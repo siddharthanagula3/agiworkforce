@@ -9,6 +9,16 @@ const mocks = vi.hoisted(() => ({
 vi.mock('@/lib/server/media-assets', () => ({ getMediaAssetById: mocks.getMediaAssetById }));
 vi.mock('@/lib/server/media-storage', () => ({ readStoredMedia: mocks.readStoredMedia }));
 
+type TestPart = {
+  type: string;
+  text?: string;
+  file?: { asset_id?: string; filename?: string; file_data?: string };
+};
+
+function partsOf(message: { content: string | TestPart[] } | undefined): TestPart[] {
+  return message?.content as TestPart[];
+}
+
 describe('hydrateChatAttachments', () => {
   beforeEach(() => vi.clearAllMocks());
 
@@ -78,7 +88,7 @@ describe('hydrateChatAttachments', () => {
     // which one to re-attach.
     expect(messages[0]?.content[1]).toEqual({
       type: 'text',
-      text: '[attachment unavailable \u2014 brief.pdf could not be read: it was deleted from your Library]',
+      text: '[attachment unavailable: brief.pdf was removed from your Library. Attach it again to include it.]',
     });
     expect(messages[0]?.content[0]).toEqual({ type: 'text', text: 'Summarize this' });
     expect(mocks.readStoredMedia).not.toHaveBeenCalled();
@@ -98,7 +108,7 @@ describe('hydrateChatAttachments', () => {
     expect(messages[0]?.content).toEqual([
       {
         type: 'text',
-        text: '[attachment unavailable \u2014 attachment-32b71cf4-c0d1-4cc7-b6c4-776ece82f137 could not be read: it was deleted from your Library]',
+        text: '[attachment unavailable: attachment-32b71cf4-c0d1-4cc7-b6c4-776ece82f137 was removed from your Library. Attach it again to include it.]',
       },
     ]);
     expect(mocks.readStoredMedia).not.toHaveBeenCalled();
@@ -225,7 +235,7 @@ describe('hydrateChatAttachments', () => {
     expect(mocks.readStoredMedia).not.toHaveBeenCalled();
   });
 
-  it('keeps the turn alive when one file\u2019s stored bytes are gone', async () => {
+  it('keeps the turn alive when one file’s stored bytes are gone', async () => {
     // The audit lost an entire four-file turn to a single unreadable file: the
     // question, the three files that were fine, and any answer at all.
     const goodId = '11111111-1111-4111-8111-111111111111';
@@ -256,18 +266,14 @@ describe('hydrateChatAttachments', () => {
 
     await expect(hydrateChatAttachments(messages, 'user-1')).resolves.toBeUndefined();
 
-    const parts = messages[0]!.content as Array<{
-      type: string;
-      text?: string;
-      file?: { filename?: string; file_data?: string };
-    }>;
+    const parts = partsOf(messages[0]);
     expect(parts[0]).toEqual({ type: 'text', text: 'Compare these' });
     expect(parts[1]?.file?.filename).toBe('readable.txt');
     expect(Buffer.from(parts[1]!.file!.file_data!.split(',')[1]!, 'base64').toString()).toBe(
       'usable contents',
     );
     expect(parts[2]?.text).toBe(
-      '[attachment unavailable \u2014 missing-bytes.txt could not be read: it is registered but its stored bytes are missing]',
+      '[attachment unavailable: missing-bytes.txt could not be loaded. Attach it again to include it.]',
     );
   });
 
@@ -289,8 +295,197 @@ describe('hydrateChatAttachments', () => {
 
     await expect(hydrateChatAttachments(messages, 'user-1')).resolves.toBeUndefined();
 
-    expect((messages[0]!.content as Array<{ text?: string }>)[0]?.text).toBe(
-      '[attachment unavailable \u2014 truncated.txt could not be read: it failed its storage integrity check]',
+    expect(partsOf(messages[0])[0]?.text).toBe(
+      '[attachment unavailable: truncated.txt could not be loaded. Attach it again to include it.]',
+    );
+  });
+
+  describe('a rotted attachment in history', () => {
+    const rottedId = '44444444-4444-4444-8444-444444444444';
+
+    function conversationWithRottedHistory() {
+      return [
+        {
+          role: 'user',
+          content: [
+            { type: 'text', text: 'What is in these?' },
+            { type: 'file', file: { asset_id: rottedId } },
+          ],
+        },
+        { role: 'assistant', content: 'Two screenshots of a stack trace.' },
+        {
+          role: 'user',
+          content: [{ type: 'text', text: 'What could cause this to happen again?' }],
+        },
+      ];
+    }
+
+    beforeEach(() => {
+      mocks.getMediaAssetById.mockResolvedValue({
+        id: rottedId,
+        userId: 'user-1',
+        kind: 'image',
+        mimeType: 'image/png',
+        storagePathname: `chat-attachments/user-1/${rottedId}.png`,
+        metadata: { filename: 'IMG_2215.PNG' },
+        deletedAt: null,
+      });
+      mocks.readStoredMedia.mockResolvedValue(null);
+    });
+
+    it('lets a later plain-text turn proceed instead of bricking the conversation', async () => {
+      const messages = conversationWithRottedHistory();
+
+      await expect(hydrateChatAttachments(messages, 'user-1')).resolves.toBeUndefined();
+
+      expect(partsOf(messages[2])).toEqual([
+        { type: 'text', text: 'What could cause this to happen again?' },
+      ]);
+    });
+
+    it('substitutes a note the model can answer around, naming the file', async () => {
+      const messages = conversationWithRottedHistory();
+
+      await hydrateChatAttachments(messages, 'user-1');
+
+      const historyParts = partsOf(messages[0]);
+      expect(historyParts[0]).toEqual({ type: 'text', text: 'What is in these?' });
+      expect(historyParts[1]).toEqual({
+        type: 'text',
+        text: '[attachment unavailable: IMG_2215.PNG could not be loaded. Attach it again to include it.]',
+      });
+    });
+
+    it('says nothing a reader could not act on', async () => {
+      const messages = conversationWithRottedHistory();
+
+      await hydrateChatAttachments(messages, 'user-1');
+
+      const note = partsOf(messages[0])[1]?.text ?? '';
+      expect(note).toContain('IMG_2215.PNG');
+      for (const operatorPhrase of [
+        'registered',
+        'stored bytes',
+        'integrity check',
+        'storage',
+        'pathname',
+        'asset',
+      ]) {
+        expect(note.toLowerCase()).not.toContain(operatorPhrase);
+      }
+    });
+  });
+
+  it('still fails the turn when the file the reader just attached is unsupported', async () => {
+    const assetId = '55555555-5555-4555-8555-555555555555';
+    mocks.getMediaAssetById.mockResolvedValue({
+      id: assetId,
+      userId: 'user-1',
+      kind: 'file',
+      mimeType: 'application/vnd.ms-excel',
+      storagePathname: 'chat-attachments/user-1/sheet.xls',
+      metadata: { filename: 'sheet.xls' },
+      deletedAt: null,
+    });
+    const messages = [
+      { role: 'user', content: [{ type: 'text', text: 'Older question' }] },
+      { role: 'assistant', content: 'Older answer' },
+      { role: 'user', content: [{ type: 'file', file: { asset_id: assetId } }] },
+    ];
+
+    await expect(hydrateChatAttachments(messages, 'user-1')).rejects.toEqual(
+      expect.objectContaining<Partial<ChatAttachmentHydrationError>>({
+        status: 400,
+        code: 'unsupported_attachment',
+      }),
+    );
+  });
+
+  it('drops the same unsupported file from history without failing the turn', async () => {
+    const assetId = '55555555-5555-4555-8555-555555555555';
+    mocks.getMediaAssetById.mockResolvedValue({
+      id: assetId,
+      userId: 'user-1',
+      kind: 'file',
+      mimeType: 'application/vnd.ms-excel',
+      storagePathname: 'chat-attachments/user-1/sheet.xls',
+      metadata: { filename: 'sheet.xls' },
+      deletedAt: null,
+    });
+    const messages = [
+      { role: 'user', content: [{ type: 'file', file: { asset_id: assetId } }] },
+      { role: 'assistant', content: 'Older answer' },
+      { role: 'user', content: [{ type: 'text', text: 'Follow-up' }] },
+    ];
+
+    await expect(hydrateChatAttachments(messages, 'user-1')).resolves.toBeUndefined();
+
+    expect(partsOf(messages[0])[0]?.text).toBe(
+      '[attachment unavailable: sheet.xls is not a file type this chat can read.]',
+    );
+  });
+
+  it('spends the attachment budget on the turn being sent before spending it on history', async () => {
+    // Charging in message order let a long conversation starve the file the
+    // reader had just attached, and blamed that file for being too large.
+    const historicalId = '66666666-6666-4666-8666-666666666666';
+    const attachedNowId = '77777777-7777-4777-8777-777777777777';
+    mocks.getMediaAssetById.mockImplementation(async (id: string) => ({
+      id,
+      userId: 'user-1',
+      kind: 'file',
+      mimeType: 'text/plain',
+      storagePathname: `chat-attachments/user-1/${id}.txt`,
+      metadata: { filename: id === historicalId ? 'old-dump.txt' : 'new-notes.txt' },
+      deletedAt: null,
+    }));
+    mocks.readStoredMedia.mockImplementation(async () => ({
+      data: Buffer.alloc(10 * 1024 * 1024),
+    }));
+
+    const messages = [
+      { role: 'user', content: [{ type: 'file', file: { asset_id: historicalId } }] },
+      { role: 'assistant', content: 'Read it.' },
+      { role: 'user', content: [{ type: 'file', file: { asset_id: attachedNowId } }] },
+    ];
+
+    await expect(hydrateChatAttachments(messages, 'user-1')).resolves.toBeUndefined();
+
+    expect(partsOf(messages[2])[0]?.file?.filename).toBe('new-notes.txt');
+    expect(partsOf(messages[0])[0]?.text).toBe(
+      '[attachment unavailable: old-dump.txt was left out because this conversation has reached its attachment limit.]',
+    );
+  });
+
+  it('drops the overflowing history file when a conversation passes the attachment count cap', async () => {
+    mocks.getMediaAssetById.mockImplementation(async (id: string) => ({
+      id,
+      userId: 'user-1',
+      kind: 'file',
+      mimeType: 'text/plain',
+      storagePathname: `chat-attachments/user-1/${id}.txt`,
+      metadata: { filename: `file-${id}.txt` },
+      deletedAt: null,
+    }));
+    mocks.readStoredMedia.mockResolvedValue({ data: Buffer.from('x') });
+
+    const history = Array.from({ length: 20 }, (_, index) => ({
+      role: 'user',
+      content: [{ type: 'file', file: { asset_id: `history-${index}` } }],
+    }));
+    const messages = [
+      ...history,
+      { role: 'assistant', content: 'Noted.' },
+      { role: 'user', content: [{ type: 'file', file: { asset_id: 'attached-now' } }] },
+    ];
+
+    await expect(hydrateChatAttachments(messages, 'user-1')).resolves.toBeUndefined();
+
+    expect(partsOf(messages[21])[0]?.file?.filename).toBe('file-attached-now.txt');
+    // No filename here: the cap is reached before the asset row is read, and a
+    // fabricated name would read like a real one.
+    expect(partsOf(messages[19])[0]?.text).toBe(
+      '[an earlier attachment was left out because this conversation has reached its attachment limit]',
     );
   });
 });
