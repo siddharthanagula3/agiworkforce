@@ -64,9 +64,12 @@ export interface AnchoredComposerMenuProps {
   /** Announced name for the popup. Without it the panel is an unlabelled region. */
   label: string;
   /**
-   * Moves focus to the first focusable row on open. Right for a menu opened by
-   * a click; wrong for one opened by typing, where taking focus off the input
-   * sends the rest of the user's keystrokes nowhere.
+   * Moves focus to the first focusable row on open, and lets Arrow/Home/End
+   * move real focus between rows. Right for a menu opened by a click; wrong
+   * for one opened by typing (mentions, slash commands), where taking focus
+   * off the input sends the rest of the user's keystrokes nowhere — that
+   * caller keeps focus in its own field and moves a virtual highlight from
+   * the same keydown it already reads.
    */
   autoFocusFirstItem?: boolean;
   /** Escape and Tab-out close the popup through this. */
@@ -192,7 +195,7 @@ export function AnchoredComposerMenu({
         anchorRef.current?.focus();
         return;
       }
-      if (!NAV_KEYS.includes(event.key)) return;
+      if (!autoFocusFirstItem || !NAV_KEYS.includes(event.key)) return;
       const node = contentRef?.current ?? internalRef.current;
       const items = focusableItems(node);
       if (items.length === 0) return;
@@ -211,7 +214,7 @@ export function AnchoredComposerMenu({
     };
     document.addEventListener('keydown', onKeyDown, true);
     return () => document.removeEventListener('keydown', onKeyDown, true);
-  }, [open, mounted, onRequestClose, anchorRef, contentRef]);
+  }, [open, mounted, onRequestClose, anchorRef, contentRef, autoFocusFirstItem]);
 
   if (!open || !mounted) return null;
 
