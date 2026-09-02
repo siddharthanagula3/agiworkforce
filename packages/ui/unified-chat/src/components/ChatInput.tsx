@@ -1014,7 +1014,7 @@ export function ChatInput({
                 type="button"
                 onClick={() => handleSuggestedSkillDismiss(suggestion.name)}
                 aria-label={`Dismiss ${suggestion.name} suggestion`}
-                className="rounded-full p-0.5 hover:bg-[var(--chat-surface-hover)]"
+                className="rounded-full p-1.5 hover:bg-[var(--chat-surface-hover)]"
               >
                 <X size={12} aria-hidden="true" />
               </button>
@@ -1056,7 +1056,7 @@ export function ChatInput({
                 type="button"
                 onClick={() => setSelectedSkill(null)}
                 aria-label={`Remove ${selectedSkill.name} skill`}
-                className="rounded p-0.5 hover:bg-[var(--chat-accent-primary)]/10"
+                className="rounded p-1.5 hover:bg-[var(--chat-accent-primary)]/10"
               >
                 <X size={12} aria-hidden="true" />
               </button>
@@ -1404,7 +1404,7 @@ export function ChatInput({
               <button
                 type="button"
                 onClick={handleClearScopeSelection}
-                className="mr-1.5 shrink-0 rounded-full p-0.5 hover:bg-[var(--chat-accent-primary)]/20"
+                className="mr-1.5 shrink-0 rounded-full p-1.5 hover:bg-[var(--chat-accent-primary)]/20"
                 aria-label={
                   canUseAgiWork
                     ? t('composer.clearProjectOrFolder', 'Clear project or folder selection')
