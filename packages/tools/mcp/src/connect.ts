@@ -913,6 +913,24 @@ export async function buildMcpToolCatalog(
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       console.error(`[mcp] failed to connect to server "${serverName}": ${message}`);
+      serverEntries[serverName] = {
+        serverName,
+        safeServerName: toSafeServerName(serverName),
+        protocolEra: 'legacy',
+        capabilities: {},
+        tasksSupported: false,
+        tools: [],
+        resources: [],
+        resourceTemplates: [],
+        prompts: [],
+        apps: [],
+        discoveryErrors: [
+          {
+            capability: 'tools',
+            message: sanitizeCatalogText(message) ?? 'Connector is temporarily unreachable',
+          },
+        ],
+      };
     }
   }
 
