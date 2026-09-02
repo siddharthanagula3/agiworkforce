@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { Eyebrow, Prose, Section } from '@/features/marketing/components/system';
 
 const PLATFORM_LABELS: Record<string, string> = {
   'darwin-arm64': 'macOS · Apple silicon',
@@ -104,15 +105,15 @@ export function CliDownloadAvailability() {
   }, [checkRelease]);
 
   return (
-    <section id="cli-downloads" className="agi-fl-section" aria-labelledby="cli-downloads-title">
-      <p className="agi-fl-eyebrow">CLI availability</p>
-      <h2 id="cli-downloads-title" className="agi-fl-h2">
+    <Section id="cli-downloads" labelledBy="cli-downloads-title" rule>
+      <Eyebrow>CLI availability</Eyebrow>
+      <h2 id="cli-downloads-title" className="agi-ds-h2">
         CLI archive availability
       </h2>
-      <p className="agi-fl-section-lede">
+      <Prose>
         The agi binary ships as platform archives on the CLI release channel. A download appears
         only for the platforms the release API confirms are published.
-      </p>
+      </Prose>
 
       {availability.state === 'loading' && (
         <div
@@ -142,7 +143,8 @@ export function CliDownloadAvailability() {
                 </p>
                 <a
                   href={download.downloadUrl}
-                  className="agi-fl-cta agi-fl-cta--secondary mt-4"
+                  className="agi-ds-btn mt-4"
+                  data-variant="primary"
                   rel="noreferrer"
                 >
                   Download {download.assetName}
@@ -161,7 +163,7 @@ export function CliDownloadAvailability() {
           className="mt-6 rounded-xl border border-border bg-card p-4 text-card-foreground"
         >
           <p className="text-sm">No published CLI archive is available right now.</p>
-          <Link href="/cli" className="agi-fl-cta agi-fl-cta--ghost mt-4">
+          <Link href="/cli" className="agi-ds-btn mt-4" data-variant="secondary">
             Read about the CLI
           </Link>
         </div>
@@ -177,13 +179,14 @@ export function CliDownloadAvailability() {
           <p className="text-sm">We could not verify the CLI archives.</p>
           <button
             type="button"
-            className="agi-fl-cta agi-fl-cta--primary mt-4"
+            className="agi-ds-btn mt-4"
+            data-variant="primary"
             onClick={() => void checkRelease()}
           >
             Retry release check
           </button>
         </div>
       )}
-    </section>
+    </Section>
   );
 }
