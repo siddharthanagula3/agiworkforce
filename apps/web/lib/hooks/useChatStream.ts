@@ -2176,14 +2176,15 @@ export function useChatStream(): UseChatStreamReturn {
       setLoading(true, conversationId);
       setError(null, conversationId);
 
+      const turnConversationId = conversationId;
       const abandonTurn = () => {
-        stopStreaming(conversationId);
-        setLoading(false, conversationId);
-        deleteMessage(assistantMessageId, conversationId);
+        stopStreaming(turnConversationId);
+        setLoading(false, turnConversationId);
+        deleteMessage(assistantMessageId, turnConversationId);
         useChatStore
           .getState()
-          .setActiveLeaf(conversationId, regenerateParentId ? restoreLeafId : userMessageId);
-        endConversationRequest(conversationId, abortController);
+          .setActiveLeaf(turnConversationId, regenerateParentId ? restoreLeafId : userMessageId);
+        endConversationRequest(turnConversationId, abortController);
       };
 
       if (options.ensureConversationId) {
