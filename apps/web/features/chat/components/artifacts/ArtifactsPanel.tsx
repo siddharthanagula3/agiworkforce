@@ -457,6 +457,7 @@ export function ArtifactsPanel() {
                 }}
                 className="h-7 px-2 text-xs"
                 title="Download all artifacts as zip"
+                aria-label="Download all artifacts as zip"
               >
                 <FolderDown className="h-3.5 w-3.5" />
                 <span className="ml-1 hidden @[26rem]:inline">Download all</span>
