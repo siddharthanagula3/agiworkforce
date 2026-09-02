@@ -4,6 +4,7 @@ import { useCallback, useEffect, useId, useState } from 'react';
 
 import { addCsrfHeaders } from '@/lib/client/csrf';
 import type { ConsentPurpose } from '@/lib/consent-purposes';
+import { Prose, Stack } from '@/features/marketing/components/system';
 
 interface ConsentRecord {
   purpose: string;
@@ -77,7 +78,7 @@ export function ConsentCentre() {
         });
 
         if (res.status === 409) {
-          setNotice('The privacy notice changed. Reloaded it — please choose again.');
+          setNotice('The privacy notice changed. Reloaded it, please choose again.');
           await load();
           return;
         }
@@ -99,7 +100,7 @@ export function ConsentCentre() {
 
   if (state.kind === 'loading') {
     return (
-      <p className="agi-page-lede" role="status">
+      <p className="agi-ds-prose" data-size="sm" role="status">
         Reading your consent record…
       </p>
     );
@@ -107,21 +108,20 @@ export function ConsentCentre() {
 
   if (state.kind === 'signed-out') {
     return (
-      <div className="agi-callout">
-        <h3 className="agi-callout-h">Sign in to manage consent held against an account.</h3>
-        <p className="agi-callout-p">
-          Consent recorded against an email address rather than an account &mdash; for example an
-          early-access signup made without signing in &mdash; cannot be shown here, because we
-          cannot prove the address is yours from this page. Use the request form below and we will
-          act on it.
-        </p>
-      </div>
+      <Stack gap="tight">
+        <h3 className="agi-ds-h3">Sign in to manage consent held against an account.</h3>
+        <Prose size="sm">
+          Consent recorded against an email address rather than an account, for example an
+          early-access signup made without signing in, cannot be shown here, because we cannot prove
+          the address is yours from this page. Use the request form below and we will act on it.
+        </Prose>
+      </Stack>
     );
   }
 
   if (state.kind === 'error') {
     return (
-      <p className="agi-page-lede" role="alert">
+      <p className="agi-ds-prose" data-size="sm" role="alert">
         {state.message} Nothing was changed. If this persists, use the request form below.
       </p>
     );
@@ -162,7 +162,7 @@ export function ConsentCentre() {
                       Never asked.
                       <br />
                       <span style={{ color: 'var(--agi-ink-quiet)', fontSize: 13 }}>
-                        No decision is on record — which is not the same as a refusal.
+                        No decision is on record, which is not the same as a refusal.
                       </span>
                     </>
                   ) : (
@@ -196,15 +196,15 @@ export function ConsentCentre() {
         </tbody>
       </table>
       {notice ? (
-        <p className="agi-page-lede" role="status" aria-live="polite" style={{ fontSize: 14 }}>
+        <p className="agi-ds-prose" data-size="sm" role="status" aria-live="polite">
           {notice}
         </p>
       ) : null}
-      <p className="agi-page-lede" style={{ fontSize: 14 }}>
+      <p className="agi-ds-prose" data-size="sm">
         Withdrawal stops the future processing that depended on that consent. It does not undo
-        processing that already happened lawfully, and it does not delete your account &mdash; that
-        is a separate request below. Every change here, in both directions, is appended to your
-        consent record rather than overwriting it.
+        processing that already happened lawfully, and it does not delete your account: that is a
+        separate request below. Every change here, in both directions, is appended to your consent
+        record rather than overwriting it.
       </p>
     </div>
   );
