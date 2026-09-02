@@ -11,6 +11,7 @@ import {
   Input,
   Button,
   ScrollArea,
+  Spinner,
   useConfirmAction,
 } from '@agiworkforce/ui';
 import { Label } from '@agiworkforce/ui';
@@ -26,7 +27,6 @@ import {
   FolderOpen,
   Calendar as CalendarIcon,
   Filter,
-  Loader2,
   FileText,
   User,
   Bot,
@@ -513,7 +513,7 @@ export function GlobalSearchDialog({ open, onOpenChange }: GlobalSearchDialogPro
           <ScrollArea className="flex-1 max-h-[400px] px-6 py-4">
             {isSearching ? (
               <div className="flex items-center justify-center py-12">
-                <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                <Spinner aria-label="Searching messages and conversations…" />
               </div>
             ) : results.length === 0 && !query.trim() && showSuggestions ? (
               <div className="space-y-6">
@@ -599,7 +599,7 @@ export function GlobalSearchDialog({ open, onOpenChange }: GlobalSearchDialogPro
                 {/* Loading history */}
                 {isLoadingHistory && (
                   <div className="flex items-center justify-center py-8">
-                    <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+                    <Spinner size="sm" aria-label="Loading search history…" />
                   </div>
                 )}
               </div>
