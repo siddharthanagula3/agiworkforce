@@ -2,6 +2,14 @@ import { buildMetadata } from '@/lib/seo/metadata';
 import Link from 'next/link';
 import { Header } from '@shared/components/layout/Header';
 import { MarketingFooter } from '@/features/marketing/components/MarketingFooter';
+import {
+  Ledger,
+  Prose,
+  Section,
+  Stack,
+  type LedgerRow,
+} from '@/features/marketing/components/system';
+import { PageHero } from '@/features/marketing/components/pages/surfaces/shared';
 import { CANONICAL_POLICY_ROUTES, POLICY_LAST_UPDATED } from '@/lib/legal-constants';
 
 export const metadata = buildMetadata({
@@ -115,55 +123,54 @@ const DOCS: { href: string; label: string; body: string }[] = [
   },
 ];
 
+function docRows(): LedgerRow[] {
+  return DOCS.map((d) => ({
+    label: d.label,
+    value: (
+      <>
+        <Link href={d.href} className="agi-ds-link">
+          {d.href}
+        </Link>{' '}
+        &middot; {d.body}
+        {REVISED[d.href] ? (
+          <>
+            {' '}
+            &middot; <span style={{ color: 'var(--agi-ink-2)' }}>Revised {REVISED[d.href]}</span>
+          </>
+        ) : null}
+      </>
+    ),
+  }));
+}
+
 export default function LegalPage() {
   return (
-    <div data-design="agi">
-      <main className="agi-shell">
-        <Header />
-        <section className="agi-page-hero">
-          <h1 className="agi-page-h1">Legal.</h1>
-          <p className="agi-page-lede">
-            The full set of legal and trust documents for AGI.{' '}
-            <strong>
-              We claim only what we have completed. Anything else is on the roadmap with no date
-              until there&rsquo;s a date.
-            </strong>
-          </p>
-        </section>
-        <section className="agi-section">
-          <p className="agi-section-eyebrow">Documents</p>
-          <table className="agi-ledger">
-            <thead>
-              <tr>
-                <th>Document</th>
-                <th>What it covers</th>
-                <th>Last revised</th>
-              </tr>
-            </thead>
-            <tbody>
-              {DOCS.map((d) => (
-                <tr key={d.href}>
-                  <td style={{ width: '24%', verticalAlign: 'top' }}>
-                    <Link href={d.href} style={{ color: 'var(--agi-ink)', fontWeight: 600 }}>
-                      {d.label}
-                    </Link>
-                  </td>
-                  <td style={{ verticalAlign: 'top' }}>{d.body}</td>
-                  <td style={{ width: '14%', color: 'var(--agi-ink-quiet)', verticalAlign: 'top' }}>
-                    {REVISED[d.href] ?? '—'}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          <p className="agi-page-lede" style={{ marginTop: 16, fontSize: 14 }}>
-            Dates come from the same constant each document prints at the top of itself, so this
-            column cannot claim a revision the document does not. Where a document carries no date
-            in that constant, this column shows a dash rather than a guess.
-          </p>
-        </section>
-        <MarketingFooter />
+    <div data-design="agi" className="agi-ds-page">
+      <Header />
+      <main id="main-content">
+        <PageHero
+          id="agi-legal-title"
+          eyebrow="Legal"
+          title="Legal."
+          lede="The full set of legal and trust documents for AGI. We claim only what we have completed. Anything else is on the roadmap with no date until there's a date."
+          ctas={[]}
+        />
+
+        <Section id="documents" labelledBy="agi-legal-documents-title" rule>
+          <Stack gap="loose">
+            <h2 className="agi-ds-h2" id="agi-legal-documents-title">
+              Documents.
+            </h2>
+            <Ledger caption="Legal documents" rows={docRows()} />
+            <Prose size="sm">
+              Dates come from the same constant each document prints at the top of itself, so this
+              column cannot claim a revision the document does not. Where a document carries no date
+              in that constant, no revision is shown.
+            </Prose>
+          </Stack>
+        </Section>
       </main>
+      <MarketingFooter />
     </div>
   );
 }
