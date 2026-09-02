@@ -90,6 +90,31 @@ describe('ApprovalInbox', () => {
     ]);
   });
 
+  it('humanizes the connector tool name half of an MCP approval label', () => {
+    const messages: Message[] = [
+      assistantMessage({
+        metadata: {
+          tools: [
+            {
+              name: 'mcp__github__create_issue',
+              status: 'awaiting_approval',
+              requiresApproval: true,
+              toolCallId: 'call-mcp',
+            },
+          ],
+        },
+      }),
+    ];
+
+    expect(collectPendingApprovals(messages)).toEqual([
+      expect.objectContaining({
+        toolCallId: 'call-mcp',
+        name: 'mcp__github__create_issue',
+        label: 'GitHub · Create Issue',
+      }),
+    ]);
+  });
+
   it('routes decisions through the canonical resolver', async () => {
     const onResolve = vi.fn().mockResolvedValue(undefined);
     const messages: Message[] = [
