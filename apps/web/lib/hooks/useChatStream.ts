@@ -3137,24 +3137,27 @@ async function handleStreamError(error: unknown, ctx: StreamErrorContext): Promi
   const errorContent = priorContent
     ? `${priorContent}\n\n${buildAssistantErrorContent(errorMessage)}`
     : buildAssistantErrorContent(errorMessage);
+  const freshMetadata = findConversationMessage(conversationId, assistantMessageId)?.metadata;
   updateMessage(
     assistantMessageId,
     {
       isStreaming: false,
       content: errorContent,
       error: true,
-      ...(currentActivity
-        ? {
-            metadata: {
-              ...currentMessage?.metadata,
+      metadata: {
+        ...freshMetadata,
+        isExecutingCode: false,
+        isSearching: false,
+        ...(currentActivity
+          ? {
               agentActivity: finishAgentActivityLocally(currentActivity, {
                 status: 'failed',
                 completedAtMs: Date.now(),
                 error: errorMessage,
               }),
-            },
-          }
-        : {}),
+            }
+          : {}),
+      },
     },
     conversationId,
   );
