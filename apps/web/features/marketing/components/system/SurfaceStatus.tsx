@@ -14,7 +14,7 @@ const STATE_MARK = {
 
 export function SurfaceStatus(props: SurfaceStatusProps) {
   return (
-    <div className="agi-ds-status" data-state={props.state}>
+    <div className="agi-ds-status agi-ds-full" data-state={props.state}>
       <div className="agi-ds-status-head">
         <h3 className="agi-ds-status-name">{props.name}</h3>
         <span className="agi-ds-status-mark">{STATE_MARK[props.state]}</span>
