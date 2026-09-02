@@ -6,6 +6,7 @@ import { PolicyContents } from '@shared/components/legal/PolicyContents';
 import { PageHero } from '@/features/marketing/components/pages/surfaces/shared';
 import { NoteList } from '@/features/marketing/components/pages/company/shared';
 import {
+  Container,
   Ledger,
   Prose,
   Section,
@@ -767,10 +768,12 @@ export default function PrivacyPage() {
           ctas={[]}
         />
 
-        <PolicyContents
-          sections={SECTIONS}
-          intro="Start with section 00: which mode you run changes almost every answer below it."
-        />
+        <Container className="my-10">
+          <PolicyContents
+            sections={SECTIONS}
+            intro="Start with section 00: which mode you run changes almost every answer below it."
+          />
+        </Container>
 
         <Section id="s-00" labelledBy="agi-privacy-s00-title" rule>
           <Stack gap="loose">

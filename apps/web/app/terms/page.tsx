@@ -5,6 +5,7 @@ import { MarketingFooter } from '@/features/marketing/components/MarketingFooter
 import { PolicyContents } from '@shared/components/legal/PolicyContents';
 import { PageHero } from '@/features/marketing/components/pages/surfaces/shared';
 import {
+  Container,
   Ledger,
   Prose,
   Section,
@@ -204,10 +205,12 @@ export default function TermsPage() {
           ctas={[]}
         />
 
-        <PolicyContents
-          sections={SECTIONS}
-          intro="Sections 15 and 17 limit our liability and require arbitration. They are the ones to read before you accept, so they are named here rather than left to be found."
-        />
+        <Container className="my-10">
+          <PolicyContents
+            sections={SECTIONS}
+            intro="Sections 15 and 17 limit our liability and require arbitration. They are the ones to read before you accept, so they are named here rather than left to be found."
+          />
+        </Container>
 
         <Section id="s-01" labelledBy="agi-terms-s01-title" rule>
           <Stack gap="loose">
