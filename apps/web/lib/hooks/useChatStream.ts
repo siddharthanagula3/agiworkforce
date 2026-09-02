@@ -89,6 +89,7 @@ import { useBillingStore } from '@shared/stores/web-auth-store';
 import {
   createSendReplayMetadata,
   hasWebSearchSources,
+  type SearchResult,
 } from '@/features/chat/types/message-metadata';
 import {
   CONTINUE_GENERATION_INSTRUCTION,
@@ -616,6 +617,19 @@ function normalizeSourceUrlKey(url: string): string {
   }
 }
 
+function dedupeNewSearchResults(
+  existing: readonly SearchResult[],
+  incoming: readonly SearchResult[],
+): SearchResult[] {
+  const seen = new Set(existing.map((result) => normalizeSourceUrlKey(result.url)));
+  return incoming.filter((source) => {
+    const key = normalizeSourceUrlKey(source.url);
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
 function projectPendingTurn(turn: PendingTurn) {
   return CloudToolApprovalProjectionSchema.parse({
     schemaVersion: 1,
@@ -899,28 +913,30 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
     updateMessage(assistantMessageId, { metadata: { ...current, ...patch } }, conversationId);
   };
 
-  const applySourceListEvent = (event: AgentEventEnvelope['event']) => {
-    if (event.type !== 'source-list' || event.sources.length === 0) return;
-    const existing = Array.isArray(currentSearchResults)
+  const existingSearchResults = (): SearchResult[] =>
+    Array.isArray(currentSearchResults)
       ? currentSearchResults
       : (currentSearchResults?.results ?? []);
-    const seen = new Set(existing.map((result) => normalizeSourceUrlKey(result.url)));
-    const additions = event.sources
-      .filter((source) => {
-        const key = normalizeSourceUrlKey(source.url);
-        if (seen.has(key)) return false;
-        seen.add(key);
-        return true;
-      })
-      .map((source) => ({
-        url: source.url,
-        title: source.title || source.url,
-        snippet: source.snippet ?? '',
-      }));
-    if (additions.length === 0) return;
+
+  const mergeSearchResults = (incoming: SearchResult[]): SearchResult[] | undefined => {
+    const existing = existingSearchResults();
+    const additions = dedupeNewSearchResults(existing, incoming);
+    if (additions.length === 0) return undefined;
     const merged = [...existing, ...additions];
     currentSearchResults = merged;
     setSearchResults(assistantMessageId, merged, conversationId);
+    return merged;
+  };
+
+  const applySourceListEvent = (event: AgentEventEnvelope['event']) => {
+    if (event.type !== 'source-list' || event.sources.length === 0) return;
+    mergeSearchResults(
+      event.sources.map((source) => ({
+        url: source.url,
+        title: source.title || source.url,
+        snippet: source.snippet ?? '',
+      })),
+    );
   };
 
   // The stream ending is itself the terminal signal: a run that never emitted a
@@ -1776,10 +1792,9 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
                 snippet: (r['encrypted_content'] as string) || '',
               }));
             if (results.length > 0) {
-              currentSearchResults = results;
-              setSearchResults(assistantMessageId, results, conversationId);
-              if (currentResearch) {
-                currentResearch = { ...currentResearch, sourcesForRetry: results };
+              const merged = mergeSearchResults(results);
+              if (merged && currentResearch) {
+                currentResearch = { ...currentResearch, sourcesForRetry: merged };
                 setResearchState(assistantMessageId, { ...currentResearch }, conversationId);
               }
             }
