@@ -1036,6 +1036,22 @@
       "evidence": ["packages/ui/i18n/src", "scripts/check-i18n-parity.mjs"]
     },
     {
+      "path": "packages/ui/icons",
+      "kind": "package",
+      "canonicalOwner": "Frontend platform",
+      "consumers": ["apps/web", "packages/ui/ui"],
+      "deployability": "browser-ui-library",
+      "trustBoundary": "presentation-only",
+      "status": "active",
+      "action": "keep",
+      "evidence": [
+        "packages/ui/icons/src/createIcon.tsx",
+        "packages/ui/icons/src/__tests__/icon-contract.test.tsx",
+        "packages/ui/ui/src/toolIcon.ts",
+        "apps/web/package.json"
+      ]
+    },
+    {
       "path": "packages/ui/ui",
       "kind": "package",
       "canonicalOwner": "Frontend platform",
