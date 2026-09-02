@@ -2,6 +2,8 @@ import { buildMetadata } from '@/lib/seo/metadata';
 import Link from 'next/link';
 import { Header } from '@shared/components/layout/Header';
 import { MarketingFooter } from '@/features/marketing/components/MarketingFooter';
+import { Eyebrow, Section, Stack } from '@/features/marketing/components/system';
+import { PageHero } from '@/features/marketing/components/pages/surfaces/shared';
 
 export const metadata = buildMetadata({
   title: 'Sitemap',
@@ -35,7 +37,7 @@ const SECTIONS: { title: string; links: { href: string; label: string }[] }[] = 
       { href: '/cli', label: 'CLI' },
       { href: '/chrome-extension', label: 'Chrome extension' },
       { href: '/vscode-extension', label: 'VS Code extension' },
-      { href: '/download', label: 'Downloads & release status' },
+      { href: '/download', label: 'Downloads and release status' },
     ],
   },
   {
@@ -80,7 +82,7 @@ const SECTIONS: { title: string; links: { href: string; label: string }[] }[] = 
     ],
   },
   {
-    title: 'Legal & trust',
+    title: 'Legal and trust',
     links: [
       { href: '/legal', label: 'Legal index' },
       { href: '/legal/eu-representative', label: 'EU representative' },
@@ -104,48 +106,35 @@ const SECTIONS: { title: string; links: { href: string; label: string }[] }[] = 
 
 export default function SitemapPage() {
   return (
-    <div data-design="agi">
-      <main className="agi-shell">
-        <Header />
-        <section className="agi-page-hero">
-          <h1 className="agi-page-h1">Sitemap.</h1>
-          <p className="agi-page-lede">Every public page, in one place.</p>
-        </section>
-        <section className="agi-section">
-          <div
-            style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
-              gap: 32,
-            }}
-          >
+    <div data-design="agi" className="agi-ds-page">
+      <Header />
+      <main id="main-content">
+        <PageHero
+          id="agi-sitemap-title"
+          eyebrow="Sitemap"
+          title="Sitemap."
+          lede="Every public page, in one place."
+          ctas={[]}
+        />
+
+        <Section id="index" rule>
+          <div className="agi-ds-grid-2">
             {SECTIONS.map((s) => (
-              <div key={s.title}>
-                <p className="agi-section-eyebrow">{s.title}</p>
-                <ul
-                  style={{
-                    listStyle: 'none',
-                    padding: 0,
-                    margin: 0,
-                    display: 'flex',
-                    flexDirection: 'column',
-                    gap: 8,
-                  }}
-                >
+              <Stack key={s.title}>
+                <Eyebrow>{s.title}</Eyebrow>
+                <Stack gap="tight">
                   {s.links.map((l) => (
-                    <li key={l.href}>
-                      <Link href={l.href} className="agi-footer-link">
-                        {l.label}
-                      </Link>
-                    </li>
+                    <Link href={l.href} className="agi-ds-link" key={l.href}>
+                      {l.label}
+                    </Link>
                   ))}
-                </ul>
-              </div>
+                </Stack>
+              </Stack>
             ))}
           </div>
-        </section>
-        <MarketingFooter />
+        </Section>
       </main>
+      <MarketingFooter />
     </div>
   );
 }
