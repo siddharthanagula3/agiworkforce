@@ -73,6 +73,7 @@ export default [
       'apps/web/e2e/*',
       'apps/web/e2e/**/*',
       '!apps/web/e2e/authenticated-flows.spec.ts',
+      '!apps/web/e2e/checkout.spec.ts',
       '**/playwright/**',
       'scripts/**',
       'coverage/**',
