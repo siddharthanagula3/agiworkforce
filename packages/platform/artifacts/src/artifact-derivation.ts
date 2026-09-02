@@ -188,8 +188,10 @@ export interface TrailingUnclosedBlock {
 
 const OPEN_FENCE_RE = /^```([^\n`]*)\r?\n/m;
 
-export function extractTrailingUnclosedBlock(markdown: string): TrailingUnclosedBlock | null {
-  const blocks = extractCodeBlocks(markdown);
+export function extractTrailingUnclosedBlock(
+  markdown: string,
+  blocks: DerivedCodeBlock[] = extractCodeBlocks(markdown),
+): TrailingUnclosedBlock | null {
   const tailStart = blocks.length > 0 ? blocks[blocks.length - 1]!.endIndex : 0;
   const tail = markdown.slice(tailStart);
 
@@ -212,6 +214,7 @@ export interface DeriveArtifactsOptions {
   include?: ArtifactInclusion;
   minCodeLines?: number;
   now?: string;
+  blocks?: DerivedCodeBlock[];
 }
 
 function blockIncluded(
@@ -228,11 +231,11 @@ export function deriveArtifacts(
   markdown: string,
   options: DeriveArtifactsOptions = {},
 ): SharedArtifact[] {
-  const { conversationId, messageId, include = 'renderable', minCodeLines = 4 } = options;
+  const { conversationId, messageId, include = 'renderable', minCodeLines = 4, blocks } = options;
   const now = options.now ?? new Date().toISOString();
 
   const artifacts: SharedArtifact[] = [];
-  for (const block of extractCodeBlocks(markdown)) {
+  for (const block of blocks ?? extractCodeBlocks(markdown)) {
     if (!blockIncluded(block, include, minCodeLines)) continue;
     artifacts.push({
       id: computeDerivedArtifactId(conversationId, messageId, block.ordinal),

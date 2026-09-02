@@ -6,6 +6,7 @@ import {
   isRenderableArtifact,
   extractCodeBlocks,
   type DeriveArtifactsOptions,
+  type DerivedCodeBlock,
 } from '@agiworkforce/artifacts';
 import type { SharedArtifact } from '@agiworkforce/types';
 import type { ArtifactData } from '../components/artifacts/ArtifactPreview';
@@ -37,11 +38,13 @@ function toArtifactData(a: SharedArtifact): ArtifactData {
 export function extractArtifacts(
   markdown: string,
   context: ExtractArtifactsContext = {},
+  blocks?: DerivedCodeBlock[],
 ): ArtifactData[] {
   const opts: DeriveArtifactsOptions = {
     conversationId: context.conversationId,
     messageId: context.messageId,
     include: 'renderable',
+    blocks,
   };
   return deriveArtifacts(markdown, opts).map(toArtifactData);
 }
