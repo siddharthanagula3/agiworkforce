@@ -1348,7 +1348,8 @@ const ChatComposerNewComponent = ({
     if (clearSignal === undefined || clearSignal === lastClearSignalRef.current) return;
     lastClearSignalRef.current = clearSignal;
     clearComposerState();
-  }, [clearComposerState, clearSignal]);
+    if (!suppressAutoFocus) takeIdleFocus();
+  }, [clearComposerState, clearSignal, suppressAutoFocus, takeIdleFocus]);
 
   // Handle prefillText prop · when the parent passes a new non-empty prefillText, copy it
   // into the local message and notify the parent it was consumed. This runs in an EFFECT,
