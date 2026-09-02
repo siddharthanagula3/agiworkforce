@@ -1503,4 +1503,45 @@ describe('MessageBubble', () => {
       expect(link.getAttribute('href')).toBe('/api/files/gf-zip');
     });
   });
+
+  describe('empty assistant turn notice', () => {
+    const noOutputNotice = () => screen.queryByText(/finished without returning a response/i);
+
+    it('reports an empty turn the model actually completed', () => {
+      render(<MessageBubble message={makeMessage({ role: 'assistant', content: '' })} />);
+      expect(noOutputNotice()).toBeInTheDocument();
+    });
+
+    it('stays quiet on an empty turn the provider rejected, which has its own notice', () => {
+      render(
+        <MessageBubble
+          message={makeMessage({
+            role: 'assistant',
+            content: '',
+            metadata: {
+              streamError: {
+                message: 'The provider rejected this request. Try again, or choose another model.',
+                code: '400',
+                retryable: false,
+              },
+            },
+          })}
+        />,
+      );
+      expect(noOutputNotice()).not.toBeInTheDocument();
+    });
+
+    it('stays quiet on an empty turn whose finish reason is an error', () => {
+      render(
+        <MessageBubble
+          message={makeMessage({
+            role: 'assistant',
+            content: '',
+            metadata: { finishReason: 'error' },
+          })}
+        />,
+      );
+      expect(noOutputNotice()).not.toBeInTheDocument();
+    });
+  });
 });

@@ -56,6 +56,7 @@ import type {
 } from '@agiworkforce/types/protocol';
 import type { InteractiveCard, ThinkingBlock } from '@agiworkforce/types';
 import type { McpInputRequiredState } from '@agiworkforce/mcp';
+import { mapClassifiedUpstreamError } from './upstream-error-copy';
 import { buildToolLoopStream, type ToolLoopStepSink } from './tool-loop-anthropic';
 import {
   getWebMcpCatalog,
@@ -2601,10 +2602,15 @@ export async function* runToolLoop(
       } catch (err) {
         if (options.shouldPropagateExecutionError?.(err)) throw err;
         const msg = err instanceof Error ? err.message : String(err);
-        const classified: { message: string; retryable: boolean; status?: number } =
-          err instanceof ProviderStreamDeadlineError
-            ? { message: err.message, retryable: true }
-            : classifyError(err);
+        const classified =
+          err instanceof ProviderStreamDeadlineError ? undefined : classifyError(err);
+        const streamError = {
+          message: classified
+            ? mapClassifiedUpstreamError(classified, servingProcessed.provider).message
+            : msg,
+          ...(classified?.status !== undefined ? { code: String(classified.status) } : {}),
+          retryable: classified?.retryable ?? true,
+        };
         logger.error(
           {
             provider: servingProcessed.provider,
@@ -2626,28 +2632,10 @@ export async function* runToolLoop(
             }),
           );
         }
-        yield encoder.encode(
-          eventStream.emit({
-            type: 'error',
-            message: classified.message,
-            ...(classified.status !== undefined ? { code: String(classified.status) } : {}),
-            retryable: classified.retryable,
-          }),
-        );
+        yield encoder.encode(eventStream.emit({ type: 'error', ...streamError }));
         yield encoder.encode(
           sseData({
-            choices: [
-              {
-                delta: {
-                  x_stream_error: {
-                    message: classified.message,
-                    ...(classified.status !== undefined ? { code: String(classified.status) } : {}),
-                    retryable: classified.retryable,
-                  },
-                },
-                index: 0,
-              },
-            ],
+            choices: [{ delta: { x_stream_error: streamError }, index: 0 }],
             model: responseModel,
           }),
         );
