@@ -54,6 +54,16 @@ describe('BudgetTrackerDisplay', () => {
     expect(container.innerHTML).not.toContain('bg-white/[0.02]');
   });
 
+  it('announces the plan-usage fetch to screen readers while it loads', () => {
+    vi.spyOn(global, 'fetch').mockReturnValue(new Promise(() => {}));
+
+    render(<BudgetTrackerDisplay showCreditBalance />);
+
+    const status = screen.getByText('loading…').closest('[role="status"]');
+    expect(status).toBeTruthy();
+    expect(status).toHaveAttribute('aria-live', 'polite');
+  });
+
   it('shows an upgrade prompt instead of a meter when usage is internal (Free)', async () => {
     vi.spyOn(global, 'fetch').mockResolvedValue({
       ok: true,
