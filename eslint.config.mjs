@@ -77,6 +77,7 @@ export default [
       '!apps/web/e2e/marketing-mobile-nav.spec.ts',
       '!apps/web/e2e/marketing-stage-contrast.spec.ts',
       '!apps/web/e2e/public-auth-clean.spec.ts',
+      '!apps/web/e2e/variant-pager.spec.ts',
       '**/playwright/**',
       'scripts/**',
       'coverage/**',
