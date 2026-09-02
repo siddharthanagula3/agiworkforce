@@ -65,10 +65,9 @@ export function LandingPage() {
                   <HeroHeadline id={HERO_TITLE_ID} text="Pick where the request runs." />
                 </div>
                 <Prose size="lg">
-                  Ask something and AGI can answer it three ways: on your own hardware with a model
-                  you already run, on your own provider account with a key that never touches ours,
-                  or on AGI&rsquo;s hosted capacity, metered and visible. The label for which one
-                  just happened is always on screen, not buried in a settings page.
+                  Ask something and AGI can answer it three ways: on hardware you run, through your
+                  own provider key that never touches ours, or on AGI&rsquo;s metered capacity.
+                  Every answer carries the label of where it ran.
                 </Prose>
                 <ButtonRow>
                   <Button href={WEB_ENTRY_HREF}>Try AGI Web</Button>
