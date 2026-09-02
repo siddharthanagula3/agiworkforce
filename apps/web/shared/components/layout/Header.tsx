@@ -4,36 +4,12 @@ import Link from 'next/link';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useUser, useClerk } from '@clerk/nextjs';
-import { useTheme } from 'next-themes';
-import { Moon, Sun, X } from 'lucide-react';
+import { X } from 'lucide-react';
 import { useMenuKeyboard } from '@agiworkforce/ui';
 import { AgiMark } from '../agi/AgiMark';
+import { ThemeToggle } from '@/features/marketing/components/system/ThemeToggle';
 import { SURFACE_STATUS } from '@/lib/marketing-constants';
 import { useAuthStore } from '@shared/stores/authentication-store';
-
-function ThemeToggle({ className = '' }: { className?: string }) {
-  const { resolvedTheme, setTheme } = useTheme();
-  const [mounted, setMounted] = useState(false);
-
-  useEffect(() => setMounted(true), []);
-
-  // Render a stable placeholder until mounted to avoid hydration mismatch.
-  if (!mounted) {
-    return <span className={`agi-top-theme-toggle ${className}`} aria-hidden="true" />;
-  }
-
-  const isDark = resolvedTheme === 'dark';
-  return (
-    <button
-      type="button"
-      className={`agi-top-link agi-top-theme-toggle ${className}`}
-      aria-label={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
-      onClick={() => setTheme(isDark ? 'light' : 'dark')}
-    >
-      {isDark ? <Sun size={16} aria-hidden="true" /> : <Moon size={16} aria-hidden="true" />}
-    </button>
-  );
-}
 
 /*
  * Site-wide marketing header. Same exports as the previous version so every
@@ -243,7 +219,7 @@ export function Header({ minimal = false }: { minimal?: boolean } = {}) {
           </span>
 
           <span className="agi-top-actions-desktop">
-            <ThemeToggle />
+            <ThemeToggle className="agi-top-theme-toggle" interactiveClassName="agi-top-link" />
             <span className="agi-top-divider" aria-hidden="true" />
             {userEmail ? (
               <>
@@ -282,7 +258,10 @@ export function Header({ minimal = false }: { minimal?: boolean } = {}) {
 
           {/* Mobile menu toggle */}
           <span className="agi-top-mobile-controls">
-            <ThemeToggle className="agi-top-theme-toggle--mobile" />
+            <ThemeToggle
+              className="agi-top-theme-toggle agi-top-theme-toggle--mobile"
+              interactiveClassName="agi-top-link"
+            />
             <button
               ref={mobileMenuButtonRef}
               type="button"
