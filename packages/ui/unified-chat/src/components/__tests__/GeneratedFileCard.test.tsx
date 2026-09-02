@@ -1,4 +1,3 @@
-
 import { describe, expect, it, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { GeneratedFileCard } from '../GeneratedFileCard';
@@ -66,6 +65,49 @@ describe('GeneratedFileCard', () => {
       />,
     );
     expect(screen.getByText('Running')).toBeDefined();
+  });
+
+  it('announces the status badge to a live region on every branch', () => {
+    const { rerender } = render(
+      <GeneratedFileCard
+        presentation={basePresentation({
+          status: 'running',
+          statusLabel: 'Running',
+          isRunning: true,
+          isComplete: false,
+        })}
+      />,
+    );
+    expect(screen.getByRole('status').textContent).toContain('Running');
+
+    rerender(
+      <GeneratedFileCard
+        presentation={basePresentation({
+          status: 'failed',
+          statusLabel: 'Failed',
+          isRunning: false,
+          isComplete: false,
+          isFailed: true,
+        })}
+      />,
+    );
+    expect(screen.getByRole('status').textContent).toContain('Failed');
+
+    rerender(<GeneratedFileCard presentation={basePresentation()} />);
+    expect(screen.getByRole('status').textContent).toContain('Completed');
+
+    rerender(
+      <GeneratedFileCard
+        presentation={basePresentation({
+          status: 'queued',
+          statusLabel: 'Queued',
+          isRunning: false,
+          isComplete: false,
+          isFailed: false,
+        })}
+      />,
+    );
+    expect(screen.getByRole('status').textContent).toContain('Queued');
   });
 
   it('shows a Failed badge when status is failed', () => {
