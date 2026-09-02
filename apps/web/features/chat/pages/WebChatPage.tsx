@@ -94,7 +94,7 @@ import {
   Keyboard,
   LogOut,
 } from '@agiworkforce/icons';
-import { Button } from '@agiworkforce/ui';
+import { Button, Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '@agiworkforce/ui';
 import { ShareConversationDialog } from '../components/share/ShareConversationDialog';
 import { useArtifactCloudSync } from '../hooks/use-artifact-cloud-sync';
 import { useBrowserReplyReadyPreference } from '../hooks/use-browser-reply-ready-preference';
@@ -4738,6 +4738,58 @@ export default function WebChatPage() {
     isLoading: isAccountLoading,
   } = resolveChatAccountDisplay(user, subscription?.tier, billingPolicyReady);
 
+  // Shared between the expanded footer's dropdown and the collapsed rail's
+  // compact trigger, so the two never drift into different menus.
+  const accountMenuItems = (
+    <>
+      {!isAccountLoading && user?.email && (
+        <>
+          <DropdownMenuLabel className="truncate font-normal text-muted-foreground">
+            {user.email}
+          </DropdownMenuLabel>
+          <DropdownMenuSeparator />
+        </>
+      )}
+      <WorkspaceMenuItems onManage={() => openSettings('team')} />
+      {/* CRIT-008: open in place — /settings/general only bounces to /chat. */}
+      <DropdownMenuItem onClick={() => openSettings('general')}>
+        <Settings className="mr-2 h-4 w-4" />
+        {t('common:settings')}
+      </DropdownMenuItem>
+      <DropdownMenuItem onClick={() => router.push('/help')}>
+        <HelpCircle className="mr-2 h-4 w-4" />
+        {t('common:navGetHelp')}
+      </DropdownMenuItem>
+      <DropdownMenuSeparator />
+      {/* Hidden once there is nothing left to buy — this menu offered
+          "Upgrade" to max_15x accounts, which reads as a billing error next
+          to the plan badge in the same sidebar. */}
+      {hasSelfServeUpgradePath(subscriptionTier) ? (
+        <DropdownMenuItem onClick={() => handleOpenUpgradeDialog()}>
+          <CreditCard className="mr-2 h-4 w-4" />
+          {t('common:navUpgrade')}
+        </DropdownMenuItem>
+      ) : null}
+      <DropdownMenuItem onClick={() => router.push('/download')}>
+        <Download className="mr-2 h-4 w-4" />
+        {t('common:navGetApps')}
+      </DropdownMenuItem>
+      <DropdownMenuItem onClick={() => setKeyboardShortcutsOpen(true)}>
+        <Keyboard className="mr-2 h-4 w-4" />
+        {t('common:navKeyboardShortcuts')}
+        <span className="ml-auto text-[12px] text-muted-foreground">{shortcutLabel('/')}</span>
+      </DropdownMenuItem>
+      <DropdownMenuSeparator />
+      <DropdownMenuItem
+        onClick={() => void handleLogout()}
+        className="text-danger focus:text-danger"
+      >
+        <LogOut className="mr-2 h-4 w-4" />
+        {t('common:navLogOut')}
+      </DropdownMenuItem>
+    </>
+  );
+
   // footerSlot: web-specific account menu + free-plan nudge.
   const sidebarFooterSlot = (
     <div className="w-full">
@@ -4768,54 +4820,39 @@ export default function WebChatPage() {
           </button>
         </DropdownMenuTrigger>
         <DropdownMenuContent side="top" align="start" className="w-56 mb-1">
-          {!isAccountLoading && user?.email && (
-            <>
-              <DropdownMenuLabel className="truncate font-normal text-muted-foreground">
-                {user.email}
-              </DropdownMenuLabel>
-              <DropdownMenuSeparator />
-            </>
-          )}
-          <WorkspaceMenuItems onManage={() => openSettings('team')} />
-          {/* CRIT-008: open in place — /settings/general only bounces to /chat. */}
-          <DropdownMenuItem onClick={() => openSettings('general')}>
-            <Settings className="mr-2 h-4 w-4" />
-            {t('common:settings')}
-          </DropdownMenuItem>
-          <DropdownMenuItem onClick={() => router.push('/help')}>
-            <HelpCircle className="mr-2 h-4 w-4" />
-            {t('common:navGetHelp')}
-          </DropdownMenuItem>
-          <DropdownMenuSeparator />
-          {/* Hidden once there is nothing left to buy — this menu offered
-              "Upgrade" to max_15x accounts, which reads as a billing error next
-              to the plan badge in the same sidebar. */}
-          {hasSelfServeUpgradePath(subscriptionTier) ? (
-            <DropdownMenuItem onClick={() => handleOpenUpgradeDialog()}>
-              <CreditCard className="mr-2 h-4 w-4" />
-              {t('common:navUpgrade')}
-            </DropdownMenuItem>
-          ) : null}
-          <DropdownMenuItem onClick={() => router.push('/download')}>
-            <Download className="mr-2 h-4 w-4" />
-            {t('common:navGetApps')}
-          </DropdownMenuItem>
-          <DropdownMenuItem onClick={() => setKeyboardShortcutsOpen(true)}>
-            <Keyboard className="mr-2 h-4 w-4" />
-            {t('common:navKeyboardShortcuts')}
-            <span className="ml-auto text-[12px] text-muted-foreground">{shortcutLabel('/')}</span>
-          </DropdownMenuItem>
-          <DropdownMenuSeparator />
-          <DropdownMenuItem
-            onClick={() => void handleLogout()}
-            className="text-danger focus:text-danger"
-          >
-            <LogOut className="mr-2 h-4 w-4" />
-            {t('common:navLogOut')}
-          </DropdownMenuItem>
+          {accountMenuItems}
         </DropdownMenuContent>
       </DropdownMenu>
     </div>
+  );
+
+  // collapsedFooterSlot: the icon rail has no room for the full account row,
+  // but still needs a way into Settings — without it, collapsing the sidebar
+  // hid Settings/help/logout entirely with no other entry point.
+  const sidebarCollapsedFooterSlot = (
+    <TooltipProvider>
+      <DropdownMenu>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <DropdownMenuTrigger asChild>
+              <button
+                type="button"
+                aria-label={`Account menu for ${displayName}`}
+                aria-busy={isAccountLoading}
+                disabled={isAccountLoading}
+                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary text-xs font-semibold text-primary-foreground outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:cursor-wait disabled:opacity-70"
+              >
+                {userInitial}
+              </button>
+            </DropdownMenuTrigger>
+          </TooltipTrigger>
+          <TooltipContent side="right">{displayName}</TooltipContent>
+        </Tooltip>
+        <DropdownMenuContent side="right" align="end" className="w-56 mb-1">
+          {accountMenuItems}
+        </DropdownMenuContent>
+      </DropdownMenu>
+    </TooltipProvider>
   );
 
   // ONE Sidebar wiring, rendered either as the desktop rail or inside the
@@ -4840,6 +4877,7 @@ export default function WebChatPage() {
     },
     navItems: sidebarNavItems,
     footerSlot: sidebarFooterSlot,
+    collapsedFooterSlot: sidebarCollapsedFooterSlot,
     // GOV-19: the two props the shared Sidebar's usage widget needs.
     showUsageWidget: managedUsageSummary !== null,
     budgetPercent: managedBudgetPercent,
@@ -5261,6 +5299,7 @@ export default function WebChatPage() {
                       enabled: isWebsiteFreeTrial,
                       limitReached: freeUsageLimitReached,
                     }}
+                    suppressAutoFocus={Boolean(highlightMessageId)}
                   />
                 </div>
               </div>

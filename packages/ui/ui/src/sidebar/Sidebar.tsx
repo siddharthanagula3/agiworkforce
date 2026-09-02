@@ -70,6 +70,7 @@ export interface SidebarProps extends SessionItemHandlers {
   renderNavLink?: (item: SidebarNavItem) => React.ReactNode;
   navExtraSlot?: React.ReactNode;
   footerSlot?: React.ReactNode;
+  collapsedFooterSlot?: React.ReactNode;
   headerSlot?: React.ReactNode;
 }
 
@@ -105,6 +106,7 @@ export function Sidebar(props: SidebarProps) {
     renderNavLink,
     navExtraSlot,
     footerSlot,
+    collapsedFooterSlot,
     headerSlot,
     onSelect,
     onRename,
@@ -441,6 +443,11 @@ export function Sidebar(props: SidebarProps) {
             )}
           />
         </div>
+        {collapsedFooterSlot && (
+          <div className="mt-auto flex flex-col items-center gap-1 border-t border-[hsl(var(--border))] p-3">
+            {collapsedFooterSlot}
+          </div>
+        )}
       </div>
     );
   }
