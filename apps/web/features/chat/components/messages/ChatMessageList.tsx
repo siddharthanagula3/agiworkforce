@@ -30,7 +30,14 @@ import { FollowUpSuggestions } from '../FollowUpSuggestions';
 import { GreetingBanner } from '../GreetingBanner/GreetingBanner';
 import { ComposerFeedbackDialog } from '../Composer/ComposerFeedbackDialog';
 import { TranscriptNotice } from './TranscriptNotice';
-import { ArrowRight, ChevronDown, CircleAlert, RefreshCw, ShieldAlert } from '@agiworkforce/icons';
+import {
+  ArrowRight,
+  ChevronDown,
+  CircleAlert,
+  RefreshCw,
+  ShieldAlert,
+  Square,
+} from '@agiworkforce/icons';
 import { cn } from '@shared/lib/utils';
 import { useTTS } from '@/lib/hooks/useTTS';
 import {
@@ -52,6 +59,18 @@ import {
 function isRefusalFinish(message: ChatMessage | undefined | null): boolean {
   const reason = (message?.metadata as { finishReason?: unknown } | undefined)?.finishReason;
   return reason === 'refusal' || reason === 'content_filter';
+}
+
+/**
+ * A user-initiated Stop, not a model or transport failure. Distinct from
+ * isIncompleteTurn/hasStreamError so it never borrows their failure wording
+ * or styling — see abandonTurn/handleStreamError in useChatStream.ts, which
+ * stamp `finishReason: 'stopped'` on abort.
+ */
+function isStoppedTurn(message: ChatMessage | undefined | null): boolean {
+  if (!message || message.role !== 'assistant' || message.isStreaming) return false;
+  const reason = (message.metadata as { finishReason?: unknown } | undefined)?.finishReason;
+  return reason === 'stopped';
 }
 
 /**
@@ -960,7 +979,20 @@ const ChatMessageListComponent = ({
 
   const showTypingIndicator = isLoading && messages.length > 0 && !lastMessage?.isStreaming;
 
-  const showContinue = Boolean(onContinue && !isLoading && isMessageContinuable(lastMessage));
+  // A user Stop is not a truncation to keep appending to (Continue) -- it
+  // routes to its own notice below instead, offering Try again.
+  const showContinue = Boolean(
+    onContinue && !isLoading && !isStoppedTurn(lastMessage) && isMessageContinuable(lastMessage),
+  );
+
+  /**
+   * User-initiated Stop (see isStoppedTurn): a distinct terminal state from a
+   * model or transport failure, so it never reuses their wording or danger
+   * styling. Takes priority over the other notices for the same message --
+   * an aborted stream leaves no stream-error, refusal or truncation marker of
+   * its own, but checks explicitly rather than relying on that.
+   */
+  const showStoppedNotice = Boolean(onRegenerate && !isLoading && isStoppedTurn(lastMessage));
 
   /**
    * Mid-stream provider failure (additive `x_stream_error` — see
@@ -979,6 +1011,7 @@ const ChatMessageListComponent = ({
     !isLoading &&
     !lastMessage?.isStreaming &&
     !showContinue &&
+    !showStoppedNotice &&
     hasStreamError(lastMessage),
   );
 
@@ -995,6 +1028,7 @@ const ChatMessageListComponent = ({
     !lastMessage?.isStreaming &&
     lastMessage?.role === 'assistant' &&
     !showContinue &&
+    !showStoppedNotice &&
     !showStreamErrorNotice &&
     isRefusalFinish(lastMessage),
   );
@@ -1013,6 +1047,7 @@ const ChatMessageListComponent = ({
     !isLoading &&
     !lastMessage?.isStreaming &&
     !showContinue &&
+    !showStoppedNotice &&
     !showStreamErrorNotice &&
     !showRefusalNotice &&
     isIncompleteTurn(lastMessage),
@@ -1029,6 +1064,7 @@ const ChatMessageListComponent = ({
     showStreamErrorNotice ||
     showRefusalNotice ||
     showIncompleteTurnNotice ||
+    showStoppedNotice ||
     showContinue ||
     readAgentActivityStatus(lastMessage) === 'failed',
   );
@@ -1386,6 +1422,22 @@ const ChatMessageListComponent = ({
             <ArrowRight className="h-3.5 w-3.5" aria-hidden="true" />
             Continue generating
           </button>
+        </div>
+      )}
+
+      {showStoppedNotice && lastMessage && (
+        <div className="px-4 pt-1 md:px-12 lg:px-20">
+          <TranscriptNotice
+            tone="neutral"
+            icon={Square}
+            message="Response stopped."
+            action={{
+              label: 'Try again',
+              ariaLabel: 'Regenerate this response',
+              icon: RefreshCw,
+              onClick: () => onRegenerate?.(lastMessage.id),
+            }}
+          />
         </div>
       )}
 

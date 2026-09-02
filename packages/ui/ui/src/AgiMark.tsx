@@ -1,4 +1,3 @@
-
 import type { CSSProperties } from 'react';
 
 const SPOKE_COUNT = 12;
@@ -32,7 +31,7 @@ export function AgiMark({
   size = 24,
   mono = false,
   spinning = false,
-  accent = 'var(--agi-amber, currentColor)',
+  accent = 'currentColor',
   ariaLabel,
   className,
   style,
