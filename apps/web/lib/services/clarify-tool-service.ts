@@ -17,6 +17,92 @@ const QUESTION_MAX = 200;
 const LABEL_MAX = 60;
 const DESCRIPTION_MAX = 200;
 
+export const CLARIFY_OFFER_MAX_MESSAGE_LENGTH = 400;
+
+const CLARIFY_OFFER_EXPLICIT_VERBS = [
+  'search',
+  'summarise',
+  'summarize',
+  'explain',
+  'write',
+  'draft',
+  'translate',
+  'list',
+  'compare',
+  'create',
+  'generate',
+  'fix',
+  'review',
+  'derive',
+  'calculate',
+  'convert',
+] as const;
+
+const CLARIFY_OFFER_OPENING_VERB_RE = new RegExp(
+  `^\\s*(?:please\\s+)?(?:${CLARIFY_OFFER_EXPLICIT_VERBS.join('|')})\\b`,
+  'i',
+);
+const CLARIFY_OFFER_URL_RE = /https?:\/\/\S+/i;
+const CLARIFY_OFFER_CODE_FENCE_RE = /```/;
+
+export interface ClarifyOfferContext {
+  userMessage: string;
+  hasAttachment: boolean;
+  webSearch: boolean;
+  research: boolean;
+}
+
+/**
+ * Explicit intent and supplied material are deterministic, unlike a tool
+ * description a fast model can talk itself past: a request already carrying
+ * search/research, a URL, an attachment, a code fence, a long body, or an
+ * opening verb like "summarize" is never missing the thing this tool exists
+ * to collect, so the tool is not even offered on that turn.
+ */
+export function shouldOfferClarifyTool(context: ClarifyOfferContext): boolean {
+  if (context.webSearch || context.research) return false;
+  const trimmed = context.userMessage.trim();
+  if (trimmed.length === 0) return false;
+  if (trimmed.length > CLARIFY_OFFER_MAX_MESSAGE_LENGTH) return false;
+  if (context.hasAttachment) return false;
+  if (CLARIFY_OFFER_URL_RE.test(trimmed)) return false;
+  if (CLARIFY_OFFER_CODE_FENCE_RE.test(trimmed)) return false;
+  if (CLARIFY_OFFER_OPENING_VERB_RE.test(trimmed)) return false;
+  return true;
+}
+
+const CLARIFY_REJECTED_TOPIC_KEYWORDS = [
+  'format',
+  'tone',
+  'length',
+  'depth',
+  'detail',
+  'style',
+  'focus',
+  'angle',
+  'perspective',
+  'preference',
+  'preferred',
+] as const;
+
+function mentionsRejectedTopic(text: string): boolean {
+  const lower = text.toLowerCase();
+  return CLARIFY_REJECTED_TOPIC_KEYWORDS.some((keyword) => lower.includes(keyword));
+}
+
+function questionAsksAboutRejectedTopic(question: {
+  header: string;
+  question: string;
+  options: { label: string; description?: string }[];
+}): boolean {
+  const fields = [
+    question.header,
+    question.question,
+    ...question.options.flatMap((option) => [option.label, option.description ?? '']),
+  ];
+  return fields.some(mentionsRejectedTopic);
+}
+
 const OptionSchema = z
   .object({
     label: z.string().trim().min(1).max(LABEL_MAX),
@@ -145,6 +231,16 @@ export function executeClarifyTool(
       content:
         'The clarifying questions were rejected: each needs a short header, a question, and ' +
         'between two and four selectable options. Answer the request directly instead.',
+    };
+  }
+
+  if (parsed.data.questions.some(questionAsksAboutRejectedTopic)) {
+    return {
+      ok: false,
+      content:
+        'The clarifying questions were rejected: the request already specifies what it needs, ' +
+        'so a question about format, tone, length, depth, focus, or a preference the user did ' +
+        'not raise is not warranted here. Answer the request directly instead.',
     };
   }
 
