@@ -405,12 +405,15 @@ export function useConversations(): UseConversationsReturn {
         });
 
         const state = useChatStore.getState();
-        const isStreamingHere = state.streamingConversationIds.includes(id);
         const cachedMessages = state.messagesByConversation[id] ?? [];
         // A cached transcript keeps its own leaf: the local one reflects a
         // variant the reader picked since this response was issued, and the
-        // server's is only authoritative for a transcript loaded fresh.
-        if (isStreamingHere || cachedMessages.length > 0) {
+        // server's is only authoritative for a transcript loaded fresh. A
+        // conversation still marked streaming with nothing cached (a durable
+        // run whose local reader stalled) has nothing to show from the local
+        // state, so it still takes the fresh fetch below rather than leaving
+        // the route with no transcript to render.
+        if (cachedMessages.length > 0) {
           setActiveConversation(id);
           return true;
         }
