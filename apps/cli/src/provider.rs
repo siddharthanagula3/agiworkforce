@@ -1005,7 +1005,7 @@ mod tests {
         assert!(detail.contains("Vision:          yes"));
         assert!(detail.contains("Reasoning:       yes"));
         assert!(!detail.contains("free (local)"));
-        assert!(detail.contains("$0.43 / $0.87"));
+        assert!(detail.contains("$1.32 / $3.96"));
     }
 
     // ── format_model_list ──────────────────────────────────────
