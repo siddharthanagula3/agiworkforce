@@ -1,4 +1,5 @@
 import type { ClassifiedError } from '@agiworkforce/provider-runtime';
+import { markProviderDegraded } from '@/lib/services/provider-availability-service';
 
 export interface UpstreamErrorShape {
   status: number;
@@ -41,6 +42,7 @@ export function mapClassifiedUpstreamError(
 
     case 'server_overload':
     case 'capacity_off_switch':
+      markProviderDegraded(provider, classified.category);
       return {
         status: 503,
         type: 'service_unavailable',
@@ -138,6 +140,7 @@ export function mapClassifiedUpstreamError(
     // user-facing shape as a rate limit, different routing consequence upstream
     // (the pool is taken out of service until it resets rather than retried).
     case 'quota_exhausted': {
+      markProviderDegraded(provider, classified.category);
       const providerLabel = provider === 'google' ? 'Google' : provider;
       return {
         status: 429,

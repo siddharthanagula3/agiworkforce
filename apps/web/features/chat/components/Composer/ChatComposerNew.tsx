@@ -23,6 +23,8 @@ import {
   ListChecks,
 } from '@agiworkforce/icons';
 import { cn } from '@shared/lib/utils';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@agiworkforce/ui';
+import { Portal as TooltipPortal } from '@radix-ui/react-tooltip';
 import { useBillingStore } from '@shared/stores/web-auth-store';
 import { isBillingPolicyReady } from '@shared/stores/billing-policy';
 import { SlashCommandMenu, type SlashCommandMenuHandle } from './SlashCommandMenu';
@@ -475,10 +477,10 @@ function MenuToggleRow({
   checked: boolean;
   onToggle: () => void;
   disabled?: boolean;
-  /** Native tooltip — used to explain WHY a row is disabled (e.g. no search path). */
+  /** Shown in a tooltip when the row is disabled (e.g. no search path). */
   title?: string;
 }) {
-  return (
+  const row = (
     <button
       type="button"
       onClick={onToggle}
@@ -493,6 +495,23 @@ function MenuToggleRow({
       <span className="flex-1 text-left">{label}</span>
       {checked && <Check className="h-3.5 w-3.5 text-foreground" />}
     </button>
+  );
+
+  if (!disabled || !title) return row;
+
+  return (
+    <TooltipProvider>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <span tabIndex={0} className="block">
+            {row}
+          </span>
+        </TooltipTrigger>
+        <TooltipPortal>
+          <TooltipContent side="right">{title}</TooltipContent>
+        </TooltipPortal>
+      </Tooltip>
+    </TooltipProvider>
   );
 }
 
