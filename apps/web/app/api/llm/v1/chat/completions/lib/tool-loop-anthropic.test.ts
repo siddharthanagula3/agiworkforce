@@ -235,7 +235,8 @@ describe('runToolLoop Anthropic dispatch (mocked adapter)', () => {
 
     expect(output).not.toContain('"content":"\\n\\nError:');
     expect(output).toContain('"type":"error"');
-    expect(output).toContain('rate limited');
+    expect(output).toContain('is temporarily at capacity');
+    expect(output).not.toContain('rate limited');
     expect(output).toContain('[DONE]');
     expect(mockAnthropicStream).toHaveBeenCalledTimes(1);
   });
@@ -252,8 +253,10 @@ describe('runToolLoop Anthropic dispatch (mocked adapter)', () => {
     expect(errorMarkerLine).toBeDefined();
     const parsed = JSON.parse(errorMarkerLine!.replace(/^data: /, ''));
     expect(parsed.choices[0].delta.x_stream_error).toMatchObject({
-      message: expect.stringContaining('rate limited'),
+      message: expect.stringContaining('is temporarily at capacity'),
+      code: '429',
     });
+    expect(errorMarkerLine).not.toContain('rate limited');
   });
 
   it('never touches E2B for an Anthropic turn with no tool calls', async () => {

@@ -915,6 +915,35 @@ describe('ChatMessageList stream error notice', () => {
     expect(retryButton()).not.toBeInTheDocument();
   });
 
+  it('calls the turn failed rather than incomplete when nothing was ever streamed', () => {
+    render(
+      <ChatMessageList
+        messages={streamErrorThread('The provider rejected this request.', '')}
+        onRegenerate={vi.fn()}
+      />,
+    );
+
+    expect(
+      screen.getByText(/no response was returned: the provider rejected this request\./i),
+    ).toBeInTheDocument();
+    expect(noticeText()).not.toBeInTheDocument();
+    expect(retryButton()).toBeInTheDocument();
+  });
+
+  it('keeps the incomplete wording when the turn streamed something before it failed', () => {
+    render(
+      <ChatMessageList
+        messages={streamErrorThread('The provider rejected this request.', 'half an answer')}
+        onRegenerate={vi.fn()}
+      />,
+    );
+
+    expect(
+      screen.getByText(/response may be incomplete: the provider rejected this request\./i),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/no response was returned/i)).not.toBeInTheDocument();
+  });
+
   it('is mutually exclusive with Continue Generation (finishReason takes precedence)', () => {
     const messages = [
       makeMessage({ id: 'u1', role: 'user', content: 'q' }),
