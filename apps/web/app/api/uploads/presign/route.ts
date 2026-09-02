@@ -47,6 +47,13 @@ const CleanupRequestSchema = z.object({
     .regex(/^[A-Za-z0-9][A-Za-z0-9._/-]*$/),
 });
 
+const R2_CORS_SAFE_DEV_ORIGINS = new Set(['http://localhost:3000', 'http://127.0.0.1:3000']);
+
+function needsSameOriginUploadProxy(request: NextRequest): boolean {
+  if (process.env['VERCEL_ENV'] === 'production') return false;
+  if (!process.env['VERCEL_ENV'] && process.env['NODE_ENV'] === 'production') return false;
+  return !R2_CORS_SAFE_DEV_ORIGINS.has(request.nextUrl.origin);
+}
 
 function extOf(name: string): string {
   const dot = name.lastIndexOf('.');
@@ -141,6 +148,8 @@ async function handlePresign(request: NextRequest): Promise<NextResponse> {
   }
 
   const localKnowledgeUpload = kind === 'knowledge-file' && !isPrivateObjectStorageConfigured();
+  const proxyChatAttachmentUpload =
+    kind === 'chat-attachment' && needsSameOriginUploadProxy(request);
   const upload = localKnowledgeUpload
     ? {
         uploadUrl: new URL(
@@ -153,26 +162,35 @@ async function handlePresign(request: NextRequest): Promise<NextResponse> {
           request.nextUrl.origin,
         ).toString(),
       }
-    : kind === 'chat-attachment' || kind === 'knowledge-file'
-      ? await getPresignedPrivateUploadUrl({
-          key,
-          contentType: mimeType,
-          contentLength: byteCount,
-          expiresInSeconds: 300,
-        })
-      : await getPresignedUploadUrl({
-          key,
-          contentType: mimeType,
-          contentLength: byteCount,
-          expiresInSeconds: 300,
-        });
+    : proxyChatAttachmentUpload
+      ? {
+          uploadUrl: new URL(
+            `/api/uploads/chat-attachment/put?key=${encodeURIComponent(key)}`,
+            request.nextUrl.origin,
+          ).toString(),
+        }
+      : kind === 'chat-attachment' || kind === 'knowledge-file'
+        ? await getPresignedPrivateUploadUrl({
+            key,
+            contentType: mimeType,
+            contentLength: byteCount,
+            expiresInSeconds: 300,
+          })
+        : await getPresignedUploadUrl({
+            key,
+            contentType: mimeType,
+            contentLength: byteCount,
+            expiresInSeconds: 300,
+          });
 
   return NextResponse.json({
     attachmentId: randomUUID(),
     storageKey: key,
     uploadUrl: upload.uploadUrl,
     uploadMethod: 'PUT' as const,
-    uploadHeaders: { 'Content-Type': mimeType },
+    uploadHeaders: proxyChatAttachmentUpload
+      ? { 'Content-Type': mimeType, 'x-csrf-token': request.headers.get('x-csrf-token') ?? '' }
+      : { 'Content-Type': mimeType },
     ...('publicUrl' in upload ? { publicUrl: upload.publicUrl } : {}),
     expiresAt: new Date(Date.now() + 300 * 1000).toISOString(),
   });

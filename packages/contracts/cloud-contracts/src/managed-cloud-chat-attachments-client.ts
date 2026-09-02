@@ -131,7 +131,8 @@ export function createManagedCloudChatAttachmentsClient(
           await presignResponse.json(),
         );
         const uploadUrl = new URL(presign.uploadUrl);
-        if (uploadUrl.protocol !== 'https:') {
+        const sameOrigin = typeof location !== 'undefined' && uploadUrl.origin === location.origin;
+        if (uploadUrl.protocol !== 'https:' && !sameOrigin) {
           throw new Error(`Refusing an insecure upload destination for ${file.name}.`);
         }
 
