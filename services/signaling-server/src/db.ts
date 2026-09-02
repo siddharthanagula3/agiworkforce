@@ -1,5 +1,6 @@
 import type { QueryResult } from '@neondatabase/serverless';
 import { Pool } from '@neondatabase/serverless';
+import { logger } from './logger.js';
 
 interface DbError {
   code?: string;
@@ -28,7 +29,26 @@ if (!databaseUrl) {
   );
 }
 
-const pool = new Pool({ connectionString: databaseUrl });
+const IDLE_TIMEOUT_MS = 5_000;
+
+const reportedTransportErrors = new WeakSet<object>();
+
+function reportTransportError(error: unknown): void {
+  if (typeof error === 'object' && error !== null) {
+    if (reportedTransportErrors.has(error)) return;
+    reportedTransportErrors.add(error);
+  }
+  logger.error({ error }, 'Neon connection transport error');
+}
+
+function guardTransportErrors(candidate: Pool): Pool {
+  candidate.on('error', reportTransportError);
+  return candidate;
+}
+
+const pool = guardTransportErrors(
+  new Pool({ connectionString: databaseUrl, idleTimeoutMillis: IDLE_TIMEOUT_MS }),
+);
 
 function normalizeTimestamp(value: string | number | null): number {
   if (value === null) {
