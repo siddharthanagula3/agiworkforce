@@ -343,7 +343,8 @@ export function applyAgentActivityEvent(
     sameTurn &&
     current?.lastSequence === -1 &&
     current.entries.some((entry) => entry.id === LOCAL_START_PROGRESS_ID);
-  const previous = sameTurn && current && !hasLocalStart ? current : createState(envelope);
+  const isFreshProjection = !(sameTurn && current && !hasLocalStart);
+  const previous = isFreshProjection ? createState(envelope) : (current as AgentActivityState);
 
   if (sameTurn && envelope.sequence <= previous.lastSequence) return previous;
 
@@ -357,7 +358,7 @@ export function applyAgentActivityEvent(
   next = applyAgentEvent(next, envelope);
 
   const hasRealActivity = hasRealActivityEntry(next.entries);
-  if (next.status !== 'running' || hasRealActivity) {
+  if (next.status !== 'running' || hasRealActivity || isFreshProjection) {
     next.entries = withoutPreparingProgress(next.entries);
   } else if (!next.entries.some((entry) => entry.id === PREPARING_PROGRESS_ID)) {
     next.entries = [
