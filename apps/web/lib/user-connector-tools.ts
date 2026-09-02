@@ -976,6 +976,19 @@ function oauthConnectorCacheKey(userId: string, connectorId: string): string {
 
 const _oauthCatalogCache = new Map<string, CustomCatalogState>();
 const OAUTH_CATALOG_TTL_MS = 60_000;
+const OAUTH_CATALOG_UNREACHABLE_TTL_MS = 5_000;
+
+function isOAuthServerUnreachable(catalog: McpToolCatalog, connectorId: string): boolean {
+  const server = catalog.servers[connectorId];
+  if (!server) return true;
+  return (
+    server.discoveryErrors.length > 0 &&
+    server.tools.length === 0 &&
+    server.resources.length === 0 &&
+    server.resourceTemplates.length === 0 &&
+    server.prompts.length === 0
+  );
+}
 
 interface ConnectorMcpTarget {
   connectorId: string;
@@ -1104,7 +1117,10 @@ async function buildOAuthConnectorCatalog(
       },
     );
     await Promise.all(handles.map((handle) => closeMcpHandle(handle)));
-    _oauthCatalogCache.set(cacheKey, { catalog, expiresAt: now + OAUTH_CATALOG_TTL_MS });
+    const ttl = isOAuthServerUnreachable(catalog, target.connectorId)
+      ? OAUTH_CATALOG_UNREACHABLE_TTL_MS
+      : OAUTH_CATALOG_TTL_MS;
+    _oauthCatalogCache.set(cacheKey, { catalog, expiresAt: now + ttl });
     return catalog;
   } catch (err) {
     logger.warn(
