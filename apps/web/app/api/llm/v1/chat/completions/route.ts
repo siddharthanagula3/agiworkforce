@@ -44,7 +44,10 @@ import { createFailoverPlan } from './lib/managed-failover';
 import { buildCpstUsageFields } from '@/lib/cpst-telemetry';
 import { withSseHeartbeat } from './lib/sse-heartbeat';
 import { startCloudAgentWorkflowExecution } from '@/lib/workflows/start-cloud-agent-workflow';
-import { claimLiveDurableStream } from '@/lib/workflows/durable-stream-liveness';
+import {
+  claimLiveDurableStream,
+  isDurableTransportCoolingDown,
+} from '@/lib/workflows/durable-stream-liveness';
 
 class DurableStreamStalledError extends Error {
   constructor() {
@@ -611,7 +614,7 @@ async function dispatchChatCompletions(
       // path cannot double-execute
       // (`startCloudAgentWorkflowExecution` cancels the run it started if the
       // durable attach fails).
-      if (areDurableInitialTurnsEnabled()) {
+      if (areDurableInitialTurnsEnabled() && !isDurableTransportCoolingDown()) {
         try {
           const workflow = await startCloudAgentWorkflowExecution({
             db: runDb,
