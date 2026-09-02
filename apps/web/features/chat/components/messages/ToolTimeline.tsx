@@ -108,6 +108,7 @@ export function humanizeToolName(
   name: string,
   args?: string,
   parameters?: Record<string, unknown>,
+  statusPhrase?: string,
 ): string {
   if (isWebSearchTool(name)) {
     const query =
@@ -149,6 +150,8 @@ export function humanizeToolName(
     http_request: 'HTTP request',
   };
   if (map[name]) return map[name]!;
+
+  if (statusPhrase) return statusPhrase;
 
   return name;
 }
@@ -465,7 +468,7 @@ function TimelineStepRow({
 
   const connectRequest = useMemo(() => findConnectRequest(tool), [tool]);
 
-  const humanLabel = humanizeToolName(tool.name, tool.args, tool.parameters);
+  const humanLabel = humanizeToolName(tool.name, tool.args, tool.parameters, tool.statusPhrase);
   const displayToolCall: ToolCall = connectRequest
     ? { ...withoutRawOutput(toolCall), name: humanLabel }
     : { ...toolCall, name: humanLabel };
@@ -606,7 +609,7 @@ function buildToolAnnouncement(tools: ToolEntry[]): string {
 
   const awaiting = tools.find((t) => t.status === 'awaiting_approval');
   if (awaiting) {
-    return `Approval needed: ${humanizeToolName(awaiting.name, awaiting.args, awaiting.parameters)}`;
+    return `Approval needed: ${humanizeToolName(awaiting.name, awaiting.args, awaiting.parameters, awaiting.statusPhrase)}`;
   }
 
   const connectTool = tools.map(findConnectRequest).find((r) => r !== null);
@@ -614,7 +617,7 @@ function buildToolAnnouncement(tools: ToolEntry[]): string {
 
   const running = [...tools].reverse().find((t) => t.status === 'running');
   if (running) {
-    return `Running: ${running.statusPhrase ?? humanizeToolName(running.name, running.args, running.parameters)}`;
+    return `Running: ${humanizeToolName(running.name, running.args, running.parameters, running.statusPhrase)}`;
   }
 
   const failed = tools.filter((t) => t.status === 'failed').length;

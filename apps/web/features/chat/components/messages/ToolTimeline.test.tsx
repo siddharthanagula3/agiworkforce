@@ -149,7 +149,7 @@ describe('ToolTimeline · header metadata', () => {
         tools={[{ name: 'tool', status: 'running' as const, statusPhrase: 'Searching…' }]}
       />,
     );
-    expect(screen.getByText('Searching…')).toBeInTheDocument();
+    expect(screen.getAllByText('Searching…').length).toBeGreaterThan(0);
   });
 
   it('omits duration from header (duration no longer shown in Claude-style header)', () => {
@@ -200,6 +200,36 @@ describe('ToolTimeline · ToolCallCard rendering', () => {
 
     await waitFor(() => {
       expect(screen.getByText('Read')).toBeInTheDocument();
+    });
+  });
+
+  it('labels a Deep Research url_fetch step with its real status phrase instead of the raw tool id', async () => {
+    const tools = [
+      {
+        name: 'url_fetch',
+        status: 'completed' as const,
+        statusPhrase: 'Fetching example.com',
+        durationMs: 300,
+      },
+    ];
+    render(<ToolTimeline tools={tools} />);
+
+    fireEvent.click(screen.getByRole('button'));
+
+    await waitFor(() => {
+      expect(screen.getByText('Fetching example.com')).toBeInTheDocument();
+      expect(screen.queryByText('url_fetch')).not.toBeInTheDocument();
+    });
+  });
+
+  it('falls back to the raw tool id when no status phrase was ever emitted for it', async () => {
+    const tools = [{ name: 'some_unmapped_tool', status: 'completed' as const, durationMs: 10 }];
+    render(<ToolTimeline tools={tools} />);
+
+    fireEvent.click(screen.getByRole('button'));
+
+    await waitFor(() => {
+      expect(screen.getByText('some_unmapped_tool')).toBeInTheDocument();
     });
   });
 });
