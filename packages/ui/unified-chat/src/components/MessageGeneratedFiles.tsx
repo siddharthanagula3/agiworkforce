@@ -424,7 +424,7 @@ export function MessageGeneratedFiles({ message }: MessageGeneratedFilesProps) {
             <div className="flex items-center gap-2">
               <span
                 role="alert"
-                className="text-[12px] text-[var(--chat-error,#f43f5e)]"
+                className="text-[12px] text-[var(--chat-destructive-text)]"
                 data-testid="generated-file-download-error"
               >
                 Download failed: {downloadErrors[entry.id]}
