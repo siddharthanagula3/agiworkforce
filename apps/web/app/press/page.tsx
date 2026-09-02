@@ -39,7 +39,7 @@ const PRODUCT_FACTS: { k: string; v: string }[] = [
   },
   {
     k: 'Managed cloud status',
-    v: 'Public alpha, open by default since 2026-06-27. No waitlist and no invite. It is not generally available.',
+    v: 'Open by default since 2026-06-27. No waitlist and no invite. It is not generally available.',
   },
   {
     k: 'Model catalog',
@@ -69,7 +69,7 @@ const NOT_CLAIMED: string[] = [
   'No named customers, logos, or testimonials, and no case studies. We publish those only with written permission, and we have none cleared to publish.',
   'No usage, revenue, headcount, or funding figures.',
   'No uptime or availability record. The SLA page states planned targets, not measured history.',
-  'No general availability claim for managed cloud. It is a public alpha.',
+  'No general availability claim for managed cloud.',
 ];
 
 export default function PressPage() {
@@ -132,8 +132,8 @@ export default function PressPage() {
               VS Code, and Chrome), of which the web app, desktop app, and CLI have shipped. Its
               distinguishing design choice is that the user selects where inference happens: locally
               on their own hardware, through their own provider API key, or on AGI&rsquo;s managed
-              cloud, which is in public alpha. Those three routes are separate trust boundaries, and
-              work does not move between them without an explicit, labeled action.
+              cloud. Those three routes are separate trust boundaries, and work does not move
+              between them without an explicit, labeled action.
             </blockquote>
           </div>
         </section>

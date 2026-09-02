@@ -16,7 +16,7 @@ import { LAUNCH, SURFACE_STATUS } from '../../lib/marketing-constants';
 export const metadata = buildMetadata({
   title: 'AGI Code | CLI + VS Code developer stack',
   description:
-    'AGI Code spans the agi CLI and the VS Code extension: resumable sessions, code review, sandboxed execution, hooks, skills, MCP, and privacy modes. Local models, BYOK, or AGI managed cloud (public alpha).',
+    'AGI Code spans the agi CLI and the VS Code extension: resumable sessions, code review, sandboxed execution, hooks, skills, MCP, and privacy modes. Local models, BYOK, or AGI managed cloud.',
   path: '/agi-code',
 });
 

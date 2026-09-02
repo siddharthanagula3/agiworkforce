@@ -69,7 +69,7 @@ export default function GetStartedPage() {
               </p>
             </li>
             <li className="agi-reason">
-              <h3 className="agi-reason-h">Managed cloud · public alpha</h3>
+              <h3 className="agi-reason-h">Managed cloud</h3>
               <p className="agi-reason-p">
                 Sign in to use AGI-hosted compute today, open by default with a small free cap.
                 Local and BYOK stay free acquisition paths.

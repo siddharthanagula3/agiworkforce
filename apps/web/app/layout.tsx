@@ -78,7 +78,7 @@ export const metadata: Metadata = {
     template: '%s | AGI',
   },
   description:
-    'AGI is an AI workspace for chat, coding, research, files, projects, artifacts, tools, connectors, memory, and automation with explicit Local, BYOK, and public-alpha managed cloud boundaries.',
+    'AGI is an AI workspace for chat, coding, research, files, projects, artifacts, tools, connectors, memory, and automation with explicit Local, BYOK, and managed cloud boundaries.',
   keywords: [
     'AI agents',
     'automation',

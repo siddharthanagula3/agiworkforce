@@ -28,7 +28,7 @@ export function organizationSchema(): JsonLdObject {
     url: SITE_URL,
     logo: `${SITE_URL}/logo.png`,
     description:
-      'AI workspace for chat, code, research, files, tools, artifacts, connectors, memory, and automation with explicit Local, BYOK, and public-alpha managed cloud boundaries.',
+      'AI workspace for chat, code, research, files, tools, artifacts, connectors, memory, and automation with explicit Local, BYOK, and managed cloud boundaries.',
     sameAs: [...SOCIAL_PROFILES],
     contactPoint: {
       '@type': 'ContactPoint',
@@ -54,7 +54,7 @@ export function softwareApplicationSchema(): JsonLdObject {
     '@type': 'SoftwareApplication',
     name: SITE_NAME,
     description:
-      'AI workspace with explicit Local, BYOK, and public-alpha managed cloud modes across web, desktop, mobile, CLI, Chrome, and VS Code.',
+      'AI workspace with explicit Local, BYOK, and managed cloud modes across web, desktop, mobile, CLI, Chrome, and VS Code.',
     applicationCategory: 'BusinessApplication',
     operatingSystem: 'Web, macOS, Windows, Linux, iOS, Android',
     url: SITE_URL,

@@ -30,7 +30,7 @@ const QA: { q: string; a: string }[] = [
   },
   {
     q: 'What does AGI Cloud cost?',
-    a: 'AGI managed cloud is in public alpha and open by default: sign in and start, no waitlist. Usage is metered and current plan details live on the pricing page. Local and BYOK remain free. Pricing is also the source of truth for which self-serve checkouts are configured for your region and billing cadence; Team is priced per seat when its checkout is available. Only Enterprise (custom governance, SSO, custom retention) is sales-assisted, with an early-access interest list.',
+    a: 'AGI managed cloud is open by default: sign in and start, no waitlist. Usage is metered and current plan details live on the pricing page. Local and BYOK remain free. Pricing is also the source of truth for which self-serve checkouts are configured for your region and billing cadence; Team is priced per seat when its checkout is available. Only Enterprise (custom governance, SSO, custom retention) is sales-assisted, with an early-access interest list.',
   },
   {
     q: 'How do I upgrade, downgrade, cancel, or get an invoice?',
@@ -101,7 +101,7 @@ export default function FaqPage() {
             <ul className="agi-fl-mode-ribbon" aria-label="Trust modes">
               <li>Local · on-device</li>
               <li>BYOK · your keys</li>
-              <li>Cloud · public alpha</li>
+              <li>Cloud · hosted by us</li>
             </ul>
           </div>
         </section>

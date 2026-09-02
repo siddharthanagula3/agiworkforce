@@ -35,7 +35,7 @@ export default async function LoginPage({
     <AuthShell
       embedded={isDesktopSurface}
       title="Welcome back."
-      lede="Sign in to pick up your chats, projects, and artifacts. Managed cloud is open in public alpha, so you can start right away."
+      lede="Sign in to pick up your chats, projects, and artifacts. Managed cloud is open by default, so you can start right away."
       points={[
         'One account across Web, Mobile & Desktop Cloud',
         'Local Mode never requires an account',

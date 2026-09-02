@@ -50,7 +50,7 @@ const COLOPHON: { key: string; val: ReactNode }[] = [
     key: 'Model catalog',
     val: `${MARKETING.models.count} models · ${MARKETING.providers.count} provider integrations, as of ${CATALOG_AS_OF}`,
   },
-  { key: 'Trust modes', val: 'Local · BYOK · Managed cloud (public alpha)' },
+  { key: 'Trust modes', val: 'Local · BYOK · Managed cloud' },
   { key: 'Data policy', val: POSITIONING.trustBoundary },
   { key: 'Set in', val: 'Newsreader & Geist' },
   {
@@ -91,7 +91,7 @@ export default function AboutPage() {
             <ul className="agi-fl-mode-ribbon" aria-label="Trust modes">
               <li>Local · on-device</li>
               <li>BYOK · your keys</li>
-              <li>Cloud · public alpha</li>
+              <li>Cloud · hosted by us</li>
             </ul>
           </div>
         </section>

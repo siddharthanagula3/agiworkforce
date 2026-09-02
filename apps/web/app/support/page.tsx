@@ -47,9 +47,9 @@ export default function SupportPage() {
             </span>
           </h1>
           <p className="agi-fl-lede">
-            Email is the canonical channel today, for everyone. Managed cloud is public alpha and
-            paid Team &amp; Enterprise SLAs are still firming up, so we don&rsquo;t publish
-            response-time promises yet. What is planned is labeled as planned.
+            Email is the canonical channel today, for everyone. Paid Team &amp; Enterprise SLAs are
+            still firming up, so we don&rsquo;t publish response-time promises yet. What is planned
+            is labeled as planned.
           </p>
           <div style={{ paddingBottom: 'clamp(48px, 7vw, 88px)' }}>
             <div className="agi-fl-cta-row">

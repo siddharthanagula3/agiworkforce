@@ -129,7 +129,7 @@ describe('public marketing copy regressions', () => {
     const normalizedWaitlist = waitlist.replace(/\s+/g, ' ');
 
     expect(waitlist).not.toContain('Cloud Managed is invite-only across Web, Mobile, Desktop, CLI');
-    expect(normalizedWaitlist).toContain('public alpha');
+    expect(normalizedWaitlist).toContain('open by default');
     expect(normalizedWaitlist).toContain(
       'Use your provider accounts on supported Desktop, CLI, and VS Code releases',
     );
@@ -267,7 +267,7 @@ describe('public marketing copy regressions', () => {
     expect(nextConfig).toContain('devIndicators: false');
   });
 
-  it('presents managed cloud as public-alpha-open, not waitlist-gated (WEB-12)', () => {
+  it('presents managed cloud as open by default, not waitlist-gated (WEB-12)', () => {
     const home = [
       'features/marketing/components/MarketingLanding.tsx',
       'features/marketing/components/RouteFlow.tsx',
@@ -278,7 +278,7 @@ describe('public marketing copy regressions', () => {
     expect(home).not.toContain('Join the Waitlist');
     expect(home).not.toContain('Private beta via waitlist');
     expect(home).not.toContain('Account & Cloud waitlist');
-    expect(home).toContain('Public alpha: sign in and start, no waitlist');
+    expect(home).toContain('Sign in and start, no waitlist');
   });
 
   it('does not claim managed cloud is waitlist/invite-only on the waitlist page (WEB-12)', () => {
@@ -291,7 +291,7 @@ describe('public marketing copy regressions', () => {
     expect(waitlist).toContain('Team');
   });
 
-  it('chat upgrade dialog presents managed cloud as public-alpha-open, not waitlist-gated (WEB-12 / PA-1)', () => {
+  it('chat upgrade dialog presents managed cloud as open by default, not waitlist-gated (WEB-12 / PA-1)', () => {
     const dialog = readWebFile('features/chat/components/dialogs/UpgradePlanDialog.tsx');
 
     expect(dialog).not.toContain('open by waitlist invite');
@@ -300,7 +300,7 @@ describe('public marketing copy regressions', () => {
     expect(dialog).not.toContain('account-gated');
     expect(dialog).not.toContain('Current plan');
     expect(dialog).toContain('Upgrade to');
-    expect(dialog).toContain('public alpha');
+    expect(dialog).toContain('open by default');
     expect(dialog).toContain('onUpgrade');
   });
 
@@ -334,7 +334,7 @@ describe('public marketing copy regressions', () => {
         'Managed compute opens by invite only',
       );
     }
-    expect(readWebFile('app/faq/page.tsx')).toContain('public alpha and open by default');
+    expect(readWebFile('app/faq/page.tsx')).toContain('open by default');
   });
 
   it('reframes marketing-constants POSITIONING away from cloud-by-invite (PA-5)', () => {
@@ -343,18 +343,17 @@ describe('public marketing copy regressions', () => {
     expect(matrix).not.toContain('Cloud by invite');
     expect(matrix).not.toContain('Higher hosted cloud is invite-only');
     expect(matrix).not.toContain('Hosted web trial. Local and BYOK for serious work.');
-    expect(matrix).toContain('public alpha');
     expect(matrix).toContain('open by default, not invite-only');
   });
 
-  it('keeps the teams page metadata on public-alpha managed cloud (PA-5)', () => {
+  it('keeps the teams page metadata on managed cloud, not cloud-by-invite (PA-5)', () => {
     const teams = readWebFile('app/teams/page.tsx');
 
     expect(teams).not.toContain('invite-only managed cloud');
     expect(teams).not.toContain('Cloud · by invite');
     expect(teams).not.toContain('AGI Cloud invite');
-    expect(teams).toContain('public-alpha managed cloud');
-    expect(teams).toContain('Cloud · public alpha');
+    expect(teams).toContain('integrations on managed cloud');
+    expect(teams).toContain('Cloud · hosted by us');
   });
 
   it('does not call managed cloud private-beta/waitlist-to-use on the pricing page (PA-5)', () => {
@@ -434,6 +433,6 @@ describe('public marketing copy regressions', () => {
       }
     };
     for (const root of ['app', 'features', 'shared', 'lib', 'content']) walk(root);
-    expect(offenders, 'managed cloud is open in public alpha, not invite-only').toEqual([]);
+    expect(offenders, 'managed cloud is open by default, not invite-only').toEqual([]);
   });
 });

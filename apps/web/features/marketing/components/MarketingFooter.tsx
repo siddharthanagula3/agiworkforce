@@ -169,8 +169,8 @@ export function MarketingFooter({ condensed = false }: { condensed?: boolean } =
           </Link>
         </span>
         <span>
-          Local and BYOK stay explicit. Managed Cloud is open in public alpha; self-serve paid plans
-          are listed on Pricing, while Enterprise remains contract-scoped.
+          Local and BYOK stay explicit. Managed Cloud is open by default; self-serve paid plans are
+          listed on Pricing, while Enterprise remains contract-scoped.
         </span>
       </div>
     </footer>

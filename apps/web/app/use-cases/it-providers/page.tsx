@@ -45,7 +45,7 @@ export default function ItProvidersPage() {
           <ul className="agi-fl-mode-ribbon" aria-label="Trust modes">
             <li>Local · client privacy</li>
             <li>BYOK · enforceable</li>
-            <li>Cloud · public alpha</li>
+            <li>Cloud · hosted by us</li>
           </ul>
           <div className="agi-fl-hero-console" aria-hidden="true">
             <ProductFrame
