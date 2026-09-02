@@ -50,7 +50,7 @@ export const HighlightedCode: React.FC<HighlightedCodeProps> = ({
       {lines.map((line, lineIndex) => (
         <React.Fragment key={lineIndex}>
           {line.map((token, tokenIndex) => (
-            <span key={tokenIndex} style={token.style}>
+            <span key={tokenIndex} className="shiki-token" style={token.style}>
               {token.content}
             </span>
           ))}
