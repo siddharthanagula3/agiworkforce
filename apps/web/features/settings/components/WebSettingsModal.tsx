@@ -50,6 +50,7 @@ import { ConnectorConsentSummary } from '@/features/connectors/components/Connec
 import { ToolPermissionsPanel } from '@/features/connectors/components/ToolPermissionsPanel';
 import { ConnectorCapabilitiesPanel } from '@/features/connectors/components/ConnectorCapabilitiesPanel';
 import {
+  brokerOutcomeMessage,
   currentConnectorReturnPath,
   withConnectorReturnPath,
 } from '@/features/connectors/hooks/use-connectors';
@@ -745,8 +746,30 @@ export function WebSettingsModal({
               currentConnectorReturnPath(),
             );
             if (target) {
-              window.location.href = target;
-              return;
+              // The start path can fail before ever leaving this origin (no
+              // public HTTPS deployment URL, provider registration refused,
+              // …), and that failure is same-origin — probe it as JSON first
+              // so a failure surfaces inline instead of tearing down this
+              // modal with a real navigation that then bounces right back.
+              const probeUrl = `${target}${target.includes('?') ? '&' : '?'}mode=json`;
+              const probeRes = await fetch(probeUrl, {
+                headers: await authedHeaders(),
+                credentials: 'include',
+              });
+              const probeBody = (await probeRes.json().catch(() => null)) as {
+                authorizeUrl?: string;
+                error?: string;
+                status?: string;
+              } | null;
+              if (probeRes.ok && probeBody?.authorizeUrl) {
+                window.location.href = probeBody.authorizeUrl;
+                return;
+              }
+              throw new Error(
+                (probeBody?.status && brokerOutcomeMessage(probeBody.status, connector.name)) ??
+                  probeBody?.error ??
+                  `Could not connect ${connector.name}.`,
+              );
             }
           }
           if (body?.installStartPath) {
