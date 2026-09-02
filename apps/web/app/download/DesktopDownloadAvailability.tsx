@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { Eyebrow, Prose, Section } from '@/features/marketing/components/system';
 
 const WEB_CHAT_ENTRY_HREF = '/login?redirectTo=%2F';
 
@@ -46,10 +47,10 @@ function isSignedLinuxManifest(value: unknown): value is {
 function Alternatives() {
   return (
     <div className="mt-4 flex flex-wrap gap-3">
-      <Link href={WEB_CHAT_ENTRY_HREF} className="agi-fl-cta agi-fl-cta--secondary">
+      <Link href={WEB_CHAT_ENTRY_HREF} className="agi-ds-btn" data-variant="secondary">
         Use AGI Web
       </Link>
-      <Link href="/cli" className="agi-fl-cta agi-fl-cta--ghost">
+      <Link href="/cli" className="agi-ds-btn" data-variant="secondary">
         See CLI availability
       </Link>
     </div>
@@ -160,21 +161,17 @@ export function DesktopDownloadAvailability() {
   }, [checkRelease, checkCloudRelease]);
 
   return (
-    <section
-      id="desktop-downloads"
-      className="agi-fl-section"
-      aria-labelledby="desktop-downloads-title"
-    >
-      <p className="agi-fl-eyebrow">Desktop availability</p>
-      <h2 id="desktop-downloads-title" className="agi-fl-h2">
+    <Section id="desktop-downloads" labelledBy="desktop-downloads-title" rule>
+      <Eyebrow>Desktop availability</Eyebrow>
+      <h2 id="desktop-downloads-title" className="agi-ds-h2">
         Desktop installer availability
       </h2>
-      <p className="agi-fl-section-lede">
+      <Prose>
         macOS gets the AGI Cloud desktop app (cloud accounts only) when a signed build is published.
         Linux x64 package assets exist, but a download is offered only after the release API
         verifies the matching updater signature. Windows installers have not been published, and no
         release dates are available for them.
-      </p>
+      </Prose>
 
       <ul className="mt-8 grid list-none gap-4 p-0 md:grid-cols-3" aria-label="Desktop platforms">
         <li className="rounded-2xl border border-border bg-card p-5 text-card-foreground">
@@ -202,7 +199,8 @@ export function DesktopDownloadAvailability() {
                 {cloudAvailability.architectures.arm64 && (
                   <a
                     href="/api/download?platform=mac&app=cloud&arch=arm64"
-                    className="agi-fl-cta agi-fl-cta--primary"
+                    className="agi-ds-btn"
+                    data-variant="primary"
                   >
                     Download for Apple silicon
                   </a>
@@ -210,7 +208,8 @@ export function DesktopDownloadAvailability() {
                 {cloudAvailability.architectures.x64 && (
                   <a
                     href="/api/download?platform=mac&app=cloud&arch=x64"
-                    className="agi-fl-cta agi-fl-cta--secondary"
+                    className="agi-ds-btn"
+                    data-variant="secondary"
                   >
                     Download for Intel Mac
                   </a>
@@ -239,7 +238,8 @@ export function DesktopDownloadAvailability() {
               <p className="text-sm">We could not verify the macOS installer.</p>
               <button
                 type="button"
-                className="agi-fl-cta agi-fl-cta--primary mt-4"
+                className="agi-ds-btn mt-4"
+                data-variant="primary"
                 onClick={() => void checkCloudRelease()}
               >
                 Retry release check
@@ -272,7 +272,7 @@ export function DesktopDownloadAvailability() {
               <p className="mb-4 text-sm text-muted-foreground">
                 Signed AppImage · version {availability.version}
               </p>
-              <a href="/api/download?platform=linux" className="agi-fl-cta agi-fl-cta--primary">
+              <a href="/api/download?platform=linux" className="agi-ds-btn" data-variant="primary">
                 Download Linux x64 AppImage
               </a>
             </div>
@@ -298,7 +298,8 @@ export function DesktopDownloadAvailability() {
               <p className="text-sm">We could not verify the Linux installer.</p>
               <button
                 type="button"
-                className="agi-fl-cta agi-fl-cta--primary mt-4"
+                className="agi-ds-btn mt-4"
+                data-variant="primary"
                 onClick={() => void checkRelease()}
               >
                 Retry release check
@@ -308,6 +309,6 @@ export function DesktopDownloadAvailability() {
           )}
         </li>
       </ul>
-    </section>
+    </Section>
   );
 }
