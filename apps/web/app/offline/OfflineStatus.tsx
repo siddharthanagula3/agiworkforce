@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { ButtonRow } from '@/features/marketing/components/system';
 
 /**
  * Reports the live connection state rather than a static "you are offline",
@@ -23,19 +24,24 @@ export function OfflineStatus() {
   }, []);
 
   return (
-    <div className="agi-device-auth-note" role="status" aria-live="polite">
-      {online === null
-        ? 'Checking your connection…'
-        : online
-          ? 'Your connection is back. Retry to pick up where you left off.'
-          : 'Still no connection. This page updates on its own when the network returns.'}
-      <button
-        type="button"
-        className="agi-cta-primary agi-device-auth-submit"
-        onClick={() => window.location.reload()}
-      >
-        Retry
-      </button>
+    <div className="agi-ds-stack" data-gap="tight" role="status" aria-live="polite">
+      <p className="agi-ds-prose" data-size="sm">
+        {online === null
+          ? 'Checking your connection…'
+          : online
+            ? 'Your connection is back. Retry to pick up where you left off.'
+            : 'Still no connection. This page updates on its own when the network returns.'}
+      </p>
+      <ButtonRow>
+        <button
+          type="button"
+          className="agi-ds-btn"
+          data-variant="primary"
+          onClick={() => window.location.reload()}
+        >
+          Retry
+        </button>
+      </ButtonRow>
     </div>
   );
 }
