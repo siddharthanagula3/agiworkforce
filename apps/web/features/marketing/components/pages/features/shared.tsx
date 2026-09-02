@@ -25,13 +25,18 @@ export function LinkGrid({ items }: { items: readonly LinkCardItem[] }) {
                 <a
                   href={item.href}
                   className="agi-ds-link"
+                  style={{ backgroundSize: '100% 1px' }}
                   target="_blank"
                   rel="noopener noreferrer"
                 >
                   {item.title}
                 </a>
               ) : (
-                <Link href={item.href} className="agi-ds-link">
+                <Link
+                  href={item.href}
+                  className="agi-ds-link"
+                  style={{ backgroundSize: '100% 1px' }}
+                >
                   {item.title}
                 </Link>
               )}
