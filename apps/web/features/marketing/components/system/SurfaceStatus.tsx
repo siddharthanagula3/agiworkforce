@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { COMING_SOON_LABEL } from '@/lib/marketing-constants';
 
 export type SurfaceStatusProps =
   | { state: 'live'; name: string; detail: string; action?: { label: string; href: string } }
@@ -8,7 +9,7 @@ export type SurfaceStatusProps =
 const STATE_MARK = {
   live: 'Live',
   pending: 'Pending',
-  absent: 'Not shipped',
+  absent: COMING_SOON_LABEL,
 } as const;
 
 export function SurfaceStatus(props: SurfaceStatusProps) {
