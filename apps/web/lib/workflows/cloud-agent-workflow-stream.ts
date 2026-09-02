@@ -1,6 +1,7 @@
 import 'server-only';
 
 import type { AgentEventEnvelope } from '@agiworkforce/types/protocol';
+import { parseGeneratedFilesDelta } from '@agiworkforce/cloud-contracts';
 
 import { extractManagedAgentEventEnvelopes } from '@/app/api/llm/v1/chat/completions/lib/managed-agent-stream';
 import { extractAssistantInteractiveCardDeltas } from '@/app/api/llm/v1/chat/completions/lib/interactive-card-stream';
@@ -8,6 +9,30 @@ import { extractAssistantInteractiveCardDeltas } from '@/app/api/llm/v1/chat/com
 export interface ProjectedCloudAgentWorkflowEvent {
   envelope?: AgentEventEnvelope;
   sse: string;
+}
+
+// This projector rebuilds the wire from named deltas rather than forwarding
+// the chunk verbatim; a delta absent here never reaches the durable stream.
+function extractGeneratedFilesDeltas(
+  chunk: Uint8Array,
+): ReturnType<typeof parseGeneratedFilesDelta> {
+  const text = new TextDecoder().decode(chunk);
+  const files: ReturnType<typeof parseGeneratedFilesDelta> = [];
+  for (const rawLine of text.split('\n')) {
+    const line = rawLine.trim();
+    if (!line.startsWith('data: ') || line === 'data: [DONE]') continue;
+    try {
+      const payload = JSON.parse(line.slice(6)) as {
+        choices?: Array<{ delta?: { x_generated_files?: unknown } }>;
+      };
+      for (const choice of payload.choices ?? []) {
+        files.push(...parseGeneratedFilesDelta(choice.delta?.x_generated_files));
+      }
+    } catch {
+      // Non-JSON/custom SSE lines carry no generated-file delta.
+    }
+  }
+  return files;
 }
 
 export function projectCloudAgentWorkflowChunk(
@@ -32,5 +57,16 @@ export function projectCloudAgentWorkflowChunk(
       choices: [{ delta: { x_interactive_card: { card } }, index: 0 }],
     })}\n\n`,
   }));
-  return [...activity, ...cards];
+  const generatedFiles = extractGeneratedFilesDeltas(chunk);
+  const files =
+    generatedFiles.length > 0
+      ? [
+          {
+            sse: `data: ${JSON.stringify({
+              choices: [{ delta: { x_generated_files: { files: generatedFiles } }, index: 0 }],
+            })}\n\n`,
+          },
+        ]
+      : [];
+  return [...activity, ...cards, ...files];
 }
