@@ -2116,10 +2116,9 @@ export function useChatStream(): UseChatStreamReturn {
         stopStreaming(conversationId);
         setLoading(false, conversationId);
         deleteMessage(assistantMessageId, conversationId);
-        if (!regenerateParentId) {
-          deleteMessage(userMessageId, conversationId);
-        }
-        useChatStore.getState().setActiveLeaf(conversationId, restoreLeafId);
+        useChatStore
+          .getState()
+          .setActiveLeaf(conversationId, regenerateParentId ? restoreLeafId : userMessageId);
         endConversationRequest(conversationId, abortController);
       };
 

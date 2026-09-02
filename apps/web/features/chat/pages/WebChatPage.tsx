@@ -1617,7 +1617,13 @@ export default function WebChatPage() {
             setBareChatSessionId(null);
             setActiveConversation(null);
             router.replace('/chat');
-            toast.error(reason || 'This conversation is unavailable — it may have been deleted.');
+            toast.error(reason || 'This conversation is unavailable — it may have been deleted.', {
+              id: `conversation-unavailable-${urlConversationId}`,
+              action: {
+                label: 'Retry',
+                onClick: () => router.push(`/chat/${urlConversationId}`),
+              },
+            });
           }
         });
       }
@@ -1673,11 +1679,20 @@ export default function WebChatPage() {
       const releaseSendWindow = claimSendWindow();
       let targetConversationId =
         options.conversationId || urlConversationId || bareChatSessionId || null;
+      let resolvedUserMessageId: string | null = options.userMessageId ?? null;
       // Nothing reached a model, so the text is the user's again. Parking it on
       // the conversation it was written for is what survives the create →
       // navigate remount that puts a different composer instance on screen.
+      // Skipped when the optimistic bubble itself survived (it already carries
+      // the content, with its own inline Retry).
       const abandonSend = (): false => {
-        parkUnsentDraft(targetConversationId, content);
+        const survived =
+          resolvedUserMessageId !== null &&
+          targetConversationId !== null &&
+          (useChatStore.getState().messagesByConversation[targetConversationId] ?? []).some(
+            (m) => m.id === resolvedUserMessageId,
+          );
+        if (!survived) parkUnsentDraft(targetConversationId, content);
         return false;
       };
       let clientConvId: string | null = null;
@@ -1687,6 +1702,9 @@ export default function WebChatPage() {
       // and park the draft where that state reads it from.
       const releaseUnresolvedPlaceholder = () => {
         if (!clientConvId || resolvedFreshConvId) return;
+        const stillHasMessages =
+          (useChatStore.getState().messagesByConversation[clientConvId]?.length ?? 0) > 0;
+        if (stillHasMessages) return;
         if (!urlConversationId) {
           setBareChatSessionId((current) => (current === clientConvId ? null : current));
         }
@@ -1706,6 +1724,7 @@ export default function WebChatPage() {
         // placeholder to the server id once `createConversation` resolves.
         clientConvId = existingConvId ? null : crypto.randomUUID();
         const convId = existingConvId || clientConvId!;
+        resolvedUserMessageId ??= crypto.randomUUID();
         if (clientConvId) {
           setActiveConversation(clientConvId);
           if (!urlConversationId) setBareChatSessionId(clientConvId);
@@ -1744,7 +1763,7 @@ export default function WebChatPage() {
         const doSend = (replacementTurnCommitted?: () => void) =>
           sendMessage(content, {
             model: activeModelId,
-            userMessageId: options.userMessageId,
+            userMessageId: resolvedUserMessageId ?? undefined,
             assistantMessageId: options.assistantMessageId,
             conversationId: convId,
             ensureConversationId,
@@ -4166,6 +4185,30 @@ export default function WebChatPage() {
 
       const replayOptions = replayToSendOptions(replayDecision.replay);
 
+      if (userRetryIndex >= 0 && !conversations.some((c) => c.id === displayedConversationId)) {
+        const conversationId = displayedConversationId;
+        deleteMessage(userMsg.id, conversationId);
+        await sendMessage(userMsg.content, {
+          model: activeModelId,
+          conversationId,
+          attachments: userMsg.attachments,
+          ...replayOptions,
+          ensureConversationId: async () => {
+            const created = await createConversation(
+              NEW_CHAT_TITLE,
+              activeModelId,
+              activeProjectId,
+            );
+            if (!created) return null;
+            adoptPendingComposerToggles(created.id);
+            if (!urlConversationId) setBareChatSessionId(created.id);
+            router.replace(`/chat/${created.id}`);
+            return created.id;
+          },
+        });
+        return;
+      }
+
       // The answer that is already here stays: the new one becomes a sibling
       // under the same question, and the pager is how the reader gets back to
       // it. Nothing is deleted, so nothing needs confirming and there is no
@@ -4208,6 +4251,14 @@ export default function WebChatPage() {
       sendReplacingMessages,
       sendMessage,
       activeModelId,
+      activeProjectId,
+      conversations,
+      createConversation,
+      adoptPendingComposerToggles,
+      urlConversationId,
+      setBareChatSessionId,
+      router,
+      deleteMessage,
       isTrialExhausted,
       handleOpenUpgradeDialog,
       setChatError,
