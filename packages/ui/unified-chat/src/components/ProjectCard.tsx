@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type MouseEvent } from 'react';
 import { FolderOpen, MoreHorizontal, Star } from 'lucide-react';
-import { useMenuKeyboard } from '@agiworkforce/ui';
+import { useConfirmAction, useMenuKeyboard } from '@agiworkforce/ui';
 import { cn } from '../lib/utils';
 import { useProjectStore } from '../stores/projectStore';
 import type { Project } from '../lib/types';
@@ -46,8 +46,8 @@ export function ProjectCard({
 }: ProjectCardProps) {
   const toggleStar = useProjectStore((s) => s.toggleStar);
   const [menuOpen, setMenuOpen] = useState(false);
-  const [confirmDelete, setConfirmDelete] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
+  const { confirm, dialog: confirmDialog } = useConfirmAction();
 
   const handleStarClick = useCallback(
     (event: MouseEvent<HTMLButtonElement>) => {
@@ -62,28 +62,26 @@ export function ProjectCard({
   const menuTriggerRef = useRef<HTMLButtonElement | null>(null);
   const closeMenu = useCallback(() => {
     setMenuOpen(false);
-    setConfirmDelete(false);
   }, []);
   // role="menu" promises the keyboard contract; this panel had outside-click
   // dismissal only, so a keyboard user could open it and reach nothing.
   useMenuKeyboard({
-    open: menuOpen,
+    open: menuOpen && !confirmDialog,
     onClose: closeMenu,
     panelRef: menuPanelRef,
     triggerRef: menuTriggerRef,
   });
 
   useEffect(() => {
-    if (!menuOpen) return;
+    if (!menuOpen || confirmDialog) return;
     function handleOutside(e: globalThis.MouseEvent) {
       if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
         setMenuOpen(false);
-        setConfirmDelete(false);
       }
     }
     document.addEventListener('mousedown', handleOutside);
     return () => document.removeEventListener('mousedown', handleOutside);
-  }, [menuOpen]);
+  }, [menuOpen, confirmDialog]);
 
   const conversationCount = project.conversationCount ?? project.conversationIds?.length ?? 0;
 
@@ -94,242 +92,217 @@ export function ProjectCard({
   const hasMenu = !!(onEdit || archiveAction || onDelete);
 
   return (
-    // The card used to BE the button, with the star and menu buttons nested
-    // inside it. A control cannot contain other controls: assistive tech has no
-    // way to represent it, and axe reports nested-interactive. The open action
-    // is now its own element stretched over the card, so the row still clicks
-    // anywhere while the action buttons stay siblings rather than descendants.
-    <div
-      aria-current={active ? 'true' : undefined}
-      className={cn(
-        'group relative flex w-full flex-col gap-2 rounded-xl border bg-[var(--chat-surface-elevated)] p-4 text-left transition-colors',
-        'hover:bg-[var(--chat-surface-hover)] focus-within:ring-2 focus-within:ring-[var(--chat-accent-secondary)]',
-        active
-          ? 'border-[var(--chat-accent-primary)] shadow-[0_0_0_2px_rgba(218,119,86,0.18)]'
-          : 'border-[var(--chat-border)]',
-        className,
-      )}
-    >
-      <button
-        type="button"
-        onClick={() => onSelect?.(project)}
-        aria-label={`Open project ${project.name}`}
-        className="absolute inset-0 z-0 cursor-pointer rounded-xl focus:outline-none"
-      />
-      <div className="pointer-events-none relative z-10 flex items-start justify-between gap-3">
-        <div className="flex min-w-0 items-center gap-2">
-          <FolderOpen
-            size={16}
-            strokeWidth={1.75}
-            className="shrink-0 text-[var(--chat-accent-secondary)]"
-            aria-hidden="true"
-          />
-          <span className="truncate text-sm font-semibold text-[var(--chat-text-primary)]">
-            {project.name}
-          </span>
-        </div>
+    <>
+      {confirmDialog}
+      {/* The card used to BE the button, with the star and menu buttons nested
+      inside it. A control cannot contain other controls: assistive tech has no
+      way to represent it, and axe reports nested-interactive. The open action
+      is now its own element stretched over the card, so the row still clicks
+      anywhere while the action buttons stay siblings rather than descendants. */}
+      <div
+        aria-current={active ? 'true' : undefined}
+        className={cn(
+          'group relative flex w-full flex-col gap-2 rounded-xl border bg-[var(--chat-surface-elevated)] p-4 text-left transition-colors',
+          'hover:bg-[var(--chat-surface-hover)] focus-within:ring-2 focus-within:ring-[var(--chat-accent-secondary)]',
+          active
+            ? 'border-[var(--chat-accent-primary)] shadow-[0_0_0_2px_rgba(218,119,86,0.18)]'
+            : 'border-[var(--chat-border)]',
+          className,
+        )}
+      >
+        <button
+          type="button"
+          onClick={() => onSelect?.(project)}
+          aria-label={`Open project ${project.name}`}
+          className="absolute inset-0 z-0 cursor-pointer rounded-xl focus:outline-none"
+        />
+        <div className="pointer-events-none relative z-10 flex items-start justify-between gap-3">
+          <div className="flex min-w-0 items-center gap-2">
+            <FolderOpen
+              size={16}
+              strokeWidth={1.75}
+              className="shrink-0 text-[var(--chat-accent-secondary)]"
+              aria-hidden="true"
+            />
+            <span className="truncate text-sm font-semibold text-[var(--chat-text-primary)]">
+              {project.name}
+            </span>
+          </div>
 
-        <div className="pointer-events-auto flex shrink-0 items-center gap-1">
-          <button
-            type="button"
-            onClick={handleStarClick}
-            aria-label={project.starred ? 'Unstar project' : 'Star project'}
-            aria-pressed={project.starred ?? false}
-            className={cn(
-              'flex h-7 w-7 items-center justify-center rounded-md transition-colors',
-              'hover:bg-[var(--chat-surface-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--chat-accent-secondary)]',
-              project.starred
-                ? 'text-[var(--chat-accent-primary-text)]'
-                : 'text-[var(--chat-text-muted)] hover:text-[var(--chat-text-primary)]',
-            )}
-          >
-            <Star size={14} strokeWidth={1.75} fill={project.starred ? 'currentColor' : 'none'} />
-          </button>
-
-          {hasMenu && (
-            <div ref={menuRef} className="relative">
-              <button
-                ref={menuTriggerRef}
-                type="button"
-                aria-label="Project options"
-                aria-expanded={menuOpen}
-                aria-haspopup="menu"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setMenuOpen((v) => !v);
-                  setConfirmDelete(false);
-                }}
-                className="flex h-7 w-7 items-center justify-center rounded-md text-[var(--chat-text-muted)] transition-colors hover:bg-[var(--chat-surface-hover)] hover:text-[var(--chat-text-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--chat-accent-secondary)]"
-              >
-                <MoreHorizontal size={14} strokeWidth={1.75} aria-hidden="true" />
-              </button>
-
-              {menuOpen && (
-                <div
-                  ref={menuPanelRef}
-                  role="menu"
-                  aria-label={`Options for ${project.name}`}
-                  className="absolute right-0 top-full z-20 mt-1 min-w-[152px] rounded-lg border border-[var(--chat-border)] bg-[var(--chat-surface-elevated)] py-1 shadow-lg"
-                >
-                  {/* Star / Unstar */}
-                  <button
-                    type="button"
-                    role="menuitem"
-                    className={menuItemCls}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      toggleStar(project.id);
-                      onStarChange?.(project.id, !project.starred);
-                      setMenuOpen(false);
-                    }}
-                  >
-                    <Star size={13} strokeWidth={1.75} aria-hidden="true" />
-                    {project.starred ? 'Unstar' : 'Star'}
-                  </button>
-
-                  {onEdit && (
-                    <button
-                      type="button"
-                      role="menuitem"
-                      className={menuItemCls}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onEdit(project);
-                        setMenuOpen(false);
-                      }}
-                    >
-                      <svg
-                        width="13"
-                        height="13"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="1.75"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        aria-hidden="true"
-                      >
-                        <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
-                        <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
-                      </svg>
-                      Edit details
-                    </button>
-                  )}
-
-                  {archiveAction && (
-                    <button
-                      type="button"
-                      role="menuitem"
-                      className={menuItemCls}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        archiveAction(project);
-                        setMenuOpen(false);
-                      }}
-                    >
-                      <svg
-                        width="13"
-                        height="13"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="1.75"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        aria-hidden="true"
-                      >
-                        <polyline points="21 8 21 21 3 21 3 8" />
-                        <rect x="1" y="3" width="22" height="5" />
-                        <line x1="10" y1="12" x2="14" y2="12" />
-                      </svg>
-                      {project.isArchived ? 'Unarchive' : 'Archive'}
-                    </button>
-                  )}
-
-                  {onDelete && !confirmDelete && (
-                    <button
-                      type="button"
-                      role="menuitem"
-                      className={cn(menuItemCls, 'text-red-400 hover:text-red-300')}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setConfirmDelete(true);
-                      }}
-                    >
-                      <svg
-                        width="13"
-                        height="13"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="1.75"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        aria-hidden="true"
-                      >
-                        <polyline points="3 6 5 6 21 6" />
-                        <path d="M19 6l-1 14H6L5 6" />
-                        <path d="M10 11v6M14 11v6" />
-                        <path d="M9 6V4h6v2" />
-                      </svg>
-                      Delete
-                    </button>
-                  )}
-
-                  {onDelete && confirmDelete && (
-                    <div className="px-3 py-2">
-                      <p className="mb-2 text-xs text-[var(--chat-text-muted)]">
-                        Delete &ldquo;{project.name}&rdquo;? This cannot be undone.
-                      </p>
-                      <div className="flex gap-2">
-                        <button
-                          type="button"
-                          role="menuitem"
-                          className="flex-1 rounded border border-red-500/40 px-2 py-1 text-xs font-medium text-red-400 transition-colors hover:bg-red-500/10"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            onDelete(project);
-                            setMenuOpen(false);
-                            setConfirmDelete(false);
-                          }}
-                        >
-                          Delete
-                        </button>
-                        <button
-                          type="button"
-                          role="menuitem"
-                          className="flex-1 rounded px-2 py-1 text-xs text-[var(--chat-text-secondary)] transition-colors hover:bg-[var(--chat-surface-hover)]"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setConfirmDelete(false);
-                          }}
-                        >
-                          Cancel
-                        </button>
-                      </div>
-                    </div>
-                  )}
-                </div>
+          <div className="pointer-events-auto flex shrink-0 items-center gap-1">
+            <button
+              type="button"
+              onClick={handleStarClick}
+              aria-label={project.starred ? 'Unstar project' : 'Star project'}
+              aria-pressed={project.starred ?? false}
+              className={cn(
+                'flex h-7 w-7 items-center justify-center rounded-md transition-colors',
+                'hover:bg-[var(--chat-surface-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--chat-accent-secondary)]',
+                project.starred
+                  ? 'text-[var(--chat-accent-primary-text)]'
+                  : 'text-[var(--chat-text-muted)] hover:text-[var(--chat-text-primary)]',
               )}
-            </div>
-          )}
+            >
+              <Star size={14} strokeWidth={1.75} fill={project.starred ? 'currentColor' : 'none'} />
+            </button>
+
+            {hasMenu && (
+              <div ref={menuRef} className="relative">
+                <button
+                  ref={menuTriggerRef}
+                  type="button"
+                  aria-label="Project options"
+                  aria-expanded={menuOpen}
+                  aria-haspopup="menu"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setMenuOpen((v) => !v);
+                  }}
+                  className="flex h-7 w-7 items-center justify-center rounded-md text-[var(--chat-text-muted)] transition-colors hover:bg-[var(--chat-surface-hover)] hover:text-[var(--chat-text-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--chat-accent-secondary)]"
+                >
+                  <MoreHorizontal size={14} strokeWidth={1.75} aria-hidden="true" />
+                </button>
+
+                {menuOpen && (
+                  <div
+                    ref={menuPanelRef}
+                    role="menu"
+                    aria-label={`Options for ${project.name}`}
+                    className="absolute right-0 top-full z-20 mt-1 min-w-[152px] rounded-lg border border-[var(--chat-border)] bg-[var(--chat-surface-elevated)] py-1 shadow-lg"
+                  >
+                    {/* Star / Unstar */}
+                    <button
+                      type="button"
+                      role="menuitem"
+                      className={menuItemCls}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        toggleStar(project.id);
+                        onStarChange?.(project.id, !project.starred);
+                        setMenuOpen(false);
+                      }}
+                    >
+                      <Star size={13} strokeWidth={1.75} aria-hidden="true" />
+                      {project.starred ? 'Unstar' : 'Star'}
+                    </button>
+
+                    {onEdit && (
+                      <button
+                        type="button"
+                        role="menuitem"
+                        className={menuItemCls}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onEdit(project);
+                          setMenuOpen(false);
+                        }}
+                      >
+                        <svg
+                          width="13"
+                          height="13"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="1.75"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          aria-hidden="true"
+                        >
+                          <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                          <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+                        </svg>
+                        Edit details
+                      </button>
+                    )}
+
+                    {archiveAction && (
+                      <button
+                        type="button"
+                        role="menuitem"
+                        className={menuItemCls}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          archiveAction(project);
+                          setMenuOpen(false);
+                        }}
+                      >
+                        <svg
+                          width="13"
+                          height="13"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="1.75"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          aria-hidden="true"
+                        >
+                          <polyline points="21 8 21 21 3 21 3 8" />
+                          <rect x="1" y="3" width="22" height="5" />
+                          <line x1="10" y1="12" x2="14" y2="12" />
+                        </svg>
+                        {project.isArchived ? 'Unarchive' : 'Archive'}
+                      </button>
+                    )}
+
+                    {onDelete && (
+                      <button
+                        type="button"
+                        role="menuitem"
+                        className={cn(menuItemCls, 'text-red-400 hover:text-red-300')}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setMenuOpen(false);
+                          confirm({
+                            title: `Delete "${project.name}"?`,
+                            description: 'This cannot be undone.',
+                            confirmLabel: 'Delete',
+                            destructive: true,
+                            onConfirm: () => onDelete(project),
+                          });
+                        }}
+                      >
+                        <svg
+                          width="13"
+                          height="13"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="1.75"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          aria-hidden="true"
+                        >
+                          <polyline points="3 6 5 6 21 6" />
+                          <path d="M19 6l-1 14H6L5 6" />
+                          <path d="M10 11v6M14 11v6" />
+                          <path d="M9 6V4h6v2" />
+                        </svg>
+                        Delete
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {project.description ? (
+          <p className="pointer-events-none relative z-10 line-clamp-2 text-xs text-[var(--chat-text-secondary)]">
+            {project.description}
+          </p>
+        ) : null}
+
+        <div className="pointer-events-none relative z-10 flex items-center justify-between text-[12px] text-[var(--chat-text-muted)]">
+          <span>
+            {conversationCount === 0
+              ? 'No conversations yet'
+              : `${conversationCount} conversation${conversationCount === 1 ? '' : 's'}`}
+          </span>
+          <span>Updated {formatRelativeDate(project.updatedAt)}</span>
         </div>
       </div>
-
-      {project.description ? (
-        <p className="pointer-events-none relative z-10 line-clamp-2 text-xs text-[var(--chat-text-secondary)]">
-          {project.description}
-        </p>
-      ) : null}
-
-      <div className="pointer-events-none relative z-10 flex items-center justify-between text-[12px] text-[var(--chat-text-muted)]">
-        <span>
-          {conversationCount === 0
-            ? 'No conversations yet'
-            : `${conversationCount} conversation${conversationCount === 1 ? '' : 's'}`}
-        </span>
-        <span>Updated {formatRelativeDate(project.updatedAt)}</span>
-      </div>
-    </div>
+    </>
   );
 }
