@@ -59,8 +59,8 @@ test.describe('chat surface layout', () => {
     await expect(page.locator('.message-inner').first()).toBeVisible({ timeout: 30000 });
 
     const edges = await page.evaluate(() => {
-      const textarea = document.querySelector('textarea');
-      const composerColumn = textarea?.closest('.max-w-3xl') as HTMLElement | null;
+      const input = document.querySelector('#chat-composer [role="textbox"]');
+      const composerColumn = input?.closest('.max-w-3xl') as HTMLElement | null;
       const messageColumn = document.querySelector('.message-inner') as HTMLElement | null;
       const rect = (el: HTMLElement | null) =>
         el
