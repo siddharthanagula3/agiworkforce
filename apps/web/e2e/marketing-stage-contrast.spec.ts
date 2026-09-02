@@ -23,7 +23,7 @@ test.describe('marketing landing contrast', () => {
         await page.evaluate((t) => {
           document.documentElement.classList.toggle('dark', t === 'dark');
         }, theme);
-        await page.waitForSelector('.agi-fl-surface-row');
+        await page.waitForSelector('.agi-ds-route-rail');
         await page.evaluate(async () => {
           for (let y = 0; y < document.body.scrollHeight; y += 600) {
             window.scrollTo(0, y);
