@@ -423,6 +423,44 @@ describe('runResearchLoop', () => {
     expect(directive?.content).toContain('search budget was reached');
   });
 
+  it('does not credit a zero-search round toward the search cap or the displayed count', async () => {
+    let call = 0;
+    streamRequestMock.mockImplementation(async () => {
+      call += 1;
+      if (call === 1) return planStream();
+      if (call === 2) {
+        return sseStream([
+          searchResultsEvent([{ url: 'https://round1.com' }]),
+          contentEvent('notes'),
+          finishEvent(),
+        ]);
+      }
+      if (call === 3) {
+        // A gap-filling round that ran no real search: no x_search_results
+        // event at all, just review notes.
+        return sseStream([contentEvent('reviewing notes, nothing new'), finishEvent()]);
+      }
+      if (call === 4) {
+        return sseStream([
+          searchResultsEvent([{ url: 'https://round3.com' }]),
+          contentEvent('notes'),
+          finishEvent(),
+        ]);
+      }
+      return sseStream([contentEvent('report'), finishEvent()]);
+    });
+
+    const run = await collectRun(
+      runResearchLoop(makeProcessed(), BILLING, { maxIterations: 5, maxSearches: 2 }),
+    );
+
+    // Plan + 3 gathering rounds + synthesis. A phantom floor on round 2 would
+    // have tripped the cap of 2 after round 2 and skipped round 3 entirely.
+    expect(streamRequestMock).toHaveBeenCalledTimes(5);
+    const statuses = researchStatuses(run);
+    expect(statuses[statuses.length - 1]?.['searches']).toBe(2);
+  });
+
   it('stops gathering when the wall-clock budget is exhausted', async () => {
     streamRequestMock.mockImplementation(async () =>
       sseStream([contentEvent('notes, never ready'), finishEvent()]),
