@@ -1297,6 +1297,7 @@ export default function WebChatPage() {
     // the empty-chat greeting before its transcript arrives.
     isLoading: isConversationLoading,
     listError: conversationListError,
+    getConversationLoadError,
     createConversation,
     loadConversation,
     deleteConversation,
@@ -1622,16 +1623,12 @@ export default function WebChatPage() {
         } else {
           void loadConversation(urlConversationId).then((ok) => {
             if (!ok) {
-              // loadConversation set the store error (server's 404/403 message) before
-              // returning false; capture it BEFORE setActiveConversation(null) resets it
-              // to null, so the user gets feedback instead of a silent bounce to a blank
-              // /chat surface.
-              const reason = useChatStore.getState().error;
+              const reason = getConversationLoadError();
               setBareChatSessionId(null);
               setActiveConversation(null);
               router.replace('/chat');
               toast.error(
-                reason || 'This conversation is unavailable — it may have been deleted.',
+                reason || "Couldn't load this conversation. Check your connection and try again.",
                 {
                   id: `conversation-unavailable-${urlConversationId}`,
                   action: {
@@ -1651,6 +1648,7 @@ export default function WebChatPage() {
   }, [
     activeConversationId,
     authLoaded,
+    getConversationLoadError,
     loadConversation,
     router,
     setActiveConversation,
