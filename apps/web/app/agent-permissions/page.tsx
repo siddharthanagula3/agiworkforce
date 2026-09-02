@@ -427,7 +427,7 @@ export default function AgentPermissionsPage() {
               disconnecting a connector is recorded in your account&rsquo;s security audit events.
             </Prose>
             <ButtonRow>
-              <Button href="/acceptable-use">Read the Acceptable Use Policy</Button>
+              <Button href="/acceptable-use">Read the acceptable use policy</Button>
               <Button href="/security" variant="secondary">
                 Security posture
               </Button>
