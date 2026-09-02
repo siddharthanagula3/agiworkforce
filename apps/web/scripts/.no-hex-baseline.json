@@ -687,7 +687,7 @@
     },
     {
       "file": "features/chat/components/messages/MessageBubble.tsx",
-      "line": 2107,
+      "line": 2149,
       "rule": "hex",
       "literal": "#6366f1"
     },
