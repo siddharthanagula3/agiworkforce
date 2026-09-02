@@ -1,4 +1,3 @@
-
 import { readFileSync, existsSync, readdirSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { render, screen } from '@testing-library/react';
@@ -7,14 +6,6 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import robots from '@/app/robots';
 import sitemap from '@/app/sitemap';
 import { DISALLOW_APP, SITE_URL } from '@/lib/seo/site';
-
-const NOT_FOUND = new Error('NEXT_NOT_FOUND');
-
-vi.mock('next/navigation', () => ({
-  notFound: () => {
-    throw NOT_FOUND;
-  },
-}));
 
 const APP_DIR = resolve(__dirname, '..');
 
@@ -26,18 +17,30 @@ function harnessSegments(): string[] {
     .map((entry) => entry.name);
 }
 
+function segmentPages(segment: string): string[] {
+  const segmentDir = resolve(APP_DIR, segment);
+  return readdirSync(segmentDir, { withFileTypes: true })
+    .filter((entry) => entry.isDirectory())
+    .map((entry) => entry.name)
+    .filter((page) => existsSync(resolve(segmentDir, page, 'page.tsx')));
+}
+
 const PRODUCTION_GUARD = /process\.env(\.NODE_ENV|\[['"]NODE_ENV['"]\])\s*===\s*['"]production['"]/;
 
-describe('SIX-24 — /dev harness segment gate', () => {
+const PUBLIC_HARNESS_ROUTES = new Set(['dev/landing-preview']);
+
+describe('SIX-24 — /dev harness segment layout', () => {
   afterEach(() => {
     vi.unstubAllEnvs();
   });
 
-  it('404s the whole segment when NODE_ENV is production', async () => {
+  it('passes children through unconditionally, since the guard now lives on individual pages', async () => {
     vi.stubEnv('NODE_ENV', 'production');
     const { default: DevHarnessLayout } = await import('../dev/layout');
 
-    expect(() => DevHarnessLayout({ children: <div>harness</div> })).toThrow(NOT_FOUND);
+    render(DevHarnessLayout({ children: <div data-testid="harness">harness</div> }));
+
+    expect(screen.getByTestId('harness')).toBeInTheDocument();
   });
 
   it('renders the harness outside production', async () => {
@@ -57,17 +60,34 @@ describe('SIX-24 — every harness route segment carries a production guard', ()
     expect(segments).toContain('dev');
   });
 
-  it.each(segments)('%s has a production guard at the segment boundary', (segment) => {
-    const layoutPath = resolve(APP_DIR, segment, 'layout.tsx');
-    expect(
-      existsSync(layoutPath),
-      `app/${segment}/layout.tsx is missing — a harness segment must 404 in production`,
-    ).toBe(true);
+  it.each(segments)(
+    '%s guards every non-public page at the segment or page boundary',
+    (segment) => {
+      const layoutPath = resolve(APP_DIR, segment, 'layout.tsx');
+      const layoutSource = existsSync(layoutPath) ? readFileSync(layoutPath, 'utf8') : '';
+      const layoutGuarded =
+        PRODUCTION_GUARD.test(layoutSource) && /notFound\(\)/.test(layoutSource);
 
-    const source = readFileSync(layoutPath, 'utf8');
-    expect(source).toMatch(PRODUCTION_GUARD);
-    expect(source).toMatch(/notFound\(\)/);
-  });
+      if (layoutGuarded) {
+        return;
+      }
+
+      for (const page of segmentPages(segment)) {
+        const route = `${segment}/${page}`;
+        if (PUBLIC_HARNESS_ROUTES.has(route)) {
+          continue;
+        }
+
+        const pagePath = resolve(APP_DIR, segment, page, 'page.tsx');
+        const source = readFileSync(pagePath, 'utf8');
+        expect(
+          source,
+          `${route}/page.tsx is missing a production guard — the segment layout does not gate it`,
+        ).toMatch(PRODUCTION_GUARD);
+        expect(source).toMatch(/notFound\(\)/);
+      }
+    },
+  );
 });
 
 describe('SIX-24 — harness paths are not crawlable', () => {
