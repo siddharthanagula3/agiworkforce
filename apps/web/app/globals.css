@@ -403,7 +403,7 @@
 }
 
 [data-design='agi'] .agi-auth-page :where(.cl-formButtonPrimary) {
-  background: var(--agi-amber) !important;
+  background: var(--agi-button-bg) !important;
   color: var(--agi-button-ink) !important;
 }
 
@@ -413,7 +413,9 @@
 }
 
 [data-design='agi'] .agi-auth-page :where(.cl-footerActionLink, .cl-identityPreviewEditButton) {
-  color: var(--agi-amber) !important;
+  color: var(--agi-ink) !important;
+  text-decoration: underline !important;
+  text-underline-offset: 3px !important;
 }
 
 @keyframes hero-fade-up {
@@ -6892,7 +6894,7 @@ html[data-contrast='more'] *:focus-visible {
   left: 4px;
   width: 1px;
   content: '';
-  background: linear-gradient(var(--agi-amber), var(--agi-rule-strong));
+  background: linear-gradient(var(--agi-ink), var(--agi-rule-strong));
 }
 
 [data-design='agi'] .agi-auth-surface-node {
@@ -6903,10 +6905,8 @@ html[data-contrast='more'] *:focus-visible {
   margin-top: 3px;
   border: 2px solid var(--agi-card);
   border-radius: 50%;
-  background: var(--agi-amber);
-  box-shadow:
-    0 0 0 1px var(--agi-amber),
-    0 0 12px var(--agi-glow-soft);
+  background: var(--agi-ink);
+  box-shadow: 0 0 0 1px var(--agi-ink);
 }
 
 [data-design='agi'] .agi-auth-surface-list strong,
@@ -6949,7 +6949,7 @@ html[data-contrast='more'] *:focus-visible {
   content: '✓';
   position: absolute;
   left: 0;
-  color: var(--agi-amber);
+  color: var(--agi-success);
   font-weight: 700;
 }
 
