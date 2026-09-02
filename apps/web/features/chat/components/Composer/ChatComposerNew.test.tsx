@@ -208,7 +208,7 @@ describe('ChatComposerNew', () => {
     expect(cluster).toBeTruthy();
     expect(cluster!.className).toContain('min-w-0');
 
-    const plus = screen.getByRole('button', { name: /more options/i });
+    const plus = screen.getByRole('button', { name: /add attachments and tools/i });
     const send = screen.getByRole('button', { name: /send message/i });
     expect(cluster!.contains(plus)).toBe(true);
     expect(cluster!.contains(send)).toBe(true);
@@ -361,7 +361,7 @@ describe('ChatComposerNew', () => {
   it('opens + menu and shows Add photos and files option', async () => {
     render(<ChatComposerNew onSend={vi.fn()} />);
 
-    const moreBtn = screen.getByRole('button', { name: /more options/i });
+    const moreBtn = screen.getByRole('button', { name: /add attachments and tools/i });
     fireEvent.click(moreBtn);
 
     expect(screen.getByText('Add photos & files')).toBeInTheDocument();
@@ -540,7 +540,7 @@ describe('ChatComposerNew', () => {
       />,
     );
 
-    await userEvent.click(screen.getByRole('button', { name: /more options/i }));
+    await userEvent.click(screen.getByRole('button', { name: /add attachments and tools/i }));
     const imageButton = screen.getByText('Create image').closest('button')!;
     const videoButton = screen.getByText('Create video').closest('button')!;
     expect(imageButton).toHaveTextContent('Checking');
@@ -574,7 +574,7 @@ describe('ChatComposerNew', () => {
       />,
     );
 
-    await userEvent.click(screen.getByRole('button', { name: /more options/i }));
+    await userEvent.click(screen.getByRole('button', { name: /add attachments and tools/i }));
     const imageButton = screen.getByText('Create image').closest('button')!;
     const videoButton = screen.getByText('Create video').closest('button')!;
     expect(imageButton).toHaveTextContent('Retry');
@@ -615,7 +615,7 @@ describe('ChatComposerNew', () => {
   it('keeps automatic Web search and reasoning effort out of the + menu', () => {
     render(<ChatComposerNew onSend={vi.fn()} />);
 
-    const moreBtn = screen.getByRole('button', { name: /more options/i });
+    const moreBtn = screen.getByRole('button', { name: /add attachments and tools/i });
     fireEvent.click(moreBtn);
 
     expect(screen.queryByRole('button', { name: /web search/i })).not.toBeInTheDocument();
@@ -738,7 +738,7 @@ describe('ChatComposerNew', () => {
   it('renders Skills, Connectors, and Plugins entries in the overflow menu', () => {
     render(<ChatComposerNew onSend={vi.fn()} />);
 
-    const moreBtn = screen.getByRole('button', { name: /more options/i });
+    const moreBtn = screen.getByRole('button', { name: /add attachments and tools/i });
     fireEvent.click(moreBtn);
 
     expect(screen.getByText('Skills')).toBeInTheDocument();
@@ -750,19 +750,19 @@ describe('ChatComposerNew', () => {
     chatComposerMocks.openSettings.mockClear();
     render(<ChatComposerNew onSend={vi.fn()} />);
 
-    fireEvent.click(screen.getByRole('button', { name: /more options/i }));
+    fireEvent.click(screen.getByRole('button', { name: /add attachments and tools/i }));
     fireEvent.click(screen.getByText('Connectors'));
     expect(chatComposerMocks.openSettings).toHaveBeenLastCalledWith('connectors');
 
-    fireEvent.click(screen.getByRole('button', { name: /more options/i }));
+    fireEvent.click(screen.getByRole('button', { name: /add attachments and tools/i }));
     fireEvent.click(screen.getByText('Skills'));
     expect(chatComposerMocks.openSettings).toHaveBeenLastCalledWith('skills');
 
-    fireEvent.click(screen.getByRole('button', { name: /more options/i }));
+    fireEvent.click(screen.getByRole('button', { name: /add attachments and tools/i }));
     fireEvent.click(screen.getByText('Plugins'));
     expect(chatComposerMocks.openSettings).toHaveBeenLastCalledWith('plugins');
 
-    fireEvent.click(screen.getByRole('button', { name: /more options/i }));
+    fireEvent.click(screen.getByRole('button', { name: /add attachments and tools/i }));
     expect(screen.getByText('Connectors').closest('a')).toBeNull();
     expect(screen.getByText('Plugins').closest('a')).toBeNull();
     expect(screen.queryByRole('textbox', { name: /search skills/i })).toBeNull();
@@ -828,13 +828,13 @@ describe('ChatComposerNew', () => {
       'AGI Work: multi-step tasks with tools, files, and reviewable deliverables',
     );
 
-    fireEvent.click(screen.getByRole('button', { name: /more options/i }));
+    fireEvent.click(screen.getByRole('button', { name: /add attachments and tools/i }));
     expect(document.querySelector('.chat-composer-mode-in-menu')).not.toBeNull();
   });
 
   it('keeps only explicit task modes inside the + menu', () => {
     render(<ChatComposerNew onSend={vi.fn()} />);
-    fireEvent.click(screen.getByRole('button', { name: /more options/i }));
+    fireEvent.click(screen.getByRole('button', { name: /add attachments and tools/i }));
     expect(screen.queryByRole('button', { name: /web search/i })).not.toBeInTheDocument();
     expect(screen.queryByText(/extended thinking/i)).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /use style/i })).not.toBeInTheDocument();
@@ -846,7 +846,7 @@ describe('ChatComposerNew', () => {
     useModelStore.getState().setSelectedModelId('auto');
 
     render(<ChatComposerNew onSend={vi.fn()} />);
-    fireEvent.click(screen.getByRole('button', { name: /more options/i }));
+    fireEvent.click(screen.getByRole('button', { name: /add attachments and tools/i }));
 
     expect(screen.getByRole('button', { name: /deep research/i })).toBeEnabled();
     expect(screen.getByRole('button', { name: /run code/i })).toBeEnabled();
@@ -861,7 +861,7 @@ describe('ChatComposerNew', () => {
     useModelStore.getState().setSelectedModelId(modelWithoutResearch!.id);
 
     render(<ChatComposerNew onSend={vi.fn()} />);
-    fireEvent.click(screen.getByRole('button', { name: /more options/i }));
+    fireEvent.click(screen.getByRole('button', { name: /add attachments and tools/i }));
 
     expect(screen.getByRole('button', { name: /deep research/i })).toHaveAttribute(
       'title',
@@ -873,7 +873,7 @@ describe('ChatComposerNew', () => {
     useModelStore.getState().setSelectedModelId('auto');
 
     render(<ChatComposerNew onSend={vi.fn()} />);
-    fireEvent.click(screen.getByRole('button', { name: /more options/i }));
+    fireEvent.click(screen.getByRole('button', { name: /add attachments and tools/i }));
     fireEvent.click(screen.getByRole('button', { name: /run code/i }));
 
     expect(screen.getByRole('status', { name: 'Active options: Run code' })).toBeVisible();
@@ -887,7 +887,7 @@ describe('ChatComposerNew', () => {
     const onSendMock = vi.fn();
     render(<ChatComposerNew onSend={onSendMock} />);
 
-    fireEvent.click(screen.getByRole('button', { name: /more options/i }));
+    fireEvent.click(screen.getByRole('button', { name: /add attachments and tools/i }));
     fireEvent.click(screen.getByRole('button', { name: /create office files/i }));
 
     const textarea = screen.getByRole('textbox', { name: /message input/i });
@@ -1109,7 +1109,7 @@ describe('ChatComposerNew', () => {
     it('renders media actions only when the host owns their generation callbacks', () => {
       const onSend = vi.fn();
       const { rerender } = render(<ChatComposerNew onSend={onSend} />);
-      fireEvent.click(screen.getByRole('button', { name: /more options/i }));
+      fireEvent.click(screen.getByRole('button', { name: /add attachments and tools/i }));
       expect(screen.queryByText('Create image')).toBeNull();
       expect(screen.queryByText('Create video')).toBeNull();
 
@@ -1140,7 +1140,7 @@ describe('ChatComposerNew', () => {
       const onGenerateImage = vi.fn();
       render(<ChatComposerNew onSend={vi.fn()} onGenerateImage={onGenerateImage} />);
 
-      fireEvent.click(screen.getByRole('button', { name: /more options/i }));
+      fireEvent.click(screen.getByRole('button', { name: /add attachments and tools/i }));
       fireEvent.click(screen.getByText('Create image'));
       fireEvent.click(screen.getByRole('button', { name: /select image model/i }));
       fireEvent.click(screen.getByRole('button', { name: googleModel!.label }));
@@ -1168,7 +1168,7 @@ describe('ChatComposerNew', () => {
       expect(openAiModel).toBeDefined();
       render(<ChatComposerNew onSend={vi.fn()} onGenerateImage={vi.fn()} />);
 
-      fireEvent.click(screen.getByRole('button', { name: /more options/i }));
+      fireEvent.click(screen.getByRole('button', { name: /add attachments and tools/i }));
       fireEvent.click(screen.getByText('Create image'));
       fireEvent.click(screen.getByRole('button', { name: /select image model/i }));
       fireEvent.click(screen.getByRole('button', { name: googleModel!.label }));
@@ -1221,7 +1221,7 @@ describe('ChatComposerNew', () => {
       }));
 
       render(<ChatComposerNew onSend={vi.fn()} onGenerateImage={vi.fn()} />);
-      fireEvent.click(screen.getByRole('button', { name: /more options/i }));
+      fireEvent.click(screen.getByRole('button', { name: /add attachments and tools/i }));
       fireEvent.click(screen.getByText('Create image'));
       fireEvent.click(screen.getByRole('button', { name: /select image model/i }));
 
@@ -1252,7 +1252,7 @@ describe('ChatComposerNew', () => {
           onUpgradeRequest={onUpgradeRequest}
         />,
       );
-      fireEvent.click(screen.getByRole('button', { name: /more options/i }));
+      fireEvent.click(screen.getByRole('button', { name: /add attachments and tools/i }));
 
       const button = screen.getByText('Create image').closest('button')!;
       expect(button).toHaveTextContent('Unavailable');
@@ -1279,7 +1279,7 @@ describe('ChatComposerNew', () => {
       const onSend = vi.fn();
       render(<ChatComposerNew onSend={onSend} onGenerateVideo={onGenerateVideo} />);
 
-      fireEvent.click(screen.getByRole('button', { name: /more options/i }));
+      fireEvent.click(screen.getByRole('button', { name: /add attachments and tools/i }));
       const item = screen.getByText('Create video');
       expect(item).toBeInTheDocument();
       expect(item.closest('button')).not.toHaveTextContent(/upgrade/i);
@@ -1316,7 +1316,7 @@ describe('ChatComposerNew', () => {
       }));
 
       render(<ChatComposerNew onSend={vi.fn()} onGenerateVideo={vi.fn()} />);
-      fireEvent.click(screen.getByRole('button', { name: /more options/i }));
+      fireEvent.click(screen.getByRole('button', { name: /add attachments and tools/i }));
 
       const button = screen.getByText('Create video').closest('button')!;
       expect(button).toHaveTextContent('Unavailable');
@@ -1342,7 +1342,7 @@ describe('ChatComposerNew', () => {
         />,
       );
 
-      fireEvent.click(screen.getByRole('button', { name: /more options/i }));
+      fireEvent.click(screen.getByRole('button', { name: /add attachments and tools/i }));
       const button = screen.getByText('Create video').closest('button')!;
       expect(button).toHaveTextContent(/upgrade/i);
 
@@ -1360,7 +1360,7 @@ describe('ChatComposerNew', () => {
 
       expect(screen.getByTestId('composer-footer')).toBeInTheDocument();
 
-      fireEvent.click(screen.getByRole('button', { name: /more options/i }));
+      fireEvent.click(screen.getByRole('button', { name: /add attachments and tools/i }));
       fireEvent.click(screen.getByText('Create video'));
 
       expect(screen.queryByTestId('composer-footer')).not.toBeInTheDocument();
@@ -1383,7 +1383,7 @@ describe('ChatComposerNew', () => {
       const onGenerateVideo = vi.fn();
       render(<ChatComposerNew onSend={vi.fn()} onGenerateVideo={onGenerateVideo} />);
 
-      fireEvent.click(screen.getByRole('button', { name: /more options/i }));
+      fireEvent.click(screen.getByRole('button', { name: /add attachments and tools/i }));
       fireEvent.click(screen.getByText('Create video'));
 
       const textarea = screen.getByRole('textbox', { name: /message input/i });
@@ -1404,7 +1404,7 @@ describe('ChatComposerNew', () => {
       const onGenerateVideo = vi.fn();
       render(<ChatComposerNew onSend={vi.fn()} onGenerateVideo={onGenerateVideo} />);
 
-      fireEvent.click(screen.getByRole('button', { name: /more options/i }));
+      fireEvent.click(screen.getByRole('button', { name: /add attachments and tools/i }));
       fireEvent.click(screen.getByText('Create video'));
 
       const textarea = screen.getByRole('textbox', { name: /message input/i });
@@ -1437,7 +1437,7 @@ describe('ChatComposerNew', () => {
 
       const onGenerateVideo = vi.fn();
       render(<ChatComposerNew onSend={vi.fn()} onGenerateVideo={onGenerateVideo} />);
-      fireEvent.click(screen.getByRole('button', { name: /more options/i }));
+      fireEvent.click(screen.getByRole('button', { name: /add attachments and tools/i }));
       fireEvent.click(screen.getByText('Create video'));
 
       const textarea = screen.getByRole('textbox', { name: /message input/i });
@@ -1464,13 +1464,13 @@ describe('ChatComposerNew', () => {
         <ChatComposerNew onSend={vi.fn()} onGenerateImage={vi.fn()} onGenerateVideo={vi.fn()} />,
       );
 
-      fireEvent.click(screen.getByRole('button', { name: /more options/i }));
+      fireEvent.click(screen.getByRole('button', { name: /add attachments and tools/i }));
       fireEvent.click(screen.getByText('Create image'));
       expect(
         screen.getByRole('button', { name: /exit image generation mode/i }),
       ).toBeInTheDocument();
 
-      fireEvent.click(screen.getByRole('button', { name: /more options/i }));
+      fireEvent.click(screen.getByRole('button', { name: /add attachments and tools/i }));
       fireEvent.click(screen.getByText('Create video'));
 
       expect(
