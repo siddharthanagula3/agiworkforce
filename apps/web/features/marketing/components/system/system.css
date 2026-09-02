@@ -102,6 +102,13 @@
   line-height: 1.5;
 }
 
+@media (max-width: 767px) {
+  [data-design='agi'] .agi-ds-prose[data-size='lg'] {
+    font-size: var(--agi-text-md);
+    line-height: var(--agi-leading-body);
+  }
+}
+
 [data-design='agi'] .agi-ds-prose[data-size='sm'] {
   font-size: var(--agi-text-sm);
 }
