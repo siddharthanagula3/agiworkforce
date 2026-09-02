@@ -4,7 +4,10 @@ import type { ProjectKnowledgeFile } from '@agiworkforce/types';
 import { KnowledgeFilesPanel } from './KnowledgeFilesPanel';
 
 vi.mock('@/lib/client/csrf', () => ({ getCsrfToken: vi.fn(async () => 'csrf-token') }));
-vi.mock('./FilePreviewModal', () => ({ FilePreviewModal: () => null }));
+vi.mock('./FilePreviewModal', () => ({
+  FilePreviewModal: ({ file }: { file: ProjectKnowledgeFile | null }) =>
+    file ? <div data-testid="preview-open">{file.fileName}</div> : null,
+}));
 
 const FILE: ProjectKnowledgeFile = {
   id: 'file-1',
@@ -53,5 +56,15 @@ describe('KnowledgeFilesPanel delete', () => {
       ),
     );
     await waitFor(() => expect(screen.queryByText('notes.txt')).toBeNull());
+  });
+
+  it('does not open the file preview when the remove button is activated by keyboard', async () => {
+    stubFetch();
+    render(<KnowledgeFilesPanel projectId="project-1" />);
+
+    const del = await screen.findByTestId('knowledge-files-delete');
+    fireEvent.keyDown(del, { key: 'Enter' });
+
+    expect(screen.queryByTestId('preview-open')).toBeNull();
   });
 });
