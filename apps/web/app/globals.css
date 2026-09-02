@@ -7427,8 +7427,9 @@ html[data-contrast='more'] *:focus-visible {
 }
 
 [data-design='agi'] .agi-rights-input:focus-visible {
-  border-color: var(--agi-amber);
-  box-shadow: 0 0 0 3px var(--agi-amber-soft);
+  border-color: var(--agi-ink);
+  outline: 2px solid var(--agi-ink);
+  outline-offset: 2px;
 }
 
 [data-design='agi'] .agi-rights-hint {
