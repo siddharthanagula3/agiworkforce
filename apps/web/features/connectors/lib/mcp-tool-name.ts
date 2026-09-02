@@ -1,4 +1,3 @@
-
 import { CONNECTORS } from '../data/connectors';
 
 export interface QualifiedMcpToolName {
@@ -26,14 +25,22 @@ export interface McpToolDescription {
   label: string;
 }
 
+function humanizeMcpToolLabel(toolName: string): string {
+  return toolName
+    .replace(/[_-]+/g, ' ')
+    .trim()
+    .replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
 export function describeMcpTool(name: string): McpToolDescription | null {
   const parsed = parseQualifiedMcpToolName(name);
   if (!parsed) return null;
   const { serverId, toolName } = parsed;
+  const humanizedToolName = humanizeMcpToolLabel(toolName);
   if (isCustomConnectorServerId(serverId)) {
-    return { serverId, toolName, label: `Custom connector · ${toolName}` };
+    return { serverId, toolName, label: `Custom connector · ${humanizedToolName}` };
   }
   const connector = CONNECTORS.find((c) => c.id === serverId);
   const displayName = connector?.name ?? serverId;
-  return { serverId, toolName, label: `${displayName} · ${toolName}` };
+  return { serverId, toolName, label: `${displayName} · ${humanizedToolName}` };
 }
