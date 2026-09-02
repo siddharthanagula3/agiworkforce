@@ -1,5 +1,6 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
+import { SEARCH_INPUT_DEBOUNCE_MS } from '@agiworkforce/utils';
 import {
   Badge,
   Dialog,
@@ -49,8 +50,6 @@ interface GlobalSearchDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }
-
-const HISTORY_SEARCH_DEBOUNCE_MS = 250;
 
 export function GlobalSearchDialog({ open, onOpenChange }: GlobalSearchDialogProps) {
   // Radix hides a modal dialog's siblings, but which nodes that reaches depends
@@ -187,7 +186,7 @@ export function GlobalSearchDialog({ open, onOpenChange }: GlobalSearchDialogPro
 
     searchTimeoutRef.current = setTimeout(() => {
       handleSearch();
-    }, HISTORY_SEARCH_DEBOUNCE_MS);
+    }, SEARCH_INPUT_DEBOUNCE_MS);
 
     return () => {
       if (searchTimeoutRef.current) {
