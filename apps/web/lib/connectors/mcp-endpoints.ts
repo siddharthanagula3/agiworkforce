@@ -1,4 +1,3 @@
-
 export type McpClientRegistrationMode = 'cimd' | 'dynamic' | 'preregistered';
 
 export interface McpEndpointRecord {
@@ -66,8 +65,8 @@ export const MCP_ENDPOINTS: Readonly<Record<string, McpEndpointRecord>> = {
   },
   cloudflare: {
     connectorId: 'cloudflare',
-    url: 'https://bindings.mcp.cloudflare.com/sse',
-    transport: 'sse',
+    url: 'https://bindings.mcp.cloudflare.com/mcp',
+    transport: 'streamable-http',
     clientRegistration: 'dynamic',
   },
   datadog: {
