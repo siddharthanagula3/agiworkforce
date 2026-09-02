@@ -1,4 +1,5 @@
 import { X } from 'lucide-react';
+import { Button } from '@agiworkforce/ui';
 import type { ManagedUsageWarning } from '@agiworkforce/types';
 import { cn } from '../lib/utils';
 
@@ -60,14 +61,16 @@ export function UsageWarningBanner({
       ) : null}
 
       {onDismiss ? (
-        <button
+        <Button
           type="button"
+          variant="ghost"
+          size="icon"
           onClick={onDismiss}
           aria-label="Dismiss usage warning"
-          className="shrink-0 rounded p-0.5 text-[var(--chat-text-muted)] transition-colors hover:bg-[var(--chat-surface-overlay)] hover:text-[var(--chat-text-primary)]"
+          className="h-6 w-6 shrink-0 text-[var(--chat-text-muted)] hover:bg-[var(--chat-surface-overlay)] hover:text-[var(--chat-text-primary)]"
         >
           <X size={14} aria-hidden="true" />
-        </button>
+        </Button>
       ) : null}
     </div>
   );
