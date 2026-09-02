@@ -946,6 +946,7 @@ export default function WebChatPage() {
   const autoTitledConversationsRef = useRef<Set<string>>(new Set());
 
   const [composerClearSignal, setComposerClearSignal] = useState(0);
+  const [restoredAttachments, setRestoredAttachments] = useState<File[] | null>(null);
   const [isUserTyping, setIsUserTyping] = useState(false);
   const [bareChatSessionId, setBareChatSessionId] = useState<string | null>(null);
   const [pendingByokHandoff, setPendingByokHandoff] = useState<PendingByokHandoff | null>(null);
@@ -1716,7 +1717,10 @@ export default function WebChatPage() {
           (useChatStore.getState().messagesByConversation[targetConversationId] ?? []).some(
             (m) => m.id === resolvedUserMessageId,
           );
-        if (!survived) parkUnsentDraft(targetConversationId, content);
+        if (!survived) {
+          parkUnsentDraft(targetConversationId, content);
+          if (options.attachments?.length) setRestoredAttachments(options.attachments);
+        }
         return false;
       };
       let clientConvId: string | null = null;
@@ -5147,6 +5151,8 @@ export default function WebChatPage() {
                     onPrefillConsumed={() => setComposerPrefill(undefined)}
                     onTypingChange={handleTypingChange}
                     clearSignal={composerClearSignal}
+                    droppedFiles={restoredAttachments}
+                    onDroppedFilesConsumed={() => setRestoredAttachments(null)}
                     emptyState
                     attachmentPrivacyShortLabel={sendPreviewPresentation.privacyShortLabel}
                     sendPreviewPresentation={sendPreviewPresentation}
@@ -5241,6 +5247,8 @@ export default function WebChatPage() {
                     onPrefillConsumed={() => setComposerPrefill(undefined)}
                     onTypingChange={handleTypingChange}
                     clearSignal={composerClearSignal}
+                    droppedFiles={restoredAttachments}
+                    onDroppedFilesConsumed={() => setRestoredAttachments(null)}
                     attachmentPrivacyShortLabel={sendPreviewPresentation.privacyShortLabel}
                     sendPreviewPresentation={sendPreviewPresentation}
                     onUpgradeRequest={handleOpenUpgradeDialog}
