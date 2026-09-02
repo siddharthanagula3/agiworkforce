@@ -2,15 +2,9 @@ import { buildMetadata } from '@/lib/seo/metadata';
 import { formatPrivacyModeLabel } from '@agiworkforce/types';
 import { Header } from '@shared/components/layout/Header';
 import { MarketingFooter } from '@/features/marketing/components/MarketingFooter';
-import {
-  Button,
-  ButtonRow,
-  Eyebrow,
-  Prose,
-  Section,
-  Stack,
-} from '@/features/marketing/components/system';
+import { Eyebrow, Section, Stack } from '@/features/marketing/components/system';
 import { FactGrid, PageHero } from '@/features/marketing/components/pages/surfaces/shared';
+import { LinkGrid } from '@/features/marketing/components/pages/features/shared';
 
 export const metadata = buildMetadata({
   title: 'Get started: from zero to a working chat',
@@ -145,16 +139,22 @@ export default function GetStartedPage() {
             <h2 className="agi-ds-h2" id="agi-get-started-next-title">
               What&rsquo;s next.
             </h2>
-            <Prose>
-              The CLI is released for Local and BYOK work; Desktop is pending its signature check.
-              The download page tracks availability for every surface and platform in one place.
-            </Prose>
-            <ButtonRow>
-              <Button href="/download">Check availability</Button>
-              <Button href="/cli" variant="secondary">
-                CLI reference
-              </Button>
-            </ButtonRow>
+            <LinkGrid
+              items={[
+                {
+                  meta: 'Pricing',
+                  title: 'See what managed cloud costs',
+                  href: '/pricing',
+                  body: 'Plans and limits for AGI-hosted compute, beyond the free cap.',
+                },
+                {
+                  meta: 'Docs',
+                  title: 'Read the docs',
+                  href: '/docs',
+                  body: 'Reference for every surface: CLI, Desktop, Mobile, Web, Chrome, and VS Code extension.',
+                },
+              ]}
+            />
           </Stack>
         </Section>
       </main>
