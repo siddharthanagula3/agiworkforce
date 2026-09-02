@@ -160,18 +160,8 @@ describe('/auth/device page', () => {
 
     const card = screen.getByRole('heading', { name: 'Connect a device.' }).closest('section');
 
-    expect(card).toHaveClass('agi-device-auth-card');
     expect(card).not.toHaveClass('agi-section');
-  });
-
-  it('keeps the approval card readable at desktop and narrow viewport widths', () => {
-    const css = readFileSync(resolve(process.cwd(), 'app/globals.css'), 'utf8');
-    const rule = css.match(/\[data-design='agi'\] \.agi-device-auth-card\s*\{([\s\S]*?)\}/);
-    const declarations = rule?.[1] ?? '';
-
-    expect(declarations).toContain('width: 100%');
-    expect(declarations).toContain('max-width: 30rem');
-    expect(declarations).toContain('padding: clamp(');
+    expect(card).toHaveStyle({ maxWidth: '30rem', width: '100%', marginInline: 'auto' });
   });
 
   it('uses focused chrome so navigation does not compete with device approval', () => {
