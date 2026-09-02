@@ -174,7 +174,7 @@ export function DesktopDownloadAvailability() {
       </Prose>
 
       <ul className="mt-8 grid list-none gap-4 p-0 md:grid-cols-3" aria-label="Desktop platforms">
-        <li className="rounded-2xl border border-border bg-card p-5 text-card-foreground">
+        <li className="agi-ds-card p-5">
           <p className="text-sm font-semibold">macOS</p>
 
           {cloudAvailability.state === 'loading' && (
@@ -183,7 +183,7 @@ export function DesktopDownloadAvailability() {
               aria-label="Checking macOS downloads"
               aria-live="polite"
               aria-busy="true"
-              className="mt-3 rounded-xl border border-border bg-card p-4 text-sm text-card-foreground"
+              className="agi-ds-card mt-3 p-4 text-sm"
             >
               Checking the release channel…
             </div>
@@ -191,7 +191,7 @@ export function DesktopDownloadAvailability() {
 
           {cloudAvailability.state === 'available' && (
             <div className="mt-3">
-              <p className="mb-4 text-sm text-muted-foreground">
+              <p className="mb-4 text-sm agi-ds-muted">
                 AGI Cloud (cloud accounts only) · signed and notarized · version{' '}
                 {cloudAvailability.version}
               </p>
@@ -223,7 +223,7 @@ export function DesktopDownloadAvailability() {
               role="status"
               aria-label="macOS downloads unavailable"
               aria-live="polite"
-              className="mt-3 rounded-xl border border-border bg-card p-4 text-card-foreground"
+              className="agi-ds-card mt-3 p-4"
             >
               <p className="text-sm">No signed macOS installer is available right now.</p>
               <Alternatives />
@@ -231,10 +231,7 @@ export function DesktopDownloadAvailability() {
           )}
 
           {cloudAvailability.state === 'error' && (
-            <div
-              role="alert"
-              className="mt-3 rounded-xl border border-destructive/40 bg-destructive/10 p-4 text-card-foreground"
-            >
+            <div role="alert" className="agi-ds-card mt-3 p-4" data-tone="danger">
               <p className="text-sm">We could not verify the macOS installer.</p>
               <button
                 type="button"
@@ -248,11 +245,11 @@ export function DesktopDownloadAvailability() {
             </div>
           )}
         </li>
-        <li className="rounded-2xl border border-border bg-card p-5 text-card-foreground">
+        <li className="agi-ds-card p-5">
           <p className="text-sm font-semibold">Windows</p>
-          <p className="mt-2 text-sm text-muted-foreground">Windows installer not published</p>
+          <p className="mt-2 text-sm agi-ds-muted">Windows installer not published</p>
         </li>
-        <li className="rounded-2xl border border-border bg-card p-5 text-card-foreground">
+        <li className="agi-ds-card p-5">
           <p className="text-sm font-semibold">Linux x64</p>
 
           {availability.state === 'loading' && (
@@ -261,7 +258,7 @@ export function DesktopDownloadAvailability() {
               aria-label="Checking Desktop downloads"
               aria-live="polite"
               aria-busy="true"
-              className="mt-3 rounded-xl border border-border bg-card p-4 text-sm text-card-foreground"
+              className="agi-ds-card mt-3 p-4 text-sm"
             >
               Checking the signed release channel…
             </div>
@@ -269,7 +266,7 @@ export function DesktopDownloadAvailability() {
 
           {availability.state === 'available' && (
             <div className="mt-3">
-              <p className="mb-4 text-sm text-muted-foreground">
+              <p className="mb-4 text-sm agi-ds-muted">
                 Signed AppImage · version {availability.version}
               </p>
               <a href="/api/download?platform=linux" className="agi-ds-btn" data-variant="primary">
@@ -283,7 +280,7 @@ export function DesktopDownloadAvailability() {
               role="status"
               aria-label="Desktop downloads unavailable"
               aria-live="polite"
-              className="mt-3 rounded-xl border border-border bg-card p-4 text-card-foreground"
+              className="agi-ds-card mt-3 p-4"
             >
               <p className="text-sm">No signed Linux installer is available right now.</p>
               <Alternatives />
@@ -291,10 +288,7 @@ export function DesktopDownloadAvailability() {
           )}
 
           {availability.state === 'error' && (
-            <div
-              role="alert"
-              className="mt-3 rounded-xl border border-destructive/40 bg-destructive/10 p-4 text-card-foreground"
-            >
+            <div role="alert" className="agi-ds-card mt-3 p-4" data-tone="danger">
               <p className="text-sm">We could not verify the Linux installer.</p>
               <button
                 type="button"
