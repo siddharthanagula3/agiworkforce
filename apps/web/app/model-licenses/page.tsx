@@ -12,7 +12,7 @@ import {
   type LedgerRow,
 } from '@/features/marketing/components/system';
 import { PageHero } from '@/features/marketing/components/pages/surfaces/shared';
-import { LEGAL_ENTITY, NOTICE_ADDRESS, POLICY_LAST_UPDATED } from '@/lib/legal-constants';
+import { LEGAL_ENTITY, NOTICE_ADDRESS } from '@/lib/legal-constants';
 import { providerLabels } from '@agiworkforce/types';
 import modelRegistry from '@agiworkforce/types/models.json';
 
@@ -112,7 +112,7 @@ export default function ModelLicensesPage() {
                 with it, and that is not the same for every model in the picker.
               </strong>{' '}
               This table is generated from the same model registry the router reads, so it cannot
-              drift from what actually runs. Last updated: {POLICY_LAST_UPDATED.modelLicenses}.
+              drift from what actually runs. Last updated: {modelRegistry.lastUpdated}.
             </>
           }
           ctas={[]}
