@@ -72,7 +72,7 @@ const buttonStyle = {
   border: 0,
   borderRadius: 'var(--radius-md)',
   background: 'var(--chat-accent-primary, #c8892a)',
-  color: 'var(--chat-accent-on-primary, #1c150b)',
+  color: 'var(--chat-accent-on-primary)',
   fontSize: 13,
   fontWeight: 600,
   padding: '7px 13px',
@@ -267,7 +267,7 @@ export function SSOPanel({
               role="alert"
               style={{
                 margin: 0,
-                color: 'var(--settings-destructive-text, #d31212)',
+                color: 'var(--settings-destructive-text)',
                 fontSize: 12,
                 lineHeight: 1.5,
               }}

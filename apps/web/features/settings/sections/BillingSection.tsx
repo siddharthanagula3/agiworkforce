@@ -677,7 +677,7 @@ export function BillingSection() {
                   padding: '4px 10px',
                   fontSize: 12,
                   fontWeight: 600,
-                  color: 'var(--chat-accent-primary-text, #8b5f1d)',
+                  color: 'var(--chat-accent-primary-text)',
                   background: 'rgba(200,137,42,0.12)',
                   borderRadius: 'var(--radius-md)',
                   border: '1px solid rgba(200,137,42,0.25)',
@@ -795,9 +795,7 @@ export function BillingSection() {
                 background: isFreeTier ? 'var(--text-1)' : 'var(--chat-accent-primary, #c8892a)',
                 border: 'none',
                 borderRadius: 'var(--radius)',
-                color: isFreeTier
-                  ? 'var(--bg-base, #09090b)'
-                  : 'var(--chat-accent-on-primary, #1c150b)',
+                color: isFreeTier ? 'var(--bg-base, #09090b)' : 'var(--chat-accent-on-primary)',
                 fontSize: 13,
                 fontWeight: 600,
                 textDecoration: 'none',
@@ -1072,7 +1070,7 @@ export function BillingSection() {
                   border: 0,
                   borderRadius: 'var(--radius-md)',
                   background: 'var(--chat-accent-primary, #c8892a)',
-                  color: 'var(--chat-accent-on-primary, #1c150b)',
+                  color: 'var(--chat-accent-on-primary)',
                   fontSize: 13,
                   fontWeight: 600,
                   cursor: topUpPending || selectedTopUpUnits === null ? 'not-allowed' : 'pointer',

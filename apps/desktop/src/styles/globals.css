@@ -130,6 +130,23 @@
   --color-input: hsl(var(--input));
   --color-ring: hsl(var(--ring));
 
+  /* Foundation status roles - fill, text and on-fill, mirroring apps/web */
+  --color-accent-text: var(--accent-text);
+  --color-accent-fill: var(--accent-fill);
+  --color-accent-on-fill: var(--accent-on-fill);
+  --color-danger-text: var(--danger-text);
+  --color-danger-fill: var(--danger-fill);
+  --color-danger-on-fill: var(--danger-on-fill);
+  --color-warning-text: var(--warning-text);
+  --color-warning-fill: var(--warning-fill);
+  --color-warning-on-fill: var(--warning-on-fill);
+  --color-success-text: var(--success-text);
+  --color-success-fill: var(--success-fill);
+  --color-success-on-fill: var(--success-on-fill);
+  --color-info-text: var(--info-text);
+  --color-info-fill: var(--info-fill);
+  --color-info-on-fill: var(--info-on-fill);
+
   /* Border radius */
   --radius-lg: 12px;
   --radius-md: 8px;

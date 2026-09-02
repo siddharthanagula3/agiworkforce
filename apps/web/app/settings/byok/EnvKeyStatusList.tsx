@@ -51,7 +51,7 @@ function StatusBadge({ isSet }: { isSet: boolean }) {
         background: isSet
           ? 'color-mix(in srgb, var(--teal, #2eb88a) 12%, transparent)'
           : 'var(--bg-elev)',
-        color: isSet ? 'var(--teal-text, #1c6d78)' : 'var(--text-3)',
+        color: isSet ? 'var(--teal-text)' : 'var(--text-3)',
         border: isSet
           ? '1px solid color-mix(in srgb, var(--teal, #2eb88a) 30%, transparent)'
           : '1px solid var(--settings-border)',
@@ -85,7 +85,7 @@ function UnknownStatusBadge() {
         fontSize: 12,
         fontWeight: 600,
         background: 'var(--bg-elev)',
-        color: 'var(--settings-destructive-text, #d31212)',
+        color: 'var(--settings-destructive-text)',
         border: '1px solid var(--settings-border)',
       }}
     >
@@ -95,7 +95,7 @@ function UnknownStatusBadge() {
           width: 5,
           height: 5,
           borderRadius: '50%',
-          background: 'var(--settings-destructive-text, #d31212)',
+          background: 'var(--settings-destructive-text)',
           flexShrink: 0,
         }}
       />
@@ -150,7 +150,7 @@ export function EnvKeyStatusList({ providers }: Props) {
           role="alert"
           style={{
             fontSize: 12,
-            color: 'var(--settings-destructive-text, #d31212)',
+            color: 'var(--settings-destructive-text)',
             display: 'flex',
             alignItems: 'center',
             gap: 8,

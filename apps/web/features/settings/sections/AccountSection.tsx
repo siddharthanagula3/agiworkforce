@@ -668,7 +668,7 @@ export function AccountSection() {
                             fontWeight: 700,
                             letterSpacing: '0.05em',
                             textTransform: 'uppercase',
-                            color: 'var(--teal-text, #1c6d78)',
+                            color: 'var(--teal-text)',
                             background: 'rgba(33,128,141,0.12)',
                             borderRadius: 3,
                             padding: '1px 5px',
