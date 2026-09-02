@@ -177,15 +177,6 @@ async function handleGet(request: NextRequest) {
     sessionParams.push(endDate);
   }
 
-  const sessionRows = await db.query<SessionRow>(
-    `select id, title, created_at, updated_at
-     from web_conversations
-     where ${sessionClauses.join(' and ')}
-     order by updated_at desc
-     limit $${sessionParams.length + 1}`,
-    [...sessionParams, limit],
-  );
-
   const projectParams: unknown[] = [userId, `%${q}%`, organizationId];
   const projectClauses: string[] = [
     'user_id = $1',
@@ -203,15 +194,6 @@ async function handleGet(request: NextRequest) {
     projectParams.push(endDate);
   }
 
-  const projectRows = await db.query<ProjectRow>(
-    `select id, name, description, created_at, updated_at
-     from user_projects
-     where ${projectClauses.join(' and ')}
-     order by updated_at desc
-     limit $${projectParams.length + 1}`,
-    [...projectParams, limit],
-  );
-
   const fileParams: unknown[] = [userId, `%${q}%`, organizationId];
   const fileClauses: string[] = [
     'user_id = $1',
@@ -227,15 +209,6 @@ async function handleGet(request: NextRequest) {
     fileClauses.push(`created_at <= $${fileParams.length + 1}`);
     fileParams.push(endDate);
   }
-  const fileRows = await db.query<FileRow>(
-    `select id, kind, prompt, metadata, created_at
-     from media_assets
-     where ${fileClauses.join(' and ')}
-     order by created_at desc
-     limit $${fileParams.length + 1}`,
-    [...fileParams, limit],
-  );
-
   const msgParams: unknown[] = [userId, `%${q}%`, organizationId];
   const msgClauses: string[] = [
     'c.user_id = $1',
@@ -258,22 +231,53 @@ async function handleGet(request: NextRequest) {
     msgParams.push(endDate);
   }
 
-  const messageRows = await db.query<MessageRow>(
-    `select
-       m.id,
-       m.conversation_id,
-       m.role,
-       m.content,
-       m.created_at,
-       m.updated_at,
-       c.title as session_title
-     from web_messages m
-     join web_conversations c on c.id = m.conversation_id
-     where ${msgClauses.join(' and ')}
-     order by m.created_at desc
-     limit 100`,
-    msgParams,
-  );
+  // The four scopes below (sessions, projects, files, messages) are
+  // independent reads with no data dependency between them, so running them
+  // sequentially only ever added their round trips together. In practice the
+  // message scan is the slow one — Promise.all overlaps it with the other
+  // three instead of paying for it on top of them.
+  const [sessionRows, projectRows, fileRows, messageRows] = await Promise.all([
+    db.query<SessionRow>(
+      `select id, title, created_at, updated_at
+       from web_conversations
+       where ${sessionClauses.join(' and ')}
+       order by updated_at desc
+       limit $${sessionParams.length + 1}`,
+      [...sessionParams, limit],
+    ),
+    db.query<ProjectRow>(
+      `select id, name, description, created_at, updated_at
+       from user_projects
+       where ${projectClauses.join(' and ')}
+       order by updated_at desc
+       limit $${projectParams.length + 1}`,
+      [...projectParams, limit],
+    ),
+    db.query<FileRow>(
+      `select id, kind, prompt, metadata, created_at
+       from media_assets
+       where ${fileClauses.join(' and ')}
+       order by created_at desc
+       limit $${fileParams.length + 1}`,
+      [...fileParams, limit],
+    ),
+    db.query<MessageRow>(
+      `select
+         m.id,
+         m.conversation_id,
+         m.role,
+         m.content,
+         m.created_at,
+         m.updated_at,
+         c.title as session_title
+       from web_messages m
+       join web_conversations c on c.id = m.conversation_id
+       where ${msgClauses.join(' and ')}
+       order by m.created_at desc
+       limit 100`,
+      msgParams,
+    ),
+  ]);
 
   const sessionResults = sessionRows.map((s) => {
     const match = extractMatch(s.title ?? '', q);
@@ -346,9 +350,14 @@ async function handleGet(request: NextRequest) {
     .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
     .slice(0, limit);
 
+  const matchedConversationIds = new Set<string>([
+    ...sessionResults.map((s) => s.sessionId),
+    ...messageResults.map((m) => m.sessionId),
+  ]);
+
   const stats = {
     totalResults: sessionResults.length + messageResults.length,
-    sessionMatches: sessionResults.length,
+    sessionMatches: matchedConversationIds.size,
     messageMatches: messageResults.length,
     projectMatches: projectResults.length,
     fileMatches: fileResults.length,

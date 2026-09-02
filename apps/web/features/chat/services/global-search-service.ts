@@ -122,7 +122,7 @@ class GlobalSearchService {
   async search(
     _userId: string,
     filters: SearchFilters,
-    _options: { trackSearch?: boolean } = { trackSearch: true },
+    _options: { trackSearch?: boolean; signal?: AbortSignal } = { trackSearch: true },
   ): Promise<{ results: SearchResult[]; stats: SearchStats }> {
     const startTime = Date.now();
     const limit = filters.limit || this.DEFAULT_LIMIT;
@@ -136,7 +136,10 @@ class GlobalSearchService {
     if (filters.endDate) params.set('endDate', filters.endDate.toISOString());
 
     const headers = await buildReadHeaders();
-    const res = await fetch(`/api/search?${params.toString()}`, { headers });
+    const res = await fetch(`/api/search?${params.toString()}`, {
+      headers,
+      ...(_options.signal ? { signal: _options.signal } : {}),
+    });
 
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));

@@ -1607,25 +1607,41 @@ export default function WebChatPage() {
 
     if (urlConversationId) {
       if (urlConversationId !== activeConversationId) {
-        void loadConversation(urlConversationId).then((ok) => {
-          if (!ok) {
-            // loadConversation set the store error (server's 404/403 message) before
-            // returning false; capture it BEFORE setActiveConversation(null) resets it
-            // to null, so the user gets feedback instead of a silent bounce to a blank
-            // /chat surface.
-            const reason = useChatStore.getState().error;
-            setBareChatSessionId(null);
-            setActiveConversation(null);
-            router.replace('/chat');
-            toast.error(reason || 'This conversation is unavailable — it may have been deleted.', {
-              id: `conversation-unavailable-${urlConversationId}`,
-              action: {
-                label: 'Retry',
-                onClick: () => router.push(`/chat/${urlConversationId}`),
-              },
-            });
-          }
-        });
+        // A conversation this tab just created (or is actively streaming into)
+        // is already known locally — fetching it here races the write that
+        // made it and can 404 on read-after-write lag alone, even though the
+        // conversation is real and the turn is succeeding. Only fetch ids this
+        // tab doesn't already have a transcript for.
+        const localState = useChatStore.getState();
+        const knownLocally =
+          localState.streamingConversationIds.includes(urlConversationId) ||
+          (localState.messagesByConversation[urlConversationId]?.length ?? 0) > 0;
+        if (knownLocally) {
+          setActiveConversation(urlConversationId);
+        } else {
+          void loadConversation(urlConversationId).then((ok) => {
+            if (!ok) {
+              // loadConversation set the store error (server's 404/403 message) before
+              // returning false; capture it BEFORE setActiveConversation(null) resets it
+              // to null, so the user gets feedback instead of a silent bounce to a blank
+              // /chat surface.
+              const reason = useChatStore.getState().error;
+              setBareChatSessionId(null);
+              setActiveConversation(null);
+              router.replace('/chat');
+              toast.error(
+                reason || 'This conversation is unavailable — it may have been deleted.',
+                {
+                  id: `conversation-unavailable-${urlConversationId}`,
+                  action: {
+                    label: 'Retry',
+                    onClick: () => router.push(`/chat/${urlConversationId}`),
+                  },
+                },
+              );
+            }
+          });
+        }
       }
     } else if (activeConversationId) {
       setBareChatSessionId(null);
@@ -1639,6 +1655,14 @@ export default function WebChatPage() {
     setActiveConversation,
     urlConversationId,
   ]);
+
+  // The load-failure toast above carries a stable per-conversation id so a
+  // later success for the SAME resource can find and clear it — otherwise it
+  // sits on screen well past the point the conversation is confirmed good.
+  useEffect(() => {
+    if (!urlConversationId || activeConversationId !== urlConversationId) return;
+    toast.dismiss(`conversation-unavailable-${urlConversationId}`);
+  }, [activeConversationId, urlConversationId]);
 
   const sendContent = useCallback(
     async (

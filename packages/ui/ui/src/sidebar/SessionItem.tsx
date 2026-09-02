@@ -63,11 +63,23 @@ function SessionItemBase({
   const [isRenaming, setIsRenaming] = useState(false);
   const [renameValue, setRenameValue] = useState(session.title);
   const inputRef = useRef<HTMLInputElement>(null);
+  // The row this instance renders for is tied to session.id, not to its index
+  // in the list (the parent keys it by id), so a ref here keeps pointing at
+  // the right row even when a rename reorders the visible list out from
+  // under it — unlike the sidebar's own index-based keyboard-focus tracking,
+  // which is exactly what went stale and left the ring on a neighboring row.
+  const selectButtonRef = useRef<HTMLButtonElement>(null);
+  const returnFocusOnExitRef = useRef(false);
 
   useEffect(() => {
     if (isRenaming && inputRef.current) {
       inputRef.current.focus();
       inputRef.current.select();
+      return;
+    }
+    if (returnFocusOnExitRef.current) {
+      returnFocusOnExitRef.current = false;
+      selectButtonRef.current?.focus();
     }
   }, [isRenaming]);
 
@@ -76,6 +88,10 @@ function SessionItemBase({
     if (next && next !== session.title) {
       onRename(session.id, next);
     }
+    setIsRenaming(false);
+  };
+
+  const cancelRename = () => {
     setIsRenaming(false);
   };
 
@@ -90,8 +106,14 @@ function SessionItemBase({
           onChange={(e) => setRenameValue(e.target.value)}
           onBlur={submitRename}
           onKeyDown={(e) => {
-            if (e.key === 'Enter') submitRename();
-            if (e.key === 'Escape') setIsRenaming(false);
+            if (e.key === 'Enter') {
+              returnFocusOnExitRef.current = true;
+              submitRename();
+            }
+            if (e.key === 'Escape') {
+              returnFocusOnExitRef.current = true;
+              cancelRename();
+            }
           }}
           onClick={(e) => e.stopPropagation()}
           className={cn(
@@ -115,6 +137,7 @@ function SessionItemBase({
     >
       <div className="flex items-center">
         <button
+          ref={selectButtonRef}
           type="button"
           onClick={() => onSelect(session.id)}
           onDoubleClick={() => setIsRenaming(true)}
@@ -133,7 +156,10 @@ function SessionItemBase({
                 <span className="sr-only">{t('sidebar.running', 'Running')}</span>
               </span>
             )}
-            <span className="truncate text-sm font-medium text-[hsl(var(--foreground))]">
+            <span
+              title={session.title || t('sidebar.untitled', 'Untitled')}
+              className="truncate text-sm font-medium text-[hsl(var(--foreground))]"
+            >
               {session.title || t('sidebar.untitled', 'Untitled')}
             </span>
           </div>
