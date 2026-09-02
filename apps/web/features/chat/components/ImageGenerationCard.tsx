@@ -217,7 +217,8 @@ function GeneratingCard({
           <span className="text-xs text-muted-foreground">Generating with {modelLabel}</span>
         )}
         <span className="text-xs tabular-nums text-muted-foreground">
-          Waiting for the image provider · {formatElapsed(elapsedSeconds)} elapsed
+          Waiting for the image provider ·{' '}
+          <span aria-live="off">{formatElapsed(elapsedSeconds)}</span> elapsed
         </span>
       </div>
     </div>
