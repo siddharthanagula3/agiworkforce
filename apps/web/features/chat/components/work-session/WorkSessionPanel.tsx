@@ -525,7 +525,9 @@ export function WorkSessionPanel({ messages, open, onClose }: WorkSessionPanelPr
                   {summary.title ?? WORK_SESSION_FALLBACK_TITLE}
                 </h2>
               </div>
-              <p className="text-xs text-muted-foreground">{statusLabel(summary.status)}</p>
+              <p className="text-xs text-muted-foreground" role="status" aria-live="polite">
+                {statusLabel(summary.status)}
+              </p>
             </div>
             <Button
               ref={closeButtonRef}
