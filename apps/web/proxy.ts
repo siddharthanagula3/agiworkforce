@@ -5,6 +5,9 @@ import { withCorsAndSecurityHeaders } from './lib/cors';
 import { apiHostRewriteUsesClerk, isApiHostRewriteSource } from './lib/api-host-route-contract';
 import { decideEuAccess, euBlockEnabled } from './lib/eu-access';
 import { getClerkAuthorizedParties } from './lib/clerk-authorized-parties';
+import { hasBrowserSessionCookie as isBrowserSessionCookiePresent } from './lib/session-cookie';
+
+const CHAT_ROOT_PATH = '/chat';
 
 const UNAVAILABLE_PATH = '/region-unavailable';
 
@@ -76,9 +79,29 @@ function buildCspResponse(request: NextRequest): NextResponse {
 }
 
 function hasBrowserSessionCookie(request: NextRequest): boolean {
-  return request.cookies.getAll().some(({ name }) => {
-    return name === '__session' || name === '__client' || name.startsWith('__clerk');
-  });
+  return isBrowserSessionCookiePresent(request.cookies.getAll());
+}
+
+// Prerendering '/' means the marketing page can no longer call auth() itself
+// to branch on sign-in state, so the branch moves here: a signed-in visitor
+// is rewritten to the chat root (URL stays '/'), a signed-out one gets the
+// static landing page. WebChatRoot behind '/chat' renders the identical tree
+// app/page.tsx used to render inline for a signed-in user.
+function buildHomeResponse(request: NextRequest): NextResponse {
+  const nonce = btoa(crypto.randomUUID());
+  const csp = buildCspWithNonce(nonce);
+  const requestHeaders = new Headers(request.headers);
+  requestHeaders.set('x-nonce', nonce);
+  requestHeaders.set('x-agi-pathname', `${request.nextUrl.pathname}${request.nextUrl.search}`);
+  requestHeaders.set('Content-Security-Policy', csp);
+
+  const response = hasBrowserSessionCookie(request)
+    ? NextResponse.rewrite(new URL(CHAT_ROOT_PATH, request.url), {
+        request: { headers: requestHeaders },
+      })
+    : NextResponse.next({ request: { headers: requestHeaders } });
+  response.headers.set('Content-Security-Policy', csp);
+  return response;
 }
 
 function buildSignedOutRedirect(request: NextRequest): NextResponse {
@@ -138,9 +161,11 @@ const clerkAuthorizedParties = ((): string[] | null => {
 // Clerk skips the azp check entirely when authorizedParties is empty, so an
 // unresolvable allowlist must stop the request instead of authenticating it.
 const clerkAwareProxy = clerkAuthorizedParties
-  ? clerkMiddleware((_auth, request: NextRequest) => buildCspResponse(request), {
-      authorizedParties: clerkAuthorizedParties,
-    })
+  ? clerkMiddleware(
+      (_auth, request: NextRequest) =>
+        request.nextUrl.pathname === '/' ? buildHomeResponse(request) : buildCspResponse(request),
+      { authorizedParties: clerkAuthorizedParties },
+    )
   : null;
 
 function clerkUnconfiguredResponse(): NextResponse {
