@@ -1267,7 +1267,7 @@ if (__AgiApp) {
                   type="button"
                   onClick={() => setViewedVersionIndex(Math.max(0, shownVersionIndex - 1))}
                   disabled={shownVersionIndex <= 0}
-                  className="flex h-6 w-5 items-center justify-center rounded text-muted-foreground transition-colors hover:text-foreground disabled:opacity-30 disabled:hover:text-muted-foreground"
+                  className="flex h-6 w-6 items-center justify-center rounded text-muted-foreground transition-colors hover:text-foreground disabled:opacity-30 disabled:hover:text-muted-foreground"
                   aria-label="Previous version"
                   title="Previous version"
                 >
@@ -1285,7 +1285,7 @@ if (__AgiApp) {
                     setViewedVersionIndex(Math.min(versionCount - 1, shownVersionIndex + 1))
                   }
                   disabled={shownVersionIndex >= versionCount - 1}
-                  className="flex h-6 w-5 items-center justify-center rounded text-muted-foreground transition-colors hover:text-foreground disabled:opacity-30 disabled:hover:text-muted-foreground"
+                  className="flex h-6 w-6 items-center justify-center rounded text-muted-foreground transition-colors hover:text-foreground disabled:opacity-30 disabled:hover:text-muted-foreground"
                   aria-label="Next version"
                   title="Next version"
                 >
