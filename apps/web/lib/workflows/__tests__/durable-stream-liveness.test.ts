@@ -1,5 +1,12 @@
-import { describe, expect, it } from 'vitest';
-import { claimLiveDurableStream } from '../durable-stream-liveness';
+import { beforeEach, describe, expect, it } from 'vitest';
+import {
+  claimLiveDurableStream,
+  isDurableTransportCoolingDown,
+  recordDurableTransportClaim,
+  recordDurableTransportStall,
+  DURABLE_STALL_COOLDOWN_MS,
+  DURABLE_STREAM_OPEN_FRAME,
+} from '../durable-stream-liveness';
 
 const enc = new TextEncoder();
 
@@ -29,6 +36,8 @@ async function drain(stream: ReadableStream<Uint8Array>): Promise<string> {
 }
 
 describe('durable stream liveness', () => {
+  beforeEach(() => recordDurableTransportClaim());
+
   // The queue failure surfaces asynchronously AFTER start() resolves, so the
   // try/catch around the start call never fired: the transport handed back a
   // stream that produced nothing and the client spun forever.
@@ -61,5 +70,32 @@ describe('durable stream liveness', () => {
     const started = Date.now();
     await claimLiveDurableStream(emits('data: fast\n\n'), 5_000);
     expect(Date.now() - started).toBeLessThan(1_000);
+  });
+
+  // The workflow's opening frame is an SSE comment, so it proves liveness
+  // without the client ever seeing a turn event that did not happen.
+  it('claims a stream whose only opening byte is the workflow open frame', async () => {
+    const live = await claimLiveDurableStream(emits(DURABLE_STREAM_OPEN_FRAME), 500);
+    expect(live).not.toBeNull();
+    await expect(drain(live!)).resolves.toBe(DURABLE_STREAM_OPEN_FRAME);
+  });
+
+  it('opens the breaker on a stall so the next turn skips the probe', async () => {
+    expect(isDurableTransportCoolingDown()).toBe(false);
+    await claimLiveDurableStream(neverEmits(), 40);
+    expect(isDurableTransportCoolingDown()).toBe(true);
+  });
+
+  it('closes the breaker once a stream is claimed', async () => {
+    recordDurableTransportStall();
+    await claimLiveDurableStream(emits('data: one\n\n'), 500);
+    expect(isDurableTransportCoolingDown()).toBe(false);
+  });
+
+  it('reopens the transport once the cooldown elapses', () => {
+    const now = Date.now();
+    recordDurableTransportStall(now);
+    expect(isDurableTransportCoolingDown(now + DURABLE_STALL_COOLDOWN_MS - 1)).toBe(true);
+    expect(isDurableTransportCoolingDown(now + DURABLE_STALL_COOLDOWN_MS)).toBe(false);
   });
 });
