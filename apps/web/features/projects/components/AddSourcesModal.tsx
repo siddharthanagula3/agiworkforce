@@ -226,7 +226,7 @@ export function AddSourcesModal({
                   borderRadius: 12,
                   padding: '28px 16px',
                   textAlign: 'center',
-                  background: isDragging ? 'rgba(200,137,42,0.06)' : 'var(--agi-bg-2)',
+                  background: isDragging ? 'var(--agi-amber-soft)' : 'var(--agi-bg-2)',
                   transition: 'border-color 0.15s, background 0.15s',
                   marginBottom: 20,
                 }}
@@ -338,7 +338,10 @@ export function AddSourcesModal({
                 </button>
               </p>
               {submitError ? (
-                <p role="alert" style={{ margin: '10px 0 0', color: '#f87171', fontSize: 12 }}>
+                <p
+                  role="alert"
+                  style={{ margin: '10px 0 0', color: 'var(--agi-error)', fontSize: 12 }}
+                >
                   {submitError}
                 </p>
               ) : null}
@@ -462,7 +465,10 @@ export function AddSourcesModal({
                 </button>
               </div>
               {submitError ? (
-                <p role="alert" style={{ margin: '10px 0 0', color: '#f87171', fontSize: 12 }}>
+                <p
+                  role="alert"
+                  style={{ margin: '10px 0 0', color: 'var(--agi-error)', fontSize: 12 }}
+                >
                   {submitError}
                 </p>
               ) : null}
@@ -501,7 +507,7 @@ function SourceButton({ icon, label, description, badge, onClick, disabled }: So
         padding: '14px 8px 12px',
         borderRadius: 12,
         border: `1px solid ${hovered && !disabled ? 'var(--agi-amber)' : 'var(--agi-rule-strong)'}`,
-        background: hovered && !disabled ? 'rgba(200,137,42,0.05)' : 'var(--agi-bg-2)',
+        background: hovered && !disabled ? 'var(--agi-amber-soft)' : 'var(--agi-bg-2)',
         cursor: disabled ? 'not-allowed' : 'pointer',
         opacity: disabled ? 0.5 : 1,
         transition: 'border-color 0.15s, background 0.15s',
@@ -527,7 +533,7 @@ function SourceButton({ icon, label, description, badge, onClick, disabled }: So
           style={{
             fontSize: 12,
             color: 'var(--agi-amber)',
-            background: 'rgba(200,137,42,0.12)',
+            background: 'var(--agi-amber-soft)',
             borderRadius: 9999,
             padding: '1px 6px',
             fontWeight: 500,
