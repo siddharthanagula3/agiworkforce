@@ -38,7 +38,7 @@ const ProjectChatHandoffSchema = z.object({
             .object({
               connectorId: z.string(),
               name: z.string(),
-              arguments: z.record(z.string()).optional(),
+              arguments: z.record(z.string(), z.string()).optional(),
             })
             .optional(),
           resources: z
