@@ -4,6 +4,7 @@ import { useEffect, useRef, useState, useMemo } from 'react';
 import { ALLOWED_ATTACHMENT_ACCEPT, type ProjectKnowledgeFile } from '@agiworkforce/types';
 import { HardDrive, MessageSquare, Upload, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
+import { useConfirmAction } from '@agiworkforce/ui';
 import { FilePreviewModal } from './FilePreviewModal';
 import { AddSourcesModal } from './AddSourcesModal';
 import {
@@ -61,6 +62,7 @@ export function SourcesPanel({ projectId }: Props) {
   const [sortOrder, setSortOrder] = useState<SortOrder>('newest');
   const [typeFilter, setTypeFilter] = useState<string>('all');
   const [retryToken, setRetryToken] = useState(0);
+  const { confirm, dialog: confirmDialog } = useConfirmAction();
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -148,6 +150,7 @@ export function SourcesPanel({ projectId }: Props) {
 
   return (
     <div data-testid="sources-panel">
+      {confirmDialog}
       {/* Upload progress / error banner */}
       {uploadState.status === 'uploading' && (
         <div
@@ -485,7 +488,13 @@ export function SourcesPanel({ projectId }: Props) {
                     title="Remove source"
                     onClick={(e) => {
                       e.stopPropagation();
-                      void handleDelete(file);
+                      confirm({
+                        title: `Remove ${file.fileName}?`,
+                        description:
+                          'The file is deleted from this project’s knowledge and the assistant stops using it. This cannot be undone: the file would have to be uploaded again.',
+                        confirmLabel: 'Remove file',
+                        onConfirm: () => handleDelete(file),
+                      });
                     }}
                     style={{
                       flexShrink: 0,
