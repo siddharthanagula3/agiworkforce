@@ -110,7 +110,7 @@ function ActionLogItem({ entry }: { entry: ActionLogEntry }) {
                     animate={{ height: 'auto', opacity: 1 }}
                     exit={{ height: 0, opacity: 0 }}
                     transition={{ duration: 0.18 }}
-                    className="mt-1 overflow-hidden whitespace-pre-wrap rounded bg-black/20 px-2 py-1.5 text-[12px] text-slate-300/90"
+                    className="mt-1 overflow-hidden whitespace-pre-wrap rounded bg-muted/50 px-2 py-1.5 text-[12px] text-foreground"
                   >
                     {details}
                   </motion.pre>
