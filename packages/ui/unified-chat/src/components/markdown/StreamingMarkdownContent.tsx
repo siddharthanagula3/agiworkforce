@@ -17,6 +17,33 @@ const NO_SETTLED_BLOCKS: readonly SettledMarkdownBlock[] = Object.freeze([]);
 // to put it back or the streamed DOM stops matching a single full parse.
 const UNIT_SEPARATOR = '\n';
 
+// A reference link `[text][label]` or footnote `[^label]` resolves against a
+// definition that can stream in anywhere in the document, so a settled block
+// that used one before its definition arrived can never resolve it once
+// rendered on its own. This reads the labels still waiting, unsettled, in the
+// tail so the caller can check whether any already-settled block named one -
+// most settled prose never does, so it does not need to be reconsidered.
+const DEFINITION_LABEL_PATTERN = /^ {0,3}\[(\^?[^\]\n]+)\]:/gm;
+
+function referenceDefinitionTokens(tail: string): readonly string[] {
+  const tokens: string[] = [];
+  for (const match of tail.matchAll(DEFINITION_LABEL_PATTERN)) {
+    const label = match[1];
+    if (label) tokens.push(`[${label}]`);
+  }
+  return tokens;
+}
+
+function settledBlockUsesAnyToken(
+  settled: readonly SettledMarkdownBlock[],
+  tokens: readonly string[],
+): boolean {
+  return settled.some((block) => {
+    const lower = block.source.toLowerCase();
+    return tokens.some((token) => lower.includes(token.toLowerCase()));
+  });
+}
+
 interface StreamingView {
   readonly settled: readonly SettledMarkdownBlock[];
   readonly tail: string;
@@ -49,9 +76,18 @@ function StreamingMarkdownContentImpl({
     const split = splitterRef.current.update(source);
     if (!split.hasReferenceDefinition) return { settled: split.settled, tail: split.tail };
 
-    // Reference links and footnotes are document-scoped, so a block that settled
-    // before its definition arrived can never resolve it. Once one exists the
-    // message renders as one unit until the content stops being an append.
+    const tokens = referenceDefinitionTokens(split.tail);
+    if (tokens.length > 0 && !settledBlockUsesAnyToken(split.settled, tokens)) {
+      // The unresolved definition's own block still holds back the tail, but
+      // nothing already settled names its label, so none of it needs
+      // reconsidering - splitting stays bounded to the unresolved remainder.
+      return { settled: split.settled, tail: split.tail };
+    }
+
+    // An already-settled block names a label this definition could resolve
+    // (or the label could not be read back out of the tail at all), so
+    // nothing settled so far can be trusted on its own. Fold the whole
+    // message into one unit until the content stops being an append of it.
     splitterRef.current.reset();
     singleUnitFromRef.current = source;
     return { settled: NO_SETTLED_BLOCKS, tail: source };
