@@ -1,14 +1,15 @@
-
 import type { StreamChunk } from '@agiworkforce/types';
 
 import type {
   ResponseOutputFunctionCallItem,
   ResponseOutputItem,
   ResponseOutputMessageItem,
-  ResponseWebSearchAction,
   ResponseWebSearchCallItem,
   ResponsesStreamEvent,
 } from './responses-types';
+
+const OPENAI_TRACKING_PARAM = 'utm_source';
+const OPENAI_TRACKING_VALUE = 'openai';
 
 interface OpenItem {
   type: 'message' | 'function_call' | 'reasoning' | 'web_search_call';
@@ -22,7 +23,6 @@ interface OpenItem {
 interface WebSearchState {
   id: string;
   status?: ResponseWebSearchCallItem['status'];
-  sources: Set<string>;
 }
 
 export interface OpenAIResponsesStreamDiagnostics {
@@ -64,12 +64,16 @@ function incrementCount(counts: Record<string, number>, key: string): void {
   counts[key] = (counts[key] ?? 0) + 1;
 }
 
-function actionSources(action: ResponseWebSearchAction | undefined): string[] {
-  if (!action) return [];
-  if (action.type === 'search') {
-    return (action.sources ?? []).map((source) => source.url).filter(Boolean);
+function stripOpenAITrackingParam(url: string): string {
+  try {
+    const parsed = new URL(url);
+    if (parsed.searchParams.get(OPENAI_TRACKING_PARAM) !== OPENAI_TRACKING_VALUE) return url;
+    parsed.searchParams.delete(OPENAI_TRACKING_PARAM);
+    const cleaned = parsed.toString();
+    return cleaned.endsWith('?') ? cleaned.slice(0, -1) : cleaned;
+  } catch {
+    return url;
   }
-  return action.url ? [action.url] : [];
 }
 
 function mapIncompleteReason(
@@ -221,10 +225,9 @@ export async function* translateOpenAIResponsesStream(
   }
 
   function updateWebSearch(outputIndex: number, item: ResponseWebSearchCallItem): WebSearchState {
-    const state = webSearches.get(outputIndex) ?? { id: item.id, sources: new Set<string>() };
+    const state = webSearches.get(outputIndex) ?? { id: item.id };
     state.id = item.id;
     state.status = item.status;
-    for (const url of actionSources(item.action)) state.sources.add(url);
     webSearches.set(outputIndex, state);
     return state;
   }
@@ -237,20 +240,20 @@ export async function* translateOpenAIResponsesStream(
     const states = [...webSearches.values()];
     const first = states[0];
     if (!first) return undefined;
-    const urls = [...new Set(states.flatMap((state) => [...state.sources]))];
+    const content = [...citationTitles.entries()].map(([url, title]) => ({
+      type: 'web_search_result',
+      url,
+      title,
+    }));
     return {
       type: 'server-tool-result',
       toolUseId: first.id,
       payload: {
         type: 'web_search_tool_result',
         tool_use_id: first.id,
-        content: urls.map((url) => ({
-          type: 'web_search_result',
-          url,
-          title: citationTitles.get(url) ?? url,
-        })),
+        content,
       },
-      ...(urls.length === 0 && states.every((state) => state.status === 'failed')
+      ...(content.length === 0 && states.every((state) => state.status === 'failed')
         ? { isError: true }
         : {}),
     };
@@ -364,7 +367,7 @@ export async function* translateOpenAIResponsesStream(
         ) {
           const citation = {
             type: 'url_citation' as const,
-            url: annotation['url'],
+            url: stripOpenAITrackingParam(annotation['url']),
             title: annotation['title'],
             start_index: annotation['start_index'],
             end_index: annotation['end_index'],
