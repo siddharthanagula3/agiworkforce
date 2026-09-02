@@ -187,7 +187,7 @@ export function useConversations(): UseConversationsReturn {
   const [listError, setListError] = useState<string | null>(null);
   const conversationLoadErrorRef = useRef<string | null>(null);
   const getConversationLoadError = useCallback(() => conversationLoadErrorRef.current, []);
-  const loadSequenceRef = useRef(0);
+  const currentLoadConversationIdRef = useRef<string | null>(null);
   const listRetryTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const listRetryAttemptRef = useRef(0);
 
@@ -344,8 +344,8 @@ export function useConversations(): UseConversationsReturn {
 
   const loadConversation = useCallback(
     async (id: string): Promise<boolean> => {
-      const requestId = (loadSequenceRef.current += 1);
-      const cancelled = () => requestId !== loadSequenceRef.current;
+      currentLoadConversationIdRef.current = id;
+      const cancelled = () => currentLoadConversationIdRef.current !== id;
 
       setIsOpeningConversation(true);
       setError(null);
