@@ -342,6 +342,11 @@ interface ChatComposerProps {
    * project OR a folder, never both. Absent prop = no picker rendered.
    */
   projectPicker?: ComposerProjectPicker;
+  /**
+   * Skips the load/new-chat auto-focus. Set when the route was opened by
+   * clicking a message in search — the highlighted message keeps attention.
+   */
+  suppressAutoFocus?: boolean;
 }
 
 export interface ComposerProjectPicker {
@@ -432,6 +437,7 @@ const COMPOSER_RESTING_HEIGHT_PX = 52;
 /** M11: the mobile step of the same box the `sm:` utilities carry. */
 const COMPOSER_RESTING_HEIGHT_COMPACT_PX = 36;
 const COMPOSER_COMPACT_MEDIA_QUERY = '(max-width: 639px)';
+const COMPOSER_AUTOFOCUS_MEDIA_QUERY = '(min-width: 768px) and (pointer: fine)';
 
 /**
  * The legacy textarea's resting height is pinned in JS, so the `sm:` step its
@@ -547,6 +553,7 @@ const ChatComposerNewComponent = ({
   onGenerateVideo,
   projectPicker,
   onSetTemporaryChat,
+  suppressAutoFocus = false,
 }: ChatComposerProps) => {
   const isTurnActive = isLoading || isGenerating;
   const [message, setMessage] = useState('');
@@ -1258,6 +1265,31 @@ const ChatComposerNewComponent = ({
     }
     textareaRef.current?.focus();
   }, []);
+
+  const takeIdleFocus = useCallback(() => {
+    if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return;
+    if (!window.matchMedia(COMPOSER_AUTOFOCUS_MEDIA_QUERY).matches) return;
+    const active = document.activeElement;
+    if (active && active !== document.body) {
+      if (active.closest('[role="dialog"], [role="menu"]')) return;
+      const tag = active.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || (active as HTMLElement).isContentEditable)
+        return;
+    }
+    focusComposer();
+  }, [focusComposer]);
+
+  useEffect(() => {
+    if (suppressAutoFocus) return;
+    takeIdleFocus();
+  }, [suppressAutoFocus, takeIdleFocus]);
+
+  const wasTurnActiveRef = useRef(isTurnActive);
+  useEffect(() => {
+    const wasTurnActive = wasTurnActiveRef.current;
+    wasTurnActiveRef.current = isTurnActive;
+    if (wasTurnActive && !isTurnActive) takeIdleFocus();
+  }, [isTurnActive, takeIdleFocus]);
 
   const clearComposerState = useCallback(() => {
     messageRef.current = '';
