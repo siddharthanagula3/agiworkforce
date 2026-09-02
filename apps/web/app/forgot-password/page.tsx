@@ -4,6 +4,7 @@ import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Header } from '@shared/components/layout/Header';
 import { MarketingFooter } from '@/features/marketing/components/MarketingFooter';
+import { Section } from '@/features/marketing/components/system';
 
 export default function ForgotPasswordPage() {
   const router = useRouter();
@@ -13,19 +14,16 @@ export default function ForgotPasswordPage() {
   }, [router]);
 
   return (
-    <div data-design="agi">
-      <main className="agi-shell">
-        <Header />
-        <section
-          className="agi-section"
-          style={{ borderBottom: 'none', maxWidth: 440, margin: '0 auto' }}
-        >
-          <p className="agi-page-lede" style={{ textAlign: 'center' }}>
-            Redirecting to sign in...
+    <div data-design="agi" className="agi-ds-page">
+      <Header />
+      <main id="main-content">
+        <Section size="sm">
+          <p className="agi-ds-prose" style={{ textAlign: 'center' }}>
+            Redirecting to sign in…
           </p>
-        </section>
-        <MarketingFooter />
+        </Section>
       </main>
+      <MarketingFooter />
     </div>
   );
 }
