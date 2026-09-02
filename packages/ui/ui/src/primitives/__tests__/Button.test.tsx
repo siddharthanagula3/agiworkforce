@@ -36,4 +36,14 @@ describe('Button', () => {
     );
     expect(screen.getByRole('button', { name: 'Button' })).toBeTruthy();
   });
+
+  it('recognizes text nested inside a wrapper element and skips the generic fallback', () => {
+    render(
+      <Button>
+        <span className="truncate">Continue</span>
+      </Button>,
+    );
+    expect(screen.getByRole('button', { name: 'Continue' })).toBeTruthy();
+    expect(screen.queryByText('Button')).toBeNull();
+  });
 });
