@@ -73,10 +73,11 @@ describe('legal policy set — one canonical page per policy', () => {
 
 describe('legal policy set — discoverability', () => {
   it('links the core policies plus the legal index from the marketing footer', () => {
-    const footer = readFileSync(
-      path.join(WEB_DIR, 'features/marketing/components/MarketingFooter.tsx'),
-      'utf8',
-    );
+    const footer =
+      readFileSync(
+        path.join(WEB_DIR, 'features/marketing/components/system/MarketingFooter.tsx'),
+        'utf8',
+      ) + readFileSync(path.join(WEB_DIR, 'features/marketing/components/system/nav.ts'), 'utf8');
     for (const href of ['/privacy', '/terms', '/security', '/cookies', '/legal']) {
       expect(footer.includes(`'${href}'`), `footer should link ${href}`).toBe(true);
     }
