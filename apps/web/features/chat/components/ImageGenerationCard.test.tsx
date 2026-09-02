@@ -27,17 +27,32 @@ describe('ImageGenerationCard progress', () => {
 
   it('reports one truthful provider-wait state with elapsed time instead of fake stages', () => {
     vi.useFakeTimers();
-    render(<ImageGenerationCard isGenerating prompt="Draw a star" />);
+    const { container } = render(<ImageGenerationCard isGenerating prompt="Draw a star" />);
+    const elapsedStatus = () => container.querySelector('.tabular-nums')?.textContent ?? '';
 
     expect(screen.getByText('Generating image')).toBeInTheDocument();
-    expect(screen.getByText(/waiting for the image provider · 0:00 elapsed/i)).toBeInTheDocument();
+    expect(elapsedStatus()).toMatch(/waiting for the image provider · 0:00 elapsed/i);
     expect(screen.queryByText(/painting details|almost there|sketching it out/i)).toBeNull();
 
     act(() => {
       vi.advanceTimersByTime(12_000);
     });
 
-    expect(screen.getByText(/waiting for the image provider · 0:12 elapsed/i)).toBeInTheDocument();
+    expect(elapsedStatus()).toMatch(/waiting for the image provider · 0:12 elapsed/i);
+  });
+
+  it('isolates the ticking elapsed clock from the polite live region so it does not re-announce every second', () => {
+    vi.useFakeTimers();
+    const { container } = render(<ImageGenerationCard isGenerating prompt="Draw a star" />);
+    const tickingNode = container.querySelector('[aria-live="off"]');
+
+    expect(tickingNode).toHaveTextContent('0:00');
+
+    act(() => {
+      vi.advanceTimersByTime(12_000);
+    });
+
+    expect(tickingNode).toHaveTextContent('0:12');
   });
 
   it('stops the loader after failure without replaying a legacy ratio the selected model rejects', () => {
