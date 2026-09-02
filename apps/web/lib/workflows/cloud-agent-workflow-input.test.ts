@@ -149,6 +149,21 @@ describe('cloud agent workflow input', () => {
     expect(parseCloudAgentWorkflowInput(JSON.parse(JSON.stringify(input)))).toEqual(input);
   });
 
+  it('accepts the server label the connector tool catalog puts on every connector tool', () => {
+    const labelled: WebMcpToolDef[] = [{ ...tools[0]!, serverLabel: 'GitHub' }];
+
+    const input = buildCloudAgentWorkflowInput({
+      runId: RUN_ID,
+      userId: 'user-1',
+      processed: makeProcessed(),
+      mcpTools: labelled,
+      approvalMode: 'manual',
+    });
+
+    expect(input.mcpTools).toEqual(labelled);
+    expect(parseCloudAgentWorkflowInput(JSON.parse(JSON.stringify(input)))).toEqual(input);
+  });
+
   it('carries the saved connector verdicts so the durable loop enforces them too', () => {
     const input = buildCloudAgentWorkflowInput({
       runId: RUN_ID,
