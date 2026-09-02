@@ -44,6 +44,7 @@ const KNOWN_BLOCK_START_TYPES: ReadonlySet<string> = new Set([
   'server_tool_use',
   'web_search_tool_result',
   'code_execution_tool_result',
+  'web_fetch_tool_result',
 ]);
 
 export async function* translateAnthropicStream(
@@ -89,7 +90,8 @@ export async function* translateAnthropicStream(
             yield { type: 'server-tool-use', toolUseId: block.id, name: block.name };
           } else if (
             block.type === 'web_search_tool_result' ||
-            block.type === 'code_execution_tool_result'
+            block.type === 'code_execution_tool_result' ||
+            block.type === 'web_fetch_tool_result'
           ) {
             yield { type: 'server-tool-result', toolUseId: block.tool_use_id, payload: block };
           } else if (!KNOWN_BLOCK_START_TYPES.has(block.type)) {
