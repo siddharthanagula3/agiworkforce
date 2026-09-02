@@ -312,9 +312,6 @@ function DeviceForm() {
               type="button"
               onClick={() => void onSwitchAccount()}
               disabled={switchingAccount}
-              // Zero-padding text at 0.76rem falls under the 24px target minimum
-              // in the block axis. The pseudo-element grows the hit area without
-              // touching the visual, matching AttachmentPreview.tsx's pattern.
               className="relative before:absolute before:-inset-2 before:content-[''] agi-ds-link"
               style={{ background: 'none', border: 'none', font: 'inherit', cursor: 'pointer' }}
             >
