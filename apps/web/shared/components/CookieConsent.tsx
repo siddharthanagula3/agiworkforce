@@ -2,8 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
-import { X, Cookie, Settings } from 'lucide-react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { X } from 'lucide-react';
 import {
   Switch,
   Button,
@@ -23,6 +22,9 @@ import {
   type CookiePreferences,
 } from '@shared/lib/cookie-consent';
 
+const CLOSE_ICON_SIZE = 16;
+const PROMPT_DELAY_MS = 1000;
+
 export const CookieConsent = () => {
   const [showBanner, setShowBanner] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
@@ -35,7 +37,7 @@ export const CookieConsent = () => {
       return undefined;
     }
 
-    const timer = setTimeout(() => setShowBanner(true), 1000);
+    const timer = setTimeout(() => setShowBanner(true), PROMPT_DELAY_MS);
     return () => clearTimeout(timer);
   }, []);
 
@@ -84,85 +86,74 @@ export const CookieConsent = () => {
 
   return (
     <>
-      <AnimatePresence>
-        {showBanner && (
-          <motion.div
-            ref={bannerRef}
-            initial={{ y: 100, opacity: 0 }}
-            animate={{ y: 0, opacity: 1 }}
-            exit={{ y: 100, opacity: 0 }}
-            className="pointer-events-none fixed bottom-0 left-0 right-0 z-50 p-4 md:p-6"
-            role="region"
-            aria-label="Cookie consent"
-          >
-            {/* The wrapper spans the full width but the card is centred at
-                max-w-7xl, so its empty padding sat over the sidebar and
-                swallowed clicks on the account menu until the banner was
-                dismissed. Only the card itself should take pointer events. */}
-            <div className="pointer-events-none mx-auto max-w-7xl">
-              <div className="pointer-events-auto relative rounded-lg border bg-card p-3 shadow-2xl backdrop-blur-sm sm:p-4 md:p-6">
-                {/* Closing is a refusal, never a grant: consent may not be
-                    inferred from dismissal, so this may only ever write
-                    NECESSARY_ONLY_PREFERENCES. It has to write something;
-                    hiding the banner without recording anything left every
-                    reload re-prompting the same person forever, which is the
-                    pressure tactic the opt-in is supposed to avoid. Users
-                    change their mind through the /cookies preferences button. */}
-                <button
-                  onClick={() => savePreferences(NECESSARY_ONLY_PREFERENCES)}
-                  className="absolute right-2 top-2 flex h-11 w-11 items-center justify-center rounded-full hover:bg-muted"
-                  aria-label="Close and reject non-essential cookies"
-                >
-                  <X className="h-4 w-4" />
-                </button>
-
-                <div className="flex flex-col gap-4 md:flex-row md:items-center md:gap-6">
-                  <div className="flex flex-1 items-start gap-3">
-                    <Cookie className="mt-1 h-6 w-6 flex-shrink-0 text-primary" />
-                    <div>
-                      <h3 className="mb-1 font-semibold">We value your privacy</h3>
-                      <p className="pr-10 text-sm text-muted-foreground">
-                        Cookies that keep you signed in are always on. Analytics is off until you
-                        turn it on, and we never set advertising cookies. Read the{' '}
-                        <Link
-                          href="/cookies"
-                          data-inline-link="true"
-                          className="underline underline-offset-2"
-                        >
-                          cookie policy
-                        </Link>
-                        .
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="flex flex-wrap gap-2 md:flex-nowrap">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setShowSettings(true)}
-                      className="gap-2"
-                    >
-                      <Settings className="h-4 w-4" />
-                      Customize
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => savePreferences(NECESSARY_ONLY_PREFERENCES)}
-                    >
-                      Necessary only
-                    </Button>
-                    <Button size="sm" onClick={() => savePreferences(ALL_ACCEPTED_PREFERENCES)}>
-                      Allow analytics
-                    </Button>
-                  </div>
-                </div>
-              </div>
+      {showBanner && (
+        // The band spans the viewport so the panel can centre in it, but only
+        // the panel may take pointer events: the empty half of the band sat
+        // over the sidebar and swallowed clicks on the account menu.
+        <div
+          ref={bannerRef}
+          data-design="agi"
+          className="agi-ds-consent"
+          role="region"
+          aria-label="Cookie consent"
+        >
+          <div className="agi-ds-consent-panel">
+            <div className="agi-ds-consent-text">
+              <h3 className="agi-ds-consent-title">Cookies on this site</h3>
+              <p className="agi-ds-consent-copy">
+                Analytics is off until you allow it, and the{' '}
+                <Link href="/cookies" data-inline-link="true" className="agi-ds-consent-link">
+                  cookie policy
+                </Link>{' '}
+                lists everything else this site sets.
+              </p>
             </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+
+            <div className="agi-ds-consent-actions">
+              <button
+                type="button"
+                className="agi-ds-btn"
+                data-variant="primary"
+                onClick={() => savePreferences(NECESSARY_ONLY_PREFERENCES)}
+              >
+                Necessary only
+              </button>
+              <button
+                type="button"
+                className="agi-ds-btn"
+                data-variant="secondary"
+                onClick={() => savePreferences(ALL_ACCEPTED_PREFERENCES)}
+              >
+                Allow analytics
+              </button>
+              <button
+                type="button"
+                className="agi-ds-btn"
+                data-variant="secondary"
+                onClick={() => setShowSettings(true)}
+              >
+                Customise
+              </button>
+            </div>
+
+            {/* Closing is a refusal, never a grant: consent may not be
+                inferred from dismissal, so this may only ever write
+                NECESSARY_ONLY_PREFERENCES. It has to write something;
+                hiding the banner without recording anything left every
+                reload re-prompting the same person forever, which is the
+                pressure tactic the opt-in is supposed to avoid. Users
+                change their mind through the /cookies preferences button. */}
+            <button
+              type="button"
+              className="agi-ds-consent-close"
+              onClick={() => savePreferences(NECESSARY_ONLY_PREFERENCES)}
+              aria-label="Close and reject non-essential cookies"
+            >
+              <X size={CLOSE_ICON_SIZE} aria-hidden="true" />
+            </button>
+          </div>
+        </div>
+      )}
 
       <Dialog open={showSettings} onOpenChange={setShowSettings}>
         <DialogContent className="sm:max-w-md">
