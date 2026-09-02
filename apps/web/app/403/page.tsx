@@ -1,5 +1,6 @@
 import { buildMetadata } from '@/lib/seo/metadata';
 import Link from 'next/link';
+import { Eyebrow, Prose, Section, Stack } from '@/features/marketing/components/system';
 import { CONTACT_EMAIL, contactMailto } from '@/lib/legal-constants';
 
 export const metadata = buildMetadata({
@@ -11,49 +12,57 @@ export const metadata = buildMetadata({
 
 export default function ForbiddenPage() {
   return (
-    <div data-design="agi">
-      <main className="agi-shell">
-        <section className="agi-page-hero">
-          <p className="agi-section-eyebrow">403</p>
-          <h1 className="agi-page-h1">You don&rsquo;t have access to this.</h1>
-          <p className="agi-page-lede">
-            You are signed in, but this account is not permitted to open this page. Signing in again
-            will not change that.
-          </p>
-        </section>
+    <div data-design="agi" className="agi-ds-page">
+      <main id="main-content">
+        <Section size="sm">
+          <Stack gap="loose">
+            <div>
+              <Eyebrow>403</Eyebrow>
+              <h1 className="agi-ds-h1">You don&rsquo;t have access to this.</h1>
+            </div>
+            <Prose>
+              You are signed in, but this account is not permitted to open this page. Signing in
+              again will not change that.
+            </Prose>
+          </Stack>
+        </Section>
 
-        <section className="agi-page-section">
-          <h2 className="agi-section-h2">Why you might be seeing this</h2>
-          <p className="agi-page-p">
-            The page belongs to a workspace you are not a member of, it needs a role your account
-            does not hold, or it is limited to a plan this account is not on. If you have more than
-            one account, you may be signed in as the wrong one.
-          </p>
-        </section>
+        <Section size="sm" rule>
+          <Stack gap="loose">
+            <h2 className="agi-ds-h2">Why you might be seeing this.</h2>
+            <Prose>
+              The page belongs to a workspace you are not a member of, it needs a role your account
+              does not hold, or it is limited to a plan this account is not on. If you have more
+              than one account, you may be signed in as the wrong one.
+            </Prose>
+          </Stack>
+        </Section>
 
-        <section className="agi-page-section">
-          <h2 className="agi-section-h2">What to do</h2>
-          <p className="agi-page-p">
-            If a teammate sent you the link, ask them to grant access from their workspace{' '}
-            <Link className="agi-link" href="/settings/team">
-              Team settings
-            </Link>
-            . If this is a plan limit, the{' '}
-            <Link className="agi-link" href="/pricing">
-              pricing page
-            </Link>{' '}
-            lists what each plan includes. Otherwise write to{' '}
-            <a className="agi-link" href={contactMailto('Access request')}>
-              {CONTACT_EMAIL}
-            </a>{' '}
-            with the address you tried to open.
-          </p>
-          <p className="agi-page-p">
-            <Link className="agi-link" href="/chat">
-              Back to your workspace
-            </Link>
-          </p>
-        </section>
+        <Section size="sm" rule>
+          <Stack gap="loose">
+            <h2 className="agi-ds-h2">What to do.</h2>
+            <Prose>
+              If a teammate sent you the link, ask them to grant access from their workspace{' '}
+              <Link className="agi-ds-link" href="/settings/team">
+                team settings
+              </Link>
+              . If this is a plan limit, the{' '}
+              <Link className="agi-ds-link" href="/pricing">
+                pricing page
+              </Link>{' '}
+              lists what each plan includes. Otherwise write to{' '}
+              <a className="agi-ds-link" href={contactMailto('Access request')}>
+                {CONTACT_EMAIL}
+              </a>{' '}
+              with the address you tried to open.
+            </Prose>
+            <Prose>
+              <Link className="agi-ds-link" href="/chat">
+                Back to your workspace
+              </Link>
+            </Prose>
+          </Stack>
+        </Section>
       </main>
     </div>
   );
