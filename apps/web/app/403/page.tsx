@@ -25,7 +25,7 @@ export default function ForbiddenPage() {
             </div>
             <Prose>
               You are signed in, but this account is not permitted to open this page. Signing in
-              again will not change that.
+              again with this account will not change that.
             </Prose>
           </Stack>
         </Section>
