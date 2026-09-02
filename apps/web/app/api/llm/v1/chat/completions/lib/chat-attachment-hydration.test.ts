@@ -52,6 +52,10 @@ describe('hydrateChatAttachments', () => {
     await hydrateChatAttachments(messages, 'user-1');
 
     expect(messages[0]?.content[1]).toEqual({
+      type: 'text',
+      text: '[attached file: brief.pdf (application/pdf)]',
+    });
+    expect(messages[0]?.content[2]).toEqual({
       type: 'file',
       file: {
         filename: 'brief.pdf',
@@ -161,7 +165,11 @@ describe('hydrateChatAttachments', () => {
 
     await hydrateChatAttachments(messages, 'user-1');
 
-    const part = messages[0]?.content[0] as unknown as {
+    expect(messages[0]?.content[0]).toEqual({
+      type: 'text',
+      text: '[attached file: revenue.ipynb (application/x-ipynb+json)]',
+    });
+    const part = messages[0]?.content[1] as unknown as {
       type: string;
       file: { filename: string; mime_type: string; file_data: string };
     };
@@ -268,11 +276,12 @@ describe('hydrateChatAttachments', () => {
 
     const parts = partsOf(messages[0]);
     expect(parts[0]).toEqual({ type: 'text', text: 'Compare these' });
-    expect(parts[1]?.file?.filename).toBe('readable.txt');
-    expect(Buffer.from(parts[1]!.file!.file_data!.split(',')[1]!, 'base64').toString()).toBe(
+    expect(parts[1]).toEqual({ type: 'text', text: '[attached file: readable.txt (text/plain)]' });
+    expect(parts[2]?.file?.filename).toBe('readable.txt');
+    expect(Buffer.from(parts[2]!.file!.file_data!.split(',')[1]!, 'base64').toString()).toBe(
       'usable contents',
     );
-    expect(parts[2]?.text).toBe(
+    expect(parts[3]?.text).toBe(
       '[attachment unavailable: missing-bytes.txt could not be loaded. Attach it again to include it.]',
     );
   });
@@ -451,10 +460,44 @@ describe('hydrateChatAttachments', () => {
 
     await expect(hydrateChatAttachments(messages, 'user-1')).resolves.toBeUndefined();
 
-    expect(partsOf(messages[2])[0]?.file?.filename).toBe('new-notes.txt');
+    expect(partsOf(messages[2])[1]?.file?.filename).toBe('new-notes.txt');
     expect(partsOf(messages[0])[0]?.text).toBe(
       '[attachment unavailable: old-dump.txt was left out because this conversation has reached its attachment limit.]',
     );
+  });
+
+  it('gives every attachment type the same filename-and-type header, so a CSV is named as reliably as a TXT', async () => {
+    const txtId = '88888888-8888-4888-8888-888888888888';
+    const csvId = '99999999-9999-4999-9999-999999999999';
+    mocks.getMediaAssetById.mockImplementation(async (id: string) => ({
+      id,
+      userId: 'user-1',
+      kind: 'file',
+      mimeType: id === txtId ? 'text/plain' : 'text/csv',
+      storagePathname: `chat-attachments/user-1/${id}`,
+      metadata: { filename: id === txtId ? 'notes.txt' : 'report.csv' },
+      deletedAt: null,
+    }));
+    mocks.readStoredMedia.mockResolvedValue({ data: Buffer.from('contents') });
+
+    const messages = [
+      {
+        role: 'user',
+        content: [
+          { type: 'text', text: 'name both files' },
+          { type: 'file', file: { asset_id: txtId } },
+          { type: 'file', file: { asset_id: csvId } },
+        ],
+      },
+    ];
+
+    await hydrateChatAttachments(messages, 'user-1');
+
+    const parts = partsOf(messages[0]);
+    expect(parts[1]).toEqual({ type: 'text', text: '[attached file: notes.txt (text/plain)]' });
+    expect(parts[2]?.file?.filename).toBe('notes.txt');
+    expect(parts[3]).toEqual({ type: 'text', text: '[attached file: report.csv (text/csv)]' });
+    expect(parts[4]?.file?.filename).toBe('report.csv');
   });
 
   it('drops the overflowing history file when a conversation passes the attachment count cap', async () => {
@@ -481,7 +524,7 @@ describe('hydrateChatAttachments', () => {
 
     await expect(hydrateChatAttachments(messages, 'user-1')).resolves.toBeUndefined();
 
-    expect(partsOf(messages[21])[0]?.file?.filename).toBe('file-attached-now.txt');
+    expect(partsOf(messages[21])[1]?.file?.filename).toBe('file-attached-now.txt');
     // No filename here: the cap is reached before the asset row is read, and a
     // fabricated name would read like a real one.
     expect(partsOf(messages[19])[0]?.text).toBe(
