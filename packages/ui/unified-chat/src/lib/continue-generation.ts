@@ -85,7 +85,10 @@ export const CONTINUE_GENERATION_INSTRUCTION =
   'Continue your previous response from exactly where it left off. ' +
   'Do not repeat any earlier content, do not restart the answer, and do not add any preamble ' +
   'or acknowledgement — output only the direct continuation. If the response was cut off ' +
-  'mid-sentence, mid-word, or mid-code-block, resume at that exact point.';
+  'mid-sentence, mid-word, or mid-code-block, resume at that exact point with no extra space. ' +
+  'If it was cut off right before a new list item, heading, table row, code fence, or display ' +
+  'equation, start the continuation with a blank line before that block, exactly as you would ' +
+  'have written it without the interruption.';
 
 const SENTENCE_ENDINGS = /[.!?:;)\]}"'\u2019\u201d*_|`>-]$/u;
 
