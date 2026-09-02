@@ -17,6 +17,25 @@ if (fs.existsSync(envPath)) {
   });
 }
 
+const E2E_RATE_LIMIT_SCALE = '50';
+const NO_CREDENTIAL = '';
+
+/**
+ * The loader above puts `.env.local` on `process.env`, real Upstash credentials
+ * included, and Playwright starts the server with `{ ...process.env, ...env }`.
+ * Left alone the batch shares one live rate-limit bucket with production: it
+ * spends the account's real allowance, burns Upstash quota, and 429s its own
+ * later specs. Blanking the credentials picks the in-process limiter, and the
+ * scale keeps back-to-back sends off the ceiling.
+ */
+const ISOLATED_SERVER_ENV: Record<string, string> = {
+  AGI_RATE_LIMIT_SCALE: E2E_RATE_LIMIT_SCALE,
+  UPSTASH_REDIS_REST_URL: NO_CREDENTIAL,
+  UPSTASH_REDIS_REST_TOKEN: NO_CREDENTIAL,
+  KV_REST_API_URL: NO_CREDENTIAL,
+  KV_REST_API_TOKEN: NO_CREDENTIAL,
+};
+
 export default defineConfig({
   testDir: './e2e',
   testMatch: ['**/*.spec.ts'],
@@ -46,6 +65,7 @@ export default defineConfig({
         url: process.env['PLAYWRIGHT_BASE_URL'] ?? 'http://localhost:3000',
         reuseExistingServer: !process.env['CI'],
         timeout: 120 * 1000,
+        env: ISOLATED_SERVER_ENV,
       },
 
   timeout: 120 * 1000,
