@@ -331,7 +331,7 @@ export function ProjectGallery({
           </div>
 
           {createError ? (
-            <p role="alert" className="text-xs text-[var(--chat-error,#f43f5e)]">
+            <p role="alert" className="text-xs text-[var(--chat-destructive-text)]">
               {createError}
             </p>
           ) : null}
