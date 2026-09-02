@@ -1,9 +1,11 @@
 import { buildMetadata } from '@/lib/seo/metadata';
+import { cookies } from 'next/headers';
 import Link from 'next/link';
 import { Header } from '@shared/components/layout/Header';
 import { MarketingFooter } from '@/features/marketing/components/MarketingFooter';
 import { Eyebrow, Prose, Section, Stack } from '@/features/marketing/components/system';
 import { CONTACT_EMAIL, contactMailto } from '@/lib/legal-constants';
+import { hasBrowserSessionCookie } from '@/lib/session-cookie';
 
 export const metadata = buildMetadata({
   title: 'Access denied',
@@ -12,7 +14,10 @@ export const metadata = buildMetadata({
   robots: { index: false, follow: false },
 });
 
-export default function ForbiddenPage() {
+export default async function ForbiddenPage() {
+  const cookieStore = await cookies();
+  const signedIn = hasBrowserSessionCookie(cookieStore.getAll());
+
   return (
     <div data-design="agi" className="agi-ds-page">
       <Header />
@@ -23,10 +28,16 @@ export default function ForbiddenPage() {
               <Eyebrow>403</Eyebrow>
               <h1 className="agi-ds-h1">You don&rsquo;t have access to this.</h1>
             </div>
-            <Prose>
-              You are signed in, but this account is not permitted to open this page. Signing in
-              again with this account will not change that.
-            </Prose>
+            {signedIn ? (
+              <Prose>
+                You are signed in, but this account is not permitted to open this page. Signing in
+                again with this account will not change that.
+              </Prose>
+            ) : (
+              <Prose>
+                You are not signed in. Sign in to see whether your account has access to this page.
+              </Prose>
+            )}
           </Stack>
         </Section>
 
