@@ -231,10 +231,8 @@ export interface StreamChunkCitation {
  * anything else falls through its `if/else if` chain unchanged and is
  * serialized straight onto the SSE stream as-is. Byte-stability for the
  * web v1 route means reproducing that default-passthrough behavior for
- * event types this migration didn't explicitly account for — for example
- * Anthropic's `web_fetch_tool_result` content block (unlike
- * `web_search_tool_result`/`code_execution_tool_result`, the legacy code
- * never added a case for it) — rather than silently dropping them, which
+ * event types this migration didn't explicitly account for, rather than
+ * silently dropping them, which
  * `packages/ai/providers/anthropic/src/stream.ts`'s translator would
  * otherwise do for any content-block/delta type outside its known set.
  *
@@ -242,7 +240,8 @@ export interface StreamChunkCitation {
  * recognizes as "exists but not (yet) worth a dedicated StreamChunk
  * variant" — currently `packages/ai/providers/anthropic/src/stream.ts` for
  * `content_block_start` block types outside {text, thinking, tool_use,
- * server_tool_use, web_search_tool_result, code_execution_tool_result}.
+ * server_tool_use, web_search_tool_result, code_execution_tool_result,
+ * web_fetch_tool_result}.
  * Consumer: `OpenAIWireAssembler` (web v1 route only, matching its
  * `citationsMode`-style opt-in), which re-serializes `payload` verbatim.
  * Surfaces without a legacy raw-passthrough wire to match should ignore

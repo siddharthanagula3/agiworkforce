@@ -262,6 +262,60 @@ describe('OpenAIWireAssembler streaming', () => {
     });
   });
 
+  it('closes a native web_fetch tool call with x_tool_result once the fetch result arrives', () => {
+    const assembler = new OpenAIWireAssembler({
+      model: FIXTURE_MODEL_ID,
+      now: NOW,
+      wireMode: 'legacy-web',
+    });
+
+    const completed = assembler.sseChunks({
+      type: 'server-tool-result',
+      toolUseId: 'wf_1',
+      payload: {
+        type: 'web_fetch_tool_result',
+        tool_use_id: 'wf_1',
+        content: { type: 'web_fetch_result', url: 'https://example.com/page' },
+      },
+    });
+
+    expect((completed[0] as { choices: Array<{ delta: unknown }> }).choices[0]?.delta).toEqual({
+      x_tool_result: {
+        tool_call_id: 'wf_1',
+        name: 'web_fetch',
+        content: 'Fetched https://example.com/page',
+        is_error: false,
+      },
+    });
+  });
+
+  it('closes a native web_fetch tool call as failed for a web_fetch_tool_result_error', () => {
+    const assembler = new OpenAIWireAssembler({
+      model: FIXTURE_MODEL_ID,
+      now: NOW,
+      wireMode: 'legacy-web',
+    });
+
+    const completed = assembler.sseChunks({
+      type: 'server-tool-result',
+      toolUseId: 'wf_2',
+      payload: {
+        type: 'web_fetch_tool_result',
+        tool_use_id: 'wf_2',
+        content: { type: 'web_fetch_tool_result_error', error_code: 'url_not_accessible' },
+      },
+    });
+
+    expect((completed[0] as { choices: Array<{ delta: unknown }> }).choices[0]?.delta).toEqual({
+      x_tool_result: {
+        tool_call_id: 'wf_2',
+        name: 'web_fetch',
+        content: 'Web fetch failed: url_not_accessible',
+        is_error: true,
+      },
+    });
+  });
+
   it('streams reasoning as inline <thinking> tags in openai-passthrough mode, same shape as legacy-web', () => {
     const contents = (events: Record<string, unknown>[]): unknown[] =>
       events.map(
