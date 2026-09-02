@@ -36,18 +36,20 @@ export default function TeamsPage() {
           ]}
         />
 
-        <Section id="team-basics" labelledBy="agi-teams-basics-title" size="xs">
-          <h2 className="sr-only" id="agi-teams-basics-title">
-            What a Team workspace includes
-          </h2>
-          <Ledger
-            caption="What a Team workspace includes"
-            rows={[
-              { label: 'Seats', value: `From ${MIN_PURCHASABLE_SEATS}` },
-              { label: 'Roles', value: 'Owner, admin, member, viewer' },
-              { label: 'Compute', value: 'Cloud · hosted by us' },
-            ]}
-          />
+        <Section id="team-basics" labelledBy="agi-teams-basics-title" rule>
+          <Stack>
+            <h2 className="agi-ds-h2" id="agi-teams-basics-title">
+              What a Team workspace includes.
+            </h2>
+            <Ledger
+              caption="What a Team workspace includes"
+              rows={[
+                { label: 'Seats', value: `From ${MIN_PURCHASABLE_SEATS}` },
+                { label: 'Roles', value: 'Owner, admin, member, viewer' },
+                { label: 'Compute', value: 'Cloud · hosted by us' },
+              ]}
+            />
+          </Stack>
         </Section>
 
         <Section id="membership" labelledBy="agi-teams-membership-title" rule>
