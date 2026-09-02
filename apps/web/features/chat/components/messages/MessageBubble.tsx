@@ -1290,8 +1290,14 @@ const MessageBubbleComponent = function MessageBubble({
   // Collect web-search sources from metadata (searchResults and/or citations).
   // These are passed INTO the ToolTimeline so they render inside the web-search step box
   // (matching the Claude reference). A fallback renders them if there is no tool timeline.
-  const { searchSources, searchQuery } = useMemo(() => {
-    if (isUser) return { searchSources: [] as ResearchSource[], searchQuery: undefined };
+  const { searchSources, searchQuery, citationsByMarker } = useMemo(() => {
+    if (isUser) {
+      return {
+        searchSources: [] as ResearchSource[],
+        searchQuery: undefined,
+        citationsByMarker: [] as ResearchSource[],
+      };
+    }
 
     const collected: ResearchSource[] = [];
     let query: string | undefined;
@@ -1341,7 +1347,18 @@ const MessageBubbleComponent = function MessageBubble({
     // De-dupe by URL and assign stable 1-based citation numbers (claude.ai
     // parity: a source cited twice keeps one number). Sources missing a usable
     // URL are dropped here rather than rendered as dead links.
-    return { searchSources: dedupeResearchSources(collected), searchQuery: query };
+    const deduped = dedupeResearchSources(collected);
+
+    // The inline [n] markers the model writes index into `collected`, not the
+    // deduped list — so a repeated source keeps its dedupe-assigned number
+    // here too, and a marker whose source got dropped resolves to nothing
+    // rather than pointing at the wrong entry.
+    const dedupedByUrl = new Map(deduped.map((s) => [s.url, s]));
+    const citationsByMarker = collected.map(
+      (source, i) => dedupedByUrl.get(source.url) ?? { ...source, citationIndex: i + 1 },
+    );
+
+    return { searchSources: deduped, searchQuery: query, citationsByMarker };
   }, [isUser, message.metadata?.searchResults, message.metadata?.citations]);
 
   // Mirror this message's web-search sources into the right-hand Sources panel
@@ -1624,9 +1641,13 @@ const MessageBubbleComponent = function MessageBubble({
             ) : (
               (() => {
                 const markdown = message.isStreaming ? (
-                  <StreamingMarkdownContent content={cleanedContent} isStreaming />
+                  <StreamingMarkdownContent
+                    content={cleanedContent}
+                    isStreaming
+                    citations={citationsByMarker}
+                  />
                 ) : (
-                  <MarkdownContent content={cleanedContent} />
+                  <MarkdownContent content={cleanedContent} citations={citationsByMarker} />
                 );
                 return formatCardType ? (
                   <MessageFormatCard

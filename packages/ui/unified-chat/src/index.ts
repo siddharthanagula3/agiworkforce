@@ -139,6 +139,7 @@ export {
 } from './components/markdown/StreamingMarkdownContent';
 export { MARKDOWN_SANITIZE_SCHEMA } from './components/markdown/markdownSanitizeSchema';
 export { preprocessMath } from './components/markdown/preprocessMath';
+export { CitationChip, type MarkdownCitation } from './components/markdown/CitationChip';
 
 export {
   LocalByokHandoffDialog,
