@@ -1,4 +1,10 @@
+import { notFound } from 'next/navigation';
+
 export default function TokenProbe() {
+  if (process.env.NODE_ENV === 'production') {
+    notFound();
+  }
+
   return (
     <main className="bg-surface-page p-8">
       <div data-probe="surface-page" className="bg-surface-page h-4" />
