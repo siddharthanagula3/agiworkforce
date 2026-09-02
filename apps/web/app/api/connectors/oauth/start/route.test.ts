@@ -99,7 +99,7 @@ describe('GET /api/connectors/oauth/start', () => {
     expect(response.status).toBe(307);
     const location = new URL(response.headers.get('location') as string);
     expect(location.pathname).toBe('/connectors');
-    expect(location.searchParams.get('status')).toBe('unavailable');
+    expect(location.searchParams.get('status')).toBe('not_configured');
     expect(mocks.createPending).not.toHaveBeenCalled();
   });
 
@@ -107,7 +107,7 @@ describe('GET /api/connectors/oauth/start', () => {
     const response = await GET(request('?connectorId=trello&mode=json'));
 
     expect(response.status).toBe(501);
-    await expect(response.json()).resolves.toMatchObject({ status: 'unavailable' });
+    await expect(response.json()).resolves.toMatchObject({ status: 'not_configured' });
   });
 
   it('reports a self-service discovery failure as an upstream failure, not as unconfigured', async () => {
