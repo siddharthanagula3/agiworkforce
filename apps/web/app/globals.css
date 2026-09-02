@@ -119,10 +119,15 @@
   --ease-standard: var(--curve-standard);
   --ease-exit: var(--curve-exit);
   --ease-spring: var(--curve-spring);
-  /* Font families — Operator-Broadsheet redesign 2026-05-05.
-     Newsreader (variable serif) for display + body on Tier A/B marketing pages.
-     JetBrains Mono for UI chrome: slugs, datelines, CTAs, marginalia. */
-  --font-sans: var(--font-newsreader), Georgia, 'Times New Roman', serif;
+  /* Sans and serif each name a role, not a hue: --font-sans is the product
+     face every unscoped element inherits (chat shell, app chrome), sourced
+     from the same chat.css tokens the chat surfaces themselves render with
+     so the two can never drift apart. --font-serif is the explicit editorial
+     face — Settings section headings opt into it through --serif below, and
+     marketing copy that wants it opts in with the font-serif utility. Nothing
+     unscoped may inherit serif by default. */
+  --font-sans: var(--chat-font-sans);
+  --font-serif: var(--chat-font-serif);
   --font-mono: var(--font-jetbrains), 'Berkeley Mono', ui-monospace, monospace;
   --font-display: var(--font-newsreader), Georgia, serif;
   --font-heading: var(--font-newsreader), Georgia, 'Times New Roman', serif;
