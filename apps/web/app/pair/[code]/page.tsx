@@ -4,12 +4,12 @@ import { PairBody } from '../pair-body';
 
 export default function PairCodePage() {
   return (
-    <div data-design="agi">
-      <main className="agi-shell">
-        <Header />
+    <div data-design="agi" className="agi-ds-page">
+      <Header />
+      <main id="main-content">
         <PairBody />
-        <MarketingFooter />
       </main>
+      <MarketingFooter />
     </div>
   );
 }
