@@ -1027,9 +1027,9 @@ export function ChatInput({
           'overflow-hidden border transition-colors',
           'bg-[var(--chat-surface-elevated)]',
           isDragOver
-            ? 'border-[var(--chat-accent-primary)] shadow-[0_0_0_2px_rgba(218,119,86,0.25)]'
+            ? 'border-[var(--chat-accent-primary)] shadow-[0_0_0_2px_color-mix(in_srgb,var(--chat-accent-primary)_25%,transparent)]'
             : focused
-              ? 'border-[var(--chat-border-strong,var(--chat-border))] shadow-[0_0_0_2px_rgba(33,128,141,0.25)]'
+              ? 'border-[var(--chat-border-strong,var(--chat-border))] shadow-[0_0_0_2px_var(--chat-focus-ring)]'
               : 'border-[var(--chat-border)]',
         )}
         style={{ borderRadius: 16 }}
