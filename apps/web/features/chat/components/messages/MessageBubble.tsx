@@ -515,7 +515,7 @@ interface MessageBubbleProps {
   isReadAloudSupported?: boolean;
   hasBranches?: boolean;
   /**
-   * This message's place among its siblings — the other answers to the same
+   * This message's place among its siblings, the other answers to the same
    * question, or the other revisions of the same message. Absent, or with a
    * total of one, nothing is rendered.
    */
@@ -637,7 +637,7 @@ const MessageBubbleComponent = function MessageBubble({
    * express: that one splices, leaving the exchange this answer produced hanging
    * off the question as if it had answered it. This takes the whole branch.
    *
-   * Offered only where both halves of the contract are present — a surface that
+   * Offered only where both halves of the contract are present; a surface that
    * cannot count what goes with the response would confirm a promise it has not
    * checked.
    */
@@ -2290,7 +2290,7 @@ const MessageBubbleComponent = function MessageBubble({
                   </>
                 )}
 
-                {/* Variants — immediately before Regenerate, which is the
+                {/* Variants sit immediately before Regenerate, which is the
                     control that produces them, and in the same slot on a user
                     message's hover row for the revisions Edit produces. */}
                 {variantPager}
