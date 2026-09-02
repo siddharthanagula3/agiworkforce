@@ -95,11 +95,12 @@ export default function TeamsPage() {
                 Every control has a page, and the page says whether it binds.
               </h2>
               <Prose>
-                Each row below carries one of three labels: a server-side check refuses requests
-                that violate it, the setting is recorded but nothing acts on it yet, or no row has
-                been saved and the shipped default applies. A recorded position never wears the same
-                badge as an enforced one, which is the difference a security reviewer is there to
-                find.
+                The three states above describe what a control on this console can be in: a
+                server-side check refuses requests that violate it, the setting is recorded but
+                nothing acts on it yet, or no row has been saved and the shipped default applies.
+                Read each row below for which one currently holds: a recorded position is never
+                described the same way as an enforced one, which is the difference a security
+                reviewer is there to find.
               </Prose>
             </div>
             <FactGrid
