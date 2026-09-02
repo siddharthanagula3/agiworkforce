@@ -45,6 +45,14 @@ export const MODEL_ID_OWNER_PATHS = Object.freeze([
   'crates/agiworkforce-protocol/src/generated/model_registry.rs',
   'tools/skill-vetting/src/skillspector/providers/openai/model_registry.yaml',
   'tools/skill-vetting/src/skillspector/providers/anthropic/model_registry.yaml',
+  // Ops facts for the free lane: pool rows are keyed by route and model ids by
+  // design, the same way the catalog files above are.
+  'apps/web/config/free-pools.json',
+  // Dated research evidence: provider surveys quote model ids as subject
+  // matter, the way the registry quotes them as data.
+  'docs/research/provider-free-value-matrix-2026-09-01.md',
+  'docs/research/free-inference-tos-workbook-2026-09-01.md',
+  'docs/architecture/byok-provider-strategy.md',
 ]);
 
 const OWNER_PATH_SET = new Set(MODEL_ID_OWNER_PATHS);

@@ -22,6 +22,7 @@ const cloudModules = [
   'projects',
   'managed-cloud-projects-client',
   'conversations',
+  'message-thread',
   'interactive-cards',
   'managed-cloud-chat-client',
   'chat-attachments',
