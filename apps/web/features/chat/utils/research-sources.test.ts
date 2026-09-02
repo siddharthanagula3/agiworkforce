@@ -35,6 +35,24 @@ describe('dedupeResearchSources', () => {
     expect(result[0]?.favicon).toBe('f.png');
   });
 
+  it('treats a tracking-param variant of a URL as the same source', () => {
+    const result = dedupeResearchSources([
+      { url: 'https://example.com/a?utm_source=chatgpt.com', title: 'first' },
+      { url: 'https://example.com/a', title: 'second' },
+    ]);
+    expect(result).toHaveLength(1);
+    expect(result[0]?.citationIndex).toBe(1);
+    expect(result[0]?.title).toBe('first');
+  });
+
+  it('keeps a real, non-tracking query param distinct', () => {
+    const result = dedupeResearchSources([
+      { url: 'https://example.com/a?id=1', title: 'one' },
+      { url: 'https://example.com/a?id=2', title: 'two' },
+    ]);
+    expect(result).toHaveLength(2);
+  });
+
   it('drops entries without a usable URL (graceful missing metadata)', () => {
     const result = dedupeResearchSources([
       { url: '', title: 'no url' },
