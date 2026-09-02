@@ -23,7 +23,6 @@ import {
   CalendarClock,
   FolderOpen,
   LibraryBig,
-  ListChecks,
   MessageSquare,
   ShieldCheck,
   TerminalSquare,
@@ -124,14 +123,6 @@ export const APP_NAV_DESTINATIONS: readonly AppNavDestination[] = [
     href: '/chat/library',
     isActive: (pathname) =>
       isUnder(pathname, '/chat/library') || isUnder(pathname, '/chat/artifacts'),
-    hideable: true,
-  },
-  {
-    id: 'tasks',
-    label: 'Tasks',
-    icon: ListChecks,
-    href: '/tasks',
-    isActive: (pathname) => isUnder(pathname, '/tasks'),
     hideable: true,
   },
   {
