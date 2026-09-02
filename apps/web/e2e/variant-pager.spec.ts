@@ -31,8 +31,7 @@ const CONSENT_DISMISS_LABEL = 'Close and reject non-essential cookies';
 const REGENERATE_LABEL = 'Regenerate response';
 const PREVIOUS_VARIANT_LABEL = 'Previous response';
 const NEXT_VARIANT_LABEL = 'Next response';
-const MORE_ACTIONS_LABEL = 'More message actions';
-const EDIT_ITEM_LABEL = 'Edit';
+const EDIT_BUTTON_LABEL = 'Edit message';
 const EDIT_SAVE_LABEL = 'Save & Retry';
 const EDIT_PLACEHOLDER = 'Edit your message...';
 
@@ -225,8 +224,7 @@ test.describe('in-thread response variants', () => {
 
     const followUpBubble = page.locator(USER_BUBBLE).last();
     await followUpBubble.hover();
-    await followUpBubble.getByRole('button', { name: MORE_ACTIONS_LABEL }).click();
-    await page.getByRole('menuitem', { name: EDIT_ITEM_LABEL }).click();
+    await followUpBubble.getByRole('button', { name: EDIT_BUTTON_LABEL }).click();
 
     const editor = page.getByPlaceholder(EDIT_PLACEHOLDER);
     await expect(editor).toBeEditable({ timeout: LOAD_TIMEOUT_MS });
@@ -274,8 +272,7 @@ test.describe('in-thread response variants', () => {
 
     const openingBubble = page.locator(USER_BUBBLE).first();
     await openingBubble.hover();
-    await openingBubble.getByRole('button', { name: MORE_ACTIONS_LABEL }).click();
-    await page.getByRole('menuitem', { name: EDIT_ITEM_LABEL }).click();
+    await openingBubble.getByRole('button', { name: EDIT_BUTTON_LABEL }).click();
 
     const editor = page.getByPlaceholder(EDIT_PLACEHOLDER);
     await expect(editor).toBeEditable({ timeout: LOAD_TIMEOUT_MS });
