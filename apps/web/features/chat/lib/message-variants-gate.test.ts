@@ -24,9 +24,9 @@ afterEach(() => {
 });
 
 describe('message variants gate', () => {
-  it('keeps regenerate replacing until something asks for variants', () => {
-    expect(resolveMessageVariantsMode()).toBe(MESSAGE_VARIANTS_MODES.off);
-    expect(resolveMessageVariantsEnabled()).toBe(false);
+  it('keeps regenerate and edit non-destructive until something asks for the old replace behaviour', () => {
+    expect(resolveMessageVariantsMode()).toBe(MESSAGE_VARIANTS_MODES.on);
+    expect(resolveMessageVariantsEnabled()).toBe(true);
   });
 
   it('takes the build-time default when there is no override', () => {
@@ -72,8 +72,8 @@ describe('message variants gate', () => {
     expect(resolveMessageVariantsEnabled()).toBe(true);
   });
 
-  it('lands off when the build-time default names nothing', () => {
-    expect(resolveMessageVariantsBuildMode()).toBe(MESSAGE_VARIANTS_MODES.off);
+  it('lands on when the build-time default names nothing', () => {
+    expect(resolveMessageVariantsBuildMode()).toBe(MESSAGE_VARIANTS_MODES.on);
   });
 
   it('falls through to the build-time default when storage is blocked', () => {

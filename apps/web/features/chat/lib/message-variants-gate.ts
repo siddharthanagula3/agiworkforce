@@ -44,7 +44,9 @@ function readStoredOverride(): MessageVariantsMode | null {
 export function resolveMessageVariantsBuildMode(): MessageVariantsMode {
   // Must stay a literal bracket read: Next inlines NEXT_PUBLIC_* by matching
   // the source text, and scripts/env-doctor.mjs scans for the same shape.
-  return parseMode(process.env['NEXT_PUBLIC_MESSAGE_VARIANTS']) ?? MESSAGE_VARIANTS_MODES.off;
+  // Edit and regenerate are non-destructive by default; NEXT_PUBLIC_MESSAGE_VARIANTS=off
+  // stays available as a kill switch.
+  return parseMode(process.env['NEXT_PUBLIC_MESSAGE_VARIANTS']) ?? MESSAGE_VARIANTS_MODES.on;
 }
 
 export function resolveMessageVariantsMode(): MessageVariantsMode {

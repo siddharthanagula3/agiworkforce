@@ -2064,12 +2064,19 @@ export function useChatStream(): UseChatStreamReturn {
       // placeholder both paint before the first await, so the turn is on
       // screen in the same frame as the click. Persistence is reconciled
       // once the network catches up.
+      // A conversation later stamped into a tree chains rows by (createdAt, id)
+      // (stampLinearParents), and this pair is built synchronously in the same
+      // tick: two Date.now() calls a few statements apart can land on the same
+      // millisecond, at which point the id tiebreak is a coin flip and can chain
+      // the parent onto its own child. userMessageStartedAtMs floors the
+      // assistant placeholder's timestamp one millisecond past its question's.
+      const userMessageStartedAtMs = Date.now();
       if (!regenerateParentId) {
         const userMessage: Message = {
           id: userMessageId,
           role: 'user',
           content: content.trim(),
-          createdAt: new Date().toISOString(),
+          createdAt: new Date(userMessageStartedAtMs).toISOString(),
           attachments: options.attachments,
           metadata: userMetadata,
           ...(threadsThisWrite ? { parentId: userMessageParentId } : {}),
@@ -2084,7 +2091,9 @@ export function useChatStream(): UseChatStreamReturn {
 
       const assistantMessageId = resolveClientMessageId(options.assistantMessageId);
       let assistantParentId = resolveAssistantParentId(conversationId, turnAnchorId);
-      const assistantStartedAtMs = Date.now();
+      const assistantStartedAtMs = regenerateParentId
+        ? Date.now()
+        : Math.max(Date.now(), userMessageStartedAtMs + 1);
       const assistantMessage: Message = {
         id: assistantMessageId,
         role: 'assistant',

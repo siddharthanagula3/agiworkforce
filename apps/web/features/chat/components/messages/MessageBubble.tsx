@@ -2211,6 +2211,23 @@ const MessageBubbleComponent = function MessageBubble({
                   <TooltipContent>Copy</TooltipContent>
                 </Tooltip>
 
+                {isUser && onEdit && (
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className={ACTION_BUTTON_SIZE}
+                        onClick={handleBeginEdit}
+                        aria-label="Edit message"
+                      >
+                        <Pencil className="h-3.5 w-3.5" aria-hidden="true" />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>Edit</TooltipContent>
+                  </Tooltip>
+                )}
+
                 {onPin && (
                   <Tooltip>
                     <TooltipTrigger asChild>
@@ -2388,12 +2405,9 @@ const MessageBubbleComponent = function MessageBubble({
                     </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align={isUser ? 'end' : 'start'}>
-                    {isUser && onEdit && (
-                      <DropdownMenuItem onClick={handleBeginEdit}>
-                        <Pencil className="mr-2 h-4 w-4" aria-hidden="true" />
-                        Edit
-                      </DropdownMenuItem>
-                    )}
+                    {/* Edit moved OUT of this menu into the persistent hover
+                        action row above, same convention as Branch below — one
+                        control, one place. Do not re-add it here. */}
                     {/*
                       Report an answer as harmful or inaccurate. The web app had
                       no such action: the only routes out were a general
