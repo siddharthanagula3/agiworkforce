@@ -1003,9 +1003,41 @@ export function withProviderStreamDeadline<T>(
   });
 }
 
+export interface ServerToolStartSignal {
+  toolCallId: string;
+  name: string;
+}
+
+export interface ServerToolResultSignal {
+  toolCallId: string;
+  name: string;
+  sources: FetchedSource[];
+  elapsedMs: number;
+}
+
+export function serverToolResultSources(content: unknown[]): FetchedSource[] {
+  const sources: FetchedSource[] = [];
+  for (const item of content) {
+    if (typeof item !== 'object' || item === null) continue;
+    const obj = item as Record<string, unknown>;
+    if (obj['type'] !== 'web_search_result') continue;
+    const url = obj['url'];
+    if (typeof url !== 'string') continue;
+    const title = typeof obj['title'] === 'string' && obj['title'] ? obj['title'] : url;
+    const snippet = obj['encrypted_content'];
+    sources.push(typeof snippet === 'string' && snippet ? { url, title, snippet } : { url, title });
+  }
+  return sources;
+}
+
 /** Exported for unit tests (untrusted-provider-stream accumulation bounds). */
 export async function collectProviderStream(stream: ReadableStream): Promise<{
-  lines: Array<{ line: SseLine; publicTextDelta?: string }>;
+  lines: Array<{
+    line: SseLine;
+    publicTextDelta?: string;
+    serverToolStart?: ServerToolStartSignal;
+    serverToolResult?: ServerToolResultSignal;
+  }>;
   finishReason: string | null;
   pendingToolCalls: PendingToolCall[];
   textContent: string;
@@ -1014,7 +1046,12 @@ export async function collectProviderStream(stream: ReadableStream): Promise<{
 }> {
   const reader = stream.getReader();
   const decoder = new TextDecoder();
-  const lines: Array<{ line: SseLine; publicTextDelta?: string }> = [];
+  const lines: Array<{
+    line: SseLine;
+    publicTextDelta?: string;
+    serverToolStart?: ServerToolStartSignal;
+    serverToolResult?: ServerToolResultSignal;
+  }> = [];
   const publicTextProjector = createPublicTextDeltaProjector();
   let buffer = '';
   let finishReason: string | null = null;
@@ -1022,6 +1059,11 @@ export async function collectProviderStream(stream: ReadableStream): Promise<{
   const generatedFileRefs = new Map<string, GeneratedFileRef>();
 
   const toolCallAccum: Map<number, { id: string; name: string; argsJson: string }> = new Map();
+  const pendingServerWebSearchTools: Array<{
+    toolCallId: string;
+    name: string;
+    startedAt: number;
+  }> = [];
 
   while (true) {
     const { done, value } = await reader.read();
@@ -1056,7 +1098,44 @@ export async function collectProviderStream(stream: ReadableStream): Promise<{
           publicTextDelta = publicTextProjector.push(textDelta) || undefined;
         }
 
-        lines.push({ line: raw + '\n', publicTextDelta });
+        let serverToolStart: ServerToolStartSignal | undefined;
+        const toolStatusDelta = event?.choices?.[0]?.delta?.x_tool_status;
+        if (toolStatusDelta && typeof toolStatusDelta === 'object') {
+          const toolStatusObj = toolStatusDelta as Record<string, unknown>;
+          const toolStatusName = toolStatusObj['name'];
+          if (
+            toolStatusObj['type'] === 'server_tool_use' &&
+            typeof toolStatusName === 'string' &&
+            isWebSearchTool(toolStatusName)
+          ) {
+            const toolCallId = crypto.randomUUID();
+            pendingServerWebSearchTools.push({
+              toolCallId,
+              name: toolStatusName,
+              startedAt: Date.now(),
+            });
+            serverToolStart = { toolCallId, name: toolStatusName };
+          }
+        }
+
+        let serverToolResult: ServerToolResultSignal | undefined;
+        const searchResultsDelta = event?.choices?.[0]?.delta?.x_search_results;
+        const searchResultsContent = (searchResultsDelta as Record<string, unknown> | undefined)?.[
+          'content'
+        ];
+        if (Array.isArray(searchResultsContent) && pendingServerWebSearchTools.length > 0) {
+          const pending = pendingServerWebSearchTools.shift();
+          if (pending) {
+            serverToolResult = {
+              toolCallId: pending.toolCallId,
+              name: pending.name,
+              sources: serverToolResultSources(searchResultsContent),
+              elapsedMs: Math.max(0, Date.now() - pending.startedAt),
+            };
+          }
+        }
+
+        lines.push({ line: raw + '\n', publicTextDelta, serverToolStart, serverToolResult });
 
         const toolCallDeltas: unknown[] | undefined = event?.choices?.[0]?.delta?.tool_calls;
         if (Array.isArray(toolCallDeltas)) {
@@ -2646,6 +2725,38 @@ export async function* runToolLoop(
         if (entry.publicTextDelta) {
           yield encoder.encode(
             eventStream.emit({ type: 'text-delta', delta: entry.publicTextDelta }),
+          );
+        }
+        if (entry.serverToolStart) {
+          const category = canonicalToolCategory(entry.serverToolStart.name, mcpTools);
+          yield encoder.encode(
+            eventStream.emit({
+              type: 'tool-execution-start',
+              toolCallId: entry.serverToolStart.toolCallId,
+              name: entry.serverToolStart.name,
+              category,
+              summary: canonicalToolSummary(entry.serverToolStart.name, category),
+              input: toAgentEventJson({}),
+            }),
+          );
+        }
+        if (entry.serverToolResult) {
+          yield encoder.encode(
+            eventStream.emit({
+              type: 'source-list',
+              toolCallId: entry.serverToolResult.toolCallId,
+              sources: entry.serverToolResult.sources,
+            }),
+          );
+          yield encoder.encode(
+            eventStream.emit({
+              type: 'tool-execution-end',
+              toolCallId: entry.serverToolResult.toolCallId,
+              name: entry.serverToolResult.name,
+              output: toAgentEventJson(entry.serverToolResult.sources),
+              isError: false,
+              elapsedMs: entry.serverToolResult.elapsedMs,
+            }),
           );
         }
       }
