@@ -65,16 +65,24 @@ function looksComplete(source: string): boolean {
   return /\n/.test(trimmed) || /^(pie|gitGraph|timeline|mindmap)/.test(trimmed);
 }
 
+export type MermaidRenderResult = { svg: string } | { error: string } | null;
+
 export interface MermaidDiagramProps {
   source: string;
   isStreaming?: boolean;
   className?: string;
+  /** Hides the "Show source" toggle for embeds that must not nest interactive
+   *  controls inside their own click target (e.g. a card thumbnail). */
+  interactive?: boolean;
+  onRenderResult?: (result: MermaidRenderResult) => void;
 }
 
 export const MermaidDiagram: React.FC<MermaidDiagramProps> = ({
   source,
   isStreaming = false,
   className,
+  interactive = true,
+  onRenderResult,
 }) => {
   const [state, setState] = useState<RenderState>(() => {
     const cached = svgCache.get(source);
@@ -84,6 +92,16 @@ export const MermaidDiagram: React.FC<MermaidDiagramProps> = ({
   const reactId = useId();
   const diagramId = useMemo(() => `mermaid-${reactId.replace(/[:]/g, '')}`, [reactId]);
   const containerRef = useRef<HTMLDivElement>(null);
+  const onRenderResultRef = useRef(onRenderResult);
+  onRenderResultRef.current = onRenderResult;
+
+  useEffect(() => {
+    const report = onRenderResultRef.current;
+    if (!report) return;
+    if (state.phase === 'ready') report({ svg: state.svg });
+    else if (state.phase === 'failed') report({ error: state.reason });
+    else report(null);
+  }, [state]);
 
   // While streaming, defer until the source looks structurally closed: mermaid
   // throws on every intermediate state. Once the turn is finished the source is
@@ -149,12 +167,16 @@ export const MermaidDiagram: React.FC<MermaidDiagramProps> = ({
           // llm-guardrail-allow: mermaid output, passed through the package sanitizeSvg
           dangerouslySetInnerHTML={{ __html: state.svg }}
         />
-        <figcaption className="mermaid-caption">
-          <button type="button" onClick={() => setShowSource((v) => !v)}>
-            {showSource ? 'Hide source' : 'Show source'}
-          </button>
-        </figcaption>
-        {showSource ? sourceBlock : null}
+        {interactive ? (
+          <>
+            <figcaption className="mermaid-caption">
+              <button type="button" onClick={() => setShowSource((v) => !v)}>
+                {showSource ? 'Hide source' : 'Show source'}
+              </button>
+            </figcaption>
+            {showSource ? sourceBlock : null}
+          </>
+        ) : null}
       </figure>
     );
   }
