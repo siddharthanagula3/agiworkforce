@@ -16,6 +16,7 @@ import {
   FolderDown,
 } from 'lucide-react';
 import { summarizeGeneratedFileBundle } from '@agiworkforce/types';
+import { MermaidDiagram } from '@agiworkforce/unified-chat';
 import { cn } from '@shared/lib/utils';
 import { buildSandboxSrcDoc } from '@shared/utils/html-sanitizer';
 import { useArtifactsStore } from '../../stores/artifacts-store';
@@ -148,7 +149,8 @@ function badgeClass(type: ArtifactData['type']): string {
 
 function ArtifactFullCard({ artifact, onClick }: { artifact: ArtifactData; onClick: () => void }) {
   const mounted = useMounted();
-  const canRender = mounted && ['html', 'react', 'svg', 'mermaid'].includes(artifact.type);
+  const canRenderMermaid = mounted && artifact.type === 'mermaid';
+  const canRender = mounted && ['html', 'react', 'svg'].includes(artifact.type);
   const generatedFileSummary = summarizeGeneratedFileBundle({
     computeSession: artifact.computeSession,
     generatedFile: artifact.generatedFile,
@@ -175,7 +177,27 @@ function ArtifactFullCard({ artifact, onClick }: { artifact: ArtifactData; onCli
     >
       {/* Preview area · 80px wide on the left */}
       <div className="relative w-20 shrink-0 overflow-hidden bg-muted/60 border-r border-border/30">
-        {canRender ? (
+        {canRenderMermaid ? (
+          <div
+            className="pointer-events-none h-full w-full overflow-hidden bg-background"
+            aria-hidden="true"
+          >
+            <div
+              style={{
+                width: '250%',
+                height: '250%',
+                transform: 'scale(0.4)',
+                transformOrigin: 'top left',
+              }}
+            >
+              <MermaidDiagram
+                source={artifact.content}
+                interactive={false}
+                className="mermaid-block"
+              />
+            </div>
+          </div>
+        ) : canRender ? (
           <iframe
             title={artifact.title || 'Artifact preview'}
             // 80px static thumbnail, same reasoning as the gallery grid: no
