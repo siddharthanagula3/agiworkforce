@@ -96,7 +96,25 @@ const GeneratedFileRefSchema = z
 
 const ProviderStepResultSchema = z
   .object({
-    lines: z.array(z.object({ line: z.string(), publicTextDelta: z.string().optional() }).strict()),
+    lines: z.array(
+      z
+        .object({
+          line: z.string(),
+          publicTextDelta: z.string().optional(),
+          serverToolStart: z.object({ toolCallId: z.string(), name: z.string() }).optional(),
+          serverToolResult: z
+            .object({
+              toolCallId: z.string(),
+              name: z.string(),
+              sources: z.array(
+                z.object({ url: z.string(), title: z.string(), snippet: z.string().optional() }),
+              ),
+              elapsedMs: z.number(),
+            })
+            .optional(),
+        })
+        .strict(),
+    ),
     finishReason: z.string().nullable(),
     pendingToolCalls: z.array(PendingToolCallSchema),
     textContent: z.string(),
