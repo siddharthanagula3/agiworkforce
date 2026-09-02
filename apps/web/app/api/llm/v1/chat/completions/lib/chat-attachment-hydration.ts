@@ -79,6 +79,19 @@ function filenameFromMetadata(metadata: Record<string, unknown>, fallback: strin
   return typeof filename === 'string' && filename.trim() ? filename.trim() : fallback;
 }
 
+/**
+ * A provider's native file/image block carries the filename as metadata on the
+ * part, not in text the model necessarily reads back to the user - the CSV vs
+ * TXT gap this closes was a model that could describe both files' contents but
+ * not name the one whose part-level filename it never surfaced. Every resolved
+ * attachment gets this same plain-text line first, so the model always has the
+ * name and type in the context it actually reads, independent of how any given
+ * provider exposes (or drops) file-part metadata.
+ */
+function attachmentContextHeader(filename: string, mimeType: string): AttachmentReferencePart {
+  return { type: 'text', text: `[attached file: ${filename} (${mimeType})]` };
+}
+
 function isNotebookAttachment(filename: string, mimeType: string): boolean {
   return (
     mimeType.trim().toLowerCase() === NOTEBOOK_MIME_TYPE ||
@@ -158,7 +171,7 @@ type AttachmentSlot = {
   partIndex: number;
   assetId: string;
   fromCurrentTurn: boolean;
-  resolved?: AttachmentReferencePart;
+  resolved?: AttachmentReferencePart[];
 };
 
 function collectAttachmentSlots(messages: HydratableMessage[]): AttachmentSlot[] {
@@ -209,11 +222,11 @@ export async function hydrateChatAttachments(
   for (const slot of ordered) {
     const live = slot.fromCurrentTurn;
     const degrade = (filename: string, note: string): void => {
-      slot.resolved = { type: 'text', text: unavailableAttachment(filename, note) };
+      slot.resolved = [{ type: 'text', text: unavailableAttachment(filename, note) }];
     };
 
     if (messages[slot.messageIndex]?.role !== 'user') {
-      slot.resolved = { type: 'text', text: UNNAMED_UNAVAILABLE_NOTE };
+      slot.resolved = [{ type: 'text', text: UNNAMED_UNAVAILABLE_NOTE }];
       continue;
     }
 
@@ -226,7 +239,7 @@ export async function hydrateChatAttachments(
           `You can attach up to ${MAX_REQUEST_ATTACHMENT_COUNT} files to one message.`,
         );
       }
-      slot.resolved = { type: 'text', text: UNNAMED_UNAVAILABLE_NOTE };
+      slot.resolved = [{ type: 'text', text: UNNAMED_UNAVAILABLE_NOTE }];
       continue;
     }
 
@@ -290,13 +303,18 @@ export async function hydrateChatAttachments(
     }
     totalBytes += object.data.byteLength;
 
+    const header = attachmentContextHeader(filename, asset.mimeType);
+
     if (isChatImageMimeType(asset.mimeType)) {
-      slot.resolved = {
-        type: 'image_url',
-        image_url: {
-          url: `data:${asset.mimeType};base64,${object.data.toString('base64')}`,
+      slot.resolved = [
+        header,
+        {
+          type: 'image_url',
+          image_url: {
+            url: `data:${asset.mimeType};base64,${object.data.toString('base64')}`,
+          },
         },
-      };
+      ];
       continue;
     }
 
@@ -314,32 +332,38 @@ export async function hydrateChatAttachments(
         continue;
       }
       if (!notebookText) {
-        slot.resolved = {
-          type: 'text',
-          text: `[${filename} contains no readable notebook cells]`,
-        };
+        slot.resolved = [
+          header,
+          { type: 'text', text: `[${filename} contains no readable notebook cells]` },
+        ];
         continue;
       }
-      slot.resolved = {
-        type: 'file',
-        file: {
-          filename,
-          mime_type: 'text/plain',
-          file_data: `data:text/plain;base64,${Buffer.from(notebookText, 'utf8').toString('base64')}`,
+      slot.resolved = [
+        header,
+        {
+          type: 'file',
+          file: {
+            filename,
+            mime_type: 'text/plain',
+            file_data: `data:text/plain;base64,${Buffer.from(notebookText, 'utf8').toString('base64')}`,
+          },
         },
-      };
+      ];
       continue;
     }
 
     const mimeType = normalizeChatDocumentMimeType(asset.mimeType);
-    slot.resolved = {
-      type: 'file',
-      file: {
-        filename,
-        mime_type: mimeType,
-        file_data: `data:${mimeType};base64,${object.data.toString('base64')}`,
+    slot.resolved = [
+      header,
+      {
+        type: 'file',
+        file: {
+          filename,
+          mime_type: mimeType,
+          file_data: `data:${mimeType};base64,${object.data.toString('base64')}`,
+        },
       },
-    };
+    ];
   }
 
   const bySlot = new Map<string, AttachmentSlot>();
@@ -348,8 +372,8 @@ export async function hydrateChatAttachments(
   for (let messageIndex = 0; messageIndex < messages.length; messageIndex += 1) {
     const message = messages[messageIndex];
     if (!message || !Array.isArray(message.content)) continue;
-    message.content = message.content.map(
-      (part, partIndex) => bySlot.get(`${messageIndex}:${partIndex}`)?.resolved ?? part,
+    message.content = message.content.flatMap(
+      (part, partIndex) => bySlot.get(`${messageIndex}:${partIndex}`)?.resolved ?? [part],
     );
   }
 }
