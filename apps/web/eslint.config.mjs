@@ -23,6 +23,8 @@ const eslintConfig = defineConfig([
     'public/chat/**',
     'app/.well-known/workflow/**',
     'scripts/**',
+    '!scripts',
+    '!scripts/verify-built-css.mjs',
   ]),
   {
     rules: {
