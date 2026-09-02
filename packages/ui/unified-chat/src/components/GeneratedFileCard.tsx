@@ -112,7 +112,11 @@ function VideoMarker({ overlay }: { overlay: boolean }) {
 function StatusBadge({ presentation }: { presentation: GeneratedFilePresentation }) {
   if (presentation.isRunning) {
     return (
-      <span className="inline-flex items-center gap-1 rounded-full bg-warning-fill/10 px-2 py-0.5 text-[12px] font-medium uppercase tracking-wide text-warning-text">
+      <span
+        role="status"
+        aria-live="polite"
+        className="inline-flex items-center gap-1 rounded-full bg-warning-fill/10 px-2 py-0.5 text-[12px] font-medium uppercase tracking-wide text-warning-text"
+      >
         <Loader2 className="h-3 w-3 animate-spin" aria-hidden />
         {presentation.statusLabel}
       </span>
@@ -120,7 +124,11 @@ function StatusBadge({ presentation }: { presentation: GeneratedFilePresentation
   }
   if (presentation.isFailed) {
     return (
-      <span className="inline-flex items-center gap-1 rounded-full bg-destructive/10 px-2 py-0.5 text-[12px] font-medium uppercase tracking-wide text-danger">
+      <span
+        role="status"
+        aria-live="polite"
+        className="inline-flex items-center gap-1 rounded-full bg-destructive/10 px-2 py-0.5 text-[12px] font-medium uppercase tracking-wide text-danger"
+      >
         <AlertTriangle className="h-3 w-3" aria-hidden />
         {presentation.statusLabel}
       </span>
@@ -128,14 +136,22 @@ function StatusBadge({ presentation }: { presentation: GeneratedFilePresentation
   }
   if (presentation.isComplete) {
     return (
-      <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-2 py-0.5 text-[12px] font-medium uppercase tracking-wide text-emerald-700 dark:text-emerald-300">
+      <span
+        role="status"
+        aria-live="polite"
+        className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-2 py-0.5 text-[12px] font-medium uppercase tracking-wide text-emerald-700 dark:text-emerald-300"
+      >
         <ShieldCheck className="h-3 w-3" aria-hidden />
         {presentation.statusLabel}
       </span>
     );
   }
   return (
-    <span className="inline-flex items-center gap-1 rounded-full bg-zinc-500/10 px-2 py-0.5 text-[12px] font-medium uppercase tracking-wide text-zinc-300">
+    <span
+      role="status"
+      aria-live="polite"
+      className="inline-flex items-center gap-1 rounded-full bg-zinc-500/10 px-2 py-0.5 text-[12px] font-medium uppercase tracking-wide text-zinc-300"
+    >
       <Clock className="h-3 w-3" aria-hidden />
       {presentation.statusLabel}
     </span>
