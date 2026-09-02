@@ -53,6 +53,12 @@ export interface AgentActivityToolEntry {
   input?: unknown;
   output?: unknown;
   error?: string;
+  /**
+   * The tool was never runnable for this turn (policy off, not offered to the
+   * provider, unsupported) rather than invoked and failing mid-run. The UI
+   * renders this as a quiet notice instead of the red failure styling.
+   */
+  unavailable?: boolean;
   startedAtMs: number;
   completedAtMs?: number;
   elapsedMs?: number;
@@ -242,6 +248,28 @@ function humanizeToolFailureSummary(raw: string | undefined, input: unknown): st
   const status = HTTP_STATUS_PATTERN.exec(detail)?.[1];
   return status ? `${withHostname} (HTTP ${status})` : withHostname;
 }
+
+/**
+ * The tool-loop reports these three ways a call never ran because the
+ * capability wasn't available for the request, distinct from a call that ran
+ * and errored. Matched against the exact server copy in
+ * apps/web/lib/e2b/execution-tools.ts and
+ * apps/web/app/api/llm/v1/chat/completions/lib/tool-loop.ts.
+ */
+const TOOL_UNAVAILABLE_BY_POLICY_PATTERNS: RegExp[] = [
+  /^Code execution is unavailable for this request\.$/,
+  /^Cloud code execution is turned off for this account\./,
+  /^Tool [\w.-]+ is not available\.$/,
+];
+
+function isToolUnavailableByPolicy(raw: string | undefined): boolean {
+  if (!raw) return false;
+  const trimmed = raw.trim();
+  return TOOL_UNAVAILABLE_BY_POLICY_PATTERNS.some((pattern) => pattern.test(trimmed));
+}
+
+const CODE_EXECUTION_UNAVAILABLE_NOTICE =
+  'Code execution was not available for this request, so the answer was written without running code.';
 
 const ONE_LINE_SUMMARY_MAX_LENGTH = 140;
 
@@ -444,6 +472,8 @@ function applyAgentEvent(
       const id = `tool:${event.toolCallId}`;
       const index = next.entries.findIndex((entry) => entry.id === id);
       const rawFailure = event.isError ? stringifyError(event.output) : undefined;
+      const unavailable = event.isError && isToolUnavailableByPolicy(rawFailure);
+      const failureSummary = unavailable ? CODE_EXECUTION_UNAVAILABLE_NOTICE : undefined;
       if (index >= 0) {
         next.entries = updateAt<AgentActivityToolEntry>(next.entries, index, (entry) => ({
           ...entry,
@@ -451,8 +481,11 @@ function applyAgentEvent(
           output: event.output,
           status: event.isError ? 'failed' : 'completed',
           summary: event.isError
-            ? (humanizeToolFailureSummary(rawFailure, entry.input) ?? entry.summary)
+            ? (failureSummary ??
+              humanizeToolFailureSummary(rawFailure, entry.input) ??
+              entry.summary)
             : entry.summary,
+          unavailable,
           ...(event.isError ? { error: rawFailure ?? 'Tool execution failed' } : {}),
           elapsedMs: event.elapsedMs ?? Math.max(0, envelope.emittedAtMs - entry.startedAtMs),
           completedAtMs: envelope.emittedAtMs,
@@ -467,10 +500,11 @@ function applyAgentEvent(
             name: event.name,
             category: 'other',
             summary: event.isError
-              ? (humanizeToolFailureSummary(rawFailure, undefined) ?? event.name)
+              ? (failureSummary ?? humanizeToolFailureSummary(rawFailure, undefined) ?? event.name)
               : event.name,
             status: event.isError ? 'failed' : 'completed',
             output: event.output,
+            unavailable,
             ...(event.isError ? { error: rawFailure ?? 'Tool execution failed' } : {}),
             startedAtMs: envelope.emittedAtMs,
             completedAtMs: envelope.emittedAtMs,
