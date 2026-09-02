@@ -46,7 +46,9 @@ export function PageHero({
   if (!visual) {
     return (
       <section className="agi-ds-section agi-ds-hero" aria-labelledby={id}>
-        <div className="agi-ds-container">{copy}</div>
+        <div className="agi-ds-container">
+          <div style={{ width: 'fit-content', maxWidth: '100%', marginInline: 'auto' }}>{copy}</div>
+        </div>
       </section>
     );
   }
