@@ -1,0 +1,42 @@
+[data-design='agi'] .agi-ds-compare-table-wrap {
+  overflow-x: auto;
+}
+
+[data-design='agi'] .agi-ds-compare-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--agi-text-sm);
+  color: var(--agi-ink);
+}
+
+[data-design='agi'] .agi-ds-compare-table th {
+  text-align: left;
+  padding: var(--agi-space-2) var(--agi-space-2);
+  border-bottom: 1px solid var(--agi-rule-strong);
+  color: var(--agi-ink-2);
+  font-family: var(--agi-font-mono);
+  font-size: var(--agi-text-xs);
+  font-weight: 500;
+  letter-spacing: var(--agi-tracking-label);
+  white-space: nowrap;
+}
+
+[data-design='agi'] .agi-ds-compare-table td {
+  padding: var(--agi-space-2) var(--agi-space-2);
+  border-bottom: 1px solid var(--agi-rule);
+  color: var(--agi-ink-2);
+}
+
+[data-design='agi'] .agi-ds-compare-table tbody tr[data-tone='highlight'] {
+  background: var(--agi-ground-2);
+}
+
+[data-design='agi'] .agi-ds-compare-table tbody tr[data-tone='highlight'] td:first-child {
+  box-shadow: inset 2px 0 0 var(--agi-ink);
+}
+
+[data-design='agi'] .agi-ds-compare-table td:first-child {
+  font-weight: 600;
+  color: var(--agi-ink);
+  white-space: nowrap;
+}
