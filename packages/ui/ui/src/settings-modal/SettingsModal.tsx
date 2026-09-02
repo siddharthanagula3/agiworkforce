@@ -1010,7 +1010,10 @@ function DirectoryBrowse({
                     </div>
                   </div>
                   {plugin.mutating ? (
-                    <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                    <Loader2
+                      className="h-4 w-4 animate-spin text-muted-foreground"
+                      aria-label={`Updating ${plugin.name}`}
+                    />
                   ) : plugin.installed && plugin.installable === false ? (
                     <span
                       title="No longer available on this surface: installed, but the server does not run it."
