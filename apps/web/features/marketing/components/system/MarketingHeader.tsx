@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { AgiMark } from '@shared/components/agi/AgiMark';
 import { Button } from './Button';
+import { MarketingMobileNav } from './MarketingMobileNav';
 import { ThemeToggle } from './ThemeToggle';
 import { Container } from './Container';
 import { HEADER_LINKS, WEB_ENTRY_HREF } from './nav';
@@ -29,6 +30,7 @@ export function MarketingHeader() {
               Sign in
             </Link>
             <Button href={WEB_ENTRY_HREF}>Try AGI Web</Button>
+            <MarketingMobileNav />
           </div>
         </div>
       </Container>

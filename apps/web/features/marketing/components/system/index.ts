@@ -9,6 +9,7 @@ export { LANE_IDS, LANE_NAMES, type LaneId } from './lanes';
 export { Ledger, type LedgerRow } from './Ledger';
 export { MarketingFooter } from './MarketingFooter';
 export { MarketingHeader } from './MarketingHeader';
+export { MarketingMobileNav } from './MarketingMobileNav';
 export { MotionReveal } from './MotionReveal';
 export { ProductFrame } from './ProductFrame';
 export { Prose } from './Prose';
