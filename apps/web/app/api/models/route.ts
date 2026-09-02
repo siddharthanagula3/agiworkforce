@@ -9,6 +9,10 @@ import {
   modelsCatalogJson as modelsData,
   type ModelMetadata,
 } from '@agiworkforce/types';
+import {
+  getProviderAvailabilityMap,
+  type ProviderAvailabilitySignal,
+} from '@/lib/services/provider-availability-service';
 
 export const runtime = 'nodejs';
 
@@ -42,6 +46,8 @@ interface ModelPricing {
   inputTokenPricingTiers: ModelInputTokenPricingTier[];
 }
 
+export type ModelAvailabilityStatus = { state: 'available' } | ProviderAvailabilitySignal;
+
 export interface ModelEntry {
   id: string;
   name: string;
@@ -55,7 +61,10 @@ export interface ModelEntry {
   quality: string | null;
   bestFor: string[];
   released: string | null;
+  availability: ModelAvailabilityStatus;
 }
+
+const AVAILABLE_STATUS: ModelAvailabilityStatus = { state: 'available' };
 
 interface ModelsJson {
   version: number;
@@ -80,13 +89,17 @@ function toCategory(modelType: string | undefined): ModelEntry['category'] {
   }
 }
 
-function toModelEntry(raw: ModelMetadata): ModelEntry {
+function toModelEntry(
+  raw: ModelMetadata,
+  availabilityByProvider: Readonly<Record<string, ProviderAvailabilitySignal>>,
+): ModelEntry {
   const caps = raw.capabilities;
 
   return {
     id: raw.id,
     name: raw.name,
     provider: raw.provider,
+    availability: availabilityByProvider[raw.provider] ?? AVAILABLE_STATUS,
     category: toCategory(raw.modelType),
     contextWindow: raw.contextWindow ?? null,
     maxOutputTokens: raw.maxOutputTokens ?? null,
@@ -140,7 +153,13 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
 
   try {
     const catalog = modelsData as ModelsJson;
-    const models: ModelEntry[] = listCanonicalModels().map(toModelEntry);
+    const canonicalModels = listCanonicalModels();
+    const availabilityByProvider = await getProviderAvailabilityMap(
+      canonicalModels.map((model) => model.provider),
+    );
+    const models: ModelEntry[] = canonicalModels.map((model) =>
+      toModelEntry(model, availabilityByProvider),
+    );
 
     logger.info({ modelCount: models.length }, 'Model catalog served');
 
@@ -153,7 +172,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       {
         status: 200,
         headers: {
-          'Cache-Control': 'public, max-age=300, stale-while-revalidate=60',
+          'Cache-Control': 'public, max-age=15, stale-while-revalidate=30',
           ...getCorsHeaders(request),
           ...getSecurityHeaders(),
         },
