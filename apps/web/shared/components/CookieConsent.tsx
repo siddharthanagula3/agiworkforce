@@ -103,7 +103,7 @@ export const CookieConsent = () => {
               <div className="pointer-events-auto relative rounded-lg border bg-card p-3 shadow-2xl backdrop-blur-sm sm:p-4 md:p-6">
                 {/* Closing is a refusal, never a grant: consent may not be
                     inferred from dismissal, so this may only ever write
-                    NECESSARY_ONLY_PREFERENCES. It has to write something —
+                    NECESSARY_ONLY_PREFERENCES. It has to write something;
                     hiding the banner without recording anything left every
                     reload re-prompting the same person forever, which is the
                     pressure tactic the opt-in is supposed to avoid. Users
