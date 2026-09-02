@@ -1,9 +1,9 @@
 'use client';
 
-import Link from 'next/link';
 import type { ReactNode } from 'react';
 import { Header } from '@shared/components/layout/Header';
 import { MarketingFooter } from '@/features/marketing/components/MarketingFooter';
+import { PageHero, type PageCta } from '@/features/marketing/components/pages/surfaces/shared';
 
 export interface SignedOutSurfaceProps {
   /** Small label above the heading, e.g. "Skills". */
@@ -33,30 +33,24 @@ export function SignedOutSurface({
   signInLabel,
   secondary,
 }: SignedOutSurfaceProps) {
+  const ctas: PageCta[] = [{ href: signInHref, label: signInLabel }];
+  if (secondary) {
+    ctas.push({ href: secondary.href, label: secondary.label, variant: 'secondary' });
+  }
+
   return (
-    <div data-design="agi">
-      <main className="agi-shell">
-        <Header />
-        <section className="agi-fl-hero agi-fl-hero--copy" aria-labelledby="agi-signed-out-title">
-          <div className="agi-fl-hero-backdrop" aria-hidden="true" />
-          <p className="agi-fl-eyebrow">{eyebrow}</p>
-          <h1 id="agi-signed-out-title" className="agi-fl-h1">
-            <span className="agi-fl-h1-line">{heading}</span>
-          </h1>
-          <p className="agi-fl-lede">{children}</p>
-          <div className="agi-fl-cta-row">
-            <Link href={signInHref} className="agi-fl-cta agi-fl-cta--primary">
-              {signInLabel}
-            </Link>
-            {secondary && (
-              <Link href={secondary.href} className="agi-fl-cta agi-fl-cta--secondary">
-                {secondary.label}
-              </Link>
-            )}
-          </div>
-        </section>
-        <MarketingFooter />
+    <div data-design="agi" className="agi-ds-page">
+      <Header />
+      <main id="main-content">
+        <PageHero
+          id="agi-signed-out-title"
+          eyebrow={eyebrow}
+          title={heading}
+          lede={children}
+          ctas={ctas}
+        />
       </main>
+      <MarketingFooter />
     </div>
   );
 }
