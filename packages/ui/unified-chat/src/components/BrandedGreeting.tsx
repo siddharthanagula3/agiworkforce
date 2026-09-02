@@ -1,4 +1,3 @@
-
 import React, { useMemo } from 'react';
 import { Sparkles } from 'lucide-react';
 import { cn } from '../lib/utils';
@@ -86,15 +85,15 @@ export const BrandedGreeting: React.FC<BrandedGreetingProps> = ({ userName = nul
       </div>
 
       {/* Headline */}
-      <h1 className="text-2xl font-semibold text-white/90 tracking-tight leading-tight">
+      <h1 className="text-2xl font-semibold text-foreground tracking-tight leading-tight">
         {headline}
       </h1>
 
       {/* Branded sub-tagline */}
-      <p className="text-sm text-white/40 font-medium">{subline}</p>
+      <p className="text-sm text-muted-foreground font-medium">{subline}</p>
 
       {/* Platform tagline */}
-      <p className="text-xs text-white/30 italic mt-1">
+      <p className="text-xs text-muted-foreground font-normal italic mt-1">
         Beyond one model. Beyond one surface. AGI in your hands.
       </p>
     </div>
