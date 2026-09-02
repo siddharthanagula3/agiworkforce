@@ -41,9 +41,10 @@ export function MarketingFooter({ condensed = false }: { condensed?: boolean } =
               {link.label}
             </Link>
           ))}
-          <a href={contactMailto(CONTACT_SUBJECTS.dpdpGrievance)}>
-            {GRIEVANCE_OFFICER_NAME}: {CONTACT_EMAIL}
-          </a>
+          <span>
+            {GRIEVANCE_OFFICER_NAME}:{' '}
+            <a href={contactMailto(CONTACT_SUBJECTS.dpdpGrievance)}>{CONTACT_EMAIL}</a>
+          </span>
         </div>
       </Container>
     </footer>

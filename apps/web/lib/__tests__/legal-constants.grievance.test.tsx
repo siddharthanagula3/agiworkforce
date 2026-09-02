@@ -21,7 +21,7 @@ const GRIEVANCE_SURFACES = [
   'app/privacy/india/page.tsx',
   'app/privacy/requests/page.tsx',
   'app/terms/page.tsx',
-  'features/marketing/components/MarketingFooter.tsx',
+  'features/marketing/components/system/MarketingFooter.tsx',
 ];
 
 const readSurface = (relative: string) => readFileSync(join(webRoot, relative), 'utf8');
@@ -44,7 +44,7 @@ describe('published grievance officer', () => {
 
   it('names the officer once in the footer instead of stuttering the role', () => {
     const { container } = render(<MarketingFooter />);
-    const strip = container.querySelector('.agi-footer-strip');
+    const strip = container.querySelector('.agi-ds-footer-legal');
     const text = strip?.textContent ?? '';
 
     expect(text).toContain(GRIEVANCE_OFFICER_NAME);
@@ -53,7 +53,7 @@ describe('published grievance officer', () => {
 
   it('points the footer grievance route at the provisioned mailbox', () => {
     const { container } = render(<MarketingFooter />);
-    const link = container.querySelector(`.agi-footer-strip a[href^="mailto:"]`);
+    const link = container.querySelector(`.agi-ds-footer-legal a[href^="mailto:"]`);
 
     expect(link?.getAttribute('href')).toBe(contactMailto(CONTACT_SUBJECTS.dpdpGrievance));
     expect(link?.textContent).toBe(CONTACT_EMAIL);
