@@ -9,9 +9,9 @@
  *  - `chat.checkpointList/Create/Restore/Delete` (@agiworkforce/desktop-command-client) removed.
  *    Hosts pass `onLoad`, `onCreate`, `onRestore`, `onDelete` callbacks so the
  *    component has zero backend coupling.
- *  - `AlertDialog/Dialog/Input/Textarea` from desktop UI were replaced with
- *    inline implementations using Tailwind — avoids importing desktop-only
- *    shadcn primitives into the surface-agnostic package.
+ *  - Restore/delete confirmation routes through `useConfirmAction` from
+ *    `@agiworkforce/ui`. `Dialog/Input/Textarea` from desktop UI remain
+ *    inline Tailwind implementations for the create-checkpoint form.
  *  - `toast` (sonner) removed — hosts show toasts via `onError`/`onSuccess`
  *    optional callbacks, or use the returned Promise rejection to handle errors.
  *  - `Checkpoint` type is re-exported as `ManagerCheckpoint` (camelCase, no
@@ -31,6 +31,7 @@ import {
   Trash2,
   X,
 } from 'lucide-react';
+import { useConfirmAction } from '@agiworkforce/ui';
 import { cn } from '../lib/utils';
 import type { Checkpoint } from '../stores/checkpointStore';
 
@@ -103,13 +104,7 @@ export function CheckpointManager({
   const [newLabel, setNewLabel] = useState('');
   const [newDescription, setNewDescription] = useState('');
   const [error, setError] = useState<string | null>(null);
-
-  type ConfirmState = {
-    open: boolean;
-    type: 'restore' | 'delete';
-    checkpoint: Checkpoint;
-  };
-  const [confirm, setConfirm] = useState<ConfirmState | null>(null);
+  const { confirm, dialog: confirmDialog } = useConfirmAction();
 
   const loadCheckpoints = useCallback(async () => {
     setLoading(true);
@@ -154,12 +149,8 @@ export function CheckpointManager({
     }
   };
 
-  const handleConfirmAction = async () => {
-    if (!confirm) return;
-    const { type, checkpoint } = confirm;
-    setConfirm(null);
-
-    if (type === 'restore') {
+  const handleRestore = useCallback(
+    async (checkpoint: Checkpoint) => {
       setRestoring(true);
       try {
         await onRestore(checkpoint.id, conversationId);
@@ -171,7 +162,12 @@ export function CheckpointManager({
       } finally {
         setRestoring(false);
       }
-    } else if (type === 'delete') {
+    },
+    [conversationId, onRestore, onRestoreComplete, loadCheckpoints],
+  );
+
+  const handleDelete = useCallback(
+    async (checkpoint: Checkpoint) => {
       try {
         await onDelete(checkpoint.id);
         setCheckpoints((prev) => prev.filter((c) => c.id !== checkpoint.id));
@@ -179,8 +175,34 @@ export function CheckpointManager({
         console.error('[CheckpointManager] Failed to delete checkpoint:', err);
         setError('Failed to delete checkpoint');
       }
-    }
-  };
+    },
+    [onDelete],
+  );
+
+  const confirmRestore = useCallback(
+    (checkpoint: Checkpoint) => {
+      confirm({
+        title: 'Restore Checkpoint',
+        description: `Restore to "${checkpoint.label ?? checkpoint.id}"? This will replace all messages in the current conversation with the checkpoint state.`,
+        confirmLabel: 'Restore',
+        destructive: false,
+        onConfirm: () => handleRestore(checkpoint),
+      });
+    },
+    [confirm, handleRestore],
+  );
+
+  const confirmDelete = useCallback(
+    (checkpoint: Checkpoint) => {
+      confirm({
+        title: 'Delete Checkpoint',
+        description: `Delete "${checkpoint.label ?? checkpoint.id}"? This action cannot be undone.`,
+        confirmLabel: 'Delete',
+        onConfirm: () => handleDelete(checkpoint),
+      });
+    },
+    [confirm, handleDelete],
+  );
 
   const handleFork = async (checkpoint: Checkpoint) => {
     if (!onFork) return;
@@ -195,39 +217,7 @@ export function CheckpointManager({
   return (
     <div className={cn('space-y-4', className)}>
       {/* Confirm dialog */}
-      {confirm && (
-        <MiniDialog
-          open={confirm.open}
-          title={confirm.type === 'restore' ? 'Restore Checkpoint' : 'Delete Checkpoint'}
-        >
-          <p className="mb-4 text-sm text-muted-foreground">
-            {confirm.type === 'restore'
-              ? `Restore to "${confirm.checkpoint.label ?? confirm.checkpoint.id}"? This will replace all messages in the current conversation with the checkpoint state.`
-              : `Delete "${confirm.checkpoint.label ?? confirm.checkpoint.id}"? This action cannot be undone.`}
-          </p>
-          <div className="flex justify-end gap-2">
-            <button
-              type="button"
-              onClick={() => setConfirm(null)}
-              className="rounded-md border border-border px-3 py-1.5 text-sm hover:bg-muted"
-            >
-              Cancel
-            </button>
-            <button
-              type="button"
-              onClick={handleConfirmAction}
-              className={cn(
-                'rounded-md px-3 py-1.5 text-sm text-white',
-                confirm.type === 'delete'
-                  ? 'bg-destructive hover:bg-destructive/90'
-                  : 'bg-primary hover:bg-primary/90',
-              )}
-            >
-              {confirm.type === 'restore' ? 'Restore' : 'Delete'}
-            </button>
-          </div>
-        </MiniDialog>
-      )}
+      {confirmDialog}
 
       {/* Create checkpoint dialog */}
       <MiniDialog open={showCreateDialog} title="Create Checkpoint">
@@ -383,7 +373,7 @@ export function CheckpointManager({
                         title="Restore to this checkpoint"
                         aria-label="Restore to this checkpoint"
                         disabled={restoring}
-                        onClick={() => setConfirm({ open: true, type: 'restore', checkpoint })}
+                        onClick={() => confirmRestore(checkpoint)}
                         className="rounded p-1 text-muted-foreground hover:text-foreground disabled:opacity-40"
                       >
                         <RotateCcw className="h-4 w-4" />
@@ -403,7 +393,7 @@ export function CheckpointManager({
                         type="button"
                         title="Delete checkpoint"
                         aria-label="Delete checkpoint"
-                        onClick={() => setConfirm({ open: true, type: 'delete', checkpoint })}
+                        onClick={() => confirmDelete(checkpoint)}
                         className="rounded p-1 text-muted-foreground hover:text-danger"
                       >
                         <Trash2 className="h-4 w-4" />
