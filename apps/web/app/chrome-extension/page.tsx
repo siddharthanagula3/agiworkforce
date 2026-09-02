@@ -9,7 +9,7 @@ import { Reveal } from '@/features/marketing/components/Reveal';
 import { COMING_SOON_LABEL, LAUNCH, NOTIFY_CTA } from '@/lib/marketing-constants';
 
 export const metadata = buildMetadata({
-  title: 'AGI in Chrome | Side Panel and Browser Control',
+  title: 'AGI in Chrome: side panel and browser control',
   description:
     'A Chrome Manifest V3 side panel that answers about the tab you are reading. Chat runs on AGI Managed Cloud, page text is sent only from origins you approved, and AGI Desktop is an optional local bridge. Computer use calls the Managed Cloud gateway directly from the extension, carrying the conversation and every screenshot it took.',
   path: '/chrome-extension',

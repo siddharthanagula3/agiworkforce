@@ -60,7 +60,7 @@ const RELEASE_CHECKS: { title: string; body: string }[] = [
 ];
 
 export const metadata = buildMetadata({
-  title: 'Download AGI | Verified Installers and Signatures',
+  title: 'Download AGI: verified installers and signatures',
   description:
     'Every AGI installer is signed inside its release workflow and checked against that signature before publication. See live Desktop and CLI availability, what each release publishes, and how to verify a download yourself.',
   path: '/download',

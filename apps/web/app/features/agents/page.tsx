@@ -6,10 +6,10 @@ import { ProductFrame } from '@/features/marketing/components/ProductFrame';
 import type { TerminalLine } from '@/features/marketing/components/DeviceMockups';
 import { FeatureGrid } from '@/features/marketing/components/LandingSections';
 import { DevBand, FinalCta } from '@/features/marketing/components/FlagshipSections';
-import { LAUNCH, NOTIFY_CTA } from '../../../lib/marketing-constants';
+import { NOTIFY_CTA } from '../../../lib/marketing-constants';
 
 export const metadata = buildMetadata({
-  title: 'AGI Agents | Delegated Work That Stops To Ask',
+  title: 'AGI Agents: delegated work that stops to ask',
   description:
     'An AGI agent is a tool-using session you hand work to: agent definition files, parallel subagents, and lifecycle hooks in the agi CLI. Risky steps open an approval whose cursor starts on No, and commands run inside an OS sandbox.',
   path: '/features/agents',
@@ -210,7 +210,7 @@ export default function FeaturesAgentsPage() {
         />
 
         <FinalCta
-          eyebrow={LAUNCH.publicLabel}
+          eyebrow="AGI CLI"
           title="Write one agent file and hand it a task."
           body="Agent definitions, parallel subagents, lifecycle hooks, the approval overlay, and the OS sandbox are all in the agi CLI source today."
           ctas={[{ href: NOTIFY_CTA.href, label: NOTIFY_CTA.label }]}

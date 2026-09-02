@@ -120,7 +120,7 @@ export default function UseCasesPage() {
           em="that job running"
           lede="A founder automating CI, a partner drafting a deliverable, an engineer running a client runbook and a rep prepping a deal each reach for a different surface first. The four pages below take one of those apiece and open on the surface it runs on."
           ctas={[
-            { href: '/download', label: 'Get AGI Desktop' },
+            { href: '/download', label: "See what's live" },
             { href: '/solutions', label: 'See the solutions map' },
           ]}
           modeRibbon={[]}

@@ -13,7 +13,7 @@ import { DESKTOP_LOCAL_RUNTIMES } from '@/lib/marketing-constants';
 import { DesktopDownloadAvailability } from '../download/DesktopDownloadAvailability';
 
 export const metadata = buildMetadata({
-  title: 'AGI Desktop | The Build With a Process on Your Machine',
+  title: 'AGI Desktop: the build with a process on your machine',
   description: `AGI Desktop is written in Rust and shipped as a Tauri 2 application, so it can do what a web page cannot: reach a local model server (${DESKTOP_LOCAL_RUNTIMES.label}), read the folders you allow, run tool commands inside an OS sandbox, and start MCP servers over stdio.`,
   path: '/desktop',
 });

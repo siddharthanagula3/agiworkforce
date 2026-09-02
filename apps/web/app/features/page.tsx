@@ -4,7 +4,7 @@ import { MarketingFooter } from '@/features/marketing/components/MarketingFooter
 import { CapabilityGrid, FinalCta } from '@/features/marketing/components/FlagshipSections';
 
 export const metadata = buildMetadata({
-  title: 'AGI Features | Chat, Artifacts, Projects, Tools, Memory & Research',
+  title: 'AGI Features: chat, artifacts, projects, tools, memory, and research',
   description:
     'Everything inside the AGI workspace: chat, artifacts, projects, tools and connectors, memory, deep research, agents, plugins, and skills. Across six surfaces and three trust modes.',
   path: '/features',

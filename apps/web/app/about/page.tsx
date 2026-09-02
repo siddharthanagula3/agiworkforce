@@ -168,7 +168,7 @@ export default function AboutPage() {
           body="Try AGI Web in the browser, or run Desktop and the CLI on your own hardware with local models and your own keys. Either way, you see where every request runs before it leaves your device."
           ctas={[
             { href: '/login?redirectTo=%2F', label: 'Try AGI Web' },
-            { href: '/download', label: 'Get AGI Desktop' },
+            { href: '/download', label: 'Get the CLI' },
             { href: '/trust', label: 'See the trust posture' },
           ]}
         />

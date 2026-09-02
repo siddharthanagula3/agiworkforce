@@ -81,7 +81,7 @@ export default function AgiWorkPage() {
             {
               meta: 'Composer',
               title: 'A mode of the box you already type in',
-              body: 'Chat and AGI Work are two positions of one segmented control — right of the attachment button on a wide screen, inside the plus menu on a narrow one. Switching it reveals a project scope chip and two optional fields, Constraints and Deliverable, under the composer. Whatever you type is the objective; the fields only narrow it.',
+              body: 'Chat and AGI Work are two positions of one segmented control: right of the attachment button on a wide screen, inside the plus menu on a narrow one. Switching it reveals a project scope chip and two optional fields, Constraints and Deliverable, under the composer. Whatever you type is the objective; the fields only narrow it.',
               href: '/chat',
             },
             {

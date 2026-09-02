@@ -36,9 +36,10 @@ export default function GetStartedPage() {
             <li className="agi-reason">
               <h3 className="agi-reason-h">Desktop &amp; CLI: Local and BYOK hosts</h3>
               <p className="agi-reason-p">
-                Both are released: the <code>agi</code> CLI ships macOS, Linux, and Windows
-                archives, and Desktop publishes per-platform installers as release assets. The{' '}
-                <Link href="/download">download page</Link> resolves what is live for your platform.
+                The <code>agi</code> CLI is released: it ships macOS, Linux, and Windows archives
+                today. Desktop has a Linux build pending its signature check; the other platforms
+                are not yet signed. The <Link href="/download">download page</Link> resolves what is
+                live for your platform.
               </p>
             </li>
             <li className="agi-reason">
@@ -80,8 +81,8 @@ export default function GetStartedPage() {
         <section className="agi-section">
           <p className="agi-section-eyebrow">03 / What&rsquo;s next</p>
           <p className="agi-reason-p">
-            Desktop and the CLI are released for Local and BYOK work. The download page tracks
-            availability for every surface and platform in one place.
+            The CLI is released for Local and BYOK work; Desktop is pending its signature check. The
+            download page tracks availability for every surface and platform in one place.
           </p>
           <div className="agi-cta-row" style={{ marginTop: 28 }}>
             <Link href="/download" className="agi-cta-primary">

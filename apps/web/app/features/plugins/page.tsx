@@ -11,7 +11,7 @@ import { pluginAvailabilityClaim } from '@/features/plugins/availability';
 import { LAUNCH, SURFACE_STATUS } from '../../../lib/marketing-constants';
 
 export const metadata = buildMetadata({
-  title: 'AGI Plugins | Bundle Commands, Skills, Hooks & MCP Servers',
+  title: 'AGI Plugins: bundle commands, skills, hooks, and MCP servers',
   description:
     'AGI plugins bundle slash commands, skills, agents, hooks, and MCP server wiring into one install. Browse the hosted catalogue to see which packs are installable today.',
   path: '/features/plugins',

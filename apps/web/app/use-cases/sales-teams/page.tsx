@@ -35,7 +35,7 @@ export default function SalesTeamsPage() {
           </p>
           <div className="agi-fl-cta-row">
             <Link href="/download" className="agi-fl-cta agi-fl-cta--primary">
-              Get AGI Desktop
+              Get the CLI
             </Link>
             <Link href="/byok" className="agi-fl-cta agi-fl-cta--ghost">
               Set up BYOK
@@ -106,7 +106,7 @@ export default function SalesTeamsPage() {
           title="Brief better, route deliberately."
           body="Bring your own keys on Desktop, CLI, and VS Code, and keep account context under your control while the team works."
           ctas={[
-            { href: '/download', label: 'Get AGI Desktop' },
+            { href: '/download', label: 'Get the CLI' },
             { href: '/byok', label: 'Set up BYOK' },
             { href: '/apps', label: 'Browse apps & connectors' },
           ]}
