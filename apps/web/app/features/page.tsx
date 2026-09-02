@@ -1,107 +1,128 @@
 import { buildMetadata } from '@/lib/seo/metadata';
 import { Header } from '@shared/components/layout/Header';
 import { MarketingFooter } from '@/features/marketing/components/MarketingFooter';
-import { CapabilityGrid, FinalCta } from '@/features/marketing/components/FlagshipSections';
+import { Eyebrow, Prose, Section, Stack } from '@/features/marketing/components/system';
+import { PageHero } from '@/features/marketing/components/pages/surfaces/shared';
+import { LinkGrid } from '@/features/marketing/components/pages/features/shared';
 
 export const metadata = buildMetadata({
-  title: 'AGI Features: chat, artifacts, projects, tools, memory, and research',
+  title: 'Features: chat, artifacts, projects, tools, memory, and research',
   description:
-    'Everything inside the AGI workspace: chat, artifacts, projects, tools and connectors, memory, deep research, agents, plugins, and skills. Across six surfaces and three trust modes.',
+    'Everything inside the AGI workspace: chat, artifacts, projects, tools and connectors, memory, deep research, agents, plugins, and skills. Across every surface and trust mode.',
   path: '/features',
 });
 
 export default function FeaturesHubPage() {
   return (
-    <div data-design="agi">
-      <main className="agi-shell">
-        <Header />
-
-        <section className="agi-page-hero">
-          <p className="agi-section-eyebrow">Features</p>
-          <h1 className="agi-page-h1">Everything in the workspace.</h1>
-          <p className="agi-page-lede">
-            AGI is an application suite: conversation is the front door, and projects, artifacts,
-            tools, memory, and research live behind it. On every surface, in every trust mode.
-          </p>
-        </section>
-
-        <CapabilityGrid
-          eyebrow="Core"
-          title="The daily loop."
-          items={[
-            {
-              meta: 'Chat',
-              title: 'AI Chat',
-              body: 'A fast, familiar conversation surface across every mode and surface.',
-              href: '/features/ai-chat',
-            },
-            {
-              meta: 'Artifacts',
-              title: 'Artifacts',
-              body: 'Documents, code, and visual outputs with previews, versions, and sharing.',
-              href: '/features/artifacts',
-            },
-            {
-              meta: 'Projects',
-              title: 'Projects',
-              body: 'Group chats, files, and instructions by topic.',
-              href: '/features/projects',
-            },
-            {
-              meta: 'Memory',
-              title: 'Memory',
-              body: 'Saved preferences and memory you can see, edit, and control.',
-              href: '/features/memory',
-            },
-            {
-              meta: 'Research',
-              title: 'Deep Research',
-              body: 'Cited reports across the web, your files, and connected tools.',
-              href: '/features/deep-research',
-            },
-            {
-              meta: 'Agents',
-              title: 'Agents',
-              body: 'Delegated, tool-using work with explicit permissions and approvals.',
-              href: '/features/agents',
-            },
-          ]}
-        />
-
-        <CapabilityGrid
-          eyebrow="Extend"
-          title="Make it yours."
-          items={[
-            {
-              meta: 'Tools',
-              title: 'Tools & Connectors',
-              body: 'MCP servers, OAuth apps, and explicit tool permissions for real work.',
-              href: '/features/tools',
-            },
-            {
-              meta: 'Plugins',
-              title: 'Plugins',
-              body: 'Bundled skills and connector wiring, previewed before the marketplace opens.',
-              href: '/features/plugins',
-            },
-            {
-              meta: 'Skills',
-              title: 'Skills',
-              body: 'A directory of prompts and agent skills to start from.',
-              href: '/skills',
-            },
-          ]}
-        />
-
-        <FinalCta
-          eyebrow="Start now"
-          title="See it all in one chat."
-          body="Try AGI Web in the browser. Get notified when the apps open for Local and BYOK work."
+    <div data-design="agi" className="agi-ds-page">
+      <Header />
+      <main id="main-content">
+        <PageHero
+          id="agi-features-hero-title"
+          eyebrow="Features"
+          title="Conversation is the front door. This is what sits behind it."
+          lede="Projects, artifacts, memory, research, and agents are not separate products: they are what a chat can reach into. Every one of them runs in Local, BYOK, or AGI Cloud, and the lane that answered is labelled on the reply."
           ctas={[
             { href: '/login?redirectTo=%2F', label: 'Try AGI Web' },
-            { href: '/download', label: 'Get notified' },
+            { href: '/download', label: 'Get the CLI', variant: 'secondary' },
           ]}
         />
+
+        <Section id="daily-loop" labelledBy="agi-features-loop-title" rule>
+          <Stack gap="loose">
+            <div>
+              <Eyebrow>The daily loop</Eyebrow>
+              <h2 className="agi-ds-h2" id="agi-features-loop-title">
+                Chat, and the things a chat opens into.
+              </h2>
+            </div>
+            <LinkGrid
+              items={[
+                {
+                  meta: 'Chat',
+                  title: 'AI chat',
+                  body: 'One composer with attachments, dictation, web search, and slash commands, then a reply that shows the tools it called.',
+                  href: '/features/ai-chat',
+                },
+                {
+                  meta: 'Artifacts',
+                  title: 'Artifacts',
+                  body: 'Documents, code, and diagrams that leave the message stream and open in a versioned panel you can restore or edit.',
+                  href: '/features/artifacts',
+                },
+                {
+                  meta: 'Projects',
+                  title: 'Projects',
+                  body: 'Standing instructions and files a thread can lean on, rebuilt into the system message on every request.',
+                  href: '/features/projects',
+                },
+                {
+                  meta: 'Memory',
+                  title: 'Memory',
+                  body: 'Short sentences you can read, search, rewrite, or clear, written by you, a finished chat, or an import.',
+                  href: '/features/memory',
+                },
+                {
+                  meta: 'Research',
+                  title: 'Deep research',
+                  body: 'A run that plans its searches, waits for you to approve them, then writes a report with a citation behind every claim.',
+                  href: '/features/deep-research',
+                },
+                {
+                  meta: 'Agents',
+                  title: 'Agents',
+                  body: 'A markdown file names the tools it may touch. Anything risky opens an approval whose cursor starts on No.',
+                  href: '/features/agents',
+                },
+              ]}
+            />
+          </Stack>
+        </Section>
+
+        <Section id="extend" labelledBy="agi-features-extend-title" rule ground="2">
+          <Stack gap="loose">
+            <div>
+              <Eyebrow>Extend</Eyebrow>
+              <h2 className="agi-ds-h2" id="agi-features-extend-title">
+                Bring your own tools in.
+              </h2>
+            </div>
+            <LinkGrid
+              items={[
+                {
+                  meta: 'Tools',
+                  title: 'Tools and connectors',
+                  body: 'MCP servers and OAuth apps, added one explicit permission at a time, with a default of asking first.',
+                  href: '/features/tools',
+                },
+                {
+                  meta: 'Plugins',
+                  title: 'Plugins',
+                  body: 'Commands, agents, skills, hooks, and MCP wiring bundled into one install, gated behind a SHA-256 you pin yourself.',
+                  href: '/features/plugins',
+                },
+                {
+                  meta: 'Skills',
+                  title: 'Skills',
+                  body: 'A directory of reusable instruction sets to start a workspace from.',
+                  href: '/skills',
+                },
+              ]}
+            />
+          </Stack>
+        </Section>
+
+        <Section id="features-close" labelledBy="agi-features-close-title" rule>
+          <Stack gap="loose">
+            <h2 className="agi-ds-h2" id="agi-features-close-title">
+              Pick where the request runs, then use all of this.
+            </h2>
+            <Prose>
+              Local, BYOK, and AGI Cloud are the same workspace on three different lanes. Each
+              feature above runs on whichever one you picked for that request.
+            </Prose>
+          </Stack>
+        </Section>
 
         <MarketingFooter />
       </main>
