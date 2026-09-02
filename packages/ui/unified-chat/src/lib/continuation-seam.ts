@@ -4,6 +4,8 @@ const MIN_OVERLAP = 8;
 
 export const SEAM_INSPECTION_WINDOW = 96;
 
+const BLOCK_START = /^ {0,3}(?:[-*+]\s|\d{1,3}[.)]\s|#{1,6}\s|>\s?|\||```|~~~|\${2}|\\\[)/;
+
 function trailingFenceIsOpen(text: string): boolean {
   let open = false;
   for (const line of text.split('\n')) {
@@ -37,6 +39,13 @@ function overlapLength(seed: string, continuation: string): number {
  * Only the unambiguous cases are repaired. A lowercase-to-uppercase boundary is
  * never a resumed word in prose - but it is routinely one in code, so a seam
  * inside a fence or inline span is always left exactly as it arrived.
+ *
+ * A cut that lands right before a block - a list item, heading, table row,
+ * fence, or display equation - is not a word boundary at all, and the single
+ * space below reads as a run-on ("= 5, 2. Verify..."). That case gets a
+ * paragraph break instead, and only when the seed does not already end on a
+ * newline and the continuation has not already supplied one of its own -
+ * whatever whitespace the model sent stays exactly as sent.
  */
 export function repairContinuationSeam(seed: string, continuation: string): string {
   if (!seed || !continuation) return continuation;
@@ -45,11 +54,15 @@ export function repairContinuationSeam(seed: string, continuation: string): stri
   const deduplicated = overlap > 0 ? continuation.slice(overlap) : continuation;
   if (!deduplicated) return deduplicated;
 
+  if (trailingFenceIsOpen(seed) || inInlineCode(seed)) return deduplicated;
+
+  if (!seed.endsWith('\n') && BLOCK_START.test(deduplicated)) {
+    return `\n\n${deduplicated}`;
+  }
+
   const seedEnd = seed.slice(-1);
   const continuationStart = deduplicated.slice(0, 1);
   if (/\s/.test(seedEnd) || /\s/.test(continuationStart)) return deduplicated;
-
-  if (trailingFenceIsOpen(seed) || inInlineCode(seed)) return deduplicated;
 
   const endsWord = /[\p{Ll}\p{Nd}]/u.test(seedEnd);
   const endsSentence = /[.!?]/.test(seedEnd);
