@@ -181,7 +181,7 @@ function CodeView({ content }: { content: string }) {
           'absolute top-2 right-2 z-10 h-7 w-7',
           'text-[var(--chat-text-muted)] hover:text-[var(--chat-text-secondary)] hover:bg-[var(--chat-surface-hover)]',
           copied && 'text-[var(--chat-accent-secondary)]',
-          copyFailed && 'text-red-400',
+          copyFailed && 'text-[var(--chat-destructive-text)]',
         )}
       >
         <Copy size={13} />
@@ -190,7 +190,7 @@ function CodeView({ content }: { content: string }) {
       {copyFailed && (
         <div
           role="status"
-          className="absolute top-10 right-2 z-10 rounded border border-[var(--chat-border)] bg-[var(--chat-surface-elevated)] px-2 py-1 text-[12px] text-red-400"
+          className="absolute top-10 right-2 z-10 rounded border border-[var(--chat-border)] bg-[var(--chat-surface-elevated)] px-2 py-1 text-[12px] text-[var(--chat-destructive-text)]"
         >
           Copy failed — clipboard unavailable
         </div>
@@ -934,7 +934,7 @@ export function ArtifactPanel({
 
           {!isPublishing && publishError && (
             <>
-              <span className="text-red-400">{publishError}</span>
+              <span className="text-[var(--chat-destructive-text)]">{publishError}</span>
               <Button
                 variant="ghost"
                 size="icon"
@@ -951,7 +951,7 @@ export function ArtifactPanel({
               catch blocks; the user pressed Copy and nothing at all happened. */}
           {!isPublishing && !publishError && copyError && (
             <>
-              <span className="text-red-400" role="status">
+              <span className="text-[var(--chat-destructive-text)]" role="status">
                 {copyError}
               </span>
               <Button
