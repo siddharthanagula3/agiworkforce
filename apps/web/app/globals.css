@@ -949,9 +949,6 @@
 }
 
 @layer base {
-}
-
-@layer base {
   *,
   *::before,
   *::after {
@@ -1705,34 +1702,6 @@ html[data-contrast='more'] *:focus-visible {
   margin: 0 auto;
   padding: 0 28px;
 }
-
-/* top bar — sticky "editorial terminal" glass chrome */
-[data-design='agi'] .agi-top {
-  position: sticky;
-  top: 0;
-  z-index: 70;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  padding: 14px clamp(20px, 4vw, 56px);
-  border-bottom: 1px solid var(--agi-rule);
-  background: color-mix(in srgb, var(--agi-bg) 78%, transparent);
-  -webkit-backdrop-filter: saturate(140%) blur(14px);
-  backdrop-filter: saturate(140%) blur(14px);
-}
-
-/* Header inside a shell: break out to full viewport width so the logo
-   always sits at the left edge, matching the homepage layout. */
-[data-design='agi'] .agi-shell .agi-top {
-  margin-inline: calc(50% - 50vw);
-  padding-left: clamp(20px, 4vw, 56px);
-  padding-right: clamp(20px, 4vw, 56px);
-}
-[data-design='agi'] .agi-top--minimal {
-  position: relative;
-  justify-content: flex-start;
-}
 [data-design='agi'] .agi-mark {
   font-family: var(--agi-font);
   font-weight: 600;
@@ -1746,101 +1715,9 @@ html[data-contrast='more'] *:focus-visible {
   line-height: 1;
   text-decoration: none;
 }
-[data-design='agi'] .agi-mark-word {
-  font-family: var(--agi-font-display);
-  font-weight: 600;
-  font-size: 20px;
-  letter-spacing: 0.06em;
-}
 [data-design='agi'] .agi-mark svg {
   display: block;
   flex-shrink: 0;
-}
-[data-design='agi'] .agi-top-right {
-  display: inline-flex;
-  align-items: center;
-  gap: clamp(16px, 2vw, 28px);
-}
-[data-design='agi'] .agi-top-nav-desktop {
-  display: inline-flex;
-  align-items: center;
-  gap: clamp(16px, 2vw, 26px);
-}
-[data-design='agi'] .agi-top-actions-desktop {
-  display: inline-flex;
-  align-items: center;
-  gap: 16px;
-}
-[data-design='agi'] .agi-top-divider {
-  width: 1px;
-  height: 18px;
-  background: var(--agi-rule-strong);
-}
-[data-design='agi'] .agi-top-link {
-  display: inline-flex;
-  align-items: center;
-  min-height: 34px;
-  font-family: var(--agi-font-mono);
-  font-size: 12.5px;
-  letter-spacing: 0.01em;
-  line-height: 1;
-  font-weight: 500;
-  color: var(--agi-ink-2);
-  text-decoration: none;
-  transition: color var(--agi-dur-fast) var(--agi-ease-out);
-  background: transparent;
-  border: none;
-  padding: 0;
-  cursor: pointer;
-}
-[data-design='agi'] .agi-top-link:hover {
-  color: var(--agi-ink);
-}
-[data-design='agi'] .agi-top-cta {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 36px;
-  font-family: var(--agi-font-mono);
-  font-size: 12.5px;
-  line-height: 1;
-  font-weight: 600;
-  letter-spacing: 0.02em;
-  color: var(--agi-button-ink);
-  background: var(--agi-button-bg);
-  padding: 9px 16px;
-  border-radius: 8px;
-  text-decoration: none;
-  transition:
-    background var(--agi-dur-fast) var(--agi-ease-out),
-    transform var(--agi-dur-fast) var(--agi-ease-out);
-}
-[data-design='agi'] .agi-top-cta:hover {
-  background: var(--agi-button-bg-hover);
-  transform: translateY(-1px);
-}
-[data-design='agi'] .agi-top-cta--block {
-  width: 100%;
-  min-height: 46px;
-  font-size: 13.5px;
-}
-[data-design='agi'] .agi-top-cta-compact {
-  display: none;
-  align-items: center;
-}
-
-/* mobile controls + animated burger */
-[data-design='agi'] .agi-top-mobile-controls {
-  display: none;
-  align-items: center;
-  gap: 6px;
-}
-[data-design='agi'] .agi-top-mobile-toggle {
-  width: 40px;
-  height: 40px;
-  justify-content: center;
-  border: 1px solid var(--agi-rule);
-  border-radius: 9px;
 }
 [data-design='agi'] .agi-burger {
   position: relative;
@@ -1869,127 +1746,6 @@ html[data-contrast='more'] *:focus-visible {
 }
 [data-design='agi'] .agi-burger.is-open span:nth-child(3) {
   transform: translateY(-5.6px) rotate(-45deg);
-}
-
-/* mobile drawer */
-[data-design='agi'] .agi-top-mobile-layer {
-  position: fixed;
-  inset: 0;
-  z-index: 90;
-}
-[data-design='agi'] .agi-top-mobile-backdrop {
-  position: absolute;
-  inset: 0;
-  border: none;
-  padding: 0;
-  cursor: pointer;
-  background: color-mix(in srgb, var(--agi-bg) 55%, transparent);
-  -webkit-backdrop-filter: blur(3px);
-  backdrop-filter: blur(3px);
-  animation: agi-fade-in var(--agi-dur-fast) var(--agi-ease-out);
-}
-[data-design='agi'] .agi-top-mobile-menu {
-  position: absolute;
-  top: 0;
-  right: 0;
-  bottom: 0;
-  width: min(86vw, 380px);
-  overflow-y: auto;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  padding: 22px 22px calc(28px + env(safe-area-inset-bottom));
-  background:
-    radial-gradient(120% 40% at 100% 0%, var(--agi-glow-soft), transparent 60%), var(--agi-bg-2);
-  border-left: 1px solid var(--agi-rule-strong);
-  box-shadow: -40px 0 100px var(--agi-shadow);
-  animation: agi-drawer-in var(--agi-dur-base) var(--agi-ease-out);
-}
-[data-design='agi'] .agi-top-mobile-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  min-height: 40px;
-  gap: 16px;
-}
-[data-design='agi'] .agi-top-mobile-header .agi-top-mobile-group {
-  margin-top: 0;
-}
-[data-design='agi'] .agi-top-mobile-close {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  flex: 0 0 40px;
-  width: 40px;
-  height: 40px;
-  color: var(--agi-ink-2);
-  background: var(--agi-surface-wash);
-  border: 1px solid var(--agi-rule);
-  border-radius: 10px;
-  cursor: pointer;
-  transition:
-    color var(--agi-dur-fast) var(--agi-ease-out),
-    background var(--agi-dur-fast) var(--agi-ease-out),
-    border-color var(--agi-dur-fast) var(--agi-ease-out);
-}
-[data-design='agi'] .agi-top-mobile-close:hover,
-[data-design='agi'] .agi-top-mobile-close:focus-visible {
-  color: var(--agi-ink);
-  background: var(--agi-bg-3);
-  border-color: var(--agi-rule-strong);
-}
-[data-design='agi'] .agi-top-mobile-products {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-[data-design='agi'] .agi-top-mobile-product {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  padding: 11px 12px;
-  border-radius: 9px;
-  text-decoration: none;
-  transition: background var(--agi-dur-fast) var(--agi-ease-out);
-}
-[data-design='agi'] .agi-top-mobile-product:hover,
-[data-design='agi'] .agi-top-mobile-product:focus-visible {
-  background: var(--agi-surface-wash);
-}
-[data-design='agi'] .agi-top-mobile-link {
-  min-height: 44px;
-  padding: 0 12px;
-  font-size: 14px;
-}
-[data-design='agi'] .agi-top-mobile-actions {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  margin-top: 14px;
-  padding-top: 16px;
-  border-top: 1px solid var(--agi-rule);
-}
-@keyframes agi-drawer-in {
-  from {
-    transform: translateX(100%);
-  }
-  to {
-    transform: translateX(0);
-  }
-}
-@keyframes agi-fade-in {
-  from {
-    opacity: 0;
-  }
-  to {
-    opacity: 1;
-  }
-}
-@media (prefers-reduced-motion: reduce) {
-  [data-design='agi'] .agi-top-mobile-menu,
-  [data-design='agi'] .agi-top-mobile-backdrop {
-    animation: none;
-  }
 }
 
 /* breakpoint: collapse the desktop nav into the drawer, keeping the primary CTA
@@ -2074,40 +1830,6 @@ html[data-contrast='more'] *:focus-visible {
   gap: 10px;
   margin-top: 28px;
 }
-[data-design='agi'] .agi-cta-hero-secondary,
-[data-design='agi'] .agi-cta-hero-tertiary {
-  display: inline-flex;
-  min-height: 42px;
-  align-items: center;
-  justify-content: center;
-  border-radius: 7px;
-  padding: 10px 16px;
-  font-size: 14px;
-  font-weight: 600;
-  text-decoration: none;
-  transition:
-    background var(--agi-dur-fast) var(--agi-ease-out),
-    border-color var(--agi-dur-fast) var(--agi-ease-out),
-    color var(--agi-dur-fast) var(--agi-ease-out);
-}
-[data-design='agi'] .agi-cta-hero-secondary {
-  color: var(--agi-ink);
-  background: var(--agi-console-tint);
-  border: 1px solid var(--agi-rule-strong);
-}
-[data-design='agi'] .agi-cta-hero-secondary:hover {
-  background: var(--agi-bg-2);
-  border-color: var(--agi-rule-strong);
-}
-[data-design='agi'] .agi-cta-hero-tertiary {
-  color: var(--agi-ink-2);
-  border: 1px solid var(--agi-rule);
-  background: transparent;
-}
-[data-design='agi'] .agi-cta-hero-tertiary:hover {
-  color: var(--agi-ink);
-  background: var(--agi-surface-wash);
-}
 [data-design='agi'] .agi-product-hero-chips {
   display: flex;
   flex-wrap: wrap;
@@ -2136,122 +1858,6 @@ html[data-contrast='more'] *:focus-visible {
   margin: 0;
   color: var(--agi-ink-quiet);
   font-size: 12px;
-}
-
-/* provider marquee */
-[data-design='agi'] .agi-provider-section {
-  display: grid;
-  grid-template-columns: minmax(0, 0.68fr) minmax(0, 1fr);
-  gap: 42px;
-  align-items: center;
-  padding: 58px 0;
-  border-bottom: 1px solid var(--agi-rule);
-}
-[data-design='agi'] .agi-provider-body {
-  margin: 0;
-  max-width: 60ch;
-  color: var(--agi-ink-2);
-  font-size: 15px;
-  line-height: 1.6;
-}
-[data-design='agi'] .agi-provider-marquee {
-  overflow: hidden;
-  border: 1px solid var(--agi-rule);
-  border-radius: 14px;
-  background:
-    linear-gradient(90deg, var(--agi-bg) 0%, transparent 14%, transparent 86%, var(--agi-bg) 100%),
-    var(--agi-card);
-}
-[data-design='agi'] .agi-provider-marquee-track {
-  display: flex;
-  width: max-content;
-  animation: agi-provider-marquee 36s linear infinite;
-}
-[data-design='agi'] .agi-provider-marquee-row {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  min-width: max-content;
-  margin: 0;
-  padding: 14px 10px;
-  list-style: none;
-}
-[data-design='agi'] .agi-provider-pill {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  min-height: 44px;
-  border: 1px solid var(--agi-rule);
-  border-radius: 999px;
-  padding: 8px 13px;
-  color: var(--agi-ink);
-  background: var(--agi-console-tint);
-  font-size: 13px;
-  font-weight: 650;
-  white-space: nowrap;
-}
-@keyframes agi-provider-marquee {
-  from {
-    transform: translateX(0);
-  }
-  to {
-    transform: translateX(-50%);
-  }
-}
-
-/* homepage surface and trust grids */
-[data-design='agi'] .agi-surface-proof-grid,
-[data-design='agi'] .agi-trust-mode-grid {
-  display: grid;
-  gap: 12px;
-}
-[data-design='agi'] .agi-surface-proof-grid {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-}
-[data-design='agi'] .agi-trust-mode-grid {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-}
-[data-design='agi'] .agi-surface-proof-card,
-[data-design='agi'] .agi-trust-mode-card {
-  min-height: 210px;
-  border: 1px solid var(--agi-rule);
-  border-radius: 12px;
-  padding: 20px;
-  color: inherit;
-  text-decoration: none;
-  background: linear-gradient(180deg, var(--agi-surface-wash), transparent), var(--agi-card);
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-  transition:
-    border-color var(--agi-dur-fast) var(--agi-ease-out),
-    transform var(--agi-dur-fast) var(--agi-ease-out);
-}
-[data-design='agi'] .agi-surface-proof-card:hover,
-[data-design='agi'] .agi-trust-mode-card:hover {
-  border-color: var(--agi-rule-strong);
-  transform: translateY(-2px);
-}
-[data-design='agi'] .agi-surface-proof-image {
-  width: calc(100% + 40px);
-  height: auto;
-  margin: -20px -20px 18px;
-  border-bottom: 1px solid var(--agi-rule);
-  object-fit: cover;
-}
-[data-design='agi'] .agi-surface-proof-status {
-  margin-top: auto;
-  padding-top: 20px;
-  color: var(--agi-amber);
-  font-family: var(--agi-font-mono);
-  font-size: 12px;
-  text-transform: uppercase;
-}
-@media (max-width: 760px) {
-}
-@media (min-width: 600px) {
-}
-@media (min-width: 960px) {
 }
 [data-design='agi'] .agi-cta-row {
   margin-top: 36px;
@@ -2654,14 +2260,6 @@ html[data-contrast='more'] *:focus-visible {
   [data-design='agi'] .agi-product-hero {
     min-height: min(660px, calc(100svh - 108px));
   }
-  [data-design='agi'] .agi-provider-section {
-    grid-template-columns: 1fr;
-    gap: 24px;
-  }
-  [data-design='agi'] .agi-surface-proof-grid,
-  [data-design='agi'] .agi-trust-mode-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
   [data-design='agi'] .agi-campaign-hero {
     grid-template-columns: 1fr;
     padding: 62px 0 44px;
@@ -2719,23 +2317,6 @@ html[data-contrast='more'] *:focus-visible {
     right: 20px;
     bottom: 16px;
   }
-  [data-design='agi'] .agi-provider-section {
-    padding: 42px 0;
-  }
-  [data-design='agi'] .agi-provider-marquee {
-    margin-inline: -20px;
-    border-left: none;
-    border-right: none;
-    border-radius: 0;
-  }
-  [data-design='agi'] .agi-surface-proof-grid,
-  [data-design='agi'] .agi-trust-mode-grid {
-    grid-template-columns: 1fr;
-  }
-  [data-design='agi'] .agi-surface-proof-card,
-  [data-design='agi'] .agi-trust-mode-card {
-    min-height: auto;
-  }
   [data-design='agi'] .agi-campaign-title {
     font-size: clamp(2.3rem, 13vw, 3.6rem);
     max-width: 11ch;
@@ -2785,69 +2366,6 @@ html[data-contrast='more'] *:focus-visible {
   color: var(--agi-ink-quiet);
   margin: 0 0 16px;
 }
-[data-design='agi'] .agi-section-h2 {
-  font-family: var(--agi-font-heading);
-  font-optical-sizing: auto;
-  font-size: clamp(1.65rem, 3.4vw, 2.5rem);
-  font-weight: 550;
-  letter-spacing: -0.024em;
-  line-height: 1.06;
-  margin: 0 0 24px;
-  color: var(--agi-ink);
-  text-wrap: balance;
-}
-[data-design='agi'] .agi-section-h2 em {
-  font-family: var(--agi-font-heading);
-  font-style: normal;
-  font-weight: 500;
-  color: var(--agi-ink);
-}
-
-/* tier grid */
-[data-design='agi'] .agi-tier-toggle {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 4px;
-  background: var(--agi-bg-2);
-  border: 1px solid var(--agi-rule);
-  border-radius: 8px;
-  margin-bottom: 36px;
-  font-size: 13px;
-  font-weight: 500;
-}
-[data-design='agi'] .agi-tier-toggle-btn {
-  padding: 6px 14px;
-  border-radius: 6px;
-  background: transparent;
-  color: var(--agi-ink-2);
-  border: none;
-  cursor: pointer;
-  transition:
-    background var(--agi-dur-fast) var(--agi-ease-out),
-    color var(--agi-dur-fast);
-  font-family: inherit;
-}
-[data-design='agi'] .agi-tier-toggle-btn--active {
-  background: var(--agi-button-bg);
-  color: var(--agi-button-ink);
-}
-[data-design='agi'] .agi-tier-toggle-save {
-  font-size: 12px;
-  font-weight: 500;
-  color: var(--agi-amber);
-  margin-left: 4px;
-}
-[data-design='agi'] .agi-tier-grid {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 18px;
-}
-@media (max-width: 880px) {
-  [data-design='agi'] .agi-tier-grid {
-    grid-template-columns: 1fr;
-  }
-}
 [data-design='agi'] .agi-tier {
   background: var(--agi-card);
   border: 1px solid var(--agi-rule);
@@ -2857,172 +2375,8 @@ html[data-contrast='more'] *:focus-visible {
   flex-direction: column;
   gap: 18px;
 }
-/* `min-height` lives HERE, on the name every card renders — not on the
-   `.agi-tier-head` row, which only the Max card has. Putting it on the row
-   reserved height for Max alone and pushed its price a line below every other
-   card's, which is the opposite of the intent. Matching the capacity pill's
-   height here keeps all four prices on one baseline. */
-[data-design='agi'] .agi-tier-name {
-  font-size: 13px;
-  font-weight: 600;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: var(--agi-ink-quiet);
-  margin: 0;
-  min-height: 28px;
-  display: flex;
-  align-items: center;
-}
-/* Plan name and its capacity selector on one row. */
-[data-design='agi'] .agi-tier-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-}
-/* Compact variant of the selector for use inside the header row. The standalone
-   `.agi-tier-toggle` (still used for the monthly/annual switch above the grid)
-   keeps its own larger sizing and bottom margin. */
-[data-design='agi'] .agi-tier-head .agi-tier-toggle {
-  margin-bottom: 0;
-  padding: 3px;
-  gap: 2px;
-  border-radius: 999px;
-  font-size: 12px;
-  flex-shrink: 0;
-}
-[data-design='agi'] .agi-tier-head .agi-tier-toggle-btn {
-  padding: 3px 11px;
-  border-radius: 999px;
-  white-space: nowrap;
-  font-variant-numeric: tabular-nums;
-}
 [data-design='agi'] #pricing-team-title {
   scroll-margin-top: 6rem;
-}
-[data-design='agi'] .agi-tier-price {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: 2px 8px;
-  margin: 0;
-}
-[data-design='agi'] .agi-tier-price-num {
-  font-size: 38px;
-  font-weight: 600;
-  letter-spacing: -0.025em;
-  color: var(--agi-ink);
-}
-[data-design='agi'] .agi-tier-price-sub {
-  flex-basis: 100%;
-  font-size: 13px;
-  color: var(--agi-ink-quiet);
-}
-[data-design='agi'] .agi-tier-body {
-  font-size: 14.5px;
-  line-height: 1.55;
-  color: var(--agi-ink-2);
-  margin: 0;
-  flex: 1;
-}
-[data-design='agi'] .agi-tier-features {
-  list-style: none;
-  padding: 0;
-  margin: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  font-size: 13.5px;
-  color: var(--agi-ink-2);
-}
-[data-design='agi'] .agi-tier-features li {
-  display: flex;
-  align-items: flex-start;
-  gap: 8px;
-}
-/* "Included" is not an alert. Twenty amber ticks per pricing screen spent the
-   accent on the least meaningful mark on the page. */
-[data-design='agi'] .agi-tier-check-icon {
-  flex-shrink: 0;
-  margin-top: 2px;
-  color: var(--agi-ink-quiet);
-}
-[data-design='agi'] .agi-tier-cta-group {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-[data-design='agi'] .agi-tier-cta {
-  font-size: 14px;
-  font-weight: 600;
-  text-decoration: none;
-  color: var(--agi-button-ink);
-  background: var(--agi-button-bg);
-  padding: 11px 16px;
-  border-radius: 8px;
-  text-align: center;
-  transition: background var(--agi-dur-fast) var(--agi-ease-out);
-}
-[data-design='agi'] .agi-tier-cta:hover {
-  background: var(--agi-button-bg-hover);
-}
-[data-design='agi'] .agi-tier-cta--ghost {
-  background: transparent;
-  color: var(--agi-ink);
-  border: 1px solid var(--agi-rule-strong);
-}
-[data-design='agi'] .agi-tier-cta--ghost:hover {
-  background: var(--agi-bg-2);
-}
-
-/* Featured tier grid (Team/Enterprise) — larger cards, amber-accented, given
-   top billing per the product's team/enterprise-first GTM. */
-[data-design='agi'] .agi-tier-grid--featured {
-  grid-template-columns: repeat(2, 1fr);
-  max-width: 920px;
-  gap: 20px;
-}
-@media (max-width: 720px) {
-  [data-design='agi'] .agi-tier-grid--featured {
-    grid-template-columns: 1fr;
-  }
-}
-[data-design='agi'] .agi-tier--featured {
-  border-color: var(--agi-amber);
-  background: linear-gradient(180deg, var(--agi-amber-soft), transparent 42%), var(--agi-card);
-  padding: 34px 30px 32px;
-}
-[data-design='agi'] .agi-tier--featured .agi-tier-name {
-  color: var(--agi-amber);
-}
-
-/* Four-up individual cloud grid (Free/Basic/Pro/Max). */
-[data-design='agi'] .agi-tier-grid--four {
-  grid-template-columns: repeat(4, 1fr);
-}
-@media (max-width: 1100px) {
-  [data-design='agi'] .agi-tier-grid--four {
-    grid-template-columns: repeat(2, 1fr);
-  }
-}
-@media (max-width: 640px) {
-  [data-design='agi'] .agi-tier-grid--four {
-    grid-template-columns: 1fr;
-  }
-}
-@media (max-width: 640px) {
-}
-[data-design='agi'] .agi-tier-badge {
-  display: inline-block;
-  font-size: 12px;
-  font-weight: 600;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--agi-amber);
-  background: var(--agi-amber-soft);
-  padding: 4px 10px;
-  border-radius: 999px;
-  width: fit-content;
 }
 
 /* providers grid */
@@ -3041,49 +2395,6 @@ html[data-contrast='more'] *:focus-visible {
   [data-design='agi'] .agi-providers-grid {
     grid-template-columns: 1fr;
   }
-}
-[data-design='agi'] .agi-provider-cell {
-  border-right: 1px solid var(--agi-rule);
-  border-bottom: 1px solid var(--agi-rule);
-  padding: 26px 24px;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  transition: background var(--agi-dur-fast) var(--agi-ease-out);
-}
-[data-design='agi'] .agi-provider-cell:hover {
-  background: var(--agi-bg-2);
-}
-[data-design='agi'] .agi-provider-name {
-  font-size: 15px;
-  font-weight: 600;
-  color: var(--agi-ink);
-  letter-spacing: -0.01em;
-}
-[data-design='agi'] .agi-provider-models {
-  font-size: 13px;
-  color: var(--agi-ink-2);
-  line-height: 1.5;
-}
-[data-design='agi'] .agi-provider-auth {
-  font-size: 12px;
-  color: var(--agi-ink-quiet);
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  margin-top: auto;
-}
-[data-design='agi'] .agi-provider-pricing {
-  font-size: 12px;
-  color: var(--agi-amber);
-  font-family: var(--agi-font-mono);
-  letter-spacing: 0.02em;
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 0;
-}
-[data-design='agi'] .agi-provider-pricing-sep {
-  color: var(--agi-ink-quiet);
 }
 
 /* steps (BYOK, mobile) */
@@ -3151,10 +2462,6 @@ html[data-contrast='more'] *:focus-visible {
   margin: 0;
   letter-spacing: 0.02em;
 }
-[data-design='agi'] .agi-callout-amber {
-  color: var(--agi-amber);
-  font-weight: 700;
-}
 
 /* ledger */
 [data-design='agi'] .agi-ledger {
@@ -3194,39 +2501,6 @@ html[data-contrast='more'] *:focus-visible {
   border: 1px solid var(--agi-rule);
   border-radius: 14px;
   overflow: hidden;
-}
-[data-design='agi'] .agi-terminal-bar {
-  padding: 12px 16px;
-  border-bottom: 1px solid var(--agi-rule);
-  font-size: 12px;
-  color: var(--agi-ink-quiet);
-}
-[data-design='agi'] .agi-terminal-pre {
-  padding: 22px 24px 26px;
-  margin: 0;
-  font-family: var(--agi-font-mono);
-  font-size: 13.5px;
-  line-height: 1.85;
-  color: var(--agi-ink);
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
-  word-break: break-word;
-  overflow-x: hidden;
-}
-[data-design='agi'] .agi-terminal-comment {
-  color: var(--agi-ink-quiet);
-}
-[data-design='agi'] .agi-terminal-prompt {
-  color: var(--agi-ink-quiet);
-  user-select: none;
-  margin-right: 6px;
-}
-@media (max-width: 640px) {
-  [data-design='agi'] .agi-terminal-pre {
-    padding: 18px;
-    font-size: 12px;
-    line-height: 1.8;
-  }
 }
 
 /* reasons */
@@ -3273,58 +2547,6 @@ html[data-contrast='more'] *:focus-visible {
   [data-design='agi'] .agi-colophon {
     grid-template-columns: 1fr;
   }
-}
-[data-design='agi'] .agi-colophon-row {
-  display: contents;
-}
-[data-design='agi'] .agi-colophon-key,
-[data-design='agi'] .agi-colophon-val {
-  padding: 14px 0;
-  border-bottom: 1px solid var(--agi-rule);
-  font-size: 14px;
-}
-[data-design='agi'] .agi-colophon-key {
-  color: var(--agi-ink-quiet);
-  font-family: var(--agi-font-mono);
-  font-size: 12px;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  font-weight: 500;
-}
-[data-design='agi'] .agi-colophon-val {
-  color: var(--agi-ink);
-  font-weight: 500;
-}
-
-/* ── plugins · connector checklist ──────────────────────────────────── */
-[data-design='agi'] .agi-plugin-connectors {
-  list-style: none;
-  margin: clamp(24px, 3.5vw, 36px) 0 0;
-  padding: 0;
-  border-top: 1px solid var(--agi-rule);
-}
-[data-design='agi'] .agi-plugin-connector {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  padding: 14px 0;
-  border-bottom: 1px solid var(--agi-rule);
-}
-[data-design='agi'] .agi-plugin-connector-id {
-  display: inline-flex;
-  align-items: center;
-  gap: 10px;
-  font-size: 14px;
-  font-weight: 500;
-  color: var(--agi-ink);
-}
-[data-design='agi'] .agi-plugin-connector-note {
-  font-family: var(--agi-font-mono);
-  font-size: 12px;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--agi-ink-quiet);
 }
 
 /* ── about · principles + founder ───────────────────────────────────── */
@@ -3526,75 +2748,6 @@ html[data-contrast='more'] *:focus-visible {
   border-top: 1px solid var(--agi-rule);
   overflow: clip;
 }
-[data-design='agi'] .agi-footer-brandband {
-  display: flex;
-  align-items: center;
-  padding-bottom: 26px;
-  margin-bottom: 30px;
-  border-bottom: 1px solid var(--agi-rule);
-}
-[data-design='agi'] .agi-footer-row {
-  display: grid;
-  grid-template-columns: repeat(6, minmax(108px, 1fr));
-  align-items: flex-start;
-  column-gap: clamp(20px, 2.4vw, 36px);
-  row-gap: 28px;
-}
-[data-design='agi'] .agi-footer-mark {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  font-weight: 600;
-  font-size: 16px;
-  line-height: 1;
-  letter-spacing: -0.018em;
-  color: var(--agi-ink);
-  text-decoration: none;
-  min-height: 24px;
-}
-[data-design='agi'] .agi-footer-mark-word {
-  font-family: var(--agi-font-display);
-  font-weight: 600;
-  font-size: 19px;
-  letter-spacing: 0.06em;
-}
-[data-design='agi'] .agi-footer-mark svg {
-  display: block;
-  flex-shrink: 0;
-}
-[data-design='agi'] .agi-footer-col {
-  list-style: none;
-  padding: 0;
-  margin: 0;
-  display: flex;
-  flex-direction: column;
-  /* The 8px the links now carry as padding used to live here as gap, so the
-     visual rhythm is unchanged while each link presents a 26px tall target. */
-  gap: 1px;
-}
-[data-design='agi'] .agi-footer-col-title {
-  font-size: 12px;
-  font-weight: 600;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--agi-ink-quiet);
-  margin-bottom: 5px;
-}
-[data-design='agi'] .agi-footer-link {
-  display: inline-block;
-  /* WCAG 2.2 SC 2.5.8: a standalone nav link is not the "inline" exception,
-     so short labels like "CLI" still need a 24px target. */
-  min-width: 24px;
-  padding-block: 3px;
-  font-size: 13.5px;
-  line-height: 1.45;
-  color: var(--agi-ink-2);
-  text-decoration: none;
-  transition: color var(--agi-dur-fast) var(--agi-ease-out);
-}
-[data-design='agi'] .agi-footer-link:hover {
-  color: var(--agi-ink);
-}
 [data-design='agi'] .agi-footer-strip {
   margin-top: 40px;
   padding-top: 20px;
@@ -3606,25 +2759,6 @@ html[data-contrast='more'] *:focus-visible {
   flex-wrap: wrap;
   font-size: 12px;
   color: var(--agi-ink-quiet);
-}
-
-@media (max-width: 1120px) {
-  [data-design='agi'] .agi-footer-row {
-    grid-template-columns: repeat(3, minmax(120px, 1fr));
-    column-gap: clamp(24px, 4vw, 64px);
-    row-gap: 32px;
-  }
-}
-
-@media (max-width: 640px) {
-  [data-design='agi'] .agi-footer-brandband {
-    padding-bottom: 22px;
-    margin-bottom: 24px;
-  }
-  [data-design='agi'] .agi-footer-row {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    column-gap: 28px;
-  }
 }
 
 @keyframes agi-blink {
@@ -3644,10 +2778,6 @@ html[data-contrast='more'] *:focus-visible {
   [data-design='agi'] .agi-chat-model {
     transition: none;
   }
-}
-@media (max-width: 880px) {
-}
-@media (max-width: 580px) {
 }
 
 /* light-mode token overrides for [data-design='agi'] pages
@@ -3864,85 +2994,6 @@ html[data-contrast='more'] *:focus-visible {
   --agi-font-heading: var(--agi-font);
 }
 
-/* Full-comparison disclosure. The table it holds is a reference someone
-   consults deliberately, not something they read on the way to picking a plan,
-   so it opens on demand instead of occupying a screen and a half by default. */
-[data-design='agi'] .agi-compare-disclosure {
-  margin-top: 36px;
-  border: 1px solid var(--agi-rule);
-  border-radius: 12px;
-  background: var(--agi-bg-2);
-}
-
-[data-design='agi'] .agi-compare-summary {
-  display: flex;
-  align-items: baseline;
-  /* Not space-between: that spread the caret, the label and the hint into
-     three separate corners, so the caret no longer read as belonging to the
-     label it opens. */
-  justify-content: flex-start;
-  gap: 12px;
-  padding: 18px 20px;
-  cursor: pointer;
-  font-size: 15px;
-  font-weight: 550;
-  color: var(--agi-ink);
-  list-style: none;
-  border-radius: 12px;
-  transition: background var(--agi-dur-fast) var(--agi-ease-out);
-}
-
-[data-design='agi'] .agi-compare-summary::-webkit-details-marker {
-  display: none;
-}
-
-[data-design='agi'] .agi-compare-summary:hover {
-  background: var(--agi-surface-wash);
-}
-
-[data-design='agi'] .agi-compare-summary:focus-visible {
-  outline: 2px solid var(--agi-amber);
-  outline-offset: 2px;
-}
-
-[data-design='agi'] .agi-compare-summary-hint {
-  margin-left: auto;
-  font-family: var(--agi-font-mono);
-  font-size: 12px;
-  font-weight: 400;
-  letter-spacing: 0.02em;
-  color: var(--agi-ink-quiet);
-}
-
-/* The affordance is a caret that turns, drawn with a border rather than a glyph
-   so it inherits colour and needs no icon font. */
-[data-design='agi'] .agi-compare-summary::before {
-  content: '';
-  width: 7px;
-  height: 7px;
-  margin-right: 12px;
-  border-right: 1.5px solid var(--agi-ink-quiet);
-  border-bottom: 1.5px solid var(--agi-ink-quiet);
-  transform: rotate(-45deg);
-  transition: transform var(--agi-dur-fast) var(--agi-ease-out);
-  flex-shrink: 0;
-  align-self: center;
-}
-
-[data-design='agi'] .agi-compare-disclosure[open] .agi-compare-summary::before {
-  transform: rotate(45deg);
-}
-
-[data-design='agi'] .agi-compare-disclosure > div {
-  padding: 0 20px 20px;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  [data-design='agi'] .agi-compare-summary::before {
-    transition: none;
-  }
-}
-
 /* ══════════════════════════════════════════════════════════════════════
  * Surface stages
  *
@@ -3969,16 +3020,11 @@ html[data-contrast='more'] *:focus-visible {
    rather than a change of ground - and the seam at the shell's max-width is
    exactly the bordered-rectangle look these stages exist to remove. The
    content inside stays on the text column; only the surface breaks out. */
-[data-design='agi'] .agi-shell > .agi-stage,
-[data-design='agi'] .agi-fl-surface-list > .agi-stage {
+[data-design='agi'] .agi-shell > .agi-stage {
   margin-inline: calc(50% - 50vw);
   padding-inline: max(28px, calc(50vw - 590px + 28px));
   width: 100vw;
   max-width: 100vw;
-}
-
-[data-design='agi'] .agi-fl-surface-list > .agi-stage {
-  border-top: 0;
 }
 
 /* No hairline between stages: the canvas change separates them. A rule is only
@@ -4043,91 +3089,6 @@ html[data-contrast='more'] *:focus-visible {
   background: var(--agi-bg);
 }
 
-[data-design='agi'] .agi-stage--ink,
-[data-design='agi'] .agi-stage--void {
-  --agi-ink: #f7f7f5;
-  --agi-ink-2: #a8a8a6;
-  --agi-ink-quiet: #8c8c8a;
-  --agi-ink-faint: #8c8c8a;
-  --agi-amber: #f0a84a;
-  --agi-amber-soft: rgba(240, 168, 74, 0.14);
-  --agi-rule: rgba(255, 255, 255, 0.08);
-  --agi-rule-strong: rgba(255, 255, 255, 0.16);
-  --agi-surface-wash: rgba(255, 255, 255, 0.03);
-  --agi-line-soft: rgba(255, 255, 255, 0.05);
-  --agi-glow-soft: rgba(255, 255, 255, 0.05);
-  --agi-button-bg: #f7f7f5;
-  --agi-button-bg-hover: #e4e4e1;
-  --agi-button-ink: #0a0a0b;
-  --agi-code-bg: rgba(255, 255, 255, 0.055);
-  --agi-shadow: rgba(0, 0, 0, 0.5);
-  --agi-error: #eb6a55;
-  --agi-success: #58bd7f;
-  --agi-code-function: #7bb0f5;
-  --agi-code-type: #4ec9b0;
-  --agi-header-sheen: rgba(255, 255, 255, 0.02);
-  --agi-selection-bg: rgba(240, 168, 74, 0.32);
-  --agi-selection-text: var(--agi-ink);
-  color: var(--agi-ink);
-}
-
-/* The default canvas, named so a stage sequence can return to it explicitly. */
-[data-design='agi'] .agi-stage--ink {
-  --agi-bg: #0a0a0b;
-  --agi-bg-2: #101012;
-  --agi-bg-3: #16161a;
-  --agi-card: #0f0f11;
-  --agi-console-tint: rgba(16, 16, 18, 0.62);
-  --agi-console-tint-strong: rgba(16, 16, 18, 0.84);
-  background: var(--agi-bg);
-}
-
-/* True black earns its place only where the content is a terminal or a
-   routing stage - somewhere the darkness is the subject, not the wallpaper. */
-[data-design='agi'] .agi-stage--void {
-  --agi-bg: #000000;
-  --agi-bg-2: #0a0a0b;
-  --agi-bg-3: #121214;
-  --agi-card: #0a0a0b;
-  --agi-console-tint: rgba(10, 10, 11, 0.72);
-  --agi-console-tint-strong: rgba(10, 10, 11, 0.9);
-  background: var(--agi-bg);
-}
-
-/* Terminal stage.
- *
- * The terminal is the artifact on this page, so it gets the composition rather
- * than a column beside a paragraph: copy sits above it as a caption, the frame
- * runs wide beneath, and the canvas goes to true black so the terminal's own
- * ground and the page's are the same surface - no box, no border, no frame
- * around a frame.
- */
-[data-design='agi'] .agi-terminal-stage {
-  display: grid;
-  justify-items: center;
-  gap: clamp(36px, 5vw, 64px);
-  padding: clamp(80px, 11vw, 148px) 0;
-}
-
-[data-design='agi'] .agi-terminal-stage-caption {
-  max-width: 46ch;
-  text-align: center;
-}
-
-[data-design='agi'] .agi-terminal-stage-caption .agi-fl-h2 {
-  max-width: none;
-}
-
-[data-design='agi'] .agi-terminal-stage-frame {
-  width: min(100%, 1080px);
-}
-
-/* The frame is the page here, so it drops the chrome it would carry when
-   sitting inside a section beside copy. */
-[data-design='agi'] .agi-terminal-stage-frame .agi-dev {
-  max-width: none;
-}
-
 /* Product-first hero.
  *
  * The flagship hero put a wordmark in the primary position and the product in
@@ -4146,55 +3107,9 @@ html[data-contrast='more'] *:focus-visible {
   text-align: center;
 }
 
-/* Width lives on the elements, not the wrapper: a ch on this container
-   resolves against the body font, so a 22ch cap here was about 176px and broke
-   the display headline to one word per line. */
-[data-design='agi'] .agi-hero-stage-copy {
-  width: 100%;
-  display: grid;
-  justify-items: center;
-  gap: 20px;
-}
-
-[data-design='agi'] .agi-hero-stage-title {
-  margin: 0;
-  max-width: 18ch;
-  font-family: var(--agi-font-display);
-  font-optical-sizing: auto;
-  font-size: clamp(2.8rem, 6vw, 4.6rem);
-  font-weight: 600;
-  letter-spacing: -0.03em;
-  line-height: 1.03;
-  color: var(--agi-ink);
-  text-wrap: balance;
-}
-
-[data-design='agi'] .agi-hero-stage-lede {
-  margin: 0;
-  max-width: 46ch;
-  font-size: clamp(1.05rem, 1.5vw, 1.25rem);
-  line-height: 1.5;
-  color: var(--agi-ink-2);
-  text-wrap: pretty;
-}
-
-/* The product sits on the floor of the hero, cropped by the fold rather than
-   shrunk to fit it - the interface stays at a size where it can be read. */
-[data-design='agi'] .agi-hero-stage-product {
-  width: min(100%, 1240px);
-  margin-top: clamp(8px, 2vw, 24px);
-}
-
-[data-design='agi'] .agi-hero-stage-product .agi-dev {
-  max-width: none;
-}
-
 @media (max-width: 720px) {
   [data-design='agi'] .agi-hero-stage {
     gap: 32px;
-  }
-  [data-design='agi'] .agi-hero-stage-copy {
-    max-width: 100%;
   }
 }
 
@@ -4248,11 +3163,6 @@ html[data-contrast='more'] *:focus-visible {
   color: var(--agi-ink-2);
 }
 
-[data-design='agi'] .agi-fl-launch-form {
-  max-width: 560px;
-  margin-top: 24px;
-}
-
 /* CTAs */
 [data-design='agi'] .agi-fl-cta-row {
   display: flex;
@@ -4260,11 +3170,6 @@ html[data-contrast='more'] *:focus-visible {
   align-items: center;
   gap: 10px;
   margin-top: 34px;
-}
-
-[data-design='agi'] .agi-fl-cta-row--sm {
-  flex-wrap: wrap;
-  margin-top: 10px;
 }
 
 [data-design='agi'] .agi-fl-cta {
@@ -4301,17 +3206,6 @@ html[data-contrast='more'] *:focus-visible {
   background: var(--agi-button-bg-hover);
 }
 
-[data-design='agi'] .agi-fl-cta--secondary {
-  color: var(--agi-ink);
-  background: var(--agi-console-tint);
-  border-color: var(--agi-rule-strong);
-}
-
-[data-design='agi'] .agi-fl-cta--secondary:hover {
-  background: var(--agi-bg-2);
-  border-color: var(--agi-amber);
-}
-
 [data-design='agi'] .agi-fl-cta--ghost {
   color: var(--agi-ink-2);
   background: transparent;
@@ -4340,10 +3234,7 @@ html[data-contrast='more'] *:focus-visible {
  * feedback survives in a form with no vestibular cost. */
 [data-design='agi'] .agi-fl-cta:active,
 [data-design='agi'] .agi-cta-primary:active,
-[data-design='agi'] .agi-cta-ghost:active,
-[data-design='agi'] .agi-cta-hero-secondary:active,
-[data-design='agi'] .agi-cta-hero-tertiary:active,
-[data-design='agi'] .agi-tier-cta:active {
+[data-design='agi'] .agi-cta-ghost:active {
   transform: scale(0.97);
   transition-duration: 90ms;
 }
@@ -4351,10 +3242,7 @@ html[data-contrast='more'] *:focus-visible {
 @media (prefers-reduced-motion: reduce) {
   [data-design='agi'] .agi-fl-cta:active,
   [data-design='agi'] .agi-cta-primary:active,
-  [data-design='agi'] .agi-cta-ghost:active,
-  [data-design='agi'] .agi-cta-hero-secondary:active,
-  [data-design='agi'] .agi-cta-hero-tertiary:active,
-  [data-design='agi'] .agi-tier-cta:active {
+  [data-design='agi'] .agi-cta-ghost:active {
     transform: none;
     filter: brightness(0.92);
   }
@@ -4382,43 +3270,6 @@ html[data-contrast='more'] *:focus-visible {
   [data-design='agi'] .agi-reveal-armed {
     opacity: 1;
     transform: none;
-  }
-}
-
-/* ── hero ───────────────────────────────────────────────────────────── */
-
-[data-design='agi'] .agi-fl-hero-split {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr);
-  align-items: center;
-  gap: clamp(28px, 5vw, 64px);
-  padding-bottom: clamp(40px, 5vw, 64px);
-}
-
-[data-design='agi'] .agi-fl-hero-copy {
-  min-width: 0;
-  /* The headline sizes on this column, not the viewport - see .agi-fl-h1. */
-  container-type: inline-size;
-}
-
-[data-design='agi'] .agi-fl-hero-visual {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  min-width: 0;
-  margin-right: clamp(-140px, -8vw, -80px);
-  animation: hero-fade-up 0.8s var(--agi-ease-out) 0.5s both;
-}
-
-@media (max-width: 860px) {
-  [data-design='agi'] .agi-fl-hero-split {
-    grid-template-columns: 1fr;
-  }
-
-  [data-design='agi'] .agi-fl-hero-visual {
-    justify-content: flex-start;
-    margin-right: 0;
-    margin-top: 8px;
   }
 }
 
@@ -4468,61 +3319,6 @@ html[data-contrast='more'] *:focus-visible {
   animation: hero-fade-up 0.7s var(--agi-ease-out) 0.05s both;
 }
 
-[data-design='agi'] .agi-fl-hero-brand-wrap {
-  display: flex;
-  flex-direction: row;
-  align-items: center;
-  gap: 0;
-  margin: 0 0 10px;
-  animation: hero-fade-up 0.6s var(--agi-ease-out) both;
-}
-
-[data-design='agi'] .agi-fl-hero-brand-text {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 6px;
-}
-
-[data-design='agi'] .agi-fl-hero-brand-sub {
-  white-space: nowrap;
-}
-
-[data-design='agi'] .agi-fl-hero-brand-mark {
-  width: clamp(3rem, 6vw, 5.5rem);
-  height: clamp(3rem, 6vw, 5.5rem);
-  flex-shrink: 0;
-  color: var(--agi-ink);
-}
-
-[data-design='agi'] .agi-fl-hero-brand {
-  margin: 0;
-  margin-left: clamp(-14px, -1.2vw, -8px);
-  font-family: var(--agi-font-display);
-  font-size: clamp(4rem, 8vw, 7rem);
-  font-weight: 700;
-  letter-spacing: 9px;
-  text-transform: uppercase;
-  color: var(--agi-ink);
-  line-height: 1;
-  animation: none;
-}
-
-[data-design='agi'] .agi-fl-h1--single {
-  margin: 0;
-  font-family: var(--agi-font-mono);
-  font-size: clamp(11px, 1.1vw, 14px);
-  font-weight: 500;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  color: var(--agi-amber);
-  white-space: nowrap;
-  max-width: none;
-  line-height: 1;
-  display: block;
-  animation: hero-fade-up 0.6s var(--agi-ease-out) 0.1s both;
-}
-
 [data-design='agi'] .agi-fl-h1-line {
   display: block;
   text-wrap: balance;
@@ -4546,412 +3342,6 @@ html[data-contrast='more'] *:focus-visible {
 
 [data-design='agi'] .agi-fl-hero .agi-fl-cta-row {
   animation: hero-fade-up 0.7s var(--agi-ease-out) 0.3s both;
-}
-
-[data-design='agi'] .agi-fl-mode-ribbon {
-  display: flex;
-  flex-wrap: nowrap;
-  gap: 0;
-  margin: 20px 0 0;
-  padding: 0;
-  list-style: none;
-  border: 1px solid var(--agi-rule);
-  border-radius: 10px;
-  width: fit-content;
-  overflow: hidden;
-  background: var(--agi-console-tint);
-  animation: hero-fade-up 0.7s var(--agi-ease-out) 0.4s both;
-}
-
-[data-design='agi'] .agi-fl-mode-ribbon li {
-  padding: 9px 16px;
-  font-family: var(--agi-font-mono);
-  font-size: 12px;
-  letter-spacing: 0.04em;
-  color: var(--agi-ink-2);
-  white-space: nowrap;
-}
-
-[data-design='agi'] .agi-fl-mode-ribbon li + li {
-  border-left: 1px solid var(--agi-rule);
-}
-
-[data-design='agi'] .agi-fl-mode-ribbon li::first-letter,
-[data-design='agi'] .agi-fl-mode-ribbon li strong {
-  color: var(--agi-ink);
-}
-
-/* Explained variant — label + note pairs instead of short strings */
-[data-design='agi'] .agi-fl-mode-ribbon.agi-fl-mode-ribbon--explained {
-  flex-wrap: wrap;
-  width: fit-content;
-  max-width: 100%;
-}
-
-[data-design='agi'] .agi-fl-mode-ribbon--explained li {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  white-space: normal;
-  min-width: 0;
-  flex: 1 1 0%;
-}
-
-[data-design='agi'] .agi-fl-mode-label {
-  display: block;
-  font-weight: 600;
-  color: var(--agi-ink);
-  letter-spacing: 0.06em;
-}
-
-[data-design='agi'] .agi-fl-mode-note {
-  display: block;
-  font-weight: 400;
-  color: var(--agi-ink-2);
-  opacity: 0.75;
-  line-height: 1.35;
-}
-
-/* ─── Availability strip ─── */
-[data-design='agi'] .agi-fl-avail {
-  padding: clamp(48px, 6vw, 80px) 28px;
-  max-width: 1180px;
-  margin: 0 auto;
-}
-
-[data-design='agi'] .agi-fl-avail-title {
-  font-family: var(--agi-font);
-  font-size: clamp(1.1rem, 2vw, 1.35rem);
-  font-weight: 400;
-  color: var(--agi-ink-2);
-  margin: 12px 0 28px;
-  line-height: 1.4;
-}
-
-[data-design='agi'] .agi-fl-avail-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-  gap: 1px;
-  list-style: none;
-  padding: 0;
-  margin: 0;
-  border: 1px solid var(--agi-rule);
-  border-radius: 10px;
-  overflow: hidden;
-  background: var(--agi-rule);
-}
-
-[data-design='agi'] .agi-fl-avail-item {
-  background: var(--agi-console-tint, var(--agi-bg));
-}
-
-[data-design='agi'] .agi-fl-avail-link {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  padding: 16px 20px;
-  text-decoration: none;
-  color: inherit;
-  transition: background 0.15s ease;
-}
-
-[data-design='agi'] .agi-fl-avail-link:hover {
-  background: color-mix(in srgb, var(--agi-ink) 4%, transparent);
-}
-
-[data-design='agi'] .agi-fl-avail-name {
-  display: block;
-  font-family: var(--agi-font);
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--agi-ink);
-}
-
-[data-design='agi'] .agi-fl-avail-status {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  font-family: var(--agi-font-mono);
-  font-size: 12px;
-  letter-spacing: 0.03em;
-  color: var(--agi-ink-2);
-  opacity: 0.7;
-}
-
-[data-design='agi'] .agi-fl-avail-status--live {
-  color: var(--agi-ink-2);
-  opacity: 1;
-}
-
-[data-design='agi'] .agi-fl-avail-dot {
-  display: inline-block;
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: var(--agi-ink-2);
-  opacity: 0.35;
-  flex-shrink: 0;
-}
-
-[data-design='agi'] .agi-fl-avail-dot--live {
-  background: #22c55e;
-  opacity: 1;
-  box-shadow: 0 0 6px rgba(34, 197, 94, 0.45);
-}
-
-[data-design='agi'] .agi-fl-avail-note {
-  margin-top: 20px;
-  font-family: var(--agi-font-mono);
-  font-size: 12px;
-  line-height: 1.55;
-  color: var(--agi-ink-2);
-  opacity: 0.65;
-  max-width: 72ch;
-}
-
-/* hero console — composite product scene */
-[data-design='agi'] .agi-fl-hero-console {
-  position: relative;
-  margin-top: clamp(48px, 7vw, 84px);
-  display: grid;
-  grid-template-columns: minmax(0, 1.55fr) minmax(0, 1fr);
-  gap: 18px;
-  align-items: end;
-  padding-bottom: clamp(56px, 8vw, 96px);
-}
-
-[data-design='agi'] .agi-fl-hero-frame--main {
-  animation: hero-fade-up 0.8s var(--agi-ease-out) 0.5s both;
-}
-
-[data-design='agi'] .agi-fl-hero-frame--terminal {
-  animation: hero-fade-up 0.8s var(--agi-ease-out) 0.64s both;
-}
-
-@media (max-width: 860px) {
-  [data-design='agi'] .agi-fl-hero-console {
-    grid-template-columns: 1fr;
-  }
-}
-
-/* ── stat band ──────────────────────────────────────────────────────── */
-
-[data-design='agi'] .agi-fl-statband {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  border-bottom: 1px solid var(--agi-rule);
-}
-
-@media (max-width: 760px) {
-  [data-design='agi'] .agi-fl-statband {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-}
-
-[data-design='agi'] .agi-fl-stat {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  padding: 34px 22px;
-}
-
-[data-design='agi'] .agi-fl-stat + .agi-fl-stat {
-  border-left: 1px solid var(--agi-rule);
-}
-
-@media (max-width: 760px) {
-  [data-design='agi'] .agi-fl-stat:nth-child(odd) {
-    border-left: none;
-  }
-  [data-design='agi'] .agi-fl-stat:nth-child(n + 3) {
-    border-top: 1px solid var(--agi-rule);
-  }
-}
-
-[data-design='agi'] .agi-fl-stat-value {
-  font-family: var(--agi-font-mono);
-  font-size: clamp(1.7rem, 3.4vw, 2.6rem);
-  font-weight: 600;
-  letter-spacing: -0.02em;
-  color: var(--agi-ink);
-}
-
-[data-design='agi'] .agi-fl-stat-label {
-  font-family: var(--agi-font-mono);
-  font-size: 12px;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  color: var(--agi-ink-quiet);
-}
-
-/* ── surface index ──────────────────────────────────────────────────── */
-
-[data-design='agi'] .agi-fl-surface-list {
-  margin: clamp(40px, 6vw, 64px) 0 0;
-  padding: 0;
-  list-style: none;
-  counter-reset: agi-surface;
-}
-
-[data-design='agi'] .agi-fl-surface-row {
-  display: grid;
-  /* The visual column holds a device frame at a fixed design width. An even
-     split rendered a 720px editor at 572px - 0.79 scale - and its code at
-     9.9px. Weighted so a frame lands near design size and stays readable. */
-  grid-template-columns: minmax(0, 0.72fr) minmax(0, 1.28fr);
-  gap: clamp(24px, 3.5vw, 48px);
-  align-items: center;
-  padding: clamp(36px, 5vw, 56px) 0;
-  border-top: 1px solid var(--agi-rule);
-}
-
-[data-design='agi'] .agi-fl-surface-row:nth-child(even) {
-  grid-template-columns: minmax(0, 1.08fr) minmax(0, 0.92fr);
-}
-
-[data-design='agi'] .agi-fl-surface-row:nth-child(even) .agi-fl-surface-copy {
-  order: 2;
-}
-
-/* Alternating rows put the frame on the other side using `order`, which moves
-   the element but not the track it lands in - so on even rows the frame was
-   dropped into the narrow column and rendered at 0.79 scale. The weights swap
-   with it. */
-[data-design='agi'] .agi-fl-surface-row:nth-child(even) {
-  grid-template-columns: minmax(0, 1.28fr) minmax(0, 0.72fr);
-}
-
-[data-design='agi'] .agi-fl-surface-row:nth-child(even) .agi-fl-surface-visual {
-  order: 1;
-}
-
-@media (max-width: 860px) {
-  [data-design='agi'] .agi-fl-surface-row,
-  [data-design='agi'] .agi-fl-surface-row:nth-child(even) {
-    grid-template-columns: 1fr;
-  }
-  [data-design='agi'] .agi-fl-surface-row:nth-child(even) .agi-fl-surface-copy {
-    order: 1;
-  }
-  [data-design='agi'] .agi-fl-surface-row:nth-child(even) .agi-fl-surface-visual {
-    order: 2;
-  }
-}
-
-[data-design='agi'] .agi-fl-surface-num {
-  display: block;
-  font-family: var(--agi-font-mono);
-  font-size: 13px;
-  letter-spacing: 0.14em;
-  color: var(--agi-amber);
-  margin-bottom: 14px;
-}
-
-[data-design='agi'] .agi-fl-surface-num::after {
-  content: ' /06';
-  color: var(--agi-ink-faint);
-}
-
-[data-design='agi'] .agi-fl-surface-name {
-  margin: 0;
-  font-family: var(--agi-font-heading);
-  font-optical-sizing: auto;
-  font-size: clamp(1.7rem, 3.2vw, 2.4rem);
-  font-weight: 600;
-  letter-spacing: -0.012em;
-  line-height: 1.08;
-}
-
-[data-design='agi'] .agi-fl-surface-link {
-  color: var(--agi-ink);
-  text-decoration: none;
-  text-underline-offset: 4px;
-  text-decoration-thickness: 1px;
-  transition: color var(--agi-dur-fast) var(--agi-ease-out);
-}
-
-[data-design='agi'] .agi-fl-surface-link:hover,
-[data-design='agi'] .agi-fl-surface-link:focus-visible {
-  text-decoration: underline;
-}
-
-[data-design='agi'] .agi-fl-surface-tagline {
-  margin: 10px 0 0;
-  font-style: normal;
-  font-family: var(--agi-font);
-  font-size: 1rem;
-  font-weight: 550;
-  color: var(--agi-ink);
-}
-
-[data-design='agi'] .agi-fl-surface-body {
-  margin: 12px 0 0;
-  max-width: 52ch;
-  font-size: 15px;
-  line-height: 1.62;
-  color: var(--agi-ink-2);
-}
-
-[data-design='agi'] .agi-fl-surface-caps {
-  margin: 18px 0 0;
-  padding: 0;
-  list-style: none;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 7px;
-}
-
-[data-design='agi'] .agi-fl-surface-caps li {
-  display: inline-flex;
-  align-items: center;
-  min-height: 27px;
-  padding: 5px 11px;
-  border: 1px solid var(--agi-rule);
-  border-radius: 999px;
-  background: var(--agi-console-tint);
-  font-size: 12.5px;
-  font-weight: 550;
-  color: var(--agi-ink-2);
-}
-
-[data-design='agi'] .agi-fl-surface-meta {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 18px;
-  margin: 18px 0 0;
-  font-family: var(--agi-font-mono);
-  font-size: 12px;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--agi-ink-quiet);
-}
-
-[data-design='agi'] .agi-fl-surface-status {
-  color: var(--agi-amber);
-}
-
-[data-design='agi'] .agi-fl-surface-visual .agi-dev {
-  transition: transform var(--agi-dur-base) var(--agi-ease-out);
-}
-
-[data-design='agi'] .agi-fl-surface-row:hover .agi-fl-surface-visual .agi-dev {
-  transform: translateY(-4px);
-}
-
-/* ── mobile hero visual ─────────────────────────────────────────────── */
-
-[data-design='agi'] .agi-mobile-hero-wrap {
-  display: flex;
-  justify-content: flex-end;
-  align-items: center;
-  gap: 20px;
-  padding-right: 0;
-}
-
-[data-design='agi'] .agi-mobile-store-col {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
 }
 
 [data-design='agi'] .agi-store-soon {
@@ -5012,286 +3402,6 @@ html[data-contrast='more'] *:focus-visible {
   color: var(--agi-ink);
 }
 
-[data-design='agi'] .agi-mobile-hero-phone {
-  width: clamp(220px, 18vw, 270px);
-  border-radius: 44px;
-  overflow: hidden;
-  box-shadow: 0 24px 64px var(--agi-shadow);
-  flex-shrink: 0;
-}
-
-[data-design='agi'] .agi-mobile-hero-img {
-  display: block;
-  width: 100%;
-  height: auto;
-}
-
-/* ── trust triptych ─────────────────────────────────────────────────── */
-
-[data-design='agi'] .agi-fl-trust-grid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 14px;
-  margin-top: clamp(36px, 5vw, 56px);
-}
-
-@media (max-width: 860px) {
-  [data-design='agi'] .agi-fl-trust-grid {
-    grid-template-columns: 1fr;
-  }
-}
-
-[data-design='agi'] .agi-fl-trust-card {
-  display: flex;
-  flex-direction: column;
-  padding: 26px 24px;
-  border: 1px solid var(--agi-rule);
-  border-radius: 14px;
-  background: linear-gradient(180deg, var(--agi-surface-wash), transparent 55%), var(--agi-card);
-  transition:
-    border-color var(--agi-dur-fast) var(--agi-ease-out),
-    transform var(--agi-dur-fast) var(--agi-ease-out);
-}
-
-[data-design='agi'] .agi-fl-trust-card:hover {
-  border-color: var(--agi-rule-strong);
-  transform: translateY(-3px);
-}
-
-[data-design='agi'] .agi-fl-trust-mode {
-  margin: 0;
-  font-family: var(--agi-font-mono);
-  font-size: 12px;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  color: var(--agi-amber);
-}
-
-[data-design='agi'] .agi-fl-trust-title {
-  margin: 14px 0 0;
-  font-family: var(--agi-font-heading);
-  font-size: 1.45rem;
-  font-weight: 600;
-  letter-spacing: -0.008em;
-  line-height: 1.18;
-  color: var(--agi-ink);
-}
-
-[data-design='agi'] .agi-fl-trust-body {
-  margin: 10px 0 0;
-  font-size: 14.5px;
-  line-height: 1.6;
-  color: var(--agi-ink-2);
-}
-
-[data-design='agi'] .agi-fl-trust-points {
-  margin: 16px 0 22px;
-  padding: 0;
-  list-style: none;
-  display: flex;
-  flex-direction: column;
-  gap: 9px;
-  flex: 1;
-}
-
-[data-design='agi'] .agi-fl-trust-points li {
-  position: relative;
-  padding-left: 20px;
-  font-size: 13.5px;
-  line-height: 1.5;
-  color: var(--agi-ink-2);
-}
-
-[data-design='agi'] .agi-fl-trust-points li::before {
-  content: '·';
-  position: absolute;
-  left: 4px;
-  color: var(--agi-amber);
-  font-weight: 700;
-}
-
-[data-design='agi'] .agi-fl-trust-card .agi-fl-cta {
-  align-self: flex-start;
-}
-
-/* ── capability grid ────────────────────────────────────────────────── */
-
-[data-design='agi'] .agi-fl-cap-grid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 12px;
-  margin-top: clamp(32px, 5vw, 52px);
-}
-
-/* A count that is not a multiple of three left the last card stranded in a
-   third of a row beside two empty tracks, which reads as a layout that broke
-   rather than one that ended. A lone trailing card takes the whole row; a
-   trailing pair splits it. */
-[data-design='agi'] .agi-fl-cap-grid > *:last-child:nth-child(3n + 1) {
-  grid-column: span 3;
-}
-
-[data-design='agi'] .agi-fl-cap-grid > *:nth-last-child(2):nth-child(3n + 1),
-[data-design='agi'] .agi-fl-cap-grid > *:nth-last-child(2):nth-child(3n + 1) ~ * {
-  grid-column: span 3;
-}
-
-@media (max-width: 900px) {
-  [data-design='agi'] .agi-fl-cap-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-  [data-design='agi'] .agi-fl-cap-grid > *:last-child:nth-child(3n + 1),
-  [data-design='agi'] .agi-fl-cap-grid > *:nth-last-child(2):nth-child(3n + 1),
-  [data-design='agi'] .agi-fl-cap-grid > *:nth-last-child(2):nth-child(3n + 1) ~ * {
-    grid-column: auto;
-  }
-}
-
-@media (max-width: 620px) {
-  [data-design='agi'] .agi-fl-cap-grid {
-    grid-template-columns: minmax(0, 1fr);
-  }
-}
-
-@media (max-width: 860px) {
-  [data-design='agi'] .agi-fl-cap-grid {
-    grid-template-columns: 1fr;
-  }
-}
-
-[data-design='agi'] .agi-fl-cap-card {
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  min-height: 150px;
-  /* The arrow is absolutely positioned in the bottom-right corner, so the copy
-     needs a reserved lane or it runs underneath it - which it did on any card
-     whose last line reached the bottom. */
-  padding: 20px 20px 46px;
-  border: 1px solid var(--agi-rule);
-  border-radius: 12px;
-  background: var(--agi-card);
-  text-decoration: none;
-  overflow: hidden;
-  transition:
-    border-color var(--agi-dur-fast) var(--agi-ease-out),
-    background var(--agi-dur-fast) var(--agi-ease-out);
-}
-
-[data-design='agi'] .agi-fl-cap-card:hover {
-  border-color: var(--agi-rule-strong);
-  background: var(--agi-bg-2);
-}
-
-[data-design='agi'] .agi-fl-cap-meta {
-  font-family: var(--agi-font-mono);
-  font-size: 12px;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  color: var(--agi-ink-quiet);
-}
-
-[data-design='agi'] .agi-fl-cap-title {
-  font-size: 17px;
-  font-weight: 600;
-  letter-spacing: -0.008em;
-  color: var(--agi-ink);
-}
-
-[data-design='agi'] .agi-fl-cap-body {
-  font-size: 13.5px;
-  line-height: 1.55;
-  color: var(--agi-ink-2);
-}
-
-[data-design='agi'] .agi-fl-cap-arrow {
-  position: absolute;
-  right: 18px;
-  bottom: 14px;
-  color: var(--agi-ink-faint);
-  transition:
-    color var(--agi-dur-fast) var(--agi-ease-out),
-    transform var(--agi-dur-fast) var(--agi-ease-out);
-}
-
-[data-design='agi'] .agi-fl-cap-card:hover .agi-fl-cap-arrow {
-  color: var(--agi-amber);
-  transform: translateX(3px);
-}
-
-/* ── dev band ───────────────────────────────────────────────────────── */
-
-[data-design='agi'] .agi-fl-devband {
-  display: grid;
-  /* The product frame gets the larger share. At an even split a 720px editor
-     rendered at 572px - 0.79 scale - which pushed its code down to 9.9px and
-     made the screenshot decoration rather than something anyone could read.
-     Roughly three fifths of the stage keeps a frame near its design size. */
-  grid-template-columns: minmax(0, 0.78fr) minmax(0, 1.22fr);
-  gap: clamp(28px, 4vw, 56px);
-  align-items: center;
-  padding: clamp(64px, 9vw, 112px) 0;
-  border-bottom: 1px solid var(--agi-rule);
-}
-
-@media (max-width: 860px) {
-  [data-design='agi'] .agi-fl-devband {
-    grid-template-columns: 1fr;
-  }
-}
-
-/* ── final CTA ──────────────────────────────────────────────────────── */
-
-[data-design='agi'] .agi-fl-final {
-  padding: clamp(80px, 11vw, 140px) 0;
-  text-align: center;
-  position: relative;
-  isolation: isolate;
-}
-
-[data-design='agi'] .agi-fl-final::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  z-index: -1;
-  pointer-events: none;
-  background: radial-gradient(46% 56% at 50% 64%, var(--agi-glow-soft), transparent 75%);
-}
-
-[data-design='agi'] .agi-fl-final-title {
-  margin: 0 auto;
-  max-width: 20ch;
-  font-family: var(--agi-font-heading);
-  font-optical-sizing: auto;
-  font-size: clamp(2.2rem, 5.4vw, 4rem);
-  /* Matches the heading scale set on .agi-fl-h2; it was the one section title
-     left a weight heavier and a tracking looser than its siblings. */
-  font-weight: 550;
-  letter-spacing: -0.03em;
-  line-height: 1.03;
-  color: var(--agi-ink);
-  text-wrap: balance;
-}
-
-[data-design='agi'] .agi-fl-final-lede {
-  margin-left: auto;
-  margin-right: auto;
-}
-
-[data-design='agi'] .agi-fl-final-ctas {
-  justify-content: center;
-}
-
-[data-design='agi'] .agi-fl-final-stamp {
-  margin: 30px 0 0;
-  font-family: var(--agi-font-mono);
-  font-size: 12px;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  color: var(--agi-ink-quiet);
-}
-
 /* ══════════════════════════════════════════════════════════════════════
    DEVICE MOCKUPS (agi-dev) — the one exact-size system for every
    illustrated device on marketing/product pages. ProductFrame,
@@ -5313,10 +3423,6 @@ html[data-contrast='more'] *:focus-visible {
   width: 100%;
   max-width: calc(var(--dev-w) * 1px);
   margin: 0 auto;
-}
-
-[data-design='agi'] .agi-fl-hero-visual .agi-dev {
-  margin-inline: auto 0;
 }
 
 [data-design='agi'] .agi-dev-shell {
@@ -6634,80 +4740,6 @@ html[data-contrast='more'] *:focus-visible {
   overscroll-behavior: contain;
 }
 
-[data-design='agi'] .agi-fl-stat-value {
-  font-variant-numeric: tabular-nums;
-}
-
-/* ── header products disclosure ─────────────────────────────────────── */
-
-[data-design='agi'] .agi-top-products {
-  position: relative;
-  display: inline-flex;
-}
-
-[data-design='agi'] .agi-top-products-button {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-}
-
-[data-design='agi'] .agi-top-products-chevron {
-  font-size: 12px;
-  color: var(--agi-ink-quiet);
-}
-
-[data-design='agi'] .agi-top-products-menu {
-  position: absolute;
-  top: calc(100% + 12px);
-  left: -14px;
-  z-index: 60;
-  min-width: 290px;
-  padding: 8px;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  border: 1px solid var(--agi-rule-strong);
-  border-radius: 12px;
-  background: var(--agi-bg-2);
-  box-shadow: 0 28px 80px var(--agi-shadow);
-  animation: slide-down 0.18s var(--agi-ease-out);
-}
-
-[data-design='agi'] .agi-top-products-item {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  padding: 9px 12px;
-  border-radius: 8px;
-  text-decoration: none;
-  transition: background var(--agi-dur-fast) var(--agi-ease-out);
-}
-
-[data-design='agi'] .agi-top-products-item:hover,
-[data-design='agi'] .agi-top-products-item:focus-visible {
-  background: var(--agi-surface-wash);
-}
-
-[data-design='agi'] .agi-top-products-label {
-  font-size: 13.5px;
-  font-weight: 600;
-  color: var(--agi-ink);
-}
-
-[data-design='agi'] .agi-top-products-hint {
-  font-size: 12px;
-  color: var(--agi-ink-quiet);
-}
-
-[data-design='agi'] .agi-top-mobile-group {
-  font-family: var(--agi-font-mono);
-  font-size: 12px;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  color: var(--agi-ink-quiet);
-  margin-top: 4px;
-}
-
 /* ── auth shell (login / signup) ────────────────────────────────────── */
 
 /* Two columns: the brand story takes the flexible left column, the card
@@ -6836,24 +4868,6 @@ html[data-contrast='more'] *:focus-visible {
   }
 }
 
-/* ── device authorization (/auth/device) ─────────────────────────────
-   This is intentionally isolated from .agi-section. Marketing sections
-   expand to the viewport with computed inline padding; combining that
-   full-bleed geometry with a narrow authorization card collapses its
-   content box on desktop screens. */
-[data-design='agi'] .agi-device-auth-stage {
-  display: grid;
-  place-items: start center;
-  min-height: min(46rem, calc(100svh - 9rem));
-  padding: clamp(2rem, 7vh, 4.5rem) 0 clamp(3.5rem, 8vh, 6rem);
-}
-
-[data-design='agi'] .agi-device-auth-desktop-shell {
-  min-height: 100svh;
-  background:
-    radial-gradient(circle at 50% -10%, var(--agi-glow-soft), transparent 44%), var(--agi-bg);
-}
-
 [data-design='agi'] .agi-auth-embedded-shell {
   display: grid;
   min-height: 100svh;
@@ -6945,12 +4959,6 @@ html[data-contrast='more'] *:focus-visible {
   }
 }
 
-[data-design='agi'] .agi-device-auth-desktop-shell .agi-device-auth-stage {
-  min-height: 100svh;
-  place-items: center;
-  padding: clamp(1rem, 4vw, 2rem);
-}
-
 [data-design='agi'] .agi-device-auth-card {
   width: 100%;
   max-width: 30rem;
@@ -6959,271 +4967,6 @@ html[data-contrast='more'] *:focus-visible {
   border-radius: 1rem;
   background: linear-gradient(145deg, var(--agi-glow-soft), transparent 38%), var(--agi-card);
   box-shadow: 0 28px 80px var(--agi-shadow);
-}
-
-[data-design='agi'] .agi-device-auth-title {
-  margin: 0;
-  color: var(--agi-ink);
-  font-family: var(--agi-font-heading);
-  font-size: clamp(2rem, 5vw, 2.75rem);
-  font-optical-sizing: auto;
-  font-weight: 600;
-  letter-spacing: -0.025em;
-  line-height: 1.02;
-  text-wrap: balance;
-}
-
-[data-design='agi'] .agi-device-auth-lede {
-  margin: 1rem 0 1.5rem;
-  color: var(--agi-ink-2);
-  font-size: 0.98rem;
-  line-height: 1.65;
-}
-
-[data-design='agi'] .agi-device-auth-lede strong {
-  color: var(--agi-ink);
-  font-weight: 600;
-}
-
-[data-design='agi'] .agi-device-auth-alert {
-  margin-bottom: 1rem;
-  padding: 0.75rem 0.875rem;
-  border: 1px solid var(--agi-rule);
-  border-radius: 0.5rem;
-  font-size: 0.875rem;
-  line-height: 1.5;
-}
-
-[data-design='agi'] .agi-device-auth-alert--error,
-[data-design='agi'] .agi-device-auth-form [data-message-type='error'] {
-  color: var(--agi-error);
-}
-
-[data-design='agi']
-  :where(
-    .agi-device-auth-alert,
-    .agi-device-auth-note,
-    .agi-device-auth-cancel,
-    .agi-device-auth-legal
-  )
-  a {
-  color: var(--agi-ink);
-  font-weight: 600;
-}
-
-[data-design='agi'] .agi-device-auth-account {
-  display: flex;
-  gap: 1rem;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 1.25rem;
-  padding: 0.75rem 0.875rem;
-  border: 1px solid var(--agi-rule-strong);
-  border-radius: 0.75rem;
-  background: var(--agi-bg-2);
-}
-
-[data-design='agi'] .agi-device-auth-account div {
-  display: grid;
-  min-width: 0;
-}
-
-[data-design='agi'] .agi-device-auth-account span,
-[data-design='agi'] .agi-device-auth-request > span {
-  color: var(--agi-ink-quiet);
-  font-family: var(--agi-font-mono);
-  font-size: 0.75rem;
-  letter-spacing: 0.065em;
-  text-transform: uppercase;
-}
-
-[data-design='agi'] .agi-device-auth-account strong,
-[data-design='agi'] .agi-device-auth-account small {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-[data-design='agi'] .agi-device-auth-account strong {
-  color: var(--agi-ink);
-  font-size: 0.9rem;
-}
-
-[data-design='agi'] .agi-device-auth-account small {
-  color: var(--agi-ink-2);
-  font-size: 0.76rem;
-}
-
-[data-design='agi'] .agi-device-auth-account button {
-  flex: 0 0 auto;
-  padding: 0;
-  border: 0;
-  background: transparent;
-  color: var(--agi-ink);
-  cursor: pointer;
-  font: inherit;
-  font-size: 0.76rem;
-  font-weight: 600;
-  text-decoration: underline;
-  text-underline-offset: 3px;
-}
-
-[data-design='agi'] .agi-device-auth-account button:disabled {
-  cursor: wait;
-  opacity: 0.6;
-}
-
-[data-design='agi'] .agi-device-auth-form {
-  display: flex;
-  flex-direction: column;
-  gap: 0.875rem;
-}
-
-[data-design='agi'] .agi-device-auth-form label {
-  color: var(--agi-ink-2);
-  font-size: 0.8rem;
-  font-weight: 600;
-}
-
-[data-design='agi'] .agi-device-auth-code {
-  width: 100%;
-  min-height: 3.25rem;
-  padding: 0.75rem 1rem;
-  border: 1px solid var(--agi-rule-strong);
-  border-radius: 0.625rem;
-  outline: none;
-  background: var(--agi-bg-2);
-  color: var(--agi-ink);
-  font-family: var(--agi-font-mono);
-  font-size: clamp(1.1rem, 5vw, 1.35rem);
-  font-variant-numeric: tabular-nums;
-  letter-spacing: 0.08em;
-  text-align: center;
-  transition:
-    border-color var(--agi-dur-fast) var(--agi-ease-out),
-    box-shadow var(--agi-dur-fast) var(--agi-ease-out);
-}
-
-[data-design='agi'] .agi-device-auth-code:focus-visible {
-  border-color: var(--agi-amber);
-  box-shadow: 0 0 0 3px var(--agi-amber-soft);
-}
-
-[data-design='agi'] .agi-device-auth-form [role='alert'],
-[data-design='agi'] .agi-device-auth-form [role='status'] {
-  margin: 0;
-  font-size: 0.82rem;
-  line-height: 1.5;
-}
-
-[data-design='agi'] .agi-device-auth-form [role='status'] {
-  color: var(--agi-success);
-}
-
-[data-design='agi'] .agi-device-auth-request {
-  padding: 0.875rem 1rem;
-  border: 1px solid color-mix(in srgb, var(--agi-success) 35%, var(--agi-rule));
-  border-radius: 0.75rem;
-  background: color-mix(in srgb, var(--agi-success) 7%, var(--agi-bg-2));
-}
-
-[data-design='agi'] .agi-device-auth-request h2 {
-  margin: 0.2rem 0 0.75rem;
-  color: var(--agi-ink);
-  font-size: 1rem;
-  letter-spacing: -0.01em;
-}
-
-[data-design='agi'] .agi-device-auth-request p {
-  margin: 0 0 0.5rem;
-  color: var(--agi-ink-2);
-  font-size: 0.78rem;
-}
-
-[data-design='agi'] .agi-device-auth-request ul {
-  display: grid;
-  gap: 0.625rem;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-[data-design='agi'] .agi-device-auth-request li {
-  display: grid;
-  gap: 0.1rem;
-  padding-left: 1rem;
-  position: relative;
-}
-
-[data-design='agi'] .agi-device-auth-request li::before {
-  position: absolute;
-  top: 0.35rem;
-  left: 0;
-  width: 0.4rem;
-  height: 0.4rem;
-  border-radius: 50%;
-  background: var(--agi-success);
-  content: '';
-}
-
-[data-design='agi'] .agi-device-auth-request li strong {
-  color: var(--agi-ink);
-  font-size: 0.8rem;
-}
-
-[data-design='agi'] .agi-device-auth-request li small {
-  color: var(--agi-ink-2);
-  font-size: 0.75rem;
-  line-height: 1.45;
-}
-
-[data-design='agi'] .agi-device-auth-submit {
-  justify-content: center;
-  min-height: 3rem;
-  border: none;
-  text-align: center;
-}
-
-[data-design='agi'] .agi-device-auth-submit:disabled {
-  cursor: not-allowed;
-  opacity: 0.58;
-}
-
-[data-design='agi'] .agi-device-auth-note {
-  margin-top: 1.25rem;
-  padding: 0.875rem 1rem;
-  border: 1px solid var(--agi-rule);
-  border-radius: 0.625rem;
-  background: var(--agi-surface-wash);
-  color: var(--agi-ink-2);
-  font-size: 0.85rem;
-  line-height: 1.6;
-}
-
-[data-design='agi'] .agi-device-auth-note strong {
-  color: var(--agi-ink);
-}
-
-[data-design='agi'] .agi-device-auth-cancel {
-  margin: 1.25rem 0 0;
-  color: var(--agi-ink-2);
-  font-size: 0.875rem;
-  text-align: center;
-}
-
-[data-design='agi'] .agi-device-auth-legal {
-  margin: 0.75rem 0 0;
-  color: var(--agi-ink-quiet);
-  font-size: 0.7rem;
-  line-height: 1.5;
-  text-align: center;
-}
-
-@media (max-width: 440px) {
-  [data-design='agi'] .agi-device-auth-account {
-    align-items: flex-start;
-    flex-direction: column;
-  }
 }
 
 /* ── inline anonymous waitlist form (/waitlist page) ────────────────── */
@@ -7461,11 +5204,7 @@ html[data-contrast='more'] *:focus-visible {
 }
 
 [data-design='agi'] .agi-fl-hero,
-[data-design='agi'] .agi-fl-statband,
 [data-design='agi'] .agi-fl-section,
-[data-design='agi'] .agi-fl-devband,
-[data-design='agi'] .agi-fl-final,
-[data-design='agi'] .agi-provider-section,
 [data-design='agi'] .agi-page-hero,
 [data-design='agi'] .agi-section,
 [data-design='agi'] .agi-campaign-hero,
@@ -7482,76 +5221,10 @@ html[data-contrast='more'] *:focus-visible {
   overflow: clip;
 }
 
-/* ── surface ticker (continuous mono words) + text-only surface rows ── */
-
-[data-design='agi'] .agi-fl-ticker {
-  overflow: hidden;
-  border-bottom: 1px solid var(--agi-rule);
-  padding: 18px 0;
-  margin-inline: calc(50% - 50vw);
-}
-
-[data-design='agi'] .agi-fl-ticker-track {
-  display: flex;
-  width: max-content;
-  animation: agi-provider-marquee 48s linear infinite;
-}
-
-[data-design='agi'] .agi-fl-ticker:hover .agi-fl-ticker-track {
-  animation-play-state: paused;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  [data-design='agi'] .agi-fl-ticker-track {
-    animation: none;
-  }
-}
-
-[data-design='agi'] .agi-fl-ticker-row {
-  display: inline-flex;
-  align-items: center;
-  white-space: nowrap;
-}
-
-[data-design='agi'] .agi-fl-ticker-word {
-  display: inline-flex;
-  align-items: center;
-  font-family: var(--agi-font-mono);
-  font-size: 13px;
-  letter-spacing: 0.22em;
-  text-transform: uppercase;
-  color: var(--agi-ink-quiet);
-}
-
-[data-design='agi'] .agi-fl-ticker-dot {
-  margin: 0 22px;
-  color: var(--agi-ink-faint);
-}
-
-[data-design='agi'] .agi-fl-surface-row--text {
-  grid-template-columns: 1fr !important;
-}
-
-[data-design='agi'] .agi-fl-surface-row--text .agi-fl-surface-body,
-[data-design='agi'] .agi-fl-surface-row--text .agi-fl-surface-caps {
-  max-width: 64ch;
-}
-
-[data-design='agi'] .agi-fl-hero--copy {
-  padding-bottom: clamp(40px, 6vw, 72px);
-}
-
 /* monochrome provider marks inherit theme ink */
 [data-design='agi'] .agi-provider-mark {
   flex: 0 0 auto;
   color: var(--agi-ink-2);
-}
-
-[data-design='agi'] .agi-top-theme-toggle {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 34px;
 }
 
 /* ══════════════════════════════════════════════════════════════════════
@@ -8003,23 +5676,6 @@ html[data-contrast='more'] *:focus-visible {
   }
 }
 
-[data-design='agi'] .agi-fl-devband-copy {
-  /* Headings inside size against this column, not the viewport. */
-  container-type: inline-size;
-  min-width: 0;
-}
-
-/* devband collage: terminal + scene stack */
-[data-design='agi'] .agi-fl-devband-visual {
-  display: grid;
-  gap: 16px;
-}
-
-[data-design='agi'] .agi-fl-devband-visual > :nth-child(2) {
-  margin-left: clamp(16px, 4vw, 56px);
-  margin-top: -8px;
-}
-
 /* ══════════════════════════════════════════════════════════════════
    MOBILE RESPONSIVENESS — 640px and 480px breakpoints
    ══════════════════════════════════════════════════════════════════ */
@@ -8071,376 +5727,17 @@ html[data-contrast='more'] *:focus-visible {
 }
 
 @media (max-width: 480px) {
-  /* Cap grid: single column at 480px */
-  [data-design='agi'] .agi-fl-cap-grid {
-    grid-template-columns: 1fr;
-  }
-
-  /* Surface list: ensure visuals are hidden on small screens */
-  [data-design='agi'] .agi-fl-surface-visual {
-    display: none;
-  }
-
-  [data-design='agi'] .agi-fl-surface-row {
-    grid-template-columns: 1fr;
-  }
-
   /* Hero h1: ensure it doesn't overflow */
   [data-design='agi'] .agi-fl-h1 {
     font-size: clamp(2rem, 8vw, 3.2rem);
     max-width: none;
   }
-
-  /* Final CTA: stack */
-  [data-design='agi'] .agi-fl-final-ctas {
-    flex-direction: column;
-    align-items: center;
-  }
-}
-
-/* ═══════════════════════════════════════════════════════════════════════════
-   DOCS LAYOUT  ·  /docs
-   Three-zone layout: sticky secondary tab nav + sticky sidebar + scrollable
-   content. Mirrors the bun.sh/docs visual pattern.
-═══════════════════════════════════════════════════════════════════════════ */
-
-[data-design='agi'] .agi-docs-wrap {
-  display: flex;
-  flex-direction: column;
-  min-height: 100vh;
-}
-
-/* ── Secondary surface tab nav ─────────────────────────────────────────── */
-[data-design='agi'] .agi-docs-tabnav {
-  position: sticky;
-  top: 0;
-  z-index: 40;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 0 56px;
-  height: 44px;
-  border-bottom: 1px solid var(--agi-rule);
-  background: var(--agi-bg);
 }
 
 [data-design='agi'] code,
 [data-design='agi'] kbd,
 [data-design='agi'] samp {
   font-size: max(0.92em, 12px);
-}
-
-[data-design='agi'] .agi-docs-tabs {
-  display: flex;
-  align-items: stretch;
-  height: 100%;
-  gap: 0;
-  /* Seven tabs need 506px. At 382px the last two sat entirely past the right
-     edge with overflow visible and nothing scrollable, so the Chrome and VS
-     Code documentation had no route to it on a phone. */
-  overflow-x: auto;
-  overscroll-behavior-x: contain;
-  scrollbar-width: none;
-}
-
-[data-design='agi'] .agi-docs-tabs::-webkit-scrollbar {
-  display: none;
-}
-
-[data-design='agi'] .agi-docs-tab {
-  flex: 0 0 auto;
-}
-
-[data-design='agi'] .agi-docs-tab {
-  display: inline-flex;
-  align-items: center;
-  padding: 0 14px;
-  height: 100%;
-  font-size: 13px;
-  font-weight: 500;
-  color: var(--agi-ink-2);
-  border-bottom: 2px solid transparent;
-  transition:
-    color 0.13s,
-    border-color 0.13s;
-  text-decoration: none;
-  white-space: nowrap;
-}
-
-[data-design='agi'] .agi-docs-tab:hover {
-  color: var(--agi-ink);
-}
-
-[data-design='agi'] .agi-docs-tab--active {
-  color: var(--agi-ink);
-  border-bottom-color: var(--agi-amber);
-}
-
-[data-design='agi'] .agi-docs-tabnav-right {
-  display: flex;
-  align-items: center;
-  gap: 2px;
-}
-
-[data-design='agi'] .agi-docs-tabnav-link {
-  display: inline-flex;
-  align-items: center;
-  padding: 5px 10px;
-  font-size: 13px;
-  color: var(--agi-ink-2);
-  text-decoration: none;
-  border-radius: 6px;
-  transition:
-    color 0.13s,
-    background 0.13s;
-}
-
-[data-design='agi'] .agi-docs-tabnav-link:hover {
-  color: var(--agi-ink);
-  background: color-mix(in srgb, var(--agi-ink) 6%, transparent);
-}
-
-/* ── Two-column body ───────────────────────────────────────────────────── */
-[data-design='agi'] .agi-docs-layout {
-  display: flex;
-  flex: 1;
-}
-
-/* ── Sidebar ───────────────────────────────────────────────────────────── */
-[data-design='agi'] .agi-docs-sidebar {
-  width: 258px;
-  flex-shrink: 0;
-  position: sticky;
-  top: 44px;
-  height: calc(100vh - 44px);
-  overflow-y: auto;
-  border-right: 1px solid var(--agi-rule);
-  padding: 20px 0 64px;
-  scrollbar-width: thin;
-  scrollbar-color: var(--agi-rule-strong) transparent;
-}
-
-[data-design='agi'] .agi-docs-sidebar::-webkit-scrollbar {
-  width: 4px;
-}
-
-[data-design='agi'] .agi-docs-sidebar::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-[data-design='agi'] .agi-docs-sidebar::-webkit-scrollbar-thumb {
-  background: var(--agi-rule-strong);
-  border-radius: 2px;
-}
-
-[data-design='agi'] .agi-docs-sidebar-group {
-  margin-bottom: 4px;
-}
-
-[data-design='agi'] .agi-docs-sidebar-group ul {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-}
-
-[data-design='agi'] .agi-docs-sidebar-heading {
-  padding: 14px 20px 4px;
-  font-size: 12px;
-  font-weight: 600;
-  letter-spacing: 0.065em;
-  text-transform: uppercase;
-  color: var(--agi-ink-quiet);
-  margin: 0;
-}
-
-[data-design='agi'] .agi-docs-sidebar-link {
-  display: block;
-  padding: 5px 20px;
-  font-size: 13.5px;
-  color: var(--agi-ink-2);
-  text-decoration: none;
-  transition:
-    color 0.12s,
-    background 0.12s;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-[data-design='agi'] .agi-docs-sidebar-link:hover {
-  color: var(--agi-ink);
-  background: color-mix(in srgb, var(--agi-ink) 5%, transparent);
-}
-
-[data-design='agi'] .agi-docs-sidebar-link.active {
-  color: var(--agi-ink);
-  font-weight: 500;
-  background: color-mix(in srgb, var(--agi-amber) 12%, transparent);
-}
-
-/* ── Main content ─────────────────────────────────────────────────────── */
-[data-design='agi'] .agi-docs-content {
-  flex: 1;
-  min-width: 0;
-  padding: 52px 64px 96px;
-  max-width: 900px;
-}
-
-/* A breadcrumb is orientation, like the section eyebrows it sits alongside. */
-[data-design='agi'] .agi-docs-breadcrumb {
-  font-size: 13px;
-  font-weight: 500;
-  color: var(--agi-ink-quiet);
-  margin-bottom: 12px;
-}
-
-[data-design='agi'] .agi-docs-h1 {
-  font-family: var(--agi-font-heading);
-  font-optical-sizing: auto;
-  font-size: clamp(28px, 3vw, 40px);
-  font-weight: 600;
-  color: var(--agi-ink);
-  line-height: 1.1;
-  letter-spacing: -0.022em;
-  margin-bottom: 10px;
-}
-
-[data-design='agi'] .agi-docs-lead {
-  font-size: 15px;
-  color: var(--agi-ink-2);
-  line-height: 1.65;
-  margin-bottom: 36px;
-  max-width: 580px;
-}
-
-/* ── Feature card grid ────────────────────────────────────────────────── */
-[data-design='agi'] .agi-docs-cards {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 14px;
-}
-
-[data-design='agi'] .agi-docs-card {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  padding: 22px;
-  background: color-mix(in srgb, var(--agi-ink) 3%, var(--agi-bg));
-  border: 1px solid var(--agi-rule);
-  border-radius: 12px;
-  text-decoration: none;
-  transition:
-    border-color 0.14s,
-    background 0.14s;
-}
-
-[data-design='agi'] .agi-docs-card:hover {
-  border-color: color-mix(in srgb, var(--agi-ink) 22%, transparent);
-  background: color-mix(in srgb, var(--agi-ink) 5%, var(--agi-bg));
-}
-
-/* Eight identical amber-tinted squares was most of the accent on this page,
-   spent on decoration. The icon distinguishes the cards; the tint did not. */
-[data-design='agi'] .agi-docs-card-icon {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 36px;
-  height: 36px;
-  border-radius: 8px;
-  background: var(--agi-surface-wash);
-  border: 1px solid var(--agi-rule);
-  color: var(--agi-ink-2);
-  flex-shrink: 0;
-}
-
-[data-design='agi'] .agi-docs-card:hover .agi-docs-card-icon {
-  color: var(--agi-ink);
-  border-color: var(--agi-rule-strong);
-}
-
-[data-design='agi'] .agi-docs-card-icon svg {
-  width: 17px;
-  height: 17px;
-}
-
-[data-design='agi'] .agi-docs-card-title {
-  font-size: 15px;
-  font-weight: 600;
-  color: var(--agi-ink);
-  line-height: 1.3;
-}
-
-[data-design='agi'] .agi-docs-card-body {
-  font-size: 13.5px;
-  color: var(--agi-ink-2);
-  line-height: 1.55;
-  flex: 1;
-}
-
-[data-design='agi'] .agi-docs-card-cta {
-  font-size: 12.5px;
-  color: var(--agi-ink-quiet);
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  margin-top: 2px;
-}
-
-[data-design='agi'] .agi-docs-card-cta code {
-  font-family: var(--font-geist-mono, ui-monospace, monospace);
-  font-size: 12px;
-  padding: 1px 5px;
-  background: color-mix(in srgb, var(--agi-ink) 8%, transparent);
-  border-radius: 4px;
-  color: var(--agi-ink-2);
-}
-
-[data-design='agi'] .agi-docs-card:hover .agi-docs-card-cta {
-  color: var(--agi-ink-2);
-}
-
-/* ── Section dividers ─────────────────────────────────────────────────── */
-[data-design='agi'] .agi-docs-section {
-  margin-top: 56px;
-}
-
-[data-design='agi'] .agi-docs-section-eyebrow {
-  font-size: 12px;
-  font-weight: 600;
-  letter-spacing: 0.065em;
-  text-transform: uppercase;
-  color: var(--agi-ink-quiet);
-  margin-bottom: 8px;
-}
-
-[data-design='agi'] .agi-docs-section-title {
-  font-size: 20px;
-  font-weight: 600;
-  color: var(--agi-ink);
-  margin-bottom: 20px;
-  letter-spacing: -0.01em;
-}
-
-/* ── Light mode adjustments ───────────────────────────────────────────── */
-[data-theme='light'] [data-design='agi'] .agi-docs-tabnav,
-[data-theme='light'][data-design='agi'] .agi-docs-tabnav {
-  background: var(--agi-bg);
-}
-
-[data-theme='light'] [data-design='agi'] .agi-docs-tab--active,
-[data-theme='light'][data-design='agi'] .agi-docs-tab--active {
-  border-bottom-color: var(--agi-amber);
-}
-
-[data-theme='light'] [data-design='agi'] .agi-docs-breadcrumb,
-[data-theme='light'][data-design='agi'] .agi-docs-breadcrumb {
-  color: var(--agi-amber);
-}
-
-[data-theme='light'] [data-design='agi'] .agi-docs-card-icon,
-[data-theme='light'][data-design='agi'] .agi-docs-card-icon {
-  background: color-mix(in srgb, var(--agi-amber) 10%, transparent);
 }
 
 /* ── Responsive ───────────────────────────────────────────────────────── */
@@ -8451,27 +5748,6 @@ html[data-contrast='more'] *:focus-visible {
 
   [data-design='agi'] .agi-docs-content {
     padding: 36px 28px 64px;
-  }
-}
-
-@media (max-width: 640px) {
-  [data-design='agi'] .agi-docs-tabnav {
-    padding: 0 20px;
-    gap: 0;
-    overflow-x: auto;
-    scrollbar-width: none;
-  }
-
-  [data-design='agi'] .agi-docs-tabnav::-webkit-scrollbar {
-    display: none;
-  }
-
-  [data-design='agi'] .agi-docs-cards {
-    grid-template-columns: 1fr;
-  }
-
-  [data-design='agi'] .agi-docs-tabnav-right {
-    display: none;
   }
 }
 
