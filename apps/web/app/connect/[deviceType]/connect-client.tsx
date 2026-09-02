@@ -143,7 +143,12 @@ export function ConnectDeviceClient({
         >
           Sign in before approving this device request.
         </div>
-        <Link href={signInHref} className="agi-cta-primary" style={{ display: 'block' }}>
+        <Link
+          href={signInHref}
+          className="agi-ds-btn"
+          data-variant="primary"
+          style={{ display: 'flex' }}
+        >
           Sign in to continue
         </Link>
       </div>

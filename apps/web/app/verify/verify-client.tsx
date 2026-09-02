@@ -95,7 +95,12 @@ export function VerifyDeviceClient({ code }: { code: string }) {
         >
           Sign in before approving or denying this device request.
         </div>
-        <Link href={signInHref} className="agi-cta-primary" style={{ display: 'block' }}>
+        <Link
+          href={signInHref}
+          className="agi-ds-btn"
+          data-variant="primary"
+          style={{ display: 'flex' }}
+        >
           Sign in to continue
         </Link>
       </div>

@@ -19,7 +19,7 @@ test.describe('signup gates the purchase', () => {
     // rendered login page itself, same as public-auth-clean.spec.ts checks.
     await expect(page).toHaveURL(/\/login\?redirectTo=%2Fpricing/);
     await page.waitForLoadState('networkidle');
-    await expect(page.locator('.agi-auth-title').first()).toBeVisible();
+    await expect(page.locator('.agi-ds-auth-brand h2').first()).toBeVisible();
   });
 
   test('an anonymous caller cannot create a checkout session', async ({ page }) => {

@@ -4,7 +4,7 @@ import { useCallback, useEffect, useId, useState } from 'react';
 
 import { addCsrfHeaders } from '@/lib/client/csrf';
 import type { ConsentPurpose } from '@/lib/consent-purposes';
-import { Prose, Stack } from '@/features/marketing/components/system';
+import { Ledger, Prose, Stack, type LedgerRow } from '@/features/marketing/components/system';
 
 interface ConsentRecord {
   purpose: string;
@@ -130,71 +130,47 @@ export function ConsentCentre() {
   const { data } = state;
   const byPurpose = new Map(data.consents.map((record) => [record.purpose, record]));
 
+  const rows: LedgerRow[] = data.purposes.map((purpose) => {
+    const record = byPurpose.get(purpose.id);
+    const isPending = pendingPurpose === purpose.id;
+    return {
+      label: purpose.label,
+      value: (
+        <>
+          {purpose.description}
+          <br />
+          {record === undefined ? (
+            <span className="agi-ds-muted">
+              Never asked. No decision is on record, which is not the same as a refusal.
+            </span>
+          ) : (
+            <span className="agi-ds-muted">
+              {record.granted ? 'Consent given' : 'Withdrawn'} on {formatInstant(record.recordedAt)}
+              , against notice revision {record.noticeVersion}.
+            </span>
+          )}
+          <br />
+          <button
+            type="button"
+            className="agi-ds-btn"
+            data-variant="secondary"
+            style={{ marginTop: 8 }}
+            disabled={isPending}
+            onClick={() => void decide(purpose.id, !record?.granted, data.noticeVersion)}
+          >
+            {isPending ? 'Recording…' : record?.granted ? 'Withdraw consent' : 'Give consent'}
+          </button>
+        </>
+      ),
+    };
+  });
+
   return (
     <div aria-labelledby={headingId}>
       <h3 id={headingId} className="sr-only">
         Consent recorded against your account
       </h3>
-      <table className="agi-ledger">
-        <thead>
-          <tr>
-            <th>Purpose</th>
-            <th>Current state</th>
-            <th>Change it</th>
-          </tr>
-        </thead>
-        <tbody>
-          {data.purposes.map((purpose) => {
-            const record = byPurpose.get(purpose.id);
-            const isPending = pendingPurpose === purpose.id;
-            return (
-              <tr key={purpose.id}>
-                <td style={{ width: '38%', verticalAlign: 'top' }}>
-                  <strong>{purpose.label}</strong>
-                  <br />
-                  <span style={{ color: 'var(--agi-ink-quiet)', fontSize: 13 }}>
-                    {purpose.description}
-                  </span>
-                </td>
-                <td style={{ width: '26%', verticalAlign: 'top' }}>
-                  {record === undefined ? (
-                    <>
-                      Never asked.
-                      <br />
-                      <span style={{ color: 'var(--agi-ink-quiet)', fontSize: 13 }}>
-                        No decision is on record, which is not the same as a refusal.
-                      </span>
-                    </>
-                  ) : (
-                    <>
-                      {record.granted ? 'Consent given' : 'Withdrawn'} on{' '}
-                      {formatInstant(record.recordedAt)}.
-                      <br />
-                      <span style={{ color: 'var(--agi-ink-quiet)', fontSize: 13 }}>
-                        Against notice revision {record.noticeVersion}.
-                      </span>
-                    </>
-                  )}
-                </td>
-                <td style={{ verticalAlign: 'top' }}>
-                  <button
-                    type="button"
-                    className="agi-cta-ghost"
-                    disabled={isPending}
-                    onClick={() => void decide(purpose.id, !record?.granted, data.noticeVersion)}
-                  >
-                    {isPending
-                      ? 'Recording…'
-                      : record?.granted
-                        ? 'Withdraw consent'
-                        : 'Give consent'}
-                  </button>
-                </td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
+      <Ledger caption="Consent recorded against your account" rows={rows} />
       {notice ? (
         <p className="agi-ds-prose" data-size="sm" role="status" aria-live="polite">
           {notice}

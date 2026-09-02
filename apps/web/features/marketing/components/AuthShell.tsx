@@ -39,17 +39,19 @@ export function AuthShell({
   if (embedded) {
     return (
       <div data-design="agi">
-        <main className="agi-auth-embedded-shell" data-testid="desktop-auth-shell">
-          <section className="agi-auth-embedded-frame" aria-label="AGI Desktop Cloud sign-in">
-            <header className="agi-auth-embedded-header">
-              <div className="agi-auth-embedded-brand">
+        <main className="agi-ds-auth-embedded-shell" data-testid="desktop-auth-shell">
+          <section className="agi-ds-auth-embedded-frame" aria-label="AGI Desktop Cloud sign-in">
+            <header className="agi-ds-auth-embedded-header">
+              <div className="agi-ds-auth-embedded-brand">
                 <AgiMark size={26} />
                 <span>AGI Desktop</span>
               </div>
-              <span className="agi-auth-secure-badge">Secure Cloud sign-in</span>
+              <span className="agi-ds-auth-secure-badge">Secure Cloud sign-in</span>
             </header>
-            <div className="agi-auth-card">{children}</div>
-            <p className="agi-auth-embedded-note">Local Mode stays available without an account.</p>
+            <div className="agi-ds-auth-card">{children}</div>
+            <p className="agi-ds-auth-embedded-note">
+              Local Mode stays available without an account.
+            </p>
           </section>
         </main>
       </div>
@@ -57,26 +59,28 @@ export function AuthShell({
   }
 
   return (
-    <div data-design="agi">
-      <main className="agi-shell">
-        <Header minimal />
-        <section className="agi-auth-page agi-auth-split">
-          <div className="agi-auth-card">{children}</div>
-          <aside className="agi-auth-brand" aria-label="Why AGI">
-            <h2 className="agi-auth-title">{title}</h2>
-            <p className="agi-auth-lede">{lede}</p>
-            <ul className="agi-auth-points">
-              {points.map((point) => (
-                <li key={point}>{point}</li>
-              ))}
-            </ul>
-            <div className="agi-auth-continuity">
-              <Eyebrow>What this account gives you today</Eyebrow>
+    <div data-design="agi" className="agi-ds-page">
+      <Header minimal />
+      <section className="agi-ds-auth-split">
+        <div className="agi-ds-auth-card">{children}</div>
+        <aside className="agi-ds-auth-brand" aria-label="Why AGI">
+          <h2 className="agi-ds-h2">{title}</h2>
+          <p className="agi-ds-prose" data-size="lg" style={{ marginTop: 14 }}>
+            {lede}
+          </p>
+          <ul className="agi-ds-auth-points" style={{ marginTop: 22 }}>
+            {points.map((point) => (
+              <li key={point}>{point}</li>
+            ))}
+          </ul>
+          <div className="agi-ds-card p-5" style={{ width: 'min(100%, 31rem)', marginTop: 28 }}>
+            <Eyebrow>What this account gives you today</Eyebrow>
+            <div style={{ marginTop: 12 }}>
               <Ledger rows={ACCOUNT_LEDGER} caption="Surface availability" />
             </div>
-          </aside>
-        </section>
-      </main>
+          </div>
+        </aside>
+      </section>
     </div>
   );
 }
