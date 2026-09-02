@@ -8,11 +8,20 @@ import { KEYBOARD_SHORTCUT_DOCS } from '../hooks/use-keyboard-shortcuts';
 const CHAT_DIR = path.resolve(__dirname, '..');
 const read = (relative: string) => readFileSync(path.join(CHAT_DIR, relative), 'utf8');
 
-const WEB_CHAT_PAGE = read('pages/WebChatPage.tsx');
+// The keyboard-shortcuts item lives in the shared AccountMenuItems component
+// (apps/web/shared/components/layout/AccountMenuItems.tsx), not on this page
+// directly — WebChatPage's and WebAppShell's account menus both render it
+// from there so the two cannot drift into different menus.
+const ACCOUNT_MENU_ITEMS = readFileSync(
+  path.resolve(CHAT_DIR, '../../shared/components/layout/AccountMenuItems.tsx'),
+  'utf8',
+);
 const SHORTCUTS_HOOK = read('hooks/use-keyboard-shortcuts.ts');
 
 function accountMenuShortcutHint(): string {
-  const item = WEB_CHAT_PAGE.slice(WEB_CHAT_PAGE.indexOf("t('common:navKeyboardShortcuts')"));
+  const item = ACCOUNT_MENU_ITEMS.slice(
+    ACCOUNT_MENU_ITEMS.indexOf("t('common:navKeyboardShortcuts')"),
+  );
   const hint = /<span[^>]*>\{?([^<}]+)\}?<\/span>/.exec(item.slice(0, 400));
   expect(hint, 'account menu shortcut hint not found').not.toBeNull();
   return hint![1]!.trim();
