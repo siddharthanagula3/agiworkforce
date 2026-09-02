@@ -1,4 +1,7 @@
+import { SURFACE_STATUS } from '@/lib/marketing-constants';
+
 export const WEB_ENTRY_HREF = '/login?redirectTo=%2F';
+export const CHAT_ROOT_HREF = '/chat';
 
 export const HEADER_LINKS = [
   { href: '/features', label: 'Product' },
@@ -22,12 +25,12 @@ export const FOOTER_COLUMNS = [
   {
     title: 'Surfaces',
     links: [
-      { href: '/apps', label: 'Web' },
-      { href: '/cli', label: 'CLI' },
-      { href: '/desktop', label: 'Desktop' },
-      { href: '/vscode-extension', label: 'VS Code' },
-      { href: '/chrome-extension', label: 'Chrome' },
-      { href: '/mobile', label: 'Mobile' },
+      { href: '/apps', label: 'Web', status: SURFACE_STATUS.web },
+      { href: '/cli', label: 'CLI', status: SURFACE_STATUS.cli },
+      { href: '/desktop', label: 'Desktop', status: SURFACE_STATUS.desktop },
+      { href: '/vscode-extension', label: 'VS Code', status: SURFACE_STATUS.vscode },
+      { href: '/chrome-extension', label: 'Chrome', status: SURFACE_STATUS.chrome },
+      { href: '/mobile', label: 'Mobile', status: SURFACE_STATUS.mobile },
       { href: '/download', label: 'Release status' },
     ],
   },
