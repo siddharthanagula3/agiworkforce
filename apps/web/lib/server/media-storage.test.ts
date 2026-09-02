@@ -65,6 +65,7 @@ import {
   readStoredMedia,
   streamStoredMedia,
   deleteStoredMedia,
+  sealedChatAttachmentPathname,
 } from './media-storage';
 
 describe('bytesFromBase64', () => {
@@ -363,6 +364,57 @@ describe('storeMedia', () => {
     await deleteStoredMedia(pathname);
     expect(deletePrivateObject).toHaveBeenCalledWith(pathname);
     expect(deleteObject).toHaveBeenCalledWith(pathname);
+  });
+
+  /**
+   * The suite above used the presigned key. The upload route stores the sealed
+   * one, and nothing exercised that shape - so a guard that accepted a single
+   * extension shipped against keys that carry two, and every completed
+   * attachment became unreadable while its bytes sat in the bucket.
+   */
+  it('reads the sealed pathname the upload route actually stores', async () => {
+    const pathname = sealedChatAttachmentPathname(
+      'chat-attachments/user-abc/1700000000000_abcdefghijklm.png',
+    );
+    expect(pathname).toBe('chat-attachments/user-abc/1700000000000_abcdefghijklm.png.scanned');
+    getPrivateObject.mockResolvedValueOnce({
+      data: Buffer.from('sealed attachment'),
+      contentType: 'image/png',
+    });
+
+    await expect(readStoredMedia(pathname)).resolves.toEqual({
+      data: Buffer.from('sealed attachment'),
+      contentType: 'image/png',
+    });
+    expect(getPrivateObject).toHaveBeenCalledWith(pathname);
+
+    getPrivateObjectStream.mockResolvedValueOnce({
+      body: new ReadableStream<Uint8Array>(),
+      contentType: 'image/png',
+      contentLength: 17,
+    });
+    await expect(streamStoredMedia(pathname)).resolves.toMatchObject({ contentLength: 17 });
+
+    await deleteStoredMedia(pathname);
+    expect(deletePrivateObject).toHaveBeenCalledWith(pathname);
+  });
+
+  it('still refuses a chat-attachment pathname that is not one the upload route minted', async () => {
+    for (const pathname of [
+      'chat-attachments/user-abc/1700000000000_abcdefghijklm.png.scanned.scanned',
+      'chat-attachments/user-abc/1700000000000_abcdefghijklm.png.evil',
+      'chat-attachments/user-abc/../../private-media/file/secret.pdf.scanned',
+      'chat-attachments/user-abc/notatimestamp.png.scanned',
+      'chat-attachments/.scanned',
+    ]) {
+      await expect(readStoredMedia(pathname)).resolves.toBeNull();
+      await expect(deleteStoredMedia(pathname)).rejects.toThrow(
+        'Invalid private chat-attachment storage path.',
+      );
+    }
+    expect(getPrivateObject).not.toHaveBeenCalled();
+    expect(getObject).not.toHaveBeenCalled();
+    expect(deletePrivateObject).not.toHaveBeenCalled();
   });
 
   it('reads, ranges, and deletes generated images and files only through the private bucket', async () => {

@@ -31,6 +31,18 @@ const PRIVATE_IMAGE_PREFIX = `${PRIVATE_MEDIA_PREFIX}image/`;
 const PRIVATE_VIDEO_PREFIX = 'private-media/video/';
 const PRIVATE_FILE_PREFIX = `${PRIVATE_MEDIA_PREFIX}file/`;
 const PRIVATE_CHAT_ATTACHMENT_PREFIX = 'chat-attachments/';
+const SEALED_CHAT_ATTACHMENT_SUFFIX = '.scanned';
+
+/**
+ * Where an attachment's bytes live once they have passed inspection. The
+ * presigned PUT that wrote the upload stays valid for minutes afterwards, so
+ * the scanned bytes are copied to a key no presign covers before anything can
+ * serve them. Every reader of a completed attachment resolves this shape, so
+ * the suffix is owned here rather than rebuilt at the upload route.
+ */
+export function sealedChatAttachmentPathname(storageKey: string): string {
+  return `${storageKey}${SEALED_CHAT_ATTACHMENT_SUFFIX}`;
+}
 
 function isLocalDevelopmentMediaStorageEnabled(): boolean {
   return process.env['NODE_ENV'] === 'development';
@@ -138,8 +150,19 @@ function isPrivateGeneratedMediaPathname(pathname: string): boolean {
   return /^private-media\/(?:image|file)\/[a-f0-9]{32}\/[0-9a-f-]{36}\.[a-z0-9]+$/i.test(pathname);
 }
 
+/**
+ * Sealing appends a second extension, and this guard once accepted only one.
+ * Every completed attachment therefore stored a pathname its own reader
+ * rejected: reads returned null, `/api/files/[id]` answered 404, and chat
+ * reported bytes as missing while they sat in the bucket. Strip the suffix
+ * before matching rather than widening the shape, so the accepted key space
+ * stays exactly the presigned one plus its sealed twin.
+ */
 function isPrivateChatAttachmentPathname(pathname: string): boolean {
-  return /^chat-attachments\/[A-Za-z0-9_-]+\/[0-9]+_[A-Za-z0-9_-]+\.[a-z0-9]+$/i.test(pathname);
+  const unsealed = pathname.endsWith(SEALED_CHAT_ATTACHMENT_SUFFIX)
+    ? pathname.slice(0, -SEALED_CHAT_ATTACHMENT_SUFFIX.length)
+    : pathname;
+  return /^chat-attachments\/[A-Za-z0-9_-]+\/[0-9]+_[A-Za-z0-9_-]+\.[a-z0-9]+$/i.test(unsealed);
 }
 
 export function bytesFromBase64(b64: string): Buffer {
