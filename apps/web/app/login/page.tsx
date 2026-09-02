@@ -2,7 +2,6 @@ import { SignIn } from '@clerk/nextjs';
 import { AuthShell } from '@/features/marketing/components/AuthShell';
 import { getSafeRedirectUrl } from '../../lib/safe-redirect';
 import { agiClerkAppearance } from '../auth/clerkAppearance';
-import { SURFACE_STATUS } from '@/lib/marketing-constants';
 
 const getAppUrl = () => process.env['NEXT_PUBLIC_APP_URL'] ?? 'https://agiworkforce.com';
 
@@ -33,16 +32,7 @@ export default async function LoginPage({
   }${authRetry ? '&authRetry=1' : ''}`;
 
   return (
-    <AuthShell
-      embedded={isDesktopSurface}
-      title="Welcome back."
-      lede="Sign in to pick up your chats, projects, and artifacts. Managed cloud is open by default, so you can start right away."
-      points={[
-        `One account across Web and CLI: ${SURFACE_STATUS.web.toLowerCase()} on both`,
-        'Local Mode never requires an account',
-        'Your route is visible before work leaves a device',
-      ]}
-    >
+    <AuthShell embedded={isDesktopSurface}>
       {/*
         No clickwrap here: terms are accepted at SIGNUP (founder decision,
         2026-08-17). Sign-in cannot know who is signing in, so gating it asked
