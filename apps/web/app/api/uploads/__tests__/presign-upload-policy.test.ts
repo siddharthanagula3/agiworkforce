@@ -56,7 +56,11 @@ type PresignBody = {
 };
 
 function presignRequest(body: PresignBody): NextRequest {
-  return new NextRequest('http://localhost/api/uploads/presign', {
+  // http://localhost:3000 is the one non-production origin the R2 CORS
+  // policy allowlists (see scripts/r2-apply-cors.mjs); any other origin now
+  // gets routed through the same-origin chat-attachment upload proxy instead
+  // of a direct presigned URL.
+  return new NextRequest('http://localhost:3000/api/uploads/presign', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
