@@ -462,6 +462,9 @@ async function dispatchChatCompletions(
         ...getSecurityHeaders(),
       };
       addAgentRunHeaders(researchHeaders, run);
+      if (processed.chatRequest.model) {
+        researchHeaders['X-AGI-Resolved-Model'] = processed.chatRequest.model;
+      }
       if (processed.quotaWarningHeader) {
         researchHeaders['X-Quota-Warning'] = processed.quotaWarningHeader;
       }

@@ -365,6 +365,9 @@ async function handleToolApproval(request: NextRequest) {
     streamHeaders['X-AGI-Workflow-Run-Id'] = turn.workflowRunId;
   }
   streamHeaders['X-AGI-Agent-Transport'] = turn.transport;
+  if (processed.chatRequest.model) {
+    streamHeaders['X-AGI-Resolved-Model'] = processed.chatRequest.model;
+  }
   if (processed.quotaWarningHeader) {
     streamHeaders['X-Quota-Warning'] = processed.quotaWarningHeader;
   }
