@@ -6,6 +6,22 @@ import { Prose, Section, Stack } from '@/features/marketing/components/system';
 import { PageHero } from '@/features/marketing/components/pages/surfaces/shared';
 import { LinkGrid } from '@/features/marketing/components/pages/features/shared';
 import { PublicWaitlistForm } from '@/features/marketing/components/PublicWaitlistForm';
+import { COMING_SOON_LABEL, SURFACE_STATUS } from '@/lib/marketing-constants';
+
+const BYOK_RELEASE_SURFACES = [
+  { id: 'desktop', label: 'Desktop' },
+  { id: 'cli', label: 'CLI' },
+  { id: 'vscode', label: 'VS Code' },
+] as const;
+
+const BYOK_RELEASE_LABEL = new Intl.ListFormat('en', {
+  style: 'long',
+  type: 'conjunction',
+}).format(
+  BYOK_RELEASE_SURFACES.filter((surface) => SURFACE_STATUS[surface.id] !== COMING_SOON_LABEL).map(
+    (surface) => surface.label,
+  ),
+);
 
 export const metadata = buildMetadata({
   title: 'AGI Cloud is open: enterprise governance early access',
@@ -30,7 +46,7 @@ const WHILE_YOU_WAIT = [
   {
     meta: 'BYOK',
     title: 'Bring your own keys',
-    body: 'Use your provider accounts on supported Desktop, CLI, and VS Code releases with visible labels.',
+    body: `Use your provider accounts on supported ${BYOK_RELEASE_LABEL} releases with visible labels.`,
     href: '/byok',
   },
   {
