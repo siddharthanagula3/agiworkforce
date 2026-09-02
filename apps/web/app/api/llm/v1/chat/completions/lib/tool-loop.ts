@@ -320,7 +320,7 @@ export interface ToolLoopProviderStepResult {
     line: string;
     publicTextDelta?: string;
     serverToolStart?: ServerToolStartSignal;
-    serverToolResult?: ServerToolResultSignal;
+    serverToolResults?: ServerToolResultSignal[];
   }>;
   finishReason: string | null;
   pendingToolCalls: PendingToolCall[];
@@ -1041,7 +1041,7 @@ export async function collectProviderStream(stream: ReadableStream): Promise<{
     line: SseLine;
     publicTextDelta?: string;
     serverToolStart?: ServerToolStartSignal;
-    serverToolResult?: ServerToolResultSignal;
+    serverToolResults?: ServerToolResultSignal[];
   }>;
   finishReason: string | null;
   pendingToolCalls: PendingToolCall[];
@@ -1055,7 +1055,7 @@ export async function collectProviderStream(stream: ReadableStream): Promise<{
     line: SseLine;
     publicTextDelta?: string;
     serverToolStart?: ServerToolStartSignal;
-    serverToolResult?: ServerToolResultSignal;
+    serverToolResults?: ServerToolResultSignal[];
   }> = [];
   const publicTextProjector = createPublicTextDeltaProjector();
   let buffer = '';
@@ -1123,24 +1123,23 @@ export async function collectProviderStream(stream: ReadableStream): Promise<{
           }
         }
 
-        let serverToolResult: ServerToolResultSignal | undefined;
+        let serverToolResults: ServerToolResultSignal[] | undefined;
         const searchResultsDelta = event?.choices?.[0]?.delta?.x_search_results;
         const searchResultsContent = (searchResultsDelta as Record<string, unknown> | undefined)?.[
           'content'
         ];
         if (Array.isArray(searchResultsContent) && pendingServerWebSearchTools.length > 0) {
-          const pending = pendingServerWebSearchTools.shift();
-          if (pending) {
-            serverToolResult = {
-              toolCallId: pending.toolCallId,
-              name: pending.name,
-              sources: serverToolResultSources(searchResultsContent),
-              elapsedMs: Math.max(0, Date.now() - pending.startedAt),
-            };
-          }
+          const now = Date.now();
+          const sources = serverToolResultSources(searchResultsContent);
+          serverToolResults = pendingServerWebSearchTools.splice(0).map((pending) => ({
+            toolCallId: pending.toolCallId,
+            name: pending.name,
+            sources,
+            elapsedMs: Math.max(0, now - pending.startedAt),
+          }));
         }
 
-        lines.push({ line: raw + '\n', publicTextDelta, serverToolStart, serverToolResult });
+        lines.push({ line: raw + '\n', publicTextDelta, serverToolStart, serverToolResults });
 
         const toolCallDeltas: unknown[] | undefined = event?.choices?.[0]?.delta?.tool_calls;
         if (Array.isArray(toolCallDeltas)) {
@@ -2745,22 +2744,22 @@ export async function* runToolLoop(
             }),
           );
         }
-        if (entry.serverToolResult) {
+        for (const result of entry.serverToolResults ?? []) {
           yield encoder.encode(
             eventStream.emit({
               type: 'source-list',
-              toolCallId: entry.serverToolResult.toolCallId,
-              sources: entry.serverToolResult.sources,
+              toolCallId: result.toolCallId,
+              sources: result.sources,
             }),
           );
           yield encoder.encode(
             eventStream.emit({
               type: 'tool-execution-end',
-              toolCallId: entry.serverToolResult.toolCallId,
-              name: entry.serverToolResult.name,
-              output: toAgentEventJson(entry.serverToolResult.sources),
+              toolCallId: result.toolCallId,
+              name: result.name,
+              output: toAgentEventJson(result.sources),
               isError: false,
-              elapsedMs: entry.serverToolResult.elapsedMs,
+              elapsedMs: result.elapsedMs,
             }),
           );
         }
