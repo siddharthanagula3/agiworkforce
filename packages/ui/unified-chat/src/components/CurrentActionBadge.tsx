@@ -95,43 +95,43 @@ function getColorClasses(type: ActionTrailEntryType) {
       return {
         bg: 'bg-purple-500/10',
         border: 'border-purple-500/30',
-        text: 'text-purple-400',
-        icon: 'text-purple-400',
+        text: 'text-purple-700 dark:text-purple-400',
+        icon: 'text-purple-700 dark:text-purple-400',
       };
     case 'searching':
       return {
         bg: 'bg-teal-500/10',
         border: 'border-teal-500/30',
-        text: 'text-teal-400',
-        icon: 'text-teal-400',
+        text: 'text-teal-700 dark:text-teal-400',
+        icon: 'text-teal-700 dark:text-teal-400',
       };
     case 'coding':
       return {
         bg: 'bg-blue-500/10',
         border: 'border-blue-500/30',
-        text: 'text-blue-400',
-        icon: 'text-blue-400',
+        text: 'text-blue-700 dark:text-blue-400',
+        icon: 'text-blue-700 dark:text-blue-400',
       };
     case 'running':
       return {
         bg: 'bg-amber-500/10',
         border: 'border-amber-500/30',
-        text: 'text-amber-400',
-        icon: 'text-amber-400',
+        text: 'text-amber-700 dark:text-amber-400',
+        icon: 'text-amber-700 dark:text-amber-400',
       };
     case 'completed':
       return {
         bg: 'bg-emerald-500/10',
         border: 'border-emerald-500/30',
-        text: 'text-emerald-400',
-        icon: 'text-emerald-400',
+        text: 'text-emerald-700 dark:text-emerald-400',
+        icon: 'text-emerald-700 dark:text-emerald-400',
       };
     case 'error':
       return {
         bg: 'bg-rose-500/10',
         border: 'border-rose-500/30',
-        text: 'text-rose-400',
-        icon: 'text-rose-400',
+        text: 'text-rose-700 dark:text-rose-400',
+        icon: 'text-rose-700 dark:text-rose-400',
       };
     default:
       return {
@@ -224,7 +224,7 @@ export function CurrentActionStack({ className }: CurrentActionBadgeProps) {
   if (activeActions.length === 0) return null;
 
   return (
-    <div className={cn('flex flex-col gap-1.5', className)}>
+    <div className={cn('flex flex-col gap-1.5', className)} role="status" aria-live="polite">
       <AnimatePresence mode="popLayout">
         {activeActions.slice(0, 5).map((action) => {
           const colors = getColorClasses(action.type);
