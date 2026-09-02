@@ -1231,6 +1231,7 @@ const MessageBubbleComponent = function MessageBubble({
    */
   const producedNoVisibleOutput = useMemo(() => {
     if (isUser || message.isStreaming) return false;
+    if (message.metadata?.finishReason === 'stopped') return false;
     if (hasStreamError({ metadata: message.metadata })) return false;
     // The persisted "no text" placeholder is a zero-width space, not "". Written
     // as escapes: the literal characters are invisible in review and in a diff,
