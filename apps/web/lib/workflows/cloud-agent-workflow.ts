@@ -25,6 +25,7 @@ import {
 import { createCloudAgentEventJournal } from '@/lib/services/cloud-agent-event-journal';
 import { logger } from '@/lib/logger';
 import { getNeonDb } from '@/lib/server/neon-db';
+import { createClaimedUserScopedDb } from '@/lib/server/claimed-user-scope-db';
 import { executeCloudAgentOperation } from './cloud-agent-operation-executor';
 import {
   cloudAgentWorkflowBillingKey,
@@ -186,11 +187,15 @@ export async function executeCloudAgentWorkflowInvocation(
 
   const input = parseCloudAgentWorkflowInput(rawInput);
   const db = getNeonDb();
+  const managedUsageDb = createClaimedUserScopedDb(db, {
+    userId: input.userId,
+    organizationId: input.processed.organizationId ?? null,
+  });
   // Rehydrate onto the side the discriminant names. A free-trial turn must come
   // back as `processed.freeTrial` so the tool loop applies the free output cap
   // rather than the managed per-step reservation -- durable is a transport
   // choice, not a licence to skip the tier's budget.
-  const processed = rehydrateCloudAgentWorkflowRequest(input, db);
+  const processed = rehydrateCloudAgentWorkflowRequest(input, managedUsageDb);
   const billingLedgerKey = cloudAgentWorkflowBillingKey(input.billing);
   const connectorExecutor = input.mcpTools.some((tool) => tool.origin === 'connector')
     ? makeUserConnectorExecutor(input.userId, input.processed.organizationId ?? null)
