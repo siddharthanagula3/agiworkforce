@@ -1,4 +1,6 @@
 [data-design='agi'] .agi-ds-compare-table-wrap {
+  max-width: 100%;
+  min-width: 0;
   overflow-x: auto;
 }
 
