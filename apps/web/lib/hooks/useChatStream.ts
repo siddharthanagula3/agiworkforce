@@ -170,7 +170,10 @@ export interface UseChatStreamReturn {
   sendMessage: (content: string, options?: SendMessageOptions) => Promise<boolean>;
   stopGeneration: (conversationId?: string) => void;
   continueGeneration: (assistantMessageId: string) => Promise<void>;
-  resumeInteractiveCardTurn: (assistantMessageId: string) => Promise<void>;
+  resumeInteractiveCardTurn: (
+    assistantMessageId: string,
+    options?: { force?: boolean },
+  ) => Promise<void>;
   resolveToolApproval: (
     assistantMessageId: string,
     toolCallId: string,
@@ -848,6 +851,7 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
     ctx.assistantMessageId,
   )?.metadata;
   const seedMetadata = ctx.seedContent !== undefined ? liveMessageMetadata : undefined;
+  const interactiveCardsResumed = seedMetadata?.interactiveCardsResumed;
   let currentSearchResults: MessageMetadata['searchResults'] = seedMetadata?.searchResults;
   let currentCodeExecutionResult: MessageMetadata['codeExecutionResult'] =
     seedMetadata?.codeExecutionResult;
@@ -1122,6 +1126,9 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
     }
     if (interactiveCards.size > 0) {
       metadata.interactiveCards = [...interactiveCards.values()];
+    }
+    if (interactiveCardsResumed) {
+      metadata.interactiveCardsResumed = true;
     }
     if (finishReason) {
       metadata.finishReason = finishReason;
@@ -1574,7 +1581,7 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
 
           const toolStatus = parsed.choices?.[0]?.delta?.x_tool_status;
           if (toolStatus?.type === 'server_tool_use') {
-            startTool(toolStatus.name, toolStatus.status);
+            startTool(toolStatus.name, undefined, toolStatus.status_phrase);
           }
           if (toolStatus?.type === 'mcp_tool_use') {
             if (toolStatus.status === 'running') {
@@ -2530,13 +2537,13 @@ export function useChatStream(): UseChatStreamReturn {
   );
 
   const resumeInteractiveCardTurn = useCallback(
-    async (assistantMessageId: string): Promise<void> => {
+    async (assistantMessageId: string, options: { force?: boolean } = {}): Promise<void> => {
       const store = useChatStore.getState();
       const conversationId = store.activeConversationId;
       if (!conversationId) return;
       const message = findConversationMessage(conversationId, assistantMessageId);
       if (!message || !hasResumableInteractiveCard(message)) return;
-      if (message.metadata?.interactiveCardsResumed) return;
+      if (message.metadata?.interactiveCardsResumed && !options.force) return;
 
       const nextMetadata: MessageMetadata = { ...message.metadata, interactiveCardsResumed: true };
       updateMessage(assistantMessageId, { metadata: nextMetadata }, conversationId);

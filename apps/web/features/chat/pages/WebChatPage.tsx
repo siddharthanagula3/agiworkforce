@@ -5,7 +5,8 @@ import { retryableUserMessageId } from '@/features/chat/lib/retryable-turn';
 import { useTranslation } from 'react-i18next';
 import { useAuth, useClerk, useUser } from '@clerk/nextjs';
 import { useRouter, useParams, useSearchParams, usePathname } from 'next/navigation';
-import { ToolApprovalProvider } from '@/lib/hooks/useChatStream';
+import { ToolApprovalProvider, InteractiveCardResumeProvider } from '@/lib/hooks/useChatStream';
+import { interactiveCardNeedsResume } from '@/app/api/interactive-cards/response-contract';
 import { useChatStreamRuntime } from '../components/ChatStreamRuntimeProvider';
 import { useConversations } from '@/lib/hooks/useConversations';
 import {
@@ -1099,8 +1100,13 @@ export default function WebChatPage() {
     [displayedConversationId, imageTranscriptRecoveries],
   );
   // Streaming send + store state
-  const { sendMessage, stopGeneration, continueGeneration, resolveToolApproval } =
-    useChatStreamRuntime();
+  const {
+    sendMessage,
+    stopGeneration,
+    continueGeneration,
+    resumeInteractiveCardTurn,
+    resolveToolApproval,
+  } = useChatStreamRuntime();
   const isStreaming = useChatStore(selectIsConversationStreaming(displayedConversationId));
   const isLoading = useChatStore(selectIsConversationLoading(displayedConversationId));
 
@@ -4062,10 +4068,31 @@ export default function WebChatPage() {
     [displayedMessages, isStreaming],
   );
 
+  const retryableCardResumeMessageId = useMemo(() => {
+    const last = displayedMessages[displayedMessages.length - 1];
+    if (
+      !isStreaming &&
+      last?.role === 'assistant' &&
+      last.error &&
+      last.metadata?.interactiveCards?.some(interactiveCardNeedsResume)
+    ) {
+      return last.id;
+    }
+    return null;
+  }, [displayedMessages, isStreaming]);
+
   const handleRegenerateMessage = useCallback(
     async (id: string) => {
       if (!displayedConversationId || isStreaming) return;
       const targetMsg = displayedMessages.find((m) => m.id === id);
+      if (
+        targetMsg?.role === 'assistant' &&
+        targetMsg.error &&
+        targetMsg.metadata?.interactiveCards?.some(interactiveCardNeedsResume)
+      ) {
+        await resumeInteractiveCardTurn(id, { force: true });
+        return;
+      }
       // A dropped turn leaves the user message trailing with no assistant reply
       // to regenerate. Retry resends that user turn: roll back from it inclusive
       // so the resend replaces it rather than duplicating it.
@@ -4161,6 +4188,7 @@ export default function WebChatPage() {
       handleOpenUpgradeDialog,
       setChatError,
       variantsEnabled,
+      resumeInteractiveCardTurn,
     ],
   );
 
@@ -4931,12 +4959,14 @@ export default function WebChatPage() {
               <span className="min-w-0 flex-1 break-words font-medium text-red-800 dark:text-red-100">
                 {chatError}
               </span>
-              {retryableTurnId && (
+              {(retryableTurnId || retryableCardResumeMessageId) && (
                 <button
                   type="button"
                   onClick={() => {
                     setChatError(null);
-                    void handleRegenerateMessage(retryableTurnId);
+                    void handleRegenerateMessage(
+                      (retryableTurnId ?? retryableCardResumeMessageId)!,
+                    );
                   }}
                   className="shrink-0 rounded-md border border-destructive/40 px-2 py-1 text-xs font-semibold text-danger transition-colors hover:bg-destructive/5"
                 >
@@ -5046,39 +5076,41 @@ export default function WebChatPage() {
                       page owns the guards and the replacing resend; the bubble
                       only owns whether its own editor is open. */}
                   <MessageInlineEditProvider value={messageInlineEdit}>
-                    <ChatMessageList
-                      messages={chatMessages}
-                      currentTier={currentTier}
-                      conversationId={displayedConversationId}
-                      isLoading={isLoading && !isStreaming}
-                      isUserTyping={isUserTyping}
-                      onRegenerate={handleRegenerateMessage}
-                      onRetryResearch={handleRetryResearch}
-                      onResearchPlanDecision={handleResearchPlanDecision}
-                      retryingResearchMessageId={retryingResearchMessageId}
-                      onContinue={handleContinueMessage}
-                      onEdit={handleEditMessage}
-                      onDelete={handleDeleteMessage}
-                      onDeleteVariant={handleDeleteVariant}
-                      countVariantFollowers={countVariantFollowers}
-                      onReact={handleReactMessage}
-                      onPin={handlePinMessage}
-                      branchGroupsByMessageId={branchGroupsByMessageId}
-                      branchingMessageId={branchingMessageId}
-                      onBranch={createBranch}
-                      onSwitchBranch={switchBranch}
-                      variantInfoByMessageId={variantInfoByMessageId}
-                      onSelectVariant={handleSelectVariant}
-                      activeLeafId={activeLeafId}
-                      variantAnchorMessageId={variantAnchorMessageId}
-                      isConversationStreaming={isStreaming}
-                      onRegenerateImage={handleRegenerateImageInPlace}
-                      onResumeVideo={handleResumeVideo}
-                      onRetryVideo={handleRetryVideo}
-                      onSendMessage={setComposerPrefill}
-                      onPaywallUpgrade={handlePaywallRecovery}
-                      onPaywallDismiss={handlePaywallDismiss}
-                    />
+                    <InteractiveCardResumeProvider value={resumeInteractiveCardTurn}>
+                      <ChatMessageList
+                        messages={chatMessages}
+                        currentTier={currentTier}
+                        conversationId={displayedConversationId}
+                        isLoading={isLoading && !isStreaming}
+                        isUserTyping={isUserTyping}
+                        onRegenerate={handleRegenerateMessage}
+                        onRetryResearch={handleRetryResearch}
+                        onResearchPlanDecision={handleResearchPlanDecision}
+                        retryingResearchMessageId={retryingResearchMessageId}
+                        onContinue={handleContinueMessage}
+                        onEdit={handleEditMessage}
+                        onDelete={handleDeleteMessage}
+                        onDeleteVariant={handleDeleteVariant}
+                        countVariantFollowers={countVariantFollowers}
+                        onReact={handleReactMessage}
+                        onPin={handlePinMessage}
+                        branchGroupsByMessageId={branchGroupsByMessageId}
+                        branchingMessageId={branchingMessageId}
+                        onBranch={createBranch}
+                        onSwitchBranch={switchBranch}
+                        variantInfoByMessageId={variantInfoByMessageId}
+                        onSelectVariant={handleSelectVariant}
+                        activeLeafId={activeLeafId}
+                        variantAnchorMessageId={variantAnchorMessageId}
+                        isConversationStreaming={isStreaming}
+                        onRegenerateImage={handleRegenerateImageInPlace}
+                        onResumeVideo={handleResumeVideo}
+                        onRetryVideo={handleRetryVideo}
+                        onSendMessage={setComposerPrefill}
+                        onPaywallUpgrade={handlePaywallRecovery}
+                        onPaywallDismiss={handlePaywallDismiss}
+                      />
+                    </InteractiveCardResumeProvider>
                   </MessageInlineEditProvider>
                 </ToolApprovalProvider>
               </div>

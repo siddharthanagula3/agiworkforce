@@ -77,3 +77,10 @@ export function interactiveCardAcceptsResponse(
   const deadlineMs = interactiveCardResponseDeadlineMs(card);
   return deadlineMs !== null && deadlineMs > nowMs;
 }
+
+export function interactiveCardNeedsResume(
+  card: InteractiveCard,
+): card is RespondableInteractiveCard {
+  if (!card.recognized || card.kind !== RESPONDABLE_INTERACTIVE_CARD_KIND) return false;
+  return card.body.state.status === 'answered';
+}
