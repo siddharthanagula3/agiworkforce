@@ -138,6 +138,11 @@ export {
   type StreamingMarkdownContentProps,
 } from './components/markdown/StreamingMarkdownContent';
 export { MARKDOWN_SANITIZE_SCHEMA } from './components/markdown/markdownSanitizeSchema';
+export {
+  MermaidDiagram,
+  type MermaidDiagramProps,
+  type MermaidRenderResult,
+} from './components/markdown/MermaidDiagram';
 export { preprocessMath } from './components/markdown/preprocessMath';
 export { CitationChip, type MarkdownCitation } from './components/markdown/CitationChip';
 

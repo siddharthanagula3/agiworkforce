@@ -40,6 +40,7 @@ import {
   ChartArtifact,
   GeneratedFileCard,
   MarkdownContent,
+  MermaidDiagram,
   SpreadsheetArtifact,
   PresentationArtifact,
   EmailArtifact,
@@ -214,6 +215,7 @@ export function ArtifactPreview({
   // so one artifact's link can never be shown under another's title.
   const [isPublishing, setIsPublishing] = useState(false);
   const [publishedUrl, setPublishedUrl] = useState<string | null>(null);
+  const [mermaidSvg, setMermaidSvg] = useState<string | null>(null);
 
   // Version navigation (panel-only, view-only). null = show latest.
   const versionCount = versionHistory?.length ?? 0;
@@ -464,6 +466,7 @@ export function ArtifactPreview({
     // CAP-015: a published URL belongs to one artifact id. Leaving it up after
     // a swap would offer the previous artifact's public link under this title.
     setPublishedUrl(null);
+    setMermaidSvg(null);
   }, [artifact.id, versionCount]);
 
   /**
@@ -492,17 +495,15 @@ export function ArtifactPreview({
 
   // AUDIT-FIX ART-6 / ART-14: the security banner is DERIVED, never latched,
   // and it now states what actually happened per renderer:
-  //   - svg      → sanitizeSVG() really does strip tags/attrs → "removed".
-  //   - mermaid  → the diagram source is HTML-escaped before it reaches the
-  //                sandbox document, so markup is inert but nothing was
-  //                deleted → "shown as text".
+  //   - svg / mermaid → both render through sanitizeSvg-family stripping of
+  //                the SVG markup before it reaches the DOM → "removed".
   //   - html/react → scripts are INTENTIONALLY executed inside the null-origin
   //                sandbox; claiming a mitigation there would be a lie.
   //   - code/document → rendered as React text nodes; no claim to make.
   const securityNotice = useMemo<'sanitized' | 'escaped' | null>(() => {
     if (artifact.type !== 'svg' && artifact.type !== 'mermaid') return null;
     if (!hasXSSRisk(activeContent)) return null;
-    return artifact.type === 'svg' ? 'sanitized' : 'escaped';
+    return 'sanitized';
   }, [artifact.type, activeContent]);
 
   const getPreviewHTML = useCallback((): string => {
@@ -934,7 +935,8 @@ if (__AgiApp) {
     }
   };
 
-  const canPreview = ['html', 'react', 'svg', 'mermaid'].includes(artifact.type);
+  const canPreview = ['html', 'react', 'svg'].includes(artifact.type);
+  const isMermaid = artifact.type === 'mermaid';
 
   /**
    * A Markdown document has a rendered view, and it is the one the user
@@ -994,6 +996,34 @@ if (__AgiApp) {
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
   };
+
+  const handleDownloadMermaidSvg = () => {
+    if (!mermaidSvg) return;
+    const blob = new Blob([mermaidSvg], { type: 'image/svg+xml' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${artifact.title || 'diagram'}.svg`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
+  const renderMermaidPreview = (containerClassName: string) => (
+    <div
+      className={cn('overflow-auto bg-background px-6 py-5', containerClassName)}
+      data-testid="artifact-mermaid-preview"
+    >
+      <div className="mx-auto max-w-3xl">
+        <MermaidDiagram
+          source={activeContent}
+          className="mermaid-block"
+          onRenderResult={(result) => setMermaidSvg(result && 'svg' in result ? result.svg : null)}
+        />
+      </div>
+    </div>
+  );
 
   const renderMarkdownPreview = (containerClassName: string) => (
     <div
@@ -1138,7 +1168,7 @@ if (__AgiApp) {
     // Whether to show the preview content (vs source code)
     const showPreview =
       activeTab === 'preview' &&
-      (canPreview || isPdf || isDocx || isSharedRendered || isImage || isMarkdownDoc);
+      (canPreview || isMermaid || isPdf || isDocx || isSharedRendered || isImage || isMarkdownDoc);
     // Human-readable type label for the toolbar, e.g. "· HTML", "· MD".
     // For code/document artifacts the type alone is generic ("CODE"/"DOCUMENT");
     // prefer the language field which carries the actual format (ts, md, pdf...).
@@ -1178,7 +1208,7 @@ if (__AgiApp) {
                 and shared-renderer types (spreadsheet/presentation/email).
                 PDF/DOCX are single-view (their "source" is an opaque data URI),
                 so they get no toggle per the claude.ai artifact header. */}
-            {(canPreview || isSharedRendered || isMarkdownDoc) && (
+            {(canPreview || isMermaid || isSharedRendered || isMarkdownDoc) && (
               <div className="flex shrink-0 items-center rounded-md border border-border/40 bg-muted/40 p-0.5">
                 <button
                   type="button"
@@ -1307,7 +1337,9 @@ if (__AgiApp) {
           </div>
 
           {/* RIGHT: controls composed per artifact type (claude.ai parity).
-              - renderable (html/react/svg/mermaid): Copy · Download · Refresh · Open · Fullscreen · Close
+              - renderable (html/react/svg): Copy · Download · Refresh · Open · Fullscreen · Close
+              - mermaid: Copy · Download (+ SVG once rendered) · Open · Fullscreen · Close (no
+                Refresh — the client-side renderer has no frame to re-mount)
               - binary doc (pdf/docx): Download · Refresh · Close  (no Copy — content is an opaque data URI)
               - code / markdown doc: Copy · Download · Close
               External + Fullscreen collapse on narrow (375px) widths. */}
@@ -1419,6 +1451,11 @@ if (__AgiApp) {
                   {isTabular && (
                     <DropdownMenuItem onClick={handleDownloadCsv}>Download as CSV</DropdownMenuItem>
                   )}
+                  {isMermaid && mermaidSvg && (
+                    <DropdownMenuItem onClick={handleDownloadMermaidSvg}>
+                      Download as SVG
+                    </DropdownMenuItem>
+                  )}
                   <DropdownMenuItem onClick={() => handleDownload('html')}>
                     Download as HTML
                   </DropdownMenuItem>
@@ -1473,7 +1510,7 @@ if (__AgiApp) {
             )}
 
             {/* Open in new tab — renderable only; hidden on narrow widths. */}
-            {canPreview && (
+            {(canPreview || isMermaid) && (
               <Button
                 variant="ghost"
                 size="sm"
@@ -1487,7 +1524,7 @@ if (__AgiApp) {
             )}
 
             {/* Fullscreen — renderable only; hidden on narrow widths. */}
-            {canPreview && (
+            {(canPreview || isMermaid) && (
               <Button
                 variant="ghost"
                 size="sm"
@@ -1583,7 +1620,7 @@ if (__AgiApp) {
         {/* Content area — fills remaining height. min-h-0 prevents a flex-child
             from refusing to shrink below its content height (iframe collapse). */}
         <div className="flex flex-1 min-h-0 flex-col overflow-hidden">
-          {/* Preview: HTML / React / SVG / Mermaid — with empty + error states. */}
+          {/* Preview: HTML / React / SVG — with empty + error states. */}
           {showPreview &&
             canPreview &&
             (activeContent.trim().length === 0 ? (
@@ -1629,6 +1666,18 @@ if (__AgiApp) {
                   onRenderError={(err) => setRenderError(err)}
                 />
               </div>
+            ))}
+
+          {/* Preview: Mermaid — client-side renderer, no sandbox iframe needed. */}
+          {showPreview &&
+            isMermaid &&
+            (activeContent.trim().length === 0 ? (
+              <div className="flex h-full w-full flex-col items-center justify-center gap-2 bg-background px-6 text-center">
+                <Code className="h-6 w-6 text-muted-foreground" aria-hidden="true" />
+                <p className="text-sm text-muted-foreground">Nothing to preview yet.</p>
+              </div>
+            ) : (
+              renderMermaidPreview('h-full w-full')
             ))}
 
           {/* Preview: shared renderers (spreadsheet / presentation / email / chart) */}
@@ -1803,6 +1852,11 @@ if (__AgiApp) {
                 {isTabular && (
                   <DropdownMenuItem onClick={handleDownloadCsv}>Download as CSV</DropdownMenuItem>
                 )}
+                {isMermaid && mermaidSvg && (
+                  <DropdownMenuItem onClick={handleDownloadMermaidSvg}>
+                    Download as SVG
+                  </DropdownMenuItem>
+                )}
                 <DropdownMenuItem onClick={() => handleDownload('html')}>
                   Download as HTML
                 </DropdownMenuItem>
@@ -1837,18 +1891,20 @@ if (__AgiApp) {
           )}
 
           {canPreview && (
-            <>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={handleRefresh}
-                className="h-7 px-2"
-                aria-label="Refresh preview"
-                title="Refresh preview"
-              >
-                <RefreshCw className="h-3.5 w-3.5" aria-hidden="true" />
-              </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handleRefresh}
+              className="h-7 px-2"
+              aria-label="Refresh preview"
+              title="Refresh preview"
+            >
+              <RefreshCw className="h-3.5 w-3.5" aria-hidden="true" />
+            </Button>
+          )}
 
+          {(canPreview || isMermaid) && (
+            <>
               <Button
                 variant="ghost"
                 size="sm"
@@ -1911,7 +1967,7 @@ if (__AgiApp) {
         onValueChange={(v) => setActiveTab(v as 'preview' | 'code')}
         className="w-full"
       >
-        {(canPreview || isPdf || isDocx || isSharedRendered || isMarkdownDoc) && (
+        {(canPreview || isMermaid || isPdf || isDocx || isSharedRendered || isMarkdownDoc) && (
           <TabsList className="w-full justify-start rounded-none border-b border-border bg-muted/30 px-4">
             <TabsTrigger value="preview" className="gap-2">
               <Eye className="h-3.5 w-3.5" />
@@ -1924,7 +1980,7 @@ if (__AgiApp) {
           </TabsList>
         )}
 
-        {/* Preview Tab · HTML/React/SVG/Mermaid */}
+        {/* Preview Tab · HTML/React/SVG */}
         {canPreview && (
           <TabsContent value="preview" className="m-0 p-0">
             <div className={cn('bg-white', isFullscreen ? 'h-[calc(100vh-100px)]' : 'h-[500px]')}>
@@ -1936,6 +1992,13 @@ if (__AgiApp) {
                 refreshKey={refreshKey}
               />
             </div>
+          </TabsContent>
+        )}
+
+        {/* Preview Tab · Mermaid — client-side renderer, no sandbox iframe. */}
+        {isMermaid && (
+          <TabsContent value="preview" className="m-0 p-0">
+            {renderMermaidPreview(isFullscreen ? 'h-[calc(100vh-100px)]' : 'h-[500px]')}
           </TabsContent>
         )}
 
