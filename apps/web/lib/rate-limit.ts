@@ -69,6 +69,44 @@ export function resolveRedisOutagePolicy(): RedisOutagePolicy {
   return hasRedisEnv || isProductionRuntime ? 'fail-closed' : 'fail-open';
 }
 
+const RATE_LIMIT_SCALE_ENV = 'AGI_RATE_LIMIT_SCALE';
+
+const UNSCALED_RATE_LIMIT_MULTIPLIER = 1;
+
+/**
+ * Widens every ceiling for a non-production run.
+ *
+ * An end-to-end batch drives one account through dozens of specs back to back,
+ * which measures the limiter rather than the product. Honoured only outside a
+ * production runtime: the sole thing this env could do to a deployment is uncap
+ * it, so a production process resolves to the configured ceilings and says so.
+ */
+function resolveRateLimitScale(): number {
+  const configured = process.env[RATE_LIMIT_SCALE_ENV]?.trim();
+  if (!configured) return UNSCALED_RATE_LIMIT_MULTIPLIER;
+
+  if (isProductionRuntime) {
+    logger.error(
+      { [RATE_LIMIT_SCALE_ENV]: configured },
+      'Rate-limit scale is a non-production affordance; enforcing the configured ceilings',
+    );
+    return UNSCALED_RATE_LIMIT_MULTIPLIER;
+  }
+
+  const scale = Number(configured);
+  if (!Number.isInteger(scale) || scale < UNSCALED_RATE_LIMIT_MULTIPLIER) {
+    logger.error(
+      { [RATE_LIMIT_SCALE_ENV]: configured },
+      'Unrecognised rate-limit scale; leaving the configured ceilings unscaled',
+    );
+    return UNSCALED_RATE_LIMIT_MULTIPLIER;
+  }
+
+  return scale;
+}
+
+const rateLimitScale = resolveRateLimitScale();
+
 export const rateLimitConfigs = {
   checkout: {
     limit: 15,
@@ -666,9 +704,9 @@ function tierConcurrency(planTier: string | null | undefined): number {
 
 export function resolveTierRateLimit(key: RateLimitKey, planTier?: string | null): number {
   const base = rateLimitConfigs[key].limit;
-  if (!TIER_SCALED_KEYS.has(key)) return base;
+  if (!TIER_SCALED_KEYS.has(key)) return base * rateLimitScale;
   const concurrency = tierConcurrency(planTier);
-  return Math.max(base * concurrency, concurrency);
+  return Math.max(base * concurrency, concurrency) * rateLimitScale;
 }
 
 const rateLimiterCache = new Map<string, Ratelimit>();

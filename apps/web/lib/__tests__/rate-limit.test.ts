@@ -467,6 +467,79 @@ describe('run-following has a bucket of its own', () => {
   });
 });
 
+describe('non-production rate-limit scale', () => {
+  const SCALE_ENV = 'AGI_RATE_LIMIT_SCALE';
+  const SCALE = 50;
+  const PRODUCTION_ENV = {
+    VERCEL_ENV: 'production',
+    UPSTASH_REDIS_REST_URL: 'https://redis.invalid',
+    UPSTASH_REDIS_REST_TOKEN: 'token',
+  };
+
+  function clearEnv(): void {
+    delete process.env[SCALE_ENV];
+    for (const name of Object.keys(PRODUCTION_ENV)) delete process.env[name];
+  }
+
+  beforeEach(() => {
+    vi.resetModules();
+    clearEnv();
+  });
+
+  afterEach(clearEnv);
+
+  it('widens a tier-scaled and a flat ceiling alike outside production', async () => {
+    const unscaled = await import('../rate-limit');
+    const tiered = unscaled.resolveTierRateLimit('chat-message', 'free');
+    const flat = unscaled.resolveTierRateLimit('me');
+
+    vi.resetModules();
+    process.env[SCALE_ENV] = String(SCALE);
+    const scaled = await import('../rate-limit');
+
+    expect(scaled.resolveTierRateLimit('chat-message', 'free')).toBe(tiered * SCALE);
+    expect(scaled.resolveTierRateLimit('me')).toBe(flat * SCALE);
+  });
+
+  it('lets a scaled ceiling absorb a burst the configured one refuses', async () => {
+    process.env[SCALE_ENV] = String(SCALE);
+    const { checkRateLimit, rateLimitConfigs } = await import('../rate-limit');
+    const id = 'user:scaled-burst';
+
+    for (let i = 0; i < rateLimitConfigs['chat-message'].limit + 1; i++) {
+      const result = await checkRateLimit(req, 'chat-message', id);
+      expect(result.success).toBe(true);
+    }
+  });
+
+  it('ignores the scale under a production runtime', async () => {
+    Object.assign(process.env, PRODUCTION_ENV);
+    const unscaled = await import('../rate-limit');
+    const tiered = unscaled.resolveTierRateLimit('chat-message', 'free');
+    const flat = unscaled.resolveTierRateLimit('me');
+
+    vi.resetModules();
+    Object.assign(process.env, PRODUCTION_ENV);
+    process.env[SCALE_ENV] = String(SCALE);
+    const scaled = await import('../rate-limit');
+
+    expect(scaled.resolveTierRateLimit('chat-message', 'free')).toBe(tiered);
+    expect(scaled.resolveTierRateLimit('me')).toBe(flat);
+  });
+
+  it('falls back to the configured ceilings for a value that is not a positive integer', async () => {
+    const unscaled = await import('../rate-limit');
+    const flat = unscaled.resolveTierRateLimit('me');
+
+    for (const value of ['', 'abc', '0', '-5', '2.5', '10x']) {
+      vi.resetModules();
+      process.env[SCALE_ENV] = value;
+      const { resolveTierRateLimit } = await import('../rate-limit');
+      expect(resolveTierRateLimit('me')).toBe(flat);
+    }
+  });
+});
+
 describe('managed turn slot age-out', () => {
   // A slot is normally released by the stream pipe's `finally`. Nothing runs a
   // `finally` when the platform kills the function at its maxDuration, so the
