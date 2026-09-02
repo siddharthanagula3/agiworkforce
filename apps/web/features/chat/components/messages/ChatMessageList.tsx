@@ -668,6 +668,23 @@ const MessageRow = memo(function MessageRow({
   );
 }, messageRowPropsEqual);
 
+function groupContentEqual(
+  prev: MessageGroup | undefined,
+  next: MessageGroup | undefined,
+): boolean {
+  if (prev === next) return true;
+  if (!prev || !next) return false;
+  return (
+    prev.firstId === next.firstId &&
+    prev.messages.length === next.messages.length &&
+    prev.messages.every((prevMessage, index) => {
+      const nextMessage = next.messages[index];
+      if (!nextMessage) return false;
+      return messageRenderEqual(prevMessage, nextMessage);
+    })
+  );
+}
+
 const MessageGroupRow = memo(
   ({
     group,
@@ -740,13 +757,7 @@ const MessageGroupRow = memo(
   },
   (prev, next) => {
     return (
-      prev.group.firstId === next.group.firstId &&
-      prev.group.messages.length === next.group.messages.length &&
-      prev.group.messages.every((prevMessage, index) => {
-        const nextMessage = next.group.messages[index];
-        if (!nextMessage) return false;
-        return messageRenderEqual(prevMessage, nextMessage);
-      }) &&
+      groupContentEqual(prev.group, next.group) &&
       prev.isLastGroup === next.isLastGroup &&
       prev.currentTier === next.currentTier &&
       prev.onRegenerate === next.onRegenerate &&
@@ -791,7 +802,41 @@ interface VirtualizedTranscriptRowData {
   footer: React.ReactNode;
 }
 
-const VirtualizedTranscriptRow = ({
+type TranscriptRowComponent = (
+  props: RowComponentProps<VirtualizedTranscriptRowData>,
+) => React.ReactElement | null;
+
+function shallowEqualRecord(
+  prev: Record<string, unknown> | undefined,
+  next: Record<string, unknown> | undefined,
+): boolean {
+  if (prev === next) return true;
+  if (!prev || !next) return false;
+  const keys = Object.keys(prev);
+  if (keys.length !== Object.keys(next).length) return false;
+  return keys.every((key) => Object.is(prev[key], next[key]));
+}
+
+function transcriptRowPropsEqual(
+  prev: RowComponentProps<VirtualizedTranscriptRowData>,
+  next: RowComponentProps<VirtualizedTranscriptRowData>,
+): boolean {
+  if (prev.index !== next.index) return false;
+  if (!shallowEqualRecord(prev.style, next.style)) return false;
+  if (!shallowEqualRecord(prev.ariaAttributes, next.ariaAttributes)) return false;
+  if (prev.hasMounted !== next.hasMounted) return false;
+  if (prev.topSpacerHeight !== next.topSpacerHeight) return false;
+  if (prev.footer !== next.footer) return false;
+  if (prev.groupProps !== next.groupProps) return false;
+
+  const groupIndex = next.index - 1;
+  return (
+    groupContentEqual(prev.groups[groupIndex], next.groups[groupIndex]) &&
+    groupContentEqual(prev.groups[groupIndex - 1], next.groups[groupIndex - 1])
+  );
+}
+
+const VirtualizedTranscriptRow = memo(function VirtualizedTranscriptRow({
   index,
   style,
   ariaAttributes,
@@ -800,7 +845,7 @@ const VirtualizedTranscriptRow = ({
   hasMounted,
   topSpacerHeight,
   footer,
-}: RowComponentProps<VirtualizedTranscriptRowData>) => {
+}: RowComponentProps<VirtualizedTranscriptRowData>) {
   if (index === 0) {
     return (
       <div
@@ -846,7 +891,8 @@ const VirtualizedTranscriptRow = ({
       />
     </div>
   );
-};
+}, transcriptRowPropsEqual);
+VirtualizedTranscriptRow.displayName = 'VirtualizedTranscriptRow';
 
 const SCROLL_THRESHOLD_PX = 120;
 const ANCHOR_SETTLE_TIMEOUT_MS = 1000;
@@ -1534,6 +1580,17 @@ const ChatMessageListComponent = ({
     </>
   );
 
+  const rowProps = useMemo<VirtualizedTranscriptRowData>(
+    () => ({
+      groups,
+      groupProps,
+      hasMounted,
+      topSpacerHeight,
+      footer: transcriptFooter,
+    }),
+    [groups, groupProps, hasMounted, topSpacerHeight, transcriptFooter],
+  );
+
   if (messages.length === 0 && !isLoading) {
     return (
       <div
@@ -1567,16 +1624,10 @@ const ChatMessageListComponent = ({
       )}
       <List
         listRef={listApiRef}
-        rowComponent={VirtualizedTranscriptRow}
+        rowComponent={VirtualizedTranscriptRow as unknown as TranscriptRowComponent}
         rowCount={virtualRowCount}
         rowHeight={dynamicRowHeight}
-        rowProps={{
-          groups,
-          groupProps,
-          hasMounted,
-          topSpacerHeight,
-          footer: transcriptFooter,
-        }}
+        rowProps={rowProps}
         defaultHeight={DEFAULT_TRANSCRIPT_VIEWPORT_HEIGHT}
         overscanCount={6}
         onResize={({ height }) => setViewportHeight(height)}
