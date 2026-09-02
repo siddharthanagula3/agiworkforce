@@ -140,15 +140,13 @@ export function MemoryEditor({
 
   const onClearAll = useCallback(() => {
     if (facts.length === 0) return;
-    const ok =
-      typeof globalThis.confirm === 'function'
-        ? globalThis.confirm(
-            `Delete all ${facts.length} memory ${facts.length === 1 ? 'fact' : 'facts'}? This cannot be undone.`,
-          )
-        : true;
-    if (!ok) return;
-    void runMutation(() => clear());
-  }, [facts.length, clear, runMutation]);
+    confirm({
+      title: 'Delete all memory facts?',
+      description: `This cannot be undone. All ${facts.length} ${facts.length === 1 ? 'fact' : 'facts'} would have to be added again.`,
+      confirmLabel: 'Forget everything',
+      onConfirm: () => runMutation(() => clear()),
+    });
+  }, [facts.length, confirm, clear, runMutation]);
 
   return (
     <div className={cn('flex h-full flex-col gap-4 p-6', className)}>
