@@ -60,7 +60,7 @@ const SCENARIOS: Scenario[] = [
       {
         label: 'Billing',
         value:
-          'No AGI account takes part, and a finished run prints "no cost, local model" because there was nothing to bill.',
+          'No AGI account takes part, and a finished run reports no cost for a local model because there was nothing to bill.',
       },
       {
         label: 'Plan tier',
