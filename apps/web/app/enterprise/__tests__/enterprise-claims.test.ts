@@ -60,7 +60,7 @@ describe('/enterprise — control claims stay accurate: shipped controls say so,
   // because there is still no per-organization retention control.
   it('states SSO and directory provisioning as implemented and entitlement-gated', () => {
     const source = rendered();
-    for (const control of ["k: 'SSO'", "k: 'Directory provisioning'"]) {
+    for (const control of ["label: 'SSO'", "label: 'Directory provisioning'"]) {
       const index = source.indexOf(control);
       expect(index, `${control} row missing`).toBeGreaterThan(-1);
       const context = source.slice(index, index + 420).toLowerCase();
@@ -80,7 +80,7 @@ describe('/enterprise — control claims stay accurate: shipped controls say so,
 
   it('states audit logging as implemented and gated on org-admin membership, not the SSO entitlement', () => {
     const source = rendered();
-    const index = source.indexOf("k: 'Audit'");
+    const index = source.indexOf("label: 'Audit'");
     expect(index, "'Audit' row missing").toBeGreaterThan(-1);
     const context = source.slice(index, index + 420).toLowerCase();
     expect(/implemented/u.test(context), 'Audit does not say it is implemented').toBe(true);
@@ -103,7 +103,7 @@ describe('/enterprise — control claims stay accurate: shipped controls say so,
     // "org-level retention windows, you set them" phrasing is exactly the
     // overclaim that got this row rewritten the first time.
     const source = rendered();
-    const index = source.indexOf("k: 'Retention'");
+    const index = source.indexOf("label: 'Retention'");
     expect(index, 'Retention row missing').toBeGreaterThan(-1);
     const context = source.slice(index, index + 900).toLowerCase();
 
