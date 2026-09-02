@@ -1,16 +1,17 @@
+import { Spinner } from '@agiworkforce/ui';
+import { Section, Stack } from '@/features/marketing/components/system';
+
 export default function FeaturesLoading() {
   return (
-    <div className="flex min-h-screen items-center justify-center bg-black">
-      <div className="flex flex-col items-center gap-4">
-        <div role="status" aria-live="polite">
-          <div
-            className="animate-spin motion-reduce:animate-none rounded-full h-8 w-8 border-2 border-muted-foreground/20 border-t-primary"
-            aria-hidden="true"
-          />
-          <span className="sr-only">Loading</span>
-        </div>
-        <p className="text-sm text-zinc-500">Loading features...</p>
-      </div>
+    <div data-design="agi" className="agi-ds-page">
+      <Section id="features-loading" size="lg">
+        <Stack>
+          <Spinner size="lg" />
+          <p className="agi-ds-prose" data-size="sm" role="status" aria-live="polite">
+            Loading features…
+          </p>
+        </Stack>
+      </Section>
     </div>
   );
 }
