@@ -219,6 +219,16 @@ describe('SourceAggregator', () => {
     expect(agg.size).toBe(0);
     expect(agg.toSearchResultsEvent('m')).toBeNull();
   });
+
+  it('dedupes across protocol, www, and trailing-slash variants like the client card list does', () => {
+    const agg = new SourceAggregator();
+    expect(agg.add({ url: 'http://example.com/report', title: 'Report' })).toBe(true);
+    expect(agg.add({ url: 'https://www.example.com/report/', title: 'Report dup' })).toBe(false);
+    expect(
+      agg.add({ url: 'https://example.com/report?utm_source=x', title: 'Different query' }),
+    ).toBe(true);
+    expect(agg.size).toBe(2);
+  });
 });
 
 // ─── researchStatusEvent wire shape ───────────────────────────────────────────
