@@ -120,6 +120,14 @@ function isMachineShaped(message: string): boolean {
   return REASON_PHRASES.includes(trimmed.slice(0, end).toLowerCase());
 }
 
+function isSchemaValidationError(error: unknown): boolean {
+  return (
+    error instanceof Error &&
+    error.name === 'ZodError' &&
+    Array.isArray((error as { issues?: unknown }).issues)
+  );
+}
+
 /**
  * The message to put on screen for a caught value.
  *
@@ -133,6 +141,8 @@ function isMachineShaped(message: string): boolean {
 export function toUserMessage(error: unknown, fallback: string): string {
   const network = networkErrorMessage(error);
   if (network) return network;
+
+  if (isSchemaValidationError(error)) return fallback;
 
   const own = error instanceof Error ? error.message.trim() : '';
   if (own && !isMachineShaped(own) && !looksInternal(own)) return own;
