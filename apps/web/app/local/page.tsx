@@ -7,7 +7,7 @@ import { CapabilityGrid, FinalCta } from '@/features/marketing/components/Flagsh
 import { DESKTOP_LOCAL_RUNTIMES, LAUNCH, SURFACE_STATUS } from '../../lib/marketing-constants';
 
 export const metadata = buildMetadata({
-  title: 'Local: Run AI on Your Device, Free Forever',
+  title: 'Local: run AI on your device, no cost',
   description: `Run AGI locally with Ollama, LM Studio, llama.cpp, or vLLM on Desktop, supported local models in the CLI, and on-device Local Mode in Mobile source. No account is required for Local mode. ${LAUNCH.publicLabel}.`,
   path: '/local',
 });
@@ -18,7 +18,7 @@ const LOCAL_SESSION: readonly TerminalLine[] = [
   { kind: 'out', text: 'SessionGuard, so an expired token now fails before any' },
   { kind: 'out', text: 'handler runs.' },
   { kind: 'cmd', text: '/cost' },
-  { kind: 'ok', text: 'Turns: 6 │ Tokens: 4182 in / 1370 out (no cost — local model)' },
+  { kind: 'ok', text: 'Turns: 6 │ Tokens: 4182 in / 1370 out (no cost: local model)' },
 ];
 
 const BOUNDARY_SESSION: readonly TerminalLine[] = [
@@ -55,7 +55,7 @@ export default function LocalPage() {
               </p>
               <ul className="agi-fl-mode-ribbon" aria-label="What Local mode costs you">
                 <li>No account required</li>
-                <li>No cost — local model</li>
+                <li>No cost: local model</li>
               </ul>
               <div className="agi-fl-cta-row">
                 <Link href="/download" className="agi-fl-cta agi-fl-cta--primary">
@@ -150,7 +150,7 @@ export default function LocalPage() {
               The runtime checks the boundary before every request.
             </h2>
             <p className="agi-fl-section-lede">
-              A session carries its own privacy authority — local, byok, or managed — written down
+              A session carries its own privacy authority (local, byok, or managed) written down
               beside its transcript, and the runtime re-reads it before each request it builds. When
               the selected model routes somewhere that authority does not cover, the send stops
               there and the error names the one command that would carry the work across properly.
@@ -182,7 +182,6 @@ export default function LocalPage() {
             { href: '/desktop', label: 'See AGI Desktop' },
             { href: '/byok', label: 'How BYOK works' },
           ]}
-          stamp={LAUNCH.publicLabel}
         />
 
         <MarketingFooter />

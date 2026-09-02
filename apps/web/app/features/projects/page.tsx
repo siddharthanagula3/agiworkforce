@@ -6,7 +6,7 @@ import { CapabilityGrid, FinalCta } from '@/features/marketing/components/Flagsh
 import { Reveal } from '@/features/marketing/components/Reveal';
 
 export const metadata = buildMetadata({
-  title: 'AGI Projects | A Home for Recurring Work',
+  title: 'AGI Projects: a home for recurring work',
   description:
     'AGI Projects group chats, knowledge files, and standing instructions under one objective. Recurring work opens with its context already in place.',
   path: '/features/projects',

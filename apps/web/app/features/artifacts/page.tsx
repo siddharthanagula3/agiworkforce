@@ -5,7 +5,7 @@ import { MarketingFooter } from '@/features/marketing/components/MarketingFooter
 import { FinalCta } from '@/features/marketing/components/FlagshipSections';
 
 export const metadata = buildMetadata({
-  title: 'AGI Artifacts | Sandboxed Previews, Versions & Downloads',
+  title: 'AGI Artifacts: sandboxed previews, versions, and downloads',
   description:
     'Artifacts in the AGI workspace: HTML, React, SVG, diagrams, code, and documents rendered in a sandboxed preview beside the chat. Versioned, with source view, copy, and download.',
   path: '/features/artifacts',

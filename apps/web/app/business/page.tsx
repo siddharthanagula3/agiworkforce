@@ -205,7 +205,7 @@ export default function BusinessPage() {
           title="Point it at a key you already pay for."
           body="Install AGI Desktop, add a provider key, and the evaluation runs as long as it needs to on a bill that already exists. Nothing here requires a plan, a seat count, or a conversation with us first."
           ctas={[
-            { href: '/download', label: 'Get AGI Desktop' },
+            { href: '/download', label: 'Get the CLI' },
             { href: '/byok', label: 'Read the BYOK billing posture' },
           ]}
         />

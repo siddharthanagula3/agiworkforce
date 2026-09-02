@@ -5,7 +5,7 @@ import { MarketingFooter } from '@/features/marketing/components/MarketingFooter
 import { FinalCta } from '@/features/marketing/components/FlagshipSections';
 
 export const metadata = buildMetadata({
-  title: 'AGI Memory | The List of Facts You Can Read and Edit',
+  title: 'AGI Memory: the list of facts you can read and edit',
   description:
     'AGI keeps memory as short sentences in a list you can open, search, rewrite, and clear. See what a chat can add, what reaches the model, and where the list is stored.',
   path: '/features/memory',
