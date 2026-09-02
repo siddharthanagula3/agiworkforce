@@ -13,7 +13,7 @@ import { describe, expect, it } from 'vitest';
  * user's account token. The absolutes are banned as patterns rather than as
  * quoted copy so they trip on the words a future writer types, and the honest
  * exception is required in each of the four places the old claim lived: hero,
- * architecture steps, capabilities, and the boundary ledger.
+ * destinations grid, capabilities, and the boundary ledger.
  *
  * Cross-page rules keep the wording consistent with /agent-permissions, which
  * is where the residual screenshot risk is written out in full.
@@ -40,14 +40,14 @@ function collapsed(): string {
   return chromeSource().replace(/\s+/gu, ' ');
 }
 
-function constBlock(name: string): string {
-  const block = new RegExp(`const ${name}[^=]*= \\[([\\s\\S]*?)\\n\\];`, 'u').exec(chromeSource());
-  expect(block, `${name} not found`).not.toBeNull();
-  return block![1]!.replace(/\s+/gu, ' ');
+function sectionBlock(id: string): string {
+  const block = new RegExp(`<Section id="${id}"[\\s\\S]*?<\\/Section>`, 'u').exec(chromeSource());
+  expect(block, `section ${id} not found`).not.toBeNull();
+  return block![0]!.replace(/\s+/gu, ' ');
 }
 
 function heroLede(): string {
-  const lede = /className="agi-fl-lede">([\s\S]*?)<\/p>/u.exec(chromeSource());
+  const lede = /lede="([^"]*)"/u.exec(chromeSource());
   expect(lede).not.toBeNull();
   return lede![1]!.replace(/\s+/gu, ' ');
 }
@@ -91,28 +91,28 @@ describe('/chrome-extension — transmission claims', () => {
     expect(heroLede()).toMatch(/Managed Cloud/u);
   });
 
-  it('carries the exception in the architecture steps', () => {
-    const steps = constBlock('ARCHITECTURE_STEPS');
-    expect(steps).toMatch(/Managed Cloud/u);
-    expect(steps).toMatch(/screenshot/iu);
+  it('carries the exception in the destinations grid', () => {
+    const destinations = sectionBlock('chrome-destinations');
+    expect(destinations).toMatch(/Managed Cloud/u);
+    expect(destinations).toMatch(/screenshot/iu);
   });
 
   it('carries the exception in the capabilities grid', () => {
-    const capabilities = constBlock('CAPABILITIES');
+    const capabilities = sectionBlock('chrome-capabilities');
     expect(capabilities).toMatch(/computer use/iu);
     expect(capabilities).toMatch(/Managed Cloud/u);
   });
 
   it('carries an egress row in the boundary ledger', () => {
-    const ledger = constBlock('BOUNDARY_LEDGER');
+    const ledger = sectionBlock('chrome-boundary');
     expect(ledger).toMatch(/Computer-use egress/u);
     expect(ledger).toMatch(/screenshot/iu);
     expect(ledger).toMatch(/Managed Cloud gateway/u);
   });
 
   it('scopes the Desktop key claim to Desktop', () => {
-    const ledger = constBlock('BOUNDARY_LEDGER');
-    const keys = /k: 'Keys in Chrome',\s*v:\s*'((?:[^'\\]|\\.)*)'/u.exec(ledger);
+    const ledger = sectionBlock('chrome-boundary');
+    const keys = /label: 'Keys in Chrome',\s*value:\s*'((?:[^'\\]|\\.)*)'/u.exec(ledger);
     expect(keys).not.toBeNull();
     expect(keys![1]!).toMatch(/computer use/iu);
   });
