@@ -18,6 +18,7 @@
       "@agiworkforce/guardian-core",
       "@agiworkforce/guardian-github",
       "@agiworkforce/i18n",
+      "@agiworkforce/icons",
       "@agiworkforce/licensing",
       "@agiworkforce/local-llm",
       "@agiworkforce/mcp",
@@ -587,6 +588,10 @@
         "to": "@agiworkforce/model-registry"
       },
       {
+        "from": "@agiworkforce/ui",
+        "to": "@agiworkforce/icons"
+      },
+      {
         "from": "@agiworkforce/unified-chat",
         "to": "@agiworkforce/client-runtime"
       },
@@ -645,6 +650,10 @@
       {
         "from": "@agiworkforce/web",
         "to": "@agiworkforce/i18n"
+      },
+      {
+        "from": "@agiworkforce/web",
+        "to": "@agiworkforce/icons"
       },
       {
         "from": "@agiworkforce/web",

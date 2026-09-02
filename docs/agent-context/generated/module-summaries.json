@@ -351,6 +351,12 @@
       "purpose": "Locale catalogues and message resolution shared by every surface; parity across locales is enforced by check:i18n-parity."
     },
     {
+      "name": "@agiworkforce/icons",
+      "path": "packages/ui/icons",
+      "kind": "package",
+      "purpose": "Hand-authored icon family with a lucide-compatible component API."
+    },
+    {
       "name": "@agiworkforce/ui",
       "path": "packages/ui/ui",
       "kind": "package",
