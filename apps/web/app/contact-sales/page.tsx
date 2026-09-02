@@ -35,7 +35,7 @@ export default function ContactSalesPage() {
             <div>
               <Eyebrow>What to include</Eyebrow>
               <h2 className="agi-ds-h2" id="agi-contact-sales-include-title">
-                What to include.
+                Tell us this up front.
               </h2>
             </div>
             <FactGrid
@@ -75,7 +75,7 @@ export default function ContactSalesPage() {
           <Stack gap="loose">
             <Eyebrow>Reach us</Eyebrow>
             <h2 className="agi-ds-h2" id="agi-contact-sales-reach-title">
-              Reach us.
+              Get a reply, not a ticket number.
             </h2>
             <ButtonRow>
               <Button href={contactMailto()}>Email {CONTACT_EMAIL}</Button>
