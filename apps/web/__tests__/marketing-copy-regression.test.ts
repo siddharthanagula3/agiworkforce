@@ -39,7 +39,7 @@ describe('public marketing copy regressions', () => {
 
     expect(source).toContain('agi models scan');
     expect(source).toContain('agi --provider ollama --model');
-    expect(source).toContain('&lt;model&gt;');
+    expect(source).toContain('<model>');
     expect(source).toContain('agi --provider lmstudio --model');
     expect(getStarted).toContain('agi models scan');
     expect(getStarted).toContain('agi --provider ollama --model');
@@ -187,7 +187,7 @@ describe('public marketing copy regressions', () => {
       'UI key entry, OS-keychain write, and revoke-all are private-beta',
     );
     expect(byokSetup).not.toContain('Desktop reads from OS keychain');
-    expect(byokSetup).toContain('Settings → Models &amp; Keys');
+    expect(byokSetup).toContain('Settings, Models &amp; Keys');
     expect(byokSetup).toContain(
       'Tauri Desktop encrypts provider keys in local application storage',
     );
@@ -269,8 +269,8 @@ describe('public marketing copy regressions', () => {
 
   it('presents managed cloud as open by default, not waitlist-gated (WEB-12)', () => {
     const home = [
-      'features/marketing/components/MarketingLanding.tsx',
-      'features/marketing/components/RouteFlow.tsx',
+      'features/marketing/components/landing/LandingPage.tsx',
+      'features/marketing/components/landing/landing-content.ts',
     ]
       .map(readWebFile)
       .join('\n');

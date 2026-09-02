@@ -73,7 +73,7 @@ export default function CliPage() {
             <SurfaceStatus
               state="live"
               name="AGI CLI"
-              detail={`${SURFACE_STATUS.cli}. Five signed v1.0.0 archives for macOS, Linux, and Windows, each checked against a Sigstore signature.`}
+              detail={`${SURFACE_STATUS.cli}. Five signed archives for macOS, Linux, and Windows, each checked against a Sigstore signature.`}
               action={{ label: 'See the release table', href: '/download#cli-downloads' }}
             />
           </Stack>
