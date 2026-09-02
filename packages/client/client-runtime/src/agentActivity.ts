@@ -584,7 +584,34 @@ export function applyAgentActivityEvent(
     }
 
     case 'text-delta':
-    case 'reasoning-delta':
+    case 'reasoning-delta': {
+      const id = 'progress:generation';
+      const summary = event.type === 'reasoning-delta' ? 'Reasoning' : 'Writing response';
+      const index = next.entries.findIndex((entry) => entry.id === id);
+      if (index < 0) {
+        next.entries = [
+          ...next.entries,
+          {
+            kind: 'progress',
+            id,
+            progressId: 'generation',
+            summary,
+            status: 'running',
+            startedAtMs: envelope.emittedAtMs,
+          },
+        ];
+      } else {
+        const entry = next.entries[index] as AgentActivityProgressEntry;
+        if (entry.summary !== summary || entry.status !== 'running') {
+          next.entries = updateAt<AgentActivityProgressEntry>(next.entries, index, (current) => ({
+            ...current,
+            summary,
+            status: 'running',
+          }));
+        }
+      }
+      return next;
+    }
     case 'tool-use-start':
     case 'tool-use-delta':
     case 'tool-use-end':
