@@ -58,7 +58,7 @@ export const FAST_CHECKS: CatalogEntry[] = [
     group: 'correctness',
   },
   {
-    script: 'check:agent-context',
+    script: 'check:agent-context-indexes',
     category: 'documentation',
     severity: 'low',
     impact: 'Agent-context drift misleads every automated contributor that reads it.',
