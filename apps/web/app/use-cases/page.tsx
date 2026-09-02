@@ -53,6 +53,7 @@ export default function UseCasesPage() {
             <FactGrid
               items={INDEX_ORDER.map((slug) => {
                 const entry = USE_CASE_CONTENT[slug];
+                if (!entry) throw new Error(`missing use case content for slug: ${slug}`);
                 return {
                   meta: entry.eyebrow.replace('Use case · ', ''),
                   title: entry.title,
