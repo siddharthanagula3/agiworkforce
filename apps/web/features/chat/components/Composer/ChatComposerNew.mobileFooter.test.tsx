@@ -136,7 +136,7 @@ describe('composer footer collapses at the mobile breakpoint (M11)', () => {
   it('keeps the send route reachable from the "+" menu once the footer drops it', () => {
     renderComposer();
 
-    fireEvent.click(screen.getByRole('button', { name: /more options/i }));
+    fireEvent.click(screen.getByRole('button', { name: /add attachments and tools/i }));
 
     const route = screen.getByTestId(MENU_SEND_ROUTE_TESTID);
     expect(route.className).toContain('md:hidden');
