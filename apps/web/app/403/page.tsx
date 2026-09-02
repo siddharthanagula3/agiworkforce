@@ -1,5 +1,7 @@
 import { buildMetadata } from '@/lib/seo/metadata';
 import Link from 'next/link';
+import { Header } from '@shared/components/layout/Header';
+import { MarketingFooter } from '@/features/marketing/components/MarketingFooter';
 import { Eyebrow, Prose, Section, Stack } from '@/features/marketing/components/system';
 import { CONTACT_EMAIL, contactMailto } from '@/lib/legal-constants';
 
@@ -13,6 +15,7 @@ export const metadata = buildMetadata({
 export default function ForbiddenPage() {
   return (
     <div data-design="agi" className="agi-ds-page">
+      <Header />
       <main id="main-content">
         <Section size="sm">
           <Stack gap="loose">
@@ -64,6 +67,7 @@ export default function ForbiddenPage() {
           </Stack>
         </Section>
       </main>
+      <MarketingFooter />
     </div>
   );
 }
