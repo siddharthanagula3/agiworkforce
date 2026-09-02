@@ -138,6 +138,13 @@ export interface StartAgentActivityLocallyOptions {
 }
 
 const LOCAL_START_PROGRESS_ID = 'progress:local-starting';
+const GENERATION_PROGRESS_ID = 'progress:generation';
+
+function withoutGenerationProgress(entries: AgentActivityEntry[]): AgentActivityEntry[] {
+  return entries.some((entry) => entry.id === GENERATION_PROGRESS_ID)
+    ? entries.filter((entry) => entry.id !== GENERATION_PROGRESS_ID)
+    : entries;
+}
 
 export function startAgentActivityLocally(
   options: StartAgentActivityLocallyOptions,
@@ -561,13 +568,17 @@ export function applyAgentActivityEvent(
       ];
       next.status = 'failed';
       next.completedAtMs = envelope.emittedAtMs;
+      next.entries = withoutGenerationProgress(next.entries);
       return next;
 
     case 'stop': {
       const status = deriveRunOutcome(stopStatus(event.reason), next.entries);
       next.status = status;
       next.stopReason = event.reason;
-      if (status !== 'running') next.completedAtMs = envelope.emittedAtMs;
+      if (status !== 'running') {
+        next.completedAtMs = envelope.emittedAtMs;
+        next.entries = withoutGenerationProgress(next.entries);
+      }
       return next;
     }
 
@@ -600,7 +611,7 @@ export function applyAgentActivityEvent(
 
     case 'text-delta':
     case 'reasoning-delta': {
-      const id = 'progress:generation';
+      const id = GENERATION_PROGRESS_ID;
       const summary = event.type === 'reasoning-delta' ? 'Reasoning' : 'Writing response';
       const index = next.entries.findIndex((entry) => entry.id === id);
       if (index < 0) {
