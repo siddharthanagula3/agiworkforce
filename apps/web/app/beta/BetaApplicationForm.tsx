@@ -106,8 +106,8 @@ export function BetaApplicationForm() {
           res.status === 429
             ? 'Too many applications from this network. Try again later.'
             : (message ??
-              body.error ??
-              'Your application was not recorded, so nothing was stored.'),
+                body.error ??
+                'Your application was not recorded, so nothing was stored.'),
         );
         return;
       }
@@ -128,7 +128,7 @@ export function BetaApplicationForm() {
         description={
           recorded.alreadyReviewed
             ? 'We already reviewed an application from this address, so we updated your details rather than starting again. That earlier decision still stands.'
-            : 'One application per email address — submitting again updates this one. If you are picked we email the address you gave us.'
+            : 'One application per email address: submitting again updates this one. If you are picked we email the address you gave us.'
         }
       />
     );
