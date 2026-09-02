@@ -46,6 +46,7 @@ export default function FeaturesAgentsPage() {
               width={1132}
               height={584}
               caption={['Settings', 'Tool approvals']}
+              priority
             />
           }
         />

@@ -41,6 +41,7 @@ export default function AiChatFeaturePage() {
               width={1472}
               height={254}
               caption={['Chat', 'Composer']}
+              priority
             />
           }
         />

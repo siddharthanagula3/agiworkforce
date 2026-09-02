@@ -53,6 +53,7 @@ export default function BusinessPage() {
               width={1128}
               height={716}
               caption={['Account', 'Usage']}
+              priority
             />
           }
         />
