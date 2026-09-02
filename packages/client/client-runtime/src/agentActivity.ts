@@ -209,6 +209,40 @@ function stringifyError(value: unknown): string | undefined {
   }
 }
 
+const FETCH_FAILURE_PATTERN = /^Fetch failed \(([a-z_]+)\): ([\s\S]*)$/;
+const HTTP_STATUS_PATTERN = /\bHTTP (\d{3})\b/;
+
+const FETCH_FAILURE_PHRASES: Record<string, string> = {
+  url_not_allowed: 'This site cannot be fetched',
+  url_not_accessible: 'The page could not be opened',
+  timeout: 'The page took too long to load',
+};
+
+const GENERIC_TOOL_FAILURE = 'The tool failed';
+
+function urlFetchHostname(input: unknown): string | undefined {
+  if (!input || typeof input !== 'object') return undefined;
+  const url = (input as { url?: unknown }).url;
+  if (typeof url !== 'string') return undefined;
+  try {
+    return new URL(url).hostname;
+  } catch {
+    return undefined;
+  }
+}
+
+function humanizeToolFailureSummary(raw: string | undefined, input: unknown): string | undefined {
+  const match = raw ? FETCH_FAILURE_PATTERN.exec(raw) : null;
+  if (!match) return oneLineSummary(raw);
+  const code = match[1] ?? '';
+  const detail = match[2] ?? '';
+  const phrase = FETCH_FAILURE_PHRASES[code] ?? GENERIC_TOOL_FAILURE;
+  const hostname = urlFetchHostname(input);
+  const withHostname = hostname ? `${phrase} for ${hostname}` : phrase;
+  const status = HTTP_STATUS_PATTERN.exec(detail)?.[1];
+  return status ? `${withHostname} (HTTP ${status})` : withHostname;
+}
+
 const ONE_LINE_SUMMARY_MAX_LENGTH = 140;
 
 function oneLineSummary(text: string | undefined): string | undefined {
@@ -409,19 +443,17 @@ function applyAgentEvent(
     case 'tool-execution-end': {
       const id = `tool:${event.toolCallId}`;
       const index = next.entries.findIndex((entry) => entry.id === id);
-      const failureSummary = event.isError
-        ? oneLineSummary(stringifyError(event.output))
-        : undefined;
+      const rawFailure = event.isError ? stringifyError(event.output) : undefined;
       if (index >= 0) {
         next.entries = updateAt<AgentActivityToolEntry>(next.entries, index, (entry) => ({
           ...entry,
           name: event.name,
           output: event.output,
           status: event.isError ? 'failed' : 'completed',
-          summary: failureSummary ?? entry.summary,
-          ...(event.isError
-            ? { error: stringifyError(event.output) ?? 'Tool execution failed' }
-            : {}),
+          summary: event.isError
+            ? (humanizeToolFailureSummary(rawFailure, entry.input) ?? entry.summary)
+            : entry.summary,
+          ...(event.isError ? { error: rawFailure ?? 'Tool execution failed' } : {}),
           elapsedMs: event.elapsedMs ?? Math.max(0, envelope.emittedAtMs - entry.startedAtMs),
           completedAtMs: envelope.emittedAtMs,
         }));
@@ -434,12 +466,12 @@ function applyAgentEvent(
             toolCallId: event.toolCallId,
             name: event.name,
             category: 'other',
-            summary: failureSummary ?? event.name,
+            summary: event.isError
+              ? (humanizeToolFailureSummary(rawFailure, undefined) ?? event.name)
+              : event.name,
             status: event.isError ? 'failed' : 'completed',
             output: event.output,
-            ...(event.isError
-              ? { error: stringifyError(event.output) ?? 'Tool execution failed' }
-              : {}),
+            ...(event.isError ? { error: rawFailure ?? 'Tool execution failed' } : {}),
             startedAtMs: envelope.emittedAtMs,
             completedAtMs: envelope.emittedAtMs,
             ...(event.elapsedMs !== undefined ? { elapsedMs: event.elapsedMs } : {}),
