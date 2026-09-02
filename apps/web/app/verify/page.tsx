@@ -5,77 +5,83 @@ import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { Header } from '@shared/components/layout/Header';
 import { MarketingFooter } from '@/features/marketing/components/MarketingFooter';
+import { Button, ButtonRow, Eyebrow, Prose, Stack } from '@/features/marketing/components/system';
 import { VerifyDeviceClient } from '@/app/verify/verify-client';
+
+const CARD_STYLE = {
+  maxWidth: '30rem',
+  width: '100%',
+  marginInline: 'auto',
+  padding: 'var(--agi-section-y-md) var(--agi-gutter)',
+} as const;
 
 function VerifyEmailBody({ email }: { email: string | null }) {
   return (
-    <section
-      className="agi-section"
-      style={{ borderBottom: 'none', maxWidth: 440, margin: '0 auto' }}
-    >
-      <p className="agi-section-eyebrow">Verify your email</p>
-      <h1 className="agi-page-h1" style={{ marginBottom: 16 }}>
-        Check your inbox.
-      </h1>
-      <p className="agi-page-lede" style={{ marginBottom: 24 }}>
-        We sent a verification link{' '}
-        {email ? (
-          <>
-            to <strong>{email}</strong>
-          </>
-        ) : (
-          'to your email'
-        )}
-        . Click it to finish creating your account.
-      </p>
-      <div className="agi-callout">
-        <h2 className="agi-callout-h">Didn&rsquo;t arrive?</h2>
-        <p className="agi-callout-p">
-          Check spam, then{' '}
-          <Link href="/forgot-password" style={{ color: 'var(--agi-amber)' }}>
-            open the sign-in recovery flow
-          </Link>
-          . You can also email contact@agiworkforce.com for account help.
-        </p>
-      </div>
-      <p style={{ marginTop: 24, fontSize: 14, color: 'var(--agi-ink-2)', textAlign: 'center' }}>
-        <Link href="/login" style={{ color: 'var(--agi-ink)' }}>
-          Back to sign in
-        </Link>
-      </p>
+    <section style={CARD_STYLE}>
+      <Stack gap="loose">
+        <div>
+          <Eyebrow>Verify your email</Eyebrow>
+          <h1 className="agi-ds-h1">Check your inbox.</h1>
+        </div>
+        <Prose>
+          We sent a verification link{' '}
+          {email ? (
+            <>
+              to <strong>{email}</strong>
+            </>
+          ) : (
+            'to your email'
+          )}
+          . Click it to finish creating your account.
+        </Prose>
+        <Stack gap="tight">
+          <h2 className="agi-ds-h3">Didn&rsquo;t arrive?</h2>
+          <Prose size="sm">
+            Check spam, then{' '}
+            <Link href="/forgot-password" className="agi-ds-link">
+              open the sign-in recovery flow
+            </Link>
+            . You can also email contact@agiworkforce.com for account help.
+          </Prose>
+        </Stack>
+        <ButtonRow>
+          <Button href="/login" variant="secondary">
+            Back to sign in
+          </Button>
+        </ButtonRow>
+      </Stack>
     </section>
   );
 }
 
 function VerifyDeviceBody({ code }: { code: string }) {
   return (
-    <section
-      className="agi-section"
-      style={{ borderBottom: 'none', maxWidth: 440, margin: '0 auto' }}
-    >
-      <p className="agi-section-eyebrow">Device sign-in</p>
-      <h1 className="agi-page-h1" style={{ marginBottom: 16 }}>
-        Approve this device?
-      </h1>
-      <p className="agi-page-lede" style={{ marginBottom: 24 }}>
-        A device is requesting to sign in to your account. Approve it only if you started this
-        sign-in. The request code is <strong>{code}</strong>.
-      </p>
+    <section style={CARD_STYLE}>
+      <Stack gap="loose">
+        <div>
+          <Eyebrow>Device sign-in</Eyebrow>
+          <h1 className="agi-ds-h1">Approve this device?</h1>
+        </div>
+        <Prose>
+          A device is requesting to sign in to your account. Approve it only if you started this
+          sign-in. The request code is <strong>{code}</strong>.
+        </Prose>
 
-      <VerifyDeviceClient code={code} />
+        <VerifyDeviceClient code={code} />
 
-      <div className="agi-callout" style={{ marginTop: 24 }}>
-        <h2 className="agi-callout-h">Security notice</h2>
-        <p className="agi-callout-p">
-          If you did not initiate this request, choose Deny and do not approve. Approving grants the
-          requesting device access to your account.
-        </p>
-      </div>
-      <p style={{ marginTop: 24, fontSize: 14, color: 'var(--agi-ink-2)', textAlign: 'center' }}>
-        <Link href="/" style={{ color: 'var(--agi-ink)' }}>
-          Cancel
-        </Link>
-      </p>
+        <Stack gap="tight">
+          <h2 className="agi-ds-h3">Security notice.</h2>
+          <Prose size="sm">
+            If you did not initiate this request, choose Deny and do not approve. Approving grants
+            the requesting device access to your account.
+          </Prose>
+        </Stack>
+        <ButtonRow>
+          <Button href="/" variant="secondary">
+            Cancel
+          </Button>
+        </ButtonRow>
+      </Stack>
     </section>
   );
 }
@@ -93,14 +99,14 @@ function VerifyBody() {
 
 export default function VerifyPage() {
   return (
-    <div data-design="agi">
-      <main className="agi-shell">
-        <Header />
+    <div data-design="agi" className="agi-ds-page">
+      <Header />
+      <main id="main-content">
         <Suspense fallback={null}>
           <VerifyBody />
         </Suspense>
-        <MarketingFooter />
       </main>
+      <MarketingFooter />
     </div>
   );
 }
