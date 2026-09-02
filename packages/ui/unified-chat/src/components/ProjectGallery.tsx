@@ -1,5 +1,6 @@
-import { useCallback, useMemo, useState, type FormEvent } from 'react';
+import { useCallback, useMemo, useRef, useState, type FormEvent } from 'react';
 import { Plus, Search, Smile } from 'lucide-react';
+import { useMenuKeyboard } from '@agiworkforce/ui';
 import { cn } from '../lib/utils';
 import { useProjectStore } from '../stores/projectStore';
 import { ProjectCard } from './ProjectCard';
@@ -88,6 +89,17 @@ export function ProjectGallery({
   const [emojiPickerOpen, setEmojiPickerOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
+
+  const emojiPickerRef = useRef<HTMLDivElement | null>(null);
+  const emojiTriggerRef = useRef<HTMLButtonElement | null>(null);
+  const closeEmojiPicker = useCallback(() => setEmojiPickerOpen(false), []);
+  useMenuKeyboard({
+    open: emojiPickerOpen,
+    onClose: closeEmojiPicker,
+    panelRef: emojiPickerRef,
+    triggerRef: emojiTriggerRef,
+    itemSelector: '[role="option"]',
+  });
 
   const applyPreset = useCallback((preset: ProjectPreset) => {
     setNewName(preset.label);
@@ -239,10 +251,12 @@ export function ProjectGallery({
         >
           <div className="flex items-center gap-2">
             <button
+              ref={emojiTriggerRef}
               type="button"
               onClick={() => setEmojiPickerOpen((v) => !v)}
               aria-label="Choose project emoji"
               aria-expanded={emojiPickerOpen}
+              aria-haspopup="listbox"
               data-testid="project-create-emoji-trigger"
               className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border bg-[var(--chat-surface-elevated)] text-lg hover:bg-[var(--chat-surface-hover)]"
               style={{ borderColor: 'var(--chat-border)' }}
@@ -266,6 +280,7 @@ export function ProjectGallery({
 
           {emojiPickerOpen && (
             <div
+              ref={emojiPickerRef}
               role="listbox"
               aria-label="Project emoji"
               data-testid="project-create-emoji-picker"
