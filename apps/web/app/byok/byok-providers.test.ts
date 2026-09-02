@@ -32,17 +32,10 @@ describe('/byok provider chips', () => {
     expect(source, '/byok must not advertise the retired Groq provider').not.toMatch(/Groq/i);
   });
 
-  it('keeps the retired Mistral lane off the home-page routing diagram', () => {
-    const routeFlow = readFileSync(
-      join(__dirname, '../../features/marketing/components/RouteFlow.tsx'),
-      'utf8',
-    );
-    const providerLanes = routeFlow.slice(
-      routeFlow.indexOf('const PROVIDERS'),
-      routeFlow.indexOf('const SURFACES'),
-    );
+  it('keeps the retired Mistral lane out of the shared BYOK provider list', () => {
+    const source = readFileSync(join(__dirname, '../../lib/byok-providers.ts'), 'utf8');
 
-    expect(providerLanes).not.toMatch(/name: 'Mistral'/);
-    expect(providerLanes).toMatch(/name: 'Perplexity'/);
+    expect(source).not.toMatch(/label: 'Mistral'/);
+    expect(source).toMatch(/label: 'Perplexity'/);
   });
 });
