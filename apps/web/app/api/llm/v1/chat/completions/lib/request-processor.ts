@@ -41,6 +41,7 @@ import { validateEgressUrl, validateUserImageUrl, EgressPolicyError } from '@/li
 import {
   CLARIFY_TOOL_NAME,
   createClarifyToolDefinition,
+  shouldOfferClarifyTool,
 } from '@/lib/services/clarify-tool-service';
 import {
   ANTHROPIC_THINKING_BUDGET,
@@ -508,16 +509,34 @@ export function applyManagedOfficeFileCreation(request: ChatCompletionRequest): 
  * ambiguous request came back as prose asking the reader to describe their
  * choice in words. Offered, never forced: unlike the map tool this sets no
  * tool_choice, because most turns should just be answered.
+ *
+ * The tool's own description could not reliably keep a fast model from
+ * calling it on a fully specified turn, so explicit intent is filtered
+ * deterministically here: the tool is not even offered when the turn already
+ * carries search/research, a long message, a URL, an attachment, a code
+ * fence, or an opening verb naming the action to take. See
+ * `shouldOfferClarifyTool`.
  */
 export function applyClarifyCardCapability(
   request: ChatCompletionRequest,
-  params: { surface: CloudChatSurface; toolsCapable: boolean },
+  params: {
+    surface: CloudChatSurface;
+    toolsCapable: boolean;
+    userMessage: string;
+    hasAttachment: boolean;
+  },
 ): void {
   if (
     (params.surface !== 'web' && params.surface !== 'mobile' && params.surface !== 'chrome') ||
     !params.toolsCapable ||
     !request.stream ||
-    !request.x_interactive_cards?.supported.includes('clarify.v1')
+    !request.x_interactive_cards?.supported.includes('clarify.v1') ||
+    !shouldOfferClarifyTool({
+      userMessage: params.userMessage,
+      hasAttachment: params.hasAttachment,
+      webSearch: request.web_search === true,
+      research: request.research === true,
+    })
   ) {
     return;
   }
@@ -2434,9 +2453,13 @@ export async function processRequest(
     userMessage: lastUserText,
   });
 
+  const lastUserContent = lastUserMsg?.content;
   applyClarifyCardCapability(chatRequest, {
     surface: chatSurface,
     toolsCapable: resolvedModelCaps?.tools ?? true,
+    userMessage: lastUserText,
+    hasAttachment:
+      Array.isArray(lastUserContent) && lastUserContent.some((part) => part.type !== 'text'),
   });
 
   const originalModel = chatRequest.model;
