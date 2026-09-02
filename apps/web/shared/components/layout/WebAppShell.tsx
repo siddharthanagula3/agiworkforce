@@ -49,6 +49,10 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
+  Tooltip,
+  TooltipTrigger,
+  TooltipContent,
+  TooltipProvider,
 } from '@agiworkforce/ui';
 import { CANONICAL_POLICY_ROUTES } from '@/lib/legal-constants';
 import { useConversations } from '@/lib/hooks/useConversations';
@@ -295,6 +299,66 @@ export function WebAppShell({ children }: WebAppShellProps) {
   const isAccountLoading =
     !isAuthInitialized || isAuthLoading || !isBillingInitialized || isBillingLoading;
 
+  // Shared between the expanded footer's dropdown and the collapsed rail's
+  // compact trigger, so the two never drift into different menus.
+  const accountMenuItems = (
+    <>
+      {user?.email && (
+        <>
+          <DropdownMenuLabel className="truncate font-normal text-muted-foreground">
+            {user.email}
+          </DropdownMenuLabel>
+          <DropdownMenuSeparator />
+        </>
+      )}
+      <WorkspaceMenuItems onManage={() => openSettings('team')} />
+      {/* CRIT-008: open in place — /settings/general only bounces to /chat. */}
+      <DropdownMenuItem onClick={() => openSettings('general')}>
+        <Settings className="mr-2 h-4 w-4" />
+        Settings
+      </DropdownMenuItem>
+      <DropdownMenuSeparator />
+      {/*
+        Legal reachability from INSIDE the product.
+        An audit found the signed-in shell rendered no route to any policy:
+        every legal link lived on the marketing footer, which a signed-in
+        user never sees. That is a real gap rather than a tidiness one — a
+        privacy notice you can only find by signing out is not accessible,
+        and the DPDP grievance route in particular has to be reachable from
+        the page that made someone want to use it.
+        The account menu rather than a persistent footer strip, because an
+        app shell should not spend vertical space on this and because it is
+        where people already look.
+      */}
+      <DropdownMenuItem asChild>
+        <Link href={CANONICAL_POLICY_ROUTES.dataUse} target="_blank" rel="noopener noreferrer">
+          <ShieldCheck className="mr-2 h-4 w-4" />
+          How we use your data
+        </Link>
+      </DropdownMenuItem>
+      <DropdownMenuItem asChild>
+        <Link href={CANONICAL_POLICY_ROUTES.dataRights} target="_blank" rel="noopener noreferrer">
+          <FileText className="mr-2 h-4 w-4" />
+          Privacy &amp; your data rights
+        </Link>
+      </DropdownMenuItem>
+      <DropdownMenuItem asChild>
+        <Link href={CANONICAL_POLICY_ROUTES.legalIndex} target="_blank" rel="noopener noreferrer">
+          <Scale className="mr-2 h-4 w-4" />
+          Terms &amp; policies
+        </Link>
+      </DropdownMenuItem>
+      <DropdownMenuSeparator />
+      <DropdownMenuItem
+        onClick={() => void handleLogout()}
+        className="text-danger focus:text-danger"
+      >
+        <LogOut className="mr-2 h-4 w-4" />
+        Log out
+      </DropdownMenuItem>
+    </>
+  );
+
   const footerSlot = isAccountLoading ? (
     <div
       role="status"
@@ -334,70 +398,38 @@ export function WebAppShell({ children }: WebAppShellProps) {
           </button>
         </DropdownMenuTrigger>
         <DropdownMenuContent side="top" align="start" className="w-56 mb-1">
-          {user?.email && (
-            <>
-              <DropdownMenuLabel className="truncate font-normal text-muted-foreground">
-                {user.email}
-              </DropdownMenuLabel>
-              <DropdownMenuSeparator />
-            </>
-          )}
-          <WorkspaceMenuItems onManage={() => openSettings('team')} />
-          {/* CRIT-008: open in place — /settings/general only bounces to /chat. */}
-          <DropdownMenuItem onClick={() => openSettings('general')}>
-            <Settings className="mr-2 h-4 w-4" />
-            Settings
-          </DropdownMenuItem>
-          <DropdownMenuSeparator />
-          {/*
-            Legal reachability from INSIDE the product.
-            An audit found the signed-in shell rendered no route to any policy:
-            every legal link lived on the marketing footer, which a signed-in
-            user never sees. That is a real gap rather than a tidiness one — a
-            privacy notice you can only find by signing out is not accessible,
-            and the DPDP grievance route in particular has to be reachable from
-            the page that made someone want to use it.
-            The account menu rather than a persistent footer strip, because an
-            app shell should not spend vertical space on this and because it is
-            where people already look.
-          */}
-          <DropdownMenuItem asChild>
-            <Link href={CANONICAL_POLICY_ROUTES.dataUse} target="_blank" rel="noopener noreferrer">
-              <ShieldCheck className="mr-2 h-4 w-4" />
-              How we use your data
-            </Link>
-          </DropdownMenuItem>
-          <DropdownMenuItem asChild>
-            <Link
-              href={CANONICAL_POLICY_ROUTES.dataRights}
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              <FileText className="mr-2 h-4 w-4" />
-              Privacy &amp; your data rights
-            </Link>
-          </DropdownMenuItem>
-          <DropdownMenuItem asChild>
-            <Link
-              href={CANONICAL_POLICY_ROUTES.legalIndex}
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              <Scale className="mr-2 h-4 w-4" />
-              Terms &amp; policies
-            </Link>
-          </DropdownMenuItem>
-          <DropdownMenuSeparator />
-          <DropdownMenuItem
-            onClick={() => void handleLogout()}
-            className="text-danger focus:text-danger"
-          >
-            <LogOut className="mr-2 h-4 w-4" />
-            Log out
-          </DropdownMenuItem>
+          {accountMenuItems}
         </DropdownMenuContent>
       </DropdownMenu>
     </div>
+  );
+
+  // collapsedFooterSlot: the icon rail has no room for the full account row,
+  // but still needs a way into Settings and the legal-reachability links —
+  // without it, collapsing the sidebar hid all of that with no other entry
+  // point on this shell.
+  const collapsedFooterSlot = isAccountLoading ? undefined : (
+    <TooltipProvider>
+      <DropdownMenu>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <DropdownMenuTrigger asChild>
+              <button
+                type="button"
+                aria-label={`Account menu for ${displayName}`}
+                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary text-xs font-semibold text-primary-foreground outline-none focus-visible:ring-2 focus-visible:ring-primary"
+              >
+                {userInitial}
+              </button>
+            </DropdownMenuTrigger>
+          </TooltipTrigger>
+          <TooltipContent side="right">{displayName}</TooltipContent>
+        </Tooltip>
+        <DropdownMenuContent side="right" align="end" className="w-56 mb-1">
+          {accountMenuItems}
+        </DropdownMenuContent>
+      </DropdownMenu>
+    </TooltipProvider>
   );
 
   const sharedSidebarProps = {
@@ -411,6 +443,7 @@ export function WebAppShell({ children }: WebAppShellProps) {
     headerSlot: <SidebarWordmark />,
     navItems: sidebarNavItems,
     footerSlot,
+    collapsedFooterSlot,
     onNewChat: handleNewChat,
     onSelect: handleSelectSession,
     onDelete: (id: string) => void handleDeleteSession(id),
