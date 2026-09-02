@@ -96,7 +96,7 @@ export function BudgetTrackerDisplay({
         {showCreditBalance && (
           <>
             {balanceLoading ? (
-              <div className="flex justify-between">
+              <div className="flex justify-between" role="status" aria-live="polite">
                 <span className="text-muted-foreground">Plan usage:</span>
                 <span className="font-medium text-muted-foreground animate-pulse">loading…</span>
               </div>
