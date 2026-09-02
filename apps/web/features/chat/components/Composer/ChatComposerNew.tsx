@@ -21,7 +21,6 @@ import {
   FolderOpen,
   Telescope,
   ListChecks,
-  Monitor,
 } from '@agiworkforce/icons';
 import { cn } from '@shared/lib/utils';
 import { useBillingStore } from '@shared/stores/web-auth-store';
@@ -86,13 +85,6 @@ import { useCoworkFolderStore, supportsDirectoryPicker } from '@shared/stores/co
 import { FREE_TRIAL_MODELS } from '@/lib/free-trial-config';
 import { MANAGED_CLOUD_CHAT_MAX_MESSAGE_LENGTH } from '@agiworkforce/cloud-contracts';
 import { ComposerFeedbackDialog } from './ComposerFeedbackDialog';
-import { CameraCaptureDialog } from './CameraCaptureDialog';
-import {
-  BrowserControlRequirementDialog,
-  BROWSER_CONTROL_MENU,
-  BROWSER_CONTROL_TEST_IDS,
-  COMPUTER_USE_ON_WEB,
-} from '@features/chat/components/computer-use';
 import { buildAgiWorkGoalInput, type AgiWorkGoalInput } from '@/features/chat/utils/agiwork-plan';
 import { AI_ACCURACY_DISCLAIMER } from '@/lib/compliance/ai-act';
 import {
@@ -757,7 +749,6 @@ const ChatComposerNewComponent = ({
   // RENDERING (absent on web), composing with the model/tier gates below.
   const canUseWorkingDirectory = useCapability('canUseWorkingDirectory');
   const canTakeScreenshotCap = useCapability('canTakeScreenshot');
-  const canUseCameraCap = useCapability('canUseCamera');
 
   // Image generation mode state (imageMode itself is per-conversation, above)
   const [imageAspectRatio, setImageAspectRatio] = useState<ImageAspectRatio>('auto');
@@ -1327,8 +1318,6 @@ const ChatComposerNewComponent = ({
    * packages/ui/unified-chat/src/components/ChatInput.tsx.
    */
   const [isCapturingScreenshot, setIsCapturingScreenshot] = useState(false);
-  const [cameraOpen, setCameraOpen] = useState(false);
-  const [browserControlOpen, setBrowserControlOpen] = useState(false);
 
   /**
    * AUDIT-FIX CMP-10: capture the screen and attach the frame.
@@ -3411,25 +3400,6 @@ const ChatComposerNewComponent = ({
                       </button>
                     )}
 
-                    {/* Take a photo — webcam capture, gated on the shared
-                        `canUseCamera` flag so the matrix stays load-bearing
-                        rather than decorative. The dialog owns the permission
-                        prompt and the preview; nothing is captured until the
-                        shutter is pressed. */}
-                    {canUseCameraCap && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setShowOverflowMenu(false);
-                          setCameraOpen(true);
-                        }}
-                        className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors hover:bg-muted/60"
-                      >
-                        <Camera className="h-4 w-4" />
-                        <span className="flex-1 text-left">Take a photo</span>
-                      </button>
-                    )}
-
                     {/* 4. Select working folder — desktop-only capability (local
                         File System Access). Render-gated: ABSENT on web/mobile.
                         The browser-API `canPickFolder` check is NOT the platform
@@ -3618,24 +3588,6 @@ const ChatComposerNewComponent = ({
                           : undefined
                       }
                     />
-
-                    {/* 8a-ii. Computer use — an explainer, never a toggle. */}
-                    <button
-                      type="button"
-                      data-testid={BROWSER_CONTROL_TEST_IDS.menuRow}
-                      title={COMPUTER_USE_ON_WEB.tooltip}
-                      onClick={() => {
-                        setBrowserControlOpen(true);
-                        closeMenu();
-                      }}
-                      className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors hover:bg-muted/60"
-                    >
-                      <Monitor className="h-4 w-4 shrink-0 text-muted-foreground" />
-                      <span className="flex-1 text-left">{COMPUTER_USE_ON_WEB.label}</span>
-                      <span className="text-xs text-muted-foreground">
-                        {BROWSER_CONTROL_MENU.badge}
-                      </span>
-                    </button>
 
                     {/* 8b. Managed Office creation — server-owned DOCX/PPTX bytes,
                         persisted through the same generated-file pipeline as sandbox output. */}
@@ -4466,22 +4418,6 @@ const ChatComposerNewComponent = ({
               </span>
             );
           })}
-
-        {/* Webcam capture. Owns its own permission prompt, live preview, and
-            stream teardown; the captured frame joins the same attachment
-            pipeline as a screenshot or a dropped image. */}
-        <CameraCaptureDialog
-          open={cameraOpen}
-          onClose={() => setCameraOpen(false)}
-          onCapture={(file) => addChatAttachments([file])}
-        />
-
-        <BrowserControlRequirementDialog
-          open={browserControlOpen}
-          onClose={() => setBrowserControlOpen(false)}
-          subscriptionTier={subscriptionTier}
-          planKnown={billingPolicyReady}
-        />
       </div>
     </div>
   );
