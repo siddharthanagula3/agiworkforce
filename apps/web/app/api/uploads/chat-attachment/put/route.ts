@@ -9,6 +9,8 @@ import { getClerkAuthUser } from '@/lib/api-auth';
 import { isPrivateObjectStorageConfigured, putPrivateObject } from '@/lib/server/object-storage';
 import { MAX_CHAT_ATTACHMENT_BYTES } from '@/lib/chat-attachment-policy';
 
+const CHAT_ATTACHMENT_SIZE_LIMIT_MESSAGE = 'Chat attachments are limited to 12 MiB.';
+
 function isOwnedChatAttachmentKey(key: string, userId: string): boolean {
   const prefix = `chat-attachments/${userId}/`;
   return (
@@ -41,7 +43,7 @@ async function handlePut(request: NextRequest): Promise<NextResponse> {
   const contentLengthHeader = request.headers.get('content-length');
   const declaredLength = contentLengthHeader ? Number(contentLengthHeader) : undefined;
   if (declaredLength !== undefined && declaredLength > MAX_CHAT_ATTACHMENT_BYTES) {
-    throw createError.validation('Chat attachments are limited to 12 MiB.');
+    throw createError.validation(CHAT_ATTACHMENT_SIZE_LIMIT_MESSAGE);
   }
 
   const contentType = request.headers.get('content-type')?.trim() || 'application/octet-stream';
@@ -50,7 +52,7 @@ async function handlePut(request: NextRequest): Promise<NextResponse> {
     throw createError.validation('The uploaded file was empty.');
   }
   if (body.byteLength > MAX_CHAT_ATTACHMENT_BYTES) {
-    throw createError.validation('Chat attachments are limited to 12 MiB.');
+    throw createError.validation(CHAT_ATTACHMENT_SIZE_LIMIT_MESSAGE);
   }
 
   await putPrivateObject({
