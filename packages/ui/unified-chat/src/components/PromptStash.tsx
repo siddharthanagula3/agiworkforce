@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Bookmark, Trash2, X } from 'lucide-react';
 import { useShallow } from 'zustand/react/shallow';
-import { useMenuKeyboard } from '@agiworkforce/ui';
+import { useConfirmAction, useMenuKeyboard } from '@agiworkforce/ui';
 import { cn } from '../lib/utils';
 import { usePromptStashStore } from '../stores/promptStashStore';
 import type { PromptStashEntry } from '../stores/promptStashStore';
@@ -74,9 +74,10 @@ export function PromptStash({ currentText, onLoad, disabled = false, onToast }: 
   const { entries, save, remove, clear } = usePromptStashStore(
     useShallow((s) => ({ entries: s.entries, save: s.save, remove: s.remove, clear: s.clear })),
   );
+  const { confirm, dialog: confirmDialog } = useConfirmAction();
 
   useEffect(() => {
-    if (!isOpen) return;
+    if (!isOpen || confirmDialog) return;
     function handleOutsideClick(e: MouseEvent) {
       if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
         setIsOpen(false);
@@ -84,10 +85,10 @@ export function PromptStash({ currentText, onLoad, disabled = false, onToast }: 
     }
     document.addEventListener('mousedown', handleOutsideClick);
     return () => document.removeEventListener('mousedown', handleOutsideClick);
-  }, [isOpen]);
+  }, [isOpen, confirmDialog]);
 
   useMenuKeyboard({
-    open: isOpen,
+    open: isOpen && !confirmDialog,
     onClose: () => setIsOpen(false),
     panelRef,
     triggerRef,
@@ -116,7 +117,7 @@ export function PromptStash({ currentText, onLoad, disabled = false, onToast }: 
     (id: string) => {
       remove(id);
       onToast?.('Prompt removed', 'success');
-      triggerRef.current?.focus();
+      window.setTimeout(() => triggerRef.current?.focus(), 0);
     },
     [remove, onToast],
   );
@@ -125,11 +126,34 @@ export function PromptStash({ currentText, onLoad, disabled = false, onToast }: 
     clear();
     onToast?.('Stash cleared', 'success');
     setIsOpen(false);
-    triggerRef.current?.focus();
+    window.setTimeout(() => triggerRef.current?.focus(), 0);
   }, [clear, onToast]);
+
+  const confirmDelete = useCallback(
+    (id: string) => {
+      confirm({
+        title: 'Delete this prompt?',
+        description: 'It will be removed from your stash. This cannot be undone.',
+        confirmLabel: 'Delete prompt',
+        onConfirm: () => handleDelete(id),
+      });
+    },
+    [confirm, handleDelete],
+  );
+
+  const confirmClearAll = useCallback(() => {
+    const count = entries.length;
+    confirm({
+      title: 'Clear all saved prompts?',
+      description: `All ${count} saved ${count === 1 ? 'prompt' : 'prompts'} will be permanently removed. This cannot be undone.`,
+      confirmLabel: 'Clear all',
+      onConfirm: handleClearAll,
+    });
+  }, [confirm, entries.length, handleClearAll]);
 
   return (
     <div ref={containerRef} className="relative">
+      {confirmDialog}
       {/* Trigger button */}
       <button
         ref={triggerRef}
@@ -194,7 +218,7 @@ export function PromptStash({ currentText, onLoad, disabled = false, onToast }: 
                     key={entry.id}
                     entry={entry}
                     onSelect={handleSelect}
-                    onDelete={handleDelete}
+                    onDelete={confirmDelete}
                   />
                 ))}
               </div>
@@ -203,7 +227,7 @@ export function PromptStash({ currentText, onLoad, disabled = false, onToast }: 
               <div className="px-2 py-1.5 border-t border-border">
                 <button
                   type="button"
-                  onClick={handleClearAll}
+                  onClick={confirmClearAll}
                   className="flex w-full items-center justify-center gap-1 rounded-md px-2 py-1.5 text-[12px] text-muted-foreground hover:text-danger hover:bg-destructive/10 transition-colors"
                 >
                   <Trash2 className="h-3 w-3" />
