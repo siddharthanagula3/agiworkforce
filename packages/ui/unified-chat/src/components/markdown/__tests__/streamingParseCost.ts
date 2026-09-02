@@ -50,8 +50,8 @@ export const FULL_PARSE_COST_PROFILE: ParseCostProfile = {
 
 export interface ParseCostRow {
   readonly size: number;
-  readonly tailMedianMs: number;
-  readonly fullReparseMedianMs: number;
+  readonly tailFastestMs: number;
+  readonly fullReparseFastestMs: number;
   readonly tailMedianChars: number;
   readonly samples: number;
   readonly fullReparseSamples: number;
@@ -101,6 +101,14 @@ function median(values: readonly number[]): number {
   const upper = sorted[middle] ?? Number.NaN;
   if (sorted.length % 2 === 1) return upper;
   return ((sorted[middle - 1] ?? Number.NaN) + upper) / 2;
+}
+
+function fastest(values: readonly number[]): number {
+  let best = Number.NaN;
+  for (const value of values) {
+    if (Number.isNaN(best) || value < best) best = value;
+  }
+  return best;
 }
 
 function push(into: Map<number, number[]>, size: number, value: number): void {
@@ -239,8 +247,8 @@ export function measureStreamingParseCost(profile: ParseCostProfile): ParseCostR
 
   const rows = sizes.map((size) => ({
     size,
-    tailMedianMs: median(tailDurations.get(size) ?? []),
-    fullReparseMedianMs: median(fullReparseDurations.get(size) ?? []),
+    tailFastestMs: fastest(tailDurations.get(size) ?? []),
+    fullReparseFastestMs: fastest(fullReparseDurations.get(size) ?? []),
     tailMedianChars: median(tailChars.get(size) ?? []),
     samples: (tailDurations.get(size) ?? []).length,
     fullReparseSamples: (fullReparseDurations.get(size) ?? []).length,
@@ -256,8 +264,8 @@ export function parseCostGrowth(report: ParseCostReport): ParseCostGrowth {
     throw new Error('Parse-cost report is missing the reference or the largest size.');
   }
   return {
-    tail: largest.tailMedianMs / reference.tailMedianMs,
-    fullReparse: largest.fullReparseMedianMs / reference.fullReparseMedianMs,
+    tail: largest.tailFastestMs / reference.tailFastestMs,
+    fullReparse: largest.fullReparseFastestMs / reference.fullReparseFastestMs,
   };
 }
 
@@ -265,8 +273,8 @@ const MS_PRECISION = 4;
 const RATIO_PRECISION = 2;
 const TABLE_COLUMNS = [
   'accumulated chars',
-  'full reparse ms',
-  'tail split ms',
+  'fastest full reparse ms',
+  'fastest tail split ms',
   'tail chars',
   'split samples',
   'reparse samples',
@@ -284,8 +292,8 @@ export function formatParseCostTable(report: ParseCostReport): string {
     ...report.rows.map((entry) =>
       row([
         entry.size.toLocaleString('en-US'),
-        entry.fullReparseMedianMs.toFixed(MS_PRECISION),
-        entry.tailMedianMs.toFixed(MS_PRECISION),
+        entry.fullReparseFastestMs.toFixed(MS_PRECISION),
+        entry.tailFastestMs.toFixed(MS_PRECISION),
         String(Math.round(entry.tailMedianChars)),
         String(entry.samples),
         String(entry.fullReparseSamples),
