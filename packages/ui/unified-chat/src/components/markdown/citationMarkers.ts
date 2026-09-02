@@ -39,7 +39,8 @@ export function findCitationIndexForUrl(
   const target = normalizeCitationUrl(href);
   if (!target) return undefined;
   for (let i = 0; i < citations.length; i++) {
-    if (normalizeCitationUrl(citations[i].url) === target) return i + 1;
+    const citation = citations[i];
+    if (citation && normalizeCitationUrl(citation.url) === target) return i + 1;
   }
   return undefined;
 }
