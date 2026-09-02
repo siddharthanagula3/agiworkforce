@@ -4,6 +4,7 @@ import { MarketingFooter } from '@/features/marketing/components/MarketingFooter
 import { Section, Stack } from '@/features/marketing/components/system';
 import { PageHero } from '@/features/marketing/components/pages/surfaces/shared';
 import { LinkGrid } from '@/features/marketing/components/pages/features/shared';
+import { contactMailto } from '@/lib/legal-constants';
 
 export const metadata = buildMetadata({
   title: 'Careers: a small team, on purpose',
@@ -49,7 +50,7 @@ export default function CareersPage() {
                 {
                   meta: 'Write',
                   title: 'Stay in touch',
-                  href: 'mailto:contact@agiworkforce.com',
+                  href: contactMailto(),
                   body: "Email us and tell us what you're building. A real human reads it.",
                   external: true,
                 },
