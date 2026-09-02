@@ -22,6 +22,7 @@ import {
   transitionCloudAgentRun,
 } from '@/lib/services/cloud-agent-run-service';
 import { getNeonDb } from '@/lib/server/neon-db';
+import { createClaimedUserScopedDb } from '@/lib/server/claimed-user-scope-db';
 import { recordManagedAutoMemoryTurn } from '@/lib/services/managed-auto-memory-service';
 import {
   cloudAgentWorkflowBillingKey,
@@ -99,8 +100,12 @@ async function settleBilling(
 
   if (billing.kind === 'managed') {
     const { kind: _kind, ...reservation } = billing;
+    const managedUsageDb = createClaimedUserScopedDb(db, {
+      userId: input.userId,
+      organizationId: input.processed.organizationId ?? null,
+    });
     const finalization = await finalizeObservedManagedUsage({
-      reservation: { db, ...reservation },
+      reservation: { db: managedUsageDb, ...reservation },
       provider,
       model,
       usage,
