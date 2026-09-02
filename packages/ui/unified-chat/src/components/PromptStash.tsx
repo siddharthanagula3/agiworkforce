@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Bookmark, Trash2, X } from 'lucide-react';
 import { useShallow } from 'zustand/react/shallow';
+import { useMenuKeyboard } from '@agiworkforce/ui';
 import { cn } from '../lib/utils';
 import { usePromptStashStore } from '../stores/promptStashStore';
 import type { PromptStashEntry } from '../stores/promptStashStore';
@@ -67,6 +68,8 @@ function EntryRow({ entry, onSelect, onDelete }: EntryRowProps) {
 export function PromptStash({ currentText, onLoad, disabled = false, onToast }: PromptStashProps) {
   const [isOpen, setIsOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
 
   const { entries, save, remove, clear } = usePromptStashStore(
     useShallow((s) => ({ entries: s.entries, save: s.save, remove: s.remove, clear: s.clear })),
@@ -83,16 +86,13 @@ export function PromptStash({ currentText, onLoad, disabled = false, onToast }: 
     return () => document.removeEventListener('mousedown', handleOutsideClick);
   }, [isOpen]);
 
-  useEffect(() => {
-    if (!isOpen) return;
-    function handleKeyDown(e: KeyboardEvent) {
-      if (e.key === 'Escape') {
-        setIsOpen(false);
-      }
-    }
-    document.addEventListener('keydown', handleKeyDown);
-    return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [isOpen]);
+  useMenuKeyboard({
+    open: isOpen,
+    onClose: () => setIsOpen(false),
+    panelRef,
+    triggerRef,
+    itemSelector: '[role="option"]',
+  });
 
   const handleSave = useCallback(() => {
     const trimmed = currentText.trim();
@@ -107,6 +107,7 @@ export function PromptStash({ currentText, onLoad, disabled = false, onToast }: 
       onLoad(entry.text);
       setIsOpen(false);
       onToast?.('Prompt loaded', 'success');
+      triggerRef.current?.focus();
     },
     [onLoad, onToast],
   );
@@ -115,6 +116,7 @@ export function PromptStash({ currentText, onLoad, disabled = false, onToast }: 
     (id: string) => {
       remove(id);
       onToast?.('Prompt removed', 'success');
+      triggerRef.current?.focus();
     },
     [remove, onToast],
   );
@@ -123,12 +125,14 @@ export function PromptStash({ currentText, onLoad, disabled = false, onToast }: 
     clear();
     onToast?.('Stash cleared', 'success');
     setIsOpen(false);
+    triggerRef.current?.focus();
   }, [clear, onToast]);
 
   return (
     <div ref={containerRef} className="relative">
       {/* Trigger button */}
       <button
+        ref={triggerRef}
         type="button"
         disabled={disabled}
         aria-label="Prompt stash"
@@ -150,6 +154,7 @@ export function PromptStash({ currentText, onLoad, disabled = false, onToast }: 
       {/* Dropdown panel */}
       {isOpen && (
         <div
+          ref={panelRef}
           role="listbox"
           aria-label="Saved prompts"
           className="absolute bottom-full right-0 mb-2 z-50 w-80 rounded-xl border border-border bg-popover shadow-xl overflow-hidden"
