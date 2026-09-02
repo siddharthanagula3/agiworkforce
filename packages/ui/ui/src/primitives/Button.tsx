@@ -32,6 +32,19 @@ const buttonVariants = cva(
   },
 );
 
+function hasRenderedText(node: React.ReactNode): boolean {
+  if (typeof node === 'string' || typeof node === 'number') {
+    return String(node).trim() !== '';
+  }
+  if (Array.isArray(node)) {
+    return node.some(hasRenderedText);
+  }
+  if (React.isValidElement(node)) {
+    return hasRenderedText((node.props as { children?: React.ReactNode }).children);
+  }
+  return false;
+}
+
 export interface ButtonProps
   extends React.ButtonHTMLAttributes<HTMLButtonElement>, VariantProps<typeof buttonVariants> {
   asChild?: boolean;
@@ -71,9 +84,7 @@ function Button({
     );
   }
 
-  const hasTextContent = React.Children.toArray(children).some(
-    (child) => typeof child === 'string' && child.trim() !== '',
-  );
+  const hasTextContent = hasRenderedText(children);
 
   return (
     <Comp
