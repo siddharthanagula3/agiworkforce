@@ -102,15 +102,17 @@ const ProviderStepResultSchema = z
           line: z.string(),
           publicTextDelta: z.string().optional(),
           serverToolStart: z.object({ toolCallId: z.string(), name: z.string() }).optional(),
-          serverToolResult: z
-            .object({
-              toolCallId: z.string(),
-              name: z.string(),
-              sources: z.array(
-                z.object({ url: z.string(), title: z.string(), snippet: z.string().optional() }),
-              ),
-              elapsedMs: z.number(),
-            })
+          serverToolResults: z
+            .array(
+              z.object({
+                toolCallId: z.string(),
+                name: z.string(),
+                sources: z.array(
+                  z.object({ url: z.string(), title: z.string(), snippet: z.string().optional() }),
+                ),
+                elapsedMs: z.number(),
+              }),
+            )
             .optional(),
         })
         .strict(),
