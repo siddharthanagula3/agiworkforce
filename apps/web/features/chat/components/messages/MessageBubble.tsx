@@ -340,6 +340,9 @@ interface Message {
     /** Trust-boundary labels persisted with the turn (Local/BYOK handoff evidence). */
     privacyMode?: StoreMessageMetadata['privacyMode'];
     providerMode?: StoreMessageMetadata['providerMode'];
+    /** How the turn ended, and why it stopped early. Both drive the empty-turn notice. */
+    finishReason?: StoreMessageMetadata['finishReason'];
+    streamError?: StoreMessageMetadata['streamError'];
     isDocument?: boolean;
     documentTitle?: string;
     hasWorkStream?: boolean;
