@@ -13,6 +13,7 @@ import {
 } from '@/features/marketing/components/system';
 import { PageHero } from '@/features/marketing/components/pages/surfaces/shared';
 import { LEGAL_ENTITY, NOTICE_ADDRESS, POLICY_LAST_UPDATED } from '@/lib/legal-constants';
+import { providerLabels } from '@agiworkforce/types';
 import modelRegistry from '@agiworkforce/types/models.json';
 
 export const metadata = buildMetadata({
@@ -30,21 +31,6 @@ interface RegistryModel {
   openWeight?: boolean | null;
   modelType?: string;
 }
-
-const PROVIDER_LABELS: Record<string, string> = {
-  anthropic: 'Anthropic',
-  openai: 'OpenAI',
-  google: 'Google',
-  xai: 'xAI',
-  deepseek: 'DeepSeek',
-  qwen: 'Qwen',
-  moonshot: 'Moonshot',
-  perplexity: 'Perplexity',
-  zhipu: 'Zhipu',
-  minimax: 'MiniMax',
-  runway: 'Runway',
-  managed_cloud: 'AGI Managed Cloud',
-};
 
 function licenceLabel(model: RegistryModel): string {
   if (typeof model.license === 'string' && model.license.trim().length > 0) {
@@ -70,7 +56,7 @@ const BY_PROVIDER = MODELS.reduce<Record<string, RegistryModel[]>>((acc, model) 
 }, {});
 
 const PROVIDER_KEYS = Object.keys(BY_PROVIDER).sort((a, b) =>
-  (PROVIDER_LABELS[a] ?? a).localeCompare(PROVIDER_LABELS[b] ?? b),
+  (providerLabels[a] ?? a).localeCompare(providerLabels[b] ?? b),
 );
 
 const COLUMNS: readonly LedgerRow[] = [
@@ -151,10 +137,10 @@ export default function ModelLicensesPage() {
           >
             <Stack gap="loose">
               <h2 className="agi-ds-h2" id={`agi-model-licenses-${providerKey}-title`}>
-                {PROVIDER_LABELS[providerKey] ?? providerKey}
+                {providerLabels[providerKey] ?? providerKey}
               </h2>
               <Ledger
-                caption={PROVIDER_LABELS[providerKey] ?? providerKey}
+                caption={providerLabels[providerKey] ?? providerKey}
                 rows={providerRows(providerKey)}
               />
             </Stack>
