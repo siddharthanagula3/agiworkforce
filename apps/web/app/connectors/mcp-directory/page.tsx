@@ -23,42 +23,42 @@ const REFERENCE_MCPS = [
     name: 'Filesystem',
     description: 'Read and write files on your local machine.',
     pkg: '@modelcontextprotocol/server-filesystem',
-    url: 'https://github.com/modelcontextprotocol/servers',
+    url: 'https://github.com/modelcontextprotocol/servers/tree/main/src/filesystem',
     tags: 'stdio · local',
   },
   {
     name: 'Git',
     description: 'Repository status, diffs, branches, and commits.',
     pkg: 'mcp-server-git',
-    url: 'https://github.com/modelcontextprotocol/servers',
+    url: 'https://github.com/modelcontextprotocol/servers/tree/main/src/git',
     tags: 'stdio · developer',
   },
   {
     name: 'GitHub',
     description: 'Repos, issues, and pull requests via the GitHub API.',
     pkg: '@modelcontextprotocol/server-github',
-    url: 'https://github.com/modelcontextprotocol/servers',
+    url: 'https://github.com/modelcontextprotocol/servers-archived/tree/main/src/github',
     tags: 'stdio · developer',
   },
   {
     name: 'Postgres',
     description: 'Query and manage PostgreSQL databases.',
     pkg: '@modelcontextprotocol/server-postgres',
-    url: 'https://github.com/modelcontextprotocol/servers',
+    url: 'https://github.com/modelcontextprotocol/servers-archived/tree/main/src/postgres',
     tags: 'stdio · database',
   },
   {
     name: 'Slack',
     description: 'Post messages and read channels via the Slack API.',
     pkg: '@modelcontextprotocol/server-slack',
-    url: 'https://github.com/modelcontextprotocol/servers',
+    url: 'https://github.com/modelcontextprotocol/servers-archived/tree/main/src/slack',
     tags: 'stdio · productivity',
   },
   {
     name: 'Memory',
     description: 'Persistent knowledge-graph storage for long-term context.',
     pkg: '@modelcontextprotocol/server-memory',
-    url: 'https://github.com/modelcontextprotocol/servers',
+    url: 'https://github.com/modelcontextprotocol/servers/tree/main/src/memory',
     tags: 'stdio · data',
   },
 ];
@@ -77,10 +77,12 @@ export default function McpDirectoryPage() {
               </h1>
             </div>
             <Prose size="lg">
-              We do not host a browsable or searchable MCP directory, and there is no plan date for
-              one. Every server below is a stdio process, so it runs on Desktop or the CLI, not in
-              the browser. Desktop&rsquo;s built-in server browser installs each of these by name.
-              To search the full catalogue of community servers, use the official MCP registry.
+              We do not host a browsable or searchable MCP (Model Context Protocol) directory, and
+              there is no plan date for one. Every server below is a stdio process, meaning it talks
+              over standard input/output rather than the network, so it runs on Desktop or the CLI,
+              not in the browser. Desktop&rsquo;s built-in server browser installs each of these by
+              name. To search the full catalogue of community servers, use the official MCP
+              registry.
             </Prose>
             <ButtonRow>
               <Button href="https://modelcontextprotocol.io/registry/about">
