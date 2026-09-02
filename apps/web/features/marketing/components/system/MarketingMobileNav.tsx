@@ -3,12 +3,12 @@
 import Link from 'next/link';
 import { Menu } from 'lucide-react';
 import { Sheet, SheetContent, SheetTitle, SheetTrigger } from '@agiworkforce/ui';
-import { HEADER_LINKS, WEB_ENTRY_HREF } from './nav';
+import { CHAT_ROOT_HREF, HEADER_LINKS, WEB_ENTRY_HREF } from './nav';
 
 const ICON_SIZE = 20;
 const SIGN_IN_HREF = '/login';
 
-export function MarketingMobileNav() {
+export function MarketingMobileNav({ signedIn = false }: { signedIn?: boolean } = {}) {
   return (
     <Sheet>
       <SheetTrigger asChild>
@@ -32,14 +32,20 @@ export function MarketingMobileNav() {
                 </Link>
               </li>
             ))}
-            <li>
-              <Link href={SIGN_IN_HREF} className="agi-ds-mobile-nav-link">
-                Sign in
-              </Link>
-            </li>
+            {!signedIn && (
+              <li>
+                <Link href={SIGN_IN_HREF} className="agi-ds-mobile-nav-link">
+                  Sign in
+                </Link>
+              </li>
+            )}
           </ul>
-          <Link href={WEB_ENTRY_HREF} className="agi-ds-btn" data-variant="primary">
-            Try AGI Web
+          <Link
+            href={signedIn ? CHAT_ROOT_HREF : WEB_ENTRY_HREF}
+            className="agi-ds-btn"
+            data-variant="primary"
+          >
+            {signedIn ? 'Open AGI' : 'Try AGI Web'}
           </Link>
         </nav>
       </SheetContent>
