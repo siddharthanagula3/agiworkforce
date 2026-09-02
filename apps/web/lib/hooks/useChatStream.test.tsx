@@ -1067,6 +1067,108 @@ describe('useChatStream', () => {
     });
   });
 
+  describe('x_code_result wiring', () => {
+    it('reads stdout, stderr, and return_code from the real code_execution_result shape', async () => {
+      mockSseStream([
+        {
+          choices: [
+            {
+              delta: {
+                x_tool_status: {
+                  type: 'server_tool_use',
+                  name: 'code_execution',
+                  status: 'executing',
+                },
+              },
+            },
+          ],
+        },
+        {
+          choices: [
+            {
+              delta: {
+                x_code_result: {
+                  content: {
+                    type: 'code_execution_result',
+                    content: [],
+                    stdout: 'hello from python\n',
+                    stderr: '',
+                    return_code: 0,
+                  },
+                },
+              },
+            },
+          ],
+        },
+        { choices: [{ delta: { content: 'Done.' }, finish_reason: 'stop' }] },
+      ]);
+
+      const { result } = renderHook(() => useChatStream());
+      await act(async () => {
+        await result.current.sendMessage('run some code', {
+          conversationId: TEMP_CONVERSATION.id,
+        });
+      });
+
+      const state = useChatStore.getState();
+      const assistantMsg = state.messages.find((m) => m.role === 'assistant');
+      expect(assistantMsg?.metadata?.codeExecutionResult).toEqual({
+        stdout: 'hello from python\n',
+        stderr: '',
+        returnCode: 0,
+      });
+      const codeEntry = assistantMsg?.metadata?.tools?.find((t) => t.name === 'code_execution');
+      expect(codeEntry?.status).toBe('completed');
+    });
+
+    it('marks the tool failed on a code_execution_tool_result_error instead of a false success', async () => {
+      mockSseStream([
+        {
+          choices: [
+            {
+              delta: {
+                x_tool_status: {
+                  type: 'server_tool_use',
+                  name: 'code_execution',
+                  status: 'executing',
+                },
+              },
+            },
+          ],
+        },
+        {
+          choices: [
+            {
+              delta: {
+                x_code_result: {
+                  content: {
+                    type: 'code_execution_tool_result_error',
+                    error_code: 'execution_time_exceeded',
+                  },
+                },
+              },
+            },
+          ],
+        },
+        { choices: [{ delta: { content: 'The script timed out.' }, finish_reason: 'stop' }] },
+      ]);
+
+      const { result } = renderHook(() => useChatStream());
+      await act(async () => {
+        await result.current.sendMessage('run some code', {
+          conversationId: TEMP_CONVERSATION.id,
+        });
+      });
+
+      const state = useChatStore.getState();
+      const assistantMsg = state.messages.find((m) => m.role === 'assistant');
+      const codeEntry = assistantMsg?.metadata?.tools?.find((t) => t.name === 'code_execution');
+      expect(codeEntry?.status).toBe('failed');
+      expect(codeEntry?.error).toBe('Code execution failed: execution_time_exceeded');
+      expect(assistantMsg?.metadata?.codeExecutionResult).toBeUndefined();
+    });
+  });
+
   describe('saveMessageToDb durability (persist after a long stream)', () => {
     function headerRecord(init: RequestInit | undefined): Record<string, string> {
       return (init?.headers ?? {}) as Record<string, string>;

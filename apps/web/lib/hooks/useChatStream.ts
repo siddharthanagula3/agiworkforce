@@ -1758,36 +1758,25 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
 
           const codeResultBlock = parsed.choices?.[0]?.delta?.x_code_result;
           if (codeResultBlock) {
-            const content = Array.isArray(codeResultBlock.content)
-              ? (codeResultBlock.content as Record<string, unknown>[])
-              : [];
-            const textItem = content.find((c) => c['type'] === 'text');
-            const rawText = (textItem?.['text'] as string) || '';
-            const images = content
-              .filter((c) => c['type'] === 'image')
-              .map((c) => {
-                const src = c['source'] as Record<string, unknown> | undefined;
-                return {
-                  mediaType: (src?.['media_type'] as string) || 'image/png',
-                  data: (src?.['data'] as string) || '',
-                };
-              })
-              .filter((img) => img.data);
-
-            const stdout = rawText.match(/<stdout>([\s\S]*?)<\/stdout>/)?.[1] ?? rawText;
-            const stderr = rawText.match(/<stderr>([\s\S]*?)<\/stderr>/)?.[1] ?? '';
-            const returnCode = parseInt(
-              rawText.match(/<return_code>(\d+)<\/return_code>/)?.[1] ?? '0',
-              10,
-            );
-            currentCodeExecutionResult = {
-              stdout,
-              stderr,
-              returnCode,
-              images: images.length > 0 ? images : undefined,
-            };
-            setCodeExecutionResult(assistantMessageId, currentCodeExecutionResult, conversationId);
-            finishTool('code_execution', 'completed');
+            const result = codeResultBlock.content as Record<string, unknown> | undefined;
+            if (result?.['type'] === 'code_execution_tool_result_error') {
+              const errorCode = (result['error_code'] as string | undefined) || 'unknown_error';
+              finishTool('code_execution', 'failed', `Code execution failed: ${errorCode}`);
+            } else {
+              const stdout =
+                typeof result?.['stdout'] === 'string' ? (result['stdout'] as string) : '';
+              const stderr =
+                typeof result?.['stderr'] === 'string' ? (result['stderr'] as string) : '';
+              const returnCode =
+                typeof result?.['return_code'] === 'number' ? (result['return_code'] as number) : 0;
+              currentCodeExecutionResult = { stdout, stderr, returnCode };
+              setCodeExecutionResult(
+                assistantMessageId,
+                currentCodeExecutionResult,
+                conversationId,
+              );
+              finishTool('code_execution', 'completed');
+            }
           }
 
           const searchResultsBlock = parsed.choices?.[0]?.delta?.x_search_results;
