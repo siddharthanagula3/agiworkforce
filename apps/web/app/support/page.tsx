@@ -10,6 +10,7 @@ import {
   Stack,
 } from '@/features/marketing/components/system';
 import { PageHero } from '@/features/marketing/components/pages/surfaces/shared';
+import { CONTACT_EMAIL, contactMailto } from '@/lib/legal-constants';
 
 export const metadata = buildMetadata({
   title: 'Support: how to reach us',
@@ -21,12 +22,11 @@ export const metadata = buildMetadata({
 const SUPPORT_ROWS: { label: string; value: string }[] = [
   {
     label: 'Local / BYOK',
-    value: 'Available now. Email contact@agiworkforce.com for a best-effort reply from a human.',
+    value: `Available now. Email ${CONTACT_EMAIL} for a best-effort reply from a human.`,
   },
   {
     label: 'Basic / Pro / Max',
-    value:
-      'Available now. Email contact@agiworkforce.com for a best-effort reply from a human; no published response-time SLA yet.',
+    value: `Available now. Email ${CONTACT_EMAIL} for a best-effort reply from a human; no published response-time SLA yet.`,
   },
   {
     label: 'Enterprise',
@@ -45,7 +45,7 @@ export default function SupportPage() {
           title="We read every email."
           lede="Email is the canonical channel today, for everyone. Paid Team and Enterprise SLAs are still firming up, so we do not publish response-time promises yet. What is planned is labeled as planned."
           ctas={[
-            { href: 'mailto:contact@agiworkforce.com', label: 'Email contact@agiworkforce.com' },
+            { href: contactMailto(), label: `Email ${CONTACT_EMAIL}` },
             { href: '/help', label: 'Browse the help index', variant: 'secondary' },
           ]}
         />
@@ -78,7 +78,7 @@ export default function SupportPage() {
               </Prose>
             </div>
             <ButtonRow>
-              <Button href="mailto:contact@agiworkforce.com">Email a bug report</Button>
+              <Button href={contactMailto()}>Email a bug report</Button>
               <Button href="/status" variant="secondary">
                 Check service status
               </Button>

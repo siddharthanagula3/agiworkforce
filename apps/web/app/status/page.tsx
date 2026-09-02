@@ -12,6 +12,7 @@ import {
 import { FactGrid, PageHero } from '@/features/marketing/components/pages/surfaces/shared';
 import { getCachedHealthChecks, type HealthCheckResult } from '../../lib/server/health-check';
 import { RENDER_CACHE_SECONDS } from '@/lib/server/render-cache';
+import { contactMailto } from '@/lib/legal-constants';
 
 export const metadata = buildMetadata({
   title: 'Status: a live, honestly scoped health signal',
@@ -267,7 +268,7 @@ export default async function StatusPage() {
               </Prose>
             </div>
             <ButtonRow>
-              <Button href="mailto:contact@agiworkforce.com">Email an incident report</Button>
+              <Button href={contactMailto()}>Email an incident report</Button>
               <Button href="/security" variant="secondary">
                 Security details
               </Button>
