@@ -33,6 +33,7 @@ import {
   type CloudAgentWorkflowInput,
 } from './cloud-agent-workflow-input';
 import { projectCloudAgentWorkflowChunk } from './cloud-agent-workflow-stream';
+import { DURABLE_STREAM_OPEN_FRAME } from './durable-stream-liveness';
 import {
   settleWorkflowInvocation,
   type WorkflowTerminalOutcome,
@@ -167,10 +168,27 @@ function workflowContinuation(
   );
 }
 
+/**
+ * The first byte the durable stream ever produces, written before this
+ * invocation touches the database or the provider. The caller's liveness probe
+ * races this frame, so a stall now means the workflow never reached its first
+ * line and the degraded turn cannot double-execute.
+ */
+async function openCloudAgentWorkflowStream(): Promise<void> {
+  const writer = getWritable<Uint8Array>().getWriter();
+  try {
+    await writer.write(new TextEncoder().encode(DURABLE_STREAM_OPEN_FRAME));
+  } finally {
+    writer.releaseLock();
+  }
+}
+
 export async function executeCloudAgentWorkflowInvocation(
   rawInput: CloudAgentWorkflowInput,
 ): Promise<WorkflowInvocationResult> {
   'use step';
+
+  await openCloudAgentWorkflowStream();
 
   const input = parseCloudAgentWorkflowInput(rawInput);
   const db = getNeonDb();

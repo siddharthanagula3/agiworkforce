@@ -10,7 +10,7 @@ import { createFailoverPlan } from '@/app/api/llm/v1/chat/completions/lib/manage
 import type { ProcessedRequest } from '@/app/api/llm/v1/chat/completions/lib/request-processor';
 import { runToolLoop, type ApprovalMode } from '@/app/api/llm/v1/chat/completions/lib/tool-loop';
 import { logger } from '@/lib/logger';
-import { claimLiveDurableStream } from './durable-stream-liveness';
+import { claimLiveDurableStream, isDurableTransportCoolingDown } from './durable-stream-liveness';
 import type { WebMcpToolDef } from '@/lib/mcp-tool-executor';
 import { createObservedProviderUsage } from '@/lib/services/managed-usage-accounting-service';
 import { recordManagedAutoMemoryTurn } from '@/lib/services/managed-auto-memory-service';
@@ -93,7 +93,8 @@ export type CloudAgentTransportDegradeReason =
   | 'kill_switch'
   | 'no_reservation'
   | 'workflow_start_failed'
-  | 'workflow_stream_stalled';
+  | 'workflow_stream_stalled'
+  | 'transport_cooling_down';
 
 export interface RunCloudAgentTurnInput extends StartCloudAgentWorkflowExecutionInput {
   /**
@@ -187,6 +188,7 @@ export async function runCloudAgentTurn(
   };
 
   if (!areDurableInitialTurnsEnabled()) return degrade('kill_switch');
+  if (isDurableTransportCoolingDown()) return degrade('transport_cooling_down');
 
   try {
     const workflow = await startCloudAgentWorkflowExecution(input);

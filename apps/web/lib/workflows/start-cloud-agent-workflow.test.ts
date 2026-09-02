@@ -73,6 +73,10 @@ vi.mock('@/lib/user-connector-tools', () => ({
 
 import { runCloudAgentTurn, startCloudAgentWorkflowExecution } from './start-cloud-agent-workflow';
 import { CloudAgentWorkflowBillingUnavailableError } from './cloud-agent-workflow-input';
+import {
+  recordDurableTransportClaim,
+  recordDurableTransportStall,
+} from './durable-stream-liveness';
 
 const RUN_ID = '0190a000-0000-7000-8000-000000000001';
 const CHECKPOINT_ID = '0190a000-0000-7000-8000-000000000004';
@@ -172,6 +176,7 @@ describe('runCloudAgentTurn transport selection', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.unstubAllEnvs();
+    recordDurableTransportClaim();
     workflowMocks.buildInput.mockReturnValue({ version: 1 });
     workflowMocks.runToolLoop.mockReturnValue((async function* () {})());
     workflowMocks.buildStream.mockReturnValue(inlineStream);
@@ -212,6 +217,24 @@ describe('runCloudAgentTurn transport selection', () => {
     expect(result.transport).toBe('inline');
     expect(result.degradedReason).toBe('workflow_stream_stalled');
   }, 20_000);
+
+  it('skips the platform entirely while the transport is cooling down', async () => {
+    recordDurableTransportStall();
+
+    const turn = await runCloudAgentTurn(turnInput());
+
+    expect(turn).toMatchObject({ transport: 'inline', degradedReason: 'transport_cooling_down' });
+    expect(workflowMocks.start).not.toHaveBeenCalled();
+    expect(workflowMocks.runToolLoop).toHaveBeenCalledOnce();
+  });
+
+  it('rethrows the cooldown for a caller that asked to answer for it itself', async () => {
+    recordDurableTransportStall();
+
+    await expect(runCloudAgentTurn(turnInput({ onDurableUnavailable: 'fail' }))).rejects.toThrow(
+      'transport_cooling_down',
+    );
+  });
 
   it('serves the turn inline when the durable platform refuses it', async () => {
     workflowMocks.start.mockRejectedValue(new Error('workflow storage unavailable'));
