@@ -15,6 +15,7 @@ import { cn } from '@shared/lib/utils';
 export interface ClarifyCardContext {
   canRespond: boolean;
   onRespond?: (cardId: string, payload: InteractiveCardResponsePayload) => void;
+  submissionError?: string;
 }
 
 interface ClarifyCardProps {
@@ -211,6 +212,12 @@ export function ClarifyCard({ card, body, ctx }: ClarifyCardProps) {
             I'll just type it
           </button>
         </div>
+      )}
+
+      {interactive && ctx.submissionError && (
+        <p className="mt-2 text-xs text-[var(--chat-destructive-text)]" role="alert">
+          {ctx.submissionError}
+        </p>
       )}
     </section>
   );

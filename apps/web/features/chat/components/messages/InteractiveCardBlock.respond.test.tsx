@@ -162,7 +162,7 @@ describe('InteractiveCardBlock — response channel', () => {
     }
   });
 
-  it('leaves the card untouched when the endpoint refuses the response', async () => {
+  it('leaves the card untouched and flags the failure inline when the endpoint refuses the response', async () => {
     const card = decode(envelope);
     seedTranscript(card);
     vi.mocked(fetch).mockResolvedValueOnce(new Response(null, { status: 409 }));
@@ -180,6 +180,21 @@ describe('InteractiveCardBlock — response channel', () => {
     if (stored?.recognized && stored.kind === 'clarify.v1') {
       expect(stored.body.state.status).toBe('pending');
     }
+    expect(screen.getByRole('alert')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Relaxed' })).toBeEnabled();
+
+    vi.mocked(fetch).mockResolvedValueOnce(
+      settledResponse({
+        status: 'answered',
+        answeredAt: '2026-08-05T10:05:00.000Z',
+        answers: [{ questionId: 'q1', kind: 'options', optionIds: ['o1'], labels: ['Relaxed'] }],
+      }),
+    );
+    await act(async () => {
+      screen.getByRole('button', { name: 'Send answers' }).click();
+    });
+
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
   });
 
   it('renders read-only when no message in the transcript carries the card', () => {
