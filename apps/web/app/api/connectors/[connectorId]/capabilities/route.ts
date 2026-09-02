@@ -31,7 +31,7 @@ async function handleGet(
   if (!resolved) throw createError.notFound('Connected connector not found');
 
   const server = resolved.catalog.servers[resolved.connectorId];
-  if (!server) throw createError.notFound('Connector capability catalog is unavailable');
+  if (!server) throw createError.serviceUnavailable('Connector is temporarily unreachable');
 
   return NextResponse.json(
     {
