@@ -19,6 +19,7 @@ import { scanUploadBytes } from '@/lib/security/upload-scan';
 import { matchDenylistedUpload, recordModerationEvent } from '@/lib/moderation';
 import { logger } from '@/lib/logger';
 import { getMediaAssetByStoragePathname, insertMediaAsset } from '@/lib/server/media-assets';
+import { sealedChatAttachmentPathname } from '@/lib/server/media-storage';
 import {
   isChatImageMimeType,
   isSupportedChatAttachment,
@@ -88,7 +89,7 @@ async function handleComplete(request: NextRequest): Promise<NextResponse> {
     );
   }
 
-  const scannedKey = `${storageKey}.scanned`;
+  const scannedKey = sealedChatAttachmentPathname(storageKey);
   const existing =
     (await getMediaAssetByStoragePathname(userId, scannedKey, organizationId)) ??
     (await getMediaAssetByStoragePathname(userId, storageKey, organizationId));
