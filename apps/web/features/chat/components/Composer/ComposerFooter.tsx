@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useId, useState, useSyncExternalStore } from 'react';
+import { useCallback, useEffect, useId, useRef, useState, useSyncExternalStore } from 'react';
 import { ChevronDown, ChevronRight, Check } from '@agiworkforce/icons';
 import { toast } from 'sonner';
 import { Popover, PopoverTrigger, PopoverContent, Slider } from '@agiworkforce/ui';
@@ -54,6 +54,27 @@ import {
 
 const FREE_LANE_SLOT_TEXT = 'Auto (free) · community models, capacity varies';
 const TRIAL_SLOT_SUFFIX = 'is selected for the free web trial';
+const MODEL_CATALOG_ENDPOINT = '/api/models';
+
+type ProviderAvailability = { state: 'degraded'; reason: string; until: string };
+
+interface ModelCatalogEntry {
+  provider: string;
+  availability: { state: 'available' } | ProviderAvailability;
+}
+
+async function fetchProviderAvailability(
+  signal: AbortSignal,
+): Promise<Record<string, ProviderAvailability>> {
+  const response = await fetch(MODEL_CATALOG_ENDPOINT, { signal });
+  if (!response.ok) return {};
+  const body = (await response.json()) as { models?: ModelCatalogEntry[] };
+  const byProvider: Record<string, ProviderAvailability> = {};
+  for (const entry of body.models ?? []) {
+    if (entry.availability.state === 'degraded') byProvider[entry.provider] = entry.availability;
+  }
+  return byProvider;
+}
 
 /**
  * The gate's two overrides are client-only, so a server render that honoured
@@ -417,6 +438,7 @@ function ModelRow({
   lockReason,
   onSelect,
   onUpgradeRequest,
+  degraded,
 }: {
   model: AIModel;
   isSelected: boolean;
@@ -427,6 +449,7 @@ function ModelRow({
   lockReason?: string;
   onSelect?: () => void;
   onUpgradeRequest?: () => void;
+  degraded?: ProviderAvailability;
 }) {
   // Derive which picker tier this model belongs to so we can label the badge
   // accurately (Balanced vs Premium) without hard-coding model IDs.
@@ -454,9 +477,13 @@ function ModelRow({
       : isLocked
         ? `${model.name} - requires upgrade`
         : model.name;
-  const ariaLabel = deprecationWarning
-    ? `${baseAriaLabel} - Leaving on ${deprecationWarning.fullLabel}`
-    : baseAriaLabel;
+  const ariaLabel = [
+    baseAriaLabel,
+    deprecationWarning ? `Leaving on ${deprecationWarning.fullLabel}` : null,
+    degraded ? degraded.reason : null,
+  ]
+    .filter(Boolean)
+    .join(' - ');
 
   const rowContent = (
     <button
@@ -494,6 +521,11 @@ function ModelRow({
         </span>
         {model.description && (
           <span className="block truncate text-xs text-muted-foreground">{model.description}</span>
+        )}
+        {degraded && (
+          <span className="block truncate text-xs text-muted-foreground">
+            Unavailable right now
+          </span>
         )}
         {/* AUDIT-FIX CMP-30: rows carried no capability information at all, so
             "can this model read my screenshot / search the web / reason?" was
@@ -571,7 +603,13 @@ function ModelRow({
     </button>
   );
 
-  if (isHighUsageRateModel(model)) {
+  const tooltipText = degraded
+    ? degraded.reason
+    : isHighUsageRateModel(model)
+      ? `${model.name} consumes usage limits faster than other models`
+      : null;
+
+  if (tooltipText) {
     return (
       <TooltipProvider>
         <Tooltip>
@@ -579,7 +617,7 @@ function ModelRow({
             <div>{rowContent}</div>
           </TooltipTrigger>
           <TooltipContent side="left" sideOffset={8}>
-            {model.name} consumes usage limits faster than other models
+            {tooltipText}
           </TooltipContent>
         </Tooltip>
       </TooltipProvider>
@@ -635,6 +673,37 @@ export function ComposerFooter({
   const [open, setOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [moreExpanded, setMoreExpanded] = useState(false);
+  const [providerAvailability, setProviderAvailability] = useState<
+    Record<string, ProviderAvailability>
+  >({});
+  const modelTriggerRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const controller = new AbortController();
+    fetchProviderAvailability(controller.signal)
+      .then(setProviderAvailability)
+      .catch(() => undefined);
+    return () => controller.abort();
+  }, [open]);
+
+  const closeModelPopover = useCallback(() => {
+    setOpen(false);
+    setSearchQuery('');
+    setMoreExpanded(false);
+  }, []);
+
+  useEffect(() => {
+    if (!open) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return;
+      event.stopPropagation();
+      closeModelPopover();
+    };
+    document.addEventListener('keydown', onKeyDown, true);
+    return () => document.removeEventListener('keydown', onKeyDown, true);
+  }, [open, closeModelPopover]);
+
   const selectedModelId = useModelStore((s) => s.selectedModelId);
   const setSelectedModelId = useModelStore((s) => s.setSelectedModelId);
   const getSelectedModel = useModelStore((s) => s.getSelectedModel);
@@ -884,15 +953,13 @@ export function ComposerFooter({
             <Popover
               open={open}
               onOpenChange={(o) => {
-                setOpen(o);
-                if (!o) {
-                  setSearchQuery('');
-                  setMoreExpanded(false);
-                }
+                if (o) setOpen(true);
+                else closeModelPopover();
               }}
             >
               <PopoverTrigger asChild>
                 <button
+                  ref={modelTriggerRef}
                   id="model-selector"
                   disabled={modelChangePending}
                   className="flex min-h-6 min-w-0 items-center gap-1.5 rounded-md px-2 py-0.5 text-xs text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground"
@@ -924,6 +991,10 @@ export function ComposerFooter({
                 collisionPadding={12}
                 className="flex max-h-[min(34rem,var(--radix-popover-content-available-height))] w-72 flex-col p-0"
                 aria-labelledby={modelSelectorTitleId}
+                onCloseAutoFocus={(event) => {
+                  event.preventDefault();
+                  modelTriggerRef.current?.focus();
+                }}
               >
                 {/* Header · model count badge removed per Claude reference */}
                 <div className="flex shrink-0 items-center border-b border-border/40 px-3 py-2">
@@ -1047,6 +1118,7 @@ export function ComposerFooter({
                         isLocked={model.isLocked}
                         lockKind={model.lockKind}
                         lockReason={model.lockReason}
+                        degraded={providerAvailability[model.providerKey]}
                         onUpgradeRequest={model.lockKind === 'tier' ? onUpgradeRequest : undefined}
                         onSelect={
                           model.isLocked || modelChangePending
@@ -1090,6 +1162,7 @@ export function ComposerFooter({
                               isLocked={lock.locked}
                               lockKind={lock.kind}
                               lockReason={lock.reason}
+                              degraded={providerAvailability[model.providerKey]}
                               onUpgradeRequest={lock.kind === 'tier' ? onUpgradeRequest : undefined}
                               onSelect={
                                 lock.locked || modelChangePending
