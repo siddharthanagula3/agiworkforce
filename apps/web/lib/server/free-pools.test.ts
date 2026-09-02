@@ -13,11 +13,13 @@ const NOW_MS = Date.UTC(2026, 8, 1);
 const HOUR_MS = 60 * 60 * 1000;
 const REVIEWER = 'founder';
 const EVIDENCE_URL = 'https://console.groq.com/docs/legal/services-agreement';
+const ROUTE_ID = 'groq/fixture-model';
+const POOL_ID = 'groq-free-fixture-model';
 
 function entry(overrides: Partial<FreePoolEntry> = {}): FreePoolEntry {
   return {
-    routeId: 'groq/gpt-oss-120b',
-    poolId: 'groq-free-gpt-oss-120b',
+    routeId: ROUTE_ID,
+    poolId: POOL_ID,
     terms: {
       commercialUseAllowed: true,
       thirdPartyServingAllowed: true,
@@ -44,7 +46,7 @@ describe('free pools schema', () => {
   it('parses a fully verified entry', () => {
     const parsed = parseFreePoolsDocument(document([entry()]));
     expect(parsed.entries).toHaveLength(1);
-    expect(parsed.entries[0]?.routeId).toBe('groq/gpt-oss-120b');
+    expect(parsed.entries[0]?.routeId).toBe(ROUTE_ID);
   });
 
   it('parses an unverified entry with null verification fields', () => {
