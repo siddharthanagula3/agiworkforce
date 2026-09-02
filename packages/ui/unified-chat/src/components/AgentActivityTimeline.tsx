@@ -70,6 +70,27 @@ function finalSummary(activity: AgentActivityState): string | undefined {
   return undefined;
 }
 
+function labelForActivity(activity: AgentActivityState): string | undefined {
+  for (let index = activity.entries.length - 1; index >= 0; index -= 1) {
+    const entry = activity.entries[index];
+    if (!entry) continue;
+    if (
+      (entry.kind === 'tool' || entry.kind === 'progress') &&
+      (entry.status === 'running' || entry.status === 'awaiting-approval')
+    ) {
+      if (entry.kind === 'tool' && entry.category === 'web-search') {
+        const sourceCount = entry.sources?.length ?? 0;
+        if (sourceCount > 0) {
+          return `Reading ${sourceCount} source${sourceCount === 1 ? '' : 's'}`;
+        }
+        return entry.summary || 'Searching the web';
+      }
+      return entry.summary;
+    }
+  }
+  return undefined;
+}
+
 export function buildAgentActivitySummary(activity: AgentActivityState): string {
   const active = latestActiveSummary(activity);
   if (activity.status === 'awaiting-approval') {
@@ -80,7 +101,7 @@ export function buildAgentActivitySummary(activity: AgentActivityState): string 
   if (activity.status === 'partial') return finalSummary(activity) ?? 'Finished with errors';
   if (activity.status === 'cancelled') return finalSummary(activity) ?? 'Cancelled';
   if (activity.status === 'completed') return finalSummary(activity) ?? 'Done';
-  return active ?? 'Working…';
+  return labelForActivity(activity) ?? 'Working…';
 }
 
 function buildAgentActivityAnnouncement(activity: AgentActivityState): string {
@@ -93,7 +114,8 @@ function buildAgentActivityAnnouncement(activity: AgentActivityState): string {
   if (activity.status === 'partial') return 'Agent activity finished with errors';
   if (activity.status === 'cancelled') return 'Agent activity cancelled';
   if (activity.status === 'completed') return 'Agent activity completed';
-  return active ? `Agent working: ${active}` : 'Agent working';
+  const running = labelForActivity(activity);
+  return running ? `Agent working: ${running}` : 'Agent working';
 }
 
 function toToolStatus(entry: AgentActivityToolEntry): ToolCallStatus {
