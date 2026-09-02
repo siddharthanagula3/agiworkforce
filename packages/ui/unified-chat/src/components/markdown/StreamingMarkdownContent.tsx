@@ -3,6 +3,7 @@ import React, { useMemo, useRef } from 'react';
 import { MarkdownContent } from './MarkdownContent';
 import { completeInlineTokens } from './completeInlineTokens';
 import { preprocessMath } from './preprocessMath';
+import type { MarkdownCitation } from './CitationChip';
 import {
   createMarkdownBlockSplitter,
   type MarkdownBlockSplitter,
@@ -24,11 +25,13 @@ interface StreamingView {
 export interface StreamingMarkdownContentProps {
   content: string;
   isStreaming?: boolean;
+  citations?: readonly MarkdownCitation[];
 }
 
 function StreamingMarkdownContentImpl({
   content,
   isStreaming = true,
+  citations,
 }: StreamingMarkdownContentProps) {
   const splitterRef = useRef<MarkdownBlockSplitter | null>(null);
   const singleUnitFromRef = useRef<string | null>(null);
@@ -60,11 +63,16 @@ function StreamingMarkdownContentImpl({
     <>
       {view.settled.map((block) => (
         <React.Fragment key={block.key}>
-          <MarkdownContent content={block.source} skipPreprocess />
+          <MarkdownContent content={block.source} skipPreprocess citations={citations} />
           {UNIT_SEPARATOR}
         </React.Fragment>
       ))}
-      <MarkdownContent content={tail} isStreaming={isStreaming} skipPreprocess />
+      <MarkdownContent
+        content={tail}
+        isStreaming={isStreaming}
+        skipPreprocess
+        citations={citations}
+      />
     </>
   );
 }

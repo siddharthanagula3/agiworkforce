@@ -3,6 +3,7 @@ import ReactMarkdown from 'react-markdown';
 import rehypeKatex from 'rehype-katex';
 import rehypeRaw from 'rehype-raw';
 import rehypeSanitize from 'rehype-sanitize';
+import * as Tooltip from '@radix-ui/react-tooltip';
 import { cn } from '../../lib/utils';
 import { MARKDOWN_SANITIZE_SCHEMA } from './markdownSanitizeSchema';
 import { preprocessMath } from './preprocessMath';
@@ -11,6 +12,9 @@ import { MermaidDiagram } from './MermaidDiagram';
 import { HighlightedCode } from './HighlightedCode';
 import { REMARK_PLUGINS } from './remarkPlugins';
 import { StreamTailContext, useIsStreamTail } from './streamTailContext';
+import { CITATION_HREF_PATTERN, linkifyCitationMarkers } from './citationMarkers';
+import { CitationChip, CitationsContext, useMarkdownCitations } from './CitationChip';
+import type { MarkdownCitation } from './CitationChip';
 import type { Components } from 'react-markdown';
 import { Button } from '@agiworkforce/ui';
 import { Copy, Check, ImageOff } from 'lucide-react';
@@ -166,6 +170,35 @@ const MarkdownImage = ({ src, alt, title }: { src?: string; alt?: string; title?
 const PROTOCOL_RELATIVE_PREFIX = '//';
 const FRAGMENT_PREFIX = '#';
 
+const MarkdownLink = ({ href, children }: { href?: string; children?: React.ReactNode }) => {
+  const citations = useMarkdownCitations();
+  // The sanitizer strips an href it refuses (javascript:, data:) but leaves
+  // the anchor behind, and a protocol-relative href passes it untouched while
+  // resolving to another origin. Neither may reach the reader as a link.
+  if (typeof href !== 'string' || href.startsWith(PROTOCOL_RELATIVE_PREFIX)) {
+    return <>{children}</>;
+  }
+  const citationMatch = CITATION_HREF_PATTERN.exec(href);
+  if (citationMatch) {
+    const index = Number(citationMatch[1]);
+    const citation = citations[index - 1];
+    if (citation) return <CitationChip index={index} citation={citation} />;
+  }
+  // A fragment points inside this same document - a heading link, or a
+  // citation whose source went missing. Opening it in a new tab lands the
+  // reader on a blank page instead of the thing they asked to see.
+  const samePage = href.startsWith(FRAGMENT_PREFIX);
+  return (
+    <a
+      href={href}
+      className="text-primary hover:underline"
+      {...(samePage ? {} : { target: '_blank', rel: 'noopener noreferrer' })}
+    >
+      {children}
+    </a>
+  );
+};
+
 const markdownComponents: Components = {
   code: CodeBlock as Components['code'],
   img: MarkdownImage as Components['img'],
@@ -185,28 +218,10 @@ const markdownComponents: Components = {
     <th className="border border-border bg-muted px-3 py-2 text-left font-semibold">{children}</th>
   ),
   td: ({ children }) => <td className="border border-border px-3 py-2">{children}</td>,
-  a: ({ href, children }) => {
-    // The sanitizer strips an href it refuses (javascript:, data:) but leaves
-    // the anchor behind, and a protocol-relative href passes it untouched while
-    // resolving to another origin. Neither may reach the reader as a link.
-    if (typeof href !== 'string' || href.startsWith(PROTOCOL_RELATIVE_PREFIX)) {
-      return <>{children}</>;
-    }
-    // A fragment points inside this same document - a citation marker reaching
-    // its source, a heading link. Opening it in a new tab lands the reader on a
-    // blank page instead of the thing they asked to see.
-    const samePage = href.startsWith(FRAGMENT_PREFIX);
-    return (
-      <a
-        href={href}
-        className="text-primary hover:underline"
-        {...(samePage ? {} : { target: '_blank', rel: 'noopener noreferrer' })}
-      >
-        {children}
-      </a>
-    );
-  },
+  a: MarkdownLink as Components['a'],
 };
+
+const EMPTY_CITATIONS: readonly MarkdownCitation[] = [];
 
 const REHYPE_PLUGINS = [
   rehypeRaw,
@@ -218,6 +233,7 @@ export interface MarkdownContentProps {
   content: string;
   isStreaming?: boolean;
   skipPreprocess?: boolean;
+  citations?: readonly MarkdownCitation[];
 }
 
 /**
@@ -247,20 +263,31 @@ export interface MarkdownContentProps {
  * It does NOT make the message that is actively streaming cheaper: its content
  * genuinely changes on every token, so it re-parses either way.
  */
-function MarkdownContentImpl({ content, isStreaming, skipPreprocess }: MarkdownContentProps) {
-  const processedContent = useMemo(
-    () => (skipPreprocess ? content : preprocessMath(content)),
-    [content, skipPreprocess],
-  );
+function MarkdownContentImpl({
+  content,
+  isStreaming,
+  skipPreprocess,
+  citations,
+}: MarkdownContentProps) {
+  const processedContent = useMemo(() => {
+    const base = skipPreprocess ? content : preprocessMath(content);
+    return citations && citations.length > 0
+      ? linkifyCitationMarkers(base, citations.length)
+      : base;
+  }, [content, skipPreprocess, citations]);
   return (
     <StreamTailContext.Provider value={Boolean(isStreaming)}>
-      <ReactMarkdown
-        remarkPlugins={REMARK_PLUGINS}
-        rehypePlugins={REHYPE_PLUGINS}
-        components={markdownComponents}
-      >
-        {processedContent}
-      </ReactMarkdown>
+      <CitationsContext.Provider value={citations ?? EMPTY_CITATIONS}>
+        <Tooltip.Provider delayDuration={150} skipDelayDuration={300}>
+          <ReactMarkdown
+            remarkPlugins={REMARK_PLUGINS}
+            rehypePlugins={REHYPE_PLUGINS}
+            components={markdownComponents}
+          >
+            {processedContent}
+          </ReactMarkdown>
+        </Tooltip.Provider>
+      </CitationsContext.Provider>
       {isStreaming && content.trim() && (
         <span className="ml-1 inline-block h-4 w-0.5 animate-pulse bg-primary" />
       )}
