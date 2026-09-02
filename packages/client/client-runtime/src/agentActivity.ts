@@ -144,13 +144,33 @@ export interface StartAgentActivityLocallyOptions {
 }
 
 const LOCAL_START_PROGRESS_ID = 'progress:local-starting';
-const GENERATION_PROGRESS_ID = 'progress:generation';
+const GENERATION_PROGRESS_ID_PREFIX = 'progress:generation';
+const GENERATION_PROGRESS_KIND = 'generation';
 const PREPARING_PROGRESS_ID = 'progress:preparing';
 
+function isGenerationProgressEntry(entry: AgentActivityEntry): entry is AgentActivityProgressEntry {
+  return entry.kind === 'progress' && entry.progressId === GENERATION_PROGRESS_KIND;
+}
+
 function withoutGenerationProgress(entries: AgentActivityEntry[]): AgentActivityEntry[] {
-  return entries.some((entry) => entry.id === GENERATION_PROGRESS_ID)
-    ? entries.filter((entry) => entry.id !== GENERATION_PROGRESS_ID)
+  return entries.some(isGenerationProgressEntry)
+    ? entries.filter((entry) => !isGenerationProgressEntry(entry))
     : entries;
+}
+
+function closeRunningGenerationProgress(
+  entries: AgentActivityEntry[],
+  completedAtMs: number,
+): AgentActivityEntry[] {
+  const index = entries.findIndex(
+    (entry) => isGenerationProgressEntry(entry) && entry.status === 'running',
+  );
+  if (index < 0) return entries;
+  return updateAt<AgentActivityProgressEntry>(entries, index, (entry) => ({
+    ...entry,
+    status: 'completed',
+    completedAtMs,
+  }));
 }
 
 function withoutPreparingProgress(entries: AgentActivityEntry[]): AgentActivityEntry[] {
@@ -423,6 +443,7 @@ function applyAgentEvent(
     }
 
     case 'tool-execution-start': {
+      next.entries = closeRunningGenerationProgress(next.entries, envelope.emittedAtMs);
       const id = `tool:${event.toolCallId}`;
       const toolIndex = next.entries.findIndex((entry) => entry.id === id);
       const detachedSourcesIndex = next.entries.findIndex(
@@ -543,6 +564,7 @@ function applyAgentEvent(
     }
 
     case 'approval-requested': {
+      next.entries = closeRunningGenerationProgress(next.entries, envelope.emittedAtMs);
       const id = `tool:${event.toolCallId}`;
       const index = next.entries.findIndex((entry) => entry.id === id);
       const approval: AgentActivityApproval = {
@@ -718,16 +740,17 @@ function applyAgentEvent(
 
     case 'text-delta':
     case 'reasoning-delta': {
-      const id = GENERATION_PROGRESS_ID;
       const summary = event.type === 'reasoning-delta' ? 'Reasoning' : 'Writing response';
-      const index = next.entries.findIndex((entry) => entry.id === id);
+      const index = next.entries.findIndex(
+        (entry) => isGenerationProgressEntry(entry) && entry.status === 'running',
+      );
       if (index < 0) {
         next.entries = [
           ...next.entries,
           {
             kind: 'progress',
-            id,
-            progressId: 'generation',
+            id: `${GENERATION_PROGRESS_ID_PREFIX}:${envelope.sequence}`,
+            progressId: GENERATION_PROGRESS_KIND,
             summary,
             status: 'running',
             startedAtMs: envelope.emittedAtMs,
@@ -735,11 +758,10 @@ function applyAgentEvent(
         ];
       } else {
         const entry = next.entries[index] as AgentActivityProgressEntry;
-        if (entry.summary !== summary || entry.status !== 'running') {
+        if (entry.summary !== summary) {
           next.entries = updateAt<AgentActivityProgressEntry>(next.entries, index, (current) => ({
             ...current,
             summary,
-            status: 'running',
           }));
         }
       }
