@@ -17,6 +17,9 @@ vi.mock('@/lib/logger', () => ({
     error: vi.fn(),
   },
 }));
+vi.mock('@/lib/services/provider-availability-service', () => ({
+  getProviderAvailabilityMap: vi.fn(() => Promise.resolve({})),
+}));
 
 import { GET } from './route';
 
