@@ -698,7 +698,6 @@
         "displayName": "GPT-OSS 120B",
         "provider": "groq",
         "providerModelId": "openai/gpt-oss-120b",
-        "openRouterSlug": "openai/gpt-oss-120b",
         "kind": "reasoning",
         "openWeight": true,
         "license": "Apache-2.0"
@@ -718,7 +717,6 @@
         "displayName": "GPT-OSS 20B",
         "provider": "groq",
         "providerModelId": "openai/gpt-oss-20b",
-        "openRouterSlug": "openai/gpt-oss-20b",
         "kind": "reasoning",
         "openWeight": true,
         "license": "Apache-2.0"

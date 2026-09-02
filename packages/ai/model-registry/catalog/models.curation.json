@@ -2531,7 +2531,6 @@
     "gpt-oss-120b": {
       "id": "gpt-oss-120b",
       "apiModelId": "openai/gpt-oss-120b",
-      "openRouterSlug": "openai/gpt-oss-120b",
       "name": "GPT-OSS 120B",
       "provider": "groq",
       "modelType": "reasoning",
@@ -2562,7 +2561,6 @@
     "gpt-oss-20b": {
       "id": "gpt-oss-20b",
       "apiModelId": "openai/gpt-oss-20b",
-      "openRouterSlug": "openai/gpt-oss-20b",
       "name": "GPT-OSS 20B",
       "provider": "groq",
       "modelType": "reasoning",
