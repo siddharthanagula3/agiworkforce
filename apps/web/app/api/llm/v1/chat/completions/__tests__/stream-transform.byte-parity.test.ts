@@ -1,4 +1,3 @@
-
 import { describe, it, expect, vi } from 'vitest';
 import type Anthropic from '@anthropic-ai/sdk';
 
@@ -183,6 +182,28 @@ const richEvents: Array<{ eventName: string; data: unknown }> = [
     },
   },
   { eventName: 'content_block_stop', data: { type: 'content_block_stop', index: 4 } },
+  {
+    eventName: 'content_block_start',
+    data: {
+      type: 'content_block_start',
+      index: 5,
+      content_block: { type: 'server_tool_use', id: 'wf_1', name: 'web_fetch' },
+    },
+  },
+  { eventName: 'content_block_stop', data: { type: 'content_block_stop', index: 5 } },
+  {
+    eventName: 'content_block_start',
+    data: {
+      type: 'content_block_start',
+      index: 6,
+      content_block: {
+        type: 'web_fetch_tool_result',
+        tool_use_id: 'wf_1',
+        content: { type: 'web_fetch_tool_result_error', error_code: 'url_not_accessible' },
+      },
+    },
+  },
+  { eventName: 'content_block_stop', data: { type: 'content_block_stop', index: 6 } },
   {
     eventName: 'message_delta',
     data: {
