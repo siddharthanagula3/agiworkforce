@@ -27,7 +27,7 @@ const MESSAGE_INPUT_LABEL = 'Message input';
 /**
  * M11: the resting composer ran to ~131px at 390px against ChatGPT's ~87px, so
  * every vertical value below the `sm` breakpoint is its own step. The `sm:`
- * halves reproduce today's desktop numbers exactly — desktop is not part of
+ * halves reproduce today's desktop numbers exactly, because desktop is not
  * this slice.
  */
 export const COMPOSER_INPUT_ROW_CLASS = 'min-h-[36px] py-1 sm:min-h-[52px] sm:py-3';
@@ -40,7 +40,7 @@ const INPUT_EMPTY_TEXT_SIZE_CLASS = 'text-[18px] md:text-[18px]';
 
 /**
  * The editor owns its own box through `composer-editor.css`, which is not
- * responsive — these arbitrary variants apply the same mobile step to the
+ * responsive, so these arbitrary variants apply the same mobile step to the
  * contenteditable that the textarea gets from its own utilities.
  */
 const EDITOR_SHARED_CLASS = 'relative z-10 [&_.ProseMirror]:max-h-[240px]';
@@ -152,16 +152,16 @@ function ComposerRichEditor({
   pendingRef.current = value;
 
   /**
-   * The editor arrives two commits after the arm is chosen — the gate resolves
+   * The editor arrives two commits after the arm is chosen. The gate resolves
    * post-hydration, then `immediatelyRender: false` defers the view by another
-   * commit — so a handle write issued before that lands on a null ref and is
+   * commit, so a handle write issued before that lands on a null ref and is
    * lost. A draft restored on mount is the one that bites: the mirror holds it,
    * the document does not, and nothing writes again.
    *
    * A callback ref is what makes this reachable. `useImperativeHandle` keys the
    * handle on the editor, so React re-attaches here the moment the view exists,
    * which is the first point a write can actually land. The mirror is the
-   * authority, so reconcile to it — and only when the document is genuinely
+   * authority, so reconcile to it, and only when the document is genuinely
    * empty, so this can never clobber what someone has typed.
    */
   const attachEditor = useCallback(
