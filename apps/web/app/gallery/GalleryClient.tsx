@@ -344,7 +344,8 @@ function NoMatchesState({ onClear }: { onClear: () => void }) {
         style={{
           fontSize: 13,
           fontWeight: 600,
-          color: 'var(--agi-amber)',
+          color: 'var(--agi-ink)',
+          textDecoration: 'underline',
           background: 'transparent',
           border: 'none',
           cursor: 'pointer',
@@ -525,8 +526,9 @@ function ArtifactCard({ title, language, subtitle, type, content, onClick }: Art
             style={{
               fontSize: 12,
               fontWeight: 500,
-              color: 'var(--agi-amber)',
-              background: 'var(--agi-amber-soft)',
+              color: 'var(--agi-ink-2)',
+              background: 'var(--agi-bg-2)',
+              border: '1px solid var(--agi-rule)',
               borderRadius: 6,
               padding: '2px 7px',
               whiteSpace: 'nowrap',
@@ -643,7 +645,7 @@ function CategoryPicker({ onClose, onSelect }: CategoryPickerProps) {
                 transition: 'border-color 150ms',
               }}
               onMouseEnter={(e) => {
-                (e.currentTarget as HTMLElement).style.borderColor = 'var(--agi-amber)';
+                (e.currentTarget as HTMLElement).style.borderColor = 'var(--agi-ink)';
               }}
               onMouseLeave={(e) => {
                 (e.currentTarget as HTMLElement).style.borderColor = 'var(--agi-rule)';
@@ -812,7 +814,7 @@ function CreationWizard({ category, onClose, onLaunch }: CreationWizardProps) {
                 height: 4,
                 flex: 1,
                 borderRadius: 4,
-                background: i <= currentStep ? 'var(--agi-amber)' : 'var(--agi-rule)',
+                background: i <= currentStep ? 'var(--agi-ink)' : 'var(--agi-rule)',
                 transition: 'background 200ms',
               }}
             />
@@ -840,7 +842,7 @@ function CreationWizard({ category, onClose, onLaunch }: CreationWizardProps) {
             boxSizing: 'border-box',
           }}
           onFocus={(e) => {
-            (e.target as HTMLTextAreaElement).style.borderColor = 'var(--agi-amber)';
+            (e.target as HTMLTextAreaElement).style.borderColor = 'var(--agi-ink)';
           }}
           onBlur={(e) => {
             (e.target as HTMLTextAreaElement).style.borderColor = 'var(--agi-rule)';
@@ -869,7 +871,7 @@ function CreationWizard({ category, onClose, onLaunch }: CreationWizardProps) {
             onClick={handleNext}
             style={{
               padding: '9px 22px',
-              background: 'var(--agi-amber)',
+              background: 'var(--agi-ink)',
               border: 'none',
               borderRadius: 9,
               color: 'var(--agi-bg)',
@@ -976,8 +978,9 @@ function ArtifactDrawer({ artifact, onClose }: ArtifactDrawerProps) {
             style={{
               fontSize: 12,
               fontWeight: 500,
-              color: 'var(--agi-amber)',
-              background: 'var(--agi-amber-soft)',
+              color: 'var(--agi-ink-2)',
+              background: 'var(--agi-bg-2)',
+              border: '1px solid var(--agi-rule)',
               borderRadius: 6,
               padding: '2px 7px',
             }}
@@ -1295,9 +1298,9 @@ export function GalleryClient({ chrome = 'marketing' }: GalleryClientProps) {
                 gap: 7,
                 padding: '9px 18px',
                 background: 'transparent',
-                border: '1px solid var(--agi-amber)',
+                border: '1px solid var(--agi-ink)',
                 borderRadius: 10,
-                color: 'var(--agi-amber)',
+                color: 'var(--agi-ink)',
                 fontSize: 13,
                 fontWeight: 600,
                 cursor: 'pointer',
@@ -1306,7 +1309,7 @@ export function GalleryClient({ chrome = 'marketing' }: GalleryClientProps) {
                 transition: 'background 150ms',
               }}
               onMouseEnter={(e) => {
-                (e.currentTarget as HTMLElement).style.background = 'var(--agi-amber-soft)';
+                (e.currentTarget as HTMLElement).style.background = 'var(--agi-bg-2)';
               }}
               onMouseLeave={(e) => {
                 (e.currentTarget as HTMLElement).style.background = 'transparent';
@@ -1473,7 +1476,8 @@ export function GalleryClient({ chrome = 'marketing' }: GalleryClientProps) {
                       marginTop: 8,
                       fontSize: 13,
                       fontWeight: 600,
-                      color: 'var(--agi-amber)',
+                      color: 'var(--agi-ink)',
+                      textDecoration: 'underline',
                       background: 'transparent',
                       border: 'none',
                       cursor: 'pointer',
