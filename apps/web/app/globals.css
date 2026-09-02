@@ -1585,68 +1585,101 @@ html[data-contrast='more'] *:focus-visible {
  * ────────────────────────────────────────────────────────────────────── */
 
 [data-design='agi'] {
-  /* ── Neutral instrument palette ────────────────────────────────────────
-     Every neutral used to be amber-tinted - the canvas (#0b0a08), the text
-     (#f5f0e6), both greys (#c4bcac, #948b79) and every rule. Nothing on the
-     page could be neutral, so the accent had nothing to stand against and
-     the whole site read as amber-washed.
+  --agi-ground: #08090a;
+  --agi-ground-2: #101113;
+  --agi-ground-3: #17181b;
+  --agi-ink: #f4f5f6;
+  --agi-ink-2: #9ea3ab;
+  --agi-rule: rgba(244, 245, 246, 0.12);
+  --agi-frame: rgba(244, 245, 246, 0.2);
 
-     The ramp is now genuinely neutral with a whisper of warmth in the ink
-     only, which is what makes it read as chosen rather than default grey.
-     Amber survives untouched as a value but stops being ambient: it belongs
-     on routing, selection, progress and live state, not on backgrounds.
+  --agi-lane-local: #3fbd82;
+  --agi-lane-local-text: #3fbd82;
+  --agi-lane-local-on-primary: #04140c;
+  --agi-lane-byok: #a98bff;
+  --agi-lane-byok-text: #a98bff;
+  --agi-lane-byok-on-primary: #0d0620;
+  --agi-lane-cloud: #5fb0f0;
+  --agi-lane-cloud-text: #5fb0f0;
+  --agi-lane-cloud-on-primary: #04131f;
 
-     Measured against every surface below: ink 18.45:1, ink-2 8.31:1,
-     ink-quiet 5.36:1 at worst, amber 8.94:1 at worst. */
-  --agi-bg: #0a0a0b;
-  --agi-bg-2: #101012;
-  --agi-bg-3: #16161a;
-  --agi-card: #0f0f11;
+  --agi-bg: var(--agi-ground);
+  --agi-bg-2: var(--agi-ground-2);
+  --agi-bg-3: var(--agi-ground-3);
+  --agi-card: #0d0e10;
+  --agi-rule-strong: rgba(244, 245, 246, 0.2);
+  --agi-ink-quiet: #93969c;
+  --agi-ink-faint: #93969c;
 
-  --agi-rule: rgba(255, 255, 255, 0.08);
-  --agi-rule-strong: rgba(255, 255, 255, 0.16);
-
-  --agi-ink: #f7f7f5;
-  --agi-ink-2: #a8a8a6;
-  --agi-ink-quiet: #8c8c8a;
-  /* Small tertiary labels still need 4.5:1 contrast on the darkest device
-     mockup surfaces. Keep a separate semantic token, but do not dim it below
-     the accessible quiet-text value. */
-  --agi-ink-faint: #8c8c8a;
-
-  /* Signal accent. Reserved for meaning - active route, selection, progress,
-     the one control that matters on a screen - not for decoration. */
+  /* Retired from the design system: still read by the marketing CSS and pages
+     that Phase B2 rebuilds. No new call site may reference it. */
   --agi-amber: #f0a84a;
   --agi-amber-soft: rgba(240, 168, 74, 0.14);
+
   --agi-surface-wash: rgba(255, 255, 255, 0.03);
   --agi-line-soft: rgba(255, 255, 255, 0.05);
-  /* Was an amber glow behind ordinary sections, which is most of where the
-     ambient wash came from. Neutral, so a glow reads as light and not brand. */
   --agi-glow-soft: rgba(255, 255, 255, 0.05);
-  --agi-console-tint: rgba(16, 16, 18, 0.62);
-  --agi-console-tint-strong: rgba(16, 16, 18, 0.84);
-  --agi-button-bg: #f7f7f5;
-  --agi-button-bg-hover: #e4e4e1;
-  --agi-button-ink: #0a0a0b;
+  --agi-console-tint: rgba(16, 17, 19, 0.62);
+  --agi-console-tint-strong: rgba(16, 17, 19, 0.84);
+  --agi-button-bg: var(--agi-ink);
+  --agi-button-bg-hover: #dfe1e4;
+  --agi-button-ink: var(--agi-ground);
   --agi-error: #eb6a55;
   --agi-success: #58bd7f;
   --agi-shadow: rgba(0, 0, 0, 0.5);
   --agi-header-sheen: rgba(255, 255, 255, 0.02);
   --agi-code-bg: rgba(255, 255, 255, 0.055);
-  --agi-selection-bg: rgba(240, 168, 74, 0.32);
+  --agi-selection-bg: rgba(244, 245, 246, 0.24);
   --agi-selection-text: var(--agi-ink);
   --agi-code-function: #7bb0f5;
   --agi-code-type: #4ec9b0;
 
-  --agi-font: var(--font-geist-sans), 'Helvetica Neue', system-ui, sans-serif;
+  --agi-font: var(--font-ibm-plex-sans), 'Helvetica Neue', system-ui, sans-serif;
   --agi-font-mono: var(--font-jetbrains), var(--font-geist-mono), ui-monospace, monospace;
+
+  --agi-text-xs: 0.75rem;
+  --agi-text-sm: 0.875rem;
+  --agi-text-md: 1rem;
+  --agi-text-lg: 1.25rem;
+  --agi-text-xl: 1.75rem;
+  --agi-text-2xl: 2.5rem;
+  --agi-text-3xl: 4rem;
+  --agi-leading-display: 1.1;
+  --agi-leading-body: 1.6;
+  --agi-tracking-display: -0.02em;
+  --agi-tracking-label: 0.08em;
+
+  --agi-space-1: 0.5rem;
+  --agi-space-2: 1rem;
+  --agi-space-3: 1.5rem;
+  --agi-space-4: 2rem;
+  --agi-space-5: 2.5rem;
+  --agi-space-6: 3rem;
+  --agi-space-7: 4rem;
+  --agi-space-8: 5rem;
+  --agi-gutter: 1.5rem;
+  --agi-container: 75rem;
+  --agi-section-y-xs: 3.5rem;
+  --agi-section-y-sm: 4.5rem;
+  --agi-section-y-md: 7rem;
+  --agi-section-y-lg: 8.75rem;
+
+  --agi-radius-control: 4px;
+  --agi-radius-frame: 8px;
+  --agi-radius-pill: 999px;
+
+  --agi-shadow-none: none;
+  --agi-shadow-panel: 0 0 0 1px var(--agi-rule), 0 18px 44px var(--agi-shadow);
 
   --agi-dur-fast: 180ms;
   --agi-dur-base: 380ms;
   --agi-dur-slow: 720ms;
+  --agi-dur-hover: 150ms;
+  --agi-dur-hero: 700ms;
   --agi-ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --agi-ease-expo: cubic-bezier(0.22, 1, 0.36, 1);
 
-  background: var(--agi-bg);
+  background: var(--agi-ground);
   color: var(--agi-ink);
   font-family: var(--agi-font);
   -webkit-font-smoothing: antialiased;
@@ -3625,11 +3658,6 @@ html[data-contrast='more'] *:focus-visible {
     opacity: 0;
   }
 }
-@keyframes agi-mark-spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
 @media (prefers-reduced-motion: reduce) {
   [data-design='agi'] .agi-cursor {
     animation: none;
@@ -3648,43 +3676,59 @@ html[data-contrast='more'] *:focus-visible {
    Tokens map to perceptually-equivalent light-surface values. */
 [data-theme='light'] [data-design='agi'],
 [data-theme='light'][data-design='agi'] {
-  /* Warm-paper editorial light theme: newsprint canvas + warm ink + a
-     deepened amber that clears WCAG AA on the light surface. */
-  --agi-bg: #faf6ee;
-  --agi-bg-2: #f3ecdf;
-  --agi-bg-3: #ebe2d1;
-  --agi-card: #fffdf8;
+  --agi-ground: #fafafa;
+  --agi-ground-2: #f1f1f2;
+  --agi-ground-3: #e8e8ea;
+  --agi-ink: #111114;
+  --agi-ink-2: #585861;
+  --agi-rule: rgba(17, 17, 20, 0.12);
+  --agi-frame: rgba(17, 17, 20, 0.2);
 
-  --agi-rule: rgba(30, 22, 10, 0.1);
-  --agi-rule-strong: rgba(30, 22, 10, 0.17);
+  --agi-lane-local: #0e6f47;
+  --agi-lane-local-text: #0e6f47;
+  --agi-lane-local-on-primary: #ffffff;
+  --agi-lane-byok: #6234c4;
+  --agi-lane-byok-text: #6234c4;
+  --agi-lane-byok-on-primary: #ffffff;
+  --agi-lane-cloud: #12609e;
+  --agi-lane-cloud-text: #12609e;
+  --agi-lane-cloud-on-primary: #ffffff;
 
-  --agi-ink: #1c150b;
-  --agi-ink-2: #524839;
-  --agi-ink-quiet: #766a55;
-  --agi-ink-faint: #665a47;
+  --agi-bg: var(--agi-ground);
+  --agi-bg-2: var(--agi-ground-2);
+  --agi-bg-3: var(--agi-ground-3);
+  --agi-card: #ffffff;
+  --agi-rule-strong: rgba(17, 17, 20, 0.2);
+  --agi-ink-quiet: #63636b;
+  --agi-ink-faint: #63636b;
 
   --agi-amber: #854500;
   --agi-amber-soft: rgba(133, 69, 0, 0.12);
-  --agi-surface-wash: rgba(30, 22, 10, 0.025);
-  --agi-line-soft: rgba(30, 22, 10, 0.05);
-  --agi-glow-soft: rgba(156, 84, 7, 0.1);
-  --agi-console-tint: rgba(243, 236, 223, 0.85);
-  --agi-console-tint-strong: rgba(255, 253, 248, 0.92);
-  --agi-button-bg: #1c150b;
-  --agi-button-bg-hover: #392c19;
-  --agi-button-ink: #faf6ee;
+
+  --agi-surface-wash: rgba(17, 17, 20, 0.025);
+  --agi-line-soft: rgba(17, 17, 20, 0.05);
+  --agi-glow-soft: rgba(17, 17, 20, 0.05);
+  --agi-console-tint: rgba(241, 241, 242, 0.85);
+  --agi-console-tint-strong: rgba(255, 255, 255, 0.92);
+  --agi-button-bg-hover: #2f2f37;
   --agi-error: #c23a2c;
   --agi-success: #1f6b43;
-  --agi-shadow: rgba(30, 22, 10, 0.14);
-  --agi-header-sheen: rgba(156, 84, 7, 0.05);
-  --agi-code-bg: rgba(30, 22, 10, 0.05);
-  --agi-selection-bg: rgba(240, 168, 74, 0.28);
-  --agi-selection-text: var(--agi-ink);
+  --agi-shadow: rgba(17, 17, 20, 0.14);
+  --agi-header-sheen: rgba(17, 17, 20, 0.03);
+  --agi-code-bg: rgba(17, 17, 20, 0.05);
+  --agi-selection-bg: rgba(17, 17, 20, 0.16);
   --agi-code-function: #245b96;
   --agi-code-type: #176555;
 
-  background: var(--agi-bg);
+  background: var(--agi-ground);
   color: var(--agi-ink);
+}
+
+@media (max-width: 767px) {
+  [data-design='agi'] {
+    --agi-text-2xl: 2rem;
+    --agi-text-3xl: 2.75rem;
+  }
 }
 
 /* ──────────────────────────────────────────────────────────────────────
@@ -3830,30 +3874,14 @@ html[data-contrast='more'] *:focus-visible {
 }
 
 /* ══════════════════════════════════════════════════════════════════════
-   FLAGSHIP MARKETING SYSTEM — 2026-06-11
+   FLAGSHIP MARKETING SYSTEM
    Landing + product-page sections (`agi-fl*`) and the device-mockup
    system (`agi-dev*`). Lives inside the [data-design='agi'] scope and uses
-   only --agi-* tokens plus the loaded font variables, so the existing
-   dark default and [data-theme='light'] override both apply untouched.
-
-   Type voices:
-   · display  — Newsreader variable serif (--font-newsreader), optical
-     sizing on, used ONLY by .agi-fl-h1/.agi-fl-h2/.agi-fl-final-title
-   · body/ui  — Geist (--agi-font)
-   · meter    — JetBrains Mono (--agi-font-mono) for eyebrows, numerals,
-     statuses, frame chrome
+   only --agi-* tokens plus the loaded font variables.
    ══════════════════════════════════════════════════════════════════════ */
 
 [data-design='agi'] {
-  /* Serif is the brand's editorial voice, not its default heading treatment.
-     It was on every H1, every H2, section titles, docs titles, auth titles and
-     the footer tagline - 21 rules - which made "editorial" the wallpaper
-     rather than a moment. It now marks one statement per page and the
-     wordmark; everything structural takes the grotesk below. */
-  --agi-font-display: var(--font-newsreader), 'Iowan Old Style', Georgia, serif;
-
-  /* Section and UI headings. Same family as body text, separated by weight,
-     size and tightened tracking rather than by a second typeface. */
+  --agi-font-display: var(--agi-font);
   --agi-font-heading: var(--agi-font);
 }
 
@@ -4085,12 +4113,6 @@ html[data-contrast='more'] *:focus-visible {
   --agi-console-tint: rgba(10, 10, 11, 0.72);
   --agi-console-tint-strong: rgba(10, 10, 11, 0.9);
   background: var(--agi-bg);
-}
-
-/* A stage whose product media should break the text column. */
-[data-design='agi'] .agi-stage-bleed {
-  width: 100%;
-  max-width: none;
 }
 
 /* Terminal stage.
