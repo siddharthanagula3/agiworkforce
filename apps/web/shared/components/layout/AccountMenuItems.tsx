@@ -70,7 +70,7 @@ export function AccountMenuItems({
         </>
       )}
       <WorkspaceMenuItems onManage={onManageWorkspace} />
-      {/* CRIT-008: open in place — /settings/general only bounces to /chat. */}
+      {/* CRIT-008: open in place; /settings/general only bounces to /chat. */}
       <DropdownMenuItem onClick={onOpenSettings}>
         <Settings className="mr-2 h-4 w-4" />
         {t('common:settings')}
@@ -85,7 +85,7 @@ export function AccountMenuItems({
         <span className="ml-auto text-[12px] text-muted-foreground">{shortcutLabel('/')}</span>
       </DropdownMenuItem>
       <DropdownMenuSeparator />
-      {/* Hidden once there is nothing left to buy — this menu offered
+      {/* Hidden once there is nothing left to buy: this menu offered
           "Upgrade" to max_15x accounts, which reads as a billing error next
           to the plan badge in the same sidebar. */}
       {showUpgrade ? (
