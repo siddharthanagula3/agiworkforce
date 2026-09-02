@@ -195,6 +195,7 @@ export function Sidebar() {
                   : 'text-[var(--chat-text-secondary)] hover:bg-[var(--chat-surface-hover)] hover:text-[var(--chat-text-primary)]',
               )}
               aria-current={isActive ? 'page' : undefined}
+              aria-label={item.label}
             >
               <span className="shrink-0">{item.icon}</span>
               {isExpanded && (
