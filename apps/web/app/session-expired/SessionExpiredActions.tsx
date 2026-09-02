@@ -1,7 +1,7 @@
 'use client';
 
-import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
+import { Button, ButtonRow } from '@/features/marketing/components/system';
 
 const SAFE_RETURN_PATH = /^\/(?!\/)[A-Za-z0-9\-._~!$&'()*+,;=:@%/?#[\]]*$/;
 
@@ -23,13 +23,8 @@ export function SessionExpiredActions() {
   const returnTo = safeReturnPath(searchParams.get('redirectTo'));
 
   return (
-    <div className="agi-device-auth-note">
-      <Link
-        className="agi-cta-primary agi-device-auth-submit"
-        href={`/login?redirectTo=${encodeURIComponent(returnTo)}`}
-      >
-        Sign in again
-      </Link>
-    </div>
+    <ButtonRow>
+      <Button href={`/login?redirectTo=${encodeURIComponent(returnTo)}`}>Sign in again</Button>
+    </ButtonRow>
   );
 }
