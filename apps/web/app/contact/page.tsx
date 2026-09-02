@@ -49,7 +49,7 @@ export default function ContactPage() {
           lede={
             <>
               Everything below is plain email. No hosted form, no ticket system. For sales
-              conversations, head to contact sales. For everything else, {CONTACT_EMAIL}
+              conversations, head to contact sales. For everything else, contact@agiworkforce.com
               reaches a person who reads it.
             </>
           }
