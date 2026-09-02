@@ -85,9 +85,8 @@ export default function ContactSalesPage() {
             </ButtonRow>
           </Stack>
         </Section>
-
-        <MarketingFooter />
       </main>
+      <MarketingFooter />
     </div>
   );
 }
