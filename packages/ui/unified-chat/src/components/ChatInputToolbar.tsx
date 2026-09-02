@@ -166,7 +166,7 @@ export function ChatInputToolbar({
             onClick={onAutoModeToggle}
             className={cn(isAutoMode && 'bg-emerald-700 hover:bg-emerald-800 text-white')}
             title={isAutoMode ? 'Auto: Agent acts autonomously' : 'Manual: Agent asks permission'}
-            aria-label="Toggle auto mode"
+            aria-label={isAutoMode ? 'Switch to manual mode' : 'Switch to auto mode'}
             aria-pressed={isAutoMode}
           >
             {isAutoMode ? (
