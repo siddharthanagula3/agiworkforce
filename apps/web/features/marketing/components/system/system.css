@@ -579,7 +579,6 @@
 
 [data-design='agi'] .agi-ds-hero-word {
   display: inline-block;
-  white-space: pre;
   animation: agi-ds-word-in var(--agi-dur-hero) var(--agi-ease-expo) both;
   animation-delay: calc(var(--agi-ds-word-index) * 60ms);
 }
