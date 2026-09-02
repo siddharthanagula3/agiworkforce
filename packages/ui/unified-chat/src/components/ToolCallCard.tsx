@@ -1,5 +1,6 @@
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState, memo } from 'react';
 import { AlertCircle, Check, Copy, Play, X as XIcon } from 'lucide-react';
+import { Button } from '@agiworkforce/ui';
 import { InlineToolCall, type InlineToolCallStatus, type InlineToolKind } from './InlineToolCall';
 import { HighlightedCode } from './markdown/HighlightedCode';
 import { cn } from '../lib/utils';
@@ -231,7 +232,7 @@ function HighlightedCodeBlock({ language, code }: { language: string; code: stri
           type="button"
           aria-label={copied ? 'Code copied' : 'Copy code'}
           onClick={handleCopy}
-          className="h-6 gap-1 px-1.5 text-[12px] flex items-center rounded text-gray-400 hover:text-gray-200 hover:bg-gray-700/50 opacity-0 transition-opacity group-hover:opacity-100"
+          className="h-6 gap-1 px-1.5 text-[12px] flex items-center rounded text-gray-400 hover:text-gray-200 hover:bg-gray-700/50 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100"
         >
           {copied ? (
             <Check className="h-2.5 w-2.5" aria-hidden="true" />
@@ -489,35 +490,38 @@ const ToolCallCardComponent = ({
             className={cn(
               'pointer-events-none absolute right-1 top-1 flex items-center gap-1.5',
               'opacity-0 transition-opacity duration-150 group-hover:opacity-100 group-hover:pointer-events-auto',
+              'group-focus-within:opacity-100 group-focus-within:pointer-events-auto',
               canCancel && 'opacity-100 pointer-events-auto',
             )}
           >
             {canCancel && (
-              <button
-                type="button"
+              <Button
+                variant="ghost"
+                size="icon"
                 aria-label="Cancel"
                 onClick={(e) => {
                   e.stopPropagation();
                   onCancel!(id);
                 }}
-                className="h-5 w-5 flex items-center justify-center rounded text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+                className="h-6 w-6 text-muted-foreground hover:text-foreground hover:bg-muted"
               >
                 <XIcon className="h-3 w-3" />
-              </button>
+              </Button>
             )}
             {showCopyAction && (
-              <button
-                type="button"
+              <Button
+                variant="ghost"
+                size="icon"
                 aria-label={copied ? 'Copied' : 'Copy'}
                 onClick={handleCopy}
-                className="h-5 w-5 flex items-center justify-center rounded text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+                className="h-6 w-6 text-muted-foreground hover:text-foreground hover:bg-muted"
               >
                 {copied ? (
                   <Check className="h-3 w-3 text-green-500" />
                 ) : (
                   <Copy className="h-3 w-3" />
                 )}
-              </button>
+              </Button>
             )}
           </div>
         )}
