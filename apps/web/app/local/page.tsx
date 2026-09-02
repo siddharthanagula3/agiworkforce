@@ -109,6 +109,10 @@ export default function LocalPage() {
                   label: 'agi --provider ollama --model <model>',
                   value: 'Start a session pinned to that runtime and model.',
                 },
+                {
+                  label: 'agi --provider lmstudio --model <model>',
+                  value: 'Start a session pinned to an LM Studio model.',
+                },
               ]}
             />
           </Stack>

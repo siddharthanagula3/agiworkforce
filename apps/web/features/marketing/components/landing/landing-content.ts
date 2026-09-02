@@ -73,7 +73,7 @@ export const LANE_PANELS: readonly {
     lane: 'cloud',
     title: 'On capacity we run',
     summary:
-      'Sign in and start. A small free allowance needs no card, and paid plans raise the ceiling.',
+      'Sign in and start, no waitlist. A small free allowance needs no card, and paid plans raise the ceiling.',
     rows: [
       { label: 'Providers', value: 'Whatever the router picks, named on the answer.' },
       { label: 'Where the key lives', value: 'Ours. You never see it and never hold it.' },
