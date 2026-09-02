@@ -2804,10 +2804,6 @@ html[data-contrast='more'] *:focus-visible {
   color: var(--agi-ink-quiet);
   margin: 0 0 16px;
 }
-[data-design='agi'] .agi-section-eyebrow::before {
-  content: '— ';
-  color: var(--agi-ink-faint);
-}
 [data-design='agi'] .agi-section-h2 {
   font-family: var(--agi-font-heading);
   font-optical-sizing: auto;
