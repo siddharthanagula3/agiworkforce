@@ -37,6 +37,14 @@ function toolCallChunk(index: number, id: string, name: string, args: string) {
   };
 }
 
+function serverToolUseChunk(name: string) {
+  return { choices: [{ delta: { x_tool_status: { type: 'server_tool_use', name } }, index: 0 }] };
+}
+
+function searchResultsChunk(content: unknown[]) {
+  return { choices: [{ delta: { x_search_results: { content } }, index: 0 }] };
+}
+
 describe('isReadOnlyTool — driven by the declared tool metadata model', () => {
   it('treats declared read-class platform and connector tools as parallel-safe', () => {
     for (const name of ['web_search', 'url_fetch', 'skill', 'mcp__github__get_pull_request_diff']) {
@@ -120,6 +128,27 @@ describe('collectProviderStream — untrusted accumulation bounds', () => {
     );
     const { pendingToolCalls } = await collectProviderStream(sseStream(events));
     expect(pendingToolCalls.length).toBe(TOOL_LOOP_STREAM_LIMITS.maxToolCallsPerStep);
+  });
+
+  it('attributes one combined native search-results delta to only the first of several pending calls', async () => {
+    const stream = sseStream([
+      serverToolUseChunk('web_search'),
+      serverToolUseChunk('web_search'),
+      searchResultsChunk([
+        { type: 'web_search_result', url: 'https://a.example', title: 'A' },
+        { type: 'web_search_result', url: 'https://b.example', title: 'B' },
+      ]),
+    ]);
+
+    const { lines } = await collectProviderStream(stream);
+    const resolved = lines.flatMap((l) => l.serverToolResults ?? []);
+    expect(resolved).toHaveLength(2);
+    expect(resolved[0]?.sources).toEqual([
+      { url: 'https://a.example', title: 'A' },
+      { url: 'https://b.example', title: 'B' },
+    ]);
+    expect(resolved[1]?.sources).toEqual([]);
+    expect(resolved[0]?.toolCallId).not.toBe(resolved[1]?.toolCallId);
   });
 
   it('bounds accumulated tool-argument JSON per call', async () => {
