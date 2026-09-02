@@ -1,6 +1,6 @@
 import { act, renderHook } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { INTERACTIVE_CARDS_MAX_PER_MESSAGE } from '@agiworkforce/types';
+import { INTERACTIVE_CARDS_MAX_PER_MESSAGE, type InteractiveCard } from '@agiworkforce/types';
 import { useChatStore } from '@shared/stores/web-chat-store';
 import { useFreeTrialStore } from '@/features/chat/stores/freeTrialStore';
 import {
@@ -80,6 +80,10 @@ const clone = <T,>(value: T): T => JSON.parse(JSON.stringify(value)) as T;
 
 function assistantMessage() {
   return useChatStore.getState().messages.find((m) => m.role === 'assistant');
+}
+
+function recognizedBody(card: InteractiveCard | undefined) {
+  return card?.recognized ? card.body : undefined;
 }
 
 describe('useChatStream — interactive cards', () => {
@@ -231,7 +235,7 @@ describe('useChatStream — interactive cards', () => {
     expect(
       assistantMessage()?.metadata?.interactiveCardSubmissionErrors?.[CARD.cardId],
     ).toBeTruthy();
-    expect(assistantMessage()?.metadata?.interactiveCards?.[0]?.body).toMatchObject({
+    expect(recognizedBody(assistantMessage()?.metadata?.interactiveCards?.[0])).toMatchObject({
       state: { status: 'pending' },
     });
 
@@ -253,7 +257,7 @@ describe('useChatStream — interactive cards', () => {
     expect(
       assistantMessage()?.metadata?.interactiveCardSubmissionErrors?.[CARD.cardId],
     ).toBeUndefined();
-    expect(assistantMessage()?.metadata?.interactiveCards?.[0]?.body).toMatchObject({
+    expect(recognizedBody(assistantMessage()?.metadata?.interactiveCards?.[0])).toMatchObject({
       state: { status: 'answered' },
     });
   });
