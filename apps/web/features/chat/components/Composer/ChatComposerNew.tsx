@@ -3136,7 +3136,9 @@ const ChatComposerNewComponent = ({
                   composerDisabled && 'cursor-not-allowed opacity-50',
                 )}
                 aria-label={
-                  hasOverflowActive ? `More options: ${overflowActiveCount} active` : 'More options'
+                  hasOverflowActive
+                    ? `Add attachments and tools: ${overflowActiveCount} active`
+                    : 'Add attachments and tools'
                 }
                 aria-pressed={hasOverflowActive}
                 aria-expanded={showOverflowMenu}
