@@ -3161,7 +3161,7 @@ const ChatComposerNewComponent = ({
                                     'cursor-not-allowed opacity-50',
                                 )}
                               >
-                                {mode === 'chat' ? 'Chat' : <>AGI Work</>}
+                                {mode === 'chat' ? 'Chat' : 'AGI Work'}
                               </button>
                             ))}
                           </div>
@@ -3734,7 +3734,7 @@ const ChatComposerNewComponent = ({
                       (isTurnActive || composerDisabled) && 'cursor-not-allowed opacity-50',
                     )}
                   >
-                    {mode === 'chat' ? 'Chat' : <>AGI Work</>}
+                    {mode === 'chat' ? 'Chat' : 'AGI Work'}
                   </button>
                 ))}
               </div>
