@@ -2959,24 +2959,24 @@ async function handleStreamError(error: unknown, ctx: StreamErrorContext): Promi
   const currentMessage = findConversationMessage(conversationId, assistantMessageId);
   const currentActivity = currentMessage?.metadata?.agentActivity;
   if (isAbort) {
-    const cancelledMetadata: MessageMetadata | undefined = currentActivity
-      ? {
-          ...currentMessage?.metadata,
-          agentActivity: finishAgentActivityLocally(currentActivity, {
-            status: 'cancelled',
-            completedAtMs: Date.now(),
-          }),
-        }
-      : currentMessage?.metadata;
+    const cancelledMetadata: MessageMetadata = {
+      ...currentMessage?.metadata,
+      finishReason: 'stopped',
+      ...(currentActivity
+        ? {
+            agentActivity: finishAgentActivityLocally(currentActivity, {
+              status: 'cancelled',
+              completedAtMs: Date.now(),
+            }),
+          }
+        : {}),
+    };
     updateMessage(
       assistantMessageId,
-      {
-        isStreaming: false,
-        ...(cancelledMetadata ? { metadata: cancelledMetadata } : {}),
-      },
+      { isStreaming: false, metadata: cancelledMetadata },
       conversationId,
     );
-    if (!isTemporaryConversation && currentMessage && cancelledMetadata) {
+    if (!isTemporaryConversation && currentMessage) {
       await saveMessageToDb(
         conversationId,
         {
