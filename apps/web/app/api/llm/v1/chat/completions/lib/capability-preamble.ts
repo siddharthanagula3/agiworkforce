@@ -123,6 +123,7 @@ export function buildCapabilityPreamble(input: CapabilityPreambleInput): string 
   const browserLocalInstant = formatLocalInstant(now, input.timeZone);
   const toolNames = extractToolNames(input.tools);
   const hasSearch = toolNames.includes('web_search');
+  const hasFetch = toolNames.includes('web_fetch') || toolNames.includes('url_fetch');
   const hasFileCreation = toolNames.some((name) =>
     ['execute_code', 'write_file', 'create_folder', 'create_office_file'].includes(name),
   );
@@ -165,6 +166,17 @@ export function buildCapabilityPreamble(input: CapabilityPreambleInput): string 
         'Web search is already enabled. For current, changing, niche, or uncertain facts, ' +
           'search before answering and cite the sources you used. The user does not need to ' +
           'ask you to enable search or select a search mode first.',
+      );
+    }
+
+    if (hasSearch || hasFetch) {
+      sections.push(
+        'When a claim in your answer comes from a search result or a page you fetched, mark it ' +
+          'with a bracketed number, e.g. [1], in the order those sources first appear, or write ' +
+          'the claim as a markdown link straight to that source URL — the app turns either form ' +
+          'into a clickable citation for the exact source. Reuse the same number for a source ' +
+          'cited again. Do this for every source you used, including a single fetched page, not ' +
+          'only when there are several.',
       );
     }
 
