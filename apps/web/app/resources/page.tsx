@@ -1,51 +1,72 @@
 import { buildMetadata } from '@/lib/seo/metadata';
-import Link from 'next/link';
 import { Header } from '@shared/components/layout/Header';
 import { MarketingFooter } from '@/features/marketing/components/MarketingFooter';
+import { Section, Stack } from '@/features/marketing/components/system';
+import { PageHero } from '@/features/marketing/components/pages/surfaces/shared';
+import { LinkGrid } from '@/features/marketing/components/pages/features/shared';
 
 export const metadata = buildMetadata({
-  title: 'Resources',
-  description: 'Pointers into the parts of AGI most often asked about.',
+  title: 'Resources: pointers into the product',
+  description: 'Pointers into the parts of AGI most often asked about, every one a real page.',
   path: '/resources',
 });
 
-const SECTIONS: { href: string; label: string; body: string }[] = [
-  { href: '/docs', label: 'Documentation', body: 'Reference material for every surface.' },
-  { href: '/api-docs', label: 'API reference', body: 'OpenAI-compatible gateway endpoints.' },
-  { href: '/changelog', label: 'Changelog', body: 'A dated archive of what shipped.' },
-  { href: '/security', label: 'Security', body: 'How keys, data, and tools are protected.' },
-  { href: '/byok', label: 'BYOK posture', body: 'Bring your own keys, pay providers directly.' },
+const SECTIONS = [
+  {
+    href: '/docs',
+    meta: 'Reference',
+    title: 'Documentation',
+    body: 'Reference material for every surface.',
+  },
+  {
+    href: '/api-docs',
+    meta: 'API',
+    title: 'API reference',
+    body: 'OpenAI-compatible gateway endpoints.',
+  },
+  {
+    href: '/changelog',
+    meta: 'Releases',
+    title: 'Changelog',
+    body: 'A dated archive of what shipped.',
+  },
+  {
+    href: '/security',
+    meta: 'Trust',
+    title: 'Security',
+    body: 'How keys, data, and tools are protected.',
+  },
+  {
+    href: '/byok',
+    meta: 'Keys',
+    title: 'BYOK posture',
+    body: 'Bring your own keys, pay providers directly.',
+  },
 ];
 
 export default function ResourcesPage() {
   return (
-    <div data-design="agi">
-      <main className="agi-shell">
-        <Header />
-        <section className="agi-page-hero">
-          <h1 className="agi-page-h1">Resources.</h1>
-          <p className="agi-page-lede">
-            Pointers into the parts of AGI most often asked about.{' '}
-            <strong>Everything below is a real page with real content</strong>. Nothing here is a
-            placeholder.
-          </p>
-        </section>
-        <section className="agi-section">
-          <p className="agi-section-eyebrow">Index</p>
-          <ul className="agi-reasons">
-            {SECTIONS.map((s) => (
-              <li className="agi-reason" key={s.href}>
-                <h3 className="agi-reason-h">{s.label}</h3>
-                <p className="agi-reason-p">{s.body}</p>
-                <Link href={s.href} className="agi-cta-ghost" style={{ marginTop: 4 }}>
-                  Open →
-                </Link>
-              </li>
-            ))}
-          </ul>
-        </section>
-        <MarketingFooter />
+    <div data-design="agi" className="agi-ds-page">
+      <Header />
+      <main id="main-content">
+        <PageHero
+          id="agi-resources-title"
+          eyebrow="Resources"
+          title="Pointers into the parts of AGI most often asked about."
+          lede="Every entry below is a real page with real content. Nothing here is a placeholder."
+          ctas={[]}
+        />
+
+        <Section id="index" labelledBy="agi-resources-index-title" rule>
+          <Stack gap="loose">
+            <h2 className="agi-ds-h2" id="agi-resources-index-title">
+              The index.
+            </h2>
+            <LinkGrid items={SECTIONS} />
+          </Stack>
+        </Section>
       </main>
+      <MarketingFooter />
     </div>
   );
 }
