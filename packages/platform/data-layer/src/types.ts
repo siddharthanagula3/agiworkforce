@@ -33,6 +33,20 @@
  * - Add a unit test in `src/__tests__/`.
  */
 
+/**
+ * Which side of the pool raised a transport failure: `pool` is a connection
+ * that failed while idle, `client` one that failed while checked out.
+ */
+export type DatabaseConnectionErrorScope = 'pool' | 'client';
+
+export interface DatabaseConnectionErrorEvent {
+  scope: DatabaseConnectionErrorScope;
+  applicationName?: string;
+  error: unknown;
+}
+
+export type DatabaseConnectionErrorListener = (event: DatabaseConnectionErrorEvent) => void;
+
 export interface DatabaseConnectionConfig {
   connectionString: string;
   poolSize?: number;
@@ -40,6 +54,12 @@ export interface DatabaseConnectionConfig {
   statementTimeoutMs?: number;
   queryTimeoutMs?: number;
   applicationName?: string;
+  /**
+   * Where a connection-transport failure is reported. Adapters must never let
+   * one reach the process as an unhandled `error` event, so a missing listener
+   * falls back to `console.error` rather than dropping it.
+   */
+  onConnectionError?: DatabaseConnectionErrorListener;
 }
 
 /**
