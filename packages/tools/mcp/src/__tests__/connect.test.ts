@@ -359,14 +359,18 @@ describe('buildMcpToolCatalog — per-server failure isolation', () => {
 
     expect(result.catalog.tools).toHaveLength(1);
     expect(result.catalog.tools[0]?.toolName).toBe('t1');
-    expect(Object.keys(result.catalog.servers)).toEqual(['good']);
+    expect(Object.keys(result.catalog.servers)).toEqual(['good', 'bad']);
+    expect(result.catalog.servers['bad']?.tools).toHaveLength(0);
+    expect(result.catalog.servers['bad']?.discoveryErrors).toEqual([
+      { capability: 'tools', message: 'bad server: connection refused' },
+    ]);
     expect(result.handles).toHaveLength(1);
 
     const messages = errSpy.mock.calls.map((args) => args.join(' '));
     expect(messages.some((m) => m.includes('bad') && m.includes('connection refused'))).toBe(true);
   });
 
-  it('returns an empty catalog when every server fails', async () => {
+  it('returns a placeholder catalog entry with a discovery error when every server fails', async () => {
     vi.doMock('@modelcontextprotocol/client', () => {
       class FakeClient {
         constructor(public info: unknown) {}
@@ -396,7 +400,13 @@ describe('buildMcpToolCatalog — per-server failure isolation', () => {
       {},
     );
     expect(result.catalog.tools).toHaveLength(0);
-    expect(Object.keys(result.catalog.servers)).toHaveLength(0);
+    expect(Object.keys(result.catalog.servers)).toEqual(['a', 'b']);
+    expect(result.catalog.servers['a']?.discoveryErrors).toEqual([
+      { capability: 'tools', message: 'connect failed' },
+    ]);
+    expect(result.catalog.servers['b']?.discoveryErrors).toEqual([
+      { capability: 'tools', message: 'connect failed' },
+    ]);
     expect(result.handles).toHaveLength(0);
     expect(errSpy).toHaveBeenCalledTimes(2);
   });
