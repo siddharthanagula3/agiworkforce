@@ -3,7 +3,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { INTERACTIVE_CARDS_MAX_PER_MESSAGE } from '@agiworkforce/types';
 import { useChatStore } from '@shared/stores/web-chat-store';
 import { useFreeTrialStore } from '@/features/chat/stores/freeTrialStore';
-import { useChatStream, __resetPendingTurnsForTests } from './useChatStream';
+import {
+  useChatStream,
+  respondToInteractiveCard,
+  __resetPendingTurnsForTests,
+} from './useChatStream';
 
 const authMocks = vi.hoisted(() => ({ getToken: vi.fn() }));
 
@@ -206,5 +210,51 @@ describe('useChatStream — interactive cards', () => {
     await send();
 
     expect(assistantMessage()?.metadata?.interactiveCards).toBeUndefined();
+  });
+
+  it('flags a card whose response the server rejected, and clears the flag on a retry that succeeds', async () => {
+    mockSseStream([cardEvent(CARD)]);
+    await send();
+    const message = assistantMessage();
+    if (!message) throw new Error('expected an assistant message');
+    const binding = {
+      conversationId: TEMP_CONVERSATION.id,
+      messageId: message.id,
+      cardId: CARD.cardId,
+    };
+    const answers = [{ question_id: 'q1', option_ids: ['o1'] }];
+
+    vi.mocked(fetch).mockResolvedValueOnce(new Response(null, { status: 500 }));
+    await act(async () => {
+      await respondToInteractiveCard(binding, { kind: 'answers', answers });
+    });
+    expect(
+      assistantMessage()?.metadata?.interactiveCardSubmissionErrors?.[CARD.cardId],
+    ).toBeTruthy();
+    expect(assistantMessage()?.metadata?.interactiveCards?.[0]?.body).toMatchObject({
+      state: { status: 'pending' },
+    });
+
+    const answered = clone(CARD) as Record<string, unknown>;
+    (answered['body'] as Record<string, unknown>)['state'] = {
+      status: 'answered',
+      answeredAt: '2026-08-05T10:05:00.000Z',
+      answers: [{ questionId: 'q1', kind: 'options', optionIds: ['o1'], labels: ['Relaxed'] }],
+    };
+    vi.mocked(fetch).mockResolvedValueOnce(
+      new Response(JSON.stringify({ card: answered }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      }),
+    );
+    await act(async () => {
+      await respondToInteractiveCard(binding, { kind: 'answers', answers });
+    });
+    expect(
+      assistantMessage()?.metadata?.interactiveCardSubmissionErrors?.[CARD.cardId],
+    ).toBeUndefined();
+    expect(assistantMessage()?.metadata?.interactiveCards?.[0]?.body).toMatchObject({
+      state: { status: 'answered' },
+    });
   });
 });

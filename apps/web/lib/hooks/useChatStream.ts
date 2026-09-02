@@ -738,6 +738,31 @@ function hasResumableInteractiveCard(message: Message | undefined): boolean {
 
 const inFlightCardResponses = new Set<string>();
 
+function patchInteractiveCardSubmissionError(
+  binding: InteractiveCardResponseBinding,
+  errorMessage: string | undefined,
+): void {
+  const message = findConversationMessage(binding.conversationId, binding.messageId);
+  const errors = { ...message?.metadata?.interactiveCardSubmissionErrors };
+  if (errorMessage) {
+    errors[binding.cardId] = errorMessage;
+  } else if (!(binding.cardId in errors)) {
+    return;
+  } else {
+    delete errors[binding.cardId];
+  }
+  useChatStore.getState().updateMessage(
+    binding.messageId,
+    {
+      metadata: {
+        ...message?.metadata,
+        interactiveCardSubmissionErrors: Object.keys(errors).length > 0 ? errors : undefined,
+      },
+    },
+    binding.conversationId,
+  );
+}
+
 export async function respondToInteractiveCard(
   binding: InteractiveCardResponseBinding,
   payload: InteractiveCardResponsePayload,
@@ -745,6 +770,7 @@ export async function respondToInteractiveCard(
   const inFlightKey = `${binding.conversationId}:${binding.messageId}:${binding.cardId}`;
   if (inFlightCardResponses.has(inFlightKey)) return;
   inFlightCardResponses.add(inFlightKey);
+  patchInteractiveCardSubmissionError(binding, undefined);
   try {
     const headers = await addCsrfHeaders({ 'Content-Type': 'application/json' });
     const response = await fetch(INTERACTIVE_CARD_RESPONSE_PATH, {
@@ -780,6 +806,7 @@ export async function respondToInteractiveCard(
   } catch (error) {
     logger.error('[useChatStream] Interactive card response failed', error);
     toast.error(INTERACTIVE_CARD_RESPONSE_FAILURE_MESSAGE);
+    patchInteractiveCardSubmissionError(binding, INTERACTIVE_CARD_RESPONSE_FAILURE_MESSAGE);
   } finally {
     inFlightCardResponses.delete(inFlightKey);
   }

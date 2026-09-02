@@ -264,6 +264,7 @@ export interface MessageMetadata {
    */
   interactiveCards?: InteractiveCard[];
   interactiveCardsResumed?: boolean;
+  interactiveCardSubmissionErrors?: Record<string, string>;
   /**
    * Safe cross-surface projection of a suspended approval checkpoint. The
    * server-owned run remains authoritative; null explicitly clears stale
