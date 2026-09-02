@@ -180,6 +180,35 @@ describe('cleanSchemaForGemini — only Gemini-known keywords survive', () => {
     expect(cleaned['required']).toEqual(['tags']);
   });
 
+  it('drops them from the nested position the production request carried them in', () => {
+    const cleaned = cleanSchemaForGemini({
+      type: 'object',
+      properties: {
+        filters: {
+          type: 'object',
+          properties: {
+            labels: {
+              type: 'object',
+              propertyNames: { pattern: '^[a-z]+$' },
+              additionalProperties: { type: 'string' },
+            },
+            minimumScore: { type: 'number', exclusiveMinimum: 0 },
+          },
+        },
+      },
+    }) as Record<string, unknown>;
+
+    const serialized = JSON.stringify(cleaned);
+    expect(serialized).not.toContain('propertyNames');
+    expect(serialized).not.toContain('exclusiveMinimum');
+
+    const filters = (cleaned['properties'] as Record<string, Record<string, unknown>>)['filters']!;
+    const nested = filters['properties'] as Record<string, Record<string, unknown>>;
+    expect(Object.keys(nested).sort()).toEqual(['labels', 'minimumScore']);
+    expect(nested['labels']?.['type']).toBe('object');
+    expect(nested['minimumScore']?.['type']).toBe('number');
+  });
+
   it('drops every other JSON Schema keyword Gemini has no name for', () => {
     const cleaned = cleanSchemaForGemini({
       type: 'object',
