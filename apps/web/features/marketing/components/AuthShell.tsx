@@ -1,7 +1,6 @@
 import type { ReactNode } from 'react';
 import { AgiMark } from '@shared/components/agi/AgiMark';
 import { Header } from '@shared/components/layout/Header';
-import { MarketingFooter } from './MarketingFooter';
 
 export function AuthShell({
   title,
@@ -45,12 +44,6 @@ export function AuthShell({
         <section className="agi-auth-page agi-auth-split">
           <div className="agi-auth-card">{children}</div>
           <aside className="agi-auth-brand" aria-label="Why AGI">
-            <div className="agi-auth-logo">
-              <span className="agi-auth-orbit" aria-hidden="true">
-                <AgiMark size={34} spinning />
-              </span>
-              <span className="agi-auth-logo-name">AGI</span>
-            </div>
             <h2 className="agi-auth-title">{title}</h2>
             <p className="agi-auth-lede">{lede}</p>
             <div className="agi-auth-continuity">
@@ -79,7 +72,6 @@ export function AuthShell({
             <p className="agi-auth-meta">Web · Desktop · Mobile · CLI · Chrome · VS Code</p>
           </aside>
         </section>
-        <MarketingFooter />
       </main>
     </div>
   );
