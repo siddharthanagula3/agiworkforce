@@ -1,4 +1,3 @@
-
 import { describe, expect, it } from 'vitest';
 import type Anthropic from '@anthropic-ai/sdk';
 import { OpenAIWireAssembler } from '@agiworkforce/provider-protocol';
@@ -103,7 +102,12 @@ describe('web v1 wire parity · streaming', () => {
         choices: [
           {
             delta: {
-              x_tool_status: { type: 'server_tool_use', name: 'web_search', status: 'searching' },
+              x_tool_status: {
+                type: 'server_tool_use',
+                name: 'web_search',
+                status: 'searching',
+                status_phrase: 'Searching the web',
+              },
             },
             index: 0,
           },
