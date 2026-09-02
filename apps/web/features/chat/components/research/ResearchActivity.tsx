@@ -202,7 +202,7 @@ export function ResearchActivity({
                 onClick={() => onPlanDecision?.('start')}
                 disabled={isRetrying}
                 className={cn(
-                  'inline-flex items-center gap-1 rounded-md bg-primary px-2 py-0.5',
+                  'inline-flex items-center gap-1 min-h-6 rounded-md bg-primary px-2 py-0.5',
                   'text-[12px] font-medium text-primary-foreground transition-opacity',
                   'hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60',
                 )}
@@ -217,7 +217,7 @@ export function ResearchActivity({
                 onClick={() => onPlanDecision?.('cancel')}
                 disabled={isRetrying}
                 className={cn(
-                  'inline-flex items-center gap-1 rounded-md border border-border/40 px-2 py-0.5',
+                  'inline-flex items-center gap-1 min-h-6 rounded-md border border-border/40 px-2 py-0.5',
                   'text-[12px] font-medium text-foreground transition-colors',
                   'hover:border-border hover:bg-muted/60 disabled:cursor-not-allowed disabled:opacity-60',
                 )}
@@ -234,7 +234,7 @@ export function ResearchActivity({
               onClick={onRetry}
               disabled={isRetrying}
               className={cn(
-                'inline-flex items-center gap-1 rounded-md border border-border/40 px-2 py-0.5',
+                'inline-flex items-center gap-1 min-h-6 rounded-md border border-border/40 px-2 py-0.5',
                 'text-[12px] font-medium text-foreground transition-colors',
                 'hover:border-border hover:bg-muted/60 disabled:cursor-not-allowed disabled:opacity-60',
               )}
