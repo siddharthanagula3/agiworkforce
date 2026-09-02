@@ -463,7 +463,10 @@ describe('runResearchLoop', () => {
     expect(streamRequestMock).toHaveBeenCalledTimes(2);
     const phases = researchStatuses(run).map((s) => s['phase']);
     expect(phases[phases.length - 1]).toBe('error');
-    expect(forwardedContent(run)).toContain('provider exploded');
+    expect(forwardedContent(run)).not.toContain('provider exploded');
+    expect(forwardedContent(run)).toContain(
+      'Deep research failed before any results were gathered',
+    );
     expect(run.doneCount).toBe(1);
   });
 
@@ -511,7 +514,8 @@ describe('runResearchLoop', () => {
     const run = await collectRun(runResearchLoop(makeProcessed(), BILLING));
     const phases = researchStatuses(run).map((s) => s['phase']);
     expect(phases[phases.length - 1]).toBe('error');
-    expect(forwardedContent(run)).toContain('synthesis died');
+    expect(forwardedContent(run)).not.toContain('synthesis died');
+    expect(forwardedContent(run)).toContain('failed while writing the report');
     expect(lastSearchResults(run)).toHaveLength(1);
     expect(run.doneCount).toBe(1);
   });
@@ -909,7 +913,9 @@ describe('durable report persistence', () => {
     );
 
     expect(reports).toHaveLength(1);
-    expect(reports[0]).toMatchObject({ status: 'failed', error: 'synthesis died' });
+    expect(reports[0]?.status).toBe('failed');
+    expect(reports[0]?.error).not.toContain('synthesis died');
+    expect(reports[0]?.error).toContain('Try again');
     expect(reports[0]?.citations).toEqual([
       expect.objectContaining({ url: 'https://kept.com', id: '1' }),
     ]);
@@ -1184,7 +1190,8 @@ describe('empty synthesis — attributing the cause honestly', () => {
     );
 
     const content = forwardedContent(run);
-    expect(content).toContain('credit balance is too low');
+    expect(content).not.toContain('credit balance is too low');
+    expect(content).not.toContain('Anthropic API');
     expect(content).toContain('every provider call failed');
     expect(content).toContain('Retrying will not help');
     // The two misattributions this test exists to prevent.
