@@ -306,9 +306,6 @@ export class NeonDatabaseAdapter implements DatabaseAdapter {
     }
   }
 
-  /**
-   *
-   */
   private guardTransportErrors(pool: Pool): Pool {
     pool.on('error', (error: unknown) => this.reportTransportError('pool', error));
     pool.on('connect', (client: PoolClient) => {
