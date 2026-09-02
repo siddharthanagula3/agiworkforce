@@ -36,6 +36,7 @@
 import {
   type AuthAdapter,
   type DatabaseAdapter,
+  type DatabaseConnectionErrorListener,
   type DatabaseProvider,
   type AuthProvider,
   type RealtimeAdapter,
@@ -86,6 +87,7 @@ export interface CreateDatabaseClientOptions {
   queryTimeoutMs?: number;
   applicationName?: string;
   unsafeAllowUnverifiedJwtSubject?: boolean;
+  onConnectionError?: DatabaseConnectionErrorListener;
 }
 
 /**
@@ -121,6 +123,7 @@ export function createDatabaseClient(opts: CreateDatabaseClientOptions = {}): Da
       if (opts.statementTimeoutMs !== undefined) cfg.statementTimeoutMs = opts.statementTimeoutMs;
       if (opts.queryTimeoutMs !== undefined) cfg.queryTimeoutMs = opts.queryTimeoutMs;
       if (opts.applicationName !== undefined) cfg.applicationName = opts.applicationName;
+      if (opts.onConnectionError !== undefined) cfg.onConnectionError = opts.onConnectionError;
       if (opts.unsafeAllowUnverifiedJwtSubject === true) {
         cfg.unsafeAllowUnverifiedJwtSubject = true;
       }
