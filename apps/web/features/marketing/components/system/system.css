@@ -199,6 +199,22 @@
   outline-offset: 2px;
 }
 
+[data-design='agi'] .agi-ds-policy-toc {
+  padding: var(--agi-space-3);
+  border: 1px solid var(--agi-rule);
+  border-radius: 8px;
+  background: var(--agi-ground-2);
+}
+
+[data-design='agi'] .agi-ds-policy-toc-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: var(--agi-space-1) var(--agi-space-4);
+}
+
 [data-design='agi'] .agi-ds-btn-row {
   display: flex;
   flex-wrap: wrap;
