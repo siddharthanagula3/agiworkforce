@@ -24,11 +24,16 @@ export const metadata = buildMetadata({
 const BASIC_SCHEDULES = BILLING_PLAN_PRODUCT_LIMITS.basic.maxScheduledTasks;
 const PRO_SCHEDULES = BILLING_PLAN_PRODUCT_LIMITS.pro.maxScheduledTasks;
 
+interface ScenarioMechanic {
+  label: string;
+  value: string;
+}
+
 interface Scenario {
   sector: string;
   title: string;
   problem: string;
-  mechanics: string[];
+  mechanics: ScenarioMechanic[];
   caveat: string;
   meta: string;
   status: string;
@@ -43,10 +48,24 @@ const SCENARIOS: Scenario[] = [
     problem:
       'An NDA forbids sending this repository to an external model provider, which disqualifies most AI coding tools on the question of where inference happens, long before anyone gets to judge how well they answer.',
     mechanics: [
-      `Desktop keeps one server URL per runtime (${DESKTOP_LOCAL_RUNTIMES.label}) and fills its model picker from whatever that server answers with.`,
-      'agi models status names every local server it can reach and the models sitting on each. A base URL that is not loopback never gets a request built for it.',
-      'No AGI account takes part, and a finished run prints "no cost, local model" because there was nothing to bill.',
-      `The ${BILLING_PLAN_PRICING['local-only'].label} plan tier is priced at zero and puts no cap on work you run against your own hardware.`,
+      {
+        label: 'Model picker',
+        value: `Desktop keeps one server URL per runtime (${DESKTOP_LOCAL_RUNTIMES.label}) and fills its model picker from whatever that server answers with.`,
+      },
+      {
+        label: 'Server discovery',
+        value:
+          'agi models status names every local server it can reach and the models sitting on each. A base URL that is not loopback never gets a request built for it.',
+      },
+      {
+        label: 'Billing',
+        value:
+          'No AGI account takes part, and a finished run prints "no cost, local model" because there was nothing to bill.',
+      },
+      {
+        label: 'Plan tier',
+        value: `The ${BILLING_PLAN_PRICING['local-only'].label} plan tier is priced at zero and puts no cap on work you run against your own hardware.`,
+      },
     ],
     caveat:
       'AGI supplies neither the hardware nor the weights, and a model you host will lose to a frontier hosted model on the hardest problems. That is capability traded for containment, and it is a trade you have to want.',
@@ -61,11 +80,30 @@ const SCENARIOS: Scenario[] = [
     problem:
       'Every engagement has to carry its own AI cost, and the firm will not put a platform vendor between itself and the invoice it has to justify line by line to the client paying it.',
     mechanics: [
-      'Each surface writes the key into its own platform credential store, so one engagement’s key stays on the one machine that engagement runs from.',
-      'Requests reach the provider endpoint directly, so the usage lands on the firm’s own provider account and shows up on the firm’s own invoice.',
-      'The CLI estimates cost from the same catalog rate card it ships with, so the arithmetic behind a cost line is inspectable before a run starts.',
-      '--max-budget-usd ends a run once estimated spend passes a ceiling you set, which keeps a runaway loop off a client’s bill.',
-      `The ${BILLING_PLAN_PRICING.byok.label} plan tier is priced at zero, which leaves the provider invoice as the only bill in the arrangement.`,
+      {
+        label: 'Key storage',
+        value:
+          'Each surface writes the key into its own platform credential store, so one engagement’s key stays on the one machine that engagement runs from.',
+      },
+      {
+        label: 'Request routing',
+        value:
+          'Requests reach the provider endpoint directly, so the usage lands on the firm’s own provider account and shows up on the firm’s own invoice.',
+      },
+      {
+        label: 'Cost estimate',
+        value:
+          'The CLI estimates cost from the same catalog rate card it ships with, so the arithmetic behind a cost line is inspectable before a run starts.',
+      },
+      {
+        label: 'Budget cap',
+        value:
+          '--max-budget-usd ends a run once estimated spend passes a ceiling you set, which keeps a runaway loop off a client’s bill.',
+      },
+      {
+        label: 'Plan tier',
+        value: `The ${BILLING_PLAN_PRICING.byok.label} plan tier is priced at zero, which leaves the provider invoice as the only bill in the arrangement.`,
+      },
     ],
     caveat:
       'Per-client attribution comes out of your provider’s own billing tooling, one key or project per engagement. The number the CLI prints is an estimate from a local rate table; AGI never sees your invoice and writes no per-client spend report for you.',
@@ -80,10 +118,25 @@ const SCENARIOS: Scenario[] = [
     problem:
       'Overnight alert triage, certificate expiry sweeps, and ticket intake repeat across dozens of client environments, and doing them by hand makes coverage a function of headcount.',
     mechanics: [
-      'agi --daemon reads ~/.agiworkforce/triggers.json and runs what it finds there: cron schedules, webhook endpoints, and filesystem watchers.',
-      'An unattended session holds three tools: read_file, search_files, and list_directory. Anything mutating is denied outright, because no one is sitting at the prompt to refuse it.',
-      'Each firing writes one JSON record into ~/.agiworkforce/daemon-logs, restricted to its owner, with known secret patterns redacted out of the prompt and the response first.',
-      `Run this on managed cloud instead and the gates change: AGI Work needs ${BILLING_PLAN_PRICING.pro.label} or above, and scheduled tasks are capped per plan at ${BASIC_SCHEDULES} on ${BILLING_PLAN_PRICING.basic.label} and ${PRO_SCHEDULES} on ${BILLING_PLAN_PRICING.pro.label}.`,
+      {
+        label: 'Trigger sources',
+        value:
+          'agi --daemon reads ~/.agiworkforce/triggers.json and runs what it finds there: cron schedules, webhook endpoints, and filesystem watchers.',
+      },
+      {
+        label: 'Tool scope',
+        value:
+          'An unattended session holds three tools: read_file, search_files, and list_directory. Anything mutating is denied outright, because no one is sitting at the prompt to refuse it.',
+      },
+      {
+        label: 'Audit log',
+        value:
+          'Each firing writes one JSON record into ~/.agiworkforce/daemon-logs, restricted to its owner, with known secret patterns redacted out of the prompt and the response first.',
+      },
+      {
+        label: 'Plan tier',
+        value: `Run this on managed cloud instead and the gates change: AGI Work needs ${BILLING_PLAN_PRICING.pro.label} or above, and scheduled tasks are capped per plan at ${BASIC_SCHEDULES} on ${BILLING_PLAN_PRICING.basic.label} and ${PRO_SCHEDULES} on ${BILLING_PLAN_PRICING.pro.label}.`,
+      },
     ],
     caveat:
       'A trigger can read and report; it cannot edit a file or run a shell command, so remediation still lands on an engineer. You also have to write the runbook each trigger follows, because AGI will not discover your clients’ processes on your behalf.',
@@ -130,13 +183,7 @@ export default function CustomersPage() {
                 <Eyebrow>{scenario.sector}</Eyebrow>
                 <h3 className="agi-ds-h3">{scenario.title}</h3>
                 <Prose>{scenario.problem}</Prose>
-                <Ledger
-                  caption={scenario.title}
-                  rows={scenario.mechanics.map((point, index) => ({
-                    label: String(index + 1).padStart(2, '0'),
-                    value: point,
-                  }))}
-                />
+                <Ledger caption={scenario.title} rows={scenario.mechanics} />
                 <Prose>
                   <strong>What it does not do.</strong> {scenario.caveat}
                 </Prose>
