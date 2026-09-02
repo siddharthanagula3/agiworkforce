@@ -7,6 +7,7 @@ import { PageHero } from '@/features/marketing/components/pages/surfaces/shared'
 import {
   Button,
   ButtonRow,
+  Container,
   Ledger,
   Prose,
   Section,
@@ -474,10 +475,12 @@ export default function DpaPage() {
           ctas={[]}
         />
 
-        <PolicyContents
-          sections={SECTIONS}
-          intro="Annex II (section 08) states the limit of every security measure next to the measure. If you are reviewing this before signing, read that one first."
-        />
+        <Container className="my-10">
+          <PolicyContents
+            sections={SECTIONS}
+            intro="Annex II (section 08) states the limit of every security measure next to the measure. If you are reviewing this before signing, read that one first."
+          />
+        </Container>
 
         <Section id="s-01" labelledBy="agi-dpa-s01-title" rule>
           <Stack gap="loose">
