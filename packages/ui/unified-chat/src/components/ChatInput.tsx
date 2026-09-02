@@ -27,7 +27,7 @@ import {
   X,
 } from 'lucide-react';
 import { cleanupVoiceDictation, detectVoiceCommand } from '@agiworkforce/utils';
-import { useUiTranslation } from '@agiworkforce/ui';
+import { useMenuKeyboard, useUiTranslation } from '@agiworkforce/ui';
 import { cn } from '../lib/utils';
 import { useChatStore } from '../stores/chatStore';
 import { useModelStore } from '../stores/modelStore';
@@ -288,6 +288,8 @@ export function ChatInput({
   const [scopePickerOpen, setScopePickerOpen] = useState(false);
   const [projectQuery, setProjectQuery] = useState('');
   const scopePickerRef = useRef<HTMLDivElement>(null);
+  const scopeTriggerRef = useRef<HTMLButtonElement>(null);
+  const scopePanelRef = useRef<HTMLDivElement>(null);
   const activeProjectId = projectPicker?.activeProjectId ?? null;
 
   useEffect(() => {
@@ -339,7 +341,16 @@ export function ChatInput({
   const closeScopePicker = useCallback(() => {
     setScopePickerOpen(false);
     setProjectQuery('');
+    scopeTriggerRef.current?.focus();
   }, []);
+
+  useMenuKeyboard({
+    open: scopePickerOpen,
+    onClose: closeScopePicker,
+    panelRef: scopePanelRef,
+    triggerRef: scopeTriggerRef,
+    itemSelector: 'input, [role="option"]',
+  });
 
   const handlePickProject = useCallback(
     (id: string) => {
@@ -1372,6 +1383,7 @@ export function ChatInput({
             )}
           >
             <button
+              ref={scopeTriggerRef}
               type="button"
               onClick={() => {
                 setScopePickerOpen((prev) => !prev);
@@ -1417,7 +1429,12 @@ export function ChatInput({
           </div>
 
           {scopePickerOpen && (
-            <div className="absolute bottom-full left-0 z-50 mb-2 w-72 rounded-xl border border-[var(--chat-border)] bg-[var(--chat-surface-elevated)] p-1.5 shadow-xl">
+            <div
+              ref={scopePanelRef}
+              role="listbox"
+              aria-label={t('composer.projectOrFolder', 'Project or folder')}
+              className="absolute bottom-full left-0 z-50 mb-2 w-72 rounded-xl border border-[var(--chat-border)] bg-[var(--chat-surface-elevated)] p-1.5 shadow-xl"
+            >
               {!canUseAgiWork && (
                 <p
                   role="status"
@@ -1436,7 +1453,6 @@ export function ChatInput({
                 onChange={(e) => setProjectQuery(e.target.value)}
                 placeholder={t('projects.searchPlaceholder', 'Search projects...')}
                 aria-label={t('composer.searchProjects', 'Search projects')}
-                autoFocus
                 className="mb-1.5 w-full rounded-lg border border-[var(--chat-border)] bg-[var(--chat-surface-hover)]/30 px-3 py-2 text-sm text-[var(--chat-text-primary)] outline-none placeholder:text-[var(--chat-text-placeholder)]"
               />
               <div className="max-h-56 overflow-y-auto">
@@ -1451,6 +1467,8 @@ export function ChatInput({
                   <button
                     key={project.id}
                     type="button"
+                    role="option"
+                    aria-selected={activeProjectId === project.id}
                     onClick={() => handlePickProject(project.id)}
                     className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm text-[var(--chat-text-primary)] transition-colors hover:bg-[var(--chat-surface-hover)]"
                   >
