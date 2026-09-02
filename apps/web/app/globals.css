@@ -6012,6 +6012,40 @@ html[data-contrast='more'] *:focus-visible {
   }
 }
 
+@media (max-width: 479px) {
+  [data-design='agi'] .agi-ds-consent-panel {
+    max-height: none;
+    overflow-y: visible;
+    gap: 6px;
+    padding: var(--agi-space-2) var(--agi-space-2)
+      calc(var(--agi-space-1) + env(safe-area-inset-bottom));
+  }
+
+  [data-design='agi'] .agi-ds-consent-title {
+    font-size: var(--agi-text-sm);
+  }
+
+  [data-design='agi'] .agi-ds-consent-copy {
+    margin-top: 2px;
+    font-size: var(--agi-text-xs);
+    overflow: hidden;
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 1;
+  }
+
+  [data-design='agi'] .agi-ds-consent-actions {
+    flex-wrap: nowrap;
+    gap: 6px;
+  }
+
+  [data-design='agi'] .agi-ds-consent-actions .agi-ds-btn {
+    min-height: 34px;
+    padding-inline: var(--agi-space-2);
+    font-size: var(--agi-text-xs);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   [data-design='agi'] .agi-ds-btn,
   [data-design='agi'] .agi-ds-consent-close {
