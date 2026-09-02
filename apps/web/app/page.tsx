@@ -1,10 +1,13 @@
 import type { Metadata } from 'next';
 import { LandingPage } from '@/features/marketing/components/landing/LandingPage';
 
+const TITLE = 'AGI: pick where the request runs';
+const DESCRIPTION =
+  'AGI answers on your own hardware, on your own provider account, or on capacity we run, and labels which one it was.';
+
 export const metadata: Metadata = {
-  title: 'AGI: pick where the request runs',
-  description:
-    'AGI answers on your own hardware, on your own provider account, or on capacity we run, and labels which one it was.',
+  title: TITLE,
+  description: DESCRIPTION,
   keywords: [
     'AI workspace',
     'multi-provider AI',
@@ -21,18 +24,16 @@ export const metadata: Metadata = {
     'LM Studio',
   ],
   openGraph: {
-    title: 'AGI: pick where the request runs',
-    description:
-      'AGI answers on your own hardware, on your own provider account, or on capacity we run, and labels which one it was.',
+    title: TITLE,
+    description: DESCRIPTION,
     type: 'website',
     url: 'https://agiworkforce.com',
     images: [{ url: '/api/og', width: 1200, height: 630, alt: 'AGI Web composer' }],
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'AGI: pick where the request runs',
-    description:
-      'AGI answers on your own hardware, on your own provider account, or on capacity we run, and labels which one it was.',
+    title: TITLE,
+    description: DESCRIPTION,
     images: ['/api/og'],
   },
 };
