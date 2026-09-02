@@ -2,8 +2,8 @@
 
 import { useEffect } from 'react';
 import Link from 'next/link';
-import { AlertTriangle, RefreshCw, Home } from 'lucide-react';
 import { logger } from '@shared/lib/logger';
+import { Button, ButtonRow, Prose, Section, Stack } from '@/features/marketing/components/system';
 
 export default function FeaturesError({
   error,
@@ -20,48 +20,29 @@ export default function FeaturesError({
   }, [error]);
 
   return (
-    <div className="flex min-h-[60vh] flex-col items-center justify-center px-4 text-center">
-      <div className="w-20 h-20 rounded-full bg-red-500/10 mx-auto mb-6 flex items-center justify-center">
-        <AlertTriangle className="h-10 w-10 text-red-500" />
-      </div>
-
-      <h1 className="text-2xl font-bold text-foreground mb-3">Unable to Load Features</h1>
-      <p className="text-muted-foreground max-w-sm mx-auto mb-2">
-        An unexpected error occurred while loading this page. Please try again.
-      </p>
-
-      {error.digest && (
-        <p className="text-muted-foreground text-xs mb-6">Error ID: {error.digest}</p>
-      )}
-
-      <div className="flex flex-col sm:flex-row gap-3 justify-center mt-6">
-        <button
-          onClick={reset}
-          className="inline-flex h-10 items-center justify-center rounded-full bg-blue-600 px-6 text-sm font-medium hover:bg-blue-700 transition-colors text-white"
-        >
-          <RefreshCw className="h-4 w-4 mr-2" />
-          Try Again
-        </button>
-        <Link
-          href="/"
-          className="inline-flex h-10 items-center justify-center rounded-full border border-border bg-card px-6 text-sm font-medium hover:bg-muted transition-colors text-foreground"
-        >
-          <Home className="h-4 w-4 mr-2" />
-          Go Home
-        </Link>
-      </div>
-
-      <div className="mt-12 pt-6 border-t border-border w-full max-w-sm">
-        <p className="text-muted-foreground text-sm">
-          If this problem persists,{' '}
-          <Link
-            href="/contact"
-            className="text-blue-700 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
-          >
-            contact our support team
-          </Link>
-        </p>
-      </div>
+    <div data-design="agi" className="agi-ds-page">
+      <Section id="features-error" size="lg">
+        <Stack gap="loose">
+          <h1 className="agi-ds-h2">Unable to load this page.</h1>
+          <Prose>An unexpected error occurred while loading this page. Try again.</Prose>
+          {error.digest ? <Prose size="sm">Error ID: {error.digest}</Prose> : null}
+          <ButtonRow>
+            <button type="button" onClick={reset} className="agi-ds-btn" data-variant="primary">
+              Try again
+            </button>
+            <Button href="/" variant="secondary">
+              Go home
+            </Button>
+          </ButtonRow>
+          <Prose size="sm">
+            If this problem persists,{' '}
+            <Link href="/contact" className="agi-ds-link">
+              contact support
+            </Link>
+            .
+          </Prose>
+        </Stack>
+      </Section>
     </div>
   );
 }
