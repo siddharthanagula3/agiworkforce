@@ -1084,22 +1084,20 @@
   }
 }
 
-[data-design='agi'] .agi-ds-auth-split {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(auto, 30rem);
-  gap: clamp(40px, 5.5vw, 76px);
-  align-items: start;
-  padding: clamp(40px, 6vh, 72px) 0 clamp(56px, 8vh, 96px);
+[data-design='agi'] .agi-ds-auth-centered {
+  display: flex;
+  justify-content: center;
+  padding: clamp(64px, 12vh, 132px) 0 clamp(56px, 8vh, 96px);
 }
 
 [data-design='agi'] .agi-ds-auth-card {
-  grid-column: 2;
-  grid-row: 1;
   width: 100%;
+  max-width: 28.5rem;
 }
 
 [data-design='agi'] .agi-ds-auth-embedded-shell .agi-ds-auth-card {
   width: 100%;
+  max-width: none;
 }
 
 [data-design='agi'] .agi-ds-auth-embedded-shell :where(.cl-rootBox, .cl-cardBox) {
@@ -1114,62 +1112,9 @@
   box-shadow: none !important;
 }
 
-[data-design='agi'] .agi-ds-auth-brand {
-  grid-column: 1;
-  grid-row: 1;
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  padding-top: 10px;
-}
-
-[data-design='agi'] .agi-ds-auth-points {
-  margin: 0;
-  padding: 0;
-  list-style: none;
-  display: flex;
-  flex-direction: column;
-  gap: var(--agi-space-2);
-}
-
-[data-design='agi'] .agi-ds-auth-points li {
-  position: relative;
-  padding-left: 22px;
-  font-size: var(--agi-text-sm);
-  line-height: 1.5;
-  color: var(--agi-ink-2);
-}
-
-[data-design='agi'] .agi-ds-auth-points li::before {
-  content: '✓';
-  position: absolute;
-  left: 0;
-  color: var(--agi-ink);
-  font-weight: 700;
-}
-
 @media (max-width: 920px) {
-  [data-design='agi'] .agi-ds-auth-split {
-    grid-template-columns: minmax(0, 1fr);
-    gap: 44px;
-    padding: clamp(20px, 4vw, 36px) 0 64px;
-  }
-
-  [data-design='agi'] .agi-ds-auth-card {
-    grid-column: 1;
-    grid-row: auto;
-  }
-
-  [data-design='agi'] .agi-ds-auth-brand {
-    grid-column: 1;
-    grid-row: auto;
-    align-items: center;
-    text-align: center;
-    padding-top: 0;
-  }
-
-  [data-design='agi'] .agi-ds-auth-points li {
-    text-align: left;
+  [data-design='agi'] .agi-ds-auth-centered {
+    padding: clamp(32px, 8vh, 56px) 0 64px;
   }
 }
 
