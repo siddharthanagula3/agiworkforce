@@ -25,6 +25,7 @@ export interface AgentControlProps {
 }
 
 const AGENT_MODES: AgentMode[] = ['ask', 'auto', 'plan', 'bypass'];
+const OVERRIDE_LABEL_SUFFIX = ' (overriding project default)';
 
 interface OverrideDotProps {
   show: boolean;
@@ -37,7 +38,7 @@ function OverrideDot({ show }: OverrideDotProps) {
       <Tooltip.Root>
         <Tooltip.Trigger asChild>
           <span
-            aria-label="Overriding project default"
+            aria-hidden="true"
             className={cn('absolute -top-0.5 -right-0.5 h-1.5 w-1.5 rounded-full', 'bg-amber-500')}
           />
         </Tooltip.Trigger>
@@ -95,7 +96,7 @@ function ModeChip({ conversationId, projectId }: ModeChipProps) {
         <Popover.Trigger asChild>
           <button
             type="button"
-            aria-label={`Agent mode: ${AGENT_MODE_LABEL[state.mode]}`}
+            aria-label={`Agent mode: ${AGENT_MODE_LABEL[state.mode]}${isOverride ? OVERRIDE_LABEL_SUFFIX : ''}`}
             className={chipClass()}
           >
             <OverrideDot show={isOverride} />
@@ -205,7 +206,11 @@ function EffortChip({ conversationId, projectId, modelId, effortOptions }: Effor
   return (
     <Popover.Root>
       <Popover.Trigger asChild>
-        <button type="button" aria-label="Reasoning effort" className={chipClass()}>
+        <button
+          type="button"
+          aria-label={`Reasoning effort${isOverride ? OVERRIDE_LABEL_SUFFIX : ''}`}
+          className={chipClass()}
+        >
           <OverrideDot show={isOverride} />
           <Sparkles aria-hidden="true" size={11} className="shrink-0" />
           <span className="max-w-[8rem] truncate">Reasoning</span>
