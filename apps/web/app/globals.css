@@ -8841,3 +8841,185 @@ html[data-contrast='more'] *:focus-visible {
     animation-duration: 3s;
   }
 }
+
+/* ──────────────────────────────────────────────────────────────────────
+ * Ledger design system — the parts the root layout needs.
+ * The button primitive and the cookie consent panel live here rather than
+ * in features/marketing/.../system.css because the consent banner mounts in
+ * app/layout.tsx, outside the marketing bundle, and both must resolve to one
+ * definition. Everything else in the system stays in system.css.
+ * ────────────────────────────────────────────────────────────────────── */
+
+[data-design='agi'] .agi-ds-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--agi-space-1);
+  min-height: 40px;
+  padding-inline: var(--agi-space-3);
+  border: 1px solid transparent;
+  border-radius: var(--agi-radius-control);
+  font-family: var(--agi-font);
+  font-size: var(--agi-text-sm);
+  font-weight: 500;
+  line-height: 1;
+  text-decoration: none;
+  cursor: pointer;
+  transition:
+    background-color var(--agi-dur-hover) var(--agi-ease-expo),
+    border-color var(--agi-dur-hover) var(--agi-ease-expo),
+    color var(--agi-dur-hover) var(--agi-ease-expo);
+}
+
+[data-design='agi'] .agi-ds-btn[data-variant='primary'] {
+  background: var(--agi-ink);
+  color: var(--agi-ground);
+}
+
+[data-design='agi'] .agi-ds-btn[data-variant='primary']:hover {
+  background: var(--agi-ink-2);
+}
+
+[data-design='agi'] .agi-ds-btn[data-variant='secondary'] {
+  background: transparent;
+  border-color: var(--agi-rule-strong);
+  color: var(--agi-ink);
+}
+
+[data-design='agi'] .agi-ds-btn[data-variant='secondary']:hover {
+  border-color: var(--agi-ink);
+}
+
+[data-design='agi'] .agi-ds-btn:focus-visible {
+  outline: 2px solid var(--agi-ink);
+  outline-offset: 2px;
+}
+
+[data-design='agi'].agi-ds-consent {
+  position: fixed;
+  inset-inline: 0;
+  bottom: 0;
+  z-index: 50;
+  display: flex;
+  justify-content: center;
+  padding: var(--agi-space-2);
+  pointer-events: none;
+}
+
+[data-design='agi'] .agi-ds-consent-panel {
+  position: relative;
+  pointer-events: auto;
+  display: flex;
+  align-items: center;
+  gap: var(--agi-space-4);
+  width: 100%;
+  max-width: var(--agi-container);
+  padding: var(--agi-space-2) var(--agi-space-3);
+  border-radius: var(--agi-radius-frame);
+  background: var(--agi-ground-2);
+  box-shadow: var(--agi-shadow-panel);
+}
+
+[data-design='agi'] .agi-ds-consent-text {
+  min-width: 0;
+  padding-inline-end: var(--agi-space-4);
+}
+
+[data-design='agi'] .agi-ds-consent-title {
+  margin: 0;
+  font-family: var(--agi-font);
+  font-size: var(--agi-text-md);
+  font-weight: 600;
+  line-height: 1.3;
+  letter-spacing: -0.01em;
+  color: var(--agi-ink);
+}
+
+[data-design='agi'] .agi-ds-consent-copy {
+  margin: 4px 0 0;
+  font-size: var(--agi-text-sm);
+  line-height: var(--agi-leading-body);
+  color: var(--agi-ink-2);
+}
+
+[data-design='agi'] .agi-ds-consent-link {
+  color: var(--agi-ink);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+[data-design='agi'] .agi-ds-consent-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--agi-space-1);
+  margin-inline-start: auto;
+}
+
+[data-design='agi'] .agi-ds-consent-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 44px;
+  height: 44px;
+  border: 1px solid transparent;
+  border-radius: var(--agi-radius-control);
+  background: transparent;
+  color: var(--agi-ink-2);
+  cursor: pointer;
+  transition:
+    color var(--agi-dur-hover) var(--agi-ease-expo),
+    border-color var(--agi-dur-hover) var(--agi-ease-expo);
+}
+
+[data-design='agi'] .agi-ds-consent-close:hover {
+  color: var(--agi-ink);
+  border-color: var(--agi-rule-strong);
+}
+
+[data-design='agi'] .agi-ds-consent-close:focus-visible {
+  outline: 2px solid var(--agi-ink);
+  outline-offset: 2px;
+}
+
+@media (max-width: 767px) {
+  [data-design='agi'].agi-ds-consent {
+    padding: 0;
+  }
+
+  [data-design='agi'] .agi-ds-consent-panel {
+    flex-direction: column;
+    align-items: stretch;
+    gap: var(--agi-space-2);
+    max-height: 33vh;
+    overflow-y: auto;
+    padding: var(--agi-space-3) var(--agi-space-2)
+      calc(var(--agi-space-2) + env(safe-area-inset-bottom));
+    border-radius: var(--agi-radius-frame) var(--agi-radius-frame) 0 0;
+  }
+
+  [data-design='agi'] .agi-ds-consent-text {
+    padding-inline-end: 44px;
+  }
+
+  [data-design='agi'] .agi-ds-consent-actions {
+    margin-inline-start: 0;
+  }
+
+  [data-design='agi'] .agi-ds-consent-actions .agi-ds-btn {
+    flex: 1 1 auto;
+  }
+
+  [data-design='agi'] .agi-ds-consent-close {
+    position: absolute;
+    inset-block-start: var(--agi-space-1);
+    inset-inline-end: var(--agi-space-1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-design='agi'] .agi-ds-btn,
+  [data-design='agi'] .agi-ds-consent-close {
+    transition: none;
+  }
+}

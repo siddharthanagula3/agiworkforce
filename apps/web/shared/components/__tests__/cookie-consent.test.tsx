@@ -1,6 +1,6 @@
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join, resolve } from 'node:path';
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { AnalyticsConsentGate } from '../AnalyticsConsentGate';
@@ -145,6 +145,38 @@ describe('CookieConsent banner drives the gate', () => {
 
       await waitFor(() => expect(gaScripts()).toHaveLength(0));
       expect(readCookiePreferences()).toEqual({ necessary: true, analytics: false });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('offers exactly three actions, privacy-preserving default first', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      render(<CookieConsent />);
+
+      await act(async () => {
+        vi.advanceTimersByTime(1200);
+      });
+
+      const banner = screen.getByRole('region', { name: 'Cookie consent' });
+      expect(within(banner).getByRole('heading', { name: 'Cookies on this site' })).toBeTruthy();
+
+      const buttons = within(banner).getAllByRole('button');
+      expect(
+        buttons.map((button) => button.textContent?.trim() || button.getAttribute('aria-label')),
+      ).toEqual([
+        'Necessary only',
+        'Allow analytics',
+        'Customise',
+        'Close and reject non-essential cookies',
+      ]);
+      expect(buttons.map((button) => button.getAttribute('data-variant'))).toEqual([
+        'primary',
+        'secondary',
+        'secondary',
+        null,
+      ]);
     } finally {
       vi.useRealTimers();
     }
