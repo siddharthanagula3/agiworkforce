@@ -228,7 +228,7 @@ export function PublishedArtifactsSection() {
                     disabled={busy}
                     style={{
                       ...actionButtonStyle,
-                      color: 'var(--chat-accent-primary-text, #8b5f1d)',
+                      color: 'var(--chat-accent-primary-text)',
                       cursor: busy ? 'not-allowed' : 'pointer',
                     }}
                   >

@@ -33,13 +33,8 @@ export function ConnectorConsentSummary({ className }: { className?: string }) {
       }
     >
       <div className="mb-2 flex items-center gap-2">
-        <ShieldAlert
-          className="h-4 w-4 shrink-0 text-amber-700 dark:text-amber-400"
-          aria-hidden="true"
-        />
-        <span className="text-xs font-semibold text-amber-700 dark:text-amber-400">
-          Before you connect
-        </span>
+        <ShieldAlert className="h-4 w-4 shrink-0 text-warning-text" aria-hidden="true" />
+        <span className="text-xs font-semibold text-warning-text">Before you connect</span>
       </div>
       <ul className="space-y-1.5">
         {POINTS.map((point) => (

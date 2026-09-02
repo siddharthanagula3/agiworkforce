@@ -40,7 +40,7 @@ export default function ChatError({
               borderRadius: 'var(--radius-md)',
               border: '1px solid var(--settings-border)',
               background: 'var(--chat-accent-primary, #1a1a1a)',
-              color: 'var(--chat-accent-on-primary, #1c150b)',
+              color: 'var(--chat-accent-on-primary)',
               padding: '8px 16px',
               fontSize: 14,
               cursor: 'pointer',

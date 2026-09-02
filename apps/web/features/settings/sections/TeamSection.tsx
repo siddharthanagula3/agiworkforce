@@ -58,7 +58,7 @@ const primaryButtonStyle = {
   border: 0,
   borderRadius: 'var(--radius-md)',
   background: 'var(--chat-accent-primary, #c8892a)',
-  color: 'var(--chat-accent-on-primary, #1c150b)',
+  color: 'var(--chat-accent-on-primary)',
   fontSize: 13,
   fontWeight: 600,
   padding: '8px 14px',
@@ -141,7 +141,7 @@ function InlineError({ error }: { error: Error | null | undefined }) {
       role="alert"
       style={{
         margin: '10px 0 0',
-        color: 'var(--settings-destructive-text, #d31212)',
+        color: 'var(--settings-destructive-text)',
         fontSize: 12,
         lineHeight: 1.5,
       }}
@@ -806,7 +806,7 @@ export function TeamSection() {
                   onClick={() => setPendingAction({ kind: 'revoke-invitation', invitation })}
                   style={{
                     ...secondaryButtonStyle,
-                    color: 'var(--settings-destructive-text, #d31212)',
+                    color: 'var(--settings-destructive-text)',
                   }}
                 >
                   Revoke
@@ -934,7 +934,7 @@ export function TeamSection() {
                         border: '1px solid var(--settings-border)',
                         borderRadius: 'var(--radius-md)',
                         background: 'transparent',
-                        color: 'var(--settings-destructive-text, #d31212)',
+                        color: 'var(--settings-destructive-text)',
                         cursor: 'pointer',
                       }}
                     >
@@ -1001,7 +1001,7 @@ export function TeamSection() {
                 disabled={!successorUserId || leaveOrganization.isPending}
                 style={{
                   ...secondaryButtonStyle,
-                  color: 'var(--settings-destructive-text, #d31212)',
+                  color: 'var(--settings-destructive-text)',
                   marginTop: 14,
                 }}
               >
@@ -1021,7 +1021,7 @@ export function TeamSection() {
                 disabled={leaveOrganization.isPending}
                 style={{
                   ...secondaryButtonStyle,
-                  color: 'var(--settings-destructive-text, #d31212)',
+                  color: 'var(--settings-destructive-text)',
                   marginTop: 14,
                 }}
               >
