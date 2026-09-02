@@ -6,6 +6,7 @@ import { Button, ButtonRow, Prose, Section, Stack } from '@/features/marketing/c
 import { PageHero } from '@/features/marketing/components/pages/surfaces/shared';
 import { NoteList } from '@/features/marketing/components/pages/company/shared';
 import { BYOK_SURFACES, DESKTOP_LOCAL_RUNTIMES, MARKETING } from '@/lib/marketing-constants';
+import { CONTACT_EMAIL, contactMailto } from '@/lib/legal-constants';
 
 export const metadata = buildMetadata({
   title: 'FAQ: providers, BYOK, local mode, and security',
@@ -90,7 +91,7 @@ export default function FaqPage() {
           id="agi-faq-title"
           eyebrow="FAQ"
           title="Direct answers, no spin."
-          lede="The questions we get most often, answered the way we'd want them answered. If something below is wrong or out of date, email contact@agiworkforce.com and we'll fix it."
+          lede={`The questions we get most often, answered the way we'd want them answered. If something below is wrong or out of date, email ${CONTACT_EMAIL} and we'll fix it.`}
           ctas={[]}
         />
 
@@ -137,7 +138,7 @@ export default function FaqPage() {
               <Button href="/legal" variant="secondary">
                 Legal index
               </Button>
-              <Button href="mailto:contact@agiworkforce.com" variant="secondary">
+              <Button href={contactMailto()} variant="secondary">
                 Email us
               </Button>
             </ButtonRow>
