@@ -11,6 +11,21 @@ import {
   type CloudAgentRetrySafety,
 } from '@/lib/services/cloud-agent-execution-service';
 
+const RAW_PAYLOAD_MESSAGE_PATTERN = /^\s*(?:\d{3}\s+)?[[{]/;
+const RAW_PAYLOAD_EXECUTION_ERROR_MESSAGE =
+  'The external operation returned a response AGI could not summarize.';
+
+function messageOf(error: unknown): string | null {
+  if (error instanceof Error) return error.message;
+  return typeof error === 'string' ? error : null;
+}
+
+function sanitizeExecutionError(error: unknown): unknown {
+  const message = messageOf(error);
+  if (message === null || !RAW_PAYLOAD_MESSAGE_PATTERN.test(message)) return error;
+  return new Error(RAW_PAYLOAD_EXECUTION_ERROR_MESSAGE, { cause: error });
+}
+
 function executionError(error: unknown): Record<string, unknown> {
   if (error instanceof Error) {
     return {
@@ -80,7 +95,8 @@ export async function executeCloudAgentOperation<TResult extends object>(
   let result: TResult;
   try {
     result = input.resultSchema.parse(await input.execute());
-  } catch (error) {
+  } catch (rawError) {
+    const error = sanitizeExecutionError(rawError);
     await failCloudAgentExecutionOperation(db, {
       userId: input.userId,
       operationId: claim.operationId,
