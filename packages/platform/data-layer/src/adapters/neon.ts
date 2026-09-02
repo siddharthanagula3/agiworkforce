@@ -307,19 +307,7 @@ export class NeonDatabaseAdapter implements DatabaseAdapter {
   }
 
   /**
-   * Both halves are load-bearing, and removing either reinstates a process
-   * kill. `pg-pool` keeps an `error` listener on a client only while it sits
-   * idle — it strips it on checkout and restores it on release — and the
-   * driver's client re-emits every transport failure whether or not a query is
-   * in flight. An unlistened `error` event is a throw in Node, so a Neon
-   * WebSocket dropping under a warm serverless instance took the function down
-   * with `Unhandled error. ()` instead of failing the one query.
    *
-   * Listening for anything other than `error` sets the driver's
-   * `hasFetchUnsupportedListeners`, which opts `pool.query` out of the
-   * `poolQueryViaFetch` transport. That flag is off by default and unset here,
-   * so this costs nothing today, but it is the reason to weigh before turning
-   * it on.
    */
   private guardTransportErrors(pool: Pool): Pool {
     pool.on('error', (error: unknown) => this.reportTransportError('pool', error));
@@ -346,7 +334,7 @@ export class NeonDatabaseAdapter implements DatabaseAdapter {
       if (report) report(event);
       else console.error('neon connection transport error', event);
     } catch {
-      // A reporter that throws must not become the crash this exists to stop.
+      return;
     }
   }
 
