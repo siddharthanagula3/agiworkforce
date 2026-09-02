@@ -41,12 +41,9 @@
     --chat-code-bg: #f6f8fa;
     --chat-code-header-bg: #ececf1;
     --chat-code-border: rgba(31, 41, 55, 0.15);
-    /* 13.76:1 on --chat-code-bg. */
     --chat-code-text: #24292f;
-    /* 6.42:1 on --chat-code-header-bg. */
     --chat-code-lang-label: #4b5563;
     --chat-code-copy-hover-bg: rgba(31, 41, 55, 0.08);
-    /* 15.07:1 on --chat-code-header-bg. */
     --chat-code-copy-hover-fg: #111827;
     --chat-text-primary: #1a1915;
     /* Used at 11-12px, where WCAG AA requires 4.5:1. Ratios below are the
@@ -113,9 +110,6 @@
     --chat-surface-hover: hsl(var(--neutral-4));
     --chat-sidebar-bg: hsl(var(--neutral-0));
     --chat-input-bg: hsl(var(--neutral-3));
-    /* Matches the fenced code block's pre-existing dark chrome (Tailwind
-       gray-950/900/700), not the neutral ramp, so the dark theme is
-       unchanged by wiring the code block onto this token. */
     --chat-code-bg: #030712;
     --chat-code-header-bg: #111827;
     --chat-code-border: rgba(55, 65, 81, 0.5);
