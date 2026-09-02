@@ -1,7 +1,16 @@
 import { buildMetadata } from '@/lib/seo/metadata';
-import Link from 'next/link';
 import { Header } from '@shared/components/layout/Header';
 import { MarketingFooter } from '@/features/marketing/components/MarketingFooter';
+import {
+  Button,
+  ButtonRow,
+  Eyebrow,
+  Ledger,
+  Prose,
+  Section,
+  Stack,
+} from '@/features/marketing/components/system';
+import { FactGrid, PageHero } from '@/features/marketing/components/pages/surfaces/shared';
 
 export const metadata = buildMetadata({
   title: 'Agent permissions',
@@ -25,29 +34,26 @@ const NO_ASK: { k: string; v: string }[] = [
   },
   {
     k: 'Write a file, create a folder',
-    v: 'Writes inside the conversation’s own sandbox workspace. Not your filesystem, not your cloud storage. A file write is classified as irreversible; a folder create is reversible.',
+    v: "Writes inside the conversation's own sandbox workspace. Not your filesystem, not your cloud storage. A file write is classified as irreversible; a folder create is reversible.",
   },
   {
     k: 'Create an Office file',
-    // Only the formats create_office_file's schema accepts may be named here.
-    // apps/web/app/agent-permissions/__tests__/office-file-claims.test.ts
-    // derives that enum and fails this row if it drifts.
     v: 'Generates a Word document (.docx) or a PowerPoint deck (.pptx) on our servers and attaches it to the conversation for you to download. Those two formats are the whole of it: no other Office format, and no editing of a file you already have. Reversible, no egress path.',
   },
   {
     k: 'Run a skill',
-    v: 'Loads a skill’s instructions into the turn. Skills act through the tools above and are gated by them.',
+    v: "Loads a skill's instructions into the turn. Skills act through the tools above and are gated by them.",
   },
 ];
 
 const REVOKE: { k: string; v: string }[] = [
   {
     k: 'Disconnect a connector',
-    v: 'Removes the connection and also deletes every saved per-tool permission for that connector, so a past “Always allow” cannot survive a reconnect.',
+    v: 'Removes the connection and also deletes every saved per-tool permission for that connector, so a past "Always allow" cannot survive a reconnect.',
   },
   {
     k: 'Reset one tool',
-    v: 'Set a single tool back to “Needs approval”, or delete its saved verdict outright. This exists specifically so a one-time “Always allow” is not permanent.',
+    v: 'Set a single tool back to "Needs approval", or delete its saved verdict outright. This exists specifically so a one-time "Always allow" is not permanent.',
   },
   {
     k: 'Block one tool',
@@ -63,11 +69,11 @@ const REVOKE: { k: string; v: string }[] = [
   },
   {
     k: 'Browser: remove a site',
-    v: 'Take a site off the extension’s allowlist and the browser agent can no longer navigate to it.',
+    v: "Take a site off the extension's allowlist and the browser agent can no longer navigate to it.",
   },
   {
     k: 'Browser: re-enable the gate',
-    v: 'Turn “ask before acting” back on if you previously opted into autopilot. Only an explicit opt-out disables it.',
+    v: 'Turn "ask before acting" back on if you previously opted into autopilot. Only an explicit opt-out disables it.',
   },
   {
     k: 'Desktop: per-tool policy',
@@ -92,397 +98,347 @@ const DESKTOP_SCOPES: { k: string; v: string }[] = [
 
 export default function AgentPermissionsPage() {
   return (
-    <div data-design="agi">
-      <main className="agi-shell">
-        <Header />
+    <div data-design="agi" className="agi-ds-page">
+      <Header />
+      <main id="main-content">
+        <PageHero
+          id="agi-perm-title"
+          eyebrow="Agent permissions"
+          title="What the agent may do, and what it must ask."
+          lede={
+            <>
+              The exact default authority of the agent on each surface, the limits of the
+              protections we ship, the connector scopes actually requested today, and every way to
+              take access back.{' '}
+              <strong>
+                Some of this is less flattering than a marketing page would write it. That is the
+                point. You cannot review a permission model you have to infer.
+              </strong>{' '}
+              The rules that govern how you use it are at{' '}
+              <a href="/acceptable-use" className="agi-ds-link">
+                /acceptable-use
+              </a>
+              .
+            </>
+          }
+          ctas={[]}
+        />
 
-        <section className="agi-fl-hero" aria-labelledby="agi-perm-hero-title">
-          <div className="agi-fl-hero-backdrop" aria-hidden="true" />
-          <p className="agi-fl-eyebrow">Agent permissions</p>
-          <h1 id="agi-perm-hero-title" className="agi-fl-h1">
-            <span className="agi-fl-h1-line">What the agent may do,</span>{' '}
-            <span className="agi-fl-h1-line">
-              <em className="agi-fl-h1-em">and what it must ask.</em>
-            </span>
-          </h1>
-          <p className="agi-fl-lede">
-            The exact default authority of the agent on each surface, the limits of the protections
-            we ship, the connector scopes actually requested today, and every way to take access
-            back.{' '}
-            <strong>
-              Some of this is less flattering than a marketing page would write it. That is the
-              point. You cannot review a permission model you have to infer.
-            </strong>{' '}
-            The rules that govern how you use it are at{' '}
-            <Link href="/acceptable-use" style={{ color: 'var(--agi-ink)' }}>
-              /acceptable-use
-            </Link>
-            .
-          </p>
-        </section>
+        <Section id="no-ask" labelledBy="agi-perm-noask-title" rule>
+          <Stack gap="loose">
+            <div>
+              <Eyebrow>Managed Cloud · no approval</Eyebrow>
+              <h2 className="agi-ds-h2" id="agi-perm-noask-title">
+                These run without asking.
+              </h2>
+              <Prose>
+                In Managed Cloud, a turn that offers no connector or MCP tool runs in automatic
+                approval mode. With no saved preference of your own, the built-in tools below
+                execute without a prompt. This is a deliberate design choice: each one acts inside a
+                read-only or isolated boundary, and prompting on every web search would train you to
+                click through prompts that matter. It is stated plainly here rather than implied
+                away.
+              </Prose>
+            </div>
+            <Ledger
+              caption="Tools that run without asking"
+              rows={NO_ASK.map((row) => ({ label: row.k, value: row.v }))}
+            />
+            <Prose>
+              You can still override any of them: set a tool to &ldquo;Needs approval&rdquo; or
+              &ldquo;Blocked&rdquo; and your setting takes precedence over automatic mode.
+            </Prose>
+          </Stack>
+        </Section>
 
-        <section className="agi-fl-section" aria-labelledby="agi-perm-noask-title">
-          <p className="agi-fl-eyebrow">Managed Cloud &middot; no approval</p>
-          <h2 id="agi-perm-noask-title" className="agi-fl-h2">
-            These run without asking.
-          </h2>
-          <p className="agi-fl-section-lede">
-            In Managed Cloud, a turn that offers no connector or MCP tool runs in automatic approval
-            mode. With no saved preference of your own, the built-in tools below execute without a
-            prompt. This is a deliberate design choice: each one acts inside a read-only or isolated
-            boundary, and prompting on every web search would train you to click through prompts
-            that matter. It is stated plainly here rather than implied away.
-          </p>
-          <table className="agi-ledger" style={{ marginTop: 24 }}>
-            <tbody>
-              {NO_ASK.map((row) => (
-                <tr key={row.k}>
-                  <td style={{ width: '28%' }}>{row.k}</td>
-                  <td>{row.v}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          <p className="agi-fl-section-lede" style={{ marginTop: 20 }}>
-            You can still override any of them: set a tool to &ldquo;Needs approval&rdquo; or
-            &ldquo;Blocked&rdquo; and your setting takes precedence over automatic mode.
-          </p>
-        </section>
+        <Section id="always-ask" labelledBy="agi-perm-ask-title" rule ground="2">
+          <Stack gap="loose">
+            <div>
+              <Eyebrow>Managed Cloud · approval required</Eyebrow>
+              <h2 className="agi-ds-h2" id="agi-perm-ask-title">
+                These always ask.
+              </h2>
+            </div>
+            <FactGrid
+              items={[
+                {
+                  meta: 'Connectors',
+                  title: 'Every connector and MCP tool',
+                  body: 'When a turn carries any connector or MCP tool, the whole turn switches to manual approval mode. These tools cross an external or mutating boundary, so they are gated by default and on every turn, not once at connect time.',
+                },
+                {
+                  meta: 'Your setting',
+                  title: 'Anything you marked "Needs approval"',
+                  body: 'A saved "ask" verdict outranks automatic mode, so you can pull any built-in tool back into the approval flow.',
+                },
+                {
+                  meta: 'Escalation',
+                  title: 'A tool call that trips the injection escalation',
+                  body: 'When untrusted content has entered the conversation, a private authenticated source is reachable, and the pending call can move data out of the boundary, an otherwise automatic approval escalates to a human decision. See the limits below.',
+                },
+              ]}
+            />
 
-        <section className="agi-fl-section" aria-labelledby="agi-perm-ask-title">
-          <p className="agi-fl-eyebrow">Managed Cloud &middot; approval required</p>
-          <h2 id="agi-perm-ask-title" className="agi-fl-h2">
-            These always ask.
-          </h2>
-          <ul className="agi-reasons">
-            <li className="agi-reason">
-              <h3 className="agi-reason-h">Every connector and MCP tool</h3>
-              <p className="agi-reason-p">
-                When a turn carries any connector or MCP tool, the whole turn switches to manual
-                approval mode. These tools cross an external or mutating boundary, so they are gated
-                by default and on every turn, not once at connect time.
-              </p>
-            </li>
-            <li className="agi-reason">
-              <h3 className="agi-reason-h">Anything you marked &ldquo;Needs approval&rdquo;</h3>
-              <p className="agi-reason-p">
-                A saved &ldquo;ask&rdquo; verdict outranks automatic mode, so you can pull any
-                built-in tool back into the approval flow.
-              </p>
-            </li>
-            <li className="agi-reason">
-              <h3 className="agi-reason-h">A tool call that trips the injection escalation</h3>
-              <p className="agi-reason-p">
-                When untrusted content has entered the conversation, a private authenticated source
-                is reachable, and the pending call can move data out of the boundary, an otherwise
-                automatic approval escalates to a human decision. See the limits below.
-              </p>
-            </li>
-          </ul>
+            <h3 className="agi-ds-h3">The precedence order, in full.</h3>
+            <Ledger
+              caption="Approval precedence order"
+              rows={[
+                { label: '1. Blocked by you', value: 'Denied. Nothing overrides this.' },
+                { label: '2. Allowed by you, escalation triggered', value: 'Asks anyway.' },
+                { label: '3. Allowed by you', value: 'Runs.' },
+                { label: '4. "Needs approval" by you', value: 'Asks.' },
+                { label: '5. Manual mode (a connector tool is in the turn)', value: 'Asks.' },
+                { label: '6. Escalation triggered', value: 'Asks.' },
+                { label: '7. Otherwise', value: 'Runs.' },
+              ]}
+            />
+          </Stack>
+        </Section>
 
-          <h3 className="agi-fl-h2" style={{ marginTop: 48, fontSize: 'inherit' }}>
-            The precedence order, in full.
-          </h3>
-          <table className="agi-ledger" style={{ marginTop: 16 }}>
-            <tbody>
-              <tr>
-                <td style={{ width: '28%' }}>1. Blocked by you</td>
-                <td>Denied. Nothing overrides this.</td>
-              </tr>
-              <tr>
-                <td>2. Allowed by you, escalation triggered</td>
-                <td>Asks anyway.</td>
-              </tr>
-              <tr>
-                <td>3. Allowed by you</td>
-                <td>Runs.</td>
-              </tr>
-              <tr>
-                <td>4. &ldquo;Needs approval&rdquo; by you</td>
-                <td>Asks.</td>
-              </tr>
-              <tr>
-                <td>5. Manual mode (a connector tool is in the turn)</td>
-                <td>Asks.</td>
-              </tr>
-              <tr>
-                <td>6. Escalation triggered</td>
-                <td>Asks.</td>
-              </tr>
-              <tr>
-                <td>7. Otherwise</td>
-                <td>Runs.</td>
-              </tr>
-            </tbody>
-          </table>
-        </section>
+        <Section id="honest-limits" labelledBy="agi-perm-limits-title" rule>
+          <Stack gap="loose">
+            <div>
+              <Eyebrow>Honest limits</Eyebrow>
+              <h2 className="agi-ds-h2" id="agi-perm-limits-title">
+                What the injection escalation does not catch.
+              </h2>
+              <Prose>
+                The escalation is a mitigation, not a proof. We publish its gaps because a reviewer
+                will find them anyway, and a mitigation you can reason about is worth more than a
+                clean claim you cannot.
+              </Prose>
+            </div>
+            <FactGrid
+              items={[
+                {
+                  meta: 'Coverage',
+                  title: 'Pasted and attached content is not counted',
+                  body: 'Untrusted content is recognised when a tool fetched it: a web page, a search result, a pull-request diff. Content you paste or attach yourself is not counted, and that is a real injection vector this check does not see.',
+                },
+                {
+                  meta: 'Bias',
+                  title: 'It over-triggers on purpose',
+                  body: 'Whether a sensitive source is reachable is derived from which tools were offered, not from what was actually read. A connector merely being available counts. We would rather cost you a click than miss a case.',
+                },
+                {
+                  meta: 'Visibility',
+                  title: 'Undeclared exfiltration is invisible',
+                  body: 'Whether a call can move data out is per-tool metadata. An MCP server that phones home during what it declares as a read is not visible to this check, which is exactly why any tool we have not classified is treated as creating an egress path.',
+                },
+                {
+                  meta: 'Override',
+                  title: 'It cannot stop you approving',
+                  body: 'The check gates automatic approval only. If it escalates and you approve, the call runs.',
+                },
+              ]}
+            />
+          </Stack>
+        </Section>
 
-        <section className="agi-fl-section" aria-labelledby="agi-perm-limits-title">
-          <p className="agi-fl-eyebrow">Honest limits</p>
-          <h2 id="agi-perm-limits-title" className="agi-fl-h2">
-            What the injection escalation does not catch.
-          </h2>
-          <p className="agi-fl-section-lede">
-            The escalation is a mitigation, not a proof. We publish its gaps because a reviewer will
-            find them anyway, and a mitigation you can reason about is worth more than a clean claim
-            you cannot.
-          </p>
-          <ul className="agi-reasons">
-            <li className="agi-reason">
-              <h3 className="agi-reason-h">Pasted and attached content is not counted</h3>
-              <p className="agi-reason-p">
-                Untrusted content is recognised when a tool fetched it: a web page, a search result,
-                a pull-request diff. Content you paste or attach yourself is not counted, and that
-                is a real injection vector this check does not see.
-              </p>
-            </li>
-            <li className="agi-reason">
-              <h3 className="agi-reason-h">It over-triggers on purpose</h3>
-              <p className="agi-reason-p">
-                Whether a sensitive source is reachable is derived from which tools were offered,
-                not from what was actually read. A connector merely being available counts. We would
-                rather cost you a click than miss a case.
-              </p>
-            </li>
-            <li className="agi-reason">
-              <h3 className="agi-reason-h">Undeclared exfiltration is invisible</h3>
-              <p className="agi-reason-p">
-                Whether a call can move data out is per-tool metadata. An MCP server that phones
-                home during what it declares as a read is not visible to this check, which is
-                exactly why any tool we have not classified is treated as creating an egress path.
-              </p>
-            </li>
-            <li className="agi-reason">
-              <h3 className="agi-reason-h">It cannot stop you approving</h3>
-              <p className="agi-reason-p">
-                The check gates automatic approval only. If it escalates and you approve, the call
-                runs.
-              </p>
-            </li>
-          </ul>
-        </section>
+        <Section id="blocking" labelledBy="agi-perm-block-title" rule ground="2">
+          <Stack gap="loose">
+            <Eyebrow>Blocking</Eyebrow>
+            <h2 className="agi-ds-h2" id="agi-perm-block-title">
+              A Block is enforced on the server.
+            </h2>
+            <Prose>
+              Blocking a tool is not a client-side preference. The verdict is stored against your
+              account and checked on the server before any side effect, on the streaming tool loop
+              and again when an approval is resumed. A modified client, or a request you write
+              yourself against the API, cannot execute a tool you blocked; the model is told the
+              tool is blocked and instructed not to retry it.
+            </Prose>
+            <Prose>
+              <strong>One thing a Block does not do:</strong> it does not hide the tool from the
+              model&rsquo;s list of available tools. The model may still attempt the call. The call
+              is refused before it runs, and nothing happens.
+            </Prose>
+          </Stack>
+        </Section>
 
-        <section className="agi-fl-section" aria-labelledby="agi-perm-block-title">
-          <p className="agi-fl-eyebrow">Blocking</p>
-          <h2 id="agi-perm-block-title" className="agi-fl-h2">
-            A Block is enforced on the server.
-          </h2>
-          <p className="agi-fl-section-lede">
-            Blocking a tool is not a client-side preference. The verdict is stored against your
-            account and checked on the server before any side effect, on the streaming tool loop and
-            again when an approval is resumed. A modified client, or a request you write yourself
-            against the API, cannot execute a tool you blocked; the model is told the tool is
-            blocked and instructed not to retry it.
-          </p>
-          <p className="agi-fl-section-lede" style={{ marginTop: 16 }}>
-            <strong>One thing a Block does not do:</strong> it does not hide the tool from the
-            model&rsquo;s list of available tools. The model may still attempt the call. The call is
-            refused before it runs, and nothing happens.
-          </p>
-        </section>
+        <Section id="browser-permissions" labelledBy="agi-perm-browser-title" rule>
+          <Stack gap="loose">
+            <div>
+              <Eyebrow>In the browser</Eyebrow>
+              <h2 className="agi-ds-h2" id="agi-perm-browser-title">
+                Computer use in Chrome.
+              </h2>
+              <Prose>
+                The Chrome extension can drive a tab through the Chrome debugger. Starting a session
+                is always an explicit action: you type a goal and click. Once running:
+              </Prose>
+            </div>
+            <Ledger
+              caption="Browser computer-use permissions"
+              rows={[
+                {
+                  label: 'Ask before acting',
+                  value:
+                    'On by default. An unset preference means ask; autopilot is an explicit opt-out you have to choose.',
+                },
+                {
+                  label: 'Unanswered approvals',
+                  value: 'Denied after 30 seconds. The gate fails closed, not open.',
+                },
+                {
+                  label: 'Where it can go',
+                  value:
+                    'Navigation is confined to the site allowlist you maintain in extension options.',
+                },
+                {
+                  label: 'Text leaving the page',
+                  value:
+                    'Page-text summaries and field readbacks are redacted by the driver before they leave.',
+                },
+                {
+                  label: 'Screenshots',
+                  value: (
+                    <>
+                      <strong>
+                        Screenshots are not redacted and cannot be. You cannot scrub secrets out of
+                        a PNG.
+                      </strong>{' '}
+                      They reach the Managed Cloud gateway. If a page has a secret visibly rendered
+                      on it, a screenshot of that page carries it. This is a residual, accepted
+                      risk, bounded by the allowlist and the approval gate.
+                    </>
+                  ),
+                },
+                {
+                  label: 'Where inference happens',
+                  value:
+                    'Computer use requires Managed Cloud sign-in and calls the Managed Cloud gateway directly from the extension.',
+                },
+              ]}
+            />
+          </Stack>
+        </Section>
 
-        <section className="agi-fl-section" aria-labelledby="agi-perm-browser-title">
-          <p className="agi-fl-eyebrow">In the browser</p>
-          <h2 id="agi-perm-browser-title" className="agi-fl-h2">
-            Computer use in Chrome.
-          </h2>
-          <p className="agi-fl-section-lede">
-            The Chrome extension can drive a tab through the Chrome debugger. Starting a session is
-            always an explicit action: you type a goal and click. Once running:
-          </p>
-          <table className="agi-ledger" style={{ marginTop: 24 }}>
-            <tbody>
-              <tr>
-                <td style={{ width: '28%' }}>Ask before acting</td>
-                <td>
-                  On by default. An unset preference means ask; autopilot is an explicit opt-out you
-                  have to choose.
-                </td>
-              </tr>
-              <tr>
-                <td>Unanswered approvals</td>
-                <td>Denied after 30 seconds. The gate fails closed, not open.</td>
-              </tr>
-              <tr>
-                <td>Where it can go</td>
-                <td>
-                  Navigation is confined to the site allowlist you maintain in extension options.
-                </td>
-              </tr>
-              <tr>
-                <td>Text leaving the page</td>
-                <td>
-                  Page-text summaries and field readbacks are redacted by the driver before they
-                  leave.
-                </td>
-              </tr>
-              <tr>
-                <td>Screenshots</td>
-                <td>
-                  <strong>
-                    Screenshots are not redacted and cannot be. You cannot scrub secrets out of a
-                    PNG.
-                  </strong>{' '}
-                  They reach the Managed Cloud gateway. If a page has a secret visibly rendered on
-                  it, a screenshot of that page carries it. This is a residual, accepted risk,
-                  bounded by the allowlist and the approval gate.
-                </td>
-              </tr>
-              <tr>
-                <td>Where inference happens</td>
-                <td>
-                  Computer use requires Managed Cloud sign-in and calls the Managed Cloud gateway
-                  directly from the extension.
-                </td>
-              </tr>
-            </tbody>
-          </table>
-        </section>
+        <Section id="desktop-permissions" labelledBy="agi-perm-desktop-title" rule ground="2">
+          <Stack gap="loose">
+            <Eyebrow>On Desktop</Eyebrow>
+            <h2 className="agi-ds-h2" id="agi-perm-desktop-title">
+              Local execution, local approval.
+            </h2>
+            <Prose>
+              Desktop runs tools on your machine, so it carries its own gate: dangerous tools prompt
+              in manual mode, per-tool approval policies are stored and reapplied, and connector
+              settings expose a standing Always allow / Needs approval / Blocked control for each
+              tool. Desktop is also the only surface today that completes a real OAuth flow. See the
+              next section.
+            </Prose>
+          </Stack>
+        </Section>
 
-        <section className="agi-fl-section" aria-labelledby="agi-perm-desktop-title">
-          <p className="agi-fl-eyebrow">On Desktop</p>
-          <h2 id="agi-perm-desktop-title" className="agi-fl-h2">
-            Local execution, local approval.
-          </h2>
-          <p className="agi-fl-section-lede">
-            Desktop runs tools on your machine, so it carries its own gate: dangerous tools prompt
-            in manual mode, per-tool approval policies are stored and reapplied, and connector
-            settings expose a standing Always allow / Needs approval / Blocked control for each
-            tool. Desktop is also the only surface today that completes a real OAuth flow. See the
-            next section.
-          </p>
-        </section>
+        <Section id="connectors" labelledBy="agi-perm-connectors-title" rule>
+          <Stack gap="loose">
+            <div>
+              <Eyebrow>Connectors</Eyebrow>
+              <h2 className="agi-ds-h2" id="agi-perm-connectors-title">
+                What is actually requested today.
+              </h2>
+              <Prose>
+                The connector directory is larger than what is connectable. This section describes
+                the current state, not the roadmap.
+              </Prose>
+            </div>
 
-        <section className="agi-fl-section" aria-labelledby="agi-perm-connectors-title">
-          <p className="agi-fl-eyebrow">Connectors</p>
-          <h2 id="agi-perm-connectors-title" className="agi-fl-h2">
-            What is actually requested today.
-          </h2>
-          <p className="agi-fl-section-lede">
-            The connector directory is larger than what is connectable. This section describes the
-            current state, not the roadmap.
-          </p>
+            <h3 className="agi-ds-h3">Managed Cloud connects exactly three kinds of thing.</h3>
+            <Ledger
+              caption="What Managed Cloud connects"
+              rows={[
+                {
+                  label: 'The GitHub App',
+                  value:
+                    'Three tools: read a pull-request diff, post an issue or pull-request comment, and post a pull-request review. Access comes from the GitHub App installation you authorize; its permission set is configured on GitHub during install and is shown to you there. We do not restate it here, because it is not declared in our own code and we will not guess at a permission list on your behalf.',
+                },
+                {
+                  label: 'Operator-configured MCP servers',
+                  value:
+                    'Remote MCP endpoints configured server-side by AGI. The endpoint and its credentials stay server-side; nothing you supply flows into them.',
+                },
+                {
+                  label: 'Your own remote MCP servers',
+                  value:
+                    'A server URL you provide, with an optional bearer token that is encrypted at rest and scoped to your account alone. Its tools are whatever that server advertises at runtime.',
+                },
+              ]}
+            />
 
-          <h3 className="agi-reason-h" style={{ marginTop: 32 }}>
-            Managed Cloud connects exactly three kinds of thing
-          </h3>
-          <table className="agi-ledger" style={{ marginTop: 16 }}>
-            <tbody>
-              <tr>
-                <td style={{ width: '28%' }}>The GitHub App</td>
-                <td>
-                  Three tools: read a pull-request diff, post an issue or pull-request comment, and
-                  post a pull-request review. Access comes from the GitHub App installation you
-                  authorize; its permission set is configured on GitHub during install and is shown
-                  to you there. We do not restate it here, because it is not declared in our own
-                  code and we will not guess at a permission list on your behalf.
-                </td>
-              </tr>
-              <tr>
-                <td>Operator-configured MCP servers</td>
-                <td>
-                  Remote MCP endpoints configured server-side by AGI. The endpoint and its
-                  credentials stay server-side; nothing you supply flows into them.
-                </td>
-              </tr>
-              <tr>
-                <td>Your own remote MCP servers</td>
-                <td>
-                  A server URL you provide, with an optional bearer token that is encrypted at rest
-                  and scoped to your account alone. Its tools are whatever that server advertises at
-                  runtime.
-                </td>
-              </tr>
-            </tbody>
-          </table>
+            <Prose>
+              <strong>
+                Every other connector in the directory is not connectable on the web today.
+              </strong>{' '}
+              Attempting to connect one returns an explicit &ldquo;not implemented&rdquo; response
+              rather than a fake connected state. No OAuth token for Gmail, Drive, Slack, Notion, or
+              any other branded catalog connector is stored in your AGI account, because no such
+              flow exists on the web. The record we keep for a connector is an enablement flag: a
+              connector id, an auth type, and whether it is active. It holds no tokens and no
+              endpoint URLs.
+            </Prose>
 
-          <p className="agi-fl-section-lede" style={{ marginTop: 24 }}>
-            <strong>
-              Every other connector in the directory is not connectable on the web today.
-            </strong>{' '}
-            Attempting to connect one returns an explicit &ldquo;not implemented&rdquo; response
-            rather than a fake connected state. No OAuth token for Gmail, Drive, Slack, Notion, or
-            any other branded catalog connector is stored in your AGI account, because no such flow
-            exists on the web. The record we keep for a connector is an enablement flag: a connector
-            id, an auth type, and whether it is active. It holds no tokens and no endpoint URLs.
-          </p>
+            <h3 className="agi-ds-h3">Desktop OAuth scopes, in full.</h3>
+            <Prose>
+              On Desktop, Gmail and calendar integrations use <em>your own</em> OAuth client
+              credentials with PKCE, and the resulting tokens are encrypted with a key derived from
+              your machine and stored in local SQLite on that device. The provider&rsquo;s own
+              consent screen shows these scopes when you authorize; we list them here so you see
+              them before you get there.
+            </Prose>
+            <Ledger
+              caption="Desktop OAuth scopes"
+              rows={DESKTOP_SCOPES.map((row) => ({ label: row.k, value: row.v }))}
+            />
+            <Prose>
+              Two of those requests are broader than the feature needs: Gmail&rsquo;s modify scope
+              and Google Calendar&rsquo;s unrestricted scope. We are naming them rather than
+              describing the narrower scope we wish we asked for. Narrowing them changes behaviour
+              for existing connections, so it is tracked as engineering work, not a wording change.
+            </Prose>
 
-          <h3 className="agi-reason-h" style={{ marginTop: 40 }}>
-            Desktop OAuth scopes, in full
-          </h3>
-          <p className="agi-fl-section-lede" style={{ marginTop: 8 }}>
-            On Desktop, Gmail and calendar integrations use <em>your own</em> OAuth client
-            credentials with PKCE, and the resulting tokens are encrypted with a key derived from
-            your machine and stored in local SQLite on that device. The provider&rsquo;s own consent
-            screen shows these scopes when you authorize; we list them here so you see them before
-            you get there.
-          </p>
-          <table className="agi-ledger" style={{ marginTop: 16 }}>
-            <tbody>
-              {DESKTOP_SCOPES.map((row) => (
-                <tr key={row.k}>
-                  <td style={{ width: '28%' }}>{row.k}</td>
-                  <td>{row.v}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          <p className="agi-fl-section-lede" style={{ marginTop: 20 }}>
-            Two of those requests are broader than the feature needs: Gmail&rsquo;s modify scope and
-            Google Calendar&rsquo;s unrestricted scope. We are naming them rather than describing
-            the narrower scope we wish we asked for. Narrowing them changes behaviour for existing
-            connections, so it is tracked as engineering work, not a wording change.
-          </p>
+            <h3 className="agi-ds-h3">A custom MCP server is your trust boundary.</h3>
+            <Prose>
+              AGI does not vet the remote MCP servers you add. The operator of that server sees the
+              conversation context you send to its tools, and any token you enter is transmitted to
+              it. We validate that the URL resolves to a public host (private and link-local
+              addresses are rejected), and we encrypt the token at rest and scope it to your
+              account. That is infrastructure hygiene, not an endorsement of the server. Add servers
+              you trust, the way you would add a dependency.
+            </Prose>
+          </Stack>
+        </Section>
 
-          <h3 className="agi-reason-h" style={{ marginTop: 40 }}>
-            A custom MCP server is your trust boundary
-          </h3>
-          <p className="agi-fl-section-lede" style={{ marginTop: 8 }}>
-            AGI does not vet the remote MCP servers you add. The operator of that server sees the
-            conversation context you send to its tools, and any token you enter is transmitted to
-            it. We validate that the URL resolves to a public host (private and link-local addresses
-            are rejected), and we encrypt the token at rest and scope it to your account. That is
-            infrastructure hygiene, not an endorsement of the server. Add servers you trust, the way
-            you would add a dependency.
-          </p>
-        </section>
-
-        <section className="agi-fl-section" aria-labelledby="agi-perm-revoke-title">
-          <p className="agi-fl-eyebrow">Revocation</p>
-          <h2 id="agi-perm-revoke-title" className="agi-fl-h2">
-            Every way to take access back.
-          </h2>
-          <table className="agi-ledger" style={{ marginTop: 24 }}>
-            <tbody>
-              {REVOKE.map((row) => (
-                <tr key={row.k}>
-                  <td style={{ width: '28%' }}>{row.k}</td>
-                  <td>{row.v}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          <p className="agi-fl-section-lede" style={{ marginTop: 24 }}>
-            On the web today, per-tool permissions are set from the approval card shown in the
-            conversation when a tool asks: that is where Always allow, Needs approval, and Blocked
-            live. A standing per-tool settings panel exists on Desktop. Connecting and disconnecting
-            a connector is recorded in your account&rsquo;s security audit events.
-          </p>
-          <div className="agi-fl-cta-row" style={{ marginTop: 32 }}>
-            <Link href="/acceptable-use" className="agi-fl-cta agi-fl-cta--primary">
-              Read the Acceptable Use Policy
-            </Link>
-            <Link href="/security" className="agi-fl-cta agi-fl-cta--ghost">
-              Security Posture
-            </Link>
-            <Link href="/privacy" className="agi-fl-cta agi-fl-cta--ghost">
-              Privacy Policy
-            </Link>
-          </div>
-        </section>
-
-        <MarketingFooter />
+        <Section id="revocation" labelledBy="agi-perm-revoke-title" rule ground="2">
+          <Stack gap="loose">
+            <div>
+              <Eyebrow>Revocation</Eyebrow>
+              <h2 className="agi-ds-h2" id="agi-perm-revoke-title">
+                Every way to take access back.
+              </h2>
+            </div>
+            <Ledger
+              caption="Ways to revoke access"
+              rows={REVOKE.map((row) => ({ label: row.k, value: row.v }))}
+            />
+            <Prose>
+              On the web today, per-tool permissions are set from the approval card shown in the
+              conversation when a tool asks: that is where Always allow, Needs approval, and Blocked
+              live. A standing per-tool settings panel exists on Desktop. Connecting and
+              disconnecting a connector is recorded in your account&rsquo;s security audit events.
+            </Prose>
+            <ButtonRow>
+              <Button href="/acceptable-use">Read the Acceptable Use Policy</Button>
+              <Button href="/security" variant="secondary">
+                Security posture
+              </Button>
+              <Button href="/privacy" variant="secondary">
+                Privacy policy
+              </Button>
+            </ButtonRow>
+          </Stack>
+        </Section>
       </main>
+      <MarketingFooter />
     </div>
   );
 }
