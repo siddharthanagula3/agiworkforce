@@ -1,5 +1,3 @@
-// `app/pricing/page.tsx` is a client component, so it cannot export
-// `metadata` itself; this layout is pricing's only metadata source.
 import { Metadata } from 'next';
 
 const TITLE = 'Pricing: what each plan and each route costs';
