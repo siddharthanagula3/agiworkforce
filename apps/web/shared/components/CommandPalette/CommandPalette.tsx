@@ -44,6 +44,8 @@ export interface CommandOption {
 type ActiveSubMenu = 'model' | null;
 
 const DEFAULT_COMMAND_PALETTE_MODEL = requireProviderDefaultModel('anthropic');
+const COMMAND_PALETTE_LISTBOX_ID = 'command-palette-listbox';
+const optionElementId = (commandId: string): string => `command-palette-option-${commandId}`;
 
 function useCommands(
   onOpenSubMenu: (menu: ActiveSubMenu) => void,
@@ -229,6 +231,12 @@ export function CommandPalette({ open, onOpenChange }: Props) {
       } else if (e.key === 'ArrowUp') {
         e.preventDefault();
         setSelectedIndex((i) => Math.max(i - 1, 0));
+      } else if (e.key === 'Home') {
+        e.preventDefault();
+        setSelectedIndex(0);
+      } else if (e.key === 'End') {
+        e.preventDefault();
+        setSelectedIndex(filtered.length - 1);
       } else if (e.key === 'Enter') {
         e.preventDefault();
         const cmd = filtered[selectedIndex];
@@ -288,6 +296,14 @@ export function CommandPalette({ open, onOpenChange }: Props) {
             spellCheck={false}
             className="flex-1 rounded-sm bg-transparent text-foreground placeholder:text-muted-foreground text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
             aria-label="Command palette search"
+            role="combobox"
+            aria-expanded={open}
+            aria-haspopup="listbox"
+            aria-autocomplete="list"
+            aria-controls={COMMAND_PALETTE_LISTBOX_ID}
+            aria-activedescendant={
+              filtered[selectedIndex] ? optionElementId(filtered[selectedIndex].id) : undefined
+            }
           />
           {query && (
             <button
@@ -305,7 +321,12 @@ export function CommandPalette({ open, onOpenChange }: Props) {
         </div>
 
         {/* Command list */}
-        <div className="max-h-[360px] overflow-y-auto py-2" role="listbox" aria-label="Commands">
+        <div
+          id={COMMAND_PALETTE_LISTBOX_ID}
+          className="max-h-[360px] overflow-y-auto py-2"
+          role="listbox"
+          aria-label="Commands"
+        >
           {filtered.length === 0 ? (
             <p className="text-center text-sm text-muted-foreground py-8">No commands found.</p>
           ) : (
@@ -321,6 +342,7 @@ export function CommandPalette({ open, onOpenChange }: Props) {
                   return (
                     <button
                       key={cmd.id}
+                      id={optionElementId(cmd.id)}
                       role="option"
                       aria-selected={isSelected}
                       onClick={() => execute(cmd)}
