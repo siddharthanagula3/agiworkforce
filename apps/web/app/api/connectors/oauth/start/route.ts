@@ -83,9 +83,11 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       }
 
       return fail(
-        started.reason === 'registration-rejected' || started.reason === 'no-client-identity'
-          ? 'unavailable'
-          : 'error',
+        started.reason === 'no-client-identity'
+          ? 'not_configured'
+          : started.reason === 'registration-rejected'
+            ? 'unavailable'
+            : 'error',
         502,
         started.message,
       );
@@ -94,7 +96,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
 
   if (!provider || !redirectUri) {
     return fail(
-      'unavailable',
+      'not_configured',
       501,
       'This connector has no OAuth application configured in this deployment.',
     );

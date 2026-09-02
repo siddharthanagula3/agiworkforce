@@ -124,10 +124,18 @@ const BROKER_OUTCOMES: Record<string, BrokerOutcome> = {
     tone: 'error',
     message: (name) => `Something went wrong connecting ${name}. Try again.`,
   },
+  not_configured: {
+    tone: 'error',
+    message: (name) => `${name} is not set up on this deployment yet.`,
+  },
 };
 
 function connectorDisplayName(id: string): string {
   return CONNECTORS.find((c) => c.id === id)?.name ?? 'This connector';
+}
+
+export function brokerOutcomeMessage(status: string, name: string): string | null {
+  return BROKER_OUTCOMES[status]?.message(name) ?? null;
 }
 
 export function useBrokerOutcome(onConnected: () => void): void {
