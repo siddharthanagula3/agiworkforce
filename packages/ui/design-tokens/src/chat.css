@@ -39,6 +39,15 @@
     --chat-sidebar-bg: #f5f4f1;
     --chat-input-bg: #ffffff;
     --chat-code-bg: #f6f8fa;
+    --chat-code-header-bg: #ececf1;
+    --chat-code-border: rgba(31, 41, 55, 0.15);
+    /* 13.76:1 on --chat-code-bg. */
+    --chat-code-text: #24292f;
+    /* 6.42:1 on --chat-code-header-bg. */
+    --chat-code-lang-label: #4b5563;
+    --chat-code-copy-hover-bg: rgba(31, 41, 55, 0.08);
+    /* 15.07:1 on --chat-code-header-bg. */
+    --chat-code-copy-hover-fg: #111827;
     --chat-text-primary: #1a1915;
     /* Used at 11-12px, where WCAG AA requires 4.5:1. Ratios below are the
        WORST case across every light surface a --chat-text-* can land on, not
@@ -104,7 +113,16 @@
     --chat-surface-hover: hsl(var(--neutral-4));
     --chat-sidebar-bg: hsl(var(--neutral-0));
     --chat-input-bg: hsl(var(--neutral-3));
-    --chat-code-bg: hsl(var(--neutral-1));
+    /* Matches the fenced code block's pre-existing dark chrome (Tailwind
+       gray-950/900/700), not the neutral ramp, so the dark theme is
+       unchanged by wiring the code block onto this token. */
+    --chat-code-bg: #030712;
+    --chat-code-header-bg: #111827;
+    --chat-code-border: rgba(55, 65, 81, 0.5);
+    --chat-code-text: #e5e7eb;
+    --chat-code-lang-label: #9ca3af;
+    --chat-code-copy-hover-bg: rgba(55, 65, 81, 0.5);
+    --chat-code-copy-hover-fg: #e5e7eb;
     --chat-text-primary: hsl(var(--neutral-fg-1));
     --chat-text-secondary: hsl(var(--neutral-fg-2));
     --chat-text-muted: hsl(var(--neutral-fg-3));
@@ -168,6 +186,12 @@
     --chat-sidebar-bg: #f9f9f9;
     --chat-input-bg: #ffffff;
     --chat-code-bg: #f7f7f8;
+    --chat-code-header-bg: #ececec;
+    --chat-code-border: rgba(0, 0, 0, 0.1);
+    --chat-code-text: #0d0d0d;
+    --chat-code-lang-label: #5d5d5d;
+    --chat-code-copy-hover-bg: rgba(0, 0, 0, 0.06);
+    --chat-code-copy-hover-fg: #0d0d0d;
     --chat-text-primary: #0d0d0d;
     /* AUDIT-FIX GOV-34: one #8e8e8e served as both muted and placeholder and
        measured 3.28:1 on #ffffff — below AA at the 11-12px sizes in use.
