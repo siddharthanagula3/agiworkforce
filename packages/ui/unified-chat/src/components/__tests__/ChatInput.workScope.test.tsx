@@ -189,10 +189,42 @@ describe('ChatInput work scope (Chat | AGI Work toggle + project/folder picker)'
 
     fireEvent.click(screen.getByRole('button', { name: 'AGI Work' }));
     fireEvent.click(screen.getByRole('button', { name: 'Project or folder' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Apollo' }));
+    fireEvent.click(screen.getByRole('option', { name: 'Apollo' }));
 
     expect(picker.onSelectProject).toHaveBeenCalledWith('p1');
     expect(onClearFolder).toHaveBeenCalled();
+  });
+
+  it('closes the scope picker on Escape and returns focus to its trigger', () => {
+    renderComposer({ projectPicker: makePicker() });
+
+    fireEvent.click(screen.getByRole('button', { name: 'AGI Work' }));
+    const trigger = screen.getByRole('button', { name: 'Project or folder' });
+    fireEvent.click(trigger);
+
+    expect(screen.getByRole('listbox', { name: 'Project or folder' })).not.toBeNull();
+
+    fireEvent.keyDown(document, { key: 'Escape' });
+
+    expect(screen.queryByRole('listbox')).toBeNull();
+    expect(document.activeElement).toBe(trigger);
+  });
+
+  it('arrow-navigates between project options in the scope picker', () => {
+    renderComposer({ projectPicker: makePicker() });
+
+    fireEvent.click(screen.getByRole('button', { name: 'AGI Work' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Project or folder' }));
+
+    fireEvent.keyDown(document, { key: 'ArrowDown' });
+    fireEvent.keyDown(document, { key: 'ArrowDown' });
+    expect(document.activeElement).toBe(screen.getByRole('option', { name: 'Apollo' }));
+
+    fireEvent.keyDown(document, { key: 'ArrowDown' });
+    expect(document.activeElement).toBe(screen.getByRole('option', { name: 'Zephyr' }));
+
+    fireEvent.keyDown(document, { key: 'ArrowUp' });
+    expect(document.activeElement).toBe(screen.getByRole('option', { name: 'Apollo' }));
   });
 
   it('a newly chosen folder displaces the active project (mutual exclusion, folder side)', () => {
