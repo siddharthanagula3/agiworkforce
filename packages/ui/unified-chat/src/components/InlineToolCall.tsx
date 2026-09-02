@@ -333,7 +333,7 @@ export function InlineToolCall({
               ("mcp__filesystem__read_text_file"). shrink-0 with no ellipsis made
               the label hold its full intrinsic width and push the status dot and
               chevron off the row's right edge. An error label is a full status
-              sentence, not a name — it wraps instead, since an ellipsis mid-word
+              sentence, not a name: it wraps instead, since an ellipsis mid-word
               (or mid-sentence) leaves the user unable to read what happened. */}
           <span
             className={cn(
