@@ -42,6 +42,18 @@ import { cn } from '@shared/lib/utils';
 const ANCHOR_OFFSET_PX = 8;
 const VIEWPORT_PADDING_PX = 8;
 const MIN_USABLE_SPACE_PX = 160;
+const FOCUSABLE_ITEM_SELECTOR =
+  'button:not([disabled]), a[href], input:not([disabled]), [tabindex]:not([tabindex="-1"])';
+const NAV_KEYS = ['ArrowDown', 'ArrowUp', 'Home', 'End'];
+
+function isRendered(el: HTMLElement): boolean {
+  return typeof el.checkVisibility === 'function' ? el.checkVisibility() : true;
+}
+
+function focusableItems(node: HTMLElement | null): HTMLElement[] {
+  if (!node) return [];
+  return Array.from(node.querySelectorAll<HTMLElement>(FOCUSABLE_ITEM_SELECTOR)).filter(isRendered);
+}
 
 export interface AnchoredComposerMenuProps {
   anchorRef: React.RefObject<HTMLElement | null>;
@@ -163,26 +175,43 @@ export function AnchoredComposerMenu({
     if (!open || !mounted || !autoFocusFirstItem) return;
     const node = contentRef?.current ?? internalRef.current;
     const id = window.setTimeout(() => {
-      node
-        ?.querySelector<HTMLElement>(
-          'button:not([disabled]), a[href], input:not([disabled]), [tabindex]:not([tabindex="-1"])',
-        )
-        ?.focus();
+      focusableItems(node)[0]?.focus();
     }, 0);
     return () => window.clearTimeout(id);
   }, [open, mounted, contentRef, autoFocusFirstItem]);
 
+  // Capture phase: a surrounding list (the sidebar) runs its own arrow-key
+  // navigation on a bubble-phase listener and must lose this race.
   useEffect(() => {
-    if (!open || !mounted || !onRequestClose) return;
+    if (!open || !mounted) return undefined;
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key !== 'Escape') return;
+      if (event.key === 'Escape') {
+        if (!onRequestClose) return;
+        event.stopPropagation();
+        onRequestClose();
+        anchorRef.current?.focus();
+        return;
+      }
+      if (!NAV_KEYS.includes(event.key)) return;
+      const node = contentRef?.current ?? internalRef.current;
+      const items = focusableItems(node);
+      if (items.length === 0) return;
+      event.preventDefault();
       event.stopPropagation();
-      onRequestClose();
-      anchorRef.current?.focus();
+      const current = items.indexOf(document.activeElement as HTMLElement);
+      const next =
+        event.key === 'ArrowDown'
+          ? (current + 1 + items.length) % items.length
+          : event.key === 'ArrowUp'
+            ? (current - 1 + items.length) % items.length
+            : event.key === 'Home'
+              ? 0
+              : items.length - 1;
+      items[next]?.focus();
     };
     document.addEventListener('keydown', onKeyDown, true);
     return () => document.removeEventListener('keydown', onKeyDown, true);
-  }, [open, mounted, onRequestClose, anchorRef]);
+  }, [open, mounted, onRequestClose, anchorRef, contentRef]);
 
   if (!open || !mounted) return null;
 
