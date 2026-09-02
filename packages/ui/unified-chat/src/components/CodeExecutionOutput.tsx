@@ -90,12 +90,22 @@ export function CodeExecutionOutput({ isExecuting, result }: CodeExecutionOutput
     }) ?? [];
   const hasOutput = Boolean(result && (result.stdout || result.stderr || safeImages.length > 0));
   const succeeded = result?.returnCode === 0;
+  const statusAnnouncement = isExecuting
+    ? 'Running code…'
+    : succeeded
+      ? 'Code execution succeeded'
+      : result
+        ? 'Code execution failed'
+        : null;
 
   return (
     <div
       data-testid="code-execution-output"
       className="mt-2 rounded-[var(--chat-radius-md)] border border-[var(--chat-border)] bg-[var(--chat-surface-elevated)] text-sm"
     >
+      <span className="sr-only" aria-live="polite" aria-atomic="true">
+        {statusAnnouncement}
+      </span>
       <button
         type="button"
         onClick={() => setExpanded((value) => !value)}
