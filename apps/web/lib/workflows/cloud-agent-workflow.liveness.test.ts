@@ -1,15 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-/**
- * The durable transport's first byte used to be the first PROJECTED turn chunk,
- * so the caller's liveness probe was really racing the provider's first token
- * plus a cold database. Every agentic turn on a cold runtime lost the whole
- * budget and then paid for the request-scoped attempt on top of it.
- *
- * These pin the ordering that makes the budget mean "the workflow reached its
- * first line": nothing may run before the open frame is on the wire.
- */
-
 const order: string[] = [];
 
 const mocks = vi.hoisted(() => ({
@@ -155,11 +145,6 @@ describe('the durable invocation opens its stream before it does any work', () =
   });
 });
 
-/**
- * The whole defect in one test, with nothing mocked between the workflow and
- * the probe that judges it: the invocation writes into a real stream, the model
- * never answers, and the caller must still claim the stream as live.
- */
 describe('the liveness probe clears the handoff without waiting for the model', () => {
   beforeEach(() => {
     vi.clearAllMocks();

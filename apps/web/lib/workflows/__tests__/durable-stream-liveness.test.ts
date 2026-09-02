@@ -72,8 +72,6 @@ describe('durable stream liveness', () => {
     expect(Date.now() - started).toBeLessThan(1_000);
   });
 
-  // The workflow's opening frame is an SSE comment, so it proves liveness
-  // without the client ever seeing a turn event that did not happen.
   it('claims a stream whose only opening byte is the workflow open frame', async () => {
     const live = await claimLiveDurableStream(emits(DURABLE_STREAM_OPEN_FRAME), 500);
     expect(live).not.toBeNull();

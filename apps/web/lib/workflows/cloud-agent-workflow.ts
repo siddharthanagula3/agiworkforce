@@ -168,12 +168,6 @@ function workflowContinuation(
   );
 }
 
-/**
- * The first byte the durable stream ever produces, written before this
- * invocation touches the database or the provider. The caller's liveness probe
- * races this frame, so a stall now means the workflow never reached its first
- * line and the degraded turn cannot double-execute.
- */
 async function openCloudAgentWorkflowStream(): Promise<void> {
   const writer = getWritable<Uint8Array>().getWriter();
   try {
