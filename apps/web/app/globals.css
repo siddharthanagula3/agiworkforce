@@ -8978,6 +8978,40 @@ html[data-contrast='more'] *:focus-visible {
   outline-offset: 2px;
 }
 
+[data-design='agi'] .agi-ds-code-input {
+  width: 100%;
+  min-height: 3.25rem;
+  padding: var(--agi-space-2) var(--agi-space-3);
+  border: 1px solid var(--agi-rule-strong);
+  border-radius: var(--agi-radius-frame);
+  outline: none;
+  background: var(--agi-ground-2);
+  color: var(--agi-ink);
+  font-family: var(--agi-font-mono);
+  font-size: clamp(1.1rem, 5vw, 1.35rem);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: var(--agi-tracking-label);
+  text-align: center;
+  transition:
+    border-color var(--agi-dur-hover) var(--agi-ease-expo),
+    box-shadow var(--agi-dur-hover) var(--agi-ease-expo);
+}
+
+[data-design='agi'] .agi-ds-code-input:focus-visible {
+  border-color: var(--agi-ink);
+  box-shadow: 0 0 0 3px var(--agi-rule-strong);
+}
+
+[data-design='agi'] .agi-ds-account-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--agi-space-2);
+  padding: var(--agi-space-2) var(--agi-space-3);
+  border: 1px solid var(--agi-rule);
+  border-radius: var(--agi-radius-frame);
+}
+
 @media (max-width: 767px) {
   [data-design='agi'].agi-ds-consent {
     padding: 0;
