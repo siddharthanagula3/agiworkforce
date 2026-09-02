@@ -524,6 +524,13 @@
   opacity: 1;
 }
 
+[data-design='agi'].agi-ds-mobile-nav > button:focus,
+[data-design='agi'].agi-ds-mobile-nav > button:focus-visible {
+  box-shadow: none;
+  outline: 2px solid var(--agi-ink);
+  outline-offset: 2px;
+}
+
 [data-design='agi'] .agi-ds-mobile-nav-title {
   margin: 0;
   font-family: var(--agi-font-mono);
