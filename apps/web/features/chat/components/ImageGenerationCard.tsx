@@ -732,7 +732,7 @@ function ResultCard({ imageUrl, prompt, modelId, onEdit, onShare }: ResultCardPr
 
         {/* Overlay controls - always visible on mobile, hover on desktop */}
         {!imgError && (
-          <div className="absolute inset-0 flex flex-col justify-end opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity duration-200">
+          <div className="absolute inset-0 flex flex-col justify-end opacity-100 sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100 transition-opacity duration-200">
             {/* Gradient scrim */}
             <div className="absolute bottom-0 left-0 right-0 h-20 bg-gradient-to-t from-black/70 to-transparent pointer-events-none" />
 
