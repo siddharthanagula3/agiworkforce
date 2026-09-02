@@ -56,6 +56,22 @@ const searchResults = {
   ],
 };
 
+const secondSearchResults = {
+  choices: [
+    {
+      delta: {
+        x_search_results: {
+          content: [
+            { type: 'web_search_result', url: 'https://a.com', title: 'A', position: 1 },
+            { type: 'web_search_result', url: 'https://c.com', title: 'C', position: 2 },
+          ],
+        },
+      },
+      index: 0,
+    },
+  ],
+};
+
 function contentDelta(text: string) {
   return { choices: [{ delta: { content: text }, index: 0 }] };
 }
@@ -174,6 +190,30 @@ describe('useChatStream deep research handling', () => {
     expect(msg?.metadata?.searchResults).toEqual([
       { url: 'https://a.com', title: 'A', snippet: '' },
       { url: 'https://b.com', title: 'B', snippet: '' },
+    ]);
+  });
+
+  it('merges sources across multiple search calls in one turn instead of replacing them', async () => {
+    installFetch([
+      researchStatus('searching'),
+      searchResults,
+      researchStatus('searching'),
+      secondSearchResults,
+      researchStatus('synthesizing'),
+      contentDelta('Final report [1][2][3]'),
+      researchStatus('complete'),
+    ]);
+
+    const { result } = renderHook(() => useChatStream());
+    await act(async () => {
+      await result.current.sendMessage('research the topic', { research: true });
+    });
+
+    const msg = assistantMessage();
+    expect(msg?.metadata?.searchResults).toEqual([
+      { url: 'https://a.com', title: 'A', snippet: '' },
+      { url: 'https://b.com', title: 'B', snippet: '' },
+      { url: 'https://c.com', title: 'C', snippet: '' },
     ]);
   });
 
