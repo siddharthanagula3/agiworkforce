@@ -1,0 +1,32 @@
+[data-design='agi'] .agi-ds-codeblock {
+  border: 1px solid var(--agi-frame);
+  border-radius: var(--agi-radius-frame);
+  background: var(--agi-ground-2);
+  overflow: hidden;
+}
+
+[data-design='agi'] .agi-ds-codeblock-bar {
+  padding: var(--agi-space-1) var(--agi-space-3);
+  border-bottom: 1px solid var(--agi-rule);
+  font-family: var(--agi-font-mono);
+  font-size: var(--agi-text-xs);
+  letter-spacing: var(--agi-tracking-label);
+  color: var(--agi-ink-2);
+}
+
+[data-design='agi'] .agi-ds-codeblock-pre {
+  margin: 0;
+  padding: var(--agi-space-3);
+  overflow-x: auto;
+  font-family: var(--agi-font-mono);
+  font-size: var(--agi-text-xs);
+  line-height: 1.6;
+  color: var(--agi-ink-2);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+[data-design='agi'] .agi-ds-codeblock-comment {
+  color: var(--agi-ink-2);
+  font-style: italic;
+}
