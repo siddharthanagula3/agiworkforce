@@ -53,7 +53,7 @@ export function StaleSessionRecovery({
         </h1>
         <p className="mb-6 text-sm text-muted-foreground">
           {stuck
-            ? 'Your browser is holding a sign-in this server will not accept. Clearing it did not help, so something else is wrong — clearing cookies for this site and signing in again usually fixes it.'
+            ? 'Your browser is holding a sign-in this server will not accept. Clearing it did not help, so something else is wrong: clearing cookies for this site and signing in again usually fixes it.'
             : 'Your previous session has expired. Clearing it and returning you to sign-in.'}
         </p>
         {stuck ? (
