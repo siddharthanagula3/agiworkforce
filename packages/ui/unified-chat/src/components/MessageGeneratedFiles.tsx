@@ -492,7 +492,10 @@ export function MessageGeneratedFiles({ message }: MessageGeneratedFilesProps) {
                     <h3 className="text-base font-medium text-[var(--chat-text-primary)]">
                       Preview couldn’t load
                     </h3>
-                    <p role="alert" className="mt-1 max-w-md text-sm text-rose-300">
+                    <p
+                      role="alert"
+                      className="mt-1 max-w-md text-sm text-[var(--chat-destructive-text)]"
+                    >
                       {previewState.error}
                     </p>
                   </div>
