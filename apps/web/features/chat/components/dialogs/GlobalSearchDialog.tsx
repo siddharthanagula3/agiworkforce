@@ -1,6 +1,5 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
-import { SEARCH_INPUT_DEBOUNCE_MS } from '@agiworkforce/utils';
 import {
   Badge,
   Dialog,
@@ -51,6 +50,8 @@ interface GlobalSearchDialogProps {
   onOpenChange: (open: boolean) => void;
 }
 
+const HISTORY_SEARCH_DEBOUNCE_MS = 250;
+
 export function GlobalSearchDialog({ open, onOpenChange }: GlobalSearchDialogProps) {
   // Radix hides a modal dialog's siblings, but which nodes that reaches depends
   // on where the Dialog root sits, and here it does not reach the app's main
@@ -90,6 +91,7 @@ export function GlobalSearchDialog({ open, onOpenChange }: GlobalSearchDialogPro
   const [showSuggestions, setShowSuggestions] = useState(true);
 
   const searchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const searchAbortRef = useRef<AbortController | null>(null);
 
   const loadSearchHistory = useCallback(async () => {
     if (!user?.id) return;
@@ -136,6 +138,13 @@ export function GlobalSearchDialog({ open, onOpenChange }: GlobalSearchDialogPro
   const handleSearch = useCallback(async () => {
     if (!user?.id || !query.trim()) return;
 
+    // A later keystroke's search must win even if an earlier one is still in
+    // flight — aborting the stale request (rather than only ignoring its
+    // response) also stops it from doing wasted work against the search route.
+    searchAbortRef.current?.abort();
+    const controller = new AbortController();
+    searchAbortRef.current = controller;
+
     setIsSearching(true);
     setShowSuggestions(false);
 
@@ -149,19 +158,24 @@ export function GlobalSearchDialog({ open, onOpenChange }: GlobalSearchDialogPro
         limit: 50,
       };
 
-      const searchResults = await globalSearchService.search(user.id, filters);
+      const searchResults = await globalSearchService.search(user.id, filters, {
+        signal: controller.signal,
+      });
+      if (searchAbortRef.current !== controller) return;
       setResults(searchResults.results);
       setStats(searchResults.stats);
     } catch (error) {
+      if (controller.signal.aborted) return;
       console.error('[GlobalSearch] Search failed:', error);
       toast.error('Search failed. Please try again.');
     } finally {
-      setIsSearching(false);
+      if (searchAbortRef.current === controller) setIsSearching(false);
     }
   }, [user?.id, query, roleFilter, startDate, endDate, includeArchived]);
 
   useEffect(() => {
     if (!query.trim() || query.length < 2) {
+      searchAbortRef.current?.abort();
       setResults([]);
       setStats(null);
       return;
@@ -173,7 +187,7 @@ export function GlobalSearchDialog({ open, onOpenChange }: GlobalSearchDialogPro
 
     searchTimeoutRef.current = setTimeout(() => {
       handleSearch();
-    }, SEARCH_INPUT_DEBOUNCE_MS);
+    }, HISTORY_SEARCH_DEBOUNCE_MS);
 
     return () => {
       if (searchTimeoutRef.current) {
@@ -188,12 +202,14 @@ export function GlobalSearchDialog({ open, onOpenChange }: GlobalSearchDialogPro
         clearTimeout(searchTimeoutRef.current);
         searchTimeoutRef.current = null;
       }
+      searchAbortRef.current?.abort();
     }
 
     return () => {
       if (searchTimeoutRef.current) {
         clearTimeout(searchTimeoutRef.current);
       }
+      searchAbortRef.current?.abort();
     };
   }, [open]);
 
