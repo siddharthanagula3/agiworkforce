@@ -8,7 +8,7 @@
  * - Token usage hidden by default
  */
 
-import React, { useState, useMemo, useEffect, useCallback } from 'react';
+import React, { useState, useMemo, useEffect, useLayoutEffect, useRef, useCallback } from 'react';
 import dynamic from 'next/dynamic';
 import { motion, useReducedMotion, type Variants } from 'framer-motion';
 import {
@@ -217,6 +217,7 @@ interface Attachment {
 }
 
 const MAX_INLINE_GENERATED_TEXT_BYTES = 2 * 1024 * 1024;
+const USER_MESSAGE_COLLAPSE_HEIGHT_PX = 320;
 
 function generatedFileLanguage(file: GeneratedFileMetadataEntry): string {
   const extension = file.fileName.toLowerCase().split('.').pop() ?? '';
@@ -609,6 +610,10 @@ const MessageBubbleComponent = function MessageBubble({
   }, []);
   const isUser = message.role === 'user';
 
+  const userContentRef = useRef<HTMLDivElement>(null);
+  const [userContentOverflows, setUserContentOverflows] = useState(false);
+  const [userContentExpanded, setUserContentExpanded] = useState(false);
+
   /**
    * Delete confirmation (shell-nav-ia-gap-01). This used to be a native
    * `window.confirm()` — an OS alert with a browser-chrome "OK", in the middle
@@ -665,6 +670,14 @@ const MessageBubbleComponent = function MessageBubble({
   // legacy `onEdit` (composer prefill) still runs, so no surface loses Edit.
   const inlineEdit = useMessageInlineEdit();
   const [isEditing, setIsEditing] = useState(false);
+
+  useLayoutEffect(() => {
+    if (!isUser || isEditing) return;
+    const node = userContentRef.current;
+    if (!node) return;
+    setUserContentOverflows(node.scrollHeight > USER_MESSAGE_COLLAPSE_HEIGHT_PX + 1);
+  }, [isUser, isEditing, message.content]);
+
   const handleBeginEdit = useCallback(() => {
     if (inlineEdit) {
       if (inlineEdit.beginEdit(message.id)) setIsEditing(true);
@@ -1605,65 +1618,94 @@ const MessageBubbleComponent = function MessageBubble({
           )}
 
           {/* Message Content · 15 px body matching desktop .message-text */}
-          <div
-            dir="auto"
-            className={cn(
-              'prose dark:prose-invert max-w-none',
-              'message-text', // 15 px / 1.6 lh (defined in globals.css .message-text)
-              'break-words overflow-wrap-anywhere text-start',
-              isUser && 'user-bubble', // right-aligned rounded bubble (assistant stays flat)
-              !isUser && message.metadata?.comparisonOptions && 'hidden',
-              isEditing && 'hidden',
-            )}
-          >
-            {message.isStreaming &&
-            !cleanedContent.trim() &&
-            !streamingBlock &&
-            !canonicalActivity &&
-            !message.metadata?.isExecutingCode &&
-            !message.metadata?.codeExecutionResult &&
-            message.metadata?.toolType !== 'image-generation' &&
-            // Same reason as image: the media card below IS the progress
-            // indicator. Observed live — the video shimmer rendered with a
-            // "Thinking..." line stacked on top of it, claiming a reasoning
-            // step that is not happening.
-            message.metadata?.toolType !== 'video-generation' ? (
-              <div className="flex items-center gap-2 text-muted-foreground">
-                <span className="inline-block h-2 w-2 animate-pulse rounded-full bg-primary" />
-                <span className="text-sm">Thinking...</span>
-              </div>
-            ) : producedNoVisibleOutput ? (
-              <TranscriptNotice
-                surface="bare"
-                role="status"
-                icon={CircleAlert}
-                message="The model finished without returning a response. Use Regenerate below to run it again."
+          <div className="relative">
+            <div
+              ref={userContentRef}
+              dir="auto"
+              className={cn(
+                'prose dark:prose-invert max-w-none',
+                'message-text', // 15 px / 1.6 lh (defined in globals.css .message-text)
+                'break-words overflow-wrap-anywhere text-start',
+                isUser && 'user-bubble', // right-aligned rounded bubble (assistant stays flat)
+                !isUser && message.metadata?.comparisonOptions && 'hidden',
+                isEditing && 'hidden',
+              )}
+              style={
+                isUser && userContentOverflows && !userContentExpanded
+                  ? { maxHeight: USER_MESSAGE_COLLAPSE_HEIGHT_PX, overflow: 'hidden' }
+                  : undefined
+              }
+            >
+              {message.isStreaming &&
+              !cleanedContent.trim() &&
+              !streamingBlock &&
+              !canonicalActivity &&
+              !message.metadata?.isExecutingCode &&
+              !message.metadata?.codeExecutionResult &&
+              message.metadata?.toolType !== 'image-generation' &&
+              // Same reason as image: the media card below IS the progress
+              // indicator. Observed live — the video shimmer rendered with a
+              // "Thinking..." line stacked on top of it, claiming a reasoning
+              // step that is not happening.
+              message.metadata?.toolType !== 'video-generation' ? (
+                <div className="flex items-center gap-2 text-muted-foreground">
+                  <span className="inline-block h-2 w-2 animate-pulse rounded-full bg-primary" />
+                  <span className="text-sm">Thinking...</span>
+                </div>
+              ) : producedNoVisibleOutput ? (
+                <TranscriptNotice
+                  surface="bare"
+                  role="status"
+                  icon={CircleAlert}
+                  message="The model finished without returning a response. Use Regenerate below to run it again."
+                />
+              ) : (
+                (() => {
+                  const markdown = message.isStreaming ? (
+                    <StreamingMarkdownContent
+                      content={cleanedContent}
+                      isStreaming
+                      citations={citationsByMarker}
+                    />
+                  ) : (
+                    <MarkdownContent content={cleanedContent} citations={citationsByMarker} />
+                  );
+                  return formatCardType ? (
+                    <MessageFormatCard
+                      content={cleanedContent}
+                      cardType={formatCardType}
+                      messageId={message.id}
+                    >
+                      {markdown}
+                    </MessageFormatCard>
+                  ) : (
+                    markdown
+                  );
+                })()
+              )}
+            </div>
+            {isUser && userContentOverflows && !userContentExpanded && !isEditing && (
+              <div
+                aria-hidden="true"
+                className="pointer-events-none absolute inset-x-0 bottom-0 h-16"
+                style={{
+                  background: 'linear-gradient(to bottom, transparent, var(--chat-user-bubble-bg))',
+                  borderBottomLeftRadius: 'var(--chat-radius-2xl)',
+                  borderBottomRightRadius: 'var(--chat-radius-2xl)',
+                }}
               />
-            ) : (
-              (() => {
-                const markdown = message.isStreaming ? (
-                  <StreamingMarkdownContent
-                    content={cleanedContent}
-                    isStreaming
-                    citations={citationsByMarker}
-                  />
-                ) : (
-                  <MarkdownContent content={cleanedContent} citations={citationsByMarker} />
-                );
-                return formatCardType ? (
-                  <MessageFormatCard
-                    content={cleanedContent}
-                    cardType={formatCardType}
-                    messageId={message.id}
-                  >
-                    {markdown}
-                  </MessageFormatCard>
-                ) : (
-                  markdown
-                );
-              })()
             )}
           </div>
+          {isUser && userContentOverflows && !isEditing && (
+            <button
+              type="button"
+              onClick={() => setUserContentExpanded((expanded) => !expanded)}
+              aria-expanded={userContentExpanded}
+              className="mt-1.5 text-xs font-medium underline-offset-2 hover:underline"
+            >
+              {userContentExpanded ? 'Show less' : 'Show more'}
+            </button>
+          )}
           {/* Interactive cards sit AFTER the prose that motivated them and
               before the artifact chip, matching where the model emitted them.
               A card that fails to render its kind still renders its authored
