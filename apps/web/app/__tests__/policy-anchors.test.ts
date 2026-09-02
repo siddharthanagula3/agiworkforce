@@ -21,9 +21,7 @@ function declaredSections(source: string): string[] {
 }
 
 function renderedIds(source: string): string[] {
-  return [...source.matchAll(/<section className="agi-section" id="(s-[^"]+)"/g)].map(
-    (m) => m[1] as string,
-  );
+  return [...source.matchAll(/<Section id="(s-[^"]+)"/g)].map((m) => m[1] as string);
 }
 
 /**
@@ -53,7 +51,7 @@ function decodeEntities(text: string): string {
 }
 
 function renderedEyebrows(source: string): string[] {
-  return [...source.matchAll(/<p className="agi-section-eyebrow">\s*([\s\S]*?)\s*<\/p>/g)]
+  return [...source.matchAll(/<h2 className="agi-ds-h2" id="[^"]*">\s*([\s\S]*?)\s*<\/h2>/g)]
     .map((m) => decodeEntities((m[1] as string).replace(/\s+/g, ' ').trim()))
     .filter((text) => /^\d{1,2} \u00b7/.test(text));
 }

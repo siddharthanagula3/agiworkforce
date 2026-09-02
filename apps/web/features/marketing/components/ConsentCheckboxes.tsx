@@ -25,15 +25,15 @@ export function ConsentCheckboxes({
   };
 
   return (
-    <fieldset className="agi-consent-fieldset" aria-describedby={`${groupId}-notice`}>
-      <legend className="agi-consent-legend">What you are agreeing to</legend>
+    <fieldset className="agi-ds-fieldset" aria-describedby={`${groupId}-notice`}>
+      <legend className="agi-ds-fieldset-legend">What you are agreeing to</legend>
 
       {purposes.map((purpose) => {
         const inputId = `${groupId}-${purpose.id}`;
         return (
-          <div key={purpose.id} className="agi-consent-item">
-            <label htmlFor={inputId} className="agi-consent-label">
-              {/* `.agi-consent-checkbox` is a 16x16 box with no hit-area
+          <div key={purpose.id} className="agi-ds-consent-item">
+            <label htmlFor={inputId} className="agi-ds-consent-item-label">
+              {/* `.agi-ds-checkbox` is a 16x16 box with no hit-area
                   expansion, under the 24x24 target minimum. The wrapping
                   `<label>` already extends the click target sideways across
                   the text, but a single-line purpose renders under 24px
@@ -49,28 +49,28 @@ export function ConsentCheckboxes({
                   checked={value.includes(purpose.id)}
                   disabled={disabled}
                   onChange={(event) => toggle(purpose.id, event.target.checked)}
-                  className="agi-consent-checkbox"
+                  className="agi-ds-checkbox"
                 />
               </span>
               <span>
                 {purpose.label}{' '}
-                <span className="agi-consent-optionality">
+                <span className="agi-ds-consent-optionality">
                   {purpose.necessaryForRequest ? '(required for this request)' : '(optional)'}
                 </span>
               </span>
             </label>
-            <p className="agi-consent-description">{purpose.description}</p>
+            <p className="agi-ds-consent-item-description">{purpose.description}</p>
           </div>
         );
       })}
 
-      <p id={`${groupId}-notice`} className="agi-consent-notice">
+      <p id={`${groupId}-notice`} className="agi-ds-consent-notice">
         Read what we collect and why in the{' '}
         <Link
           href={CANONICAL_POLICY_ROUTES.privacy}
           target="_blank"
           rel="noopener noreferrer"
-          className="agi-consent-notice-link"
+          className="agi-ds-link"
         >
           privacy notice
         </Link>{' '}
@@ -79,7 +79,7 @@ export function ConsentCheckboxes({
           href="/privacy/india"
           target="_blank"
           rel="noopener noreferrer"
-          className="agi-consent-notice-link"
+          className="agi-ds-link"
         >
           /privacy/india
         </Link>
@@ -88,7 +88,7 @@ export function ConsentCheckboxes({
           href="/privacy/requests"
           target="_blank"
           rel="noopener noreferrer"
-          className="agi-consent-notice-link"
+          className="agi-ds-link"
         >
           /privacy/requests
         </Link>{' '}

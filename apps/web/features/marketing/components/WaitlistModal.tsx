@@ -14,6 +14,7 @@ import { X } from 'lucide-react';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@agiworkforce/ui';
 import { joinPublicWaitlist } from '@/lib/services/waitlistServiceClient';
 import { WAITLIST_CONSENT_PURPOSES } from '@/lib/consent-purposes';
+import { Eyebrow } from './system';
 import {
   ConsentCheckboxes,
   missingRequiredConsents,
@@ -103,21 +104,21 @@ function WaitlistDialog({
     <Dialog open={isOpen} onOpenChange={handleOpenChange}>
       <DialogContent
         data-design="agi"
-        className="agi-modal-scope agi-waitlist-modal"
+        className="agi-modal-scope agi-ds-waitlist-modal"
         closeLabel="Close waitlist dialog"
         hideCloseButton
       >
         {state === 'success' ? (
-          <div className="agi-waitlist-success" role="status">
-            <span className="agi-waitlist-success-mark" aria-hidden="true">
+          <div className="agi-ds-waitlist-success" role="status">
+            <span className="agi-ds-waitlist-success-mark" aria-hidden="true">
               ✓
             </span>
-            <DialogTitle className="agi-waitlist-title">You&rsquo;re on the list.</DialogTitle>
-            <DialogDescription className="agi-waitlist-lede">
+            <DialogTitle className="agi-ds-h3">You&rsquo;re on the list.</DialogTitle>
+            <DialogDescription className="agi-ds-prose">
               We&rsquo;ll email you when the Enterprise program opens for your requirements. Managed
               Cloud is already open by default, and current availability for Local and BYOK is
               listed on each surface page. Changed your mind? Record a withdrawal at{' '}
-              <a href="/privacy/requests" className="agi-consent-notice-link">
+              <a href="/privacy/requests" className="agi-ds-link">
                 /privacy/requests
               </a>{' '}
               &mdash; no account needed.
@@ -125,15 +126,15 @@ function WaitlistDialog({
           </div>
         ) : (
           <>
-            <p className="agi-waitlist-eyebrow">Enterprise · early access</p>
-            <DialogTitle className="agi-waitlist-title">Discuss Enterprise access</DialogTitle>
-            <DialogDescription className="agi-waitlist-lede">
+            <Eyebrow>Enterprise · early access</Eyebrow>
+            <DialogTitle className="agi-ds-h3">Discuss Enterprise access</DialogTitle>
+            <DialogDescription className="agi-ds-prose">
               Managed Cloud is open by default. Team pricing and current checkout availability are
               shown on Pricing. This list is for contract-scoped Enterprise requirements such as
               SSO, custom retention, and governance controls · no account required.
             </DialogDescription>
 
-            <form onSubmit={handleSubmit} noValidate className="agi-waitlist-form">
+            <form onSubmit={handleSubmit} noValidate className="agi-ds-form-row">
               <label htmlFor={emailId} className="sr-only">
                 Email address
               </label>
@@ -150,7 +151,7 @@ function WaitlistDialog({
                 disabled={state === 'submitting'}
                 aria-invalid={state === 'error'}
                 aria-describedby={state === 'error' && errorMsg ? errorId : undefined}
-                className="agi-waitlist-input"
+                className="agi-ds-input"
                 onChange={(e) => {
                   setEmail(e.target.value);
                   if (state === 'error') {
@@ -173,7 +174,8 @@ function WaitlistDialog({
               />
               <button
                 type="submit"
-                className="agi-waitlist-submit"
+                className="agi-ds-btn"
+                data-variant="primary"
                 disabled={state === 'submitting'}
               >
                 {state === 'submitting' ? 'Joining…' : 'Join waitlist'}
@@ -181,16 +183,16 @@ function WaitlistDialog({
             </form>
 
             {state === 'error' && errorMsg ? (
-              <p id={errorId} role="alert" aria-live="polite" className="agi-waitlist-error">
+              <p id={errorId} role="alert" aria-live="polite" className="agi-ds-form-error">
                 {errorMsg}
               </p>
             ) : null}
 
-            <p className="agi-waitlist-finePrint">
+            <p className="agi-ds-hint" style={{ marginTop: 16 }}>
               One email when access opens, sent by a person &mdash; nothing here mails this list
               automatically, so there is no unsubscribe link in a message to click. No marketing
               drip. To come off the list, record a withdrawal at{' '}
-              <a href="/privacy/requests" className="agi-consent-notice-link">
+              <a href="/privacy/requests" className="agi-ds-link">
                 /privacy/requests
               </a>
               . It needs no account, and a person removes your address.
