@@ -92,12 +92,22 @@ function collectRawHtml(node: ParsedNode, into: string[]): void {
   for (const child of node.children ?? []) collectRawHtml(child, into);
 }
 
+function stripHtmlComments(markup: string): string {
+  let previous = markup;
+  let current = markup.replace(HTML_COMMENT_PATTERN, '');
+  while (current !== previous) {
+    previous = current;
+    current = current.replace(HTML_COMMENT_PATTERN, '');
+  }
+  return current;
+}
+
 function htmlTagBalance(node: ParsedNode): number {
   const fragments: string[] = [];
   collectRawHtml(node, fragments);
   if (fragments.length === 0) return 0;
 
-  const markup = fragments.join(LINE_FEED).replace(HTML_COMMENT_PATTERN, '');
+  const markup = stripHtmlComments(fragments.join(LINE_FEED));
   let balance = 0;
   for (const match of markup.matchAll(HTML_TAG_PATTERN)) {
     const [, closing, name, selfClosing] = match;
