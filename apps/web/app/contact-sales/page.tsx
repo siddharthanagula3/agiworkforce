@@ -1,14 +1,7 @@
 import { buildMetadata } from '@/lib/seo/metadata';
 import { Header } from '@shared/components/layout/Header';
 import { MarketingFooter } from '@/features/marketing/components/MarketingFooter';
-import {
-  Button,
-  ButtonRow,
-  Eyebrow,
-  Prose,
-  Section,
-  Stack,
-} from '@/features/marketing/components/system';
+import { Button, ButtonRow, Eyebrow, Section, Stack } from '@/features/marketing/components/system';
 import { FactGrid, PageHero } from '@/features/marketing/components/pages/surfaces/shared';
 import { CONTACT_EMAIL, contactMailto } from '@/lib/legal-constants';
 
