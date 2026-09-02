@@ -607,10 +607,18 @@ function stringifyApprovalInput(input: Record<string, unknown> | undefined): str
   }
 }
 
+const SOURCE_TRACKING_PARAM_PATTERN = /^(utm_[a-z_]+|fbclid|gclid|msclkid|ref|mc_[ce]id)$/i;
+
 function normalizeSourceUrlKey(url: string): string {
   try {
     const parsed = new URL(url);
     parsed.hash = '';
+    if (parsed.pathname.length > 1) {
+      parsed.pathname = parsed.pathname.replace(/\/+$/, '') || '/';
+    }
+    for (const key of Array.from(new Set(parsed.searchParams.keys()))) {
+      if (SOURCE_TRACKING_PARAM_PATTERN.test(key)) parsed.searchParams.delete(key);
+    }
     return parsed.toString();
   } catch {
     return url;
