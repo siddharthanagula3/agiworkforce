@@ -182,7 +182,7 @@ const COMPOSER_FOOTER_KEYS = {
 /**
  * Entries the phone drops. Measured at 390px on 2026-08-31: chatgpt.com shows
  * one line here and puts it above its composer, claude.ai shows nothing at all,
- * and ours ran to three rows — 136px of composer against ChatGPT's 87px. The
+ * and ours ran to three rows: 136px of composer against ChatGPT's 87px. The
  * composer's own control row is already full at that width (312 of 324px), so
  * nothing can move into it.
  *
@@ -190,7 +190,7 @@ const COMPOSER_FOOTER_KEYS = {
  * the resolved model whose picker sits directly above, Privacy is reachable from
  * settings and several pages, Feedback has an entry in the transcript, and the
  * send route moves into the "+" menu (see the SendPreview card there). What
- * stays at every width is the accuracy caveat — see the Article 50(1) note at
+ * stays at every width is the accuracy caveat; see the Article 50(1) note at
  * its render site.
  */
 const DESK_ONLY_COMPOSER_FOOTER_KEYS: ReadonlySet<string> = new Set<string>([
@@ -389,7 +389,7 @@ const SLASH_COMMAND_ARGUMENT_SEPARATOR = ' ';
 /**
  * The command menu opens for a bare, unspaced `/token` measured against the
  * WHOLE message, so deleting back into shape reopens it. Both input arms read
- * this one predicate — a second copy is how the two would drift.
+ * this one predicate, since a second copy is how the two would drift.
  */
 function isSlashCommandDraft(value: string): boolean {
   return (
@@ -421,7 +421,7 @@ const COMPOSER_COMPACT_MEDIA_QUERY = '(max-width: 639px)';
 
 /**
  * The legacy textarea's resting height is pinned in JS, so the `sm:` step its
- * classes carry can never reach it — this is the one density value that cannot
+ * classes carry can never reach it; this is the one density value that cannot
  * be a responsive class. jsdom has no `matchMedia`, which resolves to the
  * desktop number the existing first-paint test measures.
  */
@@ -431,8 +431,8 @@ function composerRestingHeightPx(): number {
 }
 
 /**
- * `Blob.text()` is not universally present — jsdom is the case that matters
- * here — and the undo copy is only worth what the read returns, so a failed
+ * `Blob.text()` is not universally present; jsdom is the case that matters
+ * here; and the undo copy is only worth what the read returns, so a failed
  * read degrades to an empty banner rather than throwing inside a paste.
  */
 function readPastedText(file: File): Promise<string> {
@@ -1115,7 +1115,7 @@ const ChatComposerNewComponent = ({
   const mentionCommitRef = useRef<ComposerMentionCommit | null>(null);
   /**
    * The mention popover anchors to the input row rather than to the textarea,
-   * because the editor arm has no textarea to measure. Same box either way —
+   * because the editor arm has no textarea to measure. Same box either way;
    * the input is `w-full` inside it.
    */
   const composerRowRef = useRef<HTMLDivElement>(null);
@@ -1183,16 +1183,16 @@ const ChatComposerNewComponent = ({
 
   /**
    * Every external write to the message goes through one of these three. The
-   * mirror stays authoritative on both arms — the counter, `hasContent`, the
-   * secrets audit and the draft store all read it — and the handle call
+   * mirror stays authoritative on both arms; the counter, `hasContent`, the
+   * secrets audit and the draft store all read it; and the handle call
    * replays the same text into the uncontrolled editor when that arm is
    * mounted. `setText` and `clear` also purge undo history, so Cmd+Z cannot
    * resurrect a sent message or another conversation's draft.
    *
    * Each one moves `messageRef` too. The render-time assignment alone is a
    * commit behind, and the composer is frequently unmounted by the same commit
-   * that clears it — sending the first message of a new chat swaps the
-   * empty-state instance for the in-conversation one — so the unmount would
+   * that clears it; sending the first message of a new chat swaps the
+   * empty-state instance for the in-conversation one; so the unmount would
    * park text the user had already sent.
    */
   const writeComposerMessage = useCallback((next: string) => {
@@ -1391,8 +1391,8 @@ const ChatComposerNewComponent = ({
    * affordance and nothing saying what had happened. Say it, and keep the text
    * so the choice is reversible.
    *
-   * The editor arm cannot hand over the clipboard — ProseMirror owns the event
-   * and reports only the decision — but the attachment IS the pasted text, so
+   * The editor arm cannot hand over the clipboard; ProseMirror owns the event
+   * and reports only the decision; but the attachment IS the pasted text, so
    * the undo copy is recovered from the file itself.
    */
   const applyComposerPasteDecision = useCallback(
@@ -1635,7 +1635,7 @@ const ChatComposerNewComponent = ({
 
   /**
    * The editor arm's mirror. Mentions are owned by the suggestion plugin on
-   * this arm — it is the only thing that knows where the caret is — so the
+   * this arm; it is the only thing that knows where the caret is; so the
    * slash predicate is all that crosses here.
    */
   const handleComposerTextChange = useCallback(
@@ -2297,7 +2297,7 @@ const ChatComposerNewComponent = ({
    * empty-state and in-conversation composers are separate positions in the
    * page's tree, so opening a new chat unmounts one and mounts the other, and
    * an effect body only ever runs on the instance that stays. The mount then
-   * reads the draft back. Session-only by design — the store does not persist
+   * reads the draft back. Session-only by design; the store does not persist
    * `draftsByConversation`, so a reload still starts on an empty composer.
    */
   useEffect(() => {
@@ -2313,7 +2313,7 @@ const ChatComposerNewComponent = ({
   }, [conversationId, setDraftContent, clearDraftContent, writeComposerMessage]);
 
   /**
-   * A draft can also be parked while this composer is on screen — a send that
+   * A draft can also be parked while this composer is on screen; a send that
    * never reached a model hands the text back that way. Reading it only on
    * mount was why a failed send looked like the message had simply vanished:
    * the same instance stays mounted for an existing chat, and a brand-new chat
@@ -2891,7 +2891,7 @@ const ChatComposerNewComponent = ({
           // the input's own key handler, so focus never has to live here.
           autoFocusFirstItem={false}
           // The menu returns focus to its anchor, which is the input ROW, not a
-          // focusable node — so say where focus actually belongs. Both arms
+          // focusable node; so say where focus actually belongs. Both arms
           // resolve to their own input.
           onRequestClose={() => {
             setShowMentions(false);
@@ -2986,7 +2986,7 @@ const ChatComposerNewComponent = ({
             // lines on each item's CONTENT size, so min-w-0 alone can't stop it — only
             // flex-nowrap forces one line, while the min-w-0 chain lets the model
             // pill/hint shrink to fit within it.
-            // M11: every vertical value below `sm` is its own step — the
+            // M11: every vertical value below `sm` is its own step; the
             // resting box ran to ~130px at 390px against ChatGPT's ~87px. The
             // `sm:` halves reproduce today's desktop numbers exactly.
             'flex flex-col gap-1.5 p-1.5 sm:gap-2 sm:p-3',
@@ -3671,7 +3671,7 @@ const ChatComposerNewComponent = ({
                       />
                     )}
 
-                    {/* 9. Send route — the one entry the collapsed mobile
+                    {/* 9. Send route; the one entry the collapsed mobile
                         footer drops that has no other home. It is last so the
                         menu's initial focus still lands on an action, and it is
                         the card variant because the compact one opens an
