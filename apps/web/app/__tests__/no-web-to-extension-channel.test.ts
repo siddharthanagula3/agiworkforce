@@ -2,7 +2,7 @@ import { readdirSync, readFileSync, statSync } from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 
-const EXTENSION_ROOT = path.resolve(__dirname, '..', '..', '..', '..', '..', '..', 'extension');
+const EXTENSION_ROOT = path.resolve(__dirname, '..', '..', '..', 'extension');
 const EXTENSION_SRC = path.join(EXTENSION_ROOT, 'src');
 const SOURCE_EXTENSIONS = new Set(['.ts', '.tsx', '.js', '.mjs']);
 
