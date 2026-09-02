@@ -139,11 +139,11 @@ export function CopyrightNoticeForm({ reportedUrl }: { reportedUrl: string }) {
 
   if (result) {
     return (
-      <div className="agi-callout" role="status">
-        <h3 className="agi-callout-h">Notice recorded — reference {result.reference}</h3>
-        <p className="agi-callout-p">
+      <div className="agi-ds-stack" data-gap="tight" role="status">
+        <h3 className="agi-ds-h3">Notice recorded, reference {result.reference}</h3>
+        <p className="agi-ds-prose" data-size="sm">
           The notice is in the operator queue with the exact link you reported.{' '}
-          <strong>Nothing has been removed yet</strong> — a person reviews the notice and then
+          <strong>Nothing has been removed yet</strong>, a person reviews the notice and then
           disables the link, because an unreviewed report must not be able to take someone else’s
           page offline.{' '}
           {result.operatorNotified ? (
@@ -184,7 +184,7 @@ export function CopyrightNoticeForm({ reportedUrl }: { reportedUrl: string }) {
         />
         <p className="agi-rights-hint">
           The full URL of the shared conversation or published artifact. The form checks that it
-          still resolves to something public before it records anything — a description alone cannot
+          still resolves to something public before it records anything: a description alone cannot
           identify the material.
         </p>
       </div>
