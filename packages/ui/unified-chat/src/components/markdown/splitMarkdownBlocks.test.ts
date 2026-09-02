@@ -403,6 +403,24 @@ describe('splitMarkdownBlocks — boundary safety', () => {
     expect(split.tail).toBe('Penultimate paragraph.\n\nTrailing paragraph.');
   });
 
+  it('strips a comment that only becomes visible after an inner comment is removed', () => {
+    const source = lines(
+      'Before comment.',
+      '',
+      '<!-- lead --><!<!-- inner -->-- outer <div> -->',
+      '',
+      'After comment.',
+      '',
+      'Penultimate paragraph.',
+      '',
+      'Trailing paragraph.',
+    );
+    const split = settleFully(source);
+
+    expect(split.settled).toHaveLength(3);
+    expect(split.tail).toBe('Penultimate paragraph.\n\nTrailing paragraph.');
+  });
+
   it('ignores container tags that only appear inside a code fence', () => {
     const source = lines(
       'Example markup:',
