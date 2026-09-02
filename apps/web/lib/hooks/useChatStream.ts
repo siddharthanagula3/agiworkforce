@@ -972,6 +972,18 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
     patchMessageMeta({ cloudAgentRun: { ...currentCloudAgentRun } });
   };
 
+  const CLOUD_RUN_TERMINAL_STATES: AgentTaskState[] = [
+    'ready_for_review',
+    'completed',
+    'failed',
+    'cancelled',
+    'archived',
+  ];
+  const finalCloudRunState = (fallback: AgentTaskState): AgentTaskState => {
+    const observed = currentAgentActivity?.taskState;
+    return observed && CLOUD_RUN_TERMINAL_STATES.includes(observed) ? observed : fallback;
+  };
+
   let thinkingContent = seedMetadata?.thinkingContent ?? '';
   let thinkingStartedAt: string | undefined = seedMetadata?.thinkingStartedAt;
   let thinkingCompletedAt: string | undefined = seedMetadata?.thinkingCompletedAt;
@@ -1504,6 +1516,9 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
             patchMessageMeta({ streamError: streamErrorInfo });
           }
           settleAgentActivity();
+          publishCloudRunReference({
+            state: finalCloudRunState(streamErrorInfo ? 'failed' : 'ready_for_review'),
+          });
           persistAssistant(fullAssistantContent);
           stopStreaming(conversationId);
           setLoading(false, conversationId);
@@ -1882,6 +1897,9 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
       patchMessageMeta({ streamError: streamErrorInfo });
     }
     settleAgentActivity();
+    publishCloudRunReference({
+      state: finalCloudRunState(streamErrorInfo ? 'failed' : 'ready_for_review'),
+    });
     persistAssistant(fullAssistantContent);
     stopStreaming(conversationId);
     setLoading(false, conversationId);
@@ -1925,6 +1943,7 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
       // its Continue action, leaving only Regenerate.
       finishReason = 'stopped';
       patchMessageMeta({ finishReason });
+      publishCloudRunReference({ state: 'cancelled' });
       if (fullAssistantContent || currentAgentActivity) {
         persistAssistant(fullAssistantContent);
       }
