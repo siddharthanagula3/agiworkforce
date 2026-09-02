@@ -13,6 +13,10 @@ import {
 } from '@/features/marketing/components/system';
 import { PageHero } from '@/features/marketing/components/pages/surfaces/shared';
 
+const RESEARCH_MAX_TURNS = 6;
+const RESEARCH_MAX_SEARCHES = 12;
+const RESEARCH_GATHER_BUDGET_MINUTES = 4;
+
 export const metadata = buildMetadata({
   title: 'Deep research: cited answers across web, files, and tools',
   description:
@@ -108,17 +112,17 @@ export default function DeepResearchPage() {
               caption="Run budget"
               rows={[
                 {
-                  label: '6 turns',
+                  label: `${RESEARCH_MAX_TURNS} turns`,
                   value:
                     'Model turns in a run. The planning turn, the gathering rounds, and the turn that writes the report all come out of the same allowance.',
                 },
                 {
-                  label: '12 searches',
+                  label: `${RESEARCH_MAX_SEARCHES} searches`,
                   value:
                     'Web searches in a run. Gathering stops at the cap. The report is then written from whatever the run had already collected.',
                 },
                 {
-                  label: '4 minutes',
+                  label: `${RESEARCH_GATHER_BUDGET_MINUTES} minutes`,
                   value:
                     'Gathering budget. Whatever ends the gathering phase, the report still gets written, and it has to say so when coverage came up short.',
                 },
