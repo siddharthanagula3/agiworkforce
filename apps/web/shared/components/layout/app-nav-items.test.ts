@@ -90,6 +90,15 @@ describe('app rail · every destination resolves to a real route', () => {
     expect(ids).not.toContain('customize');
   });
 
+  // Founder decision 2026-09-01: the rail carries no Tasks entry. The /tasks
+  // route itself is deliberately left shipped, so run notifications and deep
+  // links still resolve; only the rail destination is withdrawn.
+  it('carries no Tasks destination', () => {
+    const ids = APP_NAV_DESTINATIONS.map((d) => d.id);
+    expect(ids).not.toContain('tasks');
+    expect(APP_NAV_DESTINATIONS.map((d) => d.href)).not.toContain('/tasks');
+  });
+
   it('routes every destination, with no modal-only entry left behind', () => {
     expect(APP_NAV_DESTINATIONS.every((d) => typeof d.href === 'string' && d.href.length > 0)).toBe(
       true,
