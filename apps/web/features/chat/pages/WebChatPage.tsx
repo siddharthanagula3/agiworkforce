@@ -61,6 +61,8 @@ import { useThinkingStore } from '@shared/stores/thinking-store';
 import { addCsrfHeaders } from '@/lib/client/csrf';
 import { resolveSelectableModelId, useModelStore } from '@shared/stores/model-store';
 import { useNotificationStore } from '@shared/stores/notification-store';
+import { useMediaStore } from '@shared/stores/media-store';
+import { TimeoutPresets } from '@shared/lib/error-utils';
 import { useUIStore } from '@shared/stores/layout-store';
 import { useSettingsStore } from '@shared/stores/web-settings-store';
 import { useBillingStore } from '@shared/stores/web-auth-store';
@@ -309,6 +311,30 @@ const CLIENT_FALLBACK_TITLE_LENGTH = 60;
 
 function clientFallbackTitle(firstUserContent: string): string {
   return firstUserContent.trim().slice(0, CLIENT_FALLBACK_TITLE_LENGTH).replace(/\n/g, ' ');
+}
+
+/**
+ * Notification-permission banner: offered at most once per browser. Mirrors
+ * the persistence pattern in features/notifications/components/WebPushOptIn.tsx.
+ */
+const NOTIF_BANNER_STORAGE_KEY = 'agi.chat-notif-banner.resolved';
+
+function readNotifBannerResolved(): boolean {
+  if (typeof window === 'undefined') return false;
+  try {
+    return window.localStorage.getItem(NOTIF_BANNER_STORAGE_KEY) === 'true';
+  } catch {
+    return false;
+  }
+}
+
+function markNotifBannerResolved(): void {
+  if (typeof window === 'undefined') return;
+  try {
+    window.localStorage.setItem(NOTIF_BANNER_STORAGE_KEY, 'true');
+  } catch {
+    // A browser with storage blocked just gets the banner again next session.
+  }
 }
 
 async function fetchServerConversationTitle(
@@ -1078,52 +1104,6 @@ export default function WebChatPage() {
   const isStreaming = useChatStore(selectIsConversationStreaming(displayedConversationId));
   const isLoading = useChatStore(selectIsConversationLoading(displayedConversationId));
 
-  // Notification banner: appears after 3s of streaming if the user hasn't
-  // already granted/denied the Notification permission in this session.
-  const [showNotifBanner, setShowNotifBanner] = useState(false);
-  const notifBannerDismissedRef = useRef(false);
-  const notifBannerTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  useEffect(() => {
-    if (typeof Notification === 'undefined') return;
-    if (notifBannerDismissedRef.current) return;
-    if (Notification.permission !== 'default') return;
-
-    if (isStreaming) {
-      if (!notifBannerTimerRef.current) {
-        notifBannerTimerRef.current = setTimeout(() => {
-          if (!notifBannerDismissedRef.current) {
-            setShowNotifBanner(true);
-          }
-        }, 3000);
-      }
-    } else {
-      if (notifBannerTimerRef.current) {
-        clearTimeout(notifBannerTimerRef.current);
-        notifBannerTimerRef.current = null;
-      }
-      setShowNotifBanner(false);
-    }
-
-    return () => {
-      if (notifBannerTimerRef.current) {
-        clearTimeout(notifBannerTimerRef.current);
-      }
-    };
-  }, [isStreaming]);
-
-  const handleRequestNotifPermission = useCallback(async () => {
-    if (typeof Notification === 'undefined') return;
-    notifBannerDismissedRef.current = true;
-    setShowNotifBanner(false);
-    await Notification.requestPermission();
-  }, []);
-
-  const handleDismissNotifBanner = useCallback(() => {
-    notifBannerDismissedRef.current = true;
-    setShowNotifBanner(false);
-  }, []);
-
   // Managed cloud is open by default: a signed-in user already reaches it.
   // The upgrade dialog only sells higher hosted capacity, it is not an access
   // gate, so opening it simply shows the plan comparison (no waitlist).
@@ -1488,6 +1468,70 @@ export default function WebChatPage() {
   const [shareDialogOpen, setShareDialogOpen] = useState(false);
   const [exportDialogOpen, setExportDialogOpen] = useState(false);
   const hasMessages = displayedMessages.length > 0;
+
+  // Notification banner: never on an empty conversation (hasMessages gates
+  // it), shown at most once per browser, and only once a turn is either a
+  // task type that runs long by nature (Deep Research, an AGI Work agent
+  // run, or an image/video generation job) or has been streaming past
+  // TimeoutPresets.LONG_RUNNING. Dismissing it, resolving the Notification
+  // permission, or simply having shown it once all persist to localStorage
+  // so it never reappears in this browser.
+  const [showNotifBanner, setShowNotifBanner] = useState(false);
+  const notifBannerTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const hasPendingMediaJob = useMediaStore((state) =>
+    state.jobs.some((job) => job.status === 'pending' || job.status === 'generating'),
+  );
+  const isLongRunningTaskType =
+    composerToggles?.researchEnabled === true ||
+    composerToggles?.workMode === 'agiwork' ||
+    hasPendingMediaJob;
+  const isTurnActive = isStreaming || hasPendingMediaJob;
+
+  useEffect(() => {
+    if (typeof Notification === 'undefined') return undefined;
+    if (readNotifBannerResolved()) return undefined;
+    if (Notification.permission !== 'default') return undefined;
+
+    if (!hasMessages || !isTurnActive) {
+      if (notifBannerTimerRef.current) {
+        clearTimeout(notifBannerTimerRef.current);
+        notifBannerTimerRef.current = null;
+      }
+      setShowNotifBanner(false);
+      return undefined;
+    }
+
+    if (isLongRunningTaskType) {
+      setShowNotifBanner(true);
+    } else if (!notifBannerTimerRef.current) {
+      notifBannerTimerRef.current = setTimeout(() => {
+        setShowNotifBanner(true);
+      }, TimeoutPresets.LONG_RUNNING);
+    }
+
+    return () => {
+      if (notifBannerTimerRef.current) {
+        clearTimeout(notifBannerTimerRef.current);
+        notifBannerTimerRef.current = null;
+      }
+    };
+  }, [hasMessages, isTurnActive, isLongRunningTaskType]);
+
+  useEffect(() => {
+    if (showNotifBanner) markNotifBannerResolved();
+  }, [showNotifBanner]);
+
+  const handleRequestNotifPermission = useCallback(async () => {
+    if (typeof Notification === 'undefined') return;
+    markNotifBannerResolved();
+    setShowNotifBanner(false);
+    await Notification.requestPermission();
+  }, []);
+
+  const handleDismissNotifBanner = useCallback(() => {
+    markNotifBannerResolved();
+    setShowNotifBanner(false);
+  }, []);
 
   /*
    * A refused turn already states itself in the transcript as an
