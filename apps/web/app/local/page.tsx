@@ -61,7 +61,7 @@ export default function LocalPage() {
             <FactGrid
               items={[
                 {
-                  meta: `Desktop · pending signature check`,
+                  meta: `Desktop · ${SURFACE_STATUS.desktop}`,
                   title: 'Runtime URLs live in settings',
                   body: `${DESKTOP_LOCAL_RUNTIMES.label} each take a server URL. Desktop checks that the URL answers, lists the models the runtime reports, and refreshes the model catalog from the reply.`,
                 },
@@ -97,20 +97,38 @@ export default function LocalPage() {
               caption="Local setup commands"
               rows={[
                 {
-                  label: 'ollama pull <model>',
+                  label: (
+                    <code style={{ fontFamily: 'var(--agi-font-mono)', whiteSpace: 'nowrap' }}>
+                      ollama pull &lt;model&gt;
+                    </code>
+                  ),
                   value: 'Pull a model into a running Ollama server.',
                 },
                 {
-                  label: 'agi models scan',
+                  label: (
+                    <code style={{ fontFamily: 'var(--agi-font-mono)', whiteSpace: 'nowrap' }}>
+                      agi models scan
+                    </code>
+                  ),
                   value:
                     'List local model servers found on loopback, and the models each one reports.',
                 },
                 {
-                  label: 'agi --provider ollama --model <model>',
+                  label: (
+                    <code style={{ fontFamily: 'var(--agi-font-mono)' }}>
+                      agi --provider ollama{' '}
+                      <span style={{ whiteSpace: 'nowrap' }}>--model &lt;model&gt;</span>
+                    </code>
+                  ),
                   value: 'Start a session pinned to that runtime and model.',
                 },
                 {
-                  label: 'agi --provider lmstudio --model <model>',
+                  label: (
+                    <code style={{ fontFamily: 'var(--agi-font-mono)' }}>
+                      agi --provider lmstudio{' '}
+                      <span style={{ whiteSpace: 'nowrap' }}>--model &lt;model&gt;</span>
+                    </code>
+                  ),
                   value: 'Start a session pinned to an LM Studio model.',
                 },
               ]}
