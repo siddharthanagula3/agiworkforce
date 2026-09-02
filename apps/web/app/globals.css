@@ -3986,8 +3986,8 @@ html[data-contrast='more'] *:focus-visible {
   --agi-ink-2: #4e4e56;
   --agi-ink-quiet: #5f5f67;
   --agi-ink-faint: #5f5f67;
-  --agi-amber: #7f530f;
-  --agi-amber-soft: rgba(127, 83, 15, 0.12);
+  --agi-amber: #6f4709;
+  --agi-amber-soft: rgba(111, 71, 9, 0.12);
   --agi-rule: rgba(22, 22, 26, 0.1);
   --agi-rule-strong: rgba(22, 22, 26, 0.18);
   --agi-surface-wash: rgba(22, 22, 26, 0.03);

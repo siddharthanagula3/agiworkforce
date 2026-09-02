@@ -376,6 +376,81 @@ describe('WCAG 2.1 AA contrast ratios · large text and graphics (>= 3:1)', () =
   });
 });
 
+describe('the marketing stage amber clears AA through its own tint', () => {
+  // .agi-dev-badge paints --agi-amber on a --agi-amber-soft pill, so the label
+  // never meets a stage ground directly: it meets a 12% wash of itself over
+  // that ground. #7f530f measured 4.48:1 against the composite axe read on
+  // Home and 4.18:1 over the pearl stage's darkest ground, failing 12px mono
+  // text in both themes.
+  const STAGES = ['warm', 'pearl'] as const;
+
+  // Each stage's tokens are split across two rules: one block tunes ink and
+  // amber for both light stages, and each stage then declares its own grounds.
+  const stageCascade = (stage: string): string => {
+    const selector = `[data-design='agi'] .agi-stage--${stage}`;
+    const blocks: string[] = [];
+    for (
+      let at = globalsCss.indexOf(selector);
+      at !== -1;
+      at = globalsCss.indexOf(selector, at + 1)
+    ) {
+      const open = globalsCss.indexOf('{', at + selector.length);
+      if (open === -1 || /[;{}]/.test(globalsCss.slice(at + selector.length, open))) continue;
+      let depth = 0;
+      for (let i = open; i < globalsCss.length; i++) {
+        if (globalsCss[i] === '{') depth++;
+        else if (globalsCss[i] === '}' && --depth === 0) {
+          blocks.push(globalsCss.slice(open + 1, i));
+          break;
+        }
+      }
+    }
+    if (blocks.length === 0) throw new Error(`globals.css declares no .agi-stage--${stage}`);
+    return blocks.join('\n');
+  };
+
+  const channels = (hex: string): number[] => hexToSRGB(hex).map((c) => Math.round(c * 255));
+
+  const rgba = (value: string): { rgb: number[]; alpha: number } => {
+    const inner = value.match(/^rgba\(([^)]+)\)$/);
+    if (!inner?.[1]) throw new Error(`Expected an rgba tint, got ${value}`);
+    const parts = inner[1].split(',').map((part) => Number.parseFloat(part));
+    if (parts.length !== 4 || parts.some(Number.isNaN)) throw new Error(`Malformed ${value}`);
+    return { rgb: parts.slice(0, 3), alpha: parts[3]! };
+  };
+
+  // What the browser paints for a translucent background over an opaque one.
+  const compositeOver = (tint: { rgb: number[]; alpha: number }, ground: string): string => {
+    const base = channels(ground);
+    return `#${tint.rgb
+      .map((c, i) => Math.round(base[i]! * (1 - tint.alpha) + c * tint.alpha))
+      .map((c) => c.toString(16).padStart(2, '0'))
+      .join('')}`;
+  };
+
+  for (const stage of STAGES) {
+    const block = stageCascade(stage);
+    const amber = colorToken(block, '--agi-amber');
+    const soft = rgba(token(block, '--agi-amber-soft'));
+    const ground = colorToken(block, '--agi-bg-3');
+
+    it(`${stage}: --agi-amber on the soft tint over --agi-bg-3 >= 4.5:1`, () => {
+      expect(contrastRatio(amber, compositeOver(soft, ground))).toBeGreaterThanOrEqual(
+        WCAG_AA_NORMAL,
+      );
+    });
+
+    it(`${stage}: --agi-amber on --agi-bg-3 >= 4.5:1`, () => {
+      expect(contrastRatio(amber, ground)).toBeGreaterThanOrEqual(WCAG_AA_NORMAL);
+    });
+
+    it(`${stage}: --agi-amber-soft is --agi-amber at a lower alpha`, () => {
+      expect(soft.rgb).toEqual(channels(amber));
+      expect(soft.alpha).toBeLessThan(1);
+    });
+  }
+});
+
 describe('contrastRatio utility', () => {
   it('returns 21 for black vs white', () => {
     expect(contrastRatio('#000000', '#ffffff')).toBeCloseTo(21, 0);
