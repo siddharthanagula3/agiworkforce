@@ -121,7 +121,7 @@ export function RewindTimeline({
   return (
     <div className="flex flex-col h-full text-sm">
       {/* Toolbar */}
-      <div className="flex items-center justify-between px-3 py-2 border-b border-white/10 shrink-0">
+      <div className="flex items-center justify-between px-3 py-2 border-b border-[var(--chat-border)] shrink-0">
         <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
           <History className="w-3.5 h-3.5" />
           <span>
@@ -144,8 +144,8 @@ export function RewindTimeline({
 
       {/* Confirmation dialog */}
       {confirmState && (
-        <div className="mx-3 my-2 rounded border border-amber-500/30 bg-amber-500/10 p-3 shrink-0">
-          <p className="text-xs text-amber-300 mb-2">
+        <div className="mx-3 my-2 rounded border border-[var(--chat-warning-border)] bg-[var(--chat-warning-bg)] p-3 shrink-0">
+          <p className="text-xs text-[var(--chat-warning-fg)] mb-2">
             Rewind to checkpoint at{' '}
             <span className="font-mono font-semibold">{confirmState.label}</span>? This will undo
             file changes made after this point.
@@ -154,7 +154,7 @@ export function RewindTimeline({
             <button
               type="button"
               onClick={handleRewindConfirm}
-              className="flex items-center gap-1 rounded px-2 py-1 text-xs bg-amber-600 hover:bg-amber-500 text-white transition-colors"
+              className="flex items-center gap-1 rounded border border-[var(--chat-warning-border)] px-2 py-1 text-xs text-[var(--chat-warning-fg)] hover:bg-[var(--chat-warning-bg)] transition-colors"
             >
               <RotateCcw className="w-3 h-3" />
               Confirm rewind
@@ -162,7 +162,7 @@ export function RewindTimeline({
             <button
               type="button"
               onClick={handleRewindCancel}
-              className="rounded px-2 py-1 text-xs text-muted-foreground hover:text-foreground border border-white/10 hover:border-white/20 transition-colors"
+              className="rounded px-2 py-1 text-xs text-muted-foreground hover:text-foreground border border-[var(--chat-border)] hover:border-[var(--chat-border-strong)] transition-colors"
             >
               Cancel
             </button>
@@ -172,7 +172,7 @@ export function RewindTimeline({
 
       {/* Error */}
       {error && (
-        <div className="mx-3 my-2 rounded border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-400 shrink-0">
+        <div className="mx-3 my-2 rounded border border-[color:var(--chat-destructive)]/30 bg-[var(--chat-destructive)]/10 px-3 py-2 text-xs text-[var(--chat-destructive-text)] shrink-0">
           {error}
         </div>
       )}
@@ -193,7 +193,10 @@ export function RewindTimeline({
           </div>
         ) : (
           <ul className="relative px-3 py-3">
-            <div className="absolute left-6 top-4 bottom-4 w-px bg-white/10" aria-hidden />
+            <div
+              className="absolute left-6 top-4 bottom-4 w-px bg-[var(--chat-surface-hover)]"
+              aria-hidden
+            />
 
             {checkpoints.map((checkpoint, index) => {
               const isRewinding = rewinding === checkpoint.id;
@@ -212,8 +215,8 @@ export function RewindTimeline({
                     className={cn(
                       'absolute left-[18px] top-1.5 w-2 h-2 rounded-full border-2 shrink-0 -translate-x-1/2',
                       index === 0
-                        ? 'border-violet-400 bg-violet-900/50'
-                        : 'border-white/20 bg-[#0b0c14]',
+                        ? 'border-[var(--chat-accent-secondary)] bg-[var(--chat-accent-secondary)]/20'
+                        : 'border-[var(--chat-border-strong)] bg-[var(--chat-surface-elevated)]',
                     )}
                     aria-hidden
                   />
@@ -259,7 +262,7 @@ export function RewindTimeline({
                         className={cn(
                           'flex items-center gap-1 shrink-0 rounded px-1.5 py-0.5 text-xs',
                           'text-muted-foreground hover:text-foreground',
-                          'border border-white/10 hover:border-white/20 transition-colors',
+                          'border border-[var(--chat-border)] hover:border-[var(--chat-border-strong)] transition-colors',
                           (isRewinding || rewinding !== null) && 'opacity-40 cursor-not-allowed',
                         )}
                       >
