@@ -93,7 +93,7 @@ describe('InlineToolCall — status states', () => {
     );
     expect(within(container).queryByText('Error: timeout')).not.toBeNull();
     const suffix = container.querySelector('.inline-tool-call__suffix');
-    expect(suffix?.className).toMatch(/state-danger/);
+    expect(suffix?.className).toMatch(/chat-destructive-text/);
   });
 
   it('partial renders "Partial — see body" suffix', () => {
