@@ -258,6 +258,8 @@ export function ResearchActivity({
             failed ? 'border-destructive/30 bg-destructive/5' : 'border-border/30 bg-muted/10',
           )}
           aria-label="Research plan"
+          role="status"
+          aria-live="polite"
           data-testid="research-plan"
         >
           {steps.map((step) => (
