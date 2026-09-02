@@ -23,6 +23,27 @@ const MERMAID_CONFIG: MermaidConfig = {
   class: { htmlLabels: false },
 };
 
+const INLINE_TEXT_ANCHOR = /text-anchor:\s*([a-z]+)/i;
+const NODE_LABEL_CENTERED = /\.node \.label text[^{]*\{[^}]*text-anchor:\s*middle/;
+
+function bakeTextAnchor(svg: string): string {
+  const doc = new DOMParser().parseFromString(svg, 'image/svg+xml');
+  if (doc.querySelector('parsererror')) return svg;
+
+  doc.querySelectorAll('[style*="text-anchor"]').forEach((el) => {
+    const match = INLINE_TEXT_ANCHOR.exec(el.getAttribute('style') ?? '');
+    if (match?.[1]) el.setAttribute('text-anchor', match[1]);
+  });
+
+  if (NODE_LABEL_CENTERED.test(svg)) {
+    doc.querySelectorAll('g.node g.label text').forEach((el) => {
+      if (!el.hasAttribute('text-anchor')) el.setAttribute('text-anchor', 'middle');
+    });
+  }
+
+  return new XMLSerializer().serializeToString(doc.documentElement);
+}
+
 const SVG_CACHE_LIMIT = 32;
 const svgCache = new Map<string, string>();
 
@@ -125,7 +146,7 @@ export const MermaidDiagram: React.FC<MermaidDiagramProps> = ({
         const { default: mermaid } = await loadMermaid();
         const { svg } = await mermaid.render(diagramId, source);
         if (cancelled) return;
-        const sanitized = sanitizeSvg(svg);
+        const sanitized = sanitizeSvg(bakeTextAnchor(svg));
         // A render that succeeds but sanitizes down to nothing (malformed
         // markup, an unexpected root element) must not present as 'ready' with
         // an empty container - that is the empty-output-with-source-available
