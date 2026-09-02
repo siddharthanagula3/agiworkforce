@@ -21,18 +21,9 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useClerk } from '@clerk/nextjs';
-import {
-  Settings,
-  LogOut,
-  ChevronUp,
-  FileText,
-  Menu,
-  Scale,
-  ShieldCheck,
-} from '@agiworkforce/icons';
+import { ChevronUp, Menu } from '@agiworkforce/icons';
 import {
   Sheet,
   SheetContent,
@@ -45,16 +36,12 @@ import {
   type SidebarNavItem,
   DropdownMenu,
   DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
   DropdownMenuTrigger,
   Tooltip,
   TooltipTrigger,
   TooltipContent,
   TooltipProvider,
 } from '@agiworkforce/ui';
-import { CANONICAL_POLICY_ROUTES } from '@/lib/legal-constants';
 import { useConversations } from '@/lib/hooks/useConversations';
 import { useAuthStore } from '@shared/stores/authentication-store';
 import { useBillingStore } from '@shared/stores/web-auth-store';
@@ -71,10 +58,13 @@ import { isBillingPolicyReady } from '@shared/stores/billing-policy';
 import { useIsWorkspaceAdmin } from '@shared/hooks/use-workspace-admin';
 import { webManagedCloudProjects } from '@/features/projects/services/managed-cloud-projects';
 import { toast } from 'sonner';
-import { getBillingPlanPricing } from '@agiworkforce/types';
+import { getBillingPlanPricing, hasSelfServeUpgradePath } from '@agiworkforce/types';
 import { accountInitial, resolveAccountDisplayName } from '@agiworkforce/utils/display-name';
 import { useSettingsModal } from '@/features/settings/components/SettingsModalProvider';
-import { WorkspaceMenuItems } from '@/features/workspaces/components/WorkspaceMenuItems';
+import { AccountMenuItems } from '@shared/components/layout/AccountMenuItems';
+import { useUpgradePlanFlow } from '@features/billing/hooks/use-upgrade-plan-flow';
+import { KeyboardShortcutsDialog } from '@/features/chat/components/dialogs/KeyboardShortcutsDialog';
+import { KEYBOARD_SHORTCUT_DOCS } from '@/features/chat/hooks/use-keyboard-shortcuts';
 import { toUserMessage } from '@/lib/user-error-message';
 
 // A fresh [] each render changes the identity every time and defeats the
@@ -98,6 +88,18 @@ export function WebAppShell({ children }: WebAppShellProps) {
   const billingPolicyReady = useBillingStore(isBillingPolicyReady);
 
   const [collapsed, setCollapsed] = useState(false);
+  const [keyboardShortcutsOpen, setKeyboardShortcutsOpen] = useState(false);
+
+  // Shared with WebChatPage's account menu (useUpgradePlanFlow) so the
+  // dialog, mid-cycle confirm, and the real Stripe checkout call cannot
+  // drift between the two surfaces.
+  const { openUpgradeDialog, upgradeDialogs } = useUpgradePlanFlow({
+    user,
+    subscription,
+    currentTier: subscription?.tier,
+    billingPolicyReady,
+    openSettings,
+  });
 
   // Destructive-action confirmation (shell-nav-ia-gap-01): the product's own
   // AlertDialog with a red confirm, not `window.confirm`. `useConfirm` returns
@@ -300,63 +302,21 @@ export function WebAppShell({ children }: WebAppShellProps) {
     !isAuthInitialized || isAuthLoading || !isBillingInitialized || isBillingLoading;
 
   // Shared between the expanded footer's dropdown and the collapsed rail's
-  // compact trigger, so the two never drift into different menus.
+  // compact trigger, and with WebChatPage's account menu via the shared
+  // AccountMenuItems component, so none of them can drift into a different
+  // menu.
   const accountMenuItems = (
-    <>
-      {user?.email && (
-        <>
-          <DropdownMenuLabel className="truncate font-normal text-muted-foreground">
-            {user.email}
-          </DropdownMenuLabel>
-          <DropdownMenuSeparator />
-        </>
-      )}
-      <WorkspaceMenuItems onManage={() => openSettings('team')} />
-      {/* CRIT-008: open in place — /settings/general only bounces to /chat. */}
-      <DropdownMenuItem onClick={() => openSettings('general')}>
-        <Settings className="mr-2 h-4 w-4" />
-        Settings
-      </DropdownMenuItem>
-      <DropdownMenuSeparator />
-      {/*
-        Legal reachability from INSIDE the product.
-        An audit found the signed-in shell rendered no route to any policy:
-        every legal link lived on the marketing footer, which a signed-in
-        user never sees. That is a real gap rather than a tidiness one — a
-        privacy notice you can only find by signing out is not accessible,
-        and the DPDP grievance route in particular has to be reachable from
-        the page that made someone want to use it.
-        The account menu rather than a persistent footer strip, because an
-        app shell should not spend vertical space on this and because it is
-        where people already look.
-      */}
-      <DropdownMenuItem asChild>
-        <Link href={CANONICAL_POLICY_ROUTES.dataUse} target="_blank" rel="noopener noreferrer">
-          <ShieldCheck className="mr-2 h-4 w-4" />
-          How we use your data
-        </Link>
-      </DropdownMenuItem>
-      <DropdownMenuItem asChild>
-        <Link href={CANONICAL_POLICY_ROUTES.dataRights} target="_blank" rel="noopener noreferrer">
-          <FileText className="mr-2 h-4 w-4" />
-          Privacy &amp; your data rights
-        </Link>
-      </DropdownMenuItem>
-      <DropdownMenuItem asChild>
-        <Link href={CANONICAL_POLICY_ROUTES.legalIndex} target="_blank" rel="noopener noreferrer">
-          <Scale className="mr-2 h-4 w-4" />
-          Terms &amp; policies
-        </Link>
-      </DropdownMenuItem>
-      <DropdownMenuSeparator />
-      <DropdownMenuItem
-        onClick={() => void handleLogout()}
-        className="text-danger focus:text-danger"
-      >
-        <LogOut className="mr-2 h-4 w-4" />
-        Log out
-      </DropdownMenuItem>
-    </>
+    <AccountMenuItems
+      email={user?.email}
+      onManageWorkspace={() => openSettings('team')}
+      onOpenSettings={() => openSettings('general')}
+      onOpenHelp={() => router.push('/help')}
+      onOpenKeyboardShortcuts={() => setKeyboardShortcutsOpen(true)}
+      showUpgrade={hasSelfServeUpgradePath(currentTier)}
+      onUpgrade={() => openUpgradeDialog()}
+      onDownloadApps={() => router.push('/download')}
+      onLogout={() => void handleLogout()}
+    />
   );
 
   const footerSlot = isAccountLoading ? (
@@ -474,6 +434,12 @@ export function WebAppShell({ children }: WebAppShellProps) {
     <div className="fixed inset-x-0 top-0 bottom-[var(--agi-consent-inset,0px)] flex overflow-hidden bg-[var(--chat-bg)] text-[var(--chat-text-primary)]">
       {/* Destructive-action confirm (delete conversation / delete project). */}
       {destructiveConfirmDialog}
+      {upgradeDialogs}
+      <KeyboardShortcutsDialog
+        open={keyboardShortcutsOpen}
+        onOpenChange={setKeyboardShortcutsOpen}
+        shortcuts={KEYBOARD_SHORTCUT_DOCS}
+      />
       {/* Desktop: persistent/collapsible sidebar. Narrow: replaced by the
           header trigger + modal drawer below (WEB-APPSHELL-MOBILE-SIDEBAR-01). */}
       {!isNarrowViewport && (
