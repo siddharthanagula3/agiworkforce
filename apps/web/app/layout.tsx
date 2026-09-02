@@ -157,10 +157,13 @@ export default async function RootLayout({
   const telemetryConsent = await readServerTelemetryConsent();
 
   return (
-    <html lang="en" suppressHydrationWarning data-telemetry-consent={String(telemetryConsent)}>
-      <body
-        className={`${geistSans.variable} ${geistMono.variable} ${newsreader.variable} ${ibmPlexSans.variable} ${jetbrainsMono.variable} antialiased`}
-      >
+    <html
+      lang="en"
+      suppressHydrationWarning
+      data-telemetry-consent={String(telemetryConsent)}
+      className={`${geistSans.variable} ${geistMono.variable} ${newsreader.variable} ${ibmPlexSans.variable} ${jetbrainsMono.variable}`}
+    >
+      <body className="antialiased">
         {/*
          * No explicit <head> element here on purpose. The App Router owns the
          * document head, and a literal <head> in the root layout made the
