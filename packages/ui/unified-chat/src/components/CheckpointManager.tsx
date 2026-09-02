@@ -327,8 +327,12 @@ export function CheckpointManager({
 
       {/* Body */}
       {loading ? (
-        <div className="flex items-center justify-center py-8 text-muted-foreground">
-          <Clock className="mr-2 h-4 w-4 animate-spin" />
+        <div
+          role="status"
+          aria-live="polite"
+          className="flex items-center justify-center py-8 text-muted-foreground"
+        >
+          <Clock className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />
           Loading checkpoints...
         </div>
       ) : checkpoints.length === 0 ? (
