@@ -80,7 +80,7 @@ vi.mock('@neondatabase/serverless', async () => {
       state.ended += 1;
     }
   }
-  return { Pool: MockPool };
+  return { Pool: MockPool, neonConfig: { poolQueryViaFetch: false } };
 });
 
 const { NeonDatabaseAdapter } = await import('../adapters/neon');
