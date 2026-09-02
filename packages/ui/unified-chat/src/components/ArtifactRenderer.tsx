@@ -372,9 +372,13 @@ export function MermaidArtifact({ artifact, isDark }: { artifact: Artifact; isDa
 
   if (error) {
     return (
-      <div className="rounded-lg border border-rose-500/20 bg-rose-500/10 p-4">
-        <p className="mb-2 text-sm font-medium text-rose-400">Failed to render diagram</p>
-        <pre className="whitespace-pre-wrap text-xs text-rose-300">{error}</pre>
+      <div className="rounded-lg border border-[var(--chat-destructive)]/20 bg-[var(--chat-destructive)]/10 p-4">
+        <p className="mb-2 text-sm font-medium text-[var(--chat-destructive-text)]">
+          Failed to render diagram
+        </p>
+        <pre className="whitespace-pre-wrap text-xs text-[var(--chat-destructive-text)]">
+          {error}
+        </pre>
         {/* The transcript is lossless: a diagram that cannot be drawn still
             has to hand back the text it was drawn from. */}
         {artifact.content ? (
