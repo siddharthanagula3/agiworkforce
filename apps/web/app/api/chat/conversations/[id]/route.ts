@@ -19,6 +19,8 @@ import {
 import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
 import { resolveActiveOrganizationId } from '@/lib/services/active-workspace-service';
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
 type RouteContext = { params: Promise<{ id: string }> };
 
 async function handleGetConversation(request: NextRequest, context: RouteContext) {
@@ -27,6 +29,10 @@ async function handleGetConversation(request: NextRequest, context: RouteContext
 
   const userId = await requireCurrentUserId(request);
   const { id } = await context.params;
+
+  if (!UUID_RE.test(id)) {
+    throw createError.notFound('Conversation not found');
+  }
 
   const url = new URL(request.url);
   const rawLimit = parseInt(url.searchParams.get('limit') ?? '100', 10);
