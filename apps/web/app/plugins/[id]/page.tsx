@@ -28,8 +28,8 @@ function sourceLabel(source: PluginRegistryEntry['source']): string {
 function statusLabel(entry: PluginRegistryEntry): string {
   if (isPluginEntryWebInstallable(entry)) return 'Available on Web';
   if (isPluginEntryInstallable(entry)) return 'Installable';
-  if (entry.status === 'deprecated') return 'Deprecated — do not install';
-  return 'Declared — not installable yet';
+  if (entry.status === 'deprecated') return 'Deprecated: do not install';
+  return 'Declared: not installable yet';
 }
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
@@ -94,12 +94,12 @@ export default async function PluginDetailPage({ params }: Props) {
               {webInstallable ? (
                 <strong>Managed in Website Settings.</strong>
               ) : installable ? (
-                <strong>Published — install it with the AGI CLI (see below).</strong>
+                <strong>Published. Install it with the AGI CLI (see below).</strong>
               ) : entry.status === 'deprecated' ? (
-                <strong>Deprecated — this pack should no longer be installed.</strong>
+                <strong>Deprecated. This pack should no longer be installed.</strong>
               ) : (
                 <strong>
-                  Listed in the registry, with no published artifact yet — there is nothing to
+                  Listed in the registry, with no published artifact yet. There is nothing to
                   install so far.
                 </strong>
               )}
