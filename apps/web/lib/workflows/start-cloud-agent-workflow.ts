@@ -254,8 +254,8 @@ function buildInlineCloudAgentTurn(input: RunCloudAgentTurnInput): ReadableStrea
         }
       : {}),
     failover: {
-      next: (error) => {
-        const attempt = failover.next(error);
+      next: (error, context) => {
+        const attempt = failover.next(error, context);
         if (attempt) serving = attempt.processed;
         return attempt;
       },

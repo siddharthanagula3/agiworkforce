@@ -692,8 +692,8 @@ async function dispatchChatCompletions(
         // instead of billing a full agentic turn nobody sees.
         signal: request.signal,
         failover: {
-          next: (error) => {
-            const attempt = toolLoopFailover.next(error);
+          next: (error, context) => {
+            const attempt = toolLoopFailover.next(error, context);
             if (attempt) toolLoopServing = attempt.processed;
             return attempt;
           },

@@ -107,6 +107,37 @@ describe('runToolLoop — a provider rejection reaches the user as product copy'
     expect(JSON.stringify(errorEvent)).not.toContain('propertyNames');
   });
 
+  it('tells the failover plan which step failed, so it can rule on a rejection', async () => {
+    const encoder = new TextEncoder();
+    const answer = new ReadableStream({
+      start(controller) {
+        controller.enqueue(
+          encoder.encode(
+            `data: ${JSON.stringify({
+              choices: [{ index: 0, delta: { content: 'Answered.' }, finish_reason: 'stop' }],
+            })}\n\n`,
+          ),
+        );
+        controller.close();
+      },
+    });
+    mockBuildToolLoopStream
+      .mockRejectedValueOnce(providerRejection(400, UPSTREAM_REJECTION))
+      .mockResolvedValueOnce(answer);
+
+    const processed = makeProcessed();
+    const rotated = { ...processed, provider: 'anthropic' } as ProcessedRequest;
+    const next = vi.fn(() => ({ provider: 'anthropic', processed: rotated }));
+
+    const output = await drain(
+      runToolLoop(processed, { approvalMode: 'auto', failover: { next } }),
+    );
+
+    expect(next).toHaveBeenCalledWith(expect.any(Error), { step: 1 });
+    expect(output).toContain('Answered.');
+    expect(output).not.toContain('x_stream_error');
+  });
+
   it.each([
     [503, 'server_overload'],
     [401, 'auth'],
