@@ -443,6 +443,91 @@ describe('the marketing stage amber clears AA through its own tint', () => {
   }
 });
 
+describe('the marketing design-system palette clears AA in both themes', () => {
+  const designBlock = (selector: string, mustDeclare: string): string => {
+    for (
+      let at = globalsCss.indexOf(selector);
+      at !== -1;
+      at = globalsCss.indexOf(selector, at + 1)
+    ) {
+      const open = globalsCss.indexOf('{', at + selector.length);
+      if (open === -1 || /[;{}]/.test(globalsCss.slice(at + selector.length, open))) continue;
+      let depth = 0;
+      for (let i = open; i < globalsCss.length; i++) {
+        if (globalsCss[i] === '{') depth++;
+        else if (globalsCss[i] === '}' && --depth === 0) {
+          const body = globalsCss.slice(open + 1, i);
+          if (body.includes(`${mustDeclare}:`)) return body;
+          break;
+        }
+      }
+    }
+    throw new Error(`globals.css has no ${selector} block declaring ${mustDeclare}`);
+  };
+
+  const THEMES = {
+    dark: designBlock("[data-design='agi']", '--agi-ground'),
+    light: designBlock("[data-theme='light'][data-design='agi']", '--agi-ground'),
+  };
+
+  const LANES = ['local', 'byok', 'cloud'] as const;
+
+  for (const [theme, block] of Object.entries(THEMES)) {
+    const ground = colorToken(block, '--agi-ground');
+    const ground2 = colorToken(block, '--agi-ground-2');
+    const ink = colorToken(block, '--agi-ink');
+    const ink2 = colorToken(block, '--agi-ink-2');
+
+    it(`${theme}: --agi-ink on --agi-ground >= 4.5:1`, () => {
+      expect(contrastRatio(ink, ground)).toBeGreaterThanOrEqual(WCAG_AA_NORMAL);
+    });
+
+    it(`${theme}: --agi-ink on --agi-ground-2 >= 4.5:1`, () => {
+      expect(contrastRatio(ink, ground2)).toBeGreaterThanOrEqual(WCAG_AA_NORMAL);
+    });
+
+    it(`${theme}: --agi-ink-2 on --agi-ground >= 4.5:1`, () => {
+      expect(contrastRatio(ink2, ground)).toBeGreaterThanOrEqual(WCAG_AA_NORMAL);
+    });
+
+    it(`${theme}: --agi-ink-2 on --agi-ground-2 >= 4.5:1`, () => {
+      expect(contrastRatio(ink2, ground2)).toBeGreaterThanOrEqual(WCAG_AA_NORMAL);
+    });
+
+    it(`${theme}: the primary CTA draws --agi-ground on --agi-ink at >= 4.5:1`, () => {
+      expect(contrastRatio(ground, ink)).toBeGreaterThanOrEqual(WCAG_AA_NORMAL);
+    });
+
+    for (const lane of LANES) {
+      const fill = colorToken(block, `--agi-lane-${lane}`);
+      const text = colorToken(block, `--agi-lane-${lane}-text`);
+      const onFill = colorToken(block, `--agi-lane-${lane}-on-primary`);
+
+      it(`${theme}: --agi-lane-${lane}-text on --agi-ground >= 4.5:1`, () => {
+        expect(contrastRatio(text, ground)).toBeGreaterThanOrEqual(WCAG_AA_NORMAL);
+      });
+
+      it(`${theme}: --agi-lane-${lane}-text on --agi-ground-2 >= 4.5:1`, () => {
+        expect(contrastRatio(text, ground2)).toBeGreaterThanOrEqual(WCAG_AA_NORMAL);
+      });
+
+      it(`${theme}: --agi-lane-${lane}-on-primary on --agi-lane-${lane} >= 4.5:1`, () => {
+        expect(contrastRatio(onFill, fill)).toBeGreaterThanOrEqual(WCAG_AA_NORMAL);
+      });
+
+      it(`${theme}: the --agi-lane-${lane} dot stays visible on --agi-ground (>= 3:1)`, () => {
+        expect(contrastRatio(fill, ground)).toBeGreaterThanOrEqual(WCAG_AA_LARGE);
+      });
+    }
+
+    it(`${theme}: the legacy neutral ramp holds no second set of values`, () => {
+      expect(token(block, '--agi-bg')).toBe('var(--agi-ground)');
+      expect(token(block, '--agi-bg-2')).toBe('var(--agi-ground-2)');
+      expect(token(block, '--agi-bg-3')).toBe('var(--agi-ground-3)');
+    });
+  }
+});
+
 describe('contrastRatio utility', () => {
   it('returns 21 for black vs white', () => {
     expect(contrastRatio('#000000', '#ffffff')).toBeCloseTo(21, 0);

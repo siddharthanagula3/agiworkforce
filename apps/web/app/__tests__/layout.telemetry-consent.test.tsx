@@ -9,6 +9,7 @@ const mocks = vi.hoisted(() => ({
 vi.mock('next/font/google', () => ({
   Geist: () => ({ variable: '--font-geist-sans' }),
   Geist_Mono: () => ({ variable: '--font-geist-mono' }),
+  IBM_Plex_Sans: () => ({ variable: '--font-ibm-plex-sans' }),
   JetBrains_Mono: () => ({ variable: '--font-jetbrains' }),
   Newsreader: () => ({ variable: '--font-newsreader' }),
 }));
