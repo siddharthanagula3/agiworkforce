@@ -321,7 +321,8 @@ export function InlineToolCall({
           onKeyDown={onKeyDown}
           className={cn(
             'inline-tool-call__bar flex items-center gap-2 select-none',
-            'h-7 px-1 rounded-md',
+            status === 'error' ? 'min-h-7 py-1' : 'h-7',
+            'px-1 rounded-md',
             isExpandable &&
               'cursor-pointer hover:bg-[color:var(--chat-surface-hover,rgba(26,25,21,0.04))]',
             'transition-colors duration-100',
@@ -331,10 +332,13 @@ export function InlineToolCall({
           {/* Tool names are arbitrary-length — MCP servers namespace them
               ("mcp__filesystem__read_text_file"). shrink-0 with no ellipsis made
               the label hold its full intrinsic width and push the status dot and
-              chevron off the row's right edge. */}
+              chevron off the row's right edge. An error label is a full status
+              sentence, not a name — it wraps instead, since an ellipsis mid-word
+              (or mid-sentence) leaves the user unable to read what happened. */}
           <span
             className={cn(
-              'inline-tool-call__label min-w-0 truncate text-sm font-normal',
+              'inline-tool-call__label min-w-0 text-sm font-normal',
+              status === 'error' ? 'flex-1 whitespace-normal break-words' : 'truncate',
               colorClass,
             )}
             title={typeof label === 'string' ? label : undefined}

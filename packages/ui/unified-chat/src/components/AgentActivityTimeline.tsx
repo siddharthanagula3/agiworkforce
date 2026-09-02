@@ -9,6 +9,7 @@ import {
   ExternalLink,
   FileOutput,
   Globe2,
+  Info,
   Loader2,
   PauseCircle,
 } from 'lucide-react';
@@ -553,6 +554,17 @@ export function AgentActivityTimeline({
           {visibleEntries.map((entry) => {
             if (entry.kind === 'progress') return <ProgressRow key={entry.id} entry={entry} />;
             if (entry.kind === 'tool') {
+              if (entry.unavailable) {
+                return (
+                  <div key={entry.id} className="relative py-1.5 pl-8">
+                    <Info
+                      className="absolute left-0 top-2 h-4 w-4 text-muted-foreground"
+                      aria-hidden="true"
+                    />
+                    <p className="break-words text-sm text-muted-foreground">{entry.summary}</p>
+                  </div>
+                );
+              }
               const connectRequest = connectRequestFor(entry);
               return (
                 <div key={entry.id} className="relative py-1 pl-7">

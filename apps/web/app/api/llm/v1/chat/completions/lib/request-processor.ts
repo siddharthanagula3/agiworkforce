@@ -8,7 +8,7 @@ import { AgiWorkGoalSchema } from './agiwork-plan';
 import { MAX_MESSAGE_LENGTH, ToolChoiceSchema, ToolDefinitionSchema } from '@/lib/validations/llm';
 import { logger } from '@/lib/logger';
 import { resolveTurnCodeExecutionTools, providerRoutesToE2B } from '@/lib/e2b/execution-tools';
-import { e2bCutoverEnabled } from '@/lib/e2b/gate';
+import { e2bProvisioningReady } from '@/lib/e2b/gate';
 import { urlFetchToolDef } from '@/lib/url-fetch/url-fetch-tool';
 import { webSearchToolDef, webSearchBackendConfigured } from '@/lib/web-search/web-search-tool';
 import { webSearchNeedsGenericTool } from '@agiworkforce/search';
@@ -2902,7 +2902,7 @@ export async function processRequest(
     const turnCodeExecution = resolveTurnCodeExecutionTools({
       provider: providerLower,
       stream: chatRequest.stream,
-      e2bEnabled: e2bCutoverEnabled(),
+      e2bEnabled: e2bProvisioningReady(),
       toolsCapable: resolvedModelCaps?.tools ?? true,
       codeExecutionCapable: resolvedModelCaps?.codeExecution === true,
     });
@@ -2949,7 +2949,7 @@ export async function processRequest(
     stream: chatRequest.stream,
     provider: providerLower,
     model: chatRequest.model,
-    e2bEnabled: e2bCutoverEnabled(),
+    e2bEnabled: e2bProvisioningReady(),
     toolsCapable: resolvedModelCaps?.tools ?? true,
   });
   const llmRequest = {

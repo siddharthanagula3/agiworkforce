@@ -23,7 +23,7 @@ import {
 import { loadMcpToolDefs, runToolLoop } from '@/app/api/llm/v1/chat/completions/lib/tool-loop';
 import { classifyToolLoopInputs } from '@/app/api/llm/v1/chat/completions/lib/tool-loop-routing';
 import { resolveTurnCodeExecutionTools } from '@/lib/e2b/execution-tools';
-import { e2bCutoverEnabled } from '@/lib/e2b/gate';
+import { e2bProvisioningReady } from '@/lib/e2b/gate';
 import type { WebMcpToolDef } from '@/lib/mcp-tool-executor';
 import { isFreePlanTier } from '@/lib/services/free-trial-service';
 import { getCustomRemoteMcpLimit } from '@/lib/services/free-plan-entitlements';
@@ -146,7 +146,7 @@ async function buildScheduledToolPlan(input: {
   const codeExecution = resolveTurnCodeExecutionTools({
     provider,
     stream: true,
-    e2bEnabled: e2bCutoverEnabled(),
+    e2bEnabled: e2bProvisioningReady(),
     toolsCapable: true,
     codeExecutionCapable: capabilities.codeExecution === true,
   });
