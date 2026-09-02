@@ -123,7 +123,7 @@ export default function VscodeExtensionPage() {
                 at most eight of them and twenty thousand characters in total.
               </Prose>
             </div>
-            <pre className="agi-ds-thread" style={{ overflowX: 'auto' }}>
+            <pre className="agi-ds-thread" style={{ overflowX: 'auto', maxWidth: '100%' }}>
               <code style={{ fontFamily: 'var(--agi-font-mono)', fontSize: 'var(--agi-text-sm)' }}>
                 {TURN_ENVELOPE}
               </code>
