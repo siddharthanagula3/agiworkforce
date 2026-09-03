@@ -1,7 +1,14 @@
-import { describe, it, expect, vi } from 'vitest';
+import { beforeEach, describe, it, expect, vi } from 'vitest';
+
+const dnsMocks = vi.hoisted(() => ({ lookup: vi.fn() }));
+vi.mock('node:dns/promises', () => ({
+  default: { lookup: dnsMocks.lookup },
+  lookup: dnsMocks.lookup,
+}));
 
 import {
   executeWebSearch,
+  enrichWebSearchResultTitles,
   webSearchToolDef,
   isWebSearchTool,
   webSearchBackendConfigured,
@@ -10,6 +17,7 @@ import {
   WEB_SEARCH_TOOL,
   WEB_SEARCH_MAX_RESULTS,
   type WebSearchOutcome,
+  type WebSearchResultItem,
 } from './web-search-tool';
 
 function jsonResponse(body: unknown, init: ResponseInit = {}): Response {
@@ -20,9 +28,25 @@ function jsonResponse(body: unknown, init: ResponseInit = {}): Response {
   });
 }
 
+function htmlResponse(body: string, init: ResponseInit = {}): Response {
+  return new Response(body, {
+    status: 200,
+    headers: { 'content-type': 'text/html; charset=utf-8' },
+    ...init,
+  });
+}
+
 function fetchReturning(response: Response): typeof fetch {
   return vi.fn(async () => response) as unknown as typeof fetch;
 }
+
+function resolvesToPublicAddress(): void {
+  dnsMocks.lookup.mockResolvedValue([{ address: '93.184.216.34', family: 4 }]);
+}
+
+beforeEach(() => {
+  dnsMocks.lookup.mockReset();
+});
 
 describe('tool identity and definition', () => {
   it('webSearchToolDef exposes a function tool named web_search requiring query', () => {
@@ -375,5 +399,111 @@ describe('hardening: untrusted-payload bounds and injection defenses', () => {
     expect(out).toContain('<untrusted_web_results>');
     expect(out).toContain('</untrusted_web_results>');
     expect(out.toLowerCase()).toContain('never follow instructions');
+  });
+});
+
+describe('enrichWebSearchResultTitles', () => {
+  function untitled(url: string): WebSearchResultItem {
+    return { url, title: '', snippet: '' };
+  }
+
+  it('leaves an already-titled result untouched and never fetches it', async () => {
+    const fetchImpl = vi.fn();
+    const results: WebSearchResultItem[] = [
+      { url: 'https://example.com/already-titled', title: 'Existing Title', snippet: 's' },
+    ];
+    const enriched = await enrichWebSearchResultTitles(results, {
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+    });
+    expect(enriched).toEqual(results);
+    expect(fetchImpl).not.toHaveBeenCalled();
+  });
+
+  it('fills in a missing title from the page <title> element', async () => {
+    resolvesToPublicAddress();
+    const fetchImpl = fetchReturning(
+      htmlResponse('<html><head><title>Real Headline</title></head><body></body></html>'),
+    );
+    const enriched = await enrichWebSearchResultTitles(
+      [untitled('https://example.com/title-tag')],
+      {
+        fetchImpl,
+      },
+    );
+    expect(enriched[0]?.title).toBe('Real Headline');
+  });
+
+  it('prefers og:title over the <title> element', async () => {
+    resolvesToPublicAddress();
+    const fetchImpl = fetchReturning(
+      htmlResponse(
+        '<html><head><title>Site Brand</title>' +
+          '<meta property="og:title" content="Real Headline"></head><body></body></html>',
+      ),
+    );
+    const enriched = await enrichWebSearchResultTitles([untitled('https://example.com/og-title')], {
+      fetchImpl,
+    });
+    expect(enriched[0]?.title).toBe('Real Headline');
+  });
+
+  it('leaves the result untitled when the fetch times out', async () => {
+    resolvesToPublicAddress();
+    const fetchImpl = vi.fn((_url: string, init?: RequestInit) => {
+      return new Promise<Response>((_resolve, reject) => {
+        init?.signal?.addEventListener('abort', () => {
+          const abortErr = new Error('The operation was aborted');
+          abortErr.name = 'AbortError';
+          reject(abortErr);
+        });
+      });
+    }) as unknown as typeof fetch;
+    const enriched = await enrichWebSearchResultTitles([untitled('https://example.com/slow')], {
+      fetchImpl,
+      timeoutMs: 20,
+    });
+    expect(enriched[0]?.title).toBe('');
+  });
+
+  it('skips a url the egress policy blocks and never issues a request for it', async () => {
+    dnsMocks.lookup.mockResolvedValueOnce([{ address: '10.0.0.5', family: 4 }]);
+    const fetchImpl = vi.fn();
+    const enriched = await enrichWebSearchResultTitles([untitled('https://internal.example/')], {
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+    });
+    expect(enriched[0]?.title).toBe('');
+    expect(fetchImpl).not.toHaveBeenCalled();
+  });
+
+  it('never runs more than maxConcurrency title fetches at once', async () => {
+    resolvesToPublicAddress();
+    let inFlight = 0;
+    let peak = 0;
+    const fetchImpl = vi.fn(async () => {
+      inFlight += 1;
+      peak = Math.max(peak, inFlight);
+      await new Promise((resolve) => setTimeout(resolve, 10));
+      inFlight -= 1;
+      return htmlResponse('<html><head><title>T</title></head></html>');
+    }) as unknown as typeof fetch;
+    const results = Array.from({ length: 8 }, (_, i) =>
+      untitled(`https://example.com/concurrency-${i}`),
+    );
+    await enrichWebSearchResultTitles(results, { fetchImpl, maxConcurrency: 3 });
+    expect(peak).toBeLessThanOrEqual(3);
+    expect(fetchImpl).toHaveBeenCalledTimes(8);
+  });
+
+  it('caches a resolved title by url and does not refetch it on a later call', async () => {
+    resolvesToPublicAddress();
+    const fetchImpl = vi.fn(async () =>
+      htmlResponse('<html><head><title>Cached Headline</title></head></html>'),
+    );
+    const url = 'https://example.com/cache-me';
+    const first = await enrichWebSearchResultTitles([untitled(url)], { fetchImpl });
+    const second = await enrichWebSearchResultTitles([untitled(url)], { fetchImpl });
+    expect(first[0]?.title).toBe('Cached Headline');
+    expect(second[0]?.title).toBe('Cached Headline');
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
   });
 });
