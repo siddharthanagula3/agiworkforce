@@ -4,7 +4,7 @@ import { SYSTEM_PROMPT_CACHE_BOUNDARY } from '@agiworkforce/provider-protocol';
 
 import { translateChatRequest } from '../translate';
 
-const MODEL_ID = 'llama3:latest';
+const MODEL_ID = 'custom-model:latest';
 
 function reqWithSystem(system: ChatRequest['system'], userText: string): ChatRequest {
   return {

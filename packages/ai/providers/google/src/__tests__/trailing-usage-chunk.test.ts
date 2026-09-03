@@ -1,15 +1,16 @@
 import { describe, expect, it } from 'vitest';
 import type { StreamChunk } from '@agiworkforce/types';
 import { parseGeminiStream, translateGeminiStream } from '../stream';
+import { GOOGLE_DEFAULT_MODEL_ID } from './model-fixtures';
 
 const RECORDED_CACHED_TURN_SSE =
   'data: {"candidates": [{"content": {"parts": [{"text": "Gemini implicit caching applies above the "}],' +
-  '"role": "model"},"index": 0}],"modelVersion": "gemini-3.8-flash","responseId": "trailing-usage-1"}\n\n' +
+  `"role": "model"},"index": 0}],"modelVersion": "${GOOGLE_DEFAULT_MODEL_ID}","responseId": "trailing-usage-1"}\n\n` +
   'data: {"candidates": [{"content": {"parts": [{"text": "per-model token floor."}],"role": "model"},' +
-  '"finishReason": "STOP","index": 0}],"modelVersion": "gemini-3.8-flash","responseId": "trailing-usage-1"}\n\n' +
+  `"finishReason": "STOP","index": 0}],"modelVersion": "${GOOGLE_DEFAULT_MODEL_ID}","responseId": "trailing-usage-1"}\n\n` +
   'data: {"candidates": [],"usageMetadata": {"promptTokenCount": 5796,"candidatesTokenCount": 68,' +
   '"totalTokenCount": 6356,"cachedContentTokenCount": 5620,"thoughtsTokenCount": 492,' +
-  '"promptTokensDetails": [{"modality": "TEXT","tokenCount": 5796}]},"modelVersion": "gemini-3.8-flash",' +
+  `"promptTokensDetails": [{"modality": "TEXT","tokenCount": 5796}]},"modelVersion": "${GOOGLE_DEFAULT_MODEL_ID}",` +
   '"responseId": "trailing-usage-1"}\n\n';
 
 function bytesToStream(text: string): ReadableStream<Uint8Array> {

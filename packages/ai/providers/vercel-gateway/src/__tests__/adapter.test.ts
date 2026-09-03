@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { createVercelGatewayAdapter } from '../index';
+import { VERCEL_GATEWAY_ANTHROPIC_MODEL } from './model-fixtures';
 
 const VERCEL_GATEWAY_API_KEY_ENV_VAR = 'VERCEL_GATEWAY_API_KEY';
 const VERCEL_GATEWAY_HOST = 'ai-gateway.vercel.sh';
@@ -65,7 +66,7 @@ describe('createVercelGatewayAdapter', () => {
       },
     });
     for await (const _c of adapter.stream(
-      { model: 'anthropic/claude-opus-5', messages: [{ role: 'user', content: 'hi' }] },
+      { model: VERCEL_GATEWAY_ANTHROPIC_MODEL, messages: [{ role: 'user', content: 'hi' }] },
       new AbortController().signal,
     )) {
       void _c;
@@ -88,7 +89,7 @@ describe('createVercelGatewayAdapter', () => {
     });
     for await (const _c of adapter.stream(
       {
-        model: 'anthropic/claude-opus-5',
+        model: VERCEL_GATEWAY_ANTHROPIC_MODEL,
         messages: [{ role: 'user', content: 'hi' }],
         metadata: { vercelGatewayProviderOptions: { order: ['vertex'] } },
       },
