@@ -6,6 +6,7 @@ const mocks = vi.hoisted(() => ({
   execute: vi.fn(),
   authUser: vi.fn(async (..._args: unknown[]) => ({ userId: 'user-1' })),
   rateLimit: vi.fn(async (..._args: unknown[]): Promise<Response | null> => null),
+  recordAuditEvent: vi.fn(async (..._args: unknown[]) => undefined),
 }));
 
 vi.mock('server-only', () => ({}));
@@ -24,6 +25,9 @@ vi.mock('@/lib/cors', () => ({
 }));
 vi.mock('@/lib/logger', () => ({
   logger: { debug: vi.fn(), error: vi.fn(), info: vi.fn(), warn: vi.fn() },
+}));
+vi.mock('@/lib/security-audit', () => ({
+  recordAuditEvent: (...a: unknown[]) => mocks.recordAuditEvent(...a),
 }));
 
 const { GET, POST } = await import('./route');
@@ -159,5 +163,73 @@ describe('POST /api/share — link lifetime', () => {
       mocks.query.mock.calls.some((c) => /insert into shared_sessions/i.test(String(c[0]))),
       'a rejected lifetime must not reach the insert',
     ).toBe(false);
+  });
+});
+
+describe('POST /api/share — secret redaction', () => {
+  const STRIPE_KEY = `sk_live_${'a'.repeat(30)}`;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.authUser.mockResolvedValue({ userId: 'user-1' });
+    mocks.rateLimit.mockResolvedValue(null);
+    mocks.query.mockResolvedValue([{ token: 'tok-new', expires_at: FUTURE, total_messages: 0 }]);
+  });
+
+  function insertedMessages(): Array<Record<string, unknown>> {
+    const call = mocks.query.mock.calls.find((c) =>
+      /insert into shared_sessions/i.test(String(c[0])),
+    );
+    if (!call) throw new Error('no insert into shared_sessions was issued');
+    const params = call[1] as unknown[];
+    return JSON.parse(params[5] as string) as Array<Record<string, unknown>>;
+  }
+
+  it('redacts a secret found in a message before it is stored', async () => {
+    await POST(
+      new NextRequest('https://agiworkforce.com/api/share', {
+        method: 'POST',
+        body: JSON.stringify({
+          title: 'Session',
+          messages: [{ role: 'user', content: `use ${STRIPE_KEY} to bill` }],
+        }),
+      }),
+    );
+
+    const stored = JSON.stringify(insertedMessages());
+    expect(stored).not.toContain(STRIPE_KEY);
+    expect(stored).toContain('[REDACTED]');
+  });
+
+  it('records an audit event naming the pattern without the secret value', async () => {
+    await POST(
+      new NextRequest('https://agiworkforce.com/api/share', {
+        method: 'POST',
+        body: JSON.stringify({
+          title: 'Session',
+          messages: [{ role: 'user', content: `use ${STRIPE_KEY} to bill` }],
+        }),
+      }),
+    );
+
+    expect(mocks.recordAuditEvent).toHaveBeenCalledTimes(1);
+    const event = mocks.recordAuditEvent.mock.calls[0]![0] as {
+      eventType: string;
+      detail: Record<string, unknown>;
+    };
+    expect(event.eventType).toBe('secret_detected');
+    expect(event.detail['status']).toBe('redacted');
+    expect(JSON.stringify(event)).not.toContain(STRIPE_KEY);
+  });
+
+  it('does not record an audit event when nothing is redacted', async () => {
+    await POST(
+      new NextRequest('https://agiworkforce.com/api/share', {
+        method: 'POST',
+        body: JSON.stringify({ title: 'Session', messages: [{ role: 'user', content: 'hi' }] }),
+      }),
+    );
+
+    expect(mocks.recordAuditEvent).not.toHaveBeenCalled();
   });
 });
