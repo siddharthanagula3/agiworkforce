@@ -79,9 +79,9 @@ describe('isSensitiveFile', () => {
   });
 
   it('returns false for non-string input', () => {
-    // @ts-expect-error — testing runtime behavior
+    // @ts-expect-error, testing runtime behavior
     expect(isSensitiveFile(null)).toBe(false);
-    // @ts-expect-error — testing runtime behavior
+    // @ts-expect-error, testing runtime behavior
     expect(isSensitiveFile(undefined)).toBe(false);
   });
 

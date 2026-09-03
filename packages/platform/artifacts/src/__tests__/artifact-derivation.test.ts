@@ -63,7 +63,7 @@ describe('extractCodeBlocks', () => {
   });
 });
 
-describe('computeDerivedArtifactId — deterministic identity (the de-dup/sync key)', () => {
+describe('computeDerivedArtifactId, deterministic identity (the de-dup/sync key)', () => {
   it('is stable across calls for the same (conversation, message, ordinal)', () => {
     const a = computeDerivedArtifactId('c1', 'm1', 0);
     const b = computeDerivedArtifactId('c1', 'm1', 0);
@@ -84,7 +84,7 @@ describe('computeDerivedArtifactId — deterministic identity (the de-dup/sync k
   });
 });
 
-describe('deriveArtifacts — ids are deterministic (fixes the non-deterministic fork)', () => {
+describe('deriveArtifacts, ids are deterministic (fixes the non-deterministic fork)', () => {
   it('produces identical ids on repeated derivation of the same message', () => {
     const opts = { conversationId: 'c1', messageId: 'm1', now: '2026-06-21T00:00:00.000Z' };
     const first = deriveArtifacts(HTML, opts);
@@ -248,7 +248,7 @@ describe('extractTrailingUnclosedBlock', () => {
   });
 });
 
-describe('extractArtifactTitle — linear rewrite parity', () => {
+describe('extractArtifactTitle, linear rewrite parity', () => {
   const LEGACY_TITLE = /<title>(.*?)<\/title>/i;
   const LEGACY_COMMENT = /(?:\/\/|<!--|#)\s*@title:?\s*(.+?)(?:\n|-->)/i;
   const LEGACY_H1 = /<h1[^>]*>(.*?)<\/h1>/i;

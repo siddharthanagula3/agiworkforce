@@ -1,4 +1,3 @@
-
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { SignalingEvent } from '@agiworkforce/types';
 import { SignalingClient } from '../signaling';
@@ -56,7 +55,7 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-describe('SignalingClient — server-sent reconnect messages', () => {
+describe('SignalingClient, server-sent reconnect messages', () => {
   it('reports whether the local websocket accepted an outbound signal', () => {
     const { socket, client } = connect();
 

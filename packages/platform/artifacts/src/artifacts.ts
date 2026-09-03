@@ -1,82 +1,3 @@
-/**
- * Artifact Publish Service
- *
- * Canonical cross-surface publish boundary for AGI artifacts.
- *
- * Current publish boundary:
- *   - `privacyMode === 'local'`  → returns a file:// URL pointing to the
- *     exported artifact under the user data directory supplied by the host
- *     adapter. No network call is made.
- *   - `privacyMode === 'byok' | 'managed'` → delegates to the host-injected
- *     {@link CloudPublisher}, but ONLY after the trust-boundary cross-check in
- *     {@link cloudPublishDenial} passes. When the host supplies no publisher
- *     the result is `{ kind: 'unavailable', reason }` — a statement about THIS
- *     host's wiring, not a launch gate.
- *
- * SECURITY-FIX F3 (CWE-863, 2026-08-21): the caller's `privacyMode` used to be
- * the whole authorization decision, so a UI that hardcoded `'managed'` could
- * hand a Local or BYOK artifact to the managed-cloud publisher. The caller now
- * also declares {@link PublishArtifactInput.originPrivacyMode} — the boundary
- * the artifact was actually produced in — and the injected {@link CloudPublisher}
- * is a managed-cloud sink, so it is reachable only when the artifact itself
- * originated in managed mode and the caller asked for that same mode. A Local
- * or BYOK artifact resolves to `{ kind: 'unavailable' }` instead: moving it
- * across that boundary needs the explicit handoff ceremony (context selection,
- * secret scan, payload preview, consent), which this path does not implement.
- * Hosts derive that origin with {@link resolveOriginPrivacyMode}, which reduces
- * every boundary signal they observed to the most restrictive one and yields
- * `undefined` when they observed nothing at all.
- *
- * AUDIT-FIX ART-27 (2026-07-25): this function used to return
- * `{ kind: 'waitlist', waitlistGated: true }` for byok/managed unconditionally,
- * and the panel turned that into a "Cloud publish is coming — join waitlist"
- * bar pointing at a marketing domain. Per the critical rules in CLAUDE.md the
- * managed-cloud waitlist gate was REMOVED by founder decision on 2026-06-27:
- * managed cloud is public alpha, open by default, and
- * `AGI_MANAGED_COMPUTE_PRIVATE_BETA` survives only as an incident-response
- * kill-switch. This check was never that env var — it was a hardcoded privacy
- * mode test, so it kept advertising a gate the product had already dropped.
- *
- * Trust-boundary enforcement:
- *   1. `assertSurfaceCanSyncChats(surface)` — rejects CLI / VS Code / Chrome;
- *      they must use the developer-handoff path instead.
- *   2. `assertGeneratedFileTrustBoundary(input)` — validates that the
- *      synthesised GeneratedFile / ComputeSession / ArtifactManifest tuple
- *      is internally consistent before any I/O is attempted.
- *
- * The `GeneratedFileTrustBoundaryInput` records are synthesised from the
- * minimal `{ artifact, privacyMode, surface }` call site shape. They use the
- * actual privacy + provider mode values and a `file://`-prefixed URI so the
- * assertGeneratedFileTrustBoundary local-path checks pass. This is intentional
- * defensive validation — a future caller that accidentally passes a managed
- * artifact into the local path will get a loud assertion failure rather than a
- * silent mismatch.
- *
- * Known gaps:
- *   - Versioning: a publish result carries no version at all — neither
- *     {@link LocalPublishResult} nor {@link CloudPublishResult} has the field,
- *     and the web adapter's storage (apps/web/db/neon/0095_published_artifacts.sql)
- *     has no version column: republishing UPSERTs on (user_id, artifact_id), so
- *     the public page always shows the latest content and earlier published
- *     revisions are not addressable. Edit history is a client-side concept
- *     (`versionsById` in the artifact store) and does not reach a published page.
- *   - Inline editor / edit-in-place is not wired on web; the panel accepts
- *     content as-is from the artifact store. Desktop does have one
- *     (features/artifacts/InlineArtifactEditor.tsx, saved through
- *     `applyDiffToArtifact`), and it is not conflict-aware.
- *   - Web ships the first {@link CloudPublisher} (CAP-015): the ArtifactsPanel
- *     injects `createWebCloudPublisher()`, which POSTs to
- *     `/api/artifacts/publish` and returns a `/shared-artifact/<token>` URL.
- *     Desktop and Mobile still inject nothing, so byok/managed publish on those
- *     surfaces continues to resolve to `{ kind: 'unavailable' }` — accurately.
- *   - Deletion IS implemented for the web adapter (unpublish, plus a management
- *     list in settings). Retention/TTL, per-user quota and abuse controls are
- *     still founder-pending for that adapter; they are a requirement ON the
- *     adapter, not a gate in this module.
- *
- * @module artifacts
- */
-
 import {
   assertSurfaceCanSyncChats,
   assertGeneratedFileTrustBoundary,
@@ -102,17 +23,6 @@ const PRIVACY_MODE_BY_ORIGIN_SIGNAL = {
 
 const ORIGIN_PRIVACY_PRECEDENCE = ['local', 'byok', 'managed'] as const;
 
-/**
- * Reduce every boundary signal a host observed about an artifact's origin to
- * the one privacy mode the publish decision may use.
- *
- * Signals are privacy modes, provider modes, or unrecognized wire strings, in
- * no particular order. The most restrictive observed boundary wins, so a
- * client-side default of `managed` can never outrank an observed Local or BYOK
- * turn, and an empty (or entirely unrecognized) signal set resolves to
- * `undefined` — the honest "origin unknown" that {@link publishArtifact}
- * refuses to publish rather than guessing at.
- */
 export function resolveOriginPrivacyMode(
   signals: readonly (string | null | undefined)[],
 ): PrivacyMode | undefined {
@@ -159,17 +69,6 @@ export interface PublishArtifactInput {
   privacyMode: PrivacyMode;
   surface: SourceSurface;
   localFileWriter?: LocalFileWriter;
-  /**
-   * Host-supplied cloud publisher for the byok / managed paths.
-   *
-   * AUDIT-FIX ART-27: publishing to the cloud is an I/O capability the host
-   * owns, exactly like {@link LocalFileWriter}. This package performs no
-   * network I/O of its own and does not name an endpoint — when no publisher
-   * is injected, `publishArtifact` says so plainly instead of claiming a
-   * product gate that no longer exists.
-   *
-   * When `privacyMode === 'local'` the adapter is never called.
-   */
   cloudPublisher?: CloudPublisher;
   /**
    * The privacy mode the artifact was actually produced in, read from the

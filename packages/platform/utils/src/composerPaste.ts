@@ -1,14 +1,3 @@
-/**
- * Composer paste/drop/attachment policy (COMPOSER-002, UI-81).
- *
- * Framework-neutral so every composer surface can share one decision instead of
- * hand-writing its own: the web composer, the shared unified-chat `ChatInput`,
- * and the Chrome extension side panel all call into here. Mobile's threshold is
- * the reference value — see apps/mobile/src/features/chat/components/ChatInput.tsx.
- *
- * It takes `DataTransfer`, which is what both a DOM `ClipboardEvent` and a React
- * synthetic clipboard event expose, so no surface has to adapt its event first.
- */
 export const LARGE_PASTE_THRESHOLD = 10_000;
 
 export const PASTED_TEXT_MIME_TYPE = 'text/plain';

@@ -34,7 +34,7 @@ export async function selectTier(opts: {
   const ref = normalizeModelRef(opts.modelPath, opts.modelId);
 
   if (caps.thermalThrottled) {
-    throw new Error('Device is thermally throttled — inference paused. Try again in a moment.');
+    throw new Error('Device is thermally throttled, inference paused. Try again in a moment.');
   }
 
   if (caps.tier1Available && caps.tier1Runtime && canUseTier1ForModel(ref, caps.tier1Runtime)) {
@@ -104,7 +104,7 @@ export async function localGenerate(
   const ref = normalizeModelRef(modelPathOrId, opts.modelId);
 
   if (caps.thermalThrottled) {
-    throw new Error('Device is thermally throttled — inference paused.');
+    throw new Error('Device is thermally throttled, inference paused.');
   }
 
   if (caps.tier1Available && caps.tier1Runtime && canUseTier1ForModel(ref, caps.tier1Runtime)) {

@@ -4,7 +4,7 @@ import { resolveContained, isContainedIn } from '../pathContainment';
 
 const root = path.resolve('/home/u/project');
 
-describe('resolveContained — happy path', () => {
+describe('resolveContained, happy path', () => {
   it('accepts a simple relative path', () => {
     const r = resolveContained(root, 'src/index.ts');
     expect(r.ok).toBe(true);
@@ -23,7 +23,7 @@ describe('resolveContained — happy path', () => {
   });
 });
 
-describe('resolveContained — rejection cases', () => {
+describe('resolveContained, rejection cases', () => {
   it('rejects empty input', () => {
     const r = resolveContained(root, '');
     expect(r.ok).toBe(false);
@@ -55,7 +55,7 @@ describe('resolveContained — rejection cases', () => {
   });
 });
 
-describe('resolveContained — allowAbsolute mode', () => {
+describe('resolveContained, allowAbsolute mode', () => {
   it('accepts an absolute path that resolves inside root', () => {
     const inside = path.resolve(root, 'src/index.ts');
     const r = resolveContained(root, inside, { allowAbsolute: true });
