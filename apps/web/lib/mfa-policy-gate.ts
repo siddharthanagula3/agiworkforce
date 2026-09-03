@@ -1,7 +1,8 @@
 import 'server-only';
 
-import { NextResponse, type NextRequest } from 'next/server';
+import type { NextRequest } from 'next/server';
 import { clerkClient } from '@clerk/nextjs/server';
+import { AppError, ErrorCode, isAppError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { getNeonDb } from '@/lib/server/neon-db';
 import { getSharedRedisClient } from '@/lib/rate-limit';
@@ -12,10 +13,26 @@ const MFA_ENROLLMENT_CACHE_PREFIX = 'mfa-enrolled:';
 const MFA_ENROLLMENT_CACHE_TTL_SECONDS = 300;
 const MFA_ENROLLMENT_CACHE_ENROLLED = 'enrolled';
 const MFA_ENROLLMENT_CACHE_UNENROLLED = 'unenrolled';
+const MFA_REQUIRED_ERROR_REASON = 'mfa_required';
 
 type CachedMfaEnrollment =
   | typeof MFA_ENROLLMENT_CACHE_ENROLLED
   | typeof MFA_ENROLLMENT_CACHE_UNENROLLED;
+
+export class MfaRequiredError extends AppError {
+  constructor(message: string) {
+    super(ErrorCode.MFA_REQUIRED, message, 403, { reason: MFA_REQUIRED_ERROR_REASON });
+    this.name = 'MfaRequiredError';
+    Object.setPrototypeOf(this, MfaRequiredError.prototype);
+  }
+}
+
+export function isMfaRequiredError(error: unknown): error is MfaRequiredError {
+  return (
+    isAppError(error) &&
+    (error.details as { reason?: unknown } | undefined)?.reason === MFA_REQUIRED_ERROR_REASON
+  );
+}
 
 async function resolveMfaEnrolled(userId: string): Promise<boolean> {
   const redis = getSharedRedisClient();
@@ -54,25 +71,18 @@ async function resolveMfaEnrolled(userId: string): Promise<boolean> {
   return enrolled;
 }
 
-export async function buildMfaPolicyGateResponse(
-  userId: string,
-  request: NextRequest,
-  headers?: HeadersInit,
-): Promise<NextResponse | null> {
+export async function assertMfaPolicy(userId: string, request: NextRequest): Promise<void> {
   const { policy, organizationId } = await resolveMfaPolicy(getNeonDb(), userId, request);
-  if (!policy || !policy.requireMfa || !organizationId) return null;
+  if (!policy || !policy.requireMfa || !organizationId) return;
 
   const mfaEnrolled = await resolveMfaEnrolled(userId);
   const decision = evaluateOrganizationPolicy(policy, { resource: 'mfa', mfaEnrolled });
-  if (decision.allowed) return null;
+  if (decision.allowed) return;
 
   logger.warn(
     { userId, organizationId, code: decision.code },
     '[mfa-policy] request refused by workspace mfa policy',
   );
 
-  return NextResponse.json(
-    { error: { message: decision.reason, type: 'mfa_required', code: decision.code } },
-    { status: 403, headers },
-  );
+  throw new MfaRequiredError(decision.reason);
 }

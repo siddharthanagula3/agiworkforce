@@ -10,11 +10,14 @@ vi.mock('@/lib/logger', () => ({
 
 vi.mock('@/lib/rate-limit', () => ({
   withRateLimit: vi.fn().mockResolvedValue(null),
+  getSharedRedisClient: vi.fn(() => null),
 }));
 
 const mockAuth = vi.fn();
+const mockClerkGetUser = vi.fn();
 vi.mock('@clerk/nextjs/server', () => ({
   auth: (...args: unknown[]) => mockAuth(...args),
+  clerkClient: vi.fn(async () => ({ users: { getUser: mockClerkGetUser } })),
 }));
 
 const mockVerifyToken = vi.fn();
@@ -136,6 +139,8 @@ function makeFakeDb() {
 import { POST as createApiKeyRoute } from '@/app/api/settings/api-keys/route';
 import { DELETE as revokeApiKeyRoute } from '@/app/api/settings/api-keys/[keyId]/route';
 import { getClerkAuthUser } from '@/lib/api-auth';
+import { isMfaRequiredError } from '@/lib/mfa-policy-gate';
+import { isIpNotAllowedError } from '@/lib/ip-allow-list-gate';
 import {
   getTenantScope,
   newSpanId,
@@ -497,6 +502,152 @@ describe('getClerkAuthUser · API-key issue/verify unification', () => {
         ).rejects.toMatchObject({ statusCode: 401 });
         expect(getTenantScope().userId).toBeUndefined();
       });
+    });
+  });
+
+  describe('organization mfa enforcement at the auth boundary', () => {
+    const ORGANIZATION_ID = '11111111-1111-4111-8111-111111111111';
+
+    function bindOrgPolicy(organizationId: string | null, requireMfa: boolean) {
+      mockNeonQuery.mockImplementation(async (sql: string) => {
+        const s = sql.toLowerCase();
+        if (s.includes('from public.user_settings')) {
+          return organizationId ? [{ organization_id: organizationId }] : [];
+        }
+        if (s.includes('from public.organization_admin_policies')) {
+          return organizationId
+            ? [
+                {
+                  organization_id: organizationId,
+                  default_privacy_mode: 'byok',
+                  allowed_privacy_modes: ['local', 'byok'],
+                  allow_managed_compute: false,
+                  require_local_to_byok_preview: true,
+                  chat_sync_surfaces: ['web', 'desktop', 'mobile'],
+                  allow_cli_cloud_sync: false,
+                  allow_vscode_cloud_sync: false,
+                  allow_chrome_cloud_sync: false,
+                  audit_export_enabled: true,
+                  retention_days: 365,
+                  retention_enforced: false,
+                  external_sharing_enabled: true,
+                  metadata: { requireMfa },
+                  updated_at: '2026-08-22T00:00:00.000Z',
+                },
+              ]
+            : [];
+        }
+        return [];
+      });
+    }
+
+    it('lets a cookie session through when its organization does not require mfa', async () => {
+      bindOrgPolicy(ORGANIZATION_ID, false);
+      mockAuth.mockResolvedValueOnce({ userId: 'clerk-session-user' });
+
+      await expect(
+        getClerkAuthUser(new NextRequest('http://localhost/api/some-route')),
+      ).resolves.toEqual({ userId: 'clerk-session-user' });
+      expect(mockClerkGetUser).not.toHaveBeenCalled();
+    });
+
+    it('blocks a cookie session with a plain mfa_required error when the organization requires it and the user is unenrolled', async () => {
+      bindOrgPolicy(ORGANIZATION_ID, true);
+      mockAuth.mockResolvedValueOnce({ userId: 'clerk-session-user' });
+      mockClerkGetUser.mockResolvedValueOnce({ twoFactorEnabled: false });
+
+      await expect(
+        getClerkAuthUser(new NextRequest('http://localhost/api/some-route')),
+      ).rejects.toSatisfy((error: unknown) => isMfaRequiredError(error));
+    });
+
+    it('lets an enrolled caller through when the organization requires mfa', async () => {
+      bindOrgPolicy(ORGANIZATION_ID, true);
+      mockAuth.mockResolvedValueOnce({ userId: 'clerk-session-user' });
+      mockClerkGetUser.mockResolvedValueOnce({ twoFactorEnabled: true });
+
+      await expect(
+        getClerkAuthUser(new NextRequest('http://localhost/api/some-route')),
+      ).resolves.toEqual({ userId: 'clerk-session-user' });
+    });
+  });
+
+  describe('organization ip allow list enforcement at the auth boundary', () => {
+    const ORGANIZATION_ID = '22222222-2222-4222-8222-222222222222';
+
+    function bindOrgIpPolicy(organizationId: string | null, ipAllowList: string[]) {
+      mockNeonQuery.mockImplementation(async (sql: string) => {
+        const s = sql.toLowerCase();
+        if (s.includes('from public.user_settings')) {
+          return organizationId ? [{ organization_id: organizationId }] : [];
+        }
+        if (s.includes('from public.organization_admin_policies')) {
+          return organizationId
+            ? [
+                {
+                  organization_id: organizationId,
+                  default_privacy_mode: 'byok',
+                  allowed_privacy_modes: ['local', 'byok'],
+                  allow_managed_compute: false,
+                  require_local_to_byok_preview: true,
+                  chat_sync_surfaces: ['web', 'desktop', 'mobile'],
+                  allow_cli_cloud_sync: false,
+                  allow_vscode_cloud_sync: false,
+                  allow_chrome_cloud_sync: false,
+                  audit_export_enabled: true,
+                  retention_days: 365,
+                  retention_enforced: false,
+                  external_sharing_enabled: true,
+                  metadata: { ipAllowList },
+                  updated_at: '2026-08-22T00:00:00.000Z',
+                },
+              ]
+            : [];
+        }
+        return [];
+      });
+    }
+
+    function requestFromIp(forwardedFor: string): NextRequest {
+      return new NextRequest('http://localhost/api/some-route', {
+        headers: { 'x-forwarded-for': forwardedFor },
+      });
+    }
+
+    it('lets a cookie session through when the organization has no allow list configured', async () => {
+      bindOrgIpPolicy(ORGANIZATION_ID, []);
+      mockAuth.mockResolvedValueOnce({ userId: 'clerk-session-user' });
+
+      await expect(getClerkAuthUser(requestFromIp('198.51.100.9'))).resolves.toEqual({
+        userId: 'clerk-session-user',
+      });
+    });
+
+    it('lets a cookie session through when the caller ip is inside the allowed subnet', async () => {
+      bindOrgIpPolicy(ORGANIZATION_ID, ['203.0.113.0/24']);
+      mockAuth.mockResolvedValueOnce({ userId: 'clerk-session-user' });
+
+      await expect(getClerkAuthUser(requestFromIp('203.0.113.5'))).resolves.toEqual({
+        userId: 'clerk-session-user',
+      });
+    });
+
+    it('blocks a cookie session with a plain ip_not_allowed error when the caller ip is outside every allowed subnet', async () => {
+      bindOrgIpPolicy(ORGANIZATION_ID, ['203.0.113.0/24']);
+      mockAuth.mockResolvedValueOnce({ userId: 'clerk-session-user' });
+
+      await expect(getClerkAuthUser(requestFromIp('198.51.100.9'))).rejects.toSatisfy(
+        (error: unknown) => isIpNotAllowedError(error),
+      );
+    });
+
+    it('is not fooled by a spoofed leading x-forwarded-for entry', async () => {
+      bindOrgIpPolicy(ORGANIZATION_ID, ['203.0.113.0/24']);
+      mockAuth.mockResolvedValueOnce({ userId: 'clerk-session-user' });
+
+      await expect(getClerkAuthUser(requestFromIp('203.0.113.5, 198.51.100.9'))).rejects.toSatisfy(
+        (error: unknown) => isIpNotAllowedError(error),
+      );
     });
   });
 });

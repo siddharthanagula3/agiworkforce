@@ -195,7 +195,8 @@ export type AuditEventType =
   | 'legal_hold_created'
   | 'legal_hold_released'
   | 'secret_detected'
-  | 'spend_cap_exceeded';
+  | 'spend_cap_exceeded'
+  | 'ip_not_allowed';
 
 export type AuditOutcome = 'success' | 'failure' | 'denied';
 

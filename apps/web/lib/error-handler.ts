@@ -41,6 +41,8 @@ const SAFE_TO_EXPOSE_CODES = new Set<string>([
   'CONFLICT',
   // Deliberately written for the reader; see ErrorCode.CAPABILITY_UNAVAILABLE.
   'CAPABILITY_UNAVAILABLE',
+  'MFA_REQUIRED',
+  'IP_NOT_ALLOWED',
 ]);
 
 function safeErrorMessage(error: AppError): string {

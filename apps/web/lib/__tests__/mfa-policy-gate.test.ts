@@ -29,7 +29,7 @@ vi.mock('@clerk/nextjs/server', () => ({
   clerkClient: vi.fn(async () => ({ users: { getUser: mocks.getUser } })),
 }));
 
-const { buildMfaPolicyGateResponse } = await import('../mfa-policy-gate');
+const { assertMfaPolicy, isMfaRequiredError } = await import('../mfa-policy-gate');
 
 const ORGANIZATION_ID = '11111111-1111-4111-8111-111111111111';
 const request = new NextRequest('https://agiworkforce.com/api/llm/v1/chat/completions');
@@ -42,70 +42,67 @@ function policyWith(requireMfa: boolean) {
   } as unknown as Parameters<typeof mocks.resolveMfaPolicy>[0];
 }
 
-describe('buildMfaPolicyGateResponse', () => {
+describe('assertMfaPolicy', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.redisClient = null;
   });
 
-  it('returns null for a personal-scope request', async () => {
+  it('resolves for a personal-scope request', async () => {
     mocks.resolveMfaPolicy.mockResolvedValue({ policy: null, organizationId: null });
 
-    const response = await buildMfaPolicyGateResponse('user-1', request);
-
-    expect(response).toBeNull();
+    await expect(assertMfaPolicy('user-1', request)).resolves.toBeUndefined();
     expect(mocks.getUser).not.toHaveBeenCalled();
   });
 
-  it('returns null when the workspace does not require mfa, without calling Clerk', async () => {
+  it('resolves when the workspace does not require mfa, without calling Clerk', async () => {
     mocks.resolveMfaPolicy.mockResolvedValue({
       policy: policyWith(false),
       organizationId: ORGANIZATION_ID,
     });
 
-    const response = await buildMfaPolicyGateResponse('user-1', request);
-
-    expect(response).toBeNull();
+    await expect(assertMfaPolicy('user-1', request)).resolves.toBeUndefined();
     expect(mocks.getUser).not.toHaveBeenCalled();
   });
 
-  it('allows an enrolled caller when the workspace requires mfa', async () => {
+  it('resolves for an enrolled caller when the workspace requires mfa', async () => {
     mocks.resolveMfaPolicy.mockResolvedValue({
       policy: policyWith(true),
       organizationId: ORGANIZATION_ID,
     });
     mocks.getUser.mockResolvedValue({ twoFactorEnabled: true });
 
-    const response = await buildMfaPolicyGateResponse('user-1', request);
-
-    expect(response).toBeNull();
+    await expect(assertMfaPolicy('user-1', request)).resolves.toBeUndefined();
   });
 
-  it('refuses an unenrolled caller with a plain mfa_required error', async () => {
+  it('throws a recognizable, plain-copy error for an unenrolled caller', async () => {
     mocks.resolveMfaPolicy.mockResolvedValue({
       policy: policyWith(true),
       organizationId: ORGANIZATION_ID,
     });
     mocks.getUser.mockResolvedValue({ twoFactorEnabled: false });
 
-    const response = await buildMfaPolicyGateResponse('user-1', request);
+    let caught: unknown;
+    try {
+      await assertMfaPolicy('user-1', request);
+    } catch (error) {
+      caught = error;
+    }
 
-    expect(response?.status).toBe(403);
-    const body = await response?.json();
-    expect(body.error.code).toBe('mfa_required');
-    expect(body.error.message).toContain('two-factor');
+    expect(isMfaRequiredError(caught)).toBe(true);
+    expect((caught as Error).message).toContain('two-factor');
   });
 
-  it('fails closed and refuses when the Clerk lookup throws', async () => {
+  it('fails closed and throws when the Clerk lookup throws', async () => {
     mocks.resolveMfaPolicy.mockResolvedValue({
       policy: policyWith(true),
       organizationId: ORGANIZATION_ID,
     });
     mocks.getUser.mockRejectedValue(new Error('clerk outage'));
 
-    const response = await buildMfaPolicyGateResponse('user-1', request);
-
-    expect(response?.status).toBe(403);
+    await expect(assertMfaPolicy('user-1', request)).rejects.toSatisfy((error: unknown) =>
+      isMfaRequiredError(error),
+    );
   });
 
   it('uses a cached enrolled verdict instead of calling Clerk again', async () => {
@@ -115,9 +112,7 @@ describe('buildMfaPolicyGateResponse', () => {
       organizationId: ORGANIZATION_ID,
     });
 
-    const response = await buildMfaPolicyGateResponse('user-1', request);
-
-    expect(response).toBeNull();
+    await expect(assertMfaPolicy('user-1', request)).resolves.toBeUndefined();
     expect(mocks.getUser).not.toHaveBeenCalled();
   });
 
@@ -128,9 +123,15 @@ describe('buildMfaPolicyGateResponse', () => {
       organizationId: ORGANIZATION_ID,
     });
 
-    const response = await buildMfaPolicyGateResponse('user-1', request);
-
-    expect(response?.status).toBe(403);
+    await expect(assertMfaPolicy('user-1', request)).rejects.toSatisfy((error: unknown) =>
+      isMfaRequiredError(error),
+    );
     expect(mocks.getUser).not.toHaveBeenCalled();
+  });
+});
+
+describe('isMfaRequiredError', () => {
+  it('does not match an unrelated error', () => {
+    expect(isMfaRequiredError(new Error('boom'))).toBe(false);
   });
 });
