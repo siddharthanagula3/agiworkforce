@@ -61,6 +61,29 @@ describe('ResearchPanel · report to artifact', () => {
   });
 });
 
+describe('ResearchPanel · source row title fallback', () => {
+  it('shows a path-trimmed url instead of a blank or raw-url title', async () => {
+    useResearchPanelStore.getState().openPanel(
+      CONVERSATION_ID,
+      'msg-2',
+      [
+        { url: 'https://example.com/a', title: 'Real Title', citationIndex: 1 },
+        {
+          url: 'https://www.livescience.com/technology/artificial-intelligence/very-long-slug-that-goes-on-and-on',
+          title: '',
+          citationIndex: 2,
+        },
+      ],
+      [],
+    );
+    render(<ResearchPanel />);
+
+    expect(await screen.findByText('Real Title')).toBeInTheDocument();
+    expect(screen.queryByText(/very-long-slug-that-goes-on-and-on/)).toBeNull();
+    expect(screen.getByText(/livescience\.com\/technology/)).toBeInTheDocument();
+  });
+});
+
 describe('ResearchPanel · follow-up hand-off', () => {
   it("sends a reopened Library report's follow-up to the host and closes the panel", async () => {
     const user = userEvent.setup();
