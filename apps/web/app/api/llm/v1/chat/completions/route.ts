@@ -61,6 +61,7 @@ import { CloudAgentWorkflowBillingUnavailableError } from '@/lib/workflows/cloud
 import { areDurableInitialTurnsEnabled } from '@/lib/workflows/durable-initial-turns';
 import {
   loadConnectorToolPermissions,
+  withDisabledConnectorIds,
   EMPTY_CONNECTOR_TOOL_PERMISSIONS,
 } from './lib/connector-tool-permissions';
 import { loadToolApprovalPolicy } from './lib/tool-approval-policy';
@@ -534,6 +535,14 @@ async function dispatchChatCompletions(
     const toolApprovalPolicy = toolPolicyDb
       ? await loadToolApprovalPolicy(toolPolicyDb, userId)
       : DEFAULT_TOOL_APPROVAL_POLICY;
+    // Per-conversation connector opt-out: connectors the client switched off
+    // for THIS turn only, layered on top of the user's standing allow/ask/deny
+    // verdicts. Neither replaces the other -- a connector can be off for one
+    // chat while its saved permission stays Allow everywhere else.
+    const turnConnectorPermissions = withDisabledConnectorIds(
+      connectorPermissions,
+      new Set(processed.chatRequest.disabled_connector_ids),
+    );
     // GOV-7: the connector-tool ceiling is now the caller's PLAN ceiling, not a
     // flat 32 for everybody, and the truncation it causes is reported back
     // rather than only logged — a "Connected" connector whose tools were
@@ -545,7 +554,7 @@ async function dispatchChatCompletions(
             customConnectorLimit: getCustomRemoteMcpLimit(processed.subscriptionTier) ?? undefined,
             planTier: processed.subscriptionTier,
             organizationId: processed.organizationId,
-            isToolDenied: connectorPermissions.isConnectorToolDenied,
+            isToolDenied: turnConnectorPermissions.isConnectorToolDenied,
           }),
         ])
       : [[], { tools: [], dropped: [], limit: null }];
@@ -650,7 +659,7 @@ async function dispatchChatCompletions(
             mcpTools,
             approvalMode: loopInputs.approvalMode,
             toolApprovalPolicy,
-            connectorPermissions,
+            connectorPermissions: turnConnectorPermissions,
           });
           const live = await claimLiveDurableStream(workflow.readable);
           if (!live) {
@@ -714,8 +723,9 @@ async function dispatchChatCompletions(
         userId,
         connectorExecutor,
         usage: toolLoopUsage,
-        // AUDIT-FIX CON-1: server-side enforcement of the user's saved verdicts.
-        connectorPermissions,
+        // AUDIT-FIX CON-1: server-side enforcement of the user's saved verdicts,
+        // layered with this turn's per-conversation connector opt-out.
+        connectorPermissions: turnConnectorPermissions,
         toolApprovalPolicy,
         // AUDIT-FIX BUG-1: a client cancel aborts the in-flight provider call
         // instead of billing a full agentic turn nobody sees.

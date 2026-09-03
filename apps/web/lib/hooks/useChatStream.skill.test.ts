@@ -106,4 +106,42 @@ describe('useChatStream managed server selections', () => {
     ]);
     expect(JSON.stringify(request)).not.toContain('PK');
   });
+
+  it('sends the per-conversation disabled connector ids', async () => {
+    const { result } = renderHook(() => useChatStream());
+
+    await act(async () => {
+      await result.current.sendMessage('Check my email', {
+        conversationId: CONVERSATION_ID,
+        disabledConnectorIds: ['gmail', 'notion'],
+      });
+    });
+
+    const completionCall = vi
+      .mocked(fetch)
+      .mock.calls.find(([url]) => String(url).includes('/api/llm/v1/chat/completions'));
+    const request = JSON.parse(String(completionCall?.[1]?.body)) as {
+      disabled_connector_ids?: string[];
+    };
+    expect(request.disabled_connector_ids).toEqual(['gmail', 'notion']);
+  });
+
+  it('omits disabled_connector_ids when nothing is disabled', async () => {
+    const { result } = renderHook(() => useChatStream());
+
+    await act(async () => {
+      await result.current.sendMessage('Check my email', {
+        conversationId: CONVERSATION_ID,
+        disabledConnectorIds: [],
+      });
+    });
+
+    const completionCall = vi
+      .mocked(fetch)
+      .mock.calls.find(([url]) => String(url).includes('/api/llm/v1/chat/completions'));
+    const request = JSON.parse(String(completionCall?.[1]?.body)) as {
+      disabled_connector_ids?: string[];
+    };
+    expect(request.disabled_connector_ids).toBeUndefined();
+  });
 });

@@ -243,3 +243,78 @@ describe('chatStore — per-conversation error scope', () => {
     expect(useChatStore.getState().error).toBe('B failed');
   });
 });
+
+describe('chatStore — per-conversation connector opt-out', () => {
+  beforeEach(() => {
+    useChatStore.getState().reset();
+  });
+
+  it('defaults to every connector enabled (empty disabled list)', () => {
+    expect(useChatStore.getState().getDisabledConnectorIds('conv-a')).toEqual([]);
+  });
+
+  it('disables and re-enables a connector for one conversation without affecting another', () => {
+    const { setConnectorEnabled, getDisabledConnectorIds } = useChatStore.getState();
+
+    setConnectorEnabled('notion', false, 'conv-a');
+
+    expect(getDisabledConnectorIds('conv-a')).toEqual(['notion']);
+    expect(getDisabledConnectorIds('conv-b')).toEqual([]);
+
+    setConnectorEnabled('notion', true, 'conv-a');
+    expect(getDisabledConnectorIds('conv-a')).toEqual([]);
+  });
+
+  it('does not duplicate an entry when disabled twice', () => {
+    const { setConnectorEnabled, getDisabledConnectorIds } = useChatStore.getState();
+
+    setConnectorEnabled('notion', false, 'conv-a');
+    setConnectorEnabled('notion', false, 'conv-a');
+
+    expect(getDisabledConnectorIds('conv-a')).toEqual(['notion']);
+  });
+
+  it('moves the pending new-chat opt-out onto the conversation the first send created', () => {
+    const { setConnectorEnabled, adoptPendingComposerToggles, getDisabledConnectorIds } =
+      useChatStore.getState();
+
+    setConnectorEnabled('notion', false, null);
+    adoptPendingComposerToggles('conv-created');
+
+    expect(getDisabledConnectorIds('conv-created')).toEqual(['notion']);
+    expect(getDisabledConnectorIds(null)).toEqual([]);
+  });
+
+  it('does not overwrite a target conversation that already has its own opt-out set', () => {
+    const { setConnectorEnabled, adoptPendingComposerToggles, getDisabledConnectorIds } =
+      useChatStore.getState();
+
+    setConnectorEnabled('notion', false, null);
+    setConnectorEnabled('slack', false, 'conv-existing');
+    adoptPendingComposerToggles('conv-existing');
+
+    expect(getDisabledConnectorIds('conv-existing')).toEqual(['slack']);
+  });
+
+  it('drops a deleted conversation opt-out set so a recreated id starts clean', () => {
+    const { setConnectorEnabled, getDisabledConnectorIds, deleteConversation } =
+      useChatStore.getState();
+
+    setConnectorEnabled('notion', false, 'conv-a');
+    deleteConversation('conv-a');
+
+    expect(getDisabledConnectorIds('conv-a')).toEqual([]);
+  });
+
+  it('persists the per-conversation opt-out set (unlike the other composer toggles)', () => {
+    const partialize = useChatStore.persist.getOptions().partialize;
+    expect(partialize).toBeDefined();
+
+    useChatStore.getState().setConnectorEnabled('notion', false, 'conv-a');
+
+    const persisted = partialize!(useChatStore.getState()) as {
+      disabledConnectorIdsByConversation?: Record<string, string[]>;
+    };
+    expect(persisted.disabledConnectorIdsByConversation).toEqual({ 'conv-a': ['notion'] });
+  });
+});
