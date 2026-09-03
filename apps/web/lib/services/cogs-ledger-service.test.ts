@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('server-only', () => ({}));
 vi.mock('@/lib/logger', () => ({
@@ -7,6 +7,23 @@ vi.mock('@/lib/logger', () => ({
 vi.mock('@/lib/server/neon-db', () => ({
   getNeonDb: () => ({ query: vi.fn(async () => []), execute: vi.fn(async () => 1) }),
 }));
+
+vi.mock('@agiworkforce/types', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@agiworkforce/types')>();
+  const fixture = {
+    id: 'fixture-retail-model',
+    provider: 'openai',
+    inputCost: 2,
+    outputCost: 8,
+  };
+  return {
+    ...actual,
+    getModelMetadataById: (id: string) =>
+      id === fixture.id ? fixture : actual.getModelMetadataById(id),
+  };
+});
+
+const FIXTURE_RETAIL_MODEL = 'fixture-retail-model';
 
 import {
   getServedRouteIdFromCostEventMetadata,
@@ -20,6 +37,15 @@ import {
   resolveRetailCostCents,
   summarizeCogs,
 } from '@/lib/services/cogs-ledger-service';
+import {
+  LLMCostCalculator,
+  setRouteRegistryPricingLookup,
+} from '@/lib/services/llm-cost-calculator';
+import {
+  accumulateObservedProviderUsage,
+  createObservedProviderUsage,
+  observedProviderUsageLedgerCents,
+} from '@/lib/services/managed-usage-accounting-service';
 
 function fakeDb(rows: unknown[] = []) {
   return {
@@ -231,6 +257,114 @@ describe('cogs ledger · retail-equivalent cost and value multiplier', () => {
     expect(
       getValueMultiplierFromCostEvent({ metadata: { retailCostCents: 200 }, actualCostCents: 0 }),
     ).toBeNull();
+  });
+});
+
+describe('cogs ledger · retail matches the actual cost path in the same units', () => {
+  const PRICED_ON = new Date('2026-09-01T00:00:00.000Z');
+  const DEFAULT_ROUTE = `openai/${FIXTURE_RETAIL_MODEL}`;
+  const CHEAP_ROUTE = `open_router/${FIXTURE_RETAIL_MODEL}`;
+
+  afterEach(() => {
+    setRouteRegistryPricingLookup(null);
+  });
+
+  it('equals the actual cost, in cents, for a single call on the default route', () => {
+    const usage = { inputTokens: 100_000, outputTokens: 20_000 };
+
+    const actualCents = LLMCostCalculator.calculateCost(
+      'openai',
+      FIXTURE_RETAIL_MODEL,
+      {
+        promptTokens: usage.inputTokens,
+        completionTokens: usage.outputTokens,
+        totalTokens: usage.inputTokens + usage.outputTokens,
+      },
+      PRICED_ON,
+      DEFAULT_ROUTE,
+    );
+    const retailCents = resolveRetailCostCents({
+      capability: 'chat',
+      provider: 'openai',
+      model: FIXTURE_RETAIL_MODEL,
+      usage,
+      pricedAt: PRICED_ON,
+    });
+
+    expect(actualCents).toBe(36); // 0.1M * $2 + 0.02M * $8 = $0.36
+    expect(retailCents).toBe(actualCents);
+  });
+
+  it('exceeds the actual cost when the serving route is cheaper than the list price', () => {
+    setRouteRegistryPricingLookup({
+      getRoutePricing: (routeId) =>
+        routeId === CHEAP_ROUTE
+          ? {
+              provider: 'open_router',
+              isDefault: false,
+              inputPerMillion: 1,
+              outputPerMillion: 4,
+              cacheReadPerMillion: null,
+              cacheWritePerMillion: null,
+              cacheWrite1hPerMillion: null,
+            }
+          : null,
+    });
+    const usage = { inputTokens: 100_000, outputTokens: 20_000 };
+
+    const actualCents = LLMCostCalculator.calculateCost(
+      'open_router',
+      FIXTURE_RETAIL_MODEL,
+      {
+        promptTokens: usage.inputTokens,
+        completionTokens: usage.outputTokens,
+        totalTokens: usage.inputTokens + usage.outputTokens,
+      },
+      PRICED_ON,
+      CHEAP_ROUTE,
+    );
+    const retailCents = resolveRetailCostCents({
+      capability: 'chat',
+      provider: 'open_router',
+      model: FIXTURE_RETAIL_MODEL,
+      usage,
+      pricedAt: PRICED_ON,
+    });
+
+    expect(actualCents).toBe(18); // 0.1M * $1 + 0.02M * $4 = $0.18, ungated by the route
+    expect(retailCents).toBe(36); // still the $2/$8 list price
+    expect(retailCents).toBeGreaterThan(actualCents);
+  });
+
+  it('sums per call, matching an agentic turn priced observation by observation', () => {
+    const usage = createObservedProviderUsage();
+    for (let step = 0; step < 3; step += 1) {
+      accumulateObservedProviderUsage(
+        usage,
+        {
+          inputTokens: 20_000,
+          outputTokens: 4_000,
+          cacheWriteTokens: 6_000,
+          cacheWrite1hTokens: 5_000,
+        },
+        { provider: 'openai', model: FIXTURE_RETAIL_MODEL, routeId: DEFAULT_ROUTE },
+      );
+    }
+
+    const actualCents = observedProviderUsageLedgerCents(usage, {
+      provider: 'openai',
+      model: FIXTURE_RETAIL_MODEL,
+      routeId: DEFAULT_ROUTE,
+    });
+    const retailCents = resolveRetailCostCents({
+      capability: 'chat',
+      provider: 'openai',
+      model: FIXTURE_RETAIL_MODEL,
+      usage: { ...usage },
+      pricedAt: PRICED_ON,
+    });
+
+    expect(retailCents).toBe(actualCents);
   });
 });
 
