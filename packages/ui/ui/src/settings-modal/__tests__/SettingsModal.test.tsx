@@ -134,6 +134,33 @@ describe('SettingsModal nav (web IA)', () => {
     expect(screen.getByRole('searchbox', { name: 'Search settings' })).toBeTruthy();
   });
 
+  it('raises the mobile nav clip and cues an overflowing list with a scroll fade', () => {
+    renderModal();
+
+    const nav = screen.getByRole('navigation', { name: 'Settings navigation' });
+    const topFade = screen.getByTestId('settings-nav-scroll-fade-top');
+    const bottomFade = screen.getByTestId('settings-nav-scroll-fade-bottom');
+
+    expect(nav.className).toContain('max-h-[64%]');
+    expect(topFade.className).toContain('opacity-0');
+    expect(bottomFade.className).toContain('opacity-0');
+
+    Object.defineProperty(nav, 'scrollHeight', { configurable: true, value: 600 });
+    Object.defineProperty(nav, 'clientHeight', { configurable: true, value: 300 });
+    Object.defineProperty(nav, 'scrollTop', { configurable: true, writable: true, value: 0 });
+
+    fireEvent.scroll(nav);
+
+    expect(bottomFade.className).toContain('opacity-100');
+    expect(topFade.className).toContain('opacity-0');
+
+    nav.scrollTop = 300;
+    fireEvent.scroll(nav);
+
+    expect(topFade.className).toContain('opacity-100');
+    expect(bottomFade.className).toContain('opacity-0');
+  });
+
   it('keeps the Skills lifecycle and download controls visible on narrow screens', () => {
     renderModal({ activeSection: 'skills' });
 

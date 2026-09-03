@@ -17,7 +17,7 @@
  *            (surface trims via activeKeys)
  */
 
-import React, { useMemo, useState, useCallback, useEffect, useRef } from 'react';
+import React, { useMemo, useState, useCallback, useEffect } from 'react';
 import { toUserMessage } from '../lib/network-error';
 import {
   Search,
@@ -2494,24 +2494,25 @@ interface NavScrollEdges {
   canScrollDown: boolean;
 }
 
-function useNavScrollEdges(
-  ref: React.RefObject<HTMLElement | null>,
-  dependency: unknown,
-): NavScrollEdges {
+interface NavScrollEdgesResult extends NavScrollEdges {
+  navRef: (node: HTMLElement | null) => void;
+}
+
+function useNavScrollEdges(dependency: unknown): NavScrollEdgesResult {
+  const [node, setNode] = useState<HTMLElement | null>(null);
   const [edges, setEdges] = useState<NavScrollEdges>({
     canScrollUp: false,
     canScrollDown: false,
   });
 
   useEffect(() => {
-    const el = ref.current;
-    if (!el) return;
+    if (!node) return;
 
     function measure() {
-      if (!el) return;
-      const canScrollUp = el.scrollTop > NAV_SCROLL_EDGE_EPSILON_PX;
+      if (!node) return;
+      const canScrollUp = node.scrollTop > NAV_SCROLL_EDGE_EPSILON_PX;
       const canScrollDown =
-        el.scrollHeight - el.clientHeight - el.scrollTop > NAV_SCROLL_EDGE_EPSILON_PX;
+        node.scrollHeight - node.clientHeight - node.scrollTop > NAV_SCROLL_EDGE_EPSILON_PX;
       setEdges((prev) =>
         prev.canScrollUp === canScrollUp && prev.canScrollDown === canScrollDown
           ? prev
@@ -2520,17 +2521,17 @@ function useNavScrollEdges(
     }
 
     measure();
-    el.addEventListener('scroll', measure, { passive: true });
+    node.addEventListener('scroll', measure, { passive: true });
     const resizeObserver = new ResizeObserver(measure);
-    resizeObserver.observe(el);
+    resizeObserver.observe(node);
 
     return () => {
-      el.removeEventListener('scroll', measure);
+      node.removeEventListener('scroll', measure);
       resizeObserver.disconnect();
     };
-  }, [ref, dependency]);
+  }, [node, dependency]);
 
-  return edges;
+  return { ...edges, navRef: setNode };
 }
 
 function NavButton({
@@ -2668,7 +2669,6 @@ export function SettingsModal({
 }: SettingsModalProps) {
   const { t } = useUiTranslation('settings');
   const [navSearch, setNavSearch] = useState('');
-  const navScrollRef = useRef<HTMLElement>(null);
 
   // Grouped nav (preferred): filter items within each group, dropping groups
   // that end up empty so headers never orphan.
@@ -2695,7 +2695,7 @@ export function SettingsModal({
   }, [navSearch, activeKeys]);
 
   const navScrollDependency = visibleGroups ?? visibleEntries;
-  const { canScrollUp, canScrollDown } = useNavScrollEdges(navScrollRef, navScrollDependency);
+  const { canScrollUp, canScrollDown, navRef } = useNavScrollEdges(navScrollDependency);
 
   function renderSection() {
     if (activeSection === 'connectors') {
@@ -2747,7 +2747,7 @@ export function SettingsModal({
       >
         {/* Left nav */}
         <nav
-          ref={navScrollRef}
+          ref={navRef}
           aria-label={t('modal.navigation', 'Settings navigation')}
           className="relative flex max-h-[64%] w-full shrink-0 flex-col overflow-y-auto overscroll-contain border-b border-border/60 py-4 md:max-h-none md:w-[220px] md:border-b-0 md:border-r md:pb-5 md:pt-7"
         >
