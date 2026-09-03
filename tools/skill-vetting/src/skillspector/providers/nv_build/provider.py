@@ -13,7 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""build.nvidia.com provider — OSS-friendly NVIDIA path.
+"""build.nvidia.com provider, OSS-friendly NVIDIA path.
 
 Resolves ``NVIDIA_INFERENCE_KEY`` to the OpenAI-compatible endpoint
 served at https://integrate.api.nvidia.com/v1.  Token-budget metadata

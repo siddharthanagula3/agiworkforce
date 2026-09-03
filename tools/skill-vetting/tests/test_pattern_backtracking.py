@@ -14,11 +14,11 @@ of repeated ``<!--`` stalled the scan before any file body was even analyzed.
 Capping what the manifest parser reads is only safe while every cut is
 reported: a skill loader reads the whole SKILL.md, so frontmatter padded past a
 silent cap would hide its later fields from every metadata analyzer and score
-the skill clean. The manifest cases below therefore pin both halves — the caps
+the skill clean. The manifest cases below therefore pin both halves, the caps
 hold, and the parser emits a finding whenever one of them bites.
 
-Each case below is padded to ``static_runner.MAX_FILE_BYTES`` — the largest
-input the runner will hand an analyzer — and must complete inside a wall-clock
+Each case below is padded to ``static_runner.MAX_FILE_BYTES``, the largest
+input the runner will hand an analyzer, and must complete inside a wall-clock
 budget, so an unbounded gap fails the test instead of hanging it.
 """
 

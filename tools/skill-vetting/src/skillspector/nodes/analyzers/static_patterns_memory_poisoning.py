@@ -39,7 +39,6 @@ logger = get_logger(__name__)
 
 ANALYZER_ID = "static_patterns_memory_poisoning"
 
-# MP1: Persistent Context Injection — content that persists across interactions
 MP1_PATTERNS = [
     (
         r"(?:always\s+)?remember\s+(?:this|that|the\s+following)\s+(?:for|in)\s+(?:all|every|future)\s+(?:interactions?|conversations?|sessions?|responses?)",
@@ -79,7 +78,6 @@ MP1_PATTERNS = [
     ),
 ]
 
-# MP2: Context Window Stuffing — filling context to displace content
 MP2_PATTERNS = [
     (r"((\S)(?!\2).{1,19}?)\1{20,}", 0.8),
     (
@@ -108,7 +106,6 @@ MP2_PATTERNS = [
     ),
 ]
 
-# MP3: Memory Manipulation — direct modification of agent memory/state
 MP3_PATTERNS = [
     (
         r"(?:clear|reset|wipe|erase|delete|purge)\s+(?:your\s+)?(?:memory|context|state|history|conversation)",

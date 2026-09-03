@@ -126,7 +126,7 @@ Use rule ID **SDI-4** for all intent-code-divergence findings.
 - Skip findings for behavior that is obviously expected given the skill's
   stated purpose.
 - Focus on semantic and intent-level mismatches that require understanding of
-  the skill's purpose — not low-level static code patterns.
+  the skill's purpose, not low-level static code patterns.
 - Do NOT report issues already covered by static or structural analyzers
   (e.g. MCP schema violations, regex-detected patterns).
 """
@@ -135,7 +135,7 @@ Use rule ID **SDI-4** for all intent-code-divergence findings.
 def _format_manifest(manifest: dict) -> str:
     """Format manifest dict into a readable string for the prompt."""
     if not manifest:
-        return "(No manifest available — treat as unknown purpose skill.)"
+        return "(No manifest available, treat as unknown purpose skill.)"
     parts = []
     if name := manifest.get("name"):
         parts.append(f"Name: {name}")

@@ -15,7 +15,7 @@
 
 """Base LLM Analyzer with per-file / per-chunk batching (truncation-safe).
 
-Provides ``LLMAnalyzerBase`` — a reusable run-loop that splits work into one
+Provides ``LLMAnalyzerBase``, a reusable run-loop that splits work into one
 LLM call per file (or per chunk when a file exceeds the model's input budget),
 using token budgets from ``constants.py`` so no single prompt is truncated.
 
@@ -237,7 +237,7 @@ Reference line numbers (shown as L-prefixes) when reporting findings.
 
 ## Output guidelines
 
-- Most files are clean — an empty findings list is expected and correct when
+- Most files are clean: an empty findings list is expected and correct when
   no genuine issues exist.  Do not manufacture findings to fill the response.
 - Precision over recall: only report issues you are confident about.  It is
   far better to miss an edge case than to report a false positive.

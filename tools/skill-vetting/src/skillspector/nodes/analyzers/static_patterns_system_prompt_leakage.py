@@ -39,7 +39,6 @@ logger = get_logger(__name__)
 
 ANALYZER_ID = "static_patterns_system_prompt_leakage"
 
-# P6: Direct Prompt Extraction — instructions that directly reveal system prompts
 P6_PATTERNS = [
     (
         r"(?:print|output|show|display|reveal|expose|return|echo)\s+(?:your\s+)?(?:full\s+)?(?:system\s+)?(?:prompt|instructions?|rules?|guidelines?|directives?)",
@@ -75,7 +74,6 @@ P6_PATTERNS = [
     ),
 ]
 
-# P7: Indirect Prompt Extraction — side-channel or inference-based extraction
 P7_PATTERNS = [
     (
         r"(?:repeat|recite|reproduce)\s+(?:everything|all|the\s+text)\s+(?:above|before|prior|preceding)",
@@ -119,7 +117,6 @@ P7_PATTERNS = [
     ),
 ]
 
-# P8: Prompt Exfiltration via Tool — system prompt sent via tool calls
 P8_PATTERNS = [
     (
         r"(?:write|save|store|log|dump)\s+(?:your\s+)?(?:system\s+)?(?:prompt|instructions?|rules?)\s+(?:to|into|in)\s+(?:a\s+)?(?:file|disk|log|database|storage)",

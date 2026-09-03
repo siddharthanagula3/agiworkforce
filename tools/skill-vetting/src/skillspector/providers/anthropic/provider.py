@@ -31,7 +31,6 @@ from pydantic import SecretStr
 
 from skillspector.providers import registry
 
-# Documented for completeness — ChatAnthropic defaults here when base_url=None.
 ANTHROPIC_BASE_URL = "https://api.anthropic.com"
 
 REGISTRY_PATH = str(Path(__file__).with_name("model_registry.yaml"))
