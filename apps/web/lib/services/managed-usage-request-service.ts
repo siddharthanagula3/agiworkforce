@@ -110,13 +110,6 @@ function buildRouteId(
   return provider && model ? `${provider}/${model}` : null;
 }
 
-/**
- * Reads served-route facts back from a managed usage or COGS ledger metadata
- * blob. Populated at {@link finalizeManagedUsageRequest} only when the
- * settlement usage carried per-call provider observations (agent paths that
- * can fail over mid-turn); absent otherwise, since the reservation route and
- * the serving route are then the same by construction.
- */
 export function getServedRouteFromUsage(
   usage: Record<string, unknown> | null | undefined,
 ): ServedRoute {
