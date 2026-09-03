@@ -27,6 +27,7 @@ vi.mock('@/lib/crypto/totp-envelope', () => ({
   sealTotpSecret: vi.fn(() => 'encrypted-secret'),
 }));
 
+import { getClerkAuthUser } from '@/lib/api-auth';
 import { POST } from './route';
 
 function request() {
@@ -93,5 +94,15 @@ describe('POST /api/settings/2fa/setup', () => {
       /insert\s+into\s+user_two_factor/i.test(String(sql)),
     );
     expect(insertCalls).toHaveLength(1);
+  });
+
+  it('exempts an organization owner from the mfa gate so enrollment stays reachable', async () => {
+    mocks.query.mockResolvedValueOnce(existingRow(null)).mockResolvedValueOnce([]);
+
+    await POST(request());
+
+    expect(getClerkAuthUser).toHaveBeenCalledWith(expect.anything(), {
+      mfaGateExemptForOwner: true,
+    });
   });
 });

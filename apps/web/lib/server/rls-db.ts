@@ -40,6 +40,7 @@ export interface UserScopedDb {
 
 export interface UserScopedDbOptions {
   apiKeyScope?: ApiKeyScope;
+  mfaGateExemptForOwner?: boolean;
 }
 
 export const ACTIVE_ORG_HEADER = MANAGED_CLOUD_ORGANIZATION_HEADER;

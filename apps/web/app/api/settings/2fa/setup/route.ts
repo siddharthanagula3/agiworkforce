@@ -23,7 +23,7 @@ async function handleSetup2FA(request: NextRequest) {
   const rateLimitResponse = await withRateLimit(request, '2fa-setup');
   if (rateLimitResponse) return rateLimitResponse;
 
-  const { userId, email } = await getClerkAuthUser(request);
+  const { userId, email } = await getClerkAuthUser(request, { mfaGateExemptForOwner: true });
 
   const db = getNeonDb();
   const [existing] = await db.query<{ enabled: boolean }>(
