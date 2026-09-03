@@ -21,7 +21,7 @@ describe('Gemini system instruction never carries the cache boundary marker', ()
 
     const joined = (out.systemInstruction?.parts ?? []).map((p) => p.text).join('');
     expect(joined).not.toContain(SYSTEM_PROMPT_CACHE_BOUNDARY);
-    expect(joined).toBe('stable preamble\ndynamic tail');
+    expect(joined).toBe('stable preamble\n\ndynamic tail');
   });
 
   it('strips the marker from an array req.system', () => {
@@ -31,7 +31,7 @@ describe('Gemini system instruction never carries the cache boundary marker', ()
 
     const joined = (out.systemInstruction?.parts ?? []).map((p) => p.text).join('');
     expect(joined).not.toContain(SYSTEM_PROMPT_CACHE_BOUNDARY);
-    expect(joined).toBe('stable\ndynamic');
+    expect(joined).toBe('stable\n\ndynamic');
   });
 
   it('strips the marker when derived from leading system-role messages', () => {
@@ -46,6 +46,6 @@ describe('Gemini system instruction never carries the cache boundary marker', ()
 
     const joined = (out.systemInstruction?.parts ?? []).map((p) => p.text).join('');
     expect(joined).not.toContain(SYSTEM_PROMPT_CACHE_BOUNDARY);
-    expect(joined).toBe('stable\ndynamic');
+    expect(joined).toBe('stable\n\ndynamic');
   });
 });

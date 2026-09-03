@@ -1,4 +1,3 @@
-
 import { describe, expect, it } from 'vitest';
 
 import {
@@ -158,7 +157,7 @@ describe('applyAnthropicPayloadPolicyToParams', () => {
       serviceTier: undefined,
     });
     const system = params['system'] as Array<Record<string, unknown>>;
-    expect(system[0]?.['text']).toBe('cache-stable\ndynamic');
+    expect(system[0]?.['text']).toBe('cache-stable\n\ndynamic');
     expect(system[0]?.['cache_control']).toBeUndefined();
   });
 });
