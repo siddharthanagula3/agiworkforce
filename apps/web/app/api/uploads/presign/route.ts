@@ -6,8 +6,7 @@ import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { requireCsrfToken } from '@/lib/csrf';
 import { createError } from '@/lib/errors';
-import { getClerkAuthUser } from '@/lib/api-auth';
-import { getNeonDb } from '@/lib/server/neon-db';
+import { getUserScopedDb } from '@/lib/server/rls-db';
 import {
   getPresignedPrivateUploadUrl,
   getPresignedUploadUrl,
@@ -28,7 +27,6 @@ import { secureFilenameSegment } from '@/lib/secure-random';
 import { randomUUID } from 'node:crypto';
 import { isSupportedChatAttachment, MAX_CHAT_ATTACHMENT_BYTES } from '@/lib/chat-attachment-policy';
 import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
-import { resolveActiveOrganizationId } from '@/lib/services/active-workspace-service';
 
 const PresignRequestSchema = z.object({
   kind: z.enum(['avatar', 'knowledge-file', 'chat-attachment']),
@@ -66,7 +64,7 @@ function extOf(name: string): string {
 }
 
 async function handlePresign(request: NextRequest): Promise<NextResponse> {
-  const { userId } = await getClerkAuthUser(request);
+  const { db, userId, organizationId } = await getUserScopedDb(request);
 
   const csrfError = await requireCsrfToken(request);
   if (csrfError) return csrfError as NextResponse;
@@ -126,8 +124,6 @@ async function handlePresign(request: NextRequest): Promise<NextResponse> {
     if (!projectId) {
       throw createError.validation('projectId is required for knowledge-file uploads');
     }
-    const db = getNeonDb();
-    const organizationId = await resolveActiveOrganizationId(db, userId);
     const [project] = await db.query<{ id: string }>(
       `select id
          from user_projects
@@ -197,7 +193,7 @@ async function handlePresign(request: NextRequest): Promise<NextResponse> {
 }
 
 async function handleCleanup(request: NextRequest): Promise<NextResponse> {
-  const { userId } = await getClerkAuthUser(request);
+  const { db, userId, organizationId } = await getUserScopedDb(request);
   const csrfError = await requireCsrfToken(request);
   if (csrfError) return csrfError as NextResponse;
   const rateLimitResponse = await withRateLimit(request, 'uploads-presign');
@@ -215,8 +211,6 @@ async function handleCleanup(request: NextRequest): Promise<NextResponse> {
     throw createError.validation('Invalid project upload key');
   }
 
-  const db = getNeonDb();
-  const organizationId = await resolveActiveOrganizationId(db, userId);
   const [project] = await db.query<{ id: string }>(
     `select id
        from user_projects
