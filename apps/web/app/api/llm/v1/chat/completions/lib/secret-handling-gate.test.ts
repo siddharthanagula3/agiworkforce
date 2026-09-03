@@ -25,10 +25,12 @@ vi.mock('@/lib/security/secrets-audit', async (importOriginal) => {
   };
 });
 
-const { applySecretHandlingToRequest } = await import('./secret-handling-gate');
+const { applySecretHandlingToRequest, buildSecretRedactionNotice } =
+  await import('./secret-handling-gate');
 const secretsAudit = await import('@/lib/security/secrets-audit');
 
 const STRIPE_KEY = `sk_live_${'a'.repeat(30)}`;
+const LOW_CONFIDENCE_JWT = `eyJ${'a'.repeat(24)}.${'b'.repeat(24)}`;
 const ORGANIZATION_ID = '11111111-1111-4111-8111-111111111111';
 
 function processedWith(messages: Array<Record<string, unknown>>) {
@@ -49,7 +51,7 @@ describe('applySecretHandlingToRequest', () => {
 
     const outcome = await applySecretHandlingToRequest('user-1', request, processed);
 
-    expect(outcome).toEqual({ action: 'clean', patternNames: [], matchCount: 0 });
+    expect(outcome).toEqual({ action: 'clean', patternNames: [], matchCount: 0, notice: null });
     expect(mocks.resolvePolicy).not.toHaveBeenCalled();
     expect(mocks.recordAuditEvent).not.toHaveBeenCalled();
   });
@@ -61,10 +63,11 @@ describe('applySecretHandlingToRequest', () => {
     const outcome = await applySecretHandlingToRequest('user-1', request, processed);
 
     expect(outcome.action).toBe('warned');
+    expect(outcome.notice).toBeNull();
     expect(processed.llmRequest.messages[0]!.content).toContain(STRIPE_KEY);
   });
 
-  it('redact mode replaces the matched span and leaves other messages alone', async () => {
+  it('redact mode replaces the matched span, leaves other messages alone, and returns a notice', async () => {
     mocks.resolvePolicy.mockResolvedValue({ mode: 'redact', organizationId: ORGANIZATION_ID });
     const processed = processedWith([
       { role: 'user', content: `key: ${STRIPE_KEY}` },
@@ -74,6 +77,7 @@ describe('applySecretHandlingToRequest', () => {
     const outcome = await applySecretHandlingToRequest('user-1', request, processed);
 
     expect(outcome.action).toBe('redacted');
+    expect(outcome.notice).toBe(buildSecretRedactionNotice(1));
     expect(processed.llmRequest.messages[0]!.content).not.toContain(STRIPE_KEY);
     expect(processed.llmRequest.messages[0]!.content).toContain('[REDACTED]');
     expect(processed.llmRequest.messages[1]!.content).toBe('no secret here');
@@ -87,6 +91,35 @@ describe('applySecretHandlingToRequest', () => {
 
     expect(outcome.action).toBe('blocked');
     expect(processed.llmRequest.messages[0]!.content).toContain(STRIPE_KEY);
+  });
+
+  it.each(['warn', 'redact', 'block'] as const)(
+    'treats a low-confidence-only match as a warning under %s mode, never blocking or redacting',
+    async (mode) => {
+      mocks.resolvePolicy.mockResolvedValue({ mode, organizationId: ORGANIZATION_ID });
+      const processed = processedWith([{ role: 'user', content: `token: ${LOW_CONFIDENCE_JWT}` }]);
+
+      const outcome = await applySecretHandlingToRequest('user-1', request, processed);
+
+      expect(outcome.action).toBe('warned');
+      expect(outcome.notice).toBeNull();
+      expect(outcome.patternNames).toEqual(['JWT']);
+      expect(processed.llmRequest.messages[0]!.content).toContain(LOW_CONFIDENCE_JWT);
+    },
+  );
+
+  it('redacts only the high-confidence span when a message carries both tiers', async () => {
+    mocks.resolvePolicy.mockResolvedValue({ mode: 'redact', organizationId: ORGANIZATION_ID });
+    const processed = processedWith([
+      { role: 'user', content: `key: ${STRIPE_KEY} token: ${LOW_CONFIDENCE_JWT}` },
+    ]);
+
+    const outcome = await applySecretHandlingToRequest('user-1', request, processed);
+
+    expect(outcome.action).toBe('redacted');
+    expect(outcome.patternNames).toEqual(['Stripe Live Key']);
+    expect(processed.llmRequest.messages[0]!.content).not.toContain(STRIPE_KEY);
+    expect(processed.llmRequest.messages[0]!.content).toContain(LOW_CONFIDENCE_JWT);
   });
 
   it('records an audit event carrying the pattern name and count, never the secret value', async () => {
@@ -122,5 +155,16 @@ describe('applySecretHandlingToRequest', () => {
 
     expect(secretsAudit.scanForSecrets).toHaveBeenCalledTimes(1);
     expect(secretsAudit.redactSecrets).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('buildSecretRedactionNotice', () => {
+  it('pluralizes for counts other than one', () => {
+    expect(buildSecretRedactionNotice(1)).toBe(
+      '1 secret was removed from this message before it was sent.',
+    );
+    expect(buildSecretRedactionNotice(2)).toBe(
+      '2 secrets were removed from this message before it was sent.',
+    );
   });
 });
