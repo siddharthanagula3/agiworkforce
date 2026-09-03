@@ -10,9 +10,12 @@ const ORGANIZATION_ID = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
 const mocks = vi.hoisted(() => ({ query: vi.fn(), execute: vi.fn() }));
 
 vi.mock('server-only', () => ({}));
-vi.mock('@/lib/server/neon-chat', () => ({
-  getNeonChatDb: () => ({ query: mocks.query, execute: mocks.execute }),
-  requireCurrentUserId: vi.fn(async () => USER_ID),
+vi.mock('@/lib/server/rls-db', () => ({
+  getUserScopedDb: vi.fn(async () => ({
+    db: { query: mocks.query, execute: mocks.execute },
+    userId: USER_ID,
+    organizationId: null,
+  })),
 }));
 vi.mock('@/lib/services/active-workspace-service', () => ({
   resolveActiveOrganizationId: vi.fn(async () => ORGANIZATION_ID),

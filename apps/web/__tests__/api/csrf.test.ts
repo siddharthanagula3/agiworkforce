@@ -65,9 +65,32 @@ const mockNeonExecute = vi.fn();
 const mockRequireCurrentUserId = vi.fn();
 
 vi.mock('@/lib/server/neon-chat', () => ({
-  getNeonChatDb: () => ({ query: mockNeonQuery, execute: mockNeonExecute }),
-  requireCurrentUserId: (...args: unknown[]) => mockRequireCurrentUserId(...args),
   normalizeMessageMetadata: (v: unknown) => v,
+}));
+
+vi.mock('@/lib/server/rls-db', () => ({
+  getUserScopedDb: async (request: Request) => {
+    if (new URL(request.url).pathname.startsWith('/api/memory/')) {
+      const { userId } = await mockGetClerkAuthUser(request);
+      return {
+        db: {
+          query: (...args: unknown[]) => mockMemoryNeonQuery(...args),
+          execute: (...args: unknown[]) => mockMemoryNeonExecute(...args),
+        },
+        userId,
+        organizationId: null,
+      };
+    }
+    const userId = await mockRequireCurrentUserId(request);
+    return {
+      db: {
+        query: (...args: unknown[]) => mockNeonQuery(...args),
+        execute: (...args: unknown[]) => mockNeonExecute(...args),
+      },
+      userId,
+      organizationId: null,
+    };
+  },
 }));
 
 import {

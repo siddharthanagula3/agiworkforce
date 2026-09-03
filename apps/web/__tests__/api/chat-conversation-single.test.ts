@@ -26,7 +26,7 @@ vi.mock('next/headers', () => ({
 
 const mockQuery = vi.fn();
 const mockExecute = vi.fn();
-const mockRequireCurrentUserId = vi.fn();
+const mockGetUserScopedDb = vi.fn();
 const mockKillE2BSession = vi.fn();
 
 vi.mock('@/lib/e2b/runtime', () => ({
@@ -34,9 +34,11 @@ vi.mock('@/lib/e2b/runtime', () => ({
 }));
 
 vi.mock('@/lib/server/neon-chat', () => ({
-  getNeonChatDb: () => ({ query: mockQuery, execute: mockExecute }),
-  requireCurrentUserId: (...args: unknown[]) => mockRequireCurrentUserId(...args),
   normalizeMessageMetadata: (v: unknown) => v,
+}));
+
+vi.mock('@/lib/server/rls-db', () => ({
+  getUserScopedDb: (...args: unknown[]) => mockGetUserScopedDb(...args),
 }));
 
 vi.mock('@/lib/services/active-workspace-service', () => ({
@@ -88,7 +90,11 @@ describe('Single Conversation API', () => {
   beforeEach(() => {
     vi.clearAllMocks();
 
-    mockRequireCurrentUserId.mockResolvedValue('user-123');
+    mockGetUserScopedDb.mockResolvedValue({
+      db: { query: mockQuery, execute: mockExecute },
+      userId: 'user-123',
+      organizationId: null,
+    });
 
     mockQuery.mockResolvedValue([]);
     mockExecute.mockResolvedValue(undefined);
@@ -98,7 +104,7 @@ describe('Single Conversation API', () => {
     describe('Authentication', () => {
       it('should return 401 if not authenticated', async () => {
         const { createError } = await import('@/lib/errors');
-        mockRequireCurrentUserId.mockRejectedValueOnce(createError.unauthorized());
+        mockGetUserScopedDb.mockRejectedValueOnce(createError.unauthorized());
 
         const request = new NextRequest(
           `http://localhost/api/chat/conversations/${CONVERSATION_ID}`,
@@ -338,7 +344,7 @@ describe('Single Conversation API', () => {
 
       it('should return 401 if not authenticated', async () => {
         const { createError } = await import('@/lib/errors');
-        mockRequireCurrentUserId.mockRejectedValueOnce(createError.unauthorized());
+        mockGetUserScopedDb.mockRejectedValueOnce(createError.unauthorized());
 
         const request = new NextRequest(
           `http://localhost/api/chat/conversations/${CONVERSATION_ID}`,
@@ -418,7 +424,7 @@ describe('Single Conversation API', () => {
 
       it('should return 401 if not authenticated', async () => {
         const { createError } = await import('@/lib/errors');
-        mockRequireCurrentUserId.mockRejectedValueOnce(createError.unauthorized());
+        mockGetUserScopedDb.mockRejectedValueOnce(createError.unauthorized());
 
         const request = new NextRequest(
           `http://localhost/api/chat/conversations/${CONVERSATION_ID}`,

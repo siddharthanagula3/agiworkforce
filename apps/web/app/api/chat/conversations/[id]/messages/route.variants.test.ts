@@ -22,9 +22,10 @@ const db: {
 
 vi.mock('server-only', () => ({}));
 vi.mock('@/lib/server/neon-chat', () => ({
-  getNeonChatDb: () => db,
-  requireCurrentUserId: vi.fn(async () => USER_ID),
   normalizeMessageMetadata: (value: unknown) => value,
+}));
+vi.mock('@/lib/server/rls-db', () => ({
+  getUserScopedDb: vi.fn(async () => ({ db, userId: USER_ID, organizationId: null })),
 }));
 vi.mock('@/lib/services/active-workspace-service', () => ({
   resolveActiveOrganizationId: vi.fn(async () => ORGANIZATION_ID),
