@@ -45,7 +45,9 @@ function resolveGeminiResearchModel() {
   const allowedHarnessIds = new Set(profile.allowedHarnessIds);
   const maxTierModelIds = new Set(Object.values(catalog.tierAllowedModels).flat());
   const routesByModelId = new Map(
-    Object.values(registry.routes).map((route) => [route.modelKey, route]),
+    Object.values(registry.routes)
+      .filter((route) => route.isDefault)
+      .map((route) => [route.modelKey, route]),
   );
   const chatModelTypes = new Set(['chat', 'code', 'reasoning', 'multimodal', 'search']);
 
