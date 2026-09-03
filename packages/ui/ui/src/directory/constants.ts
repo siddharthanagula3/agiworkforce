@@ -71,6 +71,7 @@ export const PLUGIN_SOURCE_LABEL = 'View source';
 export const PLUGIN_PROMPTS_LABEL = 'Try asking';
 
 export const ADD_MARKETPLACE_LABEL = 'Add marketplace';
+export const ADD_MARKETPLACE_INTRO = 'Choose where these plugins come from.';
 export const ADD_MARKETPLACE_BROWSE_TITLE = 'Browse AGI sources';
 export const ADD_MARKETPLACE_BROWSE_BODY = 'Curated marketplaces of plugins from AGI and partners';
 export const ADD_MARKETPLACE_REPOSITORY_TITLE = 'Add from a repository';
