@@ -82,6 +82,8 @@ import { HelpSection } from '../sections/HelpSection';
 import { SettingsSectionNavigationProvider } from './SettingsSectionLink';
 import { type ManagedSkillSummary as ApiSkill } from '@agiworkforce/cloud-contracts';
 import { toUserMessage } from '@/lib/user-error-message';
+import { SkillEditorDialog } from '@features/skills/components/SkillEditorDialog';
+import type { SkillDraft } from '@agiworkforce/skills/validation';
 
 // ---------------------------------------------------------------------------
 // Skeleton shown while a section is still hydrating
@@ -882,6 +884,7 @@ export function WebSettingsModal({
           ...(skill.downloadable
             ? { downloadHref: `/api/skills/${encodeURIComponent(skill.name)}/download` }
             : {}),
+          ...(skill.editable ? { editable: true } : {}),
         })),
       );
     } catch (error) {
@@ -901,6 +904,142 @@ export function WebSettingsModal({
       controller.abort();
     };
   }, [open, activeSection, skills.length, loadSkills]);
+
+  // ── Skill editor (create/edit/delete) ──────────────────────────────────────
+
+  const [skillEditorMode, setSkillEditorMode] = useState<'create' | 'edit' | null>(null);
+  const [editingSkillName, setEditingSkillName] = useState<string | null>(null);
+  const [editingSkillBody, setEditingSkillBody] = useState<string | null>(null);
+  const [editingSkillBodyLoading, setEditingSkillBodyLoading] = useState(false);
+  const [editingSkillBodyError, setEditingSkillBodyError] = useState<string | null>(null);
+  const [skillSubmitting, setSkillSubmitting] = useState(false);
+  const [skillSubmitError, setSkillSubmitError] = useState<string | null>(null);
+  const [skillMutationIds, setSkillMutationIds] = useState<Set<string>>(new Set());
+  const [skillMutationErrors, setSkillMutationErrors] = useState<Record<string, string>>({});
+
+  const closeSkillEditor = useCallback(() => {
+    setSkillEditorMode(null);
+    setEditingSkillName(null);
+    setEditingSkillBody(null);
+    setEditingSkillBodyError(null);
+    setSkillSubmitError(null);
+  }, []);
+
+  const onCreateSkill = useCallback(() => {
+    setSkillSubmitError(null);
+    setEditingSkillName(null);
+    setEditingSkillBody(null);
+    setEditingSkillBodyError(null);
+    setSkillEditorMode('create');
+  }, []);
+
+  const editSkill = useCallback(
+    (skill: SettingsSkill) => {
+      setSkillSubmitError(null);
+      setEditingSkillName(skill.name);
+      setEditingSkillBody(null);
+      setEditingSkillBodyError(null);
+      setSkillEditorMode('edit');
+      setEditingSkillBodyLoading(true);
+      void (async () => {
+        try {
+          const res = await fetch(`/api/skills/${encodeURIComponent(skill.name)}`, {
+            credentials: 'include',
+            headers: await authedHeaders(),
+          });
+          if (!res.ok) throw new Error('Could not load this skill.');
+          const body = (await res.json()) as { body: string };
+          setEditingSkillBody(body.body);
+        } catch (error) {
+          setEditingSkillBodyError(toUserMessage(error, 'Could not load this skill.'));
+        } finally {
+          setEditingSkillBodyLoading(false);
+        }
+      })();
+    },
+    [authedHeaders],
+  );
+
+  const submitSkillDraft = useCallback(
+    async (draft: SkillDraft) => {
+      setSkillSubmitting(true);
+      setSkillSubmitError(null);
+      try {
+        const csrfToken = await getCsrfToken();
+        const isEdit = skillEditorMode === 'edit' && editingSkillName !== null;
+        const res = await fetch(
+          isEdit ? `/api/skills/${encodeURIComponent(editingSkillName)}` : '/api/skills',
+          {
+            method: isEdit ? 'PUT' : 'POST',
+            credentials: 'include',
+            headers: await authedHeaders({
+              'Content-Type': 'application/json',
+              'x-csrf-token': csrfToken,
+            }),
+            body: JSON.stringify(draft),
+          },
+        );
+        if (!res.ok) {
+          const body = (await res.json().catch(() => null)) as {
+            error?: { message?: string };
+          } | null;
+          throw new Error(body?.error?.message ?? 'Could not save this skill.');
+        }
+        closeSkillEditor();
+        setSkills([]);
+        announceSkillCatalogChanged();
+      } catch (error) {
+        setSkillSubmitError(toUserMessage(error, 'Could not save this skill.'));
+      } finally {
+        setSkillSubmitting(false);
+      }
+    },
+    [authedHeaders, closeSkillEditor, editingSkillName, skillEditorMode],
+  );
+
+  const removeSkill = useCallback(
+    async (id: string) => {
+      setSkillMutationIds((current) => new Set(current).add(id));
+      setSkillMutationErrors((current) => {
+        const next = { ...current };
+        delete next[id];
+        return next;
+      });
+      try {
+        const csrfToken = await getCsrfToken();
+        const res = await fetch(`/api/skills/${encodeURIComponent(id)}`, {
+          method: 'DELETE',
+          credentials: 'include',
+          headers: await authedHeaders({ 'x-csrf-token': csrfToken }),
+        });
+        if (!res.ok) throw new Error('Could not delete this skill.');
+        setSkills((current) => current.filter((skill) => skill.id !== id));
+        announceSkillCatalogChanged();
+      } catch (error) {
+        setSkillMutationErrors((current) => ({
+          ...current,
+          [id]: toUserMessage(error, 'Could not delete this skill.'),
+        }));
+      } finally {
+        setSkillMutationIds((current) => {
+          const next = new Set(current);
+          next.delete(id);
+          return next;
+        });
+      }
+    },
+    [authedHeaders],
+  );
+
+  const visibleSkills = useMemo(
+    () =>
+      skills.map((skill) => ({
+        ...skill,
+        mutating: skillMutationIds.has(skill.id),
+        ...(skillMutationErrors[skill.id] ? { error: skillMutationErrors[skill.id] } : {}),
+      })),
+    [skills, skillMutationErrors, skillMutationIds],
+  );
 
   const loadPlugins = useCallback(async (signal?: AbortSignal) => {
     setPluginsLoading(true);
@@ -1148,10 +1287,13 @@ export function WebSettingsModal({
     disconnectConnector,
     addCustomConnector,
     customConnectorAuthTokenSupported: true,
-    skills,
+    skills: visibleSkills,
     skillsLoading,
     skillsError,
     retrySkills: loadSkills,
+    onCreateSkill,
+    editSkill,
+    removeSkill,
     plugins: visiblePluginCatalog.filter((plugin) => plugin.installed),
     pluginsLoading,
     pluginsError,
@@ -1238,6 +1380,28 @@ export function WebSettingsModal({
           onOpenChange={(next) => {
             if (!next) setToolPermissionsConnectorId(null);
           }}
+        />
+        <SkillEditorDialog
+          open={skillEditorMode !== null}
+          onOpenChange={(next) => {
+            if (!next) closeSkillEditor();
+          }}
+          mode={skillEditorMode ?? 'create'}
+          initialSkill={
+            skillEditorMode === 'edit' && editingSkillName !== null
+              ? {
+                  name: editingSkillName,
+                  description:
+                    skills.find((skill) => skill.name === editingSkillName)?.description ?? '',
+                  body: editingSkillBody ?? '',
+                }
+              : null
+          }
+          bodyLoading={editingSkillBodyLoading}
+          bodyError={editingSkillBodyError}
+          submitting={skillSubmitting}
+          submitError={skillSubmitError}
+          onSubmit={submitSkillDraft}
         />
       </SettingsSectionNavigationProvider>
     </Suspense>

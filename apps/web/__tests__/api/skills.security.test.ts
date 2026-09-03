@@ -36,7 +36,7 @@ vi.mock('@/lib/services/plugin-installation-service', () => ({
 }));
 
 vi.mock('@/lib/server/neon-db', () => ({
-  getNeonDb: vi.fn(() => ({})),
+  getNeonDb: vi.fn(() => ({ query: vi.fn().mockResolvedValue([]) })),
 }));
 
 import { GET as listSkills } from '@/app/api/skills/route';

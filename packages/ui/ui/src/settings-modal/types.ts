@@ -34,6 +34,10 @@ export interface SettingsSkill {
   downloadHref?: string;
   /** From the skill's own SKILL.md frontmatter; absent renders as a dash. */
   version?: string;
+  /** True only for a skill this account authored; renders Edit/Delete. */
+  editable?: boolean;
+  mutating?: boolean;
+  error?: string;
 }
 
 export interface SettingsPlugin {
@@ -90,6 +94,9 @@ export interface SettingsDataAdapter {
   skillsLoading?: boolean;
   skillsError?: string | null;
   retrySkills?: () => Promise<void> | void;
+  onCreateSkill?: () => void;
+  editSkill?: (skill: SettingsSkill) => void;
+  removeSkill?: (id: string) => Promise<void> | void;
 
   plugins?: SettingsPlugin[];
   pluginsLoading?: boolean;

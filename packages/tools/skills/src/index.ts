@@ -59,3 +59,12 @@ export {
   DEFAULT_SKILL_RELEVANCE_MINIMUM_SCORE,
 } from './relevance';
 export type { MatchSkillsForPromptOptions, SkillRelevanceMatch } from './relevance';
+export {
+  buildSkillMarkdown,
+  validateSkillDraft,
+  SKILL_DRAFT_NAME_PATTERN,
+  SKILL_DRAFT_NAME_MAX_LENGTH,
+  SKILL_DRAFT_DESCRIPTION_MAX_LENGTH,
+  SKILL_DRAFT_BODY_MAX_LENGTH,
+} from './validation';
+export type { SkillDraft, SkillDraftValidationResult } from './validation';
