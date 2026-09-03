@@ -475,7 +475,7 @@ export default function DpaPage() {
           ctas={[]}
         />
 
-        <Container className="my-10">
+        <Container className="mb-10">
           <PolicyContents
             sections={SECTIONS}
             intro="Annex II (section 08) states the limit of every security measure next to the measure. If you are reviewing this before signing, read that one first."

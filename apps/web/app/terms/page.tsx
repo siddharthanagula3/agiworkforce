@@ -208,7 +208,7 @@ export default function TermsPage() {
           ctas={[]}
         />
 
-        <Container className="my-10">
+        <Container className="mb-10">
           <PolicyContents
             sections={SECTIONS}
             intro="Sections 15 and 17 limit our liability and require arbitration. They are the ones to read before you accept, so they are named here rather than left to be found."
