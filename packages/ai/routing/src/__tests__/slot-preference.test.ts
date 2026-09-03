@@ -39,12 +39,6 @@ describe('the free-only slots exist and are genuinely free-only', () => {
   });
 });
 
-/**
- * Requirement: absent, the input changes nothing for anyone. This is what keeps
- * the TS/Rust conformance fixture at its committed values and lets the Rust
- * resolver stay untouched — it has no counterpart because the default path is
- * the only path it ever replays.
- */
 describe('absent preference is a no-op', () => {
   it.each(TIERS)('resolves identically with and without an empty preference for %s', (tier) => {
     for (const taskType of TASKS) {
@@ -113,10 +107,6 @@ describe('preference can never widen admission', () => {
   });
 });
 
-/**
- * Requirement: the intended effect. With the preference supplied, a free-ceiling
- * request heads its plan with the free slot — which is the whole mechanism.
- */
 describe('preference reorders within the admitted set', () => {
   it('heads a free-ceiling plan with the preferred free slot', () => {
     const head = FREE_ONLY_SLOTS[0]!;

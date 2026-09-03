@@ -154,7 +154,7 @@ describe('escalation-only switching', () => {
     });
   });
 
-  it('refuses a lateral move — it buys nothing and pays the full cache reset', () => {
+  it('refuses a lateral move, it buys nothing and pays the full cache reset', () => {
     expect(
       decideTaskFamilyContinuity({
         session: session(MID_MODEL_ID),

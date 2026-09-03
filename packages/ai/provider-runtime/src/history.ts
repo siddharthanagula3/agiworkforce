@@ -1,4 +1,3 @@
-
 export interface RepairMessage {
   role: 'system' | 'user' | 'assistant' | 'tool';
   content?: string | RepairBlock[];
@@ -109,7 +108,7 @@ function buildSyntheticToolResultMessage(
   policy: 'anthropic-shape' | 'openai-shape',
 ): RepairMessage {
   const errMessage = (name: string) =>
-    `Tool "${name}" was invoked but produced no result before this turn — ` +
+    `Tool "${name}" was invoked but produced no result before this turn, ` +
     `treat as failed and decide whether to retry.`;
   if (policy === 'anthropic-shape') {
     return {
@@ -157,15 +156,6 @@ export function stripAnthropicOnlyFields(messages: RepairMessage[]): RepairMessa
   });
 }
 
-/**
- * Anthropic enforces a 100-media cap per request. Silently drop the
- * oldest media items (image / image_url / document / pdf blocks)
- * until the count is within the cap.
- *
- * @param messages — input list (not mutated).
- * @param max — cap, defaults to {@link DEFAULT_MAX_MEDIA_PER_REQUEST}.
- * @returns repaired list + count of items dropped.
- */
 export function stripExcessMediaItems(
   messages: RepairMessage[],
   max = DEFAULT_MAX_MEDIA_PER_REQUEST,

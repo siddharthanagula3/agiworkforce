@@ -1,4 +1,3 @@
-
 import { describe, expect, it } from 'vitest';
 
 import {
@@ -24,7 +23,7 @@ if (!openAIReasoningModelId || !openAIChatModelId || !openAINonReasoningModelId)
   throw new Error('Canonical OpenAI reasoning, chat, and non-reasoning fixtures must exist');
 }
 
-describe('resolveOpenAISupportedReasoningEfforts — golden snapshots', () => {
+describe('resolveOpenAISupportedReasoningEfforts, golden snapshots', () => {
   it('reads the complete current effort ladder from the canonical model registry', () => {
     const catalogReasoning = getModelReasoning(openAIReasoningModelId);
 
@@ -85,7 +84,7 @@ describe('supportsOpenAIReasoningEffort', () => {
   });
 });
 
-describe('resolveOpenAIReasoningEffortForModel — fallback ladder', () => {
+describe('resolveOpenAIReasoningEffortForModel, fallback ladder', () => {
   it('returns the requested effort when supported', () => {
     expect(
       resolveOpenAIReasoningEffortForModel({

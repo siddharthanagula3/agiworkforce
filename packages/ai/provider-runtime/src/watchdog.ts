@@ -1,4 +1,3 @@
-
 export const DEFAULT_STREAM_IDLE_TIMEOUT_MS = 90_000;
 
 export const DEFAULT_STREAM_IDLE_WARNING_MS = 45_000;
@@ -50,7 +49,7 @@ export function withStreamIdleWatchdog<T>(
                   try {
                     hooks.onHalfTimeWarning?.(Date.now() - start);
                   } catch {
-                    /* swallow — warning is a fire-and-forget hook */
+                    // noop
                   }
                 }, warningMs);
               }
@@ -88,7 +87,7 @@ export function withStreamIdleWatchdog<T>(
           try {
             void iterator.return().catch(() => undefined);
           } catch {
-            /* swallow — cleanup must not mask the original error */
+            // noop
           }
         }
       }

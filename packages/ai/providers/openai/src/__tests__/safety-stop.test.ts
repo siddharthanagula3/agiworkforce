@@ -1,12 +1,3 @@
-/**
- * OpenAI's wire `content_filter` finish reason means the provider's safety
- * layer stopped the response — the same honest concept as Anthropic's
- * `stop_reason: 'refusal'`. Both translators must surface it as the
- * first-class StreamChunkStop `'refusal'` member (mirroring the agent event
- * envelope's Refusal stop), never as `'error'` (transport/provider failure)
- * and never as a silent normal completion.
- */
-
 import { describe, expect, it } from 'vitest';
 import type { StreamChunk } from '@agiworkforce/types';
 
@@ -25,7 +16,7 @@ async function collect(stream: AsyncIterable<StreamChunk>): Promise<StreamChunk[
   return out;
 }
 
-describe('translateOpenAIStream — content_filter is a first-class refusal', () => {
+describe('translateOpenAIStream, content_filter is a first-class refusal', () => {
   it("maps finish_reason 'content_filter' to stop reason 'refusal', not 'error' or 'end_turn'", async () => {
     const chunks = [
       {
@@ -65,7 +56,7 @@ describe('translateOpenAIStream — content_filter is a first-class refusal', ()
   });
 });
 
-describe('translateOpenAIResponsesStream — content_filter is a first-class refusal', () => {
+describe('translateOpenAIResponsesStream, content_filter is a first-class refusal', () => {
   it("maps incomplete_details.reason 'content_filter' to stop reason 'refusal'", async () => {
     const events = [
       {

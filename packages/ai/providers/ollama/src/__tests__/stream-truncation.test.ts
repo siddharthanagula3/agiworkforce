@@ -1,4 +1,3 @@
-
 import { describe, expect, it } from 'vitest';
 import type { StreamChunk } from '@agiworkforce/types';
 
@@ -17,7 +16,7 @@ async function collect(stream: AsyncIterable<StreamChunk>): Promise<StreamChunk[
   return out;
 }
 
-describe('translateOllamaStream — truncation safety (P1-3)', () => {
+describe('translateOllamaStream, truncation safety (P1-3)', () => {
   it('emits a fallback stop chunk when the NDJSON stream drains without done:true', async () => {
     const records: OllamaChatStreamChunk[] = [
       {
@@ -30,7 +29,6 @@ describe('translateOllamaStream — truncation safety (P1-3)', () => {
         message: { role: 'assistant', content: ' world' },
         done: false,
       } as OllamaChatStreamChunk,
-      // <— stream truncates here. No `done: true` record.
     ];
     const out = await collect(translateOllamaStream(fromArray(records)));
     const stops = out.filter((c) => c.type === 'stop');

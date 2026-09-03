@@ -1,25 +1,3 @@
-/**
- * @agiworkforce/provider-runtime
- *
- * Cross-provider LLM runtime infrastructure: retry generator with sticky
- * `RetryContext`, stream watchdog, latched session-stable headers,
- * 30+ branch error classifier, gateway fingerprinting, fallback chain
- * resolution, and message-history repair toolkit.
- *
- * This package is consumed by:
- *   - `services/api-gateway/` — server-side LLM proxy.
- *   - `apps/web/app/api/llm/` — Next.js LLM routes (where applicable).
- *   - `apps/desktop/src-tauri/src/llm/` — Tauri-side LLM calls.
- *   - `packages/ai/providers/{anthropic,openai,google,ollama,...}` —
- *     each adapter wraps its `stream()` body in `withRetry` and
- *     `withStreamIdleWatchdog`.
- *
- * @see tasks/research/deep/m8-services-api.md
- * @see tasks/research/gap-matrix/pkg-api-providers-normalize.md
- *
- * @packageDocumentation
- */
-
 export {
   CannotRetryError,
   FallbackTriggeredError,

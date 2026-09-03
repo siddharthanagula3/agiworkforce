@@ -1,20 +1,3 @@
-/**
- * @agiworkforce/providers-xai
- *
- * xAI (Grok) provider adapter implementing `ProviderAdapter` from
- * `@agiworkforce/types`. xAI ships an OpenAI-compatible Chat Completions
- * endpoint at `https://api.x.ai/v1`, so we reuse the OpenAI translate/stream
- * layer with `provider: 'xai'` so the compat detector returns
- * `endpointClass: 'xai-native'` defaults (no `service_tier`, no Responses API).
- *
- * The current catalog-selected xAI family exposes large-context variants and
- * `reasoning_content` deltas — both surfaced via the existing OpenAI
- * `translateOpenAIStream` (which already maps `reasoning_content` →
- * `thinking-delta`).
- *
- * @packageDocumentation
- */
-
 import OpenAI from 'openai';
 import type {
   AuthMethod,

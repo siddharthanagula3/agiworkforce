@@ -54,7 +54,7 @@ const BASE: Omit<StreamFromProviderOptions<{ model: string }>, 'fetchImpl'> = {
   clientTag: 'agiworkforce-test',
 };
 
-describe('streamFromProvider — normal SSE streaming', () => {
+describe('streamFromProvider, normal SSE streaming', () => {
   it('yields text-delta chunks and stops on [DONE]', async () => {
     const sseText =
       'data: {"type":"text-delta","delta":"Hello"}\n\n' +
@@ -107,7 +107,7 @@ describe('streamFromProvider — normal SSE streaming', () => {
   });
 });
 
-describe('streamFromProvider — request construction', () => {
+describe('streamFromProvider, request construction', () => {
   it('POSTs to baseUrl + /api/v1/providers/:id/stream with auth + clientTag headers', async () => {
     const fetchImpl = fetchMockResolving(okResponse('data: [DONE]\n\n'));
 
@@ -164,7 +164,7 @@ describe('streamFromProvider — request construction', () => {
   });
 });
 
-describe('streamFromProvider — non-200 error classification', () => {
+describe('streamFromProvider, non-200 error classification', () => {
   it('yields a retryable error chunk for a 5xx response', async () => {
     const fetchImpl = fetchMockResolving(errorResponse(503, 'model overloaded'));
 
@@ -196,7 +196,7 @@ describe('streamFromProvider — non-200 error classification', () => {
   });
 });
 
-describe('streamFromProvider — paywall detection (opt-in)', () => {
+describe('streamFromProvider, paywall detection (opt-in)', () => {
   const paywallBody = JSON.stringify({
     kind: 'paywall',
     feature: 'token_cap',
@@ -266,7 +266,7 @@ describe('streamFromProvider — paywall detection (opt-in)', () => {
   });
 });
 
-describe('streamFromProvider — malformed SSE frames', () => {
+describe('streamFromProvider, malformed SSE frames', () => {
   it('silently skips a malformed frame by default and keeps reading', async () => {
     const sseText =
       'data: {"bad json"\n\n' + 'data: {"type":"text-delta","delta":"ok"}\n\n' + 'data: [DONE]\n\n';
@@ -295,7 +295,7 @@ describe('streamFromProvider — malformed SSE frames', () => {
   });
 });
 
-describe('streamFromProvider — catchTransportErrors', () => {
+describe('streamFromProvider, catchTransportErrors', () => {
   it('propagates a fetch rejection as a thrown error by default', async () => {
     const fetchImpl = vi.fn(async () => {
       throw new Error('network down');
@@ -390,7 +390,6 @@ describe('streamFromProvider — catchTransportErrors', () => {
       start(c) {
         errorController = c;
         c.enqueue(encoder.encode('data: {"type":"text-delta","delta":"a"}\n\n'));
-        // No close — the second read() hangs until the abort listener errors it below.
       },
     });
     controller.signal.addEventListener('abort', () => {
@@ -434,7 +433,7 @@ describe('streamFromProvider — catchTransportErrors', () => {
   });
 });
 
-describe('streamFromProvider — idle watchdog (opt-in)', () => {
+describe('streamFromProvider, idle watchdog (opt-in)', () => {
   function makeStallingFetch(onAbort: () => void): StreamFromProviderOptions<unknown>['fetchImpl'] {
     const encoder = new TextEncoder();
     return (async (_input: RequestInfo | URL, init?: RequestInit) => {
@@ -443,7 +442,6 @@ describe('streamFromProvider — idle watchdog (opt-in)', () => {
         start(controller) {
           ctrl = controller;
           controller.enqueue(encoder.encode('data: {"type":"text-delta","delta":"first"}\n\n'));
-          // No close — stalls until the signal aborts, simulating a silently dropped connection.
         },
       });
       init?.signal?.addEventListener('abort', () => {

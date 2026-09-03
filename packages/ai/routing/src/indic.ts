@@ -1,31 +1,3 @@
-/**
- * Indic-script detection for the auto-routing system.
- *
- * Implements the Indic-script signal used by Auto routing:
- *   "Unicode-range scan of input, sticky for conversation. >20% Indic →
- *    swap workhorse to Sarvam-M."
- *
- * Scripts covered (per Pool C definition):
- *   - Devanagari   U+0900 – U+097F   (Hindi, Marathi, Sanskrit, Nepali)
- *   - Bengali      U+0980 – U+09FF   (Bengali, Assamese)
- *   - Gurmukhi     U+0A00 – U+0A7F   (Punjabi)
- *   - Gujarati     U+0A80 – U+0AFF
- *   - Tamil        U+0B80 – U+0BFF
- *   - Telugu       U+0C00 – U+0C7F
- *   - Kannada      U+0C80 – U+0CFF
- *   - Malayalam    U+0D00 – U+0D7F
- *
- * Vercel React Best Practices applied:
- *   - `js-hoist-regexp` — none (we use codepoint comparisons; no regex at all
- *     because regex unicode flags allocate a per-call lastIndex on globals).
- *   - `js-early-exit` — bail on empty input before iterating.
- *   - `bundle-analyzable-paths` — named exports only.
- *   - `server-no-shared-module-state` — pure functions; no caches.
- *
- * @module routing/indic
- * @packageDocumentation
- */
-
 export type IndicScript =
   | 'devanagari'
   | 'bengali'

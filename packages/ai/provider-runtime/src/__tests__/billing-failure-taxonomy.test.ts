@@ -1,21 +1,3 @@
-/**
- * Regression suite for the billing/quota failure-classification defect.
- *
- * THE DEFECT THIS PINS
- * --------------------
- * Anthropic's "credit balance is too low" was classified `category: 'auth'`.
- * `CredentialFailoverState` treats any `auth` as "this provider's credential is
- * bad", which is a rotation trigger — so an AGIWorkforce account that had merely
- * run OUT OF MONEY would silently push the request onto a different PAID
- * provider and spend more there, instead of surfacing the billing failure.
- *
- * Nothing tested this path. These tests exist so it cannot regress silently.
- *
- * The governing invariant: billing/quota exhaustion, authentication failure,
- * temporary rate limiting, provider overload, timeout, capability mismatch and
- * policy refusal are semantically DIFFERENT failure classes and must produce
- * different routing behaviour.
- */
 import { describe, expect, it } from 'vitest';
 
 import { classifyError } from '../errors';
@@ -69,7 +51,6 @@ describe('billing exhaustion is not a credential failure', () => {
     const classified = classifyError(anthropicError('invalid api key provided', 401));
     expect(classified.category).toBe('auth');
     expect(isCredentialFailureCategory(classified.category)).toBe(true);
-    // A bad credential SHOULD block the provider — that behaviour is preserved.
     const state = new CredentialFailoverState();
     expect(state.recordFailure('anthropic', classified.category)).toBe(true);
     expect(state.blocksRoute('anthropic')).toBe(true);
@@ -175,9 +156,6 @@ describe('Retry-After survives normalization', () => {
   });
 
   it('reads a Retry-After already extracted by an upstream layer', () => {
-    // This is the case that was broken: once an error crossed a stream-chunk
-    // boundary the raw headers were gone, so the value had to be carried on the
-    // reconstructed Error — and `extractRetryAfterSeconds` used to ignore it.
     const error = Object.assign(new Error('slow down'), {
       status: 429,
       retryAfterSeconds: 12,

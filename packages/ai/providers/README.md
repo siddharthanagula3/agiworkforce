@@ -41,7 +41,7 @@ Current leaf packages:
 
 Composition package:
 
-- `factory` — maps canonical provider IDs to leaf constructors while leaving
+- `factory`: maps canonical provider IDs to leaf constructors while leaving
   credentials, endpoint policy, routing, and product modes in each deployable.
 
 Do not import provider leaf internals from apps. Apps and multi-provider services

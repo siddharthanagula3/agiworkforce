@@ -1520,7 +1520,7 @@ async function refresh(threshold) {
   const aaKey = process.env.ARTIFICIAL_ANALYSIS_API_KEY;
   if (!aaKey) {
     console.warn(
-      '[sync] ARTIFICIAL_ANALYSIS_API_KEY not set — benchmarks/speed kept from snapshot.',
+      '[sync] ARTIFICIAL_ANALYSIS_API_KEY not set, benchmarks/speed kept from snapshot.',
     );
   }
 
