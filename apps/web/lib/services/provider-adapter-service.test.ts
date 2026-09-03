@@ -96,6 +96,24 @@ describe('resolveProviderFromModel', () => {
     expect(resolveProviderFromModel(model, 'open_router/minimax-m3')).toBe('openrouter');
   });
 
+  it('redirects an explicitly selected direct route to OpenRouter when the direct key is absent', () => {
+    process.env['OPENROUTER_API_KEY'] = 'fixture-openrouter-key';
+    getOptionalEnv.mockReturnValue(undefined);
+    const model = requireProviderDefaultModel('minimax');
+
+    expect(resolveProviderFromModel(model, 'minimax/minimax-m3')).toBe('openrouter');
+  });
+
+  it('trusts an explicitly selected direct route once its managed key is configured', () => {
+    process.env['OPENROUTER_API_KEY'] = 'fixture-openrouter-key';
+    getOptionalEnv.mockImplementation((key) =>
+      key === 'MINIMAX_API_KEY' ? 'fixture-minimax-key' : undefined,
+    );
+    const model = requireProviderDefaultModel('minimax');
+
+    expect(resolveProviderFromModel(model, 'minimax/minimax-m3')).toBe('minimax');
+  });
+
   it('dispatches the direct provider when its managed key is configured, even with OpenRouter also configured', () => {
     process.env['OPENROUTER_API_KEY'] = 'fixture-openrouter-key';
     getOptionalEnv.mockImplementation((key) =>
