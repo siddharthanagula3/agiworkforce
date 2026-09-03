@@ -13,6 +13,8 @@ const ALLOWED_ICON_CONTENT_TYPES: ReadonlySet<string> = new Set([
   'image/jpg',
   'image/svg+xml',
   'image/webp',
+  'image/x-icon',
+  'image/vnd.microsoft.icon',
 ]);
 
 const cacheStore = new NeonMcpResponseCacheStore();
