@@ -125,6 +125,24 @@ describe('plugin removal confirmation', () => {
   });
 });
 
+const DESTRUCTIVE_ACTION_PANELS = [
+  'DirectoryBrowse',
+  'ConnectorsPanel',
+  'SkillsPanel',
+  'PluginsPanel',
+] as const;
+
+function topLevelFunctionSpans(source: string): Array<{ name: string; body: string }> {
+  const starts = [...source.matchAll(/^(?:export )?function ([A-Za-z0-9_]+)/gmu)];
+  return starts.map((match, index) => {
+    const name = match[1] as string;
+    const start = match.index as number;
+    const next = starts[index + 1];
+    const end = next ? (next.index as number) : source.length;
+    return { name, body: source.slice(start, end) };
+  });
+}
+
 describe('confirm primitive ownership', () => {
   const source = readFileSync(path.join(__dirname, '..', 'SettingsModal.tsx'), 'utf8');
 
@@ -134,8 +152,23 @@ describe('confirm primitive ownership', () => {
   });
 
   it('routes every destructive action in the modal through that one hook', () => {
-    const hookUses = source.match(/useConfirm\(\)/gu) ?? [];
-    expect(hookUses.length).toBe(3);
+    const spans = topLevelFunctionSpans(source);
+    const panelsUsingConfirm = spans
+      .filter((span) => (span.body.match(/useConfirm\(\)/gu) ?? []).length > 0)
+      .map((span) => span.name)
+      .sort();
+
+    expect(
+      panelsUsingConfirm,
+      'a destructive action must live in one of the named panels, routed through useConfirm()',
+    ).toEqual([...DESTRUCTIVE_ACTION_PANELS].sort());
+
+    const totalHookUses = source.match(/useConfirm\(\)/gu) ?? [];
+    expect(
+      totalHookUses.length,
+      'a new destructive action must reuse an existing panel call, not add a call site',
+    ).toBe(DESTRUCTIVE_ACTION_PANELS.length);
+
     expect(source).not.toMatch(/window\.confirm/u);
   });
 });
