@@ -1,4 +1,4 @@
-# AGI Workforce — Codex CLI Configuration
+# AGI Workforce, Codex CLI Configuration
 #
 # Project-level config for OpenAI Codex CLI.
 # Docs: https://github.com/openai/codex
@@ -15,7 +15,7 @@ persistence = "save-all"
 persistent_instructions = """
 Follow AGI Workforce project rules:
 
-1. Architecture: Tauri v2 desktop app — Rust backend (src-tauri/) + React 19 / TypeScript frontend (src/). Next.js 16 web app. React Native + Expo mobile app.
+1. Architecture: Tauri v2 desktop app, Rust backend (src-tauri/) + React 19 / TypeScript frontend (src/). Next.js 16 web app. React Native + Expo mobile app.
 2. Security-First: All secrets through SecretManager (Argon2id + AES-GCM). Never hardcode API keys. Use ToolGuard for tool execution. Validate all inputs. No eval() or dynamic code execution from user input.
 3. Conventional commits enforced: type(scope): lowercase subject (max 100 chars). Types: feat|fix|chore|docs|refactor|test|perf|ci|build|style. Subject MUST be lowercase.
 4. Rust: Follow Tauri v2 patterns. #[tauri::command] for invoke handlers. snake_case. deny(unsafe_code, dead_code, unused_imports, unused_variables, unused_mut). All warnings are errors.
