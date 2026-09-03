@@ -61,6 +61,7 @@ import {
   startAgentActivityLocally,
   withoutGenerationProgress,
   type AgentActivityState,
+  type AgentActivityToolEntry,
 } from '@agiworkforce/client-runtime';
 import {
   INTERACTIVE_CARD_RESPONSE_PATH,
@@ -1021,6 +1022,69 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
 
   const nativeToolCallId = (name: string) => `native:${name}`;
 
+  // Google's grounded search has no separate "started" signal on the wire at
+  // all (packages/ai/providers/google/src/stream.ts yields only a single
+  // server-tool-result once grounding is already done), and the server's
+  // canonical forwarding for native search (tool-loop.ts) only pairs a
+  // start with a result — it never covers Google's result-only shape. So a
+  // Gemini turn can legitimately see OTHER real x_agent_events (lifecycle,
+  // text-delta) while never seeing one for the search itself, which is why
+  // this is its own mechanism instead of another `applyLocalAgentEvent`
+  // case gated on `sawRealAgentEvent`: it upserts the entries array
+  // directly, never touching `lastSequence`, so it stays safe to run
+  // alongside a real event stream that covers everything except this one
+  // tool. `hasCanonicalWebSearchEntry` yields to a real forwarded entry the
+  // moment one appears (a different id, since real ones carry a server
+  // toolCallId), and `reconcileNativeWebSearchEntry` drops this synthetic
+  // row if a real one lands after it already started one, so a same-call
+  // race never leaves two rows on screen.
+  const nativeWebSearchEntryId = `tool:${nativeToolCallId('web_search')}`;
+  const hasCanonicalWebSearchEntry = () =>
+    currentAgentActivity?.entries.some(
+      (entry) =>
+        entry.kind === 'tool' &&
+        entry.category === 'web-search' &&
+        entry.id !== nativeWebSearchEntryId,
+    ) ?? false;
+
+  const upsertNativeWebSearchEntry = (patch: Partial<AgentActivityToolEntry>) => {
+    if (!currentAgentActivity || currentAgentActivity.status !== 'running') return;
+    if (hasCanonicalWebSearchEntry()) return;
+    const index = currentAgentActivity.entries.findIndex(
+      (entry) => entry.id === nativeWebSearchEntryId,
+    );
+    const existing =
+      index >= 0 ? (currentAgentActivity.entries[index] as AgentActivityToolEntry) : undefined;
+    const merged: AgentActivityToolEntry = {
+      kind: 'tool',
+      id: nativeWebSearchEntryId,
+      toolCallId: nativeToolCallId('web_search'),
+      name: 'web_search',
+      category: 'web-search',
+      summary: 'Searching the web',
+      status: 'running',
+      startedAtMs: Date.now(),
+      ...existing,
+      ...patch,
+    };
+    const entries =
+      index >= 0
+        ? currentAgentActivity.entries.map((entry, i) => (i === index ? merged : entry))
+        : [...currentAgentActivity.entries, merged];
+    currentAgentActivity = { ...currentAgentActivity, entries, updatedAtMs: Date.now() };
+    patchMessageMeta({ agentActivity: currentAgentActivity });
+  };
+
+  const reconcileNativeWebSearchEntry = () => {
+    if (!currentAgentActivity || !hasCanonicalWebSearchEntry()) return;
+    if (!currentAgentActivity.entries.some((entry) => entry.id === nativeWebSearchEntryId)) return;
+    currentAgentActivity = {
+      ...currentAgentActivity,
+      entries: currentAgentActivity.entries.filter((entry) => entry.id !== nativeWebSearchEntryId),
+    };
+    patchMessageMeta({ agentActivity: currentAgentActivity });
+  };
+
   let hasSyncedWritingResponse = false;
   const syncWritingResponseOnce = (delta: string) => {
     if (sawRealAgentEvent || hasSyncedWritingResponse) return;
@@ -1514,6 +1578,7 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
             applyAgentActivityEvent(currentAgentActivity, humanizeAgentEventEnvelope(envelope)),
           );
           patchMessageMeta({ agentActivity: currentAgentActivity });
+          reconcileNativeWebSearchEntry();
           publishCloudRunReference({ lastSequence: envelope.sequence });
           if (isTerminalAgentEventEnvelope(envelope)) {
             sawTerminalAgentEvent = true;
@@ -1657,6 +1722,7 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
               ),
             );
             patchMessageMeta({ agentActivity: currentAgentActivity });
+            reconcileNativeWebSearchEntry();
             publishCloudRunReference({ lastSequence: agentEnvelope.sequence });
           }
 
@@ -1761,14 +1827,18 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
             const name = typeof toolStatus.name === 'string' ? toolStatus.name : 'server_tool';
             const phrase =
               typeof toolStatus.status_phrase === 'string' ? toolStatus.status_phrase : name;
-            applyLocalAgentEvent({
-              type: 'tool-execution-start',
-              toolCallId: nativeToolCallId(name),
-              name,
-              category: nativeToolCategory(name),
-              summary: phrase,
-              input: null,
-            });
+            if (name === 'web_search' || name === 'gemini_grounding') {
+              upsertNativeWebSearchEntry({ summary: phrase, status: 'running' });
+            } else {
+              applyLocalAgentEvent({
+                type: 'tool-execution-start',
+                toolCallId: nativeToolCallId(name),
+                name,
+                category: nativeToolCategory(name),
+                summary: phrase,
+                input: null,
+              });
+            }
           }
           if (toolStatus?.type === 'mcp_tool_use') {
             if (toolStatus.status === 'running') {
@@ -1890,11 +1960,7 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
                 setResearchState(assistantMessageId, { ...currentResearch }, conversationId);
               }
               if (searchResultsBlock.tool !== 'url_fetch') {
-                applyLocalAgentEvent({
-                  type: 'source-list',
-                  toolCallId: nativeToolCallId('web_search'),
-                  sources: results,
-                });
+                upsertNativeWebSearchEntry({ sources: results, status: 'running' });
               }
             }
             if (searchResultsBlock.tool !== 'url_fetch') {
@@ -1912,12 +1978,10 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
                 | string
                 | undefined) || 'unknown_error';
             finishTool('web_search', 'failed', `Web search failed: ${errorCode}`);
-            applyLocalAgentEvent({
-              type: 'tool-execution-end',
-              toolCallId: nativeToolCallId('web_search'),
-              name: 'web_search',
-              output: `Web search failed: ${errorCode}`,
-              isError: true,
+            upsertNativeWebSearchEntry({
+              status: 'failed',
+              error: `Web search failed: ${errorCode}`,
+              completedAtMs: Date.now(),
             });
           }
 
