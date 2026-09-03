@@ -908,6 +908,14 @@
   [data-design='agi'] .agi-ds-receipt-row {
     grid-template-columns: minmax(0, 1fr);
   }
+
+  [data-design='agi'] .agi-ds-receipt-head {
+    min-height: calc(2 * 1lh + 2px);
+  }
+
+  [data-design='agi'] .agi-ds-receipt-note {
+    min-height: calc(2 * 1lh);
+  }
 }
 
 [data-design='agi'] .agi-ds-receipt {
