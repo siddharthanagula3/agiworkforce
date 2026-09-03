@@ -22,7 +22,9 @@ vi.mock('@/lib/logger', () => ({
 vi.mock('@/features/settings/services/user-preferences', () => ({
   verifyTOTPStep: (...args: unknown[]) => mocks.verifyStep(...args),
   verifyBackupCode: (...args: unknown[]) => mocks.verifyBackup(...args),
-  decryptTOTPSecret: vi.fn(async () => 'SECRET'),
+}));
+vi.mock('@/lib/crypto/totp-envelope', () => ({
+  openTotpSecret: vi.fn(() => 'SECRET'),
 }));
 
 import { POST } from './route';

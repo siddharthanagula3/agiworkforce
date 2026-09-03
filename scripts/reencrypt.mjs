@@ -44,7 +44,7 @@ export const REENCRYPT_TARGETS = {
     keyEncoding: 'utf8',
     legacyLayout: 'b64-iv-ct-tag',
     plaintextValue: /^[A-Z2-7]+$/,
-    versionedReaderReady: false,
+    versionedReaderReady: true,
   },
 };
 
