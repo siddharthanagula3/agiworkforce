@@ -1,4 +1,5 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
+import { requireProviderDefaultModel } from '@agiworkforce/types';
 
 const mocks = vi.hoisted(() => ({ loggerWarn: vi.fn() }));
 
@@ -14,9 +15,9 @@ vi.mock('@/lib/logger', () => ({
 import { resolveWebCloudModelRoute } from './request-processor';
 import { resolveProviderFromModel } from '@/lib/services/provider-adapter-service';
 
-const MINIMAX_MODEL_ID = 'minimax-m3';
-const OPEN_ROUTER_MINIMAX_ROUTE_ID = 'open_router/minimax-m3';
-const MISMATCHED_ROUTE_ID = 'anthropic/claude-sonnet-5';
+const MINIMAX_MODEL_ID = requireProviderDefaultModel('minimax');
+const OPEN_ROUTER_MINIMAX_ROUTE_ID = `open_router/${MINIMAX_MODEL_ID}`;
+const MISMATCHED_ROUTE_ID = `anthropic/${requireProviderDefaultModel('anthropic')}`;
 const MANAGED_CLOUD_TRUST_MODE = 'managed_cloud';
 const PRO_SUBSCRIPTION_TIER = 'pro';
 const GENERAL_TASK_TYPE = 'general';
@@ -38,7 +39,7 @@ afterEach(() => {
 });
 
 describe('dispatch follows the route the resolver selected', () => {
-  it('dispatches openrouter when the resolver selects the OpenRouter route for minimax-m3', () => {
+  it('dispatches openrouter when the resolver selects the OpenRouter route for the MiniMax default model', () => {
     const decision = resolveWebCloudModelRoute(
       MINIMAX_MODEL_ID,
       PRO_SUBSCRIPTION_TIER,
