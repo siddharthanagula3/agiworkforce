@@ -2,13 +2,17 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('server-only', () => ({}));
 
-const { mockQuery, mockResolveSharedProjectScope, mockResolveActiveOrganizationId } = vi.hoisted(
-  () => ({
-    mockQuery: vi.fn(),
-    mockResolveSharedProjectScope: vi.fn(),
-    mockResolveActiveOrganizationId: vi.fn(),
-  }),
-);
+const {
+  mockRlsQuery,
+  mockNeonQuery,
+  mockResolveSharedProjectScope,
+  mockResolveActiveOrganizationId,
+} = vi.hoisted(() => ({
+  mockRlsQuery: vi.fn(),
+  mockNeonQuery: vi.fn(),
+  mockResolveSharedProjectScope: vi.fn(),
+  mockResolveActiveOrganizationId: vi.fn(),
+}));
 
 vi.mock('@/lib/rate-limit', () => ({ withRateLimit: vi.fn(async () => null) }));
 vi.mock('@/lib/csrf', () => ({ requireCsrfToken: vi.fn(async () => null) }));
@@ -17,9 +21,14 @@ vi.mock('@/lib/logger', () => ({
 }));
 vi.mock('@/lib/server/rls-db', () => ({
   getUserScopedDb: vi.fn(async () => ({
-    db: { query: (...args: unknown[]) => mockQuery(...args) },
+    db: { query: (...args: unknown[]) => mockRlsQuery(...args) },
     userId: 'member-1',
     organizationId: await mockResolveActiveOrganizationId(),
+  })),
+}));
+vi.mock('@/lib/server/neon-db', () => ({
+  getNeonDb: vi.fn(() => ({
+    query: (...args: unknown[]) => mockNeonQuery(...args),
   })),
 }));
 vi.mock('@/lib/services/org-sharing-service', async (importOriginal) => ({
@@ -65,13 +74,28 @@ describe('GET /api/projects · shared projects', () => {
     ['organization', ORG],
   ] as const)('scopes owned rows to the active %s workspace', async (_label, organizationId) => {
     mockResolveActiveOrganizationId.mockResolvedValue(organizationId);
-    mockQuery.mockResolvedValue([]);
+    mockNeonQuery.mockResolvedValue([]);
 
     await LIST_PROJECTS(listRequest());
 
-    const [sql, params] = mockQuery.mock.calls[0] as [string, unknown[]];
+    const [sql, params] = mockNeonQuery.mock.calls[0] as [string, unknown[]];
     expect(sql).toMatch(/p\.organization_id is not distinct from \$5::uuid/i);
     expect(params[4]).toBe(organizationId);
+  });
+
+  it('reads the owned-or-shared row set through the bypass connection, not the caller-scoped one', async () => {
+    mockResolveSharedProjectScope.mockResolvedValue({
+      organizationId: ORG,
+      projectIds: [SHARED_PROJECT],
+    });
+    mockResolveActiveOrganizationId.mockResolvedValue(ORG);
+    mockNeonQuery.mockResolvedValue([projectRow({ is_org_shared: true })]);
+
+    const response = await LIST_PROJECTS(listRequest());
+
+    expect(response.status).toBe(200);
+    expect(mockRlsQuery).not.toHaveBeenCalled();
+    expect(mockNeonQuery).toHaveBeenCalledTimes(1);
   });
 
   it('binds the server-derived shared id set and keeps the ownership predicate', async () => {
@@ -80,12 +104,12 @@ describe('GET /api/projects · shared projects', () => {
       projectIds: [SHARED_PROJECT],
     });
     mockResolveActiveOrganizationId.mockResolvedValue(ORG);
-    mockQuery.mockResolvedValue([projectRow({ is_org_shared: true })]);
+    mockNeonQuery.mockResolvedValue([projectRow({ is_org_shared: true })]);
 
     const response = await LIST_PROJECTS(listRequest());
     expect(response.status).toBe(200);
 
-    const [sql, params] = mockQuery.mock.calls[0]!;
+    const [sql, params] = mockNeonQuery.mock.calls[0]!;
     expect(sql).toMatch(/p\.user_id = \$1 or p\.id = any\(\$4::uuid\[\]\)/i);
     expect(sql).toMatch(/p\.organization_id is not distinct from \$5::uuid/i);
     expect((params as unknown[])[0]).toBe('member-1');
@@ -94,11 +118,11 @@ describe('GET /api/projects · shared projects', () => {
   });
 
   it('binds an EMPTY id set for a user in no organization, so nothing widens', async () => {
-    mockQuery.mockResolvedValue([]);
+    mockNeonQuery.mockResolvedValue([]);
 
     await LIST_PROJECTS(listRequest());
 
-    const [, params] = mockQuery.mock.calls[0]!;
+    const [, params] = mockNeonQuery.mock.calls[0]!;
     expect((params as unknown[])[3]).toEqual([]);
   });
 
@@ -107,11 +131,11 @@ describe('GET /api/projects · shared projects', () => {
       organizationId: ORG,
       projectIds: [SHARED_PROJECT],
     });
-    mockQuery.mockResolvedValue([projectRow({ is_org_shared: true })]);
+    mockNeonQuery.mockResolvedValue([projectRow({ is_org_shared: true })]);
 
     await LIST_PROJECTS(listRequest());
 
-    const [sql] = mockQuery.mock.calls[0]!;
+    const [sql] = mockNeonQuery.mock.calls[0]!;
     expect(sql).toMatch(/from web_conversations c[\s\S]*?and c\.user_id = \$1/i);
   });
 
@@ -121,7 +145,7 @@ describe('GET /api/projects · shared projects', () => {
       projectIds: [SHARED_PROJECT],
     });
     mockResolveActiveOrganizationId.mockResolvedValue(ORG);
-    mockQuery.mockResolvedValue([
+    mockNeonQuery.mockResolvedValue([
       projectRow({ is_org_shared: true }),
       projectRow({ id: 'own-1', user_id: 'member-1', is_org_shared: false }),
     ]);
@@ -139,15 +163,14 @@ describe('GET /api/projects/[id] · shared project detail', () => {
     return new Request(`http://localhost:3000/api/projects/${id}`) as never;
   }
 
-  it('falls back to the shared read only after the owner read misses', async () => {
+  it('falls back to the shared read only after the owner read misses, through the bypass connection', async () => {
     mockResolveSharedProjectScope.mockResolvedValue({
       organizationId: ORG,
       projectIds: [SHARED_PROJECT],
     });
     mockResolveActiveOrganizationId.mockResolvedValue(ORG);
-    mockQuery
-      .mockResolvedValueOnce([])
-      .mockResolvedValueOnce([projectRow({ is_org_shared: true })]);
+    mockRlsQuery.mockResolvedValueOnce([]);
+    mockNeonQuery.mockResolvedValueOnce([projectRow({ is_org_shared: true })]);
 
     const response = await GET_PROJECT(detailRequest(SHARED_PROJECT), {
       params: Promise.resolve({ id: SHARED_PROJECT }),
@@ -157,7 +180,8 @@ describe('GET /api/projects/[id] · shared project detail', () => {
     const body = (await response.json()) as { project: { id: string; isOrgShared: boolean } };
     expect(body.project.isOrgShared).toBe(true);
 
-    const [sharedSql, sharedParams] = mockQuery.mock.calls[1]!;
+    expect(mockRlsQuery).toHaveBeenCalledTimes(1);
+    const [sharedSql, sharedParams] = mockNeonQuery.mock.calls[0]!;
     expect(sharedSql).toMatch(/p\.id = any\(\$3::uuid\[\]\)/i);
     expect(sharedSql).toMatch(/p\.organization_id is not distinct from \$4::uuid/i);
     expect((sharedParams as unknown[])[2]).toEqual([SHARED_PROJECT]);
@@ -169,25 +193,27 @@ describe('GET /api/projects/[id] · shared project detail', () => {
       projectIds: [SHARED_PROJECT],
     });
     mockResolveActiveOrganizationId.mockResolvedValue(ORG);
-    mockQuery.mockResolvedValue([]);
+    mockRlsQuery.mockResolvedValue([]);
+    mockNeonQuery.mockResolvedValue([]);
 
     const response = await GET_PROJECT(detailRequest(FOREIGN_PROJECT), {
       params: Promise.resolve({ id: FOREIGN_PROJECT }),
     });
 
     expect(response.status).toBe(404);
-    const [, sharedParams] = mockQuery.mock.calls[1]!;
+    const [, sharedParams] = mockNeonQuery.mock.calls[0]!;
     expect((sharedParams as unknown[])[0]).toBe(FOREIGN_PROJECT);
     expect((sharedParams as unknown[])[2]).toEqual([SHARED_PROJECT]);
   });
 
   it('does not issue a shared read at all when the caller shares nothing', async () => {
-    mockQuery.mockResolvedValue([]);
+    mockRlsQuery.mockResolvedValue([]);
 
     await GET_PROJECT(detailRequest(FOREIGN_PROJECT), {
       params: Promise.resolve({ id: FOREIGN_PROJECT }),
     }).catch(() => undefined);
 
-    expect(mockQuery).toHaveBeenCalledTimes(1);
+    expect(mockRlsQuery).toHaveBeenCalledTimes(1);
+    expect(mockNeonQuery).not.toHaveBeenCalled();
   });
 });
