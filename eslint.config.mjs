@@ -29,7 +29,7 @@ const PREVENTION_LAYER_RESTRICTED_SYNTAX = [
     selector:
       'Literal[value=/^(gpt-[0-9]|claude-(?:opus|sonnet|haiku|[1-9])|gemini-[0-9]|grok-[0-9]|o[1-9]-[a-z])/]',
     message:
-      'Hardcoded model ID detected. Read from models.json via packages/contracts/types model-catalog helpers (getDefaultModelFor, resolveAutoModeModel, getRoutingSlotModel) — NEVER inline a literal. See CLAUDE.md "Critical rules". To opt out (tests, marketing copy), add `// eslint-disable-next-line no-restricted-syntax` with a `// FIXME: P1-XX` if migration is pending.',
+      'Hardcoded model ID detected. Read from models.json via packages/contracts/types model-catalog helpers (getDefaultModelFor, resolveAutoModeModel, getRoutingSlotModel), NEVER inline a literal. See CLAUDE.md "Critical rules". To opt out (tests, marketing copy), add `// eslint-disable-next-line no-restricted-syntax` with a `// FIXME: P1-XX` if migration is pending.',
   },
   {
     // retired-model registry keeps the fast ESLint feedback without creating
@@ -679,15 +679,12 @@ export default [
           selector:
             ':matches(Literal[value=/rgba\\(\\s*255\\s*,\\s*255\\s*,\\s*255|rgba\\(\\s*0\\s*,\\s*0\\s*,\\s*0/], TemplateElement[value.raw=/rgba\\(\\s*255\\s*,\\s*255\\s*,\\s*255|rgba\\(\\s*0\\s*,\\s*0\\s*,\\s*0/])',
           message:
-            'Literal rgba white/black bypasses the theme. `white` is aliased to var(--agi-fg) and every shade here has a token — use useThemeColors(): border/borderLight, neutralSurface, inputSurface, progressTrack, scrim, cameraOverlay* (apps/mobile/src/ui/theme/tokens.ts). Literal monochrome is only correct over the camera preview or the voice sheet, which have their own cameraOverlay*/voice* tokens.',
+            'Literal rgba white/black bypasses the theme. `white` is aliased to var(--agi-fg) and every shade here has a token, use useThemeColors(): border/borderLight, neutralSurface, inputSurface, progressTrack, scrim, cameraOverlay* (apps/mobile/src/ui/theme/tokens.ts). Literal monochrome is only correct over the camera preview or the voice sheet, which have their own cameraOverlay*/voice* tokens.',
         },
       ],
     },
   },
 
-  // violations that pre-date the rule; each is tagged with a FIXME
-  //   FIXME: P1-MODEL-CATALOG-MIGRATION — replace hardcoded literals with
-  //   FIXME: P1-DATA-CLIENT-MIGRATION — route handlers use direct database
   {
     files: [
       // FIXME: P1-MODEL-CATALOG-MIGRATION (Wave 1 P0-C / Wave 2 sweep)
