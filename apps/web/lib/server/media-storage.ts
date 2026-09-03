@@ -6,6 +6,7 @@ import { copyFile, mkdir, readFile, stat, unlink, writeFile } from 'node:fs/prom
 import { Readable } from 'node:stream';
 import path from 'node:path';
 import { logger } from '@/lib/logger';
+import { withSpan } from '@/lib/observability/span';
 import {
   putPrivateObject,
   getObject,
@@ -17,6 +18,7 @@ import {
   isObjectStorageConfigured,
   isPrivateObjectStorageConfigured,
 } from './object-storage';
+import { OBJECT_STORAGE_REQUEST_TIMEOUT_MS } from './object-storage-timeouts';
 
 export interface StoredMedia {
   url: string;
@@ -165,6 +167,31 @@ function isPrivateChatAttachmentPathname(pathname: string): boolean {
   return /^chat-attachments\/[A-Za-z0-9_-]+\/[0-9]+_[A-Za-z0-9_-]+\.[a-z0-9]+$/i.test(unsealed);
 }
 
+/**
+ * The sealing copy in the upload-complete route is the only writer of this
+ * shape, and it only ever writes into the private bucket. A sealed pathname
+ * missing there is gone, not misfiled - trying the public bucket after it is
+ * a network round trip that was always going to answer "no such key."
+ */
+function isPrivateOnlyChatAttachmentPathname(pathname: string): boolean {
+  return pathname.endsWith(SEALED_CHAT_ATTACHMENT_SUFFIX);
+}
+
+async function attemptStorageRead<T>(
+  backend: 'private' | 'public_fallback',
+  pathname: string,
+  read: () => Promise<T>,
+): Promise<T> {
+  return withSpan(
+    'object_storage.read',
+    {
+      domain: 'retrieval',
+      attributes: { 'object_storage.backend': backend, 'object_storage.pathname': pathname },
+    },
+    read,
+  );
+}
+
 export function bytesFromBase64(b64: string): Buffer {
   const comma = b64.indexOf(',');
   const raw = b64.startsWith('data:') && comma !== -1 ? b64.slice(comma + 1) : b64;
@@ -172,7 +199,7 @@ export function bytesFromBase64(b64: string): Buffer {
 }
 
 export async function bytesFromUrl(url: string): Promise<{ data: Buffer; contentType: string }> {
-  const res = await fetch(url);
+  const res = await fetch(url, { signal: AbortSignal.timeout(OBJECT_STORAGE_REQUEST_TIMEOUT_MS) });
   if (!res.ok) throw new Error(`Failed to fetch media for persistence (HTTP ${res.status})`);
   const contentType = res.headers.get('content-type') ?? 'application/octet-stream';
   const data = Buffer.from(await res.arrayBuffer());
@@ -308,9 +335,12 @@ export async function readStoredMedia(
     if (!isPrivateChatAttachmentPathname(pathname) || !isPrivateObjectStorageConfigured()) {
       return null;
     }
-    const privateObject = await getPrivateObject(pathname);
+    const privateObject = await attemptStorageRead('private', pathname, () =>
+      getPrivateObject(pathname),
+    );
     if (privateObject) return privateObject;
-    return isObjectStorageConfigured() ? getObject(pathname) : null;
+    if (isPrivateOnlyChatAttachmentPathname(pathname) || !isObjectStorageConfigured()) return null;
+    return attemptStorageRead('public_fallback', pathname, () => getObject(pathname));
   }
 
   if (!isObjectStorageConfigured()) return null;
@@ -383,9 +413,8 @@ export async function streamStoredMedia(
     if (!isPrivateChatAttachmentPathname(pathname) || !isPrivateObjectStorageConfigured()) {
       return null;
     }
-    const object = await getPrivateObjectStream(
-      pathname,
-      range ? `bytes=${range.start}-${range.end}` : undefined,
+    const object = await attemptStorageRead('private', pathname, () =>
+      getPrivateObjectStream(pathname, range ? `bytes=${range.start}-${range.end}` : undefined),
     );
     if (object?.contentLength != null) {
       return {
@@ -395,10 +424,9 @@ export async function streamStoredMedia(
         contentRange: object.contentRange,
       };
     }
-    if (!isObjectStorageConfigured()) return null;
-    const legacyObject = await getObjectStream(
-      pathname,
-      range ? `bytes=${range.start}-${range.end}` : undefined,
+    if (isPrivateOnlyChatAttachmentPathname(pathname) || !isObjectStorageConfigured()) return null;
+    const legacyObject = await attemptStorageRead('public_fallback', pathname, () =>
+      getObjectStream(pathname, range ? `bytes=${range.start}-${range.end}` : undefined),
     );
     if (!legacyObject || legacyObject.contentLength == null) return null;
     return {

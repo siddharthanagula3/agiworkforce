@@ -10,6 +10,39 @@ import {
 } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import type { Readable } from 'node:stream';
+import {
+  OBJECT_STORAGE_CONNECTION_TIMEOUT_MS,
+  OBJECT_STORAGE_REQUEST_TIMEOUT_MS,
+} from './object-storage-timeouts';
+
+export class ObjectStorageTimeoutError extends Error {
+  constructor(readonly timeoutMs: number) {
+    super(`Object storage request exceeded ${timeoutMs}ms`);
+    this.name = 'ObjectStorageTimeoutError';
+  }
+}
+
+/**
+ * A backstop independent of whatever the request handler underneath the
+ * client does. The client's own `requestHandler` timeouts protect a real
+ * socket; this protects every caller even when the client itself is a fake
+ * that never settles, which is exactly the failure a hung upstream host
+ * looks like from here.
+ */
+async function withRequestTimeout<T>(operation: () => Promise<T>): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const deadline = new Promise<never>((_resolve, reject) => {
+    timer = setTimeout(
+      () => reject(new ObjectStorageTimeoutError(OBJECT_STORAGE_REQUEST_TIMEOUT_MS)),
+      OBJECT_STORAGE_REQUEST_TIMEOUT_MS,
+    );
+  });
+  try {
+    return await Promise.race([operation(), deadline]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
 
 function env(name: string): string | undefined {
   return process.env[name]?.trim() || undefined;
@@ -56,6 +89,10 @@ function getR2Client(): S3Client {
     region: 'auto',
     endpoint: `https://${accountId}.r2.cloudflarestorage.com`,
     credentials: { accessKeyId, secretAccessKey },
+    requestHandler: {
+      connectionTimeout: OBJECT_STORAGE_CONNECTION_TIMEOUT_MS,
+      requestTimeout: OBJECT_STORAGE_REQUEST_TIMEOUT_MS,
+    },
   });
   return cachedClient;
 }
@@ -165,7 +202,9 @@ async function getObjectFromBucket(
 ): Promise<{ data: Buffer; contentType: string | undefined } | null> {
   const client = getR2Client();
   try {
-    const res = await client.send(new GetObjectCommand({ Bucket: bucket, Key: key }));
+    const res = await withRequestTimeout(() =>
+      client.send(new GetObjectCommand({ Bucket: bucket, Key: key })),
+    );
     if (!res.Body) return null;
     const bytes = await res.Body.transformToByteArray();
     return { data: Buffer.from(bytes), contentType: res.ContentType };
@@ -202,7 +241,9 @@ async function getObjectStreamFromBucket(
 ): Promise<StoredObjectStream | null> {
   const client = getR2Client();
   try {
-    const res = await client.send(new GetObjectCommand({ Bucket: bucket, Key: key, Range: range }));
+    const res = await withRequestTimeout(() =>
+      client.send(new GetObjectCommand({ Bucket: bucket, Key: key, Range: range })),
+    );
     if (!res.Body) return null;
     return {
       body: res.Body.transformToWebStream(),
