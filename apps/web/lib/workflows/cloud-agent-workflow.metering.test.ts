@@ -127,6 +127,29 @@ function toolLoopOptions(): Record<string, unknown> {
   return mocks.runToolLoop.mock.calls[0]![1] as Record<string, unknown>;
 }
 
+/** What the tool loop returns for one provider step, and what a ledger row written before today still holds. */
+function providerStepResult(): Record<string, unknown> {
+  return {
+    lines: [{ line: 'data: {}\n' }],
+    finishReason: 'stop',
+    pendingToolCalls: [],
+    textContent: 'hello',
+    publicTextTail: '',
+    generatedFileRefs: [],
+    thinkingBlocks: [],
+    canonicalText: 'hello',
+    usage: {
+      providerCalls: 1,
+      inputTokens: 10,
+      outputTokens: 5,
+      cacheReadTokens: 0,
+      cacheWriteTokens: 0,
+      cacheWrite1hTokens: 0,
+      reasoningTokens: 0,
+    },
+  };
+}
+
 describe('durable invocation rebuilds the request on the side its reservation came from', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -211,6 +234,27 @@ describe('durable invocation rebuilds the request on the side its reservation ca
       db,
       expect.objectContaining({ billingIdempotencyKey: 'agi.chat.web.send.paid-turn-1' }),
     );
+  });
+
+  it('keeps the provider step lines out of the ledger row and still reads the old ones', async () => {
+    await executeCloudAgentWorkflowInvocation(makeInput(MANAGED_BILLING));
+
+    const providerExecutor = toolLoopOptions()['providerExecutor'] as (input: unknown) => unknown;
+    mocks.executeOperation.mockResolvedValue({});
+    await providerExecutor({
+      operationKey: 'provider:1',
+      step: 1,
+      request: {},
+      execute: async () => providerStepResult(),
+    });
+
+    const ledgerRow = mocks.executeOperation.mock.calls[0]![1] as {
+      execute: () => Promise<Record<string, unknown>>;
+      resultSchema: { parse: (value: unknown) => unknown };
+    };
+
+    await expect(ledgerRow.execute()).resolves.not.toHaveProperty('lines');
+    expect(() => ledgerRow.resultSchema.parse(providerStepResult())).not.toThrow();
   });
 });
 

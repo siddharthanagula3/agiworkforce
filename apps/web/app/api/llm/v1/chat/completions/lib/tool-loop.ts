@@ -317,7 +317,7 @@ export interface ToolLoopStepBudgetCheckpoint {
 }
 
 export interface ToolLoopProviderStepResult {
-  lines: Array<{
+  lines?: Array<{
     line: string;
     publicTextDelta?: string;
     serverToolStart?: ServerToolStartSignal;
@@ -2832,7 +2832,6 @@ export async function* runToolLoop(
       let providerStep: ToolLoopProviderStepResult;
       try {
         const liveLines = createLiveLineQueue<CollectedProviderLine>();
-        const streamedLines = new WeakSet<CollectedProviderLine>();
         const stepPromise = runProviderStepWithFailover(step, stepRequest, (entry) =>
           liveLines.push(entry),
         );
@@ -2841,14 +2840,9 @@ export async function* runToolLoop(
           (error: unknown) => liveLines.close(error),
         );
         for await (const entry of liveLines.drain()) {
-          streamedLines.add(entry);
           yield* emitProviderLine(entry);
         }
         providerStep = await stepPromise;
-        for (const entry of providerStep.lines) {
-          if (streamedLines.has(entry)) continue;
-          yield* emitProviderLine(entry);
-        }
         mergeObservedProviderUsage(observedUsage, providerStep.usage);
         for (const ref of providerStep.generatedFileRefs ?? []) {
           if (ref.fileId) providerGeneratedFileRefs.set(`${ref.provider}:${ref.fileId}`, ref);
