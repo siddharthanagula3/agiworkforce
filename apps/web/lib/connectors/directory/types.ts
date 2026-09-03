@@ -10,6 +10,8 @@ export type DirectoryConnectableMode =
 
 export type DirectorySource = 'internal' | 'mcp-registry';
 
+export type DirectoryBadge = 'first-party' | 'registry' | 'community';
+
 export interface DirectoryRemote {
   readonly url: string;
   readonly transport: DirectoryTransport;
@@ -28,6 +30,10 @@ export interface DirectoryRecord {
   readonly repositoryUrl: string | null;
   readonly version: string | null;
   readonly sourceRegistry: DirectorySource;
+  readonly badge: DirectoryBadge;
+  readonly iconUrl: string | null;
+  readonly monogram: string;
+  readonly docsUrl: string | null;
 }
 
 export interface DirectorySnapshot {
