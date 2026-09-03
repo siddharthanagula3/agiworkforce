@@ -4,8 +4,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { createError } from '@/lib/errors';
-import { getClerkAuthUser } from '@/lib/api-auth';
 import { getActiveWorkspaceMediaAssetById } from '@/lib/server/media-assets';
+import { getUserScopedDb } from '@/lib/server/rls-db';
 import {
   isMediaStorageConfigured,
   readStoredMedia,
@@ -67,14 +67,14 @@ async function handleGetFile(request: NextRequest, context: RouteContext): Promi
   const rateLimitResponse = await withRateLimit(request, 'files-serve');
   if (rateLimitResponse) return rateLimitResponse;
 
-  const { userId } = await getClerkAuthUser(request);
+  const { db, userId } = await getUserScopedDb(request);
   const { id } = await context.params;
 
   if (!UUID_RE.test(id)) {
     throw createError.notFound('File not found');
   }
 
-  const asset = await getActiveWorkspaceMediaAssetById(userId, id);
+  const asset = await getActiveWorkspaceMediaAssetById(userId, id, db);
   if (!asset || asset.deletedAt) {
     throw createError.notFound('File not found');
   }

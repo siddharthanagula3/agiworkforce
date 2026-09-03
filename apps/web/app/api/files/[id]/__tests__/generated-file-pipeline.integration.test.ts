@@ -1,4 +1,3 @@
-
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { createHash, randomUUID } from 'crypto';
 
@@ -104,8 +103,12 @@ vi.mock('@/lib/server/media-assets', async () => {
   };
 });
 
-vi.mock('@/lib/api-auth', () => ({
-  getClerkAuthUser: vi.fn(async () => ({ userId: 'user-gen' })),
+vi.mock('@/lib/server/rls-db', () => ({
+  getUserScopedDb: vi.fn(async () => ({
+    db: {},
+    userId: 'user-gen',
+    organizationId: null,
+  })),
 }));
 
 import { buildAdapterStreamResponse } from '../../../llm/v1/chat/completions/lib/stream-transform';
@@ -314,9 +317,11 @@ describe('generated-file byte pipeline (adapter stream → persist → serve)', 
     expect(files[0]!.mime_type).toBe('image/png');
     expect(files[0]!.checksum_sha256).toBe(createHash('sha256').update(RECORDED_PNG).digest('hex'));
 
-    const { getClerkAuthUser } = await import('@/lib/api-auth');
-    (getClerkAuthUser as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+    const { getUserScopedDb } = await import('@/lib/server/rls-db');
+    (getUserScopedDb as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      db: {},
       userId: 'user-other',
+      organizationId: null,
     });
     const id = files[0]!.uri.slice('/api/files/'.length);
     const served = await serveFile(

@@ -2,17 +2,18 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
 
 const mocks = vi.hoisted(() => ({
-  authUser: vi.fn(),
+  getUserScopedDb: vi.fn(),
   csrf: vi.fn(),
   list: vi.fn(),
   permanentDelete: vi.fn(),
   rateLimit: vi.fn(),
   restore: vi.fn(),
   softDelete: vi.fn(),
+  scopedDb: { query: vi.fn() },
 }));
 
 vi.mock('server-only', () => ({}));
-vi.mock('@/lib/api-auth', () => ({ getClerkAuthUser: mocks.authUser }));
+vi.mock('@/lib/server/rls-db', () => ({ getUserScopedDb: mocks.getUserScopedDb }));
 vi.mock('@/lib/csrf', () => ({ requireCsrfToken: mocks.csrf }));
 vi.mock('@/lib/rate-limit', () => ({ withRateLimit: mocks.rateLimit }));
 vi.mock('@/lib/server/media-assets', () => ({
@@ -38,7 +39,11 @@ function request(query = ''): NextRequest {
 describe('DELETE /api/media', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mocks.authUser.mockResolvedValue({ userId: 'owner-fixture' });
+    mocks.getUserScopedDb.mockResolvedValue({
+      db: mocks.scopedDb,
+      userId: 'owner-fixture',
+      organizationId: null,
+    });
     mocks.csrf.mockResolvedValue(null);
     mocks.rateLimit.mockResolvedValue(null);
     mocks.softDelete.mockResolvedValue(true);
@@ -49,7 +54,7 @@ describe('DELETE /api/media', () => {
     const response = await DELETE(request());
 
     expect(response.status).toBe(200);
-    expect(mocks.softDelete).toHaveBeenCalledWith('owner-fixture', ASSET_ID);
+    expect(mocks.softDelete).toHaveBeenCalledWith('owner-fixture', ASSET_ID, mocks.scopedDb);
     expect(mocks.permanentDelete).not.toHaveBeenCalled();
   });
 
@@ -57,7 +62,7 @@ describe('DELETE /api/media', () => {
     const response = await DELETE(request('&permanent=true'));
 
     expect(response.status).toBe(200);
-    expect(mocks.permanentDelete).toHaveBeenCalledWith('owner-fixture', ASSET_ID);
+    expect(mocks.permanentDelete).toHaveBeenCalledWith('owner-fixture', ASSET_ID, mocks.scopedDb);
     expect(mocks.softDelete).not.toHaveBeenCalled();
   });
 

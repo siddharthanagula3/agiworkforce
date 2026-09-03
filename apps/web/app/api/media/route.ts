@@ -6,13 +6,13 @@ import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { requireCsrfToken } from '@/lib/csrf';
 import { createError } from '@/lib/errors';
-import { getClerkAuthUser } from '@/lib/api-auth';
 import {
   listMediaAssets,
   permanentlyDeleteMediaAsset,
   softDeleteMediaAsset,
   restoreMediaAsset,
 } from '@/lib/server/media-assets';
+import { getUserScopedDb } from '@/lib/server/rls-db';
 import { authenticatedMediaUrl } from '@/lib/server/media-storage';
 import { handleCorsPreflightRequest, getCorsHeaders, getSecurityHeaders } from '@/lib/cors';
 
@@ -31,11 +31,11 @@ async function handleListMedia(request: NextRequest): Promise<NextResponse> {
   const rateLimitResponse = await withRateLimit(request, 'chat-conversation');
   if (rateLimitResponse) return rateLimitResponse;
 
-  const { userId } = await getClerkAuthUser(request);
+  const { db, userId } = await getUserScopedDb(request);
   const kindParam = request.nextUrl.searchParams.get('kind');
   const kind = kindParam === 'image' || kindParam === 'video' ? kindParam : undefined;
 
-  const assets = (await listMediaAssets(userId, { kind })).map((asset) => ({
+  const assets = (await listMediaAssets(userId, { kind }, db)).map((asset) => ({
     ...asset,
     storageUrl: authenticatedMediaUrl(asset.id),
   }));
@@ -49,7 +49,7 @@ async function handleDeleteMedia(request: NextRequest): Promise<NextResponse> {
   const rateLimitResponse = await withRateLimit(request, 'chat-conversation');
   if (rateLimitResponse) return rateLimitResponse;
 
-  const { userId } = await getClerkAuthUser(request);
+  const { db, userId } = await getUserScopedDb(request);
   const rawId = request.nextUrl.searchParams.get('id');
   const parsed = DeleteMediaQuerySchema.safeParse({
     id: rawId,
@@ -60,8 +60,8 @@ async function handleDeleteMedia(request: NextRequest): Promise<NextResponse> {
   }
 
   const deleted = parsed.data.permanent
-    ? await permanentlyDeleteMediaAsset(userId, parsed.data.id)
-    : await softDeleteMediaAsset(userId, parsed.data.id);
+    ? await permanentlyDeleteMediaAsset(userId, parsed.data.id, db)
+    : await softDeleteMediaAsset(userId, parsed.data.id, db);
   return NextResponse.json({ success: deleted }, { headers: headers(request) });
 }
 
@@ -72,14 +72,14 @@ async function handleRestoreMedia(request: NextRequest): Promise<NextResponse> {
   const rateLimitResponse = await withRateLimit(request, 'chat-conversation');
   if (rateLimitResponse) return rateLimitResponse;
 
-  const { userId } = await getClerkAuthUser(request);
+  const { db, userId } = await getUserScopedDb(request);
   const rawId = request.nextUrl.searchParams.get('id');
   const parsed = DeleteMediaQuerySchema.safeParse({ id: rawId });
   if (!parsed.success) {
     throw createError.validation('A valid id query parameter (uuid) is required');
   }
 
-  const restored = await restoreMediaAsset(userId, parsed.data.id);
+  const restored = await restoreMediaAsset(userId, parsed.data.id, db);
   return NextResponse.json({ success: restored }, { headers: headers(request) });
 }
 
