@@ -1,4 +1,3 @@
-
 import { readStringValue, normalizeOptionalLowercaseString } from './lib/string-utils';
 import { resolveBundledOpenAIResponsesEndpointClass } from './openai-responses-payload-policy';
 
@@ -56,6 +55,12 @@ export interface ProviderRequestCapabilities {
 
 const OPENAI_RESPONSES_APIS = new Set(['openai-responses', 'openai-codex-responses']);
 const OPENAI_RESPONSES_PROVIDERS = new Set(['openai']);
+const STREAMING_USAGE_COMPAT_ENDPOINT_CLASSES: ReadonlySet<ProviderEndpointClass> = new Set([
+  'deepseek-native',
+  'xai-native',
+  'groq-native',
+]);
+const STREAMING_USAGE_COMPAT_PROVIDERS = new Set(['zhipu', 'minimax', 'perplexity']);
 
 function readCompatBoolean(
   compat: unknown,
@@ -155,6 +160,8 @@ export function resolveProviderRequestCapabilities(
     shouldStripResponsesPromptCache,
     supportsNativeStreamingUsageCompat:
       endpointClass === 'moonshot-native' || endpointClass === 'modelstudio-native',
-    supportsOpenAICompletionsStreamingUsageCompat: false,
+    supportsOpenAICompletionsStreamingUsageCompat:
+      STREAMING_USAGE_COMPAT_ENDPOINT_CLASSES.has(endpointClass) ||
+      (provider !== undefined && STREAMING_USAGE_COMPAT_PROVIDERS.has(provider)),
   };
 }
