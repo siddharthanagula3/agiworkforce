@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import type { ChatRequest } from '@agiworkforce/types';
-import { detectOpenAICompletionsCompat } from '@agiworkforce/provider-protocol';
+import {
+  detectOpenAICompletionsCompat,
+  SYSTEM_PROMPT_CACHE_BOUNDARY,
+} from '@agiworkforce/provider-protocol';
 
 import { translateChatRequest, derivePromptCacheKey } from '../translate';
 import { translateChatRequestToResponses } from '../translate-responses';
@@ -125,5 +128,56 @@ describe('translateChatRequestToResponses prompt_cache_key', () => {
     const out = translateChatRequestToResponses(req, { compat });
 
     expect(out.prompt_cache_key).toBeUndefined();
+  });
+});
+
+describe('cache boundary marker never reaches the wire', () => {
+  function reqWithBoundary(dynamicSuffix: string, userText: string): ChatRequest {
+    return reqWithSystem(
+      `stable preamble${SYSTEM_PROMPT_CACHE_BOUNDARY}${dynamicSuffix}`,
+      userText,
+    );
+  }
+
+  it('strips the marker from the Chat Completions system message', () => {
+    const out = translateChatRequest(reqWithBoundary('turn 1 dynamic content', 'q'), {
+      compat,
+      provider: 'openai',
+    });
+    const system = out.messages.find((m) => m.role === 'system' || m.role === 'developer');
+    expect(system?.content).not.toContain(SYSTEM_PROMPT_CACHE_BOUNDARY);
+    expect(system?.content).toBe('stable preamble\nturn 1 dynamic content');
+  });
+
+  it('strips the marker from the Responses instructions field', () => {
+    const out = translateChatRequestToResponses(reqWithBoundary('turn 1 dynamic content', 'q'), {
+      compat,
+    });
+    expect(out.instructions).not.toContain(SYSTEM_PROMPT_CACHE_BOUNDARY);
+    expect(out.instructions).toBe('stable preamble\nturn 1 dynamic content');
+  });
+
+  it('derives an identical prompt_cache_key across turns even as the dynamic suffix changes', () => {
+    const a = translateChatRequest(reqWithBoundary('turn 1: 09:00, skill A', 'q1'), {
+      compat,
+      provider: 'openai',
+    });
+    const b = translateChatRequest(reqWithBoundary('turn 2: 09:41, skill B, memory C', 'q2'), {
+      compat,
+      provider: 'openai',
+    });
+
+    expect(a.prompt_cache_key).toBeDefined();
+    expect(a.prompt_cache_key).toBe(b.prompt_cache_key);
+  });
+
+  it('hashes the whole prefix when the caller sent no boundary at all', () => {
+    const withBoundary = derivePromptCacheKey(
+      reqWithSystem(`same preamble${SYSTEM_PROMPT_CACHE_BOUNDARY}dynamic`, 'q'),
+    );
+    const withoutBoundary = derivePromptCacheKey(reqWithSystem('same preamble', 'q'));
+    expect(withBoundary).toBeDefined();
+    expect(withoutBoundary).toBeDefined();
+    expect(withBoundary).toBe(withoutBoundary);
   });
 });

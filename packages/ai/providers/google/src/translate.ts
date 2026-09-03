@@ -1,4 +1,3 @@
-
 import type {
   ChatRequest,
   ContentBlock,
@@ -7,7 +6,10 @@ import type {
   ToolDef,
   ToolChoice,
 } from '@agiworkforce/types';
-import { cleanSchemaForGemini } from '@agiworkforce/provider-protocol';
+import {
+  cleanSchemaForGemini,
+  stripSystemPromptCacheBoundary,
+} from '@agiworkforce/provider-protocol';
 
 import type {
   GeminiContent,
@@ -93,9 +95,11 @@ function extractSystemInstruction(
 ): GeminiSystemInstruction | undefined {
   if (explicit !== undefined) {
     if (typeof explicit === 'string') {
-      return { parts: [{ text: explicit }] };
+      return { parts: [{ text: stripSystemPromptCacheBoundary(explicit) }] };
     }
-    return { parts: explicit.map((b: TextBlock) => ({ text: b.text })) };
+    return {
+      parts: explicit.map((b: TextBlock) => ({ text: stripSystemPromptCacheBoundary(b.text) })),
+    };
   }
   const systems = messages.filter((m) => m.role === 'system');
   if (systems.length === 0) return undefined;
@@ -108,7 +112,7 @@ function extractSystemInstruction(
         .join('\n\n');
     })
     .join('\n\n');
-  return { parts: [{ text }] };
+  return { parts: [{ text: stripSystemPromptCacheBoundary(text) }] };
 }
 
 function translateTool(tool: ToolDef): GeminiTool['functionDeclarations'] {
