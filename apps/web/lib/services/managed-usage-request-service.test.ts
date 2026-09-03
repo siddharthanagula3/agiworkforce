@@ -489,6 +489,53 @@ describe('managed usage settlement feeds the COGS ledger', () => {
     });
   });
 
+  it('prefers an explicit observation route id over the raw provider/model reconstruction', async () => {
+    recordSettledProviderCost.mockClear();
+    const db = fakeDb([
+      {
+        request_status: 'completed',
+        operation_result: 'finalized',
+        settlement_status: 'succeeded',
+        actual_cost_cents: 7,
+      },
+    ]);
+
+    await finalizeManagedUsageRequest({
+      db,
+      userId: 'user_1',
+      idempotencyKey: 'agi.chat.web.turn_gateway',
+      requestHash: 'f'.repeat(64),
+      leaseToken: 'lease-gateway',
+      estimatedCostCents: 10,
+      provider: 'anthropic',
+      model: 'claude-sonnet-5',
+      routeId: 'anthropic/claude-sonnet-5',
+      outcome: 'completed',
+      actualCostCents: 7,
+      usage: {
+        inputTokens: 50,
+        outputTokens: 10,
+        providerCallObservations: [
+          {
+            provider: 'openrouter',
+            model: 'claude-sonnet-5',
+            routeId: 'open_router/claude-sonnet-5',
+            inputTokens: 50,
+            outputTokens: 10,
+          },
+        ],
+      },
+    });
+
+    expect(recordSettledProviderCost).toHaveBeenCalledWith(
+      expect.objectContaining({
+        provider: 'openrouter',
+        model: 'claude-sonnet-5',
+        routeId: 'open_router/claude-sonnet-5',
+      }),
+    );
+  });
+
   it('records the cost of work the client never confirmed receiving as undelivered', async () => {
     recordSettledProviderCost.mockClear();
     const db = fakeDb([

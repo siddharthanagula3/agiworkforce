@@ -16,6 +16,7 @@ vi.mock('@/lib/services/credit-service', () => ({
 }));
 vi.mock('@/lib/services/llm-cost-calculator', () => ({
   LLMCostCalculator: { calculateCost: vi.fn(() => 2) },
+  normalizeProviderId: (provider: string | null | undefined) => provider?.toLowerCase() ?? null,
 }));
 vi.mock('@/lib/cost-tracker', () => ({
   recordModelUsage: vi.fn(),
@@ -33,6 +34,7 @@ vi.mock('@/lib/services/managed-usage-request-service', () => ({
 }));
 
 import { buildStreamResponse } from '../lib/stream-transform';
+import { LLMCostCalculator } from '@/lib/services/llm-cost-calculator';
 import type { ProcessedRequest } from '../lib/request-processor';
 
 function managedProcessed(): ProcessedRequest {
@@ -323,5 +325,34 @@ describe('buildStreamResponse CPST usage telemetry', () => {
     expect(usage['fallbackUsed']).toBe(true);
     expect(usage['fallbackReason']).toBe('managed_failover');
     expect(usage['retries']).toBe(1);
+  });
+
+  it('prices the settlement at the serving route id', async () => {
+    lifecycle.finalize.mockResolvedValue({
+      requestStatus: 'completed',
+      operationResult: 'finalized',
+      settlementStatus: 'succeeded',
+      actualCostCents: 2,
+    });
+
+    await drain(
+      await buildStreamResponse(
+        new Request('https://example.com/api/llm/v1/chat/completions', {
+          method: 'POST',
+        }) as never,
+        upstreamSse(),
+        managedProcessed(),
+        'user-001',
+        'token-001',
+      ),
+    );
+
+    expect(LLMCostCalculator.calculateCost).toHaveBeenCalledWith(
+      'anthropic',
+      'fixture-model',
+      expect.objectContaining({ promptTokens: 4, completionTokens: 2 }),
+      undefined,
+      'anthropic/fixture-model',
+    );
   });
 });

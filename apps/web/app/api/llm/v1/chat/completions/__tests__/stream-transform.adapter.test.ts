@@ -1,4 +1,3 @@
-
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 vi.mock('server-only', () => ({}));
@@ -18,6 +17,8 @@ vi.mock('@/lib/services/llm-cost-calculator', () => ({
   LLMCostCalculator: {
     calculateCost: vi.fn(() => 4),
   },
+  normalizeProviderId: (provider: string | null | undefined) =>
+    typeof provider === 'string' ? provider.toLowerCase() : null,
 }));
 vi.mock('@/lib/cost-tracker', () => ({
   recordModelUsage: vi.fn(),
@@ -188,14 +189,20 @@ describe('buildAdapterStreamResponse · billing reconciliation', () => {
     );
     await readAllText(response as any);
 
-    expect(mockCalculateCost).toHaveBeenCalledWith('anthropic', 'fixture-model', {
-      promptTokens: 120,
-      completionTokens: 80,
-      totalTokens: 200,
-      cacheReadInputTokens: 10,
-      cacheCreationInputTokens: undefined,
-      cacheCreation1hInputTokens: undefined,
-    });
+    expect(mockCalculateCost).toHaveBeenCalledWith(
+      'anthropic',
+      'fixture-model',
+      {
+        promptTokens: 120,
+        completionTokens: 80,
+        totalTokens: 200,
+        cacheReadInputTokens: 10,
+        cacheCreationInputTokens: undefined,
+        cacheCreation1hInputTokens: undefined,
+      },
+      undefined,
+      'anthropic/fixture-model',
+    );
 
     expect(mockFinalizeManagedUsageRequest).toHaveBeenCalledWith({
       ...makeProcessed().managedUsage,

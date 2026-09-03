@@ -139,7 +139,12 @@ function resolveServedRouteFromObservations(
 
   const model = (last as Record<string, unknown>)['model'];
   const modelId = typeof model === 'string' ? model : null;
-  return { provider, model: modelId, routeId: buildRouteId(provider, modelId) };
+  const observedRouteId = (last as Record<string, unknown>)['routeId'];
+  const routeId =
+    typeof observedRouteId === 'string' && observedRouteId.length > 0
+      ? observedRouteId
+      : buildRouteId(provider, modelId);
+  return { provider, model: modelId, routeId };
 }
 
 export interface ManagedUsageFinalization {
