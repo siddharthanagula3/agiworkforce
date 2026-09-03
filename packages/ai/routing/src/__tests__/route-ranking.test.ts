@@ -1,59 +1,132 @@
 /**
- * Ranked route selection over the several priced routes of ONE canonical model.
+ * Ranked route selection over the several priced routes of ONE model.
  *
- * The cases that use the real compiled registry pin the behaviour a downstream
- * caller sees today. The cases that mock the registry cover the admission and
- * cost rules no live route exercises yet — a blocked route, an experimental
- * route reached by managed traffic, and a warm route priced past the ceiling —
- * because seeding any of those into the catalog would make the catalog lie.
+ * Every case runs against a synthetic model, added alongside a real registry
+ * clone (ambient module-level code elsewhere in the dependency graph reads
+ * `runtimeProfiles`, `harnesses` and `policies.auto.slots` at import time, so
+ * the base must stay a valid registry). The synthetic model's own route count
+ * and prices are fully authored here, so no case depends on how many routes
+ * any cataloged model carries.
  */
 import { modelRegistry } from '@agiworkforce/model-registry';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { resolveAutoRoute, type RoutingRegistryView } from '../auto';
+import type {
+  AutoRouteDecision,
+  AutoRoutingRequest,
+  IntrinsicCapability,
+  RoutingRegistryView,
+} from '../auto';
 import type { RoutingRuntimeState } from '../runtime-state';
 
-interface RouteView {
-  modelKey: string;
-  provider: string;
-  isDefault: boolean;
-}
+const SYNTHETIC_MODEL_KEY = 'route-ranking-test-model';
+const SYNTHETIC_DEFAULT_PROVIDER = 'route-ranking-test-default-provider';
+const SYNTHETIC_ALTERNATE_PROVIDER = 'route-ranking-test-alternate-provider';
+const SYNTHETIC_HARNESS_ID = 'route-ranking-test/chat-completions';
 
-const routes = modelRegistry.routes as unknown as Record<string, RouteView>;
+const REAL_ALIAS_ID = 'auto-balanced';
+const TASK_TYPE = 'coding' as const;
+const SUBSCRIPTION_TIER = 'max';
+const CONTEXT_TOKENS_LIMIT = 128_000;
+const BASE_INPUT_PER_MILLION = 1;
+const BASE_OUTPUT_PER_MILLION = 2;
+const BASE_CACHE_READ_PER_MILLION = 0.1;
+const BASE_CACHE_WRITE_PER_MILLION = 0;
 
-const MULTI_ROUTE_MODEL_KEY = (() => {
-  const counts = new Map<string, number>();
-  for (const route of Object.values(routes)) {
-    counts.set(route.modelKey, (counts.get(route.modelKey) ?? 0) + 1);
-  }
-  const found = [...counts.entries()].find(([, count]) => count > 1)?.[0];
-  if (!found) throw new Error('the compiled registry must carry a model with several routes');
-  return found;
-})();
+const DEFAULT_ROUTE_ID = `${SYNTHETIC_DEFAULT_PROVIDER}/${SYNTHETIC_MODEL_KEY}`;
+const ALTERNATE_ROUTE_ID = `${SYNTHETIC_ALTERNATE_PROVIDER}/${SYNTHETIC_MODEL_KEY}`;
+const ALTERNATE_PROVIDER = SYNTHETIC_ALTERNATE_PROVIDER;
 
-const DEFAULT_ROUTE_ID = (() => {
-  const found = Object.entries(routes).find(
-    ([, route]) => route.modelKey === MULTI_ROUTE_MODEL_KEY && route.isDefault,
-  );
-  if (!found) throw new Error(`${MULTI_ROUTE_MODEL_KEY} must have a default route`);
-  return found[0];
-})();
+const ALL_CAPABILITIES: Record<IntrinsicCapability, boolean> = {
+  textInput: true,
+  imageInput: true,
+  audioInput: true,
+  videoInput: true,
+  textOutput: true,
+  imageOutput: true,
+  audioOutput: true,
+  videoOutput: true,
+  streaming: true,
+  structuredOutput: true,
+  functionCalling: true,
+  reasoning: true,
+};
 
-const ALTERNATE_ROUTE_ID = (() => {
-  const found = Object.entries(routes).find(
-    ([, route]) => route.modelKey === MULTI_ROUTE_MODEL_KEY && !route.isDefault,
-  );
-  if (!found) throw new Error(`${MULTI_ROUTE_MODEL_KEY} must have an additional route`);
-  return found[0];
-})();
-
-const ALTERNATE_PROVIDER = routes[ALTERNATE_ROUTE_ID]?.provider ?? '';
-const BYOK_REQUEST = {
-  selection: MULTI_ROUTE_MODEL_KEY,
-  taskType: 'coding',
-  subscriptionTier: 'max',
+const BYOK_REQUEST: AutoRoutingRequest = {
+  selection: SYNTHETIC_MODEL_KEY,
+  taskType: TASK_TYPE,
+  subscriptionTier: SUBSCRIPTION_TIER,
   trustMode: 'byok',
-} as const;
+};
+
+function buildSyntheticRegistry(): RoutingRegistryView {
+  const base = structuredClone(modelRegistry) as unknown as RoutingRegistryView;
+  return {
+    ...base,
+    models: {
+      ...base.models,
+      [SYNTHETIC_MODEL_KEY]: {
+        identity: {
+          key: SYNTHETIC_MODEL_KEY,
+          provider: SYNTHETIC_DEFAULT_PROVIDER,
+          providerModelId: SYNTHETIC_MODEL_KEY,
+        },
+        lifecycle: { availability: 'live', deprecated: false },
+      },
+    },
+    routes: {
+      ...base.routes,
+      [DEFAULT_ROUTE_ID]: {
+        modelKey: SYNTHETIC_MODEL_KEY,
+        provider: SYNTHETIC_DEFAULT_PROVIDER,
+        providerModelId: SYNTHETIC_MODEL_KEY,
+        harnessId: SYNTHETIC_HARNESS_ID,
+        trustModes: ['byok', 'managed_cloud'],
+        availability: 'live',
+        selectable: true,
+        isDefault: true,
+        cacheClass: 'no_provider_cache',
+        commercialStatus: 'agi_direct',
+        pricing: {
+          currency: 'USD',
+          unit: 'per_million_tokens',
+          inputPerMillion: BASE_INPUT_PER_MILLION,
+          outputPerMillion: BASE_OUTPUT_PER_MILLION,
+          cacheReadPerMillion: BASE_CACHE_READ_PER_MILLION,
+          cacheWritePerMillion: BASE_CACHE_WRITE_PER_MILLION,
+        },
+      },
+      [ALTERNATE_ROUTE_ID]: {
+        modelKey: SYNTHETIC_MODEL_KEY,
+        provider: SYNTHETIC_ALTERNATE_PROVIDER,
+        providerModelId: SYNTHETIC_MODEL_KEY,
+        harnessId: SYNTHETIC_HARNESS_ID,
+        trustModes: ['byok'],
+        availability: 'live',
+        selectable: true,
+        isDefault: false,
+        cacheClass: 'no_provider_cache',
+        commercialStatus: 'authorized_marketplace',
+        pricing: {
+          currency: 'USD',
+          unit: 'per_million_tokens',
+          inputPerMillion: BASE_INPUT_PER_MILLION,
+          outputPerMillion: BASE_OUTPUT_PER_MILLION,
+          cacheReadPerMillion: BASE_CACHE_READ_PER_MILLION,
+          cacheWritePerMillion: BASE_CACHE_WRITE_PER_MILLION,
+        },
+      },
+    },
+    capabilities: {
+      ...base.capabilities,
+      [SYNTHETIC_MODEL_KEY]: ALL_CAPABILITIES,
+    },
+    limits: {
+      ...base.limits,
+      [SYNTHETIC_MODEL_KEY]: { contextTokens: CONTEXT_TOKENS_LIMIT },
+    },
+  };
+}
 
 function stateWithUnavailableRoute(routeId: string): RoutingRuntimeState {
   return {
@@ -65,24 +138,41 @@ function stateWithUnavailableRoute(routeId: string): RoutingRuntimeState {
   };
 }
 
+afterEach(() => {
+  vi.resetModules();
+  vi.doUnmock('@agiworkforce/model-registry');
+});
+
+async function resolveWithRegistry(
+  request: AutoRoutingRequest,
+  mutate?: (registry: RoutingRegistryView) => void,
+): Promise<AutoRouteDecision> {
+  const registry = buildSyntheticRegistry();
+  mutate?.(registry);
+  vi.resetModules();
+  vi.doMock('@agiworkforce/model-registry', () => ({ modelRegistry: registry }));
+  const { resolveAutoRoute } = await import('../auto');
+  return resolveAutoRoute(request);
+}
+
 describe('ranked route selection', () => {
-  it('keeps the canonical provider route as the default answer', () => {
-    const decision = resolveAutoRoute(BYOK_REQUEST);
+  it('keeps the canonical provider route as the default answer', async () => {
+    const decision = await resolveWithRegistry(BYOK_REQUEST);
 
     expect(decision).toMatchObject({
       status: 'selected',
-      modelKey: MULTI_ROUTE_MODEL_KEY,
+      modelKey: SYNTHETIC_MODEL_KEY,
       routeId: DEFAULT_ROUTE_ID,
     });
   });
 
-  it('offers the other route of the same model as failover, never a different model', () => {
-    const decision = resolveAutoRoute(BYOK_REQUEST);
+  it('offers the other route of the same model as failover, never a different model', async () => {
+    const decision = await resolveWithRegistry(BYOK_REQUEST);
     if (decision.status !== 'selected') throw new Error('expected a selected route');
 
     expect(decision.fallbacks).toEqual([
       {
-        modelKey: MULTI_ROUTE_MODEL_KEY,
+        modelKey: SYNTHETIC_MODEL_KEY,
         provider: ALTERNATE_PROVIDER,
         providerModelId: expect.any(String),
         routeId: ALTERNATE_ROUTE_ID,
@@ -91,35 +181,59 @@ describe('ranked route selection', () => {
     ]);
   });
 
-  it('puts the same-model routes ahead of any model substitution', () => {
-    const decision = resolveAutoRoute({
-      selection: 'auto-balanced',
-      taskType: 'coding',
-      subscriptionTier: 'max',
+  it('puts the same-model routes ahead of any model substitution', async () => {
+    const aliasRequest: AutoRoutingRequest = {
+      selection: REAL_ALIAS_ID,
+      taskType: TASK_TYPE,
+      subscriptionTier: SUBSCRIPTION_TIER,
       trustMode: 'byok',
+    };
+
+    const discovery = await resolveWithRegistry(aliasRequest);
+    if (discovery.status !== 'selected') throw new Error('expected the alias to resolve');
+    const targetModelKey = discovery.modelKey;
+    const targetAlternateRouteId = `${SYNTHETIC_ALTERNATE_PROVIDER}/${targetModelKey}`;
+
+    const decision = await resolveWithRegistry(aliasRequest, (registry) => {
+      const targetDefaultRoute = Object.values(registry.routes).find(
+        (route) => route.modelKey === targetModelKey && route.isDefault,
+      );
+      if (!targetDefaultRoute) throw new Error(`missing default route for ${targetModelKey}`);
+      for (const [routeId, route] of Object.entries(registry.routes)) {
+        if (route.modelKey === targetModelKey && !route.isDefault) delete registry.routes[routeId];
+      }
+      registry.routes[targetAlternateRouteId] = {
+        ...targetDefaultRoute,
+        provider: SYNTHETIC_ALTERNATE_PROVIDER,
+        harnessId: SYNTHETIC_HARNESS_ID,
+        trustModes: ['byok'],
+        isDefault: false,
+        cacheClass: 'no_provider_cache',
+        commercialStatus: 'authorized_marketplace',
+      };
     });
     if (decision.status !== 'selected') throw new Error('expected a selected route');
 
-    expect(decision.modelKey).toBe(MULTI_ROUTE_MODEL_KEY);
+    expect(decision.modelKey).toBe(targetModelKey);
     expect(decision.fallbacks[0]).toMatchObject({
-      modelKey: MULTI_ROUTE_MODEL_KEY,
-      routeId: ALTERNATE_ROUTE_ID,
+      modelKey: targetModelKey,
+      routeId: targetAlternateRouteId,
     });
     expect(decision.fallbacks.slice(1).map((fallback) => fallback.modelKey)).not.toContain(
-      MULTI_ROUTE_MODEL_KEY,
+      targetModelKey,
     );
   });
 
-  it('does not offer a route whose harness the trust mode cannot reach', () => {
-    const decision = resolveAutoRoute({ ...BYOK_REQUEST, trustMode: 'managed_cloud' });
+  it('does not offer a route whose harness the trust mode cannot reach', async () => {
+    const decision = await resolveWithRegistry({ ...BYOK_REQUEST, trustMode: 'managed_cloud' });
     if (decision.status !== 'selected') throw new Error('expected a selected route');
 
     expect(decision.routeId).toBe(DEFAULT_ROUTE_ID);
     expect(decision.fallbacks).toEqual([]);
   });
 
-  it('leaves an unhealthy route behind the healthy alternative', () => {
-    const decision = resolveAutoRoute({
+  it('leaves an unhealthy route behind the healthy alternative', async () => {
+    const decision = await resolveWithRegistry({
       ...BYOK_REQUEST,
       runtimeState: stateWithUnavailableRoute(DEFAULT_ROUTE_ID),
     });
@@ -129,8 +243,8 @@ describe('ranked route selection', () => {
     expect(decision.fallbacks[0]?.routeId).toBe(DEFAULT_ROUTE_ID);
   });
 
-  it('keeps the warm route when it is admissible, healthy and priced alike', () => {
-    const decision = resolveAutoRoute({
+  it('keeps the warm route when it is admissible, healthy and priced alike', async () => {
+    const decision = await resolveWithRegistry({
       ...BYOK_REQUEST,
       preferredRouteId: ALTERNATE_ROUTE_ID,
     });
@@ -138,8 +252,8 @@ describe('ranked route selection', () => {
     expect(decision).toMatchObject({ status: 'selected', routeId: ALTERNATE_ROUTE_ID });
   });
 
-  it('refuses a warm route the caller may not use', () => {
-    const decision = resolveAutoRoute({
+  it('refuses a warm route the caller may not use', async () => {
+    const decision = await resolveWithRegistry({
       ...BYOK_REQUEST,
       preferredRouteId: ALTERNATE_ROUTE_ID,
       runtimeState: stateWithUnavailableRoute(ALTERNATE_ROUTE_ID),
@@ -148,8 +262,8 @@ describe('ranked route selection', () => {
     expect(decision).toMatchObject({ status: 'selected', routeId: DEFAULT_ROUTE_ID });
   });
 
-  it('prices the warm route with its cache read rate', () => {
-    const decision = resolveAutoRoute({
+  it('prices the warm route with its cache read rate', async () => {
+    const decision = await resolveWithRegistry({
       ...BYOK_REQUEST,
       estimatedInputTokens: 500_000,
       estimatedOutputTokens: 1_000,
@@ -161,28 +275,11 @@ describe('ranked route selection', () => {
 });
 
 describe('ranked route selection over synthetic route economics', () => {
-  afterEach(() => {
-    vi.resetModules();
-    vi.doUnmock('@agiworkforce/model-registry');
-  });
-
-  async function resolveAgainst(
-    mutate: (registry: RoutingRegistryView) => void,
-    request: Parameters<typeof resolveAutoRoute>[0],
-  ): Promise<ReturnType<typeof resolveAutoRoute>> {
-    const mutated = structuredClone(modelRegistry) as unknown as RoutingRegistryView;
-    mutate(mutated);
-    vi.resetModules();
-    vi.doMock('@agiworkforce/model-registry', () => ({ modelRegistry: mutated }));
-    const { resolveAutoRoute: resolveMocked } = await import('../auto');
-    return resolveMocked(request);
-  }
-
   it('never selects a blocked route, and never offers it as failover', async () => {
-    const decision = await resolveAgainst((registry) => {
+    const decision = await resolveWithRegistry(BYOK_REQUEST, (registry) => {
       const route = registry.routes[DEFAULT_ROUTE_ID];
       if (route) route.commercialStatus = 'blocked';
-    }, BYOK_REQUEST);
+    });
 
     expect(decision).toMatchObject({ status: 'selected', routeId: ALTERNATE_ROUTE_ID });
     if (decision.status !== 'selected') throw new Error('expected a selected route');
@@ -190,24 +287,25 @@ describe('ranked route selection over synthetic route economics', () => {
   });
 
   it('keeps an experimental route away from managed traffic but not from BYOK', async () => {
-    const managed = await resolveAgainst(
+    const managed = await resolveWithRegistry(
+      { ...BYOK_REQUEST, trustMode: 'managed_cloud' },
       (registry) => {
         const route = registry.routes[DEFAULT_ROUTE_ID];
         if (route) route.commercialStatus = 'experimental_only';
       },
-      { ...BYOK_REQUEST, trustMode: 'managed_cloud' },
     );
     expect(managed.status).toBe('unavailable');
 
-    const byok = await resolveAgainst((registry) => {
+    const byok = await resolveWithRegistry(BYOK_REQUEST, (registry) => {
       const route = registry.routes[DEFAULT_ROUTE_ID];
       if (route) route.commercialStatus = 'experimental_only';
-    }, BYOK_REQUEST);
+    });
     expect(byok).toMatchObject({ status: 'selected', routeId: DEFAULT_ROUTE_ID });
   });
 
   it('selects the cheaper route of the same model', async () => {
-    const decision = await resolveAgainst(
+    const decision = await resolveWithRegistry(
+      { ...BYOK_REQUEST, estimatedInputTokens: 100_000 },
       (registry) => {
         const route = registry.routes[ALTERNATE_ROUTE_ID];
         const canonical = registry.routes[DEFAULT_ROUTE_ID];
@@ -215,14 +313,18 @@ describe('ranked route selection over synthetic route economics', () => {
         route.pricing.inputPerMillion = (canonical.pricing.inputPerMillion ?? 1) / 2;
         route.pricing.outputPerMillion = (canonical.pricing.outputPerMillion ?? 1) / 2;
       },
-      { ...BYOK_REQUEST, estimatedInputTokens: 100_000 },
     );
 
     expect(decision).toMatchObject({ status: 'selected', routeId: ALTERNATE_ROUTE_ID });
   });
 
   it('drops the warm route once it costs more than the ceiling multiple', async () => {
-    const decision = await resolveAgainst(
+    const decision = await resolveWithRegistry(
+      {
+        ...BYOK_REQUEST,
+        estimatedInputTokens: 100_000,
+        preferredRouteId: ALTERNATE_ROUTE_ID,
+      },
       (registry) => {
         const route = registry.routes[ALTERNATE_ROUTE_ID];
         const canonical = registry.routes[DEFAULT_ROUTE_ID];
@@ -231,7 +333,6 @@ describe('ranked route selection over synthetic route economics', () => {
         route.pricing.outputPerMillion = (canonical.pricing.outputPerMillion ?? 1) * 10;
         delete route.pricing.cacheReadPerMillion;
       },
-      { ...BYOK_REQUEST, estimatedInputTokens: 100_000, preferredRouteId: ALTERNATE_ROUTE_ID },
     );
 
     expect(decision).toMatchObject({ status: 'selected', routeId: DEFAULT_ROUTE_ID });
