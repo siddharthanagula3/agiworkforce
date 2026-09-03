@@ -24,6 +24,19 @@ export const metadata = buildMetadata({
 const BASIC_SCHEDULES = BILLING_PLAN_PRODUCT_LIMITS.basic.maxScheduledTasks;
 const PRO_SCHEDULES = BILLING_PLAN_PRODUCT_LIMITS.pro.maxScheduledTasks;
 
+const HERO_TRANSCRIPT = [
+  { kind: 'cmd', text: 'agi models status' },
+  { kind: 'out', text: 'every local server it can reach, and the models on each' },
+  { kind: 'dim', text: 'a base URL that is not loopback never gets a request built for it' },
+  { kind: 'cmd', text: 'agi --daemon' },
+  { kind: 'out', text: 'reads ~/.agiworkforce/triggers.json' },
+  { kind: 'out', text: 'cron schedules, webhook endpoints, filesystem watchers' },
+  { kind: 'dim', text: 'tools held: read_file, search_files, list_directory' },
+  { kind: 'dim', text: 'anything mutating is denied outright' },
+] as const;
+
+const HERO_TRANSCRIPT_LABEL = 'Two commands quoted from the scenarios on this page';
+
 interface ScenarioMechanic {
   label: string;
   value: string;
@@ -161,6 +174,19 @@ export default function CustomersPage() {
             { href: '/login?redirectTo=%2F', label: 'Try AGI Web' },
             { href: '/pricing', label: 'See what a plan includes', variant: 'secondary' },
           ]}
+          visual={
+            <pre
+              className="agi-lp-terminal"
+              aria-label={HERO_TRANSCRIPT_LABEL}
+              style={{ alignSelf: 'start' }}
+            >
+              {HERO_TRANSCRIPT.map((line) => (
+                <span className="agi-lp-terminal-line" data-kind={line.kind} key={line.text}>
+                  {line.text}
+                </span>
+              ))}
+            </pre>
+          }
         />
 
         <Section id="scenarios" labelledBy="agi-customers-scenarios-title" rule>
