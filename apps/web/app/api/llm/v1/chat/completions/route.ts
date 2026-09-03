@@ -17,7 +17,6 @@ import {
   buildOrganizationPolicyGateResponse,
   buildSpendLimitGateResponse,
 } from '@/lib/managed-compute-gate';
-import { buildMfaPolicyGateResponse } from '@/lib/mfa-policy-gate';
 import { resolveAuthenticatedSurface } from './lib/request-surface';
 import { runAuthGate, type AuthGateSuccess } from './lib/auth-gate';
 // GOV-3: per-plan concurrent-turn admission (see handleChatCompletions).
@@ -303,9 +302,6 @@ async function dispatchChatCompletions(
     getSecurityHeaders(),
   );
   if (policyGateResponse) return policyGateResponse;
-
-  const mfaGateResponse = await buildMfaPolicyGateResponse(userId, request, getSecurityHeaders());
-  if (mfaGateResponse) return mfaGateResponse;
 
   // The workspace budget, checked before any credit is reserved so a turn
   // that a spend cap will refuse never spends anything first.

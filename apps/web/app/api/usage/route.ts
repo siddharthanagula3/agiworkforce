@@ -9,6 +9,8 @@ import { getClerkAuthUser } from '@/lib/api-auth';
 import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
 import { getManagedUsageSummary } from '@/lib/services/managed-usage-summary-service';
 import { isApiKeyScopeError } from '@/lib/api-key-scope-error';
+import { isMfaRequiredError } from '@/lib/mfa-policy-gate';
+import { isIpNotAllowedError } from '@/lib/ip-allow-list-gate';
 
 async function handler(request: NextRequest) {
   let userId: string;
@@ -16,7 +18,7 @@ async function handler(request: NextRequest) {
     const authResult = await getClerkAuthUser(request, { apiKeyScope: 'usage:read' });
     userId = authResult.userId;
   } catch (error) {
-    if (isApiKeyScopeError(error)) {
+    if (isApiKeyScopeError(error) || isMfaRequiredError(error) || isIpNotAllowedError(error)) {
       throw error;
     }
     throw createError.unauthorized('Authentication required');

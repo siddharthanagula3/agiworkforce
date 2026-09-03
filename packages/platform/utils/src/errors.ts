@@ -168,6 +168,19 @@ const ERROR_CODE_MESSAGES: Record<ErrorCodeValue, FriendlyError> = {
     suggestion: 'Contact support if you believe this is an error.',
     icon: 'auth',
   },
+  [ErrorCode.MFA_REQUIRED]: {
+    title: 'Two-Factor Authentication Required',
+    message: 'Your workspace requires two-factor authentication.',
+    suggestion: 'Turn it on in Settings, then try again.',
+    icon: 'auth',
+  },
+  [ErrorCode.IP_NOT_ALLOWED]: {
+    title: 'Network Not Allowed',
+    message:
+      "Your workspace administrator has restricted access to specific networks, and yours isn't one of them.",
+    suggestion: 'Connect from an allowed network or contact your administrator.',
+    icon: 'auth',
+  },
   [ErrorCode.VALIDATION_ERROR]: {
     title: 'Invalid Input',
     message: 'Some of the information provided is incorrect.',

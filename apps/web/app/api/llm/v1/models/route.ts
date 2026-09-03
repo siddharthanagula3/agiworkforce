@@ -17,6 +17,8 @@ import {
   type PickerModelView,
 } from '@agiworkforce/types';
 import { isApiKeyScopeError } from '@/lib/api-key-scope-error';
+import { isMfaRequiredError } from '@/lib/mfa-policy-gate';
+import { isIpNotAllowedError } from '@/lib/ip-allow-list-gate';
 
 type OpenAiCompatibleModel = {
   id: string;
@@ -111,6 +113,20 @@ async function handleListModels(request: NextRequest) {
   try {
     ({ userId } = await getClerkAuthUser(request, { apiKeyScope: 'models:read' }));
   } catch (error) {
+    if (isMfaRequiredError(error)) {
+      return NextResponse.json(
+        { error: { message: error.message, type: 'invalid_request_error', code: 'mfa_required' } },
+        { status: 403, headers: getCorsHeaders(request) },
+      );
+    }
+    if (isIpNotAllowedError(error)) {
+      return NextResponse.json(
+        {
+          error: { message: error.message, type: 'invalid_request_error', code: 'ip_not_allowed' },
+        },
+        { status: 403, headers: getCorsHeaders(request) },
+      );
+    }
     if (presentedAuthorization) {
       const insufficientScope = isApiKeyScopeError(error);
       return NextResponse.json(

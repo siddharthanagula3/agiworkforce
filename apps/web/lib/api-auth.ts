@@ -4,6 +4,8 @@ import type { NextRequest } from 'next/server';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { setTenantScope } from '@/lib/observability/trace-context';
+import { assertMfaPolicy } from '@/lib/mfa-policy-gate';
+import { assertIpAllowList } from '@/lib/ip-allow-list-gate';
 import { auth } from '@clerk/nextjs/server';
 import { ApiKeyService } from '@/lib/services/api-key-service';
 import { getNeonDb } from '@/lib/server/neon-db';
@@ -191,6 +193,8 @@ export async function getClerkAuthUser(
         }
         await assertAccountActive(result.userId);
         setTenantScope({ userId: result.userId });
+        await assertMfaPolicy(result.userId, request);
+        await assertIpAllowList(result.userId, request);
         return { userId: result.userId };
       }
       throw createError.unauthorized();
@@ -200,6 +204,8 @@ export async function getClerkAuthUser(
     if (result) {
       await assertAccountActive(result.userId);
       setTenantScope({ userId: result.userId });
+      await assertMfaPolicy(result.userId, request);
+      await assertIpAllowList(result.userId, request);
       return result;
     }
 
@@ -210,6 +216,8 @@ export async function getClerkAuthUser(
   if (userId) {
     await assertAccountActive(userId);
     setTenantScope({ userId });
+    await assertMfaPolicy(userId, request);
+    await assertIpAllowList(userId, request);
     return { userId };
   }
 

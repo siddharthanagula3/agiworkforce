@@ -11,6 +11,8 @@
 export const ErrorCode = {
   UNAUTHORIZED: 'UNAUTHORIZED',
   FORBIDDEN: 'FORBIDDEN',
+  MFA_REQUIRED: 'MFA_REQUIRED',
+  IP_NOT_ALLOWED: 'IP_NOT_ALLOWED',
 
   VALIDATION_ERROR: 'VALIDATION_ERROR',
   INVALID_INPUT: 'INVALID_INPUT',
@@ -110,6 +112,8 @@ export const HTTP_STATUS_TO_ERROR_CODE: Record<number, ErrorCodeValue> = {
 export const ERROR_CODE_TO_HTTP_STATUS: Record<ErrorCodeValue, number> = {
   [ErrorCode.UNAUTHORIZED]: 401,
   [ErrorCode.FORBIDDEN]: 403,
+  [ErrorCode.MFA_REQUIRED]: 403,
+  [ErrorCode.IP_NOT_ALLOWED]: 403,
   [ErrorCode.VALIDATION_ERROR]: 400,
   [ErrorCode.INVALID_INPUT]: 400,
   [ErrorCode.NOT_FOUND]: 404,
