@@ -528,4 +528,28 @@ describe('useChatStream native web search citation annotations', () => {
       },
     ]);
   });
+
+  it('dedupes two spellings of one url through the same normalization the inline markers use', async () => {
+    installFetch([
+      citationDelta('https://openai.com/index/expanding-daybreak/', 'Expanding Daybreak'),
+      citationDelta(
+        'https://www.openai.com/index/expanding-daybreak?utm_source=share',
+        'Expanding Daybreak (shared)',
+      ),
+      contentDelta('One claim about OpenAI [1].'),
+    ]);
+
+    const { result } = renderHook(() => useChatStream());
+    await act(async () => {
+      await result.current.sendMessage('what shipped this week');
+    });
+
+    expect(assistantMessage()?.metadata?.citations).toEqual([
+      {
+        type: 'url_citation',
+        url: 'https://openai.com/index/expanding-daybreak/',
+        title: 'Expanding Daybreak',
+      },
+    ]);
+  });
 });
