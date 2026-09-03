@@ -245,6 +245,7 @@ interface RankedRoute {
   route: RegistryRoute;
   expectedCents: number;
   healthy: boolean;
+  hasCredential: boolean;
 }
 
 interface EligibilityResult {
@@ -520,6 +521,12 @@ function routeIsHealthy(
   return effectiveRouteHealth(state, routeId, route.provider).available;
 }
 
+function routeHasCredential(route: RegistryRoute, request: AutoRoutingRequest): boolean {
+  const availableProviderIds = request.availableProviderIds;
+  if (!availableProviderIds) return true;
+  return availableProviderIds.has(route.provider);
+}
+
 function routeAdmissionRejections(
   routeId: string,
   route: RegistryRoute,
@@ -541,9 +548,6 @@ function routeAdmissionRejections(
   }
   if (request.allowedHarnessIds && !request.allowedHarnessIds.includes(route.harnessId)) {
     reasons.push(`harness ${route.harnessId} is not executable on the calling runtime`);
-  }
-  if (request.availableProviderIds && !request.availableProviderIds.has(route.provider)) {
-    reasons.push(`provider ${route.provider} has no available credential for this request`);
   }
   if (request.zeroDataRetentionOnly) {
     const isZeroRetention =
@@ -577,9 +581,10 @@ function routeAdmissionRejections(
  *
  * Never a model substitution: each candidate serves the same canonical model
  * through a different provider, harness and price sheet. Ranking is
- * health, then the route's own expected cost, then the model's default route,
- * then route id — the last two so two equally priced routes cannot reorder
- * between runs or between the TypeScript and Rust resolvers.
+ * health, then credential availability, then the route's own expected cost,
+ * then the model's default route, then route id — the last two so two
+ * equally priced routes cannot reorder between runs or between the
+ * TypeScript and Rust resolvers.
  */
 function rankRoutes(
   candidates: readonly RankedRoute[],
@@ -587,6 +592,7 @@ function rankRoutes(
 ): readonly RankedRoute[] {
   const ordered = [...candidates].sort((left, right) => {
     if (left.healthy !== right.healthy) return left.healthy ? -1 : 1;
+    if (left.hasCredential !== right.hasCredential) return left.hasCredential ? -1 : 1;
     if (left.expectedCents !== right.expectedCents) return left.expectedCents - right.expectedCents;
     if (left.route.isDefault !== right.route.isDefault) return left.route.isDefault ? -1 : 1;
     return left.routeId < right.routeId ? -1 : left.routeId > right.routeId ? 1 : 0;
@@ -651,7 +657,19 @@ function evaluateEligibility(
       route,
       expectedCents: routeExpectedCents(routeId, route, request),
       healthy: routeIsHealthy(routeId, route, request),
+      hasCredential: routeHasCredential(route, request),
     });
+  }
+
+  const credentialedRoutes = admissible.filter((entry) => entry.hasCredential);
+  const routable =
+    request.availableProviderIds && credentialedRoutes.length > 0 ? credentialedRoutes : admissible;
+  for (const entry of admissible) {
+    if (!routable.includes(entry)) {
+      routeReasons.push(
+        `provider ${entry.route.provider} has no available credential for this request`,
+      );
+    }
   }
 
   const capabilities = registry.capabilities[modelKey];
@@ -674,7 +692,7 @@ function evaluateEligibility(
 
   if (reasons.length > 0) return { rankedRoutes: [], reasons: [...reasons, ...routeReasons] };
 
-  const rankedRoutes = rankRoutes(admissible, request);
+  const rankedRoutes = rankRoutes(routable, request);
   const selected = rankedRoutes[0];
   if (!selected) return { rankedRoutes: [], reasons: routeReasons };
   return { routeId: selected.routeId, route: selected.route, rankedRoutes, reasons };
