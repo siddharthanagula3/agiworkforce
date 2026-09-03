@@ -7,7 +7,6 @@
 //! # Scopes
 //! - `gmail.readonly` - Read email messages and settings
 //! - `gmail.send` - Send email on behalf of the user
-//! - `gmail.modify` - Read, send, delete, and manage email
 //!
 //! # Example
 //! ```ignore
@@ -46,7 +45,6 @@ const GMAIL_API_BASE: &str = "https://gmail.googleapis.com/gmail/v1";
 // Gmail OAuth scopes
 const GMAIL_READONLY_SCOPE: &str = "https://www.googleapis.com/auth/gmail.readonly";
 const GMAIL_SEND_SCOPE: &str = "https://www.googleapis.com/auth/gmail.send";
-const GMAIL_MODIFY_SCOPE: &str = "https://www.googleapis.com/auth/gmail.modify";
 const USERINFO_EMAIL_SCOPE: &str = "https://www.googleapis.com/auth/userinfo.email";
 const USERINFO_PROFILE_SCOPE: &str = "https://www.googleapis.com/auth/userinfo.profile";
 
@@ -124,7 +122,6 @@ impl GmailOAuthClient {
             scopes: vec![
                 GMAIL_READONLY_SCOPE.to_string(),
                 GMAIL_SEND_SCOPE.to_string(),
-                GMAIL_MODIFY_SCOPE.to_string(),
                 USERINFO_EMAIL_SCOPE.to_string(),
                 USERINFO_PROFILE_SCOPE.to_string(),
             ],
@@ -598,7 +595,7 @@ mod tests {
         assert!(auth_url.contains("access_type=offline"));
         assert!(auth_url.contains("gmail.readonly"));
         assert!(auth_url.contains("gmail.send"));
-        assert!(auth_url.contains("gmail.modify"));
+        assert!(!auth_url.contains("gmail.modify"));
         assert!(!pkce.code_verifier.is_empty());
         assert!(!pkce.code_challenge.is_empty());
     }
