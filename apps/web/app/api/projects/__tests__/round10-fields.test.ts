@@ -73,6 +73,22 @@ vi.mock('@/lib/server/neon-db', () => ({
   }),
 }));
 
+vi.mock('@/lib/server/rls-db', () => ({
+  getUserScopedDb: vi.fn(async () => {
+    const { userId } = await mockGetClerkAuthUser();
+    const organizationId = await mockResolveActiveOrganizationId();
+    const adapter = {
+      query: (...args: unknown[]) => mockNeonQuery(...args),
+      execute: (...args: unknown[]) => mockNeonExecute(...args),
+      transaction: vi.fn(),
+      withUser: vi.fn(() => ({})),
+      dispose: vi.fn(),
+    };
+    adapter.transaction.mockImplementation((fn: (db: typeof adapter) => unknown) => fn(adapter));
+    return { db: adapter, userId, organizationId };
+  }),
+}));
+
 vi.mock('@/lib/server/project-knowledge-object-storage', () => ({
   deleteProjectKnowledgeObject: vi.fn(async () => undefined),
 }));

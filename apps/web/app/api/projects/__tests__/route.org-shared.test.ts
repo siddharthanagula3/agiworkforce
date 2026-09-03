@@ -15,18 +15,16 @@ vi.mock('@/lib/csrf', () => ({ requireCsrfToken: vi.fn(async () => null) }));
 vi.mock('@/lib/logger', () => ({
   logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() },
 }));
-vi.mock('@/lib/api-auth', () => ({
-  getClerkAuthUser: vi.fn(async () => ({ userId: 'member-1' })),
-}));
-vi.mock('@/lib/server/neon-db', () => ({
-  getNeonDb: vi.fn(() => ({ query: (...args: unknown[]) => mockQuery(...args) })),
+vi.mock('@/lib/server/rls-db', () => ({
+  getUserScopedDb: vi.fn(async () => ({
+    db: { query: (...args: unknown[]) => mockQuery(...args) },
+    userId: 'member-1',
+    organizationId: await mockResolveActiveOrganizationId(),
+  })),
 }));
 vi.mock('@/lib/services/org-sharing-service', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/lib/services/org-sharing-service')>()),
   resolveSharedProjectScope: mockResolveSharedProjectScope,
-}));
-vi.mock('@/lib/services/active-workspace-service', () => ({
-  resolveActiveOrganizationId: mockResolveActiveOrganizationId,
 }));
 
 import { GET as LIST_PROJECTS } from '../route';

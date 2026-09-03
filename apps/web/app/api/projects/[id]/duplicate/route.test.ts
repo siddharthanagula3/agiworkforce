@@ -10,20 +10,20 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('server-only', () => ({}));
-vi.mock('@/lib/api-auth', () => ({ getClerkAuthUser: () => mocks.authUser() }));
 vi.mock('@/lib/rate-limit', () => ({ withRateLimit: () => mocks.rateLimit() }));
 vi.mock('@/lib/csrf', () => ({ requireCsrfToken: vi.fn(async () => null) }));
 vi.mock('@/lib/logger', () => ({
   logger: { debug: vi.fn(), error: vi.fn(), info: vi.fn(), warn: vi.fn() },
 }));
-vi.mock('@/lib/server/neon-db', () => ({
-  getNeonDb: () => ({ query: (...args: unknown[]) => mocks.query(...args) }),
+vi.mock('@/lib/server/rls-db', () => ({
+  getUserScopedDb: async () => ({
+    db: { query: (...args: unknown[]) => mocks.query(...args) },
+    userId: (await mocks.authUser()).userId,
+    organizationId: await mocks.resolveActiveOrganizationId(),
+  }),
 }));
 vi.mock('@/lib/services/subscription-service', () => ({
   SubscriptionService: { getSubscription: () => mocks.getSubscription() },
-}));
-vi.mock('@/lib/services/active-workspace-service', () => ({
-  resolveActiveOrganizationId: () => mocks.resolveActiveOrganizationId(),
 }));
 vi.mock('@/lib/cors', () => ({
   withCorsRoute: <T>(handler: T) => handler,
