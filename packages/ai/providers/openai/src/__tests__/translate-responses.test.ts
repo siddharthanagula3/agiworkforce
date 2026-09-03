@@ -4,7 +4,7 @@ import type { OpenAICompletionsCompatDefaults } from '@agiworkforce/provider-pro
 import { summarizeOpenAIResponsesRequest } from '../index';
 import { translateChatRequest } from '../translate';
 import { translateChatRequestToResponses } from '../translate-responses';
-import { OPENAI_DEFAULT_MODEL_ID } from './model-fixtures';
+import { OPENAI_DEFAULT_MODEL_ID, OPENAI_REASONING_MODEL_ID } from './model-fixtures';
 
 const compat: OpenAICompletionsCompatDefaults = {
   supportsStore: true,
@@ -143,6 +143,44 @@ describe('translateChatRequestToResponses', () => {
     );
 
     expect(params.reasoning?.effort).toBe('high');
+  });
+
+  it('requests a reasoning summary for reasoning-kind models even with no explicit effort or thinking', () => {
+    const params = translateChatRequestToResponses(
+      {
+        ...request,
+        model: OPENAI_REASONING_MODEL_ID,
+      },
+      { compat },
+    );
+
+    expect(params.reasoning?.summary).toBe('auto');
+    expect(params.reasoning?.effort).toBeDefined();
+  });
+
+  it('omits reasoning entirely for non-reasoning models with no explicit effort or thinking', () => {
+    const params = translateChatRequestToResponses(
+      {
+        ...request,
+        model: 'fixture-model',
+      },
+      { compat },
+    );
+
+    expect(params.reasoning).toBeUndefined();
+  });
+
+  it('never overrides an explicitly disabled thinking config with a default reasoning summary', () => {
+    const params = translateChatRequestToResponses(
+      {
+        ...request,
+        model: OPENAI_REASONING_MODEL_ID,
+        thinking: { type: 'disabled' },
+      },
+      { compat },
+    );
+
+    expect(params.reasoning).toBeUndefined();
   });
 
   it('sends a managed tool step with required tools, low effort, and its output limit', () => {

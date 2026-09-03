@@ -337,4 +337,97 @@ describe('translateOpenAIResponsesStream', () => {
     ]);
     expect(JSON.stringify(diagnostics)).not.toContain('Sensitive response text.');
   });
+
+  it('maps reasoning summary deltas to thinking-delta chunks during the pre-token reasoning wait', async () => {
+    const chunks = await collect(
+      translateOpenAIResponsesStream(
+        fromArray([
+          {
+            type: 'response.output_item.added',
+            output_index: 0,
+            sequence_number: 0,
+            item: { type: 'reasoning', id: 'rs_1', status: 'in_progress' },
+          },
+          {
+            type: 'response.reasoning_summary_text.delta',
+            item_id: 'rs_1',
+            output_index: 0,
+            summary_index: 0,
+            sequence_number: 1,
+            delta: 'Weighing the ',
+          },
+          {
+            type: 'response.reasoning_summary_text.delta',
+            item_id: 'rs_1',
+            output_index: 0,
+            summary_index: 0,
+            sequence_number: 2,
+            delta: 'available options.',
+          },
+          {
+            type: 'response.output_item.added',
+            output_index: 1,
+            sequence_number: 3,
+            item: { type: 'message', id: 'msg_1', role: 'assistant', status: 'in_progress' },
+          },
+          {
+            type: 'response.output_text.delta',
+            item_id: 'msg_1',
+            output_index: 1,
+            content_index: 0,
+            sequence_number: 4,
+            delta: 'Here is the answer.',
+          },
+          {
+            type: 'response.completed',
+            sequence_number: 5,
+            response: { id: 'resp_1', status: 'completed' },
+          },
+        ] as ResponsesStreamEvent[]),
+      ),
+    );
+
+    expect(chunks).toEqual([
+      { type: 'thinking-delta', delta: 'Weighing the ' },
+      { type: 'thinking-delta', delta: 'available options.' },
+      { type: 'text-delta', delta: 'Here is the answer.' },
+      { type: 'stop', reason: 'end_turn' },
+    ]);
+  });
+
+  it('maps reasoning_text deltas to thinking-delta chunks the same way as reasoning_summary_text', async () => {
+    const chunks = await collect(
+      translateOpenAIResponsesStream(
+        fromArray([
+          {
+            type: 'response.reasoning_text.delta',
+            item_id: 'rs_1',
+            output_index: 0,
+            content_index: 0,
+            sequence_number: 0,
+            delta: 'Considering the request.',
+          },
+          {
+            type: 'response.output_text.delta',
+            item_id: 'msg_1',
+            output_index: 1,
+            content_index: 0,
+            sequence_number: 1,
+            delta: 'Final answer.',
+          },
+          {
+            type: 'response.completed',
+            sequence_number: 2,
+            response: { id: 'resp_1', status: 'completed' },
+          },
+        ] as ResponsesStreamEvent[]),
+      ),
+    );
+
+    expect(chunks).toEqual([
+      { type: 'thinking-delta', delta: 'Considering the request.' },
+      { type: 'text-delta', delta: 'Final answer.' },
+      { type: 'stop', reason: 'end_turn' },
+    ]);
+  });
 });

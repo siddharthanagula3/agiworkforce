@@ -8,6 +8,7 @@ import type {
   ToolDef,
   ToolChoice,
 } from '@agiworkforce/types';
+import { getModelReasoning } from '@agiworkforce/types';
 import type { OpenAICompletionsCompatDefaults } from '@agiworkforce/provider-protocol';
 import {
   normalizeOpenAIStrictToolParameters,
@@ -179,15 +180,48 @@ function translateToolChoice(choice: ToolChoice | undefined): ResponsesToolChoic
   return { type: 'function', name: choice.name };
 }
 
+const REASONING_SUMMARY_MODE: NonNullable<ResponsesReasoningConfig['summary']> = 'auto';
+const FALLBACK_REASONING_EFFORT = 'medium' as const;
+
 function thinkingBudgetToEffort(
   budgetTokens: number | undefined,
 ): 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' {
-  if (budgetTokens === undefined) return 'medium';
+  if (budgetTokens === undefined) return FALLBACK_REASONING_EFFORT;
   if (budgetTokens >= 30000) return 'xhigh';
   if (budgetTokens >= 16000) return 'high';
-  if (budgetTokens >= 4000) return 'medium';
+  if (budgetTokens >= 4000) return FALLBACK_REASONING_EFFORT;
   if (budgetTokens >= 1000) return 'low';
   return 'minimal';
+}
+
+function resolveReasoningConfig(
+  req: ChatRequest,
+  compat: OpenAICompletionsCompatDefaults,
+): ResponsesReasoningConfig | undefined {
+  if (!compat.supportsReasoningEffort) return undefined;
+  if (req.thinking?.type === 'disabled') return undefined;
+
+  const modelReasoning = getModelReasoning(req.model);
+  const hasExplicitSignal = req.effort !== undefined || req.thinking?.type === 'enabled';
+  if (!hasExplicitSignal && !modelReasoning.capable) return undefined;
+
+  const requested =
+    req.effort ??
+    (req.thinking?.type === 'enabled'
+      ? thinkingBudgetToEffort(req.thinking.budgetTokens)
+      : (modelReasoning.defaultEffort ?? FALLBACK_REASONING_EFFORT));
+
+  const resolved = resolveOpenAIReasoningEffortForModel({
+    model: { provider: 'openai', id: req.model },
+    effort: requested,
+  });
+
+  return resolved
+    ? {
+        effort: resolved as NonNullable<ResponsesReasoningConfig['effort']>,
+        summary: REASONING_SUMMARY_MODE,
+      }
+    : undefined;
 }
 
 export interface TranslateResponsesOptions {
@@ -220,26 +254,7 @@ export function translateChatRequestToResponses(
   );
   const toolChoice = translateToolChoice(req.toolChoice);
 
-  const reasoning: ResponsesReasoningConfig | undefined =
-    (req.effort !== undefined || req.thinking?.type === 'enabled') && compat.supportsReasoningEffort
-      ? (() => {
-          const requested =
-            req.effort ??
-            thinkingBudgetToEffort(
-              req.thinking?.type === 'enabled' ? req.thinking.budgetTokens : undefined,
-            );
-          const resolved = resolveOpenAIReasoningEffortForModel({
-            model: { provider: 'openai', id: req.model },
-            effort: requested,
-          });
-          return resolved
-            ? {
-                effort: resolved as NonNullable<ResponsesReasoningConfig['effort']>,
-                summary: 'auto' as const,
-              }
-            : undefined;
-        })()
-      : undefined;
+  const reasoning = resolveReasoningConfig(req, compat);
 
   const promptCacheKey = derivePromptCacheKey(req);
 
