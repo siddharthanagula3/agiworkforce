@@ -1,4 +1,3 @@
-
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('server-only', () => ({}));
@@ -56,6 +55,14 @@ async function harness(): Promise<Harness> {
         display_name: 'Okta',
         is_active: true,
         last_sync_at: null,
+      },
+    ],
+    sso_connections: [
+      {
+        id: '55555555-5555-4555-8555-555555555555',
+        organization_id: ORG,
+        domain: 'example.com',
+        domain_verified_at: '2026-01-01T00:00:00.000Z',
       },
     ],
     organization_members: [

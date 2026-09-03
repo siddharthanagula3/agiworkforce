@@ -2,7 +2,12 @@ import 'server-only';
 
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import { logger } from '@/lib/logger';
-import type { ScimGroupRow, ScimProvisionedUserRow, ProfileRow } from '@/lib/server/neon-types';
+import type {
+  ScimGroupRow,
+  ScimProvisionedUserRow,
+  ProfileRow,
+  SSOConnectionRow,
+} from '@/lib/server/neon-types';
 import {
   coerceScimBoolean,
   ScimError,
@@ -195,6 +200,7 @@ export function serializeScimUser(
 ): SerializedScimUser {
   const formatted = [row.given_name, row.family_name].filter(Boolean).join(' ');
   const hasName = Boolean(row.given_name || row.family_name);
+  const membershipGranted = row.linked_user_id !== null && row.active;
 
   return {
     schemas: [SCIM_SCHEMA.user],
@@ -221,9 +227,12 @@ export function serializeScimUser(
       location: `${baseUrl}/Users/${row.id}`,
       version: `W/"${row.version}"`,
     },
+    // `linked` mirrors membershipGranted deliberately. Reporting that a profile
+    // exists independently of membership made this response an existence oracle
+    // for any email the caller cared to submit.
     'urn:agiworkforce:params:scim:schemas:extension:2.0:Provisioning': {
-      linked: row.linked_user_id !== null,
-      membershipGranted: row.linked_user_id !== null && row.active,
+      linked: membershipGranted,
+      membershipGranted,
     },
   };
 }
@@ -336,12 +345,59 @@ async function resolveMappedRole(
   return strongestMappedRole(rows.map((row) => row.mapped_role));
 }
 
+async function verifiedDomains(
+  db: DatabaseAdapter,
+  organizationId: string,
+): Promise<ReadonlySet<string>> {
+  const rows = await db.query<Pick<SSOConnectionRow, 'domain'>>(
+    `select lower(domain) as domain
+       from sso_connections
+      where organization_id = $1 and domain_verified_at is not null`,
+    [organizationId],
+  );
+  return new Set(rows.map((row) => row.domain));
+}
+
+function emailDomain(email: string): string | null {
+  const at = email.lastIndexOf('@');
+  if (at <= 0 || at === email.length - 1) return null;
+  return email.slice(at + 1).toLowerCase();
+}
+
+// Whole-domain equality, never a suffix test: `endsWith('example.com')` would
+// hand evil-example.com every account in example.com.
+function ownsEmailDomain(email: string | null, domains: ReadonlySet<string>): boolean {
+  if (!email) return false;
+  const domain = emailDomain(email);
+  return domain !== null && domains.has(domain);
+}
+
+function emailChanged(previous: string | null, next: string | null): boolean {
+  return (previous?.toLowerCase() ?? null) !== (next?.toLowerCase() ?? null);
+}
+
+async function assertProvisionableEmail(
+  db: DatabaseAdapter,
+  ctx: ScimConnectionContext,
+  email: string | null,
+): Promise<void> {
+  if (email === null) return;
+  if (ownsEmailDomain(email, await verifiedDomains(db, ctx.organizationId))) return;
+  throw new ScimError(
+    400,
+    'Directory sync may only provision users on a domain this organization has verified',
+    'invalidValue',
+  );
+}
+
 async function linkAccount(
   db: DatabaseAdapter,
   row: ScimProvisionedUserRow,
+  domains: ReadonlySet<string>,
 ): Promise<string | null> {
   if (row.linked_user_id) return row.linked_user_id;
   if (!row.email) return null;
+  if (!ownsEmailDomain(row.email, domains)) return null;
 
   const profiles = await db.query<Pick<ProfileRow, 'id'>>(
     'select id from profiles where lower(email) = lower($1) limit 1',
@@ -369,7 +425,8 @@ export async function reconcileMembership(
   ctx: ScimConnectionContext,
   row: ScimProvisionedUserRow,
 ): Promise<MembershipOutcome> {
-  const linkedUserId = await linkAccount(db, row);
+  const domains = await verifiedDomains(db, ctx.organizationId);
+  const linkedUserId = await linkAccount(db, row, domains);
 
   if (!row.active) {
     let revoked = false;
@@ -386,8 +443,8 @@ export async function reconcileMembership(
     return { linkedUserId, membershipGranted: false, membershipRevoked: revoked, role: null };
   }
 
-  if (!linkedUserId) {
-    return { linkedUserId: null, membershipGranted: false, membershipRevoked: false, role: null };
+  if (!linkedUserId || !ownsEmailDomain(row.email, domains)) {
+    return { linkedUserId, membershipGranted: false, membershipRevoked: false, role: null };
   }
 
   const mappedRole = await resolveMappedRole(db, ctx, row.id);
@@ -508,6 +565,8 @@ export async function createScimUser(
   input: ParsedScimUser,
   rawBody: Record<string, unknown>,
 ): Promise<ScimProvisionedUserRow> {
+  await assertProvisionableEmail(db, ctx, input.email);
+
   const { row, outcome } = await db.transaction(async (tx) => {
     let rows: ScimProvisionedUserRow[];
     try {
@@ -566,6 +625,10 @@ export async function replaceScimUser(
 ): Promise<ScimProvisionedUserRow> {
   const existing = await getScimUser(db, ctx, userId);
   if (!existing) throw new ScimError(404, `User ${userId} not found`);
+
+  if (emailChanged(existing.email, input.email)) {
+    await assertProvisionableEmail(db, ctx, input.email);
+  }
 
   const { row, outcome } = await db.transaction(async (tx) => {
     let rows: ScimProvisionedUserRow[];
@@ -791,6 +854,10 @@ export async function patchScimUser(
   if (!existing) throw new ScimError(404, `User ${userId} not found`);
 
   const state = applyUserPatchOperations(existing, operations);
+
+  if (emailChanged(existing.email, state.email)) {
+    await assertProvisionableEmail(db, ctx, state.email);
+  }
 
   const { row, outcome } = await db.transaction(async (tx) => {
     let rows: ScimProvisionedUserRow[];
@@ -1078,7 +1145,8 @@ export async function reconcileGroupMembers(
     .filter((row): row is ScimProvisionedUserRow => Boolean(row));
   if (present.length === 0) return;
 
-  await linkAccountsBatch(db, ctx, present);
+  const domains = await verifiedDomains(db, ctx.organizationId);
+  await linkAccountsBatch(db, ctx, present, domains);
 
   // Inactive users lose non-owner membership; the single-user path issues one
   // delete each, and the predicate is identical here.
@@ -1095,7 +1163,9 @@ export async function reconcileGroupMembers(
     );
   }
 
-  const grantable = present.filter((row) => row.active && row.linked_user_id);
+  const grantable = present.filter(
+    (row) => row.active && row.linked_user_id && ownsEmailDomain(row.email, domains),
+  );
   if (grantable.length === 0) return;
 
   const roles = await resolveMappedRolesBatch(
@@ -1165,8 +1235,9 @@ async function linkAccountsBatch(
   db: DatabaseAdapter,
   ctx: ScimConnectionContext,
   rows: ScimProvisionedUserRow[],
+  domains: ReadonlySet<string>,
 ): Promise<void> {
-  const pending = rows.filter((row) => !row.linked_user_id && row.email);
+  const pending = rows.filter((row) => !row.linked_user_id && ownsEmailDomain(row.email, domains));
   if (pending.length === 0) return;
 
   const emails = [...new Set(pending.map((row) => (row.email as string).toLowerCase()))];
