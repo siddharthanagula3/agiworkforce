@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
+import { REGISTRY_DECLARED_PROVIDER_HOSTS } from '@agiworkforce/types';
+
 import {
   ALLOWED_MANAGED_PROVIDER_HOSTS,
   resolveValidatedBaseUrl,
@@ -95,6 +97,21 @@ describe('managed provider host allowlist', () => {
       allowedHosts: ALLOWED_MANAGED_PROVIDER_HOSTS,
     });
     expect(result.ok).toBe(false);
+  });
+
+  it('admits every host a harness declares under the registry host policy', () => {
+    for (const host of REGISTRY_DECLARED_PROVIDER_HOSTS) {
+      expect(ALLOWED_MANAGED_PROVIDER_HOSTS.has(host), host).toBe(true);
+    }
+  });
+
+  it('admits a registry-declared host through the same validator as a static one', () => {
+    for (const host of REGISTRY_DECLARED_PROVIDER_HOSTS) {
+      expect(
+        validateBaseUrl(`https://${host}/v1`, { allowedHosts: ALLOWED_MANAGED_PROVIDER_HOSTS }).ok,
+        host,
+      ).toBe(true);
+    }
   });
 });
 

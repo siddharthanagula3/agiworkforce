@@ -40,6 +40,8 @@ export * from './provider';
 
 export * from './model-catalog';
 
+export * from './harness-protocol';
+
 export { default as modelsCatalogJson } from './models.json';
 
 export * from './runtime';

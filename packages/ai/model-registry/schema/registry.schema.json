@@ -272,10 +272,30 @@
         "blocked"
       ]
     },
+    "harnessProtocol": {
+      "enum": [
+        "openai_chat",
+        "openai_responses",
+        "anthropic_messages",
+        "gemini_native",
+        "provider_native"
+      ]
+    },
+    "harnessHostPolicy": {
+      "enum": ["allowlist_only", "registry_declared"]
+    },
     "harness": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["provider", "apiFamily", "adapter", "trustModes", "features"],
+      "required": [
+        "provider",
+        "apiFamily",
+        "adapter",
+        "trustModes",
+        "features",
+        "protocol",
+        "hostPolicy"
+      ],
       "properties": {
         "provider": {
           "$ref": "#/definitions/nonEmptyString"
@@ -284,6 +304,19 @@
           "$ref": "#/definitions/nonEmptyString"
         },
         "adapter": {
+          "$ref": "#/definitions/nonEmptyString"
+        },
+        "protocol": {
+          "$ref": "#/definitions/harnessProtocol"
+        },
+        "hostPolicy": {
+          "$ref": "#/definitions/harnessHostPolicy"
+        },
+        "baseUrl": {
+          "type": "string",
+          "pattern": "^https://"
+        },
+        "apiKeyEnv": {
           "$ref": "#/definitions/nonEmptyString"
         },
         "trustModes": {
