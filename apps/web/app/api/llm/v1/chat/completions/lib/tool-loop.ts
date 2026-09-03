@@ -1880,12 +1880,15 @@ export async function* runToolLoop(
               stepSink,
               signal,
             );
-            return collectProviderStream(providerStream, (entry) => {
-              if (entry.publicTextDelta || entry.serverToolStart || entry.serverToolResults) {
-                liveContentStreamed = true;
-              }
-              onLine?.(entry);
-            });
+            return collectProviderStream(
+              providerStream,
+              onLine
+                ? (entry) => {
+                    liveContentStreamed = true;
+                    onLine(entry);
+                  }
+                : undefined,
+            );
           },
           nestedDeadlineMs(PROVIDER_STREAM_DEADLINE_MS, maxDurationMs, now() - startedAt),
           options.signal,
