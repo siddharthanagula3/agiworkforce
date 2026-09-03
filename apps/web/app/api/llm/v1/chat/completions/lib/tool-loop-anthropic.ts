@@ -1,14 +1,25 @@
 import 'server-only';
 
-import type { StreamChunk, ThinkingBlock } from '@agiworkforce/types';
+import { normalizeModelId, type StreamChunk, type ThinkingBlock } from '@agiworkforce/types';
 import { OpenAIWireAssembler } from '@agiworkforce/provider-protocol';
 import {
   accumulateObservedProviderUsage,
   type ObservedProviderUsage,
 } from '@/lib/services/managed-usage-accounting-service';
+import { normalizeProviderId } from '@/lib/services/llm-cost-calculator';
 import { startProviderStream } from './adapter-factory';
 import { ADAPTER_PROVIDERS } from './adapter-providers';
 import type { ProcessedRequest } from './request-processor';
+
+/**
+ * Route ids are named `${servingProvider}/${modelKey}` in the model registry
+ * (see `getRoutePricing`). Built from the normalized ids, not the raw
+ * dispatch-layer strings, since the registry's provider keys are its own
+ * canonical spelling (`open_router`, not `openrouter`).
+ */
+export function buildServingRouteId(provider: string, model: string): string {
+  return `${normalizeProviderId(provider) ?? provider}/${normalizeModelId(model) ?? model}`;
+}
 
 export interface ToolLoopStepSink {
   thinkingBlocks: ThinkingBlock[];
@@ -40,6 +51,7 @@ export async function buildToolLoopStream(
   return chunksToOpenAiSse(chunks, responseModel, adapterProvider.wireMode, sink, {
     provider,
     model: stepRequest.model,
+    routeId: buildServingRouteId(provider, stepRequest.model),
   });
 }
 
@@ -73,12 +85,13 @@ export function chunksToOpenAiSse(
   model: string,
   wireMode: 'legacy-web' | 'openai-passthrough',
   sink?: ToolLoopStepSink,
-  pricing?: { provider: string; model: string },
+  pricing?: { provider: string; model: string; routeId?: string | null },
 ): ReadableStream<Uint8Array> {
   const assembler = new OpenAIWireAssembler({ model, wireMode });
   const encoder = new TextEncoder();
   let sawUsage = false;
   let usageCommitted = false;
+  let upstreamProvider: string | undefined;
   const streamUsage = {
     inputTokens: 0,
     outputTokens: 0,
@@ -91,13 +104,20 @@ export function chunksToOpenAiSse(
   const commitUsage = () => {
     if (usageCommitted || !sawUsage || !sink?.usage) return;
     usageCommitted = true;
-    accumulateObservedProviderUsage(sink.usage, streamUsage, pricing);
+    accumulateObservedProviderUsage(
+      sink.usage,
+      { ...streamUsage, ...(upstreamProvider ? { upstreamProvider } : {}) },
+      pricing,
+    );
   };
 
   return new ReadableStream<Uint8Array>({
     async start(controller) {
       try {
         for await (const chunk of chunks) {
+          if (chunk.type === 'response-meta' && typeof chunk.provider === 'string') {
+            upstreamProvider = chunk.provider;
+          }
           if (chunk.type === 'usage') {
             sawUsage = true;
             streamUsage.inputTokens = Math.max(streamUsage.inputTokens, chunk.inputTokens ?? 0);

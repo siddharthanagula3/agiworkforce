@@ -3,6 +3,7 @@ import 'server-only';
 import { NextRequest, NextResponse } from 'next/server';
 import { logger } from '@/lib/logger';
 import { LLMCostCalculator } from '@/lib/services/llm-cost-calculator';
+import { buildServingRouteId } from './tool-loop-anthropic';
 import { getCorsHeaders, getSecurityHeaders } from '@/lib/cors';
 import { recordModelUsage, toOtelAttributes } from '@/lib/cost-tracker';
 import { buildCpstUsageFields } from '@/lib/cpst-telemetry';
@@ -123,14 +124,20 @@ async function settleStreamBilling(input: {
     billedOutcome === 'failed'
       ? 0
       : totalTokens > 0
-        ? LLMCostCalculator.calculateCost(provider, model, {
-            promptTokens: usage.inputTokens,
-            completionTokens: usage.outputTokens,
-            totalTokens,
-            cacheReadInputTokens: usage.cacheReadInputTokens || undefined,
-            cacheCreationInputTokens: usage.cacheCreationInputTokens || undefined,
-            cacheCreation1hInputTokens: usage.cacheCreation1hInputTokens || undefined,
-          })
+        ? LLMCostCalculator.calculateCost(
+            provider,
+            model,
+            {
+              promptTokens: usage.inputTokens,
+              completionTokens: usage.outputTokens,
+              totalTokens,
+              cacheReadInputTokens: usage.cacheReadInputTokens || undefined,
+              cacheCreationInputTokens: usage.cacheCreationInputTokens || undefined,
+              cacheCreation1hInputTokens: usage.cacheCreation1hInputTokens || undefined,
+            },
+            undefined,
+            buildServingRouteId(provider, model),
+          )
         : processed.estimatedCostCents;
 
   if (processed.managedUsage) {

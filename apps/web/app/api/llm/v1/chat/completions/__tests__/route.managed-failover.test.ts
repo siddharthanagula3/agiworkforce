@@ -1,4 +1,3 @@
-
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { NextRequest } from 'next/server';
 
@@ -206,6 +205,8 @@ vi.mock('@/lib/services/llm-cost-calculator', () => ({
     getInputCostPerMtok: vi.fn(() => 3.0),
     getCacheWriteCostPerMtok: vi.fn(() => 3.0),
   },
+  normalizeProviderId: (provider: string | null | undefined) =>
+    typeof provider === 'string' ? provider.toLowerCase() : null,
 }));
 
 import { POST } from '@/app/api/llm/v1/chat/completions/route';

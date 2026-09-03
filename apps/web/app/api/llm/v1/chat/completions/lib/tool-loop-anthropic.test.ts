@@ -333,6 +333,30 @@ describe('runToolLoop Anthropic dispatch (mocked adapter)', () => {
     expect(usage.providerCallObservations?.every((call) => call.costDollars !== undefined)).toBe(
       true,
     );
+    expect(
+      usage.providerCallObservations?.every(
+        (call) => call.routeId === `anthropic/${ANTHROPIC_MODEL}`,
+      ),
+    ).toBe(true);
+  });
+
+  it('records the OpenRouter upstream-provider attribution reported on a response-meta chunk', async () => {
+    mockAnthropicStream.mockImplementationOnce(
+      fakeAdapterStream([
+        { type: 'response-meta', provider: 'anthropic/claude-sonnet-5' },
+        { type: 'text-delta', delta: 'Hi there.' },
+        { type: 'usage', inputTokens: 10, outputTokens: 2 },
+        { type: 'stop', reason: 'end_turn' },
+      ]),
+    );
+
+    const usage = createObservedProviderUsage();
+    await drain(runToolLoop(makeProcessed(), { approvalMode: 'auto', usage }));
+
+    expect(usage.providerCallObservations?.[0]).toMatchObject({
+      upstreamProvider: 'anthropic/claude-sonnet-5',
+      routeId: `anthropic/${ANTHROPIC_MODEL}`,
+    });
   });
 
   it('replays the signed thinking block before tool_use on the follow-up request, with tag-free text', async () => {
