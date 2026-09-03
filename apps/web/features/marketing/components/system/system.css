@@ -1162,6 +1162,7 @@
 [data-design='agi'] .agi-ds-auth-card {
   width: 100%;
   max-width: 28.5rem;
+  min-height: 26rem;
 }
 
 [data-design='agi'] .agi-ds-auth-embedded-shell .agi-ds-auth-card {
