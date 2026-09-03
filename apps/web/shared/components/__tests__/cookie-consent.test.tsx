@@ -322,6 +322,32 @@ describe('CookieConsent banner drives the gate', () => {
     }
   });
 
+  // The banner used to sample points under itself with elementsFromPoint and
+  // scroll the page by whatever it found there, which fired on any ordinary
+  // in-flow content (a pricing card's CTA button, a hero eyebrow) and threw
+  // the visitor down the page on mount with no interaction from them.
+  it('never scrolls the page when it appears over page content', async () => {
+    const scrollBy = vi.spyOn(window, 'scrollBy').mockImplementation(() => {});
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      render(<CookieConsent />);
+
+      await act(async () => {
+        vi.advanceTimersByTime(1200);
+      });
+      await screen.findByRole('region', { name: 'Cookie consent' });
+
+      await act(async () => {
+        vi.advanceTimersByTime(1000);
+      });
+
+      expect(scrollBy).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+      scrollBy.mockRestore();
+    }
+  });
+
   it('does not re-prompt a visitor who already decided', async () => {
     storeDecision(NECESSARY_ONLY_PREFERENCES);
     vi.useFakeTimers({ shouldAdvanceTime: true });

@@ -24,10 +24,6 @@ import {
 
 const CLOSE_ICON_SIZE = 16;
 const PROMPT_DELAY_MS = 1000;
-const OVERLAP_SAMPLE_COLUMNS = 6;
-const OVERLAP_SAMPLE_ROWS = 3;
-const OVERLAP_MAX_ELEMENT_HEIGHT_FACTOR = 3;
-const OVERLAP_RECHECK_DELAY_MS = 400;
 
 export const CookieConsent = () => {
   const [showBanner, setShowBanner] = useState(false);
@@ -68,16 +64,13 @@ export const CookieConsent = () => {
 
   // The banner is `position: fixed; bottom: 0`, so it overlays whatever a
   // normal-flow page has at the viewport bottom on first visit instead of
-  // making room for itself. The fixed chat/support shells already clear it
-  // via the `--agi-consent-inset` var above; the body padding below gives
-  // normal-flow pages the same room to scroll past their true end so a
-  // footer is never permanently stuck under the bar. Neither one can move
-  // content that is already on screen when the banner opens: a trailing
-  // reservation cannot shift earlier-in-flow layout, so clearOverlap below
-  // nudges the viewport instead, by only as much as whatever the banner
-  // would otherwise sit on top of actually needs. It runs twice: once at
-  // mount, once after a short delay, so a late web-font swap or a scroll
-  // anchoring correction landing in between still gets cleared.
+  // making room for itself. The fixed chat/support shells clear it via the
+  // `--agi-consent-inset` var below; the body padding gives normal-flow
+  // pages the same room to scroll past their true end so a footer is never
+  // permanently stuck under the bar. Content already on screen when the
+  // banner opens is deliberately left alone rather than scrolled out from
+  // under it: an unrequested scroll on mount is worse than a card briefly
+  // sitting over a card it did not ask to move.
   useEffect(() => {
     const root = document.documentElement;
     const { body } = document;
@@ -92,35 +85,12 @@ export const CookieConsent = () => {
       root.style.setProperty('--agi-consent-inset', inset);
       body.style.paddingBottom = inset;
     };
-    const clearOverlap = () => {
-      const banner = bannerRef.current;
-      const rect = banner?.getBoundingClientRect();
-      if (!banner || !rect || typeof document.elementsFromPoint !== 'function') return;
-      const maxCoveredHeight = rect.height * OVERLAP_MAX_ELEMENT_HEIGHT_FACTOR;
-      let neededScroll = 0;
-      for (let row = 0; row < OVERLAP_SAMPLE_ROWS; row += 1) {
-        const y = rect.top + (rect.height * (row + 0.5)) / OVERLAP_SAMPLE_ROWS;
-        for (let column = 0; column < OVERLAP_SAMPLE_COLUMNS; column += 1) {
-          const x = rect.left + (rect.width * (column + 0.5)) / OVERLAP_SAMPLE_COLUMNS;
-          const covered = document
-            .elementsFromPoint(x, y)
-            .find((element) => !banner.contains(element));
-          const coveredRect = covered?.getBoundingClientRect();
-          if (!coveredRect || coveredRect.height > maxCoveredHeight) continue;
-          neededScroll = Math.max(neededScroll, coveredRect.bottom - rect.top);
-        }
-      }
-      if (neededScroll > 0) window.scrollBy({ top: neededScroll });
-    };
     publish();
-    clearOverlap();
-    const recheck = window.setTimeout(clearOverlap, OVERLAP_RECHECK_DELAY_MS);
     const node = bannerRef.current;
     const observer = node ? new ResizeObserver(publish) : null;
     if (node && observer) observer.observe(node);
     window.addEventListener('resize', publish);
     return () => {
-      window.clearTimeout(recheck);
       observer?.disconnect();
       window.removeEventListener('resize', publish);
       root.style.removeProperty('--agi-consent-inset');
