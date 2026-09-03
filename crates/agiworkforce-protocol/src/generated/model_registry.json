@@ -794,7 +794,27 @@
       "harnessId": "openai/responses",
       "trustModes": ["managed_cloud", "byok"],
       "availability": "live",
-      "selectable": true
+      "selectable": true,
+      "isDefault": true,
+      "cacheClass": "provider_explicit_prompt_cache",
+      "commercialStatus": "agi_direct",
+      "pricing": {
+        "currency": "USD",
+        "unit": "per_million_tokens",
+        "inputPerMillion": 5,
+        "outputPerMillion": 30,
+        "cacheReadPerMillion": 0.5,
+        "cacheWritePerMillion": 6.25,
+        "inputTokenPricingTiers": [
+          {
+            "thresholdTokens": 272000,
+            "inputPerMillion": 10,
+            "outputPerMillion": 45,
+            "cacheReadPerMillion": 1,
+            "cacheWritePerMillion": 12.5
+          }
+        ]
+      }
     },
     "openai/gpt-5.6-terra": {
       "modelKey": "gpt-5.6-terra",
@@ -803,7 +823,27 @@
       "harnessId": "openai/responses",
       "trustModes": ["managed_cloud", "byok"],
       "availability": "live",
-      "selectable": true
+      "selectable": true,
+      "isDefault": true,
+      "cacheClass": "provider_explicit_prompt_cache",
+      "commercialStatus": "agi_direct",
+      "pricing": {
+        "currency": "USD",
+        "unit": "per_million_tokens",
+        "inputPerMillion": 2,
+        "outputPerMillion": 12,
+        "cacheReadPerMillion": 0.2,
+        "cacheWritePerMillion": 2.5,
+        "inputTokenPricingTiers": [
+          {
+            "thresholdTokens": 272000,
+            "inputPerMillion": 4,
+            "outputPerMillion": 18,
+            "cacheReadPerMillion": 0.4,
+            "cacheWritePerMillion": 5
+          }
+        ]
+      }
     },
     "openai/gpt-5.6-luna": {
       "modelKey": "gpt-5.6-luna",
@@ -812,7 +852,27 @@
       "harnessId": "openai/responses",
       "trustModes": ["managed_cloud", "byok"],
       "availability": "live",
-      "selectable": true
+      "selectable": true,
+      "isDefault": true,
+      "cacheClass": "provider_explicit_prompt_cache",
+      "commercialStatus": "agi_direct",
+      "pricing": {
+        "currency": "USD",
+        "unit": "per_million_tokens",
+        "inputPerMillion": 0.2,
+        "outputPerMillion": 1.2,
+        "cacheReadPerMillion": 0.02,
+        "cacheWritePerMillion": 0.25,
+        "inputTokenPricingTiers": [
+          {
+            "thresholdTokens": 272000,
+            "inputPerMillion": 0.4,
+            "outputPerMillion": 1.8,
+            "cacheReadPerMillion": 0.04,
+            "cacheWritePerMillion": 0.5
+          }
+        ]
+      }
     },
     "anthropic/claude-fable-5": {
       "modelKey": "claude-fable-5",
@@ -821,7 +881,19 @@
       "harnessId": "anthropic/messages",
       "trustModes": ["managed_cloud", "byok"],
       "availability": "live",
-      "selectable": true
+      "selectable": true,
+      "isDefault": true,
+      "cacheClass": "provider_explicit_prompt_cache",
+      "commercialStatus": "agi_direct",
+      "pricing": {
+        "currency": "USD",
+        "unit": "per_million_tokens",
+        "inputPerMillion": 10,
+        "outputPerMillion": 50,
+        "cacheReadPerMillion": 1,
+        "cacheWritePerMillion": 12.5,
+        "cacheWrite1hPerMillion": 20
+      }
     },
     "anthropic/claude-opus-5": {
       "modelKey": "claude-opus-5",
@@ -830,7 +902,19 @@
       "harnessId": "anthropic/messages",
       "trustModes": ["managed_cloud", "byok"],
       "availability": "live",
-      "selectable": true
+      "selectable": true,
+      "isDefault": true,
+      "cacheClass": "provider_explicit_prompt_cache",
+      "commercialStatus": "agi_direct",
+      "pricing": {
+        "currency": "USD",
+        "unit": "per_million_tokens",
+        "inputPerMillion": 5,
+        "outputPerMillion": 25,
+        "cacheReadPerMillion": 0.5,
+        "cacheWritePerMillion": 6.25,
+        "cacheWrite1hPerMillion": 10
+      }
     },
     "anthropic/claude-sonnet-5": {
       "modelKey": "claude-sonnet-5",
@@ -839,7 +923,39 @@
       "harnessId": "anthropic/messages",
       "trustModes": ["managed_cloud", "byok"],
       "availability": "live",
-      "selectable": true
+      "selectable": true,
+      "isDefault": true,
+      "cacheClass": "provider_explicit_prompt_cache",
+      "commercialStatus": "agi_direct",
+      "pricing": {
+        "currency": "USD",
+        "unit": "per_million_tokens",
+        "inputPerMillion": 3,
+        "outputPerMillion": 15,
+        "cacheReadPerMillion": 0.3,
+        "cacheWritePerMillion": 3.75,
+        "cacheWrite1hPerMillion": 6
+      }
+    },
+    "open_router/claude-sonnet-5": {
+      "modelKey": "claude-sonnet-5",
+      "provider": "open_router",
+      "providerModelId": "anthropic/claude-sonnet-5",
+      "harnessId": "open-router/chat-completions",
+      "trustModes": ["byok"],
+      "availability": "live",
+      "selectable": true,
+      "isDefault": false,
+      "cacheClass": "gateway_prompt_cache",
+      "commercialStatus": "authorized_marketplace",
+      "pricing": {
+        "currency": "USD",
+        "unit": "per_million_tokens",
+        "inputPerMillion": 3,
+        "outputPerMillion": 15,
+        "cacheReadPerMillion": 0.3,
+        "cacheWritePerMillion": 3.75
+      }
     },
     "google/gemini-embedding-2": {
       "modelKey": "gemini-embedding-2",
@@ -848,7 +964,16 @@
       "harnessId": "google/embeddings",
       "trustModes": ["managed_cloud", "byok"],
       "availability": "live",
-      "selectable": true
+      "selectable": true,
+      "isDefault": true,
+      "cacheClass": "no_provider_cache",
+      "commercialStatus": "agi_direct",
+      "pricing": {
+        "currency": "USD",
+        "unit": "per_million_tokens",
+        "inputPerMillion": 0.2,
+        "outputPerMillion": 0
+      }
     },
     "google/gemini-3.1-pro-preview": {
       "modelKey": "gemini-3.1-pro-preview",
@@ -857,7 +982,17 @@
       "harnessId": "google/generate-content",
       "trustModes": ["managed_cloud", "byok"],
       "availability": "live",
-      "selectable": true
+      "selectable": true,
+      "isDefault": true,
+      "cacheClass": "provider_implicit_prompt_cache",
+      "commercialStatus": "agi_direct",
+      "pricing": {
+        "currency": "USD",
+        "unit": "per_million_tokens",
+        "inputPerMillion": 2,
+        "outputPerMillion": 12,
+        "cacheReadPerMillion": 0.2
+      }
     },
     "google/gemini-3.5-flash-lite": {
       "modelKey": "gemini-3.5-flash-lite",
@@ -866,7 +1001,17 @@
       "harnessId": "google/generate-content",
       "trustModes": ["managed_cloud", "byok"],
       "availability": "live",
-      "selectable": true
+      "selectable": true,
+      "isDefault": true,
+      "cacheClass": "provider_implicit_prompt_cache",
+      "commercialStatus": "agi_direct",
+      "pricing": {
+        "currency": "USD",
+        "unit": "per_million_tokens",
+        "inputPerMillion": 0.3,
+        "outputPerMillion": 2.5,
+        "cacheReadPerMillion": 0.03
+      }
     },
     "google/gemini-3.1-flash-image": {
       "modelKey": "gemini-3.1-flash-image",
@@ -875,7 +1020,17 @@
       "harnessId": "google/media",
       "trustModes": ["managed_cloud", "byok"],
       "availability": "live",
-      "selectable": true
+      "selectable": true,
+      "isDefault": true,
+      "cacheClass": "no_provider_cache",
+      "commercialStatus": "agi_direct",
+      "pricing": {
+        "currency": "USD",
+        "unit": "per_image",
+        "inputPerMillion": 0.5,
+        "outputPerMillion": 60,
+        "imagePerImage": 0.067
+      }
     },
     "deepseek/deepseek-v4-flash": {
       "modelKey": "deepseek-v4-flash",
@@ -884,7 +1039,17 @@
       "harnessId": "deepseek/chat-completions",
       "trustModes": ["managed_cloud", "byok"],
       "availability": "live",
-      "selectable": true
+      "selectable": true,
+      "isDefault": true,
+      "cacheClass": "provider_implicit_prompt_cache",
+      "commercialStatus": "agi_direct",
+      "pricing": {
+        "currency": "USD",
+        "unit": "per_million_tokens",
+        "inputPerMillion": 0.44,
+        "outputPerMillion": 1.32,
+        "cacheReadPerMillion": 0.014
+      }
     },
     "deepseek/deepseek-v4-pro": {
       "modelKey": "deepseek-v4-pro",
@@ -893,7 +1058,17 @@
       "harnessId": "deepseek/chat-completions",
       "trustModes": ["managed_cloud", "byok"],
       "availability": "live",
-      "selectable": true
+      "selectable": true,
+      "isDefault": true,
+      "cacheClass": "provider_implicit_prompt_cache",
+      "commercialStatus": "agi_direct",
+      "pricing": {
+        "currency": "USD",
+        "unit": "per_million_tokens",
+        "inputPerMillion": 1.32,
+        "outputPerMillion": 3.96,
+        "cacheReadPerMillion": 0.044
+      }
     },
     "qwen/qwen-3.5-flash": {
       "modelKey": "qwen-3.5-flash",
@@ -902,7 +1077,34 @@
       "harnessId": "qwen/chat-completions",
       "trustModes": ["managed_cloud", "byok"],
       "availability": "live",
-      "selectable": true
+      "selectable": true,
+      "isDefault": true,
+      "cacheClass": "provider_explicit_prompt_cache",
+      "commercialStatus": "agi_direct",
+      "pricing": {
+        "currency": "USD",
+        "unit": "per_million_tokens",
+        "inputPerMillion": 0.029,
+        "outputPerMillion": 0.287,
+        "cacheReadPerMillion": 0.0058,
+        "cacheWritePerMillion": 0.03625,
+        "inputTokenPricingTiers": [
+          {
+            "thresholdTokens": 128000,
+            "inputPerMillion": 0.115,
+            "outputPerMillion": 1.147,
+            "cacheReadPerMillion": 0.023,
+            "cacheWritePerMillion": 0.14375
+          },
+          {
+            "thresholdTokens": 256000,
+            "inputPerMillion": 0.172,
+            "outputPerMillion": 1.72,
+            "cacheReadPerMillion": 0.0344,
+            "cacheWritePerMillion": 0.215
+          }
+        ]
+      }
     },
     "perplexity/sonar": {
       "modelKey": "sonar",
@@ -911,7 +1113,16 @@
       "harnessId": "perplexity/chat-completions",
       "trustModes": ["managed_cloud", "byok"],
       "availability": "live",
-      "selectable": true
+      "selectable": true,
+      "isDefault": true,
+      "cacheClass": "no_provider_cache",
+      "commercialStatus": "agi_direct",
+      "pricing": {
+        "currency": "USD",
+        "unit": "per_million_tokens",
+        "inputPerMillion": 1,
+        "outputPerMillion": 1
+      }
     },
     "perplexity/sonar-reasoning-pro": {
       "modelKey": "sonar-reasoning-pro",
@@ -920,7 +1131,16 @@
       "harnessId": "perplexity/chat-completions",
       "trustModes": ["managed_cloud", "byok"],
       "availability": "live",
-      "selectable": true
+      "selectable": true,
+      "isDefault": true,
+      "cacheClass": "no_provider_cache",
+      "commercialStatus": "agi_direct",
+      "pricing": {
+        "currency": "USD",
+        "unit": "per_million_tokens",
+        "inputPerMillion": 2,
+        "outputPerMillion": 8
+      }
     },
     "perplexity/sonar-pro": {
       "modelKey": "sonar-pro",
@@ -929,7 +1149,16 @@
       "harnessId": "perplexity/chat-completions",
       "trustModes": ["managed_cloud", "byok"],
       "availability": "live",
-      "selectable": true
+      "selectable": true,
+      "isDefault": true,
+      "cacheClass": "no_provider_cache",
+      "commercialStatus": "agi_direct",
+      "pricing": {
+        "currency": "USD",
+        "unit": "per_million_tokens",
+        "inputPerMillion": 3,
+        "outputPerMillion": 15
+      }
     },
     "perplexity/sonar-deep-research": {
       "modelKey": "sonar-deep-research",
@@ -938,7 +1167,16 @@
       "harnessId": "perplexity/chat-completions",
       "trustModes": ["managed_cloud", "byok"],
       "availability": "live",
-      "selectable": true
+      "selectable": true,
+      "isDefault": true,
+      "cacheClass": "no_provider_cache",
+      "commercialStatus": "agi_direct",
+      "pricing": {
+        "currency": "USD",
+        "unit": "per_million_tokens",
+        "inputPerMillion": 2,
+        "outputPerMillion": 8
+      }
     },
     "runway/runway-gen-4": {
       "modelKey": "runway-gen-4",
@@ -947,7 +1185,18 @@
       "harnessId": "runway/media",
       "trustModes": ["managed_cloud"],
       "availability": "unavailable",
-      "selectable": false
+      "selectable": false,
+      "isDefault": true,
+      "cacheClass": "no_provider_cache",
+      "commercialStatus": "agi_direct",
+      "pricing": {
+        "currency": "USD",
+        "unit": "per_second",
+        "inputPerMillion": 0,
+        "outputPerMillion": 0,
+        "videoPerSecond": 0.12,
+        "videoPerSecondByResolution": { "720p": 0.12 }
+      }
     },
     "open_router/seedance-2.5": {
       "modelKey": "seedance-2.5",
@@ -956,7 +1205,23 @@
       "harnessId": "open_router/media",
       "trustModes": ["managed_cloud"],
       "availability": "live",
-      "selectable": true
+      "selectable": true,
+      "isDefault": true,
+      "cacheClass": "no_provider_cache",
+      "commercialStatus": "agi_direct",
+      "pricing": {
+        "currency": "USD",
+        "unit": "video_tokens",
+        "inputPerMillion": 0,
+        "outputPerMillion": 0,
+        "videoTokenFormula": {
+          "unit": "video_tokens",
+          "framesPerSecond": 24,
+          "pixelsPerToken": 1024,
+          "usdPerToken": 0.0000107,
+          "usdPerTokenWithoutAudio": 0.0000107
+        }
+      }
     },
     "openai/gpt-image-2": {
       "modelKey": "gpt-image-2",
@@ -965,7 +1230,17 @@
       "harnessId": "openai/media",
       "trustModes": ["managed_cloud", "byok"],
       "availability": "live",
-      "selectable": true
+      "selectable": true,
+      "isDefault": true,
+      "cacheClass": "provider_implicit_prompt_cache",
+      "commercialStatus": "agi_direct",
+      "pricing": {
+        "currency": "USD",
+        "unit": "per_million_tokens",
+        "inputPerMillion": 8,
+        "outputPerMillion": 30,
+        "cacheReadPerMillion": 2
+      }
     },
     "openai/gpt-4o-mini-tts": {
       "modelKey": "gpt-4o-mini-tts",
@@ -974,7 +1249,16 @@
       "harnessId": "openai/media",
       "trustModes": ["managed_cloud", "byok"],
       "availability": "live",
-      "selectable": false
+      "selectable": false,
+      "isDefault": true,
+      "cacheClass": "no_provider_cache",
+      "commercialStatus": "agi_direct",
+      "pricing": {
+        "currency": "USD",
+        "unit": "per_million_tokens",
+        "inputPerMillion": 0.6,
+        "outputPerMillion": 12
+      }
     },
     "google/gemini-3.8-flash": {
       "modelKey": "gemini-3.8-flash",
@@ -983,7 +1267,17 @@
       "harnessId": "google/generate-content",
       "trustModes": ["managed_cloud", "byok"],
       "availability": "live",
-      "selectable": true
+      "selectable": true,
+      "isDefault": true,
+      "cacheClass": "provider_implicit_prompt_cache",
+      "commercialStatus": "agi_direct",
+      "pricing": {
+        "currency": "USD",
+        "unit": "per_million_tokens",
+        "inputPerMillion": 0.75,
+        "outputPerMillion": 3.75,
+        "cacheReadPerMillion": 0.075
+      }
     },
     "zhipu/glm-5.3": {
       "modelKey": "glm-5.3",
@@ -992,7 +1286,17 @@
       "harnessId": "zhipu/chat-completions",
       "trustModes": ["managed_cloud", "byok"],
       "availability": "live",
-      "selectable": true
+      "selectable": true,
+      "isDefault": true,
+      "cacheClass": "provider_implicit_prompt_cache",
+      "commercialStatus": "agi_direct",
+      "pricing": {
+        "currency": "USD",
+        "unit": "per_million_tokens",
+        "inputPerMillion": 1.4,
+        "outputPerMillion": 4.4,
+        "cacheReadPerMillion": 0.26
+      }
     },
     "zhipu/glm-5.3-flash": {
       "modelKey": "glm-5.3-flash",
@@ -1001,7 +1305,17 @@
       "harnessId": "zhipu/chat-completions",
       "trustModes": ["managed_cloud", "byok"],
       "availability": "live",
-      "selectable": true
+      "selectable": true,
+      "isDefault": true,
+      "cacheClass": "provider_implicit_prompt_cache",
+      "commercialStatus": "agi_direct",
+      "pricing": {
+        "currency": "USD",
+        "unit": "per_million_tokens",
+        "inputPerMillion": 0.075,
+        "outputPerMillion": 0.25,
+        "cacheReadPerMillion": 0.015
+      }
     },
     "qwen/qwen-3.7-plus": {
       "modelKey": "qwen-3.7-plus",
@@ -1010,7 +1324,27 @@
       "harnessId": "qwen/chat-completions",
       "trustModes": ["managed_cloud", "byok"],
       "availability": "live",
-      "selectable": true
+      "selectable": true,
+      "isDefault": true,
+      "cacheClass": "provider_explicit_prompt_cache",
+      "commercialStatus": "agi_direct",
+      "pricing": {
+        "currency": "USD",
+        "unit": "per_million_tokens",
+        "inputPerMillion": 0.276,
+        "outputPerMillion": 1.101,
+        "cacheReadPerMillion": 0.0552,
+        "cacheWritePerMillion": 0.345,
+        "inputTokenPricingTiers": [
+          {
+            "thresholdTokens": 256000,
+            "inputPerMillion": 0.826,
+            "outputPerMillion": 3.301,
+            "cacheReadPerMillion": 0.1652,
+            "cacheWritePerMillion": 1.0325
+          }
+        ]
+      }
     },
     "moonshot/kimi-k3": {
       "modelKey": "kimi-k3",
@@ -1019,7 +1353,17 @@
       "harnessId": "moonshot/chat-completions",
       "trustModes": ["managed_cloud", "byok"],
       "availability": "live",
-      "selectable": true
+      "selectable": true,
+      "isDefault": true,
+      "cacheClass": "provider_implicit_prompt_cache",
+      "commercialStatus": "agi_direct",
+      "pricing": {
+        "currency": "USD",
+        "unit": "per_million_tokens",
+        "inputPerMillion": 3,
+        "outputPerMillion": 15,
+        "cacheReadPerMillion": 0.3
+      }
     },
     "xai/grok-4.5": {
       "modelKey": "grok-4.5",
@@ -1028,7 +1372,16 @@
       "harnessId": "xai/chat-completions",
       "trustModes": ["managed_cloud", "byok"],
       "availability": "live",
-      "selectable": true
+      "selectable": true,
+      "isDefault": true,
+      "cacheClass": "no_provider_cache",
+      "commercialStatus": "agi_direct",
+      "pricing": {
+        "currency": "USD",
+        "unit": "per_million_tokens",
+        "inputPerMillion": 2,
+        "outputPerMillion": 6
+      }
     },
     "google/veo-3.1": {
       "modelKey": "veo-3.1",
@@ -1037,7 +1390,18 @@
       "harnessId": "google/media",
       "trustModes": ["managed_cloud", "byok"],
       "availability": "live",
-      "selectable": true
+      "selectable": true,
+      "isDefault": true,
+      "cacheClass": "no_provider_cache",
+      "commercialStatus": "agi_direct",
+      "pricing": {
+        "currency": "USD",
+        "unit": "per_second",
+        "inputPerMillion": 0,
+        "outputPerMillion": 750,
+        "videoPerSecond": 0.4,
+        "videoPerSecondByResolution": { "720p": 0.4, "1080p": 0.4, "4k": 0.6 }
+      }
     },
     "google/veo-3.1-fast": {
       "modelKey": "veo-3.1-fast",
@@ -1046,7 +1410,18 @@
       "harnessId": "google/media",
       "trustModes": ["managed_cloud", "byok"],
       "availability": "live",
-      "selectable": true
+      "selectable": true,
+      "isDefault": true,
+      "cacheClass": "no_provider_cache",
+      "commercialStatus": "agi_direct",
+      "pricing": {
+        "currency": "USD",
+        "unit": "per_second",
+        "inputPerMillion": 0,
+        "outputPerMillion": 0,
+        "videoPerSecond": 0.1,
+        "videoPerSecondByResolution": { "720p": 0.1, "1080p": 0.12, "4k": 0.3 }
+      }
     },
     "openai/gpt-4o-transcribe": {
       "modelKey": "gpt-4o-transcribe",
@@ -1055,7 +1430,16 @@
       "harnessId": "openai/media",
       "trustModes": ["managed_cloud", "byok"],
       "availability": "live",
-      "selectable": true
+      "selectable": true,
+      "isDefault": true,
+      "cacheClass": "no_provider_cache",
+      "commercialStatus": "agi_direct",
+      "pricing": {
+        "currency": "USD",
+        "unit": "per_million_tokens",
+        "inputPerMillion": 2.5,
+        "outputPerMillion": 10
+      }
     },
     "openai/gpt-4o-mini-transcribe": {
       "modelKey": "gpt-4o-mini-transcribe",
@@ -1064,7 +1448,16 @@
       "harnessId": "openai/media",
       "trustModes": ["managed_cloud", "byok"],
       "availability": "live",
-      "selectable": true
+      "selectable": true,
+      "isDefault": true,
+      "cacheClass": "no_provider_cache",
+      "commercialStatus": "agi_direct",
+      "pricing": {
+        "currency": "USD",
+        "unit": "per_million_tokens",
+        "inputPerMillion": 1.25,
+        "outputPerMillion": 5
+      }
     },
     "minimax/minimax-m3": {
       "modelKey": "minimax-m3",
@@ -1073,7 +1466,16 @@
       "harnessId": "minimax/chat-completions",
       "trustModes": ["managed_cloud", "byok"],
       "availability": "live",
-      "selectable": true
+      "selectable": true,
+      "isDefault": true,
+      "cacheClass": "no_provider_cache",
+      "commercialStatus": "agi_direct",
+      "pricing": {
+        "currency": "USD",
+        "unit": "per_million_tokens",
+        "inputPerMillion": 0.3,
+        "outputPerMillion": 1.2
+      }
     },
     "google/veo-3.1-lite": {
       "modelKey": "veo-3.1-lite",
@@ -1082,7 +1484,18 @@
       "harnessId": "google/media",
       "trustModes": ["managed_cloud", "byok"],
       "availability": "live",
-      "selectable": true
+      "selectable": true,
+      "isDefault": true,
+      "cacheClass": "no_provider_cache",
+      "commercialStatus": "agi_direct",
+      "pricing": {
+        "currency": "USD",
+        "unit": "per_second",
+        "inputPerMillion": 0,
+        "outputPerMillion": 0,
+        "videoPerSecond": 0.05,
+        "videoPerSecondByResolution": { "720p": 0.05, "1080p": 0.08 }
+      }
     },
     "google/gemini-omni-flash-preview": {
       "modelKey": "gemini-omni-flash-preview",
@@ -1091,7 +1504,17 @@
       "harnessId": "google/media",
       "trustModes": ["managed_cloud", "byok"],
       "availability": "preview",
-      "selectable": false
+      "selectable": false,
+      "isDefault": true,
+      "cacheClass": "no_provider_cache",
+      "commercialStatus": "agi_direct",
+      "pricing": {
+        "currency": "USD",
+        "unit": "per_second",
+        "inputPerMillion": 1.5,
+        "outputPerMillion": 17.5,
+        "videoPerSecond": 0.1
+      }
     },
     "google/gemini-3.5-live-translate-preview": {
       "modelKey": "gemini-3.5-live-translate-preview",
@@ -1100,7 +1523,16 @@
       "harnessId": "google/media",
       "trustModes": ["managed_cloud", "byok"],
       "availability": "preview",
-      "selectable": false
+      "selectable": false,
+      "isDefault": true,
+      "cacheClass": "no_provider_cache",
+      "commercialStatus": "agi_direct",
+      "pricing": {
+        "currency": "USD",
+        "unit": "per_million_tokens",
+        "inputPerMillion": 3.5,
+        "outputPerMillion": 21
+      }
     },
     "open_router/openrouter-auto": {
       "modelKey": "openrouter-auto",
@@ -1109,7 +1541,16 @@
       "harnessId": "open-router/chat-completions",
       "trustModes": ["byok"],
       "availability": "live",
-      "selectable": true
+      "selectable": true,
+      "isDefault": true,
+      "cacheClass": "no_provider_cache",
+      "commercialStatus": "customer_byok",
+      "pricing": {
+        "currency": "USD",
+        "unit": "per_million_tokens",
+        "inputPerMillion": 0,
+        "outputPerMillion": 0
+      }
     },
     "open_router/openrouter-free": {
       "modelKey": "openrouter-free",
@@ -1118,7 +1559,16 @@
       "harnessId": "open-router/chat-completions",
       "trustModes": ["byok"],
       "availability": "live",
-      "selectable": true
+      "selectable": true,
+      "isDefault": true,
+      "cacheClass": "no_provider_cache",
+      "commercialStatus": "customer_byok",
+      "pricing": {
+        "currency": "USD",
+        "unit": "per_million_tokens",
+        "inputPerMillion": 0,
+        "outputPerMillion": 0
+      }
     },
     "groq/gpt-oss-120b": {
       "modelKey": "gpt-oss-120b",
@@ -1127,7 +1577,17 @@
       "harnessId": "groq/chat-completions",
       "trustModes": ["managed_cloud", "byok"],
       "availability": "live",
-      "selectable": true
+      "selectable": true,
+      "isDefault": true,
+      "cacheClass": "provider_implicit_prompt_cache",
+      "commercialStatus": "agi_direct",
+      "pricing": {
+        "currency": "USD",
+        "unit": "per_million_tokens",
+        "inputPerMillion": 0.15,
+        "outputPerMillion": 0.6,
+        "cacheReadPerMillion": 0.075
+      }
     },
     "groq/gpt-oss-20b": {
       "modelKey": "gpt-oss-20b",
@@ -1136,7 +1596,17 @@
       "harnessId": "groq/chat-completions",
       "trustModes": ["managed_cloud", "byok"],
       "availability": "live",
-      "selectable": true
+      "selectable": true,
+      "isDefault": true,
+      "cacheClass": "provider_implicit_prompt_cache",
+      "commercialStatus": "agi_direct",
+      "pricing": {
+        "currency": "USD",
+        "unit": "per_million_tokens",
+        "inputPerMillion": 0.075,
+        "outputPerMillion": 0.3,
+        "cacheReadPerMillion": 0.0375
+      }
     }
   },
   "harnesses": {
