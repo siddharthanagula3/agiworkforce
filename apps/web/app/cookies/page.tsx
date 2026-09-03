@@ -100,14 +100,6 @@ interface StorageRow {
 
 const STORAGE: StorageRow[] = [
   {
-    key: 'user_id',
-    store: 'Local storage',
-    holds:
-      'Your account identifier, so a crash report can be tied to a session. Written by the error-reporting wrapper. It is an identifier, which is why it is listed first rather than buried.',
-    clearedBy: 'Signing out, or clearing site data.',
-    source: 'shared/lib/sentry.ts',
-  },
-  {
     key: 'agi_secure_key',
     store: 'Local storage',
     holds:
