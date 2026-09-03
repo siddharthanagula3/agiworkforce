@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest';
 
-import { ASSERTABLE_SECRET_PATTERNS, SECRET_PATTERN_REGISTRY, globalize } from './secret-patterns';
+import {
+  ASSERTABLE_SECRET_PATTERNS,
+  HIGH_CONFIDENCE_SECRET_NAMES,
+  SECRET_PATTERN_REGISTRY,
+  globalize,
+  isHighConfidenceSecretName,
+} from './secret-patterns';
 import { assertNoLeaks, LeakDetectedError, SECRET_PATTERNS } from '../leak-detector';
 import { containsSecrets, redactSecrets, scanForSecrets } from './secrets-audit';
 
@@ -23,6 +29,51 @@ describe('secret pattern registry', () => {
     expect(globalize(/abc/i).flags).toContain('g');
     expect(globalize(/abc/i).flags).toContain('i');
     expect(globalize(/abc/g).flags).toBe('g');
+  });
+
+  it('tiers every pattern into a confidence level', () => {
+    for (const entry of SECRET_PATTERN_REGISTRY) {
+      expect(['high', 'low']).toContain(entry.confidence);
+    }
+  });
+
+  it('marks provider-prefixed and credentialed patterns as high confidence', () => {
+    for (const name of [
+      'Anthropic/OpenAI API Key',
+      'Stripe Live Key',
+      'Stripe Test Key',
+      'Neon Connection String',
+      'Google API Key',
+      'AWS Access Key',
+      'AWS Secret Key',
+      'GitHub Token',
+      'GitHub OAuth',
+      'Database URL with Credentials',
+      'MongoDB URL with Credentials',
+      'Private Key',
+    ]) {
+      expect(isHighConfidenceSecretName(name)).toBe(true);
+    }
+  });
+
+  it('marks generic and JWT-shaped patterns as low confidence', () => {
+    for (const name of [
+      'JWT',
+      'Bearer Token',
+      'Generic API Key',
+      'Generic Secret',
+      'Password in URL',
+      'Basic Auth',
+      'SSN Pattern',
+      'Credit Card',
+    ]) {
+      expect(isHighConfidenceSecretName(name)).toBe(false);
+    }
+  });
+
+  it('does not change which patterns leak-detector treats as assertable', () => {
+    expect(ASSERTABLE_SECRET_PATTERNS.length).toBe(6);
+    expect(HIGH_CONFIDENCE_SECRET_NAMES.size).toBeGreaterThan(0);
   });
 });
 
@@ -79,5 +130,12 @@ describe('scanning API (non-throwing)', () => {
     const input = `lead ${FAKE_GITHUB_TOKEN}`;
     expect(containsSecrets(input)).toBe(true);
     expect(containsSecrets(input)).toBe(true);
+  });
+
+  it('scopes redaction to an allowed pattern name set when given one', () => {
+    const input = `key ${FAKE_ANTHROPIC_KEY} and jwt ${FAKE_JWT}`;
+    const redacted = redactSecrets(input, new Set(['Anthropic/OpenAI API Key']));
+    expect(redacted).not.toContain(FAKE_ANTHROPIC_KEY);
+    expect(redacted).toContain(FAKE_JWT);
   });
 });
