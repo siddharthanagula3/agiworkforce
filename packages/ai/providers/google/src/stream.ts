@@ -1,6 +1,96 @@
 import type { StreamChunk } from '@agiworkforce/types';
 
-import type { GeminiStreamChunk } from './types';
+import type {
+  GeminiGroundingChunk,
+  GeminiGroundingSupport,
+  GeminiStreamChunk,
+  GeminiUrlContextMetadata,
+} from './types';
+
+const GEMINI_CITATION_BLOCK_INDEX = 0;
+const GEMINI_URL_RETRIEVAL_STATUS_SUCCESS = 'URL_RETRIEVAL_STATUS_SUCCESS';
+const URL_CITATION_KIND = 'url_citation';
+
+interface GroundedCitation {
+  url: string;
+  title: string;
+  startIndex?: number;
+  endIndex?: number;
+}
+
+function hostnameCitationTitle(url: string): string {
+  try {
+    const hostname = new URL(url).hostname.replace(/^www\./, '');
+    return hostname || url;
+  } catch {
+    return url;
+  }
+}
+
+function citationFromGroundingChunk(
+  chunk: GeminiGroundingChunk | undefined,
+): GroundedCitation | undefined {
+  const uri = chunk?.web?.uri;
+  if (!uri) return undefined;
+  const title = chunk?.web?.title;
+  return { url: uri, title: title || hostnameCitationTitle(uri) };
+}
+
+function citationsFromGrounding(
+  groundingChunks: GeminiGroundingChunk[],
+  groundingSupports: GeminiGroundingSupport[] | undefined,
+): GroundedCitation[] {
+  if (!groundingSupports || groundingSupports.length === 0) {
+    return groundingChunks
+      .map((chunk) => citationFromGroundingChunk(chunk))
+      .filter((citation): citation is GroundedCitation => citation !== undefined);
+  }
+  const citations: GroundedCitation[] = [];
+  for (const support of groundingSupports) {
+    for (const chunkIndex of support.groundingChunkIndices ?? []) {
+      const citation = citationFromGroundingChunk(groundingChunks[chunkIndex]);
+      if (!citation) continue;
+      citations.push({
+        ...citation,
+        ...(support.segment?.startIndex !== undefined
+          ? { startIndex: support.segment.startIndex }
+          : {}),
+        ...(support.segment?.endIndex !== undefined ? { endIndex: support.segment.endIndex } : {}),
+      });
+    }
+  }
+  return citations;
+}
+
+function citationsFromUrlContext(
+  metadata: GeminiUrlContextMetadata | undefined,
+): GroundedCitation[] {
+  const entries = metadata?.urlMetadata ?? [];
+  const citations: GroundedCitation[] = [];
+  for (const entry of entries) {
+    if (entry.urlRetrievalStatus !== GEMINI_URL_RETRIEVAL_STATUS_SUCCESS || !entry.retrievedUrl) {
+      continue;
+    }
+    citations.push({ url: entry.retrievedUrl, title: hostnameCitationTitle(entry.retrievedUrl) });
+  }
+  return citations;
+}
+
+function citationChunk(
+  citation: GroundedCitation,
+): Extract<StreamChunk, { type: 'citation-delta' }> {
+  return {
+    type: 'citation-delta',
+    blockIndex: GEMINI_CITATION_BLOCK_INDEX,
+    payload: {
+      type: URL_CITATION_KIND,
+      url: citation.url,
+      title: citation.title,
+      ...(citation.startIndex !== undefined ? { start_index: citation.startIndex } : {}),
+      ...(citation.endIndex !== undefined ? { end_index: citation.endIndex } : {}),
+    },
+  };
+}
 
 function isGeminiStreamChunk(value: unknown): value is GeminiStreamChunk {
   if (typeof value !== 'object' || value === null) return false;
@@ -114,6 +204,7 @@ export async function* translateGeminiStream(
   let turnHadToolCall = false;
   let lastUsage: GeminiStreamChunk['usageMetadata'] | undefined;
   let groundingEmitted = false;
+  const emittedCitationUrls = new Set<string>();
 
   for await (const chunk of chunks) {
     if (chunk.usageMetadata) {
@@ -177,6 +268,16 @@ export async function* translateGeminiStream(
           payload: { type: 'gemini_grounding_result', results },
         };
       }
+    }
+
+    const groundedCitations = Array.isArray(groundingChunks)
+      ? citationsFromGrounding(groundingChunks, candidate.groundingMetadata?.groundingSupports)
+      : [];
+    const urlContextCitations = citationsFromUrlContext(candidate.urlContextMetadata);
+    for (const citation of [...groundedCitations, ...urlContextCitations]) {
+      if (emittedCitationUrls.has(citation.url)) continue;
+      emittedCitationUrls.add(citation.url);
+      yield citationChunk(citation);
     }
 
     if (candidate.finishReason) {
