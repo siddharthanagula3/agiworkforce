@@ -896,7 +896,11 @@ const MessageBubbleComponent = function MessageBubble({
     (rating: 'up' | 'down') => {
       const isRepeat = responseRating === rating;
       onReact?.(message.id, isRepeat ? null : rating);
-      if (!isRepeat) void rateMessage(rating);
+      if (isRepeat) {
+        setRatingState('idle');
+      } else {
+        void rateMessage(rating);
+      }
     },
     [message.id, onReact, rateMessage, responseRating],
   );
