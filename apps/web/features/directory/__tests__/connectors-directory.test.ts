@@ -32,7 +32,14 @@ function record(patch: Partial<DirectoryRecord> = {}): DirectoryRecord {
     badge: 'community',
     iconUrl: 'https://cdn.invalid/icon.png',
     monogram: 'CU',
-    docsUrl: null,
+    documentationUrl: null,
+    iconSource: 'registry',
+    brandSlug: null,
+    authorName: null,
+    authorUrl: null,
+    websiteUrl: null,
+    supportUrl: null,
+    privacyPolicyUrl: null,
     ...patch,
   };
 }
@@ -123,6 +130,16 @@ describe('toConnectorDetail', () => {
       connected: true,
       connectable: true,
     });
+    expect(detail.href).toBeUndefined();
+  });
+
+  it('prefers the documentation link and falls back to the website', () => {
+    expect(
+      toConnectorDetail(record({ documentationUrl: 'https://docs.invalid' }), new Set()).href,
+    ).toBe('https://docs.invalid');
+    expect(toConnectorDetail(record({ websiteUrl: 'https://site.invalid' }), new Set()).href).toBe(
+      'https://site.invalid',
+    );
   });
 
   it('marks a desktop only connector as not connectable from the web', () => {
