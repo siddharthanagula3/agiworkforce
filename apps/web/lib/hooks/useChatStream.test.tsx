@@ -1487,6 +1487,122 @@ describe('useChatStream', () => {
       expect(assistantMsg?.metadata?.streamError).toEqual({ message: 'rate limited' });
     });
 
+    it('never retries a completion the server classified content_blocked, and keeps the notice', async () => {
+      mockSseStream([
+        {
+          choices: [
+            {
+              delta: {
+                x_stream_error: {
+                  message: 'The model blocked this response.',
+                  code: 'content_blocked',
+                },
+              },
+              finish_reason: 'error',
+            },
+          ],
+        },
+      ]);
+
+      const { result } = renderHook(() => useChatStream());
+      await act(async () => {
+        await result.current.sendMessage('hello', { conversationId: TEMP_CONVERSATION.id });
+      });
+
+      const completionCalls = vi
+        .mocked(fetch)
+        .mock.calls.filter(([input]) => String(input).includes('/api/llm/v1/chat/completions'));
+      expect(completionCalls).toHaveLength(1);
+      const assistantMsg = useChatStore.getState().messages.find((m) => m.role === 'assistant');
+      expect(assistantMsg?.metadata?.streamError?.code).toBe('content_blocked');
+    });
+
+    it('still retries once a completion the server classified empty_response', async () => {
+      mockSseStream([
+        {
+          choices: [
+            {
+              delta: {
+                x_stream_error: {
+                  message: 'The model finished without a response.',
+                  code: 'empty_response',
+                },
+              },
+              finish_reason: 'error',
+            },
+          ],
+        },
+      ]);
+      mockSseStream([{ choices: [{ delta: { content: 'answer' }, finish_reason: 'stop' }] }]);
+
+      const { result } = renderHook(() => useChatStream());
+      await act(async () => {
+        await result.current.sendMessage('hello', { conversationId: TEMP_CONVERSATION.id });
+      });
+
+      const completionCalls = vi
+        .mocked(fetch)
+        .mock.calls.filter(([input]) => String(input).includes('/api/llm/v1/chat/completions'));
+      expect(completionCalls).toHaveLength(2);
+      const assistantMsg = useChatStore.getState().messages.find((m) => m.role === 'assistant');
+      expect(assistantMsg?.content).toBe('answer');
+    });
+
+    it('retries a max-tokens finish with nothing visible on the exact model requested', async () => {
+      mockSseStream([{ choices: [{ delta: {}, finish_reason: 'length' }] }]);
+      mockSseStream([{ choices: [{ delta: { content: 'answer' }, finish_reason: 'stop' }] }]);
+
+      const { result } = renderHook(() => useChatStream());
+      await act(async () => {
+        await result.current.sendMessage('hello', {
+          conversationId: TEMP_CONVERSATION.id,
+          model: 'exact-model',
+        });
+      });
+
+      const completionCalls = vi
+        .mocked(fetch)
+        .mock.calls.filter(([input]) => String(input).includes('/api/llm/v1/chat/completions'));
+      expect(completionCalls).toHaveLength(2);
+      const assistantMsg = useChatStore.getState().messages.find((m) => m.role === 'assistant');
+      expect(assistantMsg?.content).toBe('answer');
+    });
+
+    it('does not retry a max-tokens finish with nothing visible once the served model differs from the request', async () => {
+      const encoder = new TextEncoder();
+      const body =
+        `data: ${JSON.stringify({ choices: [{ delta: {}, finish_reason: 'length' }] })}\n\n` +
+        'data: [DONE]\n\n';
+      const headers = new Headers();
+      headers.set('X-AGI-Resolved-Model', 'fallback-model');
+      vi.mocked(fetch).mockResolvedValueOnce(
+        new Response(
+          new ReadableStream({
+            start(controller) {
+              controller.enqueue(encoder.encode(body));
+              controller.close();
+            },
+          }),
+          { status: 200, headers },
+        ),
+      );
+
+      const { result } = renderHook(() => useChatStream());
+      await act(async () => {
+        await result.current.sendMessage('hello', {
+          conversationId: TEMP_CONVERSATION.id,
+          model: 'requested-model',
+        });
+      });
+
+      const completionCalls = vi
+        .mocked(fetch)
+        .mock.calls.filter(([input]) => String(input).includes('/api/llm/v1/chat/completions'));
+      expect(completionCalls).toHaveLength(1);
+      const assistantMsg = useChatStore.getState().messages.find((m) => m.role === 'assistant');
+      expect(assistantMsg?.model).toBe('fallback-model');
+    });
+
     it('does NOT record streamError on a normal completion (no x_stream_error delta)', async () => {
       mockSseStream([
         { choices: [{ delta: { content: 'complete answer' }, finish_reason: 'stop' }] },
