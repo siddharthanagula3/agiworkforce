@@ -70,6 +70,7 @@ import {
   classifyTaskFamily,
   classifyTaskLocally,
   detectIndicScript,
+  emptyRuntimeState,
   estimateTokens,
   resolveAutoRoute,
   taskFamilyRoutingStageEnabled,
@@ -77,10 +78,17 @@ import {
 import type {
   AutoRouteDecision,
   RoutingAttachment,
+  RoutingRuntimeState,
   RoutingTaskType,
   TaskFamily,
   TaskFamilySignals,
 } from '@agiworkforce/routing';
+import { modelRegistry, getRoutePricingForModel } from '@agiworkforce/model-registry';
+import {
+  getRouteHealthSnapshot,
+  getServedRouteAffinity,
+  type ServedRouteAffinity,
+} from '@/lib/services/free-lane/runtime-state-service';
 import { freeLaneObserves, resolveFreeLaneMode } from '@/lib/services/free-lane/mode';
 import { ROUTE_LANES, type FreeLanePlan, type RouteLane } from '@/lib/services/free-lane/plan';
 import {
@@ -685,6 +693,13 @@ export type ProcessedRequest = {
   indicResult: ReturnType<typeof detectIndicScript>;
   freeTrial?: FreeTrialReservation;
   contextTrim?: ContextTrimResult | null;
+  /**
+   * The route already warm for this conversation's cache, if any. Set once
+   * per turn from the affinity store and read back by the dispatch layer to
+   * decide whether to pin an OpenRouter upstream provider — never to steer
+   * which route is selected, which `resolveWebCloudModelRoute` already owns.
+   */
+  routeAffinity?: ServedRouteAffinity;
   llmRequest: {
     model: string;
     messages: Array<{
@@ -1252,6 +1267,47 @@ export function buildTaskFamilySignals(
   };
 }
 
+/**
+ * Every route id reachable from a selection, for a routeHealthSnapshots
+ * fetch — never for admission, which stays `resolveAutoRoute`'s alone.
+ *
+ * An exact model selection scopes to that model's own routes
+ * (`getRoutePricingForModel`). An alias (`auto`, `auto-economy`, ...) cannot
+ * be resolved to one model without duplicating the policy's slot/profile/task
+ * logic, so it gets the full set of routes any Auto slot could ever reach —
+ * a safe superset a ranker only ever reads by exact route id.
+ */
+const AUTO_POLICY_ROUTE_IDS: readonly string[] = [
+  ...new Set(
+    Object.values(modelRegistry.policies.auto.slots).flatMap((slot) =>
+      getRoutePricingForModel(slot.modelKey).map((route) => route.routeId),
+    ),
+  ),
+];
+
+function candidateRouteIdsForSelection(selection: string): readonly string[] {
+  if (selection in modelRegistry.models) {
+    return getRoutePricingForModel(selection).map((route) => route.routeId);
+  }
+  return AUTO_POLICY_ROUTE_IDS;
+}
+
+/**
+ * Live route health for whichever routes a selection could resolve to, so
+ * `rankRoutes` can deprioritize a route in cooldown instead of treating an
+ * absent `routeHealthSnapshots` entry as the only signal it has.
+ */
+export async function resolveRouteHealthRuntimeState(
+  selection: string,
+  nowMs: number,
+): Promise<RoutingRuntimeState> {
+  const routeHealthSnapshots = await getRouteHealthSnapshot(
+    candidateRouteIdsForSelection(selection),
+    nowMs,
+  );
+  return { ...emptyRuntimeState(nowMs), routeHealthSnapshots };
+}
+
 export function resolveWebCloudModelRoute(
   model: string,
   subscriptionTier: string | undefined,
@@ -1267,6 +1323,17 @@ export function resolveWebCloudModelRoute(
    * the free lane's own, so nothing else can be moved by it.
    */
   preferSlots?: readonly string[],
+  /**
+   * Live route health, and the route (if any) already warm for this
+   * conversation. Both reorder only: `resolveAutoRoute` still requires the
+   * preferred route to already be admissible for the resolved model, so an
+   * exact-model selection can never be steered onto a different model by a
+   * stale preference.
+   */
+  routeHealth?: {
+    runtimeState?: RoutingRuntimeState | null;
+    preferredRouteId?: string | null;
+  },
 ) {
   return resolveAutoRoute({
     selection: model,
@@ -1285,6 +1352,8 @@ export function resolveWebCloudModelRoute(
       ? { estimatedOutputTokens: usage.estimatedOutputTokens }
       : {}),
     ...(usage?.taskFamily !== undefined ? { taskFamily: usage.taskFamily } : {}),
+    ...(routeHealth?.runtimeState ? { runtimeState: routeHealth.runtimeState } : {}),
+    ...(routeHealth?.preferredRouteId ? { preferredRouteId: routeHealth.preferredRouteId } : {}),
   });
 }
 
@@ -2179,11 +2248,24 @@ export async function processRequest(
     taskFamily: routeTaskFamily,
   };
 
+  const routeResolutionNowMs = Date.now();
+  const [baseRouteHealthState, routeAffinity] = await Promise.all([
+    resolveRouteHealthRuntimeState(chatRequest.model, routeResolutionNowMs),
+    chatRequest.conversation_id
+      ? getServedRouteAffinity(chatRequest.conversation_id)
+      : Promise.resolve(null),
+  ]);
+
   const baseRouteDecision = resolveWebCloudModelRoute(
     chatRequest.model,
     subscription.plan_tier,
     resolvedTaskType,
     routeUsage,
+    undefined,
+    {
+      runtimeState: baseRouteHealthState,
+      ...(routeAffinity ? { preferredRouteId: routeAffinity.routeId } : {}),
+    },
   );
 
   // The free lane is a stage OVER this resolver's output, so it re-runs the same
@@ -2206,6 +2288,12 @@ export async function processRequest(
         resolvedTaskType,
         routeUsage,
         freeLane.preferSlots,
+        {
+          runtimeState: await resolveRouteHealthRuntimeState(
+            FREE_LANE_SELECTION,
+            routeResolutionNowMs,
+          ),
+        },
       )
     : null;
   const freeLaneNowMs = Date.now();
@@ -3179,6 +3267,7 @@ export async function processRequest(
     indicResult,
     freeTrial,
     contextTrim,
+    ...(routeAffinity ? { routeAffinity } : {}),
     llmRequest,
   };
 }
