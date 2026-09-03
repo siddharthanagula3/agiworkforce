@@ -394,16 +394,14 @@ const WEB_SETTINGS_NAV_GROUPS: SettingsNavGroupResolved[] = SETTINGS_NAV_GROUPS_
 // ---------------------------------------------------------------------------
 // Connector catalog -> SettingsConnector shape
 //
-// HONEST WEB SEMANTICS (known-flaws WEB-CONNECTORS row): the catalog's
 // `exclusive` connectors are local-only (filesystem/terminal/browser/vision/
-// ollama) — the cloud web server cannot run them, so they are excluded
-// entirely. For everything else, POST /api/connectors deliberately 501s
-// (no per-provider authorization flow is implemented on web yet), so NO
-// connector renders a Connect button here (canConnect: false) — the table
-// shows a truthful status label instead of a button that is known to fail.
-// Connected state still renders from real data: active user_connectors rows
-// (GET /api/connectors) and, for GitHub, real GitHub App installations.
+// ollama), excluded entirely. `mergedSettingsConnectors` below flips
+// canConnect/statusLabel once GET /api/connectors reports the id as
+// available. Connected state renders from real data: active user_connectors
+// rows (GET /api/connectors) and, for GitHub, real GitHub App installations.
 // ---------------------------------------------------------------------------
+
+const CONNECTOR_NEEDS_AGI_SETUP_LABEL = 'Needs setup by AGI';
 
 const SETTINGS_CONNECTORS = CONNECTORS.filter((c) => !c.exclusive).map((c) => ({
   id: c.id,
@@ -416,7 +414,7 @@ const SETTINGS_CONNECTORS = CONNECTORS.filter((c) => !c.exclusive).map((c) => ({
   iconBg: c.iconBg,
   iconText: c.iconText,
   canConnect: false,
-  statusLabel: c.phase > 1 ? 'Coming soon' : 'Not yet available on web',
+  statusLabel: CONNECTOR_NEEDS_AGI_SETUP_LABEL,
 }));
 
 // ---------------------------------------------------------------------------

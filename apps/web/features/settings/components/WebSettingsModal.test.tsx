@@ -169,6 +169,21 @@ describe('WebSettingsModal connectors adapter (honest web semantics)', () => {
     await waitFor(() => expect(within(notionRow).getByText('Connected')).toBeTruthy());
   });
 
+  it('labels a preregistered connector and a no-endpoint connector "Needs setup by AGI", never "Coming soon"', async () => {
+    stubFetch({ connectors: [{ connectorId: 'notion', connectedAt: '2026-07-01T00:00:00Z' }] });
+    render(<WebSettingsModal open onClose={vi.fn()} initialSection="connectors" />);
+
+    await screen.findByRole('table');
+    const { fireEvent } = await import('@testing-library/react');
+    fireEvent.click(screen.getByRole('button', { name: /^Add$/ }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Browse connectors' }));
+
+    await screen.findByText('Slack');
+    expect(screen.getByText('Google Sheets')).toBeTruthy();
+    expect(screen.getAllByText('Needs setup by AGI').length).toBeGreaterThan(0);
+    expect(screen.queryByText('Coming soon')).toBeNull();
+  });
+
   it('keeps valid connector rows when one response field is malformed', async () => {
     stubFetch({
       connectors: [
