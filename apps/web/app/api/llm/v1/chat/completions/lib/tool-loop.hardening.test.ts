@@ -37,12 +37,32 @@ function toolCallChunk(index: number, id: string, name: string, args: string) {
   };
 }
 
-function serverToolUseChunk(name: string) {
-  return { choices: [{ delta: { x_tool_status: { type: 'server_tool_use', name } }, index: 0 }] };
+function serverToolUseChunk(name: string, toolUseId?: string) {
+  return {
+    choices: [
+      {
+        delta: {
+          x_tool_status: {
+            type: 'server_tool_use',
+            name,
+            ...(toolUseId ? { tool_use_id: toolUseId } : {}),
+          },
+        },
+        index: 0,
+      },
+    ],
+  };
 }
 
-function searchResultsChunk(content: unknown[]) {
-  return { choices: [{ delta: { x_search_results: { content } }, index: 0 }] };
+function searchResultsChunk(content: unknown[], toolUseId?: string) {
+  return {
+    choices: [
+      {
+        delta: { x_search_results: { content, ...(toolUseId ? { tool_use_id: toolUseId } : {}) } },
+        index: 0,
+      },
+    ],
+  };
 }
 
 describe('isReadOnlyTool — driven by the declared tool metadata model', () => {
@@ -130,7 +150,29 @@ describe('collectProviderStream — untrusted accumulation bounds', () => {
     expect(pendingToolCalls.length).toBe(TOOL_LOOP_STREAM_LIMITS.maxToolCallsPerStep);
   });
 
-  it('attributes one combined native search-results delta to only the first of several pending calls', async () => {
+  it('attributes each search-results delta to the matching pending call by provider tool_use_id', async () => {
+    const stream = sseStream([
+      serverToolUseChunk('web_search', 'ws_a'),
+      serverToolUseChunk('web_search', 'ws_b'),
+      searchResultsChunk(
+        [{ type: 'web_search_result', url: 'https://b.example', title: 'B' }],
+        'ws_b',
+      ),
+      searchResultsChunk(
+        [{ type: 'web_search_result', url: 'https://a.example', title: 'A' }],
+        'ws_a',
+      ),
+    ]);
+
+    const { lines } = await collectProviderStream(stream);
+    const resolved = lines.flatMap((l) => l.serverToolResults ?? []);
+    expect(resolved).toHaveLength(2);
+    expect(resolved[0]?.sources).toEqual([{ url: 'https://b.example', title: 'B' }]);
+    expect(resolved[1]?.sources).toEqual([{ url: 'https://a.example', title: 'A' }]);
+    expect(resolved[0]?.toolCallId).not.toBe(resolved[1]?.toolCallId);
+  });
+
+  it('falls back to resolving the oldest pending call when a search-results delta carries no tool_use_id', async () => {
     const stream = sseStream([
       serverToolUseChunk('web_search'),
       serverToolUseChunk('web_search'),
@@ -142,13 +184,11 @@ describe('collectProviderStream — untrusted accumulation bounds', () => {
 
     const { lines } = await collectProviderStream(stream);
     const resolved = lines.flatMap((l) => l.serverToolResults ?? []);
-    expect(resolved).toHaveLength(2);
+    expect(resolved).toHaveLength(1);
     expect(resolved[0]?.sources).toEqual([
       { url: 'https://a.example', title: 'A' },
       { url: 'https://b.example', title: 'B' },
     ]);
-    expect(resolved[1]?.sources).toEqual([]);
-    expect(resolved[0]?.toolCallId).not.toBe(resolved[1]?.toolCallId);
   });
 
   it('bounds accumulated tool-argument JSON per call', async () => {

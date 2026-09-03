@@ -325,6 +325,7 @@ export async function buildStreamResponse(
                           type: 'server_tool_use',
                           name: toolName,
                           status: toolStatus,
+                          tool_use_id: event.content_block.id,
                           ...(statusPhrase ? { status_phrase: statusPhrase } : {}),
                         },
                       },

@@ -249,6 +249,7 @@ describe('OpenAIWireAssembler streaming', () => {
         type: 'server_tool_use',
         name: 'web_search',
         status: 'searching',
+        tool_use_id: 'ws_1',
         status_phrase: 'Searching the web',
       },
     });
