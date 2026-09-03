@@ -6,6 +6,7 @@ import { createDatabaseClient, type DatabaseAdapter } from '@agiworkforce/data-l
 import { auth } from '@clerk/nextjs/server';
 import { createError } from '@/lib/errors';
 import { assertAccountActive, getClerkAuthUser } from '@/lib/api-auth';
+import { setTenantScope } from '@/lib/observability/trace-context';
 import type { ApiKeyScope } from '@/lib/api-key-scopes';
 import { getNeonDb } from '@/lib/server/neon-db';
 import { RLS_POOL_TUNING } from '@/lib/server/db-pool-tuning';
@@ -75,6 +76,7 @@ export async function getUserScopedDb(
     const token = authHeader.substring(7);
     const { userId } = await getClerkAuthUser(request, options);
     const organizationId = await resolveRequestOrganizationId(request, userId);
+    setTenantScope({ userId, organizationId: organizationId ?? undefined });
     return {
       db: isApiKeyToken(token)
         ? createClaimedUserScopedDb(getNeonDb(), { userId, organizationId })
@@ -90,6 +92,7 @@ export async function getUserScopedDb(
     if (token) {
       await assertAccountActive(userId);
       const organizationId = await resolveRequestOrganizationId(request, userId);
+      setTenantScope({ userId, organizationId: organizationId ?? undefined });
       return {
         db: getRlsCapableDb().withUser(token).withOrg(organizationId),
         userId,
@@ -129,5 +132,6 @@ export async function getCurrentUserRlsDb(): Promise<CurrentUserRlsDb | null> {
   if (!userId) return null;
   const token = await getToken();
   if (!token) return null;
+  setTenantScope({ userId });
   return { db: getRlsCapableDb().withUser(token), userId };
 }

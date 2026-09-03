@@ -1,4 +1,3 @@
-
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 
 import {
@@ -9,11 +8,13 @@ import {
 } from '@/lib/observability/redact';
 import {
   formatTraceparent,
+  getTenantScope,
   getTraceContext,
   newSpanId,
   newTraceId,
   parseTraceparent,
   runWithTraceContext,
+  setTenantScope,
   traceLogFields,
 } from '@/lib/observability/trace-context';
 
@@ -79,6 +80,34 @@ describe('trace-context', () => {
         trace_id: context.traceId,
         span_id: context.spanId,
       });
+    });
+  });
+
+  it('adds tenant scope to log fields once set, and drops it outside the context', () => {
+    const context = { traceId: newTraceId(), spanId: newSpanId(), sampled: true };
+    runWithTraceContext(context, () => {
+      setTenantScope({ organizationId: 'org_1', userId: 'user_1' });
+      expect(traceLogFields()).toEqual({
+        trace_id: context.traceId,
+        span_id: context.spanId,
+        organization_id: 'org_1',
+        user_id: 'user_1',
+      });
+      expect(getTenantScope()).toEqual({ organizationId: 'org_1', userId: 'user_1' });
+    });
+    expect(traceLogFields()).toEqual({});
+    expect(getTenantScope()).toEqual({ organizationId: undefined, userId: undefined });
+  });
+
+  it('ignores an empty tenant scope update and a call with no active context', () => {
+    setTenantScope({});
+    expect(getTenantScope()).toEqual({ organizationId: undefined, userId: undefined });
+
+    const context = { traceId: newTraceId(), spanId: newSpanId(), sampled: true };
+    runWithTraceContext(context, () => {
+      setTenantScope({ userId: 'user_1' });
+      setTenantScope({});
+      expect(getTenantScope()).toEqual({ organizationId: undefined, userId: 'user_1' });
     });
   });
 });

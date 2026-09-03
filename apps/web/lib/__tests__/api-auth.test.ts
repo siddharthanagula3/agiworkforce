@@ -1,4 +1,3 @@
-
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import jwt from 'jsonwebtoken';
 import { NextRequest } from 'next/server';
@@ -137,6 +136,12 @@ function makeFakeDb() {
 import { POST as createApiKeyRoute } from '@/app/api/settings/api-keys/route';
 import { DELETE as revokeApiKeyRoute } from '@/app/api/settings/api-keys/[keyId]/route';
 import { getClerkAuthUser } from '@/lib/api-auth';
+import {
+  getTenantScope,
+  newSpanId,
+  newTraceId,
+  runWithTraceContext,
+} from '@/lib/observability/trace-context';
 
 function makeCreateRequest(
   name = 'round-trip key',
@@ -451,6 +456,47 @@ describe('getClerkAuthUser · API-key issue/verify unification', () => {
 
       const req = new NextRequest('http://localhost/api/some-route');
       await expect(getClerkAuthUser(req)).rejects.toMatchObject({ statusCode: 401 });
+    });
+  });
+
+  describe('tenant scope propagation onto the active trace context', () => {
+    it('stamps the resolved user id onto the ambient trace context for a cookie session', async () => {
+      makeFakeDb();
+      mockAuth.mockResolvedValueOnce({ userId: 'clerk-session-user' });
+
+      const context = { traceId: newTraceId(), spanId: newSpanId(), sampled: true };
+      await runWithTraceContext(context, async () => {
+        await getClerkAuthUser(new NextRequest('http://localhost/api/some-route'));
+        expect(getTenantScope().userId).toBe('clerk-session-user');
+      });
+    });
+
+    it('stamps the resolved user id for a verified API-key bearer', async () => {
+      makeFakeDb();
+      mockAuth.mockResolvedValueOnce({ userId: 'scoped-user' });
+      const createRes = await createApiKeyRoute(makeCreateRequest('scoped', ['models:read']));
+      const created = (await createRes.json()) as { full_key: string };
+
+      const context = { traceId: newTraceId(), spanId: newSpanId(), sampled: true };
+      await runWithTraceContext(context, async () => {
+        await getClerkAuthUser(makeBearerRequest(created.full_key), {
+          apiKeyScope: 'models:read',
+        });
+        expect(getTenantScope().userId).toBe('scoped-user');
+      });
+    });
+
+    it('leaves no tenant scope stamped when authentication is rejected', async () => {
+      makeFakeDb();
+      mockAuth.mockResolvedValueOnce({ userId: null });
+
+      const context = { traceId: newTraceId(), spanId: newSpanId(), sampled: true };
+      await runWithTraceContext(context, async () => {
+        await expect(
+          getClerkAuthUser(new NextRequest('http://localhost/api/some-route')),
+        ).rejects.toMatchObject({ statusCode: 401 });
+        expect(getTenantScope().userId).toBeUndefined();
+      });
     });
   });
 });

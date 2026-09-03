@@ -59,7 +59,17 @@ vi.mock('@/lib/services/active-workspace-service', () => ({
 
 import { isApiKeyScopeError } from '@/lib/api-key-scope-error';
 import { isAppError } from '@/lib/errors';
+import {
+  getTenantScope,
+  newSpanId,
+  newTraceId,
+  runWithTraceContext,
+} from '@/lib/observability/trace-context';
 import { getCurrentUserRlsDb, getUserScopedDb } from './rls-db';
+
+function withTrace<R>(fn: () => Promise<R>): Promise<R> {
+  return runWithTraceContext({ traceId: newTraceId(), spanId: newSpanId(), sampled: true }, fn);
+}
 
 const API_KEY_TOKEN = 'sk_live_0000000000000000_rls_spec_fixture';
 const API_KEY_USER = 'user_api_key_principal';
@@ -186,5 +196,50 @@ describe('getCurrentUserRlsDb', () => {
     expect(scoped?.db).toBe(rlsWithUser.mock.results[0]?.value);
     expect(rlsWithUser).toHaveBeenCalledWith('jwt-token');
     expect(rlsWithOrg).not.toHaveBeenCalled();
+  });
+});
+
+describe('tenant scope propagation onto the active trace context', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    serviceQuery.mockResolvedValue([]);
+    mockVerifyKey.mockResolvedValue({
+      id: 'key-1',
+      user_id: API_KEY_USER,
+      scopes: ['inference:write'],
+    });
+  });
+
+  it('stamps user id and organization id for an API-key principal', async () => {
+    await withTrace(async () => {
+      await getUserScopedDb(apiKeyRequest(), { apiKeyScope: 'inference:write' });
+      expect(getTenantScope()).toEqual({ organizationId: undefined, userId: API_KEY_USER });
+    });
+  });
+
+  it('stamps user id for a session JWT with no active context outside the request', async () => {
+    const request = new NextRequest('https://example.test/api/chat/sync', {
+      method: 'POST',
+      headers: { authorization: 'Bearer eyJhbGciOiJIUzI1NiJ9.session.sig' },
+    });
+    const { verifyToken } = await import('@clerk/backend');
+    vi.mocked(verifyToken).mockResolvedValue({ sub: 'user_session' } as never);
+    vi.stubEnv('CLERK_SECRET_KEY', 'sk_test_clerk_secret');
+
+    await withTrace(async () => {
+      await getUserScopedDb(request);
+      expect(getTenantScope().userId).toBe('user_session');
+    });
+    expect(getTenantScope().userId).toBeUndefined();
+    vi.unstubAllEnvs();
+  });
+
+  it('stamps user id for the Server-Component RLS read', async () => {
+    mockAuth.mockResolvedValue({ userId: 'user_1', getToken: async () => 'jwt-token' });
+
+    await withTrace(async () => {
+      await getCurrentUserRlsDb();
+      expect(getTenantScope().userId).toBe('user_1');
+    });
   });
 });

@@ -450,6 +450,43 @@ describe('sentry-shared transaction and span scrub', () => {
   });
 });
 
+describe('commonInitOptions tenant tag hook', () => {
+  it('leaves the scrubbers untouched with no hook, preserving referential identity', () => {
+    const options = commonInitOptions();
+    expect(options.beforeSend).toBe(scrubEvent);
+    expect(options.beforeSendTransaction).toBe(scrubTransactionEvent);
+  });
+
+  it('runs the hook on the already-scrubbed error event and keeps the scrub result', () => {
+    const seen: unknown[] = [];
+    const options = commonInitOptions({
+      tenantTagHook: (event) => {
+        seen.push(event);
+        event.tags = { ...event.tags, organization_id: 'org_1' };
+      },
+    });
+
+    const event = { message: 'boom' } as unknown as ErrorEvent;
+    const out = options.beforeSend(event, {}) as unknown as { tags?: Obj };
+
+    expect(seen).toHaveLength(1);
+    expect(out?.tags?.['organization_id']).toBe('org_1');
+  });
+
+  it('runs the hook on the scrubbed transaction event', () => {
+    const options = commonInitOptions({
+      tenantTagHook: (event) => {
+        event.tags = { ...event.tags, organization_id: 'org_2' };
+      },
+    });
+
+    const event = { type: 'transaction', transaction: 'GET /x' } as unknown as TransactionEvent;
+    const out = options.beforeSendTransaction(event, {}) as unknown as { tags?: Obj };
+
+    expect(out?.tags?.['organization_id']).toBe('org_2');
+  });
+});
+
 describe('telemetry consent cache (client-side Sentry gate)', () => {
   beforeEach(() => {
     window.localStorage.clear();
