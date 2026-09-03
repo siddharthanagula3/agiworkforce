@@ -53,7 +53,11 @@ describe('parseGeminiStream CRLF framing (live wire shape)', () => {
     const usage = chunks.find((c) => c.type === 'usage');
     expect(usage).toMatchObject({ inputTokens: 9, outputTokens: 4, reasoningTokens: 81 });
 
-    expect(chunks[chunks.length - 1]).toEqual({ type: 'stop', reason: 'end_turn' });
+    expect(chunks[chunks.length - 1]).toEqual({
+      type: 'stop',
+      reason: 'end_turn',
+      providerFinishReason: 'STOP',
+    });
   });
 
   it('parses CRLF frames split at arbitrary byte boundaries (including mid-CRLF)', async () => {
@@ -90,6 +94,10 @@ describe('parseGeminiStream CRLF framing (live wire shape)', () => {
         { type: 'tool-use-end', toolUseId: 'gemini-tool-1' },
       ]),
     );
-    expect(chunks.at(-1)).toEqual({ type: 'stop', reason: 'tool_use' });
+    expect(chunks.at(-1)).toEqual({
+      type: 'stop',
+      reason: 'tool_use',
+      providerFinishReason: 'STOP',
+    });
   });
 });
