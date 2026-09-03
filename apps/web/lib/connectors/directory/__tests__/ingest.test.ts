@@ -77,7 +77,14 @@ function existingRecord(overrides: Record<string, unknown> = {}) {
     badge: 'community',
     iconUrl: null,
     monogram: 'E',
-    docsUrl: null,
+    documentationUrl: null,
+    iconSource: 'monogram',
+    brandSlug: null,
+    authorName: null,
+    authorUrl: null,
+    websiteUrl: null,
+    supportUrl: null,
+    privacyPolicyUrl: null,
     ...overrides,
   };
 }

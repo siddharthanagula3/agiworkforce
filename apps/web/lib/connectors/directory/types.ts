@@ -12,6 +12,8 @@ export type DirectorySource = 'internal' | 'mcp-registry';
 
 export type DirectoryBadge = 'first-party' | 'registry' | 'community';
 
+export type DirectoryIconSource = 'brand' | 'registry' | 'site' | 'monogram';
+
 export interface DirectoryRemote {
   readonly url: string;
   readonly transport: DirectoryTransport;
@@ -33,7 +35,14 @@ export interface DirectoryRecord {
   readonly badge: DirectoryBadge;
   readonly iconUrl: string | null;
   readonly monogram: string;
-  readonly docsUrl: string | null;
+  readonly documentationUrl: string | null;
+  readonly iconSource: DirectoryIconSource;
+  readonly brandSlug: string | null;
+  readonly authorName: string | null;
+  readonly authorUrl: string | null;
+  readonly websiteUrl: string | null;
+  readonly supportUrl: string | null;
+  readonly privacyPolicyUrl: string | null;
 }
 
 export interface DirectorySnapshot {

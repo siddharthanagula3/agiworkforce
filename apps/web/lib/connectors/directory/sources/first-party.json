@@ -15,7 +15,7 @@
       "create_file",
       "copy_file"
     ],
-    "docsUrl": "https://developers.google.com/workspace/drive/api/guides/configure-mcp-server",
+    "documentationUrl": "https://developers.google.com/workspace/drive/api/guides/configure-mcp-server",
     "overridesInternalUrl": true,
     "directoryOnly": false
   },
@@ -37,7 +37,7 @@
       "label_thread",
       "unlabel_thread"
     ],
-    "docsUrl": "https://developers.google.com/workspace/gmail/api/guides/configure-mcp-server",
+    "documentationUrl": "https://developers.google.com/workspace/gmail/api/guides/configure-mcp-server",
     "overridesInternalUrl": true,
     "directoryOnly": false
   },
@@ -58,7 +58,7 @@
       "delete_event",
       "respond_to_event"
     ],
-    "docsUrl": "https://developers.google.com/workspace/calendar/api/guides/configure-mcp-server",
+    "documentationUrl": "https://developers.google.com/workspace/calendar/api/guides/configure-mcp-server",
     "overridesInternalUrl": true,
     "directoryOnly": false
   },
@@ -69,7 +69,7 @@
     "url": "https://mcp.slack.com/mcp",
     "transport": "streamable-http",
     "toolNames": [],
-    "docsUrl": "https://docs.slack.dev/ai/slack-mcp-server/",
+    "documentationUrl": "https://docs.slack.dev/ai/slack-mcp-server/",
     "overridesInternalUrl": false,
     "directoryOnly": false
   },
@@ -89,7 +89,7 @@
       "notion-spawn-session",
       "notion-list-agents"
     ],
-    "docsUrl": "https://developers.notion.com/guides/mcp/mcp-supported-tools",
+    "documentationUrl": "https://developers.notion.com/guides/mcp/mcp-supported-tools",
     "overridesInternalUrl": false,
     "directoryOnly": false
   },
@@ -110,7 +110,7 @@
       "weave_run_tool",
       "weave_list_tools"
     ],
-    "docsUrl": "https://developers.figma.com/docs/figma-mcp-server/",
+    "documentationUrl": "https://developers.figma.com/docs/figma-mcp-server/",
     "overridesInternalUrl": false,
     "directoryOnly": false
   },
@@ -121,7 +121,7 @@
     "url": "https://mcp.atlassian.com/v2/mcp",
     "transport": "streamable-http",
     "toolNames": ["getJiraIssue", "createJiraIssue", "searchJiraIssuesUsingJql"],
-    "docsUrl": "https://support.atlassian.com/atlassian-rovo-mcp-server/docs/getting-started-with-the-atlassian-remote-mcp-server/",
+    "documentationUrl": "https://support.atlassian.com/atlassian-rovo-mcp-server/docs/getting-started-with-the-atlassian-remote-mcp-server/",
     "overridesInternalUrl": true,
     "directoryOnly": false
   },
@@ -132,7 +132,7 @@
     "url": "https://mcp.atlassian.com/v2/mcp",
     "transport": "streamable-http",
     "toolNames": ["read_confluence", "write_confluence", "search_confluence"],
-    "docsUrl": "https://support.atlassian.com/atlassian-rovo-mcp-server/docs/getting-started-with-the-atlassian-remote-mcp-server/",
+    "documentationUrl": "https://support.atlassian.com/atlassian-rovo-mcp-server/docs/getting-started-with-the-atlassian-remote-mcp-server/",
     "overridesInternalUrl": true,
     "directoryOnly": false
   },
@@ -149,7 +149,7 @@
       "manage_marketing_email",
       "get_marketing_email_analytics"
     ],
-    "docsUrl": "https://developers.hubspot.com/mcp",
+    "documentationUrl": "https://developers.hubspot.com/mcp",
     "overridesInternalUrl": false,
     "directoryOnly": false
   },
@@ -168,7 +168,7 @@
       "get_portfolio",
       "add_comment"
     ],
-    "docsUrl": "https://developers.asana.com/docs/mcp-server",
+    "documentationUrl": "https://developers.asana.com/docs/mcp-server",
     "overridesInternalUrl": true,
     "directoryOnly": false
   },
@@ -179,7 +179,7 @@
     "url": "https://mcp.linear.app/mcp",
     "transport": "streamable-http",
     "toolNames": [],
-    "docsUrl": "https://linear.app/docs/mcp",
+    "documentationUrl": "https://linear.app/docs/mcp",
     "overridesInternalUrl": false,
     "directoryOnly": false
   },
@@ -190,7 +190,7 @@
     "url": "https://mcp.canva.com/mcp",
     "transport": "streamable-http",
     "toolNames": ["read_design", "edit_design"],
-    "docsUrl": "https://www.canva.dev/docs/mcp/",
+    "documentationUrl": "https://www.canva.dev/docs/mcp/",
     "overridesInternalUrl": false,
     "directoryOnly": false
   },
@@ -205,7 +205,7 @@
       "microsoft_graph_get",
       "microsoft_graph_list_properties"
     ],
-    "docsUrl": "https://learn.microsoft.com/en-us/graph/mcp-server/overview",
+    "documentationUrl": "https://learn.microsoft.com/en-us/graph/mcp-server/overview",
     "overridesInternalUrl": false,
     "directoryOnly": true
   }
