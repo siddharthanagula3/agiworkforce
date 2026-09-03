@@ -1,14 +1,12 @@
-
 import { NextRequest, NextResponse } from 'next/server';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { requireCsrfToken } from '@/lib/csrf';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
-import { getClerkAuthUser } from '@/lib/api-auth';
 import { mapProjectRow } from '@/lib/projects';
 import { parseProjectRequest } from '@/lib/project-request-validation';
-import { getNeonDb } from '@/lib/server/neon-db';
+import { getUserScopedDb } from '@/lib/server/rls-db';
 import { SubscriptionService } from '@/lib/services/subscription-service';
 import {
   getProjectLimit,
@@ -23,7 +21,6 @@ import {
   replaceProjectConversationMembership,
 } from '@/lib/services/project-membership-service';
 import { resolveSharedProjectScope } from '@/lib/services/org-sharing-service';
-import { resolveActiveOrganizationId } from '@/lib/services/active-workspace-service';
 
 const PG_UNDEFINED_COLUMN = '42703';
 
@@ -31,9 +28,7 @@ async function handleGetProjects(request: NextRequest) {
   const rateLimitResponse = await withRateLimit(request, 'chat-conversation');
   if (rateLimitResponse) return rateLimitResponse;
 
-  const { userId } = await getClerkAuthUser(request);
-  const db = getNeonDb();
-  const organizationId = await resolveActiveOrganizationId(db, userId);
+  const { db, userId, organizationId } = await getUserScopedDb(request);
 
   const url = new URL(request.url);
   const parsedLimit = parseInt(url.searchParams.get('limit') ?? '50', 10);
@@ -75,16 +70,13 @@ async function handleGetProjects(request: NextRequest) {
 }
 
 async function handleCreateProject(request: NextRequest) {
-  const { userId } = await getClerkAuthUser(request);
+  const { db, userId, organizationId } = await getUserScopedDb(request);
 
   const csrfError = await requireCsrfToken(request);
   if (csrfError) return csrfError;
 
   const rateLimitResponse = await withRateLimit(request, 'chat-conversation');
   if (rateLimitResponse) return rateLimitResponse;
-
-  const db = getNeonDb();
-  const organizationId = await resolveActiveOrganizationId(db, userId);
 
   let rawBody: unknown;
   try {

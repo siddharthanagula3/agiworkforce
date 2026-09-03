@@ -4,10 +4,10 @@ import { withRateLimit } from '@/lib/rate-limit';
 import { requireCsrfToken } from '@/lib/csrf';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
-import { getClerkAuthUser } from '@/lib/api-auth';
 import { mapProjectRow } from '@/lib/projects';
 import { parseProjectRequest } from '@/lib/project-request-validation';
-import { getNeonDb } from '@/lib/server/neon-db';
+import { getUserScopedDb } from '@/lib/server/rls-db';
+import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import { ManagedCloudProjectUpdateRequestSchema } from '@agiworkforce/cloud-contracts';
 import { SYNCED_APP_SURFACES } from '@agiworkforce/types';
 import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
@@ -18,7 +18,6 @@ import {
   replaceProjectConversationMembership,
 } from '@/lib/services/project-membership-service';
 import { resolveSharedProjectScope } from '@/lib/services/org-sharing-service';
-import { resolveActiveOrganizationId } from '@/lib/services/active-workspace-service';
 
 const PG_UNDEFINED_COLUMN = '42703';
 const PG_UNDEFINED_TABLE = '42P01';
@@ -32,7 +31,7 @@ function isSchemaNotReady(error: unknown): boolean {
 type RouteContext = { params: Promise<{ id: string }> };
 
 async function selectProjectWithConversationCount(
-  db: ReturnType<typeof getNeonDb>,
+  db: DatabaseAdapter,
   id: string,
   userId: string,
   organizationId: string | null,
@@ -57,7 +56,7 @@ async function selectProjectWithConversationCount(
 }
 
 async function selectSharedProjectWithConversationCount(
-  db: ReturnType<typeof getNeonDb>,
+  db: DatabaseAdapter,
   id: string,
   userId: string,
   sharedProjectIds: string[],
@@ -88,10 +87,8 @@ async function handleGetProject(request: NextRequest, context: RouteContext) {
   const rateLimitResponse = await withRateLimit(request, 'chat-conversation');
   if (rateLimitResponse) return rateLimitResponse;
 
-  const { userId } = await getClerkAuthUser(request);
-  const db = getNeonDb();
+  const { db, userId, organizationId } = await getUserScopedDb(request);
   const { id } = await context.params;
-  const organizationId = await resolveActiveOrganizationId(db, userId);
 
   let data = await selectProjectWithConversationCount(db, id, userId, organizationId);
 
@@ -118,7 +115,7 @@ async function handleGetProject(request: NextRequest, context: RouteContext) {
 }
 
 async function handleUpdateProject(request: NextRequest, context: RouteContext) {
-  const { userId } = await getClerkAuthUser(request);
+  const { db, userId, organizationId } = await getUserScopedDb(request);
 
   const csrfError = await requireCsrfToken(request);
   if (csrfError) return csrfError as NextResponse;
@@ -126,9 +123,7 @@ async function handleUpdateProject(request: NextRequest, context: RouteContext) 
   const rateLimitResponse = await withRateLimit(request, 'chat-conversation');
   if (rateLimitResponse) return rateLimitResponse;
 
-  const db = getNeonDb();
   const { id } = await context.params;
-  const organizationId = await resolveActiveOrganizationId(db, userId);
 
   let rawBody: unknown;
   try {
@@ -199,7 +194,7 @@ async function handleUpdateProject(request: NextRequest, context: RouteContext) 
     };
   }
 
-  const executeUpdate = async (targetDb: ReturnType<typeof getNeonDb>, includeRound10: boolean) => {
+  const executeUpdate = async (targetDb: DatabaseAdapter, includeRound10: boolean) => {
     const { sql, params } = buildUpdateSql(includeRound10);
     const [updated] = await targetDb.query<Record<string, unknown>>(sql, params);
     if (!updated) throw createError.notFound('Project not found');
@@ -262,7 +257,7 @@ async function handleUpdateProject(request: NextRequest, context: RouteContext) 
 }
 
 async function handleDeleteProject(request: NextRequest, context: RouteContext) {
-  const { userId } = await getClerkAuthUser(request);
+  const { db, userId, organizationId } = await getUserScopedDb(request);
 
   const csrfError = await requireCsrfToken(request);
   if (csrfError) return csrfError as NextResponse;
@@ -270,9 +265,7 @@ async function handleDeleteProject(request: NextRequest, context: RouteContext) 
   const rateLimitResponse = await withRateLimit(request, 'chat-conversation');
   if (rateLimitResponse) return rateLimitResponse;
 
-  const db = getNeonDb();
   const { id } = await context.params;
-  const organizationId = await resolveActiveOrganizationId(db, userId);
 
   const runDelete = (purgeKnowledgeFiles: boolean) =>
     db.transaction(async (tx) => {

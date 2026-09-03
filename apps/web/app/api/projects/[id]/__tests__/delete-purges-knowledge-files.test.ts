@@ -15,13 +15,8 @@ vi.mock('@/lib/csrf', () => ({ requireCsrfToken: vi.fn(async () => null) }));
 vi.mock('@/lib/logger', () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
-vi.mock('@/lib/api-auth', () => ({
-  getClerkAuthUser: mocks.getClerkAuthUser,
-  getAuthenticatedUser: vi.fn(),
-  getAuthenticatedUserWithClient: vi.fn(),
-}));
-vi.mock('@/lib/server/neon-db', () => ({
-  getNeonDb: () => {
+vi.mock('@/lib/server/rls-db', () => ({
+  getUserScopedDb: async () => {
     const adapter: Record<string, unknown> = {
       query: (...args: unknown[]) => mocks.query(...args),
       execute: (...args: unknown[]) => mocks.execute(...args),
@@ -29,7 +24,9 @@ vi.mock('@/lib/server/neon-db', () => ({
       dispose: () => {},
     };
     adapter['transaction'] = (fn: (tx: unknown) => unknown) => fn(adapter);
-    return adapter;
+    const { userId } = await mocks.getClerkAuthUser();
+    const organizationId = await mocks.resolveActiveOrganizationId();
+    return { db: adapter, userId, organizationId };
   },
 }));
 vi.mock('@/lib/server/object-storage', () => ({
@@ -37,9 +34,6 @@ vi.mock('@/lib/server/object-storage', () => ({
 }));
 vi.mock('@/lib/server/project-knowledge-object-storage', () => ({
   deleteProjectKnowledgeObject: mocks.deleteProjectKnowledgeObject,
-}));
-vi.mock('@/lib/services/active-workspace-service', () => ({
-  resolveActiveOrganizationId: () => mocks.resolveActiveOrganizationId(),
 }));
 vi.mock('@/lib/services/org-sharing-service', () => ({
   resolveSharedProjectScope: vi.fn(async () => null),

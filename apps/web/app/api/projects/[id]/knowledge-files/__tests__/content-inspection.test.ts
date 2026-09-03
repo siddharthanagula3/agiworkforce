@@ -21,18 +21,18 @@ vi.mock('@/lib/csrf', () => ({ requireCsrfToken: vi.fn().mockResolvedValue(null)
 vi.mock('@/lib/logger', () => ({
   logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() },
 }));
-vi.mock('@/lib/api-auth', () => ({ getClerkAuthUser: mockGetClerkAuthUser }));
-vi.mock('@/lib/server/neon-db', () => ({
-  getNeonDb: vi.fn(() => ({
-    query: (...args: unknown[]) => mockNeonQuery(...args),
-    execute: vi.fn().mockResolvedValue(1),
+vi.mock('@/lib/server/rls-db', () => ({
+  getUserScopedDb: vi.fn(async () => ({
+    db: {
+      query: (...args: unknown[]) => mockNeonQuery(...args),
+      execute: vi.fn().mockResolvedValue(1),
+    },
+    userId: (await mockGetClerkAuthUser()).userId,
+    organizationId: null,
   })),
 }));
 vi.mock('@/lib/services/subscription-service', () => ({
   SubscriptionService: { getSubscription: vi.fn(async () => ({ plan_tier: 'pro' })) },
-}));
-vi.mock('@/lib/services/active-workspace-service', () => ({
-  resolveActiveOrganizationId: vi.fn(async () => null),
 }));
 vi.mock('@/lib/server/object-storage', () => ({
   getBoundedObject: vi.fn(),

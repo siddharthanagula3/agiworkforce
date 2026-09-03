@@ -20,25 +20,21 @@ vi.mock('@/lib/csrf', () => ({ requireCsrfToken: vi.fn().mockResolvedValue(null)
 vi.mock('@/lib/logger', () => ({
   logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() },
 }));
-vi.mock('@/lib/api-auth', () => ({
-  getClerkAuthUser: mockGetClerkAuthUser,
-  getAuthenticatedUserWithClient: vi.fn(),
-  getAuthenticatedUser: vi.fn(),
-}));
-vi.mock('@/lib/server/neon-db', () => ({
-  getNeonDb: vi.fn(() => ({
-    query: (...args: unknown[]) => mockNeonQuery(...args),
-    execute: vi.fn().mockResolvedValue(1),
-    transaction: vi.fn((fn: (db: unknown) => unknown) => fn({})),
-    withUser: vi.fn(() => ({})),
-    dispose: vi.fn(),
+vi.mock('@/lib/server/rls-db', () => ({
+  getUserScopedDb: vi.fn(async () => ({
+    db: {
+      query: (...args: unknown[]) => mockNeonQuery(...args),
+      execute: vi.fn().mockResolvedValue(1),
+      transaction: vi.fn((fn: (db: unknown) => unknown) => fn({})),
+      withUser: vi.fn(() => ({})),
+      dispose: vi.fn(),
+    },
+    userId: (await mockGetClerkAuthUser()).userId,
+    organizationId: await mockResolveActiveOrganizationId(),
   })),
 }));
 vi.mock('@/lib/services/subscription-service', () => ({
   SubscriptionService: { getSubscription: vi.fn(async () => ({ plan_tier: 'pro' })) },
-}));
-vi.mock('@/lib/services/active-workspace-service', () => ({
-  resolveActiveOrganizationId: mockResolveActiveOrganizationId,
 }));
 vi.mock('@/lib/server/project-knowledge-extraction', () => ({
   extractProjectKnowledgeFile: mockExtractProjectKnowledgeFile,

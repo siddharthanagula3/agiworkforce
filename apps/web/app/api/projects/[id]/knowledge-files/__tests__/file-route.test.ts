@@ -13,16 +13,14 @@ const mocks = vi.hoisted(() => ({
 vi.mock('server-only', () => ({}));
 vi.mock('@/lib/rate-limit', () => ({ withRateLimit: vi.fn(async () => null) }));
 vi.mock('@/lib/csrf', () => ({ requireCsrfToken: vi.fn(async () => null) }));
-vi.mock('@/lib/api-auth', () => ({
-  getClerkAuthUser: vi.fn(async () => ({ userId: 'user-1' })),
-}));
 vi.mock('@/lib/logger', () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
-vi.mock('@/lib/server/neon-db', () => ({
-  getNeonDb: () => ({
-    query: mocks.query,
-    execute: mocks.execute,
+vi.mock('@/lib/server/rls-db', () => ({
+  getUserScopedDb: async () => ({
+    db: { query: mocks.query, execute: mocks.execute },
+    userId: 'user-1',
+    organizationId: await mocks.resolveActiveOrganizationId(),
   }),
 }));
 vi.mock('@/lib/server/object-storage', () => ({

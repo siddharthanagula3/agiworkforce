@@ -9,13 +9,13 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('server-only', () => ({}));
-vi.mock('@/lib/api-auth', () => ({ getClerkAuthUser: () => mocks.authUser() }));
 vi.mock('@/lib/rate-limit', () => ({ withRateLimit: () => mocks.rateLimit() }));
-vi.mock('@/lib/server/neon-db', () => ({
-  getNeonDb: () => ({ query: (...args: unknown[]) => mocks.query(...args) }),
-}));
-vi.mock('@/lib/services/active-workspace-service', () => ({
-  resolveActiveOrganizationId: () => mocks.resolveActiveOrganizationId(),
+vi.mock('@/lib/server/rls-db', () => ({
+  getUserScopedDb: async () => ({
+    db: { query: (...args: unknown[]) => mocks.query(...args) },
+    userId: (await mocks.authUser()).userId,
+    organizationId: await mocks.resolveActiveOrganizationId(),
+  }),
 }));
 vi.mock('@/lib/cors', () => ({
   withCorsRoute: <T>(handler: T) => handler,

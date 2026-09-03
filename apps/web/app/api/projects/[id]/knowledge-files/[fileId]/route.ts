@@ -4,8 +4,7 @@ import { withRateLimit } from '@/lib/rate-limit';
 import { requireCsrfToken } from '@/lib/csrf';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
-import { getClerkAuthUser } from '@/lib/api-auth';
-import { getNeonDb } from '@/lib/server/neon-db';
+import { getUserScopedDb } from '@/lib/server/rls-db';
 import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
 import { objectKeyFromStorageUri } from '@/lib/server/object-storage';
 import {
@@ -14,7 +13,6 @@ import {
 } from '@/lib/server/project-knowledge-object-storage';
 import { servedByteHeaders } from '@/lib/security/served-bytes';
 import { MAX_ATTACHMENT_BYTES } from '@agiworkforce/types';
-import { resolveActiveOrganizationId } from '@/lib/services/active-workspace-service';
 
 const PG_UNDEFINED_TABLE = '42P01';
 const PG_UNDEFINED_COLUMN = '42703';
@@ -37,10 +35,8 @@ async function ownedKnowledgeFile(
   fileName: string;
   storageUri: string;
 }> {
-  const { userId } = await getClerkAuthUser(request);
+  const { db, userId, organizationId } = await getUserScopedDb(request);
   const { id: projectId, fileId } = await context.params;
-  const db = getNeonDb();
-  const organizationId = await resolveActiveOrganizationId(db, userId);
   const [file] = await db.query<{
     mime_type: string | null;
     file_name: string;
@@ -93,7 +89,7 @@ async function handleGetKnowledgeFile(request: NextRequest, context: RouteContex
 }
 
 async function handleDeleteKnowledgeFile(request: NextRequest, context: RouteContext) {
-  const { userId } = await getClerkAuthUser(request);
+  const { db, userId, organizationId } = await getUserScopedDb(request);
 
   const csrfError = await requireCsrfToken(request);
   if (csrfError) return csrfError as NextResponse;
@@ -101,9 +97,7 @@ async function handleDeleteKnowledgeFile(request: NextRequest, context: RouteCon
   const rateLimitResponse = await withRateLimit(request, 'chat-conversation');
   if (rateLimitResponse) return rateLimitResponse;
 
-  const db = getNeonDb();
   const { id: projectId, fileId } = await context.params;
-  const organizationId = await resolveActiveOrganizationId(db, userId);
   let file: { storage_uri: string | null } | undefined;
   try {
     [file] = await db.query<{ storage_uri: string | null }>(
