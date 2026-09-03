@@ -34,7 +34,7 @@ export default function DeepResearchPage() {
           eyebrow="Features · Deep research"
           title="Every claim names the source it came from."
           lede="Search-capable models reach the live web on their own, and the composer states whether search is on for the model you picked. Deep Research goes further: the run writes out the searches it intends to make, then stops and waits for you to approve them. What comes back is a report with a bracketed number behind every factual claim, the matching sources listed beside it, and a stored copy you can reopen long after the chat has scrolled away."
-          ctas={[{ href: '/login?redirectTo=%2F', label: 'Start a research run' }]}
+          ctas={[{ href: '/login?redirectTo=%2Fchat', label: 'Start a research run' }]}
           visual={
             <ProductFrame
               light="/product/deep-research-report-light.png"
