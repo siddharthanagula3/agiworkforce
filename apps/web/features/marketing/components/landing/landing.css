@@ -1,21 +1,6 @@
 [data-design='agi'].agi-landing.agi-landing {
-  --agi-ground: #0b0a08;
-  --agi-ground-2: #13110d;
-  --agi-ground-3: #1c1913;
-  --agi-ink: #f1ebe1;
-  --agi-ink-2: #a49b8d;
-  --agi-rule: rgba(241, 235, 225, 0.1);
-  --agi-rule-strong: rgba(241, 235, 225, 0.2);
-  --agi-frame: rgba(241, 235, 225, 0.16);
-  --agi-amber: #e9a23b;
-  --agi-amber-soft: rgba(233, 162, 59, 0.14);
   --agi-container: 80rem;
   --lp-display: var(--font-newsreader), Georgia, 'Times New Roman', serif;
-  --lp-ink-3: #8a8174;
-  --lp-terminal: #060503;
-  --lp-terminal-ink: #d9d2c5;
-  --lp-terminal-dim: #8f877a;
-  --lp-shadow: 0 40px 100px -50px rgba(0, 0, 0, 0.9);
   --lp-h1: clamp(2.75rem, 1rem + 4.2vw, 5.5rem);
   --lp-h2: clamp(2rem, 1.2rem + 2.4vw, 3.6rem);
   --lp-h3: clamp(1.5rem, 1.2rem + 1vw, 2.1rem);
@@ -694,7 +679,7 @@
   overflow: hidden;
   border: 1px solid var(--agi-rule-strong);
   border-radius: 40px;
-  background: #000;
+  background: var(--lp-phone);
   box-shadow: var(--lp-shadow);
 }
 
