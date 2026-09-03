@@ -1308,6 +1308,8 @@ export async function resolveRouteHealthRuntimeState(
   return { ...emptyRuntimeState(nowMs), routeHealthSnapshots };
 }
 
+const MANAGED_WEB_CLOUD_TRUST_MODE = 'managed_cloud';
+
 export function resolveWebCloudModelRoute(
   model: string,
   subscriptionTier: string | undefined,
@@ -1339,7 +1341,7 @@ export function resolveWebCloudModelRoute(
     selection: model,
     taskType,
     subscriptionTier,
-    trustMode: 'managed_cloud',
+    trustMode: MANAGED_WEB_CLOUD_TRUST_MODE,
     runtimeProfileId: 'web/cloud-chat',
     ...(preferSlots !== undefined && preferSlots.length > 0 ? { preferSlots } : {}),
     ...(usage?.budgetRemainingCents !== undefined
@@ -1397,7 +1399,9 @@ function resolveProviderIdentities(model: string): {
 } {
   let transport: string | null;
   try {
-    transport = resolveProviderFromModel(model);
+    transport = resolveProviderFromModel(model, undefined, {
+      trustMode: MANAGED_WEB_CLOUD_TRUST_MODE,
+    });
   } catch {
     transport = null;
   }
@@ -2937,7 +2941,9 @@ export async function processRequest(
       }
 
       if (fallbackModel) {
-        const fallbackProvider = resolveProviderFromModel(fallbackModel.model);
+        const fallbackProvider = resolveProviderFromModel(fallbackModel.model, undefined, {
+          trustMode: MANAGED_WEB_CLOUD_TRUST_MODE,
+        });
         const fallbackCostCents = LLMCostCalculator.estimateCost(
           fallbackProvider,
           fallbackModel.model,
