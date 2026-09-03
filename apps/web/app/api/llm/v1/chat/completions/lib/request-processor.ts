@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import type { ResearchStep } from '@agiworkforce/types';
 import { ToolCallResponseSchema } from '@/lib/validations/tool-calls';
+import { modelSupportsResearch } from '@/features/chat/lib/research-capability-gate';
 import { AgiWorkGoalSchema } from './agiwork-plan';
 import { MAX_MESSAGE_LENGTH, ToolChoiceSchema, ToolDefinitionSchema } from '@/lib/validations/llm';
 import { logger } from '@/lib/logger';
@@ -1115,8 +1116,9 @@ export function applyJsonObjectMode(
 export function researchModeAllowed(
   chatRequest: Pick<ChatCompletionRequest, 'research'>,
   caps: Partial<ModelCapabilities> | undefined,
+  contextWindow: number | undefined = undefined,
 ): boolean {
-  return chatRequest.research === true && (caps?.research ?? false);
+  return chatRequest.research === true && modelSupportsResearch(caps, contextWindow);
 }
 
 export function applyResearchMode(
@@ -2543,7 +2545,11 @@ export async function processRequest(
     applyJsonObjectMode(chatRequest, dynamicSystemMessageRefs);
   }
 
-  const researchMode = researchModeAllowed(chatRequest, resolvedModelCaps);
+  const researchMode = researchModeAllowed(
+    chatRequest,
+    resolvedModelCaps,
+    getModelMetadataById(chatRequest.model)?.contextWindow,
+  );
   if (researchMode) {
     applyResearchMode(chatRequest, dynamicSystemMessageRefs);
   }

@@ -7,6 +7,7 @@ import {
   RESEARCH_SYSTEM_PROMPT,
 } from './request-processor';
 import type { ChatCompletionRequest } from './request-processor';
+import { RESEARCH_MIN_CONTEXT_WINDOW } from '@/features/chat/lib/research-capability-gate';
 
 const CHAT_MODEL = requireProviderDefaultModel('anthropic');
 
@@ -97,6 +98,18 @@ describe('researchModeAllowed gates on the capability it names', () => {
 
   it('refuses when the model has no capability metadata', () => {
     expect(researchModeAllowed(asked, undefined)).toBe(false);
+  });
+
+  it('grants a tool-capable model whose context window meets the threshold', () => {
+    expect(
+      researchModeAllowed(asked, { research: false, tools: true }, RESEARCH_MIN_CONTEXT_WINDOW),
+    ).toBe(true);
+  });
+
+  it('refuses a tool-capable model below the context window threshold', () => {
+    expect(
+      researchModeAllowed(asked, { research: false, tools: true }, RESEARCH_MIN_CONTEXT_WINDOW - 1),
+    ).toBe(false);
   });
 });
 
