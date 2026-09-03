@@ -25,7 +25,15 @@ const SUPPORT_ROWS: { label: string; value: string }[] = [
     value: `Available now. Email ${CONTACT_EMAIL} for a best-effort reply from a human.`,
   },
   {
-    label: 'Basic / Pro / Max',
+    label: 'Free',
+    value: `Available now. Email ${CONTACT_EMAIL} for a best-effort reply from a human; no published response-time SLA yet.`,
+  },
+  {
+    label: 'Basic and Pro',
+    value: `Available now. Email ${CONTACT_EMAIL} for a best-effort reply from a human; no published response-time SLA yet.`,
+  },
+  {
+    label: 'Max 5x, Max 15x, and Team',
     value: `Available now. Email ${CONTACT_EMAIL} for a best-effort reply from a human; no published response-time SLA yet.`,
   },
   {
