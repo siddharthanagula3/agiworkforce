@@ -1,11 +1,3 @@
-//! Multi-route resolution: one canonical model, several priced routes.
-//!
-//! The cross-language fixture in `auto_route_conformance.rs` pins the decision
-//! this resolver and the TypeScript one must agree on. These cases pin the
-//! parts that fixture cannot express as a single encoded string: which price
-//! sheet a route carries, and that failover across the routes of one model
-//! never answers with a different model.
-
 use agiworkforce_model_registry::{
     AutoRouteDecision, AutoRoutingRequest, RouteCommercialStatus, RoutingTaskType, TrustMode,
     resolve_auto_route, route_pricing,
