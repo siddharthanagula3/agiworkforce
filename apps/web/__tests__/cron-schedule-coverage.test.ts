@@ -83,6 +83,7 @@ describe('cron routes and vercel.json schedules agree', () => {
 
   function subDailyIntervalMinutes(schedule: string): number {
     const [minute, hour] = schedule.split(/\s+/);
+    if (!minute) return 0;
     const minuteStep = minute.match(/^\*\/(\d+)$/);
     if (minuteStep) return Number(minuteStep[1]);
     if (minute === '*') return 1;
