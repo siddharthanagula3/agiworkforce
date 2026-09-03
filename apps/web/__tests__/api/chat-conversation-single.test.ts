@@ -1,4 +1,3 @@
-
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { NextRequest } from 'next/server';
 import { requireProviderDefaultModel } from '@agiworkforce/types';
@@ -47,8 +46,9 @@ vi.mock('@/lib/services/active-workspace-service', () => ({
 import { GET, PUT, DELETE } from '@/app/api/chat/conversations/[id]/route';
 
 describe('Single Conversation API', () => {
+  const CONVERSATION_ID = '11111111-1111-4111-8111-111111111111';
   const mockConversation = {
-    id: 'conv-1',
+    id: CONVERSATION_ID,
     title: 'Test Conversation',
     model: 'auto',
     project_id: null,
@@ -83,7 +83,7 @@ describe('Single Conversation API', () => {
     },
   ];
 
-  const mockContext = { params: Promise.resolve({ id: 'conv-1' }) };
+  const mockContext = { params: Promise.resolve({ id: CONVERSATION_ID }) };
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -100,7 +100,9 @@ describe('Single Conversation API', () => {
         const { createError } = await import('@/lib/errors');
         mockRequireCurrentUserId.mockRejectedValueOnce(createError.unauthorized());
 
-        const request = new NextRequest('http://localhost/api/chat/conversations/conv-1');
+        const request = new NextRequest(
+          `http://localhost/api/chat/conversations/${CONVERSATION_ID}`,
+        );
         const response = await GET(request, mockContext);
 
         expect(response.status).toBe(401);
@@ -112,9 +114,12 @@ describe('Single Conversation API', () => {
         mockQuery.mockResolvedValueOnce([mockConversation]);
         mockQuery.mockResolvedValueOnce(mockMessages);
 
-        const request = new NextRequest('http://localhost/api/chat/conversations/conv-1', {
-          headers: { Authorization: 'Bearer valid-token' },
-        });
+        const request = new NextRequest(
+          `http://localhost/api/chat/conversations/${CONVERSATION_ID}`,
+          {
+            headers: { Authorization: 'Bearer valid-token' },
+          },
+        );
         const response = await GET(request, mockContext);
 
         expect(response.status).toBe(200);
@@ -139,9 +144,12 @@ describe('Single Conversation API', () => {
         mockQuery.mockResolvedValueOnce([mockConversation]);
         mockQuery.mockResolvedValueOnce(mockMessages);
 
-        const request = new NextRequest('http://localhost/api/chat/conversations/conv-1', {
-          headers: { Authorization: 'Bearer valid-token' },
-        });
+        const request = new NextRequest(
+          `http://localhost/api/chat/conversations/${CONVERSATION_ID}`,
+          {
+            headers: { Authorization: 'Bearer valid-token' },
+          },
+        );
         await GET(request, mockContext);
 
         expect(mockQuery).toHaveBeenCalledWith(
@@ -154,9 +162,12 @@ describe('Single Conversation API', () => {
         mockQuery.mockResolvedValueOnce([mockConversation]);
         mockQuery.mockResolvedValueOnce([]);
 
-        const request = new NextRequest('http://localhost/api/chat/conversations/conv-1', {
-          headers: { Authorization: 'Bearer valid-token' },
-        });
+        const request = new NextRequest(
+          `http://localhost/api/chat/conversations/${CONVERSATION_ID}`,
+          {
+            headers: { Authorization: 'Bearer valid-token' },
+          },
+        );
         const response = await GET(request, mockContext);
 
         expect(response.status).toBe(200);
@@ -168,9 +179,12 @@ describe('Single Conversation API', () => {
         mockQuery.mockResolvedValueOnce([mockConversation]);
         mockQuery.mockRejectedValueOnce(new Error('DB error'));
 
-        const request = new NextRequest('http://localhost/api/chat/conversations/conv-1', {
-          headers: { Authorization: 'Bearer valid-token' },
-        });
+        const request = new NextRequest(
+          `http://localhost/api/chat/conversations/${CONVERSATION_ID}`,
+          {
+            headers: { Authorization: 'Bearer valid-token' },
+          },
+        );
         const response = await GET(request, mockContext);
 
         expect(response.status).toBe(500);
@@ -184,14 +198,17 @@ describe('Single Conversation API', () => {
         const updated = { ...mockConversation, title: 'Updated Title' };
         mockQuery.mockResolvedValueOnce([updated]);
 
-        const request = new NextRequest('http://localhost/api/chat/conversations/conv-1', {
-          method: 'PUT',
-          headers: {
-            Authorization: 'Bearer valid-token',
-            'Content-Type': 'application/json',
+        const request = new NextRequest(
+          `http://localhost/api/chat/conversations/${CONVERSATION_ID}`,
+          {
+            method: 'PUT',
+            headers: {
+              Authorization: 'Bearer valid-token',
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ title: 'Updated Title' }),
           },
-          body: JSON.stringify({ title: 'Updated Title' }),
-        });
+        );
         const response = await PUT(request, mockContext);
 
         expect(response.status).toBe(200);
@@ -203,14 +220,17 @@ describe('Single Conversation API', () => {
         const updated = { ...mockConversation, model: CHAT_MODEL };
         mockQuery.mockResolvedValueOnce([updated]);
 
-        const request = new NextRequest('http://localhost/api/chat/conversations/conv-1', {
-          method: 'PUT',
-          headers: {
-            Authorization: 'Bearer valid-token',
-            'Content-Type': 'application/json',
+        const request = new NextRequest(
+          `http://localhost/api/chat/conversations/${CONVERSATION_ID}`,
+          {
+            method: 'PUT',
+            headers: {
+              Authorization: 'Bearer valid-token',
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ model: CHAT_MODEL }),
           },
-          body: JSON.stringify({ model: CHAT_MODEL }),
-        });
+        );
         const response = await PUT(request, mockContext);
 
         expect(response.status).toBe(200);
@@ -225,14 +245,17 @@ describe('Single Conversation API', () => {
         mockQuery.mockResolvedValueOnce([{ id: 'proj-1' }]);
         mockQuery.mockResolvedValueOnce([updated]);
 
-        const request = new NextRequest('http://localhost/api/chat/conversations/conv-1', {
-          method: 'PUT',
-          headers: {
-            Authorization: 'Bearer valid-token',
-            'Content-Type': 'application/json',
+        const request = new NextRequest(
+          `http://localhost/api/chat/conversations/${CONVERSATION_ID}`,
+          {
+            method: 'PUT',
+            headers: {
+              Authorization: 'Bearer valid-token',
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ projectId: 'proj-1' }),
           },
-          body: JSON.stringify({ projectId: 'proj-1' }),
-        });
+        );
         const response = await PUT(request, mockContext);
 
         expect(response.status).toBe(200);
@@ -251,14 +274,17 @@ describe('Single Conversation API', () => {
       it('rejects moving a conversation into a project the user does not own', async () => {
         mockQuery.mockResolvedValueOnce([]);
 
-        const request = new NextRequest('http://localhost/api/chat/conversations/conv-1', {
-          method: 'PUT',
-          headers: {
-            Authorization: 'Bearer valid-token',
-            'Content-Type': 'application/json',
+        const request = new NextRequest(
+          `http://localhost/api/chat/conversations/${CONVERSATION_ID}`,
+          {
+            method: 'PUT',
+            headers: {
+              Authorization: 'Bearer valid-token',
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ projectId: 'someone-elses-project' }),
           },
-          body: JSON.stringify({ projectId: 'someone-elses-project' }),
-        });
+        );
         const response = await PUT(request, mockContext);
 
         expect(response.status).toBe(404);
@@ -273,14 +299,17 @@ describe('Single Conversation API', () => {
         const updated = { ...mockConversation, project_id: null };
         mockQuery.mockResolvedValueOnce([updated]);
 
-        const request = new NextRequest('http://localhost/api/chat/conversations/conv-1', {
-          method: 'PUT',
-          headers: {
-            Authorization: 'Bearer valid-token',
-            'Content-Type': 'application/json',
+        const request = new NextRequest(
+          `http://localhost/api/chat/conversations/${CONVERSATION_ID}`,
+          {
+            method: 'PUT',
+            headers: {
+              Authorization: 'Bearer valid-token',
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ projectId: null }),
           },
-          body: JSON.stringify({ projectId: null }),
-        });
+        );
         const response = await PUT(request, mockContext);
 
         expect(response.status).toBe(200);
@@ -311,11 +340,14 @@ describe('Single Conversation API', () => {
         const { createError } = await import('@/lib/errors');
         mockRequireCurrentUserId.mockRejectedValueOnce(createError.unauthorized());
 
-        const request = new NextRequest('http://localhost/api/chat/conversations/conv-1', {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ title: 'Updated Title' }),
-        });
+        const request = new NextRequest(
+          `http://localhost/api/chat/conversations/${CONVERSATION_ID}`,
+          {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ title: 'Updated Title' }),
+          },
+        );
         const response = await PUT(request, mockContext);
 
         expect(response.status).toBe(401);
@@ -329,13 +361,16 @@ describe('Single Conversation API', () => {
 
       it('should soft delete conversation by setting deleted_at', async () => {
         mockQuery.mockImplementation(async (sql: string) =>
-          deleteSql.test(sql) ? [{ id: 'conv-1' }] : [],
+          deleteSql.test(sql) ? [{ id: CONVERSATION_ID }] : [],
         );
 
-        const request = new NextRequest('http://localhost/api/chat/conversations/conv-1', {
-          method: 'DELETE',
-          headers: { Authorization: 'Bearer valid-token' },
-        });
+        const request = new NextRequest(
+          `http://localhost/api/chat/conversations/${CONVERSATION_ID}`,
+          {
+            method: 'DELETE',
+            headers: { Authorization: 'Bearer valid-token' },
+          },
+        );
         const response = await DELETE(request, mockContext);
 
         expect(response.status).toBe(200);
@@ -351,10 +386,13 @@ describe('Single Conversation API', () => {
       it('should return 404 when no row matches, rather than reporting success', async () => {
         mockQuery.mockImplementation(async () => []);
 
-        const request = new NextRequest('http://localhost/api/chat/conversations/conv-1', {
-          method: 'DELETE',
-          headers: { Authorization: 'Bearer valid-token' },
-        });
+        const request = new NextRequest(
+          `http://localhost/api/chat/conversations/${CONVERSATION_ID}`,
+          {
+            method: 'DELETE',
+            headers: { Authorization: 'Bearer valid-token' },
+          },
+        );
         const response = await DELETE(request, mockContext);
 
         expect(response.status).toBe(404);
@@ -366,10 +404,13 @@ describe('Single Conversation API', () => {
           return [];
         });
 
-        const request = new NextRequest('http://localhost/api/chat/conversations/conv-1', {
-          method: 'DELETE',
-          headers: { Authorization: 'Bearer valid-token' },
-        });
+        const request = new NextRequest(
+          `http://localhost/api/chat/conversations/${CONVERSATION_ID}`,
+          {
+            method: 'DELETE',
+            headers: { Authorization: 'Bearer valid-token' },
+          },
+        );
         const response = await DELETE(request, mockContext);
 
         expect(response.status).toBe(500);
@@ -379,9 +420,12 @@ describe('Single Conversation API', () => {
         const { createError } = await import('@/lib/errors');
         mockRequireCurrentUserId.mockRejectedValueOnce(createError.unauthorized());
 
-        const request = new NextRequest('http://localhost/api/chat/conversations/conv-1', {
-          method: 'DELETE',
-        });
+        const request = new NextRequest(
+          `http://localhost/api/chat/conversations/${CONVERSATION_ID}`,
+          {
+            method: 'DELETE',
+          },
+        );
         const response = await DELETE(request, mockContext);
 
         expect(response.status).toBe(401);
@@ -389,23 +433,26 @@ describe('Single Conversation API', () => {
 
       it('should only delete conversations owned by authenticated user', async () => {
         mockQuery.mockImplementation(async (sql: string) =>
-          /update web_conversations/i.test(sql) ? [{ id: 'conv-1' }] : [],
+          /update web_conversations/i.test(sql) ? [{ id: CONVERSATION_ID }] : [],
         );
 
-        const request = new NextRequest('http://localhost/api/chat/conversations/conv-1', {
-          method: 'DELETE',
-          headers: { Authorization: 'Bearer valid-token' },
-        });
+        const request = new NextRequest(
+          `http://localhost/api/chat/conversations/${CONVERSATION_ID}`,
+          {
+            method: 'DELETE',
+            headers: { Authorization: 'Bearer valid-token' },
+          },
+        );
         await DELETE(request, mockContext);
 
         expect(mockQuery).toHaveBeenCalledWith(
           expect.stringMatching(/user_id = \$2[\s\S]*organization_id is not distinct from \$3/),
-          ['conv-1', 'user-123', null],
+          [CONVERSATION_ID, 'user-123', null],
         );
         expect(mockKillE2BSession).toHaveBeenCalledWith({
           tenantId: 'managed-cloud',
           userId: 'user-123',
-          conversationId: 'conv-1',
+          conversationId: CONVERSATION_ID,
         });
       });
     });
