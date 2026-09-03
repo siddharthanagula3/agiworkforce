@@ -6,17 +6,6 @@
  * upstream vendors itself, so model ids here are gateway slugs rather than any
  * single vendor's ids.
  *
- * Two quirks that rule out the generic `createOpenAICompatAdapter` helper
- * (it deliberately exposes no request-shaping hooks):
- *   1. Cache and provider-routing passthrough via the gateway's own
- *      `providerOptions.gateway` request extension — `./provider-options.ts`.
- *   2. Usage normalization for the gateway's cost and provider-attribution
- *      fields — `./usage.ts`.
- *
- * Model discovery uses the gateway's own `GET /models` endpoint (same shape
- * as OpenAI's `/v1/models`); the curated catalog seed stays empty until a
- * static price list is worth maintaining alongside it.
- *
  * @packageDocumentation
  */
 

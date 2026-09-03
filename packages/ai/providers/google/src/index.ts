@@ -53,14 +53,6 @@ export interface GoogleAdapterConfig extends ProviderAdapterConfig {
   skipDiscovery?: boolean;
 }
 
-/**
- * `baseUrl` reaches this adapter from two conventions in the wild: a bare
- * host (`https://generativelanguage.googleapis.com`) and a host that already
- * carries the API version (`.../v1beta`, matching the installed Google SDK
- * convention some gateway overrides use). Both must land on the same wire
- * request, so the version segment is stripped once here and re-appended by
- * every call site instead of assumed away.
- */
 function normalizeGoogleBaseUrl(url: string): string {
   const trimmed = url.replace(/\/+$/, '');
   const suffix = `/${GEMINI_API_VERSION_SEGMENT}`;

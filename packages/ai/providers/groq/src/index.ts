@@ -4,10 +4,6 @@
  * Groq provider adapter. Groq serves an OpenAI-compatible Chat Completions
  * endpoint at `https://api.groq.com/openai/v1`, which the compat layer already
  * classifies as `endpointClass: 'groq-native'` (see provider-attribution.ts).
- * Groq has historically nested streaming usage under `x_groq.usage` rather
- * than the standard top-level `usage` field, so this adapter is hand-written
- * rather than built on the generic `createOpenAICompatAdapter` shortcut, to
- * normalize that shape before the shared translate layer runs.
  *
  * @packageDocumentation
  */

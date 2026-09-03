@@ -19,10 +19,6 @@ const REQUIRED_BASE_URLS: Partial<Record<ProviderAdapterId, string>> = {
   openai_compat: PROTOCOL_ROUTE_TEST_BASE_URL,
 };
 
-/**
- * A route described only by protocol plus configuration has no adapter module
- * to carry its identity, so the caller supplies it.
- */
 const REQUIRED_IDENTITY: Partial<Record<ProviderAdapterId, Record<string, string>>> = {
   openai_compat: {
     providerId: PROTOCOL_ROUTE_TEST_PROVIDER_ID,
