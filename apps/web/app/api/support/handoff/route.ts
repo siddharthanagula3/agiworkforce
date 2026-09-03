@@ -1,4 +1,3 @@
-
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { withErrorHandler } from '@/lib/error-handler';
@@ -6,6 +5,8 @@ import { withRateLimit } from '@/lib/rate-limit';
 import { requireCsrfToken } from '@/lib/csrf';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
+import { requireHumanCaller } from '@/lib/security/bot-challenge';
+import { BOT_CHALLENGED_ENDPOINTS } from '@/lib/security/bot-challenge-routes';
 import { escalateToHuman, MissingContactEmailError } from '@/lib/support/handoff/handoff-service';
 import { resolveHandoffIdentity } from '@/lib/support/handoff/request-identity';
 
@@ -53,6 +54,8 @@ async function handleCreateHandoff(request: NextRequest) {
 
   const limited = await withRateLimit(request, 'support-handoff-create');
   if (limited) return limited;
+
+  await requireHumanCaller(BOT_CHALLENGED_ENDPOINTS.supportHandoffCreate);
 
   const body = await request.json().catch(() => null);
   const parsed = HandoffRequestSchema.safeParse(body);

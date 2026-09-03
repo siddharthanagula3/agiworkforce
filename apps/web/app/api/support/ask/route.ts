@@ -9,6 +9,8 @@ import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { withRateLimit } from '@/lib/rate-limit';
 import { readJsonBody } from '@/lib/read-json-body';
+import { requireHumanCaller } from '@/lib/security/bot-challenge';
+import { BOT_CHALLENGED_ENDPOINTS } from '@/lib/security/bot-challenge-routes';
 import { toSupportAgentAccountFacts } from '@/lib/support/account/agent-facts';
 import { resolveSupportAccountContext } from '@/lib/support/account/context-resolver';
 import { toModelSafeAccountFacts } from '@/lib/support/account/model-safe-facts';
@@ -80,6 +82,8 @@ async function handleAsk(request: NextRequest) {
     identity.userId ? `user:${identity.userId}` : undefined,
   );
   if (rateLimited) return rateLimited;
+
+  await requireHumanCaller(BOT_CHALLENGED_ENDPOINTS.supportAsk);
 
   const parsed = RequestSchema.safeParse(await readJsonBody(request));
   if (!parsed.success) {
