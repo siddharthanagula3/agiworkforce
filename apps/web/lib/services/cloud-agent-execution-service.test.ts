@@ -506,6 +506,46 @@ describe('cloud agent execution service', () => {
     });
   });
 
+  it('accepts a stored observation carrying routeId, costSource, upstreamProvider, and providerReportedCostUsd', async () => {
+    const observation = {
+      inputTokens: 75,
+      outputTokens: 0,
+      cacheReadTokens: 0,
+      cacheWriteTokens: 0,
+      cacheWrite1hTokens: 0,
+      reasoningTokens: 0,
+      provider: 'google',
+      model: 'gemini-3.8-flash',
+      costDollars: 0.002,
+      costSource: 'estimated',
+      routeId: 'google/gemini-3.8-flash',
+      upstreamProvider: 'anthropic',
+      providerReportedCostUsd: 0.0019,
+    };
+    vi.mocked(db.query).mockResolvedValueOnce([
+      {
+        provider_calls: '1',
+        input_tokens: '75',
+        output_tokens: '0',
+        cache_read_tokens: '0',
+        cache_write_tokens: '0',
+        cache_write_1h_tokens: '0',
+        reasoning_tokens: '0',
+        provider_usage_receipts: [
+          { providerCostDollars: 0.002, providerCallObservations: [observation] },
+        ],
+      },
+    ]);
+
+    await expect(
+      getCloudAgentExecutionUsage(db, {
+        userId: 'user-1',
+        runId: RUN_ID,
+        billingIdempotencyKey: 'agi.chat.web.request-3',
+      }),
+    ).resolves.toMatchObject({ providerCallObservations: [observation] });
+  });
+
   it('synthesizes request boundaries from historical top-level usage receipts', async () => {
     const subthresholdTokens = Math.floor(TIERED_MODEL.firstTier.thresholdTokens * 0.75);
     const legacyReceipt = {

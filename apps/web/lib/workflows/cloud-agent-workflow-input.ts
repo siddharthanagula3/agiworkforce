@@ -3,7 +3,12 @@ import { z } from 'zod';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import { TOOL_APPROVAL_GUIDANCE_MAX_LENGTH } from '@agiworkforce/cloud-contracts';
 import type { ProcessedRequest } from '@/app/api/llm/v1/chat/completions/lib/request-processor';
-import type { ApprovalMode, ResumeApproval } from '@/app/api/llm/v1/chat/completions/lib/tool-loop';
+import type {
+  ApprovalMode,
+  ResumeApproval,
+  ResumeInputResponse,
+  ToolApprovalDecision,
+} from '@/app/api/llm/v1/chat/completions/lib/tool-loop';
 import type { WebMcpToolDef } from '@/lib/mcp-tool-executor';
 import type { FreeTrialReservation } from '@/lib/services/free-trial-service';
 import type { ManagedUsageRequestReservation } from '@/lib/services/managed-usage-request-service';
@@ -12,6 +17,16 @@ import type {
   ConnectorToolPermissionEntry,
   ConnectorToolPermissions,
 } from '@/app/api/llm/v1/chat/completions/lib/connector-tool-permissions';
+import type { SameKeys } from '@/lib/schema-key-guard';
+
+const ThinkingConfigSchema = z
+  .object({ type: z.string().min(1), budget_tokens: z.number().int().positive().optional() })
+  .strict();
+const thinkingConfigSchemaCoversLlmRequest: SameKeys<
+  z.infer<typeof ThinkingConfigSchema>,
+  NonNullable<ProcessedRequest['llmRequest']['thinking']>
+> = true;
+void thinkingConfigSchemaCoversLlmRequest;
 
 const MessageSchema = z
   .object({
@@ -23,6 +38,11 @@ const MessageSchema = z
     __canonicalThinking: z.array(z.unknown()).optional(),
   })
   .strict();
+const messageSchemaCoversLlmRequest: SameKeys<
+  z.infer<typeof MessageSchema>,
+  ProcessedRequest['llmRequest']['messages'][number]
+> = true;
+void messageSchemaCoversLlmRequest;
 
 const LlmRequestSchema = z
   .object({
@@ -34,14 +54,16 @@ const LlmRequestSchema = z
     tools: z.array(z.unknown()).optional(),
     tool_choice: z.unknown().optional(),
     thinking_mode: z.boolean().optional(),
-    thinking: z
-      .object({ type: z.string().min(1), budget_tokens: z.number().int().positive().optional() })
-      .strict()
-      .optional(),
+    thinking: ThinkingConfigSchema.optional(),
     effort: z.string().optional(),
     usePromptCache: z.boolean().optional(),
   })
   .strict();
+const llmRequestSchemaCoversProcessedRequest: SameKeys<
+  z.infer<typeof LlmRequestSchema>,
+  ProcessedRequest['llmRequest']
+> = true;
+void llmRequestSchemaCoversProcessedRequest;
 
 const ProcessedRequestSchema = z
   .object({
@@ -125,6 +147,11 @@ const McpToolSchema = z
     inputSchema: z.record(z.string(), z.unknown()),
   })
   .strict();
+const mcpToolSchemaCoversWebMcpToolDef: SameKeys<
+  z.infer<typeof McpToolSchema>,
+  WebMcpToolDef
+> = true;
+void mcpToolSchemaCoversWebMcpToolDef;
 
 export type SerializedProcessedRequest = Omit<ProcessedRequest, 'managedUsage' | 'freeTrial'>;
 export type SerializedManagedUsageReservation = Omit<ManagedUsageRequestReservation, 'db'> & {
@@ -132,16 +159,16 @@ export type SerializedManagedUsageReservation = Omit<ManagedUsageRequestReservat
 };
 export type SerializedFreeTrialReservation = FreeTrialReservation;
 
-type SameKeys<A, B> = [keyof A] extends [keyof B]
-  ? [keyof B] extends [keyof A]
-    ? true
-    : false
-  : false;
 const managedBillingSchemaCoversReservation: SameKeys<
   z.infer<typeof ManagedBillingSchema>,
   SerializedManagedUsageReservation
 > = true;
 void managedBillingSchemaCoversReservation;
+const freeTrialBillingSchemaCoversReservation: SameKeys<
+  z.infer<typeof FreeTrialBillingSchema>,
+  SerializedFreeTrialReservation
+> = true;
+void freeTrialBillingSchemaCoversReservation;
 
 /** Whichever reservation paid for this turn, carried across the invocation boundary. */
 export type CloudAgentWorkflowBilling =
@@ -172,6 +199,45 @@ export interface CloudAgentWorkflowInput {
   };
 }
 
+const ToolApprovalDecisionSchema = z
+  .object({
+    toolCallId: z.string().min(1).max(256),
+    decision: z.enum(['approved', 'rejected']),
+  })
+  .strict();
+const toolApprovalDecisionSchemaCoversDecision: SameKeys<
+  z.infer<typeof ToolApprovalDecisionSchema>,
+  ToolApprovalDecision
+> = true;
+void toolApprovalDecisionSchemaCoversDecision;
+
+const ResumeInputResponseSchema = z
+  .object({
+    toolCallId: z.string().min(1).max(256),
+    inputResponses: z.record(z.string(), z.unknown()),
+    requestState: z.string().optional(),
+    round: z.number().int().nonnegative(),
+  })
+  .strict();
+const resumeInputResponseSchemaCoversResponse: SameKeys<
+  z.infer<typeof ResumeInputResponseSchema>,
+  ResumeInputResponse
+> = true;
+void resumeInputResponseSchemaCoversResponse;
+
+const ResumeApprovalSchema = z
+  .object({
+    approvals: z.array(ToolApprovalDecisionSchema).min(1).max(32).optional(),
+    inputResponses: z.array(ResumeInputResponseSchema).min(1).max(32).optional(),
+    guidance: z.string().trim().min(1).max(TOOL_APPROVAL_GUIDANCE_MAX_LENGTH).optional(),
+  })
+  .strict();
+const resumeApprovalSchemaCoversResumeApproval: SameKeys<
+  z.infer<typeof ResumeApprovalSchema>,
+  ResumeApproval
+> = true;
+void resumeApprovalSchemaCoversResumeApproval;
+
 const ContinuationSchema = z
   .object({
     eventSessionId: z.string().min(1),
@@ -179,40 +245,14 @@ const ContinuationSchema = z
     initialEventSequence: z.number().int().nonnegative(),
     initialCompletedSteps: z.number().int().nonnegative(),
     invocationContinuation: z.boolean(),
-    resume: z
-      .object({
-        approvals: z
-          .array(
-            z
-              .object({
-                toolCallId: z.string().min(1).max(256),
-                decision: z.enum(['approved', 'rejected']),
-              })
-              .strict(),
-          )
-          .min(1)
-          .max(32)
-          .optional(),
-        inputResponses: z
-          .array(
-            z
-              .object({
-                toolCallId: z.string().min(1).max(256),
-                inputResponses: z.record(z.string(), z.unknown()),
-                requestState: z.string().optional(),
-                round: z.number().int().nonnegative(),
-              })
-              .strict(),
-          )
-          .min(1)
-          .max(32)
-          .optional(),
-        guidance: z.string().trim().min(1).max(TOOL_APPROVAL_GUIDANCE_MAX_LENGTH).optional(),
-      })
-      .strict()
-      .optional(),
+    resume: ResumeApprovalSchema.optional(),
   })
   .strict();
+const continuationSchemaCoversWorkflowInput: SameKeys<
+  z.infer<typeof ContinuationSchema>,
+  NonNullable<CloudAgentWorkflowInput['continuation']>
+> = true;
+void continuationSchemaCoversWorkflowInput;
 
 const PredecessorApprovalSchema = z
   .object({
@@ -220,6 +260,11 @@ const PredecessorApprovalSchema = z
     leaseToken: z.string().uuid(),
   })
   .strict();
+const predecessorApprovalSchemaCoversWorkflowInput: SameKeys<
+  z.infer<typeof PredecessorApprovalSchema>,
+  NonNullable<CloudAgentWorkflowInput['predecessorApproval']>
+> = true;
+void predecessorApprovalSchemaCoversWorkflowInput;
 
 const CloudAgentWorkflowInputSchema = z
   .object({
@@ -253,6 +298,11 @@ const CloudAgentWorkflowInputSchema = z
       });
     }
   });
+const cloudAgentWorkflowInputSchemaCoversWorkflowInput: SameKeys<
+  z.infer<typeof CloudAgentWorkflowInputSchema>,
+  CloudAgentWorkflowInput
+> = true;
+void cloudAgentWorkflowInputSchemaCoversWorkflowInput;
 
 export function parseCloudAgentWorkflowInput(value: unknown): CloudAgentWorkflowInput {
   return CloudAgentWorkflowInputSchema.parse(value) as unknown as CloudAgentWorkflowInput;
