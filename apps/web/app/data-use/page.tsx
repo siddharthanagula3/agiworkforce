@@ -10,7 +10,7 @@ import { CANONICAL_POLICY_ROUTES, POLICY_LAST_UPDATED } from '@/lib/legal-consta
 export const metadata = buildMetadata({
   title: 'How we use your data',
   description:
-    'Plain-English answers to what actually happens to your conversations, files and account data — who can see them, whether they train anything, how long they are kept, and how to get them back or delete them.',
+    'Plain-English answers to what actually happens to your conversations, files and account data: who can see them, whether they train anything, how long they are kept, and how to get them back or delete them.',
   path: '/data-use',
 });
 
