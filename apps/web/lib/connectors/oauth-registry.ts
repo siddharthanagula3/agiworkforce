@@ -162,6 +162,16 @@ export function isConnectorOAuthSupported(connectorId: string): boolean {
   return getConnectorOAuthProvider(connectorId) !== null || isSelfServiceConnector(connectorId);
 }
 
+const LOCAL_DEV_HOSTNAMES = new Set(['localhost', '127.0.0.1']);
+
+export function isLocalDevOrigin(origin: URL): boolean {
+  return (
+    process.env['NODE_ENV'] !== 'production' &&
+    origin.protocol === 'http:' &&
+    LOCAL_DEV_HOSTNAMES.has(origin.hostname)
+  );
+}
+
 export function getConnectorOAuthRedirectUri(): string | null {
   const base = (
     process.env['CONNECTOR_OAUTH_REDIRECT_BASE_URL'] ??
@@ -178,11 +188,7 @@ export function getConnectorOAuthRedirectUri(): string | null {
     );
     return null;
   }
-  const isLocalHttp =
-    process.env['NODE_ENV'] !== 'production' &&
-    origin.protocol === 'http:' &&
-    (origin.hostname === 'localhost' || origin.hostname === '127.0.0.1');
-  if (origin.protocol !== 'https:' && !isLocalHttp) {
+  if (origin.protocol !== 'https:' && !isLocalDevOrigin(origin)) {
     logger.error(
       '[connector-oauth] redirect base URL must use HTTPS — OAuth connectors stay unavailable',
     );
