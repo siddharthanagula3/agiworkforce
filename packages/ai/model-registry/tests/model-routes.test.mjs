@@ -81,6 +81,39 @@ test('every route declares a known cache class, commercial status and its own pr
   }
 });
 
+const MANAGED_OPEN_ROUTER_MODEL_KEYS = [
+  'minimax-m3',
+  'qwen-3.5-flash',
+  'qwen-3.7-plus',
+  'glm-5.3',
+  'glm-5.3-flash',
+];
+
+test('the openrouter route admits managed traffic only for the models the registry names', () => {
+  for (const [routeId, route] of Object.entries(registry.routes)) {
+    if (route.provider !== 'open_router' || route.harnessId.startsWith('open_router/')) continue;
+    const admitsManaged = route.trustModes.includes('managed_cloud');
+    assert.equal(
+      admitsManaged,
+      MANAGED_OPEN_ROUTER_MODEL_KEYS.includes(route.modelKey),
+      `${routeId} managed_cloud admission must match the named roster`,
+    );
+    if (admitsManaged) {
+      assert.equal(
+        route.commercialStatus,
+        'authorized_marketplace',
+        `${routeId} must keep its authorized_marketplace status while admitting managed traffic`,
+      );
+      assert.equal(route.isDefault, false, `${routeId} must not become the default route`);
+    }
+  }
+  for (const modelKey of MANAGED_OPEN_ROUTER_MODEL_KEYS) {
+    const route = registry.routes[`open_router/${modelKey}`];
+    assert.ok(route, `open_router/${modelKey} must be compiled`);
+    assert.deepEqual(route.trustModes, ['managed_cloud', 'byok']);
+  }
+});
+
 test('a declared additional route compiles to a second priced route on the same model', () => {
   const declared = Object.entries(declarations.models).flatMap(([modelKey, declaration]) =>
     (declaration.additionalRoutes ?? []).map((route) => [modelKey, route]),
