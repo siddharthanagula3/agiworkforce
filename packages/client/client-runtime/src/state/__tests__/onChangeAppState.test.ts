@@ -1,4 +1,3 @@
-
 import { describe, it, expect, vi } from 'vitest';
 import {
   onChangeAppState,
@@ -38,7 +37,7 @@ function runChange(prev: AppState, next: AppState, depth = 0): void {
   onChangeAppState({ newState: next, oldState: prev }, depth);
 }
 
-describe('onChangeAppState — channel 1: API cache invalidation', () => {
+describe('onChangeAppState, channel 1: API cache invalidation', () => {
   it('fires invalidator on userId change', () => {
     const invalidator = vi.fn();
     const unsub = registerApiCacheInvalidator(invalidator);
@@ -90,7 +89,7 @@ describe('onChangeAppState — channel 1: API cache invalidation', () => {
   });
 });
 
-describe('onChangeAppState — channel 2: telemetry', () => {
+describe('onChangeAppState, channel 2: telemetry', () => {
   it('emits telemetry event with correct changedFields on userId change', () => {
     const handler = vi.fn();
     const unsub = registerTelemetryHandler(handler);
@@ -156,7 +155,7 @@ describe('onChangeAppState — channel 2: telemetry', () => {
   });
 });
 
-describe('onChangeAppState — channel 3: settings persistence', () => {
+describe('onChangeAppState, channel 3: settings persistence', () => {
   it('fires persistence handler on settings change', () => {
     const handler = vi.fn();
     const unsub = registerPersistenceHandler(handler);
@@ -201,7 +200,7 @@ describe('onChangeAppState — channel 3: settings persistence', () => {
   });
 });
 
-describe('onChangeAppState — channel 4: model-switch broadcast', () => {
+describe('onChangeAppState, channel 4: model-switch broadcast', () => {
   it('fires model-switch listener when activeModelId changes', () => {
     const listener = vi.fn();
     const unsub = registerModelSwitchListener(listener);
@@ -247,7 +246,7 @@ describe('onChangeAppState — channel 4: model-switch broadcast', () => {
   });
 });
 
-describe('onChangeAppState — fan-out failure isolation', () => {
+describe('onChangeAppState, fan-out failure isolation', () => {
   it('one failing channel does not prevent others from running', () => {
     const errors: unknown[] = [];
     const unsubError = onFanOutError((e) => errors.push(e));
@@ -296,7 +295,7 @@ describe('onChangeAppState — fan-out failure isolation', () => {
   });
 });
 
-describe('onChangeAppState — circular re-entrancy guard', () => {
+describe('onChangeAppState, circular re-entrancy guard', () => {
   it('calls at depth 0 and 1 are allowed', () => {
     const listener = vi.fn();
     const unsub = registerModelSwitchListener(listener);
@@ -336,7 +335,7 @@ describe('onChangeAppState — circular re-entrancy guard', () => {
   });
 });
 
-describe('onChangeAppState — all 4 channels in one change', () => {
+describe('onChangeAppState, all 4 channels in one change', () => {
   it('fires all 4 channels on a change that touches auth + model', () => {
     const apiCacheInvalidator = vi.fn();
     const telemetryHandler = vi.fn();

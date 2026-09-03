@@ -1,4 +1,3 @@
-
 import { createStore } from '../state/createStore';
 import {
   LANE_CAP,
@@ -361,8 +360,7 @@ export function createWebStorageAdapter(
       try {
         storage.setItem(key, JSON.stringify(commands));
       } catch {
-        // QuotaExceededError / SecurityError — silently drop persistence;
-        // the queue continues to function in-memory.
+        // noop
       }
     },
   };
@@ -396,7 +394,7 @@ export function createKvStorageAdapter(key: string, kv: SyncKvStore): QueueStora
       try {
         kv.set(key, JSON.stringify(commands));
       } catch {
-        // Swallow — adapter is fire-and-forget.
+        // noop
       }
     },
   };

@@ -92,7 +92,7 @@ describe('context propagation through await chains', () => {
   });
 });
 
-describe('concurrent isolation — 1,000 Tauri commands with unique contexts', () => {
+describe('concurrent isolation, 1,000 Tauri commands with unique contexts', () => {
   it('no context contamination across concurrent chains', async () => {
     const N = 1000;
     const results = await Promise.all(
@@ -113,7 +113,7 @@ describe('concurrent isolation — 1,000 Tauri commands with unique contexts', (
   }, 30_000);
 });
 
-describe('memory — 10K commands fire and resolve without leak', () => {
+describe('memory, 10K commands fire and resolve without leak', () => {
   it('WeakRef baseline: resolved contexts are GC-eligible', async () => {
     const N = 10_000;
     for (let i = 0; i < N; i++) {

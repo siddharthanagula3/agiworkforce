@@ -23,15 +23,15 @@ import {
 import { createInMemoryConversationPort, createInMemoryMessagePort } from './test-ports';
 
 describe('fixtures: cursor-compare.json', () => {
-  it.each(cursorFixtures.bigintGreaterCases)('bigintGreater — $name', (c) => {
+  it.each(cursorFixtures.bigintGreaterCases)('bigintGreater, $name', (c) => {
     expect(bigintGreater(c.a, c.b)).toBe(c.expected);
   });
 
-  it.each(cursorFixtures.maxCursorCases)('maxCursor — $name', (c) => {
+  it.each(cursorFixtures.maxCursorCases)('maxCursor, $name', (c) => {
     expect(maxCursor(c.base, ...c.versions)).toBe(c.expected);
   });
 
-  it.each(cursorFixtures.selectNextCursorCases)('selectNextCursor — $name', (c) => {
+  it.each(cursorFixtures.selectNextCursorCases)('selectNextCursor, $name', (c) => {
     expect(selectNextCursor(c.current, c.responseCursor)).toBe(c.expected);
   });
 });
@@ -57,13 +57,13 @@ const PushMessageSchemaMirror = z.object({
 });
 
 describe('fixtures: push-body.json', () => {
-  it.each(pushBodyFixtures.conversationCases)('conversation push mapping — $name', (c) => {
+  it.each(pushBodyFixtures.conversationCases)('conversation push mapping, $name', (c) => {
     const item = toConversationPushItem(c.record as SyncConversationRecord);
     expect(item).toEqual(c.expectedWireItem);
     expect(() => PushConversationSchemaMirror.parse(item)).not.toThrow();
   });
 
-  it.each(pushBodyFixtures.messageCases)('message push mapping — $name', (c) => {
+  it.each(pushBodyFixtures.messageCases)('message push mapping, $name', (c) => {
     const item = toMessagePushItem(
       c.conversationId,
       c.record as SyncMessageRecord & { role: 'user' | 'assistant' | 'system' },
@@ -109,7 +109,7 @@ const allCases = pullApplyFixtures.cases as unknown as FixtureCase[];
 const tsCases = allCases.filter((c) => c.applies.includes('ts'));
 
 describe('fixtures: pull-apply.json (every delta is schema-valid)', () => {
-  it.each(allCases)('$name — deltas parse against the wire schemas', (c) => {
+  it.each(allCases)('$name, deltas parse against the wire schemas', (c) => {
     for (const step of c.steps) {
       for (const conv of step.conversations)
         expect(() => ConversationWireDeltaSchema.parse(conv)).not.toThrow();

@@ -1,4 +1,3 @@
-
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { appStateStore, registerModelSwitchListener, registerTelemetryHandler } from '../index';
 import { initialAppState } from '../AppStateStore';
@@ -7,7 +6,7 @@ beforeEach(() => {
   appStateStore.setState(() => initialAppState);
 });
 
-describe('appStateStore — singleton integration', () => {
+describe('appStateStore, singleton integration', () => {
   it('starts with initialAppState', () => {
     const state = appStateStore.getState();
     expect(state.auth.isAuthenticated).toBe(false);
