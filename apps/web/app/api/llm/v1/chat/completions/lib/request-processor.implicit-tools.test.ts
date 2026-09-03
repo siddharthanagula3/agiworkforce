@@ -95,6 +95,19 @@ describe('implicit managed-tool intent', () => {
     expect(chatRequest.code_execution).toBe(true);
   });
 
+  it('offers code execution when the user names the capability instead of a verb', () => {
+    const chatRequest = request();
+
+    applyImplicitManagedToolIntent()(chatRequest, {
+      prompt:
+        "Use code execution to compute the first 12 rows of Pascal's triangle, then create a JSON file named pascal.json containing them and tell me its size.",
+      taskType: 'coding',
+      planTier: 'pro',
+    });
+
+    expect(chatRequest.code_execution).toBe(true);
+  });
+
   it('preserves an explicit code-execution opt-out', () => {
     const chatRequest = request({ code_execution: false });
 
