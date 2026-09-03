@@ -1,4 +1,3 @@
-
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const routeMocks = vi.hoisted(() => ({
@@ -11,6 +10,7 @@ const routeMocks = vi.hoisted(() => ({
   recordEmailOutcome: vi.fn(),
   getSubscription: vi.fn(),
   getManagedUsageSummary: vi.fn(),
+  requireHumanCaller: vi.fn(),
 }));
 
 vi.mock('@clerk/nextjs/server', () => ({ auth: routeMocks.auth }));
@@ -33,7 +33,12 @@ vi.mock('@/lib/services/subscription-service', () => ({
 vi.mock('@/lib/services/managed-usage-summary-service', () => ({
   getManagedUsageSummary: routeMocks.getManagedUsageSummary,
 }));
+vi.mock('@/lib/security/bot-challenge', () => ({
+  requireHumanCaller: routeMocks.requireHumanCaller,
+}));
 
+import { createError } from '@/lib/errors';
+import { BOT_CHALLENGED_ENDPOINTS } from '@/lib/security/bot-challenge-routes';
 import { POST } from '../route';
 import { clearAvailabilityCache } from '@/lib/support/handoff/presence-service';
 import { REFERENCE_ID_PATTERN } from '@/lib/support/handoff/reference-id';
@@ -79,6 +84,7 @@ beforeEach(() => {
   routeMocks.recordEmailOutcome.mockResolvedValue(undefined);
   routeMocks.getSubscription.mockResolvedValue(null);
   routeMocks.getManagedUsageSummary.mockResolvedValue(null);
+  routeMocks.requireHumanCaller.mockResolvedValue(undefined);
   routeMocks.insertHandoffSession.mockImplementation(async (input: Record<string, unknown>) => ({
     id: 'session-1',
     reference_id: input['referenceId'],
@@ -188,6 +194,19 @@ describe('POST /api/support/handoff', () => {
     const response = await POST(request(validBody()));
 
     expect(response.status).toBe(429);
+    expect(routeMocks.insertHandoffSession).not.toHaveBeenCalled();
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('challenges the caller before persisting or emailing an escalation', async () => {
+    routeMocks.requireHumanCaller.mockRejectedValue(createError.forbidden());
+
+    const response = await POST(request(validBody()));
+
+    expect(response.status).toBe(403);
+    expect(routeMocks.requireHumanCaller).toHaveBeenCalledWith(
+      BOT_CHALLENGED_ENDPOINTS.supportHandoffCreate,
+    );
     expect(routeMocks.insertHandoffSession).not.toHaveBeenCalled();
     expect(fetchMock).not.toHaveBeenCalled();
   });

@@ -1,10 +1,11 @@
-
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { requireCsrfToken } from '@/lib/csrf';
 import { createError } from '@/lib/errors';
+import { requireHumanCaller } from '@/lib/security/bot-challenge';
+import { BOT_CHALLENGED_ENDPOINTS } from '@/lib/security/bot-challenge-routes';
 import { getHandoffConfig } from '@/lib/support/handoff/config';
 import { redactSecrets } from '@/lib/support/handoff/transcript';
 import {
@@ -67,6 +68,8 @@ async function handlePost(request: NextRequest, context: RouteContext) {
 
   const limited = await withRateLimit(request, 'support-handoff-message');
   if (limited) return limited;
+
+  await requireHumanCaller(BOT_CHALLENGED_ENDPOINTS.supportHandoffMessage);
 
   const { sessionId } = await context.params;
   const identity = await resolveHandoffIdentity(request);

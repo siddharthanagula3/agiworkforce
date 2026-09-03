@@ -9,6 +9,7 @@ const mocks = vi.hoisted(() => ({
   enabled: vi.fn(),
   resolveContext: vi.fn(),
   listActions: vi.fn(),
+  requireHumanCaller: vi.fn(),
 }));
 
 vi.hoisted(() => {
@@ -34,7 +35,12 @@ vi.mock('@/lib/support/account/context-resolver', () => ({
 vi.mock('@/lib/support/actions/service', () => ({
   listAvailableSupportActions: mocks.listActions,
 }));
+vi.mock('@/lib/security/bot-challenge', () => ({
+  requireHumanCaller: mocks.requireHumanCaller,
+}));
 
+const { createError } = await import('@/lib/errors');
+const { BOT_CHALLENGED_ENDPOINTS } = await import('@/lib/security/bot-challenge-routes');
 const { POST } = await import('./route');
 
 const ANSWER = {
@@ -84,6 +90,17 @@ describe('POST /api/support/ask', () => {
     mocks.answer.mockResolvedValue(ANSWER);
     mocks.resolveContext.mockResolvedValue(CONTEXT);
     mocks.listActions.mockReturnValue({ actions: [{ id: 'a', title: 'A', description: 'D' }] });
+    mocks.requireHumanCaller.mockResolvedValue(undefined);
+  });
+
+  it('challenges the caller before spending a model call', async () => {
+    mocks.requireHumanCaller.mockRejectedValue(createError.forbidden());
+
+    const response = await POST(post(QUESTION));
+
+    expect(response.status).toBe(403);
+    expect(mocks.requireHumanCaller).toHaveBeenCalledWith(BOT_CHALLENGED_ENDPOINTS.supportAsk);
+    expect(mocks.answer).not.toHaveBeenCalled();
   });
 
   it('answers a grounded question through the support engine', async () => {
