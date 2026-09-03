@@ -780,4 +780,10 @@ describe('PricingPage', () => {
     expect(screen.queryByText('waitlistHeading')).toBeNull();
     expect(screen.queryByText('requestHostedAccessCta')).toBeNull();
   });
+
+  it('links to the FAQ for billing and plan questions', () => {
+    render(<PricingPage />);
+
+    expect(screen.getByRole('link', { name: 'FAQ' })).toHaveAttribute('href', '/faq');
+  });
 });

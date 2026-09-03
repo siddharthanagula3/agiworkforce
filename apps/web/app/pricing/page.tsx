@@ -1364,6 +1364,23 @@ export default function PricingPage() {
           </Container>
         </section>
 
+        <section className="agi-ds-section" aria-labelledby="pricing-faq-title" data-rule="top">
+          <Container>
+            <Eyebrow>Questions</Eyebrow>
+            <h2 id="pricing-faq-title" className="agi-ds-h2">
+              Have a question about a plan?
+            </h2>
+            <Prose size="lg">
+              Billing, upgrades, downgrades, cancellations, invoices, and what happens to your data
+              are answered on the{' '}
+              <Link href="/faq" className="agi-ds-link">
+                FAQ
+              </Link>
+              .
+            </Prose>
+          </Container>
+        </section>
+
         <MarketingFooter />
       </main>
       <UpgradeConfirmDialog
