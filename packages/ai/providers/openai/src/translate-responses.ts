@@ -57,9 +57,6 @@ function blocksToInputContent(blocks: ContentBlock[]): ResponsesInputContent[] {
         file_data: `data:${b.source.mediaType};base64,${b.source.data}`,
       });
     }
-    // tool_use / tool_result / thinking are NOT valid inside an input
-    // message's content — caller routes them as their own input items
-    // (function_call / function_call_output) below.
   }
   return out;
 }

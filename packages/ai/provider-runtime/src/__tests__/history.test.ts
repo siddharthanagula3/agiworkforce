@@ -8,7 +8,7 @@ import {
   type RepairMessage,
 } from '../history';
 
-describe('ensureToolResultPairing — anthropic-shape', () => {
+describe('ensureToolResultPairing, anthropic-shape', () => {
   it('passes through clean conversation', () => {
     const msgs: RepairMessage[] = [
       { role: 'user', content: 'hi' },
@@ -71,7 +71,7 @@ describe('ensureToolResultPairing — anthropic-shape', () => {
   });
 });
 
-describe('ensureToolResultPairing — openai-shape', () => {
+describe('ensureToolResultPairing, openai-shape', () => {
   it('handles orphan tool_calls on assistant message', () => {
     const msgs: RepairMessage[] = [
       {

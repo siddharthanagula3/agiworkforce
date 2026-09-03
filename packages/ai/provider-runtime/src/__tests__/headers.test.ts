@@ -9,7 +9,7 @@ describe('LatchedHeaderStore', () => {
     expect(store.getLatched('s1')).toEqual({ 'anthropic-beta': 'fast-mode' });
   });
 
-  it('is idempotent — re-latching same value returns false', () => {
+  it('is idempotent, re-latching same value returns false', () => {
     const store = new LatchedHeaderStore();
     store.latch('s1', 'X-Cache-Mode', 'global');
     expect(store.latch('s1', 'X-Cache-Mode', 'global')).toBe(false);

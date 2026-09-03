@@ -1,4 +1,3 @@
-
 import { describe, expect, it } from 'vitest';
 import type { ChatRequest } from '@agiworkforce/types';
 
@@ -127,7 +126,7 @@ describe('Gemini tool_result name mapping', () => {
     expect(part?.functionResponse?.name).toBe('toolu_orphan');
   });
 
-  it('matches tool_result to tool_use by id only — not by positional index', () => {
+  it('matches tool_result to tool_use by id only, not by positional index', () => {
     const req: ChatRequest = {
       model: GOOGLE_DEFAULT_MODEL_ID,
       messages: [

@@ -28,7 +28,7 @@ function buildInlineNesting(depth: number): Record<string, unknown> {
   return schema;
 }
 
-describe('cleanSchemaForGemini — expansion bounds', () => {
+describe('cleanSchemaForGemini, expansion bounds', () => {
   it('survives a 35-link $ref chain that forks twice per link', () => {
     const started = Date.now();
     const cleaned = cleanSchemaForGemini(buildForkingRefChain(35));
@@ -83,7 +83,7 @@ describe('cleanSchemaForGemini — expansion bounds', () => {
   }, 15_000);
 });
 
-describe('cleanSchemaForGemini — memoized $ref resolution stays correct', () => {
+describe('cleanSchemaForGemini, memoized $ref resolution stays correct', () => {
   it('produces identical cleaned output for every site referencing one definition', () => {
     const cleaned = cleanSchemaForGemini({
       type: 'object',
@@ -150,7 +150,7 @@ describe('cleanSchemaForGemini — memoized $ref resolution stays correct', () =
   });
 });
 
-describe('cleanSchemaForGemini — only Gemini-known keywords survive', () => {
+describe('cleanSchemaForGemini, only Gemini-known keywords survive', () => {
   /**
    * Google rejects the WHOLE request on an unknown field, naming the path:
    *   Unknown name "propertyNames" at
@@ -278,8 +278,6 @@ describe('cleanSchemaForGemini — only Gemini-known keywords survive', () => {
       },
     });
 
-    // `properties` maps caller-chosen names to schemas, so its KEYS are data,
-    // not keywords — only its values are walked as schemas.
     const walk = (node: unknown): void => {
       if (!node || typeof node !== 'object') return;
       if (Array.isArray(node)) {

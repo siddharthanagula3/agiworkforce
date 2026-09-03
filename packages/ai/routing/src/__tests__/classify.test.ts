@@ -1,4 +1,3 @@
-
 import {
   getModelMetadataById,
   getModelsForProvider,
@@ -48,7 +47,7 @@ function classify(
   return classifyTaskLocally(msg, history, attachments);
 }
 
-describe('classifyTaskLocally — image_generation', () => {
+describe('classifyTaskLocally, image_generation', () => {
   it('matches /image slash command', () => {
     expect(classify('/image a sunset over mountains')).toEqual({
       type: 'image_generation',
@@ -152,7 +151,7 @@ describe('classifyTaskLocally — image_generation', () => {
   });
 });
 
-describe('classifyTaskLocally — computer-use', () => {
+describe('classifyTaskLocally, computer-use', () => {
   const screenshot: RoutingAttachment = { mime: 'image/png', type: 'screenshot' };
 
   it('fires on screenshot + click verb', () => {
@@ -201,7 +200,7 @@ describe('classifyTaskLocally — computer-use', () => {
   });
 });
 
-describe('classifyTaskLocally — multimodal', () => {
+describe('classifyTaskLocally, multimodal', () => {
   it('matches image/png MIME', () => {
     const att: RoutingAttachment = { mime: 'image/png' };
     expect(classify('describe this', NO_HISTORY, [att]).type).toBe('multimodal');
@@ -268,7 +267,7 @@ describe('classifyTaskLocally — multimodal', () => {
   });
 });
 
-describe('classifyTaskLocally — long_context', () => {
+describe('classifyTaskLocally, long_context', () => {
   it('triggers when a single huge message exceeds 50K tokens', () => {
     const huge = 'a'.repeat(200_000);
     expect(classify(huge).type).toBe('long_context');
@@ -313,7 +312,7 @@ describe('classifyTaskLocally — long_context', () => {
   });
 });
 
-describe('classifyTaskLocally — coding', () => {
+describe('classifyTaskLocally, coding', () => {
   it('matches markdown code fences', () => {
     expect(classify('debug this:\n```\nlet x = 1;\n```').type).toBe('coding');
   });
@@ -371,7 +370,7 @@ describe('classifyTaskLocally — coding', () => {
   });
 });
 
-describe('classifyTaskLocally — reasoning', () => {
+describe('classifyTaskLocally, reasoning', () => {
   it('matches "prove" verb', () => {
     expect(classify('prove that 2 plus 2 equals four').type).toBe('reasoning');
   });
@@ -433,7 +432,7 @@ describe('classifyTaskLocally — reasoning', () => {
   });
 });
 
-describe('classifyTaskLocally — agentic', () => {
+describe('classifyTaskLocally, agentic', () => {
   it('matches explicit autonomous-agent orchestration', () => {
     expect(classify('Use autonomous agents and discover the best available tools').type).toBe(
       'agentic',
@@ -453,7 +452,7 @@ describe('classifyTaskLocally — agentic', () => {
   });
 });
 
-describe('classifyTaskLocally — research', () => {
+describe('classifyTaskLocally, research', () => {
   it('matches "latest" keyword', () => {
     expect(classify("what's the latest in AI").type).toBe('research');
   });
@@ -495,7 +494,7 @@ describe('classifyTaskLocally — research', () => {
   });
 });
 
-describe('classifyTaskLocally — creative_writing', () => {
+describe('classifyTaskLocally, creative_writing', () => {
   it('matches "write a story"', () => {
     expect(classify('write a story about a dragon').type).toBe('creative_writing');
   });
@@ -537,7 +536,7 @@ describe('classifyTaskLocally — creative_writing', () => {
   });
 });
 
-describe('classifyTaskLocally — simple_chat', () => {
+describe('classifyTaskLocally, simple_chat', () => {
   it('matches "hi"', () => {
     expect(classify('hi').type).toBe('simple_chat');
   });
@@ -588,7 +587,7 @@ describe('classifyTaskLocally — simple_chat', () => {
   });
 });
 
-describe('classifyTaskLocally — general fallthrough', () => {
+describe('classifyTaskLocally, general fallthrough', () => {
   it('falls through to general when no heuristics match', () => {
     const msg =
       'I would like to discuss something interesting that requires some neutral conversational handling without specific signals';
@@ -610,7 +609,7 @@ describe('classifyTaskLocally — general fallthrough', () => {
   });
 });
 
-describe('classifyTaskLocally — priority order', () => {
+describe('classifyTaskLocally, priority order', () => {
   it('image > computer-use', () => {
     const screenshot: RoutingAttachment = { mime: 'image/png', type: 'screenshot' };
     expect(classify('/image click submit', NO_HISTORY, [screenshot]).type).toBe('image_generation');
@@ -666,7 +665,7 @@ describe('classifyTaskLocally — priority order', () => {
   });
 });
 
-describe('applyConversationContext — long-context guard', () => {
+describe('applyConversationContext, long-context guard', () => {
   it('forces long_context when cumulative tokens > 50K', () => {
     const local = { type: 'coding' as const, confidence: 0.85 };
     const result = applyConversationContext(local, ctx(60_000, ['coding', 'coding']));
@@ -691,7 +690,7 @@ describe('applyConversationContext — long-context guard', () => {
   });
 });
 
-describe('applyConversationContext — sticky pivot mode boost', () => {
+describe('applyConversationContext, sticky pivot mode boost', () => {
   it('boosts confidence when running mode matches new turn', () => {
     const local = { type: 'coding' as const, confidence: 0.85 };
     const result = applyConversationContext(local, ctx(1_000, ['coding', 'coding', 'coding']));
@@ -736,7 +735,7 @@ describe('applyConversationContext — sticky pivot mode boost', () => {
   });
 });
 
-describe('applyConversationContext — pivot override threshold', () => {
+describe('applyConversationContext, pivot override threshold', () => {
   it('high-confidence (>=0.85) new turn overrides running mode', () => {
     const local = { type: 'image_generation' as const, confidence: 0.95 };
     const result = applyConversationContext(local, ctx(1_000, ['coding', 'coding', 'coding']));
@@ -763,7 +762,7 @@ describe('applyConversationContext — pivot override threshold', () => {
   });
 });
 
-describe('applyConversationContext — window edge cases', () => {
+describe('applyConversationContext, window edge cases', () => {
   it('inspects only the last 3 entries', () => {
     const local = { type: 'general' as const, confidence: 0.5 };
     const result = applyConversationContext(
@@ -801,7 +800,7 @@ describe('applyConversationContext — window edge cases', () => {
   });
 });
 
-describe('estimateTokens — provider multipliers', () => {
+describe('estimateTokens, provider multipliers', () => {
   it('returns 0 for empty string', () => {
     expect(estimateTokens('')).toBe(0);
   });
@@ -896,7 +895,7 @@ describe('estimateTokens — provider multipliers', () => {
   });
 });
 
-describe('detectIndicScript — basic detection', () => {
+describe('detectIndicScript, basic detection', () => {
   it('returns isIndic=false for empty string', () => {
     const r = detectIndicScript('');
     expect(r.isIndic).toBe(false);
@@ -962,7 +961,7 @@ describe('detectIndicScript — basic detection', () => {
   });
 });
 
-describe('detectIndicScript — ratio threshold', () => {
+describe('detectIndicScript, ratio threshold', () => {
   it('mixed-script with >20% Indic flips isIndic', () => {
     const r = detectIndicScript('hi नमस्ते abc');
     expect(r.isIndic).toBe(true);
@@ -992,7 +991,7 @@ describe('detectIndicScript — ratio threshold', () => {
   });
 });
 
-describe('detectIndicScript — counts and dominant script', () => {
+describe('detectIndicScript, counts and dominant script', () => {
   it('reports indicCharCount and totalCharCount', () => {
     const r = detectIndicScript('hi नम');
     expect(r.totalCharCount).toBe(5);
@@ -1042,7 +1041,7 @@ describe('detectIndicScript — counts and dominant script', () => {
   });
 });
 
-describe('detectIndicScript — boundary codepoints', () => {
+describe('detectIndicScript, boundary codepoints', () => {
   it('detects start of Devanagari range (U+0900)', () => {
     const r = detectIndicScript(String.fromCodePoint(0x0900));
     expect(r.scriptCounts.devanagari).toBe(1);
@@ -1071,7 +1070,7 @@ describe('detectIndicScript — boundary codepoints', () => {
   });
 });
 
-describe('classifier — stability', () => {
+describe('classifier, stability', () => {
   it('is deterministic across repeated calls', () => {
     const a = classify('write a function to solve x');
     const b = classify('write a function to solve x');
@@ -1119,7 +1118,7 @@ describe('classifier — stability', () => {
   });
 });
 
-describe('classifier — attachments without other signals', () => {
+describe('classifier, attachments without other signals', () => {
   it('PDF attachment + chatty short message → simple_chat (no multimodal trigger)', () => {
     const att: RoutingAttachment = { mime: 'application/pdf' };
     expect(classify('hi', NO_HISTORY, [att]).type).toBe('simple_chat');
@@ -1138,7 +1137,7 @@ describe('classifier — attachments without other signals', () => {
   });
 });
 
-describe('classifier — additional priority pairs', () => {
+describe('classifier, additional priority pairs', () => {
   it('image_generation > research', () => {
     expect(classify('/image latest news').type).toBe('image_generation');
   });
@@ -1160,7 +1159,7 @@ describe('classifier — additional priority pairs', () => {
   });
 });
 
-describe('cross-module — Indic + classifier independence', () => {
+describe('cross-module, Indic + classifier independence', () => {
   it('classifier is unaffected by Indic content', () => {
     const msg = 'नमस्ते कैसे हो';
     expect(classify(msg).type).toBe('simple_chat');

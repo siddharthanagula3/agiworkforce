@@ -1,22 +1,3 @@
-/**
- * @agiworkforce/providers-google
- *
- * Gemini provider adapter implementing `ProviderAdapter` from
- * `@agiworkforce/types`. Talks directly to
- * `https://generativelanguage.googleapis.com/v1beta` — no vendor SDK; the
- * Gemini wire is small, stable, and the SDK has churned. API-key auth.
- *
- * Tool schemas pass through `cleanSchemaForGemini` from
- * `@agiworkforce/provider-protocol` to scrub the JSON Schema keywords Cloud
- * Code Assist's validator rejects (additionalProperties, $ref,
- * minLength/maxLength/pattern, etc.).
- *
- * Vertex AI (OAuth + project/region routing) is **NOT** wired here —
- * follow-up package or a `vertexBaseUrl` config knob.
- *
- * @packageDocumentation
- */
-
 import type {
   AuthMethod,
   ChatRequest,

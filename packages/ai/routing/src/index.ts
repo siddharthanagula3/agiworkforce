@@ -1,39 +1,3 @@
-/**
- * @agiworkforce/routing
- *
- * Shared heuristic classifier, Indic-script detector, and pricing/promo helpers
- * for the AGI Workforce auto-routing system. Pure-TypeScript, zero side effects,
- * zero shared module state — safe to call from any surface (web, desktop,
- * mobile, extensions).
- *
- * Auto task requirements and slot assignments live in
- * `@agiworkforce/model-registry`; this package owns the pure classifier and
- * trust/capability-aware resolver. The legacy `three-tier-router` is retired.
- *
- * Public API:
- *   - `classifyTaskLocally(message, history, attachments?)` — heuristic taxonomy.
- *   - `applyConversationContext(local, ctx)` — 5-turn sticky pivot.
- *   - `estimateTokens(text, model?)` — provider-specific tokenizer estimates.
- *   - `detectIndicScript(text, threshold?)` — Pool C language gate.
- *   - `isDeprecated(modelId, now?)` / `isPromoExpired(modelId, now?)` — guards.
- *   - `effectiveInputPrice(modelId, now?)` / `effectiveOutputPrice(modelId, now?)`
- *     — pricing that auto-switches to `post_promo_prices` past `promo_expires_at`.
- *   - `tokenizerDriftFactor(modelId)` / `ESTIMATE_INFLATION` — tokenizer-drift
- *     inflation for cost/latency re-baselining.
- *   - `classifyTaskFamily(signals)` — deterministic structural task-family fast
- *     path; returns `family: null` when it declines, and the caller must then
- *     run the existing Auto policy unchanged.
- *   - `resolveTaskFamilyOrdering(...)` / `orderPreferredSlotsForTaskFamily(...)`
- *     — per-family quality floor plus cost ranking over the ALREADY-ADMITTED
- *     candidate set. The result is always a permutation of that set.
- *   - `decideTaskFamilyContinuity(...)` / `applyTaskFamilyContinuity(...)` —
- *     session stickiness with escalation-only switching.
- *   - `taskFamilyRoutingStageEnabled()` / `TASK_FAMILY_STAGE_ENV` — the
- *     operator flag for the stage. OFF by default.
- *
- * @packageDocumentation
- */
-
 export { applyConversationContext, classifyTaskLocally, estimateTokens } from './classify';
 export { resolveAutoRoute } from './auto';
 export { getAutoCapabilityEnvelope } from './auto-capability-envelope';

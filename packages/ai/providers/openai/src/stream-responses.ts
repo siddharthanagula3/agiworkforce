@@ -114,7 +114,6 @@ function mapIncompleteReason(
     case 'max_tokens':
       return 'max_tokens';
     case 'content_filter':
-      // Safety-layer stop — first-class 'refusal', same member the
       return 'refusal';
     case 'stop_sequence':
       return 'stop_sequence';

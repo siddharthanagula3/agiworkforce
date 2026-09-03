@@ -1,15 +1,6 @@
 #!/usr/bin/env node
 /* global fetch, AbortSignal */
 
-// Cross-checks compiled registry pricing and limits against BerriAI/litellm's
-// model_prices_and_context_window.json, fetched at runtime and never vendored.
-//
-// litellm is a third-party community snapshot, not an authority. Neither side is
-// presumed right. Every row printed here is an instruction to open the provider's
-// own pricing page and decide there — it is not a defect report against this catalog.
-//
-// Advisory by design: exit 0 unless --strict. Attribution: THIRD_PARTY_LICENSES.md.
-
 import console from 'node:console';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -283,7 +274,7 @@ const amount = (field, value) =>
 function reportDrift(rows) {
   console.log(`VERIFY AGAINST THE PROVIDER'S OWN PRICING PAGE (${rows.length} model(s))`);
   console.log(
-    '  litellm is a third-party snapshot. Neither side is presumed right — open the\n' +
+    '  litellm is a third-party snapshot. Neither side is presumed right, open the\n' +
       "  provider's page, decide there, and record the date in the row's pricingNote.",
   );
   for (const row of rows) {
@@ -302,7 +293,7 @@ function reportDrift(rows) {
 }
 
 function reportPinned(rows) {
-  console.log(`POLICY-PINNED, EXPECTED DIVERGENCE (${rows.length} model(s)) — no action`);
+  console.log(`POLICY-PINNED, EXPECTED DIVERGENCE (${rows.length} model(s)), no action`);
   console.log(
     '  A default route priced at or above the provider list price is the policy working.',
   );
@@ -316,13 +307,13 @@ function reportPinned(rows) {
 }
 
 function reportSkipped(rows) {
-  console.log(`NOT TOKEN-BILLED UPSTREAM (${rows.length} model(s)) — not compared`);
+  console.log(`NOT TOKEN-BILLED UPSTREAM (${rows.length} model(s)), not compared`);
   for (const row of rows) console.log(`  ${row.key}: ${row.skipped}`);
   console.log('');
 }
 
 function reportGaps(rows) {
-  console.log(`COVERAGE GAPS (${rows.length} model(s)) — one side silent, not a contradiction`);
+  console.log(`COVERAGE GAPS (${rows.length} model(s)), one side silent, not a contradiction`);
   for (const row of rows) {
     const ours = row.findings.filter((f) => f.kind === 'missing-ours').map((f) => f.field);
     const theirs = row.findings.filter((f) => f.kind === 'missing-theirs').map((f) => f.field);
@@ -335,7 +326,7 @@ function reportGaps(rows) {
 }
 
 function reportUnmatched(rows) {
-  console.log(`NOT IN UPSTREAM (${rows.length} model(s)) — expected for pre-release ids`);
+  console.log(`NOT IN UPSTREAM (${rows.length} model(s)), expected for pre-release ids`);
   for (const row of rows) console.log(`  ${row.key} (${row.provider})`);
   console.log('');
 }

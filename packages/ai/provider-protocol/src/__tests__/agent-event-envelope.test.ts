@@ -154,7 +154,7 @@ describe('streamChunkToAgentEvent / agentEventToStreamChunk round trip', () => {
     }
   });
 
-  describe('stop reason round trip — the honest vocabulary is symmetric: every member round-trips losslessly', () => {
+  describe('stop reason round trip, the honest vocabulary is symmetric: every member round-trips losslessly', () => {
     it('every StreamChunkStop reason round-trips exactly, refusal included', () => {
       for (const reason of [
         'end_turn',
@@ -170,7 +170,7 @@ describe('streamChunkToAgentEvent / agentEventToStreamChunk round trip', () => {
       }
     });
 
-    it("AgentEventStopReason 'refusal' maps DOWN to the first-class StreamChunk 'refusal' — the historical collapse to 'error' (the pre-emitter-wiring asymmetry this block used to pin) is closed and must not return", () => {
+    it("AgentEventStopReason 'refusal' maps DOWN to the first-class StreamChunk 'refusal', the historical collapse to 'error' (the pre-emitter-wiring asymmetry this block used to pin) is closed and must not return", () => {
       const streamChunk = agentEventToStreamChunk({ type: 'stop', reason: 'refusal' });
       expect(streamChunk).toEqual({ type: 'stop', reason: 'refusal' });
       expect(streamChunk).not.toEqual({ type: 'stop', reason: 'error' });

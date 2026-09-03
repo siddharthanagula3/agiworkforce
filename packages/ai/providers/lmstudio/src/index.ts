@@ -1,19 +1,3 @@
-/**
- * @agiworkforce/providers-lmstudio
- *
- * LMStudio provider adapter implementing `ProviderAdapter` from
- * `@agiworkforce/types`. LMStudio runs a local OpenAI-compatible server
- * (default `http://localhost:1234/v1`). Available models depend entirely on
- * what the user has loaded in LMStudio, so there is no curated catalog —
- * `catalog()` queries `/v1/models` dynamically every call.
- *
- * Closes the local-LLM gap alongside `@agiworkforce/providers-ollama`. Used
- * via the existing OpenAI translate/stream layer with `provider: 'lmstudio'`
- * which the compat detector classifies as `endpointClass: 'local'`.
- *
- * @packageDocumentation
- */
-
 import OpenAI from 'openai';
 import type {
   AuthMethod,

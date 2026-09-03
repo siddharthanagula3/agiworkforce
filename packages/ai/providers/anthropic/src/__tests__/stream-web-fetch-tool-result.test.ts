@@ -16,7 +16,7 @@ async function collect(stream: AsyncIterable<StreamChunk>): Promise<StreamChunk[
   return out;
 }
 
-describe('translateAnthropicStream — native web_fetch tool result (P1-1)', () => {
+describe('translateAnthropicStream, native web_fetch tool result (P1-1)', () => {
   it('yields a server-tool-result chunk for a web_fetch_tool_result block, not vendor-raw', async () => {
     const block = {
       type: 'web_fetch_tool_result',

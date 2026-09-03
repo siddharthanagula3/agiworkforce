@@ -1,9 +1,8 @@
-
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { parseRetryAfter, parseRetryAfterFromError } from '../retry-after';
 
-describe('parseRetryAfter — delta-seconds form', () => {
+describe('parseRetryAfter, delta-seconds form', () => {
   it('parses an integer-second value', () => {
     const h = new Headers({ 'Retry-After': '30' });
     expect(parseRetryAfter(h)).toBe(30);
@@ -22,7 +21,7 @@ describe('parseRetryAfter — delta-seconds form', () => {
   });
 });
 
-describe('parseRetryAfter — HTTP-date form', () => {
+describe('parseRetryAfter, HTTP-date form', () => {
   beforeEach(() => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date('2026-05-08T12:00:00Z'));
@@ -48,7 +47,7 @@ describe('parseRetryAfter — HTTP-date form', () => {
   });
 });
 
-describe('parseRetryAfter — input shape variants', () => {
+describe('parseRetryAfter, input shape variants', () => {
   it('accepts a Headers instance', () => {
     expect(parseRetryAfter(new Headers({ 'Retry-After': '5' }))).toBe(5);
   });

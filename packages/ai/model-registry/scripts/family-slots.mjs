@@ -182,7 +182,7 @@ async function promote(args) {
     );
   }
   if (!apply) {
-    console.log('[families] dry run — pass --apply to write and verify');
+    console.log('[families] dry run, pass --apply to write and verify');
     return;
   }
   if (await commitCatalog(next, previousText)) {
@@ -221,7 +221,7 @@ async function rollback(args) {
     `[families] ${apply ? 'roll back' : 'would roll back'} ${only}: ${family.active.modelKey} → ${rolled.active.modelKey}`,
   );
   if (!apply) {
-    console.log('[families] dry run — pass --apply to write and verify');
+    console.log('[families] dry run, pass --apply to write and verify');
     return;
   }
   const next = { ...familyCatalog, families: { ...familyCatalog.families, [only]: rolled } };

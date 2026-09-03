@@ -1,23 +1,3 @@
-/**
- * The TypeScript half of the cross-language Auto-routing conformance contract.
- *
- * `packages/ai/routing/src/auto.ts` and `crates/agiworkforce-model-registry`
- * are two independent resolvers over one generated policy. Design-doc **OQ-1
- * (which of them is canonical) is undecided**, so neither may be treated as the
- * other's reference — but a routing-policy or resolver change must not silently
- * make them disagree. `fixtures/auto-route-conformance.json` records the
- * decision both are required to reach, and the crate's
- * `tests/auto_route_conformance.rs` replays the same file. The fixture is the
- * contract; neither implementation is.
- *
- * Regenerate with `AGI_UPDATE_ROUTING_CONFORMANCE=1`, then re-run the Rust
- * test: a case only this side changed surfaces there as a failure.
- *
- * Cases stay inside the request surface BOTH resolvers implement. Budgets,
- * session capability documents and the task-family stage are TypeScript-only
- * (see `task-family-routing.ts`) and are excluded rather than pinned to one
- * side's behaviour.
- */
 import { readFileSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 

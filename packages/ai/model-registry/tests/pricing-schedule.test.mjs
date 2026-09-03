@@ -225,7 +225,7 @@ test('accepts adjacent windows that meet without overlapping', () => {
   );
 });
 
-test('accepts a gap between windows — uncovered dates fall back to the base price', () => {
+test('accepts a gap between windows, uncovered dates fall back to the base price', () => {
   const schedule = normalizePricingSchedule(MODEL, [
     { effectiveUntil: '2030-03-31', inputCost: 1 },
     { effectiveFrom: '2031-01-01', inputCost: 3 },

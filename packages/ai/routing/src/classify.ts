@@ -1,28 +1,3 @@
-/**
- * Heuristic classifier for the auto-routing system.
- *
- * Implements the task taxonomy consumed by the registry-backed Auto policy:
- *   1. Priority-ordered regex / length / attachment / Unicode heuristics.
- *   2. Token-budget guard that forces `long_context` past 50K cumulative tokens.
- *   3. 5-turn sticky-pivot logic that boosts confidence on the running mode.
- *
- * Heuristics aim for 75–85% accuracy on their own; the LLM fallback (a
- * registry-selected lightweight call wired in a higher layer) handles the remainder
- * when `confidence < 0.6`.
- *
- * Vercel React Best Practices applied:
- *   - `js-hoist-regexp` — every regex is module-scoped (compiled once).
- *   - `js-early-exit` — return as soon as a heuristic matches.
- *   - `js-length-check-first` — length comparison runs before the word-split
- *     for the simple-chat heuristic.
- *   - `server-no-shared-module-state` — no mutable module state.
- *   - `bundle-analyzable-paths` — every public symbol uses a named export so
- *     bundlers can tree-shake unused branches of the classifier.
- *
- * @module routing/classify
- * @packageDocumentation
- */
-
 import { getModelMetadataById, type RoutingTaskType } from '@agiworkforce/types';
 
 import { tokenizerDriftFactor } from './pricing';
@@ -151,22 +126,6 @@ const MAX_CONFIDENCE = 1.0;
 
 const STICKY_WINDOW = 3;
 
-/**
- * Apply 5-turn sticky-pivot logic and the long-context guard to a local
- * heuristic result.
- *
- * Rules (from spec §3):
- *   - If `cumulativeTokens > 50K` and the local result is NOT already
- *     `long_context`, override to `long_context @ 0.9`.
- *   - Compute the mode of the LAST 3 task types in `recentTaskTypes`. If the
- *     mode matches `local.type`, boost confidence by `+0.1` (clamped to 1.0).
- *   - High-confidence (≥0.85) results are allowed to override the running
- *     mode without penalty — that's the point of the threshold; it lets a
- *     conversation pivot from `coding` to `image_generation` cleanly.
- *
- * @param local - Result returned by `classifyTaskLocally`.
- * @param ctx - Snapshot of conversation token budget and recent task types.
- */
 export function applyConversationContext(
   local: ClassifierResult,
   ctx: ConversationContext,

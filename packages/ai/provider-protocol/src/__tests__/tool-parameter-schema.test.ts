@@ -1,9 +1,8 @@
-
 import { describe, expect, it } from 'vitest';
 
 import { normalizeToolParameterSchema } from '../tool-parameter-schema';
 
-describe('normalizeToolParameterSchema — passthrough cases', () => {
+describe('normalizeToolParameterSchema, passthrough cases', () => {
   it('returns a top-level object schema unchanged for a generic provider', () => {
     const schema = {
       type: 'object',
@@ -47,7 +46,7 @@ describe('normalizeToolParameterSchema — passthrough cases', () => {
   });
 });
 
-describe('normalizeToolParameterSchema — anyOf flattening (OpenAI/strict)', () => {
+describe('normalizeToolParameterSchema, anyOf flattening (OpenAI/strict)', () => {
   it('flattens a top-level anyOf into a merged object schema', () => {
     const schema = {
       anyOf: [
@@ -95,7 +94,7 @@ describe('normalizeToolParameterSchema — anyOf flattening (OpenAI/strict)', ()
   });
 });
 
-describe('normalizeToolParameterSchema — Gemini cleanup', () => {
+describe('normalizeToolParameterSchema, Gemini cleanup', () => {
   it('strips JSON Schema keywords Gemini rejects when modelProvider=google', () => {
     const schema = {
       type: 'object',
@@ -132,7 +131,7 @@ describe('normalizeToolParameterSchema — Gemini cleanup', () => {
   });
 });
 
-describe('normalizeToolParameterSchema — caller-supplied unsupportedKeywords (xAI etc.)', () => {
+describe('normalizeToolParameterSchema, caller-supplied unsupportedKeywords (xAI etc.)', () => {
   it('strips caller-listed keywords recursively', () => {
     const schema = {
       type: 'object',

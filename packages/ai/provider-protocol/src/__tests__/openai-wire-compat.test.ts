@@ -637,7 +637,7 @@ describe('OpenAIWireAssembler mid-stream error signaling (x_stream_error)', () =
     expect(finishReasons.every((f) => f === 'stop')).toBe(true);
   });
 
-  it('default mode: sseChunk() (singular, services/api-gateway) is UNCHANGED — no x_stream_error, matching its documented no-new-output contract for extension chunk types', () => {
+  it('default mode: sseChunk() (singular, services/api-gateway) is UNCHANGED, no x_stream_error, matching its documented no-new-output contract for extension chunk types', () => {
     const assembler = new OpenAIWireAssembler({ model: FIXTURE_MODEL_ID, now: NOW });
     assembler.ingest({ type: 'text-delta', delta: 'partial' });
     const chunk = assembler.sseChunk({ type: 'error', message: 'boom' });
@@ -652,7 +652,7 @@ describe('OpenAIWireAssembler mid-stream error signaling (x_stream_error)', () =
 });
 
 describe('OpenAIWireAssembler safety refusal (first-class StreamChunkStop refusal member)', () => {
-  it("default mode: a 'refusal' stop reaches the wire as finish_reason 'content_filter' — the OpenAI wire's own safety vocabulary, never a normal 'stop'", () => {
+  it("default mode: a 'refusal' stop reaches the wire as finish_reason 'content_filter', the OpenAI wire's own safety vocabulary, never a normal 'stop'", () => {
     const assembler = new OpenAIWireAssembler({ model: FIXTURE_MODEL_ID, now: NOW });
     const chunk = assembler.sseChunk({ type: 'stop', reason: 'refusal' });
     expect(

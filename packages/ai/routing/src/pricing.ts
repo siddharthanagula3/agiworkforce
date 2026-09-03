@@ -1,24 +1,3 @@
-/**
- * Pricing, promo-expiry, deprecation, and tokenizer-drift helpers for the
- * model catalog. Pure functions over models.json; no shared mutable state —
- * safe to call from any surface.
- *
- * Relocated from `three-tier-router.ts` (whose routing half is being retired)
- * so these pricing/display utilities have a stable home independent of routing.
- *
- * Promo handling: `effectiveInputPrice`/`effectiveOutputPrice` + `isPromoExpired`
- * switch to `post_promo_prices` automatically once `promo_expires_at` has passed.
- * Deprecation: `isDeprecated` is true once `deprecation_date` is in the past.
- *
- * Every helper takes an optional trailing `catalog` argument (defaulting to the
- * bundled `models.json`) purely for testability: unit tests inject a synthetic
- * fixture so the pricing *logic* is verified against controlled values rather
- * than the live catalog's magic numbers (which change on every weekly sync).
- *
- * @module routing/pricing
- * @packageDocumentation
- */
-
 import {
   isModelPromoExpired,
   modelsCatalogJson as modelsCatalog,
