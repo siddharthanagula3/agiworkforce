@@ -1,4 +1,3 @@
-
 import {
   CannotRetryError,
   FallbackTriggeredError,
@@ -117,40 +116,30 @@ export async function withRetry<T>(
       }
 
       if (classified.category === 'context_overflow') {
+        function giveUpOrFallback(): never {
+          if (ctx.fallbackModel && !options.disableFallback && shouldFallback(ctx, classified)) {
+            onEvent({
+              type: 'fallback',
+              attempt,
+              from: ctx.model,
+              to: ctx.fallbackModel,
+              classified,
+            });
+            throw new FallbackTriggeredError(ctx.model, ctx.fallbackModel, classified, err);
+          }
+          throw new CannotRetryError(err, classified);
+        }
         const parsed = parseContextOverflow(classified.message);
-        if (parsed) {
-          const headroom = parsed.contextLimit - parsed.inputTokens - 1000;
-          const thinking = ctx.thinkingConfig?.budgetTokens ?? 0;
-          const noViableShrink = headroom < FLOOR_OUTPUT_TOKENS || headroom < thinking + 1;
-          if (noViableShrink) {
-            if (ctx.fallbackModel && !options.disableFallback && shouldFallback(ctx, classified)) {
-              onEvent({
-                type: 'fallback',
-                attempt,
-                from: ctx.model,
-                to: ctx.fallbackModel,
-                classified,
-              });
-              throw new FallbackTriggeredError(ctx.model, ctx.fallbackModel, classified, err);
-            }
-            throw new CannotRetryError(err, classified);
-          }
-          const candidate = Math.max(FLOOR_OUTPUT_TOKENS, thinking + 1, headroom);
-          if (candidate < parsed.requestedMaxTokens) {
-            ctx.maxTokensOverride = candidate;
-          } else {
-            if (ctx.fallbackModel && !options.disableFallback && shouldFallback(ctx, classified)) {
-              onEvent({
-                type: 'fallback',
-                attempt,
-                from: ctx.model,
-                to: ctx.fallbackModel,
-                classified,
-              });
-              throw new FallbackTriggeredError(ctx.model, ctx.fallbackModel, classified, err);
-            }
-            throw new CannotRetryError(err, classified);
-          }
+        if (!parsed) giveUpOrFallback();
+        const headroom = parsed.contextLimit - parsed.inputTokens - 1000;
+        const thinking = ctx.thinkingConfig?.budgetTokens ?? 0;
+        const noViableShrink = headroom < FLOOR_OUTPUT_TOKENS || headroom < thinking + 1;
+        if (noViableShrink) giveUpOrFallback();
+        const candidate = Math.max(FLOOR_OUTPUT_TOKENS, thinking + 1, headroom);
+        if (candidate < parsed.requestedMaxTokens) {
+          ctx.maxTokensOverride = candidate;
+        } else {
+          giveUpOrFallback();
         }
       }
 
