@@ -499,7 +499,6 @@ export async function buildStreamResponse(
                 event.usage.prompt_tokens_details?.cached_tokens ??
                 event.usage.input_tokens_details?.cached_tokens ??
                 event.usage.cache_read_input_tokens ??
-                event.usage.prompt_cache_hit_tokens ??
                 undefined;
               if (streamCacheRead != null) {
                 cacheReadInputTokens = streamCacheRead;
