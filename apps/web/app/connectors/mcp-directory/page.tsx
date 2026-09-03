@@ -116,7 +116,9 @@ export default function McpDirectoryPage() {
                 external: true,
                 body: (
                   <>
-                    {mcp.description} <code>{mcp.pkg}</code>
+                    {mcp.description}
+                    <br />
+                    <code>{mcp.pkg}</code>
                   </>
                 ),
               }))}
