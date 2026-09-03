@@ -988,6 +988,15 @@ const SCROLL_THRESHOLD_PX = 120;
 const ANCHOR_SETTLE_TIMEOUT_MS = 1000;
 const DEFAULT_TRANSCRIPT_ROW_HEIGHT = 160;
 const DEFAULT_TRANSCRIPT_VIEWPORT_HEIGHT = 640;
+const TRANSCRIPT_SCROLL_KEYS = new Set([
+  'ArrowUp',
+  'ArrowDown',
+  'PageUp',
+  'PageDown',
+  'Home',
+  'End',
+  ' ',
+]);
 
 function readAgentActivityStatus(message: ChatMessage | undefined | null): unknown {
   const activity = message?.metadata?.['agentActivity'];
@@ -1068,6 +1077,7 @@ const ChatMessageListComponent = ({
 
   const scrolledConversationRef = useRef<string | null>(conversationId);
   const scrolledLeafRef = useRef<string | null>(activeLeafId);
+  const lastMessageIdRef = useRef<string | null>(null);
   useEffect(() => {
     if (scrolledConversationRef.current === conversationId) return;
     scrolledConversationRef.current = conversationId;
@@ -1305,6 +1315,7 @@ const ChatMessageListComponent = ({
   const pendingScrollBehaviorRef = useRef<ScrollBehavior>('smooth');
   const anchoringRef = useRef(false);
   const anchorTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const userScrollIntentRef = useRef(false);
 
   const stopAnchoring = useCallback(() => {
     anchoringRef.current = false;
@@ -1391,14 +1402,22 @@ const ChatMessageListComponent = ({
     [stopAnchoring],
   );
 
+  const markUserScrollIntent = useCallback(() => {
+    userScrollIntentRef.current = true;
+  }, []);
+
+  const handleTranscriptKeyDown = useCallback((event: React.KeyboardEvent<HTMLDivElement>) => {
+    if (TRANSCRIPT_SCROLL_KEYS.has(event.key)) userScrollIntentRef.current = true;
+  }, []);
+
   const handleScroll = useCallback(() => {
     const el = listApiRef.current?.element;
     if (!el) return;
     const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight <= SCROLL_THRESHOLD_PX;
-    if (anchoringRef.current) {
-      if (!atBottom) return;
-      stopAnchoring();
-    }
+    const userInitiated = userScrollIntentRef.current;
+    userScrollIntentRef.current = false;
+    if (anchoringRef.current && !userInitiated && !atBottom) return;
+    if (anchoringRef.current) stopAnchoring();
     setUserScrolledUp(!atBottom);
   }, [stopAnchoring]);
 
@@ -1410,6 +1429,12 @@ const ChatMessageListComponent = ({
     // moved by the turn that is streaming stays on the normal path below.
     const leafChanged = scrolledLeafRef.current !== activeLeafId;
     scrolledLeafRef.current = activeLeafId;
+    const previousLastMessageId = lastMessageIdRef.current;
+    lastMessageIdRef.current = lastMessage?.id ?? null;
+    const isFreshUserTurn =
+      lastMessage?.role === 'user' &&
+      previousLastMessageId !== null &&
+      previousLastMessageId !== lastMessage.id;
     if (leafChanged && !isStreamingNow && variantAnchorMessageId) {
       const anchorGroupIndex = groups.findIndex((group) =>
         group.messages.some((message) => message.id === variantAnchorMessageId),
@@ -1424,7 +1449,10 @@ const ChatMessageListComponent = ({
         return;
       }
     }
-    if (userScrolledUp) return;
+    if (userScrolledUp) {
+      if (!isFreshUserTurn) return;
+      setUserScrolledUp(false);
+    }
     const behavior: ScrollBehavior =
       messages.length === 1 || isStreamingNow || prefersReducedMotion ? 'auto' : 'smooth';
     if (behavior === 'auto') {
@@ -1437,6 +1465,7 @@ const ChatMessageListComponent = ({
     groups,
     variantAnchorMessageId,
     messages.length,
+    lastMessage,
     lastMessageFingerprint,
     isLoading,
     isStreamingNow,
@@ -1798,6 +1827,9 @@ const ChatMessageListComponent = ({
         aria-busy={isGenerating}
         aria-label="Chat messages"
         onScroll={handleScroll}
+        onWheel={markUserScrollIntent}
+        onTouchMove={markUserScrollIntent}
+        onKeyDown={handleTranscriptKeyDown}
         className="h-full"
       />
 
