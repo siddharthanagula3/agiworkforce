@@ -40,7 +40,7 @@ describe('panel empty states use the shared primitive', () => {
   });
 
   it('research panel sources tab', () => {
-    useResearchPanelStore.getState().openPanel(CONVERSATION_ID, []);
+    useResearchPanelStore.getState().openPanel(CONVERSATION_ID, 'msg-1', [], []);
     render(<ResearchPanel />);
     assertSharedEmptyState('No sources yet');
   });
@@ -50,7 +50,7 @@ describe('panel empty states use the shared primitive', () => {
       'fetch',
       vi.fn(async () => ({ ok: true, status: 200, json: async () => ({ reports: [] }) })),
     );
-    useResearchPanelStore.getState().openPanel(CONVERSATION_ID, []);
+    useResearchPanelStore.getState().openPanel(CONVERSATION_ID, 'msg-1', [], []);
     render(<ResearchPanel />);
     screen.getByRole('tab', { name: 'Report' }).click();
 

@@ -26,7 +26,7 @@ const REPORT: ResearchReport = {
 beforeEach(() => {
   useArtifactsStore.getState().reset();
   useChatStore.setState({ activeConversationId: CONVERSATION_ID });
-  useResearchPanelStore.getState().openPanel(CONVERSATION_ID, []);
+  useResearchPanelStore.getState().openPanel(CONVERSATION_ID, 'msg-1', [], []);
   vi.stubGlobal(
     'fetch',
     vi.fn(async () => ({ ok: true, status: 200, json: async () => ({ reports: [REPORT] }) })),
