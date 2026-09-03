@@ -58,6 +58,25 @@ export type ErrorCategory =
    */
   | 'quota_exhausted'
   | 'safety' // refusal / content filter / Google safety reasons
+  /**
+   * A step's stream completed with `status: ok` and a terminal signal that
+   * is a content-policy stop (refusal / content_filter / a Google safety
+   * finish reason), but produced no assistant text, tool call, or artifact.
+   * Distinct from `safety`: `safety` is derived from a THROWN error's text;
+   * this is derived from a clean, non-throwing stream termination that the
+   * tool loop must classify itself. Never failover-eligible, for the same
+   * reason `safety` is not — see `NEVER_ROTATE_CATEGORIES` in
+   * managed-failover.ts.
+   */
+  | 'content_blocked'
+  /**
+   * A step's stream completed with `status: ok` and a non-blocked terminal
+   * signal (a clean stop, or output-length exhaustion), but produced no
+   * assistant text, tool call, or artifact — the provider claims success
+   * and delivered nothing. Failover-eligible for Auto: a different route
+   * may simply answer where this one did not.
+   */
+  | 'empty_response'
   | 'connection'
   | 'pause_turn'
   | 'server_error'
@@ -112,6 +131,19 @@ export class FallbackTriggeredError extends Error {
     this.fallbackModel = fallbackModel;
     this.classified = classified;
     this.originalError = originalError;
+  }
+}
+
+/**
+ * Synthetic error a tool loop constructs to route a clean-but-empty provider
+ * step through the same `classifyError` / failover pipeline a thrown error
+ * uses, so `empty_response` gets the one rotation Auto is entitled to
+ * without a second, parallel dispatch path.
+ */
+export class EmptyProviderResponseError extends Error {
+  constructor(finishReason: string | null) {
+    super(`Provider step finished with no content (finish_reason=${finishReason ?? 'none'})`);
+    this.name = 'EmptyProviderResponseError';
   }
 }
 
@@ -370,6 +402,16 @@ export function classifyError(err: unknown): ClassifiedError {
       code: 'aborted',
       retryable: false,
       fallbackable: false,
+      message: err.message,
+    };
+  }
+
+  if (err instanceof Error && err.name === 'EmptyProviderResponseError') {
+    return {
+      category: 'empty_response',
+      code: 'empty_response',
+      retryable: false,
+      fallbackable: true,
       message: err.message,
     };
   }
