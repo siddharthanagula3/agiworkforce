@@ -56,15 +56,28 @@ vi.mock('@agiworkforce/model-registry', async (importOriginal) => {
   return { ...actual, getRoutePricing: () => ({ cacheClass: 'gateway_prompt_cache' }) };
 });
 
+import { requireProviderDefaultModel } from '@agiworkforce/types';
+import { getRoutePricingForModel } from '@agiworkforce/model-registry';
+
 import { buildNonStreamResponse, buildUpstreamErrorResponse } from '../lib/response-builder';
 import type { ProcessedRequest } from '../lib/request-processor';
+
+const MODEL = requireProviderDefaultModel('zhipu');
+const OPEN_ROUTER_ROUTE = getRoutePricingForModel(MODEL).find(
+  (route) => route.provider === 'open_router',
+);
+if (!OPEN_ROUTER_ROUTE) {
+  throw new Error('The zhipu default model must carry an open_router route');
+}
+const OPEN_ROUTER_PROVIDER = OPEN_ROUTER_ROUTE.provider;
+const OPEN_ROUTER_ROUTE_ID = OPEN_ROUTER_ROUTE.routeId;
 
 function makeProcessed(overrides: Partial<ProcessedRequest> = {}): ProcessedRequest {
   return {
     requestId: 'req-non-stream-route-outcome',
-    chatRequest: { model: 'glm-5.3', messages: [], stream: false } as any,
-    requestedModel: 'glm-5.3',
-    provider: 'open_router',
+    chatRequest: { model: MODEL, messages: [], stream: false } as any,
+    requestedModel: MODEL,
+    provider: OPEN_ROUTER_PROVIDER,
     estimatedCostCents: 100,
     quotaWarningHeader: null,
     quotaFeature: 'standard' as any,
@@ -111,7 +124,7 @@ describe('buildNonStreamResponse, route outcome recording', () => {
     await buildNonStreamResponse(
       makeRequest() as any,
       {
-        model: 'glm-5.3',
+        model: MODEL,
         content: 'Hello there',
         finishReason: 'stop',
         promptTokens: 100,
@@ -124,7 +137,7 @@ describe('buildNonStreamResponse, route outcome recording', () => {
     );
 
     expect(mockRecordRouteOutcome).toHaveBeenCalledWith(
-      'open_router/glm-5.3',
+      OPEN_ROUTER_ROUTE_ID,
       { class: 'success', outputTokens: 20 },
       expect.any(Number),
     );
@@ -134,7 +147,7 @@ describe('buildNonStreamResponse, route outcome recording', () => {
     await buildNonStreamResponse(
       makeRequest() as any,
       {
-        model: 'glm-5.3',
+        model: MODEL,
         content: 'Hello there',
         finishReason: 'stop',
         promptTokens: 100,
@@ -149,7 +162,7 @@ describe('buildNonStreamResponse, route outcome recording', () => {
     expect(mockRecordServedRouteAffinity).toHaveBeenCalledWith(
       expect.objectContaining({
         conversationId: 'conversation-non-stream',
-        routeId: 'open_router/glm-5.3',
+        routeId: OPEN_ROUTER_ROUTE_ID,
         ttlMs: 3_600_000,
       }),
     );
@@ -159,7 +172,7 @@ describe('buildNonStreamResponse, route outcome recording', () => {
     await buildNonStreamResponse(
       makeRequest() as any,
       {
-        model: 'glm-5.3',
+        model: MODEL,
         content: 'Hello there',
         finishReason: 'stop',
         promptTokens: 100,
@@ -179,16 +192,16 @@ describe('buildUpstreamErrorResponse, route outcome recording', () => {
   it('maps a rate-limit rejection onto the rate_limit outcome class', () => {
     buildUpstreamErrorResponse(
       upstreamError('slow down', 429),
-      'open_router',
-      'glm-5.3',
-      'glm-5.3',
+      OPEN_ROUTER_PROVIDER,
+      MODEL,
+      MODEL,
       'user-non-stream',
       'req-1',
       'non-streaming',
     );
 
     expect(mockRecordRouteOutcome).toHaveBeenCalledWith(
-      'open_router/glm-5.3',
+      OPEN_ROUTER_ROUTE_ID,
       { class: 'rate_limit' },
       expect.any(Number),
     );
@@ -197,9 +210,9 @@ describe('buildUpstreamErrorResponse, route outcome recording', () => {
   it('records nothing for a request-shaped failure that says nothing about the route', () => {
     buildUpstreamErrorResponse(
       Object.assign(new Error('content_filter triggered'), { status: 400 }),
-      'open_router',
-      'glm-5.3',
-      'glm-5.3',
+      OPEN_ROUTER_PROVIDER,
+      MODEL,
+      MODEL,
       'user-non-stream',
       'req-1',
       'non-streaming',

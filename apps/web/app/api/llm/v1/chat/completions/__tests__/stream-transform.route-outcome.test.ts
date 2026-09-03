@@ -44,14 +44,26 @@ vi.mock('@agiworkforce/model-registry', async (importOriginal) => {
 
 import { buildAdapterStreamResponse } from '../lib/stream-transform';
 import type { ProcessedRequest } from '../lib/request-processor';
+import { requireProviderDefaultModel } from '@agiworkforce/types';
 import type { StreamChunk } from '@agiworkforce/types';
+import { getRoutePricingForModel } from '@agiworkforce/model-registry';
+
+const MODEL = requireProviderDefaultModel('zhipu');
+const OPEN_ROUTER_ROUTE = getRoutePricingForModel(MODEL).find(
+  (route) => route.provider === 'open_router',
+);
+if (!OPEN_ROUTER_ROUTE) {
+  throw new Error('The zhipu default model must carry an open_router route');
+}
+const OPEN_ROUTER_PROVIDER = OPEN_ROUTER_ROUTE.provider;
+const OPEN_ROUTER_ROUTE_ID = OPEN_ROUTER_ROUTE.routeId;
 
 function makeProcessed(overrides: Partial<ProcessedRequest> = {}): ProcessedRequest {
   return {
     requestId: 'req-route-outcome-001',
-    chatRequest: { model: 'glm-5.3', messages: [], stream: true } as any,
-    requestedModel: 'glm-5.3',
-    provider: 'open_router',
+    chatRequest: { model: MODEL, messages: [], stream: true } as any,
+    requestedModel: MODEL,
+    provider: OPEN_ROUTER_PROVIDER,
     estimatedCostCents: 5,
     quotaWarningHeader: null,
     quotaFeature: 'standard' as any,
@@ -121,7 +133,7 @@ describe('buildAdapterStreamResponse, route outcome recording', () => {
     await drainResponse(response as any);
 
     expect(mockRecordRouteOutcome).toHaveBeenCalledWith(
-      'open_router/glm-5.3',
+      OPEN_ROUTER_ROUTE_ID,
       expect.objectContaining({
         class: 'success',
         outputTokens: 5,
@@ -145,7 +157,7 @@ describe('buildAdapterStreamResponse, route outcome recording', () => {
     expect(mockRecordServedRouteAffinity).toHaveBeenCalledWith(
       expect.objectContaining({
         conversationId: 'conversation-route-outcome',
-        routeId: 'open_router/glm-5.3',
+        routeId: OPEN_ROUTER_ROUTE_ID,
         ttlMs: 3_600_000,
         upstreamProvider: 'Together',
       }),
