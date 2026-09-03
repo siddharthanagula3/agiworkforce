@@ -143,7 +143,7 @@ function formatSummaryRow(s: RunSummary): string {
   const tokens =
     s.inputTokens !== undefined || s.outputTokens !== undefined
       ? `${s.inputTokens ?? '?'} in / ${s.outputTokens ?? '?'} out`
-      : '—';
+      : ', ';
   return [
     `${color}${s.label.padEnd(11)}${ANSI_RESET}`,
     String(s.textChars).padStart(5),
