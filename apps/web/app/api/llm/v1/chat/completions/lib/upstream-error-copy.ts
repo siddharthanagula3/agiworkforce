@@ -78,6 +78,26 @@ export function mapClassifiedUpstreamError(
           "The provider's safety system stopped this response. Rephrase the request, or try a different model.",
       };
 
+    // Same content-policy stop as `safety`, observed through a clean,
+    // non-throwing stream termination instead of a thrown error.
+    case 'content_blocked':
+      return {
+        status: 400,
+        type: 'content_filter',
+        code: 'content_blocked',
+        message:
+          'The model blocked this response before returning any content. Rephrase the request, or try a different model.',
+      };
+
+    case 'empty_response':
+      return {
+        status: 502,
+        type: 'upstream_error',
+        code: 'empty_response',
+        message:
+          'The model finished without returning a response. Try again, or choose Auto to use another available model.',
+      };
+
     case 'media_too_large':
       return {
         status: 400,
