@@ -39,5 +39,7 @@ export interface DirectoryRecord {
 export interface DirectorySnapshot {
   readonly records: readonly DirectoryRecord[];
   readonly nextIngestCursor: string | null;
+  readonly bootstrapComplete: boolean;
+  readonly lastSyncAt: string | null;
   readonly updatedAt: string;
 }

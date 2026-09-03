@@ -41,6 +41,8 @@ export async function upsertDirectoryRecord(record: DirectoryRecord): Promise<vo
   await writeDirectorySnapshot({
     records,
     nextIngestCursor: snapshot?.nextIngestCursor ?? null,
+    bootstrapComplete: snapshot?.bootstrapComplete ?? false,
+    lastSyncAt: snapshot?.lastSyncAt ?? null,
     updatedAt: new Date().toISOString(),
   });
 }
