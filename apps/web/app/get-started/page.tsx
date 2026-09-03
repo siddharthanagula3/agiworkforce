@@ -2,9 +2,26 @@ import { buildMetadata } from '@/lib/seo/metadata';
 import { formatPrivacyModeLabel } from '@agiworkforce/types';
 import { Header } from '@shared/components/layout/Header';
 import { MarketingFooter } from '@/features/marketing/components/MarketingFooter';
-import { Eyebrow, Section, Stack } from '@/features/marketing/components/system';
+import {
+  Button,
+  ButtonRow,
+  Eyebrow,
+  Prose,
+  Section,
+  Stack,
+  SurfaceStatus,
+} from '@/features/marketing/components/system';
 import { FactGrid, PageHero } from '@/features/marketing/components/pages/surfaces/shared';
-import { LinkGrid } from '@/features/marketing/components/pages/features/shared';
+
+const HERO_TRANSCRIPT_LABEL = 'Three commands that reach a working chat';
+
+const HERO_TRANSCRIPT = [
+  { kind: 'dim', text: '# local: models on this machine' },
+  { kind: 'cmd', text: 'agi models scan' },
+  { kind: 'cmd', text: 'agi --provider ollama --model <model>' },
+  { kind: 'dim', text: '# byok: paste your own provider key' },
+  { kind: 'cmd', text: 'agi login' },
+] as const;
 
 export const metadata = buildMetadata({
   title: 'Get started: from zero to a working chat',
@@ -39,6 +56,19 @@ export default function GetStartedPage() {
             { href: '/download', label: 'Check availability' },
             { href: '/cli', label: 'CLI reference', variant: 'secondary' },
           ]}
+          visual={
+            <pre
+              className="agi-lp-terminal"
+              aria-label={HERO_TRANSCRIPT_LABEL}
+              style={{ alignSelf: 'start' }}
+            >
+              {HERO_TRANSCRIPT.map((line) => (
+                <span className="agi-lp-terminal-line" data-kind={line.kind} key={line.text}>
+                  {line.text}
+                </span>
+              ))}
+            </pre>
+          }
         />
 
         <Section id="install" labelledBy="agi-get-started-install-title" rule>
@@ -47,50 +77,30 @@ export default function GetStartedPage() {
             <h2 className="agi-ds-h2" id="agi-get-started-install-title">
               Install.
             </h2>
-            <FactGrid
-              items={[
-                {
-                  meta: 'Web',
-                  title: 'In the browser. Nothing to install.',
-                  body: (
-                    <>
-                      <a className="agi-ds-link" href="/login?redirectTo=%2F">
-                        Try AGI Web
-                      </a>{' '}
-                      for hosted chat, projects, and artifacts today.
-                    </>
-                  ),
-                },
-                {
-                  meta: 'Desktop & CLI',
-                  title: 'Local and BYOK hosts',
-                  body: (
-                    <>
-                      The <code>agi</code> CLI is released: it ships macOS, Linux, and Windows
-                      archives today. Desktop has a Linux build pending its signature check; the
-                      other platforms are not yet signed. The{' '}
-                      <a className="agi-ds-link" href="/download">
-                        download page
-                      </a>{' '}
-                      resolves what is live for your platform.
-                    </>
-                  ),
-                },
-                {
-                  meta: 'Mobile, Chrome & VS Code',
-                  title: 'Availability lives on the download page',
-                  body: (
-                    <>
-                      Availability per surface lives on the{' '}
-                      <a className="agi-ds-link" href="/download">
-                        download page
-                      </a>{' '}
-                      with honest status labels.
-                    </>
-                  ),
-                },
-              ]}
-            />
+            <Stack gap="loose" className="agi-ds-full">
+              <SurfaceStatus
+                state="live"
+                name="Web"
+                detail="Hosted chat, projects, and artifacts in the browser, with nothing to install."
+                action={{ label: 'Try AGI Web', href: '/login?redirectTo=%2F' }}
+              />
+              <SurfaceStatus
+                state="live"
+                name="CLI"
+                detail="The agi CLI is released: it ships macOS, Linux, and Windows archives today, and it hosts the local and BYOK modes below."
+                action={{ label: 'Download the CLI', href: '/download' }}
+              />
+              <SurfaceStatus
+                state="pending"
+                name="Desktop"
+                blockedOn="A Linux build is pending its signature check, and the other platforms are not yet signed. The download page resolves what is live for your platform."
+              />
+              <SurfaceStatus
+                state="absent"
+                name="Mobile, Chrome, and VS Code"
+                detail="Availability per surface lives on the download page with honest status labels."
+              />
+            </Stack>
           </Stack>
         </Section>
 
@@ -139,22 +149,17 @@ export default function GetStartedPage() {
             <h2 className="agi-ds-h2" id="agi-get-started-next-title">
               What&rsquo;s next.
             </h2>
-            <LinkGrid
-              items={[
-                {
-                  meta: 'Pricing',
-                  title: 'See what managed cloud costs',
-                  href: '/pricing',
-                  body: 'Plans and limits for AGI-hosted compute, beyond the free cap.',
-                },
-                {
-                  meta: 'Docs',
-                  title: 'Read the docs',
-                  href: '/docs',
-                  body: 'Reference for every surface: CLI, Desktop, Mobile, Web, Chrome, and VS Code extension.',
-                },
-              ]}
-            />
+            <Prose>
+              Pricing carries the plans and limits for AGI-hosted compute beyond the free cap. The
+              docs carry the reference for every surface: CLI, Desktop, Mobile, Web, Chrome, and the
+              VS Code extension.
+            </Prose>
+            <ButtonRow>
+              <Button href="/pricing">See what managed cloud costs</Button>
+              <Button href="/docs" variant="secondary">
+                Read the docs
+              </Button>
+            </ButtonRow>
           </Stack>
         </Section>
       </main>
