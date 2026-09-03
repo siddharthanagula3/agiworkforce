@@ -47,8 +47,7 @@ export default function BusinessPage() {
           ]}
           visual={
             <ProductFrame
-              light="/product/usage-light.png"
-              dark="/product/usage-dark.png"
+              src="/product/usage-dark.png"
               alt="The account usage screen, showing spend against the plan window"
               width={1128}
               height={716}
