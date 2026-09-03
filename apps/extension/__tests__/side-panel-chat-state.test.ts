@@ -51,7 +51,10 @@ describe('side-panel chat state', () => {
     expect(assistant?.agentActivity).toMatchObject({
       lastSequence: 1,
       status: 'running',
-      entries: [expect.objectContaining({ summary: 'Searching official sources' })],
+      entries: [
+        expect.objectContaining({ summary: 'Searching official sources' }),
+        expect.objectContaining({ progressId: 'generation', summary: 'Reasoning' }),
+      ],
     });
     expect(JSON.stringify(assistant?.agentActivity)).not.toContain('private provider scratchpad');
     expect(JSON.stringify(assistant?.agentEvents)).not.toContain('private provider scratchpad');
