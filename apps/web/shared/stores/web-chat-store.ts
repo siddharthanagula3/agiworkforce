@@ -237,6 +237,13 @@ export interface MessageMetadata {
   isSearching?: boolean;
   /** Web search results from server-managed tools */
   searchResults?: WebSearchResults;
+  /**
+   * Exact per-claim citation annotations (OpenAI's url_citation), in the
+   * order the model wrote them. The source of truth for resolving a `[n]`
+   * marker to a source - unlike `searchResults`, an aggregate cross-search
+   * pool the model itself never sees.
+   */
+  citations?: Array<{ type?: string; cited_text?: string; title?: string; url?: string }>;
   /** True when this turn's request had web search on, stamped at send time. */
   webSearchRequested?: boolean;
   /** Safe replay metadata used to regenerate a turn without storing raw skill bodies. */
