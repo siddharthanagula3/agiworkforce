@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { emptyRuntimeState, type RouteHealthSnapshot } from '@agiworkforce/routing';
 
-const mockGetRouteHealthSnapshot = vi.fn(async (routeIds: readonly string[]) => {
+const mockGetRouteHealthSnapshot = vi.fn(async (routeIds: readonly string[], _nowMs: number) => {
   const snapshots: Record<string, RouteHealthSnapshot> = {};
   for (const routeId of routeIds) {
     snapshots[routeId] = {
