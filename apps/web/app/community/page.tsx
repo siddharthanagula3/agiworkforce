@@ -2,9 +2,11 @@ import { buildMetadata } from '@/lib/seo/metadata';
 import { Header } from '@shared/components/layout/Header';
 import { MarketingFooter } from '@/features/marketing/components/MarketingFooter';
 import { Section, Stack } from '@/features/marketing/components/system';
-import { PageHero } from '@/features/marketing/components/pages/surfaces/shared';
+import { FactLine, PageHero } from '@/features/marketing/components/pages/surfaces/shared';
 import { LinkGrid } from '@/features/marketing/components/pages/features/shared';
 import { CONTACT_EMAIL, contactMailto } from '@/lib/legal-constants';
+
+const HERO_FACTS = ['Discord: none', 'Forum: none', 'Slack: none', 'X: mirror only, no support'];
 
 export const metadata = buildMetadata({
   title: 'Community: where to find AGI',
@@ -27,6 +29,8 @@ export default function CommunityPage() {
             { href: contactMailto(), label: 'Email us', variant: 'secondary' },
           ]}
         />
+
+        <FactLine facts={HERO_FACTS} />
 
         <Section id="channels" labelledBy="agi-community-channels-title" rule>
           <Stack gap="loose">
