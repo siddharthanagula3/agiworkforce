@@ -6,6 +6,7 @@ import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { mapProjectRow } from '@/lib/projects';
 import { parseProjectRequest } from '@/lib/project-request-validation';
+import { getNeonDb } from '@/lib/server/neon-db';
 import { getUserScopedDb } from '@/lib/server/rls-db';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import { ManagedCloudProjectUpdateRequestSchema } from '@agiworkforce/cloud-contracts';
@@ -96,7 +97,7 @@ async function handleGetProject(request: NextRequest, context: RouteContext) {
     const sharedScope = await resolveSharedProjectScope(db, userId);
     if (sharedScope?.organizationId === organizationId) {
       data = await selectSharedProjectWithConversationCount(
-        db,
+        getNeonDb(),
         id,
         userId,
         sharedScope.projectIds,
