@@ -1,13 +1,11 @@
 import { buildMetadata } from '@/lib/seo/metadata';
 import { Header } from '@shared/components/layout/Header';
-import { MarketingFooter } from '@/features/marketing/components/MarketingFooter';
 import {
   Button,
   ButtonRow,
   Eyebrow,
+  MarketingFooter,
   Prose,
-  Section,
-  Stack,
 } from '@/features/marketing/components/system';
 import { LinkGrid } from '@/features/marketing/components/pages/features/shared';
 
@@ -61,49 +59,53 @@ const REFERENCE_MCPS = [
     url: 'https://github.com/modelcontextprotocol/servers/tree/main/src/memory',
     tags: 'stdio · data',
   },
-];
+] as const;
 
 export default function McpDirectoryPage() {
   return (
     <div data-design="agi" className="agi-ds-page">
       <Header />
       <main id="main-content">
-        <Section id="mcp-directory-hero" labelledBy="agi-mcp-directory-title" size="lg">
-          <Stack gap="loose">
-            <div>
-              <Eyebrow>Connectors · MCP reference servers</Eyebrow>
+        <section className="agi-lp-hero" aria-labelledby="agi-mcp-directory-title">
+          <div className="agi-ds-container agi-lp-hero-grid">
+            <div className="agi-lp-hero-copy">
+              <Eyebrow>Connectors &middot; MCP reference servers</Eyebrow>
               <h1 className="agi-ds-h1" id="agi-mcp-directory-title">
-                A short list, not a registry.
+                A short list, <em className="agi-ds-accent">not a registry.</em>
               </h1>
+              <Prose size="lg">
+                We do not host a browsable or searchable MCP directory, and there is no plan date
+                for one. Every server below is a stdio process, so it runs on Desktop or the CLI,
+                not in the browser. Desktop&rsquo;s built-in server browser installs each by name.
+              </Prose>
+              <ButtonRow>
+                <Button href="https://modelcontextprotocol.io/registry/about">
+                  Open the MCP registry
+                </Button>
+                <Button href="/connectors" variant="secondary">
+                  Back to connectors
+                </Button>
+              </ButtonRow>
             </div>
-            <Prose size="lg">
-              We do not host a browsable or searchable MCP (Model Context Protocol) directory, and
-              there is no plan date for one. Every server below is a stdio process, meaning it talks
-              over standard input/output rather than the network, so it runs on Desktop or the CLI,
-              not in the browser. Desktop&rsquo;s built-in server browser installs each of these by
-              name. To search the full catalogue of community servers, use the official MCP
-              registry.
-            </Prose>
-            <ButtonRow>
-              <Button href="https://modelcontextprotocol.io/registry/about">
-                Open the MCP registry
-              </Button>
-              <Button href="/connectors" variant="secondary">
-                Back to connectors
-              </Button>
-            </ButtonRow>
-          </Stack>
-        </Section>
+            <div className="agi-lp-hero-stage">
+              <pre className="agi-lp-terminal" aria-label="The reference servers, by package name">
+                <span className="agi-lp-terminal-line" data-kind="cmd">
+                  agi plugin list
+                </span>
+                {REFERENCE_MCPS.map((mcp) => (
+                  <span className="agi-lp-terminal-line" data-kind="dim" key={mcp.name}>
+                    {mcp.pkg}
+                  </span>
+                ))}
+              </pre>
+            </div>
+          </div>
+        </section>
 
-        <Section
-          id="reference-servers"
-          labelledBy="agi-mcp-directory-servers-title"
-          rule
-          ground="2"
-        >
-          <Stack gap="loose">
-            <div>
-              <Eyebrow>Installable from Desktop · stdio</Eyebrow>
+        <section className="agi-lp-section" aria-labelledby="agi-mcp-directory-servers-title">
+          <div className="agi-ds-container">
+            <div className="agi-lp-heading">
+              <Eyebrow>Installable from Desktop &middot; stdio</Eyebrow>
               <h2 className="agi-ds-h2" id="agi-mcp-directory-servers-title">
                 The reference servers.
               </h2>
@@ -123,22 +125,24 @@ export default function McpDirectoryPage() {
                 ),
               }))}
             />
-          </Stack>
-        </Section>
+          </div>
+        </section>
 
-        <Section id="mcp-directory-close" labelledBy="agi-mcp-directory-close-title" rule>
-          <Stack gap="loose">
-            <h2 className="agi-ds-h2" id="agi-mcp-directory-close-title">
-              Bring your own tools.
-            </h2>
-            <Prose>
-              The official MCP registry lists hundreds of community-contributed servers. We do not
-              mirror, curate, or sign any of them. On the web, the custom connector dialog accepts a
-              remote HTTP or SSE MCP endpoint and your own token; stdio servers like the ones above
-              have no URL, so add those from Desktop or the CLI instead.
-            </Prose>
-          </Stack>
-        </Section>
+        <section className="agi-lp-close" aria-labelledby="agi-mcp-directory-close-title">
+          <div className="agi-ds-container">
+            <div className="agi-lp-close-inner">
+              <h2 className="agi-ds-h2" id="agi-mcp-directory-close-title">
+                Bring <em className="agi-ds-accent">your own tools.</em>
+              </h2>
+              <Prose size="lg">
+                The official MCP registry lists hundreds of community-contributed servers. We do not
+                mirror, curate, or sign any of them. On the web, the custom connector dialog accepts
+                a remote HTTP or SSE MCP endpoint and your own token; stdio servers like the ones
+                above have no URL, so add those from Desktop or the CLI instead.
+              </Prose>
+            </div>
+          </div>
+        </section>
       </main>
       <MarketingFooter />
     </div>
