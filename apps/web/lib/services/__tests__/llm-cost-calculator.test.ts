@@ -685,3 +685,56 @@ describe('LLMCostCalculator — route-aware pricing fallback tiers', () => {
     expect(pricing.outputCostPer1MTokens).toBe(15);
   });
 });
+
+describe('LLMCostCalculator — live registry wiring', () => {
+  const PRICED_ON = new Date('2026-09-01T00:00:00.000Z');
+  const LIVE_ROUTE_ID = 'open_router/claude-sonnet-5';
+  const LIVE_MODEL_ID = 'claude-sonnet-5';
+
+  it('prices a request served by open_router/claude-sonnet-5 at that route sheet, not the canonical model price', async () => {
+    const { getRoutePricing, getModelMetadataById: liveGetModelMetadataById } =
+      await vi.importActual<typeof import('@agiworkforce/types')>('@agiworkforce/types');
+    const routeSheet = getRoutePricing(LIVE_ROUTE_ID);
+    if (!routeSheet) throw new Error('Live route fixture is missing from the registry');
+    const canonical = liveGetModelMetadataById(LIVE_MODEL_ID);
+    if (!canonical) throw new Error('Live canonical model fixture is missing from the catalog');
+
+    const pricing = LLMCostCalculator.getPricing(
+      'open_router',
+      LIVE_MODEL_ID,
+      PRICED_ON,
+      0,
+      LIVE_ROUTE_ID,
+    );
+
+    expect(pricing.inputCostPer1MTokens).toBe(routeSheet.inputPerMillion);
+    expect(pricing.outputCostPer1MTokens).toBe(routeSheet.outputPerMillion);
+    expect(pricing.cachedInputCostPer1MTokens).toBe(routeSheet.cacheReadPerMillion ?? undefined);
+    expect(pricing.cachedWriteCostPer1MTokens).toBe(routeSheet.cacheWritePerMillion ?? undefined);
+    // The route is documented as pricing this exact fixture differently from the
+    // vendor list price, so the two must disagree -- otherwise this test cannot
+    // tell route-sourced pricing apart from a canonical-pricing fallback.
+    expect(pricing.inputCostPer1MTokens).not.toBe(canonical.inputCost);
+    expect(pricing.cacheTokensDisjointFromInput).toBe(false);
+  });
+
+  it('falls back to the canonical model price for an unknown route id', async () => {
+    const { getModelMetadataById: liveGetModelMetadataById } =
+      await vi.importActual<typeof import('@agiworkforce/types')>('@agiworkforce/types');
+    const canonical = liveGetModelMetadataById(LIVE_MODEL_ID);
+    if (!canonical) throw new Error('Live canonical model fixture is missing from the catalog');
+
+    const pricing = LLMCostCalculator.getPricing(
+      'open_router',
+      LIVE_MODEL_ID,
+      PRICED_ON,
+      0,
+      'open_router/route-that-does-not-exist',
+    );
+
+    expect(pricing.inputCostPer1MTokens).toBe(canonical.inputCost);
+    expect(pricing.outputCostPer1MTokens).toBe(canonical.outputCost);
+    expect(pricing.cachedWrite1hCostPer1MTokens).toBe(canonical.cached_write_1h);
+    expect(pricing.cacheTokensDisjointFromInput).toBe(true);
+  });
+});
