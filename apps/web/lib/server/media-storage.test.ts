@@ -399,6 +399,20 @@ describe('storeMedia', () => {
     expect(deletePrivateObject).toHaveBeenCalledWith(pathname);
   });
 
+  it('never tries the public bucket for a sealed pathname, which only the private bucket can hold', async () => {
+    const pathname = sealedChatAttachmentPathname(
+      'chat-attachments/user-abc/1700000000000_abcdefghijklm.png',
+    );
+    getPrivateObject.mockResolvedValueOnce(null);
+
+    await expect(readStoredMedia(pathname)).resolves.toBeNull();
+    expect(getObject).not.toHaveBeenCalled();
+
+    getPrivateObjectStream.mockResolvedValueOnce(null);
+    await expect(streamStoredMedia(pathname)).resolves.toBeNull();
+    expect(getObjectStream).not.toHaveBeenCalled();
+  });
+
   it('still refuses a chat-attachment pathname that is not one the upload route minted', async () => {
     for (const pathname of [
       'chat-attachments/user-abc/1700000000000_abcdefghijklm.png.scanned.scanned',
