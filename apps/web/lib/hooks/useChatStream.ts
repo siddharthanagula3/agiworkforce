@@ -86,6 +86,7 @@ import type {
   ResearchStep,
 } from '@agiworkforce/types';
 import { parseResearchPlanEvent } from '@/features/chat/utils/research-plan';
+import { deriveAgentActivityLabel, extractToolActivityArgument } from './agentActivityLabel';
 import {
   linearTail,
   resolveVisibleThread,
@@ -1272,6 +1273,7 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
     patchMessageMeta({ thinkingSegments: thinkingSegments.map((s) => ({ ...s })) });
   };
 
+  let thinkingActivityOpen = false;
   const openThinkingSegment = () => {
     coalescedAppends.flush();
     const startedAt = new Date().toISOString();
@@ -1285,6 +1287,13 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
     });
     patchMessageMeta({ isThinkingStreaming: true, thinkingStartedAt: startedAt });
     publishThinkingSegments();
+    thinkingActivityOpen = true;
+    applyLocalAgentEvent({
+      type: 'progress-update',
+      progressId: 'thinking',
+      summary: deriveAgentActivityLabel({ kind: 'thinking' }),
+      status: 'running',
+    });
   };
 
   const appendThinkingText = (text: string) => {
@@ -1312,6 +1321,15 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
     }
     patchMessageMeta({ isThinkingStreaming: false, thinkingCompletedAt: completedAt });
     publishThinkingSegments();
+    if (thinkingActivityOpen) {
+      thinkingActivityOpen = false;
+      applyLocalAgentEvent({
+        type: 'progress-update',
+        progressId: 'thinking',
+        summary: deriveAgentActivityLabel({ kind: 'thinking' }),
+        status: 'completed',
+      });
+    }
   };
 
   const publishToolTimeline = () => {
@@ -1941,6 +1959,14 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
           if (researchPlan) {
             const planSteps = parseResearchPlanEvent(researchPlan);
             if (planSteps) {
+              if (!currentResearch) {
+                applyLocalAgentEvent({
+                  type: 'progress-update',
+                  progressId: 'planning',
+                  summary: deriveAgentActivityLabel({ kind: 'planning' }),
+                  status: 'running',
+                });
+              }
               currentResearch = {
                 ...(currentResearch ?? {
                   phase: 'planning',
@@ -1965,8 +1991,16 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
           if (toolStatus?.type === 'server_tool_use') {
             startTool(toolStatus.name, undefined, toolStatus.status_phrase);
             const name = typeof toolStatus.name === 'string' ? toolStatus.name : 'server_tool';
+            const category = nativeToolCategory(name);
             const phrase =
-              typeof toolStatus.status_phrase === 'string' ? toolStatus.status_phrase : name;
+              typeof toolStatus.status_phrase === 'string'
+                ? toolStatus.status_phrase
+                : deriveAgentActivityLabel({
+                    kind: 'tool',
+                    name,
+                    category,
+                    argument: extractToolActivityArgument(toolStatus.args),
+                  });
             if (name === 'web_search' || name === 'gemini_grounding') {
               upsertNativeWebSearchEntry({ summary: phrase, status: 'running' });
             } else {
@@ -1974,7 +2008,7 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
                 type: 'tool-execution-start',
                 toolCallId: nativeToolCallId(name),
                 name,
-                category: nativeToolCategory(name),
+                category,
                 summary: phrase,
                 input: null,
               });
@@ -2499,7 +2533,13 @@ export function useChatStream(): UseChatStreamReturn {
           agentActivity: startAgentActivityLocally({
             sessionId: conversationId,
             turnId: assistantMessageId,
-            summary: options.workMode === 'agiwork' ? 'Starting AGI Work' : 'Generating response',
+            summary:
+              options.workMode === 'agiwork'
+                ? 'Starting AGI Work'
+                : deriveAgentActivityLabel({
+                    kind: 'idle',
+                    modelName: getModelMetadataById(model)?.name,
+                  }),
             startedAtMs: assistantStartedAtMs,
           }),
         },
