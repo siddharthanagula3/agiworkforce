@@ -29,61 +29,6 @@ export const HERO_ROUTES: readonly {
   },
 ];
 
-export const LANE_PANELS: readonly {
-  lane: LaneId;
-  title: string;
-  summary: string;
-  rows: readonly LedgerRow[];
-}[] = [
-  {
-    lane: 'local',
-    title: 'On hardware you already own',
-    summary:
-      'Point AGI at a model you already run. There is no account and no request to us in the path.',
-    rows: [
-      { label: 'Runtimes', value: DESKTOP_LOCAL_RUNTIMES.label },
-      { label: 'Where the key lives', value: 'There is no key, and no account.' },
-      { label: 'Cost', value: '$0.00' },
-      {
-        label: 'What leaves the device',
-        value:
-          'Nothing, until you send it. Moving a local session into another lane is an explicit fork with a payload preview and a secret scan.',
-      },
-      { label: 'Available on', value: 'Desktop and the CLI' },
-    ],
-  },
-  {
-    lane: 'byok',
-    title: 'On your own provider account',
-    summary:
-      'Paste a key you already pay for. The request goes to your provider and the bill arrives from your provider.',
-    rows: [
-      { label: 'Providers', value: `${BYOK_PROVIDERS.length}, from one key list` },
-      {
-        label: 'Where the key lives',
-        value:
-          'Desktop encrypted storage, the CLI keyring under com.agiworkforce.cli.auth, and VS Code SecretStorage.',
-      },
-      { label: 'Cost', value: 'Whatever your provider charges. AGI is never in the payment path.' },
-      { label: 'Available on', value: BYOK_SURFACES.label },
-      { label: 'Not accepted on', value: BYOK_SURFACES.exclusion, quiet: true },
-    ],
-  },
-  {
-    lane: 'cloud',
-    title: 'On capacity we run',
-    summary:
-      'Sign in and start, no waitlist. A small free allowance needs no card, and paid plans raise the ceiling.',
-    rows: [
-      { label: 'Providers', value: 'Whatever the router picks, named on the answer.' },
-      { label: 'Where the key lives', value: 'Ours. You never see it and never hold it.' },
-      { label: 'Cost', value: 'Metered, and shown per turn.' },
-      { label: 'Free allowance', value: 'Auto Economy, no card required' },
-      { label: 'Available on', value: 'Web, Desktop, and Mobile' },
-    ],
-  },
-];
-
 export const SURFACES: readonly SurfaceStatusProps[] = [
   {
     state: 'live',
@@ -106,6 +51,72 @@ export const SURFACES: readonly SurfaceStatusProps[] = [
   { state: 'absent', name: 'Mobile', detail: 'No listing on either app store.' },
   { state: 'absent', name: 'Chrome', detail: 'No listing on the Chrome Web Store.' },
   { state: 'absent', name: 'VS Code', detail: 'The extension exists only as an unpublished VSIX.' },
+];
+
+const LIVE_SURFACE_NAMES = new Set(
+  SURFACES.filter((surface) => surface.state === 'live').map((surface) => surface.name),
+);
+
+const listLiveSurfaces = (candidates: readonly string[]): string => {
+  const live = candidates.filter((name) => LIVE_SURFACE_NAMES.has(name));
+  if (live.length <= 1) return live[0] ?? 'Not shipped yet';
+  if (live.length === 2) return `${live[0]} and ${live[1]}`;
+  return `${live.slice(0, -1).join(', ')}, and ${live[live.length - 1]}`;
+};
+
+export const LANE_PANELS: readonly {
+  lane: LaneId;
+  title: string;
+  summary: string;
+  rows: readonly LedgerRow[];
+}[] = [
+  {
+    lane: 'local',
+    title: 'On hardware you already own',
+    summary:
+      'Point AGI at a model you already run. There is no account and no request to us in the path.',
+    rows: [
+      { label: 'Runtimes', value: DESKTOP_LOCAL_RUNTIMES.label },
+      { label: 'Where the key lives', value: 'There is no key, and no account.' },
+      { label: 'Cost', value: '$0.00' },
+      {
+        label: 'What leaves the device',
+        value:
+          'Nothing, until you send it. Moving a local session into another lane is an explicit fork with a payload preview and a secret scan.',
+      },
+      { label: 'Available on', value: listLiveSurfaces(['Desktop', 'CLI']) },
+    ],
+  },
+  {
+    lane: 'byok',
+    title: 'On your own provider account',
+    summary:
+      'Paste a key you already pay for. The request goes to your provider and the bill arrives from your provider.',
+    rows: [
+      { label: 'Providers', value: `${BYOK_PROVIDERS.length}, from one key list` },
+      {
+        label: 'Where the key lives',
+        value:
+          'Desktop encrypted storage, the CLI keyring under com.agiworkforce.cli.auth, and VS Code SecretStorage.',
+      },
+      { label: 'Cost', value: 'Whatever your provider charges. AGI is never in the payment path.' },
+      { label: 'Available on', value: listLiveSurfaces(['Desktop', 'CLI', 'VS Code']) },
+      { label: 'Not accepted on', value: BYOK_SURFACES.exclusion, quiet: true },
+    ],
+  },
+  {
+    lane: 'cloud',
+    title: 'On capacity we run',
+    summary:
+      'Sign in and start, no waitlist. A small free allowance needs no card, and paid plans raise the ceiling.',
+    rows: [
+      { label: 'Providers', value: 'Whatever the router picks, named on the answer.' },
+      { label: 'Where the key lives', value: 'Ours. You never see it and never hold it.' },
+      { label: 'Cost', value: 'Metered, and shown per turn.' },
+      { label: 'Free allowance', value: 'Auto Economy, no card required' },
+      { label: 'Available on', value: listLiveSurfaces(['Web', 'Desktop', 'Mobile']) },
+    ],
+  },
 ];
 
 export const CAPABILITIES: readonly {
