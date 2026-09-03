@@ -1,9 +1,9 @@
 import { buildMetadata } from '@/lib/seo/metadata';
 import { cookies } from 'next/headers';
-import Link from 'next/link';
+import type { CSSProperties } from 'react';
 import { Header } from '@shared/components/layout/Header';
 import { MarketingFooter } from '@/features/marketing/components/MarketingFooter';
-import { Eyebrow, Prose, Section, Stack } from '@/features/marketing/components/system';
+import { Button, ButtonRow, Eyebrow, Prose, Section } from '@/features/marketing/components/system';
 import { CONTACT_EMAIL, contactMailto } from '@/lib/legal-constants';
 import { hasBrowserSessionCookie } from '@/lib/session-cookie';
 
@@ -14,6 +14,18 @@ export const metadata = buildMetadata({
   robots: { index: false, follow: false },
 });
 
+const STATEMENT_MAX_WIDTH = '30rem';
+
+const statementStyle: CSSProperties = {
+  display: 'flex',
+  flexDirection: 'column',
+  alignItems: 'center',
+  textAlign: 'center',
+  gap: 'var(--agi-space-5)',
+  maxWidth: STATEMENT_MAX_WIDTH,
+  marginInline: 'auto',
+};
+
 export default async function ForbiddenPage() {
   const cookieStore = await cookies();
   const signedIn = hasBrowserSessionCookie(cookieStore.getAll());
@@ -23,7 +35,7 @@ export default async function ForbiddenPage() {
       <Header />
       <main id="main-content">
         <Section size="sm">
-          <Stack gap="loose">
+          <div style={statementStyle}>
             <div>
               <Eyebrow>403</Eyebrow>
               <h1 className="agi-ds-h1">You don&rsquo;t have access to this.</h1>
@@ -38,44 +50,21 @@ export default async function ForbiddenPage() {
                 You are not signed in. Sign in to see whether your account has access to this page.
               </Prose>
             )}
-          </Stack>
-        </Section>
-
-        <Section size="sm" rule>
-          <Stack gap="loose">
-            <h2 className="agi-ds-h2">Why you might be seeing this.</h2>
-            <Prose>
-              The page belongs to a workspace you are not a member of, it needs a role your account
-              does not hold, or it is limited to a plan this account is not on. If you have more
-              than one account, you may be signed in as the wrong one.
-            </Prose>
-          </Stack>
-        </Section>
-
-        <Section size="sm" rule>
-          <Stack gap="loose">
-            <h2 className="agi-ds-h2">What to do.</h2>
-            <Prose>
-              If a teammate sent you the link, ask them to grant access from their workspace{' '}
-              <Link className="agi-ds-link" href="/settings/team">
-                team settings
-              </Link>
-              . If this is a plan limit, the{' '}
-              <Link className="agi-ds-link" href="/pricing">
-                pricing page
-              </Link>{' '}
-              lists what each plan includes. Otherwise write to{' '}
+            <Prose size="sm">
+              This can mean the page belongs to a workspace you are not a member of, needs a role
+              this account does not hold, or is limited to a plan this account is not on. A teammate
+              can grant access from their workspace team settings; write to{' '}
               <a className="agi-ds-link" href={contactMailto('Access request')}>
                 {CONTACT_EMAIL}
               </a>{' '}
-              with the address you tried to open.
+              with the address you tried to open if none of that fits.
             </Prose>
-            <Prose>
-              <Link className="agi-ds-link" href="/chat">
-                Back to your workspace
-              </Link>
-            </Prose>
-          </Stack>
+            <ButtonRow>
+              <Button href={signedIn ? '/chat' : '/login'}>
+                {signedIn ? 'Back to your workspace' : 'Sign in'}
+              </Button>
+            </ButtonRow>
+          </div>
         </Section>
       </main>
       <MarketingFooter />

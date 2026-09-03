@@ -1,7 +1,10 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import type { CSSProperties } from 'react';
 import { ButtonRow } from '@/features/marketing/components/system';
+
+const centeredStackStyle: CSSProperties = { alignItems: 'center' };
 
 /**
  * Reports the live connection state rather than a static "you are offline",
@@ -44,7 +47,13 @@ export function OfflineStatus() {
   const online = useOnlineStatus();
 
   return (
-    <div className="agi-ds-stack" data-gap="tight" role="status" aria-live="polite">
+    <div
+      className="agi-ds-stack"
+      data-gap="tight"
+      role="status"
+      aria-live="polite"
+      style={centeredStackStyle}
+    >
       <p className="agi-ds-prose" data-size="sm">
         {online === null
           ? 'Checking your connection…'

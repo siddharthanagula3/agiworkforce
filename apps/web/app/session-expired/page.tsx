@@ -1,5 +1,6 @@
 import { buildMetadata } from '@/lib/seo/metadata';
-import { Eyebrow, Prose, Section, Stack } from '@/features/marketing/components/system';
+import type { CSSProperties } from 'react';
+import { Eyebrow, Prose, Section } from '@/features/marketing/components/system';
 import { SessionExpiredActions } from './SessionExpiredActions';
 
 export const metadata = buildMetadata({
@@ -9,12 +10,24 @@ export const metadata = buildMetadata({
   robots: { index: false, follow: false },
 });
 
+const STATEMENT_MAX_WIDTH = '30rem';
+
+const statementStyle: CSSProperties = {
+  display: 'flex',
+  flexDirection: 'column',
+  alignItems: 'center',
+  textAlign: 'center',
+  gap: 'var(--agi-space-5)',
+  maxWidth: STATEMENT_MAX_WIDTH,
+  marginInline: 'auto',
+};
+
 export default function SessionExpiredPage() {
   return (
     <div data-design="agi" className="agi-ds-page">
       <main id="main-content">
         <Section size="sm">
-          <Stack gap="loose">
+          <div style={statementStyle}>
             <div>
               <Eyebrow>Signed out</Eyebrow>
               <h1 className="agi-ds-h1">Your session expired.</h1>
@@ -23,23 +36,14 @@ export default function SessionExpiredPage() {
               Sign-ins last a limited time, so this happens on its own after a while. Nothing you
               saved was lost.
             </Prose>
-            <SessionExpiredActions />
-          </Stack>
-        </Section>
-
-        <Section size="sm" rule>
-          <Stack gap="loose">
-            <h2 className="agi-ds-h2">Why this happens.</h2>
-            <Prose>
+            <Prose size="sm">
               A session ends when it reaches its lifetime, when you sign out on another device, or
               after a long stretch of inactivity. Signing in again issues a fresh one; you do not
-              need to clear anything or reinstall.
+              need to clear anything or reinstall. If you are sent back here immediately after
+              signing in, allow third-party cookies for this site and try again.
             </Prose>
-            <Prose>
-              If you are sent back here immediately after signing in, third-party cookies are
-              usually the cause. Allow cookies for this site, then try again.
-            </Prose>
-          </Stack>
+            <SessionExpiredActions />
+          </div>
         </Section>
       </main>
     </div>

@@ -2,24 +2,29 @@
 
 import { Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
-import Link from 'next/link';
+import type { CSSProperties } from 'react';
 import { Header } from '@shared/components/layout/Header';
 import { MarketingFooter } from '@/features/marketing/components/MarketingFooter';
-import { Button, ButtonRow, Eyebrow, Prose, Stack } from '@/features/marketing/components/system';
+import { Button, ButtonRow, Eyebrow, Prose, Section } from '@/features/marketing/components/system';
 import { VerifyDeviceClient } from '@/app/verify/verify-client';
 import { CONTACT_EMAIL } from '@/lib/legal-constants';
 
-const CARD_STYLE = {
-  maxWidth: '30rem',
-  width: '100%',
+const STATEMENT_MAX_WIDTH = '30rem';
+
+const statementStyle: CSSProperties = {
+  display: 'flex',
+  flexDirection: 'column',
+  alignItems: 'center',
+  textAlign: 'center',
+  gap: 'var(--agi-space-5)',
+  maxWidth: STATEMENT_MAX_WIDTH,
   marginInline: 'auto',
-  padding: 'var(--agi-section-y-md) var(--agi-gutter)',
-} as const;
+};
 
 function VerifyEmailBody({ email }: { email: string | null }) {
   return (
-    <section style={CARD_STYLE}>
-      <Stack gap="loose">
+    <Section size="sm">
+      <div style={statementStyle}>
         <div>
           <Eyebrow>Verify your email</Eyebrow>
           <h1 className="agi-ds-h1">Check your inbox.</h1>
@@ -35,55 +40,37 @@ function VerifyEmailBody({ email }: { email: string | null }) {
           )}
           . Click it to finish creating your account.
         </Prose>
-        <Stack gap="tight">
-          <h2 className="agi-ds-h3">Didn&rsquo;t arrive?</h2>
-          <Prose size="sm">
-            Check spam, then{' '}
-            <Link href="/forgot-password" className="agi-ds-link">
-              open the sign-in recovery flow
-            </Link>
-            . You can also email {CONTACT_EMAIL} for account help.
-          </Prose>
-        </Stack>
+        <Prose size="sm">
+          Not there? Check spam, then use the sign-in recovery flow, or email {CONTACT_EMAIL} for
+          account help.
+        </Prose>
         <ButtonRow>
           <Button href="/login" variant="secondary">
             Back to sign in
           </Button>
         </ButtonRow>
-      </Stack>
-    </section>
+      </div>
+    </Section>
   );
 }
 
 function VerifyDeviceBody({ code }: { code: string }) {
   return (
-    <section style={CARD_STYLE}>
-      <Stack gap="loose">
+    <Section size="sm">
+      <div style={statementStyle}>
         <div>
           <Eyebrow>Device sign-in</Eyebrow>
           <h1 className="agi-ds-h1">Approve this device?</h1>
         </div>
         <Prose>
           A device is requesting to sign in to your account. Approve it only if you started this
-          sign-in. The request code is <strong>{code}</strong>.
+          sign-in. The request code is <strong>{code}</strong>. If you did not initiate this
+          request, choose Deny.
         </Prose>
 
         <VerifyDeviceClient code={code} />
-
-        <Stack gap="tight">
-          <h2 className="agi-ds-h3">Security notice.</h2>
-          <Prose size="sm">
-            If you did not initiate this request, choose Deny and do not approve. Approving grants
-            the requesting device access to your account.
-          </Prose>
-        </Stack>
-        <ButtonRow>
-          <Button href="/" variant="secondary">
-            Cancel
-          </Button>
-        </ButtonRow>
-      </Stack>
-    </section>
+      </div>
+    </Section>
   );
 }
 

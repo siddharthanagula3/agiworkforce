@@ -2,10 +2,23 @@
 
 import { Suspense } from 'react';
 import { useParams, useSearchParams } from 'next/navigation';
+import type { CSSProperties } from 'react';
 import { Header } from '@shared/components/layout/Header';
 import { MarketingFooter } from '@/features/marketing/components/MarketingFooter';
-import { Eyebrow, Prose, Section, Stack } from '@/features/marketing/components/system';
+import { Eyebrow, Prose, Section } from '@/features/marketing/components/system';
 import { ConnectDeviceClient, friendlyDeviceName, isKnownDeviceType } from './connect-client';
+
+const STATEMENT_MAX_WIDTH = '30rem';
+
+const statementStyle: CSSProperties = {
+  display: 'flex',
+  flexDirection: 'column',
+  alignItems: 'center',
+  textAlign: 'center',
+  gap: 'var(--agi-space-5)',
+  maxWidth: STATEMENT_MAX_WIDTH,
+  marginInline: 'auto',
+};
 
 function ConnectBody() {
   const params = useParams();
@@ -20,7 +33,7 @@ function ConnectBody() {
   if (!isKnownDeviceType(deviceType)) {
     return (
       <Section id="connect-unknown" labelledBy="agi-connect-unknown-title">
-        <Stack gap="loose">
+        <div style={statementStyle}>
           <div>
             <Eyebrow>Device sign-in</Eyebrow>
             <h1 className="agi-ds-h1" id="agi-connect-unknown-title">
@@ -34,7 +47,7 @@ function ConnectBody() {
           <a href="/" className="agi-ds-link">
             Back to home
           </a>
-        </Stack>
+        </div>
       </Section>
     );
   }
@@ -42,7 +55,7 @@ function ConnectBody() {
   if (!deviceId) {
     return (
       <Section id="connect-incomplete" labelledBy="agi-connect-incomplete-title">
-        <Stack gap="loose">
+        <div style={statementStyle}>
           <div>
             <Eyebrow>Device sign-in</Eyebrow>
             <h1 className="agi-ds-h1" id="agi-connect-incomplete-title">
@@ -55,14 +68,14 @@ function ConnectBody() {
           <a href="/" className="agi-ds-link">
             Back to home
           </a>
-        </Stack>
+        </div>
       </Section>
     );
   }
 
   return (
     <Section id="connect-device" labelledBy="agi-connect-device-title">
-      <Stack gap="loose">
+      <div style={statementStyle}>
         <div>
           <Eyebrow>Device sign-in</Eyebrow>
           <h1 className="agi-ds-h1" id="agi-connect-device-title">
@@ -71,7 +84,7 @@ function ConnectBody() {
         </div>
         <Prose>
           {name} is requesting to sign in to your AGI account. Approve it only if you just started
-          this sign-in from {name}.
+          this sign-in from {name}; if you did not, choose Deny.
         </Prose>
 
         <ConnectDeviceClient
@@ -79,18 +92,7 @@ function ConnectBody() {
           deviceFingerprint={deviceFingerprint}
           deviceType={deviceType}
         />
-
-        <Stack gap="tight">
-          <h2 className="agi-ds-h3">Security notice</h2>
-          <Prose size="sm">
-            If you did not start this from {name}, choose Deny. Approving grants that device access
-            to your account.
-          </Prose>
-        </Stack>
-        <a href="/" className="agi-ds-link">
-          Cancel
-        </a>
-      </Stack>
+      </div>
     </Section>
   );
 }
