@@ -2282,6 +2282,12 @@ html[data-contrast='more'] *:focus-visible {
   outline-offset: 2px;
 }
 
+@media (pointer: coarse), (max-width: 767px) {
+  [data-design='agi'] .agi-ds-btn {
+    min-height: 44px;
+  }
+}
+
 [data-design='agi'].agi-ds-consent {
   position: fixed;
   inset-inline: 0;
