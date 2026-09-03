@@ -13,6 +13,8 @@ import {
   type AuthenticatedSurfaceClass,
 } from '@/lib/free-chat-surface-policy';
 import { isApiKeyScopeError } from '@/lib/api-key-scope-error';
+import { isMfaRequiredError } from '@/lib/mfa-policy-gate';
+import { isIpNotAllowedError } from '@/lib/ip-allow-list-gate';
 import { resolveSubscriptionAccess } from '@/lib/services/subscription-access-policy';
 import { resolveAuthenticatedSurface } from './request-surface';
 
@@ -113,6 +115,32 @@ export async function runAuthGate(request: NextRequest): Promise<AuthGateResult>
       apiKeyScope: 'inference:write',
     }));
   } catch (error) {
+    if (isMfaRequiredError(error)) {
+      return {
+        ok: false,
+        response: NextResponse.json(
+          {
+            error: { message: error.message, type: 'invalid_request_error', code: 'mfa_required' },
+          },
+          { status: 403 },
+        ),
+      };
+    }
+    if (isIpNotAllowedError(error)) {
+      return {
+        ok: false,
+        response: NextResponse.json(
+          {
+            error: {
+              message: error.message,
+              type: 'invalid_request_error',
+              code: 'ip_not_allowed',
+            },
+          },
+          { status: 403 },
+        ),
+      };
+    }
     const insufficientScope = isApiKeyScopeError(error);
     return {
       ok: false,
