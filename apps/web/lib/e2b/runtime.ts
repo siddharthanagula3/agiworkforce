@@ -31,8 +31,10 @@
 import 'server-only';
 
 import { getPlanMaxSandboxes, getPlanSandboxTtlMs } from '@agiworkforce/types';
+import { CLOUD_CODE_HARNESS_COMMAND_DEADLINE_MS } from '@/lib/deadline-policy';
 import { logger } from '@/lib/logger';
 import { SubscriptionService } from '@/lib/services/subscription-service';
+import { buildServerProviderAdapter } from '@/lib/services/provider-adapter-service';
 import {
   MAX_EXECUTION_OUTPUT_BYTES,
   type CommandExecutionResult,
@@ -41,6 +43,7 @@ import {
   type SandboxFileEntry,
 } from './types';
 import { e2bExecutionEnabled } from './gate';
+import { harnessCredentialSpecs } from './templates';
 import {
   E2B_COMPUTE_RATE_ENV,
   meterSandboxComputeInterval,
@@ -61,6 +64,7 @@ const E2B_SANDBOX_TIMEOUT_MS = 60_000;
 
 const E2B_CONVERSATION_TIMEOUT_MS = 10 * 60_000;
 const E2B_COMMAND_TIMEOUT_MS = 60_000;
+const E2B_MAX_COMMAND_TIMEOUT_MS = CLOUD_CODE_HARNESS_COMMAND_DEADLINE_MS;
 const ALL_OUTBOUND_TRAFFIC = '0.0.0.0/0';
 const TRUSTED_CODE_HOSTS = [
   'github.com',
@@ -170,6 +174,33 @@ function scopeLog(scope: E2BSessionScope | undefined): Record<string, string | u
   };
 }
 
+function resolveManagedHarnessCredentialValue(providerId: string): string | undefined {
+  try {
+    return buildServerProviderAdapter(providerId).config.apiKey;
+  } catch (err) {
+    logger.warn({ err, providerId }, '[e2b] no managed credential for harness provider');
+    return undefined;
+  }
+}
+
+function resolveHarnessEnvs(
+  scope: E2BSessionScope | undefined,
+  template: string | null,
+): Record<string, string> | undefined {
+  if (!scope || !template) return undefined;
+  if (scope.explicitCredential) {
+    return { [scope.explicitCredential.envVar]: scope.explicitCredential.value };
+  }
+  const specs = harnessCredentialSpecs(template);
+  if (specs.length === 0) return undefined;
+  const envs: Record<string, string> = {};
+  for (const spec of specs) {
+    const value = resolveManagedHarnessCredentialValue(spec.providerId);
+    if (value) envs[spec.envVar] = value;
+  }
+  return Object.keys(envs).length > 0 ? envs : undefined;
+}
+
 function createNetworkOptions(scope: E2BSessionScope | undefined): {
   allowInternetAccess?: boolean;
   network?: { allowOut?: string[]; denyOut?: string[] };
@@ -237,6 +268,22 @@ function commandResult(
     exitCode,
     ...(error ? { error } : {}),
   };
+}
+
+function commandCatchResult(err: unknown): CommandExecutionResult {
+  const commandError = err as {
+    stdout?: unknown;
+    stderr?: unknown;
+    exitCode?: unknown;
+    error?: unknown;
+    message?: unknown;
+  };
+  return commandResult(
+    commandError.stdout,
+    commandError.stderr,
+    commandError.exitCode,
+    commandError.error ?? commandError.message,
+  );
 }
 
 export async function pauseE2BSession(scope: E2BSessionScope): Promise<void> {
@@ -371,11 +418,13 @@ export async function getE2BExecutor(scope?: E2BSessionScope): Promise<E2BExecut
   if (codeSessionId) metadata['codeSessionId'] = codeSessionId;
   if (scope?.userId) metadata['userId'] = scope.userId;
   const template = scope?.templateId?.trim() || null;
+  const harnessEnvs = resolveHarnessEnvs(scope, template);
   const createOpts = scope
     ? {
         timeoutMs: sandboxTimeoutMs,
         lifecycle: { onTimeout: 'pause' as const },
         metadata,
+        ...(harnessEnvs ? { envs: harnessEnvs } : {}),
         ...createNetworkOptions(scope),
       }
     : { timeoutMs: sandboxTimeoutMs, metadata, ...createNetworkOptions(scope) };
@@ -549,31 +598,92 @@ export async function getE2BExecutor(scope?: E2BSessionScope): Promise<E2BExecut
         return fail(err);
       }
     },
-    async runCommand({ command, cwd, timeoutMs }): Promise<CommandExecutionResult> {
+    async runCommand({ command, cwd, timeoutMs, signal }): Promise<CommandExecutionResult> {
       try {
         const result = await sandbox.commands.run(command, {
           ...(cwd ? { cwd } : {}),
+          ...(harnessEnvs ? { envs: harnessEnvs } : {}),
+          ...(signal ? { signal } : {}),
           timeoutMs: Math.min(
-            E2B_COMMAND_TIMEOUT_MS,
+            E2B_MAX_COMMAND_TIMEOUT_MS,
             Math.max(1_000, timeoutMs ?? E2B_COMMAND_TIMEOUT_MS),
           ),
         });
         return commandResult(result.stdout, result.stderr, result.exitCode, result.error);
       } catch (err) {
-        const commandError = err as {
-          stdout?: unknown;
-          stderr?: unknown;
-          exitCode?: unknown;
-          error?: unknown;
-          message?: unknown;
-        };
-        return commandResult(
-          commandError.stdout,
-          commandError.stderr,
-          commandError.exitCode,
-          commandError.error ?? commandError.message,
-        );
+        return commandCatchResult(err);
       }
+    },
+    git: {
+      async clone({
+        url,
+        path,
+        branch,
+        depth,
+        username,
+        password,
+        timeoutMs,
+      }): Promise<CommandExecutionResult> {
+        try {
+          const result = await sandbox.git.clone(url, {
+            path,
+            ...(branch ? { branch } : {}),
+            ...(depth !== undefined ? { depth } : {}),
+            ...(username ? { username } : {}),
+            ...(password ? { password } : {}),
+            timeoutMs: Math.min(
+              E2B_MAX_COMMAND_TIMEOUT_MS,
+              Math.max(1_000, timeoutMs ?? E2B_COMMAND_TIMEOUT_MS),
+            ),
+          });
+          return commandResult(result.stdout, result.stderr, result.exitCode, result.error);
+        } catch (err) {
+          return commandCatchResult(err);
+        }
+      },
+      async add({ path, all }): Promise<CommandExecutionResult> {
+        try {
+          const result = await sandbox.git.add(path, { ...(all ? { all } : {}) });
+          return commandResult(result.stdout, result.stderr, result.exitCode, result.error);
+        } catch (err) {
+          return commandCatchResult(err);
+        }
+      },
+      async commit({ path, message, authorName, authorEmail }): Promise<CommandExecutionResult> {
+        try {
+          const result = await sandbox.git.commit(path, message, {
+            ...(authorName ? { authorName } : {}),
+            ...(authorEmail ? { authorEmail } : {}),
+          });
+          return commandResult(result.stdout, result.stderr, result.exitCode, result.error);
+        } catch (err) {
+          return commandCatchResult(err);
+        }
+      },
+      async push({
+        path,
+        remote,
+        branch,
+        username,
+        password,
+        timeoutMs,
+      }): Promise<CommandExecutionResult> {
+        try {
+          const result = await sandbox.git.push(path, {
+            ...(remote ? { remote } : {}),
+            ...(branch ? { branch } : {}),
+            ...(username ? { username } : {}),
+            ...(password ? { password } : {}),
+            timeoutMs: Math.min(
+              E2B_MAX_COMMAND_TIMEOUT_MS,
+              Math.max(1_000, timeoutMs ?? E2B_COMMAND_TIMEOUT_MS),
+            ),
+          });
+          return commandResult(result.stdout, result.stderr, result.exitCode, result.error);
+        } catch (err) {
+          return commandCatchResult(err);
+        }
+      },
     },
     async listFiles(path): Promise<SandboxFileEntry[] | null> {
       try {
