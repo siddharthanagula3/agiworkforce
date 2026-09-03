@@ -237,7 +237,7 @@ vi.mock('../../components/research/ResearchPanel', () => ({
 vi.mock('@shared/components/agi/SidebarWordmark', () => ({ SidebarWordmark: () => null }));
 
 import WebChatPage from '../WebChatPage';
-import { useChatStore } from '@shared/stores/web-chat-store';
+import { firstParkedSend, selectParkedSends, useChatStore } from '@shared/stores/web-chat-store';
 
 const FIRST_MESSAGE = 'Summarize the attached notes for me please';
 const SECOND_MESSAGE = 'Actually, forget the file, just say hi';
@@ -267,7 +267,7 @@ describe('WebChatPage concurrent send during attachment upload', () => {
     vi.unstubAllGlobals();
   });
 
-  it('blocks a second, different send while the first attachment upload is in flight and restores it once the first turn is durable', async () => {
+  it('blocks a second, different send while the first attachment upload is in flight and parks it where a remount can still find it', async () => {
     render(<WebChatPage />);
     await waitFor(() => expect(mocks.composerOnSend).not.toBeNull());
 
@@ -288,20 +288,23 @@ describe('WebChatPage concurrent send during attachment upload', () => {
     // resolving its upload -- that is the corruption this guards against.
     expect(mocks.sendMessage).not.toHaveBeenCalled();
     expect(mocks.toastError).toHaveBeenCalledWith(expect.stringContaining('saved here'));
-    // Not restored yet: the winning call still has to rename its placeholder
-    // conversation to a real id, and restoring into the composer before that
-    // settles is exactly the timing this fix avoids (see sendContent).
-    expect(mocks.composerPrefillText).toBeUndefined();
-    expect(mocks.composerDroppedFiles).toBeNull();
+    // Parked immediately, under the send's own fingerprint rather than under
+    // the placeholder conversation. A prop handoff, whenever it fired, was on
+    // the wrong side of the rename and the empty-state-to-conversation swap.
+    const parked = firstParkedSend(selectParkedSends(useChatStore.getState()));
+    expect(parked?.content).toBe(SECOND_MESSAGE);
+    expect(mocks.composerDroppedFiles).toEqual([secondFile]);
 
     mocks.uploadResolvers[0]!([]);
     await waitFor(() => expect(mocks.sendMessage).toHaveBeenCalledTimes(1));
     expect(mocks.sendMessage.mock.calls[0]![0]).toBe(FIRST_MESSAGE);
 
-    // Restored once the first send's turn is durable: a working retry, not a
-    // silent loss.
-    await waitFor(() => expect(mocks.composerPrefillText).toBe(SECOND_MESSAGE));
-    expect(mocks.composerDroppedFiles).toEqual([secondFile]);
+    // Still parked once the first send's turn is durable: only a composer that
+    // actually hands the text back releases the slot, so no remount and no
+    // rename in this window can strand it.
+    expect(firstParkedSend(selectParkedSends(useChatStore.getState()))?.content).toBe(
+      SECOND_MESSAGE,
+    );
   });
 
   it('lets the first send proceed normally once its upload settles', async () => {

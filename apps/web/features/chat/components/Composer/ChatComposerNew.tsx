@@ -55,6 +55,8 @@ import {
   DEFAULT_COMPOSER_TOGGLES,
   PENDING_CONVERSATION_KEY,
   selectDraftContent,
+  selectParkedSends,
+  firstParkedSend,
   type ComposerToggleState,
 } from '@shared/stores/web-chat-store';
 import { useModelStore } from '@shared/stores/model-store';
@@ -449,6 +451,8 @@ const COMPOSER_RESTING_HEIGHT_COMPACT_PX = 36;
 const COMPOSER_COMPACT_MEDIA_QUERY = '(max-width: 639px)';
 const COMPOSER_AUTOFOCUS_MEDIA_QUERY = '(min-width: 768px) and (pointer: fine)';
 const RESTORED_DRAFT_NOTICE = "Couldn't send. Restored here so you can try again.";
+const RESTORED_BLOCKED_SEND_NOTICE =
+  'Your previous message was still starting, so this one is back here. Send it again.';
 
 /**
  * The legacy textarea's resting height is pinned in JS, so the `sm:` step its
@@ -696,6 +700,11 @@ const ChatComposerNewComponent = ({
   const setDraftContent = useChatStore((state) => state.setDraftContent);
   const clearDraftContent = useChatStore((state) => state.clearDraftContent);
   const parkedDraft = useChatStore(selectDraftContent(conversationId));
+  const parkedSends = useChatStore(selectParkedSends);
+  const clearParkedSend = useChatStore((state) => state.clearParkedSend);
+  const parkedSend = useMemo(() => firstParkedSend(parkedSends), [parkedSends]);
+  /** Fingerprint of the parked send this composer is currently holding. */
+  const restoredParkedSendRef = useRef<string | null>(null);
   // Follow-up queue (claude.ai / ChatGPT parity): a message composed while the
   // current turn is still streaming is captured here and auto-sent when the turn
   // finishes, so the user never has to wait or manually re-send. Snapshotting the
@@ -1443,6 +1452,14 @@ const ChatComposerNewComponent = ({
     // draft that reappears when the user returns to this conversation.
     clearDraftContent(conversationId);
     if (!conversationId) clearPendingDraft();
+    // The blocked send this composer was holding has now left, by a send or by
+    // an explicit clear. Releasing it by fingerprint is what makes the handback
+    // exactly-once: a different send parked behind it is untouched.
+    const restoredFingerprint = restoredParkedSendRef.current;
+    if (restoredFingerprint) {
+      restoredParkedSendRef.current = null;
+      clearParkedSend(restoredFingerprint);
+    }
     clearAttachments();
     // Deep Research and style are persistent options. Managed Web search is an
     // ambient capability and is re-derived from the selected model/deployment.
@@ -1481,7 +1498,7 @@ const ChatComposerNewComponent = ({
     // `availableImageModels`/`availableVideoModels` are gone from these deps
     // because the clear no longer reads them — the media model now survives a
     // send, so there is nothing here to reset it to.
-  }, [clearAttachments, clearDraftContent, conversationId, setComposerToggles]);
+  }, [clearAttachments, clearDraftContent, clearParkedSend, conversationId, setComposerToggles]);
 
   useEffect(() => {
     if (!isFreeTrial || !researchEnabled) return;
@@ -2572,6 +2589,44 @@ const ChatComposerNewComponent = ({
     setLocalNotice(RESTORED_DRAFT_NOTICE);
     clearDraftContent(conversationId);
   }, [clearDraftContent, conversationId, parkedDraft, writeComposerMessage]);
+
+  /**
+   * A send the guard refused is parked in the store under its own fingerprint,
+   * never under a conversation id, so this runs on EVERY mount and on every
+   * `conversationId` change as well as when the slot itself changes. That is
+   * the point: the block happens while a first turn is still creating its
+   * conversation, and both the placeholder rename and the empty-state to
+   * in-conversation swap land between the block and the moment a composer can
+   * hold the text. Whichever instance is on screen when the dust settles reads
+   * the slot and hands it back.
+   *
+   * Declared AFTER the conversation-draft effect so a rename cannot overwrite
+   * what this restores: React runs effect bodies in declaration order within a
+   * commit, and that one writes the incoming conversation's (empty) draft.
+   *
+   * The slot is not emptied here. It is released in `clearComposerState`, once
+   * the restored text has actually left through a send or an explicit clear,
+   * so a remount in between finds it still waiting.
+   */
+  useEffect(() => {
+    if (!parkedSend) {
+      restoredParkedSendRef.current = null;
+      return;
+    }
+    const live = messageRef.current.trim();
+    if (live && live !== parkedSend.content.trim()) {
+      // The user typed something else in the meantime. Theirs is newer, so the
+      // parked copy is stale and holding it would ambush a later remount.
+      clearParkedSend(parkedSend.fingerprint);
+      restoredParkedSendRef.current = null;
+      return;
+    }
+    restoredParkedSendRef.current = parkedSend.fingerprint;
+    setSendPendingFlag(false);
+    if (live) return;
+    writeComposerMessage(parkedSend.content);
+    setLocalNotice(RESTORED_BLOCKED_SEND_NOTICE);
+  }, [clearParkedSend, conversationId, parkedSend, writeComposerMessage]);
 
   // Flush a queued follow-up when the active turn finishes (true→false).
   //

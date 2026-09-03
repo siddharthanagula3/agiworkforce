@@ -582,6 +582,17 @@ interface ChatState {
   draftContent: string;
 
   /**
+   * Messages the send guard refused, keyed by their send fingerprint rather
+   * than by any conversation id. A send blocked because an earlier one is
+   * still starting has no id it can safely be filed under: the conversation it
+   * was aimed at is a client-side placeholder that is about to be renamed to a
+   * server id, and every composer-side draft slot is keyed by that id. Keying
+   * on what the user was sending instead makes the slot outlive both the
+   * rename and the composer remount it triggers.
+   */
+  parkedSendsByFingerprint: Record<string, string>;
+
+  /**
    * AUDIT-FIX CMP-1/CMP-2/CMP-5: composer send options per conversation. See
    * `ComposerToggleState`. Not persisted -- these describe one live
    * conversation's next turn, not a user preference.
@@ -745,6 +756,20 @@ interface ChatState {
   /** Discard one conversation's parked draft. */
   clearDraftContent: (conversationId?: string | null) => void;
 
+  // Actions - Blocked sends
+  /**
+   * Hold a message the send guard refused so a composer can hand it back. Re-
+   * parking the same fingerprint is a no-op, so a repeated block never
+   * multiplies the slot.
+   */
+  parkBlockedSend: (fingerprint: string, content: string) => void;
+  /**
+   * Drop one parked send. Matching on the fingerprint is what makes this
+   * exactly-once: a composer clearing the message it restored can never
+   * discard a different one parked behind it.
+   */
+  clearParkedSend: (fingerprint: string) => void;
+
   // Actions - Composer toggles (AUDIT-FIX CMP-1/CMP-2/CMP-5)
   /**
    * Read one conversation's composer send options, seeded from the durable
@@ -796,6 +821,7 @@ const initialState = {
   selectedModelTier: 'balanced' as ModelTier,
   draftsByConversation: {} as Record<string, string>,
   draftContent: '',
+  parkedSendsByFingerprint: {} as Record<string, string>,
   composerTogglesByConversation: {} as Record<string, ComposerToggleState>,
   disabledConnectorIdsByConversation: {} as Record<string, string[]>,
   sidebarCollapsed: false,
@@ -1106,6 +1132,14 @@ export const useChatStore = create<ChatState>()(
                 activeLeafByConversation[toId] = activeLeafByConversation[fromId] ?? null;
                 delete activeLeafByConversation[fromId];
               }
+              // The draft follows its conversation. Left behind under the
+              // placeholder key it is unreachable: every composer reads the
+              // slot for the id it is rendering, which from here on is `toId`.
+              const draftsByConversation = { ...state.draftsByConversation };
+              if (fromId in draftsByConversation) {
+                draftsByConversation[toId] = draftsByConversation[fromId] ?? '';
+                delete draftsByConversation[fromId];
+              }
               const streamingConversationIds = state.streamingConversationIds.map((id) =>
                 id === fromId ? toId : id,
               );
@@ -1117,6 +1151,7 @@ export const useChatStore = create<ChatState>()(
               return {
                 messagesByConversation,
                 activeLeafByConversation,
+                draftsByConversation,
                 streamingConversationIds,
                 loadingConversationIds,
                 activeConversationId,
@@ -1520,6 +1555,34 @@ export const useChatStore = create<ChatState>()(
             'chat/clearDraftContent',
           ),
 
+        // Blocked sends
+        parkBlockedSend: (fingerprint, content) =>
+          set(
+            (state) =>
+              state.parkedSendsByFingerprint[fingerprint] === content
+                ? state
+                : {
+                    parkedSendsByFingerprint: {
+                      ...state.parkedSendsByFingerprint,
+                      [fingerprint]: content,
+                    },
+                  },
+            undefined,
+            'chat/parkBlockedSend',
+          ),
+
+        clearParkedSend: (fingerprint) =>
+          set(
+            (state) => {
+              if (!(fingerprint in state.parkedSendsByFingerprint)) return state;
+              const { [fingerprint]: _cleared, ...parkedSendsByFingerprint } =
+                state.parkedSendsByFingerprint;
+              return { parkedSendsByFingerprint };
+            },
+            undefined,
+            'chat/clearParkedSend',
+          ),
+
         // Composer toggles (AUDIT-FIX CMP-1/CMP-2/CMP-5)
         getComposerToggles: (conversationId) => {
           const state = get();
@@ -1773,6 +1836,26 @@ export const selectDraftContent =
     state.draftsByConversation[
       conversationKey(conversationId === undefined ? state.activeConversationId : conversationId)
     ] ?? '';
+
+/**
+ * The whole parked-send map, returned by reference so a subscriber does not
+ * re-render on every unrelated store write.
+ */
+export const selectParkedSends = (state: ChatState): Record<string, string> =>
+  state.parkedSendsByFingerprint;
+
+/**
+ * The oldest still-parked blocked send, or null. Insertion order is the order
+ * the user pressed send in, so the first entry is the one owed back first.
+ */
+export function firstParkedSend(
+  parkedSends: Record<string, string>,
+): { fingerprint: string; content: string } | null {
+  for (const [fingerprint, content] of Object.entries(parkedSends)) {
+    return { fingerprint, content };
+  }
+  return null;
+}
 
 /**
  * Hand text back to the user after a send that never reached a model. An

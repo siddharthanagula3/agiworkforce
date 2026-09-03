@@ -275,6 +275,8 @@ function clientFallbackTitle(firstUserContent: string): string {
   return firstUserContent.trim().slice(0, CLIENT_FALLBACK_TITLE_LENGTH).replace(/\n/g, ' ');
 }
 
+const BLOCKED_SEND_TOAST =
+  'Your last message is still starting. This one was saved here, send it again in a moment.';
 const SEND_FINGERPRINT_FIELD_SEPARATOR = '|';
 const SEND_FINGERPRINT_ATTACHMENT_SEPARATOR = ',';
 const SEND_FINGERPRINT_ATTACHMENT_FIELD_SEPARATOR = ':';
@@ -852,10 +854,6 @@ export default function WebChatPage() {
   // resolution comment inside sendContent for why the key itself can change
   // between the first send and a second one racing behind it.
   const inFlightSendFingerprintsRef = useRef<Map<string, string>>(new Map());
-  // A blocked send's restore, held until the call that is still holding its
-  // guard key releases it -- see the comment where this is written inside
-  // sendContent for why an immediate restore would just be overwritten.
-  const pendingSendRestoresRef = useRef<Map<string, () => void>>(new Map());
   // Conversations whose auto-title read has already been started. The effect below
   // re-runs on every `conversations` change, including the one its own adoption
   // causes, so without this it would start a second read pass mid-flight.
@@ -1136,6 +1134,7 @@ export default function WebChatPage() {
     setActiveConversation,
   } = useConversations();
   const adoptPendingComposerToggles = useChatStore((s) => s.adoptPendingComposerToggles);
+  const parkBlockedSend = useChatStore((s) => s.parkBlockedSend);
   const {
     groupsByMessageId: branchGroupsByMessageId,
     branchingMessageId,
@@ -1485,14 +1484,24 @@ export default function WebChatPage() {
         options.conversationId || urlConversationId || bareChatSessionId || NEW_CHAT_SEND_GUARD_KEY;
       const sendFingerprint = buildSendFingerprint(content, options.attachments);
       if (sendingConversationsRef.current.has(sendGuardKey)) {
+        // The in-flight call owns this exact content, so the composer must not
+        // take it back: this is a suppressed duplicate, not a lost message.
         if (inFlightSendFingerprintsRef.current.get(sendGuardKey) === sendFingerprint) return true;
-        pendingSendRestoresRef.current.set(sendGuardKey, () => {
-          setComposerPrefill(content);
-          if (options.attachments?.length) setRestoredAttachments(options.attachments);
-        });
-        toast.error(
-          'Your last message is still starting. This one was saved here, send it again in a moment.',
-        );
+        // A DIFFERENT payload landed on a key a still-unsettled send already
+        // claimed, most often: attach a file, press Enter, then type and send
+        // again before the upload finishes. Park it in the store under its own
+        // fingerprint right now. Handing it to the composer through a prop
+        // instead, whether immediately or once the winning call released this
+        // key, put the restore on the wrong side of two things that destroy
+        // it: `ensureConversationId` RENAMES the placeholder conversation, and
+        // the empty-state composer and the in-conversation one are separate
+        // positions in this page's tree, so the first painted turn unmounts
+        // the instance the restore was aimed at. A slot keyed by the send
+        // rather than by any conversation survives both, and whichever
+        // composer is on screen reads it on its next mount.
+        parkBlockedSend(sendFingerprint, content);
+        if (options.attachments?.length) setRestoredAttachments(options.attachments);
+        toast.error(BLOCKED_SEND_TOAST);
         return false;
       }
       sendingConversationsRef.current.add(sendGuardKey);
@@ -1503,16 +1512,9 @@ export default function WebChatPage() {
         sendGuardReleased = true;
         sendingConversationsRef.current.delete(sendGuardKey);
         inFlightSendFingerprintsRef.current.delete(sendGuardKey);
-        // Any collision this call's own key absorbed is safe to restore now:
-        // by the time this runs the conversation this call owns is durable,
-        // so no further rename is coming to clobber the restore.
-        pendingSendRestoresRef.current.get(sendGuardKey)?.();
-        pendingSendRestoresRef.current.delete(sendGuardKey);
         if (clientConvId) {
           sendingConversationsRef.current.delete(clientConvId);
           inFlightSendFingerprintsRef.current.delete(clientConvId);
-          pendingSendRestoresRef.current.get(clientConvId)?.();
-          pendingSendRestoresRef.current.delete(clientConvId);
         }
       };
 
@@ -1674,6 +1676,7 @@ export default function WebChatPage() {
       createConversation,
       setActiveConversation,
       adoptPendingComposerToggles,
+      parkBlockedSend,
       sendMessage,
       activeModelId,
       activeProjectId,
