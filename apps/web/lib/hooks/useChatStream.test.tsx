@@ -1899,6 +1899,24 @@ describe('useChatStream', () => {
     expect(consoleErrorSpy).not.toHaveBeenCalled();
   });
 
+  it('keeps the classified error code on the failed message for the incomplete-turn notice', async () => {
+    mockLlmErrorResponse({
+      error: {
+        code: 'provider_unreachable',
+        message: 'Provider unreachable',
+      },
+    });
+    const { result } = renderHook(() => useChatStream());
+
+    await act(async () => {
+      await result.current.sendMessage('hello', { conversationId: TEMP_CONVERSATION.id });
+    });
+
+    const state = useChatStore.getState();
+    const assistantMessage = state.messages.find((message) => message.role === 'assistant');
+    expect(assistantMessage?.metadata?.errorCode).toBe('provider_unreachable');
+  });
+
   it('keeps the streamed-in partial answer when an ordinary (non-durable) stream dies mid-response', async () => {
     const encoder = new TextEncoder();
     let pulls = 0;

@@ -3537,6 +3537,7 @@ async function handleStreamError(error: unknown, ctx: StreamErrorContext): Promi
         ...freshMetadata,
         isExecutingCode: false,
         isSearching: false,
+        ...(errorCode ? { errorCode } : {}),
         ...(currentActivity
           ? {
               agentActivity: finishAgentActivityLocally(currentActivity, {

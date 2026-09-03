@@ -335,6 +335,7 @@ export interface MessageMetadata {
    * survives reload.
    */
   streamError?: { message: string; code?: string; retryable?: boolean };
+  errorCode?: string;
   /** Media tool type for inline rendering (e.g. 'image-generation'). */
   toolType?: string;
   /** Generated image URL; displayed inline when toolType === 'image-generation'. */
