@@ -193,4 +193,45 @@ describe('managed system prompt assembly order', () => {
     expect(mcpIndex).toBeLessThan(boundaryIndex);
     expect(skillIndex).toBeGreaterThan(boundaryIndex);
   });
+
+  it('keeps recalled memory after the boundary even when mcp_context sets the leading message', async () => {
+    mocks.loadPolicy.mockResolvedValue({
+      enabled: true,
+      generateFromHistory: false,
+      allowToolAssistedGeneration: false,
+    });
+    mocks.scopedQuery.mockImplementation(async (sql: string) => {
+      if (sql.includes('from user_memories')) {
+        return [
+          { content: 'User prefers morning meetings.', category: 'preference', pinned: true },
+        ];
+      }
+      return [];
+    });
+
+    const result = await processRequest(
+      chatRequestFor('assembly-order-2', {
+        mcp_context: { resources: [{ connectorId: 'linear', uri: 'linear://issue/AGI-1' }] },
+      }),
+      auth(),
+    );
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+
+    const systemMessages = result.llmRequest.messages.filter(
+      (message) => message.role === 'system',
+    );
+    const joined = systemMessages.map((message) => message.content).join('\n\n');
+
+    const boundaryIndex = joined.indexOf(SYSTEM_PROMPT_CACHE_BOUNDARY);
+    const mcpIndex = joined.indexOf('Connected tool: Linear.');
+    const memoryIndex = joined.indexOf('User prefers morning meetings.');
+
+    expect(boundaryIndex).toBeGreaterThan(-1);
+    expect(mcpIndex).toBeGreaterThan(-1);
+    expect(memoryIndex).toBeGreaterThan(-1);
+    expect(mcpIndex).toBeLessThan(boundaryIndex);
+    expect(memoryIndex).toBeGreaterThan(boundaryIndex);
+  });
 });

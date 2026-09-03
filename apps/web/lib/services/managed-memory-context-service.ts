@@ -258,12 +258,7 @@ export function applyManagedMemoryContext(
   chatRequest: ChatCompletionRequest,
   prompt: string,
 ): void {
-  const firstMessage = chatRequest.messages[0];
-  if (firstMessage?.role === 'system' && typeof firstMessage.content === 'string') {
-    firstMessage.content = `${prompt}\n\n${firstMessage.content}`;
-  } else {
-    chatRequest.messages.unshift({ role: 'system', content: prompt });
-  }
+  chatRequest.messages.unshift({ role: 'system', content: prompt });
 }
 
 function deterministicAutoMemoryId(userId: string, normalizedKey: string): string {
