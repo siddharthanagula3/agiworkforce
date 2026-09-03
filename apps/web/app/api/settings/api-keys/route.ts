@@ -6,9 +6,8 @@ import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
-import { getClerkAuthUser } from '@/lib/api-auth';
 import { requireCsrfToken } from '@/lib/csrf';
-import { getNeonDb } from '@/lib/server/neon-db';
+import { getUserScopedDb } from '@/lib/server/rls-db';
 import type { ApiKeyRow } from '@/lib/server/neon-types';
 import { handleCorsPreflightRequest } from '@/lib/cors';
 import { ApiKeyService } from '@/lib/services/api-key-service';
@@ -39,8 +38,7 @@ async function handleList(request: NextRequest) {
   const rateLimitResponse = await withRateLimit(request, 'api-keys-list');
   if (rateLimitResponse) return rateLimitResponse;
 
-  const { userId } = await getClerkAuthUser(request);
-  const db = getNeonDb();
+  const { db, userId } = await getUserScopedDb(request);
 
   const rows = await db.query<ApiKeyRow>(
     `select id, user_id, name, key_hash, key_prefix, scopes, last_used_at, expires_at, revoked_at, created_at
@@ -62,7 +60,7 @@ async function handleCreate(request: NextRequest) {
   const csrfError = await requireCsrfToken(request);
   if (csrfError) return csrfError as NextResponse;
 
-  const { userId } = await getClerkAuthUser(request);
+  const { db, userId } = await getUserScopedDb(request);
 
   const body = await request.json().catch(() => ({}));
   const parsed = CreateKeySchema.safeParse(body);
@@ -70,8 +68,6 @@ async function handleCreate(request: NextRequest) {
     throw createError.validation('Invalid request body', parsed.error.issues);
   }
   const { name, scopes } = parsed.data;
-
-  const db = getNeonDb();
 
   const [countRow] = await db.query<{ count: string }>(
     `select count(*) as count from public.api_keys where user_id = $1 and revoked_at is null`,

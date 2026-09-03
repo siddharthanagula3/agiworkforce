@@ -6,20 +6,20 @@ const {
   mockAuth,
   mockGetSessionList,
   mockRevokeSession,
-  mockGetClerkAuthUser,
+  mockGetUserScopedDb,
   mockVerifyToken,
   mockNeonExecute,
 } = vi.hoisted(() => ({
   mockAuth: vi.fn(),
   mockGetSessionList: vi.fn(),
   mockRevokeSession: vi.fn(),
-  mockGetClerkAuthUser: vi.fn(),
+  mockGetUserScopedDb: vi.fn(),
   mockVerifyToken: vi.fn(),
   mockNeonExecute: vi.fn(async () => 1),
 }));
 
-vi.mock('@/lib/server/neon-db', () => ({
-  getNeonDb: () => ({ execute: mockNeonExecute }),
+vi.mock('@/lib/server/rls-db', () => ({
+  getUserScopedDb: (...args: unknown[]) => mockGetUserScopedDb(...args),
 }));
 
 vi.mock('@clerk/nextjs/server', () => ({
@@ -34,10 +34,6 @@ vi.mock('@clerk/nextjs/server', () => ({
 
 vi.mock('@clerk/backend', () => ({
   verifyToken: (...args: unknown[]) => mockVerifyToken(...args),
-}));
-
-vi.mock('@/lib/api-auth', () => ({
-  getClerkAuthUser: (...args: unknown[]) => mockGetClerkAuthUser(...args),
 }));
 
 vi.mock('@/lib/rate-limit', () => ({
@@ -89,7 +85,11 @@ describe('/api/settings/sessions', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockAuth.mockResolvedValue({ userId: 'user-1', sessionId: 'sess_current' });
-    mockGetClerkAuthUser.mockResolvedValue({ userId: 'user-1' });
+    mockGetUserScopedDb.mockResolvedValue({
+      db: { execute: mockNeonExecute },
+      userId: 'user-1',
+      organizationId: null,
+    });
     mockRevokeSession.mockResolvedValue({ status: 'revoked' });
     process.env['CLERK_SECRET_KEY'] = 'sk_test_clerk_secret';
   });

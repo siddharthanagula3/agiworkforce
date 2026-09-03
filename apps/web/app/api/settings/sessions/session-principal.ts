@@ -3,12 +3,11 @@ import 'server-only';
 import { auth } from '@clerk/nextjs/server';
 import type { NextRequest } from 'next/server';
 
-import { getClerkAuthUser } from '@/lib/api-auth';
 import { getClerkAuthorizedParties } from '@/lib/clerk-authorized-parties';
 import { createError } from '@/lib/errors';
+import { getUserScopedDb, type UserScopedDb } from '@/lib/server/rls-db';
 
-export interface SessionsPrincipal {
-  userId: string;
+export interface SessionsPrincipal extends UserScopedDb {
   currentSessionId: string | null;
 }
 
@@ -35,12 +34,12 @@ async function clerkSessionIdFromBearer(token: string, userId: string): Promise<
 export async function resolveSessionsPrincipal(request: NextRequest): Promise<SessionsPrincipal> {
   const authHeader = request.headers.get('authorization');
 
-  const { userId } = await getClerkAuthUser(request);
+  const scoped = await getUserScopedDb(request);
 
   if (authHeader?.startsWith('Bearer ')) {
     return {
-      userId,
-      currentSessionId: await clerkSessionIdFromBearer(authHeader.slice(7), userId),
+      ...scoped,
+      currentSessionId: await clerkSessionIdFromBearer(authHeader.slice(7), scoped.userId),
     };
   }
 
@@ -48,5 +47,5 @@ export async function resolveSessionsPrincipal(request: NextRequest): Promise<Se
   if (!sessionId) {
     throw createError.unauthorized('Authentication required');
   }
-  return { userId, currentSessionId: sessionId };
+  return { ...scoped, currentSessionId: sessionId };
 }

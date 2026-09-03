@@ -2,12 +2,12 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('server-only', () => ({}));
 
-const { mockAuth, mockGetSession, mockRevokeSession, mockGetClerkAuthUser, mockVerifyToken } =
+const { mockAuth, mockGetSession, mockRevokeSession, mockGetUserScopedDb, mockVerifyToken } =
   vi.hoisted(() => ({
     mockAuth: vi.fn(),
     mockGetSession: vi.fn(),
     mockRevokeSession: vi.fn(),
-    mockGetClerkAuthUser: vi.fn(),
+    mockGetUserScopedDb: vi.fn(),
     mockVerifyToken: vi.fn(),
   }));
 
@@ -25,8 +25,8 @@ vi.mock('@clerk/backend', () => ({
   verifyToken: (...args: unknown[]) => mockVerifyToken(...args),
 }));
 
-vi.mock('@/lib/api-auth', () => ({
-  getClerkAuthUser: (...args: unknown[]) => mockGetClerkAuthUser(...args),
+vi.mock('@/lib/server/rls-db', () => ({
+  getUserScopedDb: (...args: unknown[]) => mockGetUserScopedDb(...args),
 }));
 
 vi.mock('@/lib/rate-limit', () => ({
@@ -57,7 +57,7 @@ describe('DELETE /api/settings/sessions/[sessionId]', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockAuth.mockResolvedValue({ userId: 'user-1', sessionId: 'sess_current' });
-    mockGetClerkAuthUser.mockResolvedValue({ userId: 'user-1' });
+    mockGetUserScopedDb.mockResolvedValue({ db: {}, userId: 'user-1', organizationId: null });
     mockRevokeSession.mockResolvedValue({ status: 'revoked' });
     process.env['CLERK_SECRET_KEY'] = 'sk_test_clerk_secret';
   });

@@ -5,7 +5,6 @@ import { handleCorsPreflightRequest } from '@/lib/cors';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { resolveSessionsPrincipal } from '../sessions/session-principal';
-import { getNeonDb } from '@/lib/server/neon-db';
 import { isCredentialLinkMissing } from './schema-state';
 
 const MAX_DEVICES = 200;
@@ -65,8 +64,7 @@ async function handleList(request: NextRequest) {
   const rateLimitResponse = await withRateLimit(request, 'settings-sessions-list');
   if (rateLimitResponse) return rateLimitResponse;
 
-  const { userId } = await resolveSessionsPrincipal(request);
-  const db = getNeonDb();
+  const { db, userId } = await resolveSessionsPrincipal(request);
 
   let rows: DeviceRow[];
   let credentialStateKnown = true;
