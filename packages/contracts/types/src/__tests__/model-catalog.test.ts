@@ -273,6 +273,87 @@ describe('resolveEffectiveModelPricing', () => {
     });
   });
 
+  it('defaults an input-tier threshold to exclusive, admitting the tier only strictly above it', () => {
+    const tiered = {
+      inputTokenPricingTiers: [{ thresholdTokens: 200_000, inputCost: 4, outputCost: 12 }],
+    };
+    const base = { inputCost: 2, outputCost: 6 };
+
+    expect(applyInputTokenPricingTiers(tiered, base, 200_000)).toEqual(base);
+    expect(applyInputTokenPricingTiers(tiered, base, 200_001)).toMatchObject({
+      inputCost: 4,
+      outputCost: 12,
+    });
+  });
+
+  it('admits an inclusive-boundary tier at exactly its threshold', () => {
+    const tiered = {
+      inputTokenPricingTiers: [
+        {
+          thresholdTokens: 200_000,
+          thresholdBoundary: 'inclusive' as const,
+          inputCost: 4,
+          outputCost: 12,
+        },
+      ],
+    };
+    const base = { inputCost: 2, outputCost: 6 };
+
+    expect(applyInputTokenPricingTiers(tiered, base, 199_999)).toEqual(base);
+    expect(applyInputTokenPricingTiers(tiered, base, 200_000)).toMatchObject({
+      inputCost: 4,
+      outputCost: 12,
+    });
+  });
+
+  it('treats an explicit exclusive boundary the same as the unmarked default', () => {
+    const tiered = {
+      inputTokenPricingTiers: [
+        {
+          thresholdTokens: 50,
+          thresholdBoundary: 'exclusive' as const,
+          inputCost: 9,
+          outputCost: 27,
+        },
+      ],
+    };
+    const base = { inputCost: 1, outputCost: 3 };
+
+    expect(applyInputTokenPricingTiers(tiered, base, 50)).toEqual(base);
+    expect(applyInputTokenPricingTiers(tiered, base, 51)).toMatchObject({
+      inputCost: 9,
+      outputCost: 27,
+    });
+  });
+
+  it('matches the OpenAI-documented exclusive boundary at exactly 272,000 input tokens', () => {
+    const model = getModelMetadataById(requireProviderDefaultModel('openai'));
+    const tier = model?.inputTokenPricingTiers?.[0];
+    expect(tier?.thresholdTokens).toBe(272_000);
+    const asOf = new Date('2030-01-01T00:00:00Z');
+
+    expect(resolveEffectiveModelPricingForInputTokens(model!, asOf, 272_000).inputCost).toBe(
+      model!.inputCost,
+    );
+    expect(resolveEffectiveModelPricingForInputTokens(model!, asOf, 272_001).inputCost).toBe(
+      tier!.inputCost,
+    );
+  });
+
+  it('matches the Google-documented exclusive boundary at exactly 200,000 input tokens', () => {
+    const model = getModelMetadataById('gemini-3.1-pro-preview');
+    const tier = model?.inputTokenPricingTiers?.[0];
+    expect(tier?.thresholdTokens).toBe(200_000);
+    const asOf = new Date('2030-01-01T00:00:00Z');
+
+    expect(resolveEffectiveModelPricingForInputTokens(model!, asOf, 200_000).inputCost).toBe(
+      model!.inputCost,
+    );
+    expect(resolveEffectiveModelPricingForInputTokens(model!, asOf, 200_001).inputCost).toBe(
+      tier!.inputCost,
+    );
+  });
+
   it('keeps the legacy singleton as read compatibility only when no array exists', () => {
     const legacy = {
       longContext: { thresholdTokens: 10, inputCost: 2, outputCost: 6 },
