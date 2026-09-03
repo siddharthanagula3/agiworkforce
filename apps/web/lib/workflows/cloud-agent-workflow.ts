@@ -1,7 +1,7 @@
 import 'server-only';
 
-import { parseInteractiveCardDelta } from '@agiworkforce/cloud-contracts';
-import type { InteractiveCard } from '@agiworkforce/types';
+import { GENERATED_FILE_SURFACES, parseInteractiveCardDelta } from '@agiworkforce/cloud-contracts';
+import type { InteractiveCard, ThinkingBlock } from '@agiworkforce/types';
 import type { AgentTaskState } from '@agiworkforce/types/protocol';
 import { z } from 'zod';
 import { FatalError, RetryableError, getWritable } from 'workflow';
@@ -11,6 +11,11 @@ import { createAgentEventStreamEmitter } from '@/app/api/llm/v1/chat/completions
 import type { ProcessedRequest } from '@/app/api/llm/v1/chat/completions/lib/request-processor';
 import {
   runToolLoop,
+  type CollectedProviderLine,
+  type FetchedSource,
+  type PendingToolCall,
+  type ServerToolResultSignal,
+  type ServerToolStartSignal,
   type ToolLoopProviderStepResult,
   type ToolLoopToolResult,
 } from '@/app/api/llm/v1/chat/completions/lib/tool-loop';
@@ -26,6 +31,12 @@ import { createCloudAgentEventJournal } from '@/lib/services/cloud-agent-event-j
 import { logger } from '@/lib/logger';
 import { getNeonDb } from '@/lib/server/neon-db';
 import { createClaimedUserScopedDb } from '@/lib/server/claimed-user-scope-db';
+import type { GeneratedFileRef } from '@/lib/server/container-files';
+import type { GeneratedFileWire } from '@/lib/server/generated-file-persist';
+import type {
+  ObservedProviderUsage,
+  ProviderUsageObservation,
+} from '@/lib/services/managed-usage-accounting-service';
 import { executeCloudAgentOperation } from './cloud-agent-operation-executor';
 import {
   cloudAgentWorkflowBillingKey,
@@ -35,6 +46,7 @@ import {
 } from './cloud-agent-workflow-input';
 import { projectCloudAgentWorkflowChunk } from './cloud-agent-workflow-stream';
 import { DURABLE_STREAM_OPEN_FRAME } from './durable-stream-liveness';
+import type { SameKeys } from '@/lib/schema-key-guard';
 import {
   settleWorkflowInvocation,
   type WorkflowTerminalOutcome,
@@ -58,6 +70,11 @@ const ProviderCallObservationSchema = z
     providerReportedCostUsd: z.number().finite().nonnegative().optional(),
   })
   .strict();
+const providerCallObservationSchemaCoversObservation: SameKeys<
+  z.infer<typeof ProviderCallObservationSchema>,
+  ProviderUsageObservation
+> = true;
+void providerCallObservationSchemaCoversObservation;
 
 const UsageSchema = z
   .object({
@@ -72,6 +89,11 @@ const UsageSchema = z
     providerCallObservations: z.array(ProviderCallObservationSchema).optional(),
   })
   .strict();
+const usageSchemaCoversObservedProviderUsage: SameKeys<
+  z.infer<typeof UsageSchema>,
+  ObservedProviderUsage
+> = true;
+void usageSchemaCoversObservedProviderUsage;
 
 const PendingToolCallSchema = z
   .object({
@@ -80,6 +102,11 @@ const PendingToolCallSchema = z
     args: z.record(z.string(), z.unknown()),
   })
   .strict();
+const pendingToolCallSchemaCoversPendingToolCall: SameKeys<
+  z.infer<typeof PendingToolCallSchema>,
+  PendingToolCall
+> = true;
+void pendingToolCallSchemaCoversPendingToolCall;
 
 const SourceSchema = z
   .object({
@@ -88,6 +115,8 @@ const SourceSchema = z
     snippet: z.string().optional(),
   })
   .strict();
+const sourceSchemaCoversFetchedSource: SameKeys<z.infer<typeof SourceSchema>, FetchedSource> = true;
+void sourceSchemaCoversFetchedSource;
 
 const GeneratedFileRefSchema = z
   .object({
@@ -97,54 +126,97 @@ const GeneratedFileRefSchema = z
     fileId: z.string().optional(),
   })
   .strict();
+const generatedFileRefSchemaCoversGeneratedFileRef: SameKeys<
+  z.infer<typeof GeneratedFileRefSchema>,
+  GeneratedFileRef
+> = true;
+void generatedFileRefSchemaCoversGeneratedFileRef;
+
+const GeneratedFileWireSchema = z
+  .object({
+    id: z.string().min(1),
+    file_name: z.string().min(1),
+    mime_type: z.string(),
+    uri: z.string().min(1),
+    byte_count: z.number().nonnegative(),
+    kind: z.string(),
+    checksum_sha256: z.string(),
+    surface: z.enum(GENERATED_FILE_SURFACES),
+    previewable: z.boolean(),
+  })
+  .strict();
+const generatedFileWireSchemaCoversGeneratedFileWire: SameKeys<
+  z.infer<typeof GeneratedFileWireSchema>,
+  GeneratedFileWire
+> = true;
+void generatedFileWireSchemaCoversGeneratedFileWire;
+
+const ServerToolStartSignalSchema = z.object({ toolCallId: z.string(), name: z.string() }).strict();
+const serverToolStartSignalSchemaCoversSignal: SameKeys<
+  z.infer<typeof ServerToolStartSignalSchema>,
+  ServerToolStartSignal
+> = true;
+void serverToolStartSignalSchemaCoversSignal;
+
+const ServerToolResultSignalSchema = z
+  .object({
+    toolCallId: z.string(),
+    name: z.string(),
+    sources: z.array(SourceSchema),
+    elapsedMs: z.number(),
+  })
+  .strict();
+const serverToolResultSignalSchemaCoversSignal: SameKeys<
+  z.infer<typeof ServerToolResultSignalSchema>,
+  ServerToolResultSignal
+> = true;
+void serverToolResultSignalSchemaCoversSignal;
+
+const CollectedProviderLineSchema = z
+  .object({
+    line: z.string(),
+    publicTextDelta: z.string().optional(),
+    serverToolStart: ServerToolStartSignalSchema.optional(),
+    serverToolResults: z.array(ServerToolResultSignalSchema).optional(),
+  })
+  .strict();
+const collectedProviderLineSchemaCoversLine: SameKeys<
+  z.infer<typeof CollectedProviderLineSchema>,
+  CollectedProviderLine
+> = true;
+void collectedProviderLineSchemaCoversLine;
+
+const ThinkingBlockSchema = z
+  .object({
+    type: z.literal('thinking'),
+    thinking: z.string(),
+    signature: z.string().optional(),
+  })
+  .strict();
+const thinkingBlockSchemaCoversThinkingBlock: SameKeys<
+  z.infer<typeof ThinkingBlockSchema>,
+  ThinkingBlock
+> = true;
+void thinkingBlockSchemaCoversThinkingBlock;
 
 const ProviderStepResultSchema = z
   .object({
-    lines: z
-      .array(
-        z
-          .object({
-            line: z.string(),
-            publicTextDelta: z.string().optional(),
-            serverToolStart: z.object({ toolCallId: z.string(), name: z.string() }).optional(),
-            serverToolResults: z
-              .array(
-                z.object({
-                  toolCallId: z.string(),
-                  name: z.string(),
-                  sources: z.array(
-                    z.object({
-                      url: z.string(),
-                      title: z.string(),
-                      snippet: z.string().optional(),
-                    }),
-                  ),
-                  elapsedMs: z.number(),
-                }),
-              )
-              .optional(),
-          })
-          .strict(),
-      )
-      .optional(),
+    lines: z.array(CollectedProviderLineSchema).optional(),
     finishReason: z.string().nullable(),
     pendingToolCalls: z.array(PendingToolCallSchema),
     textContent: z.string(),
     publicTextTail: z.string(),
     generatedFileRefs: z.array(GeneratedFileRefSchema),
-    thinkingBlocks: z.array(
-      z
-        .object({
-          type: z.literal('thinking'),
-          thinking: z.string(),
-          signature: z.string().optional(),
-        })
-        .strict(),
-    ),
+    thinkingBlocks: z.array(ThinkingBlockSchema),
     canonicalText: z.string(),
     usage: UsageSchema,
   })
   .strict();
+const providerStepResultSchemaCoversStepResult: SameKeys<
+  z.infer<typeof ProviderStepResultSchema>,
+  ToolLoopProviderStepResult
+> = true;
+void providerStepResultSchemaCoversStepResult;
 
 export function parseCloudAgentProviderStepResult(
   value: unknown,
@@ -162,6 +234,7 @@ const ToolResultSchema = z
     source: SourceSchema.optional(),
     sources: z.array(SourceSchema).optional(),
     pngResults: z.array(z.string()).optional(),
+    generatedFiles: z.array(GeneratedFileWireSchema).optional(),
     inputRequired: z
       .object({
         inputRequests: z.record(z.string(), z.unknown()),
@@ -170,6 +243,15 @@ const ToolResultSchema = z
       .optional(),
   })
   .strict();
+const toolResultSchemaCoversToolLoopToolResult: SameKeys<
+  z.infer<typeof ToolResultSchema>,
+  ToolLoopToolResult
+> = true;
+void toolResultSchemaCoversToolLoopToolResult;
+
+export function parseCloudAgentToolResult(value: unknown): z.infer<typeof ToolResultSchema> {
+  return ToolResultSchema.parse(value);
+}
 
 type WorkflowInvocationResult =
   | { kind: 'continue'; input: CloudAgentWorkflowInput }

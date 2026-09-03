@@ -4,6 +4,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import { z } from 'zod';
 import { toIsoTimestamp } from '@/lib/server/iso-timestamps';
+import type { SameKeys } from '@/lib/schema-key-guard';
 import type {
   ObservedProviderUsage,
   ProviderUsageObservation,
@@ -426,8 +427,17 @@ const ProviderUsageObservationSchema = z
     provider: z.string().min(1).optional(),
     model: z.string().min(1).optional(),
     costDollars: z.number().finite().nonnegative().optional(),
+    costSource: z.enum(['provider_reported', 'estimated']).optional(),
+    routeId: z.string().min(1).nullable().optional(),
+    upstreamProvider: z.string().min(1).optional(),
+    providerReportedCostUsd: z.number().finite().nonnegative().optional(),
   })
   .strict();
+const providerUsageObservationSchemaCoversObservation: SameKeys<
+  z.infer<typeof ProviderUsageObservationSchema>,
+  ProviderUsageObservation
+> = true;
+void providerUsageObservationSchemaCoversObservation;
 
 const ProviderUsageReceiptSchema = z
   .object({
