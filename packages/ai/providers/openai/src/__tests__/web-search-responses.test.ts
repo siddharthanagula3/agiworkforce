@@ -3,6 +3,9 @@ import type { StreamChunk } from '@agiworkforce/types';
 
 import { translateOpenAIResponsesStream } from '../stream-responses';
 import type { ResponsesStreamEvent } from '../responses-types';
+import { OPENAI_DEFAULT_MODEL_ID } from './model-fixtures';
+
+const OPENAI_SIBLING_ARTICLE_URL = `https://openai.com/index/${OPENAI_DEFAULT_MODEL_ID}/`;
 
 async function* fromArray<T>(items: T[]): AsyncIterable<T> {
   for (const item of items) yield item;
@@ -284,7 +287,7 @@ describe('translateOpenAIResponsesStream native web search', () => {
             query: 'openai announcements',
             sources: [
               { type: 'url', url: 'https://openai.com/index/expanding-daybreak/' },
-              { type: 'url', url: 'https://openai.com/index/gpt-5-6/' },
+              { type: 'url', url: OPENAI_SIBLING_ARTICLE_URL },
             ],
           },
         },
@@ -367,7 +370,7 @@ describe('translateOpenAIResponsesStream native web search', () => {
         url: 'https://openai.com/index/expanding-daybreak/',
         title: 'Expanding Daybreak',
       },
-      { type: 'web_search_result', url: 'https://openai.com/index/gpt-5-6/', title: '' },
+      { type: 'web_search_result', url: OPENAI_SIBLING_ARTICLE_URL, title: '' },
     ]);
   });
 });
