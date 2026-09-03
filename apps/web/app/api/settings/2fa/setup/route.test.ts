@@ -1,4 +1,3 @@
-
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
 
@@ -23,7 +22,9 @@ vi.mock('@/features/settings/services/user-preferences', () => ({
   generateOTPAuthURL: vi.fn(() => 'otpauth://totp/AGI:user@example.com?secret=SECRET'),
   generateBackupCodes: vi.fn(() => ['aaaa-1111', 'bbbb-2222']),
   hashBackupCode: vi.fn(async (code: string) => `hash:${code}`),
-  encryptTOTPSecret: vi.fn(async () => 'encrypted-secret'),
+}));
+vi.mock('@/lib/crypto/totp-envelope', () => ({
+  sealTotpSecret: vi.fn(() => 'encrypted-secret'),
 }));
 
 import { POST } from './route';

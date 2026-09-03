@@ -1,4 +1,3 @@
-
 import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -14,8 +13,8 @@ import {
   generateOTPAuthURL,
   generateBackupCodes,
   hashBackupCode,
-  encryptTOTPSecret,
 } from '@/features/settings/services/user-preferences';
+import { sealTotpSecret } from '@/lib/crypto/totp-envelope';
 
 async function handleSetup2FA(request: NextRequest) {
   const csrfError = await requireCsrfToken(request);
@@ -45,7 +44,7 @@ async function handleSetup2FA(request: NextRequest) {
 
   const hashedCodes = await Promise.all(backupCodes.map((c) => hashBackupCode(c)));
 
-  const encryptedSecret = await encryptTOTPSecret(secret);
+  const encryptedSecret = sealTotpSecret(secret);
 
   await db.query(
     `insert into user_two_factor

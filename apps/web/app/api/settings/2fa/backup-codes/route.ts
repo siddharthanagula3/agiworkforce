@@ -13,8 +13,8 @@ import {
   verifyTOTPStep,
   generateBackupCodes,
   hashBackupCode,
-  decryptTOTPSecret,
 } from '@/features/settings/services/user-preferences';
+import { openTotpSecret } from '@/lib/crypto/totp-envelope';
 import { readJsonBody } from '@/lib/read-json-body';
 
 interface TwoFactorRow {
@@ -47,7 +47,7 @@ async function handleRegenerateBackupCodes(request: NextRequest) {
     throw createError.badRequest('2FA is not enabled on this account');
   }
 
-  const secret = await decryptTOTPSecret(row.totp_secret_enc);
+  const secret = openTotpSecret(row.totp_secret_enc);
   const step = await verifyTOTPStep(secret, code);
   if (step === null) {
     logger.warn({ userId }, 'backup-codes regenerate: invalid TOTP code');

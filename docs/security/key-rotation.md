@@ -25,11 +25,10 @@ in-flight flows only: a user retries the connect or the device pairing and it
 works. They get no bookkeeping column and the rotation sweep does not touch
 them.
 
-`TOTP_ENCRYPTION_KEY` is not hex. `getConfiguredTOTPKeyMaterial()` in
-`apps/web/features/settings/services/user-preferences.ts` takes the first 32
-characters of the env value as raw bytes; `loadKeyRing(_, { encoding: 'utf8' })`
-reproduces exactly that. Do not "fix" it to hex without re-encrypting first —
-it would orphan every enrolled secret.
+`TOTP_ENCRYPTION_KEY` is not hex. `lib/crypto/totp-envelope.ts` takes the first
+32 characters of the env value as raw bytes through
+`loadKeyRing(_, { encoding: 'utf8' })`. Do not "fix" it to hex without
+re-encrypting first — it would orphan every enrolled secret.
 
 The desktop token minted by `apps/web/app/api/auth/desktop-token/route.ts` is
 also AES-256-GCM under `TOTP_ENCRYPTION_KEY`, but it is never stored: rotating
@@ -52,24 +51,30 @@ column's CHECK constraint enforces — and no id may appear twice in one ring.
 
 ## Which readers understand the ring
 
-| Column                                   | Reader                                           | Ring-aware |
-| ---------------------------------------- | ------------------------------------------------ | ---------- |
-| `connector_oauth_grants.*_token_enc`     | `lib/custom-connector-crypto.ts`                 | yes        |
-| `user_custom_connectors.auth_header_enc` | `lib/custom-connector-crypto.ts`                 | yes        |
-| `github_installations.access_token_enc`  | `lib/github-app.ts`                              | yes        |
-| `user_two_factor.totp_secret_enc`        | `features/settings/services/user-preferences.ts` | **no**     |
+| Column                                   | Reader                           | Ring-aware |
+| ---------------------------------------- | -------------------------------- | ---------- |
+| `connector_oauth_grants.*_token_enc`     | `lib/custom-connector-crypto.ts` | yes        |
+| `user_custom_connectors.auth_header_enc` | `lib/custom-connector-crypto.ts` | yes        |
+| `github_installations.access_token_enc`  | `lib/github-app.ts`              | yes        |
+| `user_two_factor.totp_secret_enc`        | `lib/crypto/totp-envelope.ts`    | yes        |
 
 A ring-aware reader decrypts against every key on the ring, so rows the sweep
-has not reached yet are still readable with the retired key present. Those three
+has not reached yet are still readable with the retired key present. All four
 columns rotate with **no downtime**. They keep WRITING the legacy `iv:ct:tag`
-layout so an instance of the previous build can read what a new instance wrote
-during a rolling deploy; `--format=versioned` is what moves them to the
-self-describing layout, and the sweep refuses it for any column whose reader is
-not ring-aware (`versionedReaderReady` in `scripts/reencrypt.mjs`).
+(or, for `totp_secret_enc`, `b64-iv-ct-tag`) layout so an instance of the
+previous build can read what a new instance wrote during a rolling deploy;
+`--format=versioned` is what moves them to the self-describing layout, and the
+sweep refuses it for any column whose reader is not ring-aware
+(`versionedReaderReady` in `scripts/reencrypt.mjs`).
 
-`user_two_factor.totp_secret_enc` is the exception: `decryptTOTPSecret` still
-builds one WebCrypto key from `TOTP_ENCRYPTION_KEY`, so rotating that key needs
-a maintenance window for 2FA verification — see step 3.
+`user_two_factor.totp_secret_enc` used to be the exception: the reader built one
+WebCrypto key straight from `TOTP_ENCRYPTION_KEY` and never consulted
+`_RETIRED`. `lib/crypto/totp-envelope.ts` now calls `sealEnvelope`/`openEnvelope`
+from `lib/crypto/envelope.ts` directly, so it is ring-aware like the other three.
+It could not simply be imported into `features/settings/services/user-preferences.ts`,
+because that module is also bundled for the browser and `envelope.ts` needs
+`node:crypto`; the seal/open calls live in the new server-only sibling instead,
+and the four `/api/settings/2fa/*` routes call it directly.
 
 ## Rotation cadence
 
@@ -78,12 +83,12 @@ below runs `## Rotating a key` end to end, with `scripts/reencrypt.mjs` as the
 sweep. Nothing here rotates itself; the date is a calendar obligation on the
 Owner named in the header.
 
-| Key env                                 | Interval  | Next due   | Sweep target                            | Downtime                            |
-| --------------------------------------- | --------- | ---------- | --------------------------------------- | ----------------------------------- |
-| `CUSTOM_CONNECTOR_TOKEN_ENCRYPTION_KEY` | 12 months | 2027-08-17 | `connector-grants`, `custom-connectors` | none — ring-aware reader            |
-| `GITHUB_TOKEN_ENCRYPTION_KEY`           | 12 months | 2027-08-17 | `github-installations`                  | none — ring-aware reader            |
-| `TOTP_ENCRYPTION_KEY`                   | 12 months | 2027-08-17 | `two-factor`                            | 2FA verification window, see step 3 |
-| `DEVICE_TOKEN_ENCRYPTION_KEY`           | 12 months | 2027-08-17 | none — no durable column                | in-flight device pairings re-run    |
+| Key env                                 | Interval  | Next due   | Sweep target                            | Downtime                         |
+| --------------------------------------- | --------- | ---------- | --------------------------------------- | -------------------------------- |
+| `CUSTOM_CONNECTOR_TOKEN_ENCRYPTION_KEY` | 12 months | 2027-08-17 | `connector-grants`, `custom-connectors` | none — ring-aware reader         |
+| `GITHUB_TOKEN_ENCRYPTION_KEY`           | 12 months | 2027-08-17 | `github-installations`                  | none — ring-aware reader         |
+| `TOTP_ENCRYPTION_KEY`                   | 12 months | 2027-08-17 | `two-factor`                            | none — ring-aware reader         |
+| `DEVICE_TOKEN_ENCRYPTION_KEY`           | 12 months | 2027-08-17 | none — no durable column                | in-flight device pairings re-run |
 
 Rotate ahead of the date, not on it, whenever a key could have been read by
 someone who should not have it: a leaked deployment env, a departing operator
@@ -138,11 +143,9 @@ converts this accepted risk into a live one.
    psql "$NEON_DATABASE_URL" -f apps/web/db/neon/0104_key_version.sql
    ```
 
-3. **`TOTP_ENCRYPTION_KEY` only: take 2FA verification out of rotation** for
-   the length of the sweep. Its reader is not ring-aware, so between the env
-   swap and the last swept row a 2FA challenge cannot be verified. The other
-   three targets need no window — deploy the ring (step 4) and traffic keeps
-   working while the sweep runs.
+3. **No maintenance window is required for any of the four keys.** Every
+   reader, `TOTP_ENCRYPTION_KEY` included, is ring-aware: deploy the ring
+   (step 4) and traffic keeps working while the sweep runs. Skip to step 4.
 
 4. **Set the ring** — in the deployed environment as well as locally for the
    sweep. The old key moves to `_RETIRED` under the id it currently carries in
@@ -171,8 +174,8 @@ converts this accepted risk into a live one.
 
    `plaintext=N` in the summary counts rows deliberately left alone:
    pre-encryption TOTP secrets still stored as plain Base32, which
-   `decryptTOTPSecret` accepts and which belong to no key. They are reported,
-   never stamped.
+   `openTotpSecret` refuses to decrypt and which belong to no key. They are
+   reported, never stamped.
 
 6. **Drop `_RETIRED`** from the deployed env once the sweep reports `scanned=0`
    for every target, and redeploy. Keep the old key in a sealed record until the
@@ -239,12 +242,6 @@ build may still be serving that column. The sweep enforces the ready/not-ready
 half of that itself; the "fully deployed" half is yours to confirm.
 
 ## Not yet done
-
-`features/settings/services/user-preferences.ts` still carries its own inline
-WebCrypto codec, so `user_two_factor.totp_secret_enc` is the one column that
-needs the step-3 window and cannot take `--format=versioned`. Migrating that
-reader is tracked separately — it runs in a module that is also imported by the
-browser, so it cannot simply import `lib/crypto/envelope.ts`.
 
 `lib/device-token-crypto.ts` and `app/api/auth/desktop-token/route.ts` are not
 on this list: neither writes a durable column. Rotating `DEVICE_TOKEN_ENCRYPTION_KEY`
