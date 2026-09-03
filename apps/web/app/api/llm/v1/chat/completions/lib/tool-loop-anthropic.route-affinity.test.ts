@@ -2,10 +2,11 @@ import { describe, expect, it, vi, beforeEach } from 'vitest';
 
 vi.mock('server-only', () => ({}));
 
-const mockBuildAdapter = vi.fn(() => ({ id: 'openrouter' }));
-const mockBuildChatRequest = vi.fn(() => ({
+const mockBuildAdapter = vi.fn((..._args: unknown[]) => ({ id: 'openrouter' }));
+const mockBuildChatRequest = vi.fn((..._args: unknown[]) => ({
   model: 'claude-sonnet-5',
   messages: [] as unknown[],
+  metadata: undefined as Record<string, unknown> | undefined,
 }));
 vi.mock('./adapter-providers', () => ({
   ADAPTER_PROVIDERS: {
@@ -24,7 +25,7 @@ vi.mock('./adapter-providers', () => ({
   },
 }));
 
-const mockStartProviderStream = vi.fn(async () => (async function* () {})());
+const mockStartProviderStream = vi.fn(async (..._args: unknown[]) => (async function* () {})());
 vi.mock('./adapter-factory', () => ({
   startProviderStream: (...args: unknown[]) => mockStartProviderStream(...args),
 }));
