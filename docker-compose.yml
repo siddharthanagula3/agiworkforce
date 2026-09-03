@@ -8,7 +8,7 @@
 
 services:
   # ===========================================================================
-  # PostgreSQL 16 — Primary local database (mirrors production Neon schema)
+  # PostgreSQL 16, Primary local database (mirrors production Neon schema)
   # ===========================================================================
   postgres:
     image: postgres:16-alpine
@@ -41,7 +41,7 @@ services:
         max-file: '3'
 
   # ===========================================================================
-  # pgAdmin 4 — Web-based PostgreSQL GUI (convenience tool for local dev)
+  # pgAdmin 4, Web-based PostgreSQL GUI (convenience tool for local dev)
   # Access at: http://localhost:5050
   # Login: admin@local.dev / admin
   # ===========================================================================
@@ -50,7 +50,7 @@ services:
     container_name: agiworkforce-pgadmin
     restart: unless-stopped
     ports:
-      # Bound to 127.0.0.1 only — prevents exposure on shared networks/VPNs [H20]
+      # Bound to 127.0.0.1 only, prevents exposure on shared networks/VPNs [H20]
       - '127.0.0.1:5050:80'
     environment:
       PGADMIN_DEFAULT_EMAIL: ${PGADMIN_DEFAULT_EMAIL:-admin@local.dev}
