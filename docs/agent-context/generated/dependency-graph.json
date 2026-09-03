@@ -517,6 +517,14 @@
       },
       {
         "from": "@agiworkforce/providers-vercel-gateway",
+        "to": "@agiworkforce/provider-protocol"
+      },
+      {
+        "from": "@agiworkforce/providers-vercel-gateway",
+        "to": "@agiworkforce/provider-runtime"
+      },
+      {
+        "from": "@agiworkforce/providers-vercel-gateway",
         "to": "@agiworkforce/providers-openai"
       },
       {

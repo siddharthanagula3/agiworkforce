@@ -29,6 +29,7 @@
     "enterprise",
     "errors",
     "event-triggers",
+    "harness-protocol",
     "interactive-cards",
     "managed-usage-balance",
     "memory",
