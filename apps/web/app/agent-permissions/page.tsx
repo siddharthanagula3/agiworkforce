@@ -4,6 +4,7 @@ import { MarketingFooter } from '@/features/marketing/components/MarketingFooter
 import {
   Button,
   ButtonRow,
+  Container,
   Eyebrow,
   Ledger,
   Prose,
@@ -11,6 +12,7 @@ import {
   Stack,
 } from '@/features/marketing/components/system';
 import { FactGrid, PageHero } from '@/features/marketing/components/pages/surfaces/shared';
+import { PolicyContents } from '@shared/components/legal/PolicyContents';
 import { POLICY_LAST_UPDATED } from '@/lib/legal-constants';
 
 export const metadata = buildMetadata({
@@ -19,6 +21,17 @@ export const metadata = buildMetadata({
     'What the AGI agent may do without asking, what always requires approval, which connector scopes are actually requested, and every way to revoke access.',
   path: '/agent-permissions',
 });
+
+const SECTIONS = [
+  { label: 'These run without asking', id: 'no-ask' },
+  { label: 'These always ask', id: 'always-ask' },
+  { label: 'What the injection escalation does not catch', id: 'honest-limits' },
+  { label: 'A block is enforced on the server', id: 'blocking' },
+  { label: 'Computer use in Chrome', id: 'browser-permissions' },
+  { label: 'Local execution, local approval', id: 'desktop-permissions' },
+  { label: 'What is actually requested today', id: 'connectors' },
+  { label: 'Every way to take access back', id: 'revocation' },
+] as const;
 
 const NO_ASK: { k: string; v: string }[] = [
   {
@@ -124,6 +137,10 @@ export default function AgentPermissionsPage() {
           }
           ctas={[]}
         />
+
+        <Container className="mb-10">
+          <PolicyContents sections={SECTIONS} />
+        </Container>
 
         <Section id="no-ask" labelledBy="agi-perm-noask-title" rule>
           <Stack gap="loose">
