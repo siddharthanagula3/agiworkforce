@@ -2,8 +2,9 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('server-only', () => ({}));
 
-const { mockQuery, mockGetUserScopedDb } = vi.hoisted(() => ({
+const { mockQuery, mockNeonQuery, mockGetUserScopedDb } = vi.hoisted(() => ({
   mockQuery: vi.fn(),
+  mockNeonQuery: vi.fn(),
   mockGetUserScopedDb: vi.fn(),
 }));
 
@@ -13,6 +14,9 @@ vi.mock('@/lib/logger', () => ({
   logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() },
 }));
 vi.mock('@/lib/server/rls-db', () => ({ getUserScopedDb: mockGetUserScopedDb }));
+vi.mock('@/lib/server/neon-db', () => ({
+  getNeonDb: vi.fn(() => ({ query: (...args: unknown[]) => mockNeonQuery(...args) })),
+}));
 
 vi.mock('@/lib/services/org-entitlements', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/lib/services/org-entitlements')>()),
@@ -56,6 +60,7 @@ function calls(): { sql: string; params: unknown[] }[] {
 describe('organization shared surface · cross-org isolation', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockNeonQuery.mockResolvedValue([]);
     mockGetUserScopedDb.mockResolvedValue({
       db: { query: (...args: unknown[]) => mockQuery(...args) },
       userId: 'user-in-org-a',
@@ -82,15 +87,20 @@ describe('organization shared surface · cross-org isolation', () => {
     }
 
     const scoped = issued.filter(({ sql }) =>
-      /organization_shared_projects|organization_shared_connectors|organization_project_access/i.test(
-        sql,
-      ),
+      /organization_shared_connectors|organization_project_access/i.test(sql),
     );
     expect(scoped.length).toBeGreaterThan(0);
     for (const { sql, params } of scoped) {
       expect(sql).toMatch(/organization_id = \$1/i);
       expect(params[0]).toBe(ORG_A);
     }
+
+    expect(mockNeonQuery).toHaveBeenCalledTimes(1);
+    const [sharesSql, sharesParams] = mockNeonQuery.mock.calls[0]!;
+    expect(String(sharesSql)).toMatch(/organization_shared_projects/i);
+    expect(String(sharesSql)).toMatch(/organization_id = \$1/i);
+    expect((sharesParams as unknown[])[0]).toBe(ORG_A);
+    expect(sharesParams).not.toContain(ORG_B);
   });
 
   it('the member roster read is fenced on the caller’s organization', async () => {

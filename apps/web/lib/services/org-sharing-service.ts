@@ -2,6 +2,7 @@ import 'server-only';
 
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import { createError } from '@/lib/errors';
+import { getNeonDb } from '@/lib/server/neon-db';
 import {
   getOrganizationEntitlements,
   getSharedProjectLimitErrorMessage,
@@ -85,7 +86,7 @@ export async function listSharedProjects(
   db: DatabaseAdapter,
   organizationId: string,
 ): Promise<SharedProjectSummary[]> {
-  const rows = await db.query<SharedProjectRow>(
+  const rows = await getNeonDb().query<SharedProjectRow>(
     `select s.organization_id,
             s.project_id,
             s.shared_by_user_id,
