@@ -35,6 +35,11 @@ export interface E2BSessionScope {
   planTier?: string;
   /** E2B template id. Omitted means the SDK's default image. */
   templateId?: string | null;
+  /**
+   * A harness credential the caller supplied directly, bypassing managed
+   * provider resolution. Wins over it when present.
+   */
+  explicitCredential?: { envVar: string; value: string } | null;
 }
 
 export const MANAGED_CLOUD_E2B_TENANT_ID = 'managed-cloud';
@@ -57,6 +62,7 @@ export function managedCloudCodeSessionScope(
   networkAccess: CloudCodeNetworkAccess,
   planTier?: string,
   templateId?: string | null,
+  explicitCredential?: { envVar: string; value: string } | null,
 ): E2BSessionScope {
   return {
     tenantId: MANAGED_CLOUD_E2B_TENANT_ID,
@@ -65,6 +71,7 @@ export function managedCloudCodeSessionScope(
     networkAccess,
     ...(planTier ? { planTier } : {}),
     ...(templateId ? { templateId } : {}),
+    ...(explicitCredential ? { explicitCredential } : {}),
   };
 }
 
