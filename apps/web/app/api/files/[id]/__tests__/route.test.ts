@@ -1,19 +1,20 @@
-
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { createHash } from 'crypto';
 
 const {
-  mockGetClerkAuthUser,
+  mockGetUserScopedDb,
   mockGetActiveWorkspaceMediaAssetById,
   mockGetObject,
   mockStreamObject,
   mockIsConfigured,
+  scopedDb,
 } = vi.hoisted(() => ({
-  mockGetClerkAuthUser: vi.fn(),
+  mockGetUserScopedDb: vi.fn(),
   mockGetActiveWorkspaceMediaAssetById: vi.fn(),
   mockGetObject: vi.fn(),
   mockStreamObject: vi.fn(),
   mockIsConfigured: vi.fn(() => true),
+  scopedDb: { query: vi.fn() },
 }));
 
 vi.mock('@/lib/rate-limit', () => ({
@@ -24,8 +25,8 @@ vi.mock('@/lib/logger', () => ({
   logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() },
 }));
 
-vi.mock('@/lib/api-auth', () => ({
-  getClerkAuthUser: mockGetClerkAuthUser,
+vi.mock('@/lib/server/rls-db', () => ({
+  getUserScopedDb: mockGetUserScopedDb,
 }));
 
 vi.mock('@/lib/server/media-assets', () => ({
@@ -70,11 +71,15 @@ describe('GET /api/files/[id]', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockIsConfigured.mockReturnValue(true);
-    mockGetClerkAuthUser.mockResolvedValue({ userId: 'user-owner' });
+    mockGetUserScopedDb.mockResolvedValue({
+      db: scopedDb,
+      userId: 'user-owner',
+      organizationId: null,
+    });
   });
 
   it('returns 401 when unauthenticated', async () => {
-    mockGetClerkAuthUser.mockRejectedValue(createError.unauthorized());
+    mockGetUserScopedDb.mockRejectedValue(createError.unauthorized());
     const res = await GET(makeRequest(ASSET_ID), makeContext(ASSET_ID));
     expect(res.status).toBe(401);
     expect(mockGetObject).not.toHaveBeenCalled();
@@ -84,7 +89,11 @@ describe('GET /api/files/[id]', () => {
     mockGetActiveWorkspaceMediaAssetById.mockResolvedValue(null);
     const res = await GET(makeRequest(ASSET_ID), makeContext(ASSET_ID));
     expect(res.status).toBe(404);
-    expect(mockGetActiveWorkspaceMediaAssetById).toHaveBeenCalledWith('user-owner', ASSET_ID);
+    expect(mockGetActiveWorkspaceMediaAssetById).toHaveBeenCalledWith(
+      'user-owner',
+      ASSET_ID,
+      scopedDb,
+    );
     expect(mockGetObject).not.toHaveBeenCalled();
   });
 

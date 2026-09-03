@@ -359,13 +359,14 @@ function isProviderAvailable(provider: ImageProvider): boolean {
 async function resolveImageRefBytes(
   ref: { asset_id: string } | { b64_json: string },
   userId: string,
+  db?: Parameters<typeof getActiveWorkspaceMediaAssetById>[2],
 ): Promise<Uint8Array> {
   if ('b64_json' in ref) {
     const base64 = ref.b64_json.includes(',') ? ref.b64_json.split(',').pop()! : ref.b64_json;
     return Uint8Array.from(Buffer.from(base64, 'base64'));
   }
 
-  const asset = await getActiveWorkspaceMediaAssetById(userId, ref.asset_id);
+  const asset = await getActiveWorkspaceMediaAssetById(userId, ref.asset_id, db);
   if (
     !asset ||
     asset.deletedAt ||
@@ -1220,8 +1221,13 @@ async function handleImageGeneration(request: NextRequest): Promise<NextResponse
     let sourceBytes: Uint8Array;
     let maskBytes: Uint8Array | undefined;
     try {
-      sourceBytes = await resolveImageRefBytes(source_image, userId);
-      maskBytes = mask_image ? await resolveImageRefBytes(mask_image, userId) : undefined;
+      const referencesStoredAsset =
+        'asset_id' in source_image || (mask_image && 'asset_id' in mask_image);
+      const editRefDb = referencesStoredAsset ? (await getUserScopedDb(request)).db : undefined;
+      sourceBytes = await resolveImageRefBytes(source_image, userId, editRefDb);
+      maskBytes = mask_image
+        ? await resolveImageRefBytes(mask_image, userId, editRefDb)
+        : undefined;
     } catch (error) {
       logger.error(
         {
@@ -1297,6 +1303,7 @@ async function handleImageGeneration(request: NextRequest): Promise<NextResponse
   let reservation: ManagedUsageRequestReservation;
   let sourceSurface: 'web' | 'mobile' | 'desktop';
   let organizationId: string | null;
+  let scopedDb: Awaited<ReturnType<typeof getUserScopedDb>>['db'] | undefined;
   try {
     const idempotencyKey = parseManagedUsageIdempotencyKey(request.headers.get('Idempotency-Key'));
     const mediaIdentity = parseManagedMediaIdempotencyKey(idempotencyKey);
@@ -1310,6 +1317,7 @@ async function handleImageGeneration(request: NextRequest): Promise<NextResponse
     sourceSurface = mediaIdentity.surface;
     const scoped = await getUserScopedDb(request);
     organizationId = scoped.organizationId;
+    scopedDb = scoped.db;
     if (scoped.userId !== userId) {
       throw new ManagedUsageRequestError('Managed usage tenant mismatch.', 403, 'tenant_mismatch');
     }
@@ -1618,6 +1626,7 @@ async function handleImageGeneration(request: NextRequest): Promise<NextResponse
             conversationId,
             metadata: { aiAct: provenance[staged.idx] },
           })),
+          scopedDb,
         );
         if (!assetIds || assetIds.length !== stagedImages.length) {
           persistenceFailures.push('media catalog is unavailable for the generated image batch');

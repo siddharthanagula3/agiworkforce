@@ -261,7 +261,11 @@ describe('Article 50(2) — generated image provenance', () => {
     );
 
     expect(response.status).toBe(200);
-    expect(assetMocks.byId).toHaveBeenCalledWith(TEST_USER.userId, sourceAssetId);
+    expect(assetMocks.byId).toHaveBeenCalledWith(
+      TEST_USER.userId,
+      sourceAssetId,
+      expect.anything(),
+    );
     expect(storageMocks.read).toHaveBeenCalledWith(sourcePathname);
     expect(providerCalls()).toHaveLength(1);
     expect(String(providerCalls()[0]?.[0])).toContain('api.openai.com');
@@ -346,9 +350,10 @@ describe('Article 50(2) — generated image provenance', () => {
         ),
       );
 
-      expect(assetMocks.insertMany).toHaveBeenCalledWith([
-        expect.objectContaining({ sourceSurface }),
-      ]);
+      expect(assetMocks.insertMany).toHaveBeenCalledWith(
+        [expect.objectContaining({ sourceSurface })],
+        expect.anything(),
+      );
     },
   );
 
@@ -393,6 +398,11 @@ describe('Article 50(2) — the mark survives to the download', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockGetClerkAuthUser.mockResolvedValue(TEST_USER);
+    rlsMocks.getUserScopedDb.mockResolvedValue({
+      db: {},
+      userId: TEST_USER.userId,
+      organizationId: null,
+    });
     storageMocks.configured.mockReturnValue(true);
     storageMocks.read.mockResolvedValue({
       data: Buffer.from(PNG_B64, 'base64'),

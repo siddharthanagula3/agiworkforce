@@ -1,10 +1,9 @@
-
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { NextRequest } from 'next/server';
 import { LibraryListResponseSchema } from '@agiworkforce/cloud-contracts';
 
-const { mockGetClerkAuthUser, mockQuery, mockResolveActiveOrganizationId } = vi.hoisted(() => ({
-  mockGetClerkAuthUser: vi.fn(),
+const { mockGetUserScopedDb, mockQuery, mockResolveActiveOrganizationId } = vi.hoisted(() => ({
+  mockGetUserScopedDb: vi.fn(),
   mockQuery: vi.fn(),
   mockResolveActiveOrganizationId: vi.fn(),
 }));
@@ -17,12 +16,8 @@ vi.mock('@/lib/logger', () => ({
   logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() },
 }));
 
-vi.mock('@/lib/api-auth', () => ({
-  getClerkAuthUser: mockGetClerkAuthUser,
-}));
-
-vi.mock('@/lib/server/neon-db', () => ({
-  getNeonDb: () => ({ query: mockQuery }),
+vi.mock('@/lib/server/rls-db', () => ({
+  getUserScopedDb: mockGetUserScopedDb,
 }));
 
 vi.mock('@/lib/services/active-workspace-service', () => ({
@@ -66,13 +61,17 @@ async function parsedBody(res: Response) {
 describe('GET /api/library', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockGetClerkAuthUser.mockResolvedValue({ userId: 'user-owner' });
+    mockGetUserScopedDb.mockResolvedValue({
+      db: { query: mockQuery },
+      userId: 'user-owner',
+      organizationId: null,
+    });
     mockResolveActiveOrganizationId.mockResolvedValue(null);
     mockQuery.mockResolvedValue([]);
   });
 
   it('returns 401 when unauthenticated and never queries the database', async () => {
-    mockGetClerkAuthUser.mockRejectedValue(createError.unauthorized());
+    mockGetUserScopedDb.mockRejectedValue(createError.unauthorized());
     const res = await GET(makeRequest());
     expect(res.status).toBe(401);
     expect(mockQuery).not.toHaveBeenCalled();
