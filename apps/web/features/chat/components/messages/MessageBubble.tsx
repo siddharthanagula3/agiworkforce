@@ -399,6 +399,8 @@ interface Message {
     isSynthesis?: boolean;
     searchResults?: SearchResponse | SearchResult[];
     isSearching?: boolean;
+    /** True when this turn's request had web search on (see useChatStream). */
+    webSearchRequested?: boolean;
     tools?: ToolEntry[];
     /** Canonical Cloud activity spine; preferred over legacy `tools`. */
     agentActivity?: AgentActivityState;
@@ -1398,6 +1400,22 @@ const MessageBubbleComponent = function MessageBubble({
     [cleanedContent, citationsByMarker, searchSources],
   );
 
+  /**
+   * Web search was on for this turn (see `webSearchRequested`, stamped in
+   * useChatStream at send time) and the turn ended with zero sources: a
+   * search or fetch tool failed, or grounding never returned anything. The
+   * model still wrote an answer, so nothing else here flags that it came
+   * from the model's own knowledge rather than a live search — this is the
+   * only signal the reader gets.
+   */
+  const showNoSearchResultsNotice = useMemo(() => {
+    if (isUser || message.isStreaming) return false;
+    if (message.metadata?.webSearchRequested !== true) return false;
+    if (producedNoVisibleOutput) return false;
+    if (hasStreamError({ metadata: message.metadata })) return false;
+    return searchSources.length === 0;
+  }, [isUser, message.isStreaming, message.metadata, producedNoVisibleOutput, searchSources]);
+
   const setResearchSources = useResearchPanelStore((s) => s.setSources);
   useEffect(() => {
     if (!isUser && searchSources.length > 0) {
@@ -1502,7 +1520,14 @@ const MessageBubbleComponent = function MessageBubble({
           {!isUser && canonicalActivity && (
             <div className="mb-3">
               <AgentActivityTimeline
+                // `defaultExpanded` only seeds AgentActivityTimeline's own expand
+                // state on mount -- the notice condition below only becomes true
+                // once streaming ends, long after this component already mounted
+                // collapsed. Keying on it forces the one remount that lets the
+                // failed-tool row start open instead of needing a click.
+                key={showNoSearchResultsNotice ? `${message.id}-no-sources` : message.id}
                 activity={canonicalActivity}
+                defaultExpanded={showNoSearchResultsNotice}
                 onApprove={resolveToolApproval ? handleApproveTool : undefined}
                 onReject={resolveToolApproval ? handleRejectTool : undefined}
                 isApprovalExpired={() => approvalTurnExpired}
@@ -2219,6 +2244,26 @@ const MessageBubbleComponent = function MessageBubble({
                 cited={citedSources}
                 more={moreSources}
                 query={searchQuery}
+              />
+            </div>
+          )}
+
+          {showNoSearchResultsNotice && (
+            <div className="mt-2">
+              <TranscriptNotice
+                tone="neutral"
+                icon={CircleAlert}
+                message="Web search didn't return results for this turn, so the answer relies on the model's own knowledge."
+                action={
+                  onRegenerate
+                    ? {
+                        label: 'Retry',
+                        ariaLabel: 'Retry this response with web search',
+                        icon: RefreshCw,
+                        onClick: () => onRegenerate(message.id),
+                      }
+                    : undefined
+                }
               />
             </div>
           )}

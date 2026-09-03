@@ -109,7 +109,11 @@ import {
   humanizeAgentEventEnvelope,
   isTerminalAgentEventEnvelope,
 } from '@/features/chat/lib/agent-activity-notice';
-import { repairContinuationSeam, SEAM_INSPECTION_WINDOW } from '@agiworkforce/unified-chat';
+import {
+  hasCanonicalToolActivity,
+  repairContinuationSeam,
+  SEAM_INSPECTION_WINDOW,
+} from '@agiworkforce/unified-chat';
 import { parseQualifiedMcpToolName } from '@/features/connectors/lib/mcp-tool-name';
 import { useToolPermissionsStore } from '@/features/connectors/stores/tool-permissions-store';
 import { networkErrorMessage, toUserMessage } from '@/lib/user-error-message';
@@ -864,6 +868,70 @@ interface ConsumeStreamContext {
   onRunHandle?: (handle: ManagedCloudAgentRunHandle | null) => void;
 }
 
+/**
+ * A finished assistant turn that produced nothing: no text, no tool call, no
+ * error. Mirrors the render-time "no visible output" check in MessageBubble
+ * (`producedNoVisibleOutput`) -- the card that turn falls through to if the
+ * retry this drives also comes back empty -- so both use the same definition
+ * of empty and the retry never fires on a turn the UI wouldn't otherwise flag.
+ */
+function isEmptyAssistantTurn(message: Message | undefined | null): boolean {
+  if (!message || message.role !== 'assistant') return false;
+  if (message.isStreaming || message.error) return false;
+  const content = message.content.replace(/[\u200B\uFEFF]/g, '').trim();
+  if (content.length > 0) return false;
+  if ((message.attachments?.length ?? 0) > 0) return false;
+  const meta = message.metadata;
+  if (!meta) return true;
+  if (meta.streamError) return false;
+  if ((meta.tools?.length ?? 0) > 0) return false;
+  if (hasCanonicalToolActivity(meta.agentActivity)) return false;
+  return !(
+    meta.imageUrl ||
+    meta.videoUrl ||
+    meta.videoStatus ||
+    meta.documentData ||
+    meta.generatedFile ||
+    meta.artifactManifest ||
+    meta.computeSession ||
+    meta.codeExecutionResult ||
+    meta.isExecutingCode ||
+    (meta.interactiveCards?.length ?? 0) > 0 ||
+    meta.paywall
+  );
+}
+
+/**
+ * Resets the assistant placeholder for one silent retry of an empty turn
+ * (see isEmptyAssistantTurn). The activity label reads "Retrying", never the
+ * normal starting summary -- a turn that quietly failed once and is being
+ * resent gets a truthful state, not a fresh-looking progress indicator.
+ */
+function beginEmptyTurnRetry(
+  conversationId: string,
+  assistantMessageId: string,
+  currentMetadata: MessageMetadata | undefined,
+  updateMessage: (id: string, updates: Partial<Message>, conversationId?: string) => void,
+): void {
+  updateMessage(
+    assistantMessageId,
+    {
+      content: '',
+      isStreaming: true,
+      metadata: {
+        ...(currentMetadata?.webSearchRequested ? { webSearchRequested: true } : {}),
+        agentActivity: startAgentActivityLocally({
+          sessionId: conversationId,
+          turnId: assistantMessageId,
+          summary: 'Retrying',
+          startedAtMs: Date.now(),
+        }),
+      },
+    },
+    conversationId,
+  );
+}
+
 async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<StreamOutcome> {
   const {
     response,
@@ -927,6 +995,10 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
     ctx.assistantMessageId,
   )?.metadata;
   const seedMetadata = ctx.seedContent !== undefined ? liveMessageMetadata : undefined;
+  // Stamped on the assistant placeholder at send time (see sendMessage); read here
+  // once, up front, because buildAssistantMetadata rebuilds metadata from scratch
+  // and would otherwise drop it on the final persist.
+  const webSearchRequestedForTurn = liveMessageMetadata?.webSearchRequested === true;
   const interactiveCardsResumed = seedMetadata?.interactiveCardsResumed;
   let currentSearchResults: MessageMetadata['searchResults'] = seedMetadata?.searchResults;
   let currentCodeExecutionResult: MessageMetadata['codeExecutionResult'] =
@@ -1343,6 +1415,9 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
     }
     if (hasWebSearchSources(currentSearchResults)) {
       metadata.searchResults = currentSearchResults;
+    }
+    if (webSearchRequestedForTurn) {
+      metadata.webSearchRequested = true;
     }
     if (currentCodeExecutionResult) {
       metadata.codeExecutionResult = currentCodeExecutionResult;
@@ -2348,6 +2423,7 @@ export function useChatStream(): UseChatStreamReturn {
         isStreaming: true,
         ...(assistantParentId ? { parentId: assistantParentId } : {}),
         metadata: {
+          ...(options.webSearch ? { webSearchRequested: true } : {}),
           agentActivity: startAgentActivityLocally({
             sessionId: conversationId,
             turnId: assistantMessageId,
@@ -2445,160 +2521,186 @@ export function useChatStream(): UseChatStreamReturn {
         reportTurnCommitted();
       }
 
+      let retriedEmptyTurn = false;
       try {
-        const currentMessages = readConversationMessages(conversationId);
+        for (;;) {
+          const currentMessages = readConversationMessages(conversationId);
 
-        const apiMessages: ApiMessage[] = currentMessages
-          .filter((m) => m.id !== assistantMessageId)
-          .flatMap((m) => {
-            const turn: ApiMessage = { role: m.role, content: buildApiMessageContent(m) };
-            const settled = settledInteractiveCardTurn(m);
-            return settled ? [turn, settled] : [turn];
-          });
+          const apiMessages: ApiMessage[] = currentMessages
+            .filter((m) => m.id !== assistantMessageId)
+            .flatMap((m) => {
+              const turn: ApiMessage = { role: m.role, content: buildApiMessageContent(m) };
+              const settled = settledInteractiveCardTurn(m);
+              return settled ? [turn, settled] : [turn];
+            });
 
-        if (options.styleInstruction) {
-          apiMessages.unshift({ role: 'system', content: options.styleInstruction });
-        } else if (options.styleMode && options.styleMode !== 'normal') {
-          const styleInstruction = STYLE_SYSTEM_INSTRUCTIONS[options.styleMode];
-          if (styleInstruction) {
-            apiMessages.unshift({ role: 'system', content: styleInstruction });
+          if (options.styleInstruction) {
+            apiMessages.unshift({ role: 'system', content: options.styleInstruction });
+          } else if (options.styleMode && options.styleMode !== 'normal') {
+            const styleInstruction = STYLE_SYSTEM_INSTRUCTIONS[options.styleMode];
+            if (styleInstruction) {
+              apiMessages.unshift({ role: 'system', content: styleInstruction });
+            }
           }
-        }
 
-        const headers = await addCsrfHeaders({
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${authToken}`,
-          'X-AGI-Surface': 'web',
-          'Idempotency-Key': createManagedChatIdempotencyKey({
-            surface: 'web',
-            purpose: 'send',
-            operationId: assistantMessageId,
-          }),
-        });
-        const thinkingState = useThinkingStore.getState();
-        const requestedThinking = options.thinkingEnabled ?? thinkingState.enabled;
-        const selectedModelMetadata = getModelMetadataById(model);
-        const modelCanThink = selectedModelMetadata?.capabilities.thinking ?? true;
-        const thinkingEnabled = modelCanThink ? requestedThinking : undefined;
-        const thinkingEffort = options.thinkingEffort ?? thinkingState.effort;
-        const reasoningRequest = selectedModelMetadata?.reasoning?.request;
-        const supportsEffort = selectedModelMetadata
-          ? Boolean(reasoningRequest?.effortPath || reasoningRequest?.responsesEffortPath)
-          : true;
-        const resolvedEffort = selectedModelMetadata
-          ? resolveModelEffort(model, thinkingEffort)
-          : thinkingEffort;
-        const sendsEffortWithoutThinking =
-          selectedModelMetadata?.reasoning?.control === 'effort_levels';
-        const response = await fetch('/api/llm/v1/chat/completions', {
-          method: 'POST',
-          headers,
-          body: JSON.stringify({
-            model,
-            messages: apiMessages,
-            conversation_id: conversationId,
-            assistant_message_id: assistantMessageId,
-            stream: true,
-            [INTERACTIVE_CARD_REQUEST_KEY]: WEB_INTERACTIVE_CARD_CAPABILITY,
-            temperature: options.temperature,
-            max_tokens: options.maxTokens,
-            web_search: options.webSearch || options.research || undefined,
-            web_fetch: options.webFetch || undefined,
-            research: options.research || undefined,
-            research_resume:
-              options.research && options.researchResume
+          const headers = await addCsrfHeaders({
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${authToken}`,
+            'X-AGI-Surface': 'web',
+            'Idempotency-Key': createManagedChatIdempotencyKey({
+              surface: 'web',
+              purpose: 'send',
+              operationId: retriedEmptyTurn ? `${assistantMessageId}-retry` : assistantMessageId,
+            }),
+          });
+          const thinkingState = useThinkingStore.getState();
+          const requestedThinking = options.thinkingEnabled ?? thinkingState.enabled;
+          const selectedModelMetadata = getModelMetadataById(model);
+          const modelCanThink = selectedModelMetadata?.capabilities.thinking ?? true;
+          const thinkingEnabled = modelCanThink ? requestedThinking : undefined;
+          const thinkingEffort = options.thinkingEffort ?? thinkingState.effort;
+          const reasoningRequest = selectedModelMetadata?.reasoning?.request;
+          const supportsEffort = selectedModelMetadata
+            ? Boolean(reasoningRequest?.effortPath || reasoningRequest?.responsesEffortPath)
+            : true;
+          const resolvedEffort = selectedModelMetadata
+            ? resolveModelEffort(model, thinkingEffort)
+            : thinkingEffort;
+          const sendsEffortWithoutThinking =
+            selectedModelMetadata?.reasoning?.control === 'effort_levels';
+          const response = await fetch('/api/llm/v1/chat/completions', {
+            method: 'POST',
+            headers,
+            body: JSON.stringify({
+              model,
+              messages: apiMessages,
+              conversation_id: conversationId,
+              assistant_message_id: assistantMessageId,
+              stream: true,
+              [INTERACTIVE_CARD_REQUEST_KEY]: WEB_INTERACTIVE_CARD_CAPABILITY,
+              temperature: options.temperature,
+              max_tokens: options.maxTokens,
+              web_search: options.webSearch || options.research || undefined,
+              web_fetch: options.webFetch || undefined,
+              research: options.research || undefined,
+              research_resume:
+                options.research && options.researchResume
+                  ? {
+                      sources: options.researchResume.sources,
+                      steps: options.researchResume.steps,
+                      ...(options.researchResume.approvedSteps?.length
+                        ? { approved_steps: options.researchResume.approvedSteps }
+                        : {}),
+                    }
+                  : undefined,
+              code_execution: options.codeExecution || undefined,
+              office_creation: options.officeCreation || undefined,
+              skill_name: options.skillName,
+              mcp_context: options.mcpContext
                 ? {
-                    sources: options.researchResume.sources,
-                    steps: options.researchResume.steps,
-                    ...(options.researchResume.approvedSteps?.length
-                      ? { approved_steps: options.researchResume.approvedSteps }
+                    ...(options.mcpContext.prompt ? { prompt: options.mcpContext.prompt } : {}),
+                    ...(options.mcpContext.resources
+                      ? {
+                          resources: options.mcpContext.resources.map(({ connectorId, uri }) => ({
+                            connectorId,
+                            uri,
+                          })),
+                        }
                       : {}),
                   }
                 : undefined,
-            code_execution: options.codeExecution || undefined,
-            office_creation: options.officeCreation || undefined,
-            skill_name: options.skillName,
-            mcp_context: options.mcpContext
-              ? {
-                  ...(options.mcpContext.prompt ? { prompt: options.mcpContext.prompt } : {}),
-                  ...(options.mcpContext.resources
-                    ? {
-                        resources: options.mcpContext.resources.map(({ connectorId, uri }) => ({
-                          connectorId,
-                          uri,
-                        })),
-                      }
-                    : {}),
-                }
-              : undefined,
-            work_mode: options.workMode,
-            agi_work_goal: options.workMode === 'agiwork' ? options.agiWorkGoal : undefined,
-            thinking_mode: thinkingEnabled,
-            effort:
-              supportsEffort && resolvedEffort && (thinkingEnabled || sendsEffortWithoutThinking)
-                ? resolvedEffort
-                : undefined,
-            client_timezone: getBrowserTimeZone(),
-            use_prompt_cache: true,
-          }),
-          signal: abortController.signal,
-        });
-
-        if (!response.ok) {
-          const errorData = await response.json().catch(() => ({}));
-          const { message, code, recovery, retryAt } = readChatApiErrorPayload(
-            errorData,
-            `Request failed: ${response.status}`,
-          );
-          throw new ChatApiError(message, {
-            code,
-            status: response.status,
-            resetAt: readErrorResetAt(errorData, response),
-            ...(recovery ? { recovery } : {}),
-            ...(retryAt ? { retryAt } : {}),
+              work_mode: options.workMode,
+              agi_work_goal: options.workMode === 'agiwork' ? options.agiWorkGoal : undefined,
+              thinking_mode: thinkingEnabled,
+              effort:
+                supportsEffort && resolvedEffort && (thinkingEnabled || sendsEffortWithoutThinking)
+                  ? resolvedEffort
+                  : undefined,
+              client_timezone: getBrowserTimeZone(),
+              use_prompt_cache: true,
+            }),
+            signal: abortController.signal,
           });
-        }
 
-        const resolvedModel = response.headers.get('X-AGI-Resolved-Model')?.trim() || model;
-        if (resolvedModel !== model) {
-          updateMessage(assistantMessageId, { model: resolvedModel }, conversationId);
-        }
-
-        const outcome = await consumeAssistantStream({
-          response,
-          assistantMessageId,
-          model: resolvedModel,
-          conversationId,
-          isTemporaryConversation,
-          getAuthToken,
-          ...(assistantParentId ? { assistantParentId } : {}),
-          onRunHandle: (handle) => {
-            if (handle) {
-              activeRunsRef.current.set(conversationId, { ...handle, assistantMessageId });
-            } else {
-              activeRunsRef.current.delete(conversationId);
-            }
-          },
-        });
-
-        if (outcome.suspended && outcome.pendingCalls.length > 0) {
-          if (!outcome.runHandle) {
-            throw new Error('The managed agent did not return a durable run handle.');
+          if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            const { message, code, recovery, retryAt } = readChatApiErrorPayload(
+              errorData,
+              `Request failed: ${response.status}`,
+            );
+            throw new ChatApiError(message, {
+              code,
+              status: response.status,
+              resetAt: readErrorResetAt(errorData, response),
+              ...(recovery ? { recovery } : {}),
+              ...(retryAt ? { retryAt } : {}),
+            });
           }
-          pendingTurns.set(assistantMessageId, {
-            runId: outcome.runHandle.runId,
-            model,
+
+          const resolvedModel = response.headers.get('X-AGI-Resolved-Model')?.trim() || model;
+          if (resolvedModel !== model) {
+            updateMessage(assistantMessageId, { model: resolvedModel }, conversationId);
+          }
+
+          const outcome = await consumeAssistantStream({
+            response,
+            assistantMessageId,
+            model: resolvedModel,
             conversationId,
             isTemporaryConversation,
-            calls: outcome.pendingCalls,
-            decisions: new Map(),
-            resolving: false,
+            getAuthToken,
+            ...(assistantParentId ? { assistantParentId } : {}),
+            onRunHandle: (handle) => {
+              if (handle) {
+                activeRunsRef.current.set(conversationId, { ...handle, assistantMessageId });
+              } else {
+                activeRunsRef.current.delete(conversationId);
+              }
+            },
           });
-          autoResolvePendingApprovals(
-            assistantMessageId,
-            outcome.pendingCalls,
-            resolveToolApproval,
-          );
+
+          if (outcome.suspended && outcome.pendingCalls.length > 0) {
+            if (!outcome.runHandle) {
+              throw new Error('The managed agent did not return a durable run handle.');
+            }
+            pendingTurns.set(assistantMessageId, {
+              runId: outcome.runHandle.runId,
+              model,
+              conversationId,
+              isTemporaryConversation,
+              calls: outcome.pendingCalls,
+              decisions: new Map(),
+              resolving: false,
+            });
+            autoResolvePendingApprovals(
+              assistantMessageId,
+              outcome.pendingCalls,
+              resolveToolApproval,
+            );
+            break;
+          }
+
+          // ChatGPT parity: a turn that ends with no content, no tool call and
+          // no error gets one silent retry (same request, same conversation, no
+          // duplicate user message) before the reader ever sees the "model
+          // finished without returning a response" card.
+          if (
+            !retriedEmptyTurn &&
+            isEmptyAssistantTurn(findConversationMessage(conversationId, assistantMessageId))
+          ) {
+            retriedEmptyTurn = true;
+            beginEmptyTurnRetry(
+              conversationId,
+              assistantMessageId,
+              findConversationMessage(conversationId, assistantMessageId)?.metadata,
+              updateMessage,
+            );
+            startStreaming(assistantMessageId, conversationId);
+            setLoading(true, conversationId);
+            continue;
+          }
+
+          break;
         }
       } catch (error) {
         // CAP-040: a turn interrupted by an expired session was unrecoverable.

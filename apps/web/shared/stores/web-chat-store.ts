@@ -237,6 +237,8 @@ export interface MessageMetadata {
   isSearching?: boolean;
   /** Web search results from server-managed tools */
   searchResults?: WebSearchResults;
+  /** True when this turn's request had web search on, stamped at send time. */
+  webSearchRequested?: boolean;
   /** Safe replay metadata used to regenerate a turn without storing raw skill bodies. */
   sendReplay?: SendReplayMetadata;
   /** Durable owner-scoped attachment descriptors; raw bytes stay in object storage. */
