@@ -53,6 +53,7 @@ import type {
   SettingsPlugin,
   ConnectedConnector,
 } from './types';
+import { CUSTOM_MCP_UNVERIFIED_NOTICE, isUnverifiedCustomConnector } from './types';
 import { SETTINGS_NAV_KEYWORDS } from '../settings-nav';
 import type { SettingsNavGroupResolved, SettingsNavKey } from '../settings-nav';
 import { ConnectorLogo } from './ConnectorLogo';
@@ -298,6 +299,11 @@ function ConnectorDetail({
                   <Check className="h-2.5 w-2.5 text-primary" aria-hidden="true" />
                 </span>
               )}
+              {isUnverifiedCustomConnector(connector) && (
+                <span className="shrink-0 rounded-full bg-warning-fill/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-warning-text">
+                  Unverified
+                </span>
+              )}
             </h2>
             <p className="text-xs text-muted-foreground">{connector.category}</p>
           </div>
@@ -353,6 +359,13 @@ function ConnectorDetail({
       )}
 
       <p className="text-sm leading-relaxed text-muted-foreground">{connector.description}</p>
+
+      {isUnverifiedCustomConnector(connector) && (
+        <p className="flex items-start gap-1.5 text-xs text-warning-text">
+          <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+          {CUSTOM_MCP_UNVERIFIED_NOTICE}
+        </p>
+      )}
 
       {/* Surface-supplied permission disclosure (what connecting grants, how to
           revoke). Rendered before the Details block so it is above the fold at
@@ -1508,6 +1521,11 @@ function AddCustomConnectorForm({
         </p>
       )}
 
+      <p className="flex items-start gap-1.5 text-xs text-warning-text">
+        <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+        {CUSTOM_MCP_UNVERIFIED_NOTICE}
+      </p>
+
       <div className="flex items-center justify-end gap-2">
         <button
           type="button"
@@ -1623,7 +1641,7 @@ function ConnectorsPanel({
         (connector) =>
           connectionById.has(connector.id) ||
           connector.canConnect === true ||
-          connector.authType === 'custom_mcp',
+          isUnverifiedCustomConnector(connector),
       ),
     [catalogConnectors, connectionById],
   );
@@ -1962,19 +1980,26 @@ function ConnectorsPanel({
                               size="sm"
                             />
                             <div className="min-w-0">
-                              <button
-                                type="button"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setDetailId(connector.id);
-                                }}
-                                className={cn(
-                                  'block min-h-6 max-w-full truncate py-0.5 text-sm font-medium text-foreground hover:underline',
-                                  FOCUS_RING,
+                              <div className="flex min-w-0 items-center gap-1.5">
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setDetailId(connector.id);
+                                  }}
+                                  className={cn(
+                                    'block min-h-6 max-w-full truncate py-0.5 text-sm font-medium text-foreground hover:underline',
+                                    FOCUS_RING,
+                                  )}
+                                >
+                                  {connector.name}
+                                </button>
+                                {isUnverifiedCustomConnector(connector) && (
+                                  <span className="shrink-0 rounded-full bg-warning-fill/10 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-warning-text">
+                                    Unverified
+                                  </span>
                                 )}
-                              >
-                                {connector.name}
-                              </button>
+                              </div>
                               <p className="truncate text-xs text-muted-foreground sm:hidden">
                                 {connector.category}
                               </p>

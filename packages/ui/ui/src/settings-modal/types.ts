@@ -71,6 +71,17 @@ export interface CustomConnectorInput {
   authToken?: string;
 }
 
+export const CUSTOM_MCP_AUTH_TYPE = 'custom_mcp';
+
+export const CUSTOM_MCP_UNVERIFIED_NOTICE =
+  'Added by URL. AGI has not reviewed this server; it can read what you send it and may return instructions to the assistant.';
+
+export function isUnverifiedCustomConnector(
+  connector: Pick<SettingsConnector, 'authType'>,
+): boolean {
+  return connector.authType === CUSTOM_MCP_AUTH_TYPE;
+}
+
 export interface SettingsDataAdapter {
   connectors?: SettingsConnector[];
   connectorsLoading?: boolean;
