@@ -816,6 +816,46 @@
         ]
       }
     },
+    "open_router/gpt-5.6-sol": {
+      "modelKey": "gpt-5.6-sol",
+      "provider": "open_router",
+      "providerModelId": "openai/gpt-5.6-sol",
+      "harnessId": "open-router/chat-completions",
+      "trustModes": ["byok"],
+      "availability": "live",
+      "selectable": true,
+      "isDefault": false,
+      "cacheClass": "provider_implicit_prompt_cache",
+      "commercialStatus": "authorized_marketplace",
+      "pricing": {
+        "currency": "USD",
+        "unit": "per_million_tokens",
+        "inputPerMillion": 2,
+        "outputPerMillion": 10,
+        "cacheReadPerMillion": 0.2,
+        "cacheWritePerMillion": 2.5
+      }
+    },
+    "vercel_gateway/gpt-5.6-sol": {
+      "modelKey": "gpt-5.6-sol",
+      "provider": "vercel_gateway",
+      "providerModelId": "openai/gpt-5.6-sol",
+      "harnessId": "vercel_gateway/chat-completions",
+      "trustModes": ["byok"],
+      "availability": "live",
+      "selectable": true,
+      "isDefault": false,
+      "cacheClass": "provider_implicit_prompt_cache",
+      "commercialStatus": "experimental_only",
+      "pricing": {
+        "currency": "USD",
+        "unit": "per_million_tokens",
+        "inputPerMillion": 2,
+        "outputPerMillion": 10,
+        "cacheReadPerMillion": 0.2,
+        "cacheWritePerMillion": 2.5
+      }
+    },
     "openai/gpt-5.6-terra": {
       "modelKey": "gpt-5.6-terra",
       "provider": "openai",
@@ -843,6 +883,46 @@
             "cacheWritePerMillion": 5
           }
         ]
+      }
+    },
+    "open_router/gpt-5.6-terra": {
+      "modelKey": "gpt-5.6-terra",
+      "provider": "open_router",
+      "providerModelId": "openai/gpt-5.6-terra",
+      "harnessId": "open-router/chat-completions",
+      "trustModes": ["byok"],
+      "availability": "live",
+      "selectable": true,
+      "isDefault": false,
+      "cacheClass": "provider_implicit_prompt_cache",
+      "commercialStatus": "authorized_marketplace",
+      "pricing": {
+        "currency": "USD",
+        "unit": "per_million_tokens",
+        "inputPerMillion": 2,
+        "outputPerMillion": 12,
+        "cacheReadPerMillion": 0.2,
+        "cacheWritePerMillion": 2.5
+      }
+    },
+    "vercel_gateway/gpt-5.6-terra": {
+      "modelKey": "gpt-5.6-terra",
+      "provider": "vercel_gateway",
+      "providerModelId": "openai/gpt-5.6-terra",
+      "harnessId": "vercel_gateway/chat-completions",
+      "trustModes": ["byok"],
+      "availability": "live",
+      "selectable": true,
+      "isDefault": false,
+      "cacheClass": "provider_implicit_prompt_cache",
+      "commercialStatus": "experimental_only",
+      "pricing": {
+        "currency": "USD",
+        "unit": "per_million_tokens",
+        "inputPerMillion": 2,
+        "outputPerMillion": 12,
+        "cacheReadPerMillion": 0.2,
+        "cacheWritePerMillion": 2.5
       }
     },
     "openai/gpt-5.6-luna": {
@@ -874,6 +954,46 @@
         ]
       }
     },
+    "open_router/gpt-5.6-luna": {
+      "modelKey": "gpt-5.6-luna",
+      "provider": "open_router",
+      "providerModelId": "openai/gpt-5.6-luna",
+      "harnessId": "open-router/chat-completions",
+      "trustModes": ["byok"],
+      "availability": "live",
+      "selectable": true,
+      "isDefault": false,
+      "cacheClass": "provider_implicit_prompt_cache",
+      "commercialStatus": "authorized_marketplace",
+      "pricing": {
+        "currency": "USD",
+        "unit": "per_million_tokens",
+        "inputPerMillion": 0.2,
+        "outputPerMillion": 1.2,
+        "cacheReadPerMillion": 0.02,
+        "cacheWritePerMillion": 0.25
+      }
+    },
+    "vercel_gateway/gpt-5.6-luna": {
+      "modelKey": "gpt-5.6-luna",
+      "provider": "vercel_gateway",
+      "providerModelId": "openai/gpt-5.6-luna",
+      "harnessId": "vercel_gateway/chat-completions",
+      "trustModes": ["byok"],
+      "availability": "live",
+      "selectable": true,
+      "isDefault": false,
+      "cacheClass": "provider_implicit_prompt_cache",
+      "commercialStatus": "experimental_only",
+      "pricing": {
+        "currency": "USD",
+        "unit": "per_million_tokens",
+        "inputPerMillion": 0.2,
+        "outputPerMillion": 1.2,
+        "cacheReadPerMillion": 0.02,
+        "cacheWritePerMillion": 0.25
+      }
+    },
     "anthropic/claude-fable-5": {
       "modelKey": "claude-fable-5",
       "provider": "anthropic",
@@ -895,6 +1015,46 @@
         "cacheWrite1hPerMillion": 20
       }
     },
+    "open_router/claude-fable-5": {
+      "modelKey": "claude-fable-5",
+      "provider": "open_router",
+      "providerModelId": "anthropic/claude-fable-5",
+      "harnessId": "open-router/chat-completions",
+      "trustModes": ["byok"],
+      "availability": "live",
+      "selectable": true,
+      "isDefault": false,
+      "cacheClass": "gateway_prompt_cache",
+      "commercialStatus": "authorized_marketplace",
+      "pricing": {
+        "currency": "USD",
+        "unit": "per_million_tokens",
+        "inputPerMillion": 10,
+        "outputPerMillion": 50,
+        "cacheReadPerMillion": 1,
+        "cacheWritePerMillion": 12.5
+      }
+    },
+    "vercel_gateway/claude-fable-5": {
+      "modelKey": "claude-fable-5",
+      "provider": "vercel_gateway",
+      "providerModelId": "anthropic/claude-fable-5",
+      "harnessId": "vercel_gateway/chat-completions",
+      "trustModes": ["byok"],
+      "availability": "live",
+      "selectable": true,
+      "isDefault": false,
+      "cacheClass": "gateway_prompt_cache",
+      "commercialStatus": "experimental_only",
+      "pricing": {
+        "currency": "USD",
+        "unit": "per_million_tokens",
+        "inputPerMillion": 10,
+        "outputPerMillion": 50,
+        "cacheReadPerMillion": 1,
+        "cacheWritePerMillion": 12.5
+      }
+    },
     "anthropic/claude-opus-5": {
       "modelKey": "claude-opus-5",
       "provider": "anthropic",
@@ -914,6 +1074,46 @@
         "cacheReadPerMillion": 0.5,
         "cacheWritePerMillion": 6.25,
         "cacheWrite1hPerMillion": 10
+      }
+    },
+    "open_router/claude-opus-5": {
+      "modelKey": "claude-opus-5",
+      "provider": "open_router",
+      "providerModelId": "anthropic/claude-opus-5",
+      "harnessId": "open-router/chat-completions",
+      "trustModes": ["byok"],
+      "availability": "live",
+      "selectable": true,
+      "isDefault": false,
+      "cacheClass": "gateway_prompt_cache",
+      "commercialStatus": "authorized_marketplace",
+      "pricing": {
+        "currency": "USD",
+        "unit": "per_million_tokens",
+        "inputPerMillion": 5,
+        "outputPerMillion": 25,
+        "cacheReadPerMillion": 0.5,
+        "cacheWritePerMillion": 6.25
+      }
+    },
+    "vercel_gateway/claude-opus-5": {
+      "modelKey": "claude-opus-5",
+      "provider": "vercel_gateway",
+      "providerModelId": "anthropic/claude-opus-5",
+      "harnessId": "vercel_gateway/chat-completions",
+      "trustModes": ["byok"],
+      "availability": "live",
+      "selectable": true,
+      "isDefault": false,
+      "cacheClass": "gateway_prompt_cache",
+      "commercialStatus": "experimental_only",
+      "pricing": {
+        "currency": "USD",
+        "unit": "per_million_tokens",
+        "inputPerMillion": 5,
+        "outputPerMillion": 25,
+        "cacheReadPerMillion": 0.5,
+        "cacheWritePerMillion": 6.25
       }
     },
     "anthropic/claude-sonnet-5": {
@@ -951,10 +1151,30 @@
       "pricing": {
         "currency": "USD",
         "unit": "per_million_tokens",
-        "inputPerMillion": 3,
-        "outputPerMillion": 15,
-        "cacheReadPerMillion": 0.3,
-        "cacheWritePerMillion": 3.75
+        "inputPerMillion": 2,
+        "outputPerMillion": 10,
+        "cacheReadPerMillion": 0.2,
+        "cacheWritePerMillion": 2.5
+      }
+    },
+    "vercel_gateway/claude-sonnet-5": {
+      "modelKey": "claude-sonnet-5",
+      "provider": "vercel_gateway",
+      "providerModelId": "anthropic/claude-sonnet-5",
+      "harnessId": "vercel_gateway/chat-completions",
+      "trustModes": ["byok"],
+      "availability": "live",
+      "selectable": true,
+      "isDefault": false,
+      "cacheClass": "gateway_prompt_cache",
+      "commercialStatus": "experimental_only",
+      "pricing": {
+        "currency": "USD",
+        "unit": "per_million_tokens",
+        "inputPerMillion": 2,
+        "outputPerMillion": 10,
+        "cacheReadPerMillion": 0.2,
+        "cacheWritePerMillion": 2.5
       }
     },
     "google/gemini-embedding-2": {
@@ -994,6 +1214,46 @@
         "cacheReadPerMillion": 0.2
       }
     },
+    "open_router/gemini-3.1-pro-preview": {
+      "modelKey": "gemini-3.1-pro-preview",
+      "provider": "open_router",
+      "providerModelId": "google/gemini-3.1-pro-preview",
+      "harnessId": "open-router/chat-completions",
+      "trustModes": ["byok"],
+      "availability": "live",
+      "selectable": true,
+      "isDefault": false,
+      "cacheClass": "provider_implicit_prompt_cache",
+      "commercialStatus": "authorized_marketplace",
+      "pricing": {
+        "currency": "USD",
+        "unit": "per_million_tokens",
+        "inputPerMillion": 2,
+        "outputPerMillion": 12,
+        "cacheReadPerMillion": 0.2,
+        "cacheWritePerMillion": 0.375
+      }
+    },
+    "vercel_gateway/gemini-3.1-pro-preview": {
+      "modelKey": "gemini-3.1-pro-preview",
+      "provider": "vercel_gateway",
+      "providerModelId": "google/gemini-3.1-pro-preview",
+      "harnessId": "vercel_gateway/chat-completions",
+      "trustModes": ["byok"],
+      "availability": "live",
+      "selectable": true,
+      "isDefault": false,
+      "cacheClass": "provider_implicit_prompt_cache",
+      "commercialStatus": "experimental_only",
+      "pricing": {
+        "currency": "USD",
+        "unit": "per_million_tokens",
+        "inputPerMillion": 2,
+        "outputPerMillion": 12,
+        "cacheReadPerMillion": 0.2,
+        "cacheWritePerMillion": 0
+      }
+    },
     "google/gemini-3.5-flash-lite": {
       "modelKey": "gemini-3.5-flash-lite",
       "provider": "google",
@@ -1011,6 +1271,46 @@
         "inputPerMillion": 0.3,
         "outputPerMillion": 2.5,
         "cacheReadPerMillion": 0.03
+      }
+    },
+    "open_router/gemini-3.5-flash-lite": {
+      "modelKey": "gemini-3.5-flash-lite",
+      "provider": "open_router",
+      "providerModelId": "google/gemini-3.5-flash-lite",
+      "harnessId": "open-router/chat-completions",
+      "trustModes": ["byok"],
+      "availability": "live",
+      "selectable": true,
+      "isDefault": false,
+      "cacheClass": "provider_implicit_prompt_cache",
+      "commercialStatus": "authorized_marketplace",
+      "pricing": {
+        "currency": "USD",
+        "unit": "per_million_tokens",
+        "inputPerMillion": 0.3,
+        "outputPerMillion": 2.5,
+        "cacheReadPerMillion": 0.03,
+        "cacheWritePerMillion": 0.0833
+      }
+    },
+    "vercel_gateway/gemini-3.5-flash-lite": {
+      "modelKey": "gemini-3.5-flash-lite",
+      "provider": "vercel_gateway",
+      "providerModelId": "google/gemini-3.5-flash-lite",
+      "harnessId": "vercel_gateway/chat-completions",
+      "trustModes": ["byok"],
+      "availability": "live",
+      "selectable": true,
+      "isDefault": false,
+      "cacheClass": "provider_implicit_prompt_cache",
+      "commercialStatus": "experimental_only",
+      "pricing": {
+        "currency": "USD",
+        "unit": "per_million_tokens",
+        "inputPerMillion": 0.3,
+        "outputPerMillion": 2.5,
+        "cacheReadPerMillion": 0.03,
+        "cacheWritePerMillion": 0
       }
     },
     "google/gemini-3.1-flash-image": {
@@ -1051,6 +1351,46 @@
         "cacheReadPerMillion": 0.014
       }
     },
+    "open_router/deepseek-v4-flash": {
+      "modelKey": "deepseek-v4-flash",
+      "provider": "open_router",
+      "providerModelId": "deepseek/deepseek-v4-flash",
+      "harnessId": "open-router/chat-completions",
+      "trustModes": ["byok"],
+      "availability": "live",
+      "selectable": true,
+      "isDefault": false,
+      "cacheClass": "provider_implicit_prompt_cache",
+      "commercialStatus": "authorized_marketplace",
+      "pricing": {
+        "currency": "USD",
+        "unit": "per_million_tokens",
+        "inputPerMillion": 0.0886,
+        "outputPerMillion": 0.1772,
+        "cacheReadPerMillion": 0.0177,
+        "cacheWritePerMillion": 0.0886
+      }
+    },
+    "vercel_gateway/deepseek-v4-flash": {
+      "modelKey": "deepseek-v4-flash",
+      "provider": "vercel_gateway",
+      "providerModelId": "deepseek/deepseek-v4-flash",
+      "harnessId": "vercel_gateway/chat-completions",
+      "trustModes": ["byok"],
+      "availability": "live",
+      "selectable": true,
+      "isDefault": false,
+      "cacheClass": "provider_implicit_prompt_cache",
+      "commercialStatus": "experimental_only",
+      "pricing": {
+        "currency": "USD",
+        "unit": "per_million_tokens",
+        "inputPerMillion": 0.13,
+        "outputPerMillion": 0.26,
+        "cacheReadPerMillion": 0.028,
+        "cacheWritePerMillion": 0
+      }
+    },
     "deepseek/deepseek-v4-pro": {
       "modelKey": "deepseek-v4-pro",
       "provider": "deepseek",
@@ -1068,6 +1408,46 @@
         "inputPerMillion": 1.32,
         "outputPerMillion": 3.96,
         "cacheReadPerMillion": 0.044
+      }
+    },
+    "open_router/deepseek-v4-pro": {
+      "modelKey": "deepseek-v4-pro",
+      "provider": "open_router",
+      "providerModelId": "deepseek/deepseek-v4-pro",
+      "harnessId": "open-router/chat-completions",
+      "trustModes": ["byok"],
+      "availability": "live",
+      "selectable": true,
+      "isDefault": false,
+      "cacheClass": "provider_implicit_prompt_cache",
+      "commercialStatus": "authorized_marketplace",
+      "pricing": {
+        "currency": "USD",
+        "unit": "per_million_tokens",
+        "inputPerMillion": 1.0423,
+        "outputPerMillion": 2.0845,
+        "cacheReadPerMillion": 0.0869,
+        "cacheWritePerMillion": 1.0423
+      }
+    },
+    "vercel_gateway/deepseek-v4-pro": {
+      "modelKey": "deepseek-v4-pro",
+      "provider": "vercel_gateway",
+      "providerModelId": "deepseek/deepseek-v4-pro",
+      "harnessId": "vercel_gateway/chat-completions",
+      "trustModes": ["byok"],
+      "availability": "live",
+      "selectable": true,
+      "isDefault": false,
+      "cacheClass": "provider_implicit_prompt_cache",
+      "commercialStatus": "experimental_only",
+      "pricing": {
+        "currency": "USD",
+        "unit": "per_million_tokens",
+        "inputPerMillion": 0.66,
+        "outputPerMillion": 1.98,
+        "cacheReadPerMillion": 0.022,
+        "cacheWritePerMillion": 0
       }
     },
     "qwen/qwen-3.5-flash": {
@@ -1104,6 +1484,46 @@
             "cacheWritePerMillion": 0.215
           }
         ]
+      }
+    },
+    "open_router/qwen-3.5-flash": {
+      "modelKey": "qwen-3.5-flash",
+      "provider": "open_router",
+      "providerModelId": "qwen/qwen3.5-flash-02-23",
+      "harnessId": "open-router/chat-completions",
+      "trustModes": ["byok"],
+      "availability": "live",
+      "selectable": true,
+      "isDefault": false,
+      "cacheClass": "no_provider_cache",
+      "commercialStatus": "authorized_marketplace",
+      "pricing": {
+        "currency": "USD",
+        "unit": "per_million_tokens",
+        "inputPerMillion": 0.065,
+        "outputPerMillion": 0.26,
+        "cacheReadPerMillion": 0,
+        "cacheWritePerMillion": 0
+      }
+    },
+    "vercel_gateway/qwen-3.5-flash": {
+      "modelKey": "qwen-3.5-flash",
+      "provider": "vercel_gateway",
+      "providerModelId": "alibaba/qwen3.5-flash",
+      "harnessId": "vercel_gateway/chat-completions",
+      "trustModes": ["byok"],
+      "availability": "live",
+      "selectable": true,
+      "isDefault": false,
+      "cacheClass": "provider_implicit_prompt_cache",
+      "commercialStatus": "experimental_only",
+      "pricing": {
+        "currency": "USD",
+        "unit": "per_million_tokens",
+        "inputPerMillion": 0.1,
+        "outputPerMillion": 0.4,
+        "cacheReadPerMillion": 0.001,
+        "cacheWritePerMillion": 0.125
       }
     },
     "perplexity/sonar": {
@@ -1279,6 +1699,46 @@
         "cacheReadPerMillion": 0.075
       }
     },
+    "open_router/gemini-3.8-flash": {
+      "modelKey": "gemini-3.8-flash",
+      "provider": "open_router",
+      "providerModelId": "google/gemini-3.8-flash",
+      "harnessId": "open-router/chat-completions",
+      "trustModes": ["byok"],
+      "availability": "live",
+      "selectable": true,
+      "isDefault": false,
+      "cacheClass": "provider_implicit_prompt_cache",
+      "commercialStatus": "authorized_marketplace",
+      "pricing": {
+        "currency": "USD",
+        "unit": "per_million_tokens",
+        "inputPerMillion": 0.75,
+        "outputPerMillion": 3.75,
+        "cacheReadPerMillion": 0.075,
+        "cacheWritePerMillion": 0.0417
+      }
+    },
+    "vercel_gateway/gemini-3.8-flash": {
+      "modelKey": "gemini-3.8-flash",
+      "provider": "vercel_gateway",
+      "providerModelId": "google/gemini-3.8-flash",
+      "harnessId": "vercel_gateway/chat-completions",
+      "trustModes": ["byok"],
+      "availability": "live",
+      "selectable": true,
+      "isDefault": false,
+      "cacheClass": "provider_implicit_prompt_cache",
+      "commercialStatus": "experimental_only",
+      "pricing": {
+        "currency": "USD",
+        "unit": "per_million_tokens",
+        "inputPerMillion": 0.75,
+        "outputPerMillion": 3.75,
+        "cacheReadPerMillion": 0.075,
+        "cacheWritePerMillion": 0
+      }
+    },
     "zhipu/glm-5.3": {
       "modelKey": "glm-5.3",
       "provider": "zhipu",
@@ -1298,6 +1758,46 @@
         "cacheReadPerMillion": 0.26
       }
     },
+    "open_router/glm-5.3": {
+      "modelKey": "glm-5.3",
+      "provider": "open_router",
+      "providerModelId": "z-ai/glm-5.3",
+      "harnessId": "open-router/chat-completions",
+      "trustModes": ["byok"],
+      "availability": "live",
+      "selectable": true,
+      "isDefault": false,
+      "cacheClass": "provider_implicit_prompt_cache",
+      "commercialStatus": "authorized_marketplace",
+      "pricing": {
+        "currency": "USD",
+        "unit": "per_million_tokens",
+        "inputPerMillion": 1.4,
+        "outputPerMillion": 4.4,
+        "cacheReadPerMillion": 0.26,
+        "cacheWritePerMillion": 0
+      }
+    },
+    "vercel_gateway/glm-5.3": {
+      "modelKey": "glm-5.3",
+      "provider": "vercel_gateway",
+      "providerModelId": "zai/glm-5.3",
+      "harnessId": "vercel_gateway/chat-completions",
+      "trustModes": ["byok"],
+      "availability": "live",
+      "selectable": true,
+      "isDefault": false,
+      "cacheClass": "provider_implicit_prompt_cache",
+      "commercialStatus": "experimental_only",
+      "pricing": {
+        "currency": "USD",
+        "unit": "per_million_tokens",
+        "inputPerMillion": 0.7,
+        "outputPerMillion": 2.2,
+        "cacheReadPerMillion": 0.13,
+        "cacheWritePerMillion": 0
+      }
+    },
     "zhipu/glm-5.3-flash": {
       "modelKey": "glm-5.3-flash",
       "provider": "zhipu",
@@ -1315,6 +1815,46 @@
         "inputPerMillion": 0.075,
         "outputPerMillion": 0.25,
         "cacheReadPerMillion": 0.015
+      }
+    },
+    "open_router/glm-5.3-flash": {
+      "modelKey": "glm-5.3-flash",
+      "provider": "open_router",
+      "providerModelId": "z-ai/glm-5.3-flash",
+      "harnessId": "open-router/chat-completions",
+      "trustModes": ["byok"],
+      "availability": "live",
+      "selectable": true,
+      "isDefault": false,
+      "cacheClass": "provider_implicit_prompt_cache",
+      "commercialStatus": "authorized_marketplace",
+      "pricing": {
+        "currency": "USD",
+        "unit": "per_million_tokens",
+        "inputPerMillion": 0.075,
+        "outputPerMillion": 0.25,
+        "cacheReadPerMillion": 0.015,
+        "cacheWritePerMillion": 0
+      }
+    },
+    "vercel_gateway/glm-5.3-flash": {
+      "modelKey": "glm-5.3-flash",
+      "provider": "vercel_gateway",
+      "providerModelId": "zai/glm-5.3-flash",
+      "harnessId": "vercel_gateway/chat-completions",
+      "trustModes": ["byok"],
+      "availability": "live",
+      "selectable": true,
+      "isDefault": false,
+      "cacheClass": "provider_implicit_prompt_cache",
+      "commercialStatus": "experimental_only",
+      "pricing": {
+        "currency": "USD",
+        "unit": "per_million_tokens",
+        "inputPerMillion": 0.15,
+        "outputPerMillion": 0.5,
+        "cacheReadPerMillion": 0.03,
+        "cacheWritePerMillion": 0
       }
     },
     "qwen/qwen-3.7-plus": {
@@ -1346,6 +1886,46 @@
         ]
       }
     },
+    "open_router/qwen-3.7-plus": {
+      "modelKey": "qwen-3.7-plus",
+      "provider": "open_router",
+      "providerModelId": "qwen/qwen3.7-plus",
+      "harnessId": "open-router/chat-completions",
+      "trustModes": ["byok"],
+      "availability": "live",
+      "selectable": true,
+      "isDefault": false,
+      "cacheClass": "provider_implicit_prompt_cache",
+      "commercialStatus": "authorized_marketplace",
+      "pricing": {
+        "currency": "USD",
+        "unit": "per_million_tokens",
+        "inputPerMillion": 0.32,
+        "outputPerMillion": 1.28,
+        "cacheReadPerMillion": 0.064,
+        "cacheWritePerMillion": 0.4
+      }
+    },
+    "vercel_gateway/qwen-3.7-plus": {
+      "modelKey": "qwen-3.7-plus",
+      "provider": "vercel_gateway",
+      "providerModelId": "alibaba/qwen3.7-plus",
+      "harnessId": "vercel_gateway/chat-completions",
+      "trustModes": ["byok"],
+      "availability": "live",
+      "selectable": true,
+      "isDefault": false,
+      "cacheClass": "provider_implicit_prompt_cache",
+      "commercialStatus": "experimental_only",
+      "pricing": {
+        "currency": "USD",
+        "unit": "per_million_tokens",
+        "inputPerMillion": 0.4,
+        "outputPerMillion": 1.6,
+        "cacheReadPerMillion": 0.08,
+        "cacheWritePerMillion": 0.5
+      }
+    },
     "moonshot/kimi-k3": {
       "modelKey": "kimi-k3",
       "provider": "moonshot",
@@ -1365,6 +1945,46 @@
         "cacheReadPerMillion": 0.3
       }
     },
+    "open_router/kimi-k3": {
+      "modelKey": "kimi-k3",
+      "provider": "open_router",
+      "providerModelId": "moonshotai/kimi-k3",
+      "harnessId": "open-router/chat-completions",
+      "trustModes": ["byok"],
+      "availability": "live",
+      "selectable": true,
+      "isDefault": false,
+      "cacheClass": "provider_implicit_prompt_cache",
+      "commercialStatus": "authorized_marketplace",
+      "pricing": {
+        "currency": "USD",
+        "unit": "per_million_tokens",
+        "inputPerMillion": 3,
+        "outputPerMillion": 15,
+        "cacheReadPerMillion": 0.3,
+        "cacheWritePerMillion": 0
+      }
+    },
+    "vercel_gateway/kimi-k3": {
+      "modelKey": "kimi-k3",
+      "provider": "vercel_gateway",
+      "providerModelId": "moonshotai/kimi-k3",
+      "harnessId": "vercel_gateway/chat-completions",
+      "trustModes": ["byok"],
+      "availability": "live",
+      "selectable": true,
+      "isDefault": false,
+      "cacheClass": "provider_implicit_prompt_cache",
+      "commercialStatus": "experimental_only",
+      "pricing": {
+        "currency": "USD",
+        "unit": "per_million_tokens",
+        "inputPerMillion": 3,
+        "outputPerMillion": 15,
+        "cacheReadPerMillion": 0.3,
+        "cacheWritePerMillion": 0
+      }
+    },
     "xai/grok-4.5": {
       "modelKey": "grok-4.5",
       "provider": "xai",
@@ -1381,6 +2001,46 @@
         "unit": "per_million_tokens",
         "inputPerMillion": 2,
         "outputPerMillion": 6
+      }
+    },
+    "open_router/grok-4.5": {
+      "modelKey": "grok-4.5",
+      "provider": "open_router",
+      "providerModelId": "x-ai/grok-4.5",
+      "harnessId": "open-router/chat-completions",
+      "trustModes": ["byok"],
+      "availability": "live",
+      "selectable": true,
+      "isDefault": false,
+      "cacheClass": "provider_implicit_prompt_cache",
+      "commercialStatus": "authorized_marketplace",
+      "pricing": {
+        "currency": "USD",
+        "unit": "per_million_tokens",
+        "inputPerMillion": 2,
+        "outputPerMillion": 6,
+        "cacheReadPerMillion": 0.3,
+        "cacheWritePerMillion": 0
+      }
+    },
+    "vercel_gateway/grok-4.5": {
+      "modelKey": "grok-4.5",
+      "provider": "vercel_gateway",
+      "providerModelId": "spacexai/grok-4.5",
+      "harnessId": "vercel_gateway/chat-completions",
+      "trustModes": ["byok"],
+      "availability": "live",
+      "selectable": true,
+      "isDefault": false,
+      "cacheClass": "provider_implicit_prompt_cache",
+      "commercialStatus": "experimental_only",
+      "pricing": {
+        "currency": "USD",
+        "unit": "per_million_tokens",
+        "inputPerMillion": 2,
+        "outputPerMillion": 6,
+        "cacheReadPerMillion": 0.3,
+        "cacheWritePerMillion": 0
       }
     },
     "google/veo-3.1": {
@@ -1475,6 +2135,46 @@
         "unit": "per_million_tokens",
         "inputPerMillion": 0.3,
         "outputPerMillion": 1.2
+      }
+    },
+    "open_router/minimax-m3": {
+      "modelKey": "minimax-m3",
+      "provider": "open_router",
+      "providerModelId": "minimax/minimax-m3",
+      "harnessId": "open-router/chat-completions",
+      "trustModes": ["byok"],
+      "availability": "live",
+      "selectable": true,
+      "isDefault": false,
+      "cacheClass": "provider_implicit_prompt_cache",
+      "commercialStatus": "authorized_marketplace",
+      "pricing": {
+        "currency": "USD",
+        "unit": "per_million_tokens",
+        "inputPerMillion": 0.3,
+        "outputPerMillion": 1.2,
+        "cacheReadPerMillion": 0.06,
+        "cacheWritePerMillion": 0
+      }
+    },
+    "vercel_gateway/minimax-m3": {
+      "modelKey": "minimax-m3",
+      "provider": "vercel_gateway",
+      "providerModelId": "minimax/minimax-m3",
+      "harnessId": "vercel_gateway/chat-completions",
+      "trustModes": ["byok"],
+      "availability": "live",
+      "selectable": true,
+      "isDefault": false,
+      "cacheClass": "provider_implicit_prompt_cache",
+      "commercialStatus": "experimental_only",
+      "pricing": {
+        "currency": "USD",
+        "unit": "per_million_tokens",
+        "inputPerMillion": 0.3,
+        "outputPerMillion": 1.2,
+        "cacheReadPerMillion": 0.06,
+        "cacheWritePerMillion": 0
       }
     },
     "google/veo-3.1-lite": {
@@ -1589,6 +2289,46 @@
         "cacheReadPerMillion": 0.075
       }
     },
+    "open_router/gpt-oss-120b": {
+      "modelKey": "gpt-oss-120b",
+      "provider": "open_router",
+      "providerModelId": "openai/gpt-oss-120b",
+      "harnessId": "open-router/chat-completions",
+      "trustModes": ["byok"],
+      "availability": "live",
+      "selectable": true,
+      "isDefault": false,
+      "cacheClass": "no_provider_cache",
+      "commercialStatus": "authorized_marketplace",
+      "pricing": {
+        "currency": "USD",
+        "unit": "per_million_tokens",
+        "inputPerMillion": 0.037,
+        "outputPerMillion": 0.17,
+        "cacheReadPerMillion": 0,
+        "cacheWritePerMillion": 0
+      }
+    },
+    "vercel_gateway/gpt-oss-120b": {
+      "modelKey": "gpt-oss-120b",
+      "provider": "vercel_gateway",
+      "providerModelId": "openai/gpt-oss-120b",
+      "harnessId": "vercel_gateway/chat-completions",
+      "trustModes": ["byok"],
+      "availability": "live",
+      "selectable": true,
+      "isDefault": false,
+      "cacheClass": "no_provider_cache",
+      "commercialStatus": "experimental_only",
+      "pricing": {
+        "currency": "USD",
+        "unit": "per_million_tokens",
+        "inputPerMillion": 0.1,
+        "outputPerMillion": 0.5,
+        "cacheReadPerMillion": 0,
+        "cacheWritePerMillion": 0
+      }
+    },
     "groq/gpt-oss-20b": {
       "modelKey": "gpt-oss-20b",
       "provider": "groq",
@@ -1606,6 +2346,46 @@
         "inputPerMillion": 0.075,
         "outputPerMillion": 0.3,
         "cacheReadPerMillion": 0.0375
+      }
+    },
+    "open_router/gpt-oss-20b": {
+      "modelKey": "gpt-oss-20b",
+      "provider": "open_router",
+      "providerModelId": "openai/gpt-oss-20b",
+      "harnessId": "open-router/chat-completions",
+      "trustModes": ["byok"],
+      "availability": "live",
+      "selectable": true,
+      "isDefault": false,
+      "cacheClass": "provider_implicit_prompt_cache",
+      "commercialStatus": "authorized_marketplace",
+      "pricing": {
+        "currency": "USD",
+        "unit": "per_million_tokens",
+        "inputPerMillion": 0.03,
+        "outputPerMillion": 0.13,
+        "cacheReadPerMillion": 0.03,
+        "cacheWritePerMillion": 0
+      }
+    },
+    "vercel_gateway/gpt-oss-20b": {
+      "modelKey": "gpt-oss-20b",
+      "provider": "vercel_gateway",
+      "providerModelId": "openai/gpt-oss-20b",
+      "harnessId": "vercel_gateway/chat-completions",
+      "trustModes": ["byok"],
+      "availability": "live",
+      "selectable": true,
+      "isDefault": false,
+      "cacheClass": "no_provider_cache",
+      "commercialStatus": "experimental_only",
+      "pricing": {
+        "currency": "USD",
+        "unit": "per_million_tokens",
+        "inputPerMillion": 0.05,
+        "outputPerMillion": 0.2,
+        "cacheReadPerMillion": 0,
+        "cacheWritePerMillion": 0
       }
     }
   },
@@ -1777,6 +2557,13 @@
       "apiFamily": "media",
       "adapter": "managed-media",
       "trustModes": ["managed_cloud"],
+      "features": {}
+    },
+    "vercel_gateway/chat-completions": {
+      "provider": "vercel_gateway",
+      "apiFamily": "chat_completions",
+      "adapter": "@agiworkforce/providers-vercel-gateway",
+      "trustModes": ["byok"],
       "features": {}
     },
     "nvidia-nim/chat-completions": {
