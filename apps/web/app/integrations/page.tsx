@@ -1,16 +1,13 @@
 import { buildMetadata } from '@/lib/seo/metadata';
 import { Header } from '@shared/components/layout/Header';
-import { MarketingFooter } from '@/features/marketing/components/MarketingFooter';
 import {
   Button,
   ButtonRow,
   Eyebrow,
   Ledger,
+  MarketingFooter,
   Prose,
-  Section,
-  Stack,
 } from '@/features/marketing/components/system';
-import { FactGrid, PageHero } from '@/features/marketing/components/pages/surfaces/shared';
 import { DESKTOP_LOCAL_RUNTIMES, MARKETING, SURFACE_STATUS } from '@/lib/marketing-constants';
 
 export const metadata = buildMetadata({
@@ -20,55 +17,98 @@ export const metadata = buildMetadata({
   path: '/integrations',
 });
 
+const PATTERNS = [
+  {
+    meta: 'Tools',
+    title: 'MCP plugins',
+    body: 'Mount Model Context Protocol servers and scope their access. stdio, SSE, and streamable HTTP transports are all supported.',
+  },
+  {
+    meta: 'Bridge',
+    title: 'Native messaging bridge',
+    body: `The Chrome side panel pairs with Desktop on localhost:8787. The browser captures intent. Desktop runs the model and the tool calls. Chrome is ${SURFACE_STATUS.chrome.toLowerCase()}, not on the Chrome Web Store yet.`,
+  },
+  {
+    meta: 'Keys',
+    title: 'Provider BYOK',
+    body: 'Bring keys for Anthropic, OpenAI, Google, xAI, DeepSeek, Perplexity, Qwen, Moonshot, or Zhipu on Desktop, CLI, and VS Code. Or any OpenAI-compatible endpoint.',
+  },
+] as const;
+
 export default function IntegrationsPage() {
   return (
     <div data-design="agi" className="agi-ds-page">
       <Header />
       <main id="main-content">
-        <PageHero
-          id="agi-integrations-title"
-          eyebrow="Integrations"
-          title="Plug AGI into your stack."
-          lede="Three patterns connect AGI to the tools you already use: MCP plugins for the agent, the native messaging bridge between Chrome and Desktop, and BYOK provider keys on Desktop, CLI, and VS Code. Every connection runs behind explicit, visible permissions."
-          ctas={[
-            { href: '/apps', label: 'Browse apps and connectors' },
-            { href: '/providers', label: 'See providers', variant: 'secondary' },
-          ]}
-        />
+        <section className="agi-lp-hero" aria-labelledby="agi-integrations-title">
+          <div className="agi-ds-container agi-lp-hero-grid">
+            <div className="agi-lp-hero-copy">
+              <Eyebrow>Integrations</Eyebrow>
+              <h1 className="agi-ds-h1" id="agi-integrations-title">
+                Plug AGI <em className="agi-ds-accent">into your stack.</em>
+              </h1>
+              <Prose size="lg">
+                Three patterns connect AGI to the tools you already use: MCP plugins for the agent,
+                the native messaging bridge between Chrome and Desktop, and BYOK provider keys on
+                Desktop, CLI, and VS Code. Every connection runs behind explicit, visible
+                permissions.
+              </Prose>
+              <ButtonRow>
+                <Button href="/apps">Browse apps and connectors</Button>
+                <Button href="/providers" variant="secondary">
+                  See providers
+                </Button>
+              </ButtonRow>
+            </div>
+            <div className="agi-lp-hero-stage">
+              <div className="agi-lp-console" aria-label="What is wired today">
+                <div className="agi-lp-console-bar">
+                  <span>Integrations &middot; wired today</span>
+                </div>
+                <div className="agi-lp-console-body">
+                  <Ledger
+                    caption="Integration inventory preview"
+                    rows={[
+                      {
+                        label: 'Providers',
+                        value: `${MARKETING.providers.display} providers, BYOK on Desktop, CLI, and VS Code`,
+                      },
+                      {
+                        label: 'Local runtimes',
+                        value: `${DESKTOP_LOCAL_RUNTIMES.label} on Desktop`,
+                      },
+                      { label: 'MCP transports', value: 'stdio, SSE, streamable HTTP' },
+                    ]}
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
 
-        <Section id="patterns" labelledBy="agi-integrations-patterns-title" rule>
-          <Stack gap="loose">
-            <div>
+        <section className="agi-lp-section" aria-labelledby="agi-integrations-patterns-title">
+          <div className="agi-ds-container">
+            <div className="agi-lp-heading">
               <Eyebrow>The three patterns</Eyebrow>
               <h2 className="agi-ds-h2" id="agi-integrations-patterns-title">
                 How the pieces connect.
               </h2>
             </div>
-            <FactGrid
-              items={[
-                {
-                  meta: 'Tools',
-                  title: 'MCP plugins',
-                  body: 'Mount Model Context Protocol servers and scope their access. stdio, SSE, and streamable HTTP transports are all supported.',
-                },
-                {
-                  meta: 'Bridge',
-                  title: 'Native messaging bridge',
-                  body: `The Chrome side panel pairs with Desktop on localhost:8787. The browser captures intent. Desktop runs the model and the tool calls. Chrome is ${SURFACE_STATUS.chrome.toLowerCase()}, not on the Chrome Web Store yet.`,
-                },
-                {
-                  meta: 'Keys',
-                  title: 'Provider BYOK',
-                  body: 'Bring keys for Anthropic, OpenAI, Google, xAI, DeepSeek, Perplexity, Qwen, Moonshot, or Zhipu on Desktop, CLI, and VS Code. Or any OpenAI-compatible endpoint.',
-                },
-              ]}
-            />
-          </Stack>
-        </Section>
+            <div className="agi-ds-grid-2">
+              {PATTERNS.map((item) => (
+                <div className="agi-ds-card" style={{ padding: '1.5rem' }} key={item.title}>
+                  <Eyebrow>{item.meta}</Eyebrow>
+                  <h3 className="agi-ds-h3">{item.title}</h3>
+                  <Prose size="sm">{item.body}</Prose>
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
 
-        <Section id="whats-wired" labelledBy="agi-integrations-wired-title" rule ground="2">
-          <Stack gap="loose">
-            <div>
+        <section className="agi-lp-section" aria-labelledby="agi-integrations-wired-title">
+          <div className="agi-ds-container">
+            <div className="agi-lp-heading">
               <Eyebrow>What&rsquo;s wired today</Eyebrow>
               <h2 className="agi-ds-h2" id="agi-integrations-wired-title">
                 The honest inventory.
@@ -100,26 +140,28 @@ export default function IntegrationsPage() {
                 },
               ]}
             />
-          </Stack>
-        </Section>
+          </div>
+        </section>
 
-        <Section id="integrations-close" labelledBy="agi-integrations-close-title" rule>
-          <Stack gap="loose">
-            <h2 className="agi-ds-h2" id="agi-integrations-close-title">
-              Connect one tool, then the next.
-            </h2>
-            <Prose>
-              Start with a provider key or a local runtime, add MCP plugins as the work demands, and
-              keep every permission visible.
-            </Prose>
-            <ButtonRow>
-              <Button href="/providers">See providers</Button>
-              <Button href="/api-docs" variant="secondary">
-                Read API docs
-              </Button>
-            </ButtonRow>
-          </Stack>
-        </Section>
+        <section className="agi-lp-close" aria-labelledby="agi-integrations-close-title">
+          <div className="agi-ds-container">
+            <div className="agi-lp-close-inner">
+              <h2 className="agi-ds-h2" id="agi-integrations-close-title">
+                Connect one tool, <em className="agi-ds-accent">then the next.</em>
+              </h2>
+              <Prose size="lg">
+                Start with a provider key or a local runtime, add MCP plugins as the work demands,
+                and keep every permission visible.
+              </Prose>
+              <ButtonRow>
+                <Button href="/providers">See providers</Button>
+                <Button href="/api-docs" variant="secondary">
+                  Read API docs
+                </Button>
+              </ButtonRow>
+            </div>
+          </div>
+        </section>
       </main>
       <MarketingFooter />
     </div>
