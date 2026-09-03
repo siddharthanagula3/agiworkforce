@@ -1,8 +1,10 @@
 import {
+  getRegistryRoute,
   listCanonicalModels,
   requireProviderDefaultModel,
   type ModelMetadata,
 } from '@agiworkforce/types';
+import { getRoutePricingForModel } from '@agiworkforce/model-registry';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const { routeOverrides } = vi.hoisted(() => ({
@@ -32,13 +34,11 @@ import {
 const ENV_KEYS = ['OPENROUTER_API_KEY'] as const;
 const saved: Record<string, string | undefined> = {};
 const ROUTED_PROVIDERS = new Set(['minimax', 'qwen', 'zhipu']);
-const MANAGED_ROUTED_MODEL_IDS = new Set([
-  'minimax-m3',
-  'qwen-3.5-flash',
-  'qwen-3.7-plus',
-  'glm-5.3',
-  'glm-5.3-flash',
-]);
+const MANAGED_ROUTED_MODEL_IDS = new Set(
+  listCanonicalModels()
+    .filter((model) => ROUTED_PROVIDERS.has(model.provider))
+    .map((model) => model.id),
+);
 const DIRECT_FAILOVER_PROVIDERS = new Set([
   'anthropic',
   'openai',
@@ -99,8 +99,9 @@ describe('aggregator routing', () => {
   });
 
   it('resolves the dispatch provider of a route id, mapping open_router to openrouter', () => {
-    expect(dispatchProviderForRoute('open_router/minimax-m3')).toBe('openrouter');
-    expect(dispatchProviderForRoute('minimax/minimax-m3')).toBe('minimax');
+    const minimaxModelId = requireCatalogModel((candidate) => candidate.provider === 'minimax').id;
+    expect(dispatchProviderForRoute(`open_router/${minimaxModelId}`)).toBe('openrouter');
+    expect(dispatchProviderForRoute(`minimax/${minimaxModelId}`)).toBe('minimax');
   });
 
   it('has no dispatch provider for a route id the registry does not declare', () => {
@@ -187,9 +188,28 @@ describe('OpenRouter failover routes', () => {
   });
 });
 
-const DEFAULT_ANTHROPIC_ROUTE_ID = 'anthropic/claude-sonnet-5';
-const MANAGED_ONLY_EXPERIMENTAL_ROUTE_ID = 'cheaperinference_anthropic/claude-sonnet-5';
-const BYOK_ONLY_EXPERIMENTAL_ROUTE_ID = 'vercel_gateway/claude-sonnet-5';
+const anthropicRoutes = getRoutePricingForModel(requireProviderDefaultModel('anthropic'))
+  .map((route) => ({ routeId: route.routeId, registryRoute: getRegistryRoute(route.routeId) }))
+  .filter(
+    (entry): entry is { routeId: string; registryRoute: NonNullable<typeof entry.registryRoute> } =>
+      entry.registryRoute !== null,
+  );
+
+const DEFAULT_ANTHROPIC_ROUTE_ID = anthropicRoutes.find(
+  ({ registryRoute }) => registryRoute.isDefault,
+)!.routeId;
+const MANAGED_ONLY_EXPERIMENTAL_ROUTE_ID = anthropicRoutes.find(
+  ({ registryRoute }) =>
+    registryRoute.commercialStatus === 'experimental_only' &&
+    registryRoute.trustModes.includes('managed_cloud') &&
+    !registryRoute.trustModes.includes('byok'),
+)!.routeId;
+const BYOK_ONLY_EXPERIMENTAL_ROUTE_ID = anthropicRoutes.find(
+  ({ registryRoute }) =>
+    registryRoute.commercialStatus === 'experimental_only' &&
+    registryRoute.trustModes.includes('byok') &&
+    !registryRoute.trustModes.includes('managed_cloud'),
+)!.routeId;
 const FIXTURE_BLOCKED_ROUTE_ID = 'fixture_blocked_provider/fixture-blocked-model';
 
 describe('validateRouteSelection', () => {

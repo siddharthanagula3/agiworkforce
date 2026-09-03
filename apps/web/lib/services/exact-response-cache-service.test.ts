@@ -45,7 +45,7 @@ function fields(overrides: Partial<ExactResponseCacheKeyFields> = {}): ExactResp
     callType: 'conversation-title-generation',
     tenantId: 'user_1',
     privacyClass: 'user_private',
-    modelId: 'claude-fable-5-1',
+    modelId: 'fixture-model-primary',
     route: 'anthropic',
     systemPrompt: 'Write a short title',
     input: 'help me refactor the auth module',
@@ -78,7 +78,7 @@ describe('key stability', () => {
   const sensitiveFields: Array<[string, Partial<ExactResponseCacheKeyFields>]> = [
     ['tenantId', { tenantId: 'user_2' }],
     ['privacyClass', { privacyClass: 'shared_deterministic' }],
-    ['modelId', { modelId: 'gpt-5.6' }],
+    ['modelId', { modelId: 'fixture-model-alternate' }],
     ['route', { route: 'openai' }],
     ['systemPrompt', { systemPrompt: 'Write a long title' }],
     ['input', { input: 'help me refactor the billing module' }],

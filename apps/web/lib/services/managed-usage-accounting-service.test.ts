@@ -1,5 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { listCanonicalModels } from '@agiworkforce/types';
+import { listCanonicalModels, requireProviderDefaultModel } from '@agiworkforce/types';
+
+const ANTHROPIC_MODEL = requireProviderDefaultModel('anthropic');
+const OPEN_ROUTER_ANTHROPIC_ROUTE_ID = `open_router/${ANTHROPIC_MODEL}`;
+const ANTHROPIC_ROUTE_ID = `anthropic/${ANTHROPIC_MODEL}`;
 
 vi.mock('server-only', () => ({}));
 
@@ -108,20 +112,20 @@ describe('managed usage accounting', () => {
 
     accumulateObservedProviderUsage(
       usage,
-      { inputTokens: 100, outputTokens: 20, upstreamProvider: 'anthropic/claude-sonnet-5' },
-      { provider: 'open_router', model: 'claude-sonnet-5', routeId: 'open_router/claude-sonnet-5' },
+      { inputTokens: 100, outputTokens: 20, upstreamProvider: ANTHROPIC_ROUTE_ID },
+      { provider: 'open_router', model: ANTHROPIC_MODEL, routeId: OPEN_ROUTER_ANTHROPIC_ROUTE_ID },
     );
 
     expect(usage.providerCallObservations?.[0]).toMatchObject({
-      routeId: 'open_router/claude-sonnet-5',
-      upstreamProvider: 'anthropic/claude-sonnet-5',
+      routeId: OPEN_ROUTER_ANTHROPIC_ROUTE_ID,
+      upstreamProvider: ANTHROPIC_ROUTE_ID,
     });
     expect(LLMCostCalculator.calculateCostDollars).toHaveBeenCalledWith(
       'open_router',
-      'claude-sonnet-5',
+      ANTHROPIC_MODEL,
       expect.objectContaining({ promptTokens: 100, completionTokens: 20 }),
       undefined,
-      'open_router/claude-sonnet-5',
+      OPEN_ROUTER_ANTHROPIC_ROUTE_ID,
     );
   });
 
@@ -139,23 +143,23 @@ describe('managed usage accounting', () => {
         cacheWrite1hTokens: 0,
         reasoningTokens: 0,
         provider: 'open_router',
-        model: 'claude-sonnet-5',
-        routeId: 'open_router/claude-sonnet-5',
+        model: ANTHROPIC_MODEL,
+        routeId: OPEN_ROUTER_ANTHROPIC_ROUTE_ID,
       },
     ];
 
     calculateObservedProviderUsageCostDollars(usage, {
       provider: 'anthropic',
-      model: 'claude-sonnet-5',
-      routeId: 'anthropic/claude-sonnet-5',
+      model: ANTHROPIC_MODEL,
+      routeId: ANTHROPIC_ROUTE_ID,
     });
 
     expect(LLMCostCalculator.calculateCostDollars).toHaveBeenCalledWith(
       'open_router',
-      'claude-sonnet-5',
+      ANTHROPIC_MODEL,
       expect.anything(),
       undefined,
-      'open_router/claude-sonnet-5',
+      OPEN_ROUTER_ANTHROPIC_ROUTE_ID,
     );
   });
 
@@ -165,7 +169,7 @@ describe('managed usage accounting', () => {
     accumulateObservedProviderUsage(
       usage,
       { inputTokens: 100, outputTokens: 20, providerReportedCostUsd: 0.05 },
-      { provider: 'open_router', model: 'claude-sonnet-5', routeId: 'open_router/claude-sonnet-5' },
+      { provider: 'open_router', model: ANTHROPIC_MODEL, routeId: OPEN_ROUTER_ANTHROPIC_ROUTE_ID },
     );
 
     expect(usage.providerCallObservations?.[0]).toMatchObject({
@@ -182,7 +186,7 @@ describe('managed usage accounting', () => {
     accumulateObservedProviderUsage(
       usage,
       { inputTokens: 100, outputTokens: 20 },
-      { provider: 'anthropic', model: 'claude-sonnet-5' },
+      { provider: 'anthropic', model: ANTHROPIC_MODEL },
     );
 
     expect(usage.providerCallObservations?.[0]).toMatchObject({
@@ -198,7 +202,7 @@ describe('managed usage accounting', () => {
     accumulateObservedProviderUsage(
       usage,
       { inputTokens: 100, outputTokens: 20, providerReportedCostUsd: Number.NaN },
-      { provider: 'anthropic', model: 'claude-sonnet-5' },
+      { provider: 'anthropic', model: ANTHROPIC_MODEL },
     );
 
     expect(usage.providerCallObservations?.[0]).toMatchObject({
@@ -213,7 +217,7 @@ describe('managed usage accounting', () => {
     accumulateObservedProviderUsage(
       usage,
       { inputTokens: 100, outputTokens: 20, providerReportedCostUsd: 0 },
-      { provider: 'anthropic', model: 'claude-sonnet-5' },
+      { provider: 'anthropic', model: ANTHROPIC_MODEL },
     );
 
     expect(usage.providerCallObservations?.[0]).toMatchObject({
@@ -228,7 +232,7 @@ describe('managed usage accounting', () => {
     accumulateObservedProviderUsage(
       usage,
       { inputTokens: 100, outputTokens: 20, providerReportedCostUsd: 0.0001 },
-      { provider: 'anthropic', model: 'claude-sonnet-5' },
+      { provider: 'anthropic', model: ANTHROPIC_MODEL },
     );
 
     expect(usage.providerCallObservations?.[0]).toMatchObject({
@@ -243,7 +247,7 @@ describe('managed usage accounting', () => {
     accumulateObservedProviderUsage(
       usage,
       { inputTokens: 100, outputTokens: 20, providerReportedCostUsd: 5 },
-      { provider: 'anthropic', model: 'claude-sonnet-5' },
+      { provider: 'anthropic', model: ANTHROPIC_MODEL },
     );
 
     expect(usage.providerCallObservations?.[0]).toMatchObject({
