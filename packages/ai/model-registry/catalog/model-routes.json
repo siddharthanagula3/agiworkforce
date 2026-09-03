@@ -491,7 +491,7 @@
       "additionalRoutes": [
         {
           "provider": "open_router",
-          "harnessId": "open-router/chat-completions",
+          "harnessId": "open-router/chat-completions-managed",
           "upstreamModelId": "qwen/qwen3.5-flash-02-23",
           "cacheClass": "no_provider_cache",
           "commercialStatus": "authorized_marketplace",
@@ -521,7 +521,7 @@
       "additionalRoutes": [
         {
           "provider": "open_router",
-          "harnessId": "open-router/chat-completions",
+          "harnessId": "open-router/chat-completions-managed",
           "upstreamModelId": "qwen/qwen3.7-plus",
           "cacheClass": "provider_implicit_prompt_cache",
           "commercialStatus": "authorized_marketplace",
@@ -551,7 +551,7 @@
       "additionalRoutes": [
         {
           "provider": "open_router",
-          "harnessId": "open-router/chat-completions",
+          "harnessId": "open-router/chat-completions-managed",
           "upstreamModelId": "z-ai/glm-5.3",
           "cacheClass": "provider_implicit_prompt_cache",
           "commercialStatus": "authorized_marketplace",
@@ -607,7 +607,7 @@
       "additionalRoutes": [
         {
           "provider": "open_router",
-          "harnessId": "open-router/chat-completions",
+          "harnessId": "open-router/chat-completions-managed",
           "upstreamModelId": "z-ai/glm-5.3-flash",
           "cacheClass": "provider_implicit_prompt_cache",
           "commercialStatus": "authorized_marketplace",
@@ -762,7 +762,7 @@
       "additionalRoutes": [
         {
           "provider": "open_router",
-          "harnessId": "open-router/chat-completions",
+          "harnessId": "open-router/chat-completions-managed",
           "upstreamModelId": "minimax/minimax-m3",
           "cacheClass": "provider_implicit_prompt_cache",
           "commercialStatus": "authorized_marketplace",

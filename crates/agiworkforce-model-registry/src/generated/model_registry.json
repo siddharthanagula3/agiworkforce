@@ -1738,8 +1738,8 @@
       "modelKey": "qwen-3.5-flash",
       "provider": "open_router",
       "providerModelId": "qwen/qwen3.5-flash-02-23",
-      "harnessId": "open-router/chat-completions",
-      "trustModes": ["byok"],
+      "harnessId": "open-router/chat-completions-managed",
+      "trustModes": ["managed_cloud", "byok"],
       "availability": "live",
       "selectable": true,
       "isDefault": false,
@@ -2010,8 +2010,8 @@
       "modelKey": "glm-5.3",
       "provider": "open_router",
       "providerModelId": "z-ai/glm-5.3",
-      "harnessId": "open-router/chat-completions",
-      "trustModes": ["byok"],
+      "harnessId": "open-router/chat-completions-managed",
+      "trustModes": ["managed_cloud", "byok"],
       "availability": "live",
       "selectable": true,
       "isDefault": false,
@@ -2109,8 +2109,8 @@
       "modelKey": "glm-5.3-flash",
       "provider": "open_router",
       "providerModelId": "z-ai/glm-5.3-flash",
-      "harnessId": "open-router/chat-completions",
-      "trustModes": ["byok"],
+      "harnessId": "open-router/chat-completions-managed",
+      "trustModes": ["managed_cloud", "byok"],
       "availability": "live",
       "selectable": true,
       "isDefault": false,
@@ -2218,8 +2218,8 @@
       "modelKey": "qwen-3.7-plus",
       "provider": "open_router",
       "providerModelId": "qwen/qwen3.7-plus",
-      "harnessId": "open-router/chat-completions",
-      "trustModes": ["byok"],
+      "harnessId": "open-router/chat-completions-managed",
+      "trustModes": ["managed_cloud", "byok"],
       "availability": "live",
       "selectable": true,
       "isDefault": false,
@@ -2532,8 +2532,8 @@
       "modelKey": "minimax-m3",
       "provider": "open_router",
       "providerModelId": "minimax/minimax-m3",
-      "harnessId": "open-router/chat-completions",
-      "trustModes": ["byok"],
+      "harnessId": "open-router/chat-completions-managed",
+      "trustModes": ["managed_cloud", "byok"],
       "availability": "live",
       "selectable": true,
       "isDefault": false,
@@ -3003,6 +3003,15 @@
       "protocol": "provider_native",
       "hostPolicy": "allowlist_only"
     },
+    "open-router/chat-completions-managed": {
+      "provider": "open_router",
+      "apiFamily": "chat_completions",
+      "adapter": "@agiworkforce/providers-openrouter",
+      "trustModes": ["managed_cloud", "byok"],
+      "features": {},
+      "protocol": "provider_native",
+      "hostPolicy": "allowlist_only"
+    },
     "open_router/media": {
       "provider": "open_router",
       "apiFamily": "media",
@@ -3123,6 +3132,7 @@
         "perplexity/chat-completions",
         "groq/chat-completions",
         "minimax/chat-completions",
+        "open-router/chat-completions-managed",
         "managed-cloud/gateway",
         "openai/media",
         "google/media",
@@ -3157,6 +3167,7 @@
         "perplexity/chat-completions",
         "groq/chat-completions",
         "minimax/chat-completions",
+        "open-router/chat-completions-managed",
         "managed-cloud/gateway",
         "openai/media",
         "google/media",
@@ -3185,6 +3196,7 @@
         "perplexity/chat-completions",
         "groq/chat-completions",
         "open-router/chat-completions",
+        "open-router/chat-completions-managed",
         "nvidia-nim/chat-completions",
         "minimax/chat-completions"
       ]
@@ -3224,6 +3236,7 @@
         "perplexity/chat-completions",
         "groq/chat-completions",
         "minimax/chat-completions",
+        "open-router/chat-completions-managed",
         "managed-cloud/gateway",
         "openai/media",
         "google/media",
@@ -3261,6 +3274,7 @@
         "perplexity/chat-completions",
         "groq/chat-completions",
         "open-router/chat-completions",
+        "open-router/chat-completions-managed",
         "nvidia-nim/chat-completions",
         "minimax/chat-completions"
       ]
@@ -3285,7 +3299,8 @@
         "zhipu/chat-completions",
         "perplexity/chat-completions",
         "groq/chat-completions",
-        "minimax/chat-completions"
+        "minimax/chat-completions",
+        "open-router/chat-completions-managed"
       ]
     },
     "cli/local-chat": {
@@ -3318,6 +3333,7 @@
         "perplexity/chat-completions",
         "groq/chat-completions",
         "open-router/chat-completions",
+        "open-router/chat-completions-managed",
         "nvidia-nim/chat-completions",
         "minimax/chat-completions"
       ]
@@ -3342,7 +3358,8 @@
         "zhipu/chat-completions",
         "perplexity/chat-completions",
         "groq/chat-completions",
-        "minimax/chat-completions"
+        "minimax/chat-completions",
+        "open-router/chat-completions-managed"
       ]
     },
     "vscode/local-chat": {
@@ -3374,7 +3391,8 @@
         "zhipu/chat-completions",
         "perplexity/chat-completions",
         "groq/chat-completions",
-        "minimax/chat-completions"
+        "minimax/chat-completions",
+        "open-router/chat-completions-managed"
       ]
     },
     "chrome/browser-task": {

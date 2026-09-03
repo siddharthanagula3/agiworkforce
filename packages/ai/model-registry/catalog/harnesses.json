@@ -227,6 +227,13 @@
       "trustModes": ["byok"],
       "features": {}
     },
+    "open-router/chat-completions-managed": {
+      "provider": "open_router",
+      "apiFamily": "chat_completions",
+      "adapter": "@agiworkforce/providers-openrouter",
+      "trustModes": ["managed_cloud", "byok"],
+      "features": {}
+    },
     "open_router/media": {
       "provider": "open_router",
       "apiFamily": "media",
@@ -325,7 +332,8 @@
       "zhipu/chat-completions",
       "perplexity/chat-completions",
       "groq/chat-completions",
-      "minimax/chat-completions"
+      "minimax/chat-completions",
+      "open-router/chat-completions-managed"
     ],
     "byok-text": [
       "openai/responses",
@@ -341,6 +349,7 @@
       "perplexity/chat-completions",
       "groq/chat-completions",
       "open-router/chat-completions",
+      "open-router/chat-completions-managed",
       "nvidia-nim/chat-completions",
       "minimax/chat-completions"
     ],
