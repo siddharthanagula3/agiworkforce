@@ -9,16 +9,16 @@ export const outDir = path.join(repoRoot, 'docs', 'generated');
 const SOURCE = 'packages/ai/model-registry/catalog/harnesses.json';
 
 const DO_NOT_EDIT = [
-  '<!-- GENERATED FILE — do not edit.',
+  '<!-- GENERATED FILE, do not edit.',
   `     Source: ${SOURCE}`,
   '     Render: node scripts/generate-doc-matrices.mjs',
   '     Verify: pnpm check:doc-matrices -->',
 ].join('\n');
 
-const MARK = { implemented: '✅', partial: '◐', unwired: '—', planned: '·' };
+const MARK = { implemented: '✅', partial: '◐', unwired: ', ', planned: '·' };
 
 function mark(value) {
-  return MARK[value] ?? String(value ?? '—');
+  return MARK[value] ?? String(value ?? ', ');
 }
 
 function readSource() {
@@ -40,7 +40,7 @@ export function renderTrustModeMatrix(harnesses) {
     .sort(([a], [b]) => a.localeCompare(b))
     .map(([key, profile]) => {
       const cells = featureKeys.map((f) => mark(profile.features?.[f]?.implementation));
-      return `| \`${key}\` | ${profile.trustMode ?? '—'} | ${mark(profile.status)} | ${cells.join(' | ')} |`;
+      return `| \`${key}\` | ${profile.trustMode ?? ', '} | ${mark(profile.status)} | ${cells.join(' | ')} |`;
     });
 
   return [
@@ -48,11 +48,11 @@ export function renderTrustModeMatrix(harnesses) {
     '',
     '# Trust mode and surface matrix',
     '',
-    `Rendered from \`${SOURCE}\` — ${profiles.length} runtime profiles.`,
+    `Rendered from \`${SOURCE}\`, ${profiles.length} runtime profiles.`,
     '',
     'This table reports what the harness catalog says is **implemented**. It is',
-    'not policy. The invariants that govern these surfaces — which trust modes may',
-    'exist, and what may never cross between them — are stated in',
+    'not policy. The invariants that govern these surfaces, which trust modes may',
+    'exist, and what may never cross between them, are stated in',
     '`docs/architecture/trust-boundaries.md`, and that document wins. Where a cell',
     'here disagrees with it, one of the two is a bug; decide which before changing',
     'either.',
@@ -86,7 +86,7 @@ export function renderProviderCapabilityMatrix(harnesses) {
 
   const rows = entries.map(([id, h]) => {
     const cells = featureKeys.map((f) => mark(h.features?.[f]?.implementation));
-    return `| \`${id}\` | ${h.provider ?? '—'} | ${h.apiFamily ?? '—'} | ${(h.trustModes ?? []).join(', ') || '—'} | ${groupOf.get(id) ?? '—'} | ${cells.join(' | ')} |`;
+    return `| \`${id}\` | ${h.provider ?? ', '} | ${h.apiFamily ?? ', '} | ${(h.trustModes ?? []).join(', ') || ', '} | ${groupOf.get(id) ?? ', '} | ${cells.join(' | ')} |`;
   });
 
   const header = `| Harness | Provider | API family | Trust modes | Group | ${featureKeys.join(' | ')} |`;
@@ -97,7 +97,7 @@ export function renderProviderCapabilityMatrix(harnesses) {
     '',
     '# Provider capability matrix',
     '',
-    `Rendered from \`${SOURCE}\` — ${entries.length} harnesses in ${Object.keys(groups).length} groups.`,
+    `Rendered from \`${SOURCE}\`, ${entries.length} harnesses in ${Object.keys(groups).length} groups.`,
     '',
     'Each row is one provider route. The feature columns report what the catalog',
     'says is **implemented** on that route, not what the provider is capable of.',

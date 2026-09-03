@@ -112,13 +112,13 @@ run_case() {
     bash "$TARGET" "$VERSION" > "$log" 2>&1 || status=$?
 
   if [ "$expect" = "pass" ] && [ "$status" -ne 0 ]; then
-    echo "FAIL: $name — expected success, got exit $status"
+    echo "FAIL: $name, expected success, got exit $status"
     sed 's/^/    /' "$log"
     FAILURES=$((FAILURES + 1))
     return 1
   fi
   if [ "$expect" = "fail" ] && [ "$status" -eq 0 ]; then
-    echo "FAIL: $name — expected a non-zero exit, got 0"
+    echo "FAIL: $name, expected a non-zero exit, got 0"
     sed 's/^/    /' "$log"
     FAILURES=$((FAILURES + 1))
     return 1
@@ -131,7 +131,7 @@ run_case() {
 assert_formula_untouched() {
   local name="$1"
   if ! grep -q SENTINEL-UNTOUCHED "$ROOT/tap/Formula/agiworkforce.rb"; then
-    echo "FAIL: $name — the formula was rewritten from unverified bytes"
+    echo "FAIL: $name, the formula was rewritten from unverified bytes"
     FAILURES=$((FAILURES + 1))
   fi
 }
@@ -139,7 +139,7 @@ assert_formula_untouched() {
 assert_formula_contains() {
   local name="$1" needle="$2"
   if ! grep -q "$needle" "$ROOT/tap/Formula/agiworkforce.rb"; then
-    echo "FAIL: $name — formula is missing $needle"
+    echo "FAIL: $name, formula is missing $needle"
     FAILURES=$((FAILURES + 1))
   fi
 }
@@ -154,7 +154,7 @@ if run_case "signed release publishes" pass; then
   assert_formula_contains "signed release publishes" "$(sha256_of "$ROOT/release/agiworkforce-darwin-arm64.tar.gz")"
   assert_formula_contains "signed release publishes" "version \"$VERSION\""
   grep -q 'git push origin main' "$ROOT/git.log" || {
-    echo "FAIL: signed release publishes — tap was never pushed"
+    echo "FAIL: signed release publishes, tap was never pushed"
     FAILURES=$((FAILURES + 1))
   }
 fi

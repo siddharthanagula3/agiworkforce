@@ -89,7 +89,7 @@ const integrity = [];
 
 if (fence !== null) {
   integrity.push(
-    `unclosed ${fence.char.repeat(fence.length)} code fence opened at line ${fence.line} — ` +
+    `unclosed ${fence.char.repeat(fence.length)} code fence opened at line ${fence.line}, ` +
       'every task after it was invisible to this check',
   );
 }
@@ -102,7 +102,7 @@ if (duplicated.length > 0) {
     .join('; ');
   integrity.push(
     `${duplicated.length} task ID${duplicated.length === 1 ? ' is' : 's are'} declared more than ` +
-      `once — the ledger looks duplicated or badly merged, so every count below is inflated: ${sample}` +
+      `once, the ledger looks duplicated or badly merged, so every count below is inflated: ${sample}` +
       (duplicated.length > 5 ? `; …and ${duplicated.length - 5} more` : ''),
   );
 }

@@ -7,7 +7,15 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const outDir = path.join(repoRoot, 'packages', 'contracts', 'types', 'src', 'generated', 'protocol');
+const outDir = path.join(
+  repoRoot,
+  'packages',
+  'contracts',
+  'types',
+  'src',
+  'generated',
+  'protocol',
+);
 const [mode = '--write', ...extraArgs] = process.argv.slice(2);
 if (!['--check', '--write'].includes(mode) || extraArgs.length > 0) {
   throw new Error('Usage: node scripts/generate-protocol-types.mjs [--check|--write]');
@@ -83,7 +91,7 @@ try {
   }
 
   const banner = [
-    '// GENERATED FILE — do not edit by hand.',
+    '// GENERATED FILE, do not edit by hand.',
     '// Produced by scripts/generate-protocol-types.mjs from crates/agiworkforce-protocol',
     '// (ts-rs). Regenerate with: pnpm generate:protocol-types',
     '',

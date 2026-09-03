@@ -149,7 +149,7 @@ function checkPortalOverlays() {
     const abs = path.join(root, file);
     if (!fs.existsSync(abs)) {
       errors.push(
-        `${file} is listed as a portal overlay but does not exist — update PORTAL_OVERLAYS.`,
+        `${file} is listed as a portal overlay but does not exist, update PORTAL_OVERLAYS.`,
       );
       continue;
     }

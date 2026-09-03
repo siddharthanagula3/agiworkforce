@@ -74,7 +74,7 @@ function main() {
     if (/^GITHUB_TOKEN_ENCRYPTION_KEY=.+$/m.test(contents)) {
       delete forThisTarget.GITHUB_TOKEN_ENCRYPTION_KEY;
       console.log(`• ${path.relative(repoRoot, target)}: GITHUB_TOKEN_ENCRYPTION_KEY already set`);
-      console.log('  — left as is (rotating it would orphan every stored installation token).');
+      console.log(', left as is (rotating it would orphan every stored installation token).');
     }
 
     for (const [key, value] of Object.entries(forThisTarget)) {

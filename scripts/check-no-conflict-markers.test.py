@@ -4,7 +4,7 @@
 Run: python3 scripts/check-no-conflict-markers.test.py
 
 Markers are assembled from repeated characters so this file never contains a
-literal marker at the start of a line — otherwise the gate it tests would
+literal marker at the start of a line, otherwise the gate it tests would
 flag it once the file is tracked.
 """
 

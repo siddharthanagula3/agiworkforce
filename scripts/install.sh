@@ -1,13 +1,4 @@
 #!/bin/bash
-# AGI Workforce CLI — Install Script
-# Usage: curl -fsSL https://agiworkforce.com/install.sh | bash
-#
-# Options:
-#   --version VERSION    Install a specific version (default: latest)
-#   --no-modify-path     Skip adding to PATH
-#   --install-dir DIR    Custom install directory (default: ~/.agi/bin)
-#
-# Requires `cosign` to verify the release workflow's keyless Sigstore signature.
 
 set -euo pipefail
 
@@ -64,7 +55,7 @@ detect_platform() {
   if [ "$os" = "darwin" ] && [ "$arch" = "x64" ]; then
     if sysctl -n sysctl.proc_translated 2>/dev/null | grep -q 1; then
       arch="arm64"
-      echo -e "${YELLOW}Rosetta detected — installing native arm64 binary${NC}"
+      echo -e "${YELLOW}Rosetta detected, installing native arm64 binary${NC}"
     fi
   fi
 
@@ -125,7 +116,6 @@ download_binary() {
   fi
 
   # release-cli.yml produces archives named agiworkforce-{platform}.{ext}
-  # (no version in filename — version is in the tag/path). Match that.
   local filename="${ARCHIVE_BASENAME}-${platform}.${ext}"
   local url="https://github.com/${GITHUB_REPO}/releases/download/${version}/${filename}"
   local checksums_url="https://github.com/${GITHUB_REPO}/releases/download/${version}/SHA256SUMS"

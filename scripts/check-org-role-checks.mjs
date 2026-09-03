@@ -66,13 +66,11 @@ for (const file of walk(root)) {
 
 if (offenders.length > 0) {
   console.error(
-    `check:org-role-checks — ${offenders.length} inline organization-admin role test(s) found.\n` +
+    `check:org-role-checks, ${offenders.length} inline organization-admin role test(s) found.\n` +
       `Use ${HELPER}() from @agiworkforce/types so one edit changes every gate.\n`,
   );
   for (const offender of offenders) console.error(`  ${offender}`);
   process.exit(1);
 }
 
-console.log(
-  'check:org-role-checks — every organization-admin gate goes through the shared helper.',
-);
+console.log('check:org-role-checks, every organization-admin gate goes through the shared helper.');

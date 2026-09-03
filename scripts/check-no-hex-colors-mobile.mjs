@@ -154,7 +154,7 @@ function writeBaseline(violations) {
   const annotated = violations.map((v) => {
     const entry = { ...v };
     if (isScrimShaped(v)) {
-      entry._note = 'scrim-shaped — convert to colors.scrim or similar token in follow-up';
+      entry._note = 'scrim-shaped, convert to colors.scrim or similar token in follow-up';
     }
     return entry;
   });
@@ -194,12 +194,12 @@ for (const violation of allViolations) {
 }
 
 if (newViolations.length === 0) {
-  console.log('check:no-hex-mobile PASS — no new hardcoded color literals.');
+  console.log('check:no-hex-mobile PASS, no new hardcoded color literals.');
   process.exit(0);
 }
 
 console.error(
-  `check:no-hex-mobile FAIL — ${newViolations.length} new hardcoded color literal(s) found.\n`,
+  `check:no-hex-mobile FAIL, ${newViolations.length} new hardcoded color literal(s) found.\n`,
 );
 for (const v of newViolations) {
   console.error(`  ${v.file}:${v.line}  [${v.rule}]  ${v.literal}`);

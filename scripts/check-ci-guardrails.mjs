@@ -172,8 +172,6 @@ requireIncludes(
 requireIncludes('apps/mobile/detox.config.js', 'ONLY_ACTIVE_ARCH=YES');
 requireIncludes('apps/mobile/detox.config.js', 'DETOX_IOS_DEVICE');
 requireIncludes('apps/mobile/package.json', '"test:e2e:ios:ci"');
-// The age gate moved off first launch in ff2c0811e — it now guards Cloud
-// sign-in, so the first-run shell the smoke must reach is the onboarding hero.
 requireIncludes(
   'apps/mobile/scripts/screenshots/specs/ci-smoke.spec.ts',
   "by.id('onboarding-hero-screen')",

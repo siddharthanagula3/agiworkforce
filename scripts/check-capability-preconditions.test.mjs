@@ -29,7 +29,7 @@ function runOnSandbox(files) {
 const BARE_FINDING_ID = `# ledger
 
 - **Creation-four approvals (founder, 2026-08-05):** AI-powered artifacts
-  (CAP-052 — approved despite security sensitivity; a security design review
+  (CAP-052, approved despite security sensitivity; a security design review
   proving WEB-13 stays closed is a hard precondition).
 - **Next bullet:** unrelated.
 `;
@@ -37,7 +37,7 @@ const BARE_FINDING_ID = `# ledger
 const CITES_REVIEW = `# ledger
 
 - **Creation-four approvals (founder, 2026-08-05):** AI-powered artifacts
-  (CAP-052 — approved despite security sensitivity;
+  (CAP-052, approved despite security sensitivity;
   \`docs/design/review.md\` is that review and is a hard precondition).
 - **Next bullet:** unrelated.
 `;
@@ -70,7 +70,7 @@ test('a precondition citing a document that is missing is rejected', () => {
 
 test('the clause stops at its own parentheses instead of borrowing a sibling citation', () => {
   const text = `- **Approvals:** publishing (see \`docs/design/publishing.md\`);
-  AI artifacts (CAP-052 — a review proving WEB-13 stays closed is a hard
+  AI artifacts (CAP-052, a review proving WEB-13 stays closed is a hard
   precondition).
 `;
   const [clause] = preconditionClauses(text);

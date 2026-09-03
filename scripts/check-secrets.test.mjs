@@ -8,8 +8,6 @@ import { fileURLToPath } from 'node:url';
 
 const SCANNER = path.join(path.dirname(fileURLToPath(import.meta.url)), 'check-secrets.mjs');
 
-// The scanner scans this file too. Every credential shape is assembled at run time so no literal
-// one is committed here — a fixture that looks live is the defect this suite exists to catch.
 const shape = (...parts) => parts.join('');
 
 const STRIPE = shape('rk', '_live_', '51H8xK2eZvKYlo2CqPmXyZ9aB');

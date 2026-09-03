@@ -133,7 +133,7 @@ function main() {
   }
 
   if (violations.length === 0) {
-    console.log('AP-08: clean — no hardcoded display arrays with live store counterparts found.');
+    console.log('AP-08: clean, no hardcoded display arrays with live store counterparts found.');
     process.exit(0);
   }
 

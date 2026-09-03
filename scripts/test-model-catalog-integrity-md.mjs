@@ -66,7 +66,7 @@ try {
   fs.writeFileSync(
     FIXTURE,
     [
-      '# Fixture — stale model ID test',
+      '# Fixture, stale model ID test',
       '',
       'This file is created and deleted by test-model-catalog-integrity-md.mjs.',
       '',
@@ -87,7 +87,7 @@ try {
 
   fs.writeFileSync(
     FIXTURE,
-    ['# Fixture — clean version', '', '```bash', 'agi -m fixture-model "hello"', '```', ''].join(
+    ['# Fixture, clean version', '', '```bash', 'agi -m fixture-model "hello"', '```', ''].join(
       '\n',
     ),
   );
@@ -100,7 +100,7 @@ try {
   fs.writeFileSync(
     FIXTURE,
     [
-      '# Fixture — stale id only in HTML comment',
+      '# Fixture, stale id only in HTML comment',
       '',
       `<!-- ${retiredFixtureId} appears ONLY inside a comment; must not trigger a violation -->`,
       '',

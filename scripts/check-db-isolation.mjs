@@ -164,7 +164,7 @@ const ALLOWLIST = [
     match: /lib\/services\/security-monitoring-service\.ts$/,
     tables: ['security_audit_logs'],
     reason:
-      'getTopIpAddresses() is platform abuse detection — per-user counts cannot detect an ' +
+      'getTopIpAddresses() is platform abuse detection, per-user counts cannot detect an ' +
       'attacker spraying many accounts from one IP',
   },
   {
@@ -172,7 +172,7 @@ const ALLOWLIST = [
     tables: ['device_authorization_codes'],
     reason:
       'RFC 8628 device flow: the pending row is expired by `user_code` BEFORE any account is ' +
-      'attached, so there is no owner to constrain by — user_id is null until approval',
+      'attached, so there is no owner to constrain by, user_id is null until approval',
   },
   {
     match: /api\/auth\/device\/refresh\/route\.ts$|lib\/server\/developer-token\.ts$/,
@@ -186,7 +186,7 @@ const ALLOWLIST = [
     match: /api\/share\/\[token\]\/route\.ts$/,
     tables: ['shared_sessions'],
     reason:
-      'reading a share by its unguessable token is the feature — a public share link has no ' +
+      'reading a share by its unguessable token is the feature, a public share link has no ' +
       'viewer subject to constrain by',
   },
   {
@@ -208,11 +208,11 @@ const ALLOWLIST = [
       'a handoff session is owned by an anonymous VISITOR, and the other side of the feature is ' +
       'staff: listFreshOnlineAgents (per-agent load count), getSessionById and listWaitingQueue ' +
       '(agent console), claimSessionForAgent (an agent taking any waiting visitor) all span ' +
-      'visitors by design — their `agent_user_id` is a staff id and must NOT be read as an owner ' +
+      'visitors by design, their `agent_user_id` is a staff id and must NOT be read as an owner ' +
       'predicate. claimExpiredWaitingSession / claimExpiredWaitingBatch / ' +
       'closeIdleConnectedSessions / purgeOldHandoffSessions are time-based sweeps. ' +
       'recordEmailOutcome and appendHandoffMessage’s last-activity write are bookkeeping on a ' +
-      'session id the caller already holds — they set status and timestamps and return no rows. ' +
+      'session id the caller already holds, they set status and timestamps and return no rows. ' +
       'FUNCTION-SCOPED ON PURPOSE: getSessionForOwner and cancelSessionForOwner are NOT listed, ' +
       'so they stay policed and deleting `and owner_session_key = $2` from either one fails this ' +
       'gate. That regression was green before this entry was narrowed.',
@@ -222,7 +222,7 @@ const ALLOWLIST = [
     tables: ['shared_conversations'],
     functions: ['handleGet'],
     reason:
-      'reading a shared conversation by its unguessable UUID v4 token is the feature — a public ' +
+      'reading a shared conversation by its unguessable UUID v4 token is the feature, a public ' +
       'share link has no viewer subject to constrain by. Scoped to handleGet so the POST insert, ' +
       'which must carry user_id, stays policed.',
   },
@@ -260,7 +260,7 @@ const CROSS_TENANT_TABLES = new Map([
   [
     'beta_applications',
     'the public beta intake queue. Applying requires no account, so `user_id` is nullable and ' +
-      'most rows have no owner at all — a tenant policy would hide every anonymous application ' +
+      'most rows have no owner at all, a tenant policy would hide every anonymous application ' +
       'from the operators the queue exists for, and would refuse the signed-out insert that ' +
       'creates it. The only read is the platform-wide count in operator-metrics.ts; no ' +
       'user-facing path selects from it. Account erasure still deletes by user_id (0131), which ' +
@@ -280,7 +280,7 @@ const CROSS_TENANT_TABLES = new Map([
   ],
   [
     'cogs_adjustments',
-    'the non-provider half of the same ledger — processing fees, refunds, chargebacks, discounts ' +
+    'the non-provider half of the same ledger, processing fees, refunds, chargebacks, discounts ' +
       'and goodwill. Same shape and same reason as `provider_cost_events` above.',
   ],
 ]);
@@ -323,7 +323,7 @@ const UNPOLICED_APP_ENFORCED_TABLES = new Map([
   ],
   [
     'referrals',
-    'no query site at all — the table is provisioned by 0016_misc.sql and nothing reads or ' +
+    'no query site at all, the table is provisioned by 0016_misc.sql and nothing reads or ' +
       'writes it yet.',
   ],
 ]);
@@ -666,7 +666,7 @@ const { undecided, tenantScoped } = findUndecidedTables(
 );
 
 if (undecided.length > 0) {
-  console.error('Database isolation check FAILED — tables with no isolation decision:\n');
+  console.error('Database isolation check FAILED, tables with no isolation decision:\n');
   for (const u of undecided) {
     console.error(
       `- ${u.table} (${MIGRATIONS_DIR}/${u.migration}) carries [${u.tenantColumns.join(', ')}] ` +
@@ -675,7 +675,7 @@ if (undecided.length > 0) {
   }
   console.error(
     `A tenant-scoped table with no decision is isolated by nothing and policed by nothing:\n` +
-      `pass 1 skips statements over tables it does not know are user-owned. Pick one —\n` +
+      `pass 1 skips statements over tables it does not know are user-owned. Pick one, \n` +
       `  1. enable row level security in the migration (database-enforced), or\n` +
       `  2. add it to USER_OWNED_TABLES in scripts/check-db-isolation.mjs so every statement\n` +
       `     over it must carry an owner predicate (app-enforced), or\n` +
@@ -702,7 +702,7 @@ const { hollow, stale } =
     : { hollow: [], stale: [] };
 
 if (hollow.length > 0 || stale.length > 0) {
-  console.error('Database isolation check FAILED — app-enforcement that enforces nothing:\n');
+  console.error('Database isolation check FAILED, app-enforcement that enforces nothing:\n');
   for (const table of hollow) {
     console.error(
       `- ${table} is in USER_OWNED_TABLES and has no RLS policy, but pass 1 policed ZERO\n` +
@@ -722,7 +722,7 @@ if (hollow.length > 0 || stale.length > 0) {
       `     interpolated table name) and fix the scan, or\n` +
       `  2. enable row level security in the migration, or\n` +
       `  3. add it to UNPOLICED_APP_ENFORCED_TABLES WITH the reason zero is correct.\n` +
-      `For a stale entry, delete it — the coverage it apologised for now exists.`,
+      `For a stale entry, delete it, the coverage it apologised for now exists.`,
   );
   process.exit(1);
 }

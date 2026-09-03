@@ -59,7 +59,7 @@ function validate(dir) {
       continue;
     }
     if (res.parseError) {
-      errors.push(`${file}: invalid JSON — ${res.parseError}`);
+      errors.push(`${file}: invalid JSON, ${res.parseError}`);
       continue;
     }
     loaded[file] = res.json;
@@ -149,7 +149,7 @@ function main() {
   if (args.help) {
     console.log(
       [
-        'check-spec-artifacts.mjs — validate AGI spec artifacts',
+        'check-spec-artifacts.mjs, validate AGI spec artifacts',
         '',
         '  --dir <dir>    artifacts directory (default: docs/spec/artifacts)',
         '  --diff <old>   print added/removed/changed top-level entries vs <old>',

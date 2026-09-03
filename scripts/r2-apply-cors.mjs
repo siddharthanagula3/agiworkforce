@@ -93,7 +93,7 @@ async function main() {
 
   if (!token) {
     console.error('✖ CLOUDFLARE_API_TOKEN is not set (needs "Workers R2 Storage: Edit").');
-    console.error('  See docs/work/founder-assistance.md — R2 CORS for browser uploads.');
+    console.error('  See docs/work/founder-assistance.md, R2 CORS for browser uploads.');
     process.exit(2);
   }
   if (!accountId) {
@@ -124,7 +124,7 @@ async function main() {
         failed = true;
         const message = put.json?.errors?.map((e) => `${e.code}: ${e.message}`).join('; ');
         console.error(
-          `✖ ${bucket}: PUT failed (HTTP ${put.status})${message ? ` — ${message}` : ''}`,
+          `✖ ${bucket}: PUT failed (HTTP ${put.status})${message ? `, ${message}` : ''}`,
         );
         continue;
       }
@@ -135,7 +135,7 @@ async function main() {
     const rules = get.json?.result?.rules;
     if (matchesExpected(rules)) {
       console.log(
-        `✔ ${bucket}: verified — ${rules[0].allowed.origins.length} origins, methods ${rules[0].allowed.methods.join('/')}`,
+        `✔ ${bucket}: verified, ${rules[0].allowed.origins.length} origins, methods ${rules[0].allowed.methods.join('/')}`,
       );
     } else {
       failed = true;
