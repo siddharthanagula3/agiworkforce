@@ -51,6 +51,7 @@ test('a harness that names a wire protocol carries the base url and key env to r
   const declared = Object.entries(registry.harnesses).filter(
     ([, harness]) => harness.protocol !== PROVIDER_NATIVE_PROTOCOL,
   );
+  assert.ok(declared.length > 0, 'the catalog must exercise at least one protocol harness');
   for (const [harnessId, harness] of declared) {
     assert.equal(
       new URL(harness.baseUrl).protocol,
@@ -65,6 +66,7 @@ test('every route on a protocol harness reaches its model through a dispatchable
   const protocolRoutes = Object.entries(registry.routes).filter(
     ([, route]) => registry.harnesses[route.harnessId].protocol !== PROVIDER_NATIVE_PROTOCOL,
   );
+  assert.ok(protocolRoutes.length > 0, 'the catalog must exercise at least one protocol route');
   for (const [routeId, route] of protocolRoutes) {
     const harness = registry.harnesses[route.harnessId];
     assert.equal(harness.provider, route.provider, `${routeId} harness must serve its provider`);

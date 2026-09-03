@@ -856,6 +856,26 @@
         "cacheWritePerMillion": 2.5
       }
     },
+    "cheaperinference/gpt-5.6-sol": {
+      "modelKey": "gpt-5.6-sol",
+      "provider": "cheaperinference",
+      "providerModelId": "gpt-5.6-sol",
+      "harnessId": "cheaperinference/chat-completions",
+      "trustModes": ["managed_cloud"],
+      "availability": "live",
+      "selectable": true,
+      "isDefault": false,
+      "cacheClass": "provider_implicit_prompt_cache",
+      "commercialStatus": "experimental_only",
+      "pricing": {
+        "currency": "USD",
+        "unit": "per_million_tokens",
+        "inputPerMillion": 1,
+        "outputPerMillion": 5,
+        "cacheReadPerMillion": 0.1,
+        "cacheWritePerMillion": 1.25
+      }
+    },
     "openai/gpt-5.6-terra": {
       "modelKey": "gpt-5.6-terra",
       "provider": "openai",
@@ -923,6 +943,26 @@
         "outputPerMillion": 12,
         "cacheReadPerMillion": 0.2,
         "cacheWritePerMillion": 2.5
+      }
+    },
+    "cheaperinference/gpt-5.6-terra": {
+      "modelKey": "gpt-5.6-terra",
+      "provider": "cheaperinference",
+      "providerModelId": "gpt-5.6-terra",
+      "harnessId": "cheaperinference/chat-completions",
+      "trustModes": ["managed_cloud"],
+      "availability": "live",
+      "selectable": true,
+      "isDefault": false,
+      "cacheClass": "provider_implicit_prompt_cache",
+      "commercialStatus": "experimental_only",
+      "pricing": {
+        "currency": "USD",
+        "unit": "per_million_tokens",
+        "inputPerMillion": 0.9917,
+        "outputPerMillion": 5.9502,
+        "cacheReadPerMillion": 0.09917,
+        "cacheWritePerMillion": 1.239625
       }
     },
     "openai/gpt-5.6-luna": {
@@ -994,6 +1034,26 @@
         "cacheWritePerMillion": 0.25
       }
     },
+    "cheaperinference/gpt-5.6-luna": {
+      "modelKey": "gpt-5.6-luna",
+      "provider": "cheaperinference",
+      "providerModelId": "gpt-5.6-luna",
+      "harnessId": "cheaperinference/chat-completions",
+      "trustModes": ["managed_cloud"],
+      "availability": "live",
+      "selectable": true,
+      "isDefault": false,
+      "cacheClass": "provider_implicit_prompt_cache",
+      "commercialStatus": "experimental_only",
+      "pricing": {
+        "currency": "USD",
+        "unit": "per_million_tokens",
+        "inputPerMillion": 0.08,
+        "outputPerMillion": 0.48,
+        "cacheReadPerMillion": 0.008,
+        "cacheWritePerMillion": 0.1
+      }
+    },
     "anthropic/claude-fable-5": {
       "modelKey": "claude-fable-5",
       "provider": "anthropic",
@@ -1053,6 +1113,26 @@
         "outputPerMillion": 50,
         "cacheReadPerMillion": 1,
         "cacheWritePerMillion": 12.5
+      }
+    },
+    "cheaperinference_anthropic/claude-fable-5": {
+      "modelKey": "claude-fable-5",
+      "provider": "cheaperinference_anthropic",
+      "providerModelId": "claude-fable-5",
+      "harnessId": "cheaperinference-anthropic/messages",
+      "trustModes": ["managed_cloud"],
+      "availability": "live",
+      "selectable": true,
+      "isDefault": false,
+      "cacheClass": "provider_explicit_prompt_cache",
+      "commercialStatus": "experimental_only",
+      "pricing": {
+        "currency": "USD",
+        "unit": "per_million_tokens",
+        "inputPerMillion": 7,
+        "outputPerMillion": 35,
+        "cacheReadPerMillion": 0.7,
+        "cacheWritePerMillion": 8.75
       }
     },
     "anthropic/claude-opus-5": {
@@ -1116,6 +1196,26 @@
         "cacheWritePerMillion": 6.25
       }
     },
+    "cheaperinference_anthropic/claude-opus-5": {
+      "modelKey": "claude-opus-5",
+      "provider": "cheaperinference_anthropic",
+      "providerModelId": "claude-opus-5",
+      "harnessId": "cheaperinference-anthropic/messages",
+      "trustModes": ["managed_cloud"],
+      "availability": "live",
+      "selectable": true,
+      "isDefault": false,
+      "cacheClass": "provider_explicit_prompt_cache",
+      "commercialStatus": "experimental_only",
+      "pricing": {
+        "currency": "USD",
+        "unit": "per_million_tokens",
+        "inputPerMillion": 3.5,
+        "outputPerMillion": 17.5,
+        "cacheReadPerMillion": 0.35,
+        "cacheWritePerMillion": 4.375
+      }
+    },
     "anthropic/claude-sonnet-5": {
       "modelKey": "claude-sonnet-5",
       "provider": "anthropic",
@@ -1175,6 +1275,26 @@
         "outputPerMillion": 10,
         "cacheReadPerMillion": 0.2,
         "cacheWritePerMillion": 2.5
+      }
+    },
+    "cheaperinference_anthropic/claude-sonnet-5": {
+      "modelKey": "claude-sonnet-5",
+      "provider": "cheaperinference_anthropic",
+      "providerModelId": "claude-sonnet-5",
+      "harnessId": "cheaperinference-anthropic/messages",
+      "trustModes": ["managed_cloud"],
+      "availability": "live",
+      "selectable": true,
+      "isDefault": false,
+      "cacheClass": "provider_explicit_prompt_cache",
+      "commercialStatus": "experimental_only",
+      "pricing": {
+        "currency": "USD",
+        "unit": "per_million_tokens",
+        "inputPerMillion": 1.4,
+        "outputPerMillion": 7,
+        "cacheReadPerMillion": 0.14,
+        "cacheWritePerMillion": 1.75
       }
     },
     "google/gemini-embedding-2": {
@@ -1254,6 +1374,26 @@
         "cacheWritePerMillion": 0
       }
     },
+    "cheaperinference/gemini-3.1-pro-preview": {
+      "modelKey": "gemini-3.1-pro-preview",
+      "provider": "cheaperinference",
+      "providerModelId": "gemini-3.1-pro-preview",
+      "harnessId": "cheaperinference/chat-completions",
+      "trustModes": ["managed_cloud"],
+      "availability": "live",
+      "selectable": true,
+      "isDefault": false,
+      "cacheClass": "provider_implicit_prompt_cache",
+      "commercialStatus": "experimental_only",
+      "pricing": {
+        "currency": "USD",
+        "unit": "per_million_tokens",
+        "inputPerMillion": 1.4,
+        "outputPerMillion": 8.4,
+        "cacheReadPerMillion": 0.14,
+        "cacheWritePerMillion": 0.2625
+      }
+    },
     "google/gemini-3.5-flash-lite": {
       "modelKey": "gemini-3.5-flash-lite",
       "provider": "google",
@@ -1311,6 +1451,26 @@
         "outputPerMillion": 2.5,
         "cacheReadPerMillion": 0.03,
         "cacheWritePerMillion": 0
+      }
+    },
+    "cheaperinference/gemini-3.5-flash-lite": {
+      "modelKey": "gemini-3.5-flash-lite",
+      "provider": "cheaperinference",
+      "providerModelId": "google/gemini-3.5-flash-lite",
+      "harnessId": "cheaperinference/chat-completions",
+      "trustModes": ["managed_cloud"],
+      "availability": "live",
+      "selectable": true,
+      "isDefault": false,
+      "cacheClass": "provider_implicit_prompt_cache",
+      "commercialStatus": "experimental_only",
+      "pricing": {
+        "currency": "USD",
+        "unit": "per_million_tokens",
+        "inputPerMillion": 0.21,
+        "outputPerMillion": 1.75,
+        "cacheReadPerMillion": 0.021,
+        "cacheWritePerMillion": 0.078333
       }
     },
     "google/gemini-3.1-flash-image": {
@@ -1391,6 +1551,46 @@
         "cacheWritePerMillion": 0
       }
     },
+    "cheaperinference/deepseek-v4-flash": {
+      "modelKey": "deepseek-v4-flash",
+      "provider": "cheaperinference",
+      "providerModelId": "deepseek-v4-flash",
+      "harnessId": "cheaperinference/chat-completions",
+      "trustModes": ["managed_cloud"],
+      "availability": "live",
+      "selectable": true,
+      "isDefault": false,
+      "cacheClass": "provider_implicit_prompt_cache",
+      "commercialStatus": "experimental_only",
+      "pricing": {
+        "currency": "USD",
+        "unit": "per_million_tokens",
+        "inputPerMillion": 0.067336,
+        "outputPerMillion": 0.166606,
+        "cacheReadPerMillion": 0.013452,
+        "cacheWritePerMillion": 0.067336
+      }
+    },
+    "deepseek_anthropic/deepseek-v4-flash": {
+      "modelKey": "deepseek-v4-flash",
+      "provider": "deepseek_anthropic",
+      "providerModelId": "deepseek-v4-flash",
+      "harnessId": "deepseek-anthropic/messages",
+      "trustModes": ["managed_cloud", "byok"],
+      "availability": "live",
+      "selectable": true,
+      "isDefault": false,
+      "cacheClass": "provider_explicit_prompt_cache",
+      "commercialStatus": "agi_direct",
+      "pricing": {
+        "currency": "USD",
+        "unit": "per_million_tokens",
+        "inputPerMillion": 0.44,
+        "outputPerMillion": 1.32,
+        "cacheReadPerMillion": 0.014,
+        "cacheWritePerMillion": 0
+      }
+    },
     "deepseek/deepseek-v4-pro": {
       "modelKey": "deepseek-v4-pro",
       "provider": "deepseek",
@@ -1447,6 +1647,46 @@
         "inputPerMillion": 0.66,
         "outputPerMillion": 1.98,
         "cacheReadPerMillion": 0.022,
+        "cacheWritePerMillion": 0
+      }
+    },
+    "cheaperinference/deepseek-v4-pro": {
+      "modelKey": "deepseek-v4-pro",
+      "provider": "cheaperinference",
+      "providerModelId": "deepseek-v4-pro",
+      "harnessId": "cheaperinference/chat-completions",
+      "trustModes": ["managed_cloud"],
+      "availability": "live",
+      "selectable": true,
+      "isDefault": false,
+      "cacheClass": "provider_implicit_prompt_cache",
+      "commercialStatus": "experimental_only",
+      "pricing": {
+        "currency": "USD",
+        "unit": "per_million_tokens",
+        "inputPerMillion": 0.6204,
+        "outputPerMillion": 1.8612,
+        "cacheReadPerMillion": 0.051725,
+        "cacheWritePerMillion": 0.6204
+      }
+    },
+    "deepseek_anthropic/deepseek-v4-pro": {
+      "modelKey": "deepseek-v4-pro",
+      "provider": "deepseek_anthropic",
+      "providerModelId": "deepseek-v4-pro",
+      "harnessId": "deepseek-anthropic/messages",
+      "trustModes": ["managed_cloud", "byok"],
+      "availability": "live",
+      "selectable": true,
+      "isDefault": false,
+      "cacheClass": "provider_explicit_prompt_cache",
+      "commercialStatus": "agi_direct",
+      "pricing": {
+        "currency": "USD",
+        "unit": "per_million_tokens",
+        "inputPerMillion": 1.32,
+        "outputPerMillion": 3.96,
+        "cacheReadPerMillion": 0.044,
         "cacheWritePerMillion": 0
       }
     },
@@ -1774,7 +2014,7 @@
         "unit": "per_million_tokens",
         "inputPerMillion": 1.4,
         "outputPerMillion": 4.4,
-        "cacheReadPerMillion": 0.26,
+        "cacheReadPerMillion": 0.14,
         "cacheWritePerMillion": 0
       }
     },
@@ -1795,6 +2035,46 @@
         "inputPerMillion": 0.7,
         "outputPerMillion": 2.2,
         "cacheReadPerMillion": 0.13,
+        "cacheWritePerMillion": 0
+      }
+    },
+    "cheaperinference/glm-5.3": {
+      "modelKey": "glm-5.3",
+      "provider": "cheaperinference",
+      "providerModelId": "glm-5.3",
+      "harnessId": "cheaperinference/chat-completions",
+      "trustModes": ["managed_cloud"],
+      "availability": "live",
+      "selectable": true,
+      "isDefault": false,
+      "cacheClass": "provider_implicit_prompt_cache",
+      "commercialStatus": "experimental_only",
+      "pricing": {
+        "currency": "USD",
+        "unit": "per_million_tokens",
+        "inputPerMillion": 0.77,
+        "outputPerMillion": 2.42,
+        "cacheReadPerMillion": 0.143,
+        "cacheWritePerMillion": 0.77
+      }
+    },
+    "zhipu_anthropic/glm-5.3": {
+      "modelKey": "glm-5.3",
+      "provider": "zhipu_anthropic",
+      "providerModelId": "glm-5.3",
+      "harnessId": "zhipu-anthropic/messages",
+      "trustModes": ["managed_cloud", "byok"],
+      "availability": "live",
+      "selectable": true,
+      "isDefault": false,
+      "cacheClass": "provider_explicit_prompt_cache",
+      "commercialStatus": "agi_direct",
+      "pricing": {
+        "currency": "USD",
+        "unit": "per_million_tokens",
+        "inputPerMillion": 1.4,
+        "outputPerMillion": 4.4,
+        "cacheReadPerMillion": 0.26,
         "cacheWritePerMillion": 0
       }
     },
@@ -1854,6 +2134,46 @@
         "inputPerMillion": 0.15,
         "outputPerMillion": 0.5,
         "cacheReadPerMillion": 0.03,
+        "cacheWritePerMillion": 0
+      }
+    },
+    "cheaperinference/glm-5.3-flash": {
+      "modelKey": "glm-5.3-flash",
+      "provider": "cheaperinference",
+      "providerModelId": "glm-5.3-flash",
+      "harnessId": "cheaperinference/chat-completions",
+      "trustModes": ["managed_cloud"],
+      "availability": "live",
+      "selectable": true,
+      "isDefault": false,
+      "cacheClass": "provider_implicit_prompt_cache",
+      "commercialStatus": "experimental_only",
+      "pricing": {
+        "currency": "USD",
+        "unit": "per_million_tokens",
+        "inputPerMillion": 0.066824,
+        "outputPerMillion": 0.222748,
+        "cacheReadPerMillion": 0.013365,
+        "cacheWritePerMillion": 0.066824
+      }
+    },
+    "zhipu_anthropic/glm-5.3-flash": {
+      "modelKey": "glm-5.3-flash",
+      "provider": "zhipu_anthropic",
+      "providerModelId": "glm-5.3-flash",
+      "harnessId": "zhipu-anthropic/messages",
+      "trustModes": ["managed_cloud", "byok"],
+      "availability": "live",
+      "selectable": true,
+      "isDefault": false,
+      "cacheClass": "provider_explicit_prompt_cache",
+      "commercialStatus": "agi_direct",
+      "pricing": {
+        "currency": "USD",
+        "unit": "per_million_tokens",
+        "inputPerMillion": 0.075,
+        "outputPerMillion": 0.25,
+        "cacheReadPerMillion": 0.015,
         "cacheWritePerMillion": 0
       }
     },
@@ -1985,6 +2305,46 @@
         "cacheWritePerMillion": 0
       }
     },
+    "cheaperinference/kimi-k3": {
+      "modelKey": "kimi-k3",
+      "provider": "cheaperinference",
+      "providerModelId": "kimi-k3",
+      "harnessId": "cheaperinference/chat-completions",
+      "trustModes": ["managed_cloud"],
+      "availability": "live",
+      "selectable": true,
+      "isDefault": false,
+      "cacheClass": "provider_implicit_prompt_cache",
+      "commercialStatus": "experimental_only",
+      "pricing": {
+        "currency": "USD",
+        "unit": "per_million_tokens",
+        "inputPerMillion": 2.1,
+        "outputPerMillion": 10.5,
+        "cacheReadPerMillion": 0.21,
+        "cacheWritePerMillion": 2.1
+      }
+    },
+    "moonshot_anthropic/kimi-k3": {
+      "modelKey": "kimi-k3",
+      "provider": "moonshot_anthropic",
+      "providerModelId": "kimi-k3",
+      "harnessId": "moonshot-anthropic/messages",
+      "trustModes": ["managed_cloud", "byok"],
+      "availability": "live",
+      "selectable": true,
+      "isDefault": false,
+      "cacheClass": "provider_explicit_prompt_cache",
+      "commercialStatus": "agi_direct",
+      "pricing": {
+        "currency": "USD",
+        "unit": "per_million_tokens",
+        "inputPerMillion": 3,
+        "outputPerMillion": 15,
+        "cacheReadPerMillion": 0.3,
+        "cacheWritePerMillion": 0
+      }
+    },
     "xai/grok-4.5": {
       "modelKey": "grok-4.5",
       "provider": "xai",
@@ -2041,6 +2401,26 @@
         "outputPerMillion": 6,
         "cacheReadPerMillion": 0.3,
         "cacheWritePerMillion": 0
+      }
+    },
+    "cheaperinference/grok-4.5": {
+      "modelKey": "grok-4.5",
+      "provider": "cheaperinference",
+      "providerModelId": "grok-4.5",
+      "harnessId": "cheaperinference/chat-completions",
+      "trustModes": ["managed_cloud"],
+      "availability": "live",
+      "selectable": true,
+      "isDefault": false,
+      "cacheClass": "provider_implicit_prompt_cache",
+      "commercialStatus": "experimental_only",
+      "pricing": {
+        "currency": "USD",
+        "unit": "per_million_tokens",
+        "inputPerMillion": 1.4,
+        "outputPerMillion": 4.2,
+        "cacheReadPerMillion": 0.21,
+        "cacheWritePerMillion": 1.4
       }
     },
     "google/veo-3.1": {
@@ -2327,6 +2707,26 @@
         "outputPerMillion": 0.5,
         "cacheReadPerMillion": 0,
         "cacheWritePerMillion": 0
+      }
+    },
+    "cheaperinference/gpt-oss-120b": {
+      "modelKey": "gpt-oss-120b",
+      "provider": "cheaperinference",
+      "providerModelId": "gpt-oss-120b",
+      "harnessId": "cheaperinference/chat-completions",
+      "trustModes": ["managed_cloud"],
+      "availability": "live",
+      "selectable": true,
+      "isDefault": false,
+      "cacheClass": "provider_implicit_prompt_cache",
+      "commercialStatus": "experimental_only",
+      "pricing": {
+        "currency": "USD",
+        "unit": "per_million_tokens",
+        "inputPerMillion": 0.04,
+        "outputPerMillion": 0.2,
+        "cacheReadPerMillion": 0.012057,
+        "cacheWritePerMillion": 0.04
       }
     },
     "groq/gpt-oss-20b": {
@@ -2627,6 +3027,61 @@
       "features": {},
       "protocol": "provider_native",
       "hostPolicy": "allowlist_only"
+    },
+    "cheaperinference/chat-completions": {
+      "provider": "cheaperinference",
+      "apiFamily": "chat_completions",
+      "adapter": "@agiworkforce/providers-openai",
+      "trustModes": ["managed_cloud"],
+      "features": {},
+      "protocol": "openai_chat",
+      "baseUrl": "https://api.cheaperinference.com/v1",
+      "apiKeyEnv": "AGI_CHEAPERINFERENCE_API_KEY",
+      "hostPolicy": "registry_declared"
+    },
+    "cheaperinference-anthropic/messages": {
+      "provider": "cheaperinference_anthropic",
+      "apiFamily": "messages",
+      "adapter": "@agiworkforce/providers-anthropic",
+      "trustModes": ["managed_cloud"],
+      "features": {},
+      "protocol": "anthropic_messages",
+      "baseUrl": "https://api.cheaperinference.com",
+      "apiKeyEnv": "AGI_CHEAPERINFERENCE_API_KEY",
+      "hostPolicy": "registry_declared"
+    },
+    "deepseek-anthropic/messages": {
+      "provider": "deepseek_anthropic",
+      "apiFamily": "messages",
+      "adapter": "@agiworkforce/providers-anthropic",
+      "trustModes": ["managed_cloud", "byok"],
+      "features": {},
+      "protocol": "anthropic_messages",
+      "baseUrl": "https://api.deepseek.com/anthropic",
+      "apiKeyEnv": "DEEPSEEK_API_KEY",
+      "hostPolicy": "allowlist_only"
+    },
+    "moonshot-anthropic/messages": {
+      "provider": "moonshot_anthropic",
+      "apiFamily": "messages",
+      "adapter": "@agiworkforce/providers-anthropic",
+      "trustModes": ["managed_cloud", "byok"],
+      "features": {},
+      "protocol": "anthropic_messages",
+      "baseUrl": "https://api.moonshot.ai/anthropic",
+      "apiKeyEnv": "MOONSHOT_API_KEY",
+      "hostPolicy": "allowlist_only"
+    },
+    "zhipu-anthropic/messages": {
+      "provider": "zhipu_anthropic",
+      "apiFamily": "messages",
+      "adapter": "@agiworkforce/providers-anthropic",
+      "trustModes": ["managed_cloud", "byok"],
+      "features": {},
+      "protocol": "anthropic_messages",
+      "baseUrl": "https://api.z.ai/api/anthropic",
+      "apiKeyEnv": "ZHIPU_API_KEY",
+      "hostPolicy": "registry_declared"
     }
   },
   "runtimeProfiles": {

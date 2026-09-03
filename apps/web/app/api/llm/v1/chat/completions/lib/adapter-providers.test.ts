@@ -24,6 +24,7 @@ interface RegistryRoute {
 
 interface RegistryHarness {
   apiFamily: string;
+  protocol: string;
 }
 
 interface CompiledRegistry {
@@ -59,6 +60,16 @@ function isChatDispatchRoute(
   return apiFamily !== undefined && CHAT_DISPATCH_API_FAMILIES.has(apiFamily);
 }
 
+const PROVIDER_NATIVE_PROTOCOL = 'provider_native';
+
+function isProtocolRoute(
+  route: RegistryRoute,
+  harnesses: Record<string, RegistryHarness>,
+): boolean {
+  const protocol = harnesses[route.harnessId]?.protocol;
+  return protocol !== undefined && protocol !== PROVIDER_NATIVE_PROTOCOL;
+}
+
 describe('ADAPTER_PROVIDERS registry coverage', () => {
   it('dispatches every managed-cloud chat route the compiled registry declares', () => {
     const registry = readCompiledRegistry();
@@ -70,5 +81,20 @@ describe('ADAPTER_PROVIDERS registry coverage', () => {
       .filter(({ provider }) => !ADAPTER_PROVIDERS[provider]);
 
     expect(uncoveredProviders).toEqual([]);
+  });
+
+  it('dispatches every route the registry describes by protocol rather than by package', () => {
+    const registry = readCompiledRegistry();
+
+    const protocolRoutes = Object.entries(registry.routes).filter(([, route]) =>
+      isProtocolRoute(route, registry.harnesses),
+    );
+
+    expect(protocolRoutes.length).toBeGreaterThan(0);
+    expect(
+      protocolRoutes
+        .map(([routeId, route]) => ({ routeId, provider: route.provider }))
+        .filter(({ provider }) => !ADAPTER_PROVIDERS[provider]),
+    ).toEqual([]);
   });
 });

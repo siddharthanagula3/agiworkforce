@@ -80,8 +80,8 @@ fn every_route_carries_its_own_price_sheet() {
     assert!(alternate_pricing.cache_read_per_million.is_some());
     assert!(alternate_pricing.cache_write_per_million.is_some());
     assert_ne!(
-        default_pricing.cache_class, alternate_pricing.cache_class,
-        "a gateway route and a first-party route cache differently"
+        model.default_route_id, model.alternate_route_id,
+        "an additional route is a second priced route on the same model"
     );
     assert_ne!(
         alternate_pricing.commercial_status,
@@ -109,11 +109,12 @@ fn an_explicit_selection_fails_over_within_its_own_model() {
         panic!("expected selected route");
     };
     assert_eq!(selected.route_id, model.default_route_id);
-    assert_eq!(selected.fallbacks.len(), 1);
-    let fallback = &selected.fallbacks[0];
-    assert_eq!(fallback.model_key, model.model_key);
-    assert_eq!(fallback.route_id, model.alternate_route_id);
-    assert_ne!(fallback.provider, selected.provider);
+    assert!(!selected.fallbacks.is_empty());
+    for fallback in &selected.fallbacks {
+        assert_eq!(fallback.model_key, model.model_key);
+        assert_ne!(fallback.route_id, selected.route_id);
+        assert_ne!(fallback.provider, selected.provider);
+    }
 }
 
 #[test]
@@ -137,7 +138,6 @@ fn a_trust_mode_the_additional_harness_cannot_serve_sees_one_route_only() {
 
 #[test]
 fn same_model_routes_come_before_any_model_substitution() {
-    let model = multi_route_model();
     let decision = resolve_auto_route(&AutoRoutingRequest {
         selection: Some("auto-balanced"),
         task_type: RoutingTaskType::Coding,
@@ -150,13 +150,16 @@ fn same_model_routes_come_before_any_model_substitution() {
     let AutoRouteDecision::Selected(selected) = decision else {
         panic!("expected selected route");
     };
-    assert_eq!(selected.model_key, model.model_key);
-    assert_eq!(selected.fallbacks[0].route_id, model.alternate_route_id);
-    assert_eq!(selected.fallbacks[0].model_key, model.model_key);
+    let own_model_fallbacks = selected
+        .fallbacks
+        .iter()
+        .take_while(|fallback| fallback.model_key == selected.model_key)
+        .count();
+    assert!(own_model_fallbacks > 0);
     assert!(
-        selected.fallbacks[1..]
+        selected.fallbacks[own_model_fallbacks..]
             .iter()
-            .all(|fallback| fallback.model_key != model.model_key)
+            .all(|fallback| fallback.model_key != selected.model_key)
     );
 }
 
