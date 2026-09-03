@@ -5,6 +5,7 @@ import { MarketingFooter } from '@/features/marketing/components/MarketingFooter
 import {
   Button,
   ButtonRow,
+  Container,
   Ledger,
   Prose,
   Section,
@@ -13,6 +14,7 @@ import {
 } from '@/features/marketing/components/system';
 import { PageHero } from '@/features/marketing/components/pages/surfaces/shared';
 import { NoteList } from '@/features/marketing/components/pages/company/shared';
+import { PolicyContents } from '@shared/components/legal/PolicyContents';
 import {
   CONTACT_EMAIL,
   CONTACT_SUBJECTS,
@@ -29,6 +31,15 @@ export const metadata = buildMetadata({
     'What you may and may not do with an agent that browses the web, runs code in a sandbox, and acts on connected accounts. Prohibited uses, automated-access limits, and what happens on a violation.',
   path: '/acceptable-use',
 });
+
+const SECTIONS = [
+  { label: 'The short version', id: 'summary' },
+  '01 · What this covers',
+  '02 · Prohibited uses',
+  '03 · Automated access and limits',
+  '04 · What happens on a violation',
+  '05 · Reporting abuse',
+] as const;
 
 const SUMMARY: readonly LedgerRow[] = [
   {
@@ -197,6 +208,10 @@ export default function AcceptableUsePage() {
           }
           ctas={[]}
         />
+
+        <Container className="mb-10">
+          <PolicyContents sections={SECTIONS} />
+        </Container>
 
         <Section id="summary" labelledBy="agi-acceptable-use-summary-title" rule>
           <Stack gap="loose">
