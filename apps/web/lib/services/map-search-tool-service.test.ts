@@ -1,6 +1,10 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { createMapSearchToolDefinition, executeMapSearchTool } from './map-search-tool-service';
+import {
+  createMapSearchToolDefinition,
+  executeMapSearchTool,
+  hasMapSearchIntent,
+} from './map-search-tool-service';
 
 const NOW = () => new Date('2026-08-11T12:00:00.000Z');
 
@@ -71,5 +75,22 @@ describe('map search tool service', () => {
     const properties = definition.function.parameters.properties;
     expect(definition.function.name).toBe('search_maps');
     expect(Object.keys(properties)).toEqual(['query', 'title']);
+  });
+
+  it.each([
+    'Explain in about 300 words how a hash map handles collisions, with one short code example in Python.',
+    'Explain how a memory map works in operating systems.',
+    'What is a treemap chart?',
+  ])('does not detect map search intent for %s', (userMessage) => {
+    expect(hasMapSearchIntent(userMessage)).toBe(false);
+  });
+
+  it.each([
+    'Show coffee shops on a map.',
+    'Show coffee shops near me on a map.',
+    'Plan a driving route from Austin to Marfa.',
+    'Find coffee shops near Union Square.',
+  ])('detects map search intent for %s', (userMessage) => {
+    expect(hasMapSearchIntent(userMessage)).toBe(true);
   });
 });
