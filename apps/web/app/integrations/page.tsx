@@ -11,7 +11,7 @@ import {
   Stack,
 } from '@/features/marketing/components/system';
 import { FactGrid, PageHero } from '@/features/marketing/components/pages/surfaces/shared';
-import { DESKTOP_LOCAL_RUNTIMES, MARKETING } from '@/lib/marketing-constants';
+import { DESKTOP_LOCAL_RUNTIMES, MARKETING, SURFACE_STATUS } from '@/lib/marketing-constants';
 
 export const metadata = buildMetadata({
   title: 'Integrations: MCP plugins, the browser bridge, and BYOK',
@@ -54,7 +54,7 @@ export default function IntegrationsPage() {
                 {
                   meta: 'Bridge',
                   title: 'Native messaging bridge',
-                  body: 'The Chrome side panel pairs with Desktop on localhost:8787. The browser captures intent. Desktop runs the model and the tool calls.',
+                  body: `The Chrome side panel pairs with Desktop on localhost:8787. The browser captures intent. Desktop runs the model and the tool calls. Chrome is ${SURFACE_STATUS.chrome.toLowerCase()}, not on the Chrome Web Store yet.`,
                 },
                 {
                   meta: 'Keys',
@@ -91,8 +91,7 @@ export default function IntegrationsPage() {
                 },
                 {
                   label: 'Native messaging',
-                  value:
-                    'Chrome MV3 extension to Desktop on localhost:8787. Extension availability tracks the Desktop release.',
+                  value: `Chrome MV3 extension to Desktop on localhost:8787. Extension availability tracks the Desktop release. Chrome is ${SURFACE_STATUS.chrome.toLowerCase()}: not on the Chrome Web Store yet.`,
                 },
                 {
                   label: 'Editor',
