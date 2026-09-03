@@ -161,6 +161,12 @@ describe('buildAdapterStreamResponse · wire bytes', () => {
       [
         `data: ${JSON.stringify({ choices: [{ delta: { content: 'Hello' }, index: 0 }], model: 'fixture-model' })}`,
         '',
+        `data: ${JSON.stringify({
+          choices: [{ delta: {}, index: 0 }],
+          model: 'fixture-model',
+          usage: { prompt_tokens: 120, completion_tokens: 80, total_tokens: 200 },
+        })}`,
+        '',
         `data: ${JSON.stringify({ choices: [{ delta: {}, finish_reason: 'stop', index: 0 }], model: 'fixture-model' })}`,
         '',
         'data: [DONE]',
