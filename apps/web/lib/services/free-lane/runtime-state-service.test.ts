@@ -755,3 +755,63 @@ describe('served route affinity', () => {
     expect(affinity).toBeNull();
   });
 });
+
+describe('redis key scoping', () => {
+  it('scopes a served route affinity write to its own conversation', async () => {
+    const ttlMs = routeAffinityTtlMs('gateway_prompt_cache');
+    await recordServedRouteAffinity({
+      conversationId: 'conversation-a',
+      routeId: HEALTH_ROUTE_ID,
+      ttlMs,
+    });
+    await recordServedRouteAffinity({
+      conversationId: 'conversation-b',
+      routeId: HEALTH_ROUTE_ID,
+      ttlMs,
+    });
+
+    const keys = redisClient!.ops.filter((op) => op.command === 'hset').map((op) => op.args[0]);
+    expect(keys).toEqual(['agi-raffinity:conversation-a', 'agi-raffinity:conversation-b']);
+  });
+
+  it("never reads one conversation's affinity for another, even when pinned to the same route", async () => {
+    redisClient!.hashes.set('agi-raffinity:conversation-a', { routeId: HEALTH_ROUTE_ID });
+    expect(await getServedRouteAffinity('conversation-b')).toBeNull();
+    expect(await getServedRouteAffinity('conversation-a')).toEqual({ routeId: HEALTH_ROUTE_ID });
+  });
+
+  it('keys the shared quota pool by pool id and window, deliberately not by conversation or user', async () => {
+    await recordFreeLaneUsage({
+      routeId: ROUTE_ID,
+      nowMs: NOW_MS,
+      usage: { inputTokens: 1, outputTokens: 1 },
+      document: document(),
+    });
+    const incr = redisClient!.ops.find((op) => op.command === 'incrby');
+    expect((incr!.args[0] as string).split(':')).toEqual([
+      'agi-fpool',
+      POOL_ID,
+      String(DAY_START_MS),
+    ]);
+  });
+
+  it('keys route and provider health by id alone, deliberately not by conversation or user', async () => {
+    await recordFreeLaneRouteFailure({
+      routeId: ROUTE_ID,
+      provider: PROVIDER,
+      nowMs: NOW_MS,
+      category: 'rate_limit',
+      code: 'rate_limit_429',
+      retryAfterSeconds: 1,
+      document: document(),
+    });
+    const hset = redisClient!.ops.find((op) => op.command === 'hset');
+    expect((hset!.args[0] as string).split(':')).toEqual(['agi-fhealth', 'route', ROUTE_ID]);
+  });
+
+  it('keys route outcome events by route id alone, deliberately not by conversation or user', async () => {
+    await recordRouteOutcome(HEALTH_ROUTE_ID, { class: 'success' }, NOW_MS);
+    const zadd = redisClient!.ops.find((op) => op.command === 'zadd');
+    expect(zadd!.args[0]).toBe(`agi-rhealth:events:${HEALTH_ROUTE_ID}`);
+  });
+});
