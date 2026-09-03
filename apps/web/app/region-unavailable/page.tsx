@@ -1,4 +1,6 @@
 import { buildMetadata } from '@/lib/seo/metadata';
+import { Header } from '@shared/components/layout/Header';
+import { MarketingFooter } from '@/features/marketing/components/MarketingFooter';
 import { Eyebrow, Prose, Section, Stack } from '@/features/marketing/components/system';
 import { CONTACT_EMAIL, LEGAL_ENTITY, contactMailto } from '@/lib/legal-constants';
 
@@ -12,6 +14,7 @@ export const metadata = buildMetadata({
 export default function RegionUnavailablePage() {
   return (
     <div data-design="agi" className="agi-ds-page">
+      <Header />
       <main id="main-content">
         <Section size="sm">
           <Stack gap="loose">
@@ -57,6 +60,7 @@ export default function RegionUnavailablePage() {
           </Stack>
         </Section>
       </main>
+      <MarketingFooter />
     </div>
   );
 }
