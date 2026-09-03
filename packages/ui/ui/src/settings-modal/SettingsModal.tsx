@@ -351,7 +351,7 @@ function ConnectorDetail({
           so they follow the connection rather than the catalog entry. */}
       {connection && toolPermissions}
 
-      {/* Details — real catalog metadata only (no invented author/URL/docs). */}
+      {/* Details: real catalog metadata only (no invented author/URL/docs). */}
       <div className="rounded-lg border border-border/80">
         <div className="border-b border-border/60 px-3 py-2 text-xs font-semibold text-foreground">
           Details
@@ -366,9 +366,9 @@ function ConnectorDetail({
             <dd className="uppercase text-foreground">{connector.authType.replace('_', ' ')}</dd>
           </div>
           {/* NOTE: an "Actions" row rendered `connector.actionCount` here. That
-              number has no backing implementation on any surface — web supplies
+              number has no backing implementation on any surface: web supplies
               hand-written counts from features/connectors/data/connectors.ts and
-              Desktop passes 0 — so it advertised a capability count at exactly
+              Desktop passes 0, so it advertised a capability count at exactly
               the moment the user is deciding to grant access. Do not reinstate
               it without a runtime tool count to render. */}
           {connection?.connectedAt && (
@@ -1166,7 +1166,7 @@ function DirectoryBrowse({
                   </div>
                   <p className="mt-1.5 text-[12px] text-muted-foreground">
                     Connectors run through the OAuth/MCP connection you set up separately in
-                    Connectors — installing this pack does not connect them for you.
+                    Connectors. Installing this pack does not connect them for you.
                   </p>
                 </>
               ) : (
@@ -1356,7 +1356,7 @@ function AddCustomConnectorForm({
       {/*
         Paste a Claude Desktop / Cursor / VS Code style MCP config (or a bare
         {"url": "..."} object) to fill in the fields below instead of typing
-        them by hand. Parsing only prefills state — the Add button below is
+        them by hand. Parsing only prefills state: the Add button below is
         still the only way this ever reaches adapter.addCustomConnector.
       */}
       <div className="flex flex-col gap-1.5 rounded-lg border border-border bg-muted/20 p-3">
@@ -1403,11 +1403,11 @@ function AddCustomConnectorForm({
       </div>
 
       {/*
-        CONNECTOR-FORM-PASSWORD-AUTOFILL-01 — do not remove these autofill
+        CONNECTOR-FORM-PASSWORD-AUTOFILL-01: do not remove these autofill
         opt-outs. A bare text input followed by a password input is the exact
         shape browsers and password managers treat as a LOGIN form, so Chrome
         and Safari filled the signed-in user's account email into "Name" and
-        their saved ACCOUNT PASSWORD into "Bearer token" — a field whose own
+        their saved ACCOUNT PASSWORD into "Bearer token", a field whose own
         help text promises it is "Sent only to this MCP server". Submitting the
         prefilled form would have transmitted the user's password to an
         arbitrary third-party MCP server.
@@ -2032,7 +2032,7 @@ function SkillsPanel({ adapter }: { adapter?: SettingsDataAdapter }) {
         <h2 className="text-base font-semibold text-foreground">Skills</h2>
         <p className="mt-1 text-sm text-muted-foreground">
           Bundled, portable instruction sets for focused workflows. Select one in chat with / or @,
-          or download its SKILL.md. The web app doesn&apos;t author skills — use Record a skill in
+          or download its SKILL.md. The web app doesn&apos;t author skills. Use Record a skill in
           the Desktop app, or add a SKILL.md file to .agiworkforce/skills in the CLI.
         </p>
       </div>
@@ -2094,7 +2094,7 @@ function SkillsPanel({ adapter }: { adapter?: SettingsDataAdapter }) {
       ) : filtered.length === 0 ? (
         <p className="py-8 text-center text-sm text-muted-foreground">
           {skills.length === 0
-            ? "No skills loaded in this environment. Skills ship bundled with AGI Workforce — the web app can't create one. Use Record a skill in the Desktop app, or add a SKILL.md file to .agiworkforce/skills in the CLI."
+            ? "No skills loaded in this environment. Skills ship bundled with AGI Workforce. The web app can't create one. Use Record a skill in the Desktop app, or add a SKILL.md file to .agiworkforce/skills in the CLI."
             : 'No skills match your search.'}
         </p>
       ) : (
@@ -2112,7 +2112,7 @@ function SkillsPanel({ adapter }: { adapter?: SettingsDataAdapter }) {
                   Version, not "Last updated". The reference shows a date; the
                   skills source exposes no modified time, and a date derived
                   from load time would be fiction. The bundle's own frontmatter
-                  version is real, and answers the same question — which
+                  version is real, and answers the same question: which
                   iteration of this skill am I running.
                 */}
                 <th scope="col" className="hidden w-[12%] px-3 py-2 font-semibold sm:table-cell">
