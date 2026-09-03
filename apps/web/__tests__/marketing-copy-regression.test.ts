@@ -36,11 +36,16 @@ describe('public marketing copy regressions', () => {
   it('keeps local CLI examples tied to explicit discovered models', () => {
     const source = readWebFile('app/local/page.tsx');
     const getStarted = readWebFile('app/get-started/page.tsx');
+    const renderedSource = source
+      .replace(/\{' '\}/g, ' ')
+      .replace(/<\/?span[^>]*>/g, '')
+      .replace(/&lt;/g, '<')
+      .replace(/&gt;/g, '>')
+      .replace(/\s+/g, ' ');
 
     expect(source).toContain('agi models scan');
-    expect(source).toContain('agi --provider ollama --model');
-    expect(source).toContain('<model>');
-    expect(source).toContain('agi --provider lmstudio --model');
+    expect(renderedSource).toContain('agi --provider ollama --model <model>');
+    expect(renderedSource).toContain('agi --provider lmstudio --model <model>');
     expect(getStarted).toContain('agi models scan');
     expect(getStarted).toContain('agi --provider ollama --model');
     expect(getStarted).toContain('&lt;model&gt;');
@@ -130,8 +135,12 @@ describe('public marketing copy regressions', () => {
 
     expect(waitlist).not.toContain('Cloud Managed is invite-only across Web, Mobile, Desktop, CLI');
     expect(normalizedWaitlist).toContain('open by default');
+    expect(
+      normalizedWaitlist,
+      'byok release surface list must be derived from SURFACE_STATUS, not hardcoded',
+    ).toContain('SURFACE_STATUS[surface.id] !== COMING_SOON_LABEL');
     expect(normalizedWaitlist).toContain(
-      'Use your provider accounts on supported Desktop, CLI, and VS Code releases',
+      'Use your provider accounts on supported ${BYOK_RELEASE_LABEL} releases with visible labels.',
     );
     expect(waitlistForm).not.toContain('var(--teal, #2eb88a)');
     expect(waitlistForm).toContain('var(--agi-success)');
