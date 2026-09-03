@@ -13,7 +13,6 @@ import {
   Section,
   Stack,
 } from '@/features/marketing/components/system';
-import { PageHero } from '@/features/marketing/components/pages/surfaces/shared';
 
 export const metadata = buildMetadata({
   title: 'Tools and connectors: MCP servers, OAuth apps, and permissions',
@@ -21,6 +20,14 @@ export const metadata = buildMetadata({
     'How a tool call is gated inside AGI: the mode check, the per-tool default, the approval prompt that opens on No, the 120-second timeout that cancels rather than approves, and the tools no standing grant can answer for.',
   path: '/features/tools',
 });
+
+const IDS = {
+  hero: 'agi-features-tools-title',
+  gate: 'agi-features-tools-gate-title',
+  standing: 'agi-features-tools-standing-title',
+  saved: 'agi-features-tools-saved-title',
+  close: 'agi-features-tools-close-title',
+} as const;
 
 const NEVER_REMEMBERABLE = [
   'set_auto_approve_all',
@@ -49,33 +56,45 @@ export default function FeaturesToolsPage() {
     <div data-design="agi" className="agi-ds-page">
       <Header />
       <main id="main-content">
-        <PageHero
-          id="agi-features-tools-title"
-          eyebrow="Features · Tool permissions"
-          title="The agent asks you before it acts, and for nineteen tools it asks every time."
-          lede="MCP servers, OAuth connectors, and shell commands all arrive at the same gate. A tool call is a request, and a permission you never granted is not one the runtime can assume. Below is the order that gate actually runs in, and the tools it refuses to stop asking about."
-          ctas={[
-            { href: '/agent-permissions', label: 'Read the permission reference' },
-            { href: '/connectors', label: 'See what connects', variant: 'secondary' },
-          ]}
-          visual={
-            <ProductFrame
-              src="/product/agents-tool-approvals-dark.png"
-              srcLight="/product/agents-tool-approvals-light.png"
-              alt='The tool approvals setting in AGI, with "Ask before every action" selected'
-              width={1132}
-              height={584}
-              caption={['Settings', 'Tool approvals']}
-              priority
-            />
-          }
-        />
+        <section className="agi-lp-hero" aria-labelledby={IDS.hero}>
+          <div className="agi-ds-container agi-lp-hero-grid">
+            <div className="agi-lp-hero-copy">
+              <p className="agi-lp-eyebrow">Features &middot; Tool permissions</p>
+              <h1 className="agi-lp-h1" id={IDS.hero}>
+                <span className="agi-lp-line">The agent asks first,</span>
+                <em className="agi-lp-accent">and nineteen tools ask every time.</em>
+              </h1>
+              <p className="agi-lp-lede">
+                MCP servers, OAuth connectors, and shell commands all arrive at the same gate. A
+                tool call is a request, and a permission you never granted is not one the runtime
+                can assume.
+              </p>
+              <ButtonRow>
+                <Button href="/agent-permissions">Read the permission reference</Button>
+                <Button href="/connectors" variant="secondary">
+                  See what connects
+                </Button>
+              </ButtonRow>
+            </div>
+            <div className="agi-lp-hero-stage">
+              <ProductFrame
+                src="/product/agents-tool-approvals-dark.png"
+                srcLight="/product/agents-tool-approvals-light.png"
+                alt='The tool approvals setting in AGI, with "Ask before every action" selected'
+                width={1132}
+                height={584}
+                caption={['Settings', 'Tool approvals']}
+                priority
+              />
+            </div>
+          </div>
+        </section>
 
-        <Section id="gate-order" labelledBy="agi-features-tools-gate-title" rule>
+        <Section id="gate-order" labelledBy={IDS.gate} rule>
           <Stack gap="loose">
             <div>
               <Eyebrow>The gate order</Eyebrow>
-              <h2 className="agi-ds-h2" id="agi-features-tools-gate-title">
+              <h2 className="agi-ds-h2" id={IDS.gate}>
                 A tool call gets past all of this before it runs.
               </h2>
             </div>
@@ -85,56 +104,49 @@ export default function FeaturesToolsPage() {
                 {
                   label: 'Mode',
                   value:
-                    'AGI Desktop carries an agent mode. In Safe and Plan the agent may call only read-only tools, so a write is refused before a prompt is even offered. The mode is stored, not held in memory, so a restriction you set survives the next launch.',
+                    'In Safe and Plan, AGI Desktop may call only read-only tools, so a write is refused before a prompt is even offered.',
                 },
                 {
                   label: 'Default',
                   value:
-                    'A connector tool you have never ruled on is Needs approval. If its name reads as a write (create, update, delete, remove), the default is Blocked instead. Nothing becomes allowed by omission.',
+                    'A connector tool you have never ruled on is Needs approval. A write-shaped name defaults to Blocked instead.',
                 },
                 {
                   label: 'The ask',
                   value:
-                    'The request carries the tool name, the arguments the model actually wrote, and a risk level. In the CLI overlay the cursor starts on No, so pressing Enter on a prompt you did not read cannot grant it.',
+                    'The request carries the tool name, the arguments the model actually wrote, and a risk level.',
                 },
                 {
                   label: 'Silence',
                   value:
-                    'The desktop dialog holds the call open for 120 seconds and then cancels it. An unanswered prompt returns an error to the caller; it is never counted as a yes.',
+                    'The desktop dialog holds the call open for 120 seconds and then cancels it. It is never counted as a yes.',
                 },
                 {
                   label: 'Reach',
                   value:
-                    'Inside Local mode the CLI will only open a stdio MCP server. SSE and Streamable HTTP are network egress even when their tool schemas look read-only, so neither is offered there.',
+                    'Inside Local mode the CLI will only open a stdio MCP server; SSE and Streamable HTTP are network egress and are not offered there.',
                 },
               ]}
             />
           </Stack>
         </Section>
 
-        <Section
-          id="standing-grants"
-          labelledBy="agi-features-tools-standing-title"
-          rule
-          ground="2"
-        >
+        <Section id="standing-grants" labelledBy={IDS.standing} rule ground="2">
           <Stack gap="loose">
             <div>
               <Eyebrow>Standing grants</Eyebrow>
-              <h2 className="agi-ds-h2" id="agi-features-tools-standing-title">
+              <h2 className="agi-ds-h2" id={IDS.standing}>
                 Some tools refuse to remember your answer.
               </h2>
             </div>
             <Prose>
               Always allow, an approval scoped to the session, and Autopilot are one grant at three
-              lengths, so AGI Desktop governs them with one list. Nineteen tools are excluded from
-              all three and prompt again on every call: the ones that rewrite the permission model
-              itself, the ones that run code or write to your disk, and the ones that publish or
-              destroy data outside the app. Every MCP tool is excluded as well, because what a tool
-              does is decided by a third-party server and a remembered answer would follow the name
-              after the server redefines it.
+              lengths. Nineteen tools are excluded from all three and prompt again on every call:
+              the ones that rewrite the permission model itself, the ones that run code or write to
+              your disk, and the ones that publish or destroy data outside the app. Every MCP tool
+              is excluded as well, because what a tool does is decided by a third-party server.
             </Prose>
-            <Prose>
+            <Prose size="sm">
               {NEVER_REMEMBERABLE.map((tool, index) => (
                 <Fragment key={tool}>
                   {index > 0 ? ', ' : ''}
@@ -143,9 +155,8 @@ export default function FeaturesToolsPage() {
               ))}
             </Prose>
             <Prose size="sm">
-              That list is a constant in the desktop source with a test pinning it entry for entry,
-              so it cannot quietly get shorter. What the agent may do <em>without</em> asking on
-              each surface is written out at{' '}
+              That list is a constant in the desktop source with a test pinning it entry for entry.
+              What the agent may do <em>without</em> asking on each surface is written out at{' '}
               <Link href="/agent-permissions" className="agi-ds-link">
                 the permission reference
               </Link>
@@ -154,23 +165,48 @@ export default function FeaturesToolsPage() {
           </Stack>
         </Section>
 
-        <Section id="saved-rules" labelledBy="agi-features-tools-saved-title" rule>
+        <Section id="saved-rules" labelledBy={IDS.saved} rule>
           <Stack gap="loose">
             <div>
               <Eyebrow>Saved rules</Eyebrow>
-              <h2 className="agi-ds-h2" id="agi-features-tools-saved-title">
+              <h2 className="agi-ds-h2" id={IDS.saved}>
                 Your saved answers live in a file you can open.
               </h2>
             </div>
-            <Prose>
-              The rules sit in <code>permissions.toml</code> under <code>~/.agiworkforce</code>,
-              written with owner-only file permissions on macOS and Linux.{' '}
-              <code>agi approvals list</code> prints its Allow, Ask, Deny and Workspace tabs; allow,
-              deny, session and remove edit them; export and import carry them to another machine;
-              reset clears them. Matching is by whole token and deny is checked before allow, and a
-              command containing a newline matches no stored rule at all, so an allow for{' '}
-              <code>git status</code> cannot be ridden by a second line.
-            </Prose>
+            <Ledger
+              caption="Saved permission rules"
+              rows={[
+                {
+                  label: 'File',
+                  value: (
+                    <>
+                      <code>permissions.toml</code> under <code>~/.agiworkforce</code>, written with
+                      owner-only file permissions on macOS and Linux.
+                    </>
+                  ),
+                },
+                {
+                  label: 'Commands',
+                  value: (
+                    <>
+                      <code>agi approvals list</code> prints its Allow, Ask, Deny and Workspace
+                      tabs; allow, deny, session and remove edit them; export and import carry them
+                      to another machine; reset clears them.
+                    </>
+                  ),
+                },
+                {
+                  label: 'Matching',
+                  value: (
+                    <>
+                      By whole token, deny checked before allow. A command containing a newline
+                      matches no stored rule, so an allow for <code>git status</code> cannot be
+                      ridden by a second line.
+                    </>
+                  ),
+                },
+              ]}
+            />
             <ButtonRow>
               <Button href="/cli" variant="secondary">
                 See the agi CLI
@@ -179,24 +215,26 @@ export default function FeaturesToolsPage() {
           </Stack>
         </Section>
 
-        <Section id="tools-close" labelledBy="agi-features-tools-close-title" rule ground="2">
-          <Stack gap="loose">
-            <h2 className="agi-ds-h2" id="agi-features-tools-close-title">
-              The gaps are written down too.
-            </h2>
-            <Prose>
-              The security page sets out where data lives per trust boundary, what is encrypted,
-              what is logged, and which protections stop short, with the gaps named rather than
-              smoothed over. The download page says which installers are verified today.
-            </Prose>
-            <ButtonRow>
-              <Button href="/security">Read the security model</Button>
-              <Button href="/download" variant="secondary">
-                Check availability
-              </Button>
-            </ButtonRow>
-          </Stack>
-        </Section>
+        <section className="agi-lp-close" aria-labelledby={IDS.close}>
+          <div className="agi-ds-container">
+            <div className="agi-lp-close-inner">
+              <h2 className="agi-lp-h2" id={IDS.close}>
+                The gaps are <em className="agi-lp-accent">written down too.</em>
+              </h2>
+              <p className="agi-lp-lede">
+                The security page sets out where data lives per trust boundary, what is encrypted,
+                what is logged, and which protections stop short, with the gaps named rather than
+                smoothed over.
+              </p>
+              <ButtonRow>
+                <Button href="/security">Read the security model</Button>
+                <Button href="/download" variant="secondary">
+                  Check availability
+                </Button>
+              </ButtonRow>
+            </div>
+          </div>
+        </section>
       </main>
       <MarketingFooter />
     </div>
