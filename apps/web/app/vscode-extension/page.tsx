@@ -81,7 +81,8 @@ export default function VscodeExtensionPage() {
               in place of Cmd on Windows and Linux. The lens above each change also carries accept
               all in file and reject all in file, and those open a modal that names every file and
               how many changes are pending in each before a line is written. Anything you reject is
-              held for the rest of the window, so restore discarded changes brings it back.
+              held for the rest of the window, so <strong>Restore Discarded Changes</strong> brings
+              it back.
             </Prose>
           </Stack>
         </Section>
