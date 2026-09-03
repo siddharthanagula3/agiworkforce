@@ -7,9 +7,9 @@ import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
-import { getClerkAuthUser } from '@/lib/api-auth';
 import { requireCsrfToken } from '@/lib/csrf';
 import { getNeonDb } from '@/lib/server/neon-db';
+import { getUserScopedDb } from '@/lib/server/rls-db';
 import type { OrganizationMemberRow } from '@/lib/server/neon-types';
 import { handleCorsPreflightRequest } from '@/lib/cors';
 import { recordAuditEvent } from '@/lib/security-audit';
@@ -58,7 +58,7 @@ async function handleList(request: NextRequest) {
   const rateLimitResponse = await withRateLimit(request, 'settings-team-invitations-list');
   if (rateLimitResponse) return rateLimitResponse;
 
-  const { userId } = await getClerkAuthUser(request);
+  const { db, userId } = await getUserScopedDb(request);
   const { searchParams } = new URL(request.url);
   const parsed = ListQuerySchema.safeParse({
     organizationId: searchParams.get('organizationId') ?? undefined,
@@ -68,7 +68,6 @@ async function handleList(request: NextRequest) {
   }
   const { organizationId } = parsed.data;
 
-  const db = getNeonDb();
   await requireTeamAdminAccess(db, userId, organizationId);
   await requireOrgAdmin(db, organizationId, userId);
 
@@ -92,7 +91,7 @@ async function handleCreate(request: NextRequest) {
   const csrfError = await requireCsrfToken(request);
   if (csrfError) return csrfError as NextResponse;
 
-  const { userId } = await getClerkAuthUser(request);
+  const { db, userId } = await getUserScopedDb(request);
   const body = await request.json().catch(() => ({}));
   const parsed = CreateSchema.safeParse(body);
   if (!parsed.success) {
@@ -100,7 +99,6 @@ async function handleCreate(request: NextRequest) {
   }
   const { organizationId, email, role } = parsed.data;
 
-  const db = getNeonDb();
   await requireTeamAdminAccess(db, userId, organizationId);
   await requireOrgAdmin(db, organizationId, userId);
 
