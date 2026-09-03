@@ -226,10 +226,37 @@ export function emptyRuntimeState(capturedAtMs: number): RoutingRuntimeState {
 }
 
 /**
- * Effective health for a route, combining route-level and provider-level signal.
+ * How old `state.capturedAtMs` may be, relative to the wall clock, before a
+ * `routeHealthSnapshots` entry stops being trusted.
+ *
+ * A snapshot is normally consulted within milliseconds of capture — the same
+ * request that fetched it ranks routes with it. This guards the one case
+ * that isn't: a caller holding onto a `RoutingRuntimeState` across a long
+ * agentic turn and consulting it long after capture. Past this age the entry
+ * is dropped rather than trusted, per `effectiveRouteHealth`'s fail-open rule.
+ */
+export const MAX_ROUTE_HEALTH_SNAPSHOT_AGE_MS = 30_000;
+
+function freshRouteHealthSnapshot(
+  state: RoutingRuntimeState,
+  routeId: string,
+): RouteHealthSnapshot | undefined {
+  const snapshot = state.routeHealthSnapshots?.[routeId];
+  if (!snapshot) return undefined;
+  const ageMs = Date.now() - state.capturedAtMs;
+  return ageMs >= 0 && ageMs <= MAX_ROUTE_HEALTH_SNAPSHOT_AGE_MS ? snapshot : undefined;
+}
+
+/**
+ * Effective health for a route, combining route-level, provider-level and
+ * outcome-snapshot signal.
  *
  * Provider-level unavailability wins: if the provider is down, a route on it is
- * down regardless of what its own (possibly stale) entry says.
+ * down regardless of what its own (possibly stale) entry says. A route-level
+ * entry that is itself unavailable wins next. Only then does a fresh
+ * `routeHealthSnapshots` entry get a say — a snapshot in cooldown parks the
+ * route the same way, but a stale or missing snapshot counts as healthy, never
+ * as a pin: absence and staleness are both "no signal", not "unhealthy".
  */
 export function effectiveRouteHealth(
   state: RoutingRuntimeState,
@@ -240,10 +267,25 @@ export function effectiveRouteHealth(
   if (provider && !provider.available) return provider;
   const route = state.routeHealth[routeId];
   if (route && !route.available) return route;
+  const snapshot = freshRouteHealthSnapshot(state, routeId);
+  if (snapshot && !snapshot.available) {
+    return {
+      available: false,
+      reason: 'circuit_open',
+      ...(snapshot.cooldownUntilMs !== undefined
+        ? { availableAtMs: snapshot.cooldownUntilMs }
+        : {}),
+      ...(snapshot.successRate !== undefined ? { successRate: snapshot.successRate } : {}),
+    };
+  }
   // Merge the observable metrics, preferring the more specific route-level value.
   return {
     available: true,
-    ...(route?.successRate !== undefined ? { successRate: route.successRate } : {}),
+    ...(route?.successRate !== undefined
+      ? { successRate: route.successRate }
+      : snapshot?.successRate !== undefined
+        ? { successRate: snapshot.successRate }
+        : {}),
     ...(route?.latencyP50Ms !== undefined ? { latencyP50Ms: route.latencyP50Ms } : {}),
   };
 }

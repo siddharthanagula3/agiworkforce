@@ -3,6 +3,7 @@ import 'server-only';
 import {
   emptyRuntimeState,
   type QuotaPool,
+  type RouteCacheClass,
   type RouteHealth,
   type RouteHealthSnapshot,
   type RouteOutcome,
@@ -929,5 +930,108 @@ export async function getRouteHealthSnapshot(
       '[route-health] snapshot read failed; every route reads healthy',
     );
     return healthyRouteHealthSnapshots(routeIds);
+  }
+}
+
+const ROUTE_AFFINITY_KEY_PREFIX = 'agi-raffinity';
+const AFFINITY_FIELD_ROUTE_ID = 'routeId';
+const AFFINITY_FIELD_UPSTREAM_PROVIDER = 'upstreamProvider';
+
+const PROVIDER_PROMPT_CACHE_TTL_MS = 5 * 60 * MS_PER_SECOND;
+const EXTENDED_PROMPT_CACHE_TTL_MS = 60 * 60 * MS_PER_SECOND;
+const RESPONSE_CACHE_TTL_MS = 5 * 60 * MS_PER_SECOND;
+const NO_CACHE_AFFINITY_TTL_MS = 0;
+
+/**
+ * How long a served route stays worth pinning a conversation to, by the cache
+ * mechanism its class implies. The ceiling for each class, not an average: a
+ * shorter affinity window only gives up cache hits early, while a longer one
+ * on a route with no cache to keep warm just steers traffic without benefit,
+ * which `no_provider_cache`'s zero TTL prevents by recording no affinity at
+ * all for it.
+ */
+const ROUTE_CACHE_CLASS_AFFINITY_TTL_MS: Readonly<Record<RouteCacheClass, number>> = {
+  provider_implicit_prompt_cache: PROVIDER_PROMPT_CACHE_TTL_MS,
+  provider_explicit_prompt_cache: EXTENDED_PROMPT_CACHE_TTL_MS,
+  gateway_prompt_cache: EXTENDED_PROMPT_CACHE_TTL_MS,
+  gateway_response_cache: RESPONSE_CACHE_TTL_MS,
+  no_provider_cache: NO_CACHE_AFFINITY_TTL_MS,
+};
+
+export function routeAffinityTtlMs(cacheClass: RouteCacheClass | undefined): number {
+  return cacheClass ? ROUTE_CACHE_CLASS_AFFINITY_TTL_MS[cacheClass] : NO_CACHE_AFFINITY_TTL_MS;
+}
+
+function routeAffinityKey(conversationId: string): string {
+  return [ROUTE_AFFINITY_KEY_PREFIX, conversationId].join(KEY_SEPARATOR);
+}
+
+export interface ServedRouteAffinity {
+  routeId: string;
+  upstreamProvider?: string;
+}
+
+/**
+ * Pin a conversation to the route that just served it, for a duration bounded
+ * by how long that route's own cache mechanism stays warm.
+ *
+ * Fire-and-forget with the same fail-open contract as every other write in
+ * this module: a lost affinity write costs the next turn a cache hit, never
+ * correctness. `ttlMs <= 0` (an unknown route, or one with no cache to keep
+ * warm) records nothing — pinning without a cache benefit only narrows
+ * routing for no reason.
+ */
+export async function recordServedRouteAffinity(input: {
+  conversationId: string;
+  routeId: string;
+  ttlMs: number;
+  upstreamProvider?: string;
+}): Promise<void> {
+  if (input.ttlMs <= 0) return;
+  const client = getSharedRedisClient();
+  if (!client) return;
+  const key = routeAffinityKey(input.conversationId);
+  try {
+    const pipeline = client.pipeline();
+    pipeline.hset(key, {
+      [AFFINITY_FIELD_ROUTE_ID]: input.routeId,
+      ...(input.upstreamProvider
+        ? { [AFFINITY_FIELD_UPSTREAM_PROVIDER]: input.upstreamProvider }
+        : {}),
+    });
+    pipeline.pexpire(key, input.ttlMs);
+    await pipeline.exec();
+  } catch (error) {
+    logger.error(
+      { error, conversationId: input.conversationId },
+      '[route-affinity] served route was not recorded',
+    );
+  }
+}
+
+export async function getServedRouteAffinity(
+  conversationId: string,
+): Promise<ServedRouteAffinity | null> {
+  const client = getSharedRedisClient();
+  if (!client) return null;
+  try {
+    const raw = await client.hgetall(routeAffinityKey(conversationId));
+    if (!raw || typeof raw !== 'object') return null;
+    const record = raw as Record<string, unknown>;
+    const routeId = record[AFFINITY_FIELD_ROUTE_ID];
+    if (typeof routeId !== 'string' || routeId.length === 0) return null;
+    const upstreamProvider = record[AFFINITY_FIELD_UPSTREAM_PROVIDER];
+    return {
+      routeId,
+      ...(typeof upstreamProvider === 'string' && upstreamProvider.length > 0
+        ? { upstreamProvider }
+        : {}),
+    };
+  } catch (error) {
+    logger.error(
+      { error, conversationId },
+      '[route-affinity] read failed; the turn has no affinity',
+    );
+    return null;
   }
 }
