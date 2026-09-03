@@ -31,7 +31,7 @@ export default function CommunityPage() {
         <Section id="channels" labelledBy="agi-community-channels-title" rule>
           <Stack gap="loose">
             <h2 className="agi-ds-h2" id="agi-community-channels-title">
-              Three channels, all real.
+              Two channels, all real.
             </h2>
             <LinkGrid
               items={[
@@ -39,20 +39,28 @@ export default function CommunityPage() {
                   meta: 'Changelog',
                   title: 'Follow the changelog',
                   href: '/changelog',
-                  body: 'A dated archive of what shipped. The fastest way to track where the product is going.',
+                  body: (
+                    <>
+                      A dated archive of what shipped. The fastest way to track where the product is
+                      going. We also post it on{' '}
+                      <a
+                        href="https://twitter.com/agiworkforce"
+                        className="agi-ds-link"
+                        style={{ backgroundSize: '100% 1px' }}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                      >
+                        X
+                      </a>
+                      , but we do not reply to support there.
+                    </>
+                  ),
                 },
                 {
                   meta: 'Email',
                   title: 'Email us',
                   href: contactMailto(),
                   body: `${CONTACT_EMAIL}. A real human reads it. Use it for billing, partnerships, press, and anything the changelog does not answer.`,
-                  external: true,
-                },
-                {
-                  meta: 'X',
-                  title: '@agiworkforce',
-                  href: 'https://twitter.com/agiworkforce',
-                  body: 'We post when we ship. We do not reply to support there.',
                   external: true,
                 },
               ]}
