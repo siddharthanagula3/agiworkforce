@@ -74,7 +74,7 @@ export function humanizedPathTitle(url: string): string | undefined {
   }
 }
 
-function SourceRow({ source, index }: { source: ResearchSource; index: number }) {
+function SourceRow({ source, badge }: { source: ResearchSource; badge?: number }) {
   const [imgError, setImgError] = useState(false);
 
   // Derive a clean display hostname from the URL
@@ -115,10 +115,11 @@ function SourceRow({ source, index }: { source: ResearchSource; index: number })
         'transition-all duration-150',
       )}
     >
-      {/* Citation index badge */}
-      <span className="mt-0.5 flex h-5 min-w-[20px] shrink-0 items-center justify-center rounded bg-primary/10 px-1 text-[12px] font-semibold text-primary">
-        {source.citationIndex ?? index + 1}
-      </span>
+      {badge !== undefined && (
+        <span className="mt-0.5 flex h-5 min-w-[20px] shrink-0 items-center justify-center rounded bg-primary/10 px-1 text-[12px] font-semibold text-primary">
+          {badge}
+        </span>
+      )}
 
       {/* Favicon */}
       <div className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center">
@@ -442,7 +443,11 @@ export function ResearchPanel({ onAskFollowUp }: ResearchPanelProps) {
                       Citations
                     </h3>
                     {cited.map((source, index) => (
-                      <SourceRow key={`${source.url}-${index}`} source={source} index={index} />
+                      <SourceRow
+                        key={`${source.url}-${index}`}
+                        source={source}
+                        badge={source.citationIndex ?? index + 1}
+                      />
                     ))}
                   </div>
                 )}
@@ -452,7 +457,7 @@ export function ResearchPanel({ onAskFollowUp }: ResearchPanelProps) {
                       More
                     </h3>
                     {more.map((source, index) => (
-                      <SourceRow key={`${source.url}-${index}`} source={source} index={index} />
+                      <SourceRow key={`${source.url}-${index}`} source={source} />
                     ))}
                   </div>
                 )}

@@ -58,7 +58,7 @@ export function orderSourcesByCitation(
     return { cited: [], more: dedupedSources };
   }
 
-  const citedUrls = new Set<string>();
+  const citedKeys = new Set<string>();
   const cited: ResearchSource[] = [];
   let insideFence = false;
 
@@ -75,13 +75,18 @@ export function orderSourcesByCitation(
         const n = Number(match[1]);
         if (!Number.isInteger(n) || n < 1 || n > citationsByMarker.length) continue;
         const source = citationsByMarker[n - 1];
-        if (!source?.url || citedUrls.has(source.url)) continue;
-        citedUrls.add(source.url);
+        if (!source?.url) continue;
+        const key = normalizeUrlKey(source.url);
+        if (!key || citedKeys.has(key)) continue;
+        citedKeys.add(key);
         cited.push(source);
       }
     }
   }
 
-  const more = dedupedSources.filter((source) => !citedUrls.has(source.url));
+  const more = dedupedSources.filter((source) => {
+    const key = normalizeUrlKey(source.url);
+    return !key || !citedKeys.has(key);
+  });
   return { cited, more };
 }
