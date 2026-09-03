@@ -146,7 +146,7 @@ describe('cache boundary marker never reaches the wire', () => {
     });
     const system = out.messages.find((m) => m.role === 'system' || m.role === 'developer');
     expect(system?.content).not.toContain(SYSTEM_PROMPT_CACHE_BOUNDARY);
-    expect(system?.content).toBe('stable preamble\nturn 1 dynamic content');
+    expect(system?.content).toBe('stable preamble\n\nturn 1 dynamic content');
   });
 
   it('strips the marker from the Responses instructions field', () => {
@@ -154,7 +154,7 @@ describe('cache boundary marker never reaches the wire', () => {
       compat,
     });
     expect(out.instructions).not.toContain(SYSTEM_PROMPT_CACHE_BOUNDARY);
-    expect(out.instructions).toBe('stable preamble\nturn 1 dynamic content');
+    expect(out.instructions).toBe('stable preamble\n\nturn 1 dynamic content');
   });
 
   it('derives an identical prompt_cache_key across turns even as the dynamic suffix changes', () => {

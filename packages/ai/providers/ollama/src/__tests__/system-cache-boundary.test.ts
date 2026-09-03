@@ -22,7 +22,7 @@ describe('Ollama system message never carries the cache boundary marker', () => 
 
     const system = out.messages.find((m) => m.role === 'system');
     expect(system?.content).not.toContain(SYSTEM_PROMPT_CACHE_BOUNDARY);
-    expect(system?.content).toBe('stable preamble\ndynamic tail');
+    expect(system?.content).toBe('stable preamble\n\ndynamic tail');
   });
 
   it('strips the marker from an array req.system', () => {
@@ -32,6 +32,6 @@ describe('Ollama system message never carries the cache boundary marker', () => 
 
     const system = out.messages.find((m) => m.role === 'system');
     expect(system?.content).not.toContain(SYSTEM_PROMPT_CACHE_BOUNDARY);
-    expect(system?.content).toBe('stable\ndynamic');
+    expect(system?.content).toBe('stable\n\ndynamic');
   });
 });

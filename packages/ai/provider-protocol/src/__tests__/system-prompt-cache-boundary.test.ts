@@ -1,4 +1,3 @@
-
 import { describe, expect, it } from 'vitest';
 
 import {
@@ -15,9 +14,9 @@ describe('SYSTEM_PROMPT_CACHE_BOUNDARY constant', () => {
 });
 
 describe('stripSystemPromptCacheBoundary', () => {
-  it('replaces every boundary occurrence with a single newline', () => {
+  it('replaces every boundary occurrence with a paragraph break', () => {
     const input = `prefix${SYSTEM_PROMPT_CACHE_BOUNDARY}suffix${SYSTEM_PROMPT_CACHE_BOUNDARY}tail`;
-    expect(stripSystemPromptCacheBoundary(input)).toBe('prefix\nsuffix\ntail');
+    expect(stripSystemPromptCacheBoundary(input)).toBe('prefix\n\nsuffix\n\ntail');
   });
   it('returns the input unchanged when no boundary is present', () => {
     expect(stripSystemPromptCacheBoundary('plain text')).toBe('plain text');
