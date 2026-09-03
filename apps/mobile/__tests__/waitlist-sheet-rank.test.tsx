@@ -1,5 +1,3 @@
-
-
 jest.mock('@/src/ui/theme', () => ({
   useThemeColors: () => ({
     textPrimary: '#000',
@@ -60,7 +58,7 @@ async function renderConfirmed(rank: number) {
   return utils;
 }
 
-describe('InviteCodeModal — waitlist tab rank display', () => {
+describe('InviteCodeModal, waitlist tab rank display', () => {
   beforeEach(() => {
     jest.clearAllMocks();
   });

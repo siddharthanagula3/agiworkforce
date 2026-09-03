@@ -309,8 +309,6 @@ async function request<T>(
           }
         } catch (parseErr) {
           if (parseErr instanceof ApiPaywallError) throw parseErr;
-          // Not JSON, or not the plan-upgrade shape — fall through to the
-          // generic error handling below.
         }
       }
 
@@ -329,7 +327,7 @@ async function request<T>(
           }
         }
       } catch {
-        // Not JSON — fall back to the raw (truncated) body below.
+        // noop
       }
       if (friendlyMessage) {
         throw new ApiHttpError(friendlyMessage, response.status, errorCode);
@@ -364,7 +362,7 @@ async function uploadErrorMessage(response: Response, fileName: string): Promise
     const nested = (parsed['error'] as { message?: unknown } | undefined)?.message;
     if (typeof nested === 'string' && nested.trim()) return nested;
   } catch {
-    // Not JSON — fall through to the generic message below.
+    // noop
   }
   if (__DEV__ && body) {
     console.warn(`[api] upload step -> HTTP ${response.status}:`, body.slice(0, 500));

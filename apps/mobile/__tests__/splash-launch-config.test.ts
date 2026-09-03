@@ -38,7 +38,7 @@ function readPngSize(relativeToApp: string): { width: number; height: number } {
   return { width: header.readUInt32BE(16), height: header.readUInt32BE(20) };
 }
 
-describe('app.config.js — launch screen', () => {
+describe('app.config.js, launch screen', () => {
   it('declares the expo-splash-screen plugin with both theme variants', () => {
     const props = getSplashPluginProps();
 

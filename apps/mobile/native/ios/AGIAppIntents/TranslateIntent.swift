@@ -1,6 +1,5 @@
 import AppIntents
 
-// "Translate with AGI" — text intent. Routes to the on-device translate screen.
 @available(iOS 16.0, *)
 struct TranslateIntent: AppIntent {
     static var title: LocalizedStringResource = "Translate with AGI"

@@ -1,5 +1,3 @@
-
-
 jest.mock('../services/authSession', () => ({
   getAuthToken: jest.fn(),
   getAuthHeaders: jest.fn(),
@@ -93,7 +91,7 @@ describe('2xx responses', () => {
   });
 });
 
-describe('401 handling — refresh and retry', () => {
+describe('401 handling, refresh and retry', () => {
   it('retries the request with a new token after successful refresh', async () => {
     const fetchSpy = jest.spyOn(globalThis, 'fetch');
 
@@ -160,7 +158,7 @@ describe('failed refresh triggers local cloud-session cleanup', () => {
 });
 
 describe('concurrent 401 de-duplication', () => {
-  it('serialises concurrent refresh calls — only one network call is made', async () => {
+  it('serialises concurrent refresh calls, only one network call is made', async () => {
     const fetchSpy = jest.spyOn(globalThis, 'fetch');
 
     fetchSpy

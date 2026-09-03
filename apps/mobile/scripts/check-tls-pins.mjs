@@ -63,7 +63,7 @@ if (pinningEnforced && placeholderLines.length > 0) {
 
 if (placeholderLines.length > 0) {
   console.log(
-    '[check-tls-pins] PASS: placeholder pins present but PINNING_ENFORCED=false — ships safely on standard TLS. ' +
+    '[check-tls-pins] PASS: placeholder pins present but PINNING_ENFORCED=false, ships safely on standard TLS. ' +
       'Provision real SPKI hashes and flip PINNING_ENFORCED=true to enable pinning.',
   );
 } else {

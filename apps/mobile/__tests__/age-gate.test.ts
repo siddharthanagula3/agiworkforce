@@ -1,5 +1,3 @@
-
-
 const mockStorage = new Map<string, string>();
 
 jest.mock('@/lib/mmkv', () => ({
@@ -47,7 +45,7 @@ function setTimezone(tz: string) {
   _mockTimezone = tz;
 }
 
-describe('detectRegionRule — country thresholds', () => {
+describe('detectRegionRule, country thresholds', () => {
   afterEach(() => {
     mockStorage.clear();
     setTimezone('America/New_York');

@@ -1,4 +1,3 @@
-
 import { NativeModules, Platform } from 'react-native';
 import { getDefaultModel, localGenerate } from '@agiworkforce/local-llm';
 
@@ -98,7 +97,7 @@ export async function translate(
         pairCached,
       };
     } catch {
-      // Native translation failed — fall through to the local LLM fallback.
+      // noop
     }
   }
 

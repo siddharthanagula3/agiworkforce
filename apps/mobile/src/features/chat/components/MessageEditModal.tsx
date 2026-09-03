@@ -1,4 +1,3 @@
-
 import {
   View,
   Pressable,
@@ -37,12 +36,6 @@ export function MessageEditModal({
       accessibilityViewIsModal
     >
       {/*
-       * KeyboardAvoidingView must live INSIDE <Modal>. RN renders a Modal into a
-       * separate native window, so any ancestor KeyboardAvoidingView outside it
-       * has no effect on this content. Without this the auto-raised keyboard
-       * covered the Cancel/Send row — and because the only dismissal affordances
-       * were those buttons and the backdrop behind the keyboard, an edit could
-       * be neither confirmed nor cancelled without force-closing the app.
        */}
       <KeyboardAvoidingView
         style={styles.flex}

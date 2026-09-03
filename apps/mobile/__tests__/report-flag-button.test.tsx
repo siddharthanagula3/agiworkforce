@@ -84,7 +84,7 @@ describe('ReportFlagButton', () => {
     expect(getByLabelText('Email this report to support')).toBeTruthy();
   });
 
-  it('says up front where the report goes — on device, and to the safety team when connected', () => {
+  it('says up front where the report goes, on device, and to the safety team when connected', () => {
     const { getByLabelText, getByText } = renderButton();
     fireEvent.press(getByLabelText('Report this response'));
 
@@ -115,7 +115,7 @@ describe('ReportFlagButton', () => {
     );
   });
 
-  it('confirms what actually happened — stored locally, not transmitted', async () => {
+  it('confirms what actually happened, stored locally, not transmitted', async () => {
     const { getByLabelText, getByText, queryByText } = renderButton();
     fireEvent.press(getByLabelText('Report this response'));
     fireEvent.press(getByLabelText('Harmful or dangerous'));

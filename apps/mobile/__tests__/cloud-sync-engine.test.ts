@@ -184,7 +184,7 @@ describe('isManagedSyncEnabled', () => {
   });
 });
 
-describe('syncNow — managed gating', () => {
+describe('syncNow, managed gating', () => {
   it('makes ZERO network calls in local mode', async () => {
     useChatAppModeStore.getState().setAppMode('local');
     await syncNow();
@@ -194,7 +194,7 @@ describe('syncNow — managed gating', () => {
   });
 });
 
-describe('syncNow — pull', () => {
+describe('syncNow, pull', () => {
   it('does not apply an account-A response after a direct switch to account B', async () => {
     const accountAPull = deferred<PullPage>();
     mockGet.mockImplementation((async (path: string) => {
@@ -479,7 +479,7 @@ describe('syncNow — pull', () => {
   });
 });
 
-describe('syncNow — push', () => {
+describe('syncNow, push', () => {
   it('pushes dirty conversations + messages, then clears the dirty queue', async () => {
     seedConversation('c1', { model: 'fixture-model', messageCount: 1 });
     seedMessage('c1', { id: 'm1', role: 'user', content: 'hi there' });
@@ -860,7 +860,7 @@ describe('syncNow — push', () => {
   });
 });
 
-describe('syncNow — failures', () => {
+describe('syncNow, failures', () => {
   it('surfaces a failed pull as error status', async () => {
     mockGet.mockRejectedValueOnce(new Error('network down'));
 
@@ -872,7 +872,7 @@ describe('syncNow — failures', () => {
   });
 });
 
-describe('syncNow — artifact pull wiring (migration 0039)', () => {
+describe('syncNow, artifact pull wiring (migration 0039)', () => {
   it('applies pulled artifacts into cloudArtifacts on the artifact store', async () => {
     mockGet.mockResolvedValueOnce({
       conversations: [],
@@ -892,7 +892,7 @@ describe('syncNow — artifact pull wiring (migration 0039)', () => {
     expect(cloudArts[0]?.deletedAt ?? null).toBeNull();
   });
 
-  it('upserts a pulled artifact that already exists in cloudArtifacts (LWW — later delta wins)', async () => {
+  it('upserts a pulled artifact that already exists in cloudArtifacts (LWW, later delta wins)', async () => {
     useArtifactStore
       .getState()
       .applyCloudArtifactDeltas(

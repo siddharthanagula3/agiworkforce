@@ -1,19 +1,3 @@
-/**
- * Mobile legal reference screen for EU AI Act Article 50.
- *
- * The same verbatim citations that ship in
- * `@agiworkforce/compliance/article50-text.ts` are surfaced here so the
- * user can see the exact regulatory text we are complying with. Reviewers
- * (Apple App Review, EU legal) can also reach this screen from the privacy
- * policy footer.
- *
- * This file deliberately ships NO chat or routing logic. It only renders
- * the strings exported from the compliance package and links out to the
- * canonical EU source.
- *
- * Title: "EU AI Act — Article 50"
- * Linked from: /legal route in the drawer + privacy policy footer.
- */
 import { ScrollView, View, Pressable, Linking } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import {

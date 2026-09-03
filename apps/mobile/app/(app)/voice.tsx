@@ -1,4 +1,3 @@
-
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { Alert, View, Pressable, StatusBar, useWindowDimensions, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -35,7 +34,7 @@ const PHASE_LABEL: Record<Phase, string> = {
 };
 
 const PHASE_SUBLABEL: Record<Phase, string> = {
-  idle: 'Voice companion — on-device',
+  idle: 'Voice companion, on-device',
   listening: 'Speak naturally',
   thinking: 'Processing on-device',
   speaking: 'AI is responding',
@@ -130,9 +129,7 @@ export default function VoiceScreen() {
       .then((id) => {
         convIdRef.current = id;
       })
-      .catch(() => {
-        // ignore — surfaced as a send failure if it never resolves
-      });
+      .catch(() => {});
   }, [createConversation]);
 
   const sendVoiceMessage = useCallback(
@@ -294,7 +291,7 @@ export default function VoiceScreen() {
           <Hand size={22} color={pttMode ? colors.agentThinking : colors.textSecondary} />
         </Pressable>
 
-        {/* TTS indicator — static, shows TTS is always on-device */}
+        {/* TTS indicator, static, shows TTS is always on-device */}
         <View style={styles.controlBtn}>
           <Volume2 size={22} color={colors.terraCotta} />
         </View>

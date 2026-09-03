@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { Text } from 'react-native';
 import { render } from '@testing-library/react-native';
@@ -10,7 +9,7 @@ function getTimeOfDayGreeting(hour: number): string {
   return 'How can I help you tonight?';
 }
 
-describe('Chat tab — time-of-day greeting', () => {
+describe('Chat tab, time-of-day greeting', () => {
   it('returns morning greeting for hour 8', () => {
     expect(getTimeOfDayGreeting(8)).toBe('How can I help you this morning?');
   });

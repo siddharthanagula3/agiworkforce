@@ -1,4 +1,3 @@
-
 const { withDangerousMod, createRunOncePlugin } = require('@expo/config-plugins');
 const fs = require('fs');
 const path = require('path');
@@ -12,8 +11,6 @@ const IMPORTS = ['import android.content.Intent', 'import android.net.Uri'];
 
 const COMPANION_AND_METHODS = `
   companion object {
-    // Mirrors MAX_SHARED_BYTES (100 KB) in src/features/share-preview — the JS
-    // side re-enforces the byte cap; this just keeps the rewritten URI bounded.
     private const val MAX_SHARED_TEXT_CHARS = 100 * 1024
   }
 
@@ -23,15 +20,6 @@ const COMPANION_AND_METHODS = `
     super.onNewIntent(rewritten)
   }
 
-  /**
-   * RN's Linking module only surfaces intent data URIs — for ACTION_SEND the
-   * payload lives in EXTRA_TEXT (data is null) and for ACTION_PROCESS_TEXT in
-   * EXTRA_PROCESS_TEXT, so shares never reached JS. Rewrite both onto the
-   * app's existing deep-link seam (agiworkforce://intent/share?text=…) so the
-   * intent-verb handler in app/_layout.tsx receives them like any other verb.
-   * The \`ts\` param makes repeat shares of identical text produce distinct
-   * URLs, so the JS url-change effect re-fires.
-   */
   private fun rewriteShareIntent(intent: Intent): Intent {
     val text: String? = when (intent.action) {
       Intent.ACTION_SEND ->

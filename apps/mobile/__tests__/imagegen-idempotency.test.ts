@@ -1,4 +1,3 @@
-
 import { isManagedMediaIdempotencyKey, parseManagedMediaIdempotencyKey } from '@agiworkforce/utils';
 
 const mockPost = jest.fn();
@@ -19,7 +18,7 @@ function sentHeaders(): Record<string, string> {
   return options?.headers ?? {};
 }
 
-describe('generateImage — idempotency', () => {
+describe('generateImage, idempotency', () => {
   beforeEach(() => {
     mockPost.mockReset();
     mockPost.mockResolvedValue({ success: true });

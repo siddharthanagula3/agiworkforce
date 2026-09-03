@@ -102,7 +102,7 @@ describe('resolveMobileImageGenerationRequest', () => {
   });
 });
 
-describe('resolveMobileImageGenerationRequest — explicit Image mode', () => {
+describe('resolveMobileImageGenerationRequest, explicit Image mode', () => {
   const imageMode = { ...eligibleRequest, mediaMode: 'image' as const };
 
   it('admits a prompt that names no visual medium at all', () => {
@@ -147,7 +147,7 @@ describe('resolveMobileImageGenerationRequest — explicit Image mode', () => {
   });
 });
 
-describe('resolveMobileImageGenerationRequest — reference image', () => {
+describe('resolveMobileImageGenerationRequest, reference image', () => {
   const editCapableModelId = listMediaModels('image').find((id) =>
     supportsManagedMediaImageEdit(getModelMetadataById(id)?.provider),
   );

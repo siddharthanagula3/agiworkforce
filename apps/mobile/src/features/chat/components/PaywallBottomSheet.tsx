@@ -1,4 +1,3 @@
-
 import { useCallback, useRef, forwardRef, useImperativeHandle } from 'react';
 import { View, Pressable } from 'react-native';
 import BottomSheet, {
@@ -201,7 +200,7 @@ export const PaywallBottomSheet = forwardRef<BottomSheet, PaywallSheetProps>(
               </Text>
             </View>
 
-            {/* Close button — 44pt touch target per iOS HIG */}
+            {/* Close button, 44pt touch target per iOS HIG */}
             <Pressable
               onPress={handleDismiss}
               style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }}

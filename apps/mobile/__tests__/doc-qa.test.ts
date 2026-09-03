@@ -1,4 +1,3 @@
-
 jest.mock('expo-file-system/legacy', () => ({
   readAsStringAsync: jest.fn(),
   getInfoAsync: jest.fn().mockResolvedValue({ exists: true, size: 1234 }),
@@ -81,7 +80,7 @@ function restoreDbMock() {
   getDb.mockResolvedValue(mockDb);
 }
 
-describe('docParser — TXT', () => {
+describe('docParser, TXT', () => {
   beforeEach(() => jest.clearAllMocks());
 
   it('parses a plain text file', async () => {
@@ -97,7 +96,7 @@ describe('docParser — TXT', () => {
   });
 });
 
-describe('docParser — MD', () => {
+describe('docParser, MD', () => {
   beforeEach(() => jest.clearAllMocks());
 
   it('parses a markdown file preserving raw text', async () => {
@@ -109,7 +108,7 @@ describe('docParser — MD', () => {
   });
 });
 
-describe('docParser — CSV', () => {
+describe('docParser, CSV', () => {
   beforeEach(() => jest.clearAllMocks());
 
   it('parses a CSV into structured text', async () => {
@@ -129,7 +128,7 @@ describe('docParser — CSV', () => {
   });
 });
 
-describe('docParser — code', () => {
+describe('docParser, code', () => {
   beforeEach(() => jest.clearAllMocks());
 
   it('parses a TypeScript file as-is', async () => {
@@ -149,7 +148,7 @@ describe('docParser — code', () => {
   });
 });
 
-describe('docParser — unsupported format', () => {
+describe('docParser, unsupported format', () => {
   it('throws UNSUPPORTED_FORMAT for unknown extensions', async () => {
     await expect(parseDocument('file:///tmp/archive.zip')).rejects.toMatchObject({
       code: 'UNSUPPORTED_FORMAT',
@@ -157,7 +156,7 @@ describe('docParser — unsupported format', () => {
   });
 });
 
-describe('docParser — PDF (synthetic)', () => {
+describe('docParser, PDF (synthetic)', () => {
   beforeEach(() => jest.clearAllMocks());
 
   it('extracts text from a minimal synthetic PDF base64', async () => {
@@ -179,7 +178,7 @@ describe('docParser — PDF (synthetic)', () => {
   });
 });
 
-describe('ragIndex — index → retrieve roundtrip', () => {
+describe('ragIndex, index → retrieve roundtrip', () => {
   const CONV_ID = 'test-conv-001';
 
   beforeEach(() => {

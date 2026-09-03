@@ -71,7 +71,7 @@ export function useBiometricGate(): BiometricGateResult {
         setIsUnlocked(false);
         return false;
       } catch (err) {
-        console.warn('[biometric] Authentication error — staying locked:', err);
+        console.warn('[biometric] Authentication error, staying locked:', err);
         setIsUnlocked(false);
         return false;
       }

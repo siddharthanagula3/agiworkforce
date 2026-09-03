@@ -137,7 +137,7 @@ export default function WorkspaceScreen() {
 
     Alert.prompt(
       'Add a member',
-      'Enter the email of an existing AGI account. There is no invitation email — the account must already exist.',
+      'Enter the email of an existing AGI account. There is no invitation email, the account must already exist.',
       (email: string) => {
         const trimmed = email.trim();
         if (!trimmed.includes('@')) {
@@ -380,7 +380,7 @@ export default function WorkspaceScreen() {
           </View>
         )}
 
-        {/* Not entitled — say which plan the account is actually on rather than
+        {/* Not entitled, say which plan the account is actually on rather than
             hiding the section and leaving the user guessing. */}
         {state.kind === 'ready' && !canManage && (
           <Card>

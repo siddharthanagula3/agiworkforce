@@ -114,7 +114,7 @@ const LINEAR_GRANT = {
   needsReauthorization: false,
 };
 
-describe('Cloud Connectors — OAuth connect flow', () => {
+describe('Cloud Connectors, OAuth connect flow', () => {
   let alertSpy: jest.SpyInstance;
 
   beforeEach(() => {

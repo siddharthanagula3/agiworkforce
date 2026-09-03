@@ -1,6 +1,6 @@
 // Jest Snapshot v1, https://goo.gl/fbAQLP
 
-exports[`PermissionDetailScreen — camera locks the camera detail with native-backed levels 1`] = `
+exports[`PermissionDetailScreen, camera locks the camera detail with native-backed levels 1`] = `
 <View
   className="flex-1"
   style={
@@ -516,7 +516,7 @@ exports[`PermissionDetailScreen — camera locks the camera detail with native-b
 </View>
 `;
 
-exports[`PermissionsScreen — index locks the native-backed permission list card 1`] = `
+exports[`PermissionsScreen, index locks the native-backed permission list card 1`] = `
 <View
   className="flex-1"
   style={

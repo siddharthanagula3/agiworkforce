@@ -1,7 +1,6 @@
-
 import { device, element, by, waitFor } from 'detox';
 
-describe('Chat — first message (on-device model)', () => {
+describe('Chat, first message (on-device model)', () => {
   beforeAll(async () => {
     await device.launchApp({
       newInstance: true,

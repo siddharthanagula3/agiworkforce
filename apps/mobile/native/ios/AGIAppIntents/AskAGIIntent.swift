@@ -1,6 +1,5 @@
 import AppIntents
 
-// "Ask AGI [prompt]" — forwards a free-text question to a new chat conversation.
 @available(iOS 16.0, *)
 struct AskAGIIntent: AppIntent {
     static var title: LocalizedStringResource = "Ask AGI"

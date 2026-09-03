@@ -1,4 +1,3 @@
-
 import {
   createKvStorageAdapter,
   createMessageQueue,
@@ -25,7 +24,7 @@ export function getMobileSendQueue(): MessageQueue {
       try {
         storage.set(key, value);
       } catch {
-        // MMKV not yet initialized — drop the write; queue stays in-memory.
+        // noop
       }
     },
   });

@@ -78,7 +78,7 @@ function flatStylesFromTree(latex: string, display: boolean): Record<string, unk
   return result;
 }
 
-describe('MathBlock — design-token color values (AP-02)', () => {
+describe('MathBlock, design-token color values (AP-02)', () => {
   const EXPECTED_TEAL = colors.teal;
   const EXPECTED_TEAL_08 = `${colors.teal}14`;
 

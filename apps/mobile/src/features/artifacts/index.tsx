@@ -320,7 +320,7 @@ function ArtifactCard({ artifact, width, onPress, style }: ArtifactCardProps) {
           borderColor: c.border,
         }}
       >
-        {/* Type badge — top-left overlay */}
+        {/* Type badge, top-left overlay */}
         <View className="absolute top-3 left-3 z-10 flex-row items-center gap-1.5">
           <KindIcon size={12} color={artifact.accentColor} />
           <Badge label={badgeLabel(artifact)} color={KIND_BADGE[artifact.kind]} />

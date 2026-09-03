@@ -74,7 +74,7 @@ beforeEach(() => {
   });
 });
 
-describe('BILL-15 — the mobile surface resolves the contract account exactly as the contract declares', () => {
+describe('BILL-15, the mobile surface resolves the contract account exactly as the contract declares', () => {
   it.each(CONTRACT_CAPABILITIES)('%s', (capability) => {
     const expected = CAPABILITY_CONTRACT_EXPECTATIONS[capability];
     const decision = resolveMobileCapabilityDecision(capability as PlatformCapability);
@@ -84,7 +84,7 @@ describe('BILL-15 — the mobile surface resolves the contract account exactly a
   });
 });
 
-describe('BILL-15 — the mobile surface keeps the limits the server published', () => {
+describe('BILL-15, the mobile surface keeps the limits the server published', () => {
   it('exposes the rolling five-hour window with its authoritative resetsAt and policySource', () => {
     const decision = resolveMobileCapabilityDecision('canUseCloudModels');
     expect(decision?.limits).toEqual([
@@ -100,7 +100,7 @@ describe('BILL-15 — the mobile surface keeps the limits the server published',
     ]);
   });
 
-  it('a document with no limits key still parses — an older server must not crash the client', () => {
+  it('a document with no limits key still parses, an older server must not crash the client', () => {
     const legacy = parseEffectiveCapabilityDocument({
       sessionId: 'legacy',
       version: 'v',

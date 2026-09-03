@@ -68,7 +68,7 @@ const LANGUAGES = [
   { code: 'fr', label: 'French', locale: 'fr-FR' },
 ];
 
-describe('Voice settings — speech language', () => {
+describe('Voice settings, speech language', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockGetAvailableLanguages.mockResolvedValue(LANGUAGES);

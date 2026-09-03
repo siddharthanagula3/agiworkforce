@@ -21,10 +21,6 @@ export function GeneratedVideo({ videoUrl, thumbnailUrl, width, prompt }: Genera
       <Pressable
         onPress={() => {
           void (async () => {
-            // The generated video is auth-gated, so it has to open in the
-            // in-app browser, which carries the session. The system browser
-            // would 401 — and before the URL was resolved to an absolute one,
-            // the allowlist refused it outright and the tap did nothing at all.
             const opened = await openInAppBrowser(videoUrl);
             if (!opened) {
               Alert.alert('Could not open the video', 'Try again from your library.');
@@ -60,7 +56,7 @@ export function GeneratedVideo({ videoUrl, thumbnailUrl, width, prompt }: Genera
           <Film size={28} color={colors.textMuted} />
         )}
 
-        {/* Affordance overlay — states plainly where the tap goes. */}
+        {/* Affordance overlay, states plainly where the tap goes. */}
         <View
           style={{
             position: 'absolute',

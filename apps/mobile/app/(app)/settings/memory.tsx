@@ -343,7 +343,7 @@ export default function MemoryScreen() {
       )}
 
       {/*
-        Stored entries stay listed, editable and deletable while memory is off —
+        Stored entries stay listed, editable and deletable while memory is off.
         the master switch stops the assistant using them, it does not lock the
         user out of their own data. Dimming states that they are inert right now.
       */}

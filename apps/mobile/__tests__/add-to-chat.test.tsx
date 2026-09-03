@@ -305,7 +305,7 @@ describe('AddToChatSheet', () => {
       expect(queryByText('Chat (default)')).toBeNull();
     });
 
-    it('no longer offers AGI Work at a paid tier — the drawer owns it now', () => {
+    it('no longer offers AGI Work at a paid tier, the drawer owns it now', () => {
       useChatAppModeStore.setState({ appMode: 'cloud' });
       useTierStore.setState({ tier: 'max' });
 

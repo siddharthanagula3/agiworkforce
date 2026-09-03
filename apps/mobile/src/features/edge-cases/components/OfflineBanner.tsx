@@ -78,7 +78,7 @@ export function OfflineBanner() {
       accessibilityRole="alert"
       accessibilityLabel={EDGE_COPY.offline.banner}
       // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-      // @ts-ignore — accessibilityLiveRegion is a valid prop on Android; TS defs are incomplete
+      // @ts-ignore, accessibilityLiveRegion is a valid prop on Android; TS defs are incomplete
       accessibilityLiveRegion="polite"
     >
       <WifiOff size={14} color={colors.accentText} strokeWidth={2} />

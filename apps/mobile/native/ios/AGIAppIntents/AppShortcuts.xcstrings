@@ -2,7 +2,7 @@
   "sourceLanguage" : "en",
   "strings" : {
     "Ask ${applicationName}" : {
-      "comment" : "AskAGIIntent — no prompt supplied",
+      "comment" : "AskAGIIntent, no prompt supplied",
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
@@ -14,7 +14,7 @@
       }
     },
     "Ask ${applicationName} ${prompt}" : {
-      "comment" : "AskAGIIntent — with prompt parameter",
+      "comment" : "AskAGIIntent, with prompt parameter",
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
@@ -26,7 +26,7 @@
       }
     },
     "${applicationName} answer ${prompt}" : {
-      "comment" : "AskAGIIntent — alternate phrasing",
+      "comment" : "AskAGIIntent, alternate phrasing",
       "extractionState" : "manual",
       "localizations" : {
         "en" : {

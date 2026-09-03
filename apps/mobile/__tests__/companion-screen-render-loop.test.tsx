@@ -157,7 +157,7 @@ describe('CompanionScreen', () => {
   });
 });
 
-describe('CompanionScreen — PAR-M28 first-run setup gate', () => {
+describe('CompanionScreen, PAR-M28 first-run setup gate', () => {
   beforeEach(() => {
     useAgentStore.setState({ pendingApprovals: [] });
     useConnectionStore.setState({ status: 'disconnected' });

@@ -1,4 +1,3 @@
-
 const mockOpenURL = jest.fn();
 jest.mock('expo-linking', () => ({
   openURL: (...args: unknown[]) => mockOpenURL(...args),
@@ -10,7 +9,7 @@ beforeEach(() => {
   mockOpenURL.mockReset().mockResolvedValue(undefined);
 });
 
-describe('isAllowedExternalUrl — accepts', () => {
+describe('isAllowedExternalUrl, accepts', () => {
   it.each([
     'https://agiworkforce.com/billing',
     'https://agiworkforce.com/account',
@@ -27,7 +26,7 @@ describe('isAllowedExternalUrl — accepts', () => {
   });
 });
 
-describe('isAllowedExternalUrl — rejects', () => {
+describe('isAllowedExternalUrl, rejects', () => {
   it.each([
     ['empty', ''],
     ['plain string', 'not a url'],
@@ -75,7 +74,7 @@ describe('isAllowedExternalUrl — rejects', () => {
   });
 });
 
-describe('openExternalUrl — Linking.openURL integration', () => {
+describe('openExternalUrl, Linking.openURL integration', () => {
   it('opens the URL when allowlisted and returns true', async () => {
     const ok = await openExternalUrl('https://agiworkforce.com/billing');
     expect(ok).toBe(true);

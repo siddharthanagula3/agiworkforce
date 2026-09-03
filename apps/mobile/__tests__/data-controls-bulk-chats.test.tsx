@@ -144,7 +144,7 @@ afterEach(() => {
   jest.restoreAllMocks();
 });
 
-describe('Data controls — Chat history bulk actions', () => {
+describe('Data controls, Chat history bulk actions', () => {
   it('posts action "archive_all" only after both confirmation steps', async () => {
     mockPost.mockResolvedValue({ success: true, action: 'archive_all', affectedCount: 3 });
     const { getByTestId } = render(<DataControlsScreen />);

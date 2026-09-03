@@ -1,6 +1,6 @@
 // Jest Snapshot v1, https://goo.gl/fbAQLP
 
-exports[`ProjectDetailScreen — unit snapshots locks ProjectHeader tree for a managed project with no emoji 1`] = `
+exports[`ProjectDetailScreen, unit snapshots locks ProjectHeader tree for a managed project with no emoji 1`] = `
 <View
   accessibilityLabel="Project: My Detail Project"
   style={
@@ -308,7 +308,7 @@ exports[`ProjectDetailScreen — unit snapshots locks ProjectHeader tree for a m
 </View>
 `;
 
-exports[`ProjectDetailScreen — unit snapshots locks ProjectHeader tree for a sky-accent local project with last-used label 1`] = `
+exports[`ProjectDetailScreen, unit snapshots locks ProjectHeader tree for a sky-accent local project with last-used label 1`] = `
 <View
   accessibilityLabel="Project: My Detail Project"
   style={
@@ -641,7 +641,7 @@ exports[`ProjectDetailScreen — unit snapshots locks ProjectHeader tree for a s
 </View>
 `;
 
-exports[`ProjectDetailScreen — unit snapshots locks local-only fallback container shape 1`] = `
+exports[`ProjectDetailScreen, unit snapshots locks local-only fallback container shape 1`] = `
 <View
   testID="project-detail-local-fallback"
 >
@@ -649,7 +649,7 @@ exports[`ProjectDetailScreen — unit snapshots locks local-only fallback contai
     proj_detail_test
   </Text>
   <Text>
-    local_only — project details sync when you join Cloud.
+    local_only, project details sync when you join Cloud.
   </Text>
 </View>
 `;

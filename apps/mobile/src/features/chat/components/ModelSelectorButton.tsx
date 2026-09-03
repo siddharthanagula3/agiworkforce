@@ -20,23 +20,6 @@ interface ModelSelectorButtonProps {
   onPress: () => void;
 }
 
-/**
- * The model label on the composer's control row (PAR-M19).
- *
- * Both references keep the answering model readable and one tap from being
- * changed: Claude renders "Opus 5 High" — display name plus reasoning effort as
- * a muted suffix (IMG_0730) — and ChatGPT renders its model and effort beside the mic
- * (IMG_0689). Neither draws a chip: no icon, no chevron, no filled pill. This
- * was previously a 150pt icon+chevron chip that was exported and mounted
- * nowhere while the composer's `onOpenModelPicker` prop sat unused, so the model
- * in use was invisible everywhere in the app.
- *
- * The effort suffix is the effort the NEXT turn will actually carry, resolved
- * through the same helpers as the send path (`resolveTurnEffort` +
- * `getModelEffortOptions`) rather than the raw stored value — a model with no
- * effort axis, or a stale effort it does not support, renders no suffix instead
- * of advertising a setting that will be dropped.
- */
 export function ModelSelectorButton({ onPress }: ModelSelectorButtonProps) {
   const colors = useThemeColors();
   const selectedModel = useModelStore((s) => s.selectedModel);

@@ -42,7 +42,7 @@ NODE_VERSION="$(node --version 2>/dev/null || echo none)"
 log "node: ${NODE_VERSION}"
 case "${NODE_VERSION}" in
   v24.*) log_ok "node version OK" ;;
-  *) log_warn "node should be 24.x (repo .nvmrc) — got ${NODE_VERSION}" ;;
+  *) log_warn "node should be 24.x (repo .nvmrc), got ${NODE_VERSION}" ;;
 esac
 
 # --- Auth -----------------------------------------------------------------
@@ -61,7 +61,7 @@ log "checking Expo SDK dependency compatibility..."
 if pnpm --dir "${MOBILE_DIR}" run check:expo-deps; then
   log_ok "Expo SDK dependencies are compatible"
 else
-  die "Expo SDK dependency drift detected — run 'pnpm --dir apps/mobile exec expo install --fix --pnpm', reconcile documented exceptions, and verify native builds"
+  die "Expo SDK dependency drift detected, run 'pnpm --dir apps/mobile exec expo install --fix --pnpm', reconcile documented exceptions, and verify native builds"
 fi
 
 EAS_PROJECT_ID="$({
@@ -132,16 +132,13 @@ if [[ "${REQUIRE_SUBMIT}" == "1" && ("${PROFILE}" == "production" || "${PROFILE}
   fi
 fi
 
-# --- TLS pin guard (#387) -------------------------------------------------
-# Fail if any SPKI hashes in lib/pinning.ts are still placeholders.
-# Real pin provisioning is an ops task — see the runbook in lib/pinning.ts.
 
 if [[ "${PROFILE}" == "production" || "${PROFILE}" == "beta" || "${PROFILE}" == "preview" ]]; then
   log "checking TLS SPKI pins..."
   if EXPO_PUBLIC_APP_ENV=production node "${MOBILE_DIR}/scripts/check-tls-pins.mjs"; then
     log_ok "TLS pins provisioned"
   else
-    die "TLS SPKI pins are still placeholders — provision real hashes before releasing (runbook: apps/mobile/lib/pinning.ts)"
+    die "TLS SPKI pins are still placeholders, provision real hashes before releasing (runbook: apps/mobile/lib/pinning.ts)"
   fi
 fi
 
@@ -157,7 +154,7 @@ if [[ "${PROFILE}" == "production" || "${PROFILE}" == "beta" ]]; then
   if node "${MOBILE_DIR}/scripts/release/verify-store-listings.mjs"; then
     log_ok "release-state registry matches the live App Store and Play listings"
   else
-    die "store release-state registry disagrees with the live stores — update apps/mobile/src/features/release-state/mobileReleaseState.json deliberately before releasing"
+    die "store release-state registry disagrees with the live stores, update apps/mobile/src/features/release-state/mobileReleaseState.json deliberately before releasing"
   fi
 fi
 

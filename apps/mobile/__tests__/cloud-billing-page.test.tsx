@@ -1,4 +1,3 @@
-
 /* eslint-disable @typescript-eslint/no-require-imports */
 import React from 'react';
 import { Alert } from 'react-native';
@@ -130,7 +129,7 @@ import { useChatAppModeStore } from '../src/features/chat/store/appModeStore';
 import { openExternalUrl } from '../lib/safeOpenURL';
 import { fetchPortalSessionUrl } from '../src/features/billing/service';
 
-describe('Cloud Billing screen — Local-mode-blocked tier refresh (2026-07-05)', () => {
+describe('Cloud Billing screen, Local-mode-blocked tier refresh (2026-07-05)', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockRefreshTier.mockResolvedValue(undefined);
@@ -268,7 +267,7 @@ describe('Cloud Billing screen — Local-mode-blocked tier refresh (2026-07-05)'
     expect(queryByText('Chat is set to Local Mode')).toBeNull();
   });
 
-  it('always renders the plan badge — never swaps it for an indefinite spinner', () => {
+  it('always renders the plan badge, never swaps it for an indefinite spinner', () => {
     useChatAppModeStore.setState({ appMode: 'cloud' });
     const { queryByText } = render(<CloudBillingScreen />);
     expect(queryByText('Chat on web, iOS, Android, and desktop')).toBeTruthy();

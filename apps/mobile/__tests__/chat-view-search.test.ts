@@ -1,4 +1,3 @@
-
 jest.mock('../lib/mmkv', () => ({
   mmkvStorage: { getItem: jest.fn(), setItem: jest.fn(), removeItem: jest.fn() },
   rehydrateWhenMmkvReady: jest.fn(),
@@ -54,7 +53,7 @@ afterEach(() => {
   jest.useRealTimers();
 });
 
-describe('chatViewStore.searchConversations — mode routing', () => {
+describe('chatViewStore.searchConversations, mode routing', () => {
   it('local mode searches the on-device store and never calls the server', async () => {
     useChatAppModeStore.getState().setAppMode('local');
 

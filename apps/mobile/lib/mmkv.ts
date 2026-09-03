@@ -40,19 +40,6 @@ function getStorage(): MMKV {
   return _storage;
 }
 
-/**
- * Generate a 256-bit MMKV encryption key as 64 lowercase hex chars.
- *
- * `Crypto.getRandomBytesAsync(32)` returns 32 raw random bytes from the
- * platform CSPRNG — a true 256-bit key. Hex-encode for storage as a string;
- * `react-native-mmkv` accepts the hex string directly as `encryptionKey`. Do
- * NOT synthesize the key from concatenated `Crypto.randomUUID()` calls: each
- * RFC 4122 v4 UUID carries only 122 bits of entropy (version and variant bits
- * are fixed), so that shape looks like 256 bits while carrying far less.
- *
- * Exported separately so unit tests can pin the format without spinning up a
- * real `SecureStore`.
- */
 export async function generateMmkvEncryptionKey(): Promise<string> {
   const bytes = await Crypto.getRandomBytesAsync(32);
   let out = '';

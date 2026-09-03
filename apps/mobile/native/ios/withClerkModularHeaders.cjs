@@ -1,4 +1,3 @@
-
 const { withDangerousMod, createRunOncePlugin } = require('@expo/config-plugins');
 const fs = require('fs');
 const path = require('path');
@@ -9,7 +8,7 @@ const MARKER = '# agi-clerk-modular-headers';
 
 const INJECT = [
   '',
-  `  ${MARKER} — module maps for Clerk's static-linked Google deps`,
+  `  ${MARKER}, module maps for Clerk's static-linked Google deps`,
   "  pod 'GoogleUtilities', :modular_headers => true",
   "  pod 'RecaptchaInterop', :modular_headers => true",
   "  pod 'AppCheckCore', :modular_headers => true",

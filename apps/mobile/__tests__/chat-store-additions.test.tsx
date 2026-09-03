@@ -1,5 +1,3 @@
-
-
 jest.mock('../services/authSession', () => ({
   getAuthToken: jest.fn(async () => null),
   getAuthHeaders: jest.fn(async () => ({})),
@@ -69,7 +67,7 @@ function resetWave2State() {
   });
 }
 
-describe('chatStore — Wave 2 additions', () => {
+describe('chatStore, Wave 2 additions', () => {
   beforeEach(() => {
     resetWave2State();
     jest.clearAllMocks();

@@ -84,15 +84,6 @@ export function hasPlaceholderPins(): boolean {
 
 export type PinningStage = 'off' | 'report-only' | 'enforced';
 
-/**
- * Provisioning the pins and turning pinning on are two separate reviewed
- * changes. Pasting real SPKI hashes must not, on its own, alter a single
- * request or a single byte of the built app: it leaves the rollout here, where
- * a release build only reports what enforcement would refuse. Enforcement makes
- * this table an allowlist — localhost, LAN dispatch and user-supplied BYOK base
- * URLs have no entry and would all be refused — so the flip to
- * 'enforced' gets its own commit, its own review and its own native build.
- */
 export const PINNING_ROLLOUT: PinningStage = 'report-only';
 
 /**
@@ -122,36 +113,6 @@ export function pinningEnforcedFor(opts: {
   return pinningStageFor(opts) === 'enforced';
 }
 
-/*
- * Pin-capture runbook, one commit per step, in this order:
- *   1. node scripts/compute-spki-pins.mjs  (every host above is probed,
- *      including the Clerk FAPI host; --clerk-key <pk_live_…> derives that host
- *      from a publishable key instead, for a different Clerk instance);
- *   2. paste the printed PINS_BY_HOST block over every placeholder above, all
- *      hosts at once. Pin CA keys (intermediate or root), never leaf keys: iOS
- *      NSPinnedCAIdentities matches only certificates ABOVE the leaf, so a
- *      leaf-only table refuses every connection the app makes on iOS. A
- *      half-provisioned table fails the prebuild rather than shipping. This
- *      commit changes no request and no build output — the rollout above is
- *      still 'report-only';
- *   3. ship that build and read the '[pinning] rollout is report-only' warnings
- *      it logs. Give a PINS_BY_HOST entry to every host they name: under
- *      enforcement this table is the app's entire allowlist;
- *   4. only then set PINNING_ROLLOUT to 'enforced' and cut a NATIVE build. That
- *      flip is what makes native/withAGITlsPinning.cjs (registered in
- *      app.config.js) emit the iOS NSPinnedDomains dictionary and the Android
- *      network_security_config pin-set — the only things that verify anything,
- *      since React Native's fetch cannot inspect the peer certificate. It also
- *      changes the Expo config the fingerprint runtimeVersion is computed from,
- *      so it cannot reach an older binary as an over-the-air update, which is
- *      the point: the JS gate would refuse every pinned host on a binary that
- *      compiled no pins.
- *
- * The plugin records the hosts it covered in extra.tlsPinning, and a release
- * build that declares a real pin here without that stamp refuses the host
- * outright rather than shipping it on unverified TLS (services/secureFetch.ts →
- * pinTransportVerdict).
- */
 export const PINNING_STAGE = pinningStageFor({ isDevOrTest: isDevOrTestRuntime() });
 export const PINNING_ENFORCED = PINNING_STAGE === 'enforced';
 

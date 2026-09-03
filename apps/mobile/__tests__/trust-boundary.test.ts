@@ -1,5 +1,3 @@
-
-
 import { SYNTHETIC_LOCAL_MODEL_ID } from '../test-utils/modelFixtures';
 
 type ConversationExecutionMode = 'local' | 'cloud';
@@ -65,7 +63,7 @@ describe('mobile trust-boundary gate invariants', () => {
     expect(provider).not.toBe('cloud_managed');
   });
 
-  it('no model ID produces byok — mobile is binary (local or cloud_managed only)', () => {
+  it('no model ID produces byok, mobile is binary (local or cloud_managed only)', () => {
     const allProviders = (['local', 'cloud'] as const).map(providerForExecutionMode);
     expect(allProviders).not.toContain('byok');
     expect(allProviders).toHaveLength(2);
@@ -87,7 +85,7 @@ describe('mobile appMode store defaults', () => {
   });
 });
 
-describe('tier guard — byok awareness', () => {
+describe('tier guard, byok awareness', () => {
   const MOBILE_TIER_ORDER = ['local', 'byok', 'hobby', 'pro', 'pro_plus', 'max'];
 
   it('byok is positioned between local and hobby in the tier order', () => {
@@ -105,7 +103,7 @@ describe('tier guard — byok awareness', () => {
     expect(MOBILE_TIER_ORDER).toContain('max');
   });
 
-  it('local tier is always lowest — never grants managed features', () => {
+  it('local tier is always lowest, never grants managed features', () => {
     const localIdx = MOBILE_TIER_ORDER.indexOf('local');
     expect(localIdx).toBe(0);
     for (const tier of MOBILE_TIER_ORDER.slice(1)) {

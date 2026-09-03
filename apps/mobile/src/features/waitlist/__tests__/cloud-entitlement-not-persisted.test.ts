@@ -29,7 +29,7 @@ beforeEach(() => {
   mockWritten.clear();
 });
 
-describe('waitlist store — managed-cloud entitlement is session-only', () => {
+describe('waitlist store, managed-cloud entitlement is session-only', () => {
   it('never writes the cloud grant to device storage', () => {
     const useWaitlistStore = loadStore();
 

@@ -1,4 +1,3 @@
-
 import { View } from 'react-native';
 import { PressableBox as Pressable } from '@/components/ui/pressable-box';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -97,7 +96,7 @@ export function VoiceInlineBar({
         )}
 
         {/* Muted is a privacy state, so it gets the loudest treatment on the bar
-            — solid danger red with a slashed glyph, not a tint. The listening
+            - solid danger red with a slashed glyph, not a tint. The listening
             tint stays a separate, subtle signal on the unmuted glyph. */}
         <Pressable
           onPress={tap(onToggleMic)}

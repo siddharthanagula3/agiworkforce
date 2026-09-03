@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
 
-describe('app.config.js — native RTL support', () => {
+describe('app.config.js, native RTL support', () => {
   it('enables native RTL without forcing every locale into RTL', () => {
     const { expo } = require('../app.config.js') as {
       expo: {

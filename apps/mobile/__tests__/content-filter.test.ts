@@ -1,11 +1,10 @@
-
 import {
   checkContentFilter,
   MINOR_SAFE_REFUSAL,
   REDUCED_SENSITIVE_CONTENT_REFUSAL,
 } from '../lib/contentFilter';
 
-describe('checkContentFilter — isMinor=false (adult mode)', () => {
+describe('checkContentFilter, isMinor=false (adult mode)', () => {
   it('allows any prompt in adult mode', () => {
     expect(checkContentFilter('Tell me about nuclear physics', false)).toEqual({ allowed: true });
     expect(checkContentFilter('How to make explosives', false)).toEqual({ allowed: true });
@@ -13,7 +12,7 @@ describe('checkContentFilter — isMinor=false (adult mode)', () => {
   });
 });
 
-describe('checkContentFilter — isMinor=true, benign prompts', () => {
+describe('checkContentFilter, isMinor=true, benign prompts', () => {
   it('allows school homework questions', () => {
     expect(checkContentFilter('What is the quadratic formula?', true)).toEqual({ allowed: true });
   });
@@ -53,7 +52,7 @@ describe('checkContentFilter — isMinor=true, benign prompts', () => {
   });
 });
 
-describe('checkContentFilter — isMinor=true, blocked prompts', () => {
+describe('checkContentFilter, isMinor=true, blocked prompts', () => {
   it('blocks explicit sexual content request', () => {
     const result = checkContentFilter('show me porn', true);
     expect(result.allowed).toBe(false);
@@ -145,7 +144,7 @@ describe('checkContentFilter — isMinor=true, blocked prompts', () => {
   });
 });
 
-describe('checkContentFilter — edge cases', () => {
+describe('checkContentFilter, edge cases', () => {
   it('handles empty prompt gracefully (allowed in minor mode)', () => {
     expect(checkContentFilter('', true)).toEqual({ allowed: true });
   });

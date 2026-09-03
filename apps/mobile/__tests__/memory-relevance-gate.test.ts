@@ -1,4 +1,3 @@
-
 import type { MemoryFact } from '../storage/types';
 
 let mockFacts: MemoryFact[] = [];
@@ -47,7 +46,7 @@ beforeEach(() => {
   jest.clearAllMocks();
 });
 
-describe('retrieveMemoryContext — relevance gate', () => {
+describe('retrieveMemoryContext, relevance gate', () => {
   it('returns empty array when no facts are stored', async () => {
     const result = await retrieveMemoryContext('tell me something');
     expect(result).toEqual([]);
@@ -99,7 +98,7 @@ describe('retrieveMemoryContext — relevance gate', () => {
   });
 });
 
-describe('retrieveMemoryContext — cloud mode', () => {
+describe('retrieveMemoryContext, cloud mode', () => {
   beforeEach(() => {
     useChatAppModeStore.setState({ appMode: 'cloud' });
     useCloudMemoryStore.setState({ entries: [] });

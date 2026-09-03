@@ -1,4 +1,3 @@
-
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { mmkvStorage, storage, rehydrateWhenMmkvReady } from '@/lib/mmkv';
@@ -136,7 +135,6 @@ export const useCloudSettingsStore = create<CloudSettingsState>()(
                 generateMemoryFromHistory: s.generateMemoryFromHistory ?? true,
                 memoryPolicyInitialized: s.memoryPolicyInitialized ?? false,
                 personalization: s.personalization ?? defaultPersonalization,
-                // settingsUpdatedAt left null — seeded state is not a local edit.
               });
             }
           } catch (e) {

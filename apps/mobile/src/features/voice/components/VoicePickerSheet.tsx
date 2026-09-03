@@ -1,4 +1,3 @@
-
 import { useCallback, useRef, useState } from 'react';
 import { FlatList, Modal, Pressable, View, useWindowDimensions } from 'react-native';
 import type { NativeScrollEvent, NativeSyntheticEvent } from 'react-native';
@@ -180,7 +179,7 @@ export function VoicePickerSheet({ visible, onStart, onDismiss }: VoicePickerShe
             />
           </View>
 
-          {/* Page dots. Decorative — the list itself carries the accessible
+          {/* Page dots. Decorative, the list itself carries the accessible
               names, so announcing a dot per voice would just duplicate them. */}
           <View
             style={{ flexDirection: 'row', justifyContent: 'center', gap: 8, marginBottom: 28 }}

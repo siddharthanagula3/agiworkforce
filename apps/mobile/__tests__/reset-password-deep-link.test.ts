@@ -1,4 +1,3 @@
-
 jest.mock('expo-secure-store', () => ({
   __esModule: true,
   WHEN_UNLOCKED_THIS_DEVICE_ONLY: 'WUTDO',
@@ -32,7 +31,7 @@ const { useAuthStore } = require('../src/features/auth/store');
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const { isAgiWorkforceUniversalLinkHost } = require('../src/integrations/universalLinks');
 
-describe('authStore.resetPassword — redirect URL contract', () => {
+describe('authStore.resetPassword, redirect URL contract', () => {
   it('is disabled while Clerk mobile auth is not enabled in v1', async () => {
     await expect(useAuthStore.getState().resetPassword('user@example.com')).rejects.toThrow(
       'Clerk mobile auth is not enabled in v1',
@@ -83,7 +82,7 @@ describe('reset-password deep-link URL predicate (replicated from _layout.tsx)',
   });
 });
 
-describe('drift sentinel — _layout.tsx still enforces the predicate', () => {
+describe('drift sentinel, _layout.tsx still enforces the predicate', () => {
   it('the layout file references the expected predicate fields', () => {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const fs = require('fs');

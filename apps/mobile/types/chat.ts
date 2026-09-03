@@ -138,11 +138,6 @@ export interface ConversationSummary {
   serverVersion?: string;
   parentConversationId?: string;
   forkPointMessageId?: string;
-  /**
-   * Absent means the server never sent the field and cannot thread; present —
-   * including `null` — means it can. The distinction decides whether an edit or
-   * a regenerate branches or replaces, so it must survive every merge.
-   */
   activeLeafMessageId?: string | null;
 }
 

@@ -122,7 +122,7 @@ function signInWithPhoto(imageUrl: string | null) {
   mockClerkState.isLoaded = true;
 }
 
-describe('PAR-M43 — profile photo', () => {
+describe('PAR-M43, profile photo', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockClerkState.user = null;
@@ -234,7 +234,7 @@ describe('PAR-M43 — profile photo', () => {
   });
 });
 
-describe('PAR-M44 — Log Out placement', () => {
+describe('PAR-M44, Log Out placement', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockClerkState.user = null;

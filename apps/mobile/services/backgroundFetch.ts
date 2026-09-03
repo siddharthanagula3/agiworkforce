@@ -14,11 +14,6 @@ import {
 
 const BACKGROUND_FETCH_TASK = 'agent-status-check';
 
-/**
- * Shape of `GET /api/mobile/agent-status` (apps/web). Each entry is one open
- * pause on a cloud agent run — a tool call awaiting approval, or a connector
- * question awaiting an answer — so the copy below covers both kinds.
- */
 interface AgentStatusResponse {
   pendingApprovals: Array<{
     id: string;
@@ -123,7 +118,7 @@ export async function registerBackgroundFetch(): Promise<void> {
 
   if (status === BackgroundTask.BackgroundTaskStatus.Restricted) {
     console.debug(
-      '[backgroundFetch] Background tasks unavailable (Simulator, Low Power Mode, or device policy) — approval polling is off',
+      '[backgroundFetch] Background tasks unavailable (Simulator, Low Power Mode, or device policy), approval polling is off',
     );
     return;
   }

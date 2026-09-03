@@ -59,7 +59,7 @@ export default function DataControlsScreen() {
 
     Alert.alert(
       'Sync Local Chats to AGI Cloud?',
-      'This will copy your local conversation titles and message text to AGI Cloud. File attachments and memory facts stay on this device. This action is one-time and manual — AGI never syncs automatically.',
+      'This will copy your local conversation titles and message text to AGI Cloud. File attachments and memory facts stay on this device. This action is one-time and manual, AGI never syncs automatically.',
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -102,7 +102,7 @@ export default function DataControlsScreen() {
     if (appMode !== 'cloud') {
       Alert.alert(
         'Chat is set to Local Mode',
-        'Archive all and Delete all act on chats stored in AGI Cloud. Switch chat to AGI Cloud to manage them — chats that only exist on this device are wiped from Settings → Storage.',
+        'Archive all and Delete all act on chats stored in AGI Cloud. Switch chat to AGI Cloud to manage them, chats that only exist on this device are wiped from Settings → Storage.',
       );
       return false;
     }
@@ -168,7 +168,7 @@ export default function DataControlsScreen() {
     if (!requireCloudChats()) return;
     Alert.alert(
       'Delete all chats?',
-      'Every chat in AGI Cloud — including archived ones — and all of their messages will be permanently deleted. This cannot be undone.',
+      'Every chat in AGI Cloud, including archived ones, and all of their messages will be permanently deleted. This cannot be undone.',
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -332,7 +332,7 @@ export default function DataControlsScreen() {
       */}
       <SettingsInfo
         title="Sync to AGI Cloud"
-        body="Manually copy your local chats to AGI Cloud once. File attachments and memory stay on this device. AGI never syncs automatically — this is always your choice."
+        body="Manually copy your local chats to AGI Cloud once. File attachments and memory stay on this device. AGI never syncs automatically, this is always your choice."
         icon={Cloud}
       />
       <SettingsGroup>

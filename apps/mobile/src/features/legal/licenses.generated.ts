@@ -1,12 +1,3 @@
-/**
- * GENERATED FILE — do not edit by hand.
- *
- * Regenerate with: node apps/mobile/scripts/generate-oss-licenses.mjs
- *
- * Attribution for the app's production dependency graph. License bodies are
- * shared between packages that ship identical text; each package keeps its own
- * copyright line.
- */
 import type { OssLicenseAttribution } from './types';
 
 export const OSS_LICENSES_GENERATED_AT = '2026-08-11T20:52:59.049Z';

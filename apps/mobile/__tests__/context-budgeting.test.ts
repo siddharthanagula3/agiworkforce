@@ -1,5 +1,3 @@
-
-
 const SMALL_CONTEXT_MODEL_ID = 'fixture-small-context-model';
 const LARGE_CONTEXT_MODEL_ID = 'fixture-large-context-model';
 
@@ -85,7 +83,7 @@ describe('contextBudgeter', () => {
     });
   });
 
-  describe('computeContextBudget — small context (4K)', () => {
+  describe('computeContextBudget, small context (4K)', () => {
     const modelId = SMALL_CONTEXT_MODEL_ID;
 
     it('returns ok status when usage is low', () => {
@@ -118,7 +116,7 @@ describe('contextBudgeter', () => {
     });
   });
 
-  describe('computeContextBudget — large context (262K)', () => {
+  describe('computeContextBudget, large context (262K)', () => {
     const modelId = LARGE_CONTEXT_MODEL_ID;
 
     it('stays ok with thousands of normal messages', () => {
@@ -147,7 +145,7 @@ describe('contextBudgeter', () => {
 });
 
 describe('memoryCompactor', () => {
-  describe('compact — small context (4K)', () => {
+  describe('compact, small context (4K)', () => {
     const modelId = SMALL_CONTEXT_MODEL_ID;
 
     it('no-ops when budget is ok', async () => {

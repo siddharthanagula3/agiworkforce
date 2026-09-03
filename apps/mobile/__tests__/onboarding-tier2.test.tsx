@@ -352,7 +352,7 @@ describe('Onboarding → tier2 ExecuTorch download flow', () => {
   });
 });
 
-describe('Model picker — system-runtime-only models capability-gated', () => {
+describe('Model picker, system-runtime-only models capability-gated', () => {
   it('LOCAL_MODEL_LIST includes the iOS system model fixture', () => {
     const { LOCAL_MODEL_LIST } = require('../src/features/model-picker/service');
     expect(

@@ -1,5 +1,3 @@
-
-
 jest.mock('../lib/mmkv', () => ({
   whenMmkvReady: jest.fn((cb) => cb()),
   rehydrateWhenMmkvReady: jest.fn((store, _name) => {
@@ -60,7 +58,7 @@ beforeEach(() => {
   get.mockResolvedValue({ token: 'test-csrf-token' });
 });
 
-describe('joinWaitlist — success', () => {
+describe('joinWaitlist, success', () => {
   it('posts a row with the normalised email', async () => {
     post.mockResolvedValueOnce({ ok: true, joined: true, rank: 2 });
 
@@ -139,7 +137,7 @@ describe('joinWaitlist — success', () => {
   });
 });
 
-describe('joinWaitlist — validation errors', () => {
+describe('joinWaitlist, validation errors', () => {
   it('throws WaitlistValidationError for an empty email', async () => {
     await expect(joinWaitlist({ email: '' })).rejects.toThrow(WaitlistValidationError);
   });
@@ -158,7 +156,7 @@ describe('joinWaitlist — validation errors', () => {
   });
 });
 
-describe('joinWaitlist — network errors', () => {
+describe('joinWaitlist, network errors', () => {
   it('throws WaitlistNetworkError on API failure', async () => {
     post.mockRejectedValueOnce(new Error('server error'));
 
@@ -166,7 +164,7 @@ describe('joinWaitlist — network errors', () => {
   });
 });
 
-describe('redeemInviteCode — alpha code', () => {
+describe('redeemInviteCode, alpha code', () => {
   it('accepts ALPHATESTER and returns the local alpha invite id', async () => {
     await expect(redeemInviteCode('ALPHATESTER', 'chat')).resolves.toEqual({
       success: true,
@@ -189,7 +187,7 @@ describe('redeemInviteCode — alpha code', () => {
   });
 });
 
-describe('useWaitlistStore — defaults', () => {
+describe('useWaitlistStore, defaults', () => {
   it('starts with joined = false', () => {
     expect(getStoreState().joined).toBe(false);
   });
@@ -207,7 +205,7 @@ describe('useWaitlistStore — defaults', () => {
   });
 });
 
-describe('useWaitlistStore — markJoined', () => {
+describe('useWaitlistStore, markJoined', () => {
   it('sets joined = true', () => {
     getStoreState().markJoined({ email: 'user@test.com', country: 'US' }, { rank: 5 });
     expect(getStoreState().joined).toBe(true);
@@ -237,7 +235,7 @@ describe('useWaitlistStore — markJoined', () => {
   });
 });
 
-describe('useWaitlistStore — markInviteRedeemed', () => {
+describe('useWaitlistStore, markInviteRedeemed', () => {
   it('unlocks cloud access and normalizes the invite code', () => {
     getStoreState().markInviteRedeemed({
       code: ' alphatester ',
@@ -252,7 +250,7 @@ describe('useWaitlistStore — markInviteRedeemed', () => {
   });
 });
 
-describe('useWaitlistStore — clear', () => {
+describe('useWaitlistStore, clear', () => {
   it('resets joined to false', () => {
     getStoreState().markJoined({ email: 'a@b.com' }, { rank: 1 });
     getStoreState().clear();

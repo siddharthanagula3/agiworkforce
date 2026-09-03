@@ -1,4 +1,3 @@
-
 const mockGetItemAsync = jest.fn();
 const mockSetItemAsync = jest.fn();
 jest.mock('expo-secure-store', () => ({
@@ -16,7 +15,7 @@ beforeEach(() => {
   useBiometricFlag.setState({ hydrated: false, enabled: true });
 });
 
-describe('biometricFlagStore — initial state', () => {
+describe('biometricFlagStore, initial state', () => {
   it('starts unhydrated and ENABLED (fail-closed)', () => {
     const s = useBiometricFlag.getState();
     expect(s.hydrated).toBe(false);
@@ -24,7 +23,7 @@ describe('biometricFlagStore — initial state', () => {
   });
 });
 
-describe('biometricFlagStore — hydrate', () => {
+describe('biometricFlagStore, hydrate', () => {
   it('reads "true" from SecureStore → enabled=true', async () => {
     mockGetItemAsync.mockResolvedValueOnce('true');
     await useBiometricFlag.getState().hydrate();
@@ -70,7 +69,7 @@ describe('biometricFlagStore — hydrate', () => {
   });
 });
 
-describe('biometricFlagStore — setEnabled', () => {
+describe('biometricFlagStore, setEnabled', () => {
   it('writes "true" to SecureStore with WHEN_UNLOCKED_THIS_DEVICE_ONLY', async () => {
     await useBiometricFlag.getState().setEnabled(true);
     expect(mockSetItemAsync).toHaveBeenCalledWith('agi_biometric_lock_enabled_v1', 'true', {
@@ -96,7 +95,7 @@ describe('biometricFlagStore — setEnabled', () => {
   });
 });
 
-describe('biometricFlagStore — tamper resistance contract', () => {
+describe('biometricFlagStore, tamper resistance contract', () => {
   it('does NOT read from MMKV (the pre-fix backing store)', () => {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const fs = require('fs');

@@ -1,4 +1,3 @@
-
 /* eslint-disable @typescript-eslint/no-require-imports */
 import React from 'react';
 import { render } from '@testing-library/react-native';
@@ -55,7 +54,7 @@ jest.mock('@/src/features/auth/store', () => ({
 
 import CloudUsageScreen from '../src/features/settings/cloud-usage/index';
 
-describe('Cloud Usage screen — FEATURES.usageDashboard off', () => {
+describe('Cloud Usage screen, FEATURES.usageDashboard off', () => {
   it('shows the billing-unavailable placeholder, not a fetch attempt', () => {
     const { getByText } = render(<CloudUsageScreen />);
 

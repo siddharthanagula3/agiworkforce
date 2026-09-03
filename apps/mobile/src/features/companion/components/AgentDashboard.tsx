@@ -394,7 +394,7 @@ function ApprovalCard({ request }: ApprovalCardProps) {
 
         <View style={{ height: 1, backgroundColor: RISK_BORDER_COLORS[request.riskLevel] }} />
 
-        {/* Description — what the tool will do */}
+        {/* Description, what the tool will do */}
         <View className="px-3 py-2.5">
           <Text className="text-[11px] text-white/70 leading-[16px]" numberOfLines={4}>
             {request.description}
@@ -413,7 +413,7 @@ function ApprovalCard({ request }: ApprovalCardProps) {
           </View>
         )}
 
-        {/* Approve / Reject buttons — prominently color coded */}
+        {/* Approve / Reject buttons, prominently color coded */}
         <View className="flex-row gap-2 px-3 pb-3">
           <Pressable
             onPress={handleApprove}
@@ -650,7 +650,7 @@ function AgentCard({ agent, isSelected, onPress, onViewDetail }: AgentCardProps)
             </View>
           )}
 
-          {/* Live execution stream — shown inline when agent is running and selected */}
+          {/* Live execution stream, shown inline when agent is running and selected */}
           {isSelected && agent.status === 'running' && agent.toolCalls.length > 0 && (
             <View className="mt-3">
               <Separator className="mb-3" />
@@ -661,7 +661,7 @@ function AgentCard({ agent, isSelected, onPress, onViewDetail }: AgentCardProps)
             </View>
           )}
 
-          {/* Quick actions — shown when selected */}
+          {/* Quick actions, shown when selected */}
           {isSelected && (
             <View className="mt-3">
               <Separator className="mb-3" />
@@ -680,7 +680,7 @@ function AgentCard({ agent, isSelected, onPress, onViewDetail }: AgentCardProps)
                   <Text className="text-xs text-white/60 font-medium">View Thread</Text>
                 </Pressable>
 
-                {/* Stop Agent — shown for running agents */}
+                {/* Stop Agent, shown for running agents */}
                 {agent.status === 'running' && (
                   <Pressable
                     onPress={() => {
@@ -774,7 +774,7 @@ function FileResultsSection({ agents }: FileResultsSectionProps) {
                   </Text>
                   <Text className="text-[10px] text-white/30" numberOfLines={1}>
                     {art.agentName}
-                    {art.detail ? ` — ${art.detail}` : ''}
+                    {art.detail ? `, ${art.detail}` : ''}
                   </Text>
                 </View>
               </View>
@@ -1022,7 +1022,7 @@ export function AgentDashboard() {
         }
       />
 
-      {/* Emergency stop — only shown when there are active agents */}
+      {/* Emergency stop, only shown when there are active agents */}
       {hasRunningAgents && (
         <Animated.View
           entering={FadeIn.duration(200)}
@@ -1038,7 +1038,7 @@ export function AgentDashboard() {
             onPress={handleEmergencyStop}
             className="flex-row items-center justify-center gap-2 py-3.5 rounded-2xl active:opacity-80"
             style={{ backgroundColor: colors.agentError }}
-            accessibilityLabel="Emergency stop — cancel all running tasks"
+            accessibilityLabel="Emergency stop, cancel all running tasks"
             accessibilityRole="button"
           >
             <AlertOctagon size={18} color="#fff" />

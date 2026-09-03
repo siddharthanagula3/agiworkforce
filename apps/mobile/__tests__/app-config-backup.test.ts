@@ -1,4 +1,3 @@
-
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const appConfig = require('../app.config.js') as {
   expo: {
@@ -18,7 +17,7 @@ const easConfig = require('../eas.json') as {
   build: Record<string, { channel?: string; extends?: string }>;
 };
 
-describe('app.config.js — Android backup is disabled', () => {
+describe('app.config.js, Android backup is disabled', () => {
   it('explicitly sets allowBackup to false', () => {
     expect(appConfig.expo.android).toBeDefined();
     expect(appConfig.expo.android!.allowBackup).toBe(false);
@@ -59,7 +58,7 @@ describe('app.config.js — Android backup is disabled', () => {
   });
 });
 
-describe('app.config.js — EAS Update compatibility', () => {
+describe('app.config.js, EAS Update compatibility', () => {
   it('targets the configured EAS project with a native fingerprint runtime', () => {
     const projectId = appConfig.expo.extra?.eas?.projectId;
 

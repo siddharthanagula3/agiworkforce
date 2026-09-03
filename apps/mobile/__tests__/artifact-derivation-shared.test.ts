@@ -57,7 +57,7 @@ describe('uuid v5 bundling in RN/Jest (no react-native-get-random-values require
   });
 });
 
-describe('deriveAndMapToMobileArtifacts — delegation + mapping', () => {
+describe('deriveAndMapToMobileArtifacts, delegation + mapping', () => {
   it('produces MobileArtifacts with deterministic ids from deriveArtifacts', () => {
     const result = deriveAndMapToMobileArtifacts(
       PYTHON_BLOCK,

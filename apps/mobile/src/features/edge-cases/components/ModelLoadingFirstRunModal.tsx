@@ -119,7 +119,7 @@ export function ModelLoadingFirstRunModal({
             accessibilityRole="progressbar"
             accessibilityLabel={`Loading ${percentText}`}
             // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-            // @ts-ignore — value props are valid on Android
+            // @ts-ignore, value props are valid on Android
             accessibilityValue={{ min: 0, max: 100, now: Math.round(progress * 100) }}
           >
             <Animated.View

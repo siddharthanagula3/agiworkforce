@@ -316,7 +316,7 @@ export default function ScanScreen() {
           {/* Bottom: copy + composer */}
           <SafeAreaView style={styles.promptSafeArea} edges={['bottom']}>
             <View style={styles.bottomStack}>
-              {/* Copy-text pill — only if OCR found text */}
+              {/* Copy-text pill, only if OCR found text */}
               {extractedText.trim().length > 0 && (
                 <Pressable
                   onPress={handleCopy}

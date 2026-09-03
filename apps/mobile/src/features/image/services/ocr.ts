@@ -20,8 +20,8 @@ export async function recognizeText(imageUri: string): Promise<OcrResult> {
   if (!mod?.recognizeText) {
     throw new Error(
       Platform.OS === 'ios'
-        ? 'AGIVisionOCR native module not linked — rebuild the iOS app'
-        : 'AGIVisionOCR native module not linked — rebuild the Android app',
+        ? 'AGIVisionOCR native module not linked, rebuild the iOS app'
+        : 'AGIVisionOCR native module not linked, rebuild the Android app',
     );
   }
 

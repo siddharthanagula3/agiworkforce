@@ -1,5 +1,3 @@
-
-
 const mockStorage = new Map<string, string>();
 
 jest.mock('@/lib/mmkv', () => ({
@@ -72,7 +70,7 @@ afterEach(() => {
   openUrlSpy.mockRestore();
 });
 
-describe('saveContentReport — persistence', () => {
+describe('saveContentReport, persistence', () => {
   it('persists a report to MMKV and returns the saved record', async () => {
     const { report, delivery } = await saveContentReport(makeParams());
 
@@ -93,7 +91,7 @@ describe('saveContentReport — persistence', () => {
     expect(reports[0]?.messageId).toBe('msg-read-back');
   });
 
-  it('prepends new reports — most recent is at index 0', async () => {
+  it('prepends new reports, most recent is at index 0', async () => {
     await saveContentReport(makeParams({ messageId: 'first' }));
     await saveContentReport(makeParams({ messageId: 'second' }));
 
@@ -103,7 +101,7 @@ describe('saveContentReport — persistence', () => {
   });
 });
 
-describe('saveContentReport — contentExcerpt truncation', () => {
+describe('saveContentReport, contentExcerpt truncation', () => {
   it('truncates contentExcerpt to 500 characters', async () => {
     const longExcerpt = 'X'.repeat(MAX_EXCERPT_LEN + 100);
     const { report } = await saveContentReport(makeParams({ contentExcerpt: longExcerpt }));
@@ -119,7 +117,7 @@ describe('saveContentReport — contentExcerpt truncation', () => {
   });
 });
 
-describe('saveContentReport — MAX_STORED_REPORTS cap (100)', () => {
+describe('saveContentReport, MAX_STORED_REPORTS cap (100)', () => {
   it('evicts the oldest report when the 101st is saved', async () => {
     for (let i = 0; i < MAX_STORED_REPORTS; i++) {
       await saveContentReport(makeParams({ messageId: String(i) }));
@@ -172,7 +170,7 @@ describe('clearContentReports', () => {
   });
 });
 
-describe('saveContentReport — sendEmail=true', () => {
+describe('saveContentReport, sendEmail=true', () => {
   it('calls Linking.openURL with a mailto: URL targeting support address', async () => {
     await saveContentReport(
       makeParams({ sendEmail: true, category: 'harmful', messageId: 'msg-email' }),
@@ -213,7 +211,7 @@ describe('saveContentReport — sendEmail=true', () => {
   });
 });
 
-describe('saveContentReport — sendEmail=false', () => {
+describe('saveContentReport, sendEmail=false', () => {
   it('does not call Linking.openURL', async () => {
     await saveContentReport(makeParams({ sendEmail: false }));
     expect(openUrlSpy).not.toHaveBeenCalled();
@@ -225,7 +223,7 @@ describe('saveContentReport — sendEmail=false', () => {
   });
 });
 
-describe('saveContentReport — server intake', () => {
+describe('saveContentReport, server intake', () => {
   it('POSTs the report to the intake route with the mobile-generated report id', async () => {
     mockApiPost.mockResolvedValueOnce({ success: true });
 
