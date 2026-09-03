@@ -23,6 +23,14 @@ vi.mock('@features/chat/hooks/use-media-model-availability', () => ({
   }),
 }));
 
+vi.mock('@features/connectors/hooks/use-connectors', () => ({
+  useConnectors: () => ({
+    connectedIds: new Set<string>(),
+    sources: {} as Record<string, string>,
+    customNames: {} as Record<string, string>,
+  }),
+}));
+
 function sendButton() {
   return screen.getByRole('button', { name: /send message|sending message/i });
 }
@@ -95,5 +103,52 @@ describe('composer shows a sending indicator across the upload gap (files-2)', (
 
     expect(sendButton()).toHaveAttribute('aria-label', 'Send message');
     expect(sendButton()).toBeDisabled();
+  });
+});
+
+describe('a blocked send restores its text across the same remount (files-1)', () => {
+  it('applies a prefillText that already arrived before this instance mounted', () => {
+    const onPrefillConsumed = vi.fn();
+    render(
+      <ChatComposerNew
+        onSend={vi.fn()}
+        conversationId="client-conv-1"
+        prefillText="second message blocked by the send guard"
+        onPrefillConsumed={onPrefillConsumed}
+      />,
+    );
+
+    expect(screen.getByRole('textbox', { name: /message input/i })).toHaveValue(
+      'second message blocked by the send guard',
+    );
+    expect(onPrefillConsumed).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not reapply the same prefillText on a later rerender', () => {
+    const onPrefillConsumed = vi.fn();
+    const { rerender } = render(
+      <ChatComposerNew
+        onSend={vi.fn()}
+        conversationId="client-conv-1"
+        prefillText="second message blocked by the send guard"
+        onPrefillConsumed={onPrefillConsumed}
+      />,
+    );
+    fireEvent.change(screen.getByRole('textbox', { name: /message input/i }), {
+      target: { value: 'edited after the restore' },
+    });
+
+    rerender(
+      <ChatComposerNew
+        onSend={vi.fn()}
+        conversationId="client-conv-1"
+        prefillText="second message blocked by the send guard"
+        onPrefillConsumed={onPrefillConsumed}
+      />,
+    );
+
+    expect(screen.getByRole('textbox', { name: /message input/i })).toHaveValue(
+      'edited after the restore',
+    );
   });
 });
