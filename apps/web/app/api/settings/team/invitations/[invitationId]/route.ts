@@ -7,9 +7,9 @@ import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
-import { getClerkAuthUser } from '@/lib/api-auth';
 import { requireCsrfToken } from '@/lib/csrf';
 import { getNeonDb } from '@/lib/server/neon-db';
+import { getUserScopedDb } from '@/lib/server/rls-db';
 import type { OrganizationMemberRow } from '@/lib/server/neon-types';
 import { handleCorsPreflightRequest } from '@/lib/cors';
 import { recordAuditEvent } from '@/lib/security-audit';
@@ -71,7 +71,7 @@ async function handleResend(
   const csrfError = await requireCsrfToken(request);
   if (csrfError) return csrfError as NextResponse;
 
-  const { userId } = await getClerkAuthUser(request);
+  const { db, userId } = await getUserScopedDb(request);
   const { invitationId: rawId } = await context.params;
   const invitationId = parseInvitationId(rawId);
 
@@ -82,7 +82,6 @@ async function handleResend(
   }
   const { organizationId } = parsed.data;
 
-  const db = getNeonDb();
   await requireTeamAdminAccess(db, userId, organizationId);
   await requireOrgAdmin(db, organizationId, userId);
 
@@ -111,7 +110,7 @@ async function handleRevoke(
   const csrfError = await requireCsrfToken(request);
   if (csrfError) return csrfError as NextResponse;
 
-  const { userId } = await getClerkAuthUser(request);
+  const { db, userId } = await getUserScopedDb(request);
   const { invitationId: rawId } = await context.params;
   const invitationId = parseInvitationId(rawId);
 
@@ -124,7 +123,6 @@ async function handleRevoke(
   }
   const { organizationId } = parsed.data;
 
-  const db = getNeonDb();
   await requireTeamAdminAccess(db, userId, organizationId);
   await requireOrgAdmin(db, organizationId, userId);
 

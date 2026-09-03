@@ -10,6 +10,7 @@ import { logger } from '@/lib/logger';
 import { getClerkAuthUser } from '@/lib/api-auth';
 import { requireCsrfToken } from '@/lib/csrf';
 import { getNeonDb } from '@/lib/server/neon-db';
+import { getUserScopedDb } from '@/lib/server/rls-db';
 import type { OrganizationMemberRow } from '@/lib/server/neon-types';
 import { handleCorsPreflightRequest } from '@/lib/cors';
 import { recordAuditEvent } from '@/lib/security-audit';
@@ -86,11 +87,10 @@ async function handleRemove(
   const csrfError = await requireCsrfToken(request);
   if (csrfError) return csrfError as NextResponse;
 
-  const { userId: requesterId } = await getClerkAuthUser(request);
+  const { db, userId: requesterId } = await getUserScopedDb(request);
   const { memberId } = await context.params;
   const { organizationId, userId: targetUserId } = parseMemberId(memberId);
 
-  const db = getNeonDb();
   await requireTeamAdminAccess(db, requesterId, organizationId);
 
   const removedRole = await withSeatAccountingErrors(() =>
@@ -190,7 +190,7 @@ async function handleUpdateRole(
   const csrfError = await requireCsrfToken(request);
   if (csrfError) return csrfError as NextResponse;
 
-  const { userId: requesterId } = await getClerkAuthUser(request);
+  const { db, userId: requesterId } = await getUserScopedDb(request);
   const { memberId } = await context.params;
   const { organizationId, userId: targetUserId } = parseMemberId(memberId);
 
@@ -201,7 +201,6 @@ async function handleUpdateRole(
   }
   const { role: newRole } = parsed.data;
 
-  const db = getNeonDb();
   await requireTeamAdminAccess(db, requesterId, organizationId);
 
   const previousRole = await withSeatAccountingErrors(() =>
