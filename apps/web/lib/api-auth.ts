@@ -3,6 +3,7 @@ import 'server-only';
 import type { NextRequest } from 'next/server';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
+import { setTenantScope } from '@/lib/observability/trace-context';
 import { auth } from '@clerk/nextjs/server';
 import { ApiKeyService } from '@/lib/services/api-key-service';
 import { getNeonDb } from '@/lib/server/neon-db';
@@ -189,6 +190,7 @@ export async function getClerkAuthUser(
           throw new ApiKeyScopeError('API key does not have the required scope');
         }
         await assertAccountActive(result.userId);
+        setTenantScope({ userId: result.userId });
         return { userId: result.userId };
       }
       throw createError.unauthorized();
@@ -197,6 +199,7 @@ export async function getClerkAuthUser(
     const result = await verifyBearerToken(token);
     if (result) {
       await assertAccountActive(result.userId);
+      setTenantScope({ userId: result.userId });
       return result;
     }
 
@@ -206,6 +209,7 @@ export async function getClerkAuthUser(
   const { userId } = await auth();
   if (userId) {
     await assertAccountActive(userId);
+    setTenantScope({ userId });
     return { userId };
   }
 

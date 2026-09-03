@@ -1,4 +1,3 @@
-
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { secureTokenHex } from '@/lib/secure-random';
 
@@ -6,6 +5,13 @@ export interface TraceContext {
   readonly traceId: string;
   readonly spanId: string;
   readonly sampled: boolean;
+  organizationId?: string;
+  userId?: string;
+}
+
+export interface TenantScope {
+  organizationId?: string;
+  userId?: string;
 }
 
 const storage = new AsyncLocalStorage<TraceContext>();
@@ -51,5 +57,20 @@ export function formatTraceparent(context: TraceContext): string {
 export function traceLogFields(): Record<string, string> {
   const context = storage.getStore();
   if (!context) return {};
-  return { trace_id: context.traceId, span_id: context.spanId };
+  const fields: Record<string, string> = { trace_id: context.traceId, span_id: context.spanId };
+  if (context.organizationId) fields['organization_id'] = context.organizationId;
+  if (context.userId) fields['user_id'] = context.userId;
+  return fields;
+}
+
+export function setTenantScope(scope: TenantScope): void {
+  const context = storage.getStore();
+  if (!context) return;
+  if (scope.organizationId) context.organizationId = scope.organizationId;
+  if (scope.userId) context.userId = scope.userId;
+}
+
+export function getTenantScope(): TenantScope {
+  const context = storage.getStore();
+  return { organizationId: context?.organizationId, userId: context?.userId };
 }
