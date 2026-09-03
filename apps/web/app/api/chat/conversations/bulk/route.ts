@@ -5,7 +5,7 @@ import { withRateLimit } from '@/lib/rate-limit';
 import { requireCsrfToken } from '@/lib/csrf';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
-import { getNeonChatDb, requireCurrentUserId } from '@/lib/server/neon-chat';
+import { getUserScopedDb } from '@/lib/server/rls-db';
 import { killE2BSession } from '@/lib/e2b/runtime';
 import { unpublishArtifactsForConversations } from '@/lib/services/published-artifact-service';
 import { managedCloudE2BSessionScope } from '@/lib/e2b/session-store';
@@ -17,7 +17,7 @@ const BulkConversationActionSchema = z.object({
 });
 
 async function handleBulkConversationAction(request: NextRequest) {
-  const userId = await requireCurrentUserId(request);
+  const { db, userId } = await getUserScopedDb(request);
 
   const csrfResponse = await requireCsrfToken(request);
   if (csrfResponse) return csrfResponse;
@@ -43,7 +43,6 @@ async function handleBulkConversationAction(request: NextRequest) {
 
   let affected: Array<{ id: string }>;
   try {
-    const db = getNeonChatDb();
     const organizationId = await resolveActiveOrganizationId(db, userId);
     affected = await db.query<{ id: string }>(
       isDelete
@@ -76,7 +75,7 @@ async function handleBulkConversationAction(request: NextRequest) {
     // Soft delete leaves the 0095 FK cascade dormant, so a published artifact
     // would keep serving its public token after its chat is gone.
     try {
-      const revoked = await unpublishArtifactsForConversations(getNeonChatDb(), {
+      const revoked = await unpublishArtifactsForConversations(db, {
         userId,
         conversationIds: affected.map(({ id }) => id),
       });

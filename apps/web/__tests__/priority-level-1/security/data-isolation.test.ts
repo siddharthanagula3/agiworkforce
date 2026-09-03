@@ -10,14 +10,23 @@ vi.mock('@clerk/nextjs/server', () => ({
 
 const mockQuery = vi.fn();
 const mockExecute = vi.fn();
-vi.mock('@/lib/server/neon-db', () => ({
-  getNeonDb: () => ({
-    query: (...args: unknown[]) => mockQuery(...args),
-    execute: (...args: unknown[]) => mockExecute(...args),
-    transaction: vi.fn(),
-    withUser: vi.fn(),
-    dispose: vi.fn(),
-  }),
+vi.mock('@/lib/server/rls-db', () => ({
+  getUserScopedDb: async () => {
+    const { userId } = await mockAuth();
+    if (!userId) {
+      const { createError } = await import('@/lib/errors');
+      throw createError.unauthorized();
+    }
+    return {
+      db: {
+        query: (...args: unknown[]) => mockQuery(...args),
+        execute: (...args: unknown[]) => mockExecute(...args),
+        transaction: vi.fn(),
+      },
+      userId,
+      organizationId: null,
+    };
+  },
 }));
 
 vi.mock('@/lib/rate-limit', () => ({

@@ -3,13 +3,15 @@ import { NextRequest } from 'next/server';
 
 const mocks = vi.hoisted(() => ({
   query: vi.fn(),
-  requireUser: vi.fn(async (..._args: unknown[]) => 'user-1'),
 }));
 
 vi.mock('server-only', () => ({}));
-vi.mock('@/lib/server/neon-chat', () => ({
-  requireCurrentUserId: (...args: unknown[]) => mocks.requireUser(...args),
-  getNeonChatDb: () => ({ query: (...args: unknown[]) => mocks.query(...args) }),
+vi.mock('@/lib/server/rls-db', () => ({
+  getUserScopedDb: vi.fn(async () => ({
+    db: { query: (...args: unknown[]) => mocks.query(...args) },
+    userId: 'user-1',
+    organizationId: null,
+  })),
 }));
 vi.mock('@/lib/services/active-workspace-service', () => ({
   resolveActiveOrganizationId: vi.fn(async () => null),

@@ -5,11 +5,8 @@ import { requireCsrfToken } from '@/lib/csrf';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { CreateConversationSchema } from '@/lib/validations/chat';
-import {
-  getNeonChatDb,
-  requireCurrentUserId,
-  type ChatConversationRow,
-} from '@/lib/server/neon-chat';
+import { type ChatConversationRow } from '@/lib/server/neon-chat';
+import { getUserScopedDb } from '@/lib/server/rls-db';
 import { assertSessionInvariants } from '@agiworkforce/types';
 import {
   MANAGED_CLOUD_CHAT_DEFAULT_PAGE_SIZE,
@@ -29,7 +26,7 @@ async function handleGetConversations(request: NextRequest) {
   const rateLimitResponse = await withRateLimit(request, 'chat-conversation');
   if (rateLimitResponse) return rateLimitResponse;
 
-  const userId = await requireCurrentUserId(request);
+  const { db, userId } = await getUserScopedDb(request);
 
   const url = new URL(request.url);
   const rawQ = url.searchParams.get('q') ?? '';
@@ -58,7 +55,6 @@ async function handleGetConversations(request: NextRequest) {
   const includeHistoryStats = url.searchParams.get('includeHistoryStats') === '1';
   const statsOnly = includeHistoryStats && url.searchParams.get('statsOnly') === '1';
 
-  const db = getNeonChatDb();
   const organizationId = await resolveActiveOrganizationId(db, userId, request);
   try {
     const where = ['user_id = $1', 'organization_id is not distinct from $2'];
@@ -141,7 +137,7 @@ async function handleGetConversations(request: NextRequest) {
 }
 
 async function handleCreateConversation(request: NextRequest) {
-  const userId = await requireCurrentUserId(request);
+  const { db, userId } = await getUserScopedDb(request);
 
   const csrfResponse = await requireCsrfToken(request);
   if (csrfResponse) return csrfResponse;
@@ -161,7 +157,6 @@ async function handleCreateConversation(request: NextRequest) {
     throw createError.validation('Invalid request body', validationResult.error);
   }
   const body = validationResult.data;
-  const db = getNeonChatDb();
   const organizationId = await resolveActiveOrganizationId(db, userId, request);
 
   if (body.projectId) {

@@ -10,12 +10,8 @@ import { UpdateConversationSchema } from '@/lib/validations/chat';
 import { killE2BSession } from '@/lib/e2b/runtime';
 import { unpublishArtifactsForConversations } from '@/lib/services/published-artifact-service';
 import { managedCloudE2BSessionScope } from '@/lib/e2b/session-store';
-import {
-  getNeonChatDb,
-  requireCurrentUserId,
-  type ChatConversationRow,
-  type ChatMessageRow,
-} from '@/lib/server/neon-chat';
+import { type ChatConversationRow, type ChatMessageRow } from '@/lib/server/neon-chat';
+import { getUserScopedDb } from '@/lib/server/rls-db';
 import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
 import { resolveActiveOrganizationId } from '@/lib/services/active-workspace-service';
 
@@ -27,7 +23,7 @@ async function handleGetConversation(request: NextRequest, context: RouteContext
   const rateLimitResponse = await withRateLimit(request, 'chat-conversation');
   if (rateLimitResponse) return rateLimitResponse;
 
-  const userId = await requireCurrentUserId(request);
+  const { db, userId } = await getUserScopedDb(request);
   const { id } = await context.params;
 
   if (!UUID_RE.test(id)) {
@@ -40,7 +36,6 @@ async function handleGetConversation(request: NextRequest, context: RouteContext
   const limit = Math.min(Math.max(Number.isFinite(rawLimit) ? rawLimit : 100, 1), 500);
   const offset = Number.isFinite(rawOffset) && rawOffset >= 0 ? rawOffset : 0;
 
-  const db = getNeonChatDb();
   const organizationId = await resolveActiveOrganizationId(db, userId, request);
   const [conversation] = await db.query<ChatConversationRow>(
     `
@@ -95,7 +90,7 @@ async function handleGetConversation(request: NextRequest, context: RouteContext
 }
 
 async function handleUpdateConversation(request: NextRequest, context: RouteContext) {
-  const userId = await requireCurrentUserId(request);
+  const { db, userId } = await getUserScopedDb(request);
 
   const csrfError = await requireCsrfToken(request);
   if (csrfError) return csrfError as NextResponse;
@@ -117,7 +112,6 @@ async function handleUpdateConversation(request: NextRequest, context: RouteCont
     throw createError.validation('Invalid request body', validationResult.error);
   }
   const body = validationResult.data;
-  const db = getNeonChatDb();
   const organizationId = await resolveActiveOrganizationId(db, userId, request);
 
   const updates: Record<string, unknown> = {};
@@ -239,7 +233,7 @@ async function handleUpdateConversation(request: NextRequest, context: RouteCont
 }
 
 async function handleDeleteConversation(request: NextRequest, context: RouteContext) {
-  const userId = await requireCurrentUserId(request);
+  const { db, userId } = await getUserScopedDb(request);
 
   const csrfError = await requireCsrfToken(request);
   if (csrfError) return csrfError as NextResponse;
@@ -248,7 +242,6 @@ async function handleDeleteConversation(request: NextRequest, context: RouteCont
   if (rateLimitResponse) return rateLimitResponse;
 
   const { id } = await context.params;
-  const db = getNeonChatDb();
   const organizationId = await resolveActiveOrganizationId(db, userId, request);
 
   let deletedConversation: { id: string } | undefined;
