@@ -1,7 +1,11 @@
 import 'server-only';
 
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
-import { SECRET_HANDLING_MODE_DEFAULT, type SecretHandlingMode } from '@agiworkforce/types';
+import {
+  SECRET_HANDLING_MODE_DEFAULT,
+  type AdminPolicy,
+  type SecretHandlingMode,
+} from '@agiworkforce/types';
 import { logger } from '@/lib/logger';
 import { resolveActiveOrganizationId } from '@/lib/services/active-workspace-service';
 import { readOrganizationPolicy } from '@/lib/services/organization-policy-service';
@@ -112,5 +116,38 @@ export async function resolveSecretHandlingPolicy(
       '[secret-handling] policy read failed; falling back to the organization default',
     );
     return { mode: SECRET_HANDLING_MODE_DEFAULT.organization, organizationId };
+  }
+}
+
+export interface MfaPolicyResult {
+  policy: AdminPolicy | null;
+  organizationId: string | null;
+}
+
+export async function resolveMfaPolicy(
+  db: DatabaseAdapter,
+  userId: string,
+  request?: ScopedRequest,
+): Promise<MfaPolicyResult> {
+  let organizationId: string | null = null;
+
+  try {
+    organizationId = await resolveActiveOrganizationId(db, userId, request);
+  } catch (error) {
+    logger.warn({ error, userId }, '[mfa-policy] active workspace could not be resolved');
+    return { policy: null, organizationId: null };
+  }
+
+  if (!organizationId) return { policy: null, organizationId: null };
+
+  try {
+    const policy = await readOrganizationPolicy(db, organizationId);
+    return { policy, organizationId };
+  } catch (error) {
+    logger.error(
+      { error, userId, organizationId },
+      '[mfa-policy] policy read failed; request treated as ungoverned',
+    );
+    return { policy: null, organizationId };
   }
 }

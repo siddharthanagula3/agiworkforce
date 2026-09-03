@@ -51,9 +51,40 @@ describe('formatAdminPolicy — secretHandling', () => {
   });
 });
 
+describe('formatAdminPolicy — requireMfa and monthlySpendCapCents', () => {
+  it('defaults requireMfa to false and the spend cap to unset', () => {
+    const policy = formatAdminPolicy(policyRow());
+    expect(policy.requireMfa).toBe(false);
+    expect(policy.monthlySpendCapCents).toBeNull();
+  });
+
+  it('reads a saved requireMfa and monthlySpendCapCents out of metadata', () => {
+    const policy = formatAdminPolicy(
+      policyRow({ metadata: { requireMfa: true, monthlySpendCapCents: 50_000 } }),
+    );
+    expect(policy.requireMfa).toBe(true);
+    expect(policy.monthlySpendCapCents).toBe(50_000);
+  });
+
+  it('treats a zero or negative spend cap in metadata as unset', () => {
+    expect(
+      formatAdminPolicy(policyRow({ metadata: { monthlySpendCapCents: 0 } })).monthlySpendCapCents,
+    ).toBeNull();
+    expect(
+      formatAdminPolicy(policyRow({ metadata: { monthlySpendCapCents: -5 } })).monthlySpendCapCents,
+    ).toBeNull();
+  });
+});
+
 describe('defaultAdminPolicyFor', () => {
   it('defaults an unconfigured organization to redact', () => {
     expect(defaultAdminPolicyFor(ORGANIZATION_ID).secretHandling).toBe('redact');
+  });
+
+  it('defaults an unconfigured organization to no mfa requirement and no spend cap', () => {
+    const policy = defaultAdminPolicyFor(ORGANIZATION_ID);
+    expect(policy.requireMfa).toBe(false);
+    expect(policy.monthlySpendCapCents).toBeNull();
   });
 });
 
@@ -81,6 +112,50 @@ describe('upsertOrganizationPolicy — secretHandling', () => {
 
     const params = query.mock.calls[0]?.[1] as unknown[];
     const writtenMetadata = JSON.parse(params[13] as string);
-    expect(writtenMetadata).toEqual({ note: 'kept', secretHandling: 'block' });
+    expect(writtenMetadata).toMatchObject({ note: 'kept', secretHandling: 'block' });
+  });
+});
+
+describe('upsertOrganizationPolicy — requireMfa and monthlySpendCapCents', () => {
+  let query: ReturnType<typeof vi.fn>;
+  let db: DatabaseAdapter;
+
+  beforeEach(() => {
+    query = vi.fn();
+    db = { query } as unknown as DatabaseAdapter;
+  });
+
+  it('merges requireMfa and monthlySpendCapCents into the metadata jsonb column', async () => {
+    query.mockResolvedValueOnce([
+      policyRow({ metadata: { requireMfa: true, monthlySpendCapCents: 25_000 } }),
+    ]);
+
+    const input = {
+      ...defaultAdminPolicyFor(ORGANIZATION_ID),
+      requireMfa: true,
+      monthlySpendCapCents: 25_000,
+    };
+    delete (input as { organizationId?: string }).organizationId;
+    delete (input as { updatedAt?: string }).updatedAt;
+
+    await upsertOrganizationPolicy(db, ORGANIZATION_ID, input);
+
+    const params = query.mock.calls[0]?.[1] as unknown[];
+    const writtenMetadata = JSON.parse(params[13] as string);
+    expect(writtenMetadata).toMatchObject({ requireMfa: true, monthlySpendCapCents: 25_000 });
+  });
+
+  it('writes a null spend cap when the administrator clears it', async () => {
+    query.mockResolvedValueOnce([policyRow({ metadata: { monthlySpendCapCents: null } })]);
+
+    const input = { ...defaultAdminPolicyFor(ORGANIZATION_ID), monthlySpendCapCents: null };
+    delete (input as { organizationId?: string }).organizationId;
+    delete (input as { updatedAt?: string }).updatedAt;
+
+    await upsertOrganizationPolicy(db, ORGANIZATION_ID, input);
+
+    const params = query.mock.calls[0]?.[1] as unknown[];
+    const writtenMetadata = JSON.parse(params[13] as string);
+    expect(writtenMetadata['monthlySpendCapCents']).toBeNull();
   });
 });
