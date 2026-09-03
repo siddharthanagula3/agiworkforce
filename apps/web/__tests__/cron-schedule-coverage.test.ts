@@ -50,19 +50,29 @@ describe('cron routes and vercel.json schedules agree', () => {
   // A sub-daily cron is rejected on the Hobby plan, and the rejection kills the
   // whole deployment rather than just the cron: pushes succeed and no build ever
   // queues. The account moved to Pro on 2026-08-16, so sub-daily is permitted —
-  // but only for the jobs whose cadence is a product promise rather than a
-  // housekeeping choice. Every other job stays daily, so a future downgrade
-  // breaks one line here instead of the deploy.
+  // but only for jobs whose cadence is a deliberate promise, not a housekeeping
+  // choice made for our own convenience. Two such promises exist:
   //
-  //   run-schedules      — the cadence users are offered for scheduled tasks.
-  //   drain-audit-streams — a security team integrating a SIEM expects events
-  //                         within minutes. Delivered daily it would be an
-  //                         export with extra steps, and the /workspace posture
-  //                         describes it as streaming.
+  //   product cadence — a customer-facing commitment to how fast something
+  //     happens. run-schedules is the cadence users are offered for scheduled
+  //     tasks; drain-audit-streams is the near-real-time delivery a SIEM
+  //     integration expects, described as streaming on the /workspace posture
+  //     page.
   //
-  // Adding a third entry needs the same test: is the cadence something a
-  // customer was promised, or a choice we made for our own convenience?
-  const SUB_DAILY_ALLOWED = new Set(['/api/cron/run-schedules', '/api/cron/drain-audit-streams']);
+  //   monitoring — a check that exists to catch a problem before a customer
+  //     does. health-probe and page-security-anomalies exist to page someone,
+  //     and a daily page is not a page. These are capped at
+  //     MONITORING_MIN_INTERVAL_MINUTES rather than left unbounded, so a
+  //     future "every minute" change still fails this test.
+  //
+  // Adding an entry to either set needs the same test: is the cadence a
+  // promise to a customer, or a choice we made for our own convenience?
+  const PRODUCT_CADENCE_CRONS = new Set([
+    '/api/cron/run-schedules',
+    '/api/cron/drain-audit-streams',
+  ]);
+  const MONITORING_CRONS = new Set(['/api/cron/health-probe', '/api/cron/page-security-anomalies']);
+  const MONITORING_MIN_INTERVAL_MINUTES = 10;
 
   function isSubDaily(schedule: string): boolean {
     const [minute, hour] = schedule.split(/\s+/);
@@ -71,12 +81,35 @@ describe('cron routes and vercel.json schedules agree', () => {
     );
   }
 
+  function subDailyIntervalMinutes(schedule: string): number {
+    const [minute, hour] = schedule.split(/\s+/);
+    const minuteStep = minute.match(/^\*\/(\d+)$/);
+    if (minuteStep) return Number(minuteStep[1]);
+    if (minute === '*') return 1;
+    const hourStep = hour?.match(/^\*\/(\d+)$/);
+    if (hourStep) return Number(hourStep[1]) * 60;
+    return 0;
+  }
+
   it('keeps every housekeeping schedule daily or less frequent', () => {
     const unexpected = scheduledCrons().filter(
-      (cron) => isSubDaily(cron.schedule) && !SUB_DAILY_ALLOWED.has(cron.path),
+      (cron) =>
+        isSubDaily(cron.schedule) &&
+        !PRODUCT_CADENCE_CRONS.has(cron.path) &&
+        !MONITORING_CRONS.has(cron.path),
     );
 
     expect(unexpected.map((cron) => `${cron.path} @ ${cron.schedule}`)).toEqual([]);
+  });
+
+  it('keeps monitoring crons at or above their stated minimum interval', () => {
+    const tooFrequent = scheduledCrons().filter(
+      (cron) =>
+        MONITORING_CRONS.has(cron.path) &&
+        subDailyIntervalMinutes(cron.schedule) < MONITORING_MIN_INTERVAL_MINUTES,
+    );
+
+    expect(tooFrequent.map((cron) => `${cron.path} @ ${cron.schedule}`)).toEqual([]);
   });
 
   it('runs the schedule sweep at the cadence the product offers users', () => {
