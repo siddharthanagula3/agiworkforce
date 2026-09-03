@@ -86,6 +86,8 @@ function toDraft(policy: WorkspaceAdminPolicy): PolicyDraft {
     secretHandling: policy.secretHandling,
     requireMfa: policy.requireMfa,
     monthlySpendCapCents: policy.monthlySpendCapCents,
+    zeroDataRetentionOnly: policy.zeroDataRetentionOnly,
+    ipAllowList: policy.ipAllowList,
   };
 }
 

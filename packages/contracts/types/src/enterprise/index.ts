@@ -85,6 +85,8 @@ export interface AdminPolicy {
   secretHandling: SecretHandlingMode;
   requireMfa: boolean;
   monthlySpendCapCents: number | null;
+  zeroDataRetentionOnly: boolean;
+  ipAllowList: readonly string[];
   metadata?: Record<string, unknown>;
   updatedAt: string;
 }
@@ -389,6 +391,8 @@ export const DEFAULT_ENTERPRISE_ADMIN_POLICY: Omit<AdminPolicy, 'organizationId'
   secretHandling: SECRET_HANDLING_MODE_DEFAULT.organization,
   requireMfa: false,
   monthlySpendCapCents: null,
+  zeroDataRetentionOnly: false,
+  ipAllowList: [],
 };
 
 export const MANAGED_COMPUTE_MARGIN_POLICY = {

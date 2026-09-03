@@ -24,6 +24,8 @@ const COMMERCIAL_STATUSES = new Set([
   'experimental_only',
   'blocked',
 ]);
+const DATA_RETENTIONS = new Set(['zero_retention', 'provider_default']);
+const OPEN_ROUTER_PROVIDER_ID = 'open_router';
 
 const registry = JSON.parse(fs.readFileSync(REGISTRY_JSON, 'utf8'));
 const declarations = JSON.parse(fs.readFileSync(MODEL_ROUTES_JSON, 'utf8'));
@@ -60,6 +62,10 @@ test('every route declares a known cache class, commercial status and its own pr
     assert.ok(
       COMMERCIAL_STATUSES.has(route.commercialStatus),
       `${routeId} commercial status ${route.commercialStatus}`,
+    );
+    assert.ok(
+      DATA_RETENTIONS.has(route.dataRetention),
+      `${routeId} data retention ${route.dataRetention}`,
     );
     assert.equal(route.pricing.currency, 'USD', `${routeId} must price in USD`);
     assert.ok(route.pricing.unit.length > 0, `${routeId} must name a pricing unit`);
@@ -140,5 +146,26 @@ test('a declared additional route compiles to a second priced route on the same 
       registry.models[modelKey].identity.provider,
       `${routeId} must reach the model through a different provider than the default route`,
     );
+  }
+});
+
+test('every open_router route is classed zero_retention; every other route is provider_default', () => {
+  const openRouterRoutes = Object.values(registry.routes).filter(
+    (route) => route.provider === OPEN_ROUTER_PROVIDER_ID,
+  );
+  assert.ok(
+    openRouterRoutes.length > 0,
+    'the catalog must exercise at least one open_router route',
+  );
+  for (const route of openRouterRoutes) {
+    assert.equal(route.dataRetention, 'zero_retention');
+  }
+
+  const otherRoutes = Object.values(registry.routes).filter(
+    (route) => route.provider !== OPEN_ROUTER_PROVIDER_ID,
+  );
+  assert.ok(otherRoutes.length > 0);
+  for (const route of otherRoutes) {
+    assert.equal(route.dataRetention, 'provider_default');
   }
 });

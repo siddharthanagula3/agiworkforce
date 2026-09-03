@@ -74,6 +74,7 @@ export type {
   IntrinsicCapability,
   RouteCacheClass,
   RouteCommercialStatus,
+  RouteDataRetention,
   RoutingProfile,
   RoutingTrustMode,
   SelectedAutoRoute,
