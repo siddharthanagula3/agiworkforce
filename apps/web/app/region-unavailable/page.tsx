@@ -1,7 +1,8 @@
 import { buildMetadata } from '@/lib/seo/metadata';
+import type { CSSProperties } from 'react';
 import { Header } from '@shared/components/layout/Header';
 import { MarketingFooter } from '@/features/marketing/components/MarketingFooter';
-import { Eyebrow, Prose, Section, Stack } from '@/features/marketing/components/system';
+import { Button, ButtonRow, Eyebrow, Prose, Section } from '@/features/marketing/components/system';
 import { CONTACT_EMAIL, LEGAL_ENTITY, contactMailto } from '@/lib/legal-constants';
 
 export const metadata = buildMetadata({
@@ -11,13 +12,25 @@ export const metadata = buildMetadata({
   path: '/region-unavailable',
 });
 
+const STATEMENT_MAX_WIDTH = '32rem';
+
+const statementStyle: CSSProperties = {
+  display: 'flex',
+  flexDirection: 'column',
+  alignItems: 'center',
+  textAlign: 'center',
+  gap: 'var(--agi-space-5)',
+  maxWidth: STATEMENT_MAX_WIDTH,
+  marginInline: 'auto',
+};
+
 export default function RegionUnavailablePage() {
   return (
     <div data-design="agi" className="agi-ds-page">
       <Header />
       <main id="main-content">
         <Section size="sm">
-          <Stack gap="loose">
+          <div style={statementStyle}>
             <div>
               <Eyebrow>Availability</Eyebrow>
               <h1 className="agi-ds-h1">Not available in your region.</h1>
@@ -26,38 +39,18 @@ export default function RegionUnavailablePage() {
               {LEGAL_ENTITY} does not currently offer AGI Workforce to people in the European
               Economic Area.
             </Prose>
-          </Stack>
-        </Section>
-
-        <Section size="sm" rule>
-          <Stack gap="loose">
-            <h2 className="agi-ds-h2">Why.</h2>
-            <Prose>
+            <Prose size="sm">
               Article 27 of the GDPR requires a company outside the EU that offers services to
               people in the EU to appoint a representative established in the Union. We have not
-              appointed one. Rather than serve the EEA without meeting that obligation, we do not
-              serve it at all.
+              appointed one, so rather than serve the EEA without meeting that obligation, we do not
+              serve it at all. This is a deliberate decision, not an outage: if you reached this
+              page while travelling, the service should work again from a non-EEA location. Your
+              data and your rights over it are unaffected either way.
             </Prose>
-            <Prose>
-              This is a deliberate decision, not an outage, and it is not a judgement about you. If
-              you reached this page while travelling, the service should work again from a non-EEA
-              location.
-            </Prose>
-          </Stack>
-        </Section>
-
-        <Section size="sm" rule>
-          <Stack gap="loose">
-            <h2 className="agi-ds-h2">If you already have an account.</h2>
-            <Prose>
-              Your data is unaffected by this block, and your rights over it are unchanged. To
-              export or delete your data, or to raise a privacy request, write to{' '}
-              <a className="agi-ds-link" href={contactMailto('privacy')}>
-                {CONTACT_EMAIL}
-              </a>{' '}
-              and we will act on it wherever you are.
-            </Prose>
-          </Stack>
+            <ButtonRow>
+              <Button href={contactMailto('privacy')}>Email {CONTACT_EMAIL}</Button>
+            </ButtonRow>
+          </div>
         </Section>
       </main>
       <MarketingFooter />
