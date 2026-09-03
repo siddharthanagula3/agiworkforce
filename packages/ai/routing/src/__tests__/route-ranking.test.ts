@@ -1,13 +1,3 @@
-/**
- * Ranked route selection over the several priced routes of ONE model.
- *
- * Every case runs against a synthetic model, added alongside a real registry
- * clone (ambient module-level code elsewhere in the dependency graph reads
- * `runtimeProfiles`, `harnesses` and `policies.auto.slots` at import time, so
- * the base must stay a valid registry). The synthetic model's own route count
- * and prices are fully authored here, so no case depends on how many routes
- * any cataloged model carries.
- */
 import { modelRegistry } from '@agiworkforce/model-registry';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 

@@ -222,14 +222,6 @@ const QUOTA_EXHAUSTED_CODES: ReadonlySet<string> = new Set([
   'billing_hard_limit_reached',
 ]);
 
-/**
- * A quota_exhausted window can be a project's hard monthly billing ceiling
- * (Google's "exceeded its monthly spending cap") rather than a rolling usage
- * quota. The two need different copy: a spending cap will not clear itself on
- * a schedule the user can wait out, so the honest message names the cap
- * rather than implying "capacity" will free up. `SPENDING_CAP_PROVIDER_HINT`
- * is a stable marker `upstream-error-copy.ts` checks for, not user-facing text.
- */
 export const SPENDING_CAP_PROVIDER_HINT = 'spending_cap';
 
 function matchesSpendingCapExhausted(lowerMessage: string): boolean {
