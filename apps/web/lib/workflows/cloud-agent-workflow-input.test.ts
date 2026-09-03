@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import type { ProcessedRequest } from '@/app/api/llm/v1/chat/completions/lib/request-processor';
+import type { ResumeApproval } from '@/app/api/llm/v1/chat/completions/lib/tool-loop';
 import type { WebMcpToolDef } from '@/lib/mcp-tool-executor';
 import {
   buildCloudAgentWorkflowInput,
@@ -8,6 +9,8 @@ import {
   CloudAgentWorkflowBillingUnavailableError,
   parseCloudAgentWorkflowInput,
   rehydrateCloudAgentWorkflowRequest,
+  type CloudAgentWorkflowInput,
+  type SerializedFreeTrialReservation,
   type SerializedManagedUsageReservation,
 } from './cloud-agent-workflow-input';
 import { connectorToolPermissionsFromEntries } from '@/app/api/llm/v1/chat/completions/lib/connector-tool-permissions';
@@ -337,6 +340,65 @@ describe('cloud agent workflow input', () => {
     });
 
     expect(input.processed.chatRequest.work_mode).toBe(workMode);
+  });
+
+  it('accepts every field a full mcp tool, resume, and free-trial reservation carry', () => {
+    const fullTool: Required<WebMcpToolDef> = {
+      qualifiedName: 'mcp__github__get_pull_request',
+      serverId: 'github',
+      toolName: 'get_pull_request',
+      description: 'Read a pull request',
+      origin: 'connector',
+      serverLabel: 'GitHub',
+      inputSchema: { type: 'object', properties: { number: { type: 'number' } } },
+    };
+    const fullResume: Required<ResumeApproval> = {
+      approvals: [{ toolCallId: 'call-1', decision: 'approved' }],
+      inputResponses: [
+        {
+          toolCallId: 'call-2',
+          inputResponses: { field: 'value' },
+          requestState: 'pending',
+          round: 1,
+        },
+      ],
+      guidance: 'Retry with the corrected input',
+    };
+    const fullContinuation: Required<NonNullable<CloudAgentWorkflowInput['continuation']>> = {
+      eventSessionId: 'session-1',
+      eventTurnId: 'turn-1',
+      initialEventSequence: 9,
+      initialCompletedSteps: 2,
+      invocationContinuation: true,
+      resume: fullResume,
+    };
+    const fullFreeTrial: Required<SerializedFreeTrialReservation> = {
+      kind: 'free_trial',
+      userId: 'user-1',
+      requestId: 'agi-work-request-1',
+      reservedMicrousd: 4_200,
+    };
+    const processed = makeProcessed();
+    delete processed.managedUsage;
+    processed.freeTrial = fullFreeTrial;
+
+    const input = buildCloudAgentWorkflowInput({
+      runId: RUN_ID,
+      userId: 'user-1',
+      processed,
+      mcpTools: [fullTool],
+      approvalMode: 'manual',
+      continuation: fullContinuation,
+      predecessorApproval: {
+        checkpointId: '0190a000-0000-7000-8000-000000000004',
+        leaseToken: '0190a000-0000-7000-8000-000000000005',
+      },
+    });
+
+    expect(input.mcpTools).toEqual([fullTool]);
+    expect(input.continuation).toEqual(fullContinuation);
+    expect(input.billing).toEqual(fullFreeTrial);
+    expect(parseCloudAgentWorkflowInput(JSON.parse(JSON.stringify(input)))).toEqual(input);
   });
 
   it('round-trips invocation and approval continuation cursors', () => {
