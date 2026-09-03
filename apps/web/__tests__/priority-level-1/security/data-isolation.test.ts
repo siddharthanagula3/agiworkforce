@@ -1,4 +1,3 @@
-
 import { describe, test, expect, vi, beforeEach } from 'vitest';
 import { NextRequest } from 'next/server';
 
@@ -38,7 +37,7 @@ import { GET, PUT, DELETE } from '@/app/api/chat/conversations/[id]/route';
 
 const OWNER = 'user-1';
 const ATTACKER = 'user-2';
-const CONV_ID = 'conv-owned-by-user-1';
+const CONV_ID = '00000000-0000-4000-8000-000000000001';
 
 function rowScopedByUser(sql: string, params: unknown[]): unknown[] {
   const boundUserId = params[1];
