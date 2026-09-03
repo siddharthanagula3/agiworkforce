@@ -33,7 +33,7 @@ export function GreetingBanner({ busy = false }: GreetingBannerProps) {
       </h1>
 
       {/* Suggestion chips were removed on every surface (founder 2026-08-06).
-          The empty state is the brand mark and the greeting — nothing else.
+          The empty state is the brand mark and the greeting, nothing else.
           The `onSendMessage` prop went with them: two callers were still
           threading a handler into a component that had stopped reading it. */}
     </div>

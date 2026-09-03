@@ -61,9 +61,6 @@ describe('UpgradeConfirmDialog order details', () => {
   });
 
   it('separates Total from Total due today when a stripe balance is applied', async () => {
-    // Claude's Pro monthly upgrade screen: Total $21.32, Applied balance $0.03,
-    // Total due today $21.35. A positive Stripe balance is owed, so it ADDS —
-    // collapsing the two rows would understate what actually gets taken.
     paymentMocks.previewUpgrade.mockResolvedValue({
       amountDueNowCents: 2_135,
       currency: 'usd',

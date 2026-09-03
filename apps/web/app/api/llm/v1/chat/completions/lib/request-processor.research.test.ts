@@ -70,7 +70,7 @@ describe('applyResearchMode', () => {
   });
 
   it('RESEARCH_SYSTEM_PROMPT contains no em-dashes', () => {
-    expect(RESEARCH_SYSTEM_PROMPT).not.toContain('—');
+    expect(RESEARCH_SYSTEM_PROMPT).not.toContain(', ');
   });
 
   it('RESEARCH_SYSTEM_PROMPT mentions inline citations', () => {

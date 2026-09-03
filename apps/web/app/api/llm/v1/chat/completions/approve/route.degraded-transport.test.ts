@@ -1,25 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest, NextResponse } from 'next/server';
 
-/**
- * AGI-39, proved end to end rather than at a seam.
- *
- * `route.test.ts` mocks `runCloudAgentTurn`, which is the right boundary for
- * asserting WHAT the route hands the transport. It cannot prove the route
- * survives a durable outage, because the thing that degrades is the very
- * function it replaces.
- *
- * So this file mocks nothing between the route and the transport. The Workflow
- * platform itself (`workflow/api`'s `start`) is made unavailable, and the real
- * `runCloudAgentTurn` is left to choose. The route must still COMPLETE the
- * approval — 200, an SSE body, and the same resume dispatched into `runToolLoop`
- * — rather than 503.
- *
- * The second half proves the converse: degrading the TRANSPORT never degrades
- * AUTHORIZATION. Every gate that stands in front of transport selection still
- * refuses, and a refused request never reaches either transport.
- */
-
 const RUN_ID = '0190a000-0000-7000-8000-000000000001';
 const CHECKPOINT_ID = '0190a000-0000-7000-8000-000000000002';
 const LEASE_TOKEN = '0190a000-0000-7000-8000-000000000003';
@@ -163,11 +144,6 @@ const claimedCheckpoint = {
   leaseToken: LEASE_TOKEN,
 };
 
-/**
- * A COMPLETE ProcessedRequest. The durable input schema is strict, so a thin
- * fixture would fail to serialize and degrade for the wrong reason — the outage
- * under test has to be the platform, not the fixture.
- */
 function processedRequest(
   billing: Record<string, unknown> = {
     managedUsage: {
@@ -281,8 +257,6 @@ describe('approve completes inline when the durable platform is unavailable', ()
     expect(response.status).toBe(200);
     expect(response.headers.get('Content-Type')).toBe('text/event-stream');
     expect(response.headers.get('X-AGI-Agent-Transport')).toBe('inline');
-    // No durable run exists, so none may be advertised — a client that chased it
-    // would get a 404 from the runs API.
     expect(response.headers.get('X-AGI-Workflow-Run-Id')).toBeNull();
     expect(response.headers.get('X-AGI-Agent-Run-Id')).toBe(RUN_ID);
     expect(body).toContain('data: [DONE]');

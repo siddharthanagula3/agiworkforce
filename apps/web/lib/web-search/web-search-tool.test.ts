@@ -73,7 +73,7 @@ describe('webSearchBackendConfigured', () => {
   });
 });
 
-describe('executeWebSearch — configuration and input validation', () => {
+describe('executeWebSearch, configuration and input validation', () => {
   const neverFetch = vi.fn(async () => {
     throw new Error('fetch must not be called');
   }) as unknown as typeof fetch;
@@ -108,7 +108,7 @@ describe('executeWebSearch — configuration and input validation', () => {
   });
 });
 
-describe('executeWebSearch — happy path', () => {
+describe('executeWebSearch, happy path', () => {
   it('parses Perplexity Search API results into WebSearchResultItem[]', async () => {
     const fetchImpl = fetchReturning(
       jsonResponse({
@@ -169,8 +169,8 @@ describe('executeWebSearch — happy path', () => {
       jsonResponse({
         results: [
           { title: 'Good', url: 'https://example.com/good', snippet: 's' },
-          { title: 'No URL' }, // malformed — dropped, not fatal
-          { url: 'https://example.com/no-title' }, // no title on the wire — left empty
+          { title: 'No URL' },
+          { url: 'https://example.com/no-title' },
         ],
       }),
     );
@@ -194,7 +194,7 @@ describe('executeWebSearch — happy path', () => {
   });
 });
 
-describe('executeWebSearch — failure modes', () => {
+describe('executeWebSearch, failure modes', () => {
   it('reports upstream_error on a non-2xx HTTP response', async () => {
     const fetchImpl = fetchReturning(
       new Response('unauthorized', { status: 401, headers: { 'content-type': 'text/plain' } }),
@@ -281,7 +281,7 @@ describe('formatWebSearchResultForModel', () => {
 });
 
 describe('webSearchResultsToFetchedSources', () => {
-  it('maps results to {url,title,snippet} — snippet carried through for the encrypted_content mapping tool-loop.ts applies', () => {
+  it('maps results to {url,title,snippet}, snippet carried through for the encrypted_content mapping tool-loop.ts applies', () => {
     const outcome: WebSearchOutcome = {
       ok: true,
       query: 'q',

@@ -1,4 +1,3 @@
-
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -30,7 +29,7 @@ describe('support system prompt', () => {
     expect(declaration).not.toMatch(/\+\s*$/m);
   });
 
-  it('imports nothing — it cannot reach user data, corpus data, or the database', () => {
+  it('imports nothing, it cannot reach user data, corpus data, or the database', () => {
     expect(SOURCE).not.toMatch(/^import\s/m);
   });
 

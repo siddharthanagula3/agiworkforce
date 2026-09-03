@@ -86,7 +86,7 @@ function storedCard(): InteractiveCard | undefined {
     ?.interactiveCards?.[0];
 }
 
-describe('InteractiveCardBlock — response channel', () => {
+describe('InteractiveCardBlock, response channel', () => {
   beforeEach(() => {
     useChatStore.getState().reset();
     vi.stubGlobal('fetch', vi.fn());

@@ -49,15 +49,15 @@ describe('knowledge file capacity is visible before it is enforced', () => {
   it('states the cap alongside the count', async () => {
     mountWith(3);
 
-    expect(await screen.findByText(new RegExp(`3 of ${MAX_PROJECT_KNOWLEDGE_FILES} files`))).toBeVisible();
+    expect(
+      await screen.findByText(new RegExp(`3 of ${MAX_PROJECT_KNOWLEDGE_FILES} files`)),
+    ).toBeVisible();
   });
 
   it('says the project is full at the cap, and how to make room', async () => {
     mountWith(MAX_PROJECT_KNOWLEDGE_FILES);
 
-    await waitFor(() =>
-      expect(screen.getByText(/full — remove one to add another/)).toBeVisible(),
-    );
+    await waitFor(() => expect(screen.getByText(/full, remove one to add another/)).toBeVisible());
   });
 
   it('does not cry full below the cap', async () => {
@@ -66,7 +66,7 @@ describe('knowledge file capacity is visible before it is enforced', () => {
     await screen.findByText(
       new RegExp(`${MAX_PROJECT_KNOWLEDGE_FILES - 1} of ${MAX_PROJECT_KNOWLEDGE_FILES} files`),
     );
-    expect(screen.queryByText(/full — remove one/)).toBeNull();
+    expect(screen.queryByText(/full, remove one/)).toBeNull();
   });
 
   it('reads the cap from the shared contract, so the panel cannot drift from the server', () => {

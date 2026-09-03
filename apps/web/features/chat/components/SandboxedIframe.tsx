@@ -26,7 +26,7 @@ const FALLBACK_ERROR_REPORTER = `<script>
         '*'
       );
     } catch (e) {
-      /* parent is gone — nothing further to do */
+      // noop
     }
   }
   window.addEventListener(
@@ -229,8 +229,8 @@ export function SandboxedIframe({
           data-testid="artifact-scripts-blocked"
           className="border-b border-border bg-muted/40 px-3 py-2 text-xs text-muted-foreground"
         >
-          This artifact&rsquo;s scripts cannot run here, so what you see below is its layout only
-          &mdash; controls will not calculate or update. Open the Source tab to read what it does.
+          This artifact&rsquo;s scripts cannot run here, so what you see below is its layout only -
+          controls will not calculate or update. Open the Source tab to read what it does.
         </p>
       ) : null}
       <iframe

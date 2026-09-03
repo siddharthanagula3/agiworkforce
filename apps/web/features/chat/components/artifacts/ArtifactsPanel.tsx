@@ -92,24 +92,6 @@ type ArtifactOriginSource = Pick<
 
 export type ArtifactOriginMessage = Pick<Message, 'id' | 'model' | 'metadata'>;
 
-/**
- * SECURITY-FIX F3 (CWE-863): the publish button used to declare
- * `privacyMode: 'managed'` for every artifact, which made the managed-cloud
- * upload unconditional.
- *
- * The boundary is derived from every signal the conversation actually carries,
- * reduced most-restrictive-first, and is `undefined` when the conversation
- * carries none — which `publishArtifact` refuses rather than guessing at. Only
- * the Local→BYOK handoff writes `metadata.privacyMode`, so an ordinary Local
- * (Ollama/LM Studio) conversation is unlabeled and must be classified from the
- * model that served it — the same model-derived boundary the regenerate guards
- * use — plus any `providerMode` a turn declares.
- *
- * A `managed` label on the artifact's own descriptors is deliberately NOT
- * evidence: those descriptors are synthesised client-side from this very turn,
- * so `managed` there is a display default rather than an observation. Their
- * non-managed labels still count, because those only ever narrow the boundary.
- */
 export function resolveArtifactOriginPrivacyMode(
   artifact: ArtifactOriginSource,
   messages: readonly ArtifactOriginMessage[],
@@ -383,7 +365,7 @@ export function ArtifactsPanel() {
         )}
       >
         {/* AUDIT-FIX ART-23: drag handle (desktop only). Also keyboard
-            operable — a mouse-only resize is not a resize for everyone. */}
+            operable, a mouse-only resize is not a resize for everyone. */}
         {layout === 'desktop' && (
           <div
             role="separator"
@@ -398,7 +380,7 @@ export function ArtifactsPanel() {
             className="absolute inset-y-0 -left-1 z-10 w-2 cursor-col-resize bg-transparent transition-colors hover:bg-primary/30 focus-visible:bg-primary/40 focus-visible:outline-none"
           />
         )}
-        {/* Header — slim strip: panel title + count badge + Download all.
+        {/* Header, slim strip: panel title + count badge + Download all.
             Close X only shown here when no artifact is selected (no toolbar
             Close visible). When an artifact IS selected, the ArtifactPreview
             panel-variant toolbar carries the Close button. This ensures the

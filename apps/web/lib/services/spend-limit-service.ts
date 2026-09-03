@@ -137,18 +137,6 @@ export async function readSpendState(
   };
 }
 
-/**
- * Decides whether a managed turn may run against the workspace budget.
- *
- * Only `block` refuses. `off` and `notify` always allow — `notify` exists so a
- * finance owner can watch a budget before deciding to enforce it, and turning
- * it into a refusal would be the opposite of what they asked for.
- *
- * Ungoverned when the state cannot be read. A billing lookup failing is an
- * infrastructure fault, not an administrator's decision, and refusing every
- * member's work because the spend table blipped would be a worse outcome than
- * briefly overshooting a cap.
- */
 export async function evaluateSpendLimit(
   db: DatabaseAdapter,
   organizationId: string | null,

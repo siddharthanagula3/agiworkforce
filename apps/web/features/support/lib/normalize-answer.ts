@@ -1,4 +1,3 @@
-
 import {
   SUPPORT_ABSTENTION_REASONS,
   type SupportAbstentionReason,
@@ -106,7 +105,7 @@ export const ABSTENTION_FALLBACK_TEXT: Record<SupportAbstentionReason, string> =
   no_relevant_source:
     'I could not find anything in the documentation that answers this, so I am not going to guess.',
   hard_abstain_billing:
-    'I do not answer billing questions — charges, refunds and invoices are handled by a person, not by me.',
+    'I do not answer billing questions, charges, refunds and invoices are handled by a person, not by me.',
   hard_abstain_data_deletion:
     'I do not answer questions about deleting data or accounts. A person handles those so nothing is lost by mistake.',
   hard_abstain_security:
@@ -127,10 +126,10 @@ export const ABSTENTION_FALLBACK_TEXT: Record<SupportAbstentionReason, string> =
 
 export const ABSTENTION_HEADING: Record<SupportAbstentionReason, string> = {
   no_relevant_source: "I don't have a source for this",
-  hard_abstain_billing: 'Billing — a person handles this',
-  hard_abstain_data_deletion: 'Data deletion — a person handles this',
-  hard_abstain_security: 'Security — a person handles this',
-  hard_abstain_legal: 'Legal — a person handles this',
+  hard_abstain_billing: 'Billing, a person handles this',
+  hard_abstain_data_deletion: 'Data deletion, a person handles this',
+  hard_abstain_security: 'Security, a person handles this',
+  hard_abstain_legal: 'Legal, a person handles this',
   unverifiable_citation: "I couldn't verify a source",
   malformed_model_output: "I'm not going to guess at this",
   model_unavailable: "I can't answer this right now",

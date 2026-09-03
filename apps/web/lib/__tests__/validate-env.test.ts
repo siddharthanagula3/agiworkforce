@@ -184,7 +184,7 @@ describe('validateSecurityEscapeHatches · ACCOUNT_STATUS_FAIL_OPEN', () => {
     Object.assign(process.env, savedEnv);
   });
 
-  it('says nothing when the hatch is unset — the default is fail-closed', () => {
+  it('says nothing when the hatch is unset, the default is fail-closed', () => {
     expect(validateSecurityEscapeHatches()).toEqual({ valid: true, errors: [], warnings: [] });
   });
 

@@ -365,7 +365,7 @@ export function InlineArtifactCards({ artifacts, onOpen, className }: InlineArti
         </div>
       )}
       {/* Download-all: matches claude.ai's button beneath a multi-file response.
-          Reuses the shared downloadAllArtifacts helper (ponytail — same impl as
+          Reuses the shared downloadAllArtifacts helper (ponytail, same impl as
           the artifact panel header). */}
       {artifacts.length > 1 && (
         <button

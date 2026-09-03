@@ -96,7 +96,7 @@ function makePost(body: unknown) {
   }) as never;
 }
 
-describe('GET /api/chat/sync — shared cloud contract', () => {
+describe('GET /api/chat/sync, shared cloud contract', () => {
   beforeEach(() => vi.clearAllMocks());
 
   it('pull page with rows parses against ChatSyncPullResponseSchema', async () => {
@@ -234,7 +234,7 @@ describe('GET /api/chat/sync — shared cloud contract', () => {
   });
 });
 
-describe('POST /api/chat/sync — shared cloud contract', () => {
+describe('POST /api/chat/sync, shared cloud contract', () => {
   beforeEach(() => vi.clearAllMocks());
 
   it('push ack parses against ChatSyncPushResponseSchema', async () => {

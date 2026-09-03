@@ -52,7 +52,7 @@ describe('API host does not serve the app', () => {
     );
   });
 
-  it('leaves rewritten API traffic alone — that is what the host is for', async () => {
+  it('leaves rewritten API traffic alone, that is what the host is for', async () => {
     const response = await requestFrom('api.agiworkforce.com', '/api/llm/v1/chat/completions');
     expect(response?.status).not.toBe(307);
   });

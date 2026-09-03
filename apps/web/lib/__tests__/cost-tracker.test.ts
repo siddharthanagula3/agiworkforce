@@ -322,7 +322,7 @@ describe('cost calculation', () => {
   });
 });
 
-describe('worked cost examples — all token classes, per provider', () => {
+describe('worked cost examples, all token classes, per provider', () => {
   it('anthropic (disjoint input): applies Sonnet 5 catalog cache prices', () => {
     recordModelUsage(
       SESSION_A,
@@ -464,7 +464,7 @@ describe('effective-dated pricing', () => {
     expect(getModelUsageReport(SESSION_B).get(SCHEDULED_MODEL)!.costUsd).toBeCloseTo(6.3, 6);
   });
 
-  it('prices Sonnet 5 identically on every date — founder Decision #22', () => {
+  it('prices Sonnet 5 identically on every date, founder Decision #22', () => {
     recordModelUsage(
       SESSION_A,
       'fixture-anthropic-standard',

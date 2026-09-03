@@ -61,12 +61,6 @@ function registeredBrowser(host: string) {
   };
 }
 
-/**
- * An RFC 8291 / RFC 8188 receiver written from the specification rather than
- * from `web-push-service`, so it holds its own copy of every label, offset and
- * length. A drift in either — a renamed info string, a moved header field —
- * fails here instead of shipping a record every browser silently discards.
- */
 function receiveWebPush(body: Buffer, ecdh: ECDH, authSecret: Buffer): string {
   const salt = body.subarray(0, 16);
   const keyIdLength = body.readUInt8(20);

@@ -265,17 +265,6 @@ export interface BulkResetPreview {
   clearedCents: number;
 }
 
-/**
- * Fleet-wide goodwill reset, used after an incident so nobody pays for a window
- * we broke.
- *
- * Split into a preview and an execute because this rewrites live billing state
- * for every active user at once and cannot be undone by re-running it — the
- * operator needs to see the blast radius ("2,431 users, $840.12") before
- * committing. Allocation is never touched, only consumption, and each affected
- * account gets its own `reset` ledger row so the change stays attributable per
- * user rather than as one opaque bulk mutation.
- */
 export async function previewBulkUsageReset(): Promise<BulkResetPreview> {
   const db = getNeonDb();
   const [row] = await db.query<{ affected: string; cleared: string }>(

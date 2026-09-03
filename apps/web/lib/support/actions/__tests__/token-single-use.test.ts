@@ -1,4 +1,3 @@
-
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { createFakeNeonDb } from './helpers/fake-neon-db';
@@ -32,7 +31,7 @@ import { confirmSupportAction, proposeSupportAction } from '../service';
 
 const USER = 'user_a';
 
-describe('support actions — confirmation tokens are single use', () => {
+describe('support actions, confirmation tokens are single use', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.db = createFakeNeonDb();

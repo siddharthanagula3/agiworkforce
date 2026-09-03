@@ -86,7 +86,7 @@ function recognizedBody(card: InteractiveCard | undefined) {
   return card?.recognized ? card.body : undefined;
 }
 
-describe('useChatStream — interactive cards', () => {
+describe('useChatStream, interactive cards', () => {
   beforeEach(() => {
     useChatStore.getState().reset();
     useFreeTrialStore.getState().clearLimitReached();

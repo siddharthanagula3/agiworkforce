@@ -114,7 +114,7 @@ beforeEach(() => {
   vi.stubGlobal('fetch', mocks.fetch);
 });
 
-describe('POST /api/llm/v1/audio/transcriptions — managed usage accounting', () => {
+describe('POST /api/llm/v1/audio/transcriptions, managed usage accounting', () => {
   it('reserves credits before any provider spend', async () => {
     providerReturns({ text: 'hello' });
 

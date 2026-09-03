@@ -1,4 +1,3 @@
-
 import type { HardAbstainCategory } from '../types';
 import { normalizeText } from '../retrieval/tokenize';
 
@@ -91,13 +90,6 @@ function prepare(text: string): string {
   return normalizeText(text).replace(/[^a-z0-9+]+/g, ' ');
 }
 
-/**
- * Returns the first matching hard-abstain category, or null.
- *
- * Exported so the widget can pre-empt a pointless round trip — but the server
- * classifies again regardless. A client-side check is a latency optimization,
- * never the gate.
- */
 export function classifyHardAbstain(text: string): HardAbstainCategory | null {
   if (!text) return null;
   const prepared = prepare(text);
@@ -120,15 +112,15 @@ export const HARD_ABSTAIN_REASON: Readonly<
 
 export const HARD_ABSTAIN_COPY: Readonly<Record<HardAbstainCategory, string>> = Object.freeze({
   billing:
-    "I won't guess about charges, invoices, or what you'll be billed — getting that wrong costs you money. " +
+    "I won't guess about charges, invoices, or what you'll be billed, getting that wrong costs you money. " +
     'Here are the authoritative pages, and I can put you in touch with a human who can look at your account.',
   data_deletion:
-    "I won't guess about data deletion or how long anything is retained — that has to come from the published policy, not from me. " +
+    "I won't guess about data deletion or how long anything is retained, that has to come from the published policy, not from me. " +
     'Here are the authoritative pages, and I can hand you to a human.',
   security:
     "I won't speculate about security posture, incidents, or compliance status. " +
     'Here are the authoritative pages, and I can hand you to a human who can answer properly.',
   legal:
-    "I won't interpret the terms, the DPA, or anything else legal — that needs to come from the documents themselves or from a person. " +
+    "I won't interpret the terms, the DPA, or anything else legal, that needs to come from the documents themselves or from a person. " +
     'Here are the authoritative pages, and I can hand you to a human.',
 });

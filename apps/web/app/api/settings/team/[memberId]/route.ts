@@ -137,12 +137,6 @@ async function handleRemove(
 
   logger.info({ requesterId, organizationId, targetUserId }, 'Team member removed');
 
-  // Dropping the membership row stops the NEXT request from resolving this
-  // workspace. It does not stop a signed-in browser, a paired desktop, or a
-  // developer key that is already live — the gap between "removed" and
-  // "actually cut off" is the offboarding hole a security review looks for.
-  // Deliberately after the membership delete: if revocation fails the member is
-  // still out of the workspace, and the audit event says what remained.
   const deprovision = await deprovisionMember(getNeonDb(), await clerkClient(), {
     userId: targetUserId,
     organizationId,

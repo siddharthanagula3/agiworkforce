@@ -18,9 +18,6 @@ beforeEach(() => {
   vi.clearAllMocks();
 });
 
-// General settings asks "What should AGI call you?" and "What best describes
-// your work?". Both were stored, returned by /api/me, and read by nothing at
-// inference time — the form promised personalization the model never saw.
 describe('the personalization General settings collects reaches the model', () => {
   it('tells the model the name the user asked to be called', async () => {
     settings({ preferredName: 'Sid' });
@@ -142,9 +139,6 @@ describe('the personalization General settings collects reaches the model', () =
 
 import { formatResponseStyleLines } from '../user-identity';
 
-// Mobile ships a style preset and four 0-100 sliders. They synced to the
-// account under the 'personalization' namespace and were read by NOTHING at
-// inference time — every slider a mobile user moved was stored and discarded.
 describe('mobile response-style controls reach the model', () => {
   function personalization(general: Record<string, unknown>, style: Record<string, unknown>) {
     mockQuery.mockResolvedValue([{ settings: { general, personalization: style } }]);

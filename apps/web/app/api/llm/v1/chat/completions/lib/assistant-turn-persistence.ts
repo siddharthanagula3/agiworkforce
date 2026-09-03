@@ -172,13 +172,6 @@ export async function persistAssistantTurn(params: {
             return written;
           });
 
-    // Same fire-and-forget contract as the client-save path
-    // (scheduleArtifactIndexing in messages/route.ts): a discovery aid, never a
-    // correctness requirement, so a failure here must never surface to the
-    // turn that already completed. Gated on affected > 0 — the INSERT is a
-    // SELECT ... FROM web_conversations WHERE user/org match, so a mismatch
-    // silently inserts nothing, and indexing a message that was never written
-    // would violate web_artifact_index's FK on message_id.
     if (affected > 0) {
       scheduleArtifactIndexing({
         db,

@@ -173,7 +173,7 @@ describe('SCIM boolean coercion', () => {
     expect(coerceScimBoolean('true', 'active')).toBe(true);
   });
 
-  it('refuses anything else rather than defaulting — a silently ignored deprovision is the worst outcome', () => {
+  it('refuses anything else rather than defaulting, a silently ignored deprovision is the worst outcome', () => {
     expect(() => coerceScimBoolean('no', 'active')).toThrowError(ScimError);
     expect(() => coerceScimBoolean(0, 'active')).toThrowError(ScimError);
     expect(() => coerceScimBoolean(undefined, 'active')).toThrowError(ScimError);

@@ -160,7 +160,7 @@ describe('tool-loop url_fetch integration', () => {
   it('returns an honest error result to the model for a blocked (SSRF) URL', async () => {
     factoryMocks.streamRequest
       .mockResolvedValueOnce(toolCallStream('http://169.254.169.254/latest/meta-data/'))
-      .mockResolvedValueOnce(finalAnswerStream('I could not fetch that URL — it is not allowed.'));
+      .mockResolvedValueOnce(finalAnswerStream('I could not fetch that URL, it is not allowed.'));
 
     const fetchMock = vi.fn(async () => new Response('should never run', { status: 200 }));
     vi.stubGlobal('fetch', fetchMock);

@@ -118,7 +118,7 @@ const COMPARISON_INLINE_WINNER = `# Postgres vs MySQL
 ### Pros
 - Simple replication
 
-## Winner: Postgres — better correctness guarantees overall
+## Winner: Postgres, better correctness guarantees overall
 `;
 
 const STEPS_UNICODE = `# Café setup 🍵

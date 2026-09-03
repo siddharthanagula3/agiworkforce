@@ -96,7 +96,7 @@ beforeEach(() => {
   });
 });
 
-describe('sanitizeAuditDetail — key allowlist', () => {
+describe('sanitizeAuditDetail, key allowlist', () => {
   it('drops every key that is not part of the documented detail shape', () => {
     const hostile = {
       resourceId: 'key_abc',
@@ -122,7 +122,7 @@ describe('sanitizeAuditDetail — key allowlist', () => {
     expect(serialized).not.toContain('hunter2');
   });
 
-  it('drops nested objects — the usual way message content leaks in', () => {
+  it('drops nested objects, the usual way message content leaks in', () => {
     const safe = sanitizeAuditDetail({
       resourceName: 'ok',
       source: { conversation: [PROMPT_CONTENT] },
@@ -137,7 +137,7 @@ describe('sanitizeAuditDetail — key allowlist', () => {
   });
 });
 
-describe('sanitizeAuditDetail — value scrubbing', () => {
+describe('sanitizeAuditDetail, value scrubbing', () => {
   for (const [label, secret] of Object.entries(SECRETS)) {
     it(`redacts a ${label} smuggled into an allowlisted field`, () => {
       const safe = sanitizeAuditDetail({ resourceName: secret });
@@ -179,7 +179,7 @@ describe('sanitizeAuditDetail — value scrubbing', () => {
   });
 });
 
-describe('recordAuditEvent — persisted parameters carry no secret material', () => {
+describe('recordAuditEvent, persisted parameters carry no secret material', () => {
   it('scrubs secrets before they reach db.execute', async () => {
     await recordAuditEvent({
       userId: 'user_actor',
@@ -199,7 +199,7 @@ describe('recordAuditEvent — persisted parameters carry no secret material', (
   });
 });
 
-describe('POST /api/settings/api-keys — the generated key never lands in the audit row', () => {
+describe('POST /api/settings/api-keys, the generated key never lands in the audit row', () => {
   it('records the key id and label but not the secret', async () => {
     const rawKey = 'sk_live_9f2b7c1d4e6a8b0c_theActualSecretMaterialHere';
 

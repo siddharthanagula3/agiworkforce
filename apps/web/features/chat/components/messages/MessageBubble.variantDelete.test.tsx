@@ -53,7 +53,7 @@ async function openMenu(): Promise<ReturnType<typeof userEvent.setup>> {
   return user;
 }
 
-describe('MessageBubble — deleting one response among its siblings', () => {
+describe('MessageBubble, deleting one response among its siblings', () => {
   it('offers the action on a response that has siblings', async () => {
     renderBubble();
     await openMenu();

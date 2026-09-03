@@ -1,4 +1,3 @@
-
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { MeResponseSchema } from '@agiworkforce/cloud-contracts';
 
@@ -61,7 +60,7 @@ function makeGetRequest(query?: string) {
   return new Request(url, { method: 'GET' }) as never;
 }
 
-describe('GET /api/me — shared cloud contract', () => {
+describe('GET /api/me, shared cloud contract', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockGetClerkAuthUser.mockResolvedValue({
@@ -175,7 +174,7 @@ describe('GET /api/me — shared cloud contract', () => {
   });
 });
 
-describe('GET /api/me — capability_handshake surface parameter', () => {
+describe('GET /api/me, capability_handshake surface parameter', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockGetClerkAuthUser.mockResolvedValue({

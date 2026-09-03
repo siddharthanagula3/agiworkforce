@@ -5,18 +5,6 @@ import { join } from 'node:path';
 const WEB_ROOT = join(__dirname, '..', '..', '..', '..');
 const read = (p: string) => readFileSync(join(WEB_ROOT, p), 'utf-8');
 
-/**
- * Account deletion now has a real self-serve cancel path
- * (`POST /api/user/delete-account/cancel`, nulling
- * `profiles.deletion_requested_at` / `deletion_scheduled_for` while the grace
- * window is open). This suite used to pin the opposite invariant — that no
- * cancel path existed and the dialog said so — and its own comment predicted
- * this exact change: "If a real cancel endpoint is ever added, this test
- * should fail and the dialog copy should be revisited in the same change."
- * This is that revisit: it now pins that the copy and the code agree that
- * cancellation is self-serve, and that the endpoint actually honours the
- * grace window rather than clearing the schedule unconditionally.
- */
 describe('delete-account dialog matches what deletion actually does', () => {
   const dialog = read('features/settings/sections/AccountSection.tsx');
   const privacy = read('app/privacy/page.tsx');
@@ -47,9 +35,6 @@ describe('delete-account dialog matches what deletion actually does', () => {
   });
 
   it('the cancel endpoint only clears the schedule while it is still in the future', () => {
-    // Cancelling after the grace window closes must not be able to resurrect
-    // data the purge cron has already started erasing — the UPDATE has to be
-    // conditioned on the schedule still being ahead of `now()`.
     expect(cancelRoute).toMatch(/deletion_scheduled_for\s*>\s*now\(\)/i);
   });
 });

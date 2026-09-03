@@ -26,7 +26,7 @@ function hrefsIn(section: HTMLElement): string[] {
   );
 }
 
-describe('AdminConsolePage — admin control inventory', () => {
+describe('AdminConsolePage, admin control inventory', () => {
   it('links to the directory-sync control plane, which had no inbound link anywhere', () => {
     const { container } = render(<AdminConsolePage />);
     expect(hrefsIn(controlsSection(container))).toContain('/admin/directory-sync');
@@ -37,7 +37,7 @@ describe('AdminConsolePage — admin control inventory', () => {
     expect(hrefsIn(controlsSection(container))).toContain('/settings/team');
   });
 
-  it('gives every listed control a destination — an inventory entry with no link is a dead control', () => {
+  it('gives every listed control a destination, an inventory entry with no link is a dead control', () => {
     const { container } = render(<AdminConsolePage />);
     const section = controlsSection(container);
     const items = section.querySelectorAll('li');
@@ -65,7 +65,7 @@ describe('AdminConsolePage — admin control inventory', () => {
   });
 });
 
-describe('AdminConsolePage — readiness status tone', () => {
+describe('AdminConsolePage, readiness status tone', () => {
   it('marks the managed-compute row warn, not success, when the kill-switch is engaged', () => {
     vi.stubEnv('AGI_MANAGED_COMPUTE_PRIVATE_BETA', 'off');
     render(<AdminConsolePage />);
@@ -101,7 +101,7 @@ describe('AdminConsolePage — readiness status tone', () => {
   });
 });
 
-describe('AdminConsolePage — readiness ledger provenance', () => {
+describe('AdminConsolePage, readiness ledger provenance', () => {
   function ledgerRows(container: HTMLElement): HTMLElement[] {
     const section = container.querySelector('[aria-labelledby="readiness-ledger-title"]');
     if (!(section instanceof HTMLElement)) throw new Error('Readiness ledger section is missing');

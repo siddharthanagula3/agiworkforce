@@ -419,8 +419,8 @@ describe('runResearchLoop', () => {
     };
     const synthDirective = synthesisRequest.messages[synthesisRequest.messages.length - 1];
     expect(synthDirective?.role).toBe('user');
-    expect(synthDirective?.content).toContain('[1] A — https://a.com');
-    expect(synthDirective?.content).toContain('[2] B — https://b.com');
+    expect(synthDirective?.content).toContain('[1] A, https://a.com');
+    expect(synthDirective?.content).toContain('[2] B, https://b.com');
     // Notes were appended (markers stripped) for the synthesis turn to build on.
     const appendedNotes = synthesisRequest.messages.find(
       (m) => m.role === 'assistant' && m.content.includes('secret gathering notes'),
@@ -1293,16 +1293,7 @@ describe('plan approval gate', () => {
   });
 });
 
-describe('empty synthesis — attributing the cause honestly', () => {
-  /**
-   * Observed locally with an Anthropic key at $0: every upstream call was
-   * rejected with "Your credit balance is too low to access the Anthropic API",
-   * the run gathered nothing, synthesis came back empty, and the user was told
-   * "the model returned an empty report. Try running the research again." Both
-   * halves were wrong — the model never got a chance to speak, and the retry
-   * could not have succeeded. Zero sources plus a captured upstream error is an
-   * infrastructure failure, not a shy model.
-   */
+describe('empty synthesis, attributing the cause honestly', () => {
   it('names the upstream provider error instead of blaming the model when nothing was gathered', async () => {
     streamRequestMock
       .mockResolvedValueOnce(planStream())

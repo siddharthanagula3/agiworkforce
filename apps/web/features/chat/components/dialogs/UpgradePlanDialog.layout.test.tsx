@@ -26,7 +26,7 @@ function reservedRightGutterRem(from: HTMLElement, root: HTMLElement): number {
   return total;
 }
 
-describe('UpgradePlanDialog header — close control has its own space', () => {
+describe('UpgradePlanDialog header, close control has its own space', () => {
   it('reserves at least the close button footprint to the right of the billing toggle', () => {
     render(
       <UpgradePlanDialog open onOpenChange={vi.fn()} currentTier="free" onUpgrade={vi.fn()} />,

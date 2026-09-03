@@ -1,4 +1,3 @@
-
 import { describe, it, expect } from 'vitest';
 
 const TIER_ORDER: Record<string, number> = {
@@ -77,7 +76,7 @@ describe('credit-based proration calculation', () => {
     expect(calculateCreditAmountCents(2001, 1, 3)).toBe(667);
   });
 
-  it('zero allocation guard — does not divide by zero', () => {
+  it('zero allocation guard, does not divide by zero', () => {
     expect(calculateCreditAmountCents(2000, 0, 0)).toBe(0);
   });
 

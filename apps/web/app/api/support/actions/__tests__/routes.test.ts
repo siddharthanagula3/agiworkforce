@@ -1,4 +1,3 @@
-
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
 
@@ -207,7 +206,7 @@ describe('GET /api/support/actions/available', () => {
     mocks.listAvailable.mockReturnValue({ actions: [], unavailable: [], excluded: [] });
   });
 
-  it('requires a session — an anonymous caller is never shown an action list', async () => {
+  it('requires a session, an anonymous caller is never shown an action list', async () => {
     mocks.getClerkAuthUser.mockRejectedValue(createError.unauthorized());
     const response = await AVAILABLE(
       new NextRequest('https://agiworkforce.com/api/support/actions/available'),

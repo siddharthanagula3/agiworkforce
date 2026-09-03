@@ -40,11 +40,6 @@ interface Invoice {
   invoice_pdf: string | null;
 }
 
-// Real per-task credit ledger rows from apps/web/app/api/billing/credit-history
-// (backed by public.credit_transactions — settings-12-gap). `deduction` is
-// the per-task debit every managed-cloud request writes; the other four are
-// the money-affecting events (top-up, refund, bonus grant, manual
-// adjustment). See that route for why `allocation`/`reset` are excluded.
 type CreditTransactionType = 'purchase' | 'adjustment' | 'refund' | 'bonus' | 'deduction';
 
 interface CreditHistoryEntry {
@@ -64,14 +59,6 @@ const CREDIT_TRANSACTION_LABELS: Record<string, string> = {
   adjustment: 'Adjustment',
 };
 
-/**
- * `credit_transactions.amount_cents` is stored positive for `deduction` (an
- * "amount spent" magnitude — see db/neon/0020_functions.sql:643-657) but as a
- * signed balance delta for every other type (positive = credited, negative =
- * revoked — see the `refund` caller at db/neon/0020_functions.sql:355). Flip
- * only the verified case so a per-task debit reads as a debit instead of a
- * false "credit added" row; every other type is shown exactly as stored.
- */
 function signedCreditCents(entry: CreditHistoryEntry): number {
   return entry.transaction_type === 'deduction'
     ? -Math.abs(entry.amount_cents)
@@ -108,7 +95,7 @@ function formatDate(ts: number | null): string {
 function formatIsoDate(iso: string): string {
   const d = new Date(iso);
   return Number.isNaN(d.getTime())
-    ? '—'
+    ? ', '
     : d.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
 }
 
@@ -202,7 +189,7 @@ function PlanIcon({ tier }: { tier: string }) {
         flexShrink: 0,
       }}
     >
-      {/* The brand mark, not a generic crosshair — this is the most prominent
+      {/* The brand mark, not a generic crosshair, this is the most prominent
           icon in Billing and it was the only place in the product showing a
           stock glyph where the AGI symbol belongs. */}
       <AgiMark size={26} mono ariaLabel="" style={{ color: isPaid ? '#fff' : 'var(--text-3)' }} />
@@ -271,11 +258,6 @@ export function BillingSection() {
   const billingUnauthenticated = useBillingStore((s) => s.unauthenticated);
   const refreshUser = useBillingStore((s) => s.refreshUser);
 
-  // "Manage billing" and "Update payment method" are Stripe Customer Portal
-  // actions, but both were `<Link href="/billing">` — the old duplicate billing
-  // dashboard. Now that `/billing` redirects here, following them would land
-  // the user back on the screen they clicked from: two dead controls. They
-  // open the portal, which is what their labels have always claimed.
   const [portalPending, setPortalPending] = useState(false);
   const [portalError, setPortalError] = useState<string | null>(null);
   const [topUpAmountUsd, setTopUpAmountUsd] = useState(MIN_TOP_UP_AMOUNT_USD);
@@ -287,12 +269,6 @@ export function BillingSection() {
   const [overagePending, setOveragePending] = useState(false);
   const [overageError, setOverageError] = useState<string | null>(null);
 
-  /**
-   * Optimistic, then reconciled against the server's answer rather than the
-   * value that was requested — the response also carries the spendable balance,
-   * and a toggle that claims to be on while the server has it off would be a
-   * silent promise to spend money.
-   */
   async function setOverage(next: boolean) {
     if (overagePending) return;
     setOveragePending(true);
@@ -347,7 +323,7 @@ export function BillingSection() {
   const planLabel = isBillingPlanTier(tier) ? getBillingPlanPricing(tier).label : undefined;
   const listPriceUsd = getPlanPriceUsd(tier, 'monthly');
   const planPriceLabel = isContractPricedPlan(tier)
-    ? 'Custom — set by your contract'
+    ? 'Custom, set by your contract'
     : listPriceUsd !== null && listPriceUsd > 0
       ? `$${listPriceUsd}/mo${isPerSeatBillingPlan(tier) ? ' per seat' : ''}`
       : null;
@@ -405,8 +381,6 @@ export function BillingSection() {
     }
   }
 
-  // Real Stripe data (empty for free/unbilled users — the routes return [] when
-  // there is no Stripe customer, which we render as an honest empty state).
   const [paymentMethods, setPaymentMethods] = useState<BillingListState<PaymentMethod>>({
     status: 'idle',
     items: [],
@@ -550,11 +524,6 @@ export function BillingSection() {
     );
   }
 
-  // A 401 clears `subscription` without recording an error, so before this
-  // guard the render fell straight through to `tier = 'free'` and offered a
-  // paying customer an upgrade to the plan they already have — with the usage
-  // panel beside it still correctly reading Max 15x from its own request.
-  // "We could not read your plan" is the honest thing to say when we could not.
   if (billingUnauthenticated && !subscription) {
     return (
       <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
@@ -563,8 +532,8 @@ export function BillingSection() {
           role="alert"
           style={{ margin: 0, color: 'var(--settings-destructive-text)', fontSize: 14 }}
         >
-          Your session expired before we could read your plan. Your subscription has not changed
-          &mdash; sign in again to see it.
+          Your session expired before we could read your plan. Your subscription has not changed -
+          sign in again to see it.
         </p>
         <button
           type="button"
@@ -598,13 +567,6 @@ export function BillingSection() {
     );
   }
 
-  // Any absent subscription, not just the 401 and error cases above. When
-  // /api/me succeeds the store always writes one, and a genuinely free account
-  // carries tier 'free' from the server — so null only ever means we did not
-  // get an answer. The two guards above each named a specific cause, which left
-  // every other cause falling through to `tier = 'free'`: observed 2026-08-17
-  // with a Basic account shown "Free plan" and an Upgrade button, beside a
-  // Usage panel correctly reading Basic from its own request.
   if (!subscription) {
     return (
       <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
@@ -817,7 +779,7 @@ export function BillingSection() {
               {planChangeBlockedCopy}
             </span>
           )}
-          {/* A store-owned subscription cannot be managed in the Stripe portal —
+          {/* A store-owned subscription cannot be managed in the Stripe portal.
               send the user to the store that actually holds it. */}
           {!isFreeTier && isStoreBilled && (
             <a
@@ -888,7 +850,7 @@ export function BillingSection() {
         )}
       </section>
 
-      {/* Payment section (Stripe-billed users only — a store-billed plan's card
+      {/* Payment section (Stripe-billed users only, a store-billed plan's card
           is held by Apple or Google and is not readable or editable here) */}
       {hasStripeBilling && (
         <section
@@ -1095,7 +1057,7 @@ export function BillingSection() {
 
             {/*
               Without this, purchased credit only raised the billing-period
-              budget — the rolling 5-hour and weekly caps ignored it entirely,
+              budget, the rolling 5-hour and weekly caps ignored it entirely,
               so the limit most people actually hit stayed shut no matter how
               much they had bought. Opt-in and off by default: spending a
               balance somebody bought, without asking, is worse than stopping
@@ -1159,7 +1121,7 @@ export function BillingSection() {
 
       {/* Credit history section (settings-12-gap): the real per-task credit
           ledger from public.credit_transactions, surfaced next to the
-          balance/top-up UI above. Never seeded or mocked — an empty table
+          balance/top-up UI above. Never seeded or mocked, an empty table
           means this account has no transactions yet. */}
       <section
         style={{
@@ -1357,7 +1319,7 @@ export function BillingSection() {
                           View
                         </a>
                       ) : (
-                        <span style={{ fontSize: 13, color: 'var(--text-3)' }}>—</span>
+                        <span style={{ fontSize: 13, color: 'var(--text-3)' }}>, </span>
                       )}
                     </td>
                   </tr>

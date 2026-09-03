@@ -1,4 +1,3 @@
-
 export type ExcludedSupportActionId =
   | 'delete_account'
   | 'cancel_subscription'
@@ -36,7 +35,7 @@ export const EXCLUDED_SUPPORT_ACTIONS: Readonly<
   remove_member: Object.freeze({
     id: 'remove_member',
     reason:
-      'Removing a member takes away another person’s access. A support assistant will not act on someone else’s account — an owner or admin does it from team settings.',
+      'Removing a member takes away another person’s access. A support assistant will not act on someone else’s account, an owner or admin does it from team settings.',
     control: { label: 'Team members', href: '/settings/team' },
   }),
   transfer_ownership: Object.freeze({

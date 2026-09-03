@@ -31,14 +31,6 @@ function rememberDismissal(): void {
   }
 }
 
-/**
- * The offer to turn on run notifications.
- *
- * Mounting it never asks for permission. The browser prompt is raised only by
- * the button below, so the request always arrives on a click the user made
- * knowing what it is for — a prompt fired on page load is the one browsers
- * penalise and users deny permanently.
- */
 export function WebPushOptIn() {
   const { isSignedIn } = useAuth();
   const [offered, setOffered] = useState(false);

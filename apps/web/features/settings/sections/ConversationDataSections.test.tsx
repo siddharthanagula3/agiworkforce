@@ -18,13 +18,6 @@ const mocks = vi.hoisted(() => ({
   historyStats: vi.fn(),
 }));
 
-/**
- * Stable stub for the shared `useConfirm` destructive-confirm hook
- * (shell-nav-ia-gap-01 remainder). PrivacySection and ArchivedChatsSection now
- * route their bulk-delete/bulk-archive confirmations through the same
- * AlertDialog wrapper as WebAppShell/WebChatPage instead of `window.confirm` —
- * same stub shape as apps/web/shared/components/layout/WebAppShell.test.tsx.
- */
 const confirmStub = vi.hoisted(() => ({
   confirm: vi.fn(async (_options: { title: string; description: string }) => true),
   dialog: null as React.ReactNode,

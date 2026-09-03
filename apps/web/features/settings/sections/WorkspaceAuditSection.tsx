@@ -34,10 +34,6 @@ const controlStyle = {
 const OUTCOMES = ['', 'success', 'failure', 'denied'] as const;
 const SEVERITIES = ['', 'info', 'warning', 'critical'] as const;
 
-/**
- * Outcome carries the meaning an admin scans for, so it is encoded in form as
- * well as text — a denial has to be findable without reading every row.
- */
 function OutcomeChip({ outcome }: { outcome: AuditEventView['outcome'] }) {
   const tone =
     outcome === 'success'
@@ -114,7 +110,6 @@ export function WorkspaceAuditSection() {
     );
   }
 
-  // 403 — a personal account, or a member without admin. Not an error state.
   if (!data) return null;
 
   const events = data.events;
@@ -131,7 +126,7 @@ export function WorkspaceAuditSection() {
             </h3>
           </div>
           <p style={{ margin: '6px 0 0', fontSize: 12, color: 'var(--text-3)' }}>
-            Administrative and identity events for this workspace. Append-only — entries cannot be
+            Administrative and identity events for this workspace. Append-only, entries cannot be
             edited or removed, including by an owner. Exporting is itself recorded here.
           </p>
         </div>
@@ -220,7 +215,7 @@ export function WorkspaceAuditSection() {
           <div style={{ fontSize: 12, color: 'var(--text-3)' }}>
             {filtered
               ? 'Widen the range or clear the filters.'
-              : 'Administrative actions — policy changes, membership, identity — appear here as they happen.'}
+              : 'Administrative actions, policy changes, membership, identity, appear here as they happen.'}
           </div>
         </div>
       ) : (

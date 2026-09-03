@@ -29,7 +29,7 @@ export default function ChatError({
           Chat could not be displayed
         </h2>
         <p style={{ fontSize: 14, color: 'var(--text-3)', margin: '0 0 20px' }}>
-          Something went wrong while rendering this conversation. Your messages are saved — try
+          Something went wrong while rendering this conversation. Your messages are saved, try
           again, or open a different conversation.
         </p>
         <div style={{ display: 'flex', gap: 12, justifyContent: 'center' }}>

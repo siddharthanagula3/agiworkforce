@@ -1,4 +1,3 @@
-
 import { addCsrfHeaders } from '@/lib/client/csrf';
 import {
   SUPPORT_HISTORY_LIMIT,
@@ -363,7 +362,7 @@ export async function confirmAction(
         kind: 'ok',
         message,
         followUp: null,
-        secret: { label: 'Your new API key — copy it now, it is not shown again', value: fullKey },
+        secret: { label: 'Your new API key, copy it now, it is not shown again', value: fullKey },
       };
     }
   }

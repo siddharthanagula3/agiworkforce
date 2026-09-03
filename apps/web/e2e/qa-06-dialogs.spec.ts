@@ -178,7 +178,7 @@ async function probeDialog(
   return report;
 }
 
-test.describe('QA dialogs — focus, escape, inertness', () => {
+test.describe('QA dialogs, focus, escape, inertness', () => {
   test.setTimeout(15 * 60_000);
   test.use({ reducedMotion: 'reduce' } as never);
 

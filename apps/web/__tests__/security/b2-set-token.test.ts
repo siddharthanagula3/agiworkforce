@@ -73,7 +73,7 @@ describe('set-token route (Clerk)', () => {
     expect(cookieWrites).toEqual([]);
   });
 
-  it('refreshToken alone (no access_token) returns 400 — Clerk handles rotation internally', async () => {
+  it('refreshToken alone (no access_token) returns 400, Clerk handles rotation internally', async () => {
     const res = await POST(makeRequest({ refreshToken: 'valid-refresh-token-1234567890' }));
     expect(res.status).toBe(400);
     const json = await res.json();

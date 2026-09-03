@@ -1,18 +1,5 @@
 'use client';
 
-/**
- * In-flight state for a video generation.
- *
- * The previous inline version painted a shimmer and put its only label behind
- * `motion-safe:opacity-0`, so the text "Generating your video…" was visible
- * ONLY to readers with prefers-reduced-motion. Everyone else — every demo
- * viewer — got an unexplained grey rectangle for the 1-3 minutes Veo takes,
- * which reads as a hung or broken product rather than as work in progress.
- *
- * The label and elapsed time are now unconditional; the shimmer is decoration
- * behind them, not the message itself.
- */
-
 import { useEffect, useState } from 'react';
 import { Video, X } from '@agiworkforce/icons';
 import { cn } from '@shared/lib/utils';
@@ -39,14 +26,6 @@ function formatElapsed(seconds: number): string {
   return `${minutes}m ${String(seconds % 60).padStart(2, '0')}s`;
 }
 
-/**
- * Explicit lookup, not string-interpolated class names: Tailwind's build-time
- * scanner only sees literal class strings in source, so `aspect-[${ratio}]`
- * would silently produce no rule at runtime. Every ratio the video route can
- * accept (MANAGED_MEDIA_VIDEO_ASPECT_RATIOS) is enumerated here; anything
- * else — including 'auto' or an unrecognized value — falls back to 16:9,
- * matching the pre-existing hardcoded shape.
- */
 const VIDEO_ASPECT_CLASSES: Readonly<Record<string, string>> = {
   '16:9': 'aspect-video',
   '4:3': 'aspect-[4/3]',
@@ -86,13 +65,6 @@ export function VideoGenerationPlaceholder({
   return (
     <div
       className={cn(
-        // No `w-full`: the finished <video> (MessageBubble) is capped at
-        // `max-h-96` with no width class, so its own width is free to shrink
-        // proportionally for a portrait clip. Matching that here — bounding
-        // width and height instead of forcing width to 100% — lets the same
-        // browser aspect-ratio sizing algorithm pick an identically
-        // letterboxed box for the placeholder, so a portrait video doesn't
-        // render as a tall stack that then collapses once playback starts.
         'relative mt-4 max-w-lg max-h-96 overflow-hidden rounded-xl bg-muted',
         videoAspectClass(aspectRatio),
         className,
@@ -103,7 +75,7 @@ export function VideoGenerationPlaceholder({
       data-testid="video-generation-placeholder"
     >
       {/* Drives @keyframes shimmer in globals.css, which animates
-          background-position — so the highlight must be an oversized
+          background-position, so the highlight must be an oversized
           background gradient. A translate-based sweep would not move. */}
       <div
         className={cn(

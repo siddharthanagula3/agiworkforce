@@ -23,7 +23,7 @@ const BASE_INPUT = {
   computedAt: '2026-07-15T00:00:00.000Z',
 };
 
-describe('buildMeCapabilityHandshake — document identity', () => {
+describe('buildMeCapabilityHandshake, document identity', () => {
   it('carries sessionId=userId, a schema-prefixed CONTENT version, and the injected computedAt', () => {
     const document = buildMeCapabilityHandshake({ ...BASE_INPUT, tier: 'pro' });
     expect(document.sessionId).toBe('user_1');
@@ -55,7 +55,7 @@ describe('buildMeCapabilityHandshake — document identity', () => {
   });
 });
 
-describe('buildMeCapabilityHandshake — tier-layer honesty (the required property)', () => {
+describe('buildMeCapabilityHandshake, tier-layer honesty (the required property)', () => {
   it('free tier: grants search, voice, and connectors while keeping Deep Research paid', () => {
     const document = buildMeCapabilityHandshake({ ...BASE_INPUT, tier: 'free' });
     expect(document.granted).toContain('canUseWebSearch');
@@ -104,7 +104,7 @@ describe('buildMeCapabilityHandshake — tier-layer honesty (the required proper
   });
 });
 
-describe('buildMeCapabilityHandshake — surface layer (web denies desktop-only capabilities regardless of tier)', () => {
+describe('buildMeCapabilityHandshake, surface layer (web denies desktop-only capabilities regardless of tier)', () => {
   it('never grants desktop-only capabilities on the web surface even for the highest tier', () => {
     const document = buildMeCapabilityHandshake({
       ...BASE_INPUT,
@@ -136,7 +136,7 @@ describe('buildMeCapabilityHandshake — surface layer (web denies desktop-only 
   });
 });
 
-describe('buildMeCapabilityHandshake — model/deployment layer for cloud execution', () => {
+describe('buildMeCapabilityHandshake, model/deployment layer for cloud execution', () => {
   it('denies canUseCloudExecution when the E2B deployment flag is off, even at max tier', () => {
     const document = buildMeCapabilityHandshake({
       ...BASE_INPUT,
@@ -175,7 +175,7 @@ describe('toWireCapabilityHandshake', () => {
   });
 });
 
-describe('capability-document versioning + staleness (W5 tail — replaces placeholder versions)', () => {
+describe('capability-document versioning + staleness (W5 tail, replaces placeholder versions)', () => {
   it('is stable across identical inputs (idempotent recomputation, no counter storage)', () => {
     const a = buildMeCapabilityHandshake({ ...BASE_INPUT, tier: 'pro' });
     const b = buildMeCapabilityHandshake({ ...BASE_INPUT, tier: 'pro' });
@@ -223,7 +223,7 @@ describe('capability-document versioning + staleness (W5 tail — replaces place
   });
 });
 
-describe('BILL-15 — effective-entitlement limits on the existing /api/me handshake', () => {
+describe('BILL-15, effective-entitlement limits on the existing /api/me handshake', () => {
   const RESETS = {
     billingPeriodEndsAt: '2026-09-01T00:00:00.000Z',
     rollingFiveHourResetsAt: '2026-08-17T05:00:00.000Z',
@@ -308,7 +308,7 @@ describe('BILL-15 — effective-entitlement limits on the existing /api/me hands
   });
 });
 
-describe('BILL-15 — one decision for one account across every synced surface', () => {
+describe('BILL-15, one decision for one account across every synced surface', () => {
   const resets = {
     billingPeriodEndsAt: CAPABILITY_CONTRACT_ACCOUNT.billingPeriodEndsAt,
     rollingFiveHourResetsAt: CAPABILITY_CONTRACT_ACCOUNT.rollingFiveHourResetsAt,

@@ -114,7 +114,7 @@ function stripeSubscription(overrides: Record<string, unknown> = {}) {
   };
 }
 
-describe('POST /api/upgrade — payment-safe idempotent upgrade', () => {
+describe('POST /api/upgrade, payment-safe idempotent upgrade', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     process.env['STRIPE_SECRET_KEY'] = 'sk_test_dummy';

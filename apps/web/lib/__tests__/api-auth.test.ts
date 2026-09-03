@@ -354,7 +354,7 @@ describe('getClerkAuthUser · API-key issue/verify unification', () => {
       expect(result).toEqual({ userId: 'clerk-session-user' });
     });
 
-    it('a verified bearer resolves a DIFFERENT user than the cookie would have — bearer wins, cookie principal is never returned', async () => {
+    it('a verified bearer resolves a DIFFERENT user than the cookie would have, bearer wins, cookie principal is never returned', async () => {
       makeFakeDb();
       const { ApiKeyService } = await import('@/lib/services/api-key-service');
       const { getNeonDb } = await import('@/lib/server/neon-db');
@@ -372,7 +372,7 @@ describe('getClerkAuthUser · API-key issue/verify unification', () => {
       expect(mockAuth).not.toHaveBeenCalled();
     });
 
-    it('a verified bearer resolves the same user the cookie session has — auth() is still never consulted', async () => {
+    it('a verified bearer resolves the same user the cookie session has, auth() is still never consulted', async () => {
       makeFakeDb();
       const { ApiKeyService } = await import('@/lib/services/api-key-service');
       const { getNeonDb } = await import('@/lib/server/neon-db');

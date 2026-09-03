@@ -99,7 +99,7 @@ describe('loadMemoryExclusions', () => {
   });
 });
 
-describe('persistManagedAutoMemoryFacts — exclusions', () => {
+describe('persistManagedAutoMemoryFacts, exclusions', () => {
   it('never writes a candidate matching an exclusion', async () => {
     const db = fakeDb({ settings: { excludedTerms: ['salary'] }, inserted: ['id-1'] });
 

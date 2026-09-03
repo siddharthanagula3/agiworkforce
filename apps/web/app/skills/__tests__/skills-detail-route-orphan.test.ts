@@ -53,7 +53,7 @@ describe('/skills/[name] reachability', () => {
     const reachable = filesLinkingToSkillDetail().length > 0;
     expect(
       reachable || !existsSync(DETAIL_ROUTE_DIR),
-      'apps/web/app/skills/[name] exists but no source file links to it — wire a click-through or delete the route',
+      'apps/web/app/skills/[name] exists but no source file links to it, wire a click-through or delete the route',
     ).toBe(true);
   });
 

@@ -1,4 +1,3 @@
-
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
@@ -23,7 +22,6 @@ vi.mock('@/lib/cors', () => ({
   handleCorsPreflightRequest: vi.fn().mockReturnValue(null),
 }));
 
-// ─── CSRF mock — exported so per-test overrides work ─────────────────────────
 const mockRequireCsrfToken = vi.fn();
 vi.mock('@/lib/csrf', () => ({
   requireCsrfToken: (...args: unknown[]) => mockRequireCsrfToken(...args),
@@ -81,7 +79,7 @@ function rateLimitExceededResponse(): NextResponse {
   );
 }
 
-describe('POST /api/waitlist/cloud-managed — security tests', () => {
+describe('POST /api/waitlist/cloud-managed, security tests', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockRequireCsrfToken.mockResolvedValue(null);
@@ -261,7 +259,7 @@ describe('POST /api/waitlist/cloud-managed — security tests', () => {
     });
   });
 
-  describe('(d) DB error paths — no internal state in response', () => {
+  describe('(d) DB error paths, no internal state in response', () => {
     it('fails closed when table does not exist (42P01)', async () => {
       const pgErr = Object.assign(new Error('table not found'), { code: '42P01' });
       mockExecute.mockRejectedValueOnce(pgErr);

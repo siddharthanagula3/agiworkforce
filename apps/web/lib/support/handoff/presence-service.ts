@@ -1,4 +1,3 @@
-
 import 'server-only';
 
 import { logger } from '@/lib/logger';
@@ -93,11 +92,6 @@ function buildLive(config: HandoffConfig): HandoffAvailability {
   };
 }
 
-/**
- * @param options.skipCache pass true inside `createHandoff` — the decision that
- *   actually commits a user to a waiting state must be made against live data,
- *   not a 5-second-old read.
- */
 export async function resolveHumanAvailability(
   options: { skipCache?: boolean } = {},
 ): Promise<HandoffAvailability> {

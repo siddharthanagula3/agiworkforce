@@ -236,7 +236,7 @@ test('contrast across public routes', async ({ page }) => {
     .flatMap((r) =>
       r.bad.map(
         (b) =>
-          `  ${r.route} (${r.theme}) ${b.ratio}:1 needs ${b.need} — ${b.sel} ${JSON.stringify(b.text)}`,
+          `  ${r.route} (${r.theme}) ${b.ratio}:1 needs ${b.need}, ${b.sel} ${JSON.stringify(b.text)}`,
       ),
     )
     .join('\n');

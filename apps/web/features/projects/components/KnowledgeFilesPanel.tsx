@@ -174,7 +174,7 @@ export function KnowledgeFilesPanel({ projectId }: Props) {
               ) : null}
               {files.length >= MAX_PROJECT_KNOWLEDGE_FILES && (
                 <span style={{ color: 'var(--agi-amber)', marginLeft: 6 }}>
-                  &middot; full — remove one to add another
+                  &middot; full, remove one to add another
                 </span>
               )}
             </span>

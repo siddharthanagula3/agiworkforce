@@ -24,7 +24,7 @@ const permissive = policy({
   defaultPrivacyMode: 'managed',
 });
 
-describe('evaluateOrganizationPolicy — managed compute', () => {
+describe('evaluateOrganizationPolicy, managed compute', () => {
   it('denies when the administrator has turned managed compute off', () => {
     const decision = evaluateOrganizationPolicy(policy({ allowManagedCompute: false }), {
       resource: 'managed_compute',
@@ -99,7 +99,7 @@ describe('evaluateOrganizationPolicy — managed compute', () => {
   });
 });
 
-describe('evaluateOrganizationPolicy — chat sync', () => {
+describe('evaluateOrganizationPolicy, chat sync', () => {
   it('denies a surface removed from chatSyncSurfaces', () => {
     const decision = evaluateOrganizationPolicy(policy({ chatSyncSurfaces: ['web'] }), {
       resource: 'chat_sync',
@@ -131,7 +131,7 @@ describe('evaluateOrganizationPolicy — chat sync', () => {
   });
 });
 
-describe('evaluateOrganizationPolicy — privacy mode and audit export', () => {
+describe('evaluateOrganizationPolicy, privacy mode and audit export', () => {
   it('denies a privacy mode outside allowedPrivacyModes', () => {
     const decision = evaluateOrganizationPolicy(policy({ allowedPrivacyModes: ['local'] }), {
       resource: 'privacy_mode',
@@ -224,7 +224,7 @@ describe('evaluateOrganizationPolicy, spend cap', () => {
   });
 });
 
-describe('evaluateOrganizationPolicy — obligations', () => {
+describe('evaluateOrganizationPolicy, obligations', () => {
   it('carries the preview requirement and retention window on every decision', () => {
     const subject = policy({ requireLocalToByokPreview: true, retentionDays: 30 });
 

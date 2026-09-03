@@ -143,11 +143,6 @@ export function buildManagedAgentStream(
 
   const transitionJournal = async (state: AgentTaskState) => {
     if (!input.runJournal) return;
-    // Buffered deltas must land before the run row moves, so a replaying client
-    // never sees a terminal run whose last events are still in memory. A failed
-    // flush is logged rather than rethrown: losing the tail of the text deltas
-    // is recoverable — the assistant turn is persisted from its own buffer —
-    // whereas failing to record the terminal state strands the run.
     await flushJournal().catch((error: unknown) => {
       logger.warn(
         { error, requestId: input.processed.requestId },

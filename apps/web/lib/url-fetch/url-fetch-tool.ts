@@ -91,7 +91,7 @@ const NAMED_ENTITIES: Record<string, string> = {
   quot: '"',
   apos: "'",
   nbsp: ' ',
-  mdash: '—',
+  mdash: ', ',
   ndash: '–',
   hellip: '…',
   rsquo: '’',
@@ -467,7 +467,7 @@ export async function executeUrlFetch(
       if (current.protocol !== 'http:' && current.protocol !== 'https:') {
         return err(
           'invalid_tool_input',
-          `Unsupported URL scheme "${current.protocol}" — only http/https.`,
+          `Unsupported URL scheme "${current.protocol}", only http/https.`,
         );
       }
       if (current.username !== '' || current.password !== '') {
@@ -556,7 +556,7 @@ export async function executeUrlFetch(
       await response.body?.cancel().catch(() => undefined);
       return err(
         'response_too_large',
-        `Response is ${declaredLength} bytes — exceeds the ${maxResponseBytes}-byte limit.`,
+        `Response is ${declaredLength} bytes, exceeds the ${maxResponseBytes}-byte limit.`,
       );
     }
 

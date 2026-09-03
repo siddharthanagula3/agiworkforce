@@ -55,11 +55,6 @@ async function api(
     async ({ p, i }) => {
       const clerk = (window as unknown as { Clerk: ClerkBrowser }).Clerk;
       const token = await clerk.session?.getToken();
-      // Managed Cloud refuses a request that does not name a supported client
-      // surface, and that gate fires BEFORE the workspace policy gate. Without
-      // this header the turn is still denied — just for a different, correct
-      // reason — which would let this spec claim the policy bound when it had
-      // never been consulted.
       const headers: Record<string, string> = {
         Authorization: `Bearer ${token}`,
         'x-agi-surface': 'web',

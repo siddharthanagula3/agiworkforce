@@ -13,7 +13,7 @@ const BASE_INPUT = {
   updatedAt: '2026-07-15T00:00:00.000Z',
 };
 
-describe('buildCloudChatSessionLabel — session-label shape', () => {
+describe('buildCloudChatSessionLabel, session-label shape', () => {
   it('labels a new conversation as a well-formed cloud_chat session', () => {
     const session = buildCloudChatSessionLabel(BASE_INPUT);
     expect(session.kind).toBe('cloud_chat');
@@ -46,7 +46,7 @@ describe('buildCloudChatSessionLabel — session-label shape', () => {
   });
 });
 
-describe('assertSessionInvariants — invariant-firing test (proves the gate is real, not a no-op)', () => {
+describe('assertSessionInvariants, invariant-firing test (proves the gate is real, not a no-op)', () => {
   it('throws when a cloud_chat label is tampered into an inconsistent trust boundary', () => {
     const session = buildCloudChatSessionLabel(BASE_INPUT);
     const tampered = {

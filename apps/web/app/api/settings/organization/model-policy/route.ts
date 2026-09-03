@@ -29,15 +29,6 @@ import {
 
 export const runtime = 'nodejs';
 
-/**
- * The catalog is the only source of model ids.
- *
- * Enumerating them here rather than accepting free text means an administrator
- * cannot save a typo that silently governs nothing, and no model id is ever
- * written down in this file. Blocked ids from a retired model stay in the
- * stored policy — the table deliberately has no foreign key — but they cannot
- * be newly added once the catalog drops them.
- */
 function catalogChoices(): {
   models: { id: string; name: string; provider: string; live: boolean }[];
   providers: string[];
@@ -82,11 +73,6 @@ function dedupe(values: string[]): string[] {
   return [...new Set(values.map((value) => value.trim().toLowerCase()))].filter(Boolean);
 }
 
-/**
- * A model in both lists is an administrator contradicting themselves. The
- * evaluator resolves it — deny wins — but saving it silently would leave a
- * console showing a model as approved that members cannot use.
- */
 function assertNoContradiction(input: z.infer<typeof PolicyPutSchema>): void {
   const modelOverlap = input.allowedModels.filter((m) =>
     input.blockedModels.some((b) => b.toLowerCase() === m.toLowerCase()),

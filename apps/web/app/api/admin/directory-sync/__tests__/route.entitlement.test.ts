@@ -126,7 +126,7 @@ beforeEach(() => {
 
 describe('directory sync admin entitlement gate', () => {
   it.each(['free', 'basic', 'pro', 'max', 'max_15x', 'team'])(
-    'refuses a %s plan on every verb — enterprise_controls is enterprise-only',
+    'refuses a %s plan on every verb, enterprise_controls is enterprise-only',
     async (planTier) => {
       const state = seed({ planTier });
 

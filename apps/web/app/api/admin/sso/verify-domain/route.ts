@@ -147,7 +147,7 @@ export async function POST(request: NextRequest): Promise<Response> {
       const status = outcome.reason === 'lookup_failed' ? 503 : 409;
       const message =
         outcome.reason === 'lookup_failed'
-          ? 'The DNS lookup failed. This is a resolver problem, not a missing record — retry shortly.'
+          ? 'The DNS lookup failed. This is a resolver problem, not a missing record, retry shortly.'
           : outcome.reason === 'challenge_expired'
             ? 'This verification challenge has expired. Reissue one with PUT /api/admin/sso/verify-domain, publish the new TXT record, then verify again.'
             : outcome.reason === 'token_mismatch'

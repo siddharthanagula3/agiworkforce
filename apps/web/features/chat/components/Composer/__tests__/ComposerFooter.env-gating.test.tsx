@@ -166,7 +166,7 @@ describe('ComposerFooter · environment gating (Phase A)', () => {
     vi.clearAllMocks();
   });
 
-  it('(a) normal model without requiresEnvironment is selectable — no env-lock indicator', () => {
+  it('(a) normal model without requiresEnvironment is selectable, no env-lock indicator', () => {
     render(<ComposerFooter />);
 
     const gptRow = screen.getByRole('button', { name: 'Standard Model' });

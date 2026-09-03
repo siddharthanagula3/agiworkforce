@@ -1,4 +1,3 @@
-
 import 'server-only';
 
 import type { HandoffSessionRow } from './store';
@@ -60,7 +59,7 @@ export function buildEscalationEmail(
 
   lines.push('WHAT THE AGENT ALREADY TRIED');
   if (session.attempted_actions.length === 0) {
-    lines.push('(nothing — the agent did not attempt any account action)');
+    lines.push('(nothing, the agent did not attempt any account action)');
   } else {
     for (const attempt of session.attempted_actions) {
       lines.push(
@@ -72,7 +71,7 @@ export function buildEscalationEmail(
 
   lines.push('SOURCES THE AGENT CITED');
   if (session.citations.length === 0) {
-    lines.push('(none — the agent had nothing to cite)');
+    lines.push('(none, the agent had nothing to cite)');
   } else {
     for (const citation of session.citations) {
       lines.push(`- ${citation.title}: ${citation.url}`);

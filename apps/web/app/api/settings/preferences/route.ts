@@ -55,10 +55,6 @@ async function handleGet(request: NextRequest) {
   const rateLimitResponse = await withRateLimit(request, 'settings-activity');
   if (rateLimitResponse) return rateLimitResponse;
 
-  // Scoped, not getNeonDb(): 0134 puts a FORCE'd policy on user_settings, so
-  // the BYPASSRLS client would sail straight past it and the policy would be
-  // decorative. The `where user_id = $1` below stays as the first line of
-  // defence — the policy is the second, for the day someone forgets it.
   const { db, userId } = await getUserScopedDb(request);
   const namespace = new URL(request.url).searchParams.get('namespace');
   const settings = await readSettings(db, userId);

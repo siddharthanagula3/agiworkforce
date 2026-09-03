@@ -159,7 +159,7 @@ afterEach(() => {
   vi.unstubAllEnvs();
 });
 
-describe('runToolLoop — MRTR input_required suspend', () => {
+describe('runToolLoop, MRTR input_required suspend', () => {
   beforeEach(() => {
     mockBuildToolLoopStream.mockReset();
     mockGetE2BExecutor.mockReset();
@@ -295,7 +295,7 @@ describe('runToolLoop — MRTR input_required suspend', () => {
   });
 });
 
-describe('runToolLoop — MRTR input resume', () => {
+describe('runToolLoop, MRTR input resume', () => {
   beforeEach(() => {
     mockBuildToolLoopStream.mockReset();
     mockGetE2BExecutor.mockReset();

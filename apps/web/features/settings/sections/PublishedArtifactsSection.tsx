@@ -18,19 +18,6 @@ import {
 } from '@agiworkforce/ui';
 import { toUserMessage } from '@/lib/user-error-message';
 
-/**
- * Published artifacts management (CAP-015 slice 4).
- *
- * Mirrors {@link SharedLinksSection} deliberately — same list/copy/revoke
- * shape, same styling tokens — because it solves the same problem for the other
- * publish surface. It is rendered inside the Shared links settings screen so a
- * user has ONE place to answer "what of mine is public right now?".
- *
- * This screen is load-bearing, not decorative: published artifacts have no
- * expiry (migration 0095 ships no TTL, since none has been approved), so
- * "Unpublish" here is the only way a page ever comes down.
- */
-
 const actionButtonStyle = {
   padding: '6px 12px',
   fontSize: 12,
@@ -130,7 +117,7 @@ export function PublishedArtifactsSection() {
         </h2>
         <p style={{ margin: 0, color: 'var(--text-3)', fontSize: 14 }}>
           Artifacts you published to a public page. Anyone with the link can open one, and there is
-          no automatic expiry — unpublishing is the only way to take a page down.
+          no automatic expiry, unpublishing is the only way to take a page down.
         </p>
       </div>
 

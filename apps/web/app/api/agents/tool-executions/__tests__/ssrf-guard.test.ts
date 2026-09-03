@@ -1,4 +1,3 @@
-
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 const { mockNeonQuery, mockGetClerkAuthUser, mockRateLimitHandler } = vi.hoisted(() => ({
@@ -42,7 +41,7 @@ function makeRequest() {
   }) as never;
 }
 
-describe('POST /api/agents/tool-executions — retired', () => {
+describe('POST /api/agents/tool-executions, retired', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockFetch.mockReset();
@@ -62,7 +61,7 @@ describe('POST /api/agents/tool-executions — retired', () => {
     expect(mockNeonQuery).not.toHaveBeenCalled();
   });
 
-  it('never issues an outbound request — the SSRF surface is gone, not guarded', async () => {
+  it('never issues an outbound request, the SSRF surface is gone, not guarded', async () => {
     await POST(makeRequest());
     expect(mockFetch).not.toHaveBeenCalled();
   });

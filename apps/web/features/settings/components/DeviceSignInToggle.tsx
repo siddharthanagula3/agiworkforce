@@ -14,13 +14,6 @@ interface SecurityPrefs {
   deviceCodeSignInEnabled?: boolean;
 }
 
-/**
- * Turns off headless device-code sign-in for this account.
- *
- * Enforced on APPROVAL, in api/auth/device/approve, because starting the flow
- * is unauthenticated — there is no account to consult until a human approves a
- * code. No approval means no token, so refusing there refuses the whole grant.
- */
 export function DeviceSignInToggle() {
   const [enabled, setEnabled] = useState(true);
   const [loaded, setLoaded] = useState(false);
@@ -58,8 +51,6 @@ export function DeviceSignInToggle() {
         deviceCodeSignInEnabled: next,
       });
     } catch (err) {
-      // Leaving the switch flipped would claim a security setting the server
-      // never took — the worst direction for this control to fail in.
       setEnabled(previous);
       setError(toUserMessage(err, 'Could not save that. Try again.'));
     } finally {

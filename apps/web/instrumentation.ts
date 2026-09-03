@@ -42,7 +42,7 @@ export async function register() {
         }
 
         console.error(
-          `⚠️ ${message}\nContinuing — some features will not work until these are configured.`,
+          `⚠️ ${message}\nContinuing, some features will not work until these are configured.`,
         );
       }
     } catch (error) {

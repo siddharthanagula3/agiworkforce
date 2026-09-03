@@ -1,4 +1,3 @@
-
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { createFakeNeonDb } from './helpers/fake-neon-db';
@@ -17,7 +16,7 @@ vi.mock('@/lib/server/neon-db', () => ({ getNeonDb: () => mocks.db!.adapter }));
 import { isVerificationEmailSendable } from '../availability';
 import { listAvailableSupportActions, proposeSupportAction } from '../service';
 
-describe('support actions — unavailable capabilities fail closed', () => {
+describe('support actions, unavailable capabilities fail closed', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.db = createFakeNeonDb();

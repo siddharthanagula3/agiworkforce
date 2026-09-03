@@ -102,7 +102,7 @@ function insertWasAttempted(): boolean {
   return mockNeonQuery.mock.calls.some((call) => String(call[0]).includes(INSERT_SQL_FRAGMENT));
 }
 
-describe('POST /api/projects/[id]/knowledge-files — content inspection', () => {
+describe('POST /api/projects/[id]/knowledge-files, content inspection', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockGetClerkAuthUser.mockResolvedValue({ userId: 'user-abc' });

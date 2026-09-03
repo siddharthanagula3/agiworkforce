@@ -58,7 +58,7 @@ describe('e2bExecutionToolDefs', () => {
   });
 });
 
-describe('routeExecutionTool — FAIL-CLOSED', () => {
+describe('routeExecutionTool, FAIL-CLOSED', () => {
   it('returns an explicit error (not a silent no-op) when the executor is null', async () => {
     const result = await routeExecutionTool(null, EXECUTE_CODE_TOOL, { code: 'print(1)' });
     expect(result.ok).toBe(false);
@@ -84,7 +84,7 @@ describe('routeExecutionTool — FAIL-CLOSED', () => {
   });
 });
 
-describe('routeExecutionTool — dispatch', () => {
+describe('routeExecutionTool, dispatch', () => {
   it('routes execute_code to runCode with parsed args', async () => {
     const executor = mockExecutor();
     await routeExecutionTool(executor, EXECUTE_CODE_TOOL, {
@@ -109,7 +109,7 @@ describe('routeExecutionTool — dispatch', () => {
   });
 });
 
-describe('routeExecutionTool — output cap', () => {
+describe('routeExecutionTool, output cap', () => {
   it('caps oversized output and marks it truncated', async () => {
     const big = 'a'.repeat(MAX_EXECUTION_OUTPUT_BYTES + 5000);
     const executor = mockExecutor({ runCode: vi.fn(async () => ({ ok: true, output: big })) });
@@ -127,7 +127,7 @@ describe('routeExecutionTool — output cap', () => {
   });
 });
 
-describe('resolveCodeExecutionTools — native-always / fail-closed', () => {
+describe('resolveCodeExecutionTools, native-always / fail-closed', () => {
   it('openai → provider-native code_interpreter carrying the required container', () => {
     expect(resolveCodeExecutionTools('openai')).toEqual([
       { type: 'code_interpreter', container: { type: 'auto' } },
@@ -156,7 +156,7 @@ describe('resolveCodeExecutionTools — native-always / fail-closed', () => {
   });
 });
 
-describe('providerRoutesToE2B — §8 routing table', () => {
+describe('providerRoutesToE2B, §8 routing table', () => {
   it.each(['anthropic', 'Anthropic', 'ANTHROPIC'])(
     'anthropic (%s) → true (durable E2B artifacts)',
     (p) => {
@@ -178,7 +178,7 @@ describe('providerRoutesToE2B — §8 routing table', () => {
   );
 });
 
-describe('resolveTurnCodeExecutionTools — reports a dropped "Run code" turn', () => {
+describe('resolveTurnCodeExecutionTools, reports a dropped "Run code" turn', () => {
   const base = {
     stream: true as boolean | undefined,
     e2bEnabled: false,

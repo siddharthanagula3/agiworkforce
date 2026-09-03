@@ -341,8 +341,6 @@ describe('cloud agent run service', () => {
         ...deltas.flatMap((delta) => [delta.sequence, delta.emittedAtMs, delta.event.type, delta]),
       ],
     );
-    // No `task-state-changed` in the batch, so the state stays where it was and
-    // only `last_event_sequence` advances — to the batch's highest sequence.
     expect(db.query).toHaveBeenNthCalledWith(
       2,
       expect.stringMatching(/update public\.cloud_agent_runs/i),

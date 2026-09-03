@@ -57,7 +57,7 @@ const githubToolDef: WebMcpToolDef = {
   inputSchema: { type: 'object' },
 };
 
-describe('isToolOffered — resume authorization boundary', () => {
+describe('isToolOffered, resume authorization boundary', () => {
   it.each(['execute_code', 'write_file', 'create_folder', 'url_fetch', 'web_search'])(
     'requires %s to be present in the current request offerings',
     (toolName) => {
@@ -150,7 +150,7 @@ function agentEvents(output: string): AgentEventEnvelope[] {
     });
 }
 
-describe('runToolLoop — manual approval suspend', () => {
+describe('runToolLoop, manual approval suspend', () => {
   beforeEach(() => {
     mockBuildToolLoopStream.mockReset();
     mockGetE2BExecutor.mockReset();
@@ -266,7 +266,7 @@ describe('runToolLoop — manual approval suspend', () => {
   });
 });
 
-describe('runToolLoop — manual approval resume', () => {
+describe('runToolLoop, manual approval resume', () => {
   beforeEach(() => {
     mockBuildToolLoopStream.mockReset();
     mockGetE2BExecutor.mockReset();
@@ -383,7 +383,7 @@ describe('runToolLoop — manual approval resume', () => {
 
   it('appends a denial result on reject and continues the model without executing', async () => {
     const continuation = sseStreamFrom([
-      chunk({ content: 'Understood — I will not run that tool.' }),
+      chunk({ content: 'Understood, I will not run that tool.' }),
       chunk({}, 'stop'),
     ]);
     mockBuildToolLoopStream.mockResolvedValueOnce(continuation);

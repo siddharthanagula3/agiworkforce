@@ -13,7 +13,7 @@ const CITED = {
   proposedActionId: null,
 };
 
-describe('normalizeAnswer — the citation invariant', () => {
+describe('normalizeAnswer, the citation invariant', () => {
   it('passes a cited answer through as an answer', () => {
     const result = normalizeAnswer(CITED);
     expect(result.kind).toBe('answer');
@@ -96,9 +96,9 @@ describe('citation normalization', () => {
   it('accepts both the answer-engine and account-builder field spellings', () => {
     const citations = normalizeCitations([
       { title: 'Docs', url: '/docs' },
-      { label: 'Your account — Plan', href: '/settings/billing' },
+      { label: 'Your account, Plan', href: '/settings/billing' },
     ]);
-    expect(citations.map((c) => c.title)).toEqual(['Docs', 'Your account — Plan']);
+    expect(citations.map((c) => c.title)).toEqual(['Docs', 'Your account, Plan']);
     expect(citations.map((c) => c.url)).toEqual(['/docs', '/settings/billing']);
   });
 

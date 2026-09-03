@@ -1,4 +1,3 @@
-
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { NextRequest } from 'next/server';
 
@@ -134,7 +133,7 @@ describe('Device Link API', () => {
     });
   });
 
-  describe('H54 — Token generation and security validation', () => {
+  describe('H54, Token generation and security validation', () => {
     describe('Token format validation', () => {
       it('generated link_code has non-zero length', async () => {
         const request = new NextRequest('http://localhost/api/device/link', {

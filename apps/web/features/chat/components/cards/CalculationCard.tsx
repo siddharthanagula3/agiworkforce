@@ -39,10 +39,6 @@ function parseCalculation(content: string): ParsedCalculation {
   const extraSections: ExtraSection[] = [];
   let extraHeading: string | null = null;
 
-  // A keyword regex only ever matches from its keyword onward, so anything
-  // before it on the same line ("Grand total: $45" — "Grand ") has to be
-  // routed here explicitly or it silently disappears instead of landing in
-  // the description or an extra section like every other line does.
   function routeLeftover(text: string): void {
     const cleaned = text.trim();
     if (!cleaned) return;

@@ -375,7 +375,7 @@ describe('tool-loop web_search integration', () => {
     }
   });
 
-  it('returns an honest tool-result error (not x_stream_error) when the search backend is not configured — the turn continues, not terminates', async () => {
+  it('returns an honest tool-result error (not x_stream_error) when the search backend is not configured, the turn continues, not terminates', async () => {
     factoryMocks.streamRequest
       .mockResolvedValueOnce(toolCallStream('web_search', { query: 'x' }, 'call_web_search_2'))
       .mockResolvedValueOnce(

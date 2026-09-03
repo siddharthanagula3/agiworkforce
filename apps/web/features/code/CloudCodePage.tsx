@@ -103,7 +103,7 @@ function describeRuntime(runtime: CloudCodeRuntime): string {
   const detail = [runtime.summary, [cores, memory].filter(Boolean).join(', ')]
     .filter(Boolean)
     .join(' · ');
-  return detail ? `${runtime.name} — ${detail}` : runtime.name;
+  return detail ? `${runtime.name}, ${detail}` : runtime.name;
 }
 
 // Named friendly but returning error.message verbatim: with a 500 carrying
@@ -126,7 +126,7 @@ function agentOutcomeLabel(turn: CloudCodeAgentTurn): string {
     case 'cancelled':
       return 'Cancelled';
     case 'denied':
-      return 'Stopped — command denied';
+      return 'Stopped, command denied';
     default:
       return 'Failed';
   }
@@ -158,8 +158,6 @@ export function CloudCodePage({ api = cloudCodeApi }: CloudCodePageProps) {
   const [repositoryUrl, setRepositoryUrl] = useState('');
   const [repositoryBranch, setRepositoryBranch] = useState('');
   const [networkAccess, setNetworkAccess] = useState<CloudCodeNetworkAccess>('none');
-  // Empty string is "the default image" — the catalogue never contains one, so
-  // it cannot collide with a real template id.
   const [runtimeId, setRuntimeId] = useState('');
   const [taskGoal, setTaskGoal] = useState('');
   const taskFieldId = useId();
@@ -397,13 +395,6 @@ export function CloudCodePage({ api = cloudCodeApi }: CloudCodePageProps) {
     );
   }
 
-  /**
-   * Shared by the task box on the create form and the one in an open session, so
-   * a turn started either way reports progress and failure identically.
-   *
-   * `restoreGoal` puts the text back where the reader typed it when the turn is
-   * refused — losing what they wrote is worse than the failure itself.
-   */
   async function startAgentTurnForSession(
     session: CloudCodeSession,
     submitted: string,
@@ -724,7 +715,7 @@ export function CloudCodePage({ api = cloudCodeApi }: CloudCodePageProps) {
                         disabled={creating || runtimes.length === 0}
                       >
                         <option value="">
-                          No agent — Python 3, Node.js, git, curl, build-essential, GitHub CLI
+                          No agent, Python 3, Node.js, git, curl, build-essential, GitHub CLI
                         </option>
                         {harnessRuntimes.length > 0 && (
                           <optgroup label="Coding agents">

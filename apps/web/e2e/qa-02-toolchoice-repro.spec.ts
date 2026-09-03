@@ -40,7 +40,7 @@ function streamErrors(body: string): string[] {
   return errors;
 }
 
-test.describe('QA — provider tool_choice compatibility', () => {
+test.describe('QA, provider tool_choice compatibility', () => {
   test.setTimeout(10 * 60 * 1000);
 
   test('isolates which request flag forces an unsupported tool_choice', async ({ page }) => {

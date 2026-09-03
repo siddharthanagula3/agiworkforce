@@ -219,7 +219,7 @@ describe('public token pages are never indexable', () => {
     const noindexMarks = returns.match(/robots:\s*\{\s*index:\s*false/g) ?? [];
     expect(
       noindexMarks.length,
-      `${relativePath}: ${metadataReturns.length} metadata branches but ${noindexMarks.length} marked noindex — a shared conversation must never reach a search index`,
+      `${relativePath}: ${metadataReturns.length} metadata branches but ${noindexMarks.length} marked noindex, a shared conversation must never reach a search index`,
     ).toBeGreaterThanOrEqual(metadataReturns.length);
   });
 });

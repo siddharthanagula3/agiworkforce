@@ -78,10 +78,6 @@ describe('resolveVisibleThread', () => {
     expect(resolveVisibleThread(rows, 'a').map((m) => m.id)).toEqual(['b', 'a']);
   });
 
-  /**
-   * A leaf written by another device, or left behind by a delete, must cost the
-   * reader their selection — never the transcript.
-   */
   it('falls back to the newest chain when the leaf names a row it cannot see', () => {
     expect(resolveVisibleThread(threadedRows(), 'deleted-elsewhere').map((m) => m.id)).toEqual([
       'u1',

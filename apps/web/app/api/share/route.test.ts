@@ -112,7 +112,7 @@ describe('GET /api/share', () => {
   });
 });
 
-describe('POST /api/share — link lifetime', () => {
+describe('POST /api/share, link lifetime', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.authUser.mockResolvedValue({ userId: 'user-1' });

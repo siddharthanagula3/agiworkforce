@@ -152,8 +152,6 @@ describe('PUT /api/settings/organization/model-policy', () => {
   });
 
   it('refuses a model that is both approved and blocked', async () => {
-    // The evaluator resolves it — deny wins — but saving it silently would
-    // leave a console showing a model as approved that members cannot use.
     bind({ role: 'admin' });
     const res = await PUT(
       req('PUT', { ...EMPTY, allowedModels: [SAMPLE.id], blockedModels: [SAMPLE.id] }) as never,

@@ -1,36 +1,5 @@
 'use client';
 
-/**
- * WebSettingsModal — wires the shared @agiworkforce/ui SettingsModal shell
- * to real section content from features/settings/sections/*.
- *
- * Section content is imported from dedicated Section components (NOT from
- * route pages, which are now <SettingsModalRedirect> stubs for deep-linking).
- *
- * Sections wired:
- *   general      -> GeneralSection  (profile + preferences + danger zone)
- *   account      -> AccountSection  (sessions, user ID, logout)
- *   team         -> TeamSection     (workspace + member administration)
- *   security     -> SecuritySection (2FA, session timeout, change password)
- *   safety       -> SafetySection (strict content admission)
- *   privacy      -> PrivacySection  (toggles, export, delete)
- *   archived      -> ArchivedChatsSection (restore + permanent delete)
- *   deleted-chats -> DeletedChatsSection (restore soft-deleted conversations)
- *   shared-links -> SharedLinksSection (review + revoke)
- *   billing      -> BillingSection  (plan, payment, invoices)
- *   usage        -> UsageSection    (credit bars, analytics)
- *   capabilities -> CapabilitiesSection (memory, tools, artifacts)
- *   memory       -> MemorySection   (MemoryEditor)
- *   notifications -> NotificationsSection (browser/email/mobile-push toggles)
- *   voice        -> VoiceSection    (dictation + managed-voice availability, mirrors /settings/voice)
- *   reflect      -> ReflectSection (on-demand account activity recap)
- *   time-focus   -> TimeFocusSection (account-wide quiet hours + break reminders)
- *   help         -> HelpSection (docs, support, status, release notes, legal)
- *   connectors   -> ConnectorsPanel (built-in to shared shell via adapter)
- *   skills       -> SkillsPanel     (built-in to shared shell via adapter)
- *   plugins      -> PluginsPanel    (built-in to shared shell via adapter)
- */
-
 import { Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 import {
   loadSkillsCatalog,
@@ -62,7 +31,6 @@ import { getCsrfToken } from '@/lib/client/csrf';
 import { announceSkillCatalogChanged } from '@shared/events/skill-catalog-events';
 import type { WebSettingsContentSection } from '../lib/web-settings-sections';
 
-// Section components — real wired content, NOT route stubs
 import { GeneralSection } from '../sections/GeneralSection';
 import { AccountSection } from '../sections/AccountSection';
 import { TeamSection } from '../sections/TeamSection';
@@ -153,7 +121,7 @@ function loadFailureMessage(subject: string, error: unknown): string {
     return `Your session expired. Reload the page to sign back in, then reopen ${subject}.`;
   }
   if (status !== null && status >= 500) {
-    return `${subject} could not be loaded because the server returned an error. This is not a problem with your connection — retry, or contact support if it persists.`;
+    return `${subject} could not be loaded because the server returned an error. This is not a problem with your connection, retry, or contact support if it persists.`;
   }
   if (status !== null) {
     return `${subject} could not be loaded (the server rejected the request). Retry, or contact support if it persists.`;
@@ -311,14 +279,6 @@ function readCustomConnectorResponse(value: unknown): {
   return { rows, degraded };
 }
 
-// ---------------------------------------------------------------------------
-// URL segment -> section key mapping.
-//
-// INBOUND ONLY. This resolves a deep link (`/settings/<segment>`) to the
-// section the modal should open at. Nothing writes the URL in the other
-// direction — see handleSectionChange for why.
-// ---------------------------------------------------------------------------
-
 const SECTION_TO_SEGMENT: Record<string, string> = {
   general: 'general',
   account: 'account',
@@ -346,19 +306,6 @@ const SECTION_TO_SEGMENT: Record<string, string> = {
 const SEGMENT_TO_SECTION: Record<string, string> = Object.fromEntries(
   Object.entries(SECTION_TO_SEGMENT).map(([k, v]) => [v, k]),
 );
-
-// ---------------------------------------------------------------------------
-// AUDIT-FIX settings-27: `voice` is deliberately NOT added to the shared
-// `SETTINGS_NAV_GROUPS_WEB` in @agiworkforce/ui — that constant also drives
-// apps/desktop's Cloud settings nav (DESKTOP_CLOUD_SETTINGS_NAV maps over it
-// directly with no section content for a Cloud-side Voice tab; Desktop's own
-// voice settings are Local-only, a different surface). Adding the key there
-// would silently regress Desktop Cloud settings to the exact "nav item with
-// no content behind it" bug its own test suite guards against. Web-only
-// insertion here, mirroring how DesktopCloudSettingsModal already injects its
-// own extra items (`cowork`, `archived`, `shared-links`) on top of the same
-// shared array instead of editing it.
-// ---------------------------------------------------------------------------
 
 const WEB_SETTINGS_NAV_GROUPS: SettingsNavGroupResolved[] = SETTINGS_NAV_GROUPS_WEB.map(
   (group) => ({
@@ -449,16 +396,10 @@ export function WebSettingsModal({
     return null;
   })();
 
-  // The work description the user gave in General settings. Used only to order
-  // connector suggestions — never sent anywhere from here.
   const workRole = useBillingStore((state) => state.user?.profile?.work_description ?? null);
 
   const [activeSection, setActiveSection] = useState<string>(sectionFromPath ?? initialSection);
 
-  // Sync the active section when the URL changes (deep-link) OR when the modal is
-  // (re)opened to a requested section. The modal stays mounted (open=false) between
-  // uses, so the useState initializer alone won't pick up a newly-requested
-  // initialSection (e.g. the rail's "Customize" → openSettings('general')) — sync on open.
   useEffect(() => {
     if (sectionFromPath) {
       setActiveSection(sectionFromPath);
@@ -467,40 +408,9 @@ export function WebSettingsModal({
     }
   }, [open, initialSection, sectionFromPath]);
 
-  /**
-   * Rail selection is local state. It does NOT navigate.
-   *
-   * CRIT-008. This used to `router.replace` the section's deep-link route
-   * (`/connectors`, `/skills`, `/apps`, `/settings/<segment>`). Every one of
-   * those routes renders <SettingsModalRedirect>, whose entire job is to
-   * reopen this modal and `router.replace('/chat')` — so the URL bounced
-   * straight back one tick later, and the page underneath the modal was
-   * unmounted and remounted on every single rail click (twice, plus a server
-   * render of the force-dynamic /settings layout). The shareable URL it looked
-   * like it was producing never survived the round trip. `help` was worse:
-   * `SETTINGS_NAV_GROUPS_WEB` lists it and there is no `/settings/help` route,
-   * so clicking Help left the user on a 404.
-   *
-   * Deep links INTO the modal are unchanged — those routes are the entry
-   * points, not the section switcher.
-   */
   const handleSectionChange = useCallback((key: string) => {
     setActiveSection(key);
   }, []);
-
-  // ── Connected connectors state ─────────────────────────────────────────────
-  // Three REAL sources (no optimistic fakery):
-  //   1. Active user_connectors rows (GET /api/connectors) — the per-user
-  //      enablement gate.
-  //   2. GitHub App installations (GET /api/github/installations) — GitHub
-  //      cannot have a user_connectors row (known-flaws WEB-CONNECTORS row);
-  //      the installation IS the real "connected" signal, matching what the
-  //      chat tool loop actually offers.
-  //   3. The user's own custom remote MCP connectors (GET /api/connectors/custom)
-  //      — these have no static catalog entry, so they're synthesized into
-  //      both `connectors` (the catalog the shared table renders) and
-  //      `connectedConnectors` below, namespaced `custom-<row id>` to match
-  //      the chat tool loop (lib/user-connector-tools.ts).
 
   // The `__session` cookie is a short-lived JWT that only a document request
   // can refresh through Clerk's handshake redirect. A fetch that relies on it
@@ -538,8 +448,6 @@ export function WebSettingsModal({
   const [connectorsLoading, setConnectorsLoading] = useState(false);
   const [connectorsError, setConnectorsError] = useState<string | null>(null);
   const [connectorsNotice, setConnectorsNotice] = useState<string | null>(null);
-  // Scoped to the GitHub installations source only — never blocks the rest of
-  // the panel (see GITHUB_INSTALLATIONS_NOTICE).
   const [githubInstallationsNotice, setGithubInstallationsNotice] = useState<string | null>(null);
 
   const refreshCustomConnectors = useCallback(async () => {
@@ -576,11 +484,6 @@ export function WebSettingsModal({
           headers: await authedHeaders(),
           ...(signal ? { signal } : {}),
         };
-        // All three fetch in parallel — GitHub installations still races
-        // alongside the other two — but only /api/connectors and
-        // /api/connectors/custom gate the panel. Installations is judged and
-        // applied on its own below, so a failure there degrades to a scoped
-        // notice instead of taking the whole panel down with it.
         const [connectorsResponse, installationsResponse, customResponse] = await Promise.all([
           fetch('/api/connectors', requestOptions),
           fetch('/api/github/installations', requestOptions),
@@ -691,10 +594,6 @@ export function WebSettingsModal({
     [customConnectors],
   );
 
-  // Per-tool connector permissions are enforced on every turn
-  // (tool-loop connector-tool-permissions) and were previously only reachable
-  // from the standalone /connectors page, which signed-in users are redirected
-  // away from — so the rules applied to a user were invisible to them.
   const [toolPermissionsConnectorId, setToolPermissionsConnectorId] = useState<string | null>(null);
 
   const mergedSettingsConnectors = useMemo(
@@ -762,11 +661,6 @@ export function WebSettingsModal({
               currentConnectorReturnPath(),
             );
             if (target) {
-              // The start path can fail before ever leaving this origin (no
-              // public HTTPS deployment URL, provider registration refused,
-              // …), and that failure is same-origin — probe it as JSON first
-              // so a failure surfaces inline instead of tearing down this
-              // modal with a real navigation that then bounces right back.
               const probeUrl = `${target}${target.includes('?') ? '&' : '?'}mode=json`;
               const probeRes = await fetch(probeUrl, {
                 headers: await authedHeaders(),
@@ -1218,11 +1112,6 @@ export function WebSettingsModal({
 
   // ── Data adapter ───────────────────────────────────────────────────────────
 
-  // Custom remote-MCP connectors: persisted via POST /api/connectors/custom
-  // (live connect-and-list + encrypted-at-rest bearer token — see
-  // lib/user-connector-tools.ts). Bearer-token auth only; OAuth
-  // client-credentials aren't supported yet, so the form no longer collects
-  // them (the dead Advanced-settings OAuth fields were removed).
   const addCustomConnector = useCallback(
     async (input: { name: string; url: string; authToken?: string }) => {
       const csrfToken = await getCsrfToken();
@@ -1305,20 +1194,9 @@ export function WebSettingsModal({
     removePlugin,
   };
 
-  // ── Section content map ────────────────────────────────────────────────────
-  // Each value is the real wired Section component — NOT the route stub pages.
-
-  // Exhaustive on purpose: `WebSettingsContentSection` is what the deep-link
-  // route admits, so a key routed with no content here — or content here that
-  // the route rejects — fails to compile instead of rendering
-  // `No content for section "…"` at the user.
   const sectionContent: Record<WebSettingsContentSection, React.ReactNode> = {
     general: <GeneralSection />,
     account: <AccountSection />,
-    // Membership stays here because a plain member legitimately needs it — to
-    // see who is in their workspace and to leave it. Policy, sharing, and the
-    // audit trail moved to the `/workspace` console, which is addressable per
-    // section and gated on the owner/admin role those panels actually require.
     team: (
       <div style={{ display: 'grid', gap: 16 }}>
         <WorkspaceConsolePointer />

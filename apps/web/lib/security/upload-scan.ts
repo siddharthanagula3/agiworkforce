@@ -1,55 +1,5 @@
 import 'server-only';
 
-/**
- * Content inspection for user uploads.
- *
- * Uploads previously reached a publicly-servable URL after only three checks:
- * storage-key path safety, a MIME allowlist, and a byte-count match. None of
- * those look at the BYTES, so a file whose declared type disagrees with its
- * actual content — the classic type-confusion vector — passed cleanly.
- *
- * Two ingest paths run this, and they are the only two that accept
- * user-supplied bytes: `/api/uploads/chat-attachment/complete` (chat
- * attachments) and `POST /api/projects/[id]/knowledge-files` via
- * `lib/server/project-knowledge-extraction.ts` (project sources). Both delete
- * the stored object on rejection.
- *
- * This scans the real bytes. It is deliberately signature- and
- * structure-based rather than a virus-definition database: the checks below
- * catch the file shapes that are dangerous *because of how this product serves
- * them* (an SVG that runs script when rendered, a PDF that auto-executes on
- * open, a disguised executable), which is a different and more tractable
- * problem than general antivirus.
- *
- * An external AV service can be layered on top via `scanUploadBytes`'s hook —
- * see `UPLOAD_SCAN_WEBHOOK_URL` below — but the product is not left defenceless
- * while that is unconfigured.
- *
- * ─────────────────────────────────────────────────────────────────────────────
- * KNOWN LIMITATION, needs a product decision — see docs/agent-context/known-flaws.md
- *
- * The R2 bucket is PUBLIC by design (zero egress cost), so an object is
- * world-readable the instant the client's presigned PUT lands — BEFORE this
- * scanner ever runs at `/complete`. Scanning here therefore cannot prevent
- * exposure; it can only refuse to register the asset and delete the object,
- * which shrinks the window from "forever" to "seconds" and stops the file being
- * reachable through `/api/files/[id]` or any share link.
- *
- * Closing the window entirely requires one of:
- *   (a) making the bucket private and proxying every read through the already
- *       auth-gated `/api/files/[id]` — costs egress, or
- *   (b) scanning at presign time, which means proxying the upload through the
- *       server and giving up direct-to-R2 uploads (Vercel caps bodies ~4.5MB).
- * Both are cost/architecture calls, not code changes.
- *
- * A second, narrower limitation: this does NOT reject `text/html` for carrying
- * script, because a knowledge file legitimately can be a saved web page and
- * refusing it would break the feature. What stops that markup executing is the
- * serving side — see `lib/security/served-bytes.ts`, which demotes every
- * browser-executable type to an opaque download on both byte-serving routes.
- * ─────────────────────────────────────────────────────────────────────────────
- */
-
 export interface UploadScanFinding {
   code:
     | 'type_confusion'

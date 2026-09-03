@@ -158,7 +158,7 @@ async function handleTopUp(request: NextRequest): Promise<NextResponse> {
             currency: 'usd',
             unit_amount: amountCents,
             product_data: {
-              name: `AGI top-up — ${topUpUnits.toLocaleString('en-US')} units`,
+              name: `AGI top-up, ${topUpUnits.toLocaleString('en-US')} units`,
               description: `${topUpUnits.toLocaleString('en-US')} managed-usage top-up units`,
             },
           },

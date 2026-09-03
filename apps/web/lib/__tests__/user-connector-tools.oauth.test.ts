@@ -250,7 +250,7 @@ describe('OAuth connector catalog gating', () => {
   });
 });
 
-describe('OAuth connector execution — lazy authentication', () => {
+describe('OAuth connector execution, lazy authentication', () => {
   it('dispatches a self-service connector tool without an operator OAuth registration', async () => {
     mockConfiguredIds.mockReturnValue(new Set());
     mockResolveAccessToken.mockResolvedValue({

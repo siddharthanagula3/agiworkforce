@@ -135,21 +135,6 @@ export default function ProjectDetailPage() {
           attachments,
           skillId,
           meta: {
-            // `workMode` comes from the composer, which already downgrades it to
-            // 'chat' for anyone without the AGI Work entitlement
-            // (`ChatComposerNew`: `workMode: canUseAgiWork ? workMode : 'chat'`).
-            //
-            // This used to force 'agiwork' unconditionally, overriding that
-            // decision. Projects are available on every plan
-            // (`projects: CLOUD_CHAT_TIERS`) but AGI Work is Pro-only
-            // (`agi_work: PRO_TIERS`), so the first message sent from inside a
-            // project was rejected with a 403 for every free and basic user —
-            // the entitlement check the composer had already made correctly was
-            // simply discarded one layer up.
-            //
-            // `projectId` IS still forced: the send happens on this project's
-            // page, so the project scope is a property of where the user is, not
-            // a composer preference.
             ...(meta ?? { workMode: 'chat', projectId: project.id }),
             projectId: project.id,
           },

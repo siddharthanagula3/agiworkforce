@@ -230,12 +230,6 @@ async function generateTOTPCode(secret: string, timestamp: number = Date.now()):
   return otp.toString().padStart(TOTP_CONFIG.DIGITS, '0');
 }
 
-/**
- * The time step a code belongs to. Callers persist the accepted step and refuse
- * anything at or below it, so a code captured inside its validity window cannot
- * be replayed — verifying the digits alone accepts the same code repeatedly for
- * as long as it remains current.
- */
 async function verifyTOTPStep(
   secret: string,
   code: string,

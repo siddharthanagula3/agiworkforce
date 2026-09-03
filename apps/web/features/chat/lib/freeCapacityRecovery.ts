@@ -2,15 +2,6 @@ import { getNextUpgradeTier } from '@agiworkforce/types';
 
 import type { FreeCapacitySlot, PaywallSlot } from '@/features/chat/types/message-metadata';
 
-/**
- * The free lane's own refusal, which is not a quota block.
- *
- * `classifyManagedQuotaErrorCode` deliberately does not know this code: nothing
- * of the user's was exhausted and no plan limit was reached — the shared
- * zero-cost pool is momentarily out of capacity. It resolves here instead so the
- * card can say that rather than borrowing "you have reached your limit" copy for
- * a limit the user never hit.
- */
 export const FREE_CAPACITY_UNAVAILABLE_CODE = 'free_capacity_unavailable';
 
 const BYOK_RECOVERY_ACTION = 'byok';
@@ -36,13 +27,6 @@ export function isFreeCapacityUnavailableCode(code: string | null | undefined): 
   return code?.trim().toLowerCase() === FREE_CAPACITY_UNAVAILABLE_CODE;
 }
 
-/**
- * A server href is only ever followed as a same-origin path.
- *
- * The recovery destinations are the server's to choose, but "wherever the
- * response said" is not a contract this card can honour blindly — a protocol or
- * scheme-relative href would turn a refusal into an off-site navigation.
- */
 function samePathOriginHref(href: string | undefined): string | undefined {
   if (!href) return undefined;
   try {
@@ -61,13 +45,6 @@ export function findRecoveryHref(
   return samePathOriginHref(recovery?.find((option) => option.action === action)?.href);
 }
 
-/**
- * The instant the pool expects to have capacity again, as the wire states it.
- *
- * Absent whenever the server could not name one — every rejected route was
- * unavailable for a reason with no clock attached — and absent is a distinct
- * answer from "now", so it is never defaulted to one.
- */
 export function readRetryAt(value: unknown): string | undefined {
   if (typeof value !== 'string') return undefined;
   const parsed = Date.parse(value);

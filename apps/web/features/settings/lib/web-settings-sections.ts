@@ -1,20 +1,5 @@
 import type { SettingsNavKey } from '@agiworkforce/ui';
 
-/**
- * The settings sections the WEB modal can actually render.
- *
- * `isSettingsNavKey` admits all thirty nav keys because it answers a different
- * question: is this a real section name anywhere in the product. Nine of those
- * keys — appearance, models-keys, agents, connections, cowork, agi-code,
- * agi-in-chrome, extensions, developer — exist only on Desktop, so routing a
- * web deep link on that answer landed the visitor on a modal that rendered the
- * literal string `No content for section "developer".`
- *
- * `WEB_SETTINGS_CONTENT_SECTIONS` is the exact key set of WebSettingsModal's
- * `sectionContent` map, and that map is typed against this list, so adding a
- * section without routing it — or routing one without content — is a type
- * error rather than a debug string in production.
- */
 export const WEB_SETTINGS_CONTENT_SECTIONS = [
   'general',
   'account',

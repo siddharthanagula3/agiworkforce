@@ -2,23 +2,6 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 
-/**
- * Claim guard for /enterprise, the page a security reviewer reads first.
- *
- * The 2026 marketing audit (ledger DOC-024) found enterprise identity,
- * governance and certification controls described as if they shipped. The page
- * was rewritten to scope them as contract commitments, but the rewrite left one
- * hole: a source comment stated "the section carries a visible status date"
- * while the page rendered no date at all, under an eyebrow reading "honest as
- * of today". That is the same defect /trust was rewritten to remove — a claim
- * of datedness with no date behind it — so it is asserted here rather than left
- * to the next reader to notice.
- *
- * These tests read the source as text, matching
- * `app/security/__tests__/trust-surface-claims.test.ts`: they must fail on the
- * words a future writer types, whether or not the component renders under test.
- */
-
 const PAGE = path.join(path.resolve(__dirname, '..'), 'page.tsx');
 
 /**
@@ -32,7 +15,7 @@ function rendered(): string {
     .replace(/^\s*\/\/.*$/gmu, '');
 }
 
-describe('/enterprise — dated posture', () => {
+describe('/enterprise, dated posture', () => {
   it('declares a review date and renders it', () => {
     const source = rendered();
     const declaration = source.match(/const STATUS_AS_OF = '([^']+)'/u);
@@ -51,13 +34,7 @@ describe('/enterprise — dated posture', () => {
   });
 });
 
-describe('/enterprise — control claims stay accurate: shipped controls say so, unbuilt ones do not', () => {
-  // These rows must match shipped code. SSO and SCIM are implemented and gated
-  // on the `enterprise_controls` entitlement, so the assertions require them to
-  // read "implemented" and forbid roadmap/ask-us framing — underclaiming a
-  // shipped, gated control is the same honesty bug as overclaiming one. Audit is
-  // checked separately below, and retention keeps its contract-scoped assertion
-  // because there is still no per-organization retention control.
+describe('/enterprise, control claims stay accurate: shipped controls say so, unbuilt ones do not', () => {
   it('states SSO and directory provisioning as implemented and entitlement-gated', () => {
     const source = rendered();
     for (const control of ["label: 'SSO'", "label: 'Directory provisioning'"]) {

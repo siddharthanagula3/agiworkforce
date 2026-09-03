@@ -82,14 +82,6 @@ export type PaywallRecoveryAction =
   | 'view_usage'
   | 'top_up';
 
-/**
- * The free lane ran out of shared capacity, which is not a plan limit.
- *
- * Three ways out instead of the usual one, because none of them is the obvious
- * answer: wait for the pool, pay to leave it, or bring a key and stop depending
- * on it. `retryAt` absent means the server could not name an instant, and the
- * card must not invent one — it offers the retry immediately instead.
- */
 export interface FreeCapacityRecovery {
   retryAt?: string;
   byokHref?: string;
@@ -102,18 +94,8 @@ export interface InlinePaywallCardProps {
   requiredTier: RequiredTier;
   /** e.g. "10/10 images used this month" */
   reason?: string;
-  /**
-   * GOV-20 — hide the upgrade CTA for a refusal upgrading cannot fix (a plain
-   * rate limit). Defaults to true so every existing call site is unchanged.
-   */
   showUpgradeCta?: boolean;
-  /** GOV-20 — the ceiling also clears by picking a non-flagship model. */
   suggestStandardModel?: boolean;
-  /**
-   * GOV-20 — already-formatted "when this clears" copy. Only passed when the
-   * classification says to show it AND the server actually sent an instant;
-   * never synthesised, so the card cannot invent a reset time.
-   */
   resetLabel?: string;
   /** Server refusal recovery: upgrade, subscribe, repair billing, or inspect usage/reset. */
   recoveryAction?: PaywallRecoveryAction;
@@ -142,24 +124,11 @@ export function normalizeRequiredTier(value: string): RequiredTier {
   return value;
 }
 
-/**
- * G11 — every CTA below used to build its string from `.label` alone
- * ("Upgrade to Pro"), even though `getBillingPlanPricing` already returns
- * `monthlyPriceUsd`. Gemini's benchmark upsell discloses the exact price
- * ("Get 5x more usage with AI Ultra — $99.99/month"); this is that price,
- * read from the same catalog call every caller here already makes.
- *
- * Returns '' for a tier with no published amount (Enterprise is
- * contract-priced — `getPlanPriceUsd` returns null on purpose, and printing
- * a number for it would be exactly the "$0" bug `monthlyPriceUsd` being
- * optional was introduced to prevent). Team is per-seat, so its suffix says
- * "/seat/mo" per the catalog's own rendering rule.
- */
 function tierPriceSuffix(tier: RequiredTier): string {
   const monthlyUsd = getPlanPriceUsd(tier, 'monthly');
   if (monthlyUsd === null) return '';
   const amount = formatCatalogPrice(monthlyUsd);
-  return getBillingPlanPricing(tier).perSeat === true ? `, ${amount}/seat/mo` : ` — ${amount}/mo`;
+  return getBillingPlanPricing(tier).perSeat === true ? `, ${amount}/seat/mo` : `, ${amount}/mo`;
 }
 
 // ---------------------------------------------------------------------------
@@ -219,7 +188,6 @@ TierBadge.displayName = 'TierBadge';
 
 interface CtaButtonsProps {
   requiredTier: RequiredTier;
-  /** GOV-20 — false renders dismiss only. */
   showUpgradeCta: boolean;
   recoveryAction: PaywallRecoveryAction;
   onUpgrade: () => void;

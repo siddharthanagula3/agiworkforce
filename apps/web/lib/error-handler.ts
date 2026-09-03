@@ -253,7 +253,7 @@ export function withErrorHandler<T extends unknown[]>(
         response.headers.set('x-request-id', requestId);
         response.headers.set('traceparent', formatTraceparent(context));
       } catch {
-        // Immutable header guard — correlation still exists in the log stream.
+        // noop
       }
       return response;
     });

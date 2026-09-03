@@ -438,7 +438,7 @@ function loadConnectorMcpMap(): Map<string, RemoteConnectorEntry> {
       logger.info({ count: map.size }, '[user-connector] loaded operator connector MCP map');
     }
   } catch (err) {
-    logger.error({ error: err }, '[user-connector] failed to parse connector MCP map — ignoring');
+    logger.error({ error: err }, '[user-connector] failed to parse connector MCP map, ignoring');
   }
 
   _mapCache = map;
@@ -556,9 +556,6 @@ async function mcpResultToConnectorExec(params: {
   result: McpCallToolResult;
 }): Promise<ConnectorExecResult> {
   const text = mcpResultToText(params.result);
-  // An input_required pause is not a completed call: surface the bounded,
-  // UNTRUSTED input requests to the tool loop and persist nothing (no task
-  // binding, no app payload) — the same call resumes once input is collected.
   if (params.result.inputRequired) {
     return {
       handled: true,
@@ -802,7 +799,7 @@ function customRowToMcpConfig(row: CustomConnectorRow): McpServerConfig {
     } catch (err) {
       logger.warn(
         { rowId: row.id, error: err instanceof Error ? err.message : err },
-        '[user-connector] failed to decrypt custom connector token — refusing to connect',
+        '[user-connector] failed to decrypt custom connector token, refusing to connect',
       );
       throw new ConnectorCredentialError(
         'Stored credentials for this connector could not be decrypted. Reconnect the connector to continue.',
@@ -1498,19 +1495,6 @@ export interface LoadUserConnectorToolOptions {
   isToolDenied?: (connectorId: string, toolName: string) => boolean;
 }
 
-/**
- * Removes connectors the workspace does not permit from an offered catalog.
- *
- * Filtering the catalog is the enforcement, not a cosmetic hide: a tool the
- * model is never told about cannot be called, and every caller — chat,
- * scheduled tasks, cloud agent runs — loads its catalog through here.
- *
- * Ungoverned on a read failure, deliberately. Connector governance decides
- * which approved integrations staff use; it is not the barrier that stops
- * cross-workspace access, which is the tenancy layer and fails closed. Denying
- * every connector because the policy table blipped would break every member's
- * tools for a reason no administrator chose.
- */
 async function applyConnectorPolicy(
   defs: WebMcpToolDef[],
   organizationId: string | null,
@@ -1964,7 +1948,7 @@ export async function loadUserConnectorToolCatalog(
   } catch (err) {
     logger.warn(
       { userId, error: err instanceof Error ? err.message : err },
-      '[user-connector] failed to assemble connector tools — proceeding without them',
+      '[user-connector] failed to assemble connector tools, proceeding without them',
     );
     return { tools: [], dropped: [], limit };
   }

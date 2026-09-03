@@ -59,7 +59,7 @@ export function agiWorkPlanningDirective(goal: AgiWorkGoal): string {
   lines.push(
     '',
     `Before doing any work, reply with ONLY a JSON array of ${AGIWORK_PLAN_MIN_STEPS}-${AGIWORK_PLAN_MAX_STEPS} short, concrete step strings` +
-      ' describing how you will accomplish the objective, in order. No prose, no code fences, no keys — just the array.',
+      ' describing how you will accomplish the objective, in order. No prose, no code fences, no keys, just the array.',
   );
   return lines.join('\n');
 }

@@ -14,7 +14,7 @@ function parse(overrides: Record<string, unknown>) {
   return ChatCompletionRequestSchema.safeParse({ ...base, ...overrides });
 }
 
-describe('response_format — accepted', () => {
+describe('response_format, accepted', () => {
   it('accepts text', () => {
     expect(parse({ response_format: { type: 'text' } }).success).toBe(true);
   });
@@ -32,7 +32,7 @@ describe('response_format — accepted', () => {
   });
 });
 
-describe('response_format — refused', () => {
+describe('response_format, refused', () => {
   it('refuses json_schema, and says what to use instead', () => {
     const result = parse({ response_format: { type: 'json_schema', json_schema: {} } });
 

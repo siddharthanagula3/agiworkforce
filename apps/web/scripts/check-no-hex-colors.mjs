@@ -41,8 +41,6 @@ const EXEMPT_LINE_RE = [
   /<!--/,
   /theme-color/,
   /color-scheme/,
-  // Web App Manifest colors are read by the OS before any stylesheet exists, so
-  // the spec requires a literal CSS color here — `var(--token)` never resolves.
   /\b(?:theme_color|background_color)\b/,
 ];
 
@@ -148,7 +146,7 @@ if (newHits.length === 0) {
 
 for (const hit of newHits) {
   console.error(
-    `[AP-02] ${hit.file}:${hit.line} — ${hit.label} literal \`${hit.literal}\` found. ` +
+    `[AP-02] ${hit.file}:${hit.line}, ${hit.label} literal \`${hit.literal}\` found. ` +
       'Use a Tailwind class (bg-primary, text-foreground, etc.) OR a CSS custom property (var(--color-primary)).',
   );
 }

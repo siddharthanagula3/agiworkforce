@@ -74,7 +74,7 @@ export default function SyncSettingsPage() {
 
           <p style={{ margin: 0, fontSize: 13, color: 'var(--text-3)', lineHeight: 1.55 }}>
             Personalization and notification preferences sync automatically between Web and Mobile
-            whenever you&apos;re signed in to your AGI Cloud account — no request or opt-in step.
+            whenever you&apos;re signed in to your AGI Cloud account, no request or opt-in step.
             Appearance, display language and chat preferences do NOT sync from Web today: they are
             stored on the device you set them on. Mobile additionally sends its own appearance and
             language settings, so a change made there will not appear here. Secrets (BYOK/provider

@@ -9,8 +9,8 @@ describe('stripTrailingSourceList', () => {
       'Bhuma Kandula founded Vindynamics [1].',
       '',
       '**Sources**',
-      '[1] birsolutions.com — https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZ',
-      '[2] gust.com — https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUY',
+      '[1] birsolutions.com, https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZ',
+      '[2] gust.com, https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUY',
     ].join('\n');
 
     expect(stripTrailingSourceList(report)).toBe(
@@ -19,8 +19,7 @@ describe('stripTrailingSourceList', () => {
   });
 
   it('drops a numbered list under a Sources heading', () => {
-    const report =
-      '# Report\n\nBody [1].\n\n### References\n\n1. example.com — https://example.com';
+    const report = '# Report\n\nBody [1].\n\n### References\n\n1. example.com, https://example.com';
     expect(stripTrailingSourceList(report)).toBe('# Report\n\nBody [1].');
   });
 
@@ -29,7 +28,7 @@ describe('stripTrailingSourceList', () => {
       'Body [1].',
       '',
       'Sources',
-      '[1] example.com — https://example.com/a',
+      '[1] example.com, https://example.com/a',
       'bcdef',
     ].join('\n');
     expect(stripTrailingSourceList(report)).toBe('Body [1].');
@@ -50,7 +49,7 @@ describe('stripTrailingSourceList', () => {
   });
 
   it('leaves inline citations in place', () => {
-    const report = 'Claim [1] and claim [2].\n\nSources\n[1] a.com — https://a.com';
+    const report = 'Claim [1] and claim [2].\n\nSources\n[1] a.com, https://a.com';
     expect(stripTrailingSourceList(report)).toBe('Claim [1] and claim [2].');
   });
 });

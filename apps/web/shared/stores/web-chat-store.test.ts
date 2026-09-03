@@ -20,7 +20,7 @@ const conversationFixture = (id: string) => ({
   updatedAt: '2026-08-11T00:00:00.000Z',
 });
 
-describe('chatStore — paginated conversation identity', () => {
+describe('chatStore, paginated conversation identity', () => {
   beforeEach(() => {
     useChatStore.getState().reset();
   });
@@ -51,7 +51,7 @@ describe('chatStore — paginated conversation identity', () => {
   });
 });
 
-describe('chatStore — ambient managed search', () => {
+describe('chatStore, ambient managed search', () => {
   beforeEach(() => {
     useChatStore.getState().reset();
   });
@@ -74,7 +74,7 @@ describe('chatStore — ambient managed search', () => {
   });
 });
 
-describe('chatStore — new-conversation composer toggles', () => {
+describe('chatStore, new-conversation composer toggles', () => {
   beforeEach(() => {
     useChatStore.getState().reset();
   });
@@ -106,7 +106,7 @@ describe('chatStore — new-conversation composer toggles', () => {
   });
 });
 
-describe('chatStore — per-conversation transcript scope', () => {
+describe('chatStore, per-conversation transcript scope', () => {
   beforeEach(() => {
     useChatStore.getState().reset();
   });
@@ -139,7 +139,7 @@ describe('chatStore — per-conversation transcript scope', () => {
   });
 });
 
-describe('chatStore — per-conversation streaming scope', () => {
+describe('chatStore, per-conversation streaming scope', () => {
   beforeEach(() => {
     useChatStore.getState().reset();
   });
@@ -221,7 +221,7 @@ describe('chatStore — per-conversation streaming scope', () => {
   });
 });
 
-describe('chatStore — per-conversation error scope', () => {
+describe('chatStore, per-conversation error scope', () => {
   beforeEach(() => {
     useChatStore.getState().reset();
   });
@@ -244,7 +244,7 @@ describe('chatStore — per-conversation error scope', () => {
   });
 });
 
-describe('chatStore — per-conversation connector opt-out', () => {
+describe('chatStore, per-conversation connector opt-out', () => {
   beforeEach(() => {
     useChatStore.getState().reset();
   });

@@ -98,13 +98,6 @@ const NO_SCHEDULED_TOOLS: ScheduledToolPlan = {
   codeExecution: false,
 };
 
-/**
- * Unattended runs offer only what the catalog, the plan tier and the user's own
- * saved verdicts can back: a missing catalog entry grants nothing, and an MCP or
- * connector tool runs only when its saved level is already `allow` — a scheduled
- * run has nobody to answer an approval prompt, so anything still needing one is
- * never advertised to the model.
- */
 async function buildScheduledToolPlan(input: {
   db: Parameters<typeof loadConnectorToolPermissions>[0];
   userId: string;

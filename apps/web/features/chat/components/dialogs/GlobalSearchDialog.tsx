@@ -150,9 +150,6 @@ function GlobalSearchDialogImpl({ open, onOpenChange }: GlobalSearchDialogProps)
   const handleSearch = useCallback(async () => {
     if (!user?.id || !query.trim()) return;
 
-    // A later keystroke's search must win even if an earlier one is still in
-    // flight — aborting the stale request (rather than only ignoring its
-    // response) also stops it from doing wasted work against the search route.
     searchAbortRef.current?.abort();
     const controller = new AbortController();
     searchAbortRef.current = controller;

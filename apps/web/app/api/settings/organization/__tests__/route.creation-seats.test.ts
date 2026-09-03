@@ -84,7 +84,7 @@ function insertCall() {
   );
 }
 
-describe('POST /api/settings/organization — purchased seats', () => {
+describe('POST /api/settings/organization, purchased seats', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockTeamAccess.mockResolvedValue({ plan: 'team', canManageTeam: true, maxMembers: null });

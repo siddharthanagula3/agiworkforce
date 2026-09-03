@@ -43,7 +43,7 @@ function interval(overrides: Record<string, unknown> = {}) {
   };
 }
 
-describe('sandboxComputeIsPriceable — the provisioning gate', () => {
+describe('sandboxComputeIsPriceable, the provisioning gate', () => {
   beforeEach(() => {
     clearScopedEnv();
     resetMocks();

@@ -1,4 +1,3 @@
-
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { createFakeNeonDb } from './helpers/fake-neon-db';
@@ -33,7 +32,7 @@ import { confirmSupportAction, proposeSupportAction } from '../service';
 const USER = 'user_a';
 const KEY_ID = '44444444-4444-4444-8444-444444444444';
 
-describe('support actions — a proposal cannot be swapped for a different effect', () => {
+describe('support actions, a proposal cannot be swapped for a different effect', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.db = createFakeNeonDb({

@@ -140,7 +140,7 @@ function requireCatalogMultiBandModel() {
   return model;
 }
 
-describe('LLMCostCalculator — input-length pricing tiers', () => {
+describe('LLMCostCalculator, input-length pricing tiers', () => {
   const model = 'fixture-tiered-pricing';
   const date = new Date('2030-01-01T00:00:00Z');
 
@@ -230,7 +230,7 @@ describe('LLMCostCalculator — input-length pricing tiers', () => {
 
 const STABLE_ANTHROPIC_MODEL = 'fixture-anthropic-standard';
 
-describe('LLMCostCalculator — stable unscheduled pricing', () => {
+describe('LLMCostCalculator, stable unscheduled pricing', () => {
   const PIN_DATES = [
     new Date('2020-01-01T00:00:00.000Z'),
     new Date('2026-08-15T00:00:00.000Z'),
@@ -317,7 +317,7 @@ describe('LLMCostCalculator — stable unscheduled pricing', () => {
   });
 });
 
-describe('LLMCostCalculator — dated pricing mechanism (synthetic fixture)', () => {
+describe('LLMCostCalculator, dated pricing mechanism (synthetic fixture)', () => {
   const SCHEDULED_MODEL = 'fixture-scheduled-model';
   const INSIDE_FIRST_WINDOW = new Date('2030-02-15T00:00:00.000Z');
   const LAST_DAY_OF_FIRST_WINDOW = new Date('2030-03-31T23:59:59.999Z');
@@ -414,7 +414,7 @@ describe('LLMCostCalculator — dated pricing mechanism (synthetic fixture)', ()
   });
 });
 
-describe('LLMCostCalculator — cache-write billing', () => {
+describe('LLMCostCalculator, cache-write billing', () => {
   const PRICED_ON = new Date('2026-09-01T00:00:00.000Z');
 
   it('reads declared write prices from the selected input tier', () => {
@@ -431,7 +431,7 @@ describe('LLMCostCalculator — cache-write billing', () => {
     ).toBe(2.5);
   });
 
-  it('falls back to the plain input rate — a free write — when none is declared', () => {
+  it('falls back to the plain input rate, a free write, when none is declared', () => {
     const model = 'fixture-no-cache-write';
     const pricing = LLMCostCalculator.getPricing('openai', model, PRICED_ON);
     expect(pricing.cachedWriteCostPer1MTokens).toBeUndefined();

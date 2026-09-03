@@ -42,7 +42,6 @@ export interface WorkspaceUsageResult {
 
 export const WORKSPACE_USAGE_QUERY_KEY = ['workspace', 'usage-analytics'] as const;
 
-/** `null` means the caller is not an owner or admin — a 403, not an error. */
 export function useWorkspaceUsage(
   days: number,
 ): UseQueryResult<WorkspaceUsageResult | null, Error> {

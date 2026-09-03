@@ -8,9 +8,6 @@ const privacySource = readFileSync(
   'utf8',
 );
 
-// The 'rememberChats' switch was removed from this screen for lying: nothing
-// read it. This preference must not repeat that — it has to be honoured by the
-// save path, and honoured AT CREATION so the first message is never persisted.
 describe('start new chats as temporary', () => {
   it('is sent when the conversation is created, not applied afterwards', () => {
     const create = createSource.slice(createSource.indexOf('/api/chat/conversations'));

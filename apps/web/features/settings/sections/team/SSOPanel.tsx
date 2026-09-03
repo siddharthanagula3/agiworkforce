@@ -203,7 +203,7 @@ export function SSOPanel({
         <div style={{ padding: 20, display: 'flex', flexDirection: 'column', gap: 12 }}>
           <p role="alert" style={{ margin: 0, color: 'var(--text-3)', fontSize: 13 }}>
             Single sign-on settings could not be loaded. This is a problem reaching the server, not
-            a change to your plan — any existing connections keep working.
+            a change to your plan, any existing connections keep working.
           </p>
           <button type="button" onClick={() => void load()} style={{ alignSelf: 'flex-start' }}>
             Retry
@@ -388,7 +388,7 @@ export function SSOPanel({
                           Verify domain
                         </button>
                         {/* Challenges expire, so the reissue endpoint has to be
-                          reachable from here — otherwise a lapsed challenge is
+                          reachable from here, otherwise a lapsed challenge is
                           a dead end for everyone who does not call the API by
                           hand. */}
                         <button
@@ -434,7 +434,7 @@ export function SSOPanel({
                         confirm({
                           title: 'Remove this SSO connection?',
                           description:
-                            'Members who sign in through this connection lose access immediately. The connection and its configuration are deleted permanently — this cannot be undone.',
+                            'Members who sign in through this connection lose access immediately. The connection and its configuration are deleted permanently, this cannot be undone.',
                           confirmLabel: 'Remove connection',
                           onConfirm: () =>
                             mutate(

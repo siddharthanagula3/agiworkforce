@@ -1,4 +1,3 @@
-
 import fs from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
@@ -10,7 +9,7 @@ import { SUPPORT_ACTION_IDS } from '../types';
 
 const APP_DIR = path.resolve(import.meta.dirname, '../../../../app');
 
-describe('support actions — hand-off endpoint descriptors', () => {
+describe('support actions, hand-off endpoint descriptors', () => {
   it('gives every handoff action a descriptor and no server action one', () => {
     for (const id of SUPPORT_ACTION_IDS) {
       const definition = SUPPORT_ACTIONS[id];
@@ -37,7 +36,7 @@ describe('support actions — hand-off endpoint descriptors', () => {
     expect(endpoint.path.split('?')[0]).toBe(routePath);
   });
 
-  it('advertises only same-origin absolute paths — never a URL a client could redirect', () => {
+  it('advertises only same-origin absolute paths, never a URL a client could redirect', () => {
     for (const id of SUPPORT_ACTION_IDS) {
       const endpoint = SUPPORT_ACTIONS[id].endpoint;
       if (!endpoint) continue;

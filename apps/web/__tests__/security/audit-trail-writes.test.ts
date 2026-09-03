@@ -107,7 +107,7 @@ beforeEach(() => {
   });
 });
 
-describe('recordAuditEvent — writes a real security_audit_logs row', () => {
+describe('recordAuditEvent, writes a real security_audit_logs row', () => {
   it('records actor, action, severity, ip, user-agent, endpoint and details', async () => {
     const request = new Request('https://app.example.com/api/settings/api-keys', {
       method: 'POST',
@@ -194,7 +194,7 @@ describe('recordAuditEvent — writes a real security_audit_logs row', () => {
   });
 });
 
-describe('recordAuditEvent — enterprise dual-write', () => {
+describe('recordAuditEvent, enterprise dual-write', () => {
   it('calls the 0087 SECURITY DEFINER writer when an organizationId is present', async () => {
     await recordAuditEvent({
       userId: 'user_admin',
@@ -428,7 +428,7 @@ describe('PATCH /api/settings/team/[memberId] writes member_role_changed', () =>
   });
 });
 
-describe('recordAuditEvent — the two writes fail independently', () => {
+describe('recordAuditEvent, the two writes fail independently', () => {
   it('still attempts the enterprise row when the per-user log INSERT fails', async () => {
     mockExecute.mockRejectedValue(new Error('security_audit_logs unavailable'));
 
@@ -460,7 +460,7 @@ describe('recordAuditEvent — the two writes fail independently', () => {
   });
 });
 
-describe('recordAuditEvent — rows are readable through the existing audit-log endpoint', () => {
+describe('recordAuditEvent, rows are readable through the existing audit-log endpoint', () => {
   it("emits details->>'resource_type' and 'resource_id', the keys the read route filters on", async () => {
     await recordAuditEvent({
       userId: 'user_actor',

@@ -91,7 +91,7 @@ beforeEach(() => {
   vi.clearAllMocks();
 });
 
-describe('GET /api/chat/conversations/[id] — thread columns', () => {
+describe('GET /api/chat/conversations/[id], thread columns', () => {
   it('reads the tree alongside the transcript it has always read', async () => {
     givenDatabase([
       { match: MESSAGE_COUNT, rows: [{ total: '1' }] },
@@ -137,7 +137,7 @@ describe('GET /api/chat/conversations/[id] — thread columns', () => {
   });
 });
 
-describe('PUT /api/chat/conversations/[id] — active leaf', () => {
+describe('PUT /api/chat/conversations/[id], active leaf', () => {
   function putLeaf(body: unknown): NextRequest {
     return new NextRequest(`https://agiworkforce.com/api/chat/conversations/${CONVERSATION_ID}`, {
       method: 'PUT',

@@ -13,7 +13,7 @@ function renderFooter() {
   );
 }
 
-describe('ComposerFooter inline — bottom row stays a single usable line', () => {
+describe('ComposerFooter inline, bottom row stays a single usable line', () => {
   beforeEach(() => {
     useModelStore.setState({ selectedModelId: longestModel.id });
   });

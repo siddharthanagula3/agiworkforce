@@ -121,7 +121,7 @@ function WaitlistDialog({
               <a href="/privacy/requests" className="agi-ds-link">
                 /privacy/requests
               </a>{' '}
-              &mdash; no account needed.
+              - no account needed.
             </DialogDescription>
           </div>
         ) : (
@@ -189,7 +189,7 @@ function WaitlistDialog({
             ) : null}
 
             <p className="agi-ds-hint" style={{ marginTop: 16 }}>
-              One email when access opens, sent by a person &mdash; nothing here mails this list
+              One email when access opens, sent by a person, nothing here mails this list
               automatically, so there is no unsubscribe link in a message to click. No marketing
               drip. To come off the list, record a withdrawal at{' '}
               <a href="/privacy/requests" className="agi-ds-link">

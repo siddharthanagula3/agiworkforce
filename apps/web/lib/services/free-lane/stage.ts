@@ -23,16 +23,6 @@ import {
 import { routesOf, toFreeAutoCandidate, withRankedHead, type FreeLanePlan } from './plan';
 import { getFreeLaneRuntimeState } from './runtime-state-service';
 
-/**
- * The alias the lane resolves against.
- *
- * Not the caller's selection: a free-plan request arrives pinned to one
- * subsidized trial model, whose route plan is a single explicit entry with no
- * fallbacks — nothing for a stage that may only reject and reorder to work with.
- * Resolving the economy alias at the free tier is what makes
- * `tierAllowedSlots.free` and the free slots' `preferredSlots` position
- * load-bearing, and it is the same admission every other request gets.
- */
 export const FREE_LANE_SELECTION = 'auto-economy';
 
 /**
@@ -88,21 +78,6 @@ export interface FreeLaneActivation {
   preferSlots: readonly string[];
 }
 
-/**
- * The single place that decides whether this request is on the lane, and the
- * only source of the slot preference.
- *
- * Mode and preference are computed together on purpose. The resolver cannot
- * defend itself here: `normalizeTier` folds `basic`, `hobby` and every
- * unrecognised or absent tier into the `free` ceiling, so at the resolver a
- * paying Basic request IS free-tier and the preference would move it. The
- * protection is entirely this gate, so it is one function with one test rather
- * than an expression repeated at a call site.
- *
- * `isFreePlan` must come from the exact-`free` check. It does not trim, so a
- * whitespace-padded tier reads as not-free and the lane stays off — the safe
- * direction for a value we could not parse.
- */
 export function activateFreeLane(input: {
   configuredMode: FreeLaneMode;
   isFreePlan: boolean;

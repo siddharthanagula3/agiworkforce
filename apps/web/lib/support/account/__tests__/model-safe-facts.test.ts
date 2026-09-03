@@ -1,4 +1,3 @@
-
 import { describe, expect, it } from 'vitest';
 
 import { MODEL_SAFE_FACT_KEYS, toModelSafeAccountFacts } from '../model-safe-facts';
@@ -65,7 +64,7 @@ describe('toModelSafeAccountFacts', () => {
     expect(JSON.stringify(facts)).not.toMatch(/https?:\/\//u);
   });
 
-  it('reports only percentages for usage — never a raw allowance operand', () => {
+  it('reports only percentages for usage, never a raw allowance operand', () => {
     const facts = toModelSafeAccountFacts(context());
     const numericKeys = Object.entries(facts)
       .filter(([, v]) => typeof v === 'number')

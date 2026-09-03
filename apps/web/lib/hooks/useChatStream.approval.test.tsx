@@ -70,7 +70,7 @@ function assistantMessage() {
   return useChatStore.getState().messages.find((m) => m.role === 'assistant');
 }
 
-describe('useChatStream — tool approval → resume', () => {
+describe('useChatStream, tool approval → resume', () => {
   beforeEach(() => {
     useChatStore.getState().reset();
     useFreeTrialStore.getState().clearLimitReached();

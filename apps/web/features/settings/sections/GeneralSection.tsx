@@ -552,7 +552,7 @@ export function GeneralSection() {
             </FieldRow>
           ))}
 
-          {/* Instructions for AGI — full-width textarea (matches reference) */}
+          {/* Instructions for AGI, full-width textarea (matches reference) */}
           <label className="flex flex-col gap-1.5 pt-1">
             <span className="text-[13px] font-medium text-foreground">Instructions for AGI</span>
             <span className="text-xs leading-relaxed text-muted-foreground">
@@ -734,18 +734,6 @@ function effortLabel(level: EffortLevel): string {
   return level === 'xhigh' ? 'Extra high' : level.charAt(0).toUpperCase() + level.slice(1);
 }
 
-/**
- * CAP-020. The composer's effort picker has always split levels by entitlement
- * (ComposerFooter, via splitEffortsByEntitlement) and this one offered all five
- * unconditionally — the same setting, two pickers, one of them lying. The
- * server clamps anything above the plan's cap in resolveRequestEffort, so
- * picking "Max" on a tier without manual model selection silently produced the
- * default while Settings kept displaying Max.
- *
- * Gated levels stay VISIBLE and disabled rather than being hidden: a level that
- * vanishes reads as unsupported by the product, which is a different and wrong
- * message from "your plan does not include this".
- */
 function ReasoningEffortRow() {
   const enabled = useThinkingStore((state) => state.enabled);
   const effort = useThinkingStore((state) => state.effort);
@@ -792,7 +780,7 @@ function ReasoningEffortRow() {
           const gated = gatedEfforts.has(level);
           return (
             <option key={level} value={level} disabled={gated}>
-              {gated ? `${effortLabel(level)} — not on your plan` : effortLabel(level)}
+              {gated ? `${effortLabel(level)}, not on your plan` : effortLabel(level)}
             </option>
           );
         })}
@@ -936,10 +924,6 @@ function ChatFontRow() {
   const chatFont = useSettingsStore((state) => state.chatFont) ?? 'default';
   const setChatFont = useSettingsStore((state) => state.setChatFont);
 
-  // Only families layout.tsx and globals.css actually load. 'dyslexic' is
-  // self-hosted under public/fonts/opendyslexic/ — the control this replaces
-  // pointed at a CDN font the CSP blocked, so it fell back silently and
-  // looked broken.
   const options = [
     { value: 'default' as const, label: 'Default' },
     { value: 'sans' as const, label: 'Sans' },
@@ -1124,7 +1108,7 @@ function ReadAloudVoiceRow() {
       </Row>
       <p className="-mt-3 text-xs leading-relaxed text-muted-foreground">
         Read-aloud uses your browser&apos;s built-in speech. It always plays through your system
-        default output device — browsers give web pages no way to choose one, so change it in your
+        default output device, browsers give web pages no way to choose one, so change it in your
         operating system&apos;s sound settings. AGI reads a reply on request and then stops; web has
         no hands-free voice conversation that listens back between turns.
       </p>

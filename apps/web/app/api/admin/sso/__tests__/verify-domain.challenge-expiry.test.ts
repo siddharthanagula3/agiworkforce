@@ -96,7 +96,7 @@ function withDraft(token: string | null) {
   return writes;
 }
 
-describe('POST /api/admin/sso/verify-domain — challenge expiry', () => {
+describe('POST /api/admin/sso/verify-domain, challenge expiry', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockGetClerkAuthUser.mockResolvedValue({ userId: 'owner-user' });

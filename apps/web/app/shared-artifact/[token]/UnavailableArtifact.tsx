@@ -1,20 +1,6 @@
 import Link from 'next/link';
 import { LockKeyhole } from 'lucide-react';
 
-/**
- * What a recipient sees when a published-artifact link no longer resolves.
- *
- * Deliberately NOT the global 404. That page says "the page you're looking for
- * doesn't exist or has been moved" — which is wrong here in a way that matters:
- * the artifact was revoked or expired by the person who shared it, nothing
- * moved, and the recipient did not mistype anything. It also blamed them for a
- * link someone else sent.
- *
- * This is the same situation /share/<token> already handles, shown to the same
- * audience — someone outside the organization, often seeing the product for the
- * first time — so it uses the same treatment rather than a second visual
- * language for one shared concept.
- */
 export function UnavailableArtifact() {
   return (
     <div className="flex min-h-screen items-center justify-center bg-background">

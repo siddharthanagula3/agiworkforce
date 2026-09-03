@@ -25,12 +25,6 @@ describe('a turn interrupted by an expired session is recoverable', () => {
   });
 });
 
-/**
- * The two conditions the recovery turns on used to be asserted as source greps,
- * which pass on the shape of the code rather than on what it does. They are one
- * shared function now — the same one a failed message save hands text back
- * through — so they can be exercised directly.
- */
 describe('handing unsent text back to the user', () => {
   it('parks what was typed under the conversation it was written for', async () => {
     const { useChatStore, parkUnsentDraft } = await import('@shared/stores/web-chat-store');

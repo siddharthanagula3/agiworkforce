@@ -60,7 +60,7 @@ afterEach(() => {
   __resetConnectorOAuthRegistryCacheForTests();
 });
 
-describe('connector OAuth registry — availability is earned, not assumed', () => {
+describe('connector OAuth registry, availability is earned, not assumed', () => {
   it('ships with no providers when the operator has configured nothing', () => {
     expect([...getOAuthConfiguredConnectorIds()]).toEqual([]);
     expect(getConnectorOAuthProvider('linear')).toBeNull();
@@ -157,7 +157,7 @@ describe('connector OAuth registry — availability is earned, not assumed', () 
   });
 });
 
-describe('connector OAuth registry — redirect URI', () => {
+describe('connector OAuth registry, redirect URI', () => {
   it('derives the callback from configuration and never from a request', () => {
     expect(getConnectorOAuthRedirectUri()).toBe(
       'https://app.example.com/api/connectors/oauth/callback',
@@ -194,7 +194,7 @@ describe('connector OAuth registry — redirect URI', () => {
   });
 });
 
-describe('connector OAuth registry — authorization URL', () => {
+describe('connector OAuth registry, authorization URL', () => {
   beforeEach(() => {
     setCredentials();
     setProviders(describeProvider({ authorizationParams: { prompt: 'consent' } }));

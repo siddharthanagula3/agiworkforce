@@ -36,9 +36,6 @@ describe('/chat/artifacts route', () => {
 
 describe('Artifacts rail destination', () => {
   it('no longer exists as its own rail entry', () => {
-    // Artifacts and Library listed the same media_assets rows. One generated
-    // file appeared in both under `<assetId>` and `genfile-<assetId>` — two ids
-    // that can never dedupe, so a Library delete left a stale gallery card.
     expect(APP_NAV_DESTINATIONS.find((d) => d.id === 'artifacts')).toBeUndefined();
   });
 

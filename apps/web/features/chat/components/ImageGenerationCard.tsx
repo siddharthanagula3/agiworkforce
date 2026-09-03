@@ -1,25 +1,5 @@
 'use client';
 
-/**
- * ImageGenerationCard
- *
- * Renders the full inline image-generation experience inside an assistant
- * message bubble.  Four states:
- *
- *  A. Generating  – animated placeholder card while the image is in-flight.
- *  B. Result      – inline image with overlay New version/Share controls + action bar.
- *  C. New-version panel – full-height right-side panel (mirrors ArtifactsPanel
- *                   layout) with aspect-ratio re-generate + a change composer.
- *  D. Share modal – centered modal with copy-link, X, LinkedIn, Reddit, Download.
- *
- * This panel does NOT edit pixels. Every control in it calls `onRegenerate`,
- * which runs a fresh text-to-image generation from a rewritten prompt — the
- * source image is never sent to the provider. The copy below says exactly that.
- * `POST /api/media/image/generate` does implement real provider-side edits
- * (`operation` + `source_image` + `mask_image`), but no web client sends those
- * fields yet, so naming this "Edit" would describe behaviour that is not wired.
- */
-
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
   X,
@@ -191,13 +171,6 @@ function GeneratingCard({
         'relative mt-3 flex items-center justify-center overflow-hidden rounded-2xl',
         'w-full max-w-[420px]',
         imageAspectClass(aspectRatio),
-        // ResultCard's <img> is `w-full` with `style={{ maxHeight: 420 }}` — a
-        // tall portrait aspect (e.g. 9:16) renders far shorter than its raw
-        // ratio implies once that cap applies. Mirroring the same cap here
-        // (only for the transcript placeholder, not the EditPanel's freer
-        // regenerate view) keeps state A and state B the same box size, so a
-        // portrait placeholder doesn't overshoot and then collapse when the
-        // real image lands.
         capHeight && 'max-h-[420px]',
         'bg-muted',
       )}
@@ -234,11 +207,6 @@ interface ShareModalProps {
   imageUrl: string;
   prompt: string;
   onClose: () => void;
-  /**
-   * Video reuses this modal, so the noun has to follow the medium — sharing a
-   * clip under copy that calls it an image is wrong in the share text, the
-   * accessible name, and the preview element alike.
-   */
   mediaKind?: 'image' | 'video';
 }
 
@@ -364,10 +332,6 @@ export function ShareModal({ imageUrl, prompt, onClose, mediaKind = 'image' }: S
     </div>
   );
 }
-
-// ---------------------------------------------------------------------------
-// State C: revision panel — re-generates, never edits the source pixels
-// ---------------------------------------------------------------------------
 
 interface EditPanelProps {
   imageUrl: string;

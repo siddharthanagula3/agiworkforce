@@ -1,21 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-/**
- * Ordering test for the terminal agent notification.
- *
- * The unit tests around `transitionCloudAgentRun` pass whether or not a user
- * ever hears that their agent finished: the bug was never inside one function,
- * it was the ORDER of two of them. The workflow appends the terminal
- * `task-state-changed` envelope — which itself moves `cloud_agent_runs.state` —
- * and only afterwards settles, so anything that decides from the settled state
- * alone sees a run that is already terminal and stays silent.
- *
- * So this file mocks neither `cloud-agent-run-service` nor the settle step. It
- * drives the real functions in the real order against a database double that
- * models the one thing the decision depends on: the row's committed pre-update
- * state.
- */
-
 const mocks = vi.hoisted(() => ({
   notify: vi.fn(),
   usage: vi.fn(),

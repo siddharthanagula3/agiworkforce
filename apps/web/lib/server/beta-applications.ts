@@ -47,12 +47,6 @@ export function isBetaSurface(value: unknown): value is BetaSurface {
   return typeof value === 'string' && (BETA_SURFACES as readonly string[]).includes(value);
 }
 
-/**
- * One application per address: a second submission updates the first rather
- * than creating a duplicate a reviewer has to reconcile by eye. A row already
- * reviewed keeps its decision — resubmitting must not reset a rejection to
- * pending or discard the reviewer's note.
- */
 export async function recordBetaApplication(input: BetaApplicationInput): Promise<{
   alreadyReviewed: boolean;
 }> {

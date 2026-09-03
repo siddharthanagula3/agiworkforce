@@ -42,7 +42,7 @@ function get(token = TOKEN) {
   return GET(new NextRequest(`https://agiworkforce.com/api/share/${token}`), context(token));
 }
 
-describe('DELETE /api/share/[token] — revocation', () => {
+describe('DELETE /api/share/[token], revocation', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.authUser.mockResolvedValue({ userId: 'owner-1' });

@@ -16,14 +16,6 @@ function reportOnce(reason: string, level: 'warn' | 'error', message: string): v
   logger[level]({}, message);
 }
 
-/**
- * Resolves the HMAC key, in descending order of operator intent. It never
- * throws and never falls back to a constant: an address hashed under a key
- * that ships in this repository is recoverable by exhausting the ~4.3e9 IPv4
- * space, so a key nobody outside the process holds — even a throwaway one that
- * costs cross-instance correlation — is strictly safer than a known one, and
- * safer than a throw that would silently drop the caller's write.
- */
 function ipHashKey(): Buffer {
   const pepper = process.env['IP_HASH_PEPPER']?.trim() ?? '';
   if (pepper.length >= MINIMUM_PEPPER_LENGTH) return Buffer.from(pepper, 'utf8');

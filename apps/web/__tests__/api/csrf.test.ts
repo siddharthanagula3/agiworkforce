@@ -26,7 +26,6 @@ vi.mock('@/lib/error-handler', () => ({
       handler(req, ctx),
 }));
 
-// ─── CSRF mock — exported so tests can override per-call ───────────────────
 const mockRequireCsrfToken = vi.fn();
 vi.mock('@/lib/csrf', () => ({
   requireCsrfToken: (...args: unknown[]) => mockRequireCsrfToken(...args),
@@ -238,7 +237,7 @@ describe('CSRF protection on state-changing endpoints', () => {
     });
   });
 
-  describe('GET /api/memory/[id] — no CSRF required', () => {
+  describe('GET /api/memory/[id], no CSRF required', () => {
     it('does NOT call requireCsrfToken for GET requests', async () => {
       await memoryGET(makeMemoryRequest('GET'), routeContext);
 
@@ -308,7 +307,7 @@ describe('CSRF protection on state-changing endpoints', () => {
     });
   });
 
-  describe('GET /api/chat/conversations/[id] — no CSRF required', () => {
+  describe('GET /api/chat/conversations/[id], no CSRF required', () => {
     it('does NOT call requireCsrfToken for GET requests', async () => {
       mockNeonQuery
         .mockReset()

@@ -258,12 +258,6 @@ describe('drainAuditDestination', () => {
   });
 
   it('never sends the cursor timestamp back as a parameter', async () => {
-    // `timestamptz` holds microseconds; a JS Date holds milliseconds. Reading
-    // the cursor out and passing it back truncates it, which lands the cursor
-    // STRICTLY BEFORE the row it was taken from — so that row is selected
-    // again on the next drain, and every drain after it, forever. Verified
-    // against a real Postgres: a cursor written from `2026-08-24T00:11:25.812267Z`
-    // came back as `.812`, and the same batch re-delivered on every run.
     const h = harness({
       destination: {
         endpoint_url: 'https://siem.example.test/hook',

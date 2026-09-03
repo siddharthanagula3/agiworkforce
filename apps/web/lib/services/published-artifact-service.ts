@@ -3,31 +3,6 @@ import 'server-only';
 import { randomBytes } from 'node:crypto';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 
-/**
- * Published artifact persistence (CAP-015 slice 1).
- *
- * `packages/platform/artifacts` has carried a `CloudPublisher` seam since
- * AUDIT-FIX ART-27 with nothing behind it — the module's own docs said "No
- * surface ships a CloudPublisher yet", so the Publish action degraded to a
- * clipboard copy on every surface. This service is the storage half of the
- * first real adapter: it turns an artifact into a durable row in
- * `public.published_artifacts` (db/neon/0095_published_artifacts.sql) reachable
- * at an unguessable public URL, and it can take that URL away again.
- *
- * Trust boundary: every authenticated call takes an RLS-scoped adapter
- * (`getUserScopedDb`) AND binds `user_id` in the statement, so ownership is
- * enforced in the database as well as in the query. The one deliberately
- * anonymous read — {@link getPublishedArtifactByToken} — is the public page's
- * token lookup and mirrors how `app/share/[token]/page.tsx` reads
- * `shared_sessions`: knowledge of the 144-bit token is the read grant.
- *
- * Known gaps (founder-pending, deliberately NOT invented here):
- *   - No TTL. Published pages live until the publisher revokes them; no expiry
- *     window has been approved and a guessed one would silently delete pages.
- *   - View auth is public-by-token, matching the conversation-share precedent,
- *     and views are not counted or audited.
- */
-
 export const MAX_CONTENT_CHARS = 1_000_000;
 const MAX_TITLE_CHARS = 300;
 const MAX_ARTIFACT_ID_CHARS = 200;
@@ -269,9 +244,6 @@ export async function publishArtifactRecord(
     [userId, artifactId, conversationId],
   );
 
-  // The RLS WITH CHECK in 0095 already refuses a foreign conversation, but it
-  // refuses it by raising 42501 — a 500 to the caller. Decide it here so the
-  // answer is a 403 the client can act on.
   if (conversationId && countOf(preflight?.owned_conversations) === 0) {
     throw new PublishedArtifactOwnershipError(
       'That artifact belongs to a conversation you do not own, so it cannot be published.',
