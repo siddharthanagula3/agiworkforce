@@ -8,6 +8,7 @@ import { z } from 'zod';
 
 import { logger } from '@/lib/logger';
 import { isSelfServiceConnector } from '@/lib/connectors/mcp-endpoints';
+import { filterConnectorScopes } from '@/lib/connectors/oauth-scope-allowlist';
 
 /**
  * Both broker addresses are cross-surface contract values (mobile and the
@@ -112,7 +113,17 @@ function loadConnectorOAuthRegistry(): Map<string, ConnectorOAuthProvider> {
           unconfigured += 1;
           continue;
         }
-        registry.set(descriptor.connectorId, { ...descriptor, ...credentials });
+        const { scopes, dropped } = filterConnectorScopes(
+          descriptor.connectorId,
+          descriptor.scopes,
+        );
+        if (dropped.length > 0) {
+          logger.warn(
+            { connectorId: descriptor.connectorId, dropped },
+            '[connector-oauth] dropped operator-requested scopes above the documented ceiling',
+          );
+        }
+        registry.set(descriptor.connectorId, { ...descriptor, scopes, ...credentials });
       }
       logger.info(
         { configured: registry.size, describedButUncredentialed: unconfigured },
