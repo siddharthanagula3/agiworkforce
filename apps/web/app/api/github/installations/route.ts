@@ -7,6 +7,9 @@ import { logger } from '@/lib/logger';
 import { requireCsrfToken } from '@/lib/csrf';
 import { withRateLimit } from '@/lib/rate-limit';
 import { getClerkAuthUser } from '@/lib/api-auth';
+import { unauthorizedResponseFor } from '@/lib/api-auth-response';
+import { isMfaRequiredError } from '@/lib/mfa-policy-gate';
+import { isIpNotAllowedError } from '@/lib/ip-allow-list-gate';
 import { isGitHubInstallationLinkingAvailable } from '@/lib/github-app';
 
 const PG_UNDEFINED_TABLE = '42P01';
@@ -40,7 +43,10 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   let userId: string;
   try {
     ({ userId } = await getClerkAuthUser(request));
-  } catch {
+  } catch (authError) {
+    if (isMfaRequiredError(authError) || isIpNotAllowedError(authError)) {
+      return unauthorizedResponseFor(authError);
+    }
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
@@ -98,7 +104,10 @@ export async function DELETE(request: NextRequest): Promise<NextResponse> {
   let userId: string;
   try {
     ({ userId } = await getClerkAuthUser(request));
-  } catch {
+  } catch (authError) {
+    if (isMfaRequiredError(authError) || isIpNotAllowedError(authError)) {
+      return unauthorizedResponseFor(authError);
+    }
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 

@@ -31,6 +31,8 @@ vi.mock('@/lib/github-app', () => ({
 }));
 
 import { GET } from './route';
+import { getClerkAuthUser } from '@/lib/api-auth';
+import { IpNotAllowedError } from '@/lib/ip-allow-list-gate';
 
 describe('GitHub installation listing ownership proof', () => {
   beforeEach(() => {
@@ -132,6 +134,18 @@ describe('GitHub installation listing ownership proof', () => {
     const response = await GET(new NextRequest('http://localhost:3000/api/github/installations'));
 
     expect(response.status).toBe(500);
+  });
+
+  it('surfaces an ip allow list denial as a 403 instead of a bare unauthorized', async () => {
+    vi.mocked(getClerkAuthUser).mockRejectedValueOnce(new IpNotAllowedError('network not allowed'));
+
+    const response = await GET(new NextRequest('http://localhost:3000/api/github/installations'));
+
+    expect(response.status).toBe(403);
+    const body = (await response.json()) as { error: { code: string; message: string } };
+    expect(body.error.code).toBe('IP_NOT_ALLOWED');
+    expect(body.error.message).toBe('network not allowed');
+    expect(mocks.query).not.toHaveBeenCalled();
   });
 
   it('still 500s on a genuinely unexpected database error', async () => {

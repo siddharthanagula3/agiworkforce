@@ -3,6 +3,9 @@ import 'server-only';
 import { NextRequest, NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { getClerkAuthUser } from '@/lib/api-auth';
+import { unauthorizedResponseFor } from '@/lib/api-auth-response';
+import { isMfaRequiredError } from '@/lib/mfa-policy-gate';
+import { isIpNotAllowedError } from '@/lib/ip-allow-list-gate';
 import {
   exchangeGitHubOAuthCode,
   findGitHubInstallationForUser,
@@ -22,7 +25,10 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   let userId: string;
   try {
     ({ userId } = await getClerkAuthUser(request));
-  } catch {
+  } catch (authError) {
+    if (isMfaRequiredError(authError) || isIpNotAllowedError(authError)) {
+      return unauthorizedResponseFor(authError);
+    }
     const loginUrl = new URL('/login', request.url);
     loginUrl.searchParams.set('redirectTo', '/connectors');
     return NextResponse.redirect(loginUrl);

@@ -6,6 +6,9 @@ import { withRateLimit } from '@/lib/rate-limit';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { getUserScopedDb } from '@/lib/server/rls-db';
+import { unauthorizedResponseFor } from '@/lib/api-auth-response';
+import { isMfaRequiredError } from '@/lib/mfa-policy-gate';
+import { isIpNotAllowedError } from '@/lib/ip-allow-list-gate';
 import { handleCorsPreflightRequest } from '@/lib/cors';
 
 const DEFAULT_LIMIT = 50;
@@ -60,7 +63,10 @@ async function handleGetCreditHistory(request: NextRequest) {
   let userId: string;
   try {
     ({ db, userId } = await getUserScopedDb(request));
-  } catch {
+  } catch (authError) {
+    if (isMfaRequiredError(authError) || isIpNotAllowedError(authError)) {
+      return unauthorizedResponseFor(authError);
+    }
     throw createError.unauthorized('Authentication required');
   }
 
