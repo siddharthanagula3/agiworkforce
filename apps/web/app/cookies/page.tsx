@@ -5,6 +5,7 @@ import { MarketingFooter } from '@/features/marketing/components/MarketingFooter
 import {
   Button,
   ButtonRow,
+  Container,
   Ledger,
   Prose,
   Section,
@@ -14,6 +15,7 @@ import {
 import { PageHero } from '@/features/marketing/components/pages/surfaces/shared';
 import { NoteList } from '@/features/marketing/components/pages/company/shared';
 import { CookiePreferencesButton } from './CookiePreferencesButton';
+import { PolicyContents } from '@shared/components/legal/PolicyContents';
 import { LEGAL_ENTITY, POLICY_LAST_UPDATED } from '@/lib/legal-constants';
 
 export const metadata = buildMetadata({
@@ -22,6 +24,14 @@ export const metadata = buildMetadata({
     'The cookies AGI actually sets, who controls each one, how long it lasts, and where the consent decision is stored. Analytics is opt-in and fails closed.',
   path: '/cookies',
 });
+
+const SECTIONS = [
+  '01 · Cookies we set',
+  '02 · What else we put on your device',
+  '03 · Two things people usually get told wrong',
+  '04 · Do Not Track and Global Privacy Control',
+  '05 · Your choices',
+] as const;
 
 interface CookieRow {
   name: string;
@@ -242,6 +252,10 @@ export default function CookiesPage() {
           }
           ctas={[]}
         />
+
+        <Container className="mb-10">
+          <PolicyContents sections={SECTIONS} />
+        </Container>
 
         <Section id="s-01" labelledBy="agi-cookies-set-title" rule>
           <Stack gap="loose">
