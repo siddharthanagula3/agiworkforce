@@ -4,6 +4,12 @@
   "verificationLog": [
     {
       "date": "2026-09-02",
+      "verifiedBy": "official-z-ai-glm-model-and-pricing-docs-and-openrouter-model-list",
+      "status": "PASS",
+      "notes": "Added GLM-5.3 and GLM-5.3-Flash to the catalog and promoted the zhipu/glm family slot from glm-5.2 to glm-5.3 via the family-slots promotion script, then removed glm-5.2 from the roster and added it to retired-models.json. Official Z.ai documentation confirms glm-5.3 keeps GLM-5.2's shape (text-only input/output, 1,000,000-token context, function calling, structured output, streaming, context caching) but replaces the 5.2 thinking.type on/off toggle with mandatory reasoning at three effort levels (low, high, max via the reasoning_effort parameter; thinking.type now accepts only 'enabled'), and newly documents a 128,000-token output cap that 5.2 never published. GLM-5.3-Flash is a new addition, not a promotion target: it is the first natively multimodal GLM (text, image, video, PDF input; BUA/CUA computer-use and autonomous tool invocation) on the same 1,000,000-token context and 128,000-token output, same mandatory low/high/max reasoning. Pricing: glm-5.3 is unchanged from 5.2 at $1.40/M input, $4.40/M output, $0.26/M cache read; glm-5.3-flash is the current promotional rate of $0.075/M input, $0.25/M output, $0.015/M cache read, which Z.ai's pricing page lists as reverting to $0.15/$0.50/$0.03 on 2026-09-09 and must be re-verified before that date. Z.ai's pricing page was checked explicitly for day/night or peak/off-peak tiers on every model and carries none, so no time-of-day schedule applies (DeepSeek's peak-rate convention elsewhere in this catalog does not apply here). Benchmarks are omitted because Z.ai publishes none for either 5.3 model and carrying 5.2's numbers forward would be fabricated. GLM-5.3-Flash was left out of every provider default, task-routing slot, and tier list: those already resolve through family:zhipu/glm (unaffected by adding a non-family-pattern id), and Zhipu's provider block has no separate fast-tier route the way Google's flash-lite/flash split does, so inventing one was out of scope for this change. openrouter.ai/z-ai/glm-5.3 and openrouter.ai/z-ai/glm-5.3-flash confirm both slugs at matching context/output limits and pricing. Sources retrieved 2026-09-02: docs.z.ai/guides/llm/glm-5.3, docs.z.ai/guides/vlm/glm-5.3-flash, docs.z.ai/guides/overview/pricing, openrouter.ai/z-ai/glm-5.3, and openrouter.ai/z-ai/glm-5.3-flash."
+    },
+    {
+      "date": "2026-09-02",
       "verifiedBy": "official-google-gemini-model-and-pricing-docs-and-openrouter-model-list",
       "status": "PASS",
       "notes": "Added Gemini 3.8 Flash to the catalog and promoted the google/gemini-flash family slot from gemini-3.7-flash to gemini-3.8-flash via the family-slots promotion script, then removed gemini-3.7-flash from the roster and added it to retired-models.json. Official Google documentation confirms the exact gemini-3.8-flash API ID, the same 1,048,576-token input and 65,536-token output limits as 3.7, text/image/audio/video/PDF input with text-only output, function calling, code execution, search grounding, context caching, and low/medium/high thinking levels (minimal remains unsupported). Pricing is unchanged from 3.7's promotional rate of $0.75/M input, $3.75/M output, $0.075/M cache read, which Google's pricing page lists as reverting to $1.50/$7.50/$0.15 on 2027-01-01 and must be re-verified before that date. Benchmarks are omitted because Google publishes none for 3.8. openrouter.ai/google/gemini-3.8-flash confirms the google/gemini-3.8-flash slug at the same context/output limits and pricing. Sources retrieved 2026-09-02: ai.google.dev/gemini-api/docs/models/gemini-3.8-flash, /docs/latest-model, /docs/pricing, and openrouter.ai/google/gemini-3.8-flash."
@@ -1861,11 +1867,11 @@
         "minTier": "basic"
       }
     },
-    "glm-5.2": {
-      "id": "glm-5.2",
-      "apiModelId": "glm-5.2",
-      "openRouterSlug": "z-ai/glm-5.2",
-      "name": "GLM-5.2",
+    "glm-5.3": {
+      "id": "glm-5.3",
+      "apiModelId": "glm-5.3",
+      "openRouterSlug": "z-ai/glm-5.3",
+      "name": "GLM-5.3",
       "provider": "zhipu",
       "modelType": "reasoning",
       "openWeight": true,
@@ -1880,19 +1886,61 @@
         "Chinese Language"
       ],
       "deprecation_date": null,
+      "maxOutputTokens": 128000,
       "reasoning": {
         "capable": true,
-        "control": "thinking_toggle",
-        "canDisableThinking": true,
+        "control": "effort_levels",
+        "supportedEfforts": ["low", "high", "max"],
+        "defaultEffort": "max",
+        "canDisableThinking": false,
         "request": {
           "api": "chat",
-          "effortPath": null,
-          "togglePath": "thinking.type",
+          "effortPath": "reasoning_effort",
+          "togglePath": null,
           "budgetPath": null
         }
       },
       "tierPolicy": {
         "minTier": "pro"
+      }
+    },
+    "glm-5.3-flash": {
+      "id": "glm-5.3-flash",
+      "apiModelId": "glm-5.3-flash",
+      "openRouterSlug": "z-ai/glm-5.3-flash",
+      "name": "GLM-5.3 Flash",
+      "provider": "zhipu",
+      "modelType": "multimodal",
+      "openWeight": true,
+      "license": "MIT",
+      "inputModalities": ["text", "image", "video", "pdf"],
+      "variantPartner": "glm-5.3",
+      "quality": "excellent",
+      "qualityTier": "balanced",
+      "bestFor": [
+        "Agentic Coding",
+        "Multimodal Reasoning",
+        "Computer Use",
+        "Tool Use",
+        "Long Context"
+      ],
+      "deprecation_date": null,
+      "maxOutputTokens": 128000,
+      "reasoning": {
+        "capable": true,
+        "control": "effort_levels",
+        "supportedEfforts": ["low", "high", "max"],
+        "defaultEffort": "max",
+        "canDisableThinking": false,
+        "request": {
+          "api": "chat",
+          "effortPath": "reasoning_effort",
+          "togglePath": null,
+          "budgetPath": null
+        }
+      },
+      "tierPolicy": {
+        "minTier": "basic"
       }
     },
     "qwen-3.7-plus": {

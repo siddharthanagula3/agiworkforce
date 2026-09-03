@@ -34,7 +34,8 @@
     "nvidia/nemotron-3-super-120b-a12b:free",
     "google/gemma-4-26b-a4b-it:free",
     "gemini-3.5-flash",
-    "gemini-3.7-flash"
+    "gemini-3.7-flash",
+    "glm-5.2"
   ],
   "guardedNonCanonicalModelIds": [
     "all-MiniLM-L6-v2",
