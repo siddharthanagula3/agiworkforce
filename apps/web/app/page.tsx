@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 import { LandingPage } from '@/features/marketing/components/landing/LandingPage';
 
-const TITLE = 'AGI: pick where the request runs';
+const TITLE = 'AGI: any model, any surface, you pick where it runs';
 const DESCRIPTION =
   'AGI answers on your own hardware, on your own provider account, or on capacity we run, and labels which one it was.';
 
