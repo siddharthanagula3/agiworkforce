@@ -100,12 +100,4 @@ export interface PairingSession {
   latencyMs?: number;
 }
 
-/**
- * The name mobile gives the screen a user pairs from.
- *
- * Desktop's pairing card told people to "open Desktop Companion on your
- * phone", a screen with no such name — mobile calls it Remote in the drawer
- * and in the screen header. Both surfaces read this constant so the
- * instruction cannot drift from the label again.
- */
 export const MOBILE_REMOTE_SCREEN_LABEL = 'Remote';

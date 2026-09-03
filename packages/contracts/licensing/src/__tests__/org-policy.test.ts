@@ -1,4 +1,3 @@
-
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -40,7 +39,7 @@ function readFixture(file: string): Uint8Array {
   return new Uint8Array(readFileSync(join(fixturesDir, file)));
 }
 
-describe('verifyOrgPolicy — fixture corpus replay', () => {
+describe('verifyOrgPolicy, fixture corpus replay', () => {
   it('exercises accept and every error variant', () => {
     const codes = new Set(manifest.cases.map((c) => ('code' in c.expect ? c.expect.code : 'ok')));
     for (const code of [
@@ -79,7 +78,7 @@ describe('verifyOrgPolicy — fixture corpus replay', () => {
   }
 });
 
-describe('checkPolicyTightening — monotonic rule', () => {
+describe('checkPolicyTightening, monotonic rule', () => {
   const permissive: PolicyPermissions = {
     allowedProviders: ['*'],
     allowedModels: ['*'],

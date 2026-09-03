@@ -1,17 +1,3 @@
-/**
- * Database entity types — cloud schema mirrors.
- *
- * These interfaces exactly match the column layouts in cloud migration folders.
- * They are used by the web app, mobile app, and VS Code extension to type
- * responses from shared database APIs.
- *
- * The desktop app uses SQLite as source of truth; a sync client writes
- * deterministic-UUID copies of local rows into cloud persistence.
- *
- * @module database
- * @packageDocumentation
- */
-
 export type MessageRole = 'user' | 'assistant' | 'system' | 'tool';
 
 export type ConversationSource = 'desktop' | 'web' | 'mobile' | 'extension' | 'vscode';

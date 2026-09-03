@@ -10,20 +10,6 @@ import {
   type PlaceIdentity,
 } from '../interactive-cards';
 
-/**
- * The type-level half of the wrong-city fix.
- *
- * The runtime schemas in @agiworkforce/cloud-contracts make the wrong PAYLOAD
- * impossible. This file proves the wrong CODE does not compile — that a renderer
- * cannot reach for an unvalidated body, routing cannot reach for coordinates
- * that were never resolved, and the model-facing tool input cannot carry
- * identity at all.
- *
- * The `@ts-expect-error` lines ARE the assertions: each one fails the build if
- * the access it guards ever becomes legal again. The runtime `expect` calls
- * exist so the file is also a real test rather than a silently-skipped one.
- */
-
 describe('unrecognized cards cannot be read as if validated', () => {
   it('has no body on the unrecognized branch', () => {
     const card = {
@@ -36,7 +22,7 @@ describe('unrecognized cards cannot be read as if validated', () => {
       producedBy: { toolCallId: 'toolu_1', toolName: 'x' },
     } satisfies InteractiveCard;
 
-    // @ts-expect-error `body` is ABSENT from the unrecognized branch — not
+    // @ts-expect-error `body` is ABSENT from the unrecognized branch, not
     const leaked = card.body;
 
     expect(leaked).toBeUndefined();
@@ -130,7 +116,7 @@ describe('the model cannot author place identity', () => {
     // @ts-expect-error No coordinates.
     stop.lat = 32.8;
 
-    // @ts-expect-error No URL — the documented anti-pattern is letting the model
+    // @ts-expect-error No URL, the documented anti-pattern is letting the model
     stop.url = 'https://maps.example/anything';
 
     // @ts-expect-error No display name either: a model-authored name beside a

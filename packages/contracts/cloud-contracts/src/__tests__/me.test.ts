@@ -1,4 +1,3 @@
-
 import { describe, it, expect } from 'vitest';
 import { MeResponseSchema, parseMeResponse } from '../me';
 import golden from '../__fixtures__/me-response.golden.json';
@@ -99,7 +98,7 @@ describe('MeResponseSchema', () => {
   });
 });
 
-describe('MeResponseSchema — capability_handshake (six-app finding A)', () => {
+describe('MeResponseSchema, capability_handshake (six-app finding A)', () => {
   it('accepts the golden fixture pro-tier capability_handshake document', () => {
     const result = MeResponseSchema.safeParse(golden);
     expect(result.success).toBe(true);
@@ -109,7 +108,7 @@ describe('MeResponseSchema — capability_handshake (six-app finding A)', () => 
     }
   });
 
-  it('is optional — a pre-handshake payload (no field at all) still parses (backward compat)', () => {
+  it('is optional, a pre-handshake payload (no field at all) still parses (backward compat)', () => {
     const { capability_handshake: _omit, ...withoutHandshake } = golden;
     expect(MeResponseSchema.safeParse(withoutHandshake).success).toBe(true);
   });

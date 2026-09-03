@@ -7,7 +7,7 @@ import {
 } from '../index';
 import { InMemoryConsentLedger } from './test-ledger';
 
-describe('Chinese-HQ provider registry — PRD V5 R-023', () => {
+describe('Chinese-HQ provider registry, PRD V5 R-023', () => {
   it('locks the exact four provider ids the PRD §10 lock #26 enumerates', () => {
     expect([...CHINESE_HQ_PROVIDER_IDS].sort()).toEqual(['deepseek', 'moonshot', 'qwen', 'zhipu']);
   });
@@ -30,7 +30,7 @@ describe('Chinese-HQ provider registry — PRD V5 R-023', () => {
   });
 });
 
-describe('isProviderRoutingAllowed — default-off gate', () => {
+describe('isProviderRoutingAllowed, default-off gate', () => {
   it('allows non-Chinese-HQ providers without checking the ledger', () => {
     const ledger = new InMemoryConsentLedger();
     expect(isProviderRoutingAllowed('anthropic', ledger)).toBe(true);

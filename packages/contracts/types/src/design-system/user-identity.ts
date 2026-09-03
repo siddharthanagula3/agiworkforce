@@ -15,13 +15,13 @@ export const PLAN_LABEL: Readonly<Record<UIPlanTier, string>> = Object.freeze({
 });
 
 export const PLAN_DESCRIPTION: Readonly<Record<UIPlanTier, string>> = Object.freeze({
-  local: 'Local LLMs — Ollama / LM Studio',
+  local: 'Local LLMs, Ollama / LM Studio',
   byok: 'Local app with your own provider keys',
   free: 'Managed Cloud chat with free usage',
   basic: 'Cloud Managed, basic models',
-  pro: 'Pro — balanced models, higher usage',
-  max: 'Max 5x — flagship models and higher usage',
-  max_15x: 'Max 15x — flagship models and the highest individual usage',
+  pro: 'Pro, balanced models, higher usage',
+  max: 'Max 5x, flagship models and higher usage',
+  max_15x: 'Max 15x, flagship models and the highest individual usage',
   team: 'Pro capabilities with shared team administration',
   enterprise: 'Managed controls and negotiated enterprise capabilities',
 });

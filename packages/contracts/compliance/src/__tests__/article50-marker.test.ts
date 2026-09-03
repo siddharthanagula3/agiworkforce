@@ -11,7 +11,7 @@ import {
 const FIXTURE_IMAGE_MODEL_ID = 'fixture-image-model';
 const FIXTURE_TEXT_MODEL_ID = 'fixture-text-model';
 
-describe('Article50Marker — buildProvenanceClaim', () => {
+describe('Article50Marker, buildProvenanceClaim', () => {
   it('builds a C2PA-style claim with the required Article 50(2) fields', () => {
     const claim = buildProvenanceClaim({
       kind: 'image',
@@ -75,7 +75,7 @@ describe('Article50Marker — buildProvenanceClaim', () => {
   });
 });
 
-describe('Article50Marker — <meta> tag', () => {
+describe('Article50Marker, <meta> tag', () => {
   it('renders the exact tag name the integration test grep-asserts', () => {
     const tag = renderAiGeneratedMetaTag({
       kind: 'image',
@@ -134,7 +134,7 @@ describe('Article50Marker — <meta> tag', () => {
   });
 });
 
-describe('Article50Marker — wrapTextExportWithMarker + hasAiGeneratedMarker', () => {
+describe('Article50Marker, wrapTextExportWithMarker + hasAiGeneratedMarker', () => {
   it('wraps text with both the JSON sidecar and the meta tag', () => {
     const wrapped = wrapTextExportWithMarker({
       text: 'hello world',

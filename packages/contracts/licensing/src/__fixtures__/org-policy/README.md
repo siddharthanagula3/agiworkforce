@@ -19,7 +19,7 @@ case.nowMs, { baseline: case.baseline })` must equal `case.expect`. When a case
 omits `baseline`, the product-default baseline (`DEFAULT_POLICY_BASELINE`) is
 used.
 
-- `licenseClaims` — the already-verified root-of-trust license (orgId
+- `licenseClaims`: the already-verified root-of-trust license (orgId
   `org_acme`, `policyKeys = [policy key 1]`). Held in the manifest so replays
   share it. In production the caller verifies this license with `verifyLicense`
   first, then passes its claims here.
@@ -42,20 +42,20 @@ export not required. Lattice per field (candidate must be ⊑ baseline):
 - `auditExport.required`: `true` (required) is tighter than `false`. May not
   DROP a required audit.
 
-Against the default (permissive) baseline a first policy can always restrict —
+Against the default (permissive) baseline a first policy can always restrict.
 that is the correct security property. Over-granting is therefore only
 detectable against a tighter prior baseline, so `over-granting.agipolicy` pins a
 concrete `baseline` in the manifest (a prior version-1 policy).
 
 ## Fixtures and expected verdicts
 
-| File                           | Baseline                   | Verdict                                                                                              |
-| ------------------------------ | -------------------------- | ---------------------------------------------------------------------------------------------------- |
-| `valid-tightening.agipolicy`   | default                    | ok — restricts providers, forbids BYOK, blocks egress, bounds retention                              |
-| `valid-unrestricted.agipolicy` | default                    | ok — equals the baseline (equal is not "more permissive")                                            |
-| `forged-key.agipolicy`         | default                    | bad_signature — signer not in the license `policyKeys`                                               |
-| `tampered.agipolicy`           | default                    | bad_signature — payload byte-flipped after signing                                                   |
-| `org-mismatch.agipolicy`       | default                    | org_mismatch — policy orgId differs from the license orgId                                           |
-| `not-yet-valid.agipolicy`      | default                    | not_yet_valid — issuedAt is in the future                                                            |
-| `over-granting.agipolicy`      | prior policy (in manifest) | not_tightening — re-enables egress, broadens providers, loosens BYOK, extends retention, drops audit |
-| `malformed-schema.agipolicy`   | default                    | malformed — valid sig, but a required field is missing                                               |
+| File                           | Baseline                   | Verdict                                                                                             |
+| ------------------------------ | -------------------------- | --------------------------------------------------------------------------------------------------- |
+| `valid-tightening.agipolicy`   | default                    | ok, restricts providers, forbids BYOK, blocks egress, bounds retention                              |
+| `valid-unrestricted.agipolicy` | default                    | ok, equals the baseline (equal is not "more permissive")                                            |
+| `forged-key.agipolicy`         | default                    | bad_signature, signer not in the license `policyKeys`                                               |
+| `tampered.agipolicy`           | default                    | bad_signature, payload byte-flipped after signing                                                   |
+| `org-mismatch.agipolicy`       | default                    | org_mismatch, policy orgId differs from the license orgId                                           |
+| `not-yet-valid.agipolicy`      | default                    | not_yet_valid, issuedAt is in the future                                                            |
+| `over-granting.agipolicy`      | prior policy (in manifest) | not_tightening, re-enables egress, broadens providers, loosens BYOK, extends retention, drops audit |
+| `malformed-schema.agipolicy`   | default                    | malformed, valid sig, but a required field is missing                                               |

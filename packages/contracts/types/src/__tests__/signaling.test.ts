@@ -1,26 +1,22 @@
-
 import { describe, expect, it } from 'vitest';
 import { SIGNALING_EVENT_TYPES, type SignalingEvent } from '../signaling';
 
 const SERVER_SENT_TYPES: ReadonlyArray<[SignalingEvent['type'], string]> = [
-  ['registered', 'services/signaling-server/src/index.ts — handleRegister'],
-  ['peer_ready', 'services/signaling-server/src/index.ts — handleRegister'],
-  ['signal', 'services/signaling-server/src/index.ts — handleSignal / deliverPendingApprovals'],
-  ['peer_left', 'services/signaling-server/src/index.ts — socket close + error paths'],
-  ['heartbeat_ack', 'services/signaling-server/src/index.ts — heartbeat handler'],
-  ['session_expired', 'services/signaling-server/src/index.ts — disconnectParticipants'],
-  ['terminated', 'services/signaling-server/src/index.ts — disconnectParticipants'],
-  ['sync_request', 'services/signaling-server/src/index.ts — mobile reconnect state sync'],
-  [
-    'approval_queued',
-    'services/signaling-server/src/index.ts — approval queued for offline mobile',
-  ],
-  ['connection_timeout', 'services/signaling-server/src/connection-manager.ts — idle cleanup'],
-  ['server_shutdown', 'services/signaling-server/src/connection-manager.ts — closeAllConnections'],
-  ['error', 'services/signaling-server/src/index.ts — every rejection path'],
+  ['registered', 'services/signaling-server/src/index.ts, handleRegister'],
+  ['peer_ready', 'services/signaling-server/src/index.ts, handleRegister'],
+  ['signal', 'services/signaling-server/src/index.ts, handleSignal / deliverPendingApprovals'],
+  ['peer_left', 'services/signaling-server/src/index.ts, socket close + error paths'],
+  ['heartbeat_ack', 'services/signaling-server/src/index.ts, heartbeat handler'],
+  ['session_expired', 'services/signaling-server/src/index.ts, disconnectParticipants'],
+  ['terminated', 'services/signaling-server/src/index.ts, disconnectParticipants'],
+  ['sync_request', 'services/signaling-server/src/index.ts, mobile reconnect state sync'],
+  ['approval_queued', 'services/signaling-server/src/index.ts, approval queued for offline mobile'],
+  ['connection_timeout', 'services/signaling-server/src/connection-manager.ts, idle cleanup'],
+  ['server_shutdown', 'services/signaling-server/src/connection-manager.ts, closeAllConnections'],
+  ['error', 'services/signaling-server/src/index.ts, every rejection path'],
 ];
 
-describe('signaling contract — event vocabulary', () => {
+describe('signaling contract, event vocabulary', () => {
   it.each(SERVER_SENT_TYPES)('covers the server-sent `%s` message (%s)', (type) => {
     expect(SIGNALING_EVENT_TYPES).toContain(type);
   });
@@ -35,7 +31,7 @@ describe('signaling contract — event vocabulary', () => {
   });
 });
 
-describe('signaling contract — reconnect payload shapes', () => {
+describe('signaling contract, reconnect payload shapes', () => {
   it('carries the resync cause and server clock on `sync_request`', () => {
     const event: SignalingEvent = {
       type: 'sync_request',

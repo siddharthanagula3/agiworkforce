@@ -20,7 +20,7 @@
       "expect": {
         "ok": true
       },
-      "note": "Restricts providers, forbids BYOK, blocks managed-cloud egress, bounds retention — all tighter than the default baseline."
+      "note": "Restricts providers, forbids BYOK, blocks managed-cloud egress, bounds retention, all tighter than the default baseline."
     },
     {
       "file": "valid-unrestricted.agipolicy",

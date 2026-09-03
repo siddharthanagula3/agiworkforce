@@ -379,11 +379,6 @@ export type ManagedQuotaBlockKind =
   | 'rolling_window'
   | 'billing_period'
   | 'rate_limit'
-  /**
-   * The plan simply does not include the capability — nothing was exhausted and
-   * nothing resets. Distinct from every other kind here, which are all "you had
-   * an allowance and used it up", so the card must not offer a reset time.
-   */
   | 'plan_capability';
 
 export interface ManagedQuotaBlockPresentation {

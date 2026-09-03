@@ -63,7 +63,7 @@ const WEB: CapabilityRow = {
   canUseNativeIntegrations: false,
   canUseCamera: true,
   canUsePhotos: false,
-  canUseNotifications: false, // SPEC-SILENT for web; web push not shipped — false matches current
+  canUseNotifications: false,
 };
 
 const DESKTOP: CapabilityRow = {

@@ -14,31 +14,6 @@
  * @packageDocumentation
  */
 
-/**
- * A single analytics event emitted by any surface within a workspace.
- *
- * Events are append-only. Once stored they are never mutated. The
- * `metadata` bag carries event-type-specific fields.
- *
- * Event type semantics:
- * - `agent_execution` — an agent session started, completed, or failed.
- * - `tool_usage`      — a single tool call was made by an agent or user.
- * - `model_call`      — a direct LLM inference call (token counts in metadata).
- * - `user_action`     — a user-initiated UI action (page view, feature click, etc.).
- *
- * @example
- * ```typescript
- * const event: WorkspaceAnalyticsEvent = {
- *   id: 'evt-abc-001',
- *   workspaceId: 'ws-acme',
- *   userId: 'usr-alice',
- *   eventType: 'model_call',
- *   eventName: `${selectedModel.id}/chat`,
- *   metadata: { inputTokens: 1200, outputTokens: 340, costUsd: 0.048 },
- *   timestamp: '2026-03-19T10:00:00Z',
- * };
- * ```
- */
 export interface WorkspaceAnalyticsEvent {
   id: string;
 

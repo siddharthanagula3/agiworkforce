@@ -267,7 +267,7 @@ describe('url safety', () => {
   });
 });
 
-describe('itinerary invariants — the wrong-city link', () => {
+describe('itinerary invariants, the wrong-city link', () => {
   const base = {
     title: 'SF founder day',
     summary: 'A transit-only circuit.',

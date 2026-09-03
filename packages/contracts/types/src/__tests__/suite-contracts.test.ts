@@ -57,7 +57,7 @@ import type { ConversationId } from '../conversation';
 const FIXTURE_LOCAL_MODEL_LABEL = 'Fixture Local Model';
 const FIXTURE_BYOK_MODEL_LABEL = 'Fixture BYOK Model';
 
-describe('suite contracts — trust boundaries', () => {
+describe('suite contracts, trust boundaries', () => {
   it('locks the public privacy and provider mode vocabularies', () => {
     expect(PRIVACY_MODES).toEqual(['local', 'byok', 'managed']);
     expect(PROVIDER_MODES).toEqual(['Local', 'DirectByok', 'ManagedGateway', 'ManagedNative']);
@@ -224,7 +224,7 @@ describe('suite contracts — trust boundaries', () => {
   });
 });
 
-describe('suite contracts — records', () => {
+describe('suite contracts, records', () => {
   it('models a cross-surface chat intent without losing the trust boundary', () => {
     const intent = {
       id: 'intent-1',

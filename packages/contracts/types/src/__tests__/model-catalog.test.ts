@@ -770,7 +770,7 @@ describe('model catalog helpers', () => {
   });
 });
 
-describe('getDefaultModelFor — tier-aware default model resolution', () => {
+describe('getDefaultModelFor, tier-aware default model resolution', () => {
   it('returns workhorse_general for free tier on every kind (Free only allows that slot)', () => {
     const workhorse = getRoutingSlotModel('workhorse_general');
     expect(getDefaultModelFor('free', 'chat')).toBe(workhorse);
@@ -830,7 +830,7 @@ describe('getDefaultModelFor — tier-aware default model resolution', () => {
     );
   });
 
-  it('returns the catalog model for the resolved slot — never a hardcoded literal', () => {
+  it('returns the catalog model for the resolved slot, never a hardcoded literal', () => {
     const proChat = getDefaultModelFor('pro', 'chat');
     expect(proChat).toBe(getRoutingSlotModel('general_balanced_pro'));
     expect(proChat.length).toBeGreaterThan(0);

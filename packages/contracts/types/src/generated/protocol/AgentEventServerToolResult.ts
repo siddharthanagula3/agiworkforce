@@ -3,10 +3,6 @@ import type { JsonValue } from './serde_json/JsonValue';
 
 export type AgentEventServerToolResult = {
   toolUseId: string;
-  /**
-   * Vendor result payload, verbatim and untranslated — see
-   * `StreamChunkServerToolResult.payload`'s docstring.
-   */
   payload: JsonValue;
   isError?: boolean;
 };

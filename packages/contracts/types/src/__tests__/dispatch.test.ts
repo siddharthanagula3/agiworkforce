@@ -1,4 +1,3 @@
-
 import { describe, expect, it } from 'vitest';
 import {
   DISPATCH_HKDF_INFO,
@@ -18,7 +17,7 @@ import {
   type SignedEnvelope,
 } from '../dispatch';
 
-describe('dispatch — canonical wire-format constants', () => {
+describe('dispatch, canonical wire-format constants', () => {
   it('locks the HKDF info parameter', () => {
     expect(DISPATCH_HKDF_INFO).toBe('dispatch-hmac-v2');
   });
@@ -49,7 +48,7 @@ describe('dispatch — canonical wire-format constants', () => {
   });
 });
 
-describe('dispatch — envelope shape', () => {
+describe('dispatch, envelope shape', () => {
   it('accepts a valid signed envelope', () => {
     const envelope: DispatchEnvelope = {
       hmac: 'a'.repeat(64),
@@ -74,13 +73,13 @@ describe('dispatch — envelope shape', () => {
     expect(asCanonical.hmac).toBe(envelope.hmac);
   });
 
-  it('payload is unknown by default — caller narrows after verify', () => {
+  it('payload is unknown by default, caller narrows after verify', () => {
     const payload: DispatchPayload = { foo: 'bar' };
     expect(payload).toBeDefined();
   });
 });
 
-describe('dispatch — session state shape', () => {
+describe('dispatch, session state shape', () => {
   it('builds a fresh session with hex secret + empty nonce cache', () => {
     const state: DispatchSessionState = {
       secret: 'c'.repeat(64),
@@ -100,7 +99,7 @@ describe('dispatch — session state shape', () => {
   });
 });
 
-describe('dispatch — verify result discriminants', () => {
+describe('dispatch, verify result discriminants', () => {
   it('accepts the success branch', () => {
     const result: DispatchVerifyResult = { ok: true };
     expect(result.ok).toBe(true);
