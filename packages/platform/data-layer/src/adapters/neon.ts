@@ -259,6 +259,45 @@ function decodeJwtSub(jwt: string): string {
   return sub;
 }
 
+const SECURE_SSL_MODES = new Set(['require', 'verify-ca', 'verify-full']);
+
+function isLocalWebSocketProxyConfigured(): boolean {
+  return Boolean(process.env['AGI_DATABASE_WS_PROXY']?.trim());
+}
+
+/**
+ * Fails closed on a connection string that does not ask Postgres to require
+ * TLS. The Neon serverless driver already tunnels over a secure WebSocket by
+ * default, but that is a property of the driver, not of the connection
+ * string an operator hands it; a plain-Postgres host reached through the
+ * `postgres` adapter or a future driver change would otherwise carry
+ * `AGI_DATABASE_URL`'s credentials in the clear with nothing here to notice.
+ * Skipped only for the loopback-only local WebSocket proxy, whose own
+ * loopback check ({@link applyLocalWebSocketProxy}) is the real guard there.
+ */
+function assertSecureConnectionString(connectionString: string): void {
+  if (isLocalWebSocketProxyConfigured()) return;
+
+  let sslmode: string | null;
+  try {
+    sslmode = new URL(connectionString).searchParams.get('sslmode');
+  } catch {
+    throw new DataLayerConfigError(
+      'AGI_DATABASE_URL (or DATABASE_URL) is not a valid connection string. Expected ' +
+        'postgresql://user:pwd@host/db?sslmode=require.',
+    );
+  }
+
+  if (!sslmode || !SECURE_SSL_MODES.has(sslmode)) {
+    throw new DataLayerConfigError(
+      'AGI_DATABASE_URL (or DATABASE_URL) must set sslmode=require (or verify-ca / ' +
+        'verify-full) so traffic to Neon is never sent unencrypted. Add ' +
+        '?sslmode=require to the connection string, or set AGI_DATABASE_WS_PROXY for a ' +
+        'loopback-only local Postgres during development.',
+    );
+  }
+}
+
 const DEFAULT_CONNECTION_TIMEOUT_MS = 10_000;
 
 /**
@@ -307,6 +346,7 @@ export class NeonDatabaseAdapter implements DatabaseAdapter {
       this.poolPromise = config.poolPromise;
       this.ownsPool = false;
     } else {
+      assertSecureConnectionString(config.connectionString);
       this.poolPromise = (async () => {
         const mod = await loadNeon();
         return this.guardTransportErrors(
