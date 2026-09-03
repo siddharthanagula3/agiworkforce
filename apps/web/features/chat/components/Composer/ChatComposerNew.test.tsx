@@ -879,6 +879,24 @@ describe('ChatComposerNew', () => {
     expect(screen.getByRole('status', { name: 'Active options: Run code' })).toBeVisible();
   });
 
+  it('exposes the toggle state of + menu rows to assistive technology', () => {
+    useModelStore.getState().setSelectedModelId('auto');
+
+    render(<ChatComposerNew onSend={vi.fn()} />);
+    fireEvent.click(screen.getByRole('button', { name: /add attachments and tools/i }));
+
+    const runCode = screen.getByRole('button', { name: /run code/i });
+    expect(runCode).toHaveAttribute('aria-pressed', 'false');
+
+    fireEvent.click(runCode);
+    fireEvent.click(screen.getByRole('button', { name: /add attachments and tools/i }));
+
+    expect(screen.getByRole('button', { name: /run code/i })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+  });
+
   it('sends the persistent Office file-creation selection to the server', async () => {
     const toolModel = getSelectableModels().find((model) => model.capabilities.tools === true);
     expect(toolModel, 'the canonical registry must expose a tool-capable model').toBeDefined();

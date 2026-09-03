@@ -501,6 +501,7 @@ function MenuToggleRow({
       onClick={onToggle}
       disabled={disabled}
       title={title}
+      aria-pressed={checked}
       className={cn(
         'flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors',
         disabled ? 'cursor-not-allowed opacity-50' : 'hover:bg-muted/60',
