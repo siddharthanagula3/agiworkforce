@@ -57,7 +57,7 @@ export interface DirectorySection {
 
 export interface DirectoryDetailFile {
   path: string;
-  content: string;
+  content?: string;
 }
 
 export interface DirectorySkillDetail {
@@ -68,6 +68,7 @@ export interface DirectorySkillDetail {
   description: string;
   license?: string;
   files: readonly DirectoryDetailFile[];
+  readFile?: (path: string) => Promise<string>;
   editable?: boolean;
   installed?: boolean;
   href?: string;
@@ -132,6 +133,7 @@ export interface DirectoryAdapter {
   loadSection?: (section: DirectorySectionKey) => Promise<void> | void;
   loadDetail?: (section: DirectorySectionKey, id: string) => Promise<DirectoryDetail | null>;
   install?: (section: DirectorySectionKey, id: string) => Promise<void> | void;
+  uninstall?: (section: DirectorySectionKey, id: string) => Promise<void> | void;
   openSettings?: (section: DirectorySectionKey, id: string) => Promise<void> | void;
   copyLink?: (section: DirectorySectionKey, id: string) => Promise<void> | void;
   openHref?: (href: string) => Promise<void> | void;

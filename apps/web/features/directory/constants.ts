@@ -12,6 +12,13 @@ export const SKILL_PUBLISHER_AGI = 'AGI';
 export const SKILL_PUBLISHER_YOU = 'You';
 export const SKILL_PUBLISHER_MANAGED = 'Managed';
 
+export const SKILL_STATUS_GROUP_ID = 'status';
+export const SKILL_STATUS_GROUP_LABEL = 'Status';
+export const SKILL_STATUS_INSTALLED = 'installed';
+export const SKILL_STATUS_NOT_INSTALLED = 'not-installed';
+export const SKILL_STATUS_INSTALLED_LABEL = 'Installed';
+export const SKILL_STATUS_NOT_INSTALLED_LABEL = 'Not installed';
+
 export const SKILL_LIFECYCLE_GROUP_ID = 'lifecycle';
 export const SKILL_LIFECYCLE_GROUP_LABEL = 'Status';
 export const SKILL_LIFECYCLE_INCLUDED_LABEL = 'Included';
@@ -53,6 +60,7 @@ export const CONNECTOR_ICON_PATH = '/api/connectors/directory/icon';
 export const CONNECTOR_DIRECTORY_PATH = '/api/connectors/directory';
 export const CONNECTORS_PATH = '/api/connectors';
 export const SKILLS_PATH = '/api/skills';
+export const SKILL_INSTALLS_PATH = '/api/skills/installs';
 export const PLUGINS_PATH = '/api/plugins';
 export const PLUGIN_INSTALLATIONS_PATH = '/api/plugins/installations';
 export const PLUGIN_MARKETPLACES_PATH = '/api/plugins/marketplaces';

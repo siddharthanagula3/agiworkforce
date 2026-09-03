@@ -17,7 +17,10 @@ import {
   currentConnectorReturnPath,
   withConnectorReturnPath,
 } from '@features/connectors/hooks/use-connectors';
-import { loadSkillsCatalog } from '@features/skills/services/skills-catalog';
+import {
+  invalidateSkillsCatalog,
+  loadSkillsCatalog,
+} from '@features/skills/services/skills-catalog';
 import { getCsrfToken } from '@/lib/client/csrf';
 
 import {
@@ -47,7 +50,14 @@ import {
   toRegistryDetail,
   type PluginDirectorySnapshot,
 } from '../services/plugins-directory';
-import { fetchSkillDetail, toSkillSection } from '../services/skills-directory';
+import {
+  fetchInstalledSkillNames,
+  fetchSkillDetail,
+  installSkill,
+  mergeSkillCatalog,
+  toSkillSection,
+  uninstallSkill,
+} from '../services/skills-directory';
 
 const EMPTY: DirectorySection = { entries: [] };
 const SECTIONS: readonly DirectorySectionKey[] = ['skills', 'connectors', 'plugins'];
@@ -72,15 +82,21 @@ export function useDirectoryAdapter(): DirectoryAdapter {
   const [connectors, setConnectors] = useState<DirectorySection>(EMPTY);
   const [plugins, setPlugins] = useState<DirectorySection>(EMPTY);
   const skillCache = useRef<readonly ManagedSkillSummary[]>([]);
+  const installedSkills = useRef<ReadonlySet<string>>(new Set<string>());
   const connectedIds = useRef<ReadonlySet<string>>(new Set<string>());
   const pluginCache = useRef<PluginDirectorySnapshot | null>(null);
 
   const loadSkills = useCallback(async () => {
     setSkills((prev) => ({ ...prev, loading: true, error: null }));
     try {
-      const catalog = await loadSkillsCatalog();
+      const [listed, installed] = await Promise.all([
+        loadSkillsCatalog(),
+        fetchInstalledSkillNames(),
+      ]);
+      const catalog = mergeSkillCatalog(listed);
       skillCache.current = catalog;
-      setSkills({ ...toSkillSection(catalog), retry: loadSkills });
+      installedSkills.current = installed;
+      setSkills({ ...toSkillSection(catalog, installed), retry: loadSkills });
     } catch {
       setSkills((prev) => ({ ...prev, loading: false, error: SKILLS_FAILED_COPY }));
     }
@@ -122,7 +138,8 @@ export function useDirectoryAdapter(): DirectoryAdapter {
 
   const loadDetail = useCallback(
     async (section: DirectorySectionKey, id: string): Promise<DirectoryDetail | null> => {
-      if (section === 'skills') return fetchSkillDetail(id, skillCache.current);
+      if (section === 'skills')
+        return fetchSkillDetail(id, skillCache.current, installedSkills.current);
       if (section === 'connectors') {
         const record = await fetchConnectorRecord(id);
         return record ? toConnectorDetail(record, connectedIds.current) : null;
@@ -174,13 +191,32 @@ export function useDirectoryAdapter(): DirectoryAdapter {
     [loadPlugins],
   );
 
+  const runSkillInstall = useCallback(
+    async (id: string, installed: boolean) => {
+      const csrfToken = await getCsrfToken();
+      if (installed) await installSkill(id, csrfToken);
+      else await uninstallSkill(id, csrfToken);
+      invalidateSkillsCatalog();
+      await loadSkills();
+    },
+    [loadSkills],
+  );
+
   const install = useCallback(
     (section: DirectorySectionKey, id: string) => {
       if (section === 'connectors') return connect(id);
       if (section === 'plugins') return installPlugin(id);
-      return Promise.resolve();
+      return runSkillInstall(id, true);
     },
-    [connect, installPlugin],
+    [connect, installPlugin, runSkillInstall],
+  );
+
+  const uninstall = useCallback(
+    (section: DirectorySectionKey, id: string) => {
+      if (section !== 'skills') return Promise.resolve();
+      return runSkillInstall(id, false);
+    },
+    [runSkillInstall],
   );
 
   const copyLink = useCallback(async (section: DirectorySectionKey, id: string) => {
@@ -238,6 +274,7 @@ export function useDirectoryAdapter(): DirectoryAdapter {
       loadSection,
       loadDetail,
       install,
+      uninstall,
       copyLink,
       openHref,
       addMarketplace,
@@ -250,6 +287,7 @@ export function useDirectoryAdapter(): DirectoryAdapter {
       loadSection,
       loadDetail,
       install,
+      uninstall,
       copyLink,
       openHref,
       addMarketplace,

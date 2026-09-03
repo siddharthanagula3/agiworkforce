@@ -40,6 +40,13 @@ describe('DirectoryGrid', () => {
     expect(onInstall).toHaveBeenCalledWith('canvas-design');
   });
 
+  it('offers a remove control when installed with no settings pane', () => {
+    const onRemove = vi.fn();
+    renderGrid({ entries: [{ ...skill, installed: true }], onInstall: vi.fn(), onRemove });
+    fireEvent.click(screen.getByRole('button', { name: 'Remove canvas-design' }));
+    expect(onRemove).toHaveBeenCalledWith('canvas-design');
+  });
+
   it('swaps the add control for a settings control once installed', () => {
     const onOpenSettings = vi.fn();
     const onInstall = vi.fn();

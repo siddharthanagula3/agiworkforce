@@ -1,9 +1,10 @@
 'use client';
 
 import { Copy, Eye, FileText, Folder, Code2 } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 
 import { cn } from '../cn';
+import { Spinner } from '../primitives/Spinner';
 import {
   INSTALLED_LABEL,
   INSTALL_LABEL,
@@ -13,6 +14,8 @@ import {
   SKILL_LICENSE_LABEL,
   SKILL_RAW_LABEL,
   SKILL_RENDERED_LABEL,
+  DIRECTORY_LOADING_LABEL,
+  GENERIC_ERROR_COPY,
 } from './constants';
 import { buildFileTree } from './filtering';
 import { DirectoryBackLink, DirectoryDetailHeader } from './DirectoryDetailHeader';
@@ -46,6 +49,7 @@ export function SkillDetailView({
   onBack,
   onInstall,
   onOpenSettings,
+  onRemove,
   onCopyLink,
   onCopyContent,
   busy,
@@ -54,6 +58,7 @@ export function SkillDetailView({
   onBack: () => void;
   onInstall?: () => void;
   onOpenSettings?: () => void;
+  onRemove?: () => void;
   onCopyLink?: () => void;
   onCopyContent?: (content: string) => void;
   busy?: boolean;
@@ -63,8 +68,38 @@ export function SkillDetailView({
   const [selectedPath, setSelectedPath] = useState(firstFile);
   const [raw, setRaw] = useState(false);
 
+  const [loaded, setLoaded] = useState<Record<string, string>>({});
+  const [fileError, setFileError] = useState<string | null>(null);
+  const [fileLoading, setFileLoading] = useState(false);
+
   const selected = detail.files.find((file) => file.path === selectedPath) ?? detail.files[0];
   const isEntryFile = selected?.path === firstFile;
+  const selectedPathValue = selected?.path;
+  const inlineContent = selected?.content;
+  const content = inlineContent ?? (selectedPathValue ? loaded[selectedPathValue] : undefined);
+  const readFile = detail.readFile;
+
+  useEffect(() => {
+    if (!selectedPathValue || inlineContent !== undefined) return;
+    if (!readFile || loaded[selectedPathValue] !== undefined) return;
+    let cancelled = false;
+    setFileLoading(true);
+    setFileError(null);
+    void readFile(selectedPathValue)
+      .then((text) => {
+        if (!cancelled) setLoaded((prev) => ({ ...prev, [selectedPathValue]: text }));
+      })
+      .catch((caught: unknown) => {
+        if (cancelled) return;
+        setFileError(caught instanceof Error ? caught.message : GENERIC_ERROR_COPY);
+      })
+      .finally(() => {
+        if (!cancelled) setFileLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedPathValue, inlineContent, readFile, loaded]);
 
   return (
     <div className="flex flex-col gap-4">
@@ -77,6 +112,7 @@ export function SkillDetailView({
         primaryDone={detail.installed === true}
         onPrimary={onInstall}
         onOpenSettings={onOpenSettings}
+        onRemove={onRemove}
         onCopyLink={onCopyLink}
         busy={busy}
       />
@@ -167,11 +203,11 @@ export function SkillDetailView({
               >
                 <Code2 aria-hidden className="size-4" />
               </button>
-              {onCopyContent && selected ? (
+              {onCopyContent && content !== undefined ? (
                 <button
                   type="button"
                   aria-label={SKILL_COPY_LABEL}
-                  onClick={() => onCopyContent(selected.content)}
+                  onClick={() => onCopyContent(content)}
                   className={cn(DIRECTORY_ICON_BUTTON, DIRECTORY_FOCUS_RING)}
                 >
                   <Copy aria-hidden className="size-4" />
@@ -179,12 +215,18 @@ export function SkillDetailView({
               ) : null}
             </div>
           </div>
-          {raw ? (
+          {fileLoading ? (
+            <div className="flex justify-center py-8">
+              <Spinner aria-label={DIRECTORY_LOADING_LABEL} />
+            </div>
+          ) : fileError ? (
+            <p className="py-8 text-center text-sm text-danger">{fileError}</p>
+          ) : raw ? (
             <pre className="overflow-x-auto rounded-lg bg-muted p-3 font-mono text-xs text-foreground">
-              {selected?.content}
+              {content}
             </pre>
           ) : (
-            <RenderedBody content={selected?.content ?? ''} />
+            <RenderedBody content={content ?? ''} />
           )}
         </section>
       </div>

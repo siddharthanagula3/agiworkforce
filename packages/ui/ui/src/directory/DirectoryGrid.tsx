@@ -1,6 +1,6 @@
 'use client';
 
-import { Download, Plus, Settings as SettingsIcon } from 'lucide-react';
+import { Download, Minus, Plus, Settings as SettingsIcon } from 'lucide-react';
 
 import { cn } from '../cn';
 import { Spinner } from '../primitives/Spinner';
@@ -11,6 +11,7 @@ import {
   DIRECTORY_LOADING_LABEL,
   DIRECTORY_RETRY_LABEL,
   NEW_BADGE_LABEL,
+  REMOVE_LABEL,
   SETTINGS_LABEL,
 } from './constants';
 import { formatInstallCount } from './filtering';
@@ -43,16 +44,21 @@ export function DirectoryCard({
   onOpen,
   onInstall,
   onOpenSettings,
+  onRemove,
 }: {
   entry: DirectoryEntry;
   onOpen: (id: string) => void;
   onInstall?: (id: string) => void;
   onOpenSettings?: (id: string) => void;
+  onRemove?: (id: string) => void;
 }) {
   const count = formatInstallCount(entry.installCount);
-  const trailingLabel = entry.installed ? SETTINGS_LABEL : ADD_LABEL;
-  const trailingAction = entry.installed ? onOpenSettings : onInstall;
-  const TrailingIcon = entry.installed ? SettingsIcon : Plus;
+  const installedAction = onOpenSettings ?? onRemove;
+  const installedLabel = onOpenSettings ? SETTINGS_LABEL : REMOVE_LABEL;
+  const InstalledIcon = onOpenSettings ? SettingsIcon : Minus;
+  const trailingLabel = entry.installed ? installedLabel : ADD_LABEL;
+  const trailingAction = entry.installed ? installedAction : onInstall;
+  const TrailingIcon = entry.installed ? InstalledIcon : Plus;
 
   return (
     <div className={DIRECTORY_CARD}>
@@ -127,6 +133,7 @@ export function DirectoryGrid({
   onOpen,
   onInstall,
   onOpenSettings,
+  onRemove,
 }: {
   section: DirectorySectionKey;
   entries: readonly DirectoryEntry[];
@@ -136,6 +143,7 @@ export function DirectoryGrid({
   onOpen: (id: string) => void;
   onInstall?: (id: string) => void;
   onOpenSettings?: (id: string) => void;
+  onRemove?: (id: string) => void;
 }) {
   if (loading && entries.length === 0) {
     return (
@@ -182,6 +190,7 @@ export function DirectoryGrid({
           onOpen={onOpen}
           onInstall={onInstall}
           onOpenSettings={onOpenSettings}
+          onRemove={onRemove}
         />
       ))}
     </div>
