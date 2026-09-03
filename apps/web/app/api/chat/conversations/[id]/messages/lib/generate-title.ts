@@ -24,6 +24,12 @@ import {
   buildServerProviderAdapter,
   toGenericUpstreamError,
 } from '@/lib/services/provider-adapter-service';
+import {
+  EXACT_RESPONSE_CACHE_MECHANISM,
+  lookupExactResponseCache,
+  storeExactResponseCache,
+  type ExactResponseCacheKeyFields,
+} from '@/lib/services/exact-response-cache-service';
 import { assertNoLeaks } from '@/lib/leak-detector';
 import { logger } from '@/lib/logger';
 import type { getNeonChatDb } from '@/lib/server/neon-chat';
@@ -102,6 +108,24 @@ function clientTruncatedTitleCandidate(rawContent: string): string {
   return rawContent.trim().slice(0, 60).replace(/\n/g, ' ');
 }
 
+/**
+ * A temporary (incognito) conversation carries an explicit no-persistence
+ * expectation that outlives this single request — writing its title prompt
+ * into the shared exact-response cache, even scoped to this user, would break
+ * that expectation for a TTL well past the conversation's own lifetime.
+ */
+async function isTemporaryConversation(
+  db: ChatDb,
+  conversationId: string,
+  userId: string,
+): Promise<boolean> {
+  const [row] = await db.query<{ is_temporary: boolean }>(
+    'select is_temporary from web_conversations where id = $1 and user_id = $2 limit 1',
+    [conversationId, userId],
+  );
+  return row?.is_temporary === true;
+}
+
 async function generateAndPersistTitle(input: ScheduleTitleGenerationInput): Promise<void> {
   const source = input.content.trim().slice(0, MAX_SOURCE_CHARS);
   if (!source) return;
@@ -151,23 +175,73 @@ async function generateAndPersistTitle(input: ScheduleTitleGenerationInput): Pro
       ? 'legacy-web'
       : 'openai-passthrough';
 
+  const cacheFields: ExactResponseCacheKeyFields = {
+    callType: 'conversation-title-generation',
+    tenantId: input.userId,
+    privacyClass: 'user_private',
+    modelId: route.providerModelId,
+    route: route.provider,
+    systemPrompt: TITLE_SYSTEM_PROMPT,
+    input: source,
+    temperature: 0,
+    responseFormat: 'text',
+  };
+  const cacheBypass = await isTemporaryConversation(input.db, input.conversationId, input.userId);
+  const cacheLookup = await lookupExactResponseCache(cacheFields, { bypass: cacheBypass });
+
   let title: string | null;
-  try {
-    const adapter = buildServerProviderAdapter(route.provider);
-    const response = await drainToLlmResponse(
-      adapter.stream(chatRequest, new AbortController().signal),
-      route.modelKey,
-      (chunk) => toGenericUpstreamError(route.provider, chunk),
-      wireMode,
-    );
-    title = sanitizeGeneratedTitle(response.content);
-  } catch (error) {
-    logger.warn(
-      { error, conversationId: input.conversationId, provider: route.provider },
-      '[conversation-title] generation failed; keeping the truncated title',
-    );
-    return;
+  if (cacheLookup.outcome === 'hit' && cacheLookup.entry) {
+    title = sanitizeGeneratedTitle(cacheLookup.entry.content);
+  } else {
+    try {
+      const adapter = buildServerProviderAdapter(route.provider);
+      const response = await drainToLlmResponse(
+        adapter.stream(chatRequest, new AbortController().signal),
+        route.modelKey,
+        (chunk) => toGenericUpstreamError(route.provider, chunk),
+        wireMode,
+      );
+      title = sanitizeGeneratedTitle(response.content);
+      await storeExactResponseCache(
+        cacheFields,
+        {
+          content: response.content,
+          usage: {
+            promptTokens: response.promptTokens,
+            completionTokens: response.completionTokens,
+            totalTokens: response.totalTokens,
+            ...(response.reasoningOutputTokens !== undefined
+              ? { reasoningOutputTokens: response.reasoningOutputTokens }
+              : {}),
+            ...(response.cacheCreationInputTokens !== undefined
+              ? { cacheCreationInputTokens: response.cacheCreationInputTokens }
+              : {}),
+            ...(response.cacheCreation1hInputTokens !== undefined
+              ? { cacheCreation1hInputTokens: response.cacheCreation1hInputTokens }
+              : {}),
+            ...(response.cachedInputTokens !== undefined
+              ? { cachedInputTokens: response.cachedInputTokens }
+              : {}),
+          },
+        },
+        { bypass: cacheBypass },
+      );
+    } catch (error) {
+      logger.warn(
+        { error, conversationId: input.conversationId, provider: route.provider },
+        '[conversation-title] generation failed; keeping the truncated title',
+      );
+      return;
+    }
   }
+  logger.info(
+    {
+      conversationId: input.conversationId,
+      mechanism: EXACT_RESPONSE_CACHE_MECHANISM,
+      cacheOutcome: cacheLookup.outcome,
+    },
+    '[conversation-title] exact-response cache outcome',
+  );
   if (!title) return;
 
   try {
