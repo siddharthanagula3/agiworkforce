@@ -1,8 +1,8 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { listCanonicalModels, resolveEffectiveModelPricing } from '@agiworkforce/types';
 
-import { LLMCostCalculator } from '../llm-cost-calculator';
+import { LLMCostCalculator, setRouteRegistryPricingLookup } from '../llm-cost-calculator';
 
 vi.mock('@agiworkforce/types', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@agiworkforce/types')>();
@@ -514,5 +514,174 @@ describe('LLMCostCalculator — cache-write billing', () => {
       PRICED_ON,
     );
     expect(cents).toBe(1175);
+  });
+});
+
+describe('LLMCostCalculator — route-aware pricing fallback tiers', () => {
+  const PRICED_ON = new Date('2026-09-01T00:00:00.000Z');
+  const ROUTE_ID = 'open_router/fixture-anthropic-standard';
+
+  afterEach(() => {
+    setRouteRegistryPricingLookup(null);
+  });
+
+  it('prices by routeId when the registry exposes route pricing, ahead of canonical model pricing', () => {
+    setRouteRegistryPricingLookup({
+      getRoutePricing: (routeId) =>
+        routeId === ROUTE_ID
+          ? {
+              provider: 'open_router',
+              isDefault: false,
+              inputPerMillion: 1,
+              outputPerMillion: 2,
+              cacheReadPerMillion: 0.1,
+              cacheWritePerMillion: 1.5,
+              cacheWrite1hPerMillion: null,
+            }
+          : null,
+    });
+
+    const pricing = LLMCostCalculator.getPricing(
+      'open_router',
+      STABLE_ANTHROPIC_MODEL,
+      PRICED_ON,
+      0,
+      ROUTE_ID,
+    );
+
+    expect(pricing).toEqual({
+      inputCostPer1MTokens: 1,
+      outputCostPer1MTokens: 2,
+      cachedInputCostPer1MTokens: 0.1,
+      cachedWriteCostPer1MTokens: 1.5,
+      cachedWrite1hCostPer1MTokens: undefined,
+      cacheTokensDisjointFromInput: false,
+    });
+  });
+
+  it('falls back to provider-specific registry pricing when no route pricing matches', () => {
+    setRouteRegistryPricingLookup({
+      getRoutePricingForModel: (modelId) =>
+        modelId === STABLE_ANTHROPIC_MODEL
+          ? [
+              {
+                provider: 'open_router',
+                isDefault: true,
+                inputPerMillion: 2.5,
+                outputPerMillion: 12,
+                cacheReadPerMillion: null,
+                cacheWritePerMillion: null,
+                cacheWrite1hPerMillion: null,
+              },
+            ]
+          : [],
+    });
+
+    const pricing = LLMCostCalculator.getPricing('open_router', STABLE_ANTHROPIC_MODEL, PRICED_ON);
+
+    expect(pricing.inputCostPer1MTokens).toBe(2.5);
+    expect(pricing.outputCostPer1MTokens).toBe(12);
+  });
+
+  it('falls back to canonical model pricing when the registry exposes neither lookup', () => {
+    const pricing = LLMCostCalculator.getPricing(
+      'open_router',
+      STABLE_ANTHROPIC_MODEL,
+      PRICED_ON,
+      0,
+      ROUTE_ID,
+    );
+
+    expect(pricing.inputCostPer1MTokens).toBe(3);
+    expect(pricing.outputCostPer1MTokens).toBe(15);
+  });
+
+  it('falls back to canonical model pricing when a matched route sheet has no usable price', () => {
+    setRouteRegistryPricingLookup({
+      getRoutePricing: (routeId) =>
+        routeId === ROUTE_ID
+          ? {
+              provider: 'open_router',
+              isDefault: false,
+              inputPerMillion: null,
+              outputPerMillion: null,
+              cacheReadPerMillion: null,
+              cacheWritePerMillion: null,
+              cacheWrite1hPerMillion: null,
+            }
+          : null,
+    });
+
+    const pricing = LLMCostCalculator.getPricing(
+      'open_router',
+      STABLE_ANTHROPIC_MODEL,
+      PRICED_ON,
+      0,
+      ROUTE_ID,
+    );
+
+    expect(pricing.inputCostPer1MTokens).toBe(3);
+    expect(pricing.outputCostPer1MTokens).toBe(15);
+  });
+
+  it('prices cache read and cache write tokens with the route rates, not the vendor list price', () => {
+    setRouteRegistryPricingLookup({
+      getRoutePricing: (routeId) =>
+        routeId === ROUTE_ID
+          ? {
+              provider: 'anthropic',
+              isDefault: false,
+              inputPerMillion: 1,
+              outputPerMillion: 5,
+              cacheReadPerMillion: 0.05,
+              cacheWritePerMillion: 2,
+              cacheWrite1hPerMillion: null,
+            }
+          : null,
+    });
+
+    const cents = LLMCostCalculator.calculateCost(
+      'open_router',
+      STABLE_ANTHROPIC_MODEL,
+      {
+        promptTokens: 1_000_000,
+        completionTokens: 0,
+        totalTokens: 1_000_000,
+        cacheReadInputTokens: 1_000_000,
+        cacheCreationInputTokens: 1_000_000,
+      },
+      PRICED_ON,
+      ROUTE_ID,
+    );
+
+    expect(cents).toBe(305);
+  });
+
+  it('ignores route pricing for a routeId the registry does not recognize', () => {
+    setRouteRegistryPricingLookup({
+      getRoutePricing: (routeId) =>
+        routeId === ROUTE_ID
+          ? {
+              provider: 'open_router',
+              isDefault: false,
+              inputPerMillion: 1,
+              outputPerMillion: 2,
+              cacheReadPerMillion: null,
+              cacheWritePerMillion: null,
+              cacheWrite1hPerMillion: null,
+            }
+          : null,
+    });
+
+    const pricing = LLMCostCalculator.getPricing(
+      'anthropic',
+      STABLE_ANTHROPIC_MODEL,
+      PRICED_ON,
+      0,
+      'anthropic/some-other-route',
+    );
+
+    expect(pricing.inputCostPer1MTokens).toBe(3);
+    expect(pricing.outputCostPer1MTokens).toBe(15);
   });
 });
