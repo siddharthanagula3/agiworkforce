@@ -32,7 +32,10 @@ import {
 } from '@/lib/services/free-trial-service';
 import { LLMCostCalculator } from '@/lib/services/llm-cost-calculator';
 import { selectCheapestRequestFallback } from '@/lib/services/request-cost-fallback';
-import { resolveProviderFromModel } from '@/lib/services/provider-adapter-service';
+import {
+  listAvailableManagedProviderIds,
+  resolveProviderFromModel,
+} from '@/lib/services/provider-adapter-service';
 import { evaluateModelAccessForOrganization } from '@/lib/services/model-policy-gate';
 import { readModelPolicy } from '@/lib/services/model-policy-service';
 import {
@@ -1336,6 +1339,7 @@ export function resolveWebCloudModelRoute(
     runtimeState?: RoutingRuntimeState | null;
     preferredRouteId?: string | null;
   },
+  availableProviderIds?: ReadonlySet<string>,
 ) {
   return resolveAutoRoute({
     selection: model,
@@ -1356,6 +1360,7 @@ export function resolveWebCloudModelRoute(
     ...(usage?.taskFamily !== undefined ? { taskFamily: usage.taskFamily } : {}),
     ...(routeHealth?.runtimeState ? { runtimeState: routeHealth.runtimeState } : {}),
     ...(routeHealth?.preferredRouteId ? { preferredRouteId: routeHealth.preferredRouteId } : {}),
+    ...(availableProviderIds && availableProviderIds.size > 0 ? { availableProviderIds } : {}),
   });
 }
 
@@ -2262,6 +2267,7 @@ export async function processRequest(
       ? getServedRouteAffinity(chatRequest.conversation_id)
       : Promise.resolve(null),
   ]);
+  const availableProviderIds = listAvailableManagedProviderIds();
 
   const baseRouteDecision = resolveWebCloudModelRoute(
     chatRequest.model,
@@ -2273,6 +2279,7 @@ export async function processRequest(
       runtimeState: baseRouteHealthState,
       ...(routeAffinity ? { preferredRouteId: routeAffinity.routeId } : {}),
     },
+    availableProviderIds,
   );
 
   // The free lane is a stage OVER this resolver's output, so it re-runs the same
@@ -2301,6 +2308,7 @@ export async function processRequest(
             routeResolutionNowMs,
           ),
         },
+        availableProviderIds,
       )
     : null;
   const freeLaneNowMs = Date.now();
@@ -2647,7 +2655,9 @@ export async function processRequest(
   let usedFallback = false;
   let fallbackReason: string | undefined;
 
-  let provider = routeDecision.provider;
+  let provider = resolveProviderFromModel(chatRequest.model, routeDecision.routeId, {
+    trustMode: MANAGED_WEB_CLOUD_TRUST_MODE,
+  });
 
   const resolvedSlot: RoutingSlot | null = getSlotForModel(chatRequest.model);
   const isFlagshipRequest =
