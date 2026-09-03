@@ -16,6 +16,28 @@ const RLS_TABLES = [
   'chat_messages',
   'device_pairings',
   'agent_approval_requests',
+  'web_conversations',
+  'web_artifacts',
+  'user_memories',
+  'media_assets',
+  'user_projects',
+  'scheduled_tasks',
+  'cloud_agent_runs',
+  'user_connectors',
+  'user_custom_connectors',
+  'api_keys',
+  'managed_usage_requests',
+  'usage_events',
+  'user_two_factor',
+  'account_sessions',
+  'notifications',
+  'chat_folders',
+  'conversation_tags',
+  'message_bookmarks',
+  'message_reactions',
+  'user_shortcuts',
+  'email_preferences',
+  'search_history',
 ];
 
 function parseTarget(argv) {
@@ -82,6 +104,50 @@ async function cleanup(client, fixture) {
   await client.query('delete from public.device_pairings where user_id = any($1)', [fixture.users]);
   await client.query('delete from public.chat_messages where user_id = any($1)', [fixture.users]);
   await client.query('delete from public.conversations where user_id = any($1)', [fixture.users]);
+  await client.query('delete from public.conversation_tags where user_id = any($1)', [
+    fixture.users,
+  ]);
+  await client.query('delete from public.message_bookmarks where user_id = any($1)', [
+    fixture.users,
+  ]);
+  await client.query('delete from public.message_reactions where user_id = any($1)', [
+    fixture.users,
+  ]);
+  await client.query('delete from public.web_artifacts where user_id = any($1)', [fixture.users]);
+  await client.query('delete from public.web_messages where conversation_id = any($1::uuid[])', [
+    fixture.webConversations,
+  ]);
+  await client.query('delete from public.web_conversations where id = any($1::uuid[])', [
+    fixture.webConversations,
+  ]);
+  await client.query('delete from public.user_memories where user_id = any($1)', [fixture.users]);
+  await client.query('delete from public.media_assets where user_id = any($1)', [fixture.users]);
+  await client.query('delete from public.user_projects where user_id = any($1)', [fixture.users]);
+  await client.query('delete from public.scheduled_tasks where user_id = any($1)', [fixture.users]);
+  await client.query('delete from public.cloud_agent_runs where user_id = any($1)', [
+    fixture.users,
+  ]);
+  await client.query('delete from public.user_connectors where user_id = any($1)', [fixture.users]);
+  await client.query('delete from public.user_custom_connectors where user_id = any($1)', [
+    fixture.users,
+  ]);
+  await client.query('delete from public.api_keys where user_id = any($1)', [fixture.users]);
+  await client.query('delete from public.managed_usage_requests where user_id = any($1)', [
+    fixture.users,
+  ]);
+  await client.query('delete from public.usage_events where user_id = any($1)', [fixture.users]);
+  await client.query('delete from public.user_two_factor where user_id = any($1)', [fixture.users]);
+  await client.query('delete from public.account_sessions where user_id = any($1)', [
+    fixture.users,
+  ]);
+  await client.query('delete from public.notifications where user_id = any($1)', [fixture.users]);
+  await client.query('delete from public.chat_folders where user_id = any($1)', [fixture.users]);
+  await client.query('delete from public.user_shortcuts where user_id = any($1)', [fixture.users]);
+  await client.query('delete from public.email_preferences where user_id = any($1)', [
+    fixture.users,
+  ]);
+  await client.query('delete from public.search_history where user_id = any($1)', [fixture.users]);
+  await client.query('delete from public.profiles where id = any($1)', [fixture.users]);
   await client.query('delete from public.organizations where id = any($1::uuid[])', [
     fixture.organizations,
   ]);
@@ -171,6 +237,119 @@ async function seed(client, fixture) {
        values ($1, $2, 'probe-agent', 'probe-tool', '{}'::jsonb)`,
       [userId, randomUUID()],
     );
+
+    const webConversationId = fixture.webConversations[index];
+    const webMessageId = fixture.webMessages[index];
+    const requestHash = '0'.repeat(64);
+
+    await client.query(`insert into public.profiles (id, email) values ($1, $2)`, [
+      userId,
+      `${suffix}@rls-probe.invalid`,
+    ]);
+    await client.query(
+      `insert into public.web_conversations (id, user_id, title) values ($1, $2, 'RLS probe')`,
+      [webConversationId, userId],
+    );
+    await client.query(
+      `insert into public.web_messages (id, conversation_id, role, content)
+       values ($1, $2, 'user', 'RLS probe')`,
+      [webMessageId, webConversationId],
+    );
+    await client.query(
+      `insert into public.web_artifacts
+         (id, user_id, conversation_id, artifact_type, content)
+       values ($1, $2, $3, 'code', 'RLS probe')`,
+      [randomUUID(), userId, webConversationId],
+    );
+    await client.query(
+      `insert into public.user_memories (user_id, content) values ($1, 'RLS probe')`,
+      [userId],
+    );
+    await client.query(
+      `insert into public.media_assets (user_id, kind, mime_type, storage_url)
+       values ($1, 'image', 'image/png', 'https://rls-probe.invalid/asset.png')`,
+      [userId],
+    );
+    await client.query(
+      `insert into public.user_projects (user_id, name) values ($1, 'RLS probe')`,
+      [userId],
+    );
+    await client.query(
+      `insert into public.scheduled_tasks (user_id, name, schedule_type, action_type)
+       values ($1, 'RLS probe', 'once', 'notification')`,
+      [userId],
+    );
+    await client.query(
+      `insert into public.cloud_agent_runs
+         (user_id, request_id, origin_surface, work_mode, provider, model)
+       values ($1, $2, 'web', 'chat', 'probe', 'probe-model')`,
+      [userId, `rls-probe-${suffix}`],
+    );
+    await client.query(
+      `insert into public.user_connectors (user_id, connector_id, auth_type)
+       values ($1, 'rls-probe-connector', 'api_key')`,
+      [userId],
+    );
+    await client.query(
+      `insert into public.user_custom_connectors (user_id, name, url, transport, short_id)
+       values ($1, 'RLS probe', 'https://rls-probe.invalid/mcp', 'sse', $2)`,
+      [userId, suffix],
+    );
+    await client.query(
+      `insert into public.api_keys (user_id, name, key_hash, key_prefix)
+       values ($1, 'RLS probe', 'rls-probe-hash', 'rlsp')`,
+      [userId],
+    );
+    await client.query(
+      `insert into public.managed_usage_requests
+         (user_id, idempotency_key, request_hash, provider, model,
+          estimated_cost_cents, lease_token, lease_expires_at)
+       values ($1, $2, $3, 'probe', 'probe-model', 10, 'rls-probe-lease', now() + interval '1 hour')`,
+      [userId, `rls-probe-${suffix}`, requestHash],
+    );
+    await client.query(
+      `insert into public.usage_events (user_id, event_type) values ($1, 'rls_probe')`,
+      [userId],
+    );
+    await client.query(
+      `insert into public.user_two_factor (user_id, totp_secret_enc) values ($1, 'rls-probe-secret')`,
+      [userId],
+    );
+    await client.query(`insert into public.account_sessions (user_id) values ($1)`, [userId]);
+    await client.query(
+      `insert into public.notifications (user_id, title, message)
+       values ($1, 'RLS probe', 'RLS probe fixture')`,
+      [userId],
+    );
+    await client.query(`insert into public.chat_folders (user_id, name) values ($1, 'RLS probe')`, [
+      userId,
+    ]);
+    await client.query(
+      `insert into public.conversation_tags (conversation_id, user_id, tag)
+       values ($1, $2, 'rls-probe')`,
+      [webConversationId, userId],
+    );
+    await client.query(
+      `insert into public.message_bookmarks (message_id, user_id) values ($1, $2)`,
+      [webMessageId, userId],
+    );
+    await client.query(
+      `insert into public.message_reactions (message_id, user_id, emoji) values ($1, $2, '👍')`,
+      [webMessageId, userId],
+    );
+    await client.query(
+      `insert into public.user_shortcuts (user_id, title, content)
+       values ($1, 'RLS probe', 'RLS probe fixture')`,
+      [userId],
+    );
+    await client.query(`insert into public.email_preferences (user_id, email) values ($1, $2)`, [
+      userId,
+      `rls-probe-${suffix}@rls-probe.invalid`,
+    ]);
+    await client.query(`insert into public.search_history (user_id, query) values ($1, $2)`, [
+      userId,
+      'rls probe query',
+    ]);
   }
 }
 
@@ -268,6 +447,8 @@ async function main() {
     users: [`rls_probe_a_${runId}`, `rls_probe_b_${runId}`],
     organizations: [randomUUID(), randomUUID()],
     conversations: [randomUUID(), randomUUID()],
+    webConversations: [randomUUID(), randomUUID()],
+    webMessages: [randomUUID(), randomUUID()],
     suffixes: [`a-${runId}`, `b-${runId}`],
   };
   const failures = [];
