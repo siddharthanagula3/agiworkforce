@@ -130,7 +130,8 @@ export async function* translateOpenAIResponsesStream(
     error: false,
   };
   let stopEmitted = false;
-  let searchResultEmitted = false;
+  const emittedWebSearchResultIds = new Set<string>();
+  let textStarted = false;
   let diagnosticsEmitted = false;
   let visibleText = '';
 
@@ -261,32 +262,36 @@ export async function* translateOpenAIResponsesStream(
     return state;
   }
 
-  function buildWebSearchResult():
-    | Extract<StreamChunk, { type: 'server-tool-result' }>
-    | undefined {
-    if (searchResultEmitted || webSearches.size === 0) return undefined;
-    searchResultEmitted = true;
-    const states = [...webSearches.values()];
-    const first = states[0];
-    if (!first) return undefined;
-    const urls = [...new Set(states.flatMap((state) => [...state.sources]))];
-    const content = urls.map((url) => ({
+  function webSearchResultForState(
+    state: WebSearchState,
+  ): Extract<StreamChunk, { type: 'server-tool-result' }> | undefined {
+    if (emittedWebSearchResultIds.has(state.id)) return undefined;
+    if (state.status !== 'completed' && state.status !== 'failed') return undefined;
+    emittedWebSearchResultIds.add(state.id);
+    const content = [...state.sources].map((url) => ({
       type: 'web_search_result',
       url,
       title: citationTitles.get(url) ?? '',
     }));
     return {
       type: 'server-tool-result',
-      toolUseId: first.id,
+      toolUseId: state.id,
       payload: {
         type: 'web_search_tool_result',
-        tool_use_id: first.id,
+        tool_use_id: state.id,
         content,
       },
-      ...(content.length === 0 && states.every((state) => state.status === 'failed')
-        ? { isError: true }
-        : {}),
+      ...(content.length === 0 && state.status === 'failed' ? { isError: true } : {}),
     };
+  }
+
+  function flushWebSearchResults(): Extract<StreamChunk, { type: 'server-tool-result' }>[] {
+    const chunks: Extract<StreamChunk, { type: 'server-tool-result' }>[] = [];
+    for (const state of webSearches.values()) {
+      const chunk = webSearchResultForState(state);
+      if (chunk) chunks.push(chunk);
+    }
+    return chunks;
   }
 
   for await (const event of events) {
@@ -312,6 +317,13 @@ export async function* translateOpenAIResponsesStream(
       case 'response.output_text.delta': {
         const ev = event as Extract<ResponsesStreamEvent, { type: 'response.output_text.delta' }>;
         if (ev.delta) {
+          if (!textStarted) {
+            textStarted = true;
+            for (const searchResult of flushWebSearchResults()) {
+              emitted.serverTool = true;
+              yield searchResult;
+            }
+          }
           const key = `${ev.output_index}:${ev.content_index}`;
           emittedText.set(key, `${emittedText.get(key) ?? ''}${ev.delta}`);
           visibleText += ev.delta;
@@ -329,6 +341,13 @@ export async function* translateOpenAIResponsesStream(
       case 'response.refusal.delta': {
         const ev = event as Extract<ResponsesStreamEvent, { type: 'response.refusal.delta' }>;
         if (ev.delta) {
+          if (!textStarted) {
+            textStarted = true;
+            for (const searchResult of flushWebSearchResults()) {
+              emitted.serverTool = true;
+              yield searchResult;
+            }
+          }
           const key = `${ev.output_index}:${ev.content_index}`;
           emittedText.set(key, `${emittedText.get(key) ?? ''}${ev.delta}`);
           visibleText += ev.delta;
@@ -442,8 +461,7 @@ export async function* translateOpenAIResponsesStream(
             yield chunk;
           }
         }
-        const searchResult = buildWebSearchResult();
-        if (searchResult) {
+        for (const searchResult of flushWebSearchResults()) {
           emitted.serverTool = true;
           yield searchResult;
         }
@@ -500,8 +518,7 @@ export async function* translateOpenAIResponsesStream(
       }
       case 'response.incomplete': {
         const ev = event as Extract<ResponsesStreamEvent, { type: 'response.incomplete' }>;
-        const searchResult = buildWebSearchResult();
-        if (searchResult) {
+        for (const searchResult of flushWebSearchResults()) {
           emitted.serverTool = true;
           yield searchResult;
         }
@@ -515,8 +532,7 @@ export async function* translateOpenAIResponsesStream(
       }
       case 'response.failed': {
         const ev = event as Extract<ResponsesStreamEvent, { type: 'response.failed' }>;
-        const searchResult = buildWebSearchResult();
-        if (searchResult) {
+        for (const searchResult of flushWebSearchResults()) {
           emitted.serverTool = true;
           yield searchResult;
         }
@@ -534,8 +550,7 @@ export async function* translateOpenAIResponsesStream(
       case 'error':
       case 'response.error': {
         const ev = event as Extract<ResponsesStreamEvent, { type: 'error' | 'response.error' }>;
-        const searchResult = buildWebSearchResult();
-        if (searchResult) {
+        for (const searchResult of flushWebSearchResults()) {
           emitted.serverTool = true;
           yield searchResult;
         }
@@ -555,8 +570,7 @@ export async function* translateOpenAIResponsesStream(
   }
 
   if (!stopEmitted) {
-    const searchResult = buildWebSearchResult();
-    if (searchResult) {
+    for (const searchResult of flushWebSearchResults()) {
       emitted.serverTool = true;
       yield searchResult;
     }

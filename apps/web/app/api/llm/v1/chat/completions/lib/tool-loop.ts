@@ -1085,6 +1085,7 @@ export async function collectProviderStream(stream: ReadableStream): Promise<{
   const toolCallAccum: Map<number, { id: string; name: string; argsJson: string }> = new Map();
   const pendingServerWebSearchTools: Array<{
     toolCallId: string;
+    providerToolUseId?: string;
     name: string;
     startedAt: number;
   }> = [];
@@ -1133,8 +1134,13 @@ export async function collectProviderStream(stream: ReadableStream): Promise<{
             isWebSearchTool(toolStatusName)
           ) {
             const toolCallId = crypto.randomUUID();
+            const providerToolUseId =
+              typeof toolStatusObj['tool_use_id'] === 'string'
+                ? toolStatusObj['tool_use_id']
+                : undefined;
             pendingServerWebSearchTools.push({
               toolCallId,
+              providerToolUseId,
               name: toolStatusName,
               startedAt: Date.now(),
             });
@@ -1144,14 +1150,24 @@ export async function collectProviderStream(stream: ReadableStream): Promise<{
 
         let serverToolResults: ServerToolResultSignal[] | undefined;
         const searchResultsDelta = event?.choices?.[0]?.delta?.x_search_results;
-        const searchResultsContent = (searchResultsDelta as Record<string, unknown> | undefined)?.[
-          'content'
-        ];
+        const searchResultsObj = searchResultsDelta as Record<string, unknown> | undefined;
+        const searchResultsContent = searchResultsObj?.['content'];
+        const searchResultsToolUseId =
+          typeof searchResultsObj?.['tool_use_id'] === 'string'
+            ? searchResultsObj['tool_use_id']
+            : undefined;
         if (Array.isArray(searchResultsContent) && pendingServerWebSearchTools.length > 0) {
           const now = Date.now();
           const sources = serverToolResultSources(searchResultsContent);
-          const resolved = pendingServerWebSearchTools.splice(0);
-          const attributed = resolved[0];
+          const matchIndex = searchResultsToolUseId
+            ? pendingServerWebSearchTools.findIndex(
+                (pending) => pending.providerToolUseId === searchResultsToolUseId,
+              )
+            : -1;
+          const [attributed] = pendingServerWebSearchTools.splice(
+            matchIndex >= 0 ? matchIndex : 0,
+            1,
+          );
           if (attributed) {
             serverToolResults = [
               {
@@ -1160,12 +1176,6 @@ export async function collectProviderStream(stream: ReadableStream): Promise<{
                 sources,
                 elapsedMs: Math.max(0, now - attributed.startedAt),
               },
-              ...resolved.slice(1).map((pending) => ({
-                toolCallId: pending.toolCallId,
-                name: pending.name,
-                sources: [] as FetchedSource[],
-                elapsedMs: Math.max(0, now - pending.startedAt),
-              })),
             ];
           }
         }
