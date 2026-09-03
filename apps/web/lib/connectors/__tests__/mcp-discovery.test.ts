@@ -208,4 +208,77 @@ describe('discovered MCP OAuth with the v2 SDK', () => {
     expect(result.status).toBe('failed');
     expect(fetch).not.toHaveBeenCalled();
   });
+
+  it('starts a dynamic-registration authorization against a local dev redirect base URL', async () => {
+    vi.stubEnv('CONNECTOR_OAUTH_REDIRECT_BASE_URL', 'http://localhost:3100');
+    registrationMethod = 'dynamic';
+
+    const start = await beginMcpAuthorization({
+      userId: 'user-1',
+      connectorId: 'stripe',
+      mcpUrl: MCP_URL,
+      returnPath: '/connectors',
+      scope: 'read',
+    });
+
+    expect(start.status).toBe('redirect');
+    if (start.status !== 'redirect') throw new Error(JSON.stringify(start));
+    const redirect = new URL(start.authorizationUrl);
+    expect(redirect.searchParams.get('redirect_uri')).toBe(
+      'http://localhost:3100/api/connectors/oauth/callback',
+    );
+    expect(redirect.searchParams.get('client_id')).toBe('registered-client');
+    expect(redirect.searchParams.get('code_challenge_method')).toBe('S256');
+    expect(redirect.searchParams.get('state')).toBe(start.state);
+  });
+
+  it('falls back a CIMD-preferring provider to dynamic registration against a local dev redirect base URL', async () => {
+    vi.stubEnv('CONNECTOR_OAUTH_REDIRECT_BASE_URL', 'http://localhost:3100');
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
+        const url = String(input);
+        if (url === 'https://mcp.example.test/.well-known/oauth-protected-resource/mcp') {
+          return Response.json({ resource: MCP_URL, authorization_servers: [currentIssuer] });
+        }
+        if (url === `${currentIssuer}/.well-known/oauth-authorization-server`) {
+          return Response.json({
+            issuer: currentIssuer,
+            authorization_endpoint: `${currentIssuer}/authorize`,
+            token_endpoint: `${currentIssuer}/token`,
+            registration_endpoint: `${currentIssuer}/register`,
+            response_types_supported: ['code'],
+            grant_types_supported: ['authorization_code', 'refresh_token'],
+            code_challenge_methods_supported: ['S256'],
+            token_endpoint_auth_methods_supported: ['none'],
+            client_id_metadata_document_supported: true,
+          });
+        }
+        if (url === `${currentIssuer}/register`) {
+          return Response.json({
+            ...JSON.parse(String(init?.body)),
+            client_id: 'registered-client',
+          });
+        }
+        throw new Error(`Unexpected OAuth request: ${url}`);
+      }),
+    );
+
+    const start = await beginMcpAuthorization({
+      userId: 'user-1',
+      connectorId: 'notion',
+      mcpUrl: MCP_URL,
+      returnPath: '/connectors',
+    });
+
+    expect(start.status).toBe('redirect');
+    if (start.status !== 'redirect') throw new Error(JSON.stringify(start));
+    const redirect = new URL(start.authorizationUrl);
+    expect(redirect.searchParams.get('client_id')).toBe('registered-client');
+    expect(redirect.searchParams.get('redirect_uri')).toBe(
+      'http://localhost:3100/api/connectors/oauth/callback',
+    );
+    expect(redirect.searchParams.get('code_challenge')).toBeTruthy();
+    expect(redirect.searchParams.get('state')).toBe(start.state);
+  });
 });
