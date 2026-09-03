@@ -3,6 +3,7 @@ import { act, render, screen, fireEvent, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event';
 import {
   ChatComposerNew,
+  COMPOSER_RESEARCH_MIN_CONTEXT_WINDOW,
   IMAGE_MODELS,
   VIDEO_MODELS,
   type ComposerProjectPicker,
@@ -900,20 +901,27 @@ describe('ChatComposerNew', () => {
     expect(screen.getByRole('button', { name: /create office files/i })).toBeEnabled();
   });
 
-  it('explains unavailable Deep Research without guessing provider families', () => {
-    const modelWithoutResearch = getSelectableModels().find(
-      (model) => model.capabilities.research !== true,
-    );
-    expect(modelWithoutResearch, 'catalog must expose a non-research model').toBeDefined();
-    useModelStore.getState().setSelectedModelId(modelWithoutResearch!.id);
+  it('enables Deep Research for a tool-capable model the catalog marks research false', () => {
+    const toolsOnlyResearchModel = useModelStore
+      .getState()
+      .availableModels.map((model) => getModelMetadataById(model.id))
+      .filter((model): model is NonNullable<typeof model> => Boolean(model))
+      .find(
+        (model) =>
+          model.capabilities.research !== true &&
+          model.capabilities.tools === true &&
+          (model.contextWindow ?? 0) >= COMPOSER_RESEARCH_MIN_CONTEXT_WINDOW,
+      );
+    expect(
+      toolsOnlyResearchModel,
+      'catalog must expose a reachable tool-capable model',
+    ).toBeDefined();
+    useModelStore.getState().setSelectedModelId(toolsOnlyResearchModel!.id);
 
     render(<ChatComposerNew onSend={vi.fn()} />);
     fireEvent.click(screen.getByRole('button', { name: /add attachments and tools/i }));
 
-    expect(screen.getByRole('button', { name: /deep research/i })).toHaveAttribute(
-      'title',
-      "Deep Research isn't available for this model. Choose Auto or a model that supports Deep Research.",
-    );
+    expect(screen.getByRole('button', { name: /deep research/i })).toBeEnabled();
   });
 
   it('shows the enabled + menu option beside the menu button', () => {
