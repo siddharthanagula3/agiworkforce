@@ -50,6 +50,9 @@ vi.mock('@/lib/server/neon-db', () => ({
       if (typeof sql === 'string' && sql.includes('account_status')) {
         return Promise.resolve([]);
       }
+      if (typeof sql === 'string' && sql.includes('user_settings')) {
+        return Promise.resolve([]);
+      }
       return mockQuery(sql, params);
     },
     execute: (...args: unknown[]) => mockExecute(...args),
