@@ -11,7 +11,6 @@ import {
   Stack,
 } from '@/features/marketing/components/system';
 import { FactGrid, PageHero } from '@/features/marketing/components/pages/surfaces/shared';
-import { NoteList } from '@/features/marketing/components/pages/company/shared';
 import {
   CONTACT_EMAIL,
   CONTACT_SUBJECTS,
@@ -150,49 +149,59 @@ const AT_REST: { label: string; value: string }[] = [
   },
 ];
 
-const ACCESS = [
+const ACCESS: { label: string; value: string }[] = [
   {
-    title: 'Sessions and protected routes',
-    body: 'Authentication is handled by Clerk. Six route groups (chat, library, schedules, settings, billing, and admin) are checked at the edge before the page renders; a request without a session cookie is redirected to login carrying its intended destination, so a protected page never renders and then complains.',
+    label: 'Sessions and protected routes',
+    value:
+      'Authentication is handled by Clerk. Six route groups (chat, library, schedules, settings, billing, and admin) are checked at the edge before the page renders; a request without a session cookie is redirected to login carrying its intended destination, so a protected page never renders and then complains.',
   },
   {
-    title: 'Administrative access',
-    body: 'Admin routes require an explicit admin or owner role read from the Clerk identity, not from anything the browser sends. There is no client-side flag that grants it.',
+    label: 'Administrative access',
+    value:
+      'Admin routes require an explicit admin or owner role read from the Clerk identity, not from anything the browser sends. There is no client-side flag that grants it.',
   },
   {
-    title: 'Cross-site request forgery',
-    body: 'State-changing requests carry an HMAC-SHA256 token compared in constant time. The signing secret must be at least 32 bytes or the process refuses it. A previous secret can be honoured during a rotation window and then removed. If no secret is configured, a random one is generated so every token fails, the system fails closed, not open.',
+    label: 'Cross-site request forgery',
+    value:
+      'State-changing requests carry an HMAC-SHA256 token compared in constant time. The signing secret must be at least 32 bytes or the process refuses it. A previous secret can be honoured during a rotation window and then removed. If no secret is configured, a random one is generated so every token fails, the system fails closed, not open.',
   },
   {
-    title: 'Rate limiting and abuse',
-    body: 'Limits are enforced per endpoint through Upstash Redis, which is required at production runtime. The module throws on start if it is not configured. Security-sensitive endpoints are marked fail-closed and reject requests when the limiter is unreachable; a few business-critical paths such as checkout are deliberately fail-open, and are marked as such in the code.',
+    label: 'Rate limiting and abuse',
+    value:
+      'Limits are enforced per endpoint through Upstash Redis, which is required at production runtime. The module throws on start if it is not configured. Security-sensitive endpoints are marked fail-closed and reject requests when the limiter is unreachable; a few business-critical paths such as checkout are deliberately fail-open, and are marked as such in the code.',
   },
 ];
 
-const ISOLATION = [
+const ISOLATION: { label: string; value: string }[] = [
   {
-    title: 'Script injection',
-    body: "Every response carries a Content-Security-Policy built per request with a fresh random nonce. script-src contains no 'unsafe-inline': an injected inline script has no nonce and does not execute. object-src is 'none', base-uri and form-action are 'self', and frame-ancestors is 'none' everywhere except one documented case, owner-scoped PDF preview, which is restricted to PDF responses on an authenticated file route.",
+    label: 'Script injection',
+    value:
+      "Every response carries a Content-Security-Policy built per request with a fresh random nonce. script-src contains no 'unsafe-inline': an injected inline script has no nonce and does not execute. object-src is 'none', base-uri and form-action are 'self', and frame-ancestors is 'none' everywhere except one documented case, owner-scoped PDF preview, which is restricted to PDF responses on an authenticated file route.",
   },
   {
-    title: 'Allowlist integrity',
-    body: 'The third-party origins the policy admits are derived, not pasted. The authentication origin is decoded from the publishable key and rejected unless it is shaped like a hostname; the upload origin is admitted only if the account identifier is exactly 32 hex characters and the bucket name matches a valid bucket shape. A typo in an environment variable therefore cannot widen script-src or connect-src to an arbitrary host, it just drops the origin.',
+    label: 'Allowlist integrity',
+    value:
+      'The third-party origins the policy admits are derived, not pasted. The authentication origin is decoded from the publishable key and rejected unless it is shaped like a hostname; the upload origin is admitted only if the account identifier is exactly 32 hex characters and the bucket name matches a valid bucket shape. A typo in an environment variable therefore cannot widen script-src or connect-src to an arbitrary host, it just drops the origin.',
   },
   {
-    title: 'Model-generated artifacts',
-    body: "Artifacts render on a separate origin with its own policy: default-src 'none', connect-src 'none', frame-src 'self', form-action 'none', base-uri 'none', object-src 'none', Referrer-Policy no-referrer, cross-origin isolation headers, and frame-ancestors pinned to our application hosts. Code in an artifact can paint, but it cannot make a fetch, XHR or WebSocket call (connect-src is 'none'), submit a form, or reach the parent page. It is not fully network-isolated: the policy still permits images and fonts over https and scripts from two pinned CDNs, so an artifact can issue outbound GETs for those resource types. Treat an artifact as sandboxed against interaction with your session, not as an airgap. Where that origin is not configured, artifacts fall back to a same-origin frame WITHOUT allow-same-origin, which is the flag combination that would defeat the sandbox. Scripts inside an HTML artifact do not run unless the artifact is explicitly marked as needing them.",
+    label: 'Model-generated artifacts',
+    value:
+      "Artifacts render on a separate origin with its own policy: default-src 'none', connect-src 'none', frame-src 'self', form-action 'none', base-uri 'none', object-src 'none', Referrer-Policy no-referrer, cross-origin isolation headers, and frame-ancestors pinned to our application hosts. Code in an artifact can paint, but it cannot make a fetch, XHR or WebSocket call (connect-src is 'none'), submit a form, or reach the parent page. It is not fully network-isolated: the policy still permits images and fonts over https and scripts from two pinned CDNs, so an artifact can issue outbound GETs for those resource types. Treat an artifact as sandboxed against interaction with your session, not as an airgap. Where that origin is not configured, artifacts fall back to a same-origin frame WITHOUT allow-same-origin, which is the flag combination that would defeat the sandbox. Scripts inside an HTML artifact do not run unless the artifact is explicitly marked as needing them.",
   },
   {
-    title: 'Server-side request forgery',
-    body: 'Outbound URLs are checked against private, loopback, link-local, and reserved ranges BEFORE the hostname allowlist is consulted, including IPv4-mapped IPv6 forms, so even an over-broad allowlist cannot be steered at cloud metadata at 169.254.169.254 or an internal address. Remote MCP server URLs must be HTTPS, must resolve to a public address, and must not embed credentials. The status page you can read at /status deliberately calls its health checks in-process rather than fetching itself, because building a request URL out of inbound headers is the same class of bug.',
+    label: 'Server-side request forgery',
+    value:
+      'Outbound URLs are checked against private, loopback, link-local, and reserved ranges BEFORE the hostname allowlist is consulted, including IPv4-mapped IPv6 forms, so even an over-broad allowlist cannot be steered at cloud metadata at 169.254.169.254 or an internal address. Remote MCP server URLs must be HTTPS, must resolve to a public address, and must not embed credentials. The status page you can read at /status deliberately calls its health checks in-process rather than fetching itself, because building a request URL out of inbound headers is the same class of bug.',
   },
   {
-    title: 'Hosted code execution',
-    body: 'Managed code execution through E2B is off unless an operator sets an explicit execution flag. Holding an E2B API key does not by itself open the loop. That was a deliberate design decision, so a credential appearing in the environment cannot quietly enable remote execution.',
+    label: 'Hosted code execution',
+    value:
+      'Managed code execution through E2B is off unless an operator sets an explicit execution flag. Holding an E2B API key does not by itself open the loop. That was a deliberate design decision, so a credential appearing in the environment cannot quietly enable remote execution.',
   },
   {
-    title: 'Desktop command execution',
-    body: 'The desktop shell gate classifies a command three ways, most restrictive wins. Commands classified as forbidden never run, even if you approve them. Commands classified as prompt route into the confirmation flow before execution. The classifier combines argv-prefix policy rules with a dangerous-pattern check that catches pipes and shell operators the prefix rules cannot express.',
+    label: 'Desktop command execution',
+    value:
+      'The desktop shell gate classifies a command three ways, most restrictive wins. Commands classified as forbidden never run, even if you approve them. Commands classified as prompt route into the confirmation flow before execution. The classifier combines argv-prefix policy rules with a dangerous-pattern check that catches pipes and shell operators the prefix rules cannot express.',
   },
 ];
 
@@ -257,34 +266,41 @@ const LOGGING: { label: string; value: string }[] = [
   },
 ];
 
-const DELETION = [
+const DELETION: { label: string; value: string }[] = [
   {
-    title: 'The list is enumerated, not implied',
-    body: 'Erasure walks a hardcoded, foreign-key-ordered list of 70 user-scoped tables covering conversations, artifacts, folders, tags, branches, bookmarks, reactions, shares, memories, settings, projects, shortcuts, search history, schedules, connectors, connector permissions, notifications, feedback, support tickets and their replies, API keys, two-factor enrolment, sessions, credits, redemptions, usage and billing records, mobile store transactions, video generation jobs, consent records, data-rights requests, beta applications, email preferences, device registrations, sync data, workspace membership, subscriptions, and finally the profile row. Child tables that cascade are deliberately left out of the list so there is one source of truth, not two.',
+    label: 'The list is enumerated, not implied',
+    value:
+      'Erasure walks a hardcoded, foreign-key-ordered list of 70 user-scoped tables covering conversations, artifacts, folders, tags, branches, bookmarks, reactions, shares, memories, settings, projects, shortcuts, search history, schedules, connectors, connector permissions, notifications, feedback, support tickets and their replies, API keys, two-factor enrolment, sessions, credits, redemptions, usage and billing records, mobile store transactions, video generation jobs, consent records, data-rights requests, beta applications, email preferences, device registrations, sync data, workspace membership, subscriptions, and finally the profile row. Child tables that cascade are deliberately left out of the list so there is one source of truth, not two.',
   },
   {
-    title: 'Bytes before rows',
-    body: 'Stored media objects are deleted from object storage first, and only then are their catalogue rows removed. If an object delete fails, its row is kept so a later run can retry, deleting the row first would destroy the only pointer to a live object and leave it orphaned forever.',
+    label: 'Bytes before rows',
+    value:
+      'Stored media objects are deleted from object storage first, and only then are their catalogue rows removed. If an object delete fails, its row is kept so a later run can retry, deleting the row first would destroy the only pointer to a live object and leave it orphaned forever.',
   },
   {
-    title: 'It refuses to claim success it did not achieve',
-    body: 'The erasure result carries a completeness flag that is true only when every table and every stored object was disposed of. A table that does not exist on a deployment is reported as skipped; a table that errored is reported with its error. Partial erasure does not report as done.',
+    label: 'It refuses to claim success it did not achieve',
+    value:
+      'The erasure result carries a completeness flag that is true only when every table and every stored object was disposed of. A table that does not exist on a deployment is reported as skipped; a table that errored is reported with its error. Partial erasure does not report as done.',
   },
   {
-    title: 'Data before identity',
-    body: 'The scheduled purge erases account data BEFORE deleting the identity record. If erasure fails, you still have a recoverable account rather than orphaned rows with no owner to attach them to.',
+    label: 'Data before identity',
+    value:
+      'The scheduled purge erases account data BEFORE deleting the identity record. If erasure fails, you still have a recoverable account rather than orphaned rows with no owner to attach them to.',
   },
   {
-    title: 'It actually runs',
-    body: 'A cron-authenticated job runs daily at 04:30 UTC and processes up to 25 pending accounts per run. Separate scheduled jobs purge deleted media at 04:00 UTC, temporary chats at 03:00 UTC, and reclaim sandboxes at 05:45 UTC. This is the mechanism behind the 24-hour deletion window in the privacy policy.',
+    label: 'It actually runs',
+    value:
+      'A cron-authenticated job runs daily at 04:30 UTC and processes up to 25 pending accounts per run. Separate scheduled jobs purge deleted media at 04:00 UTC, temporary chats at 03:00 UTC, and reclaim sandboxes at 05:45 UTC. This is the mechanism behind the 24-hour deletion window in the privacy policy.',
   },
   {
-    title: 'Export first, if you want it',
-    body: 'A self-service export endpoint returns your account data as a JSON file download before you delete anything.',
+    label: 'Export first, if you want it',
+    value:
+      'A self-service export endpoint returns your account data as a JSON file download before you delete anything.',
   },
   {
-    title: 'Local mode',
-    body: 'There is nothing for us to delete. Remove the application data directory and the encrypted database goes with it. We never had a copy.',
+    label: 'Local mode',
+    value:
+      'There is nothing for us to delete. Remove the application data directory and the encrypted database goes with it. We never had a copy.',
   },
 ];
 
@@ -482,7 +498,7 @@ export default function SecurityPage() {
             <h2 className="agi-ds-h2" id="agi-security-access-title">
               Access control: who gets in, and what stops them.
             </h2>
-            <NoteList items={ACCESS} />
+            <Ledger caption="Access control" rows={ACCESS} />
           </Stack>
         </Section>
 
@@ -497,7 +513,7 @@ export default function SecurityPage() {
                 as such.
               </Prose>
             </div>
-            <NoteList items={ISOLATION} />
+            <Ledger caption="Execution isolation" rows={ISOLATION} />
           </Stack>
         </Section>
 
@@ -536,7 +552,7 @@ export default function SecurityPage() {
                 fail. Here is the mechanism, in the order it runs.
               </Prose>
             </div>
-            <NoteList items={DELETION} />
+            <Ledger caption="Deletion" rows={DELETION} />
           </Stack>
         </Section>
 
