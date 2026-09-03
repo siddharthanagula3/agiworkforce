@@ -1,4 +1,3 @@
-
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
@@ -66,11 +65,28 @@ vi.mock('@clerk/nextjs/server', () => ({
 }));
 
 import { POST, OPTIONS } from '@/app/api/waitlist/public/route';
+import {
+  PLATFORM_AVAILABILITY_CONSENT_PURPOSES,
+  WAITLIST_CONSENT_PURPOSES,
+} from '@/lib/consent-purposes';
+
+const PLATFORM_AVAILABILITY_SOURCE = 'other';
 
 const CONSENTED = [
   { purpose: 'enterprise_waitlist', granted: true },
   { purpose: 'product_updates', granted: false },
 ];
+
+function consentFor(source: string) {
+  const purposes =
+    source === PLATFORM_AVAILABILITY_SOURCE
+      ? PLATFORM_AVAILABILITY_CONSENT_PURPOSES
+      : WAITLIST_CONSENT_PURPOSES;
+  return purposes.map((purpose) => ({
+    purpose: purpose.id,
+    granted: purpose.necessaryForRequest,
+  }));
+}
 
 function makePostRequest(
   body: Record<string, unknown>,
@@ -275,7 +291,11 @@ describe('POST /api/waitlist/public — security tests', () => {
     it('accepts every allow-listed source verbatim', async () => {
       for (const source of ['website', 'byok', 'sync', 'billing', 'mobile', 'other']) {
         mockExecute.mockClear();
-        const request = makePostRequest({ email: 'test@example.com', source });
+        const request = makePostRequest({
+          email: 'test@example.com',
+          source,
+          consent: consentFor(source),
+        });
         const response = await POST(request);
 
         expect(response.status).toBe(200);
