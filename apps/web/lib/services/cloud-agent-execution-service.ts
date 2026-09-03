@@ -22,6 +22,21 @@ const OPERATION_REPLAY_LIMIT_ERROR = {
   code: 'operation_replay_limit_exceeded',
   message: 'The durable operation exceeded its maximum replay attempts.',
 } as const;
+const MILLISECONDS_PER_SECOND = 1000;
+const OPERATION_LEASE_RENEWAL_SAFETY_DIVISOR = 2;
+export const OPERATION_LEASE_RENEWAL_INTERVAL_SECONDS = Math.floor(
+  MIN_OPERATION_LEASE_SECONDS / OPERATION_LEASE_RENEWAL_SAFETY_DIVISOR,
+);
+
+function clampLeaseSeconds(leaseSeconds: number | undefined): number {
+  return Math.min(
+    MAX_OPERATION_LEASE_SECONDS,
+    Math.max(
+      MIN_OPERATION_LEASE_SECONDS,
+      Math.trunc(leaseSeconds ?? DEFAULT_OPERATION_LEASE_SECONDS),
+    ),
+  );
+}
 
 export type CloudAgentOperationKind = z.infer<typeof OperationKindSchema>;
 export type CloudAgentRetrySafety = z.infer<typeof RetrySafetySchema>;
@@ -189,13 +204,7 @@ export async function claimCloudAgentExecutionOperation(
     .regex(/^[0-9a-f]{64}$/)
     .parse(input.inputHash);
   const retrySafety = RetrySafetySchema.parse(input.retrySafety);
-  const leaseSeconds = Math.min(
-    MAX_OPERATION_LEASE_SECONDS,
-    Math.max(
-      MIN_OPERATION_LEASE_SECONDS,
-      Math.trunc(input.leaseSeconds ?? DEFAULT_OPERATION_LEASE_SECONDS),
-    ),
-  );
+  const leaseSeconds = clampLeaseSeconds(input.leaseSeconds);
   const now = input.now ?? new Date();
 
   return db.transaction(async (tx) => {
@@ -272,12 +281,20 @@ export async function claimCloudAgentExecutionOperation(
     }
 
     if (operation.attempt >= MAX_OPERATION_REPLAY_ATTEMPTS) {
+      const lastAttemptAgeSeconds = Math.max(
+        0,
+        Math.round((now.getTime() - Date.parse(operation.updatedAt)) / MILLISECONDS_PER_SECOND),
+      );
       const exhaustedRows = await tx.query<CloudAgentExecutionOperationRow>(
         `update public.cloud_agent_execution_operations
             set status = 'failed',
                 lease_token = null,
                 lease_expires_at = null,
-                error = jsonb_build_object('code', $3::text, 'message', $4::text),
+                error = jsonb_build_object(
+                  'code', $3::text,
+                  'message', $4::text,
+                  'lastAttemptAgeSeconds', $5::int
+                ),
                 completed_at = now(),
                 updated_at = now()
           where id = $1 and user_id = $2 and status = 'running'
@@ -287,6 +304,7 @@ export async function claimCloudAgentExecutionOperation(
           input.userId,
           OPERATION_REPLAY_LIMIT_ERROR.code,
           OPERATION_REPLAY_LIMIT_ERROR.message,
+          lastAttemptAgeSeconds,
         ],
       );
       return claimFromOperation(requireOperation(exhaustedRows));
@@ -307,6 +325,27 @@ export async function claimCloudAgentExecutionOperation(
     );
     return claimFromOperation(reacquired);
   });
+}
+
+export async function renewCloudAgentExecutionOperationLease(
+  db: DatabaseAdapter,
+  input: {
+    userId: string;
+    operationId: string;
+    leaseToken: string;
+    leaseSeconds?: number;
+  },
+): Promise<boolean> {
+  const leaseSeconds = clampLeaseSeconds(input.leaseSeconds);
+  const rows = await db.query<CloudAgentExecutionOperationRow>(
+    `update public.cloud_agent_execution_operations
+        set lease_expires_at = now() + make_interval(secs => $4),
+            updated_at = now()
+      where id = $1 and user_id = $2 and lease_token = $3 and status = 'running'
+      returning *`,
+    [input.operationId, input.userId, input.leaseToken, leaseSeconds],
+  );
+  return rows.length > 0;
 }
 
 export async function completeCloudAgentExecutionOperation(
