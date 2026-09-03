@@ -602,6 +602,7 @@ export class OpenAIWireAssembler {
                 type: 'server_tool_use',
                 name: chunk.name,
                 status,
+                tool_use_id: chunk.toolUseId,
                 ...(statusPhrase ? { status_phrase: statusPhrase } : {}),
               },
             },
