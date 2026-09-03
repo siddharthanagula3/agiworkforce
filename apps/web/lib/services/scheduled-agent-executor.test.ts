@@ -35,9 +35,13 @@ vi.mock('@/lib/services/provider-adapter-service', () => ({
 vi.mock('@/app/api/llm/v1/chat/completions/lib/adapter-response', () => ({
   drainToLlmResponse: vi.fn(),
 }));
-vi.mock('@agiworkforce/provider-protocol', () => ({
-  openAIWireRequestToChatRequest: vi.fn((value) => value),
-}));
+vi.mock('@agiworkforce/provider-protocol', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@agiworkforce/provider-protocol')>();
+  return {
+    ...actual,
+    openAIWireRequestToChatRequest: vi.fn((value) => value),
+  };
+});
 
 import { resolveAutoRoute } from '@agiworkforce/routing';
 import { getSlotForModel } from '@agiworkforce/types';
