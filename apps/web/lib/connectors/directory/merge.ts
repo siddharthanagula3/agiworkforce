@@ -7,7 +7,9 @@ import {
   getDeclaredConnectorActions,
 } from '@/lib/connectors/catalog';
 import { getMcpEndpoint } from '@/lib/connectors/mcp-endpoints';
+import { deriveInternalBadge } from '@/lib/connectors/directory/badge';
 import { connectableForInternalId } from '@/lib/connectors/directory/connectable';
+import { deriveMonogram } from '@/lib/connectors/directory/monogram';
 import type {
   DirectoryAuthMode,
   DirectoryRecord,
@@ -44,6 +46,10 @@ export function buildInternalDirectoryRecords(): DirectoryRecord[] {
       repositoryUrl: null,
       version: null,
       sourceRegistry: 'internal',
+      badge: deriveInternalBadge(),
+      iconUrl: null,
+      monogram: deriveMonogram(connector.name),
+      docsUrl: null,
     };
   });
 }
@@ -81,6 +87,32 @@ function matchInternalRecord(
   return undefined;
 }
 
+function unionCategories(
+  current: readonly string[],
+  incoming: readonly string[],
+): readonly string[] {
+  return [...new Set([...current, ...incoming])];
+}
+
+function richerDescription(current: string, incoming: string): string {
+  return incoming.length > current.length ? incoming : current;
+}
+
+function enrichWithRegistryRecord(
+  current: DirectoryRecord,
+  registryRecord: DirectoryRecord,
+): DirectoryRecord {
+  return {
+    ...current,
+    description: richerDescription(current.description, registryRecord.description),
+    categories: unionCategories(current.categories, registryRecord.categories),
+    toolNames: current.toolNames.length > 0 ? current.toolNames : registryRecord.toolNames,
+    repositoryUrl: current.repositoryUrl ?? registryRecord.repositoryUrl,
+    iconUrl: current.iconUrl ?? registryRecord.iconUrl,
+    docsUrl: current.docsUrl ?? registryRecord.docsUrl,
+  };
+}
+
 export function mergeDirectoryRecords(
   internalRecords: readonly DirectoryRecord[],
   registryRecords: readonly DirectoryRecord[],
@@ -93,11 +125,7 @@ export function mergeDirectoryRecords(
     const matched = matchInternalRecord(registryRecord, internalHosts);
     if (matched) {
       const current = merged.get(matched.id) ?? matched;
-      merged.set(matched.id, {
-        ...current,
-        toolNames: current.toolNames.length > 0 ? current.toolNames : registryRecord.toolNames,
-        repositoryUrl: current.repositoryUrl ?? registryRecord.repositoryUrl,
-      });
+      merged.set(matched.id, enrichWithRegistryRecord(current, registryRecord));
       continue;
     }
     if (!merged.has(registryRecord.id)) merged.set(registryRecord.id, registryRecord);
