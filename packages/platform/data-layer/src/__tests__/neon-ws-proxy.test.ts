@@ -11,7 +11,7 @@ const VAR = 'AGI_DATABASE_WS_PROXY';
 const original = process.env[VAR];
 
 function adapter() {
-  return new NeonDatabaseAdapter({ connectionString: 'postgresql://u:p@example.test/d' });
+  return new NeonDatabaseAdapter({ connectionString: 'postgresql://u:p@localhost/d' });
 }
 
 beforeEach(() => {
