@@ -62,7 +62,7 @@ describe('ResearchPanel · report to artifact', () => {
 });
 
 describe('ResearchPanel · source row title fallback', () => {
-  it('shows a path-trimmed url instead of a blank or raw-url title', async () => {
+  it('humanizes the last path segment instead of a blank or raw-url title', async () => {
     useResearchPanelStore.getState().openPanel(
       CONVERSATION_ID,
       'msg-2',
@@ -80,7 +80,22 @@ describe('ResearchPanel · source row title fallback', () => {
 
     expect(await screen.findByText('Real Title')).toBeInTheDocument();
     expect(screen.queryByText(/very-long-slug-that-goes-on-and-on/)).toBeNull();
-    expect(screen.getByText(/livescience\.com\/technology/)).toBeInTheDocument();
+    expect(screen.getByText('Very Long Slug That Goes On And On')).toBeInTheDocument();
+    expect(screen.getByText('livescience.com')).toBeInTheDocument();
+  });
+
+  it('falls back to the path-trimmed url when the path has no segment to humanize', async () => {
+    useResearchPanelStore
+      .getState()
+      .openPanel(
+        CONVERSATION_ID,
+        'msg-3',
+        [{ url: 'https://openai.com/', title: '', citationIndex: 1 }],
+        [],
+      );
+    render(<ResearchPanel />);
+
+    expect(await screen.findAllByText('openai.com')).toHaveLength(2);
   });
 });
 
