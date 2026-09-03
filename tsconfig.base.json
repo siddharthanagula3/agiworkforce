@@ -46,7 +46,7 @@
     "incremental": true,
     "composite": true,
 
-    /* Path Mappings — paths are resolved relative to tsconfig.json location */
+    /* Path Mappings, paths are resolved relative to tsconfig.json location */
     "paths": {
       "@types/*": ["./packages/contracts/types/src/*"],
       "@utils/*": ["./packages/platform/utils/src/*"],
