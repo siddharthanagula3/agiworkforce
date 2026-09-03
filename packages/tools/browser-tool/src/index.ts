@@ -1,46 +1,3 @@
-/**
- * @agiworkforce/browser-tool
- *
- * Minimal agent-controlled browser tool, built fresh on `playwright-core`.
- *
- * One tool, one schema (discriminated-union on `action.kind`), ten actions:
- *   navigate, click, clickCoords, type, press, screenshot, snapshot, wait,
- *   evaluate, close.
- *
- * Profile management is isolated by design: every action targets a named
- * profile under `~/.agiworkforce/browser/profiles/<name>` (default
- * `agiworkforce`). The agent NEVER touches the user's daily Chrome
- * profile — that was the whole bet OpenClaw made on this surface.
- *
- * Schema patterns lifted from OpenClaw's `extensions/browser/` (lessons,
- * not code): flat discriminated union (Vertex-AI compatible),
- * `aria` vs `ai` snapshot modes, `ref`-based element targeting, and the
- * stale-ref recovery loop the agent should use (re-snapshot on miss).
- *
- * # Security: `evaluate` action gate
- *
- * The `evaluate` action runs LLM-supplied JavaScript inside the persistent
- * browser context. Because that context retains cookies / localStorage for
- * every site the agent has ever navigated to, an `evaluate` script can
- * exfiltrate session credentials with a single `fetch()`. To prevent that,
- * `evaluate` is **disabled by default**. Callers who genuinely need it
- * must construct the runner with `allowEvaluate: true` AND apply their own
- * caller-side approval / allow-list / domain check. Without the flag, an
- * `evaluate` action returns an error result (`isError: true`) and never
- * touches the page.
- *
- * What this package does NOT do (vs OpenClaw's full `extensions/browser/`):
- *   - No HTTP control service / Express server (you call `runBrowserAction`
- *     directly from the gateway / app)
- *   - No multi-profile dialog / file-chooser arming
- *   - No Chrome MCP stdio mode (we use Playwright directly)
- *   - No PDF generation (use `printToPDF` via CDP if needed; not exposed here)
- *
- * Those are future-sprint additions.
- *
- * @packageDocumentation
- */
-
 import { closeProfile, openProfile } from './profile';
 import { clearSnapshotRefs, resolveRef, takeSnapshot } from './snapshot';
 import type { ComputerAction } from '@agiworkforce/types';
@@ -66,12 +23,6 @@ export type {
 export { listProfiles, resolveProfileDir, closeProfile, closeAllProfiles } from './profile';
 export { BrowserProfileNameError } from './profile';
 
-/**
- * Configuration for {@link runBrowserAction}.
- *
- * Hand-passed by the caller per invocation (the runner is stateless w.r.t.
- * config). Field defaults are conservative — secure-by-default.
- */
 export interface BrowserToolConfig {
   allowEvaluate?: boolean;
 }
@@ -176,14 +127,6 @@ export async function runComputerAction(
   };
 }
 
-/**
- * Execute a single browser action. The caller owns the lifecycle —
- * call `closeAllProfiles()` on shutdown to release any persistent contexts.
- *
- * @param action The action to perform.
- * @param config Optional config (gate `evaluate`, etc.). See
- *   {@link BrowserToolConfig}. Defaults are secure-by-default.
- */
 export async function runBrowserAction(
   action: BrowserAction,
   config: BrowserToolConfig = {},
@@ -218,7 +161,7 @@ export async function runBrowserAction(
         const locator = resolveRef(profileName, action.ref);
         if (!locator) {
           return errorResult(
-            `Unknown ref "${action.ref}" — call action: snapshot first to refresh refs.`,
+            `Unknown ref "${action.ref}", call action: snapshot first to refresh refs.`,
           );
         }
         await locator.click({ button: action.button ?? 'left' });
@@ -242,7 +185,7 @@ export async function runBrowserAction(
         const locator = resolveRef(profileName, action.ref);
         if (!locator) {
           return errorResult(
-            `Unknown ref "${action.ref}" — call action: snapshot first to refresh refs.`,
+            `Unknown ref "${action.ref}", call action: snapshot first to refresh refs.`,
           );
         }
         await locator.fill(action.text);
@@ -300,7 +243,7 @@ export async function runBrowserAction(
             "browser-tool: 'evaluate' action is disabled by default. " +
               'Set allowEvaluate: true at runner construction to enable. ' +
               'Note: enabling without an allow-list / domain block is a ' +
-              'credential-theft surface — see runBrowserAction docs.',
+              'credential-theft surface, see runBrowserAction docs.',
           );
         }
         const page = await openProfile(profileName);

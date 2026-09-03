@@ -1,9 +1,8 @@
-
 import { describe, expect, it } from 'vitest';
 
 import { parseFrontmatter } from '../frontmatter';
 
-describe('parseFrontmatter — basic shape', () => {
+describe('parseFrontmatter, basic shape', () => {
   it('parses string scalars', () => {
     const { data, body } = parseFrontmatter(
       ['---', 'name: diffs', 'description: Use the diffs tool.', '---', '', 'body text'].join('\n'),
@@ -33,7 +32,7 @@ describe('parseFrontmatter — basic shape', () => {
     expect(data['os']).toEqual(['darwin', 'linux']);
   });
 
-  it('parses nested objects (one level deep — matches `requires:`)', () => {
+  it('parses nested objects (one level deep, matches `requires:`)', () => {
     const { data } = parseFrontmatter(
       ['---', 'requires:', '  bins:', '    - git', '    - rg', '---'].join('\n'),
     );
@@ -54,7 +53,7 @@ describe('parseFrontmatter — basic shape', () => {
   });
 });
 
-describe('parseFrontmatter — security: prototype pollution avoidance', () => {
+describe('parseFrontmatter, security: prototype pollution avoidance', () => {
   it('throws FrontmatterError on __proto__ key (no Object.prototype pollution)', () => {
     const before = ({} as Record<string, unknown>)['polluted'];
     expect(() =>
@@ -78,7 +77,7 @@ describe('parseFrontmatter — security: prototype pollution avoidance', () => {
   });
 });
 
-describe('parseFrontmatter — comments and blank lines', () => {
+describe('parseFrontmatter, comments and blank lines', () => {
   it('ignores `#`-prefixed comment lines', () => {
     const { data } = parseFrontmatter(
       ['---', '# this is a comment', 'name: x', '# also a comment', '---'].join('\n'),

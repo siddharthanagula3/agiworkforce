@@ -261,12 +261,6 @@ export interface PinnedFetchOptions {
   allowPrivateAddresses?: boolean;
 }
 
-/**
- * A fetch that resolves the hostname exactly once and connects only to an address vetted in
- * that same resolution. Splitting the check from the connection — the shape of
- * `assertAllowedUrl()` followed by global `fetch()` — leaves a DNS-rebinding window where the
- * socket lands on an address nobody vetted.
- */
 export function createPinnedFetch(options: PinnedFetchOptions = {}): McpFetch {
   const allowPrivateAddresses = options.allowPrivateAddresses === true;
 

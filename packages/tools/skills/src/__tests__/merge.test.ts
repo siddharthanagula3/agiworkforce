@@ -1,4 +1,3 @@
-
 import { describe, expect, it } from 'vitest';
 
 import { mergeSkills } from '../merge';
@@ -17,7 +16,7 @@ function makeSkill(name: string, source: SkillSource, suffix = ''): Skill {
   };
 }
 
-describe('mergeSkills — precedence resolution', () => {
+describe('mergeSkills, precedence resolution', () => {
   it('extra wins over workspace, workspace wins over project, etc.', async () => {
     const out = mergeSkills([
       [makeSkill('alpha', 'bundled', '-bundled')],
