@@ -64,7 +64,11 @@ async function loadService(): Promise<typeof import('./provider-adapter-service'
   return import('./provider-adapter-service');
 }
 
-import { buildServerProviderAdapter, resolveProviderFromModel } from './provider-adapter-service';
+import {
+  buildServerProviderAdapter,
+  listAvailableManagedProviderIds,
+  resolveProviderFromModel,
+} from './provider-adapter-service';
 
 describe('resolveProviderFromModel', () => {
   const savedOpenRouterKey = process.env['OPENROUTER_API_KEY'];
@@ -213,6 +217,36 @@ describe('resolveProviderFromModel', () => {
       }),
     ).toBe('vercel_gateway');
     expect(loggerWarn).not.toHaveBeenCalled();
+  });
+});
+
+describe('listAvailableManagedProviderIds', () => {
+  beforeEach(() => {
+    getOptionalEnv.mockReset();
+  });
+
+  it('admits the registry-spelled provider id for a configured managed key', () => {
+    getOptionalEnv.mockImplementation((key) =>
+      key === 'ANTHROPIC_API_KEY' ? 'fixture-key' : undefined,
+    );
+
+    expect(listAvailableManagedProviderIds().has('anthropic')).toBe(true);
+  });
+
+  it('maps the openrouter adapter key to the registry-spelled open_router provider', () => {
+    getOptionalEnv.mockImplementation((key) =>
+      key === 'OPENROUTER_API_KEY' ? 'fixture-key' : undefined,
+    );
+
+    const available = listAvailableManagedProviderIds();
+    expect(available.has('open_router')).toBe(true);
+    expect(available.has('openrouter')).toBe(false);
+  });
+
+  it('excludes a provider with no configured key', () => {
+    getOptionalEnv.mockReturnValue(undefined);
+
+    expect(listAvailableManagedProviderIds().has('minimax')).toBe(false);
   });
 });
 
