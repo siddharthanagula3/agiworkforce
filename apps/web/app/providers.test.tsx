@@ -40,9 +40,6 @@ vi.mock('@shared/components/TelemetryConsentSync', () => ({
 }));
 vi.mock('@shared/components/OfflineIndicator', () => ({ OfflineIndicator: () => null }));
 vi.mock('@shared/components/SessionTimeoutGuard', () => ({ SessionTimeoutGuard: () => null }));
-vi.mock('@/lib/seo/seo-optimizer', () => ({
-  seoService: { initialize: vi.fn() },
-}));
 
 import Providers from './providers';
 
@@ -61,5 +58,25 @@ describe('Providers', () => {
     expect(themeProvider).toContainElement(capabilityProvider);
     expect(capabilityProvider).toContainElement(queryProvider);
     expect(themeProvider.parentElement).toBe(container);
+  });
+
+  it('does not remove or replace the server-rendered structured data', () => {
+    const marker = 'canary-server-rendered-organization';
+    const script = document.createElement('script');
+    script.type = 'application/ld+json';
+    script.textContent = JSON.stringify({ '@type': 'Organization', name: marker });
+    document.head.appendChild(script);
+
+    render(
+      <Providers>
+        <span>App content</span>
+      </Providers>,
+    );
+
+    const scripts = document.head.querySelectorAll('script[type="application/ld+json"]');
+    expect(scripts).toHaveLength(1);
+    expect(scripts[0]?.textContent).toContain(marker);
+
+    document.head.removeChild(script);
   });
 });
