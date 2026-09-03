@@ -42,7 +42,9 @@ const ORG = '11111111-1111-4111-8111-111111111111';
 const OTHER_ORG = '22222222-2222-4222-8222-222222222222';
 const CONNECTION = '33333333-3333-4333-8333-333333333333';
 const OTHER_CONNECTION = '44444444-4444-4444-8444-444444444444';
+const SSO_CONNECTION = '55555555-5555-4555-8555-555555555555';
 const ADMIN = 'admin-user';
+const VERIFIED_DOMAIN = 'example.com';
 
 const BASE = 'https://app.example.com/api/scim/v2';
 
@@ -88,6 +90,14 @@ async function harness(
         display_name: 'Other tenant Okta',
         is_active: true,
         last_sync_at: null,
+      },
+    ],
+    sso_connections: [
+      {
+        id: SSO_CONNECTION,
+        organization_id: ORG,
+        domain: VERIFIED_DOMAIN,
+        domain_verified_at: '2026-01-01T00:00:00.000Z',
       },
     ],
     organization_members: [
@@ -320,7 +330,7 @@ describe('SCIM entitlement gate', () => {
 });
 
 describe('SCIM provision -> update -> deprovision', () => {
-  it('grants a real organization membership when the person already has an account', async () => {
+  it('grants a real organization membership when the person already has an account on a verified domain', async () => {
     const { rawToken, state } = await harness();
     state.profiles.push({ id: 'clerk_ada', email: 'Ada@Example.com' });
 
@@ -635,6 +645,108 @@ describe('SCIM tenant isolation', () => {
 
     const response = await usersGet(scimRequest('/Users', { token: rawToken }));
     await expect(response.json()).resolves.toMatchObject({ totalResults: 0, Resources: [] });
+  });
+});
+
+describe('SCIM verified-domain binding', () => {
+  function victimPayload(email: string) {
+    return userPayload({ userName: email, emails: [{ value: email, primary: true }] });
+  }
+
+  it('refuses to claim an account on a domain the organization has not verified', async () => {
+    const { rawToken, state } = await harness();
+    state.profiles.push({ id: 'clerk_victim', email: 'victim@other-tenant.test' });
+
+    const response = await usersPost(
+      scimRequest('/Users', {
+        method: 'POST',
+        token: rawToken,
+        body: victimPayload('victim@other-tenant.test'),
+      }),
+    );
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toMatchObject({
+      schemas: [SCIM_SCHEMA.error],
+      scimType: 'invalidValue',
+    });
+    expect(state.scim_provisioned_users).toHaveLength(0);
+    expect(state.organization_members.some((row) => row['user_id'] === 'clerk_victim')).toBe(false);
+  });
+
+  it('refuses a look-alike domain that merely ends with the verified one', async () => {
+    const { rawToken, state } = await harness();
+    state.profiles.push({ id: 'clerk_lookalike', email: `ada@evil-${VERIFIED_DOMAIN}` });
+
+    const response = await usersPost(
+      scimRequest('/Users', {
+        method: 'POST',
+        token: rawToken,
+        body: victimPayload(`ada@evil-${VERIFIED_DOMAIN}`),
+      }),
+    );
+
+    expect(response.status).toBe(400);
+    expect(state.organization_members.some((row) => row['user_id'] === 'clerk_lookalike')).toBe(
+      false,
+    );
+  });
+
+  it('refuses every provision while the organization has verified no domain at all', async () => {
+    const { rawToken, state } = await harness();
+    state.sso_connections.length = 0;
+    state.profiles.push({ id: 'clerk_ada', email: 'ada@example.com' });
+
+    const response = await usersPost(
+      scimRequest('/Users', { method: 'POST', token: rawToken, body: userPayload() }),
+    );
+
+    expect(response.status).toBe(400);
+    expect(state.scim_provisioned_users).toHaveLength(0);
+    expect(state.organization_members.some((row) => row['user_id'] === 'clerk_ada')).toBe(false);
+  });
+
+  it('refuses to move an existing resource onto an unverified domain', async () => {
+    const { rawToken, state } = await harness();
+    state.profiles.push({ id: 'clerk_victim', email: 'victim@other-tenant.test' });
+
+    const created = await usersPost(
+      scimRequest('/Users', { method: 'POST', token: rawToken, body: userPayload() }),
+    );
+    const scimUserId = String(((await created.json()) as Record<string, any>)['id']);
+
+    const response = await userPatch(
+      scimRequest(`/Users/${scimUserId}`, {
+        method: 'PATCH',
+        token: rawToken,
+        body: {
+          schemas: [SCIM_SCHEMA.patchOp],
+          Operations: [{ op: 'replace', path: 'emails.value', value: 'victim@other-tenant.test' }],
+        },
+      }),
+      { params: Promise.resolve({ userId: scimUserId }) },
+    );
+
+    expect(response.status).toBe(400);
+    expect(state.scim_provisioned_users[0]?.['email']).toBe('ada@example.com');
+    expect(state.organization_members.some((row) => row['user_id'] === 'clerk_victim')).toBe(false);
+  });
+
+  it('links an account inside the verified domain whatever the case of either side', async () => {
+    const { rawToken, state } = await harness();
+    state.sso_connections[0]!['domain'] = VERIFIED_DOMAIN.toUpperCase();
+    state.profiles.push({ id: 'clerk_ada', email: 'ada@example.com' });
+
+    const response = await usersPost(
+      scimRequest('/Users', {
+        method: 'POST',
+        token: rawToken,
+        body: victimPayload('Ada@EXAMPLE.com'),
+      }),
+    );
+
+    expect(response.status).toBe(201);
+    expect(state.organization_members.some((row) => row['user_id'] === 'clerk_ada')).toBe(true);
   });
 });
 
