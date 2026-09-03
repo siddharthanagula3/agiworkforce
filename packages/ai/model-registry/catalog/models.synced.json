@@ -291,7 +291,7 @@
       "speed": "fast",
       "released": "September 2026"
     },
-    "glm-5.2": {
+    "glm-5.3": {
       "contextWindow": 1000000,
       "inputCost": 1.4,
       "outputCost": 4.4,
@@ -311,15 +311,31 @@
         "codeExecution": true,
         "caching": true
       },
-      "benchmarks": {
-        "swebench": 79,
-        "humaneval": 92,
-        "mmlu": 90,
-        "gpqa": 84,
-        "aime": 92
-      },
       "speed": "medium",
-      "released": "June 2026"
+      "released": "August 2026"
+    },
+    "glm-5.3-flash": {
+      "contextWindow": 1000000,
+      "inputCost": 0.075,
+      "outputCost": 0.25,
+      "cached_input": 0.015,
+      "capabilities": {
+        "streaming": true,
+        "tools": true,
+        "vision": true,
+        "json": true,
+        "thinking": true,
+        "computerUse": true,
+        "agentic": true,
+        "imageGen": false,
+        "videoGen": false,
+        "search": false,
+        "research": true,
+        "codeExecution": true,
+        "caching": true
+      },
+      "speed": "fast",
+      "released": "August 2026"
     },
     "qwen-3.5-plus": {
       "contextWindow": 1000000,
