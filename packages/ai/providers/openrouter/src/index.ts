@@ -143,7 +143,7 @@ export function createOpenRouterAdapter(config: OpenRouterAdapterConfig = {}): P
         provider: 'open_router',
       });
 
-      applyOpenRouterAnthropicCacheControl(params, anthropicCacheRetention);
+      applyOpenRouterAnthropicCacheControl(params, anthropicCacheRetention, req);
       applyOpenRouterProviderRouting(params, config.providerRouting, req.metadata);
 
       params.stream_options = { include_usage: true };
