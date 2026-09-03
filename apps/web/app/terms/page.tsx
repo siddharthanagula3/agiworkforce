@@ -269,7 +269,7 @@ export default function TermsPage() {
               {LEGAL_ENTITY} grants you a non-exclusive, non-transferable, revocable licence to
               install and use AGI on devices you own or control, and to access the hosted service,
               subject to these terms. The software and the service are proprietary; you may not
-              redistribute, sublicense, decompile, or reverse-engineer them except as applicable law
+              redistribute, sublicence, decompile, or reverse-engineer them except as applicable law
               expressly permits. All rights not granted are reserved.
             </Prose>
           </Stack>
