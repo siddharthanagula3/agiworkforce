@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 1,
+  "models": {
+    "claude-sonnet-5": {
+      "additionalRoutes": [
+        {
+          "provider": "open_router",
+          "harnessId": "open-router/chat-completions",
+          "upstreamModelId": "anthropic/claude-sonnet-5",
+          "cacheClass": "gateway_prompt_cache",
+          "commercialStatus": "authorized_marketplace",
+          "pricing": {
+            "inputPerMillion": 3,
+            "outputPerMillion": 15,
+            "cacheReadPerMillion": 0.3,
+            "cacheWritePerMillion": 3.75
+          },
+          "pricingNote": "OpenRouter publishes no price table inside this repository, so these are Anthropic's official list prices for Claude Sonnet 5 recorded as the route price. OpenRouter serves the same weights through anthropic/claude-sonnet-5 and forwards cache_control, which is why the route carries a gateway prompt cache class rather than the provider-native one. Replace these four numbers with OpenRouter's own published rates once a fetched price table lands in the repository."
+        }
+      ]
+    }
+  }
+}

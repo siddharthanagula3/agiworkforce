@@ -28,6 +28,7 @@ const CATALOG_DIR = path.join(REGISTRY_DIR, 'catalog');
 const CURATION_JSON = path.join(CATALOG_DIR, 'models.curation.json');
 const SYNCED_JSON = path.join(CATALOG_DIR, 'models.synced.json');
 const HARNESSES_JSON = path.join(CATALOG_DIR, 'harnesses.json');
+const MODEL_ROUTES_JSON = path.join(CATALOG_DIR, 'model-routes.json');
 const ROUTING_POLICIES_JSON = path.join(CATALOG_DIR, 'routing-policies.json');
 const REGISTRY_SCHEMA_JSON = path.join(REGISTRY_DIR, 'schema', 'registry.schema.json');
 const GENERATED_DIR = path.join(REGISTRY_DIR, 'generated');
@@ -340,6 +341,183 @@ function buildCatalog(curation, synced, familyCatalog) {
 const AUTO_POLICY_MODEL_IDS = new Set(['auto', 'auto-economy', 'auto-balanced', 'auto-premium']);
 const MEDIA_MODEL_TYPES = new Set(['image', 'video', 'audio', 'tts', 'stt']);
 const GENERATED_IMAGE_MIME_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp']);
+
+const CACHE_CLASS = {
+  providerImplicitPromptCache: 'provider_implicit_prompt_cache',
+  providerExplicitPromptCache: 'provider_explicit_prompt_cache',
+  gatewayPromptCache: 'gateway_prompt_cache',
+  gatewayResponseCache: 'gateway_response_cache',
+  noProviderCache: 'no_provider_cache',
+};
+const CACHE_CLASSES = new Set(Object.values(CACHE_CLASS));
+
+const COMMERCIAL_STATUS = {
+  agiDirect: 'agi_direct',
+  customerByok: 'customer_byok',
+  authorizedMarketplace: 'authorized_marketplace',
+  freeCommercial: 'free_commercial',
+  experimentalOnly: 'experimental_only',
+  blocked: 'blocked',
+};
+const COMMERCIAL_STATUSES = new Set(Object.values(COMMERCIAL_STATUS));
+
+const MANAGED_CLOUD_TRUST_MODE = 'managed_cloud';
+const ROUTE_PRICING_FIELDS = [
+  'inputPerMillion',
+  'outputPerMillion',
+  'cacheReadPerMillion',
+  'cacheWritePerMillion',
+  'cacheWrite1hPerMillion',
+];
+const ADDITIONAL_ROUTE_FIELDS = [
+  'provider',
+  'harnessId',
+  'upstreamModelId',
+  'cacheClass',
+  'commercialStatus',
+  'pricing',
+  'pricingNote',
+];
+
+function routeId(provider, modelKey) {
+  return `${provider}/${modelKey}`;
+}
+
+function derivedCacheClass(model) {
+  if (model.cached_write !== undefined || model.cached_write_1h !== undefined) {
+    return CACHE_CLASS.providerExplicitPromptCache;
+  }
+  if (model.cached_input !== undefined) return CACHE_CLASS.providerImplicitPromptCache;
+  return CACHE_CLASS.noProviderCache;
+}
+
+function derivedCommercialStatus(harness) {
+  return harness.trustModes.includes(MANAGED_CLOUD_TRUST_MODE)
+    ? COMMERCIAL_STATUS.agiDirect
+    : COMMERCIAL_STATUS.customerByok;
+}
+
+function normalizeRoutePricing(label, pricing) {
+  assert.ok(
+    pricing && typeof pricing === 'object' && !Array.isArray(pricing),
+    `${label} pricing must be an object`,
+  );
+  const unknown = Object.keys(pricing).filter((key) => !ROUTE_PRICING_FIELDS.includes(key));
+  assert.deepEqual(unknown, [], `${label} pricing has unsupported keys: ${unknown.join(', ')}`);
+  for (const field of ['inputPerMillion', 'outputPerMillion', 'cacheReadPerMillion']) {
+    assert.ok(
+      typeof pricing[field] === 'number' && pricing[field] >= 0,
+      `${label} pricing.${field} is required and must be a non-negative number`,
+    );
+  }
+  assert.ok(
+    typeof pricing.cacheWritePerMillion === 'number' && pricing.cacheWritePerMillion >= 0,
+    `${label} pricing.cacheWritePerMillion is required and must be a non-negative number`,
+  );
+  return defined({
+    currency: 'USD',
+    unit: 'per_million_tokens',
+    inputPerMillion: pricing.inputPerMillion,
+    outputPerMillion: pricing.outputPerMillion,
+    cacheReadPerMillion: pricing.cacheReadPerMillion,
+    cacheWritePerMillion: pricing.cacheWritePerMillion,
+    cacheWrite1hPerMillion: pricing.cacheWrite1hPerMillion,
+  });
+}
+
+function buildModelRoutes({
+  modelKey,
+  model,
+  harnessCatalog,
+  routeDeclaration,
+  lifecycle,
+  modelPricing,
+}) {
+  const harnessId = resolveHarnessId(model);
+  const harness = harnessCatalog.harnesses[harnessId];
+  if (!harness) {
+    throw new Error(`No harness configuration for ${modelKey}: expected ${harnessId}`);
+  }
+  if (harness.provider !== model.provider) {
+    throw new Error(
+      `Harness ${harnessId} provider ${harness.provider} does not match ${modelKey} provider ${model.provider}`,
+    );
+  }
+
+  const selectable = lifecycle.availability === 'live' && lifecycle.deprecated !== true;
+  const declaredDefault = routeDeclaration?.defaultRoute ?? {};
+  const entries = [
+    [
+      routeId(model.provider, modelKey),
+      {
+        modelKey,
+        provider: model.provider,
+        providerModelId: model.apiModelId ?? model.id ?? modelKey,
+        harnessId,
+        trustModes: [...harness.trustModes],
+        availability: lifecycle.availability,
+        selectable,
+        isDefault: true,
+        cacheClass: declaredDefault.cacheClass ?? derivedCacheClass(model),
+        commercialStatus: declaredDefault.commercialStatus ?? derivedCommercialStatus(harness),
+        pricing: modelPricing,
+      },
+    ],
+  ];
+
+  for (const [index, additional] of (routeDeclaration?.additionalRoutes ?? []).entries()) {
+    const label = `${modelKey} additionalRoutes[${index}]`;
+    const unknown = Object.keys(additional).filter((key) => !ADDITIONAL_ROUTE_FIELDS.includes(key));
+    assert.deepEqual(unknown, [], `${label} has unsupported keys: ${unknown.join(', ')}`);
+    assert.ok(typeof additional.provider === 'string', `${label}.provider is required`);
+    assert.notEqual(
+      additional.provider,
+      model.provider,
+      `${label} must not repeat the canonical provider of ${modelKey}`,
+    );
+    assert.ok(
+      typeof additional.upstreamModelId === 'string' && additional.upstreamModelId.length > 0,
+      `${label}.upstreamModelId is required`,
+    );
+    assert.ok(CACHE_CLASSES.has(additional.cacheClass), `${label}.cacheClass is not a known class`);
+    assert.ok(
+      COMMERCIAL_STATUSES.has(additional.commercialStatus),
+      `${label}.commercialStatus is not a known status`,
+    );
+    const additionalHarnessId = additional.harnessId ?? resolveHarnessId(additional);
+    const additionalHarness = harnessCatalog.harnesses[additionalHarnessId];
+    assert.ok(additionalHarness, `${label} references unknown harness ${additionalHarnessId}`);
+    assert.equal(
+      additionalHarness.provider,
+      additional.provider,
+      `${label} harness ${additionalHarnessId} does not serve provider ${additional.provider}`,
+    );
+    const id = routeId(additional.provider, modelKey);
+    assert.equal(
+      entries.some(([existing]) => existing === id),
+      false,
+      `${label} duplicates route id ${id}`,
+    );
+    entries.push([
+      id,
+      {
+        modelKey,
+        provider: additional.provider,
+        providerModelId: additional.upstreamModelId,
+        harnessId: additionalHarnessId,
+        trustModes: [...additionalHarness.trustModes],
+        availability: lifecycle.availability,
+        selectable,
+        isDefault: false,
+        cacheClass: additional.cacheClass,
+        commercialStatus: additional.commercialStatus,
+        pricing: normalizeRoutePricing(label, additional.pricing),
+      },
+    ]);
+  }
+
+  return entries;
+}
 
 function resolveHarnessId(model) {
   if (model.provider === 'managed_cloud') return 'managed-cloud/gateway';
@@ -889,7 +1067,13 @@ function buildRuntimeProfiles(harnessCatalog) {
   return normalizedProfiles;
 }
 
-function buildNormalizedRegistry(catalog, harnessCatalog, routingPolicies, familyCatalog) {
+function buildNormalizedRegistry(
+  catalog,
+  harnessCatalog,
+  modelRouteCatalog,
+  routingPolicies,
+  familyCatalog,
+) {
   const models = {};
   const providerModelKeys = {};
   const routes = {};
@@ -905,16 +1089,6 @@ function buildNormalizedRegistry(catalog, harnessCatalog, routingPolicies, famil
       );
     }
 
-    const harnessId = resolveHarnessId(model);
-    const harness = harnessCatalog.harnesses[harnessId];
-    if (!harness) {
-      throw new Error(`No harness configuration for ${modelKey}: expected ${harnessId}`);
-    }
-    if (harness.provider !== model.provider) {
-      throw new Error(
-        `Harness ${harnessId} provider ${harness.provider} does not match ${modelKey} provider ${model.provider}`,
-      );
-    }
     assert.ok(
       model.inputTokenPricingTiers === undefined || model.longContext === undefined,
       `${modelKey} must not declare both inputTokenPricingTiers and legacy longContext`,
@@ -950,15 +1124,6 @@ function buildNormalizedRegistry(catalog, harnessCatalog, routingPolicies, famil
       evidenceRefs: Array.isArray(model.evidenceRefs) ? model.evidenceRefs : [],
     };
     (providerModelKeys[model.provider] ??= []).push(modelKey);
-    routes[`${model.provider}/${modelKey}`] = {
-      modelKey,
-      provider: model.provider,
-      providerModelId: model.apiModelId ?? model.id ?? modelKey,
-      harnessId,
-      trustModes: [...harness.trustModes],
-      availability: lifecycle.availability,
-      selectable: lifecycle.availability === 'live' && lifecycle.deprecated !== true,
-    };
     pricing[modelKey] = defined({
       currency: 'USD',
       unit: videoGeneration?.pricing
@@ -987,6 +1152,17 @@ function buildNormalizedRegistry(catalog, harnessCatalog, routingPolicies, famil
             ? [normalizeLongContextPricing(modelKey, model.longContext)]
             : undefined,
     });
+    for (const [id, route] of buildModelRoutes({
+      modelKey,
+      model,
+      harnessCatalog,
+      routeDeclaration: modelRouteCatalog.models?.[modelKey],
+      lifecycle,
+      modelPricing: pricing[modelKey],
+    })) {
+      assert.equal(routes[id], undefined, `Duplicate route id ${id}`);
+      routes[id] = route;
+    }
     limits[modelKey] = defined({
       contextTokens: positiveIntegerOrUndefined(model.contextWindow),
       maxInputTokens: positiveIntegerOrUndefined(model.maxInputTokens),
@@ -1047,7 +1223,7 @@ function buildNormalizedRegistry(catalog, harnessCatalog, routingPolicies, famil
   };
 }
 
-const TYPESCRIPT_REGISTRY_MODULE = `/* This file is generated by @agiworkforce/model-registry. */\nimport registry from './registry.json';\n\nexport const modelRegistry = registry;\nexport type ModelRegistry = typeof modelRegistry;\nexport type ModelKey = keyof ModelRegistry['models'];\nexport type ProviderId = keyof ModelRegistry['providerModelKeys'];\nexport type RouteId = keyof ModelRegistry['routes'];\nexport type HarnessId = keyof ModelRegistry['harnesses'];\nexport type RuntimeProfileId = keyof ModelRegistry['runtimeProfiles'];\nexport default registry;\n`;
+const TYPESCRIPT_REGISTRY_MODULE = `/* This file is generated by @agiworkforce/model-registry. */\nimport registry from './registry.json';\n\nexport const modelRegistry = registry;\nexport type ModelRegistry = typeof modelRegistry;\nexport type ModelKey = keyof ModelRegistry['models'];\nexport type ProviderId = keyof ModelRegistry['providerModelKeys'];\nexport type RouteId = keyof ModelRegistry['routes'];\nexport type HarnessId = keyof ModelRegistry['harnesses'];\nexport type RuntimeProfileId = keyof ModelRegistry['runtimeProfiles'];\n\nexport type RouteCacheClass =\n  | 'provider_implicit_prompt_cache'\n  | 'provider_explicit_prompt_cache'\n  | 'gateway_prompt_cache'\n  | 'gateway_response_cache'\n  | 'no_provider_cache';\n\nexport type RouteCommercialStatus =\n  | 'agi_direct'\n  | 'customer_byok'\n  | 'authorized_marketplace'\n  | 'free_commercial'\n  | 'experimental_only'\n  | 'blocked';\n\ninterface RoutePricingRecord {\n  currency: string;\n  unit: string;\n  inputPerMillion?: number;\n  outputPerMillion?: number;\n  cacheReadPerMillion?: number;\n  cacheWritePerMillion?: number;\n  cacheWrite1hPerMillion?: number;\n}\n\ninterface RouteRecord {\n  modelKey: string;\n  provider: string;\n  providerModelId: string;\n  harnessId: string;\n  isDefault: boolean;\n  cacheClass: RouteCacheClass;\n  commercialStatus: RouteCommercialStatus;\n  pricing: RoutePricingRecord;\n}\n\nexport interface RoutePriceSheet {\n  routeId: string;\n  modelKey: string;\n  provider: string;\n  providerModelId: string;\n  harnessId: string;\n  isDefault: boolean;\n  cacheClass: RouteCacheClass;\n  commercialStatus: RouteCommercialStatus;\n  currency: string;\n  unit: string;\n  inputPerMillion: number | null;\n  outputPerMillion: number | null;\n  cacheReadPerMillion: number | null;\n  cacheWritePerMillion: number | null;\n  cacheWrite1hPerMillion: number | null;\n}\n\nconst routeRecords = registry.routes as unknown as Readonly<Record<string, RouteRecord>>;\n\nfunction toPriceSheet(routeId: string, route: RouteRecord): RoutePriceSheet {\n  const { pricing } = route;\n  return {\n    routeId,\n    modelKey: route.modelKey,\n    provider: route.provider,\n    providerModelId: route.providerModelId,\n    harnessId: route.harnessId,\n    isDefault: route.isDefault,\n    cacheClass: route.cacheClass,\n    commercialStatus: route.commercialStatus,\n    currency: pricing.currency,\n    unit: pricing.unit,\n    inputPerMillion: pricing.inputPerMillion ?? null,\n    outputPerMillion: pricing.outputPerMillion ?? null,\n    cacheReadPerMillion: pricing.cacheReadPerMillion ?? null,\n    cacheWritePerMillion: pricing.cacheWritePerMillion ?? null,\n    cacheWrite1hPerMillion: pricing.cacheWrite1hPerMillion ?? null,\n  };\n}\n\nexport function getRoutePricing(routeId: string): RoutePriceSheet | null {\n  const route = routeRecords[routeId];\n  return route ? toPriceSheet(routeId, route) : null;\n}\n\nexport function getRoutePricingForModel(modelKey: string): RoutePriceSheet[] {\n  return Object.entries(routeRecords)\n    .filter(([, route]) => route.modelKey === modelKey)\n    .map(([routeId, route]) => toPriceSheet(routeId, route));\n}\n\nexport default registry;\n`;
 const RUST_REGISTRY_MODULE_SOURCE = `// This file is generated by @agiworkforce/model-registry.\npub const MODEL_REGISTRY_JSON: &str = include_str!("model_registry.json");\n`;
 
 function yamlSingleQuoted(value) {
@@ -1090,10 +1266,18 @@ function buildSkillSpectorProviderRegistry(catalog, providerId) {
 
 async function buildNormalizedArtifacts(catalog, familyCatalog) {
   const harnessCatalog = readJson(HARNESSES_JSON);
+  const modelRouteCatalog = readJson(MODEL_ROUTES_JSON);
   const routingPolicies = readJson(ROUTING_POLICIES_JSON);
   assert.equal(routingPolicies.schemaVersion, 1, 'Unsupported routing policy schema version');
+  assert.equal(modelRouteCatalog.schemaVersion, 1, 'Unsupported model route schema version');
   assert.equal(familyCatalog.schemaVersion, 1, 'Unsupported model family schema version');
-  const registry = buildNormalizedRegistry(catalog, harnessCatalog, routingPolicies, familyCatalog);
+  const registry = buildNormalizedRegistry(
+    catalog,
+    harnessCatalog,
+    modelRouteCatalog,
+    routingPolicies,
+    familyCatalog,
+  );
   const schema = readJson(REGISTRY_SCHEMA_JSON);
   const validate = new Ajv({ allErrors: true, strict: true }).compile(schema);
   if (!validate(registry)) {
@@ -1296,6 +1480,7 @@ export function loadFamilySnapshot() {
   const registry = buildNormalizedRegistry(
     catalog,
     readJson(HARNESSES_JSON),
+    readJson(MODEL_ROUTES_JSON),
     readJson(ROUTING_POLICIES_JSON),
     familyCatalog,
   );

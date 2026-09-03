@@ -8,4 +8,93 @@ export type ProviderId = keyof ModelRegistry['providerModelKeys'];
 export type RouteId = keyof ModelRegistry['routes'];
 export type HarnessId = keyof ModelRegistry['harnesses'];
 export type RuntimeProfileId = keyof ModelRegistry['runtimeProfiles'];
+
+export type RouteCacheClass =
+  | 'provider_implicit_prompt_cache'
+  | 'provider_explicit_prompt_cache'
+  | 'gateway_prompt_cache'
+  | 'gateway_response_cache'
+  | 'no_provider_cache';
+
+export type RouteCommercialStatus =
+  | 'agi_direct'
+  | 'customer_byok'
+  | 'authorized_marketplace'
+  | 'free_commercial'
+  | 'experimental_only'
+  | 'blocked';
+
+interface RoutePricingRecord {
+  currency: string;
+  unit: string;
+  inputPerMillion?: number;
+  outputPerMillion?: number;
+  cacheReadPerMillion?: number;
+  cacheWritePerMillion?: number;
+  cacheWrite1hPerMillion?: number;
+}
+
+interface RouteRecord {
+  modelKey: string;
+  provider: string;
+  providerModelId: string;
+  harnessId: string;
+  isDefault: boolean;
+  cacheClass: RouteCacheClass;
+  commercialStatus: RouteCommercialStatus;
+  pricing: RoutePricingRecord;
+}
+
+export interface RoutePriceSheet {
+  routeId: string;
+  modelKey: string;
+  provider: string;
+  providerModelId: string;
+  harnessId: string;
+  isDefault: boolean;
+  cacheClass: RouteCacheClass;
+  commercialStatus: RouteCommercialStatus;
+  currency: string;
+  unit: string;
+  inputPerMillion: number | null;
+  outputPerMillion: number | null;
+  cacheReadPerMillion: number | null;
+  cacheWritePerMillion: number | null;
+  cacheWrite1hPerMillion: number | null;
+}
+
+const routeRecords = registry.routes as unknown as Readonly<Record<string, RouteRecord>>;
+
+function toPriceSheet(routeId: string, route: RouteRecord): RoutePriceSheet {
+  const { pricing } = route;
+  return {
+    routeId,
+    modelKey: route.modelKey,
+    provider: route.provider,
+    providerModelId: route.providerModelId,
+    harnessId: route.harnessId,
+    isDefault: route.isDefault,
+    cacheClass: route.cacheClass,
+    commercialStatus: route.commercialStatus,
+    currency: pricing.currency,
+    unit: pricing.unit,
+    inputPerMillion: pricing.inputPerMillion ?? null,
+    outputPerMillion: pricing.outputPerMillion ?? null,
+    cacheReadPerMillion: pricing.cacheReadPerMillion ?? null,
+    cacheWritePerMillion: pricing.cacheWritePerMillion ?? null,
+    cacheWrite1hPerMillion: pricing.cacheWrite1hPerMillion ?? null,
+  };
+}
+
+export function getRoutePricing(routeId: string): RoutePriceSheet | null {
+  const route = routeRecords[routeId];
+  return route ? toPriceSheet(routeId, route) : null;
+}
+
+export function getRoutePricingForModel(modelKey: string): RoutePriceSheet[] {
+  return Object.entries(routeRecords)
+    .filter(([, route]) => route.modelKey === modelKey)
+    .map(([routeId, route]) => toPriceSheet(routeId, route));
+}
+
 export default registry;
