@@ -6,9 +6,8 @@ import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
-import { getClerkAuthUser } from '@/lib/api-auth';
 import { requireCsrfToken } from '@/lib/csrf';
-import { getNeonDb } from '@/lib/server/neon-db';
+import { getUserScopedDb } from '@/lib/server/rls-db';
 import { handleCorsPreflightRequest } from '@/lib/cors';
 import { recordAuditEvent } from '@/lib/security-audit';
 
@@ -49,13 +48,13 @@ async function handleGetOverage(request: NextRequest) {
   const rateLimitResponse = await withRateLimit(request, 'billing-payment-methods');
   if (rateLimitResponse) return rateLimitResponse;
 
-  const { userId } = await getClerkAuthUser(request);
-  const rows = await getNeonDb().query<OverageRow>(SELECT_OVERAGE, [userId]);
+  const { db, userId } = await getUserScopedDb(request);
+  const rows = await db.query<OverageRow>(SELECT_OVERAGE, [userId]);
   return toResponse(rows[0]);
 }
 
 async function handlePutOverage(request: NextRequest) {
-  const { userId } = await getClerkAuthUser(request);
+  const { db, userId } = await getUserScopedDb(request);
   const csrfError = await requireCsrfToken(request, userId);
   if (csrfError) return csrfError as NextResponse;
 
@@ -67,7 +66,6 @@ async function handlePutOverage(request: NextRequest) {
     throw createError.validation('Send { "enabled": true } or { "enabled": false }.');
   }
 
-  const db = getNeonDb();
   const updated = await db.query<OverageRow>(
     `update public.subscriptions
         set overage_enabled = $2, updated_at = now()

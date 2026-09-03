@@ -6,26 +6,23 @@ import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
-import { getClerkAuthUser } from '@/lib/api-auth';
-import { getNeonDb } from '@/lib/server/neon-db';
+import { getUserScopedDb } from '@/lib/server/rls-db';
 import type { SubscriptionRow } from '@/lib/server/neon-types';
 import { handleCorsPreflightRequest } from '@/lib/cors';
 import { STRIPE_CLIENT_OPTIONS } from '@/lib/stripe-config';
 
 const STRIPE_SECRET_KEY = process.env['STRIPE_SECRET_KEY'];
 
-const stripe = STRIPE_SECRET_KEY
-  ? new Stripe(STRIPE_SECRET_KEY, STRIPE_CLIENT_OPTIONS)
-  : null;
+const stripe = STRIPE_SECRET_KEY ? new Stripe(STRIPE_SECRET_KEY, STRIPE_CLIENT_OPTIONS) : null;
 
 async function handleGetPaymentMethods(request: NextRequest) {
   const rateLimitResponse = await withRateLimit(request, 'billing-payment-methods');
   if (rateLimitResponse) return rateLimitResponse;
 
+  let db: Awaited<ReturnType<typeof getUserScopedDb>>['db'];
   let userId: string;
   try {
-    const auth = await getClerkAuthUser(request);
-    userId = auth.userId;
+    ({ db, userId } = await getUserScopedDb(request));
   } catch {
     throw createError.unauthorized('Authentication required');
   }
@@ -34,8 +31,6 @@ async function handleGetPaymentMethods(request: NextRequest) {
     logger.warn('[billing/payment-methods] Stripe not configured');
     return NextResponse.json({ payment_methods: [] });
   }
-
-  const db = getNeonDb();
 
   type SubRow = Pick<SubscriptionRow, 'stripe_customer_id' | 'stripe_subscription_id'>;
   const [sub] = await db

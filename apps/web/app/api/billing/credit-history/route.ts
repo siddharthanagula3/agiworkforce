@@ -5,8 +5,7 @@ import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
-import { getClerkAuthUser } from '@/lib/api-auth';
-import { getNeonDb } from '@/lib/server/neon-db';
+import { getUserScopedDb } from '@/lib/server/rls-db';
 import { handleCorsPreflightRequest } from '@/lib/cors';
 
 const DEFAULT_LIMIT = 50;
@@ -42,12 +41,9 @@ interface CreditHistoryRow {
 /**
  * GET /api/billing/credit-history
  * List the current user's real per-task credit ledger: purchases, refunds,
- * bonuses, manual adjustments, and every usage deduction. Scoped to the
- * caller via an explicit `user_id` predicate, matching the neighbouring
- * billing routes (apps/web/app/api/billing/invoices/route.ts,
- * apps/web/app/api/billing/payment-methods/route.ts) — none of them bind an
- * RLS subject via `db.withUser()`, so the `user_id = $1` filter here is the
- * real scoping boundary, not a redundant belt-and-suspenders check.
+ * bonuses, manual adjustments, and every usage deduction. Runs on the
+ * RLS-scoped connection from getUserScopedDb(), with the explicit `user_id`
+ * predicate kept as a query-level backstop.
  * Returns an empty list if the account has no transactions yet — never
  * fabricated rows.
  */
@@ -62,10 +58,10 @@ async function handleGetCreditHistory(request: NextRequest) {
   const rateLimitResponse = await withRateLimit(request, 'billing-invoices');
   if (rateLimitResponse) return rateLimitResponse;
 
+  let db: Awaited<ReturnType<typeof getUserScopedDb>>['db'];
   let userId: string;
   try {
-    const auth = await getClerkAuthUser(request);
-    userId = auth.userId;
+    ({ db, userId } = await getUserScopedDb(request));
   } catch {
     throw createError.unauthorized('Authentication required');
   }
@@ -76,7 +72,7 @@ async function handleGetCreditHistory(request: NextRequest) {
   const offset = parsePositiveInt(url.searchParams.get('offset'), 0);
 
   try {
-    const rows = await getNeonDb().query<CreditHistoryRow>(
+    const rows = await db.query<CreditHistoryRow>(
       `select id, transaction_type, amount_cents, description, metadata, created_at::text as created_at
        from public.credit_transactions
        where user_id = $1

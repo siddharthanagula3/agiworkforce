@@ -6,14 +6,14 @@ const mocks = vi.hoisted(() => ({
   createSession: vi.fn(),
   retrieveSubscription: vi.fn(async () => ({ currency: 'usd' })),
   audit: vi.fn(),
+  getUserScopedDb: vi.fn(),
 }));
 
 vi.mock('server-only', () => ({}));
 vi.mock('@/lib/rate-limit', () => ({ withRateLimit: vi.fn(async () => null) }));
 vi.mock('@/lib/csrf', () => ({ requireCsrfToken: vi.fn(async () => null) }));
-vi.mock('@clerk/nextjs/server', () => ({ auth: vi.fn(async () => ({ userId: 'user_123' })) }));
-vi.mock('@/lib/server/neon-db', () => ({
-  getNeonDb: () => ({ query: mocks.query }),
+vi.mock('@/lib/server/rls-db', () => ({
+  getUserScopedDb: (...args: unknown[]) => mocks.getUserScopedDb(...args),
 }));
 vi.mock('@/lib/security-audit', () => ({
   recordAuditEvent: (...args: unknown[]) => mocks.audit(...args),
@@ -50,6 +50,11 @@ describe('POST /api/billing/top-up', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     process.env['STRIPE_CHECKOUT_ENABLED'] = '1';
+    mocks.getUserScopedDb.mockResolvedValue({
+      db: { query: mocks.query },
+      userId: 'user_123',
+      organizationId: null,
+    });
     mocks.query.mockImplementation(async (sql: string) => {
       if (sql.includes('to_regprocedure')) return [{ ready: true }];
       return [
