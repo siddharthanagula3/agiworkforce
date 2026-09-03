@@ -19,10 +19,10 @@
  */
 
 import modelsCatalogJson from './models.json';
-import { modelRegistry } from '@agiworkforce/model-registry';
+import { modelRegistry, type RouteCommercialStatus } from '@agiworkforce/model-registry';
 
 export { getRoutePricing } from '@agiworkforce/model-registry';
-export type { RoutePriceSheet } from '@agiworkforce/model-registry';
+export type { RoutePriceSheet, RouteCommercialStatus } from '@agiworkforce/model-registry';
 
 export interface RegistryRoute {
   modelKey: string;
@@ -30,6 +30,7 @@ export interface RegistryRoute {
   harnessId: string;
   trustModes: readonly string[];
   isDefault: boolean;
+  commercialStatus: RouteCommercialStatus;
 }
 
 export function getRegistryRoute(routeId: string): RegistryRoute | null {
@@ -208,8 +209,11 @@ export interface EffectiveModelPricing {
   cached_write_1h?: number | undefined;
 }
 
+export type PricingTierThresholdBoundary = 'inclusive' | 'exclusive';
+
 export interface InputTokenPricingTier {
   thresholdTokens: number;
+  thresholdBoundary?: PricingTierThresholdBoundary;
   inputCost: number;
   outputCost: number;
   cached_input?: number;
@@ -310,6 +314,15 @@ export function isModelPromoExpired(
   );
 }
 
+const DEFAULT_PRICING_TIER_THRESHOLD_BOUNDARY: PricingTierThresholdBoundary = 'exclusive';
+
+function admitsPricingTier(candidate: InputTokenPricingTier, inputTokens: number): boolean {
+  const boundary = candidate.thresholdBoundary ?? DEFAULT_PRICING_TIER_THRESHOLD_BOUNDARY;
+  return boundary === 'inclusive'
+    ? inputTokens >= candidate.thresholdTokens
+    : inputTokens > candidate.thresholdTokens;
+}
+
 export function applyInputTokenPricingTiers(
   model: Pick<ModelMetadata, 'inputTokenPricingTiers' | 'longContext'>,
   base: EffectiveModelPricing,
@@ -328,7 +341,7 @@ export function applyInputTokenPricingTiers(
   for (const candidate of tiers) {
     if (
       Number.isFinite(candidate.thresholdTokens) &&
-      inputTokens > candidate.thresholdTokens &&
+      admitsPricingTier(candidate, inputTokens) &&
       (tier === undefined || candidate.thresholdTokens > tier.thresholdTokens)
     ) {
       tier = candidate;

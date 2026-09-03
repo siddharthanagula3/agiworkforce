@@ -9,11 +9,12 @@ import {
   type ProviderAdapterConfigMap,
   type ProviderAdapterId,
 } from '@agiworkforce/providers-factory';
-import { detectProviderFromModelId, listProtocolRoutes } from '@agiworkforce/types';
+import { getModelMetadataById, listProtocolRoutes } from '@agiworkforce/types';
 import {
   dispatchProviderForRoute,
   isManagedOpenRouterRoute,
   openRouterSlugFor,
+  validateRouteSelection,
 } from './aggregator-routing';
 import type {
   HarnessProtocol,
@@ -109,14 +110,40 @@ function hasServerProviderKey(providerId: string): boolean {
   return resolveServerProviderApiKey(providerId) !== undefined;
 }
 
-export function resolveProviderFromModel(model: string, selectedRouteId?: string): string {
-  const catalogProvider = detectProviderFromModelId(model);
-  if (!catalogProvider) {
+const DEFAULT_ROUTE_SELECTION_TRUST_MODE = 'managed_cloud';
+
+export interface RouteSelectionContext {
+  trustMode?: string;
+  hasUserProviderKey?: boolean;
+}
+
+export function resolveProviderFromModel(
+  model: string,
+  selectedRouteId?: string,
+  routeContext: RouteSelectionContext = {},
+): string {
+  const metadata = getModelMetadataById(model);
+  if (!metadata) {
     throw new Error('Model is not registered in the canonical model catalog');
   }
+  const catalogProvider = metadata.provider;
 
-  const selectedProvider = selectedRouteId ? dispatchProviderForRoute(selectedRouteId) : undefined;
-  if (selectedProvider) return selectedProvider;
+  if (selectedRouteId) {
+    const validation = validateRouteSelection(selectedRouteId, {
+      modelId: metadata.id,
+      trustMode: routeContext.trustMode ?? DEFAULT_ROUTE_SELECTION_TRUST_MODE,
+      hasUserProviderKey: routeContext.hasUserProviderKey ?? false,
+    });
+    if (validation.ok) {
+      const selectedProvider = dispatchProviderForRoute(selectedRouteId);
+      if (selectedProvider) return selectedProvider;
+    } else {
+      logger.warn(
+        { routeId: selectedRouteId, model, reason: validation.reason },
+        'Rejected selected route; falling back to default route resolution',
+      );
+    }
+  }
 
   if (catalogProvider === 'open_router') return 'openrouter';
 
