@@ -1,4 +1,3 @@
-
 import type {
   OpenAIChatCompletionCreateParams,
   OpenAIChatMessageParam,
@@ -9,6 +8,12 @@ export type OpenRouterAnthropicCacheRetention = 'none' | 'short' | 'long';
 interface AnthropicCacheControl {
   type: 'ephemeral';
   ttl?: '5m' | '1h';
+}
+
+const OPENROUTER_CACHE_CONTROL_ROUTE_PREFIXES = ['anthropic/', 'google/'] as const;
+
+function supportsCacheControlPassthrough(model: string): boolean {
+  return OPENROUTER_CACHE_CONTROL_ROUTE_PREFIXES.some((prefix) => model.startsWith(prefix));
 }
 
 function buildCacheControl(
@@ -28,7 +33,7 @@ export function applyOpenRouterAnthropicCacheControl(
   params: OpenAIChatCompletionCreateParams,
   retention: OpenRouterAnthropicCacheRetention,
 ): void {
-  if (!params.model.startsWith('anthropic/')) return;
+  if (!supportsCacheControlPassthrough(params.model)) return;
   const cacheControl = buildCacheControl(retention);
   if (!cacheControl) return;
 
