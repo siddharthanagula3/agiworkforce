@@ -40,6 +40,7 @@ import {
 } from '@agiworkforce/types';
 import { createManagedChatIdempotencyKey } from '@agiworkforce/utils/managed-chat-idempotency';
 import {
+  AGENT_EVENT_SCHEMA_VERSION,
   createManagedCloudChatClient,
   createManagedCloudAgentRunClient,
   ManagedCloudChatHttpError,
@@ -58,6 +59,7 @@ import {
   applyAgentActivityEvent,
   finishAgentActivityLocally,
   startAgentActivityLocally,
+  withoutGenerationProgress,
   type AgentActivityState,
 } from '@agiworkforce/client-runtime';
 import {
@@ -71,7 +73,13 @@ import { FALLBACK_REASON_HEADER } from '@/lib/chat-fallback-reason';
 import { getBrowserTimeZone } from '@/lib/client/browser-timezone';
 import { createFrameCoalescedAppender } from '@/lib/client/frame-coalesced-appender';
 import { isFreeTrialErrorCode, useFreeTrialStore } from '@/features/chat/stores/freeTrialStore';
-import type { AgentEventEnvelope, AgentTaskState, ResearchStep } from '@agiworkforce/types';
+import type {
+  AgentEvent,
+  AgentEventEnvelope,
+  AgentEventToolCategory,
+  AgentTaskState,
+  ResearchStep,
+} from '@agiworkforce/types';
 import { parseResearchPlanEvent } from '@/features/chat/utils/research-plan';
 import {
   linearTail,
@@ -974,6 +982,52 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
     );
   };
 
+  // A turn that gets the structured `x_agent_event` stream (the managed cloud
+  // chat / agent run dialect, not only AGI Work) already drives truthful
+  // phase labels through applyAgentActivityEvent below. A turn that never
+  // sees one of those only gets the older `x_tool_status` / `x_search_results`
+  // deltas, which used to update nothing but the legacy tool timeline,
+  // leaving the header stuck on its starting label. Projecting those through
+  // the identical state machine gives both dialects the same labels
+  // ("Searching the web" -> "Reading N sources" -> "Writing response") from
+  // the same kind of event, without a second, bespoke label deriver.
+  //
+  // Real `x_agent_event`s always win: `sawRealAgentEvent` flips true the
+  // moment one is parsed (seeded true if this message already carries one
+  // from an earlier chunk) and permanently disables synthesis for the turn,
+  // so a stream carrying both dialects for the same tool call never lets the
+  // synthetic projection collide with the canonical one.
+  let sawRealAgentEvent = (currentAgentActivity?.lastSequence ?? -1) > -1;
+  let localAgentEventSequence = 0;
+  const applyLocalAgentEvent = (event: AgentEvent) => {
+    if (sawRealAgentEvent) return;
+    currentAgentActivity = applyAgentActivityEvent(currentAgentActivity, {
+      schemaVersion: AGENT_EVENT_SCHEMA_VERSION,
+      sessionId: conversationId,
+      turnId: assistantMessageId,
+      sequence: localAgentEventSequence++,
+      emittedAtMs: Date.now(),
+      event,
+    });
+    patchMessageMeta({ agentActivity: currentAgentActivity });
+  };
+
+  const nativeToolCategory = (name: string): AgentEventToolCategory => {
+    if (name === 'web_search' || name === 'gemini_grounding') return 'web-search';
+    if (name === 'web_fetch' || name === 'url_fetch') return 'web-fetch';
+    if (name === 'code_execution') return 'code-execution';
+    return 'other';
+  };
+
+  const nativeToolCallId = (name: string) => `native:${name}`;
+
+  let hasSyncedWritingResponse = false;
+  const syncWritingResponseOnce = (delta: string) => {
+    if (sawRealAgentEvent || hasSyncedWritingResponse) return;
+    hasSyncedWritingResponse = true;
+    applyLocalAgentEvent({ type: 'text-delta', delta });
+  };
+
   // The stream ending is itself the terminal signal: a run that never emitted a
   // stop envelope (deep research, server tools) would otherwise keep rendering
   // "Working…" under a finished answer.
@@ -992,7 +1046,7 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
     }
     currentAgentActivity = {
       ...currentAgentActivity,
-      entries: currentAgentActivity.entries.map((entry) =>
+      entries: withoutGenerationProgress(currentAgentActivity.entries).map((entry) =>
         entry.kind === 'progress' && entry.progressId === 'local-starting'
           ? { ...entry, summary: 'Response ready' }
           : entry,
@@ -1454,6 +1508,7 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
                     ? 'error'
                     : 'stop';
           }
+          sawRealAgentEvent = true;
           applySourceListEvent(envelope.event);
           currentAgentActivity = collapseDuplicateAgentActivityErrors(
             applyAgentActivityEvent(currentAgentActivity, humanizeAgentEventEnvelope(envelope)),
@@ -1580,6 +1635,7 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
           const parsed = JSON.parse(data);
 
           const agentEnvelope = parseAgentEventDelta(parsed.choices?.[0]?.delta?.x_agent_event);
+          if (agentEnvelope) sawRealAgentEvent = true;
           const duplicateAgentEnvelope = Boolean(
             agentEnvelope &&
             currentAgentActivity?.sessionId === agentEnvelope.sessionId &&
@@ -1620,6 +1676,7 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
           if (chunk !== null) {
             contentBuffer += chunk;
             flushContentBuffer(false);
+            syncWritingResponseOnce(chunk);
           }
 
           const researchStatus = parsed.choices?.[0]?.delta?.x_research_status;
@@ -1701,6 +1758,17 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
           const toolStatus = parsed.choices?.[0]?.delta?.x_tool_status;
           if (toolStatus?.type === 'server_tool_use') {
             startTool(toolStatus.name, undefined, toolStatus.status_phrase);
+            const name = typeof toolStatus.name === 'string' ? toolStatus.name : 'server_tool';
+            const phrase =
+              typeof toolStatus.status_phrase === 'string' ? toolStatus.status_phrase : name;
+            applyLocalAgentEvent({
+              type: 'tool-execution-start',
+              toolCallId: nativeToolCallId(name),
+              name,
+              category: nativeToolCategory(name),
+              summary: phrase,
+              input: null,
+            });
           }
           if (toolStatus?.type === 'mcp_tool_use') {
             if (toolStatus.status === 'running') {
@@ -1821,6 +1889,13 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
                 currentResearch = { ...currentResearch, sourcesForRetry: merged };
                 setResearchState(assistantMessageId, { ...currentResearch }, conversationId);
               }
+              if (searchResultsBlock.tool !== 'url_fetch') {
+                applyLocalAgentEvent({
+                  type: 'source-list',
+                  toolCallId: nativeToolCallId('web_search'),
+                  sources: results,
+                });
+              }
             }
             if (searchResultsBlock.tool !== 'url_fetch') {
               finishTool('web_search', 'completed');
@@ -1837,6 +1912,13 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
                 | string
                 | undefined) || 'unknown_error';
             finishTool('web_search', 'failed', `Web search failed: ${errorCode}`);
+            applyLocalAgentEvent({
+              type: 'tool-execution-end',
+              toolCallId: nativeToolCallId('web_search'),
+              name: 'web_search',
+              output: `Web search failed: ${errorCode}`,
+              isError: true,
+            });
           }
 
           const toolResultBlock = parsed.choices?.[0]?.delta?.x_tool_result;

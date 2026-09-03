@@ -152,7 +152,7 @@ function isGenerationProgressEntry(entry: AgentActivityEntry): entry is AgentAct
   return entry.kind === 'progress' && entry.progressId === GENERATION_PROGRESS_KIND;
 }
 
-function withoutGenerationProgress(entries: AgentActivityEntry[]): AgentActivityEntry[] {
+export function withoutGenerationProgress(entries: AgentActivityEntry[]): AgentActivityEntry[] {
   return entries.some(isGenerationProgressEntry)
     ? entries.filter((entry) => !isGenerationProgressEntry(entry))
     : entries;

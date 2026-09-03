@@ -19,6 +19,7 @@ export {
   applyAgentActivityEvent,
   finishAgentActivityLocally,
   startAgentActivityLocally,
+  withoutGenerationProgress,
 } from './agentActivity';
 export type {
   AgentActivityApproval,
