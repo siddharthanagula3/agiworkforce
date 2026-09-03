@@ -1,5 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { ChatAttachmentHydrationError, hydrateChatAttachments } from './chat-attachment-hydration';
+import {
+  ChatAttachmentHydrationError,
+  hydrateChatAttachments,
+  MAX_PARALLEL_ATTACHMENT_FETCHES,
+} from './chat-attachment-hydration';
 
 const mocks = vi.hoisted(() => ({
   getMediaAssetById: vi.fn(),
@@ -530,5 +534,80 @@ describe('hydrateChatAttachments', () => {
     expect(partsOf(messages[19])[0]?.text).toBe(
       '[an earlier attachment was left out because this conversation has reached its attachment limit]',
     );
+  });
+
+  it('overlaps the DB and storage round trips across attachment slots instead of serializing them', async () => {
+    const slotCount = MAX_PARALLEL_ATTACHMENT_FETCHES + 2;
+    const ids = Array.from({ length: slotCount }, (_, index) => `slot-${index}`);
+    const fetchDelayMs = 20;
+    const callOrder: string[] = [];
+    let inFlight = 0;
+    let peakInFlight = 0;
+
+    mocks.getMediaAssetById.mockImplementation(async (id: string) => {
+      callOrder.push(`lookup-start:${id}`);
+      inFlight += 1;
+      peakInFlight = Math.max(peakInFlight, inFlight);
+      await new Promise((resolve) => setTimeout(resolve, fetchDelayMs));
+      inFlight -= 1;
+      callOrder.push(`lookup-end:${id}`);
+      return {
+        id,
+        userId: 'user-1',
+        kind: 'file',
+        mimeType: 'text/plain',
+        storagePathname: `chat-attachments/user-1/${id}.txt`,
+        metadata: { filename: `${id}.txt` },
+        deletedAt: null,
+      };
+    });
+    mocks.readStoredMedia.mockResolvedValue({ data: Buffer.from('x') });
+
+    const messages = [
+      {
+        role: 'user',
+        content: ids.map((id) => ({ type: 'file', file: { asset_id: id } })),
+      },
+    ];
+
+    const startedAt = Date.now();
+    await hydrateChatAttachments(messages, 'user-1');
+    const elapsedMs = Date.now() - startedAt;
+
+    expect(peakInFlight).toBeGreaterThan(1);
+    expect(peakInFlight).toBeLessThanOrEqual(MAX_PARALLEL_ATTACHMENT_FETCHES);
+    expect(elapsedMs).toBeLessThan(fetchDelayMs * ids.length);
+    expect(callOrder[0]).toBe('lookup-start:slot-0');
+    expect(callOrder.filter((entry) => entry.startsWith('lookup-start')).length).toBe(slotCount);
+  });
+
+  it('produces the same result for a single attachment whether or not other slots are being fetched concurrently', async () => {
+    const assetId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+    mocks.getMediaAssetById.mockResolvedValue({
+      id: assetId,
+      userId: 'user-1',
+      kind: 'file',
+      mimeType: 'text/csv',
+      byteSize: 7,
+      storagePathname: `chat-attachments/user-1/${assetId}.csv`,
+      metadata: { filename: 'report.csv' },
+      deletedAt: null,
+    });
+    mocks.readStoredMedia.mockResolvedValue({ data: Buffer.from('a,b,c\n1') });
+    const messages = [{ role: 'user', content: [{ type: 'file', file: { asset_id: assetId } }] }];
+
+    await hydrateChatAttachments(messages, 'user-1');
+
+    expect(partsOf(messages[0])).toEqual([
+      { type: 'text', text: '[attached file: report.csv (text/csv)]' },
+      {
+        type: 'file',
+        file: {
+          filename: 'report.csv',
+          mime_type: 'text/plain',
+          file_data: `data:text/plain;base64,${Buffer.from('a,b,c\n1').toString('base64')}`,
+        },
+      },
+    ]);
   });
 });

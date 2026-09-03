@@ -7,11 +7,14 @@ import {
   isSupportedChatAttachment,
   normalizeChatDocumentMimeType,
 } from '@/lib/chat-attachment-policy';
+import { withSpan } from '@/lib/observability/span';
+import { mapWithConcurrency } from './tool-loop';
 
 const MAX_REQUEST_ATTACHMENT_COUNT = 20;
 const MAX_REQUEST_ATTACHMENT_BYTES = 18 * 1024 * 1024;
 const MAX_NOTEBOOK_TEXT_CHARS = 200_000;
 const NOTEBOOK_MIME_TYPE = 'application/x-ipynb+json';
+export const MAX_PARALLEL_ATTACHMENT_FETCHES = 4;
 
 type AttachmentReferencePart = {
   type: string;
@@ -199,6 +202,72 @@ function collectAttachmentSlots(messages: HydratableMessage[]): AttachmentSlot[]
   return slots;
 }
 
+type ResolvedMediaAsset = NonNullable<Awaited<ReturnType<typeof getMediaAssetById>>>;
+type ResolvedStoredMedia = NonNullable<Awaited<ReturnType<typeof readStoredMedia>>>;
+
+type AttachmentFetchOutcome =
+  | { readonly kind: 'foreign' }
+  | { readonly kind: 'removed'; readonly filename: string }
+  | { readonly kind: 'unsupported'; readonly filename: string }
+  | { readonly kind: 'unreadable'; readonly filename: string }
+  | {
+      readonly kind: 'ready';
+      readonly filename: string;
+      readonly asset: ResolvedMediaAsset;
+      readonly object: ResolvedStoredMedia;
+    };
+
+/**
+ * The DB row and the stored bytes are two round trips with nothing between
+ * them a caller can use, so they run one after another here - but this whole
+ * function runs concurrently across slots, which is where the serial cost
+ * actually was.
+ */
+async function fetchAttachmentPayload(
+  assetId: string,
+  userId: string,
+): Promise<AttachmentFetchOutcome> {
+  const asset = await withSpan(
+    'chat_attachment.asset_lookup',
+    { domain: 'retrieval', attributes: { 'chat_attachment.asset_id': assetId } },
+    () => getMediaAssetById(assetId),
+  );
+
+  if (asset && asset.userId !== userId) return { kind: 'foreign' };
+
+  if (!asset || asset.deletedAt || !asset.storagePathname) {
+    return {
+      kind: 'removed',
+      filename: asset
+        ? filenameFromMetadata(asset.metadata, `attachment-${asset.id}`)
+        : `attachment-${assetId}`,
+    };
+  }
+
+  const filename = filenameFromMetadata(asset.metadata, `attachment-${asset.id}`);
+  if (!isSupportedChatAttachment(filename, asset.mimeType)) {
+    return { kind: 'unsupported', filename };
+  }
+
+  const object = await withSpan(
+    'chat_attachment.storage_read',
+    {
+      domain: 'retrieval',
+      attributes: {
+        'chat_attachment.asset_id': asset.id,
+        'chat_attachment.mime_type': asset.mimeType,
+      },
+    },
+    () => readStoredMedia(asset.storagePathname as string),
+  );
+  if (!object) return { kind: 'unreadable', filename };
+  if (asset.byteSize != null && object.data.byteLength !== asset.byteSize) {
+    return { kind: 'unreadable', filename };
+  }
+
+  return { kind: 'ready', filename, asset, object };
+}
+
 export async function hydrateChatAttachments(
   messages: HydratableMessage[],
   userId: string,
@@ -219,11 +288,10 @@ export async function hydrateChatAttachments(
     ...slots.filter((slot) => !slot.fromCurrentTurn),
   ];
 
+  const pending: AttachmentSlot[] = [];
+
   for (const slot of ordered) {
     const live = slot.fromCurrentTurn;
-    const degrade = (filename: string, note: string): void => {
-      slot.resolved = [{ type: 'text', text: unavailableAttachment(filename, note) }];
-    };
 
     if (messages[slot.messageIndex]?.role !== 'user') {
       slot.resolved = [{ type: 'text', text: UNNAMED_UNAVAILABLE_NOTE }];
@@ -243,9 +311,28 @@ export async function hydrateChatAttachments(
       continue;
     }
 
-    const asset = await getMediaAssetById(slot.assetId);
+    pending.push(slot);
+  }
 
-    if (asset && asset.userId !== userId) {
+  /**
+   * Fetching is independent per slot, so it runs concurrently under a small
+   * cap; the budget and ordering rules below still apply afterward, in the
+   * same `ordered` sequence the serial loop used, so the outcome does not
+   * depend on which fetch happens to land first.
+   */
+  const outcomes = await mapWithConcurrency(pending, MAX_PARALLEL_ATTACHMENT_FETCHES, (slot) =>
+    fetchAttachmentPayload(slot.assetId, userId),
+  );
+
+  for (let index = 0; index < pending.length; index += 1) {
+    const slot = pending[index]!;
+    const outcome = outcomes[index]!;
+    const live = slot.fromCurrentTurn;
+    const degrade = (filename: string, note: string): void => {
+      slot.resolved = [{ type: 'text', text: unavailableAttachment(filename, note) }];
+    };
+
+    if (outcome.kind === 'foreign') {
       if (live) {
         throw new ChatAttachmentHydrationError(
           404,
@@ -257,38 +344,29 @@ export async function hydrateChatAttachments(
       continue;
     }
 
-    if (!asset || asset.deletedAt || !asset.storagePathname) {
-      degrade(
-        asset
-          ? filenameFromMetadata(asset.metadata, `attachment-${asset.id}`)
-          : `attachment-${slot.assetId}`,
-        ATTACHMENT_REMOVED_NOTE,
-      );
+    if (outcome.kind === 'removed') {
+      degrade(outcome.filename, ATTACHMENT_REMOVED_NOTE);
       continue;
     }
 
-    const filename = filenameFromMetadata(asset.metadata, `attachment-${asset.id}`);
-    if (!isSupportedChatAttachment(filename, asset.mimeType)) {
+    if (outcome.kind === 'unsupported') {
       if (live) {
         throw new ChatAttachmentHydrationError(
           400,
           'unsupported_attachment',
-          `${filename} is not a file type this chat can read.`,
+          `${outcome.filename} is not a file type this chat can read.`,
         );
       }
-      degrade(filename, ATTACHMENT_UNSUPPORTED_NOTE);
+      degrade(outcome.filename, ATTACHMENT_UNSUPPORTED_NOTE);
       continue;
     }
 
-    const object = await readStoredMedia(asset.storagePathname);
-    if (!object) {
-      degrade(filename, ATTACHMENT_UNREADABLE_NOTE);
+    if (outcome.kind === 'unreadable') {
+      degrade(outcome.filename, ATTACHMENT_UNREADABLE_NOTE);
       continue;
     }
-    if (asset.byteSize != null && object.data.byteLength !== asset.byteSize) {
-      degrade(filename, ATTACHMENT_UNREADABLE_NOTE);
-      continue;
-    }
+
+    const { filename, asset, object } = outcome;
 
     if (totalBytes + object.data.byteLength > MAX_REQUEST_ATTACHMENT_BYTES) {
       if (live) {
