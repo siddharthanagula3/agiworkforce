@@ -24,7 +24,7 @@ export interface ConfirmDialogProps {
   onCancel?: () => void;
 }
 
-export function ConfirmDialog({
+function ConfirmDialogImpl({
   open,
   onOpenChange,
   title,
@@ -69,6 +69,21 @@ export function ConfirmDialog({
     </AlertDialog>
   );
 }
+
+export const ConfirmDialog = React.memo(ConfirmDialogImpl, (prev, next) => {
+  if (!prev.open && !next.open) return true;
+  return (
+    prev.open === next.open &&
+    prev.onOpenChange === next.onOpenChange &&
+    prev.title === next.title &&
+    prev.description === next.description &&
+    prev.confirmText === next.confirmText &&
+    prev.cancelText === next.cancelText &&
+    prev.variant === next.variant &&
+    prev.onConfirm === next.onConfirm &&
+    prev.onCancel === next.onCancel
+  );
+});
 
 export function useConfirm() {
   const [state, setState] = React.useState<{
@@ -127,18 +142,23 @@ export function useConfirm() {
     finalize(false);
   }, [finalize]);
 
+  const handleOpenChange = React.useCallback(
+    (open: boolean) => {
+      if (!open) {
+        if (resolvingRef.current) {
+          resolvingRef.current = false;
+          return;
+        }
+        handleCancel();
+      }
+    },
+    [handleCancel],
+  );
+
   const dialog = (
     <ConfirmDialog
       open={state.open}
-      onOpenChange={(open) => {
-        if (!open) {
-          if (resolvingRef.current) {
-            resolvingRef.current = false;
-            return;
-          }
-          handleCancel();
-        }
-      }}
+      onOpenChange={handleOpenChange}
       title={state.title}
       description={state.description}
       confirmText={state.confirmText}
