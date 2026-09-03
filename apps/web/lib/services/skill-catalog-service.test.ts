@@ -15,6 +15,7 @@ import {
   getBundledSkillDownloadForPlugins,
   getManagedSkillCatalog,
   getManagedSkillDirectory,
+  getManagedSkillDirectoryForPlugins,
   getManagedSkillLayers,
   getManagedSkillPluginOwners,
   parseSkillLayersConfig,
@@ -206,6 +207,26 @@ describe('managed Skill catalog service', () => {
       'literature-review',
     );
     expect(download?.content.toString('utf-8')).toContain('name: literature-review');
+  });
+
+  it('offers a plugin-owned skill to the composer only once its plugin is installed and enabled', async () => {
+    const beforeInstall = await getManagedSkillDirectoryForPlugins(new Set());
+    expect(beforeInstall.some((skill) => skill.name === 'literature-review')).toBe(false);
+
+    const afterInstall = await getManagedSkillDirectoryForPlugins(new Set(['research-pack']));
+    expect(afterInstall.some((skill) => skill.name === 'literature-review')).toBe(true);
+
+    const afterUninstall = await getManagedSkillDirectoryForPlugins(new Set());
+    expect(afterUninstall.some((skill) => skill.name === 'literature-review')).toBe(false);
+  });
+
+  it('never gates an engineering-pack skill behind install, since it owns no skill', async () => {
+    const withoutPlugin = await getManagedSkillDirectoryForPlugins(new Set());
+    const withPlugin = await getManagedSkillDirectoryForPlugins(new Set(['engineering-pack']));
+
+    for (const skills of [withoutPlugin, withPlugin]) {
+      expect(skills.some((skill) => skill.name === 'code-review')).toBe(true);
+    }
   });
 
   it('does not auto-grant a bundled skill required tools', async () => {
