@@ -179,6 +179,10 @@ function withoutPreparingProgress(entries: AgentActivityEntry[]): AgentActivityE
     : entries;
 }
 
+function withoutLocalStart(entries: AgentActivityEntry[]): AgentActivityEntry[] {
+  return entries.filter((entry) => entry.id !== LOCAL_START_PROGRESS_ID);
+}
+
 function hasRealActivityEntry(entries: readonly AgentActivityEntry[]): boolean {
   return entries.some(
     (entry) =>
@@ -353,7 +357,12 @@ export function applyAgentActivityEvent(
     current?.lastSequence === -1 &&
     current.entries.some((entry) => entry.id === LOCAL_START_PROGRESS_ID);
   const isFreshProjection = !(sameTurn && current && !hasLocalStart);
-  const previous = isFreshProjection ? createState(envelope) : (current as AgentActivityState);
+  const previous = isFreshProjection
+    ? {
+        ...createState(envelope),
+        ...(hasLocalStart ? { entries: withoutLocalStart(current!.entries) } : {}),
+      }
+    : (current as AgentActivityState);
 
   if (sameTurn && envelope.sequence <= previous.lastSequence) return previous;
 

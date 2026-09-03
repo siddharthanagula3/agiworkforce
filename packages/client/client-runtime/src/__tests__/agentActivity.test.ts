@@ -51,6 +51,42 @@ describe('portable agent activity projection', () => {
     expect(JSON.stringify(canonical)).not.toContain('Starting AGI Work');
   });
 
+  it('keeps a tool entry a local bridge appended before the first canonical event of the turn arrives', () => {
+    const starting = startAgentActivityLocally({
+      sessionId: 'session-1',
+      turnId: 'turn-1',
+      summary: 'Starting AGI Work',
+      startedAtMs: 900,
+    });
+
+    const bridged = {
+      ...starting,
+      entries: [
+        ...starting.entries,
+        {
+          kind: 'tool',
+          id: 'tool:native-web-search',
+          toolCallId: 'native-web-search',
+          name: 'web_search',
+          category: 'web-search',
+          summary: 'Reading 3 sources',
+          status: 'running',
+          startedAtMs: 950,
+        } satisfies AgentActivityToolEntry,
+      ],
+    };
+
+    const next = applyAgentActivityEvent(
+      bridged,
+      envelope(0, { type: 'text-delta', delta: 'Here is what I found. ' }),
+    );
+
+    const tool = next.entries.find((entry) => entry.id === 'tool:native-web-search');
+    expect(isToolEntry(tool)).toBe(true);
+    expect(tool).toMatchObject({ summary: 'Reading 3 sources', status: 'running' });
+    expect(JSON.stringify(next)).not.toContain('Starting AGI Work');
+  });
+
   it('can complete a local starting action when a provider returns without activity events', () => {
     const starting = startAgentActivityLocally({
       sessionId: 'session-1',
