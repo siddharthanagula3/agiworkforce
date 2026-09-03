@@ -58,8 +58,9 @@ export function DirectoryModalProvider({ children }: { children: React.ReactNode
     return () => window.removeEventListener('hashchange', sync);
   }, []);
 
+  const directoryOpen = route !== null;
   useEffect(() => {
-    if (!route) return undefined;
+    if (!directoryOpen) return undefined;
     const main = document.getElementById(MAIN_CONTENT_ID);
     if (!main) return undefined;
     const previous = main.getAttribute(ARIA_HIDDEN);
@@ -68,9 +69,14 @@ export function DirectoryModalProvider({ children }: { children: React.ReactNode
       if (previous === null) main.removeAttribute(ARIA_HIDDEN);
       else main.setAttribute(ARIA_HIDDEN, previous);
     };
-  }, [route]);
+  }, [directoryOpen]);
 
   const onRouteChange = useCallback((section: DirectorySectionKey, entryId: string | null) => {
+    setRoute((current) =>
+      current && current.section === section && current.entryId === entryId
+        ? current
+        : { section, entryId },
+    );
     if (typeof window === 'undefined') return;
     if (!parseDirectoryHash(window.location.hash)) return;
     window.history.replaceState(null, '', buildDirectoryHash(section, entryId));
@@ -78,7 +84,7 @@ export function DirectoryModalProvider({ children }: { children: React.ReactNode
 
   return (
     <DirectoryModalContext.Provider
-      value={{ isOpen: route !== null, openDirectory, closeDirectory }}
+      value={{ isOpen: directoryOpen, openDirectory, closeDirectory }}
     >
       {children}
       {route ? (
