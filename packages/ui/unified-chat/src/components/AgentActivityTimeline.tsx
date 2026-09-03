@@ -64,16 +64,20 @@ function latestActiveSummary(activity: AgentActivityState): string | undefined {
 }
 
 const WEB_SEARCH_COMPLETED_SUMMARY = 'Searched the web';
+const WEB_SEARCH_CANCELLED_SUMMARY = 'Search stopped';
 
 function finalSummary(activity: AgentActivityState): string | undefined {
   for (let index = activity.entries.length - 1; index >= 0; index -= 1) {
     const entry = activity.entries[index];
     if (!entry || !('summary' in entry) || !entry.summary) continue;
-    if (entry.kind === 'tool' && entry.category === 'web-search' && entry.status !== 'failed') {
-      const sourceCount = entry.sources?.length ?? 0;
-      return sourceCount > 0
-        ? `${WEB_SEARCH_COMPLETED_SUMMARY} · ${sourceCount} source${sourceCount === 1 ? '' : 's'}`
-        : WEB_SEARCH_COMPLETED_SUMMARY;
+    if (entry.kind === 'tool' && entry.category === 'web-search') {
+      if (entry.status === 'cancelled') return WEB_SEARCH_CANCELLED_SUMMARY;
+      if (entry.status !== 'failed') {
+        const sourceCount = entry.sources?.length ?? 0;
+        return sourceCount > 0
+          ? `${WEB_SEARCH_COMPLETED_SUMMARY} · ${sourceCount} source${sourceCount === 1 ? '' : 's'}`
+          : WEB_SEARCH_COMPLETED_SUMMARY;
+      }
     }
     return entry.summary;
   }
