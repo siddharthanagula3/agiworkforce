@@ -364,4 +364,83 @@ describe('translateOpenAIResponsesStream native web search', () => {
       { type: 'web_search_result', url: OPENAI_SIBLING_ARTICLE_URL, title: '' },
     ]);
   });
+
+  it('falls back to the hostname instead of dropping a cited annotation OpenAI returns with no title', async () => {
+    const events = [
+      {
+        type: 'response.output_text.annotation.added',
+        item_id: 'msg_untitled',
+        output_index: 1,
+        content_index: 0,
+        annotation_index: 0,
+        annotation: {
+          type: 'url_citation',
+          url: 'https://example.com/no-title-page',
+          title: '',
+          start_index: 0,
+          end_index: 3,
+        },
+      },
+      {
+        type: 'response.completed',
+        response: { id: 'resp_untitled', status: 'completed' },
+      },
+    ] as ResponsesStreamEvent[];
+
+    const chunks = await collect(translateOpenAIResponsesStream(fromArray(events)));
+    const citations = chunks.filter(
+      (c): c is Extract<StreamChunk, { type: 'citation-delta' }> => c.type === 'citation-delta',
+    );
+
+    expect(citations).toHaveLength(1);
+    expect(citations[0]?.payload).toMatchObject({
+      url: 'https://example.com/no-title-page',
+      title: 'example.com',
+    });
+  });
+
+  it('recovers an untitled annotation from the final snapshot instead of silently dropping it', async () => {
+    const events = [
+      {
+        type: 'response.completed',
+        response: {
+          id: 'resp_untitled_snapshot',
+          status: 'completed',
+          output: [
+            {
+              type: 'message',
+              id: 'msg_untitled_snapshot',
+              role: 'assistant',
+              content: [
+                {
+                  type: 'output_text',
+                  text: 'See the source.',
+                  annotations: [
+                    {
+                      type: 'url_citation',
+                      url: 'https://example.com/still-no-title',
+                      title: '',
+                      start_index: 0,
+                      end_index: 3,
+                    },
+                  ],
+                },
+              ],
+            },
+          ],
+        },
+      },
+    ] as ResponsesStreamEvent[];
+
+    const chunks = await collect(translateOpenAIResponsesStream(fromArray(events)));
+    const citations = chunks.filter(
+      (c): c is Extract<StreamChunk, { type: 'citation-delta' }> => c.type === 'citation-delta',
+    );
+
+    expect(citations).toHaveLength(1);
+    expect(citations[0]?.payload).toMatchObject({
+      url: 'https://example.com/still-no-title',
+      title: 'example.com',
+    });
+  });
 });
