@@ -39,11 +39,6 @@ export function LandingPage() {
           <div className="agi-ds-container">
             <Stack gap="loose" className="agi-ds-hero-stack">
               <HeroHeadline id={HERO_TITLE_ID} text={HERO_QUESTION} />
-              <Prose size="lg">
-                Ask something and AGI can answer it three ways: on hardware you run, through your
-                own provider key that never touches ours, or on AGI&rsquo;s metered capacity. Every
-                answer carries the label of where it ran.
-              </Prose>
               <div className="agi-ds-receipt-row">
                 {HERO_ROUTES.map((route) => (
                   <RouteReceipt
