@@ -282,6 +282,24 @@ function clientFallbackTitle(firstUserContent: string): string {
   return firstUserContent.trim().slice(0, CLIENT_FALLBACK_TITLE_LENGTH).replace(/\n/g, ' ');
 }
 
+const SEND_FINGERPRINT_FIELD_SEPARATOR = '|';
+const SEND_FINGERPRINT_ATTACHMENT_SEPARATOR = ',';
+const SEND_FINGERPRINT_ATTACHMENT_FIELD_SEPARATOR = ':';
+
+/**
+ * Identifies what a send call is trying to deliver, independent of which
+ * conversation id it resolves to. Two collisions on the same guard key are
+ * the SAME in-flight call (a literal double Enter/click) only when this also
+ * matches; a different fingerprint means a distinct message arrived while
+ * the first one is still starting, and must be handed back, not swallowed.
+ */
+function buildSendFingerprint(content: string, attachments?: File[]): string {
+  const attachmentSignature = (attachments ?? [])
+    .map((file) => `${file.name}${SEND_FINGERPRINT_ATTACHMENT_FIELD_SEPARATOR}${file.size}`)
+    .join(SEND_FINGERPRINT_ATTACHMENT_SEPARATOR);
+  return `${content}${SEND_FINGERPRINT_FIELD_SEPARATOR}${attachmentSignature}`;
+}
+
 /**
  * Notification-permission banner: offered at most once per browser. Mirrors
  * the persistence pattern in features/notifications/components/WebPushOptIn.tsx.
@@ -915,6 +933,16 @@ export default function WebChatPage() {
   // nothing. Scoped, it does what its comment claims (close the reentrancy
   // window for one conversation) instead of serialising the whole app.
   const sendingConversationsRef = useRef<Set<string>>(new Set());
+  // What each currently-claimed guard key is sending, so a collision can tell
+  // a literal resubmit (swallow it, see the comment above) apart from a
+  // different message that landed on the same key -- see the guard-key
+  // resolution comment inside sendContent for why the key itself can change
+  // between the first send and a second one racing behind it.
+  const inFlightSendFingerprintsRef = useRef<Map<string, string>>(new Map());
+  // A blocked send's restore, held until the call that is still holding its
+  // guard key releases it -- see the comment where this is written inside
+  // sendContent for why an immediate restore would just be overwritten.
+  const pendingSendRestoresRef = useRef<Map<string, () => void>>(new Map());
   // Conversations whose auto-title read has already been started. The effect below
   // re-runs on every `conversations` change, including the one its own adoption
   // causes, so without this it would start a second read pass mid-flight.
@@ -1604,15 +1632,50 @@ export default function WebChatPage() {
       // rapid submits on the empty surface must not create two conversations.
       const sendGuardKey =
         options.conversationId || urlConversationId || bareChatSessionId || NEW_CHAT_SEND_GUARD_KEY;
-      // The in-flight call owns this content, so the composer must not take it
-      // back — this is a suppressed duplicate, not a lost message.
-      if (sendingConversationsRef.current.has(sendGuardKey)) return true;
+      const sendFingerprint = buildSendFingerprint(content, options.attachments);
+      if (sendingConversationsRef.current.has(sendGuardKey)) {
+        // The in-flight call owns this exact content, so the composer must not
+        // take it back — this is a suppressed duplicate, not a lost message.
+        if (inFlightSendFingerprintsRef.current.get(sendGuardKey) === sendFingerprint) return true;
+        // A DIFFERENT payload landed on a key a still-unsettled send already
+        // claimed — most often: attach a file, press Enter, then type and send
+        // again before the upload finishes. Restoring it into the composer
+        // right now would just be lost again: the winning call still has to
+        // run `ensureConversationId`, which RENAMES this placeholder to its
+        // real server id, and ChatComposerNew's own conversationId-keyed
+        // draft effect treats every rename as a conversation switch -- it
+        // unconditionally overwrites whatever is in the box with that new
+        // id's (empty) draft. Queue the restore for `releaseSendGuard` below
+        // instead, which the winning call only reaches once its own turn is
+        // durable, i.e. once the rename has already happened.
+        pendingSendRestoresRef.current.set(sendGuardKey, () => {
+          setComposerPrefill(content);
+          if (options.attachments?.length) setRestoredAttachments(options.attachments);
+        });
+        toast.error(
+          'Your last message is still starting. This one was saved here — send it again in a moment.',
+        );
+        return false;
+      }
       sendingConversationsRef.current.add(sendGuardKey);
+      inFlightSendFingerprintsRef.current.set(sendGuardKey, sendFingerprint);
       let sendGuardReleased = false;
       const releaseSendGuard = () => {
         if (sendGuardReleased) return;
         sendGuardReleased = true;
         sendingConversationsRef.current.delete(sendGuardKey);
+        inFlightSendFingerprintsRef.current.delete(sendGuardKey);
+        // Any collision this call's own key absorbed is safe to restore now:
+        // by the time this runs the conversation this call owns is durable,
+        // so no further rename is coming to clobber the restore.
+        pendingSendRestoresRef.current.get(sendGuardKey)?.();
+        pendingSendRestoresRef.current.delete(sendGuardKey);
+        if (clientConvId) {
+          sendingConversationsRef.current.delete(clientConvId);
+          inFlightSendFingerprintsRef.current.delete(clientConvId);
+          pendingSendRestoresRef.current.get(clientConvId)?.();
+          pendingSendRestoresRef.current.delete(clientConvId);
+        }
       };
 
       // Hold the send window for the entire flow (claimed BEFORE
@@ -1673,6 +1736,12 @@ export default function WebChatPage() {
         const convId = existingConvId || clientConvId!;
         resolvedUserMessageId ??= crypto.randomUUID();
         if (clientConvId) {
+          // Register the placeholder itself, not just `sendGuardKey` above: the
+          // two lines below make `bareChatSessionId` (hence a racing second
+          // call's own `sendGuardKey`) resolve to THIS id on its very next
+          // render, and without this the collision check above would miss it.
+          sendingConversationsRef.current.add(clientConvId);
+          inFlightSendFingerprintsRef.current.set(clientConvId, sendFingerprint);
           setActiveConversation(clientConvId);
           if (!urlConversationId) setBareChatSessionId(clientConvId);
         }

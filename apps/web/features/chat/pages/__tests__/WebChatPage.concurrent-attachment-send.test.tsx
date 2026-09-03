@@ -1,0 +1,323 @@
+import { act, render, waitFor } from '@testing-library/react';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+type ComposerOnSend = (
+  content: string,
+  attachments?: File[],
+  skillId?: string,
+  meta?: Record<string, unknown>,
+) => false | void;
+
+const mocks = vi.hoisted(() => ({
+  composerOnSend: null as ComposerOnSend | null,
+  composerDroppedFiles: null as File[] | null,
+  composerConversationId: null as string | null,
+  composerPrefillText: undefined as string | undefined,
+  sendMessage: vi.fn(async (_content: string, ..._rest: unknown[]) => true),
+  createConversation: vi.fn(async () => ({
+    id: 'real-conversation-id',
+    title: 'New Chat',
+    createdAt: '2026-09-03T00:00:00.000Z',
+    updatedAt: '2026-09-03T00:00:00.000Z',
+  })),
+  uploadChatAttachments: vi.fn(),
+  toastError: vi.fn(),
+  uploadResolvers: [] as Array<(value: unknown[]) => void>,
+}));
+
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({ replace: vi.fn(), push: vi.fn(), back: vi.fn() }),
+  useParams: () => ({}),
+  useSearchParams: () => new URLSearchParams(),
+  usePathname: () => '/chat',
+}));
+
+vi.mock('@clerk/nextjs', () => ({
+  useAuth: () => ({
+    getToken: async () => 'fixture-token',
+    isLoaded: true,
+    userId: 'fixture-user',
+  }),
+  useClerk: () => ({ signOut: vi.fn() }),
+  useUser: () => ({ user: null }),
+}));
+
+vi.mock('react-i18next', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('react-i18next')>();
+  return {
+    ...actual,
+    useTranslation: () => ({
+      t: (key: string) => key,
+      i18n: { language: 'en', changeLanguage: vi.fn() },
+    }),
+  };
+});
+
+vi.mock('@/lib/client/csrf', () => ({
+  addCsrfHeaders: async (headers: HeadersInit = {}) => headers,
+  getCsrfToken: async () => 'fixture-csrf-token',
+}));
+vi.mock('@/app/settings/_lib/preferences-client', () => ({
+  fetchPreferenceNamespace: async () => ({ browserReplyReady: true }),
+  PREFERENCE_NAMESPACE_SAVED_EVENT: 'agi:preference-namespace-saved',
+}));
+
+vi.mock('sonner', () => ({ toast: { error: mocks.toastError, dismiss: vi.fn() } }));
+
+vi.mock('@/lib/hooks/useConversations', async () => {
+  const { useChatStore } = await import('@shared/stores/web-chat-store');
+  return {
+    useConversations: () => ({
+      conversations: [],
+      isLoading: false,
+      listError: null,
+      getConversationLoadError: () => null,
+      createConversation: mocks.createConversation,
+      loadConversation: vi.fn(),
+      deleteConversation: vi.fn(),
+      updateConversation: vi.fn(async () => true),
+      // Delegates to the real store, matching production: this hook's
+      // `setActiveConversation` IS what keeps `activeConversationId` in step
+      // with the id `sendContent` just claimed. A no-op mock here made the
+      // page believe a route change was still pending and stopped rendering
+      // any composer at all for the rest of the test.
+      setActiveConversation: (id: string | null) =>
+        useChatStore.getState().setActiveConversation(id),
+    }),
+  };
+});
+
+vi.mock('@/lib/hooks/useManagedUsageSummary', () => ({
+  getWorstUsagePercent: () => 0,
+  readManagedUsageBuckets: () => [],
+  useManagedUsageSummary: () => ({ usage: null }),
+}));
+
+vi.mock('@/lib/hooks/useMediaGeneration', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/lib/hooks/useMediaGeneration')>();
+  return {
+    ...actual,
+    useMediaGeneration: () => ({
+      generateImage: vi.fn(),
+      generateVideo: vi.fn(),
+      startVideoGeneration: vi.fn(),
+      watchVideoGeneration: vi.fn(),
+    }),
+  };
+});
+
+vi.mock('../../services/chat-attachment-upload', () => ({
+  uploadChatAttachments: mocks.uploadChatAttachments,
+}));
+
+vi.mock('../../components/Composer/ChatComposerNew', () => ({
+  ChatComposerNew: (props: {
+    onSend: ComposerOnSend;
+    droppedFiles: File[] | null;
+    conversationId?: string | null;
+    prefillText?: string;
+  }) => {
+    mocks.composerOnSend = props.onSend;
+    mocks.composerDroppedFiles = props.droppedFiles;
+    mocks.composerConversationId = props.conversationId ?? null;
+    mocks.composerPrefillText = props.prefillText;
+    return null;
+  },
+}));
+vi.mock('../../components/messages/ChatMessageList', () => ({
+  ChatMessageList: () => null,
+}));
+vi.mock('../../components/GreetingBanner/GreetingBanner', () => ({
+  GreetingBanner: () => null,
+}));
+vi.mock('../../components/ChatStreamRuntimeProvider', () => ({
+  useChatStreamRuntime: () => ({
+    sendMessage: mocks.sendMessage,
+    stopGeneration: vi.fn(),
+    continueGeneration: vi.fn(),
+    resumeInteractiveCardTurn: vi.fn(),
+    resolveToolApproval: vi.fn(),
+  }),
+}));
+vi.mock('../../hooks/use-artifact-cloud-sync', () => ({ useArtifactCloudSync: vi.fn() }));
+vi.mock('../../hooks/use-share-conversation', () => ({
+  useShareConversation: () => ({ share: vi.fn(), isSharing: false }),
+}));
+vi.mock('../../hooks/use-conversation-branches', () => ({
+  useConversationBranches: () => ({
+    groupsByMessageId: {},
+    branchingMessageId: null,
+    createBranch: vi.fn(),
+    switchBranch: vi.fn(),
+  }),
+}));
+vi.mock('../../hooks/use-keyboard-shortcuts', () => ({
+  KEYBOARD_SHORTCUT_DOCS: [],
+  useKeyboardShortcuts: vi.fn(),
+}));
+
+vi.mock('@/features/settings/components/SettingsModalProvider', () => ({
+  useSettingsModal: () => ({ openSettings: vi.fn() }),
+}));
+vi.mock('@/features/connectors/stores/tool-permissions-store', () => {
+  const state = { hydrateFromServer: vi.fn() };
+  return {
+    useToolPermissionsStore: Object.assign(
+      (selector: (value: typeof state) => unknown) => selector(state),
+      { getState: () => state },
+    ),
+  };
+});
+
+vi.mock('@features/projects', () => {
+  const projectState = {
+    projects: [],
+    activeProjectId: null,
+    setActiveProject: vi.fn(),
+    updateProject: vi.fn(),
+    removeProject: vi.fn(),
+    setProjects: vi.fn(),
+  };
+  return {
+    useManagedCloudProjects: () => ({ projects: [], isReady: true, retry: vi.fn() }),
+    useProjectStore: (selector: (value: typeof projectState) => unknown) => selector(projectState),
+    ProjectSettingsDialog: () => null,
+  };
+});
+vi.mock('@features/projects/services/managed-cloud-projects', () => ({
+  webManagedCloudProjects: {
+    updateProject: vi.fn(),
+    deleteProject: vi.fn(),
+    createProject: vi.fn(),
+  },
+}));
+
+vi.mock('@agiworkforce/ui', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@agiworkforce/ui')>();
+  return { ...actual, Sidebar: () => null };
+});
+vi.mock('@agiworkforce/unified-chat', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@agiworkforce/unified-chat')>();
+  return {
+    ...actual,
+    LocalByokHandoffDialog: () => null,
+    UsageWarningBanner: () => null,
+  };
+});
+
+vi.mock('../../components/dialogs/GlobalSearchDialog', () => ({ GlobalSearchDialog: () => null }));
+vi.mock('../../components/dialogs/KeyboardShortcutsDialog', () => ({
+  KeyboardShortcutsDialog: () => null,
+}));
+vi.mock('../../components/dialogs/CreateProjectDialog', () => ({
+  CreateProjectDialog: () => null,
+}));
+vi.mock('../../components/dialogs/UpgradePlanDialog', () => ({
+  UpgradePlanDialog: () => null,
+}));
+vi.mock('@features/billing/components/UpgradeConfirmDialog', () => ({
+  UpgradeConfirmDialog: () => null,
+}));
+vi.mock('@/features/time-focus/TimeFocusReminder', () => ({ TimeFocusReminder: () => null }));
+vi.mock('../../components/ConversationTitleMenu', () => ({ ConversationTitleMenu: () => null }));
+vi.mock('../../components/approvals/ApprovalInbox', () => ({ ApprovalInbox: () => null }));
+vi.mock('../../components/work-session/WorkSessionPanel', () => ({
+  hasWorkSession: () => false,
+  WorkSessionPanel: () => null,
+  WorkSessionToggleButton: () => null,
+}));
+vi.mock('../../components/artifacts/ArtifactsPanel', () => ({
+  ArtifactsPanel: () => null,
+  ArtifactsToggleButton: () => null,
+}));
+vi.mock('../../components/research/ResearchPanel', () => ({
+  ResearchPanel: () => null,
+  ResearchToggleButton: () => null,
+}));
+vi.mock('@shared/components/agi/SidebarWordmark', () => ({ SidebarWordmark: () => null }));
+
+import WebChatPage from '../WebChatPage';
+import { useChatStore } from '@shared/stores/web-chat-store';
+
+const FIRST_MESSAGE = 'Summarize the attached notes for me please';
+const SECOND_MESSAGE = 'Actually, forget the file, just say hi';
+
+function pendingUpload(): Promise<unknown[]> {
+  return new Promise((resolve) => {
+    mocks.uploadResolvers.push(resolve);
+  });
+}
+
+describe('WebChatPage concurrent send during attachment upload', () => {
+  beforeEach(() => {
+    useChatStore.getState().reset();
+    mocks.composerOnSend = null;
+    mocks.composerDroppedFiles = null;
+    mocks.composerConversationId = null;
+    mocks.composerPrefillText = undefined;
+    mocks.uploadResolvers = [];
+    mocks.sendMessage.mockClear();
+    mocks.createConversation.mockClear();
+    mocks.toastError.mockClear();
+    mocks.uploadChatAttachments.mockReset();
+    mocks.uploadChatAttachments.mockImplementation(() => pendingUpload());
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('blocks a second, different send while the first attachment upload is in flight and restores it once the first turn is durable', async () => {
+    render(<WebChatPage />);
+    await waitFor(() => expect(mocks.composerOnSend).not.toBeNull());
+
+    const file = new File(['notes'], 'notes.txt', { type: 'text/plain' });
+    act(() => {
+      mocks.composerOnSend!(FIRST_MESSAGE, [file], undefined, {});
+    });
+
+    await waitFor(() => expect(mocks.uploadChatAttachments).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(mocks.composerConversationId).not.toBeNull());
+
+    const secondFile = new File(['other'], 'other.txt', { type: 'text/plain' });
+    act(() => {
+      mocks.composerOnSend!(SECOND_MESSAGE, [secondFile], undefined, {});
+    });
+
+    // The second send must never reach the model while the first is still
+    // resolving its upload -- that is the corruption this guards against.
+    expect(mocks.sendMessage).not.toHaveBeenCalled();
+    expect(mocks.toastError).toHaveBeenCalledWith(expect.stringContaining('saved here'));
+    // Not restored yet: the winning call still has to rename its placeholder
+    // conversation to a real id, and restoring into the composer before that
+    // settles is exactly the timing this fix avoids (see sendContent).
+    expect(mocks.composerPrefillText).toBeUndefined();
+    expect(mocks.composerDroppedFiles).toBeNull();
+
+    mocks.uploadResolvers[0]!([]);
+    await waitFor(() => expect(mocks.sendMessage).toHaveBeenCalledTimes(1));
+    expect(mocks.sendMessage.mock.calls[0]![0]).toBe(FIRST_MESSAGE);
+
+    // Restored once the first send's turn is durable: a working retry, not a
+    // silent loss.
+    await waitFor(() => expect(mocks.composerPrefillText).toBe(SECOND_MESSAGE));
+    expect(mocks.composerDroppedFiles).toEqual([secondFile]);
+  });
+
+  it('lets the first send proceed normally once its upload settles', async () => {
+    render(<WebChatPage />);
+    await waitFor(() => expect(mocks.composerOnSend).not.toBeNull());
+
+    const file = new File(['notes'], 'notes.txt', { type: 'text/plain' });
+    act(() => {
+      mocks.composerOnSend!(FIRST_MESSAGE, [file], undefined, {});
+    });
+
+    await waitFor(() => expect(mocks.uploadChatAttachments).toHaveBeenCalledTimes(1));
+    mocks.uploadResolvers[0]!([]);
+
+    await waitFor(() => expect(mocks.sendMessage).toHaveBeenCalledTimes(1));
+    expect(mocks.sendMessage.mock.calls[0]![0]).toBe(FIRST_MESSAGE);
+    expect(mocks.toastError).not.toHaveBeenCalled();
+  });
+});
