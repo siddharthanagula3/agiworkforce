@@ -3,6 +3,9 @@ import 'server-only';
 import { NextRequest, NextResponse } from 'next/server';
 
 import { getClerkAuthUser } from '@/lib/api-auth';
+import { unauthorizedResponseFor } from '@/lib/api-auth-response';
+import { isMfaRequiredError } from '@/lib/mfa-policy-gate';
+import { isIpNotAllowedError } from '@/lib/ip-allow-list-gate';
 import { logger } from '@/lib/logger';
 import { withRateLimit } from '@/lib/rate-limit';
 import {
@@ -35,7 +38,10 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   let userId: string;
   try {
     ({ userId } = await getClerkAuthUser(request));
-  } catch {
+  } catch (authError) {
+    if (isMfaRequiredError(authError) || isIpNotAllowedError(authError)) {
+      return unauthorizedResponseFor(authError);
+    }
     if (wantsJson) {
       return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
     }

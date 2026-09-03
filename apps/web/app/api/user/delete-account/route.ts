@@ -6,6 +6,9 @@ import { handleCorsPreflightRequest, getCorsHeaders } from '@/lib/cors';
 import { requireCsrfToken } from '@/lib/csrf';
 import { logger } from '@/lib/logger';
 import { getClerkAuthUser } from '@/lib/api-auth';
+import { unauthorizedResponseFor } from '@/lib/api-auth-response';
+import { isMfaRequiredError } from '@/lib/mfa-policy-gate';
+import { isIpNotAllowedError } from '@/lib/ip-allow-list-gate';
 import { clerkClient } from '@clerk/nextjs/server';
 import { getNeonDb } from '@/lib/server/neon-db';
 import { eraseUserAccountData } from '@/lib/server/account-erasure';
@@ -66,7 +69,10 @@ export async function GET(request: NextRequest) {
   try {
     const authResult = await getClerkAuthUser(request);
     userId = authResult.userId;
-  } catch {
+  } catch (authError) {
+    if (isMfaRequiredError(authError) || isIpNotAllowedError(authError)) {
+      return unauthorizedResponseFor(authError);
+    }
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401, headers: SECURITY_HEADERS });
   }
 
@@ -119,7 +125,10 @@ export async function DELETE(request: NextRequest) {
   try {
     const authResult = await getClerkAuthUser(request);
     userId = authResult.userId;
-  } catch {
+  } catch (authError) {
+    if (isMfaRequiredError(authError) || isIpNotAllowedError(authError)) {
+      return unauthorizedResponseFor(authError);
+    }
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401, headers: SECURITY_HEADERS });
   }
 

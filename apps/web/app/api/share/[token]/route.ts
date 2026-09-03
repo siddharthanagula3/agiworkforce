@@ -6,6 +6,9 @@ import { requireCsrfToken } from '@/lib/csrf';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { getClerkAuthUser } from '@/lib/api-auth';
+import { unauthorizedResponseFor } from '@/lib/api-auth-response';
+import { isMfaRequiredError } from '@/lib/mfa-policy-gate';
+import { isIpNotAllowedError } from '@/lib/ip-allow-list-gate';
 
 import { shareRef } from '@/lib/share-ref';
 
@@ -79,7 +82,10 @@ async function handleDeleteShare(request: NextRequest, context: RouteContext) {
   try {
     const authResult = await getClerkAuthUser(request);
     userId = authResult.userId;
-  } catch {
+  } catch (authError) {
+    if (isMfaRequiredError(authError) || isIpNotAllowedError(authError)) {
+      return unauthorizedResponseFor(authError);
+    }
     throw createError.unauthorized();
   }
 
