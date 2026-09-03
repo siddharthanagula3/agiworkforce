@@ -8,22 +8,34 @@ const receiptMocks = vi.hoisted(() => ({
   claim: vi.fn(),
   complete: vi.fn(),
   fail: vi.fn(),
+  renew: vi.fn(),
 }));
 
-vi.mock('@/lib/services/cloud-agent-execution-service', () => ({
-  claimCloudAgentExecutionOperation: receiptMocks.claim,
-  completeCloudAgentExecutionOperation: receiptMocks.complete,
-  failCloudAgentExecutionOperation: receiptMocks.fail,
-  fingerprintCloudAgentOperation: () => 'a'.repeat(64),
-}));
+vi.mock('@/lib/services/cloud-agent-execution-service', async () => {
+  const actual = await vi.importActual<
+    typeof import('@/lib/services/cloud-agent-execution-service')
+  >('@/lib/services/cloud-agent-execution-service');
+  return {
+    ...actual,
+    claimCloudAgentExecutionOperation: receiptMocks.claim,
+    completeCloudAgentExecutionOperation: receiptMocks.complete,
+    failCloudAgentExecutionOperation: receiptMocks.fail,
+    renewCloudAgentExecutionOperationLease: receiptMocks.renew,
+    fingerprintCloudAgentOperation: () => 'a'.repeat(64),
+  };
+});
 
+import { OPERATION_LEASE_RENEWAL_INTERVAL_SECONDS } from '@/lib/services/cloud-agent-execution-service';
 import { executeCloudAgentOperation } from './cloud-agent-operation-executor';
 
 const db = {} as never;
 const ResultSchema = z.object({ answer: z.number() }).strict();
 
 describe('durable cloud agent operation executor', () => {
-  beforeEach(() => vi.clearAllMocks());
+  beforeEach(() => {
+    vi.clearAllMocks();
+    receiptMocks.renew.mockResolvedValue(true);
+  });
 
   it('records a newly acquired result with billing-scoped usage', async () => {
     receiptMocks.claim.mockResolvedValue({
@@ -61,6 +73,82 @@ describe('durable cloud agent operation executor', () => {
         },
       }),
     );
+  });
+
+  it('renews the lease while a long-running execute call is still in flight', async () => {
+    vi.useFakeTimers();
+    try {
+      receiptMocks.claim.mockResolvedValue({
+        disposition: 'acquired',
+        operationId: '0190a000-0000-7000-8000-000000000002',
+        leaseToken: '0190a000-0000-7000-8000-000000000003',
+        attempt: 1,
+      });
+      receiptMocks.complete.mockResolvedValue({ status: 'completed' });
+
+      let resolveExecute!: (value: { answer: number }) => void;
+      const execute = vi.fn(
+        () =>
+          new Promise<{ answer: number }>((resolve) => {
+            resolveExecute = resolve;
+          }),
+      );
+
+      const pending = executeCloudAgentOperation(db, {
+        userId: 'user-1',
+        runId: '0190a000-0000-7000-8000-000000000001',
+        billingIdempotencyKey: 'agi.chat.web.request-1',
+        operationKey: 'provider:1',
+        operationKind: 'provider',
+        retrySafety: 'unsafe',
+        payload: { model: 'test' },
+        resultSchema: ResultSchema,
+        execute,
+      });
+
+      await vi.advanceTimersByTimeAsync(OPERATION_LEASE_RENEWAL_INTERVAL_SECONDS * 1000);
+      expect(receiptMocks.renew).toHaveBeenCalledWith(db, {
+        userId: 'user-1',
+        operationId: '0190a000-0000-7000-8000-000000000002',
+        leaseToken: '0190a000-0000-7000-8000-000000000003',
+      });
+
+      resolveExecute({ answer: 42 });
+      await expect(pending).resolves.toEqual({ answer: 42 });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('stops renewing the lease once the operation settles', async () => {
+    vi.useFakeTimers();
+    try {
+      receiptMocks.claim.mockResolvedValue({
+        disposition: 'acquired',
+        operationId: '0190a000-0000-7000-8000-000000000002',
+        leaseToken: '0190a000-0000-7000-8000-000000000003',
+        attempt: 1,
+      });
+      receiptMocks.complete.mockResolvedValue({ status: 'completed' });
+
+      await executeCloudAgentOperation(db, {
+        userId: 'user-1',
+        runId: '0190a000-0000-7000-8000-000000000001',
+        billingIdempotencyKey: 'agi.chat.web.request-1',
+        operationKey: 'provider:1',
+        operationKind: 'provider',
+        retrySafety: 'unsafe',
+        payload: { model: 'test' },
+        resultSchema: ResultSchema,
+        execute: vi.fn().mockResolvedValue({ answer: 42 }),
+      });
+      receiptMocks.renew.mockClear();
+
+      await vi.advanceTimersByTimeAsync(OPERATION_LEASE_RENEWAL_INTERVAL_SECONDS * 1000 * 2);
+      expect(receiptMocks.renew).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('replays a completed result without repeating the operation', async () => {

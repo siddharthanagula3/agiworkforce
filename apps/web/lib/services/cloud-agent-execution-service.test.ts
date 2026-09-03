@@ -12,6 +12,7 @@ import {
   claimCloudAgentExecutionOperation,
   completeCloudAgentExecutionOperation,
   getCloudAgentExecutionUsage,
+  renewCloudAgentExecutionOperationLease,
 } from './cloud-agent-execution-service';
 
 const RUN_ID = '0190a000-0000-7000-8000-000000000001';
@@ -313,16 +314,67 @@ describe('cloud agent execution service', () => {
       disposition: 'failed',
       error: { code: 'operation_replay_limit_exceeded' },
     });
-    expect(db.query).toHaveBeenNthCalledWith(
-      2,
-      expect.stringMatching(/status = 'failed'/i),
-      expect.arrayContaining([OPERATION_ID, 'user-1']),
-    );
+    expect(db.query).toHaveBeenNthCalledWith(2, expect.stringMatching(/status = 'failed'/i), [
+      OPERATION_ID,
+      'user-1',
+      'operation_replay_limit_exceeded',
+      'The durable operation exceeded its maximum replay attempts.',
+      600,
+    ]);
     expect(db.query).not.toHaveBeenNthCalledWith(
       2,
       expect.stringMatching(/attempt = attempt \+ 1/i),
       expect.anything(),
     );
+  });
+
+  it('keeps a heartbeat-renewed lease waiting instead of reclaiming it as stale', async () => {
+    vi.mocked(db.query).mockResolvedValueOnce([
+      { ...RUNNING_ROW, lease_expires_at: '2026-07-17T20:20:00.000Z' },
+    ]);
+
+    const claim = await claimCloudAgentExecutionOperation(db, {
+      userId: 'user-1',
+      runId: RUN_ID,
+      operationKey: 'provider:1',
+      operationKind: 'provider',
+      inputHash: INPUT_HASH,
+      retrySafety: 'unsafe',
+      now: new Date('2026-07-17T20:10:00.000Z'),
+    });
+
+    expect(claim).toEqual({ disposition: 'in_progress' });
+    expect(db.query).toHaveBeenCalledOnce();
+  });
+
+  it('renews an active lease without touching its attempt count', async () => {
+    vi.mocked(db.query).mockResolvedValueOnce([
+      { ...RUNNING_ROW, lease_expires_at: '2026-07-17T20:20:00.000Z' },
+    ]);
+
+    const renewed = await renewCloudAgentExecutionOperationLease(db, {
+      userId: 'user-1',
+      operationId: OPERATION_ID,
+      leaseToken: LEASE_TOKEN,
+    });
+
+    expect(renewed).toBe(true);
+    expect(db.query).toHaveBeenCalledWith(
+      expect.stringMatching(/set lease_expires_at = now\(\) \+ make_interval/i),
+      [OPERATION_ID, 'user-1', LEASE_TOKEN, 240],
+    );
+  });
+
+  it('reports a lost lease instead of renewing an operation another claimant already reclaimed', async () => {
+    vi.mocked(db.query).mockResolvedValueOnce([]);
+
+    const renewed = await renewCloudAgentExecutionOperationLease(db, {
+      userId: 'user-1',
+      operationId: OPERATION_ID,
+      leaseToken: LEASE_TOKEN,
+    });
+
+    expect(renewed).toBe(false);
   });
 
   it('rejects reuse of an operation key for different input', async () => {
