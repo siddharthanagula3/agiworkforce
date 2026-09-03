@@ -1,0 +1,3 @@
+Analyzing repository structure
+Updated cmd/main.go with the requested flag
+Done: added the --verbose flag and its test.
