@@ -97,6 +97,7 @@ import {
   parkPendingDraft,
   restorablePendingDraft,
 } from '@features/chat/lib/pending-composer-draft';
+import { modelSupportsResearch } from '@features/chat/lib/research-capability-gate';
 import { useCoworkFolderStore, supportsDirectoryPicker } from '@shared/stores/cowork-folder-store';
 import { FREE_TRIAL_MODELS } from '@/lib/free-trial-config';
 import { MANAGED_CLOUD_CHAT_MAX_MESSAGE_LENGTH } from '@agiworkforce/cloud-contracts';
@@ -142,8 +143,6 @@ export {
 const COMPOSER_MAX_CHARS = MANAGED_CLOUD_CHAT_MAX_MESSAGE_LENGTH;
 /** Show the counter only once the message is long enough for it to matter. */
 const COMPOSER_COUNTER_THRESHOLD = Math.floor(COMPOSER_MAX_CHARS * 0.75);
-
-export const COMPOSER_RESEARCH_MIN_CONTEXT_WINDOW = 500_000;
 
 /** Composer work mode — claude.ai Chat/Cowork parity ("AGI Work" here). */
 export type ComposerWorkMode = CloudWorkMode;
@@ -1122,11 +1121,8 @@ const ChatComposerNewComponent = ({
         modelSupportsTools: selectedModelCaps?.tools,
         genericBackendConfigured: genericWebSearchConfigured,
       });
-  const modelSupportsResearch =
-    isAutoSelected ||
-    (selectedModelCaps?.research ?? false) ||
-    ((selectedModelCaps?.tools ?? false) &&
-      (selectedModelMeta?.contextWindow ?? 0) >= COMPOSER_RESEARCH_MIN_CONTEXT_WINDOW);
+  const researchAvailableForModel =
+    isAutoSelected || modelSupportsResearch(selectedModelCaps, selectedModelMeta?.contextWindow);
   const modelSupportsThinkingCap = selectedModelCaps?.thinking ?? false;
   // Same both-signals rule as web search above: the catalog capability is
   // necessary but not sufficient. Native-tier providers (anthropic/google/
@@ -1173,8 +1169,10 @@ const ChatComposerNewComponent = ({
   // Clear Research if the model loses research support.
   useEffect(() => {
     if (!billingPolicyReady) return;
-    if (researchEnabled && !modelSupportsResearch) setComposerToggles({ researchEnabled: false });
-  }, [billingPolicyReady, researchEnabled, modelSupportsResearch, setComposerToggles]);
+    if (researchEnabled && !researchAvailableForModel) {
+      setComposerToggles({ researchEnabled: false });
+    }
+  }, [billingPolicyReady, researchEnabled, researchAvailableForModel, setComposerToggles]);
 
   // If the user switches to a model that can't execute code, clear the toggle.
   useEffect(() => {
@@ -3865,11 +3863,11 @@ const ChatComposerNewComponent = ({
                         handleResearchToggle();
                         closeMenu();
                       }}
-                      disabled={disabled || isFreeTrial || !modelSupportsResearch}
+                      disabled={disabled || isFreeTrial || !researchAvailableForModel}
                       title={
                         isFreeTrial
                           ? 'Upgrade to use Deep Research'
-                          : !modelSupportsResearch
+                          : !researchAvailableForModel
                             ? "Deep Research isn't available for this model. Choose Auto or a model that supports Deep Research."
                             : undefined
                       }
