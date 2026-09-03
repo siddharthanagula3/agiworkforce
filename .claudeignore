@@ -68,5 +68,5 @@ third_party/
 .cursor/
 .claude/
 
-# Snapshots — only read when verifying a finding
+# Snapshots, only read when verifying a finding
 **/__snapshots__/
