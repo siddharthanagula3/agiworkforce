@@ -19,6 +19,7 @@ import {
   listUserSkills,
   toUserSkillSummary,
 } from '@/lib/services/user-skill-service';
+import { userSkillAuthoringEnabled } from '@/lib/services/user-skill-authoring';
 import { listEnabledPluginIds } from '@/lib/services/plugin-installation-service';
 import { getNeonDb } from '@/lib/server/neon-db';
 import { getUserScopedDb } from '@/lib/server/rls-db';
@@ -39,27 +40,27 @@ async function handleListSkills(request: NextRequest) {
     }
     throw error;
   }
-  const userSkills = await listUserSkills(getNeonDb(), userId);
-  return NextResponse.json(
-    ManagedSkillsResponseSchema.parse({
-      skills: [
-        ...skills.map((s) => ({
-          name: s.name,
-          description: s.description,
-          source: s.source,
-          lifecycle: s.frontmatter['draft'] === true ? 'draft' : 'included',
-          downloadable: s.source === 'bundled' && s.frontmatter['draft'] !== true,
-          // Straight from the bundle's frontmatter. Omitted when the skill has
-          // none, so the column can say "unknown" instead of showing a version
-          // this route made up.
-          ...(typeof s.frontmatter['version'] === 'string' && s.frontmatter['version'].trim()
-            ? { version: s.frontmatter['version'].trim() }
-            : {}),
-        })),
-        ...userSkills.map(toUserSkillSummary),
-      ],
-    }),
-  );
+  const canAuthorSkills = userSkillAuthoringEnabled();
+  const userSkills = canAuthorSkills ? await listUserSkills(getNeonDb(), userId) : [];
+  const body = ManagedSkillsResponseSchema.parse({
+    skills: [
+      ...skills.map((s) => ({
+        name: s.name,
+        description: s.description,
+        source: s.source,
+        lifecycle: s.frontmatter['draft'] === true ? 'draft' : 'included',
+        downloadable: s.source === 'bundled' && s.frontmatter['draft'] !== true,
+        // Straight from the bundle's frontmatter. Omitted when the skill has
+        // none, so the column can say "unknown" instead of showing a version
+        // this route made up.
+        ...(typeof s.frontmatter['version'] === 'string' && s.frontmatter['version'].trim()
+          ? { version: s.frontmatter['version'].trim() }
+          : {}),
+      })),
+      ...userSkills.map(toUserSkillSummary),
+    ],
+  });
+  return NextResponse.json({ ...body, canAuthorSkills });
 }
 
 async function handleCreateSkill(request: NextRequest) {
