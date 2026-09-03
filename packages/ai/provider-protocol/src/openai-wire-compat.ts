@@ -401,7 +401,7 @@ export class OpenAIWireAssembler {
     };
   }
 
-  private usageOnlyEnvelope(): Record<string, unknown> | null {
+  private fullUsagePayload(): Record<string, unknown> | null {
     const usage = this.usageOrNull();
     if (usage === null) return null;
     const fullUsage: Record<string, unknown> = { ...usage };
@@ -411,6 +411,12 @@ export class OpenAIWireAssembler {
     if (this.usage.reasoning !== undefined) {
       fullUsage['completion_tokens_details'] = { reasoning_tokens: this.usage.reasoning };
     }
+    return fullUsage;
+  }
+
+  private usageOnlyEnvelope(): Record<string, unknown> | null {
+    const fullUsage = this.fullUsagePayload();
+    if (fullUsage === null) return null;
     return {
       id: this.realId ?? this.id,
       object: 'chat.completion.chunk' as const,
@@ -421,6 +427,16 @@ export class OpenAIWireAssembler {
         : {}),
       ...(this.serviceTier !== undefined ? { service_tier: this.serviceTier } : {}),
       choices: [],
+      usage: fullUsage,
+    };
+  }
+
+  private legacyWebUsageEnvelope(): Record<string, unknown> | null {
+    const fullUsage = this.fullUsagePayload();
+    if (fullUsage === null) return null;
+    return {
+      choices: [{ delta: {}, index: 0 }],
+      model: this.model,
       usage: fullUsage,
     };
   }
@@ -746,12 +762,15 @@ export class OpenAIWireAssembler {
           ),
         );
         break;
-      case 'usage':
-        if (openaiPassthrough) {
-          const usageChunk = this.usageOnlyEnvelope();
-          if (usageChunk !== null) out.push(usageChunk);
-        }
+      case 'usage': {
+        const usageChunk = openaiPassthrough
+          ? this.usageOnlyEnvelope()
+          : legacyWeb
+            ? this.legacyWebUsageEnvelope()
+            : null;
+        if (usageChunk !== null) out.push(usageChunk);
         break;
+      }
       case 'tool-use-end':
       case 'response-meta':
         break;

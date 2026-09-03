@@ -510,6 +510,51 @@ describe('assembleOpenAIWireResponse (non-streaming)', () => {
   });
 });
 
+describe('OpenAIWireAssembler usage forwarding (sseChunks)', () => {
+  it('legacy-web: a usage StreamChunk reaches the client SSE with prompt, completion, cache read, and thoughts tokens', () => {
+    const assembler = new OpenAIWireAssembler({
+      model: FIXTURE_MODEL_ID,
+      now: NOW,
+      id: 'chatcmpl-usage-legacy',
+      wireMode: 'legacy-web',
+    });
+
+    assembler.sseChunks({ type: 'text-delta', delta: 'answer' });
+    const wireEvents = assembler.sseChunks({
+      type: 'usage',
+      inputTokens: 5796,
+      outputTokens: 68,
+      cacheReadTokens: 5620,
+      reasoningTokens: 492,
+    });
+
+    expect(wireEvents).toHaveLength(1);
+    const [event] = wireEvents as Array<{
+      choices: Array<{ delta: Record<string, unknown>; index: number }>;
+      usage: Record<string, unknown>;
+    }>;
+    expect(event.choices).toEqual([{ delta: {}, index: 0 }]);
+    expect(event.usage).toEqual({
+      prompt_tokens: 5796,
+      completion_tokens: 68,
+      total_tokens: 5864,
+      prompt_tokens_details: { cached_tokens: 5620 },
+      completion_tokens_details: { reasoning_tokens: 492 },
+    });
+  });
+
+  it('legacy-web: a usage StreamChunk with no input/output tokens yet emits nothing', () => {
+    const assembler = new OpenAIWireAssembler({
+      model: FIXTURE_MODEL_ID,
+      now: NOW,
+      id: 'chatcmpl-usage-empty',
+      wireMode: 'legacy-web',
+    });
+
+    expect(assembler.sseChunks({ type: 'usage', cacheReadTokens: 5620 })).toEqual([]);
+  });
+});
+
 describe('OpenAIWireAssembler mid-stream error signaling (x_stream_error)', () => {
   const midStreamFailure: StreamChunk[] = [
     { type: 'text-delta', delta: 'partial answer' },
