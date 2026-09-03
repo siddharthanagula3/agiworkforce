@@ -42,6 +42,12 @@ const SECTIONS = [
     title: 'BYOK posture',
     body: 'Bring your own keys, pay providers directly.',
   },
+  {
+    href: '/status',
+    meta: 'Live',
+    title: 'Status',
+    body: 'A live health signal, rechecked every minute.',
+  },
 ];
 
 export default function ResourcesPage() {
