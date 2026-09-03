@@ -43,7 +43,12 @@ import {
   type ExecutableImageModel,
   type ModelMetadata,
 } from '@agiworkforce/types';
-import { parseRetryAfter } from '@agiworkforce/provider-runtime';
+import {
+  classifyError,
+  parseRetryAfter,
+  SPENDING_CAP_PROVIDER_HINT,
+} from '@agiworkforce/provider-runtime';
+import { markProviderDegraded } from '@/lib/services/provider-availability-service';
 import { parseManagedMediaIdempotencyKey } from '@agiworkforce/utils';
 import {
   aiGeneratedHeaders,
@@ -1445,9 +1450,33 @@ async function handleImageGeneration(request: NextRequest): Promise<NextResponse
 
     const providerHttpError = error instanceof ImageProviderHttpError ? error : null;
     const errorMessage = error instanceof Error ? error.message : 'Image generation failed';
+    // classifyError reads .status/.message the same way it does for the chat
+    // provider adapters, so a Google spending-cap 429 here is recognized the
+    // same way it is on the chat path -- the same billing project backs both.
+    const classified = error instanceof Error ? classifyError(error) : undefined;
+    const providerLabel = provider === 'google' ? 'Google' : provider;
 
+    // A spent quota window will not clear on a schedule the reader can wait
+    // out, unlike a plain rate limit -- no countdown, and the copy names the
+    // real reason instead of implying transient capacity. `suppressRetryAfter`
+    // drops any retry_after_seconds/Retry-After the provider still sent, since
+    // showing a wait timer next to "pick another model" contradicts itself.
     let friendlyMessage = `Provider ${provider} failed: ${errorMessage}`;
-    if (providerHttpError?.status === 429) {
+    let suppressRetryAfter = false;
+    if (classified?.category === 'quota_exhausted') {
+      markProviderDegraded(provider, classified.category);
+      suppressRetryAfter = true;
+      friendlyMessage =
+        classified.providerHint === SPENDING_CAP_PROVIDER_HINT
+          ? `${providerLabel}'s spending cap for this project is exceeded, so image generation is unavailable right now. Choose a different image model.`
+          : `${providerLabel} has exhausted its image generation quota for now. Choose a different image model, or try again later.`;
+    } else if (
+      classified?.category === 'server_overload' ||
+      classified?.category === 'capacity_off_switch'
+    ) {
+      markProviderDegraded(provider, classified.category);
+      friendlyMessage = `${providerLabel} image generation is overloaded right now. Try again in a moment, or choose a different image model.`;
+    } else if (providerHttpError?.status === 429) {
       friendlyMessage =
         'The image generation service is temporarily busy. Use Try again after the wait shown below.';
     } else if (errorMessage.includes('content policy') || errorMessage.includes('safety')) {
@@ -1468,6 +1497,8 @@ async function handleImageGeneration(request: NextRequest): Promise<NextResponse
         'The image provider did not respond before the request deadline. Please try again.';
     }
 
+    const retryAfterSeconds = suppressRetryAfter ? undefined : providerHttpError?.retryAfterSeconds;
+
     return NextResponse.json(
       {
         success: false,
@@ -1476,18 +1507,14 @@ async function handleImageGeneration(request: NextRequest): Promise<NextResponse
         provider,
         model: 'unknown',
         latency_ms: Date.now() - startTime,
-        ...(providerHttpError?.retryAfterSeconds !== undefined
-          ? { retry_after_seconds: providerHttpError.retryAfterSeconds }
-          : {}),
+        ...(retryAfterSeconds !== undefined ? { retry_after_seconds: retryAfterSeconds } : {}),
       } satisfies ImageGenerationResponse,
       {
         status: providerHttpError?.status === 429 ? 429 : 422,
         headers: {
           ...getCorsHeaders(request),
           ...getSecurityHeaders(),
-          ...(providerHttpError?.retryAfterSeconds !== undefined
-            ? { 'Retry-After': String(providerHttpError.retryAfterSeconds) }
-            : {}),
+          ...(retryAfterSeconds !== undefined ? { 'Retry-After': String(retryAfterSeconds) } : {}),
         },
       },
     );
