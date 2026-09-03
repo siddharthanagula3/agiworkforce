@@ -229,10 +229,10 @@ describe('buildAdapterStreamResponse · billing reconciliation', () => {
     });
   });
 
-  it('prefers a gateway-reported cost over the calculator estimate, and records that source', async () => {
+  it('prefers a gateway-reported cost within the catalog sanity band, and records that source', async () => {
     const chunks: StreamChunk[] = [
       { type: 'text-delta', delta: 'Hi' },
-      { type: 'usage', inputTokens: 120, outputTokens: 80, costUsd: 0.0009 },
+      { type: 'usage', inputTokens: 120, outputTokens: 80, costUsd: 0.02 },
       { type: 'stop', reason: 'end_turn' },
     ];
 
@@ -246,11 +246,86 @@ describe('buildAdapterStreamResponse · billing reconciliation', () => {
     );
     await readAllText(response as any);
 
-    expect(mockCalculateCost).not.toHaveBeenCalled();
+    expect(mockCalculateCost).toHaveBeenCalled();
     expect(mockFinalizeManagedUsageRequest).toHaveBeenCalledWith(
       expect.objectContaining({
-        actualCostCents: 1,
+        actualCostCents: 2,
         usage: expect.objectContaining({ costSource: 'provider_reported' }),
+      }),
+    );
+  });
+
+  it('ignores a zero gateway-reported cost on real usage and falls back to the estimate', async () => {
+    const chunks: StreamChunk[] = [
+      { type: 'text-delta', delta: 'Hi' },
+      { type: 'usage', inputTokens: 120, outputTokens: 80, costUsd: 0 },
+      { type: 'stop', reason: 'end_turn' },
+    ];
+
+    const response = await buildAdapterStreamResponse(
+      makeRequest() as any,
+      chunksOf(chunks),
+      makeProcessed({ provider: 'openrouter', estimatedCostCents: 5 }),
+      'user-002c',
+      'token-002c',
+      1_700_000_000_000,
+    );
+    await readAllText(response as any);
+
+    expect(mockFinalizeManagedUsageRequest).toHaveBeenCalledWith(
+      expect.objectContaining({
+        actualCostCents: 4,
+        usage: expect.objectContaining({ costSource: 'estimated' }),
+      }),
+    );
+  });
+
+  it('ignores a gateway-reported cost far below the catalog estimate and falls back to it', async () => {
+    const chunks: StreamChunk[] = [
+      { type: 'text-delta', delta: 'Hi' },
+      { type: 'usage', inputTokens: 120, outputTokens: 80, costUsd: 0.00001 },
+      { type: 'stop', reason: 'end_turn' },
+    ];
+
+    const response = await buildAdapterStreamResponse(
+      makeRequest() as any,
+      chunksOf(chunks),
+      makeProcessed({ provider: 'openrouter', estimatedCostCents: 5 }),
+      'user-002d',
+      'token-002d',
+      1_700_000_000_000,
+    );
+    await readAllText(response as any);
+
+    expect(mockFinalizeManagedUsageRequest).toHaveBeenCalledWith(
+      expect.objectContaining({
+        actualCostCents: 4,
+        usage: expect.objectContaining({ costSource: 'estimated' }),
+      }),
+    );
+  });
+
+  it('ignores a gateway-reported cost far above the catalog estimate and falls back to it', async () => {
+    const chunks: StreamChunk[] = [
+      { type: 'text-delta', delta: 'Hi' },
+      { type: 'usage', inputTokens: 120, outputTokens: 80, costUsd: 5 },
+      { type: 'stop', reason: 'end_turn' },
+    ];
+
+    const response = await buildAdapterStreamResponse(
+      makeRequest() as any,
+      chunksOf(chunks),
+      makeProcessed({ provider: 'openrouter', estimatedCostCents: 5 }),
+      'user-002e',
+      'token-002e',
+      1_700_000_000_000,
+    );
+    await readAllText(response as any);
+
+    expect(mockFinalizeManagedUsageRequest).toHaveBeenCalledWith(
+      expect.objectContaining({
+        actualCostCents: 4,
+        usage: expect.objectContaining({ costSource: 'estimated' }),
       }),
     );
   });

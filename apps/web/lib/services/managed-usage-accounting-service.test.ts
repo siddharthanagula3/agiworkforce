@@ -159,22 +159,21 @@ describe('managed usage accounting', () => {
     );
   });
 
-  it('prefers a provider-reported cost over the calculator estimate, and records that source', () => {
+  it('prefers a provider-reported cost within the catalog sanity band, and records that source', () => {
     const usage = createObservedProviderUsage();
-    vi.mocked(LLMCostCalculator.calculateCostDollars).mockClear();
 
     accumulateObservedProviderUsage(
       usage,
-      { inputTokens: 100, outputTokens: 20, providerReportedCostUsd: 0.0042 },
+      { inputTokens: 100, outputTokens: 20, providerReportedCostUsd: 0.05 },
       { provider: 'open_router', model: 'claude-sonnet-5', routeId: 'open_router/claude-sonnet-5' },
     );
 
     expect(usage.providerCallObservations?.[0]).toMatchObject({
-      costDollars: 0.0042,
+      costDollars: 0.05,
       costSource: 'provider_reported',
     });
-    expect(usage.providerCostDollars).toBe(0.0042);
-    expect(LLMCostCalculator.calculateCostDollars).not.toHaveBeenCalled();
+    expect(usage.providerCostDollars).toBe(0.05);
+    expect(LLMCostCalculator.calculateCostDollars).toHaveBeenCalled();
   });
 
   it('falls back to the calculator estimate and records that source when no cost was reported', () => {
@@ -199,6 +198,51 @@ describe('managed usage accounting', () => {
     accumulateObservedProviderUsage(
       usage,
       { inputTokens: 100, outputTokens: 20, providerReportedCostUsd: Number.NaN },
+      { provider: 'anthropic', model: 'claude-sonnet-5' },
+    );
+
+    expect(usage.providerCallObservations?.[0]).toMatchObject({
+      costDollars: 0.09,
+      costSource: 'estimated',
+    });
+  });
+
+  it('ignores a zero reported cost on real usage and falls back to the estimate', () => {
+    const usage = createObservedProviderUsage();
+
+    accumulateObservedProviderUsage(
+      usage,
+      { inputTokens: 100, outputTokens: 20, providerReportedCostUsd: 0 },
+      { provider: 'anthropic', model: 'claude-sonnet-5' },
+    );
+
+    expect(usage.providerCallObservations?.[0]).toMatchObject({
+      costDollars: 0.09,
+      costSource: 'estimated',
+    });
+  });
+
+  it('ignores a reported cost far below the catalog estimate and falls back to the estimate', () => {
+    const usage = createObservedProviderUsage();
+
+    accumulateObservedProviderUsage(
+      usage,
+      { inputTokens: 100, outputTokens: 20, providerReportedCostUsd: 0.0001 },
+      { provider: 'anthropic', model: 'claude-sonnet-5' },
+    );
+
+    expect(usage.providerCallObservations?.[0]).toMatchObject({
+      costDollars: 0.09,
+      costSource: 'estimated',
+    });
+  });
+
+  it('ignores a reported cost far above the catalog estimate and falls back to the estimate', () => {
+    const usage = createObservedProviderUsage();
+
+    accumulateObservedProviderUsage(
+      usage,
+      { inputTokens: 100, outputTokens: 20, providerReportedCostUsd: 5 },
       { provider: 'anthropic', model: 'claude-sonnet-5' },
     );
 

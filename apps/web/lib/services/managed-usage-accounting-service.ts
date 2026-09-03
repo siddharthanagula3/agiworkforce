@@ -1,5 +1,6 @@
 import 'server-only';
 
+import { logger } from '@/lib/logger';
 import { LLMCostCalculator, type TokenUsage } from '@/lib/services/llm-cost-calculator';
 import type { CpstUsageFields } from '@/lib/cpst-telemetry';
 import {
@@ -76,7 +77,18 @@ function toTokenUsage(observation: ProviderUsageObservation): TokenUsage {
 }
 
 function validReportedCost(value: number | undefined): number | undefined {
-  return Number.isFinite(value) && value !== undefined && value >= 0 ? value : undefined;
+  return Number.isFinite(value) && value !== undefined && value > 0 ? value : undefined;
+}
+
+const REPORTED_COST_SANITY_BAND_MIN_MULTIPLE = 0.1;
+const REPORTED_COST_SANITY_BAND_MAX_MULTIPLE = 10;
+
+function isReportedCostWithinSanityBand(reportedCostUsd: number, estimateDollars: number): boolean {
+  if (estimateDollars <= 0) return true;
+  return (
+    reportedCostUsd >= estimateDollars * REPORTED_COST_SANITY_BAND_MIN_MULTIPLE &&
+    reportedCostUsd <= estimateDollars * REPORTED_COST_SANITY_BAND_MAX_MULTIPLE
+  );
 }
 
 function normalizeObservation(
@@ -109,26 +121,35 @@ export function accumulateObservedProviderUsage(
   target.cacheWrite1hTokens += normalized.cacheWrite1hTokens;
   target.reasoningTokens += normalized.reasoningTokens;
 
-  const costSource: ObservedCostSource =
-    normalized.providerReportedCostUsd !== undefined ? 'provider_reported' : 'estimated';
-  const priced: ProviderUsageObservation = pricing
-    ? {
-        ...normalized,
-        provider: pricing.provider,
-        model: pricing.model,
-        routeId: pricing.routeId ?? null,
-        costDollars:
-          normalized.providerReportedCostUsd ??
-          LLMCostCalculator.calculateCostDollars(
-            pricing.provider,
-            pricing.model,
-            toTokenUsage(normalized),
-            undefined,
-            pricing.routeId,
-          ),
-        costSource,
-      }
-    : normalized;
+  let priced: ProviderUsageObservation = normalized;
+  if (pricing) {
+    const estimateDollars = LLMCostCalculator.calculateCostDollars(
+      pricing.provider,
+      pricing.model,
+      toTokenUsage(normalized),
+      undefined,
+      pricing.routeId,
+    );
+    const reportedCostUsd = normalized.providerReportedCostUsd;
+    const reportedAdmitted =
+      reportedCostUsd !== undefined &&
+      isReportedCostWithinSanityBand(reportedCostUsd, estimateDollars);
+    if (reportedCostUsd !== undefined && !reportedAdmitted) {
+      logger.warn(
+        { provider: pricing.provider, model: pricing.model, reportedCostUsd, estimateDollars },
+        'Ignored provider-reported cost outside the catalog sanity band',
+      );
+    }
+    const costSource: ObservedCostSource = reportedAdmitted ? 'provider_reported' : 'estimated';
+    priced = {
+      ...normalized,
+      provider: pricing.provider,
+      model: pricing.model,
+      routeId: pricing.routeId ?? null,
+      costDollars: reportedAdmitted ? (reportedCostUsd as number) : estimateDollars,
+      costSource,
+    };
+  }
   (target.providerCallObservations ??= []).push(priced);
   if (priced.costDollars !== undefined) {
     target.providerCostDollars = nonNegative(target.providerCostDollars) + priced.costDollars;
