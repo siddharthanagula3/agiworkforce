@@ -1,4 +1,3 @@
-
 export interface GeminiPart {
   text?: string;
   inlineData?: { mimeType: string; data: string };
@@ -60,6 +59,19 @@ export interface GeminiGenerateContentRequest {
   }>;
 }
 
+export interface GeminiGroundingChunk {
+  web?: { uri: string; title?: string };
+}
+
+export interface GeminiGroundingSupport {
+  segment?: { startIndex?: number; endIndex?: number; text?: string };
+  groundingChunkIndices?: number[];
+}
+
+export interface GeminiUrlContextMetadata {
+  urlMetadata?: Array<{ retrievedUrl?: string; urlRetrievalStatus?: string }>;
+}
+
 export interface GeminiStreamChunk {
   candidates?: Array<{
     content?: GeminiContent;
@@ -79,10 +91,10 @@ export interface GeminiStreamChunk {
     index?: number;
     safetyRatings?: Array<{ category: string; probability: string; blocked?: boolean }>;
     groundingMetadata?: {
-      groundingChunks?: Array<{
-        web?: { uri: string; title?: string };
-      }>;
+      groundingChunks?: GeminiGroundingChunk[];
+      groundingSupports?: GeminiGroundingSupport[];
     };
+    urlContextMetadata?: GeminiUrlContextMetadata;
   }>;
   promptFeedback?: {
     blockReason?: string;
