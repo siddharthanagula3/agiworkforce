@@ -1,4 +1,3 @@
-
 import type {
   ChatRequest,
   ContentBlock,
@@ -12,7 +11,7 @@ import { getModelMetadataById } from '@agiworkforce/types';
 interface AnthropicTranslatedRequest {
   model: string;
   messages: AnthropicMessageParam[];
-  system?: string | AnthropicSystemBlock[];
+  system?: AnthropicSystemBlock[];
   tools?: AnthropicToolParam[];
   tool_choice?: AnthropicToolChoiceParam;
   max_tokens: number;
@@ -174,10 +173,10 @@ function translateMessage(msg: ProviderMessage): AnthropicMessageParam | null {
 function translateSystem(
   messages: ProviderMessage[],
   explicit?: ChatRequest['system'],
-): string | AnthropicSystemBlock[] | undefined {
+): AnthropicSystemBlock[] | undefined {
   if (explicit !== undefined) {
     if (typeof explicit === 'string') {
-      return explicit;
+      return explicit ? [{ type: 'text', text: explicit }] : undefined;
     }
     return explicit.map((b: TextBlock) => ({
       type: 'text' as const,
@@ -189,7 +188,7 @@ function translateSystem(
   if (systemMsgs.length === 0) {
     return undefined;
   }
-  return systemMsgs
+  const text = systemMsgs
     .map((m) => {
       if (typeof m.content === 'string') return m.content;
       return m.content
@@ -198,6 +197,7 @@ function translateSystem(
         .join('\n\n');
     })
     .join('\n\n');
+  return text ? [{ type: 'text', text }] : undefined;
 }
 
 function translateTool(tool: ToolDef): AnthropicToolParam {
