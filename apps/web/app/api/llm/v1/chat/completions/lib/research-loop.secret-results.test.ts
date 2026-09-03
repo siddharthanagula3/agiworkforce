@@ -165,7 +165,7 @@ beforeEach(() => {
   dnsMocks.lookup.mockResolvedValue([{ address: '93.184.216.34', family: 4 }]);
 });
 
-describe('research loop — secret handling policy applied to url_fetch results', () => {
+describe('research loop, secret handling policy applied to url_fetch results', () => {
   it('redacts a secret a fetched page returns before it reaches the client stream or the provider', async () => {
     mocks.resolvePolicy.mockResolvedValue({ mode: 'redact', organizationId: ORGANIZATION_ID });
     mockFetchAndPlanAndSynthesis();

@@ -16,12 +16,6 @@ import { startProviderStream } from './adapter-factory';
 import { ADAPTER_PROVIDERS } from './adapter-providers';
 import type { ProcessedRequest } from './request-processor';
 
-/**
- * Route ids are named `${servingProvider}/${modelKey}` in the model registry
- * (see `getRoutePricing`). Built from the normalized ids, not the raw
- * dispatch-layer strings, since the registry's provider keys are its own
- * canonical spelling (`open_router`, not `openrouter`).
- */
 export function buildServingRouteId(provider: string, model: string): string {
   return `${normalizeProviderId(provider) ?? provider}/${normalizeModelId(model) ?? model}`;
 }
@@ -29,16 +23,6 @@ export function buildServingRouteId(provider: string, model: string): string {
 const OPENROUTER_DISPATCH_PROVIDER_ID = 'openrouter';
 const OPENROUTER_METADATA_ROUTING_KEY = 'openRouterProviderRouting';
 
-/**
- * Pin the OpenRouter gateway to the upstream provider that already holds this
- * conversation's warm cache, when this attempt is dispatching to exactly the
- * route the affinity names.
- *
- * Without this, OpenRouter's own load balancer is free to bounce the same
- * route across its upstream providers (DigitalOcean, DeepInfra, Bedrock, ...)
- * turn to turn, which never lets the gateway's own cache warm up regardless
- * of how consistently this app re-selects the route.
- */
 function applyWarmRouteProviderPinning(
   chatRequest: ChatRequest,
   provider: string,

@@ -194,10 +194,6 @@ export async function buildNonStreamResponse(
     });
   }
 
-  // This function is reached only on success (a failed attempt is reported
-  // through `buildUpstreamErrorResponse` instead), so every call here is a
-  // route health success sample -- the non-streaming twin of
-  // `recordDirectRouteSuccess` in stream-transform.ts.
   try {
     const routeId = buildServingRouteId(provider, llmResponse.model);
     void recordRouteOutcome(
@@ -371,10 +367,6 @@ export function buildUpstreamErrorResponse(
     context === 'streaming' ? 'Streaming request failed' : 'LLM request failed',
   );
 
-  // The standard adapter path's twin of `tool-loop.ts`'s
-  // `recordProviderStepFailure`: this is the single point both the streaming
-  // and non-streaming direct paths reach once failover is exhausted, so it is
-  // where a route's failure becomes attributable to route health.
   try {
     const outcomeClass = routeOutcomeClassForError(error, classified);
     if (outcomeClass) {

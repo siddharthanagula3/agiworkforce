@@ -81,12 +81,6 @@ export function resolveBilledOutcome(input: {
   return input.outcome ?? 'completed';
 }
 
-/**
- * Whole ledger cents from a gateway-reported charge, matching
- * `LLMCostCalculator.calculateCost`'s rounding: non-empty paid usage always
- * consumes at least one cent, so a sub-cent gateway charge cannot bypass paid
- * caps.
- */
 function reportedCostCentsFromUsd(reportedCostUsd: number): number {
   const costCents = reportedCostUsd * 100;
   return costCents > 0 ? Math.max(1, Math.ceil(costCents)) : 0;
@@ -231,15 +225,6 @@ async function settleStreamBilling(input: {
   );
 }
 
-/**
- * The standard single-turn adapter path's twin of `tool-loop.ts`'s
- * `recordProviderStepSuccess` -- same fire-and-forget, fail-open contract, so
- * a route health / affinity write lost here costs the next turn a ranking
- * signal or a cache hit, never correctness. This path is the one the
- * overwhelming majority of ordinary (no MCP/platform tool) chat turns take,
- * so route health and served-route affinity previously had no data at all
- * for it.
- */
 function recordDirectRouteSuccess(input: {
   processed: ProcessedRequest;
   provider: string;

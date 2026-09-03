@@ -130,7 +130,7 @@ function rotatedOncePlan(): { next: Mock<ToolLoopFailoverPlan['next']> } {
   };
 }
 
-describe('runToolLoop — provider lines reach the client while the step is still running', () => {
+describe('runToolLoop, provider lines reach the client while the step is still running', () => {
   beforeEach(() => {
     mockBuildToolLoopStream.mockReset();
   });
