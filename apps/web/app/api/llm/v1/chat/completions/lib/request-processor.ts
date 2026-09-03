@@ -13,7 +13,12 @@ import { urlFetchToolDef } from '@/lib/url-fetch/url-fetch-tool';
 import { webSearchToolDef, webSearchBackendConfigured } from '@/lib/web-search/web-search-tool';
 import { webSearchNeedsGenericTool } from '@agiworkforce/search';
 import { extractCandidateMemoryFacts } from '@agiworkforce/agent-core';
-import { supportsOpenAIReasoningEffort } from '@agiworkforce/provider-protocol';
+import {
+  supportsOpenAIReasoningEffort,
+  SYSTEM_PROMPT_CACHE_BOUNDARY,
+  splitSystemPromptCacheBoundary,
+  prependSystemPromptAdditionAfterCacheBoundary,
+} from '@agiworkforce/provider-protocol';
 import { CreditService } from '@/lib/services/credit-service';
 import { SubscriptionService } from '@/lib/services/subscription-service';
 import {
@@ -900,6 +905,39 @@ export function collectManagedPromptMaterials(request: ChatCompletionRequest): s
   const materials = request.messages.map((message) => extractTextContent(message.content));
   if (request.tools?.length) materials.push(JSON.stringify(request.tools));
   return materials;
+}
+
+/**
+ * Assembles the leading system message so the cacheable prefix (static
+ * capability preamble + custom instructions) stays byte-identical across
+ * turns of one conversation, with everything that varies per turn
+ * (timestamp, matched skills, recalled memories) folded in after
+ * `SYSTEM_PROMPT_CACHE_BOUNDARY`. `capabilityPreamble` already carries that
+ * boundary ahead of its own dynamic time context; `dynamicSystemAddition`
+ * (skill/memory content) is inserted right after it, and
+ * `customInstructionsPreamble` (static, per-user config) joins the stable
+ * side.
+ */
+export function composeManagedSystemPreamble(input: {
+  capabilityPreamble: string | null;
+  customInstructionsPreamble: string | null | undefined;
+  dynamicSystemAddition: string;
+}): string {
+  const withDynamicAddition = prependSystemPromptAdditionAfterCacheBoundary({
+    systemPrompt: input.capabilityPreamble ?? '',
+    systemPromptAddition: input.dynamicSystemAddition,
+  });
+  const split = splitSystemPromptCacheBoundary(withDynamicAddition);
+  const stableBlock = [
+    split ? split.stablePrefix : withDynamicAddition,
+    input.customInstructionsPreamble,
+  ]
+    .filter((block): block is string => Boolean(block))
+    .join('\n\n');
+  const dynamicBlock = split ? split.dynamicSuffix : '';
+  return dynamicBlock
+    ? `${stableBlock}${SYSTEM_PROMPT_CACHE_BOUNDARY}${dynamicBlock}`
+    : stableBlock;
 }
 
 /**
@@ -1797,6 +1835,8 @@ export async function processRequest(
     };
   }
 
+  const dynamicSystemMessageRefs = new Set<object>();
+
   if (chatRequest.mcp_context) {
     try {
       const context = await loadSelectedMcpContext(userId, chatRequest.mcp_context);
@@ -1848,6 +1888,7 @@ export async function processRequest(
             [chatRequest.conversation_id, userId],
           )
         : [];
+      const preMemoryMessageCount = chatRequest.messages.length;
       await enrichManagedMemoryContext({
         db: scoped.db,
         userId,
@@ -1855,6 +1896,9 @@ export async function processRequest(
         isTemporary: false,
         projectId: conversationRow?.project_id ?? null,
       });
+      if (chatRequest.messages.length > preMemoryMessageCount) {
+        dynamicSystemMessageRefs.add(chatRequest.messages[0] as object);
+      }
     } catch (error) {
       logger.error(
         { error, userId, conversationId: chatRequest.conversation_id },
@@ -2338,6 +2382,7 @@ export async function processRequest(
     };
   }
 
+  const preSkillMessageCount = chatRequest.messages.length;
   if (chatRequest.skill_name) {
     let managedSkillCatalog: Skill[];
     try {
@@ -2408,6 +2453,9 @@ export async function processRequest(
         '[skills] offered relevance-matched skills without an explicit selection',
       );
     }
+  }
+  if (chatRequest.messages.length > preSkillMessageCount) {
+    dynamicSystemMessageRefs.add(chatRequest.messages[0] as object);
   }
 
   if (chatRequest.office_creation) {
@@ -2852,13 +2900,23 @@ export async function processRequest(
       }) ?? computerUseSoftCapWarning;
   }
 
-  const internalMessages = chatRequest.messages.map((msg) => ({
+  const dynamicSystemSourceMessages = chatRequest.messages.filter((msg) =>
+    dynamicSystemMessageRefs.has(msg),
+  );
+  const staticSourceMessages = chatRequest.messages.filter(
+    (msg) => !dynamicSystemMessageRefs.has(msg),
+  );
+  const internalMessages = staticSourceMessages.map((msg) => ({
     role: msg.role as 'system' | 'user' | 'assistant' | 'tool',
     content: extractTextContent(msg.content),
     multimodal_content: Array.isArray(msg.content) ? (msg.content as unknown[]) : undefined,
     tool_calls: msg.tool_calls as unknown[] | undefined,
     tool_call_id: msg.tool_call_id,
   }));
+  const dynamicSkillMemoryText = dynamicSystemSourceMessages
+    .map((msg) => extractTextContent(msg.content))
+    .filter((text) => text.length > 0)
+    .join('\n\n');
 
   let resolvedTools: unknown[] | undefined = chatRequest.tools;
   if (chatRequest.web_search) {
@@ -2928,19 +2986,48 @@ export async function processRequest(
     });
 
     const customInstructionsPreamble = await customInstructionsPromise;
-    const preamble = [capabilityPreamble, customInstructionsPreamble]
-      .filter((block): block is string => Boolean(block))
-      .join('\n\n');
+    const preamble = composeManagedSystemPreamble({
+      capabilityPreamble,
+      customInstructionsPreamble,
+      dynamicSystemAddition: dynamicSkillMemoryText,
+    });
+    const preambleSplit = preamble ? splitSystemPromptCacheBoundary(preamble) : undefined;
+    const stablePreambleBlock = preambleSplit ? preambleSplit.stablePrefix : preamble;
+    const dynamicPreambleBlock = preambleSplit ? preambleSplit.dynamicSuffix : '';
 
-    if (preamble) {
+    if (stablePreambleBlock) {
       internalMessages.unshift({
         role: 'system',
-        content: preamble,
+        content: stablePreambleBlock,
         multimodal_content: undefined,
         tool_calls: undefined,
         tool_call_id: undefined,
       });
     }
+    if (dynamicPreambleBlock) {
+      // Inserted after every other leading system message (the client's own
+      // system text, MCP context, JSON/research mode directives) so those
+      // stay ahead of the boundary too: none of them vary with the timestamp
+      // or matched skills/memories, so none belong in the uncacheable tail.
+      const firstNonSystemIndex = internalMessages.findIndex((msg) => msg.role !== 'system');
+      const dynamicInsertIndex =
+        firstNonSystemIndex === -1 ? internalMessages.length : firstNonSystemIndex;
+      internalMessages.splice(dynamicInsertIndex, 0, {
+        role: 'system',
+        content: `${SYSTEM_PROMPT_CACHE_BOUNDARY}${dynamicPreambleBlock}`,
+        multimodal_content: undefined,
+        tool_calls: undefined,
+        tool_call_id: undefined,
+      });
+    }
+  } else if (dynamicSkillMemoryText) {
+    internalMessages.unshift({
+      role: 'system',
+      content: dynamicSkillMemoryText,
+      multimodal_content: undefined,
+      tool_calls: undefined,
+      tool_call_id: undefined,
+    });
   }
 
   const managedCodeToolChoice = resolveInitialManagedCodeToolChoice({

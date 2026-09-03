@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
+import { SYSTEM_PROMPT_CACHE_BOUNDARY } from '@agiworkforce/provider-protocol';
+
 import { createManagedOfficeFileToolDefinition } from '@/lib/services/managed-office-file-service';
 
 import { buildCapabilityPreamble, extractToolNames } from './capability-preamble';
@@ -158,5 +160,44 @@ describe('capability preamble', () => {
     });
 
     expect(preamble).not.toContain('"Run code"');
+  });
+
+  describe('cache prefix stability', () => {
+    it('puts the ever-changing timestamp after the cache boundary, not before it', () => {
+      const preamble = buildCapabilityPreamble({
+        now: new Date('2026-07-25T12:03:00.000Z'),
+        tools: [{ type: 'function', function: { name: 'web_search' } }],
+      });
+
+      expect(preamble).toContain(SYSTEM_PROMPT_CACHE_BOUNDARY);
+      const [before, after] = String(preamble).split(SYSTEM_PROMPT_CACHE_BOUNDARY);
+      expect(before).not.toContain('The current UTC date and time is');
+      expect(after).toContain('The current UTC date and time is');
+    });
+
+    it('rounds the timestamp down to the coarse granularity', () => {
+      const preamble = buildCapabilityPreamble({
+        now: new Date('2026-07-25T12:03:47.812Z'),
+        tools: [],
+      });
+
+      expect(preamble).toContain('The current UTC date and time is 2026-07-25T12:03:00.000Z');
+    });
+
+    it('keeps the portion before the boundary byte-identical across two turns of one conversation', () => {
+      const turnOne = buildCapabilityPreamble({
+        now: new Date('2026-07-25T12:03:00.000Z'),
+        tools: [{ type: 'function', function: { name: 'web_search' } }],
+      });
+      const turnTwo = buildCapabilityPreamble({
+        now: new Date('2026-07-25T12:41:00.000Z'),
+        tools: [{ type: 'function', function: { name: 'web_search' } }],
+      });
+
+      const stableOne = String(turnOne).split(SYSTEM_PROMPT_CACHE_BOUNDARY)[0];
+      const stableTwo = String(turnTwo).split(SYSTEM_PROMPT_CACHE_BOUNDARY)[0];
+      expect(stableOne).toBe(stableTwo);
+      expect(turnOne).not.toBe(turnTwo);
+    });
   });
 });
