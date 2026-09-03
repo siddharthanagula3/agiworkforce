@@ -493,3 +493,39 @@ describe('useChatStream research retry request', () => {
     expect(secondKey?.['Idempotency-Key']).not.toBe(firstKey?.['Idempotency-Key']);
   });
 });
+
+function citationDelta(url: string, title: string) {
+  return { choices: [{ delta: { x_citation: { url, title } }, index: 0 }] };
+}
+
+describe('useChatStream native web search citation annotations', () => {
+  it('accumulates each x_citation event in first-appearance order, deduped by url', async () => {
+    installFetch([
+      citationDelta('https://openai.com/index/expanding-daybreak/', 'Expanding Daybreak'),
+      citationDelta(
+        'https://blog.google/products/pixel-watch-5/',
+        'Pixel Watch 5: Proactive assistance',
+      ),
+      citationDelta('https://openai.com/index/expanding-daybreak/', 'Expanding Daybreak'),
+      contentDelta('Two claims, one about OpenAI [1] and one about Google [2].'),
+    ]);
+
+    const { result } = renderHook(() => useChatStream());
+    await act(async () => {
+      await result.current.sendMessage('what shipped this week');
+    });
+
+    expect(assistantMessage()?.metadata?.citations).toEqual([
+      {
+        type: 'url_citation',
+        url: 'https://openai.com/index/expanding-daybreak/',
+        title: 'Expanding Daybreak',
+      },
+      {
+        type: 'url_citation',
+        url: 'https://blog.google/products/pixel-watch-5/',
+        title: 'Pixel Watch 5: Proactive assistance',
+      },
+    ]);
+  });
+});
