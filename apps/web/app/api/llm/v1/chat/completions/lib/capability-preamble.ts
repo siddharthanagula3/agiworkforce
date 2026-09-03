@@ -1,6 +1,9 @@
 import 'server-only';
 
 import { isValidIanaTimeZone } from '@agiworkforce/types';
+import { SYSTEM_PROMPT_CACHE_BOUNDARY } from '@agiworkforce/provider-protocol';
+
+const TIME_CONTEXT_GRANULARITY_MS = 60_000;
 
 const TOOL_DESCRIPTIONS: Record<string, string> = {
   web_search: 'search the live web and cite what you find',
@@ -92,6 +95,10 @@ export interface CapabilityPreambleInput {
   researchUnavailable?: boolean;
 }
 
+function roundDownToGranularity(instant: Date, granularityMs: number): Date {
+  return new Date(Math.floor(instant.getTime() / granularityMs) * granularityMs);
+}
+
 function formatLocalInstant(now: Date, timeZone: string | undefined): string | null {
   if (!timeZone || !isValidIanaTimeZone(timeZone)) return null;
 
@@ -118,7 +125,7 @@ function formatLocalInstant(now: Date, timeZone: string | undefined): string | n
 }
 
 export function buildCapabilityPreamble(input: CapabilityPreambleInput): string | null {
-  const now = input.now ?? new Date();
+  const now = roundDownToGranularity(input.now ?? new Date(), TIME_CONTEXT_GRANULARITY_MS);
   const currentUtcTimestamp = now.toISOString();
   const browserLocalInstant = formatLocalInstant(now, input.timeZone);
   const toolNames = extractToolNames(input.tools);
@@ -144,7 +151,7 @@ export function buildCapabilityPreamble(input: CapabilityPreambleInput): string 
     'as though it were local. Your training data has a cutoff, so treat anything ' +
     'time-sensitive as potentially stale and verify it before stating it as current.';
 
-  const sections: string[] = ['You are AGI Workforce, an AI assistant.', timeContext];
+  const sections: string[] = ['You are AGI Workforce, an AI assistant.'];
 
   if (toolNames.length > 0) {
     const described = toolNames.map((name) => {
@@ -229,5 +236,5 @@ export function buildCapabilityPreamble(input: CapabilityPreambleInput): string 
     );
   }
 
-  return sections.join('\n\n');
+  return `${sections.join('\n\n')}${SYSTEM_PROMPT_CACHE_BOUNDARY}${timeContext}`;
 }
