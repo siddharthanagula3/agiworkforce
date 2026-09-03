@@ -85,7 +85,7 @@ fn delegated_file_reads_enabled() -> bool {
     let enabled = std::env::var(A2A_ALLOW_FILE_READS_ENV).as_deref() == Ok("1");
     if enabled && !FILE_READ_OVERRIDE_WARNED.swap(true, Ordering::Relaxed) {
         eprintln!(
-            "  {} WARNING: {A2A_ALLOW_FILE_READS_ENV}=1 — a delegated task can read project files and return them to the peer that requested it",
+            "  {} WARNING: {A2A_ALLOW_FILE_READS_ENV}=1, a delegated task can read project files and return them to the peer that requested it",
             ts::danger("[a2a]")
         );
     }
@@ -115,12 +115,6 @@ pub fn build_a2a_state(
 // Server entry point
 // ---------------------------------------------------------------------------
 
-/// Start the A2A HTTP server on the given port.
-///
-/// Endpoints:
-/// - `GET  /a2a/card`       — returns this agent's AgentCard as JSON
-/// - `POST /a2a/task`       — accept a delegated task
-/// - `GET  /a2a/task/{id}`  — check task status
 pub async fn serve_a2a(state: A2aState, port: u16) -> Result<()> {
     let listener = tokio::net::TcpListener::bind(format!("127.0.0.1:{}", port))
         .await

@@ -1,5 +1,3 @@
-// AGI Workforce TUI — ratatui-based full-screen terminal UI
-// Built on ratatui rendering modules + AgentSession
 
 pub(crate) mod app_event;
 pub(crate) mod approval_broker;

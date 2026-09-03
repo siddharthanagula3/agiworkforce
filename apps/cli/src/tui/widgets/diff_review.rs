@@ -1,7 +1,3 @@
-//! `DiffReviewView` — per-file diff review overlay.
-//!
-//! `y/n/s` keys record Approve/Reject/Skip decisions per file; ↑↓ move the
-//! cursor across files; Enter finalizes and returns Submit(approved_count).
 
 #![allow(dead_code)]
 
@@ -180,7 +176,6 @@ impl InteractiveView for DiffReviewView {
             return Some(out);
         }
 
-        // File list — decision label colored by outcome, cursor accented.
         for (i, file) in self.files.iter().enumerate() {
             let cursor = if i == self.cursor { "❯" } else { " " };
             let (decision_str, dec_color) = match self.decisions.get(&file.path) {
@@ -214,7 +209,6 @@ impl InteractiveView for DiffReviewView {
             "│ ──────────────────────────────────────────────────────────  │",
         ));
 
-        // Hunk preview — +added green, -removed red, @@ headers accented.
         for hunk in self.current_hunks().iter().take(3) {
             let hunk = pad_to_cols(sanitize_terminal_text(hunk).as_ref(), 58);
             let style = if hunk.starts_with('+') {

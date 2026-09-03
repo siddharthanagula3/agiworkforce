@@ -27,9 +27,6 @@ pub use executor::ToolCall;
 pub use prompt::assemble_system_prompt;
 pub(crate) use prompt::encode_untrusted_context;
 
-// ---------------------------------------------------------------------------
-// Tool definitions (native API JSON Schema) — test-only helpers
-// ---------------------------------------------------------------------------
 
 #[cfg(test)]
 fn build_tool_definitions() -> Vec<ToolDefinition> {
@@ -140,9 +137,6 @@ pub struct AgentSession {
     pub max_turns: Option<usize>,
     /// If set, stop the agent loop when cumulative spend exceeds this many USD.
     pub max_budget_usd: Option<f64>,
-    /// Optional callback invoked when the budget cap is hit.
-    /// `(cumulative_usd, limit_usd)` — caller is responsible for emitting
-    /// any JSON event; chat.rs always writes a human-readable line to stderr.
     pub on_budget_exhausted: Option<BudgetSink>,
     pub plan_mode: bool,
     pub permission_mode: crate::cli_options::PermissionMode,
@@ -199,12 +193,6 @@ pub struct AgentSession {
     memory_consolidation_tasks: Vec<tokio::task::JoinHandle<()>>,
     pub(crate) managed_session: Option<ManagedSession>,
     pub(crate) managed_session_path: Option<PathBuf>,
-    /// When false this session must never write managed-session state — not the
-    /// session file under `~/.agiworkforce/managed_sessions/`, and not the
-    /// session index row that mirrors it. Seeded at construction from the
-    /// process-wide `--no-session-persistence` policy
-    /// (`cli_options::session_persistence_enabled`). Resuming an existing
-    /// session still rehydrates in memory; only the write-back is suppressed.
     pub(crate) session_persistence: bool,
     /// Subscription tier used when the interactive per-turn Auto re-resolution
     /// re-queries the registry policy. Seeded by the `--auto` launch path from
@@ -232,13 +220,6 @@ pub struct AgentSession {
     /// Maps from the TUI Effort picker: Medium=None, High=Some(16384), Max=Some(32768).
     /// Only applied when the active provider is Anthropic.
     pub thinking_budget_tokens: Option<u32>,
-    /// The Effort picker's selection, kept whole.
-    ///
-    /// `thinking_budget_tokens` above is only the Anthropic projection of this,
-    /// and it collapses Low and Medium to the same `None`. Storing the level
-    /// itself lets the request boundary derive the OpenAI `reasoning.effort`
-    /// string and the Gemini thinking budget too — previously both ran at
-    /// provider default regardless of what the user picked.
     pub effort: Option<crate::design_system::Effort>,
 }
 
@@ -2991,7 +2972,6 @@ mod tests {
         session.json_events = true;
         session.json_session_id = "my-session-id".to_string();
 
-        // Obtain the sink — it must not panic and must capture the session_id.
         let mut sink = session.continuation_sink();
 
         // The sink is a closure; invoke it and confirm the resulting event
@@ -3009,9 +2989,6 @@ mod tests {
         assert_eq!(v["session_id"], "my-session-id");
         assert_eq!(v["event"], "message_delta");
 
-        // Call the actual sink — it writes to real stdout (not captured here),
-        // but must not panic.  The test above proves the event shape is correct;
-        // this call proves the closure is callable without errors.
         (sink)("chunk");
     }
 
@@ -3119,7 +3096,7 @@ mod tests {
         // ...but the turn that follows must not be written back.
         session
             .messages
-            .push(Message::text("user", "second turn — must never reach disk"));
+            .push(Message::text("user", "second turn, must never reach disk"));
         session
             .persist_managed_session()
             .expect("persist_managed_session must succeed as a no-op");
@@ -3160,7 +3137,7 @@ mod tests {
             .expect("adopt persisted authority");
         session
             .messages
-            .push(Message::text("user", "second turn — expected on disk"));
+            .push(Message::text("user", "second turn, expected on disk"));
         session
             .persist_managed_session()
             .expect("persist_managed_session should succeed");

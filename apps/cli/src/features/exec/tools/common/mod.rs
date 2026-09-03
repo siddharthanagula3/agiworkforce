@@ -22,8 +22,6 @@ pub(super) fn validate_file_path(path_str: &str) -> std::result::Result<PathBuf,
     crate::path_security::validate_workspace_path(path_str)
 }
 
-/// Path validation for tools that WRITE. Adds the agent-instruction denylist on
-/// top of containment — see path_security::AGENT_INSTRUCTION_DIRS.
 pub(super) fn validate_file_write_path(path_str: &str) -> std::result::Result<PathBuf, String> {
     crate::path_security::validate_workspace_write_path(path_str)
 }
@@ -98,7 +96,6 @@ pub(super) fn describe_command(command: &str) -> String {
     }
 }
 
-// AUDIT-FIX: H-6 — char-safe skip avoids panicking on multibyte UTF-8.
 fn skip_chars(s: &str, n: usize) -> &str {
     match s.char_indices().nth(n) {
         Some((i, _)) => &s[i..],

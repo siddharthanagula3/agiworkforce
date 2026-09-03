@@ -1,7 +1,3 @@
-//! Phase 6 reorg — feature layer.
-//!
-//! Files migrate here incrementally. Each submodule's mod.rs documents
-//! what will live there. No live public API yet beyond `plan`.
 
 // PILOT (migrated): plan_mode.rs → features/plan/plan_mode.rs
 pub mod plan;
@@ -13,7 +9,6 @@ pub mod plan;
 #[allow(dead_code)]
 pub mod a2a;
 
-// PLACEHOLDER — not yet migrated; declared so lib.rs `features::*` resolves.
 pub mod exec;
 pub mod hooks;
 pub mod mcp;

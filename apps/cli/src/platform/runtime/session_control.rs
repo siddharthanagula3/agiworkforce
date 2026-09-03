@@ -767,7 +767,6 @@ mod tests {
             "archive must stamp archived_at"
         );
 
-        // Archive is idempotent — a second call keeps the original stamp.
         let first_stamp = after_archive.summary.archived_at;
         store.archive(reference()).expect("archive again");
         let re_resolved = store.resolve(reference()).expect("resolve");

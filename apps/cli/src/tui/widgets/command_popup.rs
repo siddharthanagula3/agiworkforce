@@ -1,12 +1,3 @@
-//! `CommandPopup` — fuzzy slash-command picker overlay.
-//!
-//! Char keys append to an inline filter; Backspace removes the last char;
-//! ↑↓ navigate the filtered set; Enter fills the canonical slash command name.
-//! A space separates the command name from its arguments — fuzzy matching runs
-//! on the name token only (text before the first space), and Enter carries any
-//! typed arguments through so `/privacy-mode local` fills as typed rather than
-//! silently matching nothing.
-//! The render shows `/name — description` rows with `❯ ` bolding the cursor row.
 
 use super::i18n::{keys, t};
 use super::interactive::{InteractiveView, KeyAction, SelectionState, ViewAction};
@@ -35,9 +26,6 @@ const POPUP_INNER_WIDTH: usize = 59;
 /// single space that separates content from the left border.
 const POPUP_BORDER_WIDTH: usize = POPUP_INNER_WIDTH + 1;
 
-/// Top border with the title inlaid — `┌─ Title ──…──┐`. The dash run is
-/// measured rather than typed so a translated title keeps the box rectangular;
-/// the previous fixed literal only lined up for the word "Commands".
 fn popup_header(title: &str) -> String {
     let inlay = format!("─ {} ", truncate_cols(title, POPUP_BORDER_WIDTH - 3));
     let fill = POPUP_BORDER_WIDTH.saturating_sub(display_width(&inlay));
@@ -70,9 +58,6 @@ impl CommandPopup {
         }
     }
 
-    /// The command-name portion of the filter — text before the first space.
-    /// Everything after the first space is treated as command arguments and
-    /// must not influence which command the fuzzy matcher selects.
     fn name_query(&self) -> &str {
         match self.filter.split_once(' ') {
             Some((head, _)) => head,
@@ -132,7 +117,7 @@ impl InteractiveView for CommandPopup {
                     "  "
                 };
                 out.push_str(&popup_row(&format!(
-                    "{cursor}/{} — {}",
+                    "{cursor}/{}, {}",
                     cmd.name, cmd.description
                 )));
             }
@@ -348,7 +333,6 @@ mod tests {
             popup.handle_key(KeyAction::Down);
         }
         assert_eq!(popup.state.cursor(), 3);
-        // narrow filter so only 1 result — cursor should clamp
         popup.handle_key(KeyAction::Char('h')); // "help"
         assert!(popup.state.cursor() < popup.filtered().len());
     }

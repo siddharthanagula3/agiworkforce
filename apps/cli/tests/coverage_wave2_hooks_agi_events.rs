@@ -1,27 +1,7 @@
-/// Coverage wave 2 — AGI-exclusive hook event round-trip.
-///
-/// Exercises the deserialize → matcher → run path for every AGI-exclusive
-/// event variant that has zero test coverage:
-///   CronTriggered, WebhookReceived, FileChanged, DaemonStarted, DaemonStopped,
-///   PostToolBatch, TeammateIdle, Setup, WorktreeCreate, WorktreeRemove,
-///   Elicitation, ElicitationResult.
-///
-/// Strategy: for each event, build a HooksConfig with a no-op `true` hook
-/// keyed to the event's string name, call run_hooks(), and assert that at
-/// least one HookResult came back — proving the event-name string maps to the
-/// right HookEvent variant, the hook matcher accepts the input, and the
-/// executor fires the command.
 use std::collections::HashMap;
 
 use agiworkforce_cli::hooks::{run_hooks, Hook, HookEvent, HookInput, HooksConfig};
 
-// ---------------------------------------------------------------------------
-// Helper — build a HooksConfig wired to a single no-op `true` hook.
-// The hooks executor always runs commands through `sh -c` (see
-// run_single_hook in features/hooks/hooks.rs), so `true` is available on every
-// platform's hook shell (including Git Bash / MSYS sh on Windows) and the
-// result will have success=true.
-// ---------------------------------------------------------------------------
 fn config_for_event(event_name: &str) -> HooksConfig {
     let hook = Hook {
         command: "true".to_string(),
@@ -60,14 +40,14 @@ macro_rules! agi_event_fires {
             let results = run_hooks(&config, $variant, &input).await;
             assert!(
                 !results.is_empty(),
-                "run_hooks() returned no results for {} — the event name failed to \
+                "run_hooks() returned no results for {}, the event name failed to \
                  match any hook entry (deserialize→match→run round-trip broken)",
                 $name_str
             );
             // The `true` command must succeed.
             assert!(
                 results[0].success,
-                "hook for {} ran but exited with failure — expected `true` to succeed",
+                "hook for {} ran but exited with failure, expected `true` to succeed",
                 $name_str
             );
         }

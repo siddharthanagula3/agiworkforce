@@ -1,8 +1,3 @@
-//! /advisor tool — routes a question to a higher-tier model for a quick
-//! second opinion without polluting the main session context.
-//!
-//! The advisor builds a one-shot prompt and collects streaming chunks into a
-//! single response string. It does not mutate the caller's message history.
 
 use anyhow::{bail, Result};
 

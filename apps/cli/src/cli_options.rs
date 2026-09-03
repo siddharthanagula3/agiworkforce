@@ -87,19 +87,6 @@ impl CliOptions {
     }
 }
 
-/// Process-wide session-persistence policy, seeded from `--no-session-persistence`.
-///
-/// `--no-session-persistence` is a privacy opt-out, so it has to reach every
-/// managed-session write site. `agi exec`, `run_oneshot`, the REPL and the TUI
-/// each build their own `AgentSession` through helpers that do not share an
-/// options struct, and the subcommand dispatch runs before the per-run option
-/// resolution — so the policy is published once at entry instead of being
-/// threaded through ~20 signatures. Mirrors `sandbox::set_sandbox_disabled`.
-///
-/// `AgentSession` reads this once at construction into
-/// `AgentSession::session_persistence`; per-session overrides never consult it
-/// again, so embedders can opt an individual session out (or back in) without
-/// disturbing the process policy.
 static SESSION_PERSISTENCE_ENABLED: AtomicBool = AtomicBool::new(true);
 
 /// Publish the run's session-persistence policy. Called once from `run_main`

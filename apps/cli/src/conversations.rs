@@ -251,7 +251,7 @@ pub fn restore_into_session(session: &mut AgentSession, conv: &SavedConversation
 /// assistant/user text).
 pub fn export_as_markdown(session: &AgentSession) -> String {
     let mut md = String::new();
-    md.push_str(&format!("# Conversation — {}\n\n", session.model));
+    md.push_str(&format!("# Conversation, {}\n\n", session.model));
     md.push_str(&format!(
         "Tokens: {} in / {} out | {} turns\n\n---\n\n",
         session.total_input_tokens, session.total_output_tokens, session.turn_count

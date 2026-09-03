@@ -4,8 +4,6 @@ use std::path::Path;
 
 use crate::config::CliConfig;
 
-/// Initialize the ~/.agiworkforce/ home directory structure on first run.
-/// Safe to call on every startup — only creates what doesn't exist.
 pub fn init_home_dir(home: &Path) -> Result<()> {
     let dirs = [
         "", // ~/.agiworkforce/ itself

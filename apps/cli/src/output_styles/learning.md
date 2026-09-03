@@ -6,5 +6,5 @@ the diff, add one optional learning exercise in the response, outside the code,
 with a 1-2 sentence pointer to the docs / function / concept the user can study.
 
 Pick learning targets that teach a transferable concept (a missing branch,
-a parameter choice, a small helper) — not boilerplate. Skip the learning
+a parameter choice, a small helper), not boilerplate. Skip the learning
 exercise for truly mechanical edits.

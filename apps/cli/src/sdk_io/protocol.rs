@@ -110,15 +110,10 @@ pub(crate) struct ErrorEvent {
     pub(crate) message: String,
 }
 
-// ---------------------------------------------------------------------------
-// Control channel — server-initiated requests the embedder must answer
-// ---------------------------------------------------------------------------
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(tag = "method", rename_all = "snake_case")]
 pub(crate) enum ControlRequest {
-    /// "May I run this tool?" — the embedder replies allow/deny + optional
-    /// updated_input. Mirrors Claude Code's `can_use_tool` control request.
     CanUseTool {
         request_id: u64,
         tool_name: String,
@@ -188,9 +183,6 @@ pub(crate) enum HookResult {
     Block { reason: Option<String> },
 }
 
-// ---------------------------------------------------------------------------
-// Inbound messages — what an embedder writes to our stdin
-// ---------------------------------------------------------------------------
 
 #[derive(Debug, Clone, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]

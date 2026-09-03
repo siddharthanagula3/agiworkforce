@@ -1,16 +1,3 @@
-//! `TuiElicitationHandler` — bridges incoming MCP `elicitation/create`
-//! requests to a TUI overlay. Implements the shared
-//! `agiworkforce_mcp::elicitation::ElicitationHandler` trait so it can be wired
-//! into the engine via `ClientHooks`.
-//!
-//! Architecture: when an MCP server sends elicitation/create, the handler's
-//! `handle()` method (running in the MCP read-loop's tokio task) pushes a
-//! `PendingElicitation` onto a queue and awaits a `oneshot` response. The
-//! TUI render loop polls the queue via `drain_pending()`, surfaces an
-//! overlay to the user, and on user submit calls `complete(id, response)`
-//! to wake the awaiting handler.
-//!
-//! M-FINAL-B of v1.2.
 
 use std::collections::HashMap;
 use std::future::Future;
@@ -52,8 +39,6 @@ impl TuiElicitationHandler {
         }
     }
 
-    /// Cheap clone — both halves share the inner state. Named `shared_state`
-    /// (not `handle`) so it doesn't collide with the trait's `handle` method.
     pub fn shared_state(&self) -> Arc<Mutex<TuiElicitationInner>> {
         self.state.clone()
     }
@@ -173,8 +158,6 @@ mod tests {
             handler.handle("server-b", dummy_request()).await
         });
         tokio::time::sleep(std::time::Duration::from_millis(10)).await;
-        // Drain to remove the responder, but never call complete() — the
-        // responder Sender drops, causing rx.await to fail → Decline.
         let _pending = h.drain_pending().await.expect("queue");
         // Force-drop responders.
         {

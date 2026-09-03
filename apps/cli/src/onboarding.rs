@@ -78,25 +78,25 @@ fn print_welcome_banner() {
     eprintln!(
         "  {}  {}",
         ts::accent("✦"),
-        ts::muted("Live cost HUD — see tokens, $, and context % in real time")
+        ts::muted("Live cost HUD, see tokens, $, and context % in real time")
     );
     eprintln!(
         "  {}  {}",
         ts::accent("✦"),
-        ts::muted("JSON event stream — `--json-events` for CI / dashboards / automation")
+        ts::muted("JSON event stream, `--json-events` for CI / dashboards / automation")
     );
     eprintln!(
         "  {}  {}",
         ts::accent("✦"),
         ts::muted(format!(
-            "Multi-model fallback — `{}`",
+            "Multi-model fallback, `{}`",
             multi_model_fallback_example()
         ))
     );
     eprintln!(
         "  {}  {}\n",
         ts::accent("✦"),
-        ts::muted("Session replay — `agi session fork <id> --at-turn N --as <name>`")
+        ts::muted("Session replay, `agi session fork <id> --at-turn N --as <name>`")
     );
     eprintln!(
         "  {}\n",
@@ -222,10 +222,10 @@ pub fn ensure_current_directory_trusted() -> Result<bool> {
 
 fn select_auth_provider() -> Result<AuthChoice> {
     let choices = &[
-        "Local model                      Run AI locally — no account required",
+        "Local model                      Run AI locally, no account required",
         "Provide your own API key         Pay for what you use (Anthropic, OpenAI, Google)",
         "Other providers                  ChatGPT, Anthropic, GitHub Copilot OAuth",
-        "AGI cloud                        Sign in to get started — open to everyone",
+        "AGI cloud                        Sign in to get started, open to everyone",
         "Skip for now                     Configure later with /login",
     ];
 
@@ -244,8 +244,8 @@ fn select_other_provider() -> Result<AuthChoice> {
         "Sign in with ChatGPT             Usage included with Plus, Pro, Business, Enterprise",
         "Sign in with Anthropic           Usage included with Pro, Max, Team, Enterprise",
         "Sign in with GitHub Copilot      Usage included with Copilot subscription",
-        "OpenRouter                       API key — access 200+ models",
-        "NVIDIA NIM                       API key — NVIDIA hosted models",
+        "OpenRouter                       API key, access 200+ models",
+        "NVIDIA NIM                       API key, NVIDIA hosted models",
         "Ollama (local)                   Connect to locally running Ollama models",
         "LM Studio (local)                Connect to LM Studio's local OpenAI-compatible server",
         "Back",
@@ -333,8 +333,6 @@ async fn select_local_model(preferred_provider: Option<&str>) -> Result<(String,
 enum AuthChoice {
     /// A cloud provider that requires an interactive login (OAuth/API key).
     Provider(&'static str),
-    /// A LOCAL provider (Ollama/LM Studio) — runs on-device, needs no account,
-    /// and must NEVER fall through to the cloud login menu.
     Local(&'static str),
     /// A named provider that stores a BYOK credential in the OS keyring.
     ApiKeyProvider(&'static str),
@@ -343,9 +341,6 @@ enum AuthChoice {
     Skip,
 }
 
-/// Pure mapping for the primary login menu (`select_auth_provider`). Index 0 is
-/// "Local model — no account required" and resolves to a LOCAL provider, not a
-/// cloud login (the v1 local-only first-run must not demand an account).
 fn auth_choice_for_index(selection: usize) -> AuthChoice {
     match selection {
         0 => AuthChoice::Local("auto"),
@@ -402,16 +397,6 @@ struct ModelChoice {
 /// Providers shown in the default onboarding model picker, in display order.
 const DEFAULT_ONBOARDING_PROVIDERS: &[&str] = &["anthropic", "openai", "google"];
 
-/// Build the onboarding model list from the bundled catalog.
-///
-/// For each provider in ONBOARDING_PROVIDERS we select up to 3 models using this
-/// priority order:
-///   1. qualityTier == "best"   → shown as the flagship option.
-///   2. qualityTier == "balanced" → shown as the everyday option.
-///   3. qualityTier == "fast"   → shown as the quick-answers option.
-///
-/// Model descriptions are derived from qualityTier so they stay accurate as the
-/// catalog evolves — no hardcoded model IDs or descriptions.
 fn onboarding_models(providers: &[&str]) -> Vec<ModelChoice> {
     let default_id = model_catalog::default_model();
     let mut choices: Vec<ModelChoice> = Vec::new();
@@ -431,9 +416,9 @@ fn onboarding_models(providers: &[&str]) -> Vec<ModelChoice> {
             });
             if let Some(model) = candidate {
                 let description = match tier {
-                    "best" => "Most capable — complex work and research".to_string(),
-                    "fast" => "Fastest — quick answers and simple tasks".to_string(),
-                    _ => "Everyday tasks — quality and speed balanced".to_string(),
+                    "best" => "Most capable, complex work and research".to_string(),
+                    "fast" => "Fastest, quick answers and simple tasks".to_string(),
+                    _ => "Everyday tasks, quality and speed balanced".to_string(),
                 };
                 let label = if model.id == default_id {
                     format!("{} (default)", model.display_name)
@@ -457,7 +442,7 @@ fn onboarding_models(providers: &[&str]) -> Vec<ModelChoice> {
                 } else {
                     model.display_name.clone()
                 },
-                description: "Catalog model — provider-supplied metadata".to_string(),
+                description: "Catalog model, provider-supplied metadata".to_string(),
                 provider: model.provider.clone(),
                 has_reasoning: model.supports_reasoning,
             }));
@@ -553,7 +538,6 @@ fn select_model_for_providers(providers: &[&str]) -> Result<(String, String, boo
                 chosen.has_reasoning,
             ));
         }
-        // User selected a header row — re-show
     }
 }
 
@@ -797,7 +781,6 @@ pub async fn run_onboarding() -> Result<bool> {
     let auth_choice = match select_auth_provider() {
         Ok(choice) => choice,
         Err(_) => {
-            // Ctrl+C or error — don't write marker, re-run next time
             eprintln!(
                 "\n  {}",
                 ts::muted("Setup interrupted. Run again to continue.")
@@ -824,7 +807,7 @@ pub async fn run_onboarding() -> Result<bool> {
             // Local-only path: no account, no cloud login. The cloud login menu
             // must never appear here (the v1 local-only first-run bug).
             eprintln!(
-                "\n  {} Local model — no account needed.",
+                "\n  {} Local model, no account needed.",
                 ts::success_header("✓")
             );
             eprintln!(
@@ -883,8 +866,6 @@ pub async fn run_onboarding() -> Result<bool> {
         }
     }
 
-    // Step 5: Model selection — local choice picks a local model so a local-only
-    // user never ends up with a cloud default they cannot run offline.
     let model_selection = if chose_local {
         select_local_model(preferred_local_provider).await
     } else {
@@ -992,7 +973,6 @@ mod local_first_run_tests {
 
     #[test]
     fn local_model_choice_resolves_to_local_not_cloud_login() {
-        // Primary menu index 0 = "Local model — no account required".
         assert_eq!(auth_choice_for_index(0), AuthChoice::Local("auto"));
         // It must NOT route into any cloud login path (the v1 first-run bug).
         assert!(!matches!(

@@ -1,12 +1,3 @@
-//! NotebookEdit — Jupyter `.ipynb` cell manipulation.
-//!
-//! Modes:
-//! - `insert` — add a new cell at a position
-//! - `replace` — replace cell content by cell_id (or index)
-//! - `delete` — remove cell by cell_id (or index)
-//!
-//! Operates on the JSON document directly (serde_json::Value); we don't link
-//! a Python notebook crate.
 
 #![allow(dead_code)]
 
@@ -353,7 +344,6 @@ mod tests {
     #[test]
     fn replace_by_index_fallback_updates_source() {
         let mut tmp = NamedTempFile::new().unwrap();
-        // Cell has no id field — exercises index-only path
         write_notebook(
             &mut tmp,
             r#"[{"cell_type":"code","source":["old\n"],"metadata":{}}]"#,

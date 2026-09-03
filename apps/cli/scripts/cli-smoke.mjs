@@ -20,7 +20,7 @@ const bin = [
   resolve(root, 'target/debug/agi'),
 ].find((candidate) => candidate && existsSync(candidate));
 if (!bin) {
-  console.error('SMOKE FAIL: built binary not found — run `cargo build --release --bin agi` first');
+  console.error('SMOKE FAIL: built binary not found, run `cargo build --release --bin agi` first');
   process.exit(1);
 }
 console.log('[binary]', bin);
@@ -96,7 +96,7 @@ if (missing.length) fail(`--help missing documented commands: ${missing.join(', 
 
 const doctor = runSoft(['doctor'], 45000);
 if (doctor === null) {
-  console.log('[doctor] skipped (exceeded 45s — variable dependency/auth checks)');
+  console.log('[doctor] skipped (exceeded 45s, variable dependency/auth checks)');
 } else {
   console.log('[doctor] ' + (doctor.split('\n').find((l) => /overall:/.test(l)) || '').trim());
   if (!/AGI doctor/.test(doctor) || !/runtime dependency/.test(doctor))

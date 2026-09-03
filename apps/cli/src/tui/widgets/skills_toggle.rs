@@ -1,8 +1,3 @@
-//! `SkillsToggleView` — overlay for enabling/disabling discovered skills.
-//!
-//! Spacebar toggles the enabled flag on the highlighted skill. Enter saves the
-//! current state and closes; Esc discards changes and closes. The caller reads
-//! `enabled_skills()` after a Submit action.
 
 #![allow(dead_code)]
 
