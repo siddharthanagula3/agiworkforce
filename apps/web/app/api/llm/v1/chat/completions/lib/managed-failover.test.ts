@@ -28,7 +28,12 @@ vi.mock('./request-processor', () => ({
   buildThinkingConfig: vi.fn(() => undefined),
 }));
 
-import { createFailoverPlan, buildFailoverAttemptView } from './managed-failover';
+import {
+  createFailoverPlan,
+  buildFailoverAttemptView,
+  isNeverRotateCategory,
+} from './managed-failover';
+import { EmptyProviderResponseError } from '@agiworkforce/provider-runtime';
 import type { ProcessedRequest } from './request-processor';
 
 const FIRST_STEP = 1;
@@ -112,10 +117,15 @@ describe('rotation eligibility (gateway parity)', () => {
     ['forbidden (403)', httpError(403, 'permission denied')],
     ['revoked oauth token', new Error('This oauth token has been revoked')],
     ['disabled organization', httpError(403, 'Your organization has been disabled')],
+    ['empty provider response', new EmptyProviderResponseError('length')],
   ])('rotates on %s', (_label, error) => {
     const attempt = makePlan(makeProcessed()).next(error);
     expect(attempt).not.toBeNull();
     expect(attempt!.model).toBe('candidate-a');
+  });
+
+  it('never rotates a content-blocked finish: a refusal must never be shopped around providers', () => {
+    expect(isNeverRotateCategory('content_blocked')).toBe(true);
   });
 
   it('never rotates on an exhausted credit balance', () => {
