@@ -133,7 +133,9 @@ export function toConnectorDetail(
     tools: record.toolNames,
     connected: connectedIds.has(record.id),
     connectable: !CONNECTABLE_BLOCKED.has(record.connectable),
-    ...(record.docsUrl ? { href: record.docsUrl } : {}),
+    ...(record.documentationUrl ?? record.websiteUrl
+      ? { href: (record.documentationUrl ?? record.websiteUrl) as string }
+      : {}),
   };
 }
 
