@@ -112,7 +112,7 @@ describe('formatManagedMemorySystemPrompt', () => {
 });
 
 describe('applyManagedMemoryContext', () => {
-  it('merges into the leading system message without adding a duplicate', () => {
+  it('adds a separate leading system message instead of merging into an existing one', () => {
     const request = {
       model: 'auto',
       messages: [
@@ -124,8 +124,26 @@ describe('applyManagedMemoryContext', () => {
 
     applyManagedMemoryContext(request, 'MEMORY BLOCK');
 
-    expect(request.messages).toHaveLength(2);
-    expect(request.messages[0]?.content).toBe('MEMORY BLOCK\n\nExisting system prompt.');
+    expect(request.messages).toHaveLength(3);
+    expect(request.messages[0]).toEqual({ role: 'system', content: 'MEMORY BLOCK' });
+    expect(request.messages[1]?.content).toBe('Existing system prompt.');
+  });
+
+  it('keeps memory as its own entry even when the leading message is MCP context', () => {
+    const request = {
+      model: 'auto',
+      messages: [
+        { role: 'system', content: 'Connected tool: Linear.' },
+        { role: 'user', content: 'Hello' },
+      ],
+      stream: false,
+    } as ChatCompletionRequest;
+
+    applyManagedMemoryContext(request, 'MEMORY BLOCK');
+
+    expect(request.messages).toHaveLength(3);
+    expect(request.messages[0]).toEqual({ role: 'system', content: 'MEMORY BLOCK' });
+    expect(request.messages[1]).toEqual({ role: 'system', content: 'Connected tool: Linear.' });
   });
 });
 
