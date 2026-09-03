@@ -386,6 +386,10 @@ export async function recordAuditEvent(event: AuditEvent): Promise<void> {
   if (!event.organizationId) return;
 
   try {
+    const enterpriseMetadata: Record<string, unknown> = { ...detail };
+    if (ipAddress) enterpriseMetadata['ipAddress'] = ipAddress;
+    if (userAgent) enterpriseMetadata['userAgent'] = userAgent;
+
     await getNeonDb().query(
       `select public.record_enterprise_audit_event($1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb)`,
       [
@@ -397,7 +401,7 @@ export async function recordAuditEvent(event: AuditEvent): Promise<void> {
         detail['resourceId'] ?? null,
         outcome,
         severity,
-        JSON.stringify(detail),
+        JSON.stringify(enterpriseMetadata),
       ],
     );
   } catch (err) {

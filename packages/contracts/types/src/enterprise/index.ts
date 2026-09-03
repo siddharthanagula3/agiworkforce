@@ -138,6 +138,8 @@ export interface EnterpriseAuditEvent {
   resourceId: string | null;
   outcome: 'success' | 'failure' | 'denied';
   severity: 'info' | 'warning' | 'critical';
+  ipAddress?: string | null;
+  userAgent?: string | null;
   metadata?: Record<string, unknown>;
   createdAt: string;
 }
