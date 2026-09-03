@@ -1368,6 +1368,47 @@
       "minContextTokens": 1000000,
       "minMaxOutputTokens": null,
       "active": {
+        "modelKey": "glm-5.3",
+        "generation": "5.3",
+        "lifecycle": "stable",
+        "promotedAt": "2026-09-03",
+        "promotionReason": "automatic family upgrade from glm-5.2 to glm-5.3",
+        "evaluation": {
+          "gates": {
+            "providerAvailability": "configured on zhipu",
+            "familyIdentity": "matches glm at tier frontier",
+            "lifecycleEligibility": "lifecycle stable is allowed",
+            "capabilityCoverage": "covers 6 capabilities",
+            "regressionThresholds": "no shared benchmarks published"
+          },
+          "seeded": false
+        },
+        "availability": "live",
+        "pricingSnapshot": {
+          "currency": "USD",
+          "unit": "per_million_tokens",
+          "inputPerMillion": 1.4,
+          "outputPerMillion": 4.4,
+          "cacheReadPerMillion": 0.26
+        },
+        "capabilitySnapshot": {
+          "textInput": true,
+          "imageInput": false,
+          "audioInput": false,
+          "videoInput": false,
+          "textOutput": true,
+          "imageOutput": false,
+          "audioOutput": false,
+          "videoOutput": false,
+          "streaming": true,
+          "structuredOutput": true,
+          "functionCalling": true,
+          "reasoning": true
+        },
+        "limitSnapshot": { "contextTokens": 1000000, "maxOutputTokens": 128000 },
+        "benchmarkSnapshot": {}
+      },
+      "previous": {
         "modelKey": "glm-5.2",
         "generation": "5.2",
         "lifecycle": "stable",
@@ -1399,9 +1440,15 @@
         "limitSnapshot": { "contextTokens": 1000000 },
         "benchmarkSnapshot": { "swebench": 79, "humaneval": 92, "mmlu": 90, "gpqa": 84, "aime": 92 }
       },
-      "previous": null,
       "fallbackChain": [],
-      "history": []
+      "history": [
+        {
+          "promotedAt": "2026-09-03",
+          "from": "glm-5.2",
+          "to": "glm-5.3",
+          "reason": "automatic family upgrade from glm-5.2 to glm-5.3"
+        }
+      ]
     },
     "minimax/minimax": {
       "provider": "minimax",
