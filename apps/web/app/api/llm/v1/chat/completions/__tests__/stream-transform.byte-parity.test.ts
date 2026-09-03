@@ -9,12 +9,6 @@ vi.mock('@/lib/cors', () => ({
   getCorsHeaders: vi.fn(() => ({})),
   getSecurityHeaders: vi.fn(() => ({})),
 }));
-vi.mock('@/lib/services/credit-service', () => ({
-  CreditService: {
-    generateIdempotencyKey: vi.fn(() => 'idempotency-key'),
-    deductCredits: vi.fn(() => Promise.resolve()),
-  },
-}));
 vi.mock('@/lib/services/llm-cost-calculator', () => ({
   LLMCostCalculator: { calculateCost: vi.fn(() => 0) },
 }));
@@ -23,7 +17,7 @@ vi.mock('@/lib/cost-tracker', () => ({
   toOtelAttributes: vi.fn(() => ({})),
 }));
 
-import { buildStreamResponse, buildAdapterStreamResponse } from '../lib/stream-transform';
+import { buildAdapterStreamResponse } from '../lib/stream-transform';
 import { translateAnthropicStream } from '@agiworkforce/providers-anthropic';
 import type { ProcessedRequest } from '../lib/request-processor';
 
@@ -79,156 +73,108 @@ async function* asAnthropicEvents(events: unknown[]): AsyncIterable<Anthropic.Me
   for (const event of events) yield event as Anthropic.MessageStreamEvent;
 }
 
-function rawSseStream(
-  events: Array<{ eventName: string; data: unknown }>,
-): ReadableStream<Uint8Array> {
-  const encoder = new TextEncoder();
-  const lines: string[] = [];
-  for (const { eventName, data } of events) {
-    lines.push(`event: ${eventName}`, `data: ${JSON.stringify(data)}`, '');
-  }
-  return new ReadableStream({
-    start(controller) {
-      controller.enqueue(encoder.encode(lines.join('\n')));
-      controller.close();
-    },
-  });
-}
-
-const richEvents: Array<{ eventName: string; data: unknown }> = [
+const richEvents: unknown[] = [
   {
-    eventName: 'message_start',
-    data: {
-      type: 'message_start',
-      message: {
-        usage: {
-          input_tokens: 500,
-          cache_read_input_tokens: 100,
-          cache_creation_input_tokens: 400,
-          cache_creation: { ephemeral_1h_input_tokens: 300 },
-        },
+    type: 'message_start',
+    message: {
+      usage: {
+        input_tokens: 500,
+        cache_read_input_tokens: 100,
+        cache_creation_input_tokens: 400,
+        cache_creation: { ephemeral_1h_input_tokens: 300 },
       },
     },
   },
+  { type: 'content_block_start', index: 0, content_block: { type: 'text' } },
   {
-    eventName: 'content_block_start',
-    data: { type: 'content_block_start', index: 0, content_block: { type: 'text' } },
+    type: 'content_block_delta',
+    index: 0,
+    delta: { type: 'text_delta', text: 'Let me search. ' },
+  },
+  { type: 'content_block_stop', index: 0 },
+  {
+    type: 'content_block_start',
+    index: 1,
+    content_block: { type: 'server_tool_use', id: 'srvtool_1', name: 'web_search' },
   },
   {
-    eventName: 'content_block_delta',
-    data: {
-      type: 'content_block_delta',
-      index: 0,
-      delta: { type: 'text_delta', text: 'Let me search. ' },
+    type: 'content_block_delta',
+    index: 1,
+    delta: { type: 'input_json_delta', partial_json: '{"query":"cats"}' },
+  },
+  { type: 'content_block_stop', index: 1 },
+  {
+    type: 'content_block_start',
+    index: 2,
+    content_block: {
+      type: 'web_search_tool_result',
+      content: [{ url: 'https://example.com' }],
     },
   },
-  { eventName: 'content_block_stop', data: { type: 'content_block_stop', index: 0 } },
+  { type: 'content_block_stop', index: 2 },
+  { type: 'content_block_start', index: 3, content_block: { type: 'thinking' } },
   {
-    eventName: 'content_block_start',
-    data: {
-      type: 'content_block_start',
-      index: 1,
-      content_block: { type: 'server_tool_use', id: 'srvtool_1', name: 'web_search' },
+    type: 'content_block_delta',
+    index: 3,
+    delta: { type: 'thinking_delta', thinking: 'pondering...' },
+  },
+  { type: 'content_block_stop', index: 3 },
+  {
+    type: 'content_block_start',
+    index: 4,
+    content_block: { type: 'tool_use', id: 'call_abc', name: 'get_weather' },
+  },
+  {
+    type: 'content_block_delta',
+    index: 4,
+    delta: { type: 'input_json_delta', partial_json: '{"city":"NYC"}' },
+  },
+  { type: 'content_block_stop', index: 4 },
+  {
+    type: 'content_block_start',
+    index: 5,
+    content_block: { type: 'server_tool_use', id: 'wf_1', name: 'web_fetch' },
+  },
+  { type: 'content_block_stop', index: 5 },
+  {
+    type: 'content_block_start',
+    index: 6,
+    content_block: {
+      type: 'web_fetch_tool_result',
+      tool_use_id: 'wf_1',
+      content: { type: 'web_fetch_tool_result_error', error_code: 'url_not_accessible' },
     },
   },
+  { type: 'content_block_stop', index: 6 },
   {
-    eventName: 'content_block_delta',
-    data: {
-      type: 'content_block_delta',
-      index: 1,
-      delta: { type: 'input_json_delta', partial_json: '{"query":"cats"}' },
-    },
+    type: 'message_delta',
+    delta: { stop_reason: 'tool_use' },
+    usage: { output_tokens: 42 },
   },
-  { eventName: 'content_block_stop', data: { type: 'content_block_stop', index: 1 } },
-  {
-    eventName: 'content_block_start',
-    data: {
-      type: 'content_block_start',
-      index: 2,
-      content_block: {
-        type: 'web_search_tool_result',
-        content: [{ url: 'https://example.com' }],
-      },
-    },
-  },
-  { eventName: 'content_block_stop', data: { type: 'content_block_stop', index: 2 } },
-  {
-    eventName: 'content_block_start',
-    data: { type: 'content_block_start', index: 3, content_block: { type: 'thinking' } },
-  },
-  {
-    eventName: 'content_block_delta',
-    data: {
-      type: 'content_block_delta',
-      index: 3,
-      delta: { type: 'thinking_delta', thinking: 'pondering...' },
-    },
-  },
-  { eventName: 'content_block_stop', data: { type: 'content_block_stop', index: 3 } },
-  {
-    eventName: 'content_block_start',
-    data: {
-      type: 'content_block_start',
-      index: 4,
-      content_block: { type: 'tool_use', id: 'call_abc', name: 'get_weather' },
-    },
-  },
-  {
-    eventName: 'content_block_delta',
-    data: {
-      type: 'content_block_delta',
-      index: 4,
-      delta: { type: 'input_json_delta', partial_json: '{"city":"NYC"}' },
-    },
-  },
-  { eventName: 'content_block_stop', data: { type: 'content_block_stop', index: 4 } },
-  {
-    eventName: 'content_block_start',
-    data: {
-      type: 'content_block_start',
-      index: 5,
-      content_block: { type: 'server_tool_use', id: 'wf_1', name: 'web_fetch' },
-    },
-  },
-  { eventName: 'content_block_stop', data: { type: 'content_block_stop', index: 5 } },
-  {
-    eventName: 'content_block_start',
-    data: {
-      type: 'content_block_start',
-      index: 6,
-      content_block: {
-        type: 'web_fetch_tool_result',
-        tool_use_id: 'wf_1',
-        content: { type: 'web_fetch_tool_result_error', error_code: 'url_not_accessible' },
-      },
-    },
-  },
-  { eventName: 'content_block_stop', data: { type: 'content_block_stop', index: 6 } },
-  {
-    eventName: 'message_delta',
-    data: {
-      type: 'message_delta',
-      delta: { stop_reason: 'tool_use' },
-      usage: { output_tokens: 42 },
-    },
-  },
-  { eventName: 'message_stop', data: { type: 'message_stop' } },
+  { type: 'message_stop' },
 ];
 
-describe('byte parity: legacy buildStreamResponse vs adapter buildAdapterStreamResponse', () => {
-  it('produce identical `data:` channel bytes for the rich text/web_search/thinking/tool_use scenario', async () => {
-    const legacyResponse = await buildStreamResponse(
-      makeRequest() as any,
-      rawSseStream(richEvents),
-      makeProcessed(),
-      'user-parity',
-      'token-parity',
-    );
-    const legacyBody = await collectBody(legacyResponse as any);
+const RICH_SCENARIO_GOLDEN_DATA_LINES = [
+  'data: {"choices":[{"delta":{"content":"Let me search. "},"index":0}],"model":"fixture-model"}',
+  'data: {"choices":[{"delta":{"x_tool_status":{"type":"server_tool_use","name":"web_search","status":"searching","tool_use_id":"srvtool_1","status_phrase":"Searching the web"}},"index":0}],"model":"fixture-model"}',
+  'data: {"choices":[{"delta":{"x_search_results":{"type":"web_search_tool_result","content":[{"url":"https://example.com"}]}},"index":0}],"model":"fixture-model"}',
+  'data: {"choices":[{"delta":{"content":"<thinking>"},"index":0}],"model":"fixture-model"}',
+  'data: {"choices":[{"delta":{"content":"pondering..."},"index":0}],"model":"fixture-model"}',
+  'data: {"choices":[{"delta":{"content":"</thinking>"},"index":0}],"model":"fixture-model"}',
+  'data: {"choices":[{"delta":{"tool_calls":[{"index":4,"id":"call_abc","type":"function","function":{"name":"get_weather","arguments":""}}]},"index":0}],"model":"fixture-model"}',
+  'data: {"choices":[{"delta":{"tool_calls":[{"index":4,"function":{"arguments":"{\\"city\\":\\"NYC\\"}"}}]},"index":0}],"model":"fixture-model"}',
+  'data: {"choices":[{"delta":{"x_tool_status":{"type":"server_tool_use","name":"web_fetch","status":"fetching","tool_use_id":"wf_1","status_phrase":"Fetching page"}},"index":0}],"model":"fixture-model"}',
+  'data: {"choices":[{"delta":{"x_tool_result":{"tool_call_id":"wf_1","name":"web_fetch","content":"Web fetch failed: url_not_accessible","is_error":true}},"index":0}],"model":"fixture-model"}',
+  'data: {"choices":[{"delta":{},"index":0}],"model":"fixture-model","usage":{"prompt_tokens":500,"completion_tokens":42,"total_tokens":542,"prompt_tokens_details":{"cached_tokens":100}}}',
+  'data: {"choices":[{"delta":{},"finish_reason":"tool_calls","index":0}],"model":"fixture-model"}',
+  'data: [DONE]',
+].join('\n');
 
+describe('buildAdapterStreamResponse — rich text/web_search/thinking/tool_use golden wire', () => {
+  it('emits the exact `data:` channel bytes for the scenario', async () => {
     const adapterResponse = await buildAdapterStreamResponse(
       makeRequest() as any,
-      translateAnthropicStream(asAnthropicEvents(richEvents.map((e) => e.data))),
+      translateAnthropicStream(asAnthropicEvents(richEvents)),
       makeProcessed(),
       'user-parity',
       'token-parity',
@@ -236,8 +182,6 @@ describe('byte parity: legacy buildStreamResponse vs adapter buildAdapterStreamR
     );
     const adapterBody = await collectBody(adapterResponse as any);
 
-    expect(legacyBody.length).toBeGreaterThan(100);
-
-    expect(stripToDataLines(adapterBody)).toBe(stripToDataLines(legacyBody));
+    expect(stripToDataLines(adapterBody)).toBe(RICH_SCENARIO_GOLDEN_DATA_LINES);
   });
 });
