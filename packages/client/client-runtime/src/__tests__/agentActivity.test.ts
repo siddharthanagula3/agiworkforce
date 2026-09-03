@@ -5,6 +5,11 @@ import {
   finishAgentActivityLocally,
   startAgentActivityLocally,
 } from '../agentActivity';
+import type { AgentActivityEntry, AgentActivityToolEntry } from '../agentActivity';
+
+function isToolEntry(entry: AgentActivityEntry | undefined): entry is AgentActivityToolEntry {
+  return entry?.kind === 'tool';
+}
 
 function envelope(sequence: number, event: AgentEvent): AgentEventEnvelope {
   return {
@@ -557,6 +562,9 @@ describe('tool failure summaries', () => {
       summary: 'The tool failed',
       error: "TypeError: Cannot read properties of undefined (reading 'access_token')",
     });
-    expect(JSON.stringify(entry?.summary)).not.toContain('access_token');
+    expect(isToolEntry(entry)).toBe(true);
+    expect(JSON.stringify(isToolEntry(entry) ? entry.summary : undefined)).not.toContain(
+      'access_token',
+    );
   });
 });
