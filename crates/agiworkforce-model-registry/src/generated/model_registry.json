@@ -798,6 +798,7 @@
       "isDefault": true,
       "cacheClass": "provider_explicit_prompt_cache",
       "commercialStatus": "agi_direct",
+      "dataRetention": "provider_default",
       "pricing": {
         "currency": "USD",
         "unit": "per_million_tokens",
@@ -827,6 +828,7 @@
       "isDefault": false,
       "cacheClass": "provider_implicit_prompt_cache",
       "commercialStatus": "authorized_marketplace",
+      "dataRetention": "zero_retention",
       "pricing": {
         "currency": "USD",
         "unit": "per_million_tokens",
@@ -847,6 +849,7 @@
       "isDefault": false,
       "cacheClass": "provider_implicit_prompt_cache",
       "commercialStatus": "experimental_only",
+      "dataRetention": "provider_default",
       "pricing": {
         "currency": "USD",
         "unit": "per_million_tokens",
@@ -867,6 +870,7 @@
       "isDefault": false,
       "cacheClass": "provider_implicit_prompt_cache",
       "commercialStatus": "experimental_only",
+      "dataRetention": "provider_default",
       "pricing": {
         "currency": "USD",
         "unit": "per_million_tokens",
@@ -887,6 +891,7 @@
       "isDefault": true,
       "cacheClass": "provider_explicit_prompt_cache",
       "commercialStatus": "agi_direct",
+      "dataRetention": "provider_default",
       "pricing": {
         "currency": "USD",
         "unit": "per_million_tokens",
@@ -916,6 +921,7 @@
       "isDefault": false,
       "cacheClass": "provider_implicit_prompt_cache",
       "commercialStatus": "authorized_marketplace",
+      "dataRetention": "zero_retention",
       "pricing": {
         "currency": "USD",
         "unit": "per_million_tokens",
@@ -936,6 +942,7 @@
       "isDefault": false,
       "cacheClass": "provider_implicit_prompt_cache",
       "commercialStatus": "experimental_only",
+      "dataRetention": "provider_default",
       "pricing": {
         "currency": "USD",
         "unit": "per_million_tokens",
@@ -956,6 +963,7 @@
       "isDefault": false,
       "cacheClass": "provider_implicit_prompt_cache",
       "commercialStatus": "experimental_only",
+      "dataRetention": "provider_default",
       "pricing": {
         "currency": "USD",
         "unit": "per_million_tokens",
@@ -976,6 +984,7 @@
       "isDefault": true,
       "cacheClass": "provider_explicit_prompt_cache",
       "commercialStatus": "agi_direct",
+      "dataRetention": "provider_default",
       "pricing": {
         "currency": "USD",
         "unit": "per_million_tokens",
@@ -1005,6 +1014,7 @@
       "isDefault": false,
       "cacheClass": "provider_implicit_prompt_cache",
       "commercialStatus": "authorized_marketplace",
+      "dataRetention": "zero_retention",
       "pricing": {
         "currency": "USD",
         "unit": "per_million_tokens",
@@ -1025,6 +1035,7 @@
       "isDefault": false,
       "cacheClass": "provider_implicit_prompt_cache",
       "commercialStatus": "experimental_only",
+      "dataRetention": "provider_default",
       "pricing": {
         "currency": "USD",
         "unit": "per_million_tokens",
@@ -1045,6 +1056,7 @@
       "isDefault": false,
       "cacheClass": "provider_implicit_prompt_cache",
       "commercialStatus": "experimental_only",
+      "dataRetention": "provider_default",
       "pricing": {
         "currency": "USD",
         "unit": "per_million_tokens",
@@ -1065,6 +1077,7 @@
       "isDefault": true,
       "cacheClass": "provider_explicit_prompt_cache",
       "commercialStatus": "agi_direct",
+      "dataRetention": "provider_default",
       "pricing": {
         "currency": "USD",
         "unit": "per_million_tokens",
@@ -1086,6 +1099,7 @@
       "isDefault": false,
       "cacheClass": "gateway_prompt_cache",
       "commercialStatus": "authorized_marketplace",
+      "dataRetention": "zero_retention",
       "pricing": {
         "currency": "USD",
         "unit": "per_million_tokens",
@@ -1106,6 +1120,7 @@
       "isDefault": false,
       "cacheClass": "gateway_prompt_cache",
       "commercialStatus": "experimental_only",
+      "dataRetention": "provider_default",
       "pricing": {
         "currency": "USD",
         "unit": "per_million_tokens",
@@ -1126,6 +1141,7 @@
       "isDefault": false,
       "cacheClass": "provider_explicit_prompt_cache",
       "commercialStatus": "experimental_only",
+      "dataRetention": "provider_default",
       "pricing": {
         "currency": "USD",
         "unit": "per_million_tokens",
@@ -1146,6 +1162,7 @@
       "isDefault": true,
       "cacheClass": "provider_explicit_prompt_cache",
       "commercialStatus": "agi_direct",
+      "dataRetention": "provider_default",
       "pricing": {
         "currency": "USD",
         "unit": "per_million_tokens",
@@ -1167,6 +1184,7 @@
       "isDefault": false,
       "cacheClass": "gateway_prompt_cache",
       "commercialStatus": "authorized_marketplace",
+      "dataRetention": "zero_retention",
       "pricing": {
         "currency": "USD",
         "unit": "per_million_tokens",
@@ -1187,6 +1205,7 @@
       "isDefault": false,
       "cacheClass": "gateway_prompt_cache",
       "commercialStatus": "experimental_only",
+      "dataRetention": "provider_default",
       "pricing": {
         "currency": "USD",
         "unit": "per_million_tokens",
@@ -1207,6 +1226,7 @@
       "isDefault": false,
       "cacheClass": "provider_explicit_prompt_cache",
       "commercialStatus": "experimental_only",
+      "dataRetention": "provider_default",
       "pricing": {
         "currency": "USD",
         "unit": "per_million_tokens",
@@ -1227,6 +1247,7 @@
       "isDefault": true,
       "cacheClass": "provider_explicit_prompt_cache",
       "commercialStatus": "agi_direct",
+      "dataRetention": "provider_default",
       "pricing": {
         "currency": "USD",
         "unit": "per_million_tokens",
@@ -1248,6 +1269,7 @@
       "isDefault": false,
       "cacheClass": "gateway_prompt_cache",
       "commercialStatus": "authorized_marketplace",
+      "dataRetention": "zero_retention",
       "pricing": {
         "currency": "USD",
         "unit": "per_million_tokens",
@@ -1268,6 +1290,7 @@
       "isDefault": false,
       "cacheClass": "gateway_prompt_cache",
       "commercialStatus": "experimental_only",
+      "dataRetention": "provider_default",
       "pricing": {
         "currency": "USD",
         "unit": "per_million_tokens",
@@ -1288,6 +1311,7 @@
       "isDefault": false,
       "cacheClass": "provider_explicit_prompt_cache",
       "commercialStatus": "experimental_only",
+      "dataRetention": "provider_default",
       "pricing": {
         "currency": "USD",
         "unit": "per_million_tokens",
@@ -1308,6 +1332,7 @@
       "isDefault": true,
       "cacheClass": "no_provider_cache",
       "commercialStatus": "agi_direct",
+      "dataRetention": "provider_default",
       "pricing": {
         "currency": "USD",
         "unit": "per_million_tokens",
@@ -1326,6 +1351,7 @@
       "isDefault": true,
       "cacheClass": "provider_implicit_prompt_cache",
       "commercialStatus": "agi_direct",
+      "dataRetention": "provider_default",
       "pricing": {
         "currency": "USD",
         "unit": "per_million_tokens",
@@ -1353,6 +1379,7 @@
       "isDefault": false,
       "cacheClass": "provider_implicit_prompt_cache",
       "commercialStatus": "authorized_marketplace",
+      "dataRetention": "zero_retention",
       "pricing": {
         "currency": "USD",
         "unit": "per_million_tokens",
@@ -1373,6 +1400,7 @@
       "isDefault": false,
       "cacheClass": "provider_implicit_prompt_cache",
       "commercialStatus": "experimental_only",
+      "dataRetention": "provider_default",
       "pricing": {
         "currency": "USD",
         "unit": "per_million_tokens",
@@ -1393,6 +1421,7 @@
       "isDefault": false,
       "cacheClass": "provider_implicit_prompt_cache",
       "commercialStatus": "experimental_only",
+      "dataRetention": "provider_default",
       "pricing": {
         "currency": "USD",
         "unit": "per_million_tokens",
@@ -1413,6 +1442,7 @@
       "isDefault": true,
       "cacheClass": "provider_implicit_prompt_cache",
       "commercialStatus": "agi_direct",
+      "dataRetention": "provider_default",
       "pricing": {
         "currency": "USD",
         "unit": "per_million_tokens",
@@ -1432,6 +1462,7 @@
       "isDefault": false,
       "cacheClass": "provider_implicit_prompt_cache",
       "commercialStatus": "authorized_marketplace",
+      "dataRetention": "zero_retention",
       "pricing": {
         "currency": "USD",
         "unit": "per_million_tokens",
@@ -1452,6 +1483,7 @@
       "isDefault": false,
       "cacheClass": "provider_implicit_prompt_cache",
       "commercialStatus": "experimental_only",
+      "dataRetention": "provider_default",
       "pricing": {
         "currency": "USD",
         "unit": "per_million_tokens",
@@ -1472,6 +1504,7 @@
       "isDefault": false,
       "cacheClass": "provider_implicit_prompt_cache",
       "commercialStatus": "experimental_only",
+      "dataRetention": "provider_default",
       "pricing": {
         "currency": "USD",
         "unit": "per_million_tokens",
@@ -1492,6 +1525,7 @@
       "isDefault": true,
       "cacheClass": "no_provider_cache",
       "commercialStatus": "agi_direct",
+      "dataRetention": "provider_default",
       "pricing": {
         "currency": "USD",
         "unit": "per_image",
@@ -1511,6 +1545,7 @@
       "isDefault": true,
       "cacheClass": "provider_implicit_prompt_cache",
       "commercialStatus": "agi_direct",
+      "dataRetention": "provider_default",
       "pricing": {
         "currency": "USD",
         "unit": "per_million_tokens",
@@ -1530,6 +1565,7 @@
       "isDefault": false,
       "cacheClass": "provider_implicit_prompt_cache",
       "commercialStatus": "authorized_marketplace",
+      "dataRetention": "zero_retention",
       "pricing": {
         "currency": "USD",
         "unit": "per_million_tokens",
@@ -1550,6 +1586,7 @@
       "isDefault": false,
       "cacheClass": "provider_implicit_prompt_cache",
       "commercialStatus": "experimental_only",
+      "dataRetention": "provider_default",
       "pricing": {
         "currency": "USD",
         "unit": "per_million_tokens",
@@ -1570,6 +1607,7 @@
       "isDefault": false,
       "cacheClass": "provider_implicit_prompt_cache",
       "commercialStatus": "experimental_only",
+      "dataRetention": "provider_default",
       "pricing": {
         "currency": "USD",
         "unit": "per_million_tokens",
@@ -1590,6 +1628,7 @@
       "isDefault": false,
       "cacheClass": "provider_explicit_prompt_cache",
       "commercialStatus": "agi_direct",
+      "dataRetention": "provider_default",
       "pricing": {
         "currency": "USD",
         "unit": "per_million_tokens",
@@ -1610,6 +1649,7 @@
       "isDefault": true,
       "cacheClass": "provider_implicit_prompt_cache",
       "commercialStatus": "agi_direct",
+      "dataRetention": "provider_default",
       "pricing": {
         "currency": "USD",
         "unit": "per_million_tokens",
@@ -1629,6 +1669,7 @@
       "isDefault": false,
       "cacheClass": "provider_implicit_prompt_cache",
       "commercialStatus": "authorized_marketplace",
+      "dataRetention": "zero_retention",
       "pricing": {
         "currency": "USD",
         "unit": "per_million_tokens",
@@ -1649,6 +1690,7 @@
       "isDefault": false,
       "cacheClass": "provider_implicit_prompt_cache",
       "commercialStatus": "experimental_only",
+      "dataRetention": "provider_default",
       "pricing": {
         "currency": "USD",
         "unit": "per_million_tokens",
@@ -1669,6 +1711,7 @@
       "isDefault": false,
       "cacheClass": "provider_implicit_prompt_cache",
       "commercialStatus": "experimental_only",
+      "dataRetention": "provider_default",
       "pricing": {
         "currency": "USD",
         "unit": "per_million_tokens",
@@ -1689,6 +1732,7 @@
       "isDefault": false,
       "cacheClass": "provider_explicit_prompt_cache",
       "commercialStatus": "agi_direct",
+      "dataRetention": "provider_default",
       "pricing": {
         "currency": "USD",
         "unit": "per_million_tokens",
@@ -1709,6 +1753,7 @@
       "isDefault": true,
       "cacheClass": "provider_explicit_prompt_cache",
       "commercialStatus": "agi_direct",
+      "dataRetention": "provider_default",
       "pricing": {
         "currency": "USD",
         "unit": "per_million_tokens",
@@ -1745,6 +1790,7 @@
       "isDefault": false,
       "cacheClass": "no_provider_cache",
       "commercialStatus": "authorized_marketplace",
+      "dataRetention": "zero_retention",
       "pricing": {
         "currency": "USD",
         "unit": "per_million_tokens",
@@ -1765,6 +1811,7 @@
       "isDefault": false,
       "cacheClass": "provider_implicit_prompt_cache",
       "commercialStatus": "experimental_only",
+      "dataRetention": "provider_default",
       "pricing": {
         "currency": "USD",
         "unit": "per_million_tokens",
@@ -1785,6 +1832,7 @@
       "isDefault": true,
       "cacheClass": "no_provider_cache",
       "commercialStatus": "agi_direct",
+      "dataRetention": "provider_default",
       "pricing": {
         "currency": "USD",
         "unit": "per_million_tokens",
@@ -1803,6 +1851,7 @@
       "isDefault": true,
       "cacheClass": "no_provider_cache",
       "commercialStatus": "agi_direct",
+      "dataRetention": "provider_default",
       "pricing": {
         "currency": "USD",
         "unit": "per_million_tokens",
@@ -1821,6 +1870,7 @@
       "isDefault": true,
       "cacheClass": "no_provider_cache",
       "commercialStatus": "agi_direct",
+      "dataRetention": "provider_default",
       "pricing": {
         "currency": "USD",
         "unit": "per_million_tokens",
@@ -1839,6 +1889,7 @@
       "isDefault": true,
       "cacheClass": "no_provider_cache",
       "commercialStatus": "agi_direct",
+      "dataRetention": "provider_default",
       "pricing": {
         "currency": "USD",
         "unit": "per_million_tokens",
@@ -1857,6 +1908,7 @@
       "isDefault": true,
       "cacheClass": "no_provider_cache",
       "commercialStatus": "agi_direct",
+      "dataRetention": "provider_default",
       "pricing": {
         "currency": "USD",
         "unit": "per_second",
@@ -1877,6 +1929,7 @@
       "isDefault": true,
       "cacheClass": "no_provider_cache",
       "commercialStatus": "agi_direct",
+      "dataRetention": "zero_retention",
       "pricing": {
         "currency": "USD",
         "unit": "video_tokens",
@@ -1902,6 +1955,7 @@
       "isDefault": true,
       "cacheClass": "provider_implicit_prompt_cache",
       "commercialStatus": "agi_direct",
+      "dataRetention": "provider_default",
       "pricing": {
         "currency": "USD",
         "unit": "per_million_tokens",
@@ -1921,6 +1975,7 @@
       "isDefault": true,
       "cacheClass": "no_provider_cache",
       "commercialStatus": "agi_direct",
+      "dataRetention": "provider_default",
       "pricing": {
         "currency": "USD",
         "unit": "per_million_tokens",
@@ -1939,6 +1994,7 @@
       "isDefault": true,
       "cacheClass": "provider_implicit_prompt_cache",
       "commercialStatus": "agi_direct",
+      "dataRetention": "provider_default",
       "pricing": {
         "currency": "USD",
         "unit": "per_million_tokens",
@@ -1958,6 +2014,7 @@
       "isDefault": false,
       "cacheClass": "provider_implicit_prompt_cache",
       "commercialStatus": "authorized_marketplace",
+      "dataRetention": "zero_retention",
       "pricing": {
         "currency": "USD",
         "unit": "per_million_tokens",
@@ -1978,6 +2035,7 @@
       "isDefault": false,
       "cacheClass": "provider_implicit_prompt_cache",
       "commercialStatus": "experimental_only",
+      "dataRetention": "provider_default",
       "pricing": {
         "currency": "USD",
         "unit": "per_million_tokens",
@@ -1998,6 +2056,7 @@
       "isDefault": true,
       "cacheClass": "provider_implicit_prompt_cache",
       "commercialStatus": "agi_direct",
+      "dataRetention": "provider_default",
       "pricing": {
         "currency": "USD",
         "unit": "per_million_tokens",
@@ -2017,6 +2076,7 @@
       "isDefault": false,
       "cacheClass": "provider_implicit_prompt_cache",
       "commercialStatus": "authorized_marketplace",
+      "dataRetention": "zero_retention",
       "pricing": {
         "currency": "USD",
         "unit": "per_million_tokens",
@@ -2037,6 +2097,7 @@
       "isDefault": false,
       "cacheClass": "provider_implicit_prompt_cache",
       "commercialStatus": "experimental_only",
+      "dataRetention": "provider_default",
       "pricing": {
         "currency": "USD",
         "unit": "per_million_tokens",
@@ -2057,6 +2118,7 @@
       "isDefault": false,
       "cacheClass": "provider_implicit_prompt_cache",
       "commercialStatus": "experimental_only",
+      "dataRetention": "provider_default",
       "pricing": {
         "currency": "USD",
         "unit": "per_million_tokens",
@@ -2077,6 +2139,7 @@
       "isDefault": false,
       "cacheClass": "provider_explicit_prompt_cache",
       "commercialStatus": "agi_direct",
+      "dataRetention": "provider_default",
       "pricing": {
         "currency": "USD",
         "unit": "per_million_tokens",
@@ -2097,6 +2160,7 @@
       "isDefault": true,
       "cacheClass": "provider_implicit_prompt_cache",
       "commercialStatus": "agi_direct",
+      "dataRetention": "provider_default",
       "pricing": {
         "currency": "USD",
         "unit": "per_million_tokens",
@@ -2116,6 +2180,7 @@
       "isDefault": false,
       "cacheClass": "provider_implicit_prompt_cache",
       "commercialStatus": "authorized_marketplace",
+      "dataRetention": "zero_retention",
       "pricing": {
         "currency": "USD",
         "unit": "per_million_tokens",
@@ -2136,6 +2201,7 @@
       "isDefault": false,
       "cacheClass": "provider_implicit_prompt_cache",
       "commercialStatus": "experimental_only",
+      "dataRetention": "provider_default",
       "pricing": {
         "currency": "USD",
         "unit": "per_million_tokens",
@@ -2156,6 +2222,7 @@
       "isDefault": false,
       "cacheClass": "provider_implicit_prompt_cache",
       "commercialStatus": "experimental_only",
+      "dataRetention": "provider_default",
       "pricing": {
         "currency": "USD",
         "unit": "per_million_tokens",
@@ -2176,6 +2243,7 @@
       "isDefault": false,
       "cacheClass": "provider_explicit_prompt_cache",
       "commercialStatus": "agi_direct",
+      "dataRetention": "provider_default",
       "pricing": {
         "currency": "USD",
         "unit": "per_million_tokens",
@@ -2196,6 +2264,7 @@
       "isDefault": true,
       "cacheClass": "provider_explicit_prompt_cache",
       "commercialStatus": "agi_direct",
+      "dataRetention": "provider_default",
       "pricing": {
         "currency": "USD",
         "unit": "per_million_tokens",
@@ -2225,6 +2294,7 @@
       "isDefault": false,
       "cacheClass": "provider_implicit_prompt_cache",
       "commercialStatus": "authorized_marketplace",
+      "dataRetention": "zero_retention",
       "pricing": {
         "currency": "USD",
         "unit": "per_million_tokens",
@@ -2245,6 +2315,7 @@
       "isDefault": false,
       "cacheClass": "provider_implicit_prompt_cache",
       "commercialStatus": "experimental_only",
+      "dataRetention": "provider_default",
       "pricing": {
         "currency": "USD",
         "unit": "per_million_tokens",
@@ -2265,6 +2336,7 @@
       "isDefault": true,
       "cacheClass": "provider_implicit_prompt_cache",
       "commercialStatus": "agi_direct",
+      "dataRetention": "provider_default",
       "pricing": {
         "currency": "USD",
         "unit": "per_million_tokens",
@@ -2284,6 +2356,7 @@
       "isDefault": false,
       "cacheClass": "provider_implicit_prompt_cache",
       "commercialStatus": "authorized_marketplace",
+      "dataRetention": "zero_retention",
       "pricing": {
         "currency": "USD",
         "unit": "per_million_tokens",
@@ -2304,6 +2377,7 @@
       "isDefault": false,
       "cacheClass": "provider_implicit_prompt_cache",
       "commercialStatus": "experimental_only",
+      "dataRetention": "provider_default",
       "pricing": {
         "currency": "USD",
         "unit": "per_million_tokens",
@@ -2324,6 +2398,7 @@
       "isDefault": false,
       "cacheClass": "provider_implicit_prompt_cache",
       "commercialStatus": "experimental_only",
+      "dataRetention": "provider_default",
       "pricing": {
         "currency": "USD",
         "unit": "per_million_tokens",
@@ -2344,6 +2419,7 @@
       "isDefault": false,
       "cacheClass": "provider_explicit_prompt_cache",
       "commercialStatus": "agi_direct",
+      "dataRetention": "provider_default",
       "pricing": {
         "currency": "USD",
         "unit": "per_million_tokens",
@@ -2364,6 +2440,7 @@
       "isDefault": true,
       "cacheClass": "no_provider_cache",
       "commercialStatus": "agi_direct",
+      "dataRetention": "provider_default",
       "pricing": {
         "currency": "USD",
         "unit": "per_million_tokens",
@@ -2390,6 +2467,7 @@
       "isDefault": false,
       "cacheClass": "provider_implicit_prompt_cache",
       "commercialStatus": "authorized_marketplace",
+      "dataRetention": "zero_retention",
       "pricing": {
         "currency": "USD",
         "unit": "per_million_tokens",
@@ -2410,6 +2488,7 @@
       "isDefault": false,
       "cacheClass": "provider_implicit_prompt_cache",
       "commercialStatus": "experimental_only",
+      "dataRetention": "provider_default",
       "pricing": {
         "currency": "USD",
         "unit": "per_million_tokens",
@@ -2430,6 +2509,7 @@
       "isDefault": false,
       "cacheClass": "provider_implicit_prompt_cache",
       "commercialStatus": "experimental_only",
+      "dataRetention": "provider_default",
       "pricing": {
         "currency": "USD",
         "unit": "per_million_tokens",
@@ -2450,6 +2530,7 @@
       "isDefault": true,
       "cacheClass": "no_provider_cache",
       "commercialStatus": "agi_direct",
+      "dataRetention": "provider_default",
       "pricing": {
         "currency": "USD",
         "unit": "per_second",
@@ -2470,6 +2551,7 @@
       "isDefault": true,
       "cacheClass": "no_provider_cache",
       "commercialStatus": "agi_direct",
+      "dataRetention": "provider_default",
       "pricing": {
         "currency": "USD",
         "unit": "per_second",
@@ -2490,6 +2572,7 @@
       "isDefault": true,
       "cacheClass": "no_provider_cache",
       "commercialStatus": "agi_direct",
+      "dataRetention": "provider_default",
       "pricing": {
         "currency": "USD",
         "unit": "per_million_tokens",
@@ -2508,6 +2591,7 @@
       "isDefault": true,
       "cacheClass": "no_provider_cache",
       "commercialStatus": "agi_direct",
+      "dataRetention": "provider_default",
       "pricing": {
         "currency": "USD",
         "unit": "per_million_tokens",
@@ -2526,6 +2610,7 @@
       "isDefault": true,
       "cacheClass": "no_provider_cache",
       "commercialStatus": "agi_direct",
+      "dataRetention": "provider_default",
       "pricing": {
         "currency": "USD",
         "unit": "per_million_tokens",
@@ -2544,6 +2629,7 @@
       "isDefault": false,
       "cacheClass": "provider_implicit_prompt_cache",
       "commercialStatus": "authorized_marketplace",
+      "dataRetention": "zero_retention",
       "pricing": {
         "currency": "USD",
         "unit": "per_million_tokens",
@@ -2564,6 +2650,7 @@
       "isDefault": false,
       "cacheClass": "provider_implicit_prompt_cache",
       "commercialStatus": "experimental_only",
+      "dataRetention": "provider_default",
       "pricing": {
         "currency": "USD",
         "unit": "per_million_tokens",
@@ -2584,6 +2671,7 @@
       "isDefault": true,
       "cacheClass": "no_provider_cache",
       "commercialStatus": "agi_direct",
+      "dataRetention": "provider_default",
       "pricing": {
         "currency": "USD",
         "unit": "per_second",
@@ -2604,6 +2692,7 @@
       "isDefault": true,
       "cacheClass": "no_provider_cache",
       "commercialStatus": "agi_direct",
+      "dataRetention": "provider_default",
       "pricing": {
         "currency": "USD",
         "unit": "per_second",
@@ -2623,6 +2712,7 @@
       "isDefault": true,
       "cacheClass": "no_provider_cache",
       "commercialStatus": "agi_direct",
+      "dataRetention": "provider_default",
       "pricing": {
         "currency": "USD",
         "unit": "per_million_tokens",
@@ -2641,6 +2731,7 @@
       "isDefault": true,
       "cacheClass": "no_provider_cache",
       "commercialStatus": "customer_byok",
+      "dataRetention": "zero_retention",
       "pricing": {
         "currency": "USD",
         "unit": "per_million_tokens",
@@ -2659,6 +2750,7 @@
       "isDefault": true,
       "cacheClass": "no_provider_cache",
       "commercialStatus": "customer_byok",
+      "dataRetention": "zero_retention",
       "pricing": {
         "currency": "USD",
         "unit": "per_million_tokens",
@@ -2677,6 +2769,7 @@
       "isDefault": true,
       "cacheClass": "provider_implicit_prompt_cache",
       "commercialStatus": "agi_direct",
+      "dataRetention": "provider_default",
       "pricing": {
         "currency": "USD",
         "unit": "per_million_tokens",
@@ -2696,6 +2789,7 @@
       "isDefault": false,
       "cacheClass": "no_provider_cache",
       "commercialStatus": "authorized_marketplace",
+      "dataRetention": "zero_retention",
       "pricing": {
         "currency": "USD",
         "unit": "per_million_tokens",
@@ -2716,6 +2810,7 @@
       "isDefault": false,
       "cacheClass": "no_provider_cache",
       "commercialStatus": "experimental_only",
+      "dataRetention": "provider_default",
       "pricing": {
         "currency": "USD",
         "unit": "per_million_tokens",
@@ -2736,6 +2831,7 @@
       "isDefault": false,
       "cacheClass": "provider_implicit_prompt_cache",
       "commercialStatus": "experimental_only",
+      "dataRetention": "provider_default",
       "pricing": {
         "currency": "USD",
         "unit": "per_million_tokens",
@@ -2756,6 +2852,7 @@
       "isDefault": true,
       "cacheClass": "provider_implicit_prompt_cache",
       "commercialStatus": "agi_direct",
+      "dataRetention": "provider_default",
       "pricing": {
         "currency": "USD",
         "unit": "per_million_tokens",
@@ -2775,6 +2872,7 @@
       "isDefault": false,
       "cacheClass": "provider_implicit_prompt_cache",
       "commercialStatus": "authorized_marketplace",
+      "dataRetention": "zero_retention",
       "pricing": {
         "currency": "USD",
         "unit": "per_million_tokens",
@@ -2795,6 +2893,7 @@
       "isDefault": false,
       "cacheClass": "no_provider_cache",
       "commercialStatus": "experimental_only",
+      "dataRetention": "provider_default",
       "pricing": {
         "currency": "USD",
         "unit": "per_million_tokens",

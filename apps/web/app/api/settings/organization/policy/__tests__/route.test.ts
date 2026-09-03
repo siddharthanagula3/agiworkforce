@@ -117,6 +117,22 @@ describe('GET /api/settings/organization/policy', () => {
     expect(body.policy.secretHandling).toBe('redact');
   });
 
+  it('defaults zeroDataRetentionOnly to false when the saved metadata has no explicit value', async () => {
+    bindCaller({ policyRow: SAVED_POLICY });
+
+    const body = await (await GET(request() as never)).json();
+
+    expect(body.policy.zeroDataRetentionOnly).toBe(false);
+  });
+
+  it('defaults ipAllowList to an empty array when the saved metadata has no explicit value', async () => {
+    bindCaller({ policyRow: SAVED_POLICY });
+
+    const body = await (await GET(request() as never)).json();
+
+    expect(body.policy.ipAllowList).toEqual([]);
+  });
+
   it('lets a member read the policy but not manage it', async () => {
     bindCaller({ role: 'member', policyRow: SAVED_POLICY });
 
@@ -275,6 +291,46 @@ describe('PATCH /api/settings/organization/policy', () => {
 
     expect(response.status).toBe(400);
     expect(upsertParams()).toEqual([]);
+  });
+
+  it('stores a zeroDataRetentionOnly patch inside the metadata column', async () => {
+    bindCaller({ policyRow: SAVED_POLICY });
+
+    await PATCH(request({ zeroDataRetentionOnly: true }) as never);
+
+    const params = upsertParams();
+    expect(JSON.parse(params[13] as string)).toMatchObject({ zeroDataRetentionOnly: true });
+  });
+
+  it('stores an ipAllowList patch inside the metadata column', async () => {
+    bindCaller({ policyRow: SAVED_POLICY });
+
+    await PATCH(request({ ipAllowList: ['203.0.113.0/24', '2001:db8::/32'] }) as never);
+
+    const params = upsertParams();
+    expect(JSON.parse(params[13] as string)).toMatchObject({
+      ipAllowList: ['203.0.113.0/24', '2001:db8::/32'],
+    });
+  });
+
+  it('rejects an ipAllowList entry that is not a valid address or CIDR', async () => {
+    bindCaller({ policyRow: SAVED_POLICY });
+
+    const response = await PATCH(request({ ipAllowList: ['not-an-address'] }) as never);
+
+    expect(response.status).toBe(400);
+    expect(upsertParams()).toEqual([]);
+  });
+
+  it('clears a saved ip allow list when the administrator patches it to empty', async () => {
+    bindCaller({
+      policyRow: { ...SAVED_POLICY, metadata: { ipAllowList: ['203.0.113.0/24'] } },
+    });
+
+    await PATCH(request({ ipAllowList: [] }) as never);
+
+    const params = upsertParams();
+    expect(JSON.parse(params[13] as string)).toMatchObject({ ipAllowList: [] });
   });
 
   it('deduplicates repeated modes and surfaces before writing', async () => {

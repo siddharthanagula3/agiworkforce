@@ -24,6 +24,8 @@ export type RouteCommercialStatus =
   | 'experimental_only'
   | 'blocked';
 
+export type RouteDataRetention = 'zero_retention' | 'provider_default';
+
 interface RoutePricingRecord {
   currency: string;
   unit: string;
@@ -43,6 +45,7 @@ interface RouteRecord {
   isDefault: boolean;
   cacheClass: RouteCacheClass;
   commercialStatus: RouteCommercialStatus;
+  dataRetention: RouteDataRetention;
   pricing: RoutePricingRecord;
 }
 
@@ -55,6 +58,7 @@ export interface RoutePriceSheet {
   isDefault: boolean;
   cacheClass: RouteCacheClass;
   commercialStatus: RouteCommercialStatus;
+  dataRetention: RouteDataRetention;
   currency: string;
   unit: string;
   inputPerMillion: number | null;
@@ -77,6 +81,7 @@ function toPriceSheet(routeId: string, route: RouteRecord): RoutePriceSheet {
     isDefault: route.isDefault,
     cacheClass: route.cacheClass,
     commercialStatus: route.commercialStatus,
+    dataRetention: route.dataRetention,
     currency: pricing.currency,
     unit: pricing.unit,
     inputPerMillion: pricing.inputPerMillion ?? null,
