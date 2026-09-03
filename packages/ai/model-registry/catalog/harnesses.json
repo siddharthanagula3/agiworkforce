@@ -254,6 +254,61 @@
       "adapter": "managed-media",
       "trustModes": ["managed_cloud"],
       "features": {}
+    },
+    "cheaperinference/chat-completions": {
+      "provider": "cheaperinference",
+      "apiFamily": "chat_completions",
+      "adapter": "@agiworkforce/providers-openai",
+      "trustModes": ["managed_cloud"],
+      "features": {},
+      "protocol": "openai_chat",
+      "baseUrl": "https://api.cheaperinference.com/v1",
+      "apiKeyEnv": "AGI_CHEAPERINFERENCE_API_KEY",
+      "hostPolicy": "registry_declared"
+    },
+    "cheaperinference-anthropic/messages": {
+      "provider": "cheaperinference_anthropic",
+      "apiFamily": "messages",
+      "adapter": "@agiworkforce/providers-anthropic",
+      "trustModes": ["managed_cloud"],
+      "features": {},
+      "protocol": "anthropic_messages",
+      "baseUrl": "https://api.cheaperinference.com",
+      "apiKeyEnv": "AGI_CHEAPERINFERENCE_API_KEY",
+      "hostPolicy": "registry_declared"
+    },
+    "deepseek-anthropic/messages": {
+      "provider": "deepseek_anthropic",
+      "apiFamily": "messages",
+      "adapter": "@agiworkforce/providers-anthropic",
+      "trustModes": ["managed_cloud", "byok"],
+      "features": {},
+      "protocol": "anthropic_messages",
+      "baseUrl": "https://api.deepseek.com/anthropic",
+      "apiKeyEnv": "DEEPSEEK_API_KEY",
+      "hostPolicy": "allowlist_only"
+    },
+    "moonshot-anthropic/messages": {
+      "provider": "moonshot_anthropic",
+      "apiFamily": "messages",
+      "adapter": "@agiworkforce/providers-anthropic",
+      "trustModes": ["managed_cloud", "byok"],
+      "features": {},
+      "protocol": "anthropic_messages",
+      "baseUrl": "https://api.moonshot.ai/anthropic",
+      "apiKeyEnv": "MOONSHOT_API_KEY",
+      "hostPolicy": "allowlist_only"
+    },
+    "zhipu-anthropic/messages": {
+      "provider": "zhipu_anthropic",
+      "apiFamily": "messages",
+      "adapter": "@agiworkforce/providers-anthropic",
+      "trustModes": ["managed_cloud", "byok"],
+      "features": {},
+      "protocol": "anthropic_messages",
+      "baseUrl": "https://api.z.ai/api/anthropic",
+      "apiKeyEnv": "ZHIPU_API_KEY",
+      "hostPolicy": "registry_declared"
     }
   },
   "harnessGroups": {
