@@ -1401,8 +1401,34 @@ const MessageBubbleComponent = function MessageBubble({
   );
 
   /**
+   * Web search was ON for this turn (`webSearchRequested`) AND a search or
+   * fetch actually ran -- a web-search/web-fetch tool entry in the canonical
+   * activity feed, or a named search/fetch tool in the legacy timeline. The
+   * toggle alone is not evidence: ambient search arms it on nearly every
+   * turn, including ones that never touch a search tool at all (a plain
+   * code-execution turn, observed live producing this notice under its file
+   * card with nothing to retry).
+   */
+  const turnAttemptedSearch = useMemo(() => {
+    if (
+      canonicalActivity?.entries.some(
+        (entry) =>
+          entry.kind === 'tool' &&
+          (entry.category === 'web-search' || entry.category === 'web-fetch'),
+      )
+    ) {
+      return true;
+    }
+    if (canonicalActivity?.entries.some((entry) => entry.kind === 'sources')) return true;
+    return Boolean(
+      message.metadata?.tools?.some((tool) => /web_search|url_fetch|grounding/i.test(tool.name)),
+    );
+  }, [canonicalActivity, message.metadata?.tools]);
+
+  /**
    * Web search was on for this turn (see `webSearchRequested`, stamped in
-   * useChatStream at send time) and the turn ended with zero sources: a
+   * useChatStream at send time), a search was actually attempted
+   * (`turnAttemptedSearch`), and the turn still ended with zero sources: the
    * search or fetch tool failed, or grounding never returned anything. The
    * model still wrote an answer, so nothing else here flags that it came
    * from the model's own knowledge rather than a live search — this is the
@@ -1411,10 +1437,18 @@ const MessageBubbleComponent = function MessageBubble({
   const showNoSearchResultsNotice = useMemo(() => {
     if (isUser || message.isStreaming) return false;
     if (message.metadata?.webSearchRequested !== true) return false;
+    if (!turnAttemptedSearch) return false;
     if (producedNoVisibleOutput) return false;
     if (hasStreamError({ metadata: message.metadata })) return false;
     return searchSources.length === 0;
-  }, [isUser, message.isStreaming, message.metadata, producedNoVisibleOutput, searchSources]);
+  }, [
+    isUser,
+    message.isStreaming,
+    message.metadata,
+    turnAttemptedSearch,
+    producedNoVisibleOutput,
+    searchSources,
+  ]);
 
   const setResearchSources = useResearchPanelStore((s) => s.setSources);
   useEffect(() => {

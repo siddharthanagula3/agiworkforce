@@ -1544,4 +1544,102 @@ describe('MessageBubble', () => {
       expect(noOutputNotice()).not.toBeInTheDocument();
     });
   });
+
+  describe('no-sources notice', () => {
+    const noSourcesNotice = () =>
+      screen.queryByText(/web search didn't return results for this turn/i);
+
+    const codeExecutionActivity = {
+      schemaVersion: 1 as const,
+      sessionId: 's1',
+      turnId: 't1',
+      lastSequence: 1,
+      status: 'completed' as const,
+      startedAtMs: 0,
+      updatedAtMs: 100,
+      entries: [
+        {
+          kind: 'tool' as const,
+          id: 'tool-1',
+          toolCallId: 'call-1',
+          name: 'code_execution',
+          category: 'code-execution' as const,
+          summary: 'Ran code',
+          status: 'completed' as const,
+          startedAtMs: 0,
+          completedAtMs: 50,
+        },
+      ],
+    };
+
+    const failedFetchActivity = {
+      schemaVersion: 1 as const,
+      sessionId: 's1',
+      turnId: 't1',
+      lastSequence: 1,
+      status: 'failed' as const,
+      startedAtMs: 0,
+      updatedAtMs: 100,
+      entries: [
+        {
+          kind: 'tool' as const,
+          id: 'tool-1',
+          toolCallId: 'call-1',
+          name: 'url_fetch',
+          category: 'web-fetch' as const,
+          summary: 'The tool failed for example.com',
+          status: 'failed' as const,
+          startedAtMs: 0,
+          completedAtMs: 50,
+        },
+      ],
+    };
+
+    it('stays quiet on a search-enabled turn that never attempted a search (Pascal/code-execution)', () => {
+      render(
+        <MessageBubble
+          message={makeMessage({
+            role: 'assistant',
+            content: "Here's the Pascal's triangle file.",
+            metadata: {
+              webSearchRequested: true,
+              agentActivity: codeExecutionActivity,
+            },
+          })}
+        />,
+      );
+      expect(noSourcesNotice()).not.toBeInTheDocument();
+    });
+
+    it('shows the notice on a search-enabled turn whose fetch attempt produced zero sources', () => {
+      render(
+        <MessageBubble
+          message={makeMessage({
+            role: 'assistant',
+            content: 'Based on what I already know, here is an answer.',
+            metadata: {
+              webSearchRequested: true,
+              agentActivity: failedFetchActivity,
+            },
+          })}
+        />,
+      );
+      expect(noSourcesNotice()).toBeInTheDocument();
+    });
+
+    it('stays quiet when web search was never requested for the turn', () => {
+      render(
+        <MessageBubble
+          message={makeMessage({
+            role: 'assistant',
+            content: 'Based on what I already know, here is an answer.',
+            metadata: {
+              agentActivity: failedFetchActivity,
+            },
+          })}
+        />,
+      );
+      expect(noSourcesNotice()).not.toBeInTheDocument();
+    });
+  });
 });
