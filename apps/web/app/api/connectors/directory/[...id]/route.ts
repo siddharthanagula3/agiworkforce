@@ -9,10 +9,15 @@ import { createError } from '@/lib/errors';
 import { getClerkAuthUser } from '@/lib/api-auth';
 import { resolveAuthModeForRecord } from '@/lib/connectors/directory/auth-probe';
 import {
+  pendingSiteIconSource,
+  resolveSiteIconForRecord,
+} from '@/lib/connectors/directory/favicon-probe';
+import {
   readDirectorySnapshot,
   upsertDirectoryRecord,
 } from '@/lib/connectors/directory/snapshot-cache';
 import { discoverAndCacheToolNames } from '@/lib/connectors/directory/tool-discovery';
+import { toDirectoryEntryView } from '@/lib/connectors/directory/view';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -37,6 +42,11 @@ async function handleGet(
     await upsertDirectoryRecord(record);
   }
 
+  if (pendingSiteIconSource(record)) {
+    record = await resolveSiteIconForRecord(record);
+    await upsertDirectoryRecord(record);
+  }
+
   if (record.toolNames.length === 0) {
     const auth = await getClerkAuthUser(request).catch(() => null);
     if (auth?.userId) {
@@ -46,7 +56,7 @@ async function handleGet(
   }
 
   return NextResponse.json(
-    { entry: record },
+    { entry: toDirectoryEntryView(record) },
     { status: 200, headers: { 'Cache-Control': 'public, max-age=60, stale-while-revalidate=300' } },
   );
 }

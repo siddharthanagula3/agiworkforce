@@ -9,6 +9,7 @@ import { withRateLimit } from '@/lib/rate-limit';
 import { logger } from '@/lib/logger';
 import { DIRECTORY_CATEGORIES } from '@/lib/connectors/directory/categorize';
 import { readDirectorySnapshot } from '@/lib/connectors/directory/snapshot-cache';
+import { toDirectoryEntryView } from '@/lib/connectors/directory/view';
 import type {
   DirectoryAuthMode,
   DirectoryConnectableMode,
@@ -87,7 +88,7 @@ async function handleGet(request: NextRequest): Promise<NextResponse> {
 
     return NextResponse.json(
       {
-        entries: page,
+        entries: page.map(toDirectoryEntryView),
         total: filtered.length,
         nextCursor: nextOffset < filtered.length ? String(nextOffset) : null,
         updatedAt: snapshot?.updatedAt ?? null,

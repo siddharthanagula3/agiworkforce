@@ -11,6 +11,7 @@ const mocks = vi.hoisted(() => ({
   discoverAndCacheToolNames: vi.fn(
     async (..._args: unknown[]): Promise<readonly string[] | null> => null,
   ),
+  resolveSiteIconForRecord: vi.fn(async (record: unknown) => record),
 }));
 
 vi.mock('server-only', () => ({}));
@@ -32,6 +33,11 @@ vi.mock('@/lib/api-auth', () => ({
 vi.mock('@/lib/connectors/directory/tool-discovery', () => ({
   discoverAndCacheToolNames: (...args: unknown[]) => mocks.discoverAndCacheToolNames(...args),
 }));
+vi.mock('@/lib/connectors/directory/favicon-probe', () => ({
+  pendingSiteIconSource: (record: { iconSource: string; iconUrl: string | null }) =>
+    record.iconSource === 'site' && record.iconUrl === null,
+  resolveSiteIconForRecord: (record: unknown) => mocks.resolveSiteIconForRecord(record),
+}));
 
 import { GET } from './route';
 
@@ -52,7 +58,14 @@ function record(overrides: Record<string, unknown> = {}) {
     badge: 'community',
     iconUrl: null,
     monogram: 'ST',
-    docsUrl: null,
+    documentationUrl: null,
+    iconSource: 'monogram',
+    brandSlug: null,
+    authorName: null,
+    authorUrl: null,
+    websiteUrl: null,
+    supportUrl: null,
+    privacyPolicyUrl: null,
     ...overrides,
   };
 }
@@ -126,5 +139,62 @@ describe('GET /api/connectors/directory/[...id]', () => {
     const body = await response.json();
 
     expect(body.entry.toolNames).toEqual(['list_items', 'create_item']);
+  });
+
+  it('resolves and persists a pending site icon before returning', async () => {
+    mocks.readDirectorySnapshot.mockResolvedValueOnce({
+      records: [
+        record({ authMode: 'oauth', connectable: 'connect', iconSource: 'site', iconUrl: null }),
+      ],
+    });
+    mocks.resolveSiteIconForRecord.mockResolvedValueOnce(
+      record({
+        authMode: 'oauth',
+        connectable: 'connect',
+        iconSource: 'site',
+        iconUrl: 'https://tool.example.com/favicon.ico',
+      }),
+    );
+
+    const response = await GET(
+      request('io.github.someone/tool'),
+      context('io.github.someone/tool'),
+    );
+    const body = await response.json();
+
+    expect(body.entry.iconUrl).toBe('https://tool.example.com/favicon.ico');
+    expect(mocks.upsertDirectoryRecord).toHaveBeenCalledTimes(1);
+  });
+
+  it('never touches an already-resolved icon source', async () => {
+    mocks.readDirectorySnapshot.mockResolvedValueOnce({
+      records: [record({ authMode: 'oauth', connectable: 'connect', iconSource: 'brand' })],
+    });
+
+    await GET(request('io.github.someone/tool'), context('io.github.someone/tool'));
+
+    expect(mocks.resolveSiteIconForRecord).not.toHaveBeenCalled();
+  });
+
+  it('carries a computed tool count and connector url in the detail response', async () => {
+    mocks.readDirectorySnapshot.mockResolvedValueOnce({
+      records: [
+        record({
+          authMode: 'oauth',
+          connectable: 'connect',
+          toolNames: ['a', 'b'],
+          remotes: [{ url: 'https://tool.example.com/mcp', transport: 'streamable-http' }],
+        }),
+      ],
+    });
+
+    const response = await GET(
+      request('io.github.someone/tool'),
+      context('io.github.someone/tool'),
+    );
+    const body = await response.json();
+
+    expect(body.entry.toolCount).toBe(2);
+    expect(body.entry.connectorUrl).toBe('https://tool.example.com/mcp');
   });
 });
