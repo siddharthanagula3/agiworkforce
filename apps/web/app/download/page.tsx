@@ -1,16 +1,13 @@
 import { buildMetadata } from '@/lib/seo/metadata';
 import { Header } from '@shared/components/layout/Header';
-import { MarketingFooter } from '@/features/marketing/components/MarketingFooter';
 import {
   Button,
   ButtonRow,
   Eyebrow,
   Ledger,
+  MarketingFooter,
   Prose,
-  Section,
-  Stack,
 } from '@/features/marketing/components/system';
-import { PageHero } from '@/features/marketing/components/pages/surfaces/shared';
 import { PublicWaitlistForm } from '@/features/marketing/components/PublicWaitlistForm';
 import { PLATFORM_AVAILABILITY_CONSENT_PURPOSES } from '@/lib/consent-purposes';
 import { DesktopDownloadAvailability } from './DesktopDownloadAvailability';
@@ -50,6 +47,14 @@ $ ${COSIGN_COMMAND}
 $ codesign -d --verbose=4 "${CLOUD_APP_PATH}"
 $ xcrun stapler validate ~/Downloads/${CLOUD_INSTALLER}`;
 
+const HERO_TRANSCRIPT: { kind: 'cmd' | 'out' | 'dim'; text: string }[] = [
+  { kind: 'cmd', text: `shasum -a 256 -c ${CHECKSUM_FILE}` },
+  { kind: 'out', text: `${SAMPLE_ARCHIVE}: OK` },
+  { kind: 'cmd', text: './agi doctor' },
+  { kind: 'out', text: '[Pass] OS sandbox - macOS Seatbelt is available' },
+  { kind: 'dim', text: '[Warn] auth providers - no provider auth entries found' },
+];
+
 const RELEASE_CHECKS: { title: string; body: string }[] = [
   {
     title: 'Signed and re-checked inside the same run',
@@ -81,28 +86,45 @@ export default function DownloadPage() {
     <div data-design="agi" className="agi-ds-page">
       <Header />
       <main id="main-content">
-        <PageHero
-          id="agi-download-hero-title"
-          eyebrow="Installers and signatures"
-          title="We check the signature before you download."
-          lede="Desktop artifacts are signed with the release key and re-verified against that signature in the same workflow run. CLI archives ship a checksum file signed with Sigstore and verified before the release exists. This page then asks the release API again on load, so a platform gets a download control only once the API confirms a published asset for it."
-          ctas={[
-            { href: '#desktop-downloads', label: 'Check the installers' },
-            {
-              href: '#release-verification',
-              label: 'How a release is signed',
-              variant: 'secondary',
-            },
-          ]}
-        />
+        <section className="agi-lp-hero" aria-labelledby="agi-download-hero-title">
+          <div className="agi-ds-container agi-lp-hero-grid">
+            <div className="agi-lp-hero-copy">
+              <Eyebrow>Installers and signatures</Eyebrow>
+              <h1 className="agi-ds-h1" id="agi-download-hero-title">
+                We check the signature <em className="agi-ds-accent">before you download.</em>
+              </h1>
+              <Prose size="lg">
+                Desktop artifacts are signed with the release key and re-verified in the same
+                workflow run. CLI archives ship a checksum file signed with Sigstore, verified
+                before the release exists. This page then asks the release API again on load, so a
+                platform gets a control only once the API confirms a published asset for it.
+              </Prose>
+              <ButtonRow>
+                <Button href="#desktop-downloads">Check the installers</Button>
+                <Button href="#release-verification" variant="secondary">
+                  How a release is signed
+                </Button>
+              </ButtonRow>
+            </div>
+            <div className="agi-lp-hero-stage">
+              <pre className="agi-lp-terminal" aria-label="A real installer verification session">
+                {HERO_TRANSCRIPT.map((line, index) => (
+                  <span className="agi-lp-terminal-line" data-kind={line.kind} key={index}>
+                    {line.text}
+                  </span>
+                ))}
+              </pre>
+            </div>
+          </div>
+        </section>
 
         <DesktopDownloadAvailability />
 
         <CliDownloadAvailability />
 
-        <Section id="release-verification" labelledBy="agi-download-verify-title" rule>
-          <Stack gap="loose">
-            <div>
+        <section className="agi-lp-section" aria-labelledby="agi-download-verify-title">
+          <div className="agi-ds-container">
+            <div className="agi-lp-heading">
               <Eyebrow>Release verification</Eyebrow>
               <h2 className="agi-ds-h2" id="agi-download-verify-title">
                 A build has to prove itself before it reaches this page.
@@ -117,37 +139,39 @@ export default function DownloadPage() {
 
             <div className="agi-ds-grid-2">
               {RELEASE_CHECKS.map((item) => (
-                <Stack key={item.title}>
+                <div className="agi-ds-card" style={{ padding: '1.5rem' }} key={item.title}>
                   <h3 className="agi-ds-h3">{item.title}</h3>
                   <Prose size="sm">{item.body}</Prose>
-                </Stack>
+                </div>
               ))}
             </div>
 
-            <Prose>
-              None of that has to be taken on trust. The release publishes the material you need to
-              repeat the checks yourself, on the file you actually downloaded.
-            </Prose>
+            <div style={{ marginTop: '3rem' }}>
+              <Prose>
+                None of that has to be taken on trust. The release publishes the material you need
+                to repeat the checks yourself, on the file you actually downloaded.
+              </Prose>
+            </div>
 
-            <div>
+            <div style={{ marginTop: '2rem' }}>
               <Eyebrow>Verify a download on your own machine</Eyebrow>
               <div className="agi-ds-codeblock">
                 <pre className="agi-ds-codeblock-pre">{SELF_VERIFY_TRANSCRIPT}</pre>
               </div>
             </div>
 
-            <div>
+            <div style={{ marginTop: '2rem' }}>
               <Eyebrow>A verified CLI archive, checked and unpacked</Eyebrow>
               <div className="agi-ds-codeblock">
                 <pre className="agi-ds-codeblock-pre">{VERIFY_TRANSCRIPT}</pre>
               </div>
             </div>
-          </Stack>
-        </Section>
+          </div>
+        </section>
 
-        <Section id="release-contents" labelledBy="agi-download-contents-title" rule ground="2">
-          <Stack gap="loose">
-            <div>
+        <section className="agi-lp-section" aria-labelledby="agi-download-contents-title">
+          <div className="agi-ds-container">
+            <div className="agi-lp-heading">
               <Eyebrow>Release contents</Eyebrow>
               <h2 className="agi-ds-h2" id="agi-download-contents-title">
                 Each release publishes the same set of files.
@@ -193,12 +217,12 @@ export default function DownloadPage() {
                 },
               ]}
             />
-          </Stack>
-        </Section>
+          </div>
+        </section>
 
-        <Section id="other-surfaces" labelledBy="agi-download-notify-title" rule>
-          <Stack gap="loose">
-            <div>
+        <section className="agi-lp-section" aria-labelledby="agi-download-notify-title">
+          <div className="agi-ds-container">
+            <div className="agi-lp-heading">
               <Eyebrow>Platforms without an installer</Eyebrow>
               <h2 className="agi-ds-h2" id="agi-download-notify-title">
                 Leave an address and we will write when a platform opens.
@@ -226,28 +250,30 @@ export default function DownloadPage() {
               successMessage="You're on the list. We'll email you when a platform has a verified installer to download."
               purposes={PLATFORM_AVAILABILITY_CONSENT_PURPOSES}
             />
-          </Stack>
-        </Section>
+          </div>
+        </section>
 
-        <Section id="download-close" labelledBy="agi-download-close-title" rule ground="2">
-          <Stack gap="loose">
-            <h2 className="agi-ds-h2" id="agi-download-close-title">
-              AGI Web opens in a browser while you wait on a platform.
-            </h2>
-            <Prose>
-              Web needs no release tag and no signature check. Sign in there now, and the same
-              account signs you into Desktop on the day an installer for your platform is published.
-              Stable channel: nothing is linked here until the release API confirms a verified
-              asset.
-            </Prose>
-            <ButtonRow>
-              <Button href={WEB_CHAT_ENTRY_HREF}>Use AGI Web</Button>
-              <Button href="/desktop" variant="secondary">
-                What AGI Desktop does
-              </Button>
-            </ButtonRow>
-          </Stack>
-        </Section>
+        <section className="agi-lp-close" aria-labelledby="agi-download-close-title">
+          <div className="agi-ds-container">
+            <div className="agi-lp-close-inner">
+              <h2 className="agi-ds-h2" id="agi-download-close-title">
+                AGI Web opens in a browser <em className="agi-ds-accent">while you wait.</em>
+              </h2>
+              <Prose size="lg">
+                Web needs no release tag and no signature check. Sign in there now, and the same
+                account signs you into Desktop on the day an installer for your platform is
+                published. Stable channel: nothing is linked here until the release API confirms a
+                verified asset.
+              </Prose>
+              <ButtonRow>
+                <Button href={WEB_CHAT_ENTRY_HREF}>Use AGI Web</Button>
+                <Button href="/desktop" variant="secondary">
+                  What AGI Desktop does
+                </Button>
+              </ButtonRow>
+            </div>
+          </div>
+        </section>
       </main>
       <MarketingFooter />
     </div>
