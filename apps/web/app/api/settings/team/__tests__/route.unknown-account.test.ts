@@ -1,11 +1,23 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { bypassProfileLookup, rlsScopedProfileLookup } from './rls-profile-lookup.fixture';
 
 vi.mock('server-only', () => ({}));
 
-const { mockQuery, mockExecute, mockTransaction, mockRequireTeamAccess } = vi.hoisted(() => ({
-  mockQuery: vi.fn(),
-  mockExecute: vi.fn(),
-  mockTransaction: vi.fn(),
+const {
+  mockRlsQuery,
+  mockRlsExecute,
+  mockRlsTransaction,
+  mockNeonQuery,
+  mockNeonExecute,
+  mockNeonTransaction,
+  mockRequireTeamAccess,
+} = vi.hoisted(() => ({
+  mockRlsQuery: vi.fn(),
+  mockRlsExecute: vi.fn(),
+  mockRlsTransaction: vi.fn(),
+  mockNeonQuery: vi.fn(),
+  mockNeonExecute: vi.fn(),
+  mockNeonTransaction: vi.fn(),
   mockRequireTeamAccess: vi.fn(),
 }));
 
@@ -31,18 +43,18 @@ vi.mock('@/app/api/settings/team/team-admin-access', () => ({
 
 vi.mock('@/lib/server/neon-db', () => ({
   getNeonDb: vi.fn(() => ({
-    query: (...args: unknown[]) => mockQuery(...args),
-    execute: (...args: unknown[]) => mockExecute(...args),
-    transaction: (...args: unknown[]) => mockTransaction(...args),
+    query: (...args: unknown[]) => mockNeonQuery(...args),
+    execute: (...args: unknown[]) => mockNeonExecute(...args),
+    transaction: (...args: unknown[]) => mockNeonTransaction(...args),
   })),
 }));
 
 vi.mock('@/lib/server/rls-db', () => ({
   getUserScopedDb: vi.fn(async () => ({
     db: {
-      query: (...args: unknown[]) => mockQuery(...args),
-      execute: (...args: unknown[]) => mockExecute(...args),
-      transaction: (...args: unknown[]) => mockTransaction(...args),
+      query: (...args: unknown[]) => mockRlsQuery(...args),
+      execute: (...args: unknown[]) => mockRlsExecute(...args),
+      transaction: (...args: unknown[]) => mockRlsTransaction(...args),
     },
     userId: 'owner-user',
     organizationId: null,
@@ -69,20 +81,28 @@ describe('POST /api/settings/team unknown account honesty', () => {
       canManageTeam: true,
       maxMembers: null,
     });
-    mockTransaction.mockImplementation(async (callback: (tx: unknown) => Promise<unknown>) =>
+    mockRlsTransaction.mockImplementation(async (callback: (tx: unknown) => Promise<unknown>) =>
       callback({
-        query: (...args: unknown[]) => mockQuery(...args),
-        execute: (...args: unknown[]) => mockExecute(...args),
+        query: (...args: unknown[]) => mockRlsQuery(...args),
+        execute: (...args: unknown[]) => mockRlsExecute(...args),
       }),
     );
+    mockRlsQuery.mockImplementation(async (sql: string, params?: unknown[]) => {
+      const text = String(sql);
+      const profileResult = rlsScopedProfileLookup([], 'owner-user', text, params);
+      if (profileResult !== undefined) return profileResult;
+      if (text.includes('pg_advisory_xact_lock')) return [];
+      if (text.includes('from public.organization_members')) return [ownerMembership];
+      return [];
+    });
+    mockNeonQuery.mockImplementation(async (sql: string, params?: unknown[]) => {
+      const profileResult = bypassProfileLookup([], String(sql), params);
+      return profileResult !== undefined ? profileResult : [];
+    });
+    mockRlsExecute.mockResolvedValue(0);
   });
 
   it('returns an actionable error and does not pretend an email invitation was queued', async () => {
-    mockQuery
-      .mockResolvedValueOnce([])
-      .mockResolvedValueOnce([ownerMembership])
-      .mockResolvedValueOnce([]);
-
     const response = await POST(
       new Request('http://localhost:3000/api/settings/team', {
         method: 'POST',
@@ -96,8 +116,12 @@ describe('POST /api/settings/team unknown account honesty', () => {
     );
 
     expect(response.status).toBe(400);
-    expect(mockExecute.mock.calls.some(([sql]) => String(sql).includes('insert into'))).toBe(false);
-    expect(mockQuery.mock.calls.some(([sql]) => String(sql).includes('insert into'))).toBe(false);
+    expect(mockRlsExecute.mock.calls.some(([sql]) => String(sql).includes('insert into'))).toBe(
+      false,
+    );
+    expect(mockRlsQuery.mock.calls.some(([sql]) => String(sql).includes('insert into'))).toBe(
+      false,
+    );
 
     const body = (await response.json()) as { error: { message: string } };
     expect(body.error.message).toMatch(/POST \/api\/settings\/team\/invitations/);

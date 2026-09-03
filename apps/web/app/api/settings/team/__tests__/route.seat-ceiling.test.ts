@@ -2,10 +2,20 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('server-only', () => ({}));
 
-const { mockQuery, mockExecute, mockTransaction } = vi.hoisted(() => ({
-  mockQuery: vi.fn(),
-  mockExecute: vi.fn(),
-  mockTransaction: vi.fn(),
+const {
+  mockRlsQuery,
+  mockRlsExecute,
+  mockRlsTransaction,
+  mockNeonQuery,
+  mockNeonExecute,
+  mockNeonTransaction,
+} = vi.hoisted(() => ({
+  mockRlsQuery: vi.fn(),
+  mockRlsExecute: vi.fn(),
+  mockRlsTransaction: vi.fn(),
+  mockNeonQuery: vi.fn(),
+  mockNeonExecute: vi.fn(),
+  mockNeonTransaction: vi.fn(),
 }));
 
 vi.mock('@/lib/rate-limit', () => ({ withRateLimit: vi.fn(async () => null) }));
@@ -29,18 +39,18 @@ vi.mock('@/app/api/settings/team/team-admin-access', () => ({
 }));
 vi.mock('@/lib/server/neon-db', () => ({
   getNeonDb: vi.fn(() => ({
-    query: (...args: unknown[]) => mockQuery(...args),
-    execute: (...args: unknown[]) => mockExecute(...args),
-    transaction: (...args: unknown[]) => mockTransaction(...args),
+    query: (...args: unknown[]) => mockNeonQuery(...args),
+    execute: (...args: unknown[]) => mockNeonExecute(...args),
+    transaction: (...args: unknown[]) => mockNeonTransaction(...args),
   })),
 }));
 
 vi.mock('@/lib/server/rls-db', () => ({
   getUserScopedDb: vi.fn(async () => ({
     db: {
-      query: (...args: unknown[]) => mockQuery(...args),
-      execute: (...args: unknown[]) => mockExecute(...args),
-      transaction: (...args: unknown[]) => mockTransaction(...args),
+      query: (...args: unknown[]) => mockRlsQuery(...args),
+      execute: (...args: unknown[]) => mockRlsExecute(...args),
+      transaction: (...args: unknown[]) => mockRlsTransaction(...args),
     },
     userId: 'admin-user',
     organizationId: null,
@@ -85,28 +95,28 @@ function request(body: unknown) {
 }
 
 function primeHappyPathUntilInsert() {
-  mockQuery
+  mockRlsQuery
     .mockResolvedValueOnce([])
     .mockResolvedValueOnce([adminMembership])
-    .mockResolvedValueOnce([targetProfile])
     .mockResolvedValueOnce([]);
+  mockNeonQuery.mockResolvedValueOnce([targetProfile]);
 }
 
 describe('POST /api/settings/team seat ceiling', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockExecute.mockResolvedValue(0);
-    mockTransaction.mockImplementation(async (callback: (tx: unknown) => Promise<unknown>) =>
+    mockRlsExecute.mockResolvedValue(0);
+    mockRlsTransaction.mockImplementation(async (callback: (tx: unknown) => Promise<unknown>) =>
       callback({
-        query: (...args: unknown[]) => mockQuery(...args),
-        execute: (...args: unknown[]) => mockExecute(...args),
+        query: (...args: unknown[]) => mockRlsQuery(...args),
+        execute: (...args: unknown[]) => mockRlsExecute(...args),
       }),
     );
   });
 
   it('turns the database seat-ceiling abort into an actionable 409, not a 500', async () => {
     primeHappyPathUntilInsert();
-    mockQuery.mockRejectedValueOnce(seatCeilingViolation());
+    mockRlsQuery.mockRejectedValueOnce(seatCeilingViolation());
 
     const response = await POST(
       request({ organizationId: ORG_A, email: 'target@example.com', role: 'member' }),
@@ -129,10 +139,9 @@ describe('POST /api/settings/team seat ceiling', () => {
     };
 
     let insertsAttempted = 0;
-    mockQuery.mockImplementation(async (sql: string, params?: unknown[]) => {
+    mockRlsQuery.mockImplementation(async (sql: string, params?: unknown[]) => {
       const text = String(sql);
       if (text.includes('pg_advisory_xact_lock')) return [];
-      if (text.includes('from public.profiles')) return [targetProfile];
       if (text.includes('insert into public.organization_members')) {
         insertsAttempted += 1;
         if (insertsAttempted === 1) return [createdRow];
@@ -141,6 +150,10 @@ describe('POST /api/settings/team seat ceiling', () => {
       if (text.includes('from public.organization_members')) {
         return params?.[1] === 'admin-user' ? [adminMembership] : [];
       }
+      return [];
+    });
+    mockNeonQuery.mockImplementation(async (sql: string) => {
+      if (String(sql).includes('from public.profiles')) return [targetProfile];
       return [];
     });
 
@@ -155,31 +168,33 @@ describe('POST /api/settings/team seat ceiling', () => {
   });
 
   it('does not consume a seat when the target is already a member', async () => {
-    mockQuery
+    mockRlsQuery
       .mockResolvedValueOnce([])
       .mockResolvedValueOnce([adminMembership])
-      .mockResolvedValueOnce([targetProfile])
       .mockResolvedValueOnce([{ ...adminMembership, user_id: 'target-user', role: 'member' }]);
+    mockNeonQuery.mockResolvedValueOnce([targetProfile]);
 
     const response = await POST(
       request({ organizationId: ORG_A, email: 'target@example.com', role: 'member' }),
     );
 
     expect(response.status).toBe(409);
-    expect(mockQuery.mock.calls.some(([sql]) => String(sql).includes('insert into'))).toBe(false);
+    expect(mockRlsQuery.mock.calls.some(([sql]) => String(sql).includes('insert into'))).toBe(
+      false,
+    );
   });
 
   it('expires lapsed invitations first, so a dead invitation cannot block a live seat', async () => {
-    mockQuery
+    mockRlsQuery
       .mockResolvedValueOnce([])
       .mockResolvedValueOnce([adminMembership])
-      .mockResolvedValueOnce([targetProfile])
       .mockResolvedValueOnce([])
       .mockResolvedValueOnce([{ ...adminMembership, user_id: 'target-user' }]);
+    mockNeonQuery.mockResolvedValueOnce([targetProfile]);
 
     await POST(request({ organizationId: ORG_A, email: 'target@example.com', role: 'member' }));
 
-    const expiryCall = mockExecute.mock.calls.find(([sql]) =>
+    const expiryCall = mockRlsExecute.mock.calls.find(([sql]) =>
       String(sql).toLowerCase().includes("status = 'expired'"),
     );
     expect(expiryCall).toBeDefined();

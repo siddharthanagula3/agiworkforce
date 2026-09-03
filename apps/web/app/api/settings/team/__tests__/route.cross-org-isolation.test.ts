@@ -1,11 +1,26 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import {
+  bypassProfileLookup,
+  rlsScopedProfileLookup,
+  type ProfileFixtureRow,
+} from './rls-profile-lookup.fixture';
 
 vi.mock('server-only', () => ({}));
 
-const { mockQuery, mockExecute, mockTransaction } = vi.hoisted(() => ({
-  mockQuery: vi.fn(),
-  mockExecute: vi.fn(),
-  mockTransaction: vi.fn(),
+const {
+  mockRlsQuery,
+  mockRlsExecute,
+  mockRlsTransaction,
+  mockNeonQuery,
+  mockNeonExecute,
+  mockNeonTransaction,
+} = vi.hoisted(() => ({
+  mockRlsQuery: vi.fn(),
+  mockRlsExecute: vi.fn(),
+  mockRlsTransaction: vi.fn(),
+  mockNeonQuery: vi.fn(),
+  mockNeonExecute: vi.fn(),
+  mockNeonTransaction: vi.fn(),
 }));
 
 vi.mock('@/lib/rate-limit', () => ({ withRateLimit: vi.fn(async () => null) }));
@@ -29,18 +44,18 @@ vi.mock('@/app/api/settings/team/team-admin-access', () => ({
 }));
 vi.mock('@/lib/server/neon-db', () => ({
   getNeonDb: vi.fn(() => ({
-    query: (...args: unknown[]) => mockQuery(...args),
-    execute: (...args: unknown[]) => mockExecute(...args),
-    transaction: (...args: unknown[]) => mockTransaction(...args),
+    query: (...args: unknown[]) => mockNeonQuery(...args),
+    execute: (...args: unknown[]) => mockNeonExecute(...args),
+    transaction: (...args: unknown[]) => mockNeonTransaction(...args),
   })),
 }));
 
 vi.mock('@/lib/server/rls-db', () => ({
   getUserScopedDb: vi.fn(async () => ({
     db: {
-      query: (...args: unknown[]) => mockQuery(...args),
-      execute: (...args: unknown[]) => mockExecute(...args),
-      transaction: (...args: unknown[]) => mockTransaction(...args),
+      query: (...args: unknown[]) => mockRlsQuery(...args),
+      execute: (...args: unknown[]) => mockRlsExecute(...args),
+      transaction: (...args: unknown[]) => mockRlsTransaction(...args),
     },
     userId: 'org-a-admin',
     organizationId: null,
@@ -80,6 +95,10 @@ const MEMBERSHIPS: Record<string, Record<string, unknown>> = {
   },
 };
 
+const PROFILES: ProfileFixtureRow[] = [
+  { id: 'target-user', email: 'target@example.com', display_name: null, avatar_url: null },
+];
+
 function membershipLookup(sql: string, params?: unknown[]) {
   const text = sql.toLowerCase();
   const scopesOrg = /organization_id\s*=\s*\$1/.test(text);
@@ -94,14 +113,39 @@ function membershipLookup(sql: string, params?: unknown[]) {
 }
 
 function installDatabase() {
-  mockQuery.mockImplementation(async (sql: string, params?: unknown[]) => {
+  mockRlsQuery.mockImplementation(async (sql: string, params?: unknown[]) => {
     const text = String(sql);
+    const profileResult = rlsScopedProfileLookup(PROFILES, 'org-a-admin', text, params);
+    if (profileResult !== undefined) return profileResult;
     if (text.includes('pg_advisory_xact_lock')) return [];
-    if (text.includes('from public.profiles')) {
+    if (text.includes('from public.organization_members')) return membershipLookup(text, params);
+    if (text.includes('insert into public.organization_members')) {
       return [
-        { id: 'target-user', email: 'target@example.com', display_name: null, avatar_url: null },
+        {
+          organization_id: ORG_A,
+          user_id: 'target-user',
+          role: 'member',
+          provisioning_source: 'manual',
+          provisioned_at: null,
+          joined_at: '2026-08-01T00:00:00.000Z',
+          email: 'target@example.com',
+          display_name: null,
+          avatar_url: null,
+        },
       ];
     }
+    return [];
+  });
+  mockRlsExecute.mockResolvedValue(0);
+  mockRlsTransaction.mockImplementation(async (callback: (tx: unknown) => Promise<unknown>) =>
+    callback({
+      query: (...args: unknown[]) => mockRlsQuery(...args),
+      execute: (...args: unknown[]) => mockRlsExecute(...args),
+    }),
+  );
+
+  mockNeonQuery.mockImplementation(async (sql: string, params?: unknown[]) => {
+    const text = String(sql);
     if (text.includes('left join public.profiles')) {
       const organizationId = (params ?? [])[0];
       const scopesOrg = /om\.organization_id\s*=\s*\$1/i.test(text);
@@ -109,17 +153,12 @@ function installDatabase() {
         (row) => !scopesOrg || row['organization_id'] === organizationId,
       );
     }
+    const profileResult = bypassProfileLookup(PROFILES, text, params);
+    if (profileResult !== undefined) return profileResult;
     if (text.includes('from public.organization_members')) return membershipLookup(text, params);
-    if (text.includes('insert into public.organization_members')) return [];
     return [];
   });
-  mockExecute.mockResolvedValue(0);
-  mockTransaction.mockImplementation(async (callback: (tx: unknown) => Promise<unknown>) =>
-    callback({
-      query: (...args: unknown[]) => mockQuery(...args),
-      execute: (...args: unknown[]) => mockExecute(...args),
-    }),
-  );
+  mockNeonExecute.mockResolvedValue(0);
 }
 
 describe('settings/team cross-organization isolation', () => {
@@ -135,7 +174,7 @@ describe('settings/team cross-organization isolation', () => {
 
     expect(response.status).toBe(403);
     expect(
-      mockQuery.mock.calls.some(([sql]) => String(sql).includes('left join public.profiles')),
+      mockNeonQuery.mock.calls.some(([sql]) => String(sql).includes('left join public.profiles')),
     ).toBe(false);
   });
 
@@ -145,7 +184,7 @@ describe('settings/team cross-organization isolation', () => {
     );
 
     expect(response.status).toBe(200);
-    const listCall = mockQuery.mock.calls.find(([sql]) =>
+    const listCall = mockNeonQuery.mock.calls.find(([sql]) =>
       String(sql).includes('left join public.profiles'),
     );
     expect(String(listCall?.[0])).toContain('where om.organization_id = $1');
@@ -170,8 +209,34 @@ describe('settings/team cross-organization isolation', () => {
     );
 
     expect(response.status).toBe(403);
-    expect(mockQuery.mock.calls.some(([sql]) => String(sql).includes('insert into'))).toBe(false);
-    expect(mockExecute.mock.calls.some(([sql]) => String(sql).includes('insert into'))).toBe(false);
+    expect(mockRlsQuery.mock.calls.some(([sql]) => String(sql).includes('insert into'))).toBe(
+      false,
+    );
+    expect(mockRlsExecute.mock.calls.some(([sql]) => String(sql).includes('insert into'))).toBe(
+      false,
+    );
+  });
+
+  it('resolves the invitee by email through the bypass connection, not the caller-scoped one', async () => {
+    const response = await POST(
+      new Request('http://localhost:3000/api/settings/team', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          organizationId: ORG_A,
+          email: 'target@example.com',
+          role: 'member',
+        }),
+      }) as never,
+    );
+
+    expect(response.status).toBe(201);
+    expect(
+      mockRlsQuery.mock.calls.some(([sql]) => String(sql).includes('from public.profiles')),
+    ).toBe(false);
+    expect(
+      mockNeonQuery.mock.calls.some(([sql]) => String(sql).includes('from public.profiles')),
+    ).toBe(true);
   });
 
   it('refuses to remove a member of another organization via a forged memberId', async () => {
@@ -184,7 +249,9 @@ describe('settings/team cross-organization isolation', () => {
     );
 
     expect(response.status).toBe(403);
-    expect(mockExecute.mock.calls.some(([sql]) => String(sql).includes('delete from'))).toBe(false);
+    expect(mockRlsExecute.mock.calls.some(([sql]) => String(sql).includes('delete from'))).toBe(
+      false,
+    );
   });
 
   it('refuses to change the role of a member of another organization', async () => {
@@ -199,7 +266,7 @@ describe('settings/team cross-organization isolation', () => {
     );
 
     expect(response.status).toBe(403);
-    expect(mockExecute.mock.calls.some(([sql]) => String(sql).includes('update'))).toBe(false);
+    expect(mockRlsExecute.mock.calls.some(([sql]) => String(sql).includes('update'))).toBe(false);
   });
 
   it('carries both the organization id and the user id on every membership mutation', async () => {
@@ -222,7 +289,7 @@ describe('settings/team cross-organization isolation', () => {
       );
 
       expect(response.status).toBe(200);
-      const deleteCall = mockExecute.mock.calls.find(([sql]) =>
+      const deleteCall = mockRlsExecute.mock.calls.find(([sql]) =>
         String(sql).includes('delete from public.organization_members'),
       );
       expect(String(deleteCall?.[0])).toContain('organization_id = $1');

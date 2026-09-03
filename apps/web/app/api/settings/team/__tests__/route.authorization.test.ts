@@ -1,11 +1,26 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import {
+  bypassProfileLookup,
+  rlsScopedProfileLookup,
+  type ProfileFixtureRow,
+} from './rls-profile-lookup.fixture';
 
 vi.mock('server-only', () => ({}));
 
-const { mockQuery, mockExecute, mockTransaction } = vi.hoisted(() => ({
-  mockQuery: vi.fn(),
-  mockExecute: vi.fn(),
-  mockTransaction: vi.fn(),
+const {
+  mockRlsQuery,
+  mockRlsExecute,
+  mockRlsTransaction,
+  mockNeonQuery,
+  mockNeonExecute,
+  mockNeonTransaction,
+} = vi.hoisted(() => ({
+  mockRlsQuery: vi.fn(),
+  mockRlsExecute: vi.fn(),
+  mockRlsTransaction: vi.fn(),
+  mockNeonQuery: vi.fn(),
+  mockNeonExecute: vi.fn(),
+  mockNeonTransaction: vi.fn(),
 }));
 
 vi.mock('@/lib/rate-limit', () => ({
@@ -41,18 +56,18 @@ vi.mock('@/app/api/settings/team/team-admin-access', () => ({
 
 vi.mock('@/lib/server/neon-db', () => ({
   getNeonDb: vi.fn(() => ({
-    query: (...args: unknown[]) => mockQuery(...args),
-    execute: (...args: unknown[]) => mockExecute(...args),
-    transaction: (...args: unknown[]) => mockTransaction(...args),
+    query: (...args: unknown[]) => mockNeonQuery(...args),
+    execute: (...args: unknown[]) => mockNeonExecute(...args),
+    transaction: (...args: unknown[]) => mockNeonTransaction(...args),
   })),
 }));
 
 vi.mock('@/lib/server/rls-db', () => ({
   getUserScopedDb: vi.fn(async () => ({
     db: {
-      query: (...args: unknown[]) => mockQuery(...args),
-      execute: (...args: unknown[]) => mockExecute(...args),
-      transaction: (...args: unknown[]) => mockTransaction(...args),
+      query: (...args: unknown[]) => mockRlsQuery(...args),
+      execute: (...args: unknown[]) => mockRlsExecute(...args),
+      transaction: (...args: unknown[]) => mockRlsTransaction(...args),
     },
     userId: 'admin-user',
     organizationId: null,
@@ -81,11 +96,11 @@ function request(body: unknown) {
 describe('POST /api/settings/team authorization invariants', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockExecute.mockResolvedValue(0);
-    mockTransaction.mockImplementation(async (callback: (tx: unknown) => Promise<unknown>) =>
+    mockRlsExecute.mockResolvedValue(0);
+    mockRlsTransaction.mockImplementation(async (callback: (tx: unknown) => Promise<unknown>) =>
       callback({
-        query: (...args: unknown[]) => mockQuery(...args),
-        execute: (...args: unknown[]) => mockExecute(...args),
+        query: (...args: unknown[]) => mockRlsQuery(...args),
+        execute: (...args: unknown[]) => mockRlsExecute(...args),
       }),
     );
   });
@@ -100,24 +115,28 @@ describe('POST /api/settings/team authorization invariants', () => {
     );
 
     expect(response.status).toBe(400);
-    expect(mockTransaction).not.toHaveBeenCalled();
-    expect(mockQuery).not.toHaveBeenCalled();
-    expect(mockExecute).not.toHaveBeenCalled();
+    expect(mockRlsTransaction).not.toHaveBeenCalled();
+    expect(mockRlsQuery).not.toHaveBeenCalled();
+    expect(mockRlsExecute).not.toHaveBeenCalled();
+    expect(mockNeonQuery).not.toHaveBeenCalled();
   });
 
   it('refuses a caller who is not a member of the named organization', async () => {
-    mockQuery.mockResolvedValueOnce([]).mockResolvedValueOnce([]);
+    mockRlsQuery.mockResolvedValueOnce([]).mockResolvedValueOnce([]);
 
     const response = await POST(
       request({ organizationId: ORG_A, email: 'someone@example.com', role: 'member' }),
     );
 
     expect(response.status).toBe(403);
-    expect(mockQuery.mock.calls.some(([sql]) => String(sql).includes('insert into'))).toBe(false);
+    expect(mockRlsQuery.mock.calls.some(([sql]) => String(sql).includes('insert into'))).toBe(
+      false,
+    );
+    expect(mockNeonQuery).not.toHaveBeenCalled();
   });
 
   it('refuses a plain member who is not an admin', async () => {
-    mockQuery.mockResolvedValueOnce([]).mockResolvedValueOnce([
+    mockRlsQuery.mockResolvedValueOnce([]).mockResolvedValueOnce([
       {
         organization_id: ORG_A,
         user_id: 'admin-user',
@@ -133,49 +152,65 @@ describe('POST /api/settings/team authorization invariants', () => {
     );
 
     expect(response.status).toBe(403);
-    expect(mockQuery.mock.calls.some(([sql]) => String(sql).includes('insert into'))).toBe(false);
+    expect(mockRlsQuery.mock.calls.some(([sql]) => String(sql).includes('insert into'))).toBe(
+      false,
+    );
+    expect(mockNeonQuery).not.toHaveBeenCalled();
   });
 
   it('does not read a member count before inserting, because the ceiling is a DB constraint', async () => {
-    mockQuery
-      .mockResolvedValueOnce([])
-      .mockResolvedValueOnce([
-        {
-          organization_id: ORG_A,
-          user_id: 'admin-user',
-          role: 'admin',
-          provisioning_source: 'manual',
-          provisioned_at: null,
-          joined_at: '2026-07-23T00:00:00.000Z',
-        },
-      ])
-      .mockResolvedValueOnce([
-        { id: 'target-user', email: 'someone@example.com', display_name: null, avatar_url: null },
-      ])
-      .mockResolvedValueOnce([])
-      .mockResolvedValueOnce([
-        {
-          organization_id: ORG_A,
-          user_id: 'target-user',
-          role: 'member',
-          provisioning_source: 'manual',
-          provisioned_at: null,
-          joined_at: '2026-08-05T00:00:00.000Z',
-          email: 'someone@example.com',
-          display_name: null,
-          avatar_url: null,
-        },
-      ]);
+    const adminMembership = {
+      organization_id: ORG_A,
+      user_id: 'admin-user',
+      role: 'admin',
+      provisioning_source: 'manual',
+      provisioned_at: null,
+      joined_at: '2026-07-23T00:00:00.000Z',
+    };
+    const insertedMembership = {
+      organization_id: ORG_A,
+      user_id: 'target-user',
+      role: 'member',
+      provisioning_source: 'manual',
+      provisioned_at: null,
+      joined_at: '2026-08-05T00:00:00.000Z',
+      email: 'someone@example.com',
+      display_name: null,
+      avatar_url: null,
+    };
+    const profiles: ProfileFixtureRow[] = [
+      { id: 'target-user', email: 'someone@example.com', display_name: null, avatar_url: null },
+    ];
+
+    mockRlsQuery.mockImplementation(async (sql: string, params?: unknown[]) => {
+      const text = String(sql);
+      const profileResult = rlsScopedProfileLookup(profiles, 'admin-user', text, params);
+      if (profileResult !== undefined) return profileResult;
+      if (text.includes('pg_advisory_xact_lock')) return [];
+      if (text.includes('insert into public.organization_members')) return [insertedMembership];
+      if (text.includes('from public.organization_members')) {
+        return (params as unknown[] | undefined)?.[1] === 'admin-user' ? [adminMembership] : [];
+      }
+      return [];
+    });
+    mockNeonQuery.mockImplementation(async (sql: string, params?: unknown[]) => {
+      const profileResult = bypassProfileLookup(profiles, String(sql), params);
+      return profileResult !== undefined ? profileResult : [];
+    });
 
     const response = await POST(
       request({ organizationId: ORG_A, email: 'someone@example.com', role: 'member' }),
     );
 
     expect(response.status).toBe(201);
-    const sqls = mockQuery.mock.calls.map(([sql]) => String(sql).toLowerCase());
+    const rlsSqls = mockRlsQuery.mock.calls.map(([sql]) => String(sql).toLowerCase());
     expect(
-      sqls.some((sql) => sql.includes('count(*)') && sql.includes('organization_members')),
+      rlsSqls.some((sql) => sql.includes('count(*)') && sql.includes('organization_members')),
     ).toBe(false);
+    expect(rlsSqls.some((sql) => sql.includes('from public.profiles'))).toBe(false);
+    expect(
+      mockNeonQuery.mock.calls.some(([sql]) => String(sql).includes('from public.profiles')),
+    ).toBe(true);
   });
 });
 
@@ -188,6 +223,6 @@ describe('GET /api/settings/team authorization invariants', () => {
     const response = await GET(listRequest("' or '1'='1"));
 
     expect(response.status).toBe(400);
-    expect(mockQuery).not.toHaveBeenCalled();
+    expect(mockNeonQuery).not.toHaveBeenCalled();
   });
 });
