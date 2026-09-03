@@ -14,7 +14,7 @@ REPO_ROOT="$(cd "${SCRIPT_DIR}/../../.." && pwd)"
 cd "${REPO_ROOT}"
 
 echo "Building Next.js..."
-pnpm --filter @agiworkforce/web build:next-only
+NODE_OPTIONS="${NODE_OPTIONS:-} --max-old-space-size=6144" pnpm --filter @agiworkforce/web build:next-only
 node apps/web/scripts/verify-built-css.mjs
 
 echo "Build complete!"

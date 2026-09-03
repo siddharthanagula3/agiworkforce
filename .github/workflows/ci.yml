@@ -1039,6 +1039,13 @@ jobs:
         run: pnpm db:migrate -- apply --target ci
 
       - name: Build Web app
+        # next build's own "Running TypeScript..." phase has hit
+        # "Ineffective mark-compacts near heap limit" under Node's default
+        # old-space cap here, independent of the js-verify job's tsc --noEmit.
+        # 6 GB of old space stays under this runner's memory while covering
+        # the ~3 GB the type-check phase needs.
+        env:
+          NODE_OPTIONS: --max-old-space-size=6144
         run: pnpm --filter @agiworkforce/web build
 
       - name: Start Web app
