@@ -192,7 +192,9 @@ describe('runToolLoop — the provider stream is clamped to the loop budget too'
       }),
     );
 
-    expect(output).toContain("ran past this turn's remaining time budget (5s)");
+    expect(output).toContain('The model took too long to respond');
+    expect(output).toContain('"code":"provider_timeout"');
+    expect(output).not.toContain("ran past this turn's remaining time budget");
     expect(output).toContain('[DONE]');
     expect(mockBuildToolLoopStream).toHaveBeenCalledTimes(1);
   });
@@ -211,9 +213,40 @@ describe('runToolLoop — the provider stream is clamped to the loop budget too'
       }),
     );
 
-    expect(output).toContain(
-      `ran past this turn's remaining time budget (${CHAT_TOOL_LOOP_BUDGET_MS / 1000}s)`,
+    expect(output).toContain('The model took too long to respond');
+    expect(output).toContain('"code":"provider_timeout"');
+  });
+});
+
+describe('runToolLoop — a provider stream deadline maps to plain user copy', () => {
+  beforeEach(() => {
+    mockBuildToolLoopStream.mockReset();
+    vi.useFakeTimers();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('streams the mapped api_timeout copy and code, not the raw deadline message', async () => {
+    mockBuildToolLoopStream.mockResolvedValue(new ReadableStream({ start() {} }));
+
+    const base = 5_000_000;
+    const now = (): number => base;
+
+    const output = await drainWithFakeTimers(
+      runToolLoop(makeProcessed(), {
+        approvalMode: 'auto',
+        maxDurationMs: CHAT_TOOL_LOOP_BUDGET_MS,
+        now,
+      }),
     );
+
+    expect(output).toContain(
+      'The model took too long to respond. Try again, or pick a faster model from the model picker.',
+    );
+    expect(output).toContain('"code":"provider_timeout"');
+    expect(output).not.toContain("ran past this turn's remaining time budget");
   });
 });
 

@@ -47,7 +47,7 @@
 import 'server-only';
 
 import { logger } from '@/lib/logger';
-import { classifyError } from '@agiworkforce/provider-runtime';
+import { classifyError, type ClassifiedError } from '@agiworkforce/provider-runtime';
 import { toolStatusPhrase } from '@agiworkforce/provider-protocol';
 import type {
   AgentEventEnvelope,
@@ -2850,19 +2850,28 @@ export async function* runToolLoop(
       } catch (err) {
         if (options.shouldPropagateExecutionError?.(err)) throw err;
         const msg = err instanceof Error ? err.message : String(err);
-        const classified =
-          err instanceof ProviderStreamDeadlineError ? undefined : classifyError(err);
-        const mappedUpstream = classified
-          ? mapClassifiedUpstreamError(classified, servingProcessed.provider)
-          : undefined;
+        // The deadline error is raised by this file, not a provider SDK, so
+        // classifyError's message/name matchers cannot see it -- it must be
+        // classified explicitly rather than falling through the mapper.
+        const classified: ClassifiedError =
+          err instanceof ProviderStreamDeadlineError
+            ? {
+                category: 'api_timeout',
+                code: 'api_timeout',
+                retryable: true,
+                fallbackable: false,
+                message: msg,
+              }
+            : classifyError(err);
+        const mappedUpstream = mapClassifiedUpstreamError(classified, servingProcessed.provider);
         const streamError = {
-          message: mappedUpstream ? mappedUpstream.message : msg,
+          message: mappedUpstream.message,
           // The provider's own error family (e.g. provider_quota_exhausted,
           // provider_overloaded), not the raw HTTP status -- the client needs
           // this to tell a spent quota apart from a plain rate limit and offer
           // the right recovery (switch model vs. wait out a retry-after).
-          ...(mappedUpstream ? { code: mappedUpstream.code } : {}),
-          retryable: classified?.retryable ?? true,
+          code: mappedUpstream.code,
+          retryable: classified.retryable,
         };
         logger.error(
           {
