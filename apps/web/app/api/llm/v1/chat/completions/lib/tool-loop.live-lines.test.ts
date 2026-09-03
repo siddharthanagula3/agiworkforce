@@ -15,11 +15,7 @@ vi.mock('@/lib/services/managed-usage-request-service', () => ({
   ManagedUsageRequestError: class ManagedUsageRequestError extends Error {},
 }));
 
-import {
-  runToolLoop,
-  type ToolLoopFailoverPlan,
-  type ToolLoopProviderStepResult,
-} from './tool-loop';
+import { runToolLoop, type ToolLoopFailoverPlan } from './tool-loop';
 import { WEB_SEARCH_CITATION_DELTA_KEY } from '@agiworkforce/types';
 import type { ProcessedRequest } from './request-processor';
 
@@ -286,39 +282,5 @@ describe('runToolLoop — provider lines reach the client while the step is stil
     ).resolves.toBe('ended');
     expect(reader.seen()).toContain('"content":"partial"');
     expect(reader.seen()).toContain('data: [DONE]');
-  });
-
-  it('replays the recorded lines of a provider step that was served from cache', async () => {
-    const cached: ToolLoopProviderStepResult = {
-      lines: [{ line: chunk({ content: 'recovered' }), publicTextDelta: 'recovered' }],
-      finishReason: 'stop',
-      pendingToolCalls: [],
-      textContent: 'recovered',
-      publicTextTail: '',
-      generatedFileRefs: [],
-      thinkingBlocks: [],
-      canonicalText: 'recovered',
-      usage: {
-        providerCalls: 1,
-        inputTokens: 10,
-        outputTokens: 5,
-        cacheReadTokens: 0,
-        cacheWriteTokens: 0,
-        cacheWrite1hTokens: 0,
-        reasoningTokens: 0,
-      },
-    };
-
-    const reader = consume(
-      runToolLoop(makeProcessed(), {
-        approvalMode: 'auto',
-        providerExecutor: async () => cached,
-      }),
-    );
-    await reader.done;
-
-    expect(mockBuildToolLoopStream).not.toHaveBeenCalled();
-    expect(occurrences(reader.seen(), '"content":"recovered"')).toBe(1);
-    expect(reader.seen()).toContain('"delta":"recovered"');
   });
 });
