@@ -28,6 +28,24 @@ import { useOverlayDialog, useOverlayLayout } from '../../hooks/use-overlay-dial
 // Source row
 // ============================================================================
 
+const TITLE_FALLBACK_MAX_LENGTH = 60;
+
+function pathTrimmedUrl(url: string): string {
+  try {
+    const parsed = new URL(url);
+    const host = parsed.hostname.replace(/^www\./, '');
+    const path = parsed.pathname.replace(/\/+$/, '');
+    const combined = path && path !== '/' ? `${host}${path}` : host;
+    return combined.length > TITLE_FALLBACK_MAX_LENGTH
+      ? `${combined.slice(0, TITLE_FALLBACK_MAX_LENGTH - 1)}…`
+      : combined;
+  } catch {
+    return url.length > TITLE_FALLBACK_MAX_LENGTH
+      ? `${url.slice(0, TITLE_FALLBACK_MAX_LENGTH - 1)}…`
+      : url;
+  }
+}
+
 function SourceRow({ source, index }: { source: ResearchSource; index: number }) {
   const [imgError, setImgError] = useState(false);
 
@@ -38,6 +56,9 @@ function SourceRow({ source, index }: { source: ResearchSource; index: number })
   } catch {
     // keep raw
   }
+
+  const displayTitle =
+    source.title && source.title !== source.url ? source.title : pathTrimmedUrl(source.url);
 
   // Fall back to Google's favicon service when no favicon was provided
   const faviconSrc =
@@ -86,7 +107,7 @@ function SourceRow({ source, index }: { source: ResearchSource; index: number })
       {/* Text content */}
       <div className="min-w-0 flex-1 space-y-0.5">
         <h4 className="line-clamp-2 text-[13px] font-medium leading-snug text-foreground transition-colors group-hover:text-primary">
-          {source.title || displayHost}
+          {displayTitle}
         </h4>
         <p className="truncate text-[12px] text-muted-foreground">{displayHost}</p>
         {source.snippet && (
