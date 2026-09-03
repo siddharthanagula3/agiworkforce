@@ -99,6 +99,7 @@ const ManagedBillingSchema = z
     quotaFeature: z.string().min(1).optional(),
     provider: z.string().min(1).optional(),
     model: z.string().min(1).optional(),
+    routeId: z.string().min(1).nullable().optional(),
   })
   .strict();
 
@@ -130,6 +131,17 @@ export type SerializedManagedUsageReservation = Omit<ManagedUsageRequestReservat
   kind: 'managed';
 };
 export type SerializedFreeTrialReservation = FreeTrialReservation;
+
+type SameKeys<A, B> = [keyof A] extends [keyof B]
+  ? [keyof B] extends [keyof A]
+    ? true
+    : false
+  : false;
+const managedBillingSchemaCoversReservation: SameKeys<
+  z.infer<typeof ManagedBillingSchema>,
+  SerializedManagedUsageReservation
+> = true;
+void managedBillingSchemaCoversReservation;
 
 /** Whichever reservation paid for this turn, carried across the invocation boundary. */
 export type CloudAgentWorkflowBilling =
