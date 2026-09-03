@@ -63,7 +63,14 @@ import { buildThinkingConfig, resolveRequestEffort } from './request-processor';
  *
  *  `quota_exhausted` IS eligible: that route's window is spent, but a different
  *  route with its own quota is a legitimate answer. What must never appear here
- *  is `billing_exhausted` — see `NEVER_ROTATE_CATEGORIES`. */
+ *  is `billing_exhausted` — see `NEVER_ROTATE_CATEGORIES`.
+ *
+ *  `empty_response` is eligible for a different reason than the rest: the
+ *  route did not fail, it answered with nothing. A different route may
+ *  simply produce content where this one did not. The tool loop is the only
+ *  caller that ever raises it (via `EmptyProviderResponseError`), and it
+ *  does so at most once per turn — see `tool-loop.ts`'s
+ *  `emptyResponseRotationUsed`. */
 const FAILOVER_ELIGIBLE_CATEGORIES: ReadonlySet<string> = new Set([
   'connection',
   'server_error',
@@ -72,6 +79,7 @@ const FAILOVER_ELIGIBLE_CATEGORIES: ReadonlySet<string> = new Set([
   'api_timeout',
   'rate_limit',
   'quota_exhausted',
+  'empty_response',
 ]);
 
 /**
@@ -86,9 +94,15 @@ const FAILOVER_ELIGIBLE_CATEGORIES: ReadonlySet<string> = new Set([
  * problem, and hiding it by spending elsewhere is the worst possible response.
  *
  * `safety` is here for a different reason: a policy refusal must never be
- * shopped around providers until one accepts the content.
+ * shopped around providers until one accepts the content. `content_blocked`
+ * is the same refusal observed through a clean stream instead of a thrown
+ * error, and must never rotate for the same reason.
  */
-const NEVER_ROTATE_CATEGORIES: ReadonlySet<string> = new Set(['billing_exhausted', 'safety']);
+const NEVER_ROTATE_CATEGORIES: ReadonlySet<string> = new Set([
+  'billing_exhausted',
+  'safety',
+  'content_blocked',
+]);
 
 const REQUEST_REJECTION_CATEGORY = 'client_error';
 const REQUEST_REJECTION_STATUS = 400;
