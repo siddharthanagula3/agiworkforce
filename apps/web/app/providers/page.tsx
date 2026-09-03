@@ -51,11 +51,15 @@ function formatPrice(usd: number): string {
 
 function providerRowValue(row: ProviderRow): string {
   const model = row.defaultModel ? `Default: ${row.defaultModel}.` : 'Lists its own models.';
-  const count = row.modelCount > 0 ? `${row.modelCount} catalog models.` : 'No catalog models.';
-  const price =
-    row.inputPerMillion > 0 || row.outputPerMillion > 0
-      ? `Base ${formatPrice(row.inputPerMillion)}/MTok in, ${formatPrice(row.outputPerMillion)}/MTok out.`
-      : '';
+  const hasPrice = row.inputPerMillion > 0 || row.outputPerMillion > 0;
+  const priceText = `${formatPrice(row.inputPerMillion)}/MTok in, ${formatPrice(row.outputPerMillion)}/MTok out.`;
+  const count =
+    row.modelCount > 0
+      ? `${row.modelCount} catalog models.`
+      : hasPrice
+        ? `No catalog models yet; provider lists ${priceText}`
+        : 'No catalog models.';
+  const price = row.modelCount > 0 && hasPrice ? `Base ${priceText}` : '';
   return [model, count, price].filter(Boolean).join(' ');
 }
 
