@@ -5,12 +5,13 @@ import { MarketingFooter } from '@/features/marketing/components/MarketingFooter
 import {
   Button,
   ButtonRow,
+  Eyebrow,
   Ledger,
   Prose,
   Section,
   Stack,
 } from '@/features/marketing/components/system';
-import { PageHero } from '@/features/marketing/components/pages/surfaces/shared';
+import { FactLine, PageHero } from '@/features/marketing/components/pages/surfaces/shared';
 import { CATALOG_AS_OF, MARKETING, SURFACE_STATUS } from '../../lib/marketing-constants';
 import {
   FOUNDER_NAME,
@@ -87,6 +88,18 @@ const NOT_CLAIMED: string[] = [
   'No general availability claim for managed cloud.',
 ];
 
+const NESTED_SEPARATOR = ' · ';
+const FACT_SEPARATOR = ', ';
+
+const HERO_FACTS = [
+  `${MARKETING.models.count} models`,
+  `${MARKETING.providers.count} provider integrations`,
+  `Web ${SURFACE_STATUS.web.toLowerCase()}`,
+  `CLI ${SURFACE_STATUS.cli.toLowerCase()}`,
+  `Desktop ${SURFACE_STATUS.desktop.replace(NESTED_SEPARATOR, FACT_SEPARATOR)}`,
+  `As of ${CATALOG_AS_OF}`,
+];
+
 export default function PressPage() {
   return (
     <div data-design="agi" className="agi-ds-page">
@@ -102,6 +115,8 @@ export default function PressPage() {
             { href: '/trust', label: 'See the trust posture', variant: 'secondary' },
           ]}
         />
+
+        <FactLine facts={HERO_FACTS} />
 
         <Section id="boilerplate" labelledBy="agi-press-boiler-title" rule>
           <Stack gap="loose">
@@ -167,7 +182,14 @@ export default function PressPage() {
             <h2 className="agi-ds-h2" id="agi-press-company-title">
               Who builds it.
             </h2>
-            <Ledger caption="Company facts" rows={COMPANY_FACTS} />
+            <div className="agi-ds-grid-2">
+              {COMPANY_FACTS.map((fact) => (
+                <div key={fact.label}>
+                  <Eyebrow>{fact.label}</Eyebrow>
+                  <Prose size="sm">{fact.value}</Prose>
+                </div>
+              ))}
+            </div>
           </Stack>
         </Section>
 
@@ -182,10 +204,13 @@ export default function PressPage() {
                 list, it did not come from us.
               </Prose>
             </div>
-            <Ledger
-              caption="Not claimed"
-              rows={NOT_CLAIMED.map((item, index) => ({ label: `${index + 1}`, value: item }))}
-            />
+            <ul aria-label="Not claimed" className="list-disc ps-5">
+              {NOT_CLAIMED.map((item) => (
+                <li className="agi-ds-prose" data-size="sm" key={item}>
+                  {item}
+                </li>
+              ))}
+            </ul>
           </Stack>
         </Section>
 
