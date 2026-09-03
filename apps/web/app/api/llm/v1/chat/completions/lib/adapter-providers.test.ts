@@ -6,6 +6,7 @@ import { describe, expect, it, vi } from 'vitest';
 vi.mock('server-only', () => ({}));
 
 import { ADAPTER_PROVIDERS } from './adapter-providers';
+import { dispatchProviderForRoute } from '@/lib/services/aggregator-routing';
 
 const LEVELS_FROM_THIS_FILE_TO_REPO_ROOT = 9;
 const MANAGED_CLOUD_TRUST_MODE = 'managed_cloud';
@@ -77,7 +78,10 @@ describe('ADAPTER_PROVIDERS registry coverage', () => {
     const uncoveredProviders = Object.entries(registry.routes)
       .filter(([, route]) => route.trustModes.includes(MANAGED_CLOUD_TRUST_MODE))
       .filter(([, route]) => isChatDispatchRoute(route, registry.harnesses))
-      .map(([routeId, route]) => ({ routeId, provider: route.provider }))
+      .map(([routeId, route]) => ({
+        routeId,
+        provider: dispatchProviderForRoute(routeId) ?? route.provider,
+      }))
       .filter(({ provider }) => !ADAPTER_PROVIDERS[provider]);
 
     expect(uncoveredProviders).toEqual([]);
@@ -93,7 +97,10 @@ describe('ADAPTER_PROVIDERS registry coverage', () => {
     expect(protocolRoutes.length).toBeGreaterThan(0);
     expect(
       protocolRoutes
-        .map(([routeId, route]) => ({ routeId, provider: route.provider }))
+        .map(([routeId, route]) => ({
+          routeId,
+          provider: dispatchProviderForRoute(routeId) ?? route.provider,
+        }))
         .filter(({ provider }) => !ADAPTER_PROVIDERS[provider]),
     ).toEqual([]);
   });
