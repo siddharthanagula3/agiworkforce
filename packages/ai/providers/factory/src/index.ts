@@ -19,7 +19,12 @@ import {
 } from '@agiworkforce/providers-moonshot';
 import { createNvidiaAdapter, type NvidiaAdapterConfig } from '@agiworkforce/providers-nvidia';
 import { createOllamaAdapter, type OllamaAdapterConfig } from '@agiworkforce/providers-ollama';
-import { createOpenAIAdapter, type OpenAIAdapterConfig } from '@agiworkforce/providers-openai';
+import {
+  createOpenAIAdapter,
+  createOpenAICompatAdapter,
+  type OpenAIAdapterConfig,
+  type OpenAICompatAdapterConfig,
+} from '@agiworkforce/providers-openai';
 import {
   createOpenRouterAdapter,
   type OpenRouterAdapterConfig,
@@ -39,9 +44,24 @@ import {
 } from '@agiworkforce/providers-workers-ai';
 import { createXAIAdapter, type XAIAdapterConfig } from '@agiworkforce/providers-xai';
 import { createZhipuAdapter, type ZhipuAdapterConfig } from '@agiworkforce/providers-zhipu';
-import type { ProviderAdapter } from '@agiworkforce/types';
+import type { ModelInfo, Provider, ProviderAdapter } from '@agiworkforce/types';
+
+/**
+ * A vendor described only by protocol plus configuration.
+ *
+ * The registry can name an OpenAI-shaped endpoint, its base URL and its key
+ * env var without anyone writing an adapter package for it, so the identity
+ * the compat adapter needs comes from the caller rather than from a module.
+ */
+export interface OpenAICompatRouteConfig extends OpenAICompatAdapterConfig {
+  providerId: string;
+  label: string;
+  apiKeyEnvVar: string;
+  catalog?: readonly ModelInfo[];
+}
 
 export interface ProviderAdapterConfigMap {
+  openai_compat: OpenAICompatRouteConfig;
   anthropic: AnthropicAdapterConfig;
   deepseek: DeepSeekAdapterConfig;
   google: GoogleAdapterConfig;
@@ -64,6 +84,7 @@ export interface ProviderAdapterConfigMap {
 export type ProviderAdapterId = keyof ProviderAdapterConfigMap;
 
 export const PROVIDER_ADAPTER_IDS = [
+  'openai_compat',
   'anthropic',
   'deepseek',
   'google',
@@ -89,7 +110,24 @@ type ProviderAdapterFactories = {
   ) => ProviderAdapter;
 };
 
+const EMPTY_COMPAT_CATALOG: readonly ModelInfo[] = [];
+
+function createOpenAICompatRouteAdapter(config: OpenAICompatRouteConfig): ProviderAdapter {
+  const { providerId, label, apiKeyEnvVar, catalog, ...adapterConfig } = config;
+  return createOpenAICompatAdapter(
+    {
+      id: providerId as Provider,
+      label,
+      apiKeyEnvVar,
+      apiKeyLabel: label,
+      catalog: catalog ?? EMPTY_COMPAT_CATALOG,
+    },
+    adapterConfig,
+  );
+}
+
 const PROVIDER_ADAPTER_FACTORIES: ProviderAdapterFactories = {
+  openai_compat: createOpenAICompatRouteAdapter,
   anthropic: createAnthropicAdapter,
   deepseek: createDeepSeekAdapter,
   google: createGoogleAdapter,

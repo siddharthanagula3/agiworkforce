@@ -1,7 +1,39 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { getProviderDefaultModel, requireProviderDefaultModel } from '@agiworkforce/types';
+import type { ProtocolRoute } from '@agiworkforce/types';
 
 vi.mock('server-only', () => ({}));
+
+const OPENAI_CHAT_FIXTURE_BASE_URL = 'https://openrouter.ai/api/v1';
+const ANTHROPIC_DIALECT_FIXTURE_BASE_URL = 'https://api.deepseek.com/anthropic';
+const OFF_ALLOWLIST_FIXTURE_BASE_URL = 'https://reseller.invalid/v1';
+const FIXTURE_KEY_ENV = 'AGI_FIXTURE_RESELLER_API_KEY';
+
+function protocolRouteFixture(overrides: Partial<ProtocolRoute>): ProtocolRoute {
+  return {
+    routeId: 'fixture_reseller/fixture-model',
+    modelKey: 'fixture-model',
+    provider: 'fixture_reseller',
+    providerModelId: 'fixture-upstream-model',
+    harnessId: 'fixture-reseller/chat-completions',
+    apiFamily: 'chat_completions',
+    protocol: 'openai_chat',
+    baseUrl: OPENAI_CHAT_FIXTURE_BASE_URL,
+    apiKeyEnv: FIXTURE_KEY_ENV,
+    hostPolicy: 'allowlist_only',
+    trustModes: ['managed_cloud'],
+    cacheClass: 'no_provider_cache',
+    commercialStatus: 'experimental_only',
+    ...overrides,
+  };
+}
+
+const { protocolRoutes } = vi.hoisted(() => ({ protocolRoutes: [] as ProtocolRoute[] }));
+
+vi.mock('@agiworkforce/types', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@agiworkforce/types')>()),
+  listProtocolRoutes: () => protocolRoutes,
+}));
 
 const createProviderAdapter = vi.fn((providerId: string, config: unknown) => ({
   providerId,
@@ -22,6 +54,11 @@ vi.mock('@shared/utils/env', () => ({
 vi.mock('@/lib/logger', () => ({
   logger: { info: (...args: unknown[]) => loggerInfo(...args), warn: vi.fn() },
 }));
+
+async function loadService(): Promise<typeof import('./provider-adapter-service')> {
+  vi.resetModules();
+  return import('./provider-adapter-service');
+}
 
 import { buildServerProviderAdapter, resolveProviderFromModel } from './provider-adapter-service';
 
@@ -180,5 +217,101 @@ describe('free-lane gateway credentials', () => {
     expect(createProviderAdapter).toHaveBeenCalledWith('vercel_gateway', {
       apiKey: 'oidc-token',
     });
+  });
+});
+
+describe('buildProtocolRouteAdapter', () => {
+  beforeEach(() => {
+    createProviderAdapter.mockClear();
+    getOptionalEnv.mockReset();
+    protocolRoutes.length = 0;
+  });
+
+  it('builds an OpenAI-compatible adapter from the harness base url and key env', async () => {
+    protocolRoutes.push(protocolRouteFixture({}));
+    getOptionalEnv.mockImplementation((key) =>
+      key === FIXTURE_KEY_ENV ? 'fixture-reseller-key' : undefined,
+    );
+
+    const { buildProtocolRouteAdapter } = await loadService();
+    buildProtocolRouteAdapter('fixture_reseller');
+
+    expect(createProviderAdapter).toHaveBeenCalledWith('openai_compat', {
+      apiKey: 'fixture-reseller-key',
+      baseUrl: OPENAI_CHAT_FIXTURE_BASE_URL,
+      providerId: 'fixture_reseller',
+      label: 'fixture_reseller',
+      apiKeyEnvVar: FIXTURE_KEY_ENV,
+      skipDiscovery: true,
+    });
+  });
+
+  it('builds the Anthropic adapter with prompt-cache policy for an anthropic_messages harness', async () => {
+    protocolRoutes.push(
+      protocolRouteFixture({
+        provider: 'fixture_vendor_anthropic',
+        harnessId: 'fixture-vendor-anthropic/messages',
+        apiFamily: 'messages',
+        protocol: 'anthropic_messages',
+        baseUrl: ANTHROPIC_DIALECT_FIXTURE_BASE_URL,
+        cacheClass: 'provider_explicit_prompt_cache',
+      }),
+    );
+    getOptionalEnv.mockImplementation((key) =>
+      key === FIXTURE_KEY_ENV ? 'fixture-vendor-key' : undefined,
+    );
+
+    const { buildProtocolRouteAdapter } = await loadService();
+    buildProtocolRouteAdapter('fixture_vendor_anthropic', {
+      anthropicCache: { enableCacheControl: true, cacheRetention: 'long' },
+    });
+
+    expect(createProviderAdapter).toHaveBeenCalledWith('anthropic', {
+      apiKey: 'fixture-vendor-key',
+      baseUrl: ANTHROPIC_DIALECT_FIXTURE_BASE_URL,
+      enableCacheControl: true,
+      cacheRetention: 'long',
+    });
+  });
+
+  it('refuses a harness whose base url host the egress allowlist does not admit', async () => {
+    protocolRoutes.push(protocolRouteFixture({ baseUrl: OFF_ALLOWLIST_FIXTURE_BASE_URL }));
+    getOptionalEnv.mockImplementation((key) =>
+      key === FIXTURE_KEY_ENV ? 'fixture-reseller-key' : undefined,
+    );
+
+    const { buildProtocolRouteAdapter } = await loadService();
+
+    expect(() => buildProtocolRouteAdapter('fixture_reseller')).toThrow(/egress allowlist/);
+    expect(createProviderAdapter).not.toHaveBeenCalled();
+  });
+
+  it('fails closed when the harness key env var is unset', async () => {
+    protocolRoutes.push(protocolRouteFixture({}));
+    getOptionalEnv.mockReturnValue(undefined);
+
+    const { buildProtocolRouteAdapter } = await loadService();
+
+    expect(() => buildProtocolRouteAdapter('fixture_reseller')).toThrow(FIXTURE_KEY_ENV);
+    expect(createProviderAdapter).not.toHaveBeenCalled();
+  });
+
+  it('rejects a provider the registry does not describe by protocol', async () => {
+    const { buildProtocolRouteAdapter } = await loadService();
+
+    expect(() => buildProtocolRouteAdapter('anthropic')).toThrow(/no protocol route/);
+  });
+
+  it('refuses two protocol harnesses behind one provider id', async () => {
+    protocolRoutes.push(
+      protocolRouteFixture({}),
+      protocolRouteFixture({
+        harnessId: 'fixture-reseller/messages',
+        protocol: 'anthropic_messages',
+        baseUrl: ANTHROPIC_DIALECT_FIXTURE_BASE_URL,
+      }),
+    );
+
+    await expect(loadService()).rejects.toThrow(/two protocol harnesses/);
   });
 });

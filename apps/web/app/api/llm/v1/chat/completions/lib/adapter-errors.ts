@@ -65,7 +65,14 @@ export function toOpenAIUpstreamError(chunk: Extract<StreamChunk, { type: 'error
   return providerUpstreamError('OpenAI', chunk);
 }
 
-function makeUpstreamErrorMapper(
+/**
+ * Error mapper for a provider with no bespoke adapter package.
+ *
+ * A route described only by protocol and configuration still has to attribute
+ * its failures to the vendor that served the request, so the label is the
+ * route's own provider id.
+ */
+export function makeUpstreamErrorMapper(
   label: string,
 ): (chunk: Extract<StreamChunk, { type: 'error' }>) => Error {
   return (chunk) => providerUpstreamError(label, chunk);
