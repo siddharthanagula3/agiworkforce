@@ -36,6 +36,7 @@ export default function AiChatFeaturePage() {
           visual={
             <ProductFrame
               src="/product/composer-dark.png"
+              srcLight="/product/composer-light.png"
               alt="The AGI composer with attachments, dictation, and the model picker"
               width={1472}
               height={254}

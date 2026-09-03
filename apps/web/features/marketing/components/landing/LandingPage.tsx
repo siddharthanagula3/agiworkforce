@@ -185,6 +185,7 @@ export function LandingPage() {
                 </div>
                 <ProductFrame
                   src={WEB_SHOT.dark}
+                  srcLight={WEB_SHOT.light}
                   alt={WEB_SHOT.alt}
                   width={WEB_SHOT.width}
                   height={WEB_SHOT.height}
@@ -205,6 +206,7 @@ export function LandingPage() {
                 <div className="agi-lp-phone">
                   <ProductFrame
                     src={MOBILE_SHOT.dark}
+                    srcLight={MOBILE_SHOT.light}
                     alt={MOBILE_SHOT.alt}
                     width={MOBILE_SHOT.width}
                     height={MOBILE_SHOT.height}
@@ -247,6 +249,7 @@ export function LandingPage() {
                   <MotionReveal>
                     <ProductFrame
                       src={moment.image.dark}
+                      srcLight={moment.image.light}
                       alt={moment.image.alt}
                       width={moment.image.width}
                       height={moment.image.height}
@@ -296,9 +299,6 @@ export function LandingPage() {
                 </Button>
               </ButtonRow>
             </div>
-            <span className="agi-lp-watermark" aria-hidden="true">
-              AGI
-            </span>
           </div>
         </section>
       </main>
