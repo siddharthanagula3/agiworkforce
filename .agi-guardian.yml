@@ -1,6 +1,6 @@
 # AGI Guardian repository configuration.
 # Schema: packages/guardian/core/src/config.ts (GuardianConfigSchema).
-# Invalid values fail closed to shadow-mode defaults — see parseGuardianConfig.
+# Invalid values fail closed to shadow-mode defaults, see parseGuardianConfig.
 version: 1
 
 # shadow: findings publish as neutral check runs and advisory comments only.
