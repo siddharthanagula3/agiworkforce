@@ -8,6 +8,7 @@ import {
   storeMedia,
 } from '@/lib/server/media-storage';
 import { insertMediaAsset, type MediaKind } from '@/lib/server/media-assets';
+import { getNeonDb } from '@/lib/server/neon-db';
 import { logger } from '@/lib/logger';
 
 export const MAX_GENERATED_FILE_BYTES = 20 * 1024 * 1024;
@@ -120,19 +121,22 @@ function mediaKindFor(mime: string): MediaKind {
   return 'file';
 }
 
-export async function persistGeneratedFileBytes(params: {
-  userId: string;
-  organizationId: string | null;
-  data: Buffer;
-  mimeType: string;
-  filename: string;
-  provider: string;
-  origin: string;
-  model?: string;
-  prompt?: string;
-  conversationId?: string;
-  extraMetadata?: Record<string, unknown>;
-}): Promise<PersistGeneratedFileOutcome> {
+export async function persistGeneratedFileBytes(
+  params: {
+    userId: string;
+    organizationId: string | null;
+    data: Buffer;
+    mimeType: string;
+    filename: string;
+    provider: string;
+    origin: string;
+    model?: string;
+    prompt?: string;
+    conversationId?: string;
+    extraMetadata?: Record<string, unknown>;
+  },
+  db: Parameters<typeof insertMediaAsset>[1] = getNeonDb(),
+): Promise<PersistGeneratedFileOutcome> {
   const { userId, organizationId, data, mimeType, filename, provider, origin, model, prompt } =
     params;
 
@@ -152,28 +156,31 @@ export async function persistGeneratedFileBytes(params: {
     const checksum = createHash('sha256').update(data).digest('hex');
     const stored = await storeMedia({ userId, kind, data, contentType: mimeType });
     storedPathname = stored.pathname;
-    const assetId = await insertMediaAsset({
-      userId,
-      organizationId,
-      kind,
-      mimeType,
-      byteSize: stored.byteSize,
-      storageUrl: stored.url,
-      storagePathname: stored.pathname,
-      prompt,
-      provider,
-      model,
-      sourceSurface: 'web',
-      ...(params.conversationId ? { conversationId: params.conversationId } : {}),
-      metadata: {
-        filename,
-        origin,
-        checksumSha256: checksum,
-        surface: classification.surface,
-        previewable: classification.previewable,
-        ...(params.extraMetadata ?? {}),
+    const assetId = await insertMediaAsset(
+      {
+        userId,
+        organizationId,
+        kind,
+        mimeType,
+        byteSize: stored.byteSize,
+        storageUrl: stored.url,
+        storagePathname: stored.pathname,
+        prompt,
+        provider,
+        model,
+        sourceSurface: 'web',
+        ...(params.conversationId ? { conversationId: params.conversationId } : {}),
+        metadata: {
+          filename,
+          origin,
+          checksumSha256: checksum,
+          surface: classification.surface,
+          previewable: classification.previewable,
+          ...(params.extraMetadata ?? {}),
+        },
       },
-    });
+      db,
+    );
     if (!assetId) {
       await deleteStoredMedia(stored.pathname);
       storedPathname = null;

@@ -14,6 +14,7 @@ vi.mock('@/lib/server/media-storage', () => ({
 vi.mock('@/lib/server/media-assets', () => ({
   insertMediaAsset: (...args: unknown[]) => insertMediaAsset(...args),
 }));
+vi.mock('@/lib/server/neon-db', () => ({ getNeonDb: () => ({}) }));
 
 import {
   persistGeneratedFileBytes,
@@ -78,6 +79,7 @@ describe('persistGeneratedFileBytes', () => {
           previewable: true,
         }),
       }),
+      expect.anything(),
     );
   });
 
@@ -119,6 +121,7 @@ describe('persistGeneratedFileBytes', () => {
 
     expect(insertMediaAsset).toHaveBeenCalledWith(
       expect.objectContaining({ organizationId: admittedOrganizationId }),
+      expect.anything(),
     );
   });
 
@@ -140,6 +143,7 @@ describe('persistGeneratedFileBytes', () => {
       expect.objectContaining({
         metadata: expect.objectContaining({ surface: 'artifact', previewable: true }),
       }),
+      expect.anything(),
     );
   });
 
