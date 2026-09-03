@@ -22,6 +22,20 @@ export function isMapSearchTool(name: string): boolean {
   return name === MAP_SEARCH_TOOL_NAME;
 }
 
+const MAP_SEARCH_GEO_CONTEXT_RE =
+  /\b(?:on|using|via)\s+(?:a\s+|the\s+|google\s+|open\s*street\s*)?maps?\b|\bmaps?\s+of\b|\b(?:draw|show)\s+(?:me\s+)?(?:a\s+|the\s+)?maps?\b/i;
+const MAP_SEARCH_LOCATION_PHRASE_RE =
+  /\bnearby\b|\bnear me\b|\bwhere is\b|\bwhere are\b|\broutes?\b|\bdirections\b|\bdrive from\b|\bdriving from\b|\broad ?trip\b|\bitinerary\b|\bhow far\b/i;
+const MAP_SEARCH_NEAR_PROPER_NOUN_RE = /\bnear\s+[A-Z]/;
+
+export function hasMapSearchIntent(userMessage: string): boolean {
+  return (
+    MAP_SEARCH_GEO_CONTEXT_RE.test(userMessage) ||
+    MAP_SEARCH_LOCATION_PHRASE_RE.test(userMessage) ||
+    MAP_SEARCH_NEAR_PROPER_NOUN_RE.test(userMessage)
+  );
+}
+
 export function createMapSearchToolDefinition() {
   return {
     type: 'function' as const,
@@ -30,10 +44,13 @@ export function createMapSearchToolDefinition() {
       description:
         'Render a real, visible map card in the chat. ALWAYS call this instead of writing a ' +
         'Google Maps or OpenStreetMap link in your answer whenever the user asks to see, show, ' +
-        'find, or explore a place, an area, or a route on a map — a pasted link is not a map ' +
-        'and does not satisfy that request. For a route, pass both endpoints in the query as ' +
-        '"<origin> to <destination>". This is a search, not a verified place identity or ' +
-        'turn-by-turn navigation; do not claim that a specific place was resolved.',
+        'find, or explore a real-world place, address, or route on a map. A pasted link is not ' +
+        'a map and does not satisfy that request. For a route, pass both endpoints in the ' +
+        'query as "<origin> to <destination>". This is a search, not a verified place identity ' +
+        'or turn-by-turn navigation; do not claim that a specific place was resolved. Never call ' +
+        'this for a non-geographic use of the word map, such as a hash map, memory map, tree ' +
+        'map, or site map; those are data structures or diagrams, not places, and get a normal ' +
+        'text answer instead.',
       parameters: {
         type: 'object',
         properties: {
