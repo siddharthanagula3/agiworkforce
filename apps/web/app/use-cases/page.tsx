@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import { buildMetadata } from '@/lib/seo/metadata';
 import { Header } from '@shared/components/layout/Header';
 import { MarketingFooter } from '@/features/marketing/components/MarketingFooter';
@@ -5,11 +6,11 @@ import {
   Button,
   ButtonRow,
   Eyebrow,
+  ProductFrame,
   Prose,
   Section,
   Stack,
 } from '@/features/marketing/components/system';
-import { FactGrid, PageHero } from '@/features/marketing/components/pages/surfaces/shared';
 import { USE_CASE_CONTENT } from '@/features/marketing/components/pages/business/use-cases-content';
 
 export const metadata = buildMetadata({
@@ -21,78 +22,123 @@ export const metadata = buildMetadata({
 
 const INDEX_ORDER = ['startups', 'consulting', 'it-providers', 'sales-teams'] as const;
 
+const IDS = {
+  hero: 'agi-usecases-title',
+  index: 'agi-usecases-index-title',
+  cost: 'agi-usecases-cost-title',
+} as const;
+
 export default function UseCasesPage() {
   return (
     <div data-design="agi" className="agi-ds-page">
       <Header />
       <main id="main-content">
-        <PageHero
-          id="agi-usecases-title"
-          eyebrow="Use cases"
-          title="We wrote one page per job, and each one shows that job running."
-          lede="A founder automating CI, a partner drafting a deliverable, an engineer running a client runbook and a rep prepping a deal each reach for a different surface first. The four pages below take one of those apiece."
-          ctas={[
-            { href: '/download', label: "See what's live" },
-            { href: '/solutions', label: 'See the solutions map', variant: 'secondary' },
-          ]}
-        />
+        <section className="agi-lp-hero" aria-labelledby={IDS.hero}>
+          <div className="agi-ds-container agi-lp-hero-grid">
+            <div className="agi-lp-hero-copy">
+              <p className="agi-lp-eyebrow">Use cases</p>
+              <h1 className="agi-lp-h1" id={IDS.hero}>
+                <span className="agi-lp-line">One page per job,</span>
+                <em className="agi-lp-accent">each shows that job running.</em>
+              </h1>
+              <p className="agi-lp-lede">
+                A founder automating CI, a partner drafting a deliverable, an engineer running a
+                client runbook, and a rep prepping a deal each reach for a different surface first.
+                The four pages below take one of those apiece.
+              </p>
+              <ButtonRow>
+                <Button href="/download">See what&rsquo;s live</Button>
+                <Button href="/solutions" variant="secondary">
+                  See the solutions map
+                </Button>
+              </ButtonRow>
+            </div>
+            <div className="agi-lp-hero-stage">
+              <div className="agi-lp-browser">
+                <div className="agi-lp-browser-bar" aria-hidden="true">
+                  <span className="agi-lp-browser-dots">
+                    <i />
+                    <i />
+                    <i />
+                  </span>
+                  <span>agiworkforce.com/chat</span>
+                </div>
+                <ProductFrame
+                  src="/product/hero-thread-dark.png"
+                  srcLight="/product/hero-thread-light.png"
+                  alt="A working AGI chat thread in the browser"
+                  width={2392}
+                  height={1244}
+                  priority
+                />
+              </div>
+            </div>
+          </div>
+        </section>
 
-        <Section id="usecases-index" labelledBy="agi-usecases-index-title" rule>
+        <Section id="usecases-index" labelledBy={IDS.index} rule>
           <Stack gap="loose">
             <div>
               <Eyebrow>The pages</Eyebrow>
-              <h2 className="agi-ds-h2" id="agi-usecases-index-title">
-                Each page below opens on the surface its team actually works in.
+              <h2 className="agi-ds-h2" id={IDS.index}>
+                Each page opens on the surface its team actually works in.
               </h2>
               <Prose>
                 Underneath they are the same product, with the same projects, connectors and
-                routing, so what changes between them is where the work starts and how much of it a
-                script is supposed to do.
+                routing, so what changes between them is where the work starts.
               </Prose>
             </div>
-            <FactGrid
-              items={INDEX_ORDER.map((slug) => {
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              {INDEX_ORDER.map((slug) => {
                 const entry = USE_CASE_CONTENT[slug];
                 if (!entry) throw new Error(`missing use case content for slug: ${slug}`);
-                return {
-                  meta: entry.eyebrow.replace('Use case · ', ''),
-                  title: entry.title,
-                  body: (
-                    <>
-                      {entry.lede}{' '}
-                      <a href={`/use-cases/${entry.slug}`} className="agi-ds-link">
-                        Read the {entry.eyebrow.replace('Use case · ', '')} page
-                      </a>
-                    </>
-                  ),
-                };
+                const label = entry.eyebrow.replace('Use case · ', '');
+                return (
+                  <div
+                    key={slug}
+                    className="flex flex-col gap-3 rounded-xl border border-[var(--agi-rule)] bg-[var(--agi-ground-2)] p-6"
+                  >
+                    <Eyebrow>{label}</Eyebrow>
+                    <h3 className="agi-ds-h3">{entry.title}</h3>
+                    <Prose size="sm">{entry.lede}</Prose>
+                    <Link href={`/use-cases/${entry.slug}`} className="agi-ds-link">
+                      Read the {label} page
+                    </Link>
+                  </div>
+                );
               })}
-            />
-          </Stack>
-        </Section>
-
-        <Section id="usecases-close" labelledBy="agi-usecases-close-title" rule ground="2">
-          <Stack gap="loose">
-            <div>
-              <Eyebrow>What it costs</Eyebrow>
-              <h2 className="agi-ds-h2" id="agi-usecases-close-title">
-                Every one of these teams can start without paying us.
-              </h2>
-              <Prose>
-                Local runs on hardware you already own and BYOK bills you at your provider&rsquo;s
-                published rates, and both stay free on our side for as long as you use them.
-                Managed-cloud capacity is the part that carries a price, and the pricing page is
-                where those plans are written down.
-              </Prose>
             </div>
-            <ButtonRow>
-              <Button href="/pricing">See plans</Button>
-            </ButtonRow>
           </Stack>
         </Section>
 
-        <MarketingFooter />
+        <div className="agi-lp-factline">
+          <div className="agi-ds-container">
+            <ul className="agi-lp-factline-list">
+              <li>Local runs on hardware you already own, free</li>
+              <li>BYOK bills you at your provider&rsquo;s published rates</li>
+              <li>managed cloud capacity is the part that carries a price</li>
+            </ul>
+          </div>
+        </div>
+
+        <section className="agi-lp-close" aria-labelledby={IDS.cost}>
+          <div className="agi-ds-container">
+            <div className="agi-lp-close-inner">
+              <h2 className="agi-lp-h2" id={IDS.cost}>
+                Every team can start <em className="agi-lp-accent">without paying us.</em>
+              </h2>
+              <p className="agi-lp-lede">
+                Local and BYOK stay free on our side for as long as you use them. The pricing page
+                is where managed-cloud plans are written down.
+              </p>
+              <ButtonRow>
+                <Button href="/pricing">See plans</Button>
+              </ButtonRow>
+            </div>
+          </div>
+        </section>
       </main>
+      <MarketingFooter />
     </div>
   );
 }
