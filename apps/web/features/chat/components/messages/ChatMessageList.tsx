@@ -98,6 +98,18 @@ function isIncompleteTurn(message: ChatMessage | undefined | null): boolean {
   return (message.metadata as { truncated?: unknown } | undefined)?.truncated === true;
 }
 
+export const INCOMPLETE_TURN_GRACE_MS = 45_000;
+
+export function isWithinIncompleteTurnGracePeriod(
+  message: ChatMessage | undefined | null,
+  nowMs: number,
+): boolean {
+  if (!message || message.role !== 'user' || !message.createdAt) return false;
+  const sentAtMs = new Date(message.createdAt).getTime();
+  if (Number.isNaN(sentAtMs)) return false;
+  return nowMs - sentAtMs < INCOMPLETE_TURN_GRACE_MS;
+}
+
 const STREAM_ERROR_PARTIAL_PREFIX = 'Response may be incomplete';
 const STREAM_ERROR_NO_RESPONSE_PREFIX = 'No response was returned';
 const STREAM_ERROR_CONNECTION_DETAIL = 'the connection to the model was interrupted.';
@@ -1043,6 +1055,25 @@ const ChatMessageListComponent = ({
 
   const lastMessage = useMemo(() => messages[messages.length - 1], [messages]);
 
+  const [pastIncompleteTurnGrace, setPastIncompleteTurnGrace] = useState(
+    () => !isWithinIncompleteTurnGracePeriod(lastMessage, Date.now()),
+  );
+  useEffect(() => {
+    const createdAt = lastMessage?.createdAt;
+    const withinGrace = lastMessage
+      ? isWithinIncompleteTurnGracePeriod(lastMessage, Date.now())
+      : false;
+    if (!withinGrace || !createdAt) {
+      setPastIncompleteTurnGrace(true);
+      return;
+    }
+    setPastIncompleteTurnGrace(false);
+    const sentAtMs = new Date(createdAt).getTime();
+    const remainingMs = INCOMPLETE_TURN_GRACE_MS - (Date.now() - sentAtMs);
+    const timer = setTimeout(() => setPastIncompleteTurnGrace(true), Math.max(0, remainingMs));
+    return () => clearTimeout(timer);
+  }, [lastMessage]);
+
   const lastMessageFingerprint = useMemo(
     () => (lastMessage ? `${lastMessage.id}-${lastMessage.content.length}` : ''),
     [lastMessage],
@@ -1121,7 +1152,8 @@ const ChatMessageListComponent = ({
     !showStoppedNotice &&
     !showStreamErrorNotice &&
     !showRefusalNotice &&
-    isIncompleteTurn(lastMessage),
+    isIncompleteTurn(lastMessage) &&
+    (lastMessage?.role !== 'user' || pastIncompleteTurnGrace),
   );
 
   // A turn that failed, was refused, stopped short, or is offering Continue
