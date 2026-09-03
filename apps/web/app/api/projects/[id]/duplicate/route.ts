@@ -6,8 +6,7 @@ import { withRateLimit } from '@/lib/rate-limit';
 import { requireCsrfToken } from '@/lib/csrf';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
-import { getClerkAuthUser } from '@/lib/api-auth';
-import { getNeonDb } from '@/lib/server/neon-db';
+import { getUserScopedDb } from '@/lib/server/rls-db';
 import { mapProjectRow } from '@/lib/projects';
 import { SubscriptionService } from '@/lib/services/subscription-service';
 import {
@@ -16,7 +15,6 @@ import {
   isUserResourceLimitError,
 } from '@/lib/services/free-plan-entitlements';
 import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
-import { resolveActiveOrganizationId } from '@/lib/services/active-workspace-service';
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -41,10 +39,8 @@ async function handleDuplicateProject(request: NextRequest, context: RouteContex
   const rateLimitResponse = await withRateLimit(request, 'chat-conversation');
   if (rateLimitResponse) return rateLimitResponse;
 
-  const { userId } = await getClerkAuthUser(request);
-  const db = getNeonDb();
+  const { db, userId, organizationId } = await getUserScopedDb(request);
   const { id } = await context.params;
-  const organizationId = await resolveActiveOrganizationId(db, userId);
 
   const [source] = await db.query<Record<string, unknown>>(
     `select * from user_projects

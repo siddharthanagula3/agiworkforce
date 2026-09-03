@@ -4,11 +4,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { createError } from '@/lib/errors';
-import { getClerkAuthUser } from '@/lib/api-auth';
-import { getNeonDb } from '@/lib/server/neon-db';
+import { getUserScopedDb } from '@/lib/server/rls-db';
 import { mapProjectRow } from '@/lib/projects';
 import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
-import { resolveActiveOrganizationId } from '@/lib/services/active-workspace-service';
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -23,10 +21,8 @@ async function handleExportProject(request: NextRequest, context: RouteContext) 
   const rateLimitResponse = await withRateLimit(request, 'chat-conversation');
   if (rateLimitResponse) return rateLimitResponse;
 
-  const { userId } = await getClerkAuthUser(request);
-  const db = getNeonDb();
+  const { db, userId, organizationId } = await getUserScopedDb(request);
   const { id } = await context.params;
-  const organizationId = await resolveActiveOrganizationId(db, userId);
 
   const [project] = await db.query<Record<string, unknown>>(
     `select * from user_projects
