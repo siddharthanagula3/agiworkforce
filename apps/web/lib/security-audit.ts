@@ -193,7 +193,8 @@ export type AuditEventType =
   | 'admin_policy_changed'
   | 'retention_sweep_completed'
   | 'legal_hold_created'
-  | 'legal_hold_released';
+  | 'legal_hold_released'
+  | 'secret_detected';
 
 export type AuditOutcome = 'success' | 'failure' | 'denied';
 

@@ -22,6 +22,7 @@ import { runAuthGate, type AuthGateSuccess } from './lib/auth-gate';
 // GOV-3: per-plan concurrent-turn admission (see handleChatCompletions).
 import { acquireManagedTurnSlot, type ManagedTurnSlotResult } from '@/lib/rate-limit';
 import { processRequest, type ProcessedRequest } from './lib/request-processor';
+import { applySecretHandlingToRequest } from './lib/secret-handling-gate';
 import { buildAdapterStreamResponse } from './lib/stream-transform';
 import { buildNonStreamResponse, buildUpstreamErrorResponse } from './lib/response-builder';
 import { runToolLoop, loadMcpToolDefs } from './lib/tool-loop';
@@ -312,6 +313,22 @@ async function dispatchChatCompletions(
   if (!processResult.ok) return processResult.response;
 
   const processed = processResult;
+
+  const secretHandling = await applySecretHandlingToRequest(userId, request, processed);
+  if (secretHandling.action === 'blocked') {
+    await refundFailedReservation(userId, processed, 'request_failure');
+    return NextResponse.json(
+      {
+        error: {
+          message:
+            'This message was blocked because it appears to contain a secret, such as an API key or access token. Remove it and send the message again.',
+          type: 'invalid_request_error',
+          code: 'secret_detected',
+        },
+      },
+      { status: 400, headers: getSecurityHeaders() },
+    );
+  }
 
   // Persist the external-side-effect boundary before any provider/tool loop
   // starts. A crash after this point is recovered customer-favorably by 0056;
