@@ -855,6 +855,7 @@ export function useChat(runtime: ChatRuntime | null, options?: UseChatOptions) {
       let resolvedModelId = preflightModelState.selectedModelId;
       let resolvedProvider: string | undefined = selectedModel.provider;
       const isAutoSelection = resolvedModelId.startsWith('auto');
+      const isExplicitByokSelection = executionMode === 'byok' && !isAutoSelection;
       let autoRouting: MessageRouting | undefined;
       const requiresRegistryAdmission =
         isAutoSelection || executionMode === 'cloud_managed' || executionMode === 'byok';
@@ -899,8 +900,7 @@ export function useChat(runtime: ChatRuntime | null, options?: UseChatOptions) {
         });
         if (decision.status === 'unavailable') {
           const isAdmittedDynamicByokModel =
-            executionMode === 'byok' &&
-            !isAutoSelection &&
+            isExplicitByokSelection &&
             decision.code === 'unknown_selection' &&
             selectedModel.isByok;
           if (!isAdmittedDynamicByokModel) {
@@ -909,7 +909,9 @@ export function useChat(runtime: ChatRuntime | null, options?: UseChatOptions) {
           }
         } else {
           resolvedModelId = decision.modelKey;
-          resolvedProvider = decision.provider;
+          if (!isExplicitByokSelection) {
+            resolvedProvider = decision.provider;
+          }
 
           if (isAutoSelection) {
             const routingReason = `${decision.reason} via ${decision.harnessId}`;
