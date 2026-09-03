@@ -1625,13 +1625,6 @@ export function isToolOffered(
 
 const TOOL_DENIED_MESSAGE = 'The user denied permission to run this tool.';
 
-/**
- * Drains a provider step as its lines are produced instead of after the step
- * resolves. `collectProviderStream` still returns the full result once the
- * step finishes -- this queue is the side channel that lets a caller `yield`
- * each line the moment it is parsed, so a client sees it while the provider
- * is still generating rather than in one burst afterward.
- */
 function createLiveLineQueue<T>(): {
   push: (item: T) => void;
   close: (error?: unknown) => void;
@@ -1850,11 +1843,7 @@ export async function* runToolLoop(
     // generic "overloaded" that does not match what the provider actually
     // said.
     let rootQuotaExhaustedError: unknown | undefined;
-    // Once any provider line has already reached the client live, a failover
-    // retry would splice a second attempt's text onto the first attempt's --
-    // visible corruption, not a clean recovery. From that point on this step
-    // owns its failure: surface it instead of rotating to a rescue route.
-    let liveContentStreamed = false;
+    let liveLinesReachedClient = false;
     for (;;) {
       const attemptProcessed = servingProcessed;
       const attemptRequest: ProcessedRequest['llmRequest'] = {
@@ -1884,7 +1873,7 @@ export async function* runToolLoop(
               providerStream,
               onLine
                 ? (entry) => {
-                    liveContentStreamed = true;
+                    liveLinesReachedClient = true;
                     onLine(entry);
                   }
                 : undefined,
@@ -1912,7 +1901,7 @@ export async function* runToolLoop(
       } catch (err) {
         if (options.shouldPropagateExecutionError?.(err)) throw err;
         if (err instanceof ProviderStreamDeadlineError) throw err;
-        if (liveContentStreamed) throw err;
+        if (liveLinesReachedClient) throw err;
         const classified = classifyError(err);
         if (!rootQuotaExhaustedError && classified.category === 'quota_exhausted') {
           rootQuotaExhaustedError = err;
@@ -1948,8 +1937,8 @@ export async function* runToolLoop(
     }
     for (const result of entry.serverToolResults ?? []) {
       // Anthropic/Gemini/OpenAI native search all normalize to this shape
-      // (serverToolResultSources), and the provider's own title — when it has
-      // one at all — is often just a citation label, not the headline. Enrich
+      // (serverToolResultSources), and the provider's own title, when it has
+      // one at all, is often just a citation label, not the headline. Enrich
       // here, on the already-capped list, before either client-facing event
       // goes out.
       const sources = await enrichWebSearchResultTitles(result.sources);
