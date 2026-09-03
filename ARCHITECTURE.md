@@ -31,14 +31,14 @@ Two workspaces in one repository:
 Six clients on one contract layer. Each has its own build and release workflow;
 none is forced into another's framework conventions.
 
-| Surface                 | Stack                                      |
-| ----------------------- | ------------------------------------------ |
-| `apps/web`              | Next.js 16, App Router                     |
-| `apps/desktop`          | Tauri 2 — React 19 + Vite front, Rust back |
-| `apps/mobile`           | Expo / React Native                        |
-| `apps/cli`              | Rust binary `agi`                          |
-| `apps/extension`        | Chrome MV3                                 |
-| `apps/extension-vscode` | VS Code                                    |
+| Surface                 | Stack                                     |
+| ----------------------- | ----------------------------------------- |
+| `apps/web`              | Next.js 16, App Router                    |
+| `apps/desktop`          | Tauri 2, React 19 + Vite front, Rust back |
+| `apps/mobile`           | Expo / React Native                       |
+| `apps/cli`              | Rust binary `agi`                         |
+| `apps/extension`        | Chrome MV3                                |
+| `apps/extension-vscode` | VS Code                                   |
 
 ## Shared packages
 
