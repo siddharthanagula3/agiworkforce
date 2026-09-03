@@ -10,6 +10,7 @@ const mocks = vi.hoisted(() => ({
     userId: 'user-1',
     organizationId: null,
   })),
+  recordAuditEvent: vi.fn(async (..._args: unknown[]) => undefined),
 }));
 
 vi.mock('server-only', () => ({}));
@@ -24,6 +25,9 @@ vi.mock('@/lib/cors', () => ({
 }));
 vi.mock('@/lib/logger', () => ({
   logger: { debug: vi.fn(), error: vi.fn(), info: vi.fn(), warn: vi.fn() },
+}));
+vi.mock('@/lib/security-audit', () => ({
+  recordAuditEvent: (...a: unknown[]) => mocks.recordAuditEvent(...a),
 }));
 
 const { POST, GET } = await import('./route');
@@ -93,6 +97,40 @@ describe('POST /api/artifacts/publish', () => {
     expect(body.token).toBe(TOKEN);
     expect(body.shareUrl).toContain(`/shared-artifact/${TOKEN}`);
     expect(body.sandboxed).toBe(true);
+  });
+
+  it('redacts a secret found in the artifact content before it is stored', async () => {
+    const stripeKey = `sk_live_${'a'.repeat(30)}`;
+    await POST(
+      postRequest({ ...VALID_BODY, content: `<script>const key='${stripeKey}'</script>` }),
+    );
+
+    const call = mocks.query.mock.calls.find(([sql]) =>
+      String(sql).includes('insert into public.published_artifacts'),
+    );
+    const params = call![1] as unknown[];
+    const storedContent = String(params[7]);
+    expect(storedContent).not.toContain(stripeKey);
+    expect(storedContent).toContain('[REDACTED]');
+  });
+
+  it('records an audit event naming the pattern without the secret value', async () => {
+    const stripeKey = `sk_live_${'a'.repeat(30)}`;
+    await POST(postRequest({ ...VALID_BODY, content: `key='${stripeKey}'` }));
+
+    expect(mocks.recordAuditEvent).toHaveBeenCalledTimes(1);
+    const event = mocks.recordAuditEvent.mock.calls[0]![0] as {
+      eventType: string;
+      detail: Record<string, unknown>;
+    };
+    expect(event.eventType).toBe('secret_detected');
+    expect(event.detail['status']).toBe('redacted');
+    expect(JSON.stringify(event)).not.toContain(stripeKey);
+  });
+
+  it('does not record an audit event when the content is clean', async () => {
+    await POST(postRequest(VALID_BODY));
+    expect(mocks.recordAuditEvent).not.toHaveBeenCalled();
   });
 
   it('refuses a cross-site publish before writing anything', async () => {

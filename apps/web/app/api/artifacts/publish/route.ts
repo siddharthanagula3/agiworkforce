@@ -9,6 +9,9 @@ import { createError } from '@/lib/errors';
 import { getUserScopedDb } from '@/lib/server/rls-db';
 import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
 import { buildExternalSharingGateResponse } from '@/lib/managed-compute-gate';
+import { recordAuditEvent } from '@/lib/security-audit';
+import { redactSecrets, scanForSecrets } from '@/lib/security/secrets-audit';
+import { logger } from '@/lib/logger';
 import {
   MAX_CONTENT_CHARS,
   PUBLISHABLE_KINDS,
@@ -71,10 +74,14 @@ async function handlePublish(request: NextRequest): Promise<Response> {
     throw createError.validation('Invalid publish request', parsed.error.flatten());
   }
 
-  const { db, userId } = await getUserScopedDb(request);
+  const { db, userId, organizationId } = await getUserScopedDb(request);
 
   const sharingGateResponse = await buildExternalSharingGateResponse(userId, request);
   if (sharingGateResponse) return sharingGateResponse;
+
+  const secretDetections = scanForSecrets(parsed.data.content);
+  const publishContent =
+    secretDetections.length > 0 ? redactSecrets(parsed.data.content) : parsed.data.content;
 
   let published;
   try {
@@ -85,7 +92,7 @@ async function handlePublish(request: NextRequest): Promise<Response> {
       kind: parsed.data.kind,
       conversationId: parsed.data.conversationId ?? null,
       ...(parsed.data.language ? { language: parsed.data.language } : {}),
-      content: parsed.data.content,
+      content: publishContent,
     });
   } catch (error) {
     if (error instanceof PublishedArtifactValidationError) {
@@ -99,6 +106,27 @@ async function handlePublish(request: NextRequest): Promise<Response> {
     }
     if (isPublishedArtifactSchemaUnavailable(error)) return publishingUnavailableResponse();
     throw error;
+  }
+
+  if (secretDetections.length > 0) {
+    const patternNames = [...new Set(secretDetections.map((detection) => detection.name))];
+    await recordAuditEvent({
+      userId,
+      organizationId,
+      eventType: 'secret_detected',
+      request,
+      outcome: 'success',
+      severity: 'info',
+      detail: {
+        resourceType: 'artifact_publish',
+        resourceId: published.token,
+        source: patternNames.join(','),
+        count: secretDetections.length,
+        status: 'redacted',
+      },
+    }).catch((error) => {
+      logger.error({ error, userId }, 'Failed to record secret-redaction audit event');
+    });
   }
 
   return NextResponse.json(

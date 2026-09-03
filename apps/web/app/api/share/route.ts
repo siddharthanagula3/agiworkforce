@@ -10,6 +10,9 @@ import { logger } from '@/lib/logger';
 import { getClerkAuthUser } from '@/lib/api-auth';
 import { handleCorsPreflightRequest } from '@/lib/cors';
 import { buildExternalSharingGateResponse } from '@/lib/managed-compute-gate';
+import { recordAuditEvent } from '@/lib/security-audit';
+import { redactSecretsFromValue } from '@/lib/security/secrets-audit';
+import { resolveActiveOrganizationId } from '@/lib/services/active-workspace-service';
 
 export function OPTIONS(request: NextRequest) {
   return handleCorsPreflightRequest(request) ?? new NextResponse(null, { status: 204 });
@@ -27,10 +30,14 @@ const CreateShareSchema = z.object({
     .default(DEFAULT_SHARE_EXPIRY_DAYS),
 });
 
-function sanitizeMessages(
-  messages: Array<Record<string, unknown>>,
-): Array<Record<string, unknown>> {
-  return messages.map((msg) => {
+interface SanitizedMessages {
+  messages: Array<Record<string, unknown>>;
+  secretPatternNames: string[];
+  secretMatchCount: number;
+}
+
+function sanitizeMessages(messages: Array<Record<string, unknown>>): SanitizedMessages {
+  const pathStripped = messages.map((msg) => {
     if (msg['display_args'] && typeof msg['display_args'] === 'string') {
       return {
         ...msg,
@@ -42,6 +49,13 @@ function sanitizeMessages(
     }
     return msg;
   });
+
+  const { value, detections } = redactSecretsFromValue(pathStripped);
+  return {
+    messages: value,
+    secretPatternNames: [...new Set(detections.map((detection) => detection.name))],
+    secretMatchCount: detections.length,
+  };
 }
 
 type SharedSessionRow = {
@@ -79,7 +93,11 @@ async function handleCreateShare(request: NextRequest) {
 
   const token = randomBytes(18).toString('base64url');
 
-  const sanitizedMessages = sanitizeMessages(messages);
+  const {
+    messages: sanitizedMessages,
+    secretPatternNames,
+    secretMatchCount,
+  } = sanitizeMessages(messages);
   const expiresAt = new Date(Date.now() + expiresInDays * 24 * 60 * 60 * 1000).toISOString();
 
   const [data] = await db.query<SharedSessionRow>(
@@ -102,6 +120,27 @@ async function handleCreateShare(request: NextRequest) {
   if (!data) {
     logger.error({ userId: userId }, 'Failed to create shared session');
     throw createError.internal('Failed to create share');
+  }
+
+  if (secretMatchCount > 0) {
+    const organizationId = await resolveActiveOrganizationId(db, userId, request).catch(() => null);
+    await recordAuditEvent({
+      userId,
+      organizationId,
+      eventType: 'secret_detected',
+      request,
+      outcome: 'success',
+      severity: 'info',
+      detail: {
+        resourceType: 'share',
+        resourceId: data.token,
+        source: secretPatternNames.join(','),
+        count: secretMatchCount,
+        status: 'redacted',
+      },
+    }).catch((error) => {
+      logger.error({ error, userId }, 'Failed to record secret-redaction audit event');
+    });
   }
 
   const appUrl = process.env['NEXT_PUBLIC_APP_URL'] ?? 'https://agiworkforce.com';
