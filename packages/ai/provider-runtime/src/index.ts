@@ -25,6 +25,7 @@ export {
   FallbackTriggeredError,
   classifyError,
   parseContextOverflow,
+  SPENDING_CAP_PROVIDER_HINT,
   type ClassifiedError,
   type ErrorCategory,
 } from './errors';

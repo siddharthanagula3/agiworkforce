@@ -82,7 +82,7 @@ describe('runToolLoop — a provider rejection reaches the user as product copy'
 
     expect(streamError).toEqual({
       message: 'The provider rejected this request. Try again, or choose another model.',
-      code: '400',
+      code: 'provider_rejected_request',
       retryable: false,
     });
     expect(output).not.toContain('propertyNames');
