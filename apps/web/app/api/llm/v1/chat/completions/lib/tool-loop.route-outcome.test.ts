@@ -16,8 +16,8 @@ vi.mock('@/lib/services/managed-usage-request-service', () => ({
   ManagedUsageRequestError: class ManagedUsageRequestError extends Error {},
 }));
 
-const mockRecordRouteOutcome = vi.fn(async () => undefined);
-const mockRecordServedRouteAffinity = vi.fn(async () => undefined);
+const mockRecordRouteOutcome = vi.fn(async (..._args: unknown[]) => undefined);
+const mockRecordServedRouteAffinity = vi.fn(async (..._args: unknown[]) => undefined);
 vi.mock('@/lib/services/free-lane/runtime-state-service', () => ({
   recordRouteOutcome: (...args: unknown[]) => mockRecordRouteOutcome(...args),
   recordServedRouteAffinity: (...args: unknown[]) => mockRecordServedRouteAffinity(...args),
