@@ -300,6 +300,16 @@ export default function TrustPage() {
               caption="Change record"
               rows={[
                 {
+                  label: '2026-09-02',
+                  value:
+                    'Corrected the database row-level isolation row: the count of hosted routes that touch no database at all was undercounted by one. The measured routes that reach the database, and the split between policy-scoped and owner-connection routes, are unchanged.',
+                },
+                {
+                  label: '2026-08-14',
+                  value:
+                    'Added the DPDP (India) surface: notice, consent, data-principal rights, grievance redressal, parental consent, notice languages, Significant Data Fiduciary status, and data residency, each rated against what the product does today. Corrected the GDPR/CCPA data-subject-rights row, which had cited 34 erasure-scoped tables against an actual 66; the count is now derived from code. Corrected the subprocessor-transparency row after a review found six live processors missing from the published list, including one delisted on a manifest check that could not see its direct HTTP calls.',
+                },
+                {
                   label: '2026-08-05',
                   value:
                     'Rewritten as a dated ledger. Removed a claim that SOC 2 evidence collection was underway: no such programme exists. Corrected the code-signing rows, which described signing as planned when both macOS notarization and Windows signing are implemented and enforced in the release pipeline. Replaced the general database-isolation claim with the actual route coverage. Added the unappointed EU Article 27 representative, absent production access governance, and absent continuity evidence as explicit rows.',
