@@ -140,6 +140,41 @@ describe('DirectoryModal shell', () => {
     expect(screen.getByPlaceholderText('Search plugins')).toBeTruthy();
   });
 
+  it('follows a new route while it is already open', () => {
+    const adapter = makeAdapter();
+    const { rerender } = render(
+      <DirectoryModal open onClose={vi.fn()} adapter={adapter} initialSection="skills" />,
+    );
+    expect(screen.getByPlaceholderText('Search skills')).toBeTruthy();
+
+    rerender(
+      <DirectoryModal
+        open
+        onClose={vi.fn()}
+        adapter={adapter}
+        initialSection="connectors"
+        initialEntryId="customerscore"
+      />,
+    );
+
+    expect(screen.queryByPlaceholderText('Search skills')).toBeNull();
+    expect(screen.getByRole('tab', { name: 'Connectors' }).getAttribute('aria-selected')).toBe(
+      'true',
+    );
+  });
+
+  it('keeps the user on a tab they picked when the route prop repeats', () => {
+    const adapter = makeAdapter();
+    const { rerender } = render(
+      <DirectoryModal open onClose={vi.fn()} adapter={adapter} initialSection="skills" />,
+    );
+    fireEvent.click(screen.getByRole('tab', { name: 'Plugins' }));
+    rerender(
+      <DirectoryModal open onClose={vi.fn()} adapter={adapter} initialSection="skills" />,
+    );
+    expect(screen.getByPlaceholderText('Search plugins')).toBeTruthy();
+  });
+
   it('narrows the grid by search', () => {
     renderModal();
     fireEvent.change(screen.getByPlaceholderText('Search skills'), {

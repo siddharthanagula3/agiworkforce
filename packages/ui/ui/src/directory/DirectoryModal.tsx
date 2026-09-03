@@ -94,6 +94,15 @@ export function DirectoryModal({
     [section, adapter],
   );
 
+  useEffect(() => {
+    if (!initialSection || !sections.includes(initialSection)) return;
+    setSection(initialSection);
+  }, [initialSection, sections]);
+
+  useEffect(() => {
+    setEntryId(initialEntryId ?? null);
+  }, [initialEntryId]);
+
   const loadSection = adapter.loadSection;
   useEffect(() => {
     if (!open) return;
