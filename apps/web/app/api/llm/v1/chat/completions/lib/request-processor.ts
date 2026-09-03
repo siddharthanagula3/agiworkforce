@@ -360,7 +360,7 @@ export type ManagedSkillSelectionResult =
 
 type QuotaFeature = 'chat' | 'image' | 'video' | 'computer_use';
 
-const RE_CODE_EXECUTION_ACTION = /\b(run|execute|test|benchmark)\b/i;
+const RE_CODE_EXECUTION_ACTION = /\b(run|execute|execution|test|benchmark)\b/i;
 const RE_CODE_EXECUTION_SUBJECT =
   /\b(code|script|program|python|javascript|typescript|sql|notebook|command)\b|```/i;
 
