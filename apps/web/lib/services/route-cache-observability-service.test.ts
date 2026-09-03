@@ -31,6 +31,7 @@ describe('route cache observability · breakdown arithmetic', () => {
         actual_cost_cents: '120',
         retail_cost_cents: '480',
         retail_priced_requests: '10',
+        retail_priced_actual_cost_cents: '120',
         fallback_count: '0',
         latency_p50_ms: '820',
         latency_p95_ms: '2100',
@@ -47,8 +48,40 @@ describe('route cache observability · breakdown arithmetic', () => {
 
     expect(row.cacheHitRate).toBeCloseTo(0.6);
     expect(row.valueMultiplier).toBeCloseTo(4);
+    expect(row.retailCoverage).toBeCloseTo(1);
     expect(row.latencyP50Ms).toBe(820);
     expect(row.latencyP95Ms).toBe(2100);
+  });
+
+  it('prices the multiplier only over the retail-priced subset, not diluted by the full request count', async () => {
+    const db = fakeDb([
+      {
+        key: 'anthropic/claude-sonnet-5',
+        requests: '10',
+        cache_read_tokens: '0',
+        cache_write_tokens: '0',
+        input_tokens: '0',
+        cache_hit_requests: '0',
+        actual_cost_cents: '1000',
+        retail_cost_cents: '80',
+        retail_priced_requests: '2',
+        retail_priced_actual_cost_cents: '100',
+        fallback_count: '0',
+        latency_p50_ms: null,
+        latency_p95_ms: null,
+      },
+    ]);
+
+    const rows = await getObservabilityBreakdown(
+      'route',
+      new Date('2026-09-02T00:00:00Z'),
+      new Date('2026-09-03T00:00:00Z'),
+      db as never,
+    );
+    const row = rows[0]!;
+
+    expect(row.valueMultiplier).toBeCloseTo(0.8);
+    expect(row.retailCoverage).toBeCloseTo(0.2);
   });
 
   it('reports a null value multiplier when no row in the group carried a retail price', async () => {
@@ -63,6 +96,7 @@ describe('route cache observability · breakdown arithmetic', () => {
         actual_cost_cents: '900',
         retail_cost_cents: '0',
         retail_priced_requests: '0',
+        retail_priced_actual_cost_cents: '0',
         fallback_count: '0',
         latency_p50_ms: null,
         latency_p95_ms: null,
