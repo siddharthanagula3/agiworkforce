@@ -124,6 +124,7 @@ import type { SearchResponse, SearchResult, MediaGenerationResult } from '../../
 import { hasWebSearchSources } from '../../types/message-metadata';
 import type { GeneratedDocument } from '../../types/message-metadata';
 import { ThinkingBlock } from '../ThinkingBlock';
+import { mergeAdjacentThinkingSegments } from '../../lib/mergeThinkingSegments';
 import { formatBytes } from '@shared/utils/format';
 import { ComparisonResponse } from './ComparisonResponse';
 import type { InteractiveCard } from '@agiworkforce/types';
@@ -1580,29 +1581,23 @@ const MessageBubbleComponent = function MessageBubble({
                   ? message.metadata.tools
                   : [];
 
-              // Multi-segment interleaved path: thinking[0], tool[0], thinking[1], tool[1], ...
               if (segments && segments.length > 0) {
-                const maxLen = Math.max(segments.length, tools.length);
+                const groups = mergeAdjacentThinkingSegments(segments, tools);
                 const blocks: React.ReactNode[] = [];
 
-                for (let i = 0; i < maxLen; i++) {
-                  const seg = segments[i];
-                  const tool = tools[i];
-
-                  if (seg) {
-                    blocks.push(
-                      <div key={`thinking-seg-${seg.id}`} className="mb-2">
-                        <ThinkingBlock
-                          content={seg.content}
-                          isStreaming={seg.isStreaming}
-                          startedAt={seg.startedAt}
-                          completedAt={seg.completedAt ?? undefined}
-                          durationSeconds={seg.durationSeconds}
-                          defaultExpanded={seg.isStreaming}
-                        />
-                      </div>,
-                    );
-                  }
+                groups.forEach(({ segment: seg, toolAfter: tool }, i) => {
+                  blocks.push(
+                    <div key={`thinking-seg-${seg.id}`} className="mb-2">
+                      <ThinkingBlock
+                        content={seg.content}
+                        isStreaming={seg.isStreaming}
+                        startedAt={seg.startedAt}
+                        completedAt={seg.completedAt ?? undefined}
+                        durationSeconds={seg.durationSeconds}
+                        defaultExpanded={seg.isStreaming}
+                      />
+                    </div>,
+                  );
 
                   if (tool) {
                     blocks.push(
@@ -1618,7 +1613,7 @@ const MessageBubbleComponent = function MessageBubble({
                       </div>,
                     );
                   }
-                }
+                });
 
                 // Any remaining tools beyond the last segment
                 if (tools.length > segments.length) {
