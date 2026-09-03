@@ -506,6 +506,9 @@ export async function* translateOpenAIResponsesStream(
             ...(usage.input_tokens_details?.cached_tokens !== undefined
               ? { cacheReadTokens: usage.input_tokens_details.cached_tokens }
               : {}),
+            ...(usage.input_tokens_details?.cache_write_tokens !== undefined
+              ? { cacheWriteTokens: usage.input_tokens_details.cache_write_tokens }
+              : {}),
             ...(usage.output_tokens_details?.reasoning_tokens !== undefined
               ? { reasoningTokens: usage.output_tokens_details.reasoning_tokens }
               : {}),
