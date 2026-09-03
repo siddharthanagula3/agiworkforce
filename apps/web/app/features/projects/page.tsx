@@ -110,17 +110,17 @@ export default function ProjectsFeaturePage() {
               caption="What a project accumulates"
               rows={[
                 {
-                  label: '01 Instructions',
+                  label: 'Instructions',
                   value:
                     'You write the standing instructions once. Project settings holds a single instructions field. Up to 8,000 characters of it ride into the system message of every chat in the project, labelled as instructions the model is to follow for every reply here.',
                 },
                 {
-                  label: '02 Files',
+                  label: 'Files',
                   value:
                     'You add the files the work leans on. The Sources tab takes images, PDFs, text, JSON and XML, dropped in or picked, and text you paste is saved as a source of its own. A project holds up to 20 files, and the file list in project settings shows the running count against that cap instead of waiting for an upload to be refused.',
                 },
                 {
-                  label: '03 Threads',
+                  label: 'Threads',
                   value:
                     'The threads pile up without you filing them. Every chat started from the project belongs to it. The project view lists them by date, and the ones you already ran become ranked context for the next question you ask.',
                 },
