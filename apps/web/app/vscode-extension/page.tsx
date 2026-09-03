@@ -123,7 +123,19 @@ export default function VscodeExtensionPage() {
                 at most eight of them and twenty thousand characters in total.
               </Prose>
             </div>
-            <pre className="agi-ds-thread" style={{ overflowX: 'auto', maxWidth: '100%' }}>
+            <pre
+              className="agi-ds-thread"
+              style={{
+                overflowX: 'auto',
+                maxWidth: '100%',
+                backgroundImage:
+                  'linear-gradient(to left, transparent, var(--agi-ground-2) 70%), linear-gradient(to left, transparent, var(--agi-frame))',
+                backgroundRepeat: 'no-repeat, no-repeat',
+                backgroundPosition: '100% 0, 100% 0',
+                backgroundSize: 'var(--agi-space-4) 100%, var(--agi-space-2) 100%',
+                backgroundAttachment: 'local, scroll',
+              }}
+            >
               <code style={{ fontFamily: 'var(--agi-font-mono)', fontSize: 'var(--agi-text-sm)' }}>
                 {TURN_ENVELOPE}
               </code>
