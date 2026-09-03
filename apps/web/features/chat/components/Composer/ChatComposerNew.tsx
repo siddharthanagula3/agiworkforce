@@ -447,6 +447,7 @@ const COMPOSER_RESTING_HEIGHT_PX = 52;
 const COMPOSER_RESTING_HEIGHT_COMPACT_PX = 36;
 const COMPOSER_COMPACT_MEDIA_QUERY = '(max-width: 639px)';
 const COMPOSER_AUTOFOCUS_MEDIA_QUERY = '(min-width: 768px) and (pointer: fine)';
+const RESTORED_DRAFT_NOTICE = "Couldn't send. Restored here so you can try again.";
 
 /**
  * The legacy textarea's resting height is pinned in JS, so the `sm:` step its
@@ -1503,21 +1504,6 @@ const ChatComposerNewComponent = ({
     if (!suppressAutoFocus) takeIdleFocus();
   }, [clearComposerState, clearSignal, suppressAutoFocus, takeIdleFocus]);
 
-  // Handle prefillText prop · when the parent passes a new non-empty prefillText, copy it
-  // into the local message and notify the parent it was consumed. This runs in an EFFECT,
-  // not during render: onPrefillConsumed is a PARENT (WebChatPage) state setter, and calling
-  // it during this component's render triggers React's "Cannot update a component while
-  // rendering a different component" warning (the recurring dev-overlay "1 Issue").
-  const [prevPrefill, setPrevPrefill] = useState(prefillText);
-  useEffect(() => {
-    if (prefillText && prefillText.length > 0 && prefillText !== prevPrefill) {
-      setPrevPrefill(prefillText);
-      writeComposerMessage(prefillText);
-      onPrefillConsumed?.();
-      setSendPendingFlag(false);
-    }
-  }, [prefillText, prevPrefill, onPrefillConsumed, writeComposerMessage]);
-
   /**
    * AUDIT-FIX MEDIA-VIDEO-01: every attachment entry point on this surface
    * funnels through here (the + menu's file input, drag-and-drop, paste,
@@ -2556,6 +2542,22 @@ const ChatComposerNewComponent = ({
     };
   }, [conversationId, setDraftContent, clearDraftContent, writeComposerMessage]);
 
+  // Handle prefillText prop · when the parent passes a new non-empty prefillText, copy it
+  // into the local message and notify the parent it was consumed. This runs in an EFFECT,
+  // not during render: onPrefillConsumed is a PARENT (WebChatPage) state setter, and calling
+  // it during this component's render triggers React's "Cannot update a component while
+  // rendering a different component" warning (the recurring dev-overlay "1 Issue").
+  const consumedPrefillRef = useRef<string | undefined>(undefined);
+  useEffect(() => {
+    if (!prefillText || prefillText.length === 0 || prefillText === consumedPrefillRef.current) {
+      return;
+    }
+    consumedPrefillRef.current = prefillText;
+    writeComposerMessage(prefillText);
+    onPrefillConsumed?.();
+    setSendPendingFlag(false);
+  }, [prefillText, onPrefillConsumed, writeComposerMessage]);
+
   /**
    * A draft can also be parked while this composer is on screen; a send that
    * never reached a model hands the text back that way. Reading it only on
@@ -2576,7 +2578,9 @@ const ChatComposerNewComponent = ({
     setSendPendingFlag(false);
     if (!parkedDraft || messageRef.current.trim()) return;
     writeComposerMessage(parkedDraft);
-  }, [parkedDraft, writeComposerMessage]);
+    setLocalNotice(RESTORED_DRAFT_NOTICE);
+    clearDraftContent(conversationId);
+  }, [clearDraftContent, conversationId, parkedDraft, writeComposerMessage]);
 
   // Flush a queued follow-up when the active turn finishes (true→false).
   //
