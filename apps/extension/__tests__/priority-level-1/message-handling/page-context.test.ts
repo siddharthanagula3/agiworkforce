@@ -1,12 +1,3 @@
-/**
- * L1 Message Handling — page-context payload safety.
- *
- * When the extension forwards page-derived content to the desktop bridge it
- * must (1) bound the JSON it parses from hostile pages and (2) strip invisible
- * Unicode / redact secrets from extracted text before it ever leaves the tab.
- * Both paths use the shared validators in src/background/policy.ts.
- */
-
 import { describe, expect, test } from 'vitest';
 import {
   MAX_CONTEXT_HTML_CHARS,

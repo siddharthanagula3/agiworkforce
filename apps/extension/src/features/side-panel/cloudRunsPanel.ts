@@ -460,9 +460,6 @@ function describeEnvelope(envelope: AgentEventEnvelope): JournalEntry | null {
   }
 }
 
-// Journal reads are incremental, so a later page has to be able to continue the
-// entry list an earlier page produced — including finishing a text run that was
-// split across the page boundary.
 export function summarizeRunJournal(
   events: readonly AgentEventEnvelope[],
   previousEntries: readonly JournalEntry[] = [],
@@ -553,9 +550,6 @@ export function buildCloudRunsPanel(
     else statusEl.removeAttribute('data-kind');
   }
 
-  // The outcome of a decision has to outlive the reload that decision triggers —
-  // otherwise "another device already answered this" flashes and disappears.
-  // Load progress and load failures are cleared by the next successful read.
   function clearTransientStatus(): void {
     if (statusOrigin !== 'action') setStatus('');
   }
@@ -594,9 +588,7 @@ export function buildCloudRunsPanel(
     if (!pending) return null;
 
     const card = el('div', { class: 'sp-run-approval', role: 'group' });
-    card.appendChild(
-      el('div', { class: 'sp-run-approval-title' }, `Waiting on you — ${run.model}`),
-    );
+    card.appendChild(el('div', { class: 'sp-run-approval-title' }, `Waiting on you, ${run.model}`));
     for (const call of pending.toolCalls) {
       card.appendChild(
         el('div', { class: 'sp-run-approval-call' }, `${call.name}\n${call.argsPreview}`),
@@ -936,9 +928,6 @@ export function buildCloudRunsPanel(
   panelEl.ownerDocument.addEventListener('visibilitychange', onVisibilityChange);
   panelEl.ownerDocument.defaultView?.addEventListener('pagehide', onPageHide);
 
-  // Deactivation is also the sign-out path, so it has to leave nothing of the
-  // previous account on screen: stopping the poll while stale rows — tool names,
-  // argument previews, typed guidance — stay painted is not a teardown.
   function clearRenderedRuns(): void {
     stopRefreshTimer();
     inFlight?.abort();

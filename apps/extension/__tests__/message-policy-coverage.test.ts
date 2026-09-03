@@ -1,4 +1,3 @@
-
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -27,7 +26,7 @@ describe('MESSAGE_POLICY covers every dispatched message type', () => {
     expect(handled).toContain('CHAT_MESSAGE');
   });
 
-  it('has an explicit entry for every handled type — no silent default inheritance', () => {
+  it('has an explicit entry for every handled type, no silent default inheritance', () => {
     const missing = handledMessageTypes().filter((type) => !Object.hasOwn(MESSAGE_POLICY, type));
     expect(missing).toEqual([]);
   });

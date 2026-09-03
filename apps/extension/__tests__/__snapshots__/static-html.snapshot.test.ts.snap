@@ -11,7 +11,7 @@ exports[`Chrome extension static HTML snapshots > locks the side_panel.html stru
       M-08 audit 2026-05-19: minimal reset CSS extracted to side_panel.css.
       The rest of the side panel's styles are injected dynamically by
       side_panel.ts:injectStyles via Constructable Stylesheets
-      (\`document.adoptedStyleSheets\`), which is CSP-compliant — no <style>
+      (\`document.adoptedStyleSheets\`), which is CSP-compliant, no <style>
       tag is created at runtime.
     -->
     <link rel="stylesheet" href="./side_panel.css" />

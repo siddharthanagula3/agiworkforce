@@ -136,7 +136,7 @@ function runAutofill(): Promise<{ success?: boolean; error?: string; platform?: 
   });
 }
 
-describe('SEC-15 — ATS detection is hostname-anchored', () => {
+describe('SEC-15, ATS detection is hostname-anchored', () => {
   it('rejects attacker URLs that merely contain an ATS host as a path or query substring', () => {
     expect(isGreenhouseUrl(`${ATTACKER_ORIGIN}/boards.greenhouse.io/apply`)).toBe(false);
     expect(isGreenhouseUrl(`${ATTACKER_ORIGIN}/?next=grnh.se/abc`)).toBe(false);
@@ -165,7 +165,7 @@ describe('SEC-15 — ATS detection is hostname-anchored', () => {
   });
 });
 
-describe('SEC-15 — AGI_RUN_AUTOFILL gates the stored profile on the site allowlist', () => {
+describe('SEC-15, AGI_RUN_AUTOFILL gates the stored profile on the site allowlist', () => {
   beforeEach(() => {
     for (const key of Object.keys(chromeMock._localStore)) {
       delete chromeMock._localStore[key];

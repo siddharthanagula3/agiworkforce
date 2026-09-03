@@ -1,32 +1,3 @@
-/**
- * cloudAgentClient.ts — Streaming client for the AGI Cloud gateway.
- *
- * Posts to POST https://api.agiworkforce.com/v1/chat/completions in
- * OpenAI-compatible format with stream:true and browser tool definitions.
- *
- * AUTH SEAM:
- *   Uses the same Clerk Chrome Extension Native API token owner as managed
- *   chat. MV3 workers create Clerk with `background:true`, so tokens refresh
- *   without copying bearer credentials through extension storage. Development
- *   builds retain the explicit local test-token fallback owned by that module.
- *
- * MODEL:
- *   Read from the canonical catalog's computer_use routing slot (SLOT_REGISTRY).
- *   The current vision + function-calling model is resolved from the catalog.
- *   Not hardcoded here — the catalog value is embedded at build time via the
- *   COMPUTER_USE_MODEL constant exported below so callers can log or override it.
- *
- * EGRESS:
- *   All network calls go to GATEWAY_URL_ALLOWLIST_EXACT members only (validated
- *   by validateGatewayUrl from policy.ts). No provider host (openai.com,
- *   anthropic.com, etc.) is ever contacted — the key lives on the server.
- *
- * STREAMING:
- *   The gateway sends OpenAI-style SSE: `data: {...}\n\n` lines.
- *   callCloud() accumulates tool_calls deltas and returns a fully assembled
- *   CloudAgentResponse when the stream ends.
- */
-
 import { validateGatewayUrl } from '../../background/policy';
 import { getAuthToken } from '../cloud-bridge/freeTrialClient';
 import { BoundedSseDecoder } from '../cloud-bridge/boundedSseDecoder';
@@ -471,7 +442,7 @@ export async function resolveGatewayBase(): Promise<string> {
       }
     }
   } catch {
-    // storage unavailable — use default
+    /* noop */
   }
   return DEFAULT_GATEWAY_BASE;
 }

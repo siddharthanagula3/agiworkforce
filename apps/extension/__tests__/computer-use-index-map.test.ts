@@ -1,16 +1,3 @@
-/**
- * The index map is the path the model is told to prefer over raw CSS
- * selectors, so an index that names two elements is a silent click on
- * something the model never chose, inside the user's live session.
- *
- * These tests run the real page-side expressions — the exact strings shipped
- * to Runtime.evaluate — against a jsdom document holding the shapes the old
- * builder collided on: duplicate unlabelled buttons, two inputs sharing a
- * name, and an id that is not a valid CSS identifier.
- *
- * @vitest-environment jsdom
- */
-
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const EVAL_TAB_ID = 7;

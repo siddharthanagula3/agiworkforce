@@ -10,15 +10,6 @@ const DOM_SUMMARY_MAX_CHARS = 8_000;
 const ELEMENT_LABEL_MAX_CHARS = 60;
 const DETACH_REASON_USER_CANCELED = 'canceled_by_user';
 
-/**
- * One entry of the index map the model is told to act through.
- *
- * `selector` is a structural path built page-side and proven — page-side, at
- * the moment it is built — to resolve to exactly one element. `signature` is a
- * fingerprint of the element captured in that same pass. Resolution re-checks
- * both: an index that no longer names exactly one element, or names an element
- * whose fingerprint changed, is refused rather than clicked.
- */
 export interface IndexedElement {
   readonly selector: string;
   readonly signature: string;
@@ -46,7 +37,7 @@ export function resolveIndexedSelector(tabId: number, index: number): string | n
 
 function staleIndexMessage(tool: string, index: number): string {
   return (
-    `${tool}: index ${index} not found in current snapshot — ` +
+    `${tool}: index ${index} not found in current snapshot, ` +
     `call read_dom again to rebuild the index map.`
   );
 }
@@ -278,7 +269,6 @@ export async function waitForStable(
     }
     await waitForPollInterval(pollIntervalMs, signal);
   }
-  // Timeout reached — return anyway; caller continues best-effort
 }
 
 /**
@@ -322,23 +312,15 @@ const UNIQUE_PATH_JS = `((el) => {
   return parts.join(' > ');
 })`;
 
-/**
- * Resolves a selector to exactly one element, refusing anything else.
- *
- * A selector that matches zero elements, more than one element, or an element
- * whose signature no longer matches the one captured when the index was built
- * throws page-side. The alternative — acting on `matches[0]` — is a silent
- * click on an element the model did not choose, on the user's live session.
- */
 const RESOLVE_UNIQUE_ELEMENT_JS = `((selector, expectedSignature) => {
   const matches = document.querySelectorAll(selector);
   if (matches.length === 0) {
-    throw new Error('no element matches ' + selector + ' — the page changed since read_dom');
+    throw new Error('no element matches ' + selector + ', the page changed since read_dom');
   }
   if (matches.length > 1) {
     throw new Error(
       matches.length + ' elements match ' + selector +
-        ' — refusing to act on an ambiguous target; call read_dom again'
+        ', refusing to act on an ambiguous target; call read_dom again'
     );
   }
   const el = matches[0];
@@ -347,7 +329,7 @@ const RESOLVE_UNIQUE_ELEMENT_JS = `((selector, expectedSignature) => {
     if (actual !== expectedSignature) {
       throw new Error(
         'element at this index changed since read_dom (was "' + expectedSignature +
-          '", now "' + actual + '") — refusing to act on it; call read_dom again'
+          '", now "' + actual + '"), refusing to act on it; call read_dom again'
       );
     }
   }
@@ -702,7 +684,7 @@ async function readSiteAllowlist(): Promise<ReadonlySet<string>> {
       return new Set(list as string[]);
     }
   } catch {
-    // storage unavailable — fail-closed
+    /* noop */
   }
   return new Set<string>();
 }

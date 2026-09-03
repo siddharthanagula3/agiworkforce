@@ -1,8 +1,7 @@
-
 import { describe, expect, it } from 'vitest';
 import { sanitizePageText, INVISIBLE_UNICODE_RE } from '../src/background/policy';
 
-describe('INVISIBLE_UNICODE_RE — character class matches expected vectors', () => {
+describe('INVISIBLE_UNICODE_RE, character class matches expected vectors', () => {
   it('matches a zero-width space', () => {
     expect('a​b'.match(INVISIBLE_UNICODE_RE)?.length).toBe(1);
   });
@@ -37,7 +36,7 @@ describe('H-06 invisible-Unicode stripping in page text', () => {
     expect(sanitizePageText('plain️')).toBe('plain');
   });
 
-  it('strips Tag characters (U+E0001 — the ASCII-smuggling range)', () => {
+  it('strips Tag characters (U+E0001, the ASCII-smuggling range)', () => {
     expect(sanitizePageText('hi\u{E0001}\u{E0048}there')).toBe('hithere');
   });
 

@@ -1,5 +1,5 @@
 /*
- * side_panel.css — minimal static styles for the side-panel host page.
+ * side_panel.css, minimal static styles for the side-panel host page.
  *
  * M-08 audit 2026-05-19: extracted from the inline <style> block in
  * side_panel.html so the manifest CSP can drop 'unsafe-inline' from

@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { validateGatewayUrl } from '../src/background/policy';
 import { renderMarkdown, sanitizeHtml } from '../src/features/side-panel/markdown';
 
-describe('C-1 + M-02 validateGatewayUrl — exact-match allowlist', () => {
+describe('C-1 + M-02 validateGatewayUrl, exact-match allowlist', () => {
   it('accepts the canonical production gateway', () => {
     expect(validateGatewayUrl('https://api.agiworkforce.com')).toBe('https://api.agiworkforce.com');
   });
@@ -110,7 +110,7 @@ describe('C-2 Bridge Bearer stripping', () => {
     expect(h).toBeNull();
   });
 
-  it('rejects LAN host pretending to be bridge — no auth header sent', () => {
+  it('rejects LAN host pretending to be bridge, no auth header sent', () => {
     const h = resolveAuthHeader('http://192.168.1.10:8787', KEY, TOKEN);
     expect(h?.header).not.toBe('X-Bridge-Token');
   });
@@ -127,7 +127,7 @@ describe('H-1 DISCOVERY_MESSAGE_TYPES is empty', () => {
     expect(DISCOVERY_MESSAGE_TYPES.has('GET_AGI_BRIDGE_URL')).toBe(false);
   });
 
-  it('set is empty — no types bypass allowlist checks', () => {
+  it('set is empty, no types bypass allowlist checks', () => {
     expect(DISCOVERY_MESSAGE_TYPES.size).toBe(0);
   });
 });
@@ -675,7 +675,7 @@ function senderTabAllowedToMutateV3(
   return senderTabId === targetTabId;
 }
 
-describe('P0-D cross-tab mutation guard — DOUBLE_CLICK, RIGHT_CLICK, FILL_FORM', () => {
+describe('P0-D cross-tab mutation guard, DOUBLE_CLICK, RIGHT_CLICK, FILL_FORM', () => {
   it('DOUBLE_CLICK is in the mutation guard set', () => {
     expect(DOM_MUTATION_MESSAGE_TYPES_V3.has('DOUBLE_CLICK')).toBe(true);
   });
@@ -727,7 +727,7 @@ describe('P0-D cross-tab mutation guard — DOUBLE_CLICK, RIGHT_CLICK, FILL_FORM
 
 import { redactSensitiveText } from '../src/features/content/in-page-panel/pageActions';
 
-describe('P1-14 redactSensitiveText — sensitive field redaction', () => {
+describe('P1-14 redactSensitiveText, sensitive field redaction', () => {
   it('redacts a 16-digit Visa number', () => {
     const result = redactSensitiveText('Your card: 4111111111111111 expires soon');
     expect(result).toContain('[REDACTED]');

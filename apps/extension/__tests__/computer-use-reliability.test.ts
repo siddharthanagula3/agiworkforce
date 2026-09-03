@@ -596,7 +596,7 @@ describe('P1-4: debugger auto-reattach on eviction', () => {
     expect(resolveIndexedSelector(55, 1)).toBeNull();
   });
 
-  it('ensureOnDetachListener is idempotent — addListener called at most once per module load', () => {
+  it('ensureOnDetachListener is idempotent, addListener called at most once per module load', () => {
     const callsBefore = chromeMock.debugger.onDetach.addListener.mock.calls.length;
     ensureOnDetachListener();
     ensureOnDetachListener();
@@ -647,7 +647,7 @@ describe('P1-4: debugger auto-reattach on eviction', () => {
     expect(onDetachedByUser).toHaveBeenCalledWith(101);
   });
 
-  it('an eviction detach does not terminate the run — it re-attaches instead', () => {
+  it('an eviction detach does not terminate the run, it re-attaches instead', () => {
     const onDetachedByUser = vi.fn();
     registerActiveTab(102, onDetachedByUser);
     ensureOnDetachListener();
@@ -701,7 +701,7 @@ describe('P1-4: debugger auto-reattach on eviction', () => {
   });
 });
 
-describe('P2-5: approval gate — fail-CLOSED on timeout', () => {
+describe('P2-5: approval gate, fail-CLOSED on timeout', () => {
   it('skips action when onBeforeAction callback returns false (explicit deny)', async () => {
     fetchMock
       .mockResolvedValueOnce({

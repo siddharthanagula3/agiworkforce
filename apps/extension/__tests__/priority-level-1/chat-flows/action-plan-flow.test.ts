@@ -1,13 +1,3 @@
-/**
- * L1 Chat Flows — shortcut / scheduled-task action plan lifecycle.
- *
- * The extension's "conversation flow" is an action plan produced upstream and
- * replayed against the page. The end-to-end safety gate is: validate the whole
- * plan at save time (allowlisted types + bounded fields + safe URLs), then
- * re-check the originating site at fire time. These tests exercise that flow
- * via the real validators.
- */
-
 import { describe, expect, test } from 'vitest';
 import {
   ALLOWED_SHORTCUT_ACTION_TYPES,

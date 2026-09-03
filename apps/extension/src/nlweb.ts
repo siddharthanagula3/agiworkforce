@@ -75,7 +75,7 @@ async function sameOriginFetch(url: string, method: 'GET' | 'HEAD'): Promise<NLW
       try {
         body = await resp.text();
       } catch {
-        // Body read failed — non-fatal
+        /* noop */
       }
     }
 

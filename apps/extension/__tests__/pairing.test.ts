@@ -178,7 +178,7 @@ describe('unpair', () => {
   });
 });
 
-describe('requestPairing — authorizes with the operator-supplied bridge secret', () => {
+describe('requestPairing, authorizes with the operator-supplied bridge secret', () => {
   it('sends the stored bridge secret as X-Bridge-Token on a single POST /pair', async () => {
     seedBridgeSecret();
     const fetchMock = vi.fn().mockResolvedValue(pairResponse());
@@ -244,7 +244,7 @@ describe('requestPairing — authorizes with the operator-supplied bridge secret
   });
 });
 
-describe('requestPairing — failure paths', () => {
+describe('requestPairing, failure paths', () => {
   it('fails before any network call when no bridge token is stored', async () => {
     const fetchMock = vi.fn().mockResolvedValue(pairResponse());
     vi.stubGlobal('fetch', fetchMock);
@@ -420,7 +420,7 @@ describe('pairing code helpers', () => {
   });
 });
 
-describe('startPairing — asks Desktop to display a code', () => {
+describe('startPairing, asks Desktop to display a code', () => {
   it('posts the extension id and receives only an opaque request id', async () => {
     const fetchMock = vi.fn().mockResolvedValue(pairRequestResponse());
     vi.stubGlobal('fetch', fetchMock);
@@ -472,7 +472,7 @@ describe('startPairing — asks Desktop to display a code', () => {
   });
 });
 
-describe('submitPairingCode — the code the user read off Desktop', () => {
+describe('submitPairingCode, the code the user read off Desktop', () => {
   async function startAwaitingCode() {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(pairRequestResponse()));
     const state = await startPairing();
@@ -545,7 +545,7 @@ describe('submitPairingCode — the code the user read off Desktop', () => {
   });
 });
 
-describe('beginPairing — one button, both paths', () => {
+describe('beginPairing, one button, both paths', () => {
   it('runs the code handshake when no operator secret is provisioned', async () => {
     const fetchMock = vi.fn().mockResolvedValue(pairRequestResponse());
     vi.stubGlobal('fetch', fetchMock);
@@ -570,7 +570,7 @@ describe('beginPairing — one button, both paths', () => {
   });
 });
 
-describe('storeBridgeSecret — the operator credential keeps its own key', () => {
+describe('storeBridgeSecret, the operator credential keeps its own key', () => {
   it('writes the secret without claiming the extension is paired', async () => {
     const state = await storeBridgeSecret(BRIDGE_SECRET);
 
@@ -597,7 +597,7 @@ describe('storeBridgeSecret — the operator credential keeps its own key', () =
   });
 });
 
-describe('loadPairingState — resumes an open handshake', () => {
+describe('loadPairingState, resumes an open handshake', () => {
   it('returns awaiting-code when a live request is stored', async () => {
     sessionStore['agi_pair_request'] = {
       requestId: REQUEST_ID,

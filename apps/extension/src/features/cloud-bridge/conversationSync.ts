@@ -408,7 +408,7 @@ async function handleFlushError(
     await recordCloudSyncState(owner, conversationId, {
       state: 'blocked',
       blockedReason: 'not-found',
-      lastError: 'Removed from Cloud — no longer syncing.',
+      lastError: 'Removed from Cloud, no longer syncing.',
       lastAttemptAt: now,
     });
     return;

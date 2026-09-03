@@ -193,7 +193,7 @@ validated, metadata-bounded generated-file descriptors or interactive-card
 envelopes. Request-only page context and attachment image bytes are not
 serialized into that record, so they are not included in the account copy. The
 account copy is retained under server-side policy, not this document's 30-day
-browser TTL, and deleting it requires deleting the conversation — local eviction
+browser TTL, and deleting it requires deleting the conversation, local eviction
 does not remove it.
 
 Local eviction never issues a cloud delete. The 30-day TTL, the 1 MiB
@@ -227,8 +227,8 @@ pending delete.
   `AGI_START_COMPUTER_USE` refuses before any lease, CDP attach, or paid cloud
   call when either half is absent, and refuses the same way when the record or
   the permission cannot be read, so a storage or API failure denies rather than
-  grants. Removing an origin from the allowlist — from the current-site button
-  or the per-entry remove — revokes its browser-control record and removes the
+  grants. Removing an origin from the allowlist, from the current-site button
+  or the per-entry remove, revokes its browser-control record and removes the
   host permission in the same step, so a re-added site is confirmed again.
   Non-http(s) and malformed entries are dropped on read, so a poisoned record
   cannot widen the grant.

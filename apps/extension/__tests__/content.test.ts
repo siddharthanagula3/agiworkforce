@@ -144,7 +144,7 @@ afterEach(() => {
   clearBody();
 });
 
-describe('handleMessage — invalid messages are rejected', () => {
+describe('handleMessage, invalid messages are rejected', () => {
   it('rejects null messages', async () => {
     const response = await dispatchMessage(null as unknown as Record<string, unknown>);
     expect(response).toMatchObject({ success: false, error: 'Invalid message' });
@@ -175,14 +175,14 @@ describe('handleMessage — invalid messages are rejected', () => {
   });
 });
 
-describe('handleMessage — TAB_READY', () => {
+describe('handleMessage, TAB_READY', () => {
   it('responds with success and ready=true', async () => {
     const response = await dispatchMessage({ type: 'TAB_READY' });
     expect(response).toMatchObject({ success: true, ready: true });
   });
 });
 
-describe('handleMessage — GET_PAGE_INFO', () => {
+describe('handleMessage, GET_PAGE_INFO', () => {
   it('returns success with url, title, html, selectedText', async () => {
     document.title = 'My Page';
     const response = await dispatchMessage({ type: 'GET_PAGE_INFO' });
@@ -206,7 +206,7 @@ describe('handleMessage — GET_PAGE_INFO', () => {
   });
 });
 
-describe('handleMessage — GET_FORMS', () => {
+describe('handleMessage, GET_FORMS', () => {
   it('returns success with a forms array', async () => {
     const response = await dispatchMessage({ type: 'GET_FORMS' });
     expect(response).toMatchObject({ success: true, forms: expect.any(Array) });
@@ -226,7 +226,7 @@ describe('handleMessage — GET_FORMS', () => {
   });
 });
 
-describe('handleMessage — CLICK', () => {
+describe('handleMessage, CLICK', () => {
   it('returns success=false for an invalid selector', async () => {
     const { validators } = await import('../src/utils');
     (validators.isValidSelector as ReturnType<typeof vi.fn>).mockReturnValueOnce(false);
@@ -255,7 +255,7 @@ describe('handleMessage — CLICK', () => {
   });
 });
 
-describe('handleMessage — TYPE', () => {
+describe('handleMessage, TYPE', () => {
   it('returns success=false for an invalid selector', async () => {
     const { validators } = await import('../src/utils');
     (validators.isValidSelector as ReturnType<typeof vi.fn>).mockReturnValueOnce(false);
@@ -289,7 +289,7 @@ describe('handleMessage — TYPE', () => {
   });
 });
 
-describe('handleMessage — GET_TEXT', () => {
+describe('handleMessage, GET_TEXT', () => {
   it('returns success=false for invalid selector', async () => {
     const { validators } = await import('../src/utils');
     (validators.isValidSelector as ReturnType<typeof vi.fn>).mockReturnValueOnce(false);
@@ -310,7 +310,7 @@ describe('handleMessage — GET_TEXT', () => {
   });
 });
 
-describe('handleMessage — SET_ATTRIBUTE security', () => {
+describe('handleMessage, SET_ATTRIBUTE security', () => {
   it('blocks event handler attributes (onclick)', async () => {
     document.body.innerHTML = '<div id="d"></div>';
     const el = document.getElementById('d')!;
@@ -361,7 +361,7 @@ describe('handleMessage — SET_ATTRIBUTE security', () => {
   });
 });
 
-describe('handleMessage — EXECUTE_SCRIPT allowlist', () => {
+describe('handleMessage, EXECUTE_SCRIPT allowlist', () => {
   it('rejects unknown script operations', async () => {
     const response = (await dispatchMessage({
       type: 'EXECUTE_SCRIPT',
@@ -406,7 +406,7 @@ describe('handleMessage — EXECUTE_SCRIPT allowlist', () => {
   });
 });
 
-describe('handleMessage — CONNECTION_STATUS_CHANGED', () => {
+describe('handleMessage, CONNECTION_STATUS_CHANGED', () => {
   it('sets automationState.connectionStatus to connected', async () => {
     await dispatchMessage({
       type: 'CONNECTION_STATUS_CHANGED',
@@ -435,7 +435,7 @@ describe('handleMessage — CONNECTION_STATUS_CHANGED', () => {
   });
 });
 
-describe('handleMessage — recording lifecycle', () => {
+describe('handleMessage, recording lifecycle', () => {
   beforeEach(() => {
     chromeMock.runtime.sendMessage.mockResolvedValue({ success: true });
     chromeMock.storage.local.set.mockResolvedValue(undefined);
@@ -474,7 +474,7 @@ describe('handleMessage — recording lifecycle', () => {
   });
 });
 
-describe('handleMessage — WebMCP messages', () => {
+describe('handleMessage, WebMCP messages', () => {
   it('WEBMCP_DISCOVER_TOOLS returns supported and tools from discoverAllTools', async () => {
     const { discoverAllTools } = await import('../src/webmcp');
     (discoverAllTools as ReturnType<typeof vi.fn>).mockReturnValueOnce({
@@ -532,7 +532,7 @@ describe('checkConnectionStatus', () => {
   });
 });
 
-describe('handleMessage — RUN_PAGE_ACTIONS', () => {
+describe('handleMessage, RUN_PAGE_ACTIONS', () => {
   it('returns success=true with result summary when all actions succeed', async () => {
     const response = (await dispatchMessage({
       type: 'RUN_PAGE_ACTIONS',
@@ -584,7 +584,7 @@ describe('handleMessage — RUN_PAGE_ACTIONS', () => {
   });
 });
 
-describe('handleMessage — additional message types routing', () => {
+describe('handleMessage, additional message types routing', () => {
   const invalidSelectorSetup = async () => {
     const { validators } = await import('../src/utils');
     (validators.isValidSelector as ReturnType<typeof vi.fn>).mockReturnValueOnce(false);

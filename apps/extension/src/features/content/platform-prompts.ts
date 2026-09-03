@@ -93,7 +93,7 @@ Confluence:
 - Messages are in .fui-ChatMessage containers, channels in the team sidebar
 - @ mentions autocomplete after typing @; @team notifies everyone
 - Files tab per channel links to SharePoint; "Open in SharePoint" for full management
-- Schedule a meeting from the Chat or Calendar tab — pre-fills attendees from the conversation
+- Schedule a meeting from the Chat or Calendar tab, pre-fills attendees from the conversation
 - Mute/unmute during calls: Ctrl+Shift+M / Cmd+Shift+M (same shortcut toggles)`,
 };
 
@@ -106,7 +106,7 @@ export function getPlatformPrompt(url: string): string | null {
       }
     }
   } catch {
-    // Invalid URL — no prompt
+    /* noop */
   }
   return null;
 }
