@@ -10,8 +10,12 @@ vi.mock('next/navigation', () => ({
   useRouter: () => ({ push }),
 }));
 
+vi.mock('@clerk/nextjs', () => ({
+  useAuth: () => ({ isLoaded: true, isSignedIn: true }),
+}));
+
 vi.mock('@/features/chat/hooks/use-artifact-index', () => ({
-  useArtifactIndex: () => ({ artifacts: [] }),
+  useArtifactIndex: () => ({ artifacts: [], loaded: true }),
 }));
 
 let storeArtifacts: Artifact[] = [];
