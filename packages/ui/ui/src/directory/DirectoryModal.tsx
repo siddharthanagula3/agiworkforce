@@ -200,6 +200,10 @@ export function DirectoryModal({
       adapter.install && data.installable
         ? () => void runAction(detail.id, adapter.install)
         : undefined;
+    const remove =
+      adapter.uninstall && data.installable
+        ? () => void runAction(detail.id, adapter.uninstall)
+        : undefined;
 
     if (detail.kind === 'skill') {
       return (
@@ -208,6 +212,7 @@ export function DirectoryModal({
           onBack={closeDetail}
           onInstall={install}
           onOpenSettings={openSettings}
+          onRemove={remove}
           onCopyLink={copyLink}
           busy={busy}
         />
@@ -308,6 +313,9 @@ export function DirectoryModal({
                       ? {
                           onOpenSettings: (id: string) => void adapter.openSettings?.(section, id),
                         }
+                      : {})}
+                    {...(adapter.uninstall && data.installable
+                      ? { onRemove: (id: string) => void runAction(id, adapter.uninstall) }
                       : {})}
                   />
                 </>
