@@ -3,8 +3,10 @@ import 'server-only';
 export const MCP_REGISTRY_BASE_URL = 'https://registry.modelcontextprotocol.io';
 const MCP_REGISTRY_SERVERS_PATH = '/v0/servers';
 export const MCP_REGISTRY_PAGE_LIMIT = 100;
+export const MCP_REGISTRY_LATEST_VERSION_FILTER = 'latest';
 const MCP_REGISTRY_OFFICIAL_META_KEY = 'io.modelcontextprotocol.registry/official' as const;
-const MCP_REGISTRY_ACTIVE_STATUS = 'active';
+export const MCP_REGISTRY_ACTIVE_STATUS = 'active';
+export const MCP_REGISTRY_DELETED_STATUS = 'deleted';
 
 export interface RegistryKeyValueInput {
   readonly name: string;
@@ -69,13 +71,20 @@ export class RegistryFetchError extends Error {
   }
 }
 
+export interface FetchRegistryPageOptions {
+  readonly cursor?: string | null;
+  readonly updatedSince?: string | null;
+}
+
 export async function fetchRegistryPage(
-  cursor: string | null,
+  options: FetchRegistryPageOptions,
   fetchImpl: RegistryFetch = fetch,
 ): Promise<RegistryPage> {
   const url = new URL(MCP_REGISTRY_SERVERS_PATH, MCP_REGISTRY_BASE_URL);
   url.searchParams.set('limit', String(MCP_REGISTRY_PAGE_LIMIT));
-  if (cursor) url.searchParams.set('cursor', cursor);
+  url.searchParams.set('version', MCP_REGISTRY_LATEST_VERSION_FILTER);
+  if (options.cursor) url.searchParams.set('cursor', options.cursor);
+  if (options.updatedSince) url.searchParams.set('updated_since', options.updatedSince);
 
   const response = await fetchImpl(url.toString(), { headers: { Accept: 'application/json' } });
   if (!response.ok) {
@@ -87,8 +96,20 @@ export async function fetchRegistryPage(
   return (await response.json()) as RegistryPage;
 }
 
+export function isLatestEntry(entry: RegistryEntry): boolean {
+  return entry._meta?.[MCP_REGISTRY_OFFICIAL_META_KEY]?.isLatest === true;
+}
+
+export function registryEntryStatus(entry: RegistryEntry): string | undefined {
+  return entry._meta?.[MCP_REGISTRY_OFFICIAL_META_KEY]?.status;
+}
+
 export function isLatestActiveEntry(entry: RegistryEntry): boolean {
-  const official = entry._meta?.[MCP_REGISTRY_OFFICIAL_META_KEY];
-  if (official?.isLatest !== true) return false;
-  return official.status === undefined || official.status === MCP_REGISTRY_ACTIVE_STATUS;
+  if (!isLatestEntry(entry)) return false;
+  const status = registryEntryStatus(entry);
+  return status === undefined || status === MCP_REGISTRY_ACTIVE_STATUS;
+}
+
+export function isDeletedEntry(entry: RegistryEntry): boolean {
+  return registryEntryStatus(entry) === MCP_REGISTRY_DELETED_STATUS;
 }
