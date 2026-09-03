@@ -618,4 +618,24 @@ describe('WebSettingsModal connectors adapter (honest web semantics)', () => {
 
     expect(screen.getByText('Team settings content')).toBeTruthy();
   });
+
+  it('lists Memory as its own top-level nav entry, not nested under Capabilities', () => {
+    stubFetch();
+    render(<WebSettingsModal open onClose={vi.fn()} initialSection="general" />);
+
+    const nav = screen.getByRole('navigation', { name: 'Settings navigation' });
+    expect(within(nav).getByRole('button', { name: 'Memory' })).toBeTruthy();
+    expect(within(nav).getByRole('button', { name: 'Capabilities' })).toBeTruthy();
+  });
+
+  it('marks the Memory nav entry current when the memory section is active', () => {
+    stubFetch();
+    render(<WebSettingsModal open onClose={vi.fn()} initialSection="memory" />);
+
+    const nav = screen.getByRole('navigation', { name: 'Settings navigation' });
+    expect(within(nav).getByRole('button', { name: 'Memory' })).toHaveAttribute(
+      'aria-current',
+      'page',
+    );
+  });
 });

@@ -1,83 +1,15 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
 import type { ReactNode } from 'react';
 import { Switch } from '@agiworkforce/ui';
-import {
-  fetchPreferenceNamespace,
-  savePreferenceNamespace,
-} from '@/app/settings/_lib/preferences-client';
-import { resetMemoryCapabilityCache } from '@/lib/runtime/memory-capability';
 import { SettingsSectionLink } from '../components/SettingsSectionLink';
 import { ToolApprovalDefaultsPanel } from '../components/ToolApprovalDefaultsPanel';
 import { LockdownModePanel } from '@/features/settings/components/LockdownModePanel';
-import { toUserMessage } from '@/lib/user-error-message';
-
-type CapabilitiesSettings = {
-  memory: boolean;
-  generateFromHistory: boolean;
-  allowToolAssistedGeneration: boolean;
-  searchPastChats: boolean;
-  cloudCodeExecution: boolean;
-};
-
-const NAMESPACE = 'capabilities';
-
-const DEFAULT_SETTINGS: CapabilitiesSettings = {
-  memory: false,
-  generateFromHistory: true,
-  allowToolAssistedGeneration: false,
-  searchPastChats: false,
-  // Matches the server default in code-execution-policy.ts. Defaulting to off
-  // here would show every existing user a switch claiming a capability they
-  // still have is disabled.
-  cloudCodeExecution: true,
-};
+import { useCapabilitiesPreferences } from '../hooks/use-capabilities-preferences';
 
 export function CapabilitiesSection() {
-  const [settings, setSettings] = useState<CapabilitiesSettings>(DEFAULT_SETTINGS);
-  const [saving, setSaving] = useState(false);
-  const [saveError, setSaveError] = useState<string | null>(null);
-  const [savedAt, setSavedAt] = useState<number | null>(null);
-  const [loadError, setLoadError] = useState<string | null>(null);
-  const [reloadKey, setReloadKey] = useState(0);
-
-  useEffect(() => {
-    let cancelled = false;
-    fetchPreferenceNamespace<CapabilitiesSettings>(NAMESPACE, DEFAULT_SETTINGS)
-      .then((value) => {
-        if (cancelled) return;
-        setSettings(value);
-        setLoadError(null);
-      })
-      .catch((error) => {
-        if (!cancelled) {
-          setLoadError(toUserMessage(error, 'Failed to load settings'));
-        }
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [reloadKey]);
-
-  const persist = useCallback(async (next: CapabilitiesSettings) => {
-    setSettings(next);
-    setSaving(true);
-    setSaveError(null);
-    try {
-      await savePreferenceNamespace(NAMESPACE, next);
-      resetMemoryCapabilityCache();
-      setSavedAt(Date.now());
-    } catch (error) {
-      setSaveError(toUserMessage(error, 'Failed to save settings'));
-    } finally {
-      setSaving(false);
-    }
-  }, []);
-
-  const setBoolean = (key: keyof CapabilitiesSettings, value: boolean) => {
-    void persist({ ...settings, [key]: value });
-  };
+  const { settings, saving, saveError, savedAt, loadError, retry, setBoolean } =
+    useCapabilitiesPreferences();
 
   const row = (title: string, description: string, control: ReactNode) => (
     <div className="flex items-center justify-between rounded-lg border border-border/40 p-4">
@@ -115,78 +47,13 @@ export function CapabilitiesSection() {
         {loadError && (
           <button
             type="button"
-            onClick={() => setReloadKey((value) => value + 1)}
+            onClick={retry}
             className="mt-2 rounded-md border border-border/60 px-2 py-1 text-xs text-foreground transition-colors hover:bg-muted/60"
           >
             Try again
           </button>
         )}
       </div>
-
-      <section className="space-y-4">
-        <h3 className="text-sm font-medium uppercase tracking-wider text-muted-foreground">
-          Memory
-        </h3>
-
-        {row(
-          'Memory',
-          'Allow AGI to remember details across conversations',
-          <Switch
-            aria-label="Memory"
-            checked={settings.memory}
-            disabled={loadError !== null}
-            onCheckedChange={(value) => setBoolean('memory', value)}
-          />,
-        )}
-
-        {row(
-          'Generate from past chats',
-          'Use conversation history to generate better responses',
-          <Switch
-            aria-label="Generate from past chats"
-            checked={settings.generateFromHistory}
-            disabled={loadError !== null || !settings.memory}
-            onCheckedChange={(value) => setBoolean('generateFromHistory', value)}
-          />,
-        )}
-
-        {row(
-          'Search past chats',
-          'Let AGI look up excerpts from your other conversations when answering. Never used in temporary chats.',
-          <Switch
-            aria-label="Search past chats"
-            checked={settings.searchPastChats}
-            disabled={loadError !== null}
-            onCheckedChange={(value) => setBoolean('searchPastChats', value)}
-          />,
-        )}
-
-        {row(
-          'Allow memory generation from tool-assisted chats',
-          'Create memories from chats that use tools, connectors, code, or web search',
-          <Switch
-            aria-label="Allow memory generation from tool-assisted chats"
-            checked={settings.allowToolAssistedGeneration}
-            disabled={loadError !== null || !settings.memory}
-            onCheckedChange={(value) => setBoolean('allowToolAssistedGeneration', value)}
-          />,
-        )}
-
-        <div className="flex flex-col items-start gap-3">
-          <SettingsSectionLink
-            section="memory"
-            className="inline-flex min-h-6 items-center text-xs text-[var(--chat-accent-primary-text)] hover:underline"
-          >
-            View and manage memory
-          </SettingsSectionLink>
-          {/*
-            The "Import memory from other AI providers" row was removed: the web
-            import flow is a placeholder (no working provider import endpoint), so
-            surfacing a Start-import control would be a dead/fake control. It will
-            return here once the import backend ships.
-          */}
-        </div>
-      </section>
 
       <section className="flex flex-col gap-4">
         <h3 className="text-sm font-medium uppercase tracking-wider text-muted-foreground">
@@ -208,6 +75,17 @@ export function CapabilitiesSection() {
       <ToolApprovalDefaultsPanel />
 
       <LockdownModePanel />
+
+      <p className="text-xs text-muted-foreground">
+        Memory has moved to{' '}
+        <SettingsSectionLink
+          section="memory"
+          className="text-[var(--chat-accent-primary-text)] hover:underline"
+        >
+          Memory
+        </SettingsSectionLink>
+        .
+      </p>
 
       <p className="text-xs text-muted-foreground">
         Skills have moved to{' '}
