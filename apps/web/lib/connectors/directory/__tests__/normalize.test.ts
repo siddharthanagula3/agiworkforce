@@ -115,4 +115,35 @@ describe('normalizeRegistryEntry', () => {
     const record = normalizeRegistryEntry(SMITHERY_SLACK_ENTRY);
     expect(record?.categories).toContain('Communication');
   });
+
+  it('badges a custom-domain namespace as community', () => {
+    const record = normalizeRegistryEntry(SMITHERY_SLACK_ENTRY);
+    expect(record?.badge).toBe('community');
+  });
+
+  it('badges a GitHub-verified namespace as registry and carries its icon and docs url', () => {
+    const record = normalizeRegistryEntry({
+      server: {
+        name: 'io.github.acme/weather',
+        title: 'Weather Server',
+        description: 'Weather forecasts over MCP.',
+        version: '2.0.0',
+        remotes: [{ type: 'streamable-http', url: 'https://weather.example.com/mcp' }],
+        websiteUrl: 'https://weather.example.com/docs',
+        icons: [{ src: 'https://weather.example.com/icon.png', mimeType: 'image/png' }],
+      },
+    });
+    expect(record).toMatchObject({
+      badge: 'registry',
+      iconUrl: 'https://weather.example.com/icon.png',
+      docsUrl: 'https://weather.example.com/docs',
+      monogram: 'WS',
+    });
+  });
+
+  it('has no icon or docs url when the registry entry declares neither', () => {
+    const record = normalizeRegistryEntry(TANDEM_DOCS_ENTRY);
+    expect(record?.iconUrl).toBeNull();
+    expect(record?.docsUrl).toBeNull();
+  });
 });
