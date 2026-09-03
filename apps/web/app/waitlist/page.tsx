@@ -2,7 +2,7 @@ import { buildMetadata } from '@/lib/seo/metadata';
 import Link from 'next/link';
 import { Header } from '@shared/components/layout/Header';
 import { MarketingFooter } from '@/features/marketing/components/MarketingFooter';
-import { Prose, Section, Stack } from '@/features/marketing/components/system';
+import { Eyebrow, Ledger, Prose, Section, Stack } from '@/features/marketing/components/system';
 import { PageHero } from '@/features/marketing/components/pages/surfaces/shared';
 import { LinkGrid } from '@/features/marketing/components/pages/features/shared';
 import { PublicWaitlistForm } from '@/features/marketing/components/PublicWaitlistForm';
@@ -22,6 +22,16 @@ const BYOK_RELEASE_LABEL = new Intl.ListFormat('en', {
     (surface) => surface.label,
   ),
 );
+
+const HERO_STATUS_CAPTION = 'Where each surface stands today';
+
+const HERO_STATUS_SURFACES = [{ id: 'web', label: 'Web' }, ...BYOK_RELEASE_SURFACES] as const;
+
+const HERO_STATUS_ROWS = HERO_STATUS_SURFACES.map((surface) => ({
+  label: surface.label,
+  value: SURFACE_STATUS[surface.id],
+  quiet: SURFACE_STATUS[surface.id] === COMING_SOON_LABEL,
+}));
 
 export const metadata = buildMetadata({
   title: 'AGI Cloud is open: enterprise governance early access',
@@ -82,6 +92,12 @@ export default function WaitlistPage() {
             </>
           }
           ctas={[]}
+          visual={
+            <Stack gap="base">
+              <Eyebrow>{HERO_STATUS_CAPTION}</Eyebrow>
+              <Ledger rows={HERO_STATUS_ROWS} caption={HERO_STATUS_CAPTION} />
+            </Stack>
+          }
         />
 
         <Section id="join" size="sm">
