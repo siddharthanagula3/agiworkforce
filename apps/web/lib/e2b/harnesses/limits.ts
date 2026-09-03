@@ -1,0 +1,5 @@
+export const SUCCESS_EXIT_CODE = 0;
+
+export const MAX_ERROR_MESSAGE_LENGTH = 2000;
+
+export const MAX_HARNESS_TEXT_LENGTH = 100_000;
