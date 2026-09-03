@@ -439,12 +439,18 @@ export function toChatMessage(m: Message, conversationId: string): ChatMessage {
       : undefined;
 
   const metadata: Record<string, unknown> | undefined =
-    m.metadata || m.model || m.fallbackReason || m.routeLane || tokensUsed !== undefined
+    m.metadata ||
+    m.model ||
+    m.fallbackReason ||
+    m.routeLane ||
+    m.secretRedactionCount ||
+    tokensUsed !== undefined
       ? {
           ...m.metadata,
           model: m.model ?? m.metadata?.model,
           ...(m.fallbackReason ? { fallbackReason: m.fallbackReason } : {}),
           ...(m.routeLane ? { routeLane: m.routeLane } : {}),
+          ...(m.secretRedactionCount ? { secretRedactionCount: m.secretRedactionCount } : {}),
           ...(inputTokens !== undefined ? { inputTokens } : {}),
           ...(outputTokens !== undefined ? { outputTokens } : {}),
           ...(tokensUsed !== undefined ? { tokensUsed } : {}),

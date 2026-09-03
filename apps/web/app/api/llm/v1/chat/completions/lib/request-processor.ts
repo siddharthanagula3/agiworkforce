@@ -671,6 +671,7 @@ export type ProcessedRequest = {
    */
   modelPolicy?: ModelAccessPolicy | null;
   zeroDataRetentionOnly?: boolean;
+  secretRedactionCount?: number;
   subscriptionTier?: string;
   /**
    * Set only when the free lane actually dispatched this request.
