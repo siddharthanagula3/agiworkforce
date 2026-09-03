@@ -1928,6 +1928,51 @@ export async function* runToolLoop(
     }
   }
 
+  async function* emitProviderLine(entry: CollectedProviderLine): AsyncGenerator<Uint8Array> {
+    yield encoder.encode(entry.line);
+    if (entry.publicTextDelta) {
+      yield encoder.encode(eventStream.emit({ type: 'text-delta', delta: entry.publicTextDelta }));
+    }
+    if (entry.serverToolStart) {
+      const category = canonicalToolCategory(entry.serverToolStart.name, mcpTools);
+      yield encoder.encode(
+        eventStream.emit({
+          type: 'tool-execution-start',
+          toolCallId: entry.serverToolStart.toolCallId,
+          name: entry.serverToolStart.name,
+          category,
+          summary: canonicalToolSummary(entry.serverToolStart.name, category),
+          input: toAgentEventJson({}),
+        }),
+      );
+    }
+    for (const result of entry.serverToolResults ?? []) {
+      // Anthropic/Gemini/OpenAI native search all normalize to this shape
+      // (serverToolResultSources), and the provider's own title — when it has
+      // one at all — is often just a citation label, not the headline. Enrich
+      // here, on the already-capped list, before either client-facing event
+      // goes out.
+      const sources = await enrichWebSearchResultTitles(result.sources);
+      yield encoder.encode(
+        eventStream.emit({
+          type: 'source-list',
+          toolCallId: result.toolCallId,
+          sources,
+        }),
+      );
+      yield encoder.encode(
+        eventStream.emit({
+          type: 'tool-execution-end',
+          toolCallId: result.toolCallId,
+          name: result.name,
+          output: toAgentEventJson(sources),
+          isError: false,
+          elapsedMs: result.elapsedMs,
+        }),
+      );
+    }
+  }
+
   const fetchedSources: FetchedSource[] = [];
   const searchedSources: FetchedSource[] = [];
   const agiWorkTurn = processed.chatRequest?.work_mode === 'agiwork';
@@ -2798,6 +2843,7 @@ export async function* runToolLoop(
       let providerStep: ToolLoopProviderStepResult;
       try {
         const liveLines = createLiveLineQueue<CollectedProviderLine>();
+        const streamedLines = new WeakSet<CollectedProviderLine>();
         const stepPromise = runProviderStepWithFailover(step, stepRequest, (entry) =>
           liveLines.push(entry),
         );
@@ -2806,52 +2852,14 @@ export async function* runToolLoop(
           (error: unknown) => liveLines.close(error),
         );
         for await (const entry of liveLines.drain()) {
-          yield encoder.encode(entry.line);
-          if (entry.publicTextDelta) {
-            yield encoder.encode(
-              eventStream.emit({ type: 'text-delta', delta: entry.publicTextDelta }),
-            );
-          }
-          if (entry.serverToolStart) {
-            const category = canonicalToolCategory(entry.serverToolStart.name, mcpTools);
-            yield encoder.encode(
-              eventStream.emit({
-                type: 'tool-execution-start',
-                toolCallId: entry.serverToolStart.toolCallId,
-                name: entry.serverToolStart.name,
-                category,
-                summary: canonicalToolSummary(entry.serverToolStart.name, category),
-                input: toAgentEventJson({}),
-              }),
-            );
-          }
-          for (const result of entry.serverToolResults ?? []) {
-            // Anthropic/Gemini/OpenAI native search all normalize to this shape
-            // (serverToolResultSources), and the provider's own title — when it
-            // has one at all — is often just a citation label, not the
-            // headline. Enrich here, on the already-capped list, before either
-            // client-facing event goes out.
-            const sources = await enrichWebSearchResultTitles(result.sources);
-            yield encoder.encode(
-              eventStream.emit({
-                type: 'source-list',
-                toolCallId: result.toolCallId,
-                sources,
-              }),
-            );
-            yield encoder.encode(
-              eventStream.emit({
-                type: 'tool-execution-end',
-                toolCallId: result.toolCallId,
-                name: result.name,
-                output: toAgentEventJson(sources),
-                isError: false,
-                elapsedMs: result.elapsedMs,
-              }),
-            );
-          }
+          streamedLines.add(entry);
+          yield* emitProviderLine(entry);
         }
         providerStep = await stepPromise;
+        for (const entry of providerStep.lines) {
+          if (streamedLines.has(entry)) continue;
+          yield* emitProviderLine(entry);
+        }
         mergeObservedProviderUsage(observedUsage, providerStep.usage);
         for (const ref of providerStep.generatedFileRefs ?? []) {
           if (ref.fileId) providerGeneratedFileRefs.set(`${ref.provider}:${ref.fileId}`, ref);
