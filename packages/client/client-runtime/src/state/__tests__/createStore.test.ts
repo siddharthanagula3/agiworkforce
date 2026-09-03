@@ -1,4 +1,3 @@
-
 import { describe, it, expect, vi } from 'vitest';
 import { createStore } from '../createStore';
 
@@ -11,7 +10,7 @@ function makeCounterStore(onChange?: Parameters<typeof createStore<Counter>>[1])
   return createStore<Counter>({ value: 0, flag: false }, onChange);
 }
 
-describe('createStore — basic correctness', () => {
+describe('createStore, basic correctness', () => {
   it('returns initial state from getState()', () => {
     const store = makeCounterStore();
     expect(store.getState()).toEqual({ value: 0, flag: false });
@@ -69,7 +68,7 @@ describe('createStore — basic correctness', () => {
   });
 });
 
-describe('createStore — subscribe / unsubscribe', () => {
+describe('createStore, subscribe / unsubscribe', () => {
   it('subscribe returns an unsubscribe function', () => {
     const store = makeCounterStore();
     const listener = vi.fn();
@@ -109,7 +108,7 @@ describe('createStore — subscribe / unsubscribe', () => {
   });
 });
 
-describe('createStore — onChange fires before listeners', () => {
+describe('createStore, onChange fires before listeners', () => {
   it('onChange is called before listener', () => {
     const order: string[] = [];
 
@@ -148,7 +147,7 @@ describe('createStore — onChange fires before listeners', () => {
   });
 });
 
-describe('createStore — render-storm protection', () => {
+describe('createStore, render-storm protection', () => {
   it('single boolean flip causes exactly 1 listener notification', () => {
     const store = makeCounterStore();
     let renderCount = 0;
@@ -189,7 +188,7 @@ describe('createStore — render-storm protection', () => {
   });
 });
 
-describe('createStore — useSyncExternalStore compatibility', () => {
+describe('createStore, useSyncExternalStore compatibility', () => {
   it('subscribe signature matches useSyncExternalStore (subscribe returns () => void)', () => {
     const store = makeCounterStore();
     const unsub = store.subscribe(() => {});
@@ -197,7 +196,7 @@ describe('createStore — useSyncExternalStore compatibility', () => {
     expect(() => unsub()).not.toThrow();
   });
 
-  it('getState is stable — same reference between mutations', () => {
+  it('getState is stable, same reference between mutations', () => {
     const store = makeCounterStore();
     const ref1 = store.getState;
     const ref2 = store.getState;
@@ -205,7 +204,7 @@ describe('createStore — useSyncExternalStore compatibility', () => {
   });
 });
 
-describe('createStore — property: mutation sequence integrity', () => {
+describe('createStore, property: mutation sequence integrity', () => {
   it('N unique values → exactly N listener calls, final state is last value', () => {
     const store = createStore<number>(0);
     let calls = 0;

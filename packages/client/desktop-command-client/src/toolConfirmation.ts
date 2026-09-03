@@ -1,7 +1,3 @@
-/**
- * Tool Confirmation API — typed wrappers for tool approval, safety, and agent mode commands.
- */
-
 import { command } from '@agiworkforce/client-runtime';
 
 export interface ToolSafetyTierInfo {

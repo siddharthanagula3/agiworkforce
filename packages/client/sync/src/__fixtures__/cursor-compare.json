@@ -1,5 +1,5 @@
 {
-  "description": "Golden bigint-string cursor comparisons — length-then-lexicographic compare on the leading-zero-stripped string. Replayed against TS bigintGreater/maxCursor (packages/client/sync/src/__tests__/fixtures.test.ts) and Rust bigint_greater/max_cursor (apps/desktop/src-tauri/src/data/cloud_sync.rs fixture-replay tests).",
+  "description": "Golden bigint-string cursor comparisons, length-then-lexicographic compare on the leading-zero-stripped string. Replayed against TS bigintGreater/maxCursor (packages/client/sync/src/__tests__/fixtures.test.ts) and Rust bigint_greater/max_cursor (apps/desktop/src-tauri/src/data/cloud_sync.rs fixture-replay tests).",
   "bigintGreaterCases": [
     { "name": "simple_greater", "a": "10", "b": "9", "expected": true },
     { "name": "simple_less", "a": "9", "b": "10", "expected": false },
