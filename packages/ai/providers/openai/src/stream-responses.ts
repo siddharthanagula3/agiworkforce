@@ -83,6 +83,20 @@ function actionSources(action: ResponseWebSearchAction | undefined): string[] {
   return (action.sources ?? []).map((source) => stripOpenAITrackingParam(source.url));
 }
 
+function annotationTitle(raw: unknown): { url: string; title: string } | null {
+  if (typeof raw !== 'object' || raw === null) return null;
+  const annotation = raw as Record<string, unknown>;
+  if (
+    annotation['type'] !== 'url_citation' ||
+    typeof annotation['url'] !== 'string' ||
+    typeof annotation['title'] !== 'string' ||
+    !annotation['title']
+  ) {
+    return null;
+  }
+  return { url: stripOpenAITrackingParam(annotation['url']), title: annotation['title'] };
+}
+
 function mapIncompleteReason(
   reason: string | undefined,
 ): 'max_tokens' | 'stop_sequence' | 'refusal' | 'end_turn' {
@@ -222,6 +236,13 @@ export async function* translateOpenAIResponsesStream(
       return recoverFunctionCall(outputIndex, item, closeFunctionCall);
     }
     if (isMessageItem(item)) {
+      for (const content of item.content ?? []) {
+        if (content.type !== 'output_text') continue;
+        for (const raw of content.annotations ?? []) {
+          const citation = annotationTitle(raw);
+          if (citation) citationTitles.set(citation.url, citation.title);
+        }
+      }
       return (item.content ?? []).flatMap((content, contentIndex) =>
         content.type === 'output_text'
           ? recoverText(`${outputIndex}:${contentIndex}`, content.text)
@@ -252,7 +273,7 @@ export async function* translateOpenAIResponsesStream(
     const content = urls.map((url) => ({
       type: 'web_search_result',
       url,
-      title: citationTitles.get(url) ?? url,
+      title: citationTitles.get(url) ?? '',
     }));
     return {
       type: 'server-tool-result',
