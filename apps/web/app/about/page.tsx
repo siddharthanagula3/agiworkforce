@@ -12,7 +12,12 @@ import {
 } from '@/features/marketing/components/system';
 import { PageHero } from '@/features/marketing/components/pages/surfaces/shared';
 import { FounderBlock, NoteList } from '@/features/marketing/components/pages/company/shared';
-import { CATALOG_AS_OF, MARKETING, POSITIONING } from '../../lib/marketing-constants';
+import {
+  CATALOG_AS_OF,
+  MARKETING,
+  POSITIONING,
+  SURFACE_STATUS,
+} from '../../lib/marketing-constants';
 import {
   FOUNDER_NAME,
   FOUNDER_ROLE,
@@ -38,8 +43,8 @@ const PRINCIPLES = [
     body: 'Bring your own provider keys on Desktop, CLI, and VS Code. Traffic goes straight to your provider; the keys stay encrypted on your machine. We do not sit in the middle of your spend.',
   },
   {
-    title: 'One workspace, six surfaces.',
-    body: 'Web, Desktop, Mobile, CLI, Chrome, and VS Code. Each is native to its platform rather than a wrapped web view, and they share one contract layer: the same model catalog, the same trust-boundary rules, the same capability gates.',
+    title: 'One contract layer, six surfaces at different stages.',
+    body: `Web, Desktop, Mobile, CLI, Chrome, and VS Code share one contract layer: the same model catalog, the same trust-boundary rules, the same capability gates. They are not all live at once. Web and CLI: ${SURFACE_STATUS.web}. Desktop: ${SURFACE_STATUS.desktop}. Mobile, Chrome, and VS Code: ${SURFACE_STATUS.mobile}. Each surface that has shipped is native to its platform rather than a wrapped web view.`,
   },
 ];
 
@@ -108,7 +113,15 @@ export default function AboutPage() {
                   value:
                     'Rust for the CLI and the desktop core, TypeScript and React across the app surfaces',
                 },
-                { label: 'Surfaces', value: 'Web · Desktop · Mobile · CLI · Chrome · VS Code' },
+                {
+                  label: 'Surfaces',
+                  value: (
+                    <>
+                      Web · {SURFACE_STATUS.web}. CLI · {SURFACE_STATUS.cli}. Desktop ·{' '}
+                      {SURFACE_STATUS.desktop}. Mobile, Chrome, VS Code · {SURFACE_STATUS.mobile}.
+                    </>
+                  ),
+                },
                 {
                   label: 'Model catalog',
                   value: `${MARKETING.models.count} models · ${MARKETING.providers.count} provider integrations, as of ${CATALOG_AS_OF}`,
