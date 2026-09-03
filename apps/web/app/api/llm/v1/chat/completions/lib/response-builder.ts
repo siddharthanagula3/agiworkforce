@@ -13,7 +13,15 @@ import { extractJsonObject, wantsJsonObject } from './json-object-mode';
 import { mapClassifiedUpstreamError, type UpstreamErrorShape } from './upstream-error-copy';
 import { compactionUsageFields } from './context-window';
 import { addRouteLaneHeader } from '@/lib/services/free-lane/plan';
-import { observeFreeLaneSettlement } from '@/lib/services/free-lane/runtime-state-service';
+import {
+  observeFreeLaneSettlement,
+  recordRouteOutcome,
+  recordServedRouteAffinity,
+  routeAffinityTtlMs,
+} from '@/lib/services/free-lane/runtime-state-service';
+import { getRoutePricing } from '@agiworkforce/model-registry';
+import { buildServingRouteId } from './tool-loop-anthropic';
+import { routeOutcomeClassForError } from './tool-loop';
 import { canPersistAssistantTurn, persistAssistantTurn } from './assistant-turn-persistence';
 import type { ProcessedRequest } from './request-processor';
 import {
@@ -186,6 +194,31 @@ export async function buildNonStreamResponse(
     });
   }
 
+  // This function is reached only on success (a failed attempt is reported
+  // through `buildUpstreamErrorResponse` instead), so every call here is a
+  // route health success sample -- the non-streaming twin of
+  // `recordDirectRouteSuccess` in stream-transform.ts.
+  try {
+    const routeId = buildServingRouteId(provider, llmResponse.model);
+    void recordRouteOutcome(
+      routeId,
+      { class: 'success', outputTokens: llmResponse.completionTokens },
+      Date.now(),
+    );
+    if (processed.conversationId) {
+      void recordServedRouteAffinity({
+        conversationId: processed.conversationId,
+        routeId,
+        ttlMs: routeAffinityTtlMs(getRoutePricing(routeId)?.cacheClass),
+      });
+    }
+  } catch (error) {
+    logger.warn(
+      { error, userId, requestId },
+      '[response-builder] route outcome / affinity was not recorded',
+    );
+  }
+
   await onSuccessfulTurn?.();
 
   const responseId = `chatcmpl-${Date.now()}-${secureToken(7)}`;
@@ -337,6 +370,26 @@ export function buildUpstreamErrorResponse(
     },
     context === 'streaming' ? 'Streaming request failed' : 'LLM request failed',
   );
+
+  // The standard adapter path's twin of `tool-loop.ts`'s
+  // `recordProviderStepFailure`: this is the single point both the streaming
+  // and non-streaming direct paths reach once failover is exhausted, so it is
+  // where a route's failure becomes attributable to route health.
+  try {
+    const outcomeClass = routeOutcomeClassForError(error, classified);
+    if (outcomeClass) {
+      void recordRouteOutcome(
+        buildServingRouteId(provider, model),
+        { class: outcomeClass },
+        Date.now(),
+      );
+    }
+  } catch (recordError) {
+    logger.warn(
+      { error: recordError, userId, requestId },
+      '[response-builder] route outcome was not recorded',
+    );
+  }
 
   const shape: UpstreamErrorShape =
     classified.status === 402

@@ -1706,7 +1706,7 @@ const ROUTE_OUTCOME_CLASS_BY_ERROR_CATEGORY: Readonly<
   invalid_model: 'unsupported_capability',
 };
 
-function routeOutcomeClassForError(
+export function routeOutcomeClassForError(
   err: unknown,
   classified: ClassifiedError,
 ): RouteOutcomeClass | undefined {

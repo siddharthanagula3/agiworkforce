@@ -9,7 +9,13 @@ import { recordModelUsage, toOtelAttributes } from '@/lib/cost-tracker';
 import { buildCpstUsageFields } from '@/lib/cpst-telemetry';
 import { addFallbackReasonHeader } from '@/lib/chat-fallback-reason';
 import { addRouteLaneHeader } from '@/lib/services/free-lane/plan';
-import { observeFreeLaneSettlement } from '@/lib/services/free-lane/runtime-state-service';
+import {
+  observeFreeLaneSettlement,
+  recordRouteOutcome,
+  recordServedRouteAffinity,
+  routeAffinityTtlMs,
+} from '@/lib/services/free-lane/runtime-state-service';
+import { getRoutePricing } from '@agiworkforce/model-registry';
 import type { StreamChunk } from '@agiworkforce/types';
 import { OpenAIWireAssembler, toolStatusPhrase } from '@agiworkforce/provider-protocol';
 import type { ProcessedRequest } from './request-processor';
@@ -223,6 +229,48 @@ async function settleStreamBilling(input: {
     503,
     'billing_protocol_error',
   );
+}
+
+/**
+ * The standard single-turn adapter path's twin of `tool-loop.ts`'s
+ * `recordProviderStepSuccess` -- same fire-and-forget, fail-open contract, so
+ * a route health / affinity write lost here costs the next turn a ranking
+ * signal or a cache hit, never correctness. This path is the one the
+ * overwhelming majority of ordinary (no MCP/platform tool) chat turns take,
+ * so route health and served-route affinity previously had no data at all
+ * for it.
+ */
+function recordDirectRouteSuccess(input: {
+  processed: ProcessedRequest;
+  provider: string;
+  model: string;
+  ttftMs: number | null;
+  durationMs: number;
+  outputTokens: number;
+  upstreamProvider: string | undefined;
+}): void {
+  try {
+    const routeId = buildServingRouteId(input.provider, input.model);
+    void recordRouteOutcome(
+      routeId,
+      {
+        class: 'success',
+        ...(input.ttftMs !== null ? { ttftMs: input.ttftMs } : {}),
+        durationMs: input.durationMs,
+        outputTokens: input.outputTokens,
+      },
+      Date.now(),
+    );
+    if (!input.processed.conversationId) return;
+    void recordServedRouteAffinity({
+      conversationId: input.processed.conversationId,
+      routeId,
+      ttlMs: routeAffinityTtlMs(getRoutePricing(routeId)?.cacheClass),
+      ...(input.upstreamProvider ? { upstreamProvider: input.upstreamProvider } : {}),
+    });
+  } catch (error) {
+    logger.warn({ error }, '[stream-transform] route outcome / affinity was not recorded');
+  }
 }
 
 export async function buildStreamResponse(
@@ -758,6 +806,7 @@ export async function buildAdapterStreamResponse(
   const usage = createUsageAccumulator();
   const encoder = new TextEncoder();
   let firstTokenTimestampMs: number | null = null;
+  let upstreamProvider: string | undefined;
 
   const generatedFileRefs = new Map<string, GeneratedFileRef>();
 
@@ -785,6 +834,9 @@ export async function buildAdapterStreamResponse(
       try {
         for await (const chunk of chunks) {
           ingestUsageChunk(usage, chunk);
+          if (chunk.type === 'response-meta' && typeof chunk.provider === 'string') {
+            upstreamProvider = chunk.provider;
+          }
           try {
             collectGeneratedFileRefs(chunk, generatedFileRefs);
           } catch {
@@ -991,6 +1043,15 @@ export async function buildAdapterStreamResponse(
       }
 
       if (assembler.lastError === null) {
+        recordDirectRouteSuccess({
+          processed,
+          provider: providerUsed,
+          model: modelUsed,
+          ttftMs: firstTokenTimestampMs,
+          durationMs: Date.now() - streamStartedAt,
+          outputTokens: usage.outputTokens,
+          upstreamProvider,
+        });
         await persistAssistantTurnSnapshot(false);
         await onSuccessfulTurn?.();
       } else {
