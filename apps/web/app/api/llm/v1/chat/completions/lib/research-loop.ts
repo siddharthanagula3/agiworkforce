@@ -60,6 +60,7 @@ import {
 } from './tool-loop';
 import { mapClassifiedUpstreamError } from './upstream-error-copy';
 import { isUrlFetchTool, executeUrlFetch } from '@/lib/url-fetch/url-fetch-tool';
+import { enrichWebSearchResultTitles } from '@/lib/web-search/web-search-tool';
 import {
   accumulateObservedProviderUsage,
   createObservedProviderUsage,
@@ -497,7 +498,7 @@ export class SourceAggregator {
     }
     this.byUrl.set(key, {
       url,
-      title: typeof entry.title === 'string' && entry.title ? entry.title : url,
+      title: typeof entry.title === 'string' && entry.title ? entry.title : '',
       snippet: typeof entry.snippet === 'string' && entry.snippet ? entry.snippet : undefined,
     });
     return true;
@@ -509,6 +510,22 @@ export class SourceAggregator {
 
   list(): Array<ResearchSourceEntry & { position: number }> {
     return [...this.byUrl.values()].map((s, i) => ({ ...s, position: i + 1 }));
+  }
+
+  /**
+   * Fetch real headlines for entries still missing a title, in place.
+   * Delegates to `enrichWebSearchResultTitles` for the cache, concurrency cap,
+   * and timeout, then writes the results back onto the SAME keys so later
+   * `list()`/event calls see the enriched titles.
+   */
+  async enrichTitles(): Promise<void> {
+    const entries = [...this.byUrl.entries()];
+    if (entries.length === 0) return;
+    const enriched = await enrichWebSearchResultTitles(entries.map(([, value]) => value));
+    entries.forEach(([key], i) => {
+      const value = enriched[i];
+      if (value) this.byUrl.set(key, value);
+    });
   }
 
   /** Full cumulative x_search_results event (client shape unchanged). */
@@ -1483,6 +1500,7 @@ export async function* runResearchLoop(
       }
 
       totalSearches += roundSearchEvents;
+      await sources.enrichTitles();
       yield encoder.encode(toolStatusEvent('completed', responseModel, round));
       markPlanSteps(roundStepIds, 'completed');
       yield planEvent();
