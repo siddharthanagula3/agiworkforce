@@ -5,6 +5,7 @@ import { MarketingFooter } from '@/features/marketing/components/MarketingFooter
 import {
   Button,
   ButtonRow,
+  Container,
   Ledger,
   Prose,
   Section,
@@ -12,6 +13,7 @@ import {
 } from '@/features/marketing/components/system';
 import { PageHero } from '@/features/marketing/components/pages/surfaces/shared';
 import { NoteList } from '@/features/marketing/components/pages/company/shared';
+import { PolicyContents } from '@shared/components/legal/PolicyContents';
 import { POLICY_LAST_UPDATED } from '@/lib/legal-constants';
 
 export const metadata = buildMetadata({
@@ -23,6 +25,14 @@ export const metadata = buildMetadata({
 
 const LAST_REVIEWED = POLICY_LAST_UPDATED.trust;
 const NEXT_REVIEW = 'November 2026';
+
+const SECTIONS = [
+  { label: 'What we hold, and what we do not', id: 'compliance' },
+  { label: 'Control by control, dated', id: 'posture' },
+  { label: 'Do not take our word for it', id: 'verify' },
+  { label: 'When this page last moved', id: 'changes' },
+  { label: 'Go deeper on any of it', id: 'related' },
+] as const;
 
 const COMPLIANCE: { label: string; value: string }[] = [
   {
@@ -241,6 +251,10 @@ export default function TrustPage() {
             <Prose size="sm">Managed Cloud is in public alpha.</Prose>
           </Stack>
         </Section>
+
+        <Container className="mb-10">
+          <PolicyContents sections={SECTIONS} />
+        </Container>
 
         <Section id="compliance" labelledBy="agi-trust-compliance-title" rule ground="2">
           <Stack gap="loose">

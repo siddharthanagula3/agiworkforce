@@ -5,12 +5,14 @@ import { MarketingFooter } from '@/features/marketing/components/MarketingFooter
 import {
   Button,
   ButtonRow,
+  Container,
   Ledger,
   Prose,
   Section,
   Stack,
 } from '@/features/marketing/components/system';
 import { FactGrid, PageHero } from '@/features/marketing/components/pages/surfaces/shared';
+import { PolicyContents } from '@shared/components/legal/PolicyContents';
 import {
   CONTACT_EMAIL,
   CONTACT_SUBJECTS,
@@ -27,6 +29,22 @@ export const metadata = buildMetadata({
 });
 
 const LAST_REVIEWED = POLICY_LAST_UPDATED.security;
+
+const SECTIONS = [
+  { label: 'The mode decides the whole risk model', id: 'boundaries' },
+  { label: 'Where data lives, by category, by mode, by holder', id: 'data' },
+  { label: 'Encryption in transit', id: 'transit' },
+  { label: 'Encryption at rest', id: 'rest' },
+  { label: 'Access control', id: 'access' },
+  { label: 'Execution isolation', id: 'isolation' },
+  { label: 'Tenant isolation', id: 'db' },
+  { label: 'Logging', id: 'logging' },
+  { label: 'Deletion', id: 'deletion' },
+  { label: 'Release integrity', id: 'release' },
+  { label: 'Reporting a vulnerability', id: 'report' },
+  { label: 'What we have not done', id: 'not-done' },
+  { label: 'The rest of the trust surface', id: 'related' },
+] as const;
 
 const BOUNDARIES = [
   {
@@ -436,6 +454,10 @@ export default function SecurityPage() {
             </Prose>
           </Stack>
         </Section>
+
+        <Container className="mb-10">
+          <PolicyContents sections={SECTIONS} />
+        </Container>
 
         <Section id="boundaries" labelledBy="agi-security-boundaries-title" rule ground="2">
           <Stack gap="loose">
