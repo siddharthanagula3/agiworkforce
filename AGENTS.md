@@ -9,7 +9,7 @@ repository. `CLAUDE.md` is a thin adapter over this file and may not weaken it.
 Path-scoped rules live in `.claude/rules/`; machine-readable ownership lives in
 `docs/agent-context/lanes.json`.
 
-This file states rules. It does not mirror facts that live in code — the
+This file states rules. It does not mirror facts that live in code, the
 previous agent-doc corpus was deleted in August 2026 because it did exactly
 that and rotted. Every mutable value below is a pointer to the thing that
 enforces it.
@@ -24,7 +24,7 @@ enforces it.
 - Mark what you could not verify as unknown. An honest gap beats a confident
   invention.
 - **Verify the instrument, not just the result.** A harness, guard or probe is
-  a source like any other. Ask what would make its answer false — state leaking
+  a source like any other. Ask what would make its answer false, state leaking
   between cases, a measurement taken before the page settled, your own traffic
   counted as the product's, a check that passed over an input it never read.
 - **A second opinion sharing the first one's question is not independent.**
@@ -75,7 +75,7 @@ require editing a consumer.
 tables.** Provider defaults, provider task routing, canonicalization targets,
 tier lists, and Auto routing slots reference a family slot (`family:<provider>/<family>`)
 that resolves at compile time to that slot's active model. A newer release in an
-existing family is a one-record promotion — never a sweep through the routing
+existing family is a one-record promotion, never a sweep through the routing
 tables. `pnpm models:families` evaluates every slot against the promotion gates
 (provider availability, family and tier identity, lifecycle, capability
 coverage, and cost/context/benchmark regression thresholds);
@@ -114,7 +114,7 @@ The parts you cannot infer from one file:
   `--confirm-production`.
 - **Web routing middleware is `apps/web/proxy.ts`, exporting `proxy`.** Next.js 16
   renamed it; do not restore `middleware.ts`. `apps/web/AGENTS.md` and
-  `apps/web/CLAUDE.md` are written by `next dev` — commit them rather than
+  `apps/web/CLAUDE.md` are written by `next dev`, commit them rather than
   reverting a diff that only regenerates.
 - **`packages/ui/unified-chat` is surface-neutral.** It is shared by desktop, web,
   Chrome, and VS Code; nothing in it may assume one surface's routing, billing,
@@ -143,7 +143,7 @@ Enforced by: `check:trust-boundaries`, `check:rust-egress-boundary`,
 Inference cost is a first-class design constraint. Routing weighs intent,
 capability, quality, latency, privacy, reliability, context, and total cost. A
 stronger model is not a default because it is stronger. Routing metadata is
-centralized and configurable — never inlined at a call site. Do not encode a
+centralized and configurable, never inlined at a call site. Do not encode a
 competitor's subscription economics as a permanent repository fact.
 
 ## 8. Scale
@@ -168,8 +168,8 @@ Never weaken validation, tests, security, trust boundaries, permissions, type
 safety, lint rules, or guards to make a change pass.
 
 An action a user cannot undo asks first, and the question names the
-consequence — what stops working, who loses access, whether it can be
-recovered — not "are you sure". `useConfirmAction` in `@agiworkforce/ui` is
+consequence, what stops working, who loses access, whether it can be
+recovered, not "are you sure". `useConfirmAction` in `@agiworkforce/ui` is
 that surface; a mutation fired straight from `onClick` is a defect regardless
 of how obvious the button's label seems.
 
@@ -185,7 +185,7 @@ not silently become architecture.
 ## 11. Documentation
 
 Documentation describes current reality unless explicitly historical. Do not
-create arbitrary Markdown — update the canonical owner instead, and delete stale
+create arbitrary Markdown, update the canonical owner instead, and delete stale
 or contradictory copies. Git carries history; the live tree does not.
 
 | Kind of knowledge              | Home                            |
@@ -219,7 +219,7 @@ without it.
 | Task              | Command                                                                                        |
 | ----------------- | ---------------------------------------------------------------------------------------------- |
 | Lint              | `pnpm lint` (Chrome extension: `pnpm lint:extension`)                                          |
-| Typecheck         | `pnpm typecheck:all` — `pnpm typecheck` covers only desktop                                    |
+| Typecheck         | `pnpm typecheck:all`, `pnpm typecheck` covers only desktop                                     |
 | Test everything   | `pnpm test`                                                                                    |
 | Test what changed | `pnpm test:affected`                                                                           |
 | One package       | `pnpm --filter @agiworkforce/web test`                                                         |
@@ -231,7 +231,7 @@ without it.
 | Guard chain       | `pnpm check:llm-operability`                                                                   |
 
 `docs/agent-context/commands.json` is the machine-readable inventory per
-surface — read it instead of guessing a workspace filter.
+surface, read it instead of guessing a workspace filter.
 
 Four things that bite:
 
@@ -251,7 +251,7 @@ Four things that bite:
 
 Commit subjects are conventional and lowercase; `commitlint` rejects any
 capitalized token in the subject, filenames included. Put those in the body.
-Lockfiles are never hand-edited — change the manifest and run the package
+Lockfiles are never hand-edited, change the manifest and run the package
 manager. New root files must be registered in `scripts/check-repo-organization.mjs`.
 
 `docs/agent-context/known-flaws.md` records durable defects. Check it before
