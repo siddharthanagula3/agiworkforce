@@ -20,6 +20,9 @@
 
 import modelsCatalogJson from './models.json';
 import { modelRegistry } from '@agiworkforce/model-registry';
+
+export { getRoutePricing } from '@agiworkforce/model-registry';
+export type { RoutePriceSheet } from '@agiworkforce/model-registry';
 import type { Provider } from './provider';
 import type { ModelInfo } from './provider-adapter';
 import type { SubscriptionTier } from './user';

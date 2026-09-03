@@ -118,7 +118,7 @@ const PROVIDER_ALIASES: Record<string, string> = {
   'open-router': 'open_router',
 };
 
-function normalizeProviderId(provider: string | null | undefined): string | null {
+export function normalizeProviderId(provider: string | null | undefined): string | null {
   if (!provider) {
     return null;
   }
