@@ -1012,13 +1012,48 @@ export const RESEARCH_SYSTEM_PROMPT =
   ' Use plain language; avoid jargon where simpler terms work just as well.' +
   ' Do not pad the report with filler sentences; every paragraph must add new information.';
 
-export function applyJsonObjectMode(chatRequest: ChatCompletionRequest): void {
-  const firstMessage = chatRequest.messages[0];
-  if (firstMessage?.role === 'system' && typeof firstMessage.content === 'string') {
-    firstMessage.content = `${firstMessage.content}\n\n${JSON_OBJECT_DIRECTIVE}`;
-  } else {
-    chatRequest.messages.unshift({ role: 'system', content: JSON_OBJECT_DIRECTIVE });
+const NO_DYNAMIC_SYSTEM_MESSAGE_REFS: ReadonlySet<object> = new Set();
+
+/**
+ * The first static (non-memory, non-skill) system message, so a directive
+ * lands ahead of `SYSTEM_PROMPT_CACHE_BOUNDARY` rather than glued onto a
+ * message that varies every turn. Falls back to `messages[0]` semantics
+ * (index -1) when every leading system message is dynamic-tracked.
+ */
+function firstStaticSystemMessageIndex(
+  messages: ChatCompletionRequest['messages'],
+  dynamicSystemMessageRefs: ReadonlySet<object>,
+): number {
+  return messages.findIndex(
+    (message) => message.role === 'system' && !dynamicSystemMessageRefs.has(message as object),
+  );
+}
+
+function applyStaticSystemDirective(
+  chatRequest: ChatCompletionRequest,
+  dynamicSystemMessageRefs: ReadonlySet<object>,
+  directive: string,
+  join: (existing: string, directive: string) => string,
+): void {
+  const index = firstStaticSystemMessageIndex(chatRequest.messages, dynamicSystemMessageRefs);
+  const target = index === -1 ? undefined : chatRequest.messages[index];
+  if (target && typeof target.content === 'string') {
+    target.content = join(target.content, directive);
+    return;
   }
+  chatRequest.messages.unshift({ role: 'system', content: directive });
+}
+
+export function applyJsonObjectMode(
+  chatRequest: ChatCompletionRequest,
+  dynamicSystemMessageRefs: ReadonlySet<object> = NO_DYNAMIC_SYSTEM_MESSAGE_REFS,
+): void {
+  applyStaticSystemDirective(
+    chatRequest,
+    dynamicSystemMessageRefs,
+    JSON_OBJECT_DIRECTIVE,
+    (existing, directive) => `${existing}\n\n${directive}`,
+  );
 }
 
 export function researchModeAllowed(
@@ -1028,15 +1063,18 @@ export function researchModeAllowed(
   return chatRequest.research === true && (caps?.research ?? false);
 }
 
-export function applyResearchMode(chatRequest: ChatCompletionRequest): void {
+export function applyResearchMode(
+  chatRequest: ChatCompletionRequest,
+  dynamicSystemMessageRefs: ReadonlySet<object> = NO_DYNAMIC_SYSTEM_MESSAGE_REFS,
+): void {
   chatRequest.web_search = true;
   chatRequest.web_fetch = true;
-  const firstMessage = chatRequest.messages[0];
-  if (firstMessage?.role === 'system') {
-    firstMessage.content = RESEARCH_SYSTEM_PROMPT + '\n\n' + firstMessage.content;
-  } else {
-    chatRequest.messages.unshift({ role: 'system', content: RESEARCH_SYSTEM_PROMPT });
-  }
+  applyStaticSystemDirective(
+    chatRequest,
+    dynamicSystemMessageRefs,
+    RESEARCH_SYSTEM_PROMPT,
+    (existing, directive) => `${directive}\n\n${existing}`,
+  );
 }
 
 /**
@@ -2344,12 +2382,12 @@ export async function processRequest(
   }
 
   if (wantsJsonObject(chatRequest.response_format)) {
-    applyJsonObjectMode(chatRequest);
+    applyJsonObjectMode(chatRequest, dynamicSystemMessageRefs);
   }
 
   const researchMode = researchModeAllowed(chatRequest, resolvedModelCaps);
   if (researchMode) {
-    applyResearchMode(chatRequest);
+    applyResearchMode(chatRequest, dynamicSystemMessageRefs);
   }
   // The user asked for Deep Research and the routed model cannot do it, so the
   // research loop will not run. Previously this was silent: the toggle stayed
