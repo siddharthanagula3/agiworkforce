@@ -104,7 +104,7 @@ describe('tier2: LLMModule loading', () => {
   });
 });
 
-describe('tier2: generate — basic', () => {
+describe('tier2: generate, basic', () => {
   it('returns text from generate()', async () => {
     const result = await tier2Generate(DEFAULT_PRESET, { prompt: 'Hello' });
     expect(result.text).toBe('hello from model');
@@ -148,7 +148,7 @@ describe('tier2: generate — basic', () => {
   });
 });
 
-describe('tier2: generate — tools API', () => {
+describe('tier2: generate, tools API', () => {
   it('passes tools array to generate()', async () => {
     const tools = [
       {

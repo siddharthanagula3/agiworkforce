@@ -107,7 +107,7 @@ async function loadContext(
     if (mmprojPath) {
       if (typeof context.initMultimodal !== 'function') {
         console.warn(
-          '[local-llm] llama.rn build lacks initMultimodal — vision disabled, text still works.',
+          '[local-llm] llama.rn build lacks initMultimodal, vision disabled, text still works.',
         );
       } else {
         try {
@@ -115,11 +115,11 @@ async function loadContext(
             (await context.initMultimodal({ path: mmprojPath, use_gpu: true })) === true;
           if (!multimodalReady) {
             console.warn(
-              '[local-llm] initMultimodal returned false — mmproj not loaded, vision off.',
+              '[local-llm] initMultimodal returned false, mmproj not loaded, vision off.',
             );
           }
         } catch (error) {
-          console.warn('[local-llm] initMultimodal threw — vision off:', error);
+          console.warn('[local-llm] initMultimodal threw, vision off:', error);
           multimodalReady = false;
         }
       }

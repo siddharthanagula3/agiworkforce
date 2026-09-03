@@ -119,7 +119,7 @@ const CATALOG: OnDeviceModel[] = [
     displayName: 'AGI Premium Multimodal',
     family: 'gemma4',
     paramCountB: 4.5, // 4.5B effective / 8B with embeddings
-    fileSizeBytes: 4_294_967_296, // ~4 GB Q4 — premium devices only; busts 2.5 GB universal budget
+    fileSizeBytes: 4_294_967_296,
     supportedRuntimes: ['litert-lm'],
     contextWindow: 128_000,
     capabilities: {
@@ -164,7 +164,7 @@ const CATALOG: OnDeviceModel[] = [
     displayName: 'Apple Intelligence',
     family: 'apple-fm',
     paramCountB: 3.0, // ~3B system model
-    fileSizeBytes: 0, // OS-resident — not downloaded
+    fileSizeBytes: 0,
     supportedRuntimes: ['apple-foundation-models'],
     contextWindow: 4_096, // Apple FM public context cap (Wave 1-2 budgeting task #30)
     capabilities: {
@@ -183,7 +183,7 @@ const CATALOG: OnDeviceModel[] = [
     displayName: 'Google on-device AI (Gemma-based)',
     family: 'google-system-model',
     paramCountB: 0,
-    fileSizeBytes: 0, // OS-resident via AICore — not downloaded
+    fileSizeBytes: 0,
     supportedRuntimes: ['aicore'],
     contextWindow: 4_000, // ML Kit Prompt API input guidance; device runtime owns the model
     capabilities: {
@@ -241,7 +241,7 @@ export function getShippableModels(): OnDeviceModel[] {
 
 export function getDefaultModel(): OnDeviceModel {
   const model = CATALOG.find((m) => m.role === 'default');
-  if (!model) throw new Error('No default on-device model in catalog — catalog is corrupted');
+  if (!model) throw new Error('No default on-device model in catalog, catalog is corrupted');
   return model;
 }
 

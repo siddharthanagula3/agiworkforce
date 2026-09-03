@@ -33,7 +33,6 @@ export type {
   CreateStorageClientOptions,
 } from './factory';
 
-// Concrete adapter classes — exported for advanced users (testing,
 export { ClerkAuthAdapter, type ClerkAuthConfig } from './adapters/clerk';
 
 export { NeonDatabaseAdapter } from './adapters/neon';

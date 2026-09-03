@@ -163,7 +163,7 @@ describe('on-device catalog: tier-2 vision option (P6, gated off)', () => {
     expect(model!.license).not.toBe('Unverified');
   });
 
-  it('claims vision-in NOMINALLY only — effective vision stays install-gated', () => {
+  it('claims vision-in NOMINALLY only, effective vision stays install-gated', () => {
     const model = requireExecutorchVisionModel();
     expect(model.capabilities.visionIn).toBe(true);
   });
