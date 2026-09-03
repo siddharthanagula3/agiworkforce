@@ -83,6 +83,7 @@ function toDraft(policy: WorkspaceAdminPolicy): PolicyDraft {
     retentionDays: policy.retentionDays,
     retentionEnforced: policy.retentionEnforced,
     externalSharingEnabled: policy.externalSharingEnabled,
+    secretHandling: policy.secretHandling,
   };
 }
 

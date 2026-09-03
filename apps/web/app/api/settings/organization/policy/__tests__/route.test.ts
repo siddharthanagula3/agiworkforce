@@ -109,6 +109,14 @@ describe('GET /api/settings/organization/policy', () => {
     expect(body.policy.allowedPrivacyModes).toEqual(['local', 'byok', 'managed']);
   });
 
+  it('defaults secretHandling to redact when the saved metadata has no explicit value', async () => {
+    bindCaller({ policyRow: SAVED_POLICY });
+
+    const body = await (await GET(request() as never)).json();
+
+    expect(body.policy.secretHandling).toBe('redact');
+  });
+
   it('lets a member read the policy but not manage it', async () => {
     bindCaller({ role: 'member', policyRow: SAVED_POLICY });
 
@@ -217,6 +225,24 @@ describe('PATCH /api/settings/organization/policy', () => {
 
     const event = mockRecordAuditEvent.mock.calls[0]?.[0] as { detail: { status: string } };
     expect(event.detail.status).toBe('created');
+  });
+
+  it('stores a secretHandling patch inside the metadata column', async () => {
+    bindCaller({ policyRow: SAVED_POLICY });
+
+    await PATCH(request({ secretHandling: 'block' }) as never);
+
+    const params = upsertParams();
+    expect(JSON.parse(params[13] as string)).toMatchObject({ secretHandling: 'block' });
+  });
+
+  it('rejects a secretHandling value outside warn, redact, block', async () => {
+    bindCaller({ policyRow: SAVED_POLICY });
+
+    const response = await PATCH(request({ secretHandling: 'ignore' }) as never);
+
+    expect(response.status).toBe(400);
+    expect(upsertParams()).toEqual([]);
   });
 
   it('deduplicates repeated modes and surfaces before writing', async () => {
