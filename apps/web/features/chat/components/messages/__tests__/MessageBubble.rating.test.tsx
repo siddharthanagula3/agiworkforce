@@ -119,6 +119,20 @@ describe('rating an assistant response', () => {
     expect(up).toHaveAttribute('aria-pressed', 'false');
   });
 
+  it('toggles the rating off when the same verdict is clicked again', async () => {
+    const onReact = vi.fn();
+    render(<MessageBubble message={assistantMessage()} onReact={onReact} />);
+
+    const up = screen.getByRole('button', { name: 'Good response' });
+    await userEvent.click(up);
+    await waitFor(() => expect(up).toHaveAttribute('aria-pressed', 'true'));
+    expect(onReact).toHaveBeenNthCalledWith(1, 'msg-1', 'up');
+
+    await userEvent.click(up);
+    await waitFor(() => expect(up).toHaveAttribute('aria-pressed', 'false'));
+    expect(onReact).toHaveBeenNthCalledWith(2, 'msg-1', null);
+  });
+
   it('does not send a second vote for the same message', async () => {
     render(<MessageBubble message={assistantMessage()} />);
 
