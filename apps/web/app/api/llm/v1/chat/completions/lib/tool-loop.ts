@@ -1799,20 +1799,6 @@ function toolResultSecretBlockedMessage(toolName: string): string {
   return `The result from "${toolName}" was blocked because it contained a secret. This organization's policy blocks sensitive values before they reach the model.`;
 }
 
-/**
- * Applies the same organization secret-handling policy that
- * `applySecretHandlingToRequest` (secret-handling-gate.ts) enforces on the
- * inbound user turn, but to a tool RESULT before it reaches either the
- * client (the `x_tool_result` SSE event and the `tool-execution-end` stream
- * event) or the provider (appended to `messages` and re-sent). A fetched
- * URL, a connector response or a code-execution stdout is exactly as
- * capable of carrying a live credential as anything a user typed, and none
- * of it passed through the request-level gate.
- *
- * Exported for unit tests; every site in `runToolLoop` that emits a tool
- * result to the client or pushes one onto `messages` routes the single
- * scan result through both.
- */
 export async function applyToolResultSecretPolicy(
   userId: string | undefined,
   toolName: string,
