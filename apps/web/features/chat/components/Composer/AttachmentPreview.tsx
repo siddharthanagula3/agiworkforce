@@ -193,7 +193,7 @@ function AttachmentPreviewComponent({
         {previews.map((preview, index) =>
           preview.type === 'image' ? (
             <ImageThumbnail
-              key={`${preview.file.name}-${preview.file.size}-${preview.file.lastModified}`}
+              key={preview.url}
               preview={preview}
               index={index}
               onRemove={onRemove}
@@ -201,7 +201,7 @@ function AttachmentPreviewComponent({
             />
           ) : (
             <DocumentChip
-              key={`${preview.file.name}-${preview.file.size}-${preview.file.lastModified}`}
+              key={preview.url}
               preview={preview}
               index={index}
               onRemove={onRemove}
