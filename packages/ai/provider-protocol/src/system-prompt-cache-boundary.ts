@@ -1,10 +1,9 @@
-
 import { normalizeStructuredPromptSection } from './lib/prompt-cache-stability';
 
 export const SYSTEM_PROMPT_CACHE_BOUNDARY = '\n<!-- AGIWORKFORCE_CACHE_BOUNDARY -->\n';
 
 export function stripSystemPromptCacheBoundary(text: string): string {
-  return text.replaceAll(SYSTEM_PROMPT_CACHE_BOUNDARY, '\n');
+  return text.replaceAll(SYSTEM_PROMPT_CACHE_BOUNDARY, '\n\n');
 }
 
 export function splitSystemPromptCacheBoundary(
