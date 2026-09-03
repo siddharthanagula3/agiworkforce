@@ -4,11 +4,12 @@ import { Header } from '@shared/components/layout/Header';
 import { MarketingFooter } from '@/features/marketing/components/MarketingFooter';
 import { Prose, Section, Stack } from '@/features/marketing/components/system';
 import { PageHero } from '@/features/marketing/components/pages/surfaces/shared';
-import { CONTACT_EMAIL, LEGAL_ENTITY, PRODUCT_NAME, contactMailto } from '@/lib/legal-constants';
+import { CONTACT_EMAIL, LEGAL_ENTITY, contactMailto } from '@/lib/legal-constants';
 
 export const metadata = buildMetadata({
   title: 'Disclaimer',
-  description: `What ${PRODUCT_NAME} output is and is not: accuracy limits, professional advice, and third-party models.`,
+  description:
+    'What AGI output is and is not: accuracy limits, professional advice, and third-party models.',
   path: '/disclaimer',
 });
 
@@ -21,7 +22,7 @@ export default function DisclaimerPage() {
           id="agi-disclaimer-title"
           eyebrow="Legal"
           title="Disclaimer."
-          lede={`${PRODUCT_NAME} generates text, code, and files with language models. Model output can be wrong, out of date, or confidently invented. Check anything you intend to rely on.`}
+          lede="AGI generates text, code, and files with language models. Model output can be wrong, out of date, or confidently invented. Check anything you intend to rely on."
           ctas={[]}
         />
 
@@ -50,7 +51,7 @@ export default function DisclaimerPage() {
               Not professional advice.
             </h2>
             <Prose>
-              Nothing {PRODUCT_NAME} produces is legal, medical, financial, tax, or other regulated
+              Nothing AGI produces is legal, medical, financial, tax, or other regulated
               professional advice, and using it does not create a professional relationship of any
               kind. For a decision with legal, health, or financial consequences, consult someone
               qualified and licensed in the relevant jurisdiction.
@@ -64,11 +65,10 @@ export default function DisclaimerPage() {
               Third-party models and providers.
             </h2>
             <Prose>
-              {PRODUCT_NAME} routes requests to models operated by third parties. Their
-              availability, behaviour, and results can change without notice, and a model named in
-              the interface may be updated or retired by its provider. Provider names and marks
-              belong to their respective owners and their appearance here does not imply
-              endorsement.
+              AGI routes requests to models operated by third parties. Their availability,
+              behaviour, and results can change without notice, and a model named in the interface
+              may be updated or retired by its provider. Provider names and marks belong to their
+              respective owners and their appearance here does not imply endorsement.
             </Prose>
             <Prose>
               When you connect a tool or bring your own key, that provider&rsquo;s own terms govern
@@ -108,7 +108,7 @@ export default function DisclaimerPage() {
               <Link href="/terms" className="agi-ds-link">
                 terms of service
               </Link>
-              , and what you may do with {PRODUCT_NAME} is in the{' '}
+              , and what you may do with AGI is in the{' '}
               <Link href="/acceptable-use" className="agi-ds-link">
                 acceptable use policy
               </Link>
