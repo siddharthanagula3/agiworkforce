@@ -52,6 +52,7 @@ export const FOOTER_COLUMNS = [
       { href: '/about', label: 'About' },
       { href: '/docs', label: 'Docs' },
       { href: '/help', label: 'Help' },
+      { href: '/faq', label: 'FAQ' },
       { href: '/blog', label: 'Blog' },
       { href: '/careers', label: 'Careers' },
       { href: '/status', label: 'Status' },
