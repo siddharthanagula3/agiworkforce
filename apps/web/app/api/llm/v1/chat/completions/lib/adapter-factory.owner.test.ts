@@ -40,12 +40,16 @@ import {
   buildAnthropicAdapter,
   buildDeepSeekAdapter,
   buildGoogleAdapter,
+  buildGroqAdapter,
   buildMinimaxAdapter,
   buildMoonshotAdapter,
+  buildNvidiaNimAdapter,
   buildOpenAIAdapter,
   buildOpenRouterAdapter,
   buildPerplexityAdapter,
   buildQwenAdapter,
+  buildVercelGatewayAdapter,
+  buildWorkersAiAdapter,
   buildXAIAdapter,
   buildZhipuAdapter,
 } from './adapter-factory';
@@ -64,6 +68,10 @@ const SERVER_PROVIDER_BUILDERS: ReadonlyArray<{
   { providerId: 'deepseek', build: buildDeepSeekAdapter },
   { providerId: 'xai', build: buildXAIAdapter },
   { providerId: 'perplexity', build: buildPerplexityAdapter },
+  { providerId: 'groq', build: buildGroqAdapter },
+  { providerId: 'nvidia_nim', build: buildNvidiaNimAdapter },
+  { providerId: 'workers_ai', build: buildWorkersAiAdapter },
+  { providerId: 'vercel_gateway', build: buildVercelGatewayAdapter },
 ];
 
 describe('managed Web adapter construction ownership', () => {

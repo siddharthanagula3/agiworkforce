@@ -57,6 +57,22 @@ export function buildPerplexityAdapter(): ProviderAdapter {
   return buildServerProviderAdapter('perplexity');
 }
 
+export function buildGroqAdapter(): ProviderAdapter {
+  return buildServerProviderAdapter('groq');
+}
+
+export function buildNvidiaNimAdapter(): ProviderAdapter {
+  return buildServerProviderAdapter('nvidia_nim');
+}
+
+export function buildWorkersAiAdapter(): ProviderAdapter {
+  return buildServerProviderAdapter('workers_ai');
+}
+
+export function buildVercelGatewayAdapter(): ProviderAdapter {
+  return buildServerProviderAdapter('vercel_gateway');
+}
+
 export async function startProviderStream(
   adapter: ProviderAdapter,
   chatRequest: ChatRequest,
