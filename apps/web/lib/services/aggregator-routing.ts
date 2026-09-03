@@ -5,10 +5,13 @@ import {
   getRegistryRoute,
   listCanonicalModels,
   type ModelMetadata,
+  type RouteCommercialStatus,
 } from '@agiworkforce/types';
 
 const MANAGED_CLOUD_TRUST_MODE = 'managed_cloud';
 const OPEN_ROUTER_PROVIDER = 'open_router';
+const BLOCKED_ROUTE_COMMERCIAL_STATUS: RouteCommercialStatus = 'blocked';
+const EXPERIMENTAL_ROUTE_COMMERCIAL_STATUS: RouteCommercialStatus = 'experimental_only';
 
 const DEFAULT_ROUTED_PROVIDERS = ['minimax', 'qwen', 'zhipu'] as const;
 const DEFAULT_ROUTED_PROVIDER_SET: ReadonlySet<string> = new Set(DEFAULT_ROUTED_PROVIDERS);
@@ -45,6 +48,56 @@ export function dispatchProviderForRoute(routeId: string): string | undefined {
   const route = getRegistryRoute(routeId);
   if (!route) return undefined;
   return route.provider === OPEN_ROUTER_PROVIDER ? 'openrouter' : route.provider;
+}
+
+export type RouteSelectionRejectionReason =
+  | 'unknown_route'
+  | 'model_mismatch'
+  | 'trust_mode_not_permitted'
+  | 'commercial_status_not_admitted';
+
+export interface RouteSelectionRequest {
+  modelId: string;
+  trustMode: string;
+  hasUserProviderKey: boolean;
+}
+
+export interface RouteSelectionOutcome {
+  ok: boolean;
+  reason: RouteSelectionRejectionReason | null;
+}
+
+function isRouteCommercialStatusAdmitted(
+  commercialStatus: RouteCommercialStatus,
+  trustMode: string,
+  hasUserProviderKey: boolean,
+): boolean {
+  if (commercialStatus === BLOCKED_ROUTE_COMMERCIAL_STATUS) return false;
+  if (commercialStatus !== EXPERIMENTAL_ROUTE_COMMERCIAL_STATUS) return true;
+  if (trustMode === MANAGED_CLOUD_TRUST_MODE) return false;
+  return hasUserProviderKey;
+}
+
+export function validateRouteSelection(
+  routeId: string,
+  request: RouteSelectionRequest,
+): RouteSelectionOutcome {
+  const route = getRegistryRoute(routeId);
+  if (!route) return { ok: false, reason: 'unknown_route' };
+  if (route.modelKey !== request.modelId) return { ok: false, reason: 'model_mismatch' };
+  if (!route.trustModes.includes(request.trustMode)) {
+    return { ok: false, reason: 'trust_mode_not_permitted' };
+  }
+  if (
+    !isRouteCommercialStatusAdmitted(
+      route.commercialStatus,
+      request.trustMode,
+      request.hasUserProviderKey,
+    )
+  ) {
+    return { ok: false, reason: 'commercial_status_not_admitted' };
+  }
+  return { ok: true, reason: null };
 }
 
 export function openRouterSlugFor(apiModelId: string): string | undefined {

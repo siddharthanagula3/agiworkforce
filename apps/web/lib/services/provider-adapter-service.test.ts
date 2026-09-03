@@ -41,6 +41,7 @@ const createProviderAdapter = vi.fn((providerId: string, config: unknown) => ({
 }));
 const getOptionalEnv = vi.fn<(key: string) => string | undefined>();
 const loggerInfo = vi.fn();
+const loggerWarn = vi.fn();
 
 vi.mock('@agiworkforce/providers-factory', () => ({
   createProviderAdapter: (providerId: string, config: unknown) =>
@@ -52,7 +53,10 @@ vi.mock('@shared/utils/env', () => ({
 }));
 
 vi.mock('@/lib/logger', () => ({
-  logger: { info: (...args: unknown[]) => loggerInfo(...args), warn: vi.fn() },
+  logger: {
+    info: (...args: unknown[]) => loggerInfo(...args),
+    warn: (...args: unknown[]) => loggerWarn(...args),
+  },
 }));
 
 async function loadService(): Promise<typeof import('./provider-adapter-service')> {
@@ -68,6 +72,7 @@ describe('resolveProviderFromModel', () => {
   beforeEach(() => {
     getOptionalEnv.mockReset();
     getOptionalEnv.mockReturnValue(undefined);
+    loggerWarn.mockClear();
     delete process.env['OPENROUTER_API_KEY'];
   });
 
@@ -121,6 +126,74 @@ describe('resolveProviderFromModel', () => {
     );
 
     expect(resolveProviderFromModel(requireProviderDefaultModel('qwen'))).toBe('qwen');
+  });
+
+  it('falls back to default resolution and warns when the selected route serves a different model', () => {
+    const model = requireProviderDefaultModel('openai');
+
+    expect(resolveProviderFromModel(model, 'anthropic/claude-sonnet-5')).toBe('openai');
+    expect(loggerWarn).toHaveBeenCalledWith(
+      expect.objectContaining({ routeId: 'anthropic/claude-sonnet-5', reason: 'model_mismatch' }),
+      expect.any(String),
+    );
+  });
+
+  it('falls back to default resolution when the selected route is closed to the request trust mode', () => {
+    const model = requireProviderDefaultModel('minimax');
+
+    expect(resolveProviderFromModel(model, 'open_router/minimax-m3', { trustMode: 'local' })).toBe(
+      'minimax',
+    );
+    expect(loggerWarn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        routeId: 'open_router/minimax-m3',
+        reason: 'trust_mode_not_permitted',
+      }),
+      expect.any(String),
+    );
+  });
+
+  it('falls back to default resolution when an experimental route lacks an admitting key', () => {
+    const model = requireProviderDefaultModel('anthropic');
+
+    expect(
+      resolveProviderFromModel(model, 'vercel_gateway/claude-sonnet-5', {
+        trustMode: 'byok',
+        hasUserProviderKey: false,
+      }),
+    ).toBe('anthropic');
+    expect(loggerWarn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        routeId: 'vercel_gateway/claude-sonnet-5',
+        reason: 'commercial_status_not_admitted',
+      }),
+      expect.any(String),
+    );
+  });
+
+  it('defaults an omitted trust mode to managed, rejecting a byok-only route', () => {
+    const model = requireProviderDefaultModel('anthropic');
+
+    expect(resolveProviderFromModel(model, 'vercel_gateway/claude-sonnet-5')).toBe('anthropic');
+    expect(loggerWarn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        routeId: 'vercel_gateway/claude-sonnet-5',
+        reason: 'trust_mode_not_permitted',
+      }),
+      expect.any(String),
+    );
+  });
+
+  it('dispatches an experimental route once the byok trust mode and a user key admit it', () => {
+    const model = requireProviderDefaultModel('anthropic');
+
+    expect(
+      resolveProviderFromModel(model, 'vercel_gateway/claude-sonnet-5', {
+        trustMode: 'byok',
+        hasUserProviderKey: true,
+      }),
+    ).toBe('vercel_gateway');
+    expect(loggerWarn).not.toHaveBeenCalled();
   });
 });
 
