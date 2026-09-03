@@ -3,7 +3,7 @@ import { Header } from '@shared/components/layout/Header';
 import { MarketingFooter } from '@/features/marketing/components/MarketingFooter';
 import { Ledger, Section, Stack } from '@/features/marketing/components/system';
 import { PageHero } from '@/features/marketing/components/pages/surfaces/shared';
-import { LAUNCH } from '../../lib/marketing-constants';
+import { DESKTOP_LOCAL_RUNTIMES, LAUNCH } from '../../lib/marketing-constants';
 
 export const metadata: Metadata = {
   title: 'Changelog',
@@ -24,6 +24,30 @@ interface Release {
 }
 
 const RELEASES: Release[] = [
+  {
+    date: '2026-07-31',
+    headline: 'Agent tooling and platform maturity · live',
+    body: [
+      'CLI: configurable keybindings, live NDJSON event streaming, named-agent runs, session search by pull request, managed-gateway model discovery.',
+      'Desktop: official MCP registry connection, menu bar residency, renderer IPC isolation, secure LLM proxy settings.',
+      'Web: centralized approval inbox, live admin security console, virtualized chat transcript, account session management.',
+    ],
+  },
+  {
+    date: '2026-07-03',
+    headline: 'Desktop local model providers · live',
+    body: [
+      `Desktop now talks to ${DESKTOP_LOCAL_RUNTIMES.label} as local, self-hosted model providers, alongside the existing BYOK provider set.`,
+    ],
+  },
+  {
+    date: '2026-06-24',
+    headline: 'Local, BYOK, and cloud trust boundary · live',
+    body: [
+      'Fail-closed egress separation enforced across all six surfaces: local mode makes no network call to us, BYOK traffic goes straight to the provider you configured, managed cloud is metered against your plan.',
+      'Canonical security policy published in SECURITY.md, naming the trust-boundary model and its known gaps.',
+    ],
+  },
   {
     date: '2026-05-08',
     headline: 'Marketing site redesign · live',
