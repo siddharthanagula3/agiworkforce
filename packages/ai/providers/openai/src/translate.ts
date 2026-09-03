@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 
 import type {
   ChatRequest,
@@ -187,6 +188,41 @@ function thinkingBudgetToRequestedEffort(
 
 const OPENAI_RESPONSES_ONLY_TOOL_TYPES = new Set(['web_search_preview', 'code_interpreter']);
 
+const PROMPT_CACHE_KEY_PREFIX = 'sysfp';
+const PROMPT_CACHE_KEY_DIGEST_LENGTH = 32;
+
+function collectLeadingSystemMessageText(messages: ProviderMessage[]): string[] {
+  const out: string[] = [];
+  for (const msg of messages) {
+    if (msg.role !== 'system') break;
+    const text =
+      typeof msg.content === 'string'
+        ? msg.content
+        : msg.content
+            .filter(isTextBlock)
+            .map((b) => b.text)
+            .join('\n\n');
+    out.push(text);
+  }
+  return out;
+}
+
+export function derivePromptCacheKey(req: ChatRequest): string | undefined {
+  const explicit = req.system;
+  const prefixText =
+    explicit !== undefined
+      ? typeof explicit === 'string'
+        ? explicit
+        : explicit.map((b: TextBlock) => b.text).join('\n\n')
+      : collectLeadingSystemMessageText(req.messages).join('\n\n');
+  if (!prefixText) return undefined;
+  const digest = createHash('sha256')
+    .update(prefixText)
+    .digest('hex')
+    .slice(0, PROMPT_CACHE_KEY_DIGEST_LENGTH);
+  return `${PROMPT_CACHE_KEY_PREFIX}_${digest}`;
+}
+
 export interface TranslateOptions {
   compat: OpenAICompletionsCompatDefaults;
   provider: string;
@@ -218,6 +254,7 @@ export function translateChatRequest(
     ...(vendorTools as OpenAIChatCompletionCreateParams['tools'] & unknown[]),
   ];
   const toolChoice = translateToolChoice(req.toolChoice);
+  const promptCacheKey = derivePromptCacheKey(req);
 
   const params: OpenAIChatCompletionCreateParams = {
     model: req.model,
@@ -230,6 +267,7 @@ export function translateChatRequest(
     ...(req.topP !== undefined ? { top_p: req.topP } : {}),
     ...(req.stopSequences ? { stop: req.stopSequences } : {}),
     ...(req.metadata ? { metadata: req.metadata as Record<string, string> } : {}),
+    ...(promptCacheKey ? { prompt_cache_key: promptCacheKey } : {}),
   };
 
   if (req.maxOutputTokens !== undefined) {

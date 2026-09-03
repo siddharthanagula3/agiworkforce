@@ -25,6 +25,7 @@ import type {
   ResponsesTool,
   ResponsesToolChoice,
 } from './responses-types';
+import { derivePromptCacheKey } from './translate';
 
 function isTextBlock(b: ContentBlock): b is TextBlock {
   return b.type === 'text';
@@ -237,6 +238,8 @@ export function translateChatRequestToResponses(
         })()
       : undefined;
 
+  const promptCacheKey = derivePromptCacheKey(req);
+
   const params: ResponsesCreateParams = {
     model: req.model,
     input: inputItems,
@@ -254,6 +257,7 @@ export function translateChatRequestToResponses(
     ...(options.store !== undefined ? { store: options.store } : {}),
     ...(options.serviceTier ? { service_tier: options.serviceTier } : {}),
     ...(req.metadata ? { metadata: req.metadata as Record<string, string> } : {}),
+    ...(promptCacheKey ? { prompt_cache_key: promptCacheKey } : {}),
   };
 
   return params;
