@@ -1,4 +1,3 @@
-
 export const CHAT_COMPLETIONS_FUNCTION_LIMIT_MS = 300_000;
 
 export const FUNCTION_TEARDOWN_RESERVE_MS = 60_000;
@@ -13,6 +12,10 @@ export const PROVIDER_STREAM_DEADLINE_MS = CHAT_TOOL_LOOP_BUDGET_MS;
 export const CLOUD_CODE_TURN_BUDGET_MS = 10 * 60_000;
 
 export const CLOUD_CODE_COMMAND_DEADLINE_MS = 60_000;
+
+export const IMAGE_GENERATION_FUNCTION_LIMIT_MS = 60_000;
+
+export const IMAGE_GENERATION_PROVIDER_DEADLINE_MS = 55_000;
 
 export const MIN_CHILD_DEADLINE_MS = 1_000;
 
@@ -59,5 +62,11 @@ export const DEADLINE_HIERARCHY = [
     parentMs: CLOUD_CODE_TURN_BUDGET_MS,
     child: 'cloud code sandbox command',
     childMs: CLOUD_CODE_COMMAND_DEADLINE_MS,
+  },
+  {
+    parent: 'image generation function limit',
+    parentMs: IMAGE_GENERATION_FUNCTION_LIMIT_MS,
+    child: 'image generation provider call',
+    childMs: IMAGE_GENERATION_PROVIDER_DEADLINE_MS,
   },
 ] as const;

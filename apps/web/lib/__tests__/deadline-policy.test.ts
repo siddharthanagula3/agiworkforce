@@ -9,6 +9,7 @@ import {
   CLOUD_CODE_TURN_BUDGET_MS,
   DEADLINE_HIERARCHY,
   FUNCTION_TEARDOWN_RESERVE_MS,
+  IMAGE_GENERATION_FUNCTION_LIMIT_MS,
   MIN_CHILD_DEADLINE_MS,
   TOOL_CALL_DEADLINE_MS,
   nestedDeadlineMs,
@@ -38,6 +39,28 @@ describe('deadline hierarchy', () => {
     const declared = /export const maxDuration = (\d+)/.exec(routeSource);
     expect(declared, 'route.ts must declare maxDuration').not.toBeNull();
     expect(Number(declared![1]) * 1000).toBe(CHAT_COMPLETIONS_FUNCTION_LIMIT_MS);
+  });
+
+  it("matches the image generation route's declared maxDuration", () => {
+    const routeSource = readFileSync(
+      join(__dirname, '../../app/api/media/image/generate/route.ts'),
+      'utf8',
+    );
+    const declared = /export const maxDuration = (\d+)/.exec(routeSource);
+    expect(declared, 'route.ts must declare maxDuration').not.toBeNull();
+    expect(Number(declared![1]) * 1000).toBe(IMAGE_GENERATION_FUNCTION_LIMIT_MS);
+  });
+
+  it('keeps every upstream provider call in the image route on the shared deadline', () => {
+    const routeSource = readFileSync(
+      join(__dirname, '../../app/api/media/image/generate/route.ts'),
+      'utf8',
+    );
+    const literalTimeouts = routeSource.match(/AbortSignal\.timeout\(\d+/g) ?? [];
+    expect(literalTimeouts, 'no upstream call may hardcode its own timeout').toEqual([]);
+    const sharedTimeouts =
+      routeSource.match(/AbortSignal\.timeout\(IMAGE_GENERATION_PROVIDER_DEADLINE_MS\)/g) ?? [];
+    expect(sharedTimeouts.length).toBeGreaterThan(0);
   });
 });
 
