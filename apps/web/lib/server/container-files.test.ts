@@ -73,6 +73,7 @@ describe('persistGeneratedFile', () => {
     );
     expect(insertMediaAsset).toHaveBeenCalledWith(
       expect.objectContaining({ kind: 'file', mimeType: 'application/pdf', provider: 'openai' }),
+      expect.anything(),
     );
     expect(result).toMatchObject({
       assetId: 'asset_1',
@@ -128,6 +129,7 @@ describe('persistGeneratedFile', () => {
     );
     expect(insertMediaAsset).toHaveBeenCalledWith(
       expect.objectContaining({ mimeType: 'text/csv' }),
+      expect.anything(),
     );
   });
 
