@@ -161,6 +161,29 @@ function centsForTokens(tokens: number, ratePerMtok: number): number {
   return Math.max(0, Math.round((tokens / 1_000_000) * ratePerMtok * 100));
 }
 
+interface ExtractedChatTokens {
+  promptTokens: number;
+  completionTokens: number;
+  cacheReadTokens: number;
+  cacheWriteTokens: number;
+  cacheWrite1hTokens: number;
+}
+
+function extractChatTokens(usage: Record<string, unknown>): ExtractedChatTokens {
+  const cacheWrite1hTokens =
+    numeric(usage['cacheWrite1hTokens']) ?? numeric(usage['cacheCreation1hInputTokens']) ?? 0;
+  return {
+    promptTokens: numeric(usage['inputTokens']) ?? numeric(usage['promptTokens']) ?? 0,
+    completionTokens: numeric(usage['outputTokens']) ?? numeric(usage['completionTokens']) ?? 0,
+    cacheReadTokens:
+      numeric(usage['cacheReadTokens']) ?? numeric(usage['cacheReadInputTokens']) ?? 0,
+    cacheWriteTokens:
+      (numeric(usage['cacheWriteTokens']) ?? numeric(usage['cacheCreationInputTokens']) ?? 0) +
+      cacheWrite1hTokens,
+    cacheWrite1hTokens,
+  };
+}
+
 export function resolveTokenClassDimensions(input: {
   capability: CogsCapability;
   provider: string;
@@ -170,14 +193,12 @@ export function resolveTokenClassDimensions(input: {
 }): TokenClassDimensions {
   if (UNIT_BASIS_BY_CAPABILITY[input.capability] !== 'token') return { ...NO_TOKEN_CLASSES };
 
-  const usage = input.usage;
-  const inputTokens = numeric(usage['inputTokens']) ?? numeric(usage['promptTokens']) ?? 0;
-  const cacheReadUnits =
-    numeric(usage['cacheReadTokens']) ?? numeric(usage['cacheReadInputTokens']) ?? 0;
-  const cacheWriteUnits =
-    (numeric(usage['cacheWriteTokens']) ?? numeric(usage['cacheCreationInputTokens']) ?? 0) +
-    (numeric(usage['cacheWrite1hTokens']) ?? numeric(usage['cacheCreation1hInputTokens']) ?? 0);
-  const compactionSavedUnits = numeric(usage['compactionSavedTokens']) ?? 0;
+  const {
+    promptTokens: inputTokens,
+    cacheReadTokens: cacheReadUnits,
+    cacheWriteTokens: cacheWriteUnits,
+  } = extractChatTokens(input.usage);
+  const compactionSavedUnits = numeric(input.usage['compactionSavedTokens']) ?? 0;
 
   if (cacheReadUnits === 0 && cacheWriteUnits === 0) {
     return { ...NO_TOKEN_CLASSES, compactionSavedUnits };
@@ -207,6 +228,54 @@ export function resolveTokenClassDimensions(input: {
       Math.max(0, cacheWriteRate - inputRate),
     ),
   };
+}
+
+/**
+ * The creator-direct list price for the same token mix, ignoring whatever
+ * discounted route actually served the request — the canonical-model tier of
+ * {@link LLMCostCalculator.getPricing}, ungated by a routeId. `null` for
+ * non-token capabilities or an unknown model, where "retail" has no meaning.
+ */
+export function resolveRetailCostCents(input: {
+  capability: CogsCapability;
+  provider: string;
+  model?: string | null;
+  usage: Record<string, unknown>;
+  pricedAt?: Date;
+}): number | null {
+  if (UNIT_BASIS_BY_CAPABILITY[input.capability] !== 'token' || !input.model) return null;
+
+  const tokens = extractChatTokens(input.usage);
+  return LLMCostCalculator.calculateCost(
+    input.provider,
+    input.model,
+    {
+      promptTokens: tokens.promptTokens,
+      completionTokens: tokens.completionTokens,
+      totalTokens: tokens.promptTokens + tokens.completionTokens,
+      cacheReadInputTokens: tokens.cacheReadTokens,
+      cacheCreationInputTokens: tokens.cacheWriteTokens,
+      cacheCreation1hInputTokens: tokens.cacheWrite1hTokens,
+    },
+    input.pricedAt ?? new Date(),
+  );
+}
+
+/**
+ * Reads the retail-equivalent cost a settled COGS row's metadata carries and
+ * divides it by what the route actually cost. `null` when either figure is
+ * unavailable or the actual cost is zero, where a multiplier is meaningless.
+ */
+export function getValueMultiplierFromCostEvent(input: {
+  metadata: Record<string, unknown> | null | undefined;
+  actualCostCents: number;
+}): number | null {
+  const retailCostCents =
+    typeof input.metadata?.['retailCostCents'] === 'number'
+      ? (input.metadata['retailCostCents'] as number)
+      : null;
+  if (retailCostCents === null || !(input.actualCostCents > 0)) return null;
+  return retailCostCents / input.actualCostCents;
 }
 
 export async function recordProviderCostEvent(
@@ -459,7 +528,21 @@ export async function recordSettledProviderCost(input: {
     );
   }
 
-  const metadata = input.routeId ? { ...input.usage, servedRouteId: input.routeId } : input.usage;
+  const retailCostCents = resolveRetailCostCents({
+    capability,
+    provider: input.provider,
+    model: input.model,
+    usage: input.usage,
+  });
+
+  const metadata =
+    input.routeId || retailCostCents !== null
+      ? {
+          ...input.usage,
+          ...(input.routeId ? { servedRouteId: input.routeId } : {}),
+          ...(retailCostCents !== null ? { retailCostCents } : {}),
+        }
+      : input.usage;
 
   try {
     await recordProviderCostEvent(
