@@ -8,6 +8,7 @@ import {
   ButtonRow,
   Eyebrow,
   Ledger,
+  ProductFrame,
   Prose,
   Section,
   Stack,
@@ -57,6 +58,17 @@ export default function FeaturesToolsPage() {
             { href: '/agent-permissions', label: 'Read the permission reference' },
             { href: '/connectors', label: 'See what connects', variant: 'secondary' },
           ]}
+          visual={
+            <ProductFrame
+              light="/product/agents-tool-approvals-light.png"
+              dark="/product/agents-tool-approvals-dark.png"
+              alt='The tool approvals setting in AGI, with "Ask before every action" selected'
+              width={1132}
+              height={584}
+              caption={['Settings', 'Tool approvals']}
+              priority
+            />
+          }
         />
 
         <Section id="gate-order" labelledBy="agi-features-tools-gate-title" rule>
