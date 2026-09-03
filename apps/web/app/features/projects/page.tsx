@@ -11,7 +11,6 @@ import {
   Section,
   Stack,
 } from '@/features/marketing/components/system';
-import { FactGrid, PageHero } from '@/features/marketing/components/pages/surfaces/shared';
 
 export const metadata = buildMetadata({
   title: 'Projects: a home for recurring work',
@@ -22,125 +21,155 @@ export const metadata = buildMetadata({
 
 const PROJECTS_ENTRY_HREF = '/login?redirectTo=%2Fchat%2Fprojects';
 
+const IDS = {
+  hero: 'agi-features-projects-title',
+  templates: 'agi-features-projects-templates-title',
+  accumulate: 'agi-features-projects-accumulate-title',
+  assembly: 'agi-features-projects-assembly-title',
+  budget: 'agi-features-projects-budget-title',
+  lifecycle: 'agi-features-projects-lifecycle-title',
+  close: 'agi-features-projects-close-title',
+} as const;
+
+const ACCUMULATES = [
+  {
+    meta: 'Instructions',
+    title: 'Written once',
+    body: 'Project settings holds a single instructions field. Up to 8,000 characters of it ride into the system message of every chat in the project.',
+  },
+  {
+    meta: 'Files',
+    title: 'Added as the work needs them',
+    body: 'The Sources tab takes images, PDFs, text, JSON and XML, dropped in or picked. A project holds up to 20 files, tracked against that cap.',
+  },
+  {
+    meta: 'Threads',
+    title: 'Accumulate on their own',
+    body: 'Every chat started from the project belongs to it, listed by date, and the ones you already ran become ranked context for the next question.',
+  },
+] as const;
+
+const BUDGET_FACTS = [
+  'filename match scores 6, summary match 3',
+  '40 recent chats ranked, 15 survive',
+  '16,000 characters per file, 48,000 across all',
+  '1,600 characters per chat excerpt',
+] as const;
+
 export default function ProjectsFeaturePage() {
   return (
     <div data-design="agi" className="agi-ds-page">
       <Header />
       <main id="main-content">
-        <PageHero
-          id="agi-features-projects-title"
-          eyebrow="Features · Projects"
-          title="A project rebuilds its own context into every prompt you send."
-          lede="Open a chat inside a project and AGI reassembles what that project holds, the standing instructions you wrote, the files you uploaded, and the threads you already ran there, into the system message for that one turn. It is built fresh each time and ranked against the question you just typed."
-          ctas={[{ href: PROJECTS_ENTRY_HREF, label: 'Open Projects in AGI Web' }]}
-          visual={
-            <ProductFrame
-              src="/product/projects-dark.png"
-              srcLight="/product/projects-light.png"
-              alt="The AGI projects view listing standing instructions, files, and threads"
-              width={2880}
-              height={1800}
-              caption={['Projects', 'Workspace']}
-              priority
-            />
-          }
-        />
-
-        <Section id="starting" labelledBy="agi-features-projects-start-title" rule>
-          <Stack gap="loose">
-            <div>
-              <Eyebrow>Starting</Eyebrow>
-              <h2 className="agi-ds-h2" id="agi-features-projects-start-title">
-                Every template arrives with its instructions already written.
-              </h2>
-              <Prose>
-                Creating a project asks for a name and a starting point. Blank leaves everything
-                empty. The rest ship with a description and a set of standing instructions filled
-                in, so the first chat in the project already behaves the way that kind of work needs
-                it to.
-              </Prose>
+        <section className="agi-lp-hero" aria-labelledby={IDS.hero}>
+          <div className="agi-ds-container agi-lp-hero-grid">
+            <div className="agi-lp-hero-copy">
+              <p className="agi-lp-eyebrow">Features &middot; Projects</p>
+              <h1 className="agi-lp-h1" id={IDS.hero}>
+                <span className="agi-lp-line">A project rebuilds</span>
+                <span className="agi-lp-line">its own context</span>
+                <em className="agi-lp-accent">into every prompt.</em>
+              </h1>
+              <p className="agi-lp-lede">
+                Open a chat inside a project and AGI reassembles what it holds, your standing
+                instructions, your files, and the threads you already ran, into the system message
+                for that one turn. Built fresh each time, ranked against the question you asked.
+              </p>
+              <ButtonRow>
+                <Button href={PROJECTS_ENTRY_HREF}>Open Projects in AGI Web</Button>
+              </ButtonRow>
             </div>
-            <Ledger
-              caption="Project templates"
-              rows={[
-                {
-                  label: 'Research',
-                  value:
-                    'Gather sources and build up findings on a topic. Ships with: "Cite a source for every factual claim, and link it."',
-                },
-                {
-                  label: 'Writing',
-                  value:
-                    'Drafting and editing with a consistent voice. Ships with: "Match the voice of the samples in this project rather than a generic house style."',
-                },
-                {
-                  label: 'Engineering',
-                  value:
-                    'Work on a codebase with its conventions in context. Ships with: "Show the smallest change that solves the problem."',
-                },
-                {
-                  label: 'Meeting notes',
-                  value:
-                    'Summarise discussions and track what was decided. Ships with: "Separate decisions from discussion, and name the owner of each action."',
-                },
-              ]}
-            />
-          </Stack>
-        </Section>
+            <div className="agi-lp-hero-stage">
+              <div className="agi-lp-browser">
+                <div className="agi-lp-browser-bar" aria-hidden="true">
+                  <span className="agi-lp-browser-dots">
+                    <i />
+                    <i />
+                    <i />
+                  </span>
+                  <span>agiworkforce.com/chat/projects</span>
+                </div>
+                <ProductFrame
+                  src="/product/projects-dark.png"
+                  srcLight="/product/projects-light.png"
+                  alt="The AGI projects view listing standing instructions, files, and threads"
+                  width={2880}
+                  height={1800}
+                  priority
+                />
+              </div>
+            </div>
+          </div>
+        </section>
 
-        <Section
-          id="accumulate"
-          labelledBy="agi-features-projects-accumulate-title"
-          rule
-          ground="2"
-        >
+        <section className="agi-lp-section" aria-labelledby={IDS.templates}>
+          <div className="agi-ds-container">
+            <div className="agi-lp-heading">
+              <p className="agi-lp-eyebrow">Starting</p>
+              <h2 className="agi-lp-h2" id={IDS.templates}>
+                Every template arrives <em className="agi-lp-accent">already written.</em>
+              </h2>
+            </div>
+            <div className="agi-lp-moments">
+              <article className="agi-lp-moment">
+                <div className="agi-lp-moment-copy">
+                  <h3 className="agi-lp-moment-title">Four starting points</h3>
+                  <p className="agi-lp-moment-body">
+                    Blank leaves everything empty. Research ships with &ldquo;Cite a source for
+                    every factual claim, and link it.&rdquo; Writing ships with &ldquo;Match the
+                    voice of the samples in this project.&rdquo; Engineering ships with &ldquo;Show
+                    the smallest change that solves the problem.&rdquo; Meeting notes ships with
+                    &ldquo;Separate decisions from discussion, and name the owner of each
+                    action.&rdquo;
+                  </p>
+                </div>
+                <ProductFrame
+                  src="/product/projects-dark-landing.png"
+                  srcLight="/product/projects-light-landing.png"
+                  alt="Creating a new AGI project from a template"
+                  width={2880}
+                  height={1800}
+                  caption={['Projects', 'New project']}
+                />
+              </article>
+            </div>
+          </div>
+        </section>
+
+        <Section id="accumulate" labelledBy={IDS.accumulate} rule ground="2">
           <Stack gap="loose">
             <div>
               <Eyebrow>What builds up</Eyebrow>
-              <h2 className="agi-ds-h2" id="agi-features-projects-accumulate-title">
+              <h2 className="agi-ds-h2" id={IDS.accumulate}>
                 Everything you add stays where the work is.
               </h2>
-              <Prose>
-                A project collects three kinds of thing, and each arrives at a different moment.
-                Instructions get written once. Files show up as the work needs them. Threads
-                accumulate on their own.
-              </Prose>
             </div>
-            <Ledger
-              caption="What a project accumulates"
-              rows={[
-                {
-                  label: 'Instructions',
-                  value:
-                    'You write the standing instructions once. Project settings holds a single instructions field. Up to 8,000 characters of it ride into the system message of every chat in the project, labelled as instructions the model is to follow for every reply here.',
-                },
-                {
-                  label: 'Files',
-                  value:
-                    'You add the files the work leans on. The Sources tab takes images, PDFs, text, JSON and XML, dropped in or picked, and text you paste is saved as a source of its own. A project holds up to 20 files, and the file list in project settings shows the running count against that cap instead of waiting for an upload to be refused.',
-                },
-                {
-                  label: 'Threads',
-                  value:
-                    'The threads pile up without you filing them. Every chat started from the project belongs to it. The project view lists them by date, and the ones you already ran become ranked context for the next question you ask.',
-                },
-              ]}
-            />
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+              {ACCUMULATES.map((item) => (
+                <div
+                  key={item.meta}
+                  className="flex flex-col gap-3 rounded-xl border border-[var(--agi-rule)] bg-[var(--agi-ground)] p-6"
+                >
+                  <Eyebrow>{item.meta}</Eyebrow>
+                  <h3 className="agi-ds-h3">{item.title}</h3>
+                  <Prose size="sm">{item.body}</Prose>
+                </div>
+              ))}
+            </div>
           </Stack>
         </Section>
 
-        <Section id="assembly" labelledBy="agi-features-projects-assembly-title" rule>
+        <Section id="assembly" labelledBy={IDS.assembly} rule>
           <Stack gap="loose">
             <div>
               <Eyebrow>What gets sent</Eyebrow>
-              <h2 className="agi-ds-h2" id="agi-features-projects-assembly-title">
+              <h2 className="agi-ds-h2" id={IDS.assembly}>
                 The project block sits at the top of the system message.
               </h2>
               <Prose>
-                It is rebuilt on every request inside a project, and skipped when the project holds
-                nothing yet. Read the boundary line below carefully: your files and your earlier
-                threads go in as reference data, and the model is told never to follow instructions
-                found inside them.
+                Rebuilt on every request inside a project, and skipped when the project holds
+                nothing yet. Your files and earlier threads go in as reference data, and the model
+                is told never to follow instructions found inside them.
               </Prose>
             </div>
             <Ledger
@@ -148,130 +177,93 @@ export default function ProjectsFeaturePage() {
               rows={[
                 {
                   label: 'Header',
-                  value:
-                    'Names the project and carries its description, so the model knows which project it is working inside.',
+                  value: 'Names the project and carries its description.',
                 },
                 {
                   label: 'Instructions',
-                  value:
-                    'Your standing instructions, included verbatim, labelled as rules to follow for every reply here.',
+                  value: 'Your standing instructions, included verbatim.',
                 },
                 {
                   label: 'Files',
-                  value:
-                    'Each knowledge file is listed by name with a short summary, then its extracted content follows as untrusted reference data.',
+                  value: 'Each file listed by name with a summary, then its extracted content.',
                 },
                 {
                   label: 'Threads',
-                  value:
-                    'The most relevant earlier chats in the project, each contributing its title and a bounded recent excerpt, also marked untrusted reference data.',
+                  value: 'The most relevant earlier chats, title plus a bounded recent excerpt.',
                 },
                 {
                   label: 'Boundary',
                   value:
-                    'A standing instruction that the model must never follow directives found inside project files or past chats, only use them as evidence for the current request.',
+                    'A standing instruction that the model must never follow directives found inside project files or past chats.',
                 },
               ]}
             />
           </Stack>
         </Section>
 
-        <Section id="budget" labelledBy="agi-features-projects-budget-title" rule ground="2">
-          <Stack gap="loose">
-            <div>
-              <Eyebrow>Ranking and budget</Eyebrow>
-              <h2 className="agi-ds-h2" id="agi-features-projects-budget-title">
-                The context is scored against your question, then trimmed to fit.
-              </h2>
-              <Prose>
-                Everything a project holds cannot go into every turn. AGI scores each file and each
-                earlier thread against the words in your current message, takes the highest scorers
-                first, and stops at a fixed character budget. Whatever gets left out is named in the
-                prompt, so the model tells you about the gap.
-              </Prose>
-            </div>
-            <Ledger
-              caption="Context ranking and budget"
-              rows={[
-                {
-                  label: 'File ranking',
-                  value:
-                    'A filename match scores 6, a summary match 3, a hit in the body 1. Ties fall back to the order the files were added.',
-                },
-                {
-                  label: 'Thread ranking',
-                  value:
-                    'The 40 most recently updated chats in the project are the candidates. A title match scores 6, an excerpt match 2, and at most 15 chats survive into the prompt.',
-                },
-                {
-                  label: 'Thread excerpts',
-                  value:
-                    'Each surviving chat contributes its last six messages, each clipped to 800 characters, capped at 1,600 characters per chat and 16,000 across all of them.',
-                },
-                {
-                  label: 'File budget',
-                  value:
-                    'A file that gets cut short is marked as an excerpt, so the model says it was truncated: 16,000 characters from any single file and 48,000 across all files in one turn.',
-                },
-                {
-                  label: 'Overflow',
-                  value:
-                    'Files that did not fit, and files whose text could not be extracted, are listed by name with an instruction to tell you rather than answer as though they were empty.',
-                },
-              ]}
-            />
-          </Stack>
-        </Section>
+        <div className="agi-lp-factline">
+          <div className="agi-ds-container">
+            <p className="agi-lp-eyebrow" style={{ marginBottom: '0.75rem' }}>
+              Ranking and budget
+            </p>
+            <h2 className="agi-ds-h3" style={{ marginBottom: '1rem' }}>
+              Scored against your question, then trimmed to fit.
+            </h2>
+            <ul className="agi-lp-factline-list">
+              {BUDGET_FACTS.map((fact) => (
+                <li key={fact}>{fact}</li>
+              ))}
+            </ul>
+          </div>
+        </div>
 
-        <Section id="lifecycle" labelledBy="agi-features-projects-lifecycle-title" rule>
+        <Section id="lifecycle" labelledBy={IDS.lifecycle} rule ground="2">
           <Stack gap="loose">
             <div>
               <Eyebrow>Over time</Eyebrow>
-              <h2 className="agi-ds-h2" id="agi-features-projects-lifecycle-title">
+              <h2 className="agi-ds-h2" id={IDS.lifecycle}>
                 A project is something you can move, copy, or close out.
               </h2>
-              <Prose>
-                Projects outlast the work that started them, so the operations that move or destroy
-                one are explicit about what they take with them.
-              </Prose>
             </div>
-            <FactGrid
-              items={[
+            <Ledger
+              caption="Project lifecycle"
+              rows={[
                 {
-                  meta: 'Pin',
-                  title: 'The projects you keep returning to sort to the top.',
-                  body: 'Pin a project from its menu. The gallery sorts by pinned first, or by last update, creation date, or name.',
+                  label: 'Pin',
+                  value:
+                    'Pin a project from its menu. The gallery sorts by pinned first, or by last update, creation date, or name.',
                 },
                 {
-                  meta: 'Copy',
-                  title: 'A project can leave as a file.',
-                  body: 'Duplicate builds a second project carrying the same instructions, description, and knowledge files. Export streams the project and its files out as a JSON download.',
+                  label: 'Copy',
+                  value:
+                    'Duplicate builds a second project carrying the same instructions, description, and knowledge files. Export streams it out as a JSON download.',
                 },
                 {
-                  meta: 'Delete',
-                  title: 'Deleting a project does not delete its conversations.',
-                  body: 'Deleting removes the project and permanently destroys the uploaded file contents. The chats that ran inside it move to All Chats.',
+                  label: 'Delete',
+                  value:
+                    'Deleting removes the project and permanently destroys the uploaded file contents. The chats that ran inside it move to All Chats.',
                 },
               ]}
             />
           </Stack>
         </Section>
 
-        <Section id="projects-close" labelledBy="agi-features-projects-close-title" rule ground="2">
-          <Stack gap="loose">
-            <h2 className="agi-ds-h2" id="agi-features-projects-close-title">
-              Memory is the other thing a project can scope.
-            </h2>
-            <Prose>
-              A project can be told to ignore everything remembered outside it, so chats there draw
-              only on the project&rsquo;s own memories. What memory stores, how it reads, and how to
-              clear it is documented on its own page.
-            </Prose>
-            <ButtonRow>
-              <Button href="/features/memory">See how memory works</Button>
-            </ButtonRow>
-          </Stack>
-        </Section>
+        <section className="agi-lp-close" aria-labelledby={IDS.close}>
+          <div className="agi-ds-container">
+            <div className="agi-lp-close-inner">
+              <h2 className="agi-lp-h2" id={IDS.close}>
+                Memory is the other thing <em className="agi-lp-accent">a project scopes.</em>
+              </h2>
+              <p className="agi-lp-lede">
+                A project can be told to ignore everything remembered outside it, so chats there
+                draw only on the project&rsquo;s own memories.
+              </p>
+              <ButtonRow>
+                <Button href="/features/memory">See how memory works</Button>
+              </ButtonRow>
+            </div>
+          </div>
+        </section>
       </main>
       <MarketingFooter />
     </div>
