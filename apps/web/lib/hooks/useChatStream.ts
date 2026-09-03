@@ -2545,9 +2545,8 @@ export function useChatStream(): UseChatStreamReturn {
         }
       }
 
-      let authToken: string;
       try {
-        authToken = await getAuthToken();
+        await getAuthToken();
       } catch {
         abandonTurn();
         setError('Your session has expired. Please sign in again.', conversationId);
@@ -2615,7 +2614,7 @@ export function useChatStream(): UseChatStreamReturn {
 
           const headers = await addCsrfHeaders({
             'Content-Type': 'application/json',
-            Authorization: `Bearer ${authToken}`,
+            Authorization: `Bearer ${await getAuthToken()}`,
             'X-AGI-Surface': 'web',
             'Idempotency-Key': createManagedChatIdempotencyKey({
               surface: 'web',
