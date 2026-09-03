@@ -23,6 +23,15 @@ export type EnterprisePrivacyMode = PrivacyMode;
 
 export type EnterprisePlanTier = 'free' | 'pro_individual' | 'team' | 'business' | 'enterprise';
 
+export type SecretHandlingMode = 'warn' | 'redact' | 'block';
+
+export const SECRET_HANDLING_MODE_DEFAULT: Readonly<
+  Record<'organization' | 'personal', SecretHandlingMode>
+> = Object.freeze({
+  organization: 'redact',
+  personal: 'warn',
+});
+
 export interface Organization {
   id: string;
   name: string;
@@ -73,6 +82,7 @@ export interface AdminPolicy {
    * this ships.
    */
   externalSharingEnabled: boolean;
+  secretHandling: SecretHandlingMode;
   metadata?: Record<string, unknown>;
   updatedAt: string;
 }
@@ -374,6 +384,7 @@ export const DEFAULT_ENTERPRISE_ADMIN_POLICY: Omit<AdminPolicy, 'organizationId'
   // permanently deleting conversations, which only a workspace owner can decide.
   retentionEnforced: false,
   externalSharingEnabled: true,
+  secretHandling: SECRET_HANDLING_MODE_DEFAULT.organization,
 };
 
 export const MANAGED_COMPUTE_MARGIN_POLICY = {

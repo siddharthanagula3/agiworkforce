@@ -3,8 +3,10 @@ import 'server-only';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import {
   DEFAULT_ENTERPRISE_ADMIN_POLICY,
+  SECRET_HANDLING_MODE_DEFAULT,
   type AdminPolicy,
   type PrivacyMode,
+  type SecretHandlingMode,
   type SyncedAppSurface,
 } from '@agiworkforce/types';
 
@@ -54,6 +56,13 @@ function toIso(value: unknown): string {
   return new Date(0).toISOString();
 }
 
+function readSecretHandling(metadata: Record<string, unknown> | null): SecretHandlingMode {
+  const value = metadata?.['secretHandling'];
+  return value === 'warn' || value === 'redact' || value === 'block'
+    ? value
+    : SECRET_HANDLING_MODE_DEFAULT.organization;
+}
+
 export function formatAdminPolicy(row: AdminPolicyRow): AdminPolicy {
   return {
     organizationId: row.organization_id,
@@ -69,6 +78,7 @@ export function formatAdminPolicy(row: AdminPolicyRow): AdminPolicy {
     retentionDays: row.retention_days,
     retentionEnforced: row.retention_enforced,
     externalSharingEnabled: row.external_sharing_enabled,
+    secretHandling: readSecretHandling(row.metadata),
     metadata: row.metadata ?? {},
     updatedAt: toIso(row.updated_at),
   };
@@ -161,7 +171,7 @@ export async function upsertOrganizationPolicy(
       input.retentionDays,
       input.retentionEnforced,
       input.externalSharingEnabled,
-      JSON.stringify(input.metadata ?? {}),
+      JSON.stringify({ ...(input.metadata ?? {}), secretHandling: input.secretHandling }),
     ],
   );
 
@@ -189,6 +199,7 @@ export function diffAdminPolicy(
     'retentionDays',
     'retentionEnforced',
     'externalSharingEnabled',
+    'secretHandling',
   ];
 
   for (const key of keys) {

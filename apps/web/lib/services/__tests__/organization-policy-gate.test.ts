@@ -3,7 +3,10 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 vi.mock('server-only', () => ({}));
 
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
-import { evaluateActiveWorkspacePolicy } from '../organization-policy-gate';
+import {
+  evaluateActiveWorkspacePolicy,
+  resolveSecretHandlingPolicy,
+} from '../organization-policy-gate';
 
 const ORGANIZATION_ID = '11111111-1111-4111-8111-111111111111';
 
@@ -149,5 +152,58 @@ describe('evaluateActiveWorkspacePolicy', () => {
 
     expect(decision.allowed).toBe(false);
     expect(String(h.query.mock.calls[0]?.[0])).toContain('organization_members');
+  });
+});
+
+describe('resolveSecretHandlingPolicy', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it('defaults a personal-scope request to warn', async () => {
+    const h = harness();
+    h.query.mockResolvedValueOnce([]);
+
+    const result = await resolveSecretHandlingPolicy(h.db, 'user-1');
+
+    expect(result).toEqual({ mode: 'warn', organizationId: null });
+  });
+
+  it('defaults an organization with no saved policy to redact', async () => {
+    const h = harness();
+    h.query.mockResolvedValueOnce([{ organization_id: ORGANIZATION_ID }]).mockResolvedValueOnce([]);
+
+    const result = await resolveSecretHandlingPolicy(h.db, 'user-1');
+
+    expect(result).toEqual({ mode: 'redact', organizationId: ORGANIZATION_ID });
+  });
+
+  it('binds an organization saved policy value', async () => {
+    const h = harness();
+    h.query
+      .mockResolvedValueOnce([{ organization_id: ORGANIZATION_ID }])
+      .mockResolvedValueOnce([policyRow({ metadata: { secretHandling: 'block' } })]);
+
+    const result = await resolveSecretHandlingPolicy(h.db, 'user-1');
+
+    expect(result).toEqual({ mode: 'block', organizationId: ORGANIZATION_ID });
+  });
+
+  it('falls back to the organization default when the policy read fails', async () => {
+    const h = harness();
+    h.query
+      .mockResolvedValueOnce([{ organization_id: ORGANIZATION_ID }])
+      .mockRejectedValueOnce(new Error('connection reset'));
+
+    const result = await resolveSecretHandlingPolicy(h.db, 'user-1');
+
+    expect(result).toEqual({ mode: 'redact', organizationId: ORGANIZATION_ID });
+  });
+
+  it('falls back to warn when the active workspace cannot be resolved', async () => {
+    const h = harness();
+    h.query.mockRejectedValueOnce(new Error('connection reset'));
+
+    const result = await resolveSecretHandlingPolicy(h.db, 'user-1');
+
+    expect(result).toEqual({ mode: 'warn', organizationId: null });
   });
 });
