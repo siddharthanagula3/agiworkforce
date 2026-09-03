@@ -38,7 +38,7 @@ them, or you will validate something you did not commit.
 ## Commits
 
 Conventional and **lowercase** subjects. `commitlint` rejects any capitalized
-token in the subject line, filenames included — put those in the body.
+token in the subject line, filenames included, put those in the body.
 
 ```
 fix(web): stop the composer dropping a queued attachment
@@ -54,7 +54,7 @@ the package manager.
 
 New root files must be registered in `scripts/check-repo-organization.mjs` or
 the guard rejects them. New documentation goes to the owner named in the
-`AGENTS.md` §11 table — if a document does not fit a row, settle ownership
+`AGENTS.md` §11 table, if a document does not fit a row, settle ownership
 before writing it.
 
 Generated artifacts are never hand-edited. Each has a generator and a drift
@@ -63,7 +63,7 @@ check; run the generator.
 ## Pull requests
 
 `.github/PULL_REQUEST_TEMPLATE/` holds templates per change type. State what you
-ran, not just what you changed — a claim of success without a command behind it
+ran, not just what you changed, a claim of success without a command behind it
 is treated as unverified.
 
 ## Reporting a vulnerability
