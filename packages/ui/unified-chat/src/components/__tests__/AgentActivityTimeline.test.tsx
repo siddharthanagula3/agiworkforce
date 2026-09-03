@@ -145,6 +145,32 @@ describe('AgentActivityTimeline', () => {
     expect(trigger.textContent).not.toContain('Searching the web');
   });
 
+  it('phrases a cancelled search entry as stopped, not searched', () => {
+    const cancelledSearch = activity({
+      status: 'cancelled',
+      completedAtMs: 2_000,
+      entries: [
+        {
+          kind: 'tool',
+          id: 'tool:search-1',
+          toolCallId: 'search-1',
+          name: 'web_search',
+          category: 'web-search',
+          summary: 'Searching the web',
+          status: 'cancelled',
+          startedAtMs: 1_100,
+          completedAtMs: 1_500,
+          sources: [{ url: 'https://example.com/a', title: 'A' }],
+        },
+      ],
+    });
+
+    render(<AgentActivityTimeline activity={cancelledSearch} />);
+    const trigger = screen.getByRole('button', { name: /show agent activity/i });
+    expect(trigger.textContent).toContain('Search stopped');
+    expect(trigger.textContent).not.toContain('Searched the web');
+  });
+
   it('keeps a failed search entry on its own humanized failure summary', () => {
     const failedSearch = activity({
       status: 'failed',
