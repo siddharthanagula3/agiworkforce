@@ -81,13 +81,15 @@ test('every route declares a known cache class, commercial status and its own pr
   }
 });
 
-const MANAGED_OPEN_ROUTER_MODEL_KEYS = [
-  'minimax-m3',
-  'qwen-3.5-flash',
-  'qwen-3.7-plus',
-  'glm-5.3',
-  'glm-5.3-flash',
-];
+const MANAGED_OPEN_ROUTER_HARNESS_ID = 'open-router/chat-completions-managed';
+const MANAGED_OPEN_ROUTER_MODEL_KEYS = Object.entries(declarations.models)
+  .filter(([, declaration]) =>
+    (declaration.additionalRoutes ?? []).some(
+      (route) =>
+        route.provider === 'open_router' && route.harnessId === MANAGED_OPEN_ROUTER_HARNESS_ID,
+    ),
+  )
+  .map(([modelKey]) => modelKey);
 
 test('the openrouter route admits managed traffic only for the models the registry names', () => {
   for (const [routeId, route] of Object.entries(registry.routes)) {
