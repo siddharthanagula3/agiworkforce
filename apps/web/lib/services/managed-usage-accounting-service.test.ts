@@ -159,6 +159,55 @@ describe('managed usage accounting', () => {
     );
   });
 
+  it('prefers a provider-reported cost over the calculator estimate, and records that source', () => {
+    const usage = createObservedProviderUsage();
+    vi.mocked(LLMCostCalculator.calculateCostDollars).mockClear();
+
+    accumulateObservedProviderUsage(
+      usage,
+      { inputTokens: 100, outputTokens: 20, providerReportedCostUsd: 0.0042 },
+      { provider: 'open_router', model: 'claude-sonnet-5', routeId: 'open_router/claude-sonnet-5' },
+    );
+
+    expect(usage.providerCallObservations?.[0]).toMatchObject({
+      costDollars: 0.0042,
+      costSource: 'provider_reported',
+    });
+    expect(usage.providerCostDollars).toBe(0.0042);
+    expect(LLMCostCalculator.calculateCostDollars).not.toHaveBeenCalled();
+  });
+
+  it('falls back to the calculator estimate and records that source when no cost was reported', () => {
+    const usage = createObservedProviderUsage();
+
+    accumulateObservedProviderUsage(
+      usage,
+      { inputTokens: 100, outputTokens: 20 },
+      { provider: 'anthropic', model: 'claude-sonnet-5' },
+    );
+
+    expect(usage.providerCallObservations?.[0]).toMatchObject({
+      costDollars: 0.09,
+      costSource: 'estimated',
+    });
+    expect(LLMCostCalculator.calculateCostDollars).toHaveBeenCalled();
+  });
+
+  it('ignores a negative or non-finite reported cost and falls back to the estimate', () => {
+    const usage = createObservedProviderUsage();
+
+    accumulateObservedProviderUsage(
+      usage,
+      { inputTokens: 100, outputTokens: 20, providerReportedCostUsd: Number.NaN },
+      { provider: 'anthropic', model: 'claude-sonnet-5' },
+    );
+
+    expect(usage.providerCallObservations?.[0]).toMatchObject({
+      costDollars: 0.09,
+      costSource: 'estimated',
+    });
+  });
+
   it('settles observed multi-call usage once through the managed lifecycle', async () => {
     const usage = createObservedProviderUsage();
     accumulateObservedProviderUsage(usage, { inputTokens: 300, outputTokens: 50 });

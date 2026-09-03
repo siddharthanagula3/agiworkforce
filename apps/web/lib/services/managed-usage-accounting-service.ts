@@ -32,6 +32,8 @@ export function createObservedProviderUsage(): ObservedProviderUsage {
   };
 }
 
+export type ObservedCostSource = 'provider_reported' | 'estimated';
+
 export interface ProviderUsageObservation {
   inputTokens: number;
   outputTokens: number;
@@ -42,12 +44,14 @@ export interface ProviderUsageObservation {
   provider?: string;
   model?: string;
   costDollars?: number;
+  costSource?: ObservedCostSource;
   routeId?: string | null;
   upstreamProvider?: string;
+  providerReportedCostUsd?: number;
 }
 
 type ProviderUsageObservationInput = Partial<
-  Omit<ProviderUsageObservation, 'provider' | 'model' | 'costDollars' | 'routeId'>
+  Omit<ProviderUsageObservation, 'provider' | 'model' | 'costDollars' | 'costSource' | 'routeId'>
 >;
 
 export interface ProviderUsagePricingContext {
@@ -71,9 +75,14 @@ function toTokenUsage(observation: ProviderUsageObservation): TokenUsage {
   };
 }
 
+function validReportedCost(value: number | undefined): number | undefined {
+  return Number.isFinite(value) && value !== undefined && value >= 0 ? value : undefined;
+}
+
 function normalizeObservation(
   observation: ProviderUsageObservationInput,
 ): ProviderUsageObservation {
+  const providerReportedCostUsd = validReportedCost(observation.providerReportedCostUsd);
   return {
     inputTokens: nonNegative(observation.inputTokens),
     outputTokens: nonNegative(observation.outputTokens),
@@ -82,6 +91,7 @@ function normalizeObservation(
     cacheWrite1hTokens: nonNegative(observation.cacheWrite1hTokens),
     reasoningTokens: nonNegative(observation.reasoningTokens),
     ...(observation.upstreamProvider ? { upstreamProvider: observation.upstreamProvider } : {}),
+    ...(providerReportedCostUsd !== undefined ? { providerReportedCostUsd } : {}),
   };
 }
 
@@ -99,19 +109,24 @@ export function accumulateObservedProviderUsage(
   target.cacheWrite1hTokens += normalized.cacheWrite1hTokens;
   target.reasoningTokens += normalized.reasoningTokens;
 
-  const priced = pricing
+  const costSource: ObservedCostSource =
+    normalized.providerReportedCostUsd !== undefined ? 'provider_reported' : 'estimated';
+  const priced: ProviderUsageObservation = pricing
     ? {
         ...normalized,
         provider: pricing.provider,
         model: pricing.model,
         routeId: pricing.routeId ?? null,
-        costDollars: LLMCostCalculator.calculateCostDollars(
-          pricing.provider,
-          pricing.model,
-          toTokenUsage(normalized),
-          undefined,
-          pricing.routeId,
-        ),
+        costDollars:
+          normalized.providerReportedCostUsd ??
+          LLMCostCalculator.calculateCostDollars(
+            pricing.provider,
+            pricing.model,
+            toTokenUsage(normalized),
+            undefined,
+            pricing.routeId,
+          ),
+        costSource,
       }
     : normalized;
   (target.providerCallObservations ??= []).push(priced);
