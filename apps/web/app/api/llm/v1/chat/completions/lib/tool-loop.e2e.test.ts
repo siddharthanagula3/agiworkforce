@@ -46,10 +46,15 @@ vi.mock('@/lib/server/container-files', async (importOriginal) => {
 });
 
 const mockReserveManagedUsageProviderStep = vi.fn();
-vi.mock('@/lib/services/managed-usage-request-service', () => ({
-  reserveManagedUsageProviderStep: (...args: unknown[]) =>
-    mockReserveManagedUsageProviderStep(...args),
-}));
+vi.mock('@/lib/services/managed-usage-request-service', async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import('@/lib/services/managed-usage-request-service')>();
+  return {
+    ...actual,
+    reserveManagedUsageProviderStep: (...args: unknown[]) =>
+      mockReserveManagedUsageProviderStep(...args),
+  };
+});
 
 import { runToolLoop, type ToolLoopProviderExecutor } from './tool-loop';
 import type { ProcessedRequest } from './request-processor';
