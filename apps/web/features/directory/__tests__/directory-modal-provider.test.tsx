@@ -9,14 +9,15 @@ vi.mock('next/dynamic', () => ({
     function WebDirectoryModalStub(props: {
       initialSection?: string;
       initialEntryId?: string | null;
+      onRouteChange?: (section: string, entryId: string | null) => void;
     }) {
       modalState.mounts += 1;
       return (
-        <div
-          data-testid="web-directory-modal"
-          data-section={props.initialSection}
-          data-entry={props.initialEntryId ?? ''}
-        />
+        <div data-testid="web-directory-modal" data-section={props.initialSection} data-entry={props.initialEntryId ?? ''}>
+          <button type="button" onClick={() => props.onRouteChange?.('connectors', 'slack')}>
+            Report route
+          </button>
+        </div>
       );
     },
 }));
@@ -102,6 +103,25 @@ describe('DirectoryModalProvider', () => {
     window.dispatchEvent(new HashChangeEvent('hashchange'));
     const modal = await screen.findByTestId('web-directory-modal');
     expect(modal.getAttribute('data-section')).toBe('skills');
+  });
+
+  it('keeps the url in step with a route the modal reports', async () => {
+    const user = userEvent.setup();
+    setHash('#directory/skills');
+    renderProvider();
+    await user.click(screen.getByRole('button', { name: 'Report route' }));
+    expect(window.location.hash).toBe('#directory/connectors/slack');
+    expect(screen.getByTestId('web-directory-modal').getAttribute('data-section')).toBe(
+      'connectors',
+    );
+  });
+
+  it('does not add a directory hash when the modal was opened without one', async () => {
+    const user = userEvent.setup();
+    renderProvider();
+    await user.click(screen.getByRole('button', { name: 'Open plugins' }));
+    await user.click(screen.getByRole('button', { name: 'Report route' }));
+    expect(window.location.hash).toBe('');
   });
 
   it('strips the directory hash on close', async () => {
