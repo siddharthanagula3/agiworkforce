@@ -11,7 +11,6 @@ import {
 } from '@/features/marketing/components/system';
 import { Header } from '@shared/components/layout/Header';
 import { MarketingFooter } from '@/features/marketing/components/MarketingFooter';
-import { PageHero } from '@/features/marketing/components/pages/surfaces/shared';
 
 export const metadata = buildMetadata({
   title: 'Artifacts: sandboxed previews, versions, and downloads',
@@ -20,35 +19,105 @@ export const metadata = buildMetadata({
   path: '/features/artifacts',
 });
 
+const IDS = {
+  hero: 'agi-features-artifacts-title',
+  renderers: 'agi-features-artifacts-renderers-title',
+  isolation: 'agi-features-artifacts-isolation-title',
+  versions: 'agi-features-artifacts-versions-title',
+  exports: 'agi-features-artifacts-exports-title',
+  gallery: 'agi-features-artifacts-gallery-title',
+  close: 'agi-features-artifacts-close-title',
+} as const;
+
+const ISOLATION_FACTS = [
+  'own origin, never the page around it',
+  'no fetch, XHR, or socket out',
+  'forms and plugins switched off',
+  "connect-src 'none' on every renderer",
+] as const;
+
+const EXPORT_CONTROLS = [
+  {
+    meta: 'Copy',
+    title: 'Puts the version on the clipboard',
+    body: 'Copies exactly the version you are reading, not the newest one if you have stepped back.',
+  },
+  {
+    meta: 'Download',
+    title: 'The artifact as a standalone file',
+    body: 'A menu offers standalone HTML, the source under its own extension, or the whole thing as Markdown. A table adds CSV, and a generated file adds that file.',
+  },
+  {
+    meta: 'Download all',
+    title: 'Every artifact in the chat, zipped',
+    body: 'Once a conversation holds more than one artifact, the panel header zips them, each entry named from its title and language, collisions numbered.',
+  },
+  {
+    meta: 'Publish',
+    title: 'A public page under its own link',
+    body: 'The page is not indexed, it is listed in Settings beside your shared links, and you revoke it from there whenever you want the link dead.',
+  },
+  {
+    meta: 'Local and BYOK',
+    title: 'Publishing does not move data quietly',
+    body: 'An artifact made in Local or BYOK mode does not publish, because that would move it to AGI managed cloud. The panel refuses by name and points at the download instead.',
+  },
+] as const;
+
 export default function ArtifactsFeaturePage() {
   return (
     <div data-design="agi" className="agi-ds-page">
       <Header />
       <main id="main-content">
-        <PageHero
-          id="agi-features-artifacts-title"
-          eyebrow="Features · Artifacts"
-          title="You can run the artifact before you keep it."
-          lede="When a reply carries something buildable, it leaves the message stream and opens in a panel beside the chat. The render sits on one tab and the source that produced it sits on the other, so the thing you are judging is the thing you can read."
-          ctas={[{ href: '/gallery', label: 'Browse the gallery' }]}
-          visual={
-            <ProductFrame
-              src="/product/artifacts-library-dark.png"
-              srcLight="/product/artifacts-library-light.png"
-              alt="The AGI library listing generated artifacts with their type, size, and route labels"
-              width={2880}
-              height={1800}
-              caption={['Library', 'Generated files']}
-              priority
-            />
-          }
-        />
+        <section className="agi-lp-hero" aria-labelledby={IDS.hero}>
+          <div className="agi-ds-container agi-lp-hero-grid">
+            <div className="agi-lp-hero-copy">
+              <p className="agi-lp-eyebrow">Features &middot; Artifacts</p>
+              <h1 className="agi-lp-h1" id={IDS.hero}>
+                <span className="agi-lp-line">Run it,</span>
+                <span className="agi-lp-line">then decide.</span>
+                <em className="agi-lp-accent">Not before.</em>
+              </h1>
+              <p className="agi-lp-lede">
+                When a reply carries something buildable, it opens in a panel beside the chat. The
+                render sits on one tab and the source that produced it sits on the other, so the
+                thing you are judging is the thing you can read.
+              </p>
+              <ButtonRow>
+                <Button href="/gallery">Browse the gallery</Button>
+                <Button href="/features/ai-chat" variant="secondary">
+                  How a reply becomes one
+                </Button>
+              </ButtonRow>
+            </div>
+            <div className="agi-lp-hero-stage">
+              <div className="agi-lp-browser">
+                <div className="agi-lp-browser-bar" aria-hidden="true">
+                  <span className="agi-lp-browser-dots">
+                    <i />
+                    <i />
+                    <i />
+                  </span>
+                  <span>agiworkforce.com/gallery</span>
+                </div>
+                <ProductFrame
+                  src="/product/artifacts-library-dark.png"
+                  srcLight="/product/artifacts-library-light.png"
+                  alt="The AGI library listing generated artifacts with their type, size, and route labels"
+                  width={2880}
+                  height={1800}
+                  priority
+                />
+              </div>
+            </div>
+          </div>
+        </section>
 
-        <Section id="renderers" labelledBy="agi-features-artifacts-renderers-title" rule>
+        <Section id="renderers" labelledBy={IDS.renderers} rule>
           <Stack gap="loose">
             <div>
               <Eyebrow>Rendering</Eyebrow>
-              <h2 className="agi-ds-h2" id="agi-features-artifacts-renderers-title">
+              <h2 className="agi-ds-h2" id={IDS.renderers}>
                 How each kind reaches the frame.
               </h2>
               <Prose>
@@ -63,84 +132,54 @@ export default function ArtifactsFeaturePage() {
                 {
                   label: 'HTML',
                   value:
-                    'The markup is rebuilt into a fresh document that carries the artifact policy, with a base tag dropped and any frame inside it stripped of same-origin access. Scripts and inline handlers survive that pass, so the page behaves the way it will behave anywhere else.',
+                    'Rebuilt into a fresh document that carries the artifact policy, with a base tag dropped and any inner frame stripped of same-origin access.',
                 },
                 {
                   label: 'React',
                   value:
-                    'The source reaches Babel inside the frame as source rather than as escaped text, is compiled there, and whatever it names App or Component is mounted against React 18.',
+                    'The source reaches Babel inside the frame as source rather than escaped text, is compiled there, and whatever it names App or Component is mounted against React 18.',
                 },
                 {
                   label: 'SVG',
                   value:
-                    'Sanitized before it is drawn: tags and attributes that could execute are stripped out. When something is stripped, the panel says so under the artifact rather than staying quiet about it.',
+                    'Sanitized before it is drawn: tags and attributes that could execute are stripped, and the panel says so under the artifact when something was.',
                 },
                 {
                   label: 'Mermaid',
                   value:
-                    'The definition is HTML-escaped on the way into the frame, so markup written inside a diagram is laid out as text, and mermaid draws the graph from what is left.',
+                    'The definition is HTML-escaped on the way in, so markup written inside a diagram lays out as text, and mermaid draws the graph from what is left.',
                 },
               ]}
             />
           </Stack>
         </Section>
 
-        <Section id="isolation" labelledBy="agi-features-artifacts-isolation-title" rule ground="2">
-          <Stack gap="loose">
-            <div>
-              <Eyebrow>Isolation</Eyebrow>
-              <h2 className="agi-ds-h2" id="agi-features-artifacts-isolation-title">
-                What the preview frame is allowed to do.
-              </h2>
-              <Prose>
-                Rendering an artifact means executing something a model wrote, so the frame it runs
-                in is the boundary. The cross-origin renderer and the in-page fallback take their
-                policy from one shared contract rather than each writing its own, so the same
-                argument covers both paths. That single policy sets{' '}
-                <code>connect-src &apos;none&apos;</code>, the directive that matters most: a page
-                rendering in the panel may draw itself, but it has no way to send what it just read
-                to anyone.
-              </Prose>
-            </div>
-            <Ledger
-              caption="Frame isolation"
-              rows={[
-                {
-                  label: 'Origin',
-                  value:
-                    'A separate origin when the deployment configures one, and a null-origin frame when it does not. Neither one can read the page around it or the session you are signed into.',
-                },
-                {
-                  label: 'Network',
-                  value:
-                    'Nothing inside the frame can fetch, open an XHR, or hold a socket. There is no route from a rendered artifact back out to your data.',
-                },
-                {
-                  label: 'Scripts',
-                  value:
-                    "The artifact's own script runs, because that is what makes the render a render. Anything it pulls in has to come from one of four named CDNs.",
-                },
-                {
-                  label: 'Forms and plugins',
-                  value:
-                    'Form submission and object embedding are both switched off, so a preview cannot post a form anywhere or load a plugin.',
-                },
-              ]}
-            />
-          </Stack>
-        </Section>
+        <div className="agi-lp-factline">
+          <div className="agi-ds-container">
+            <p className="agi-lp-eyebrow" style={{ marginBottom: '0.75rem' }}>
+              Isolation
+            </p>
+            <h2 className="agi-ds-h3" style={{ marginBottom: '1rem' }}>
+              Rendering an artifact means executing something a model wrote.
+            </h2>
+            <ul className="agi-lp-factline-list">
+              {ISOLATION_FACTS.map((fact) => (
+                <li key={fact}>{fact}</li>
+              ))}
+            </ul>
+          </div>
+        </div>
 
-        <Section id="versions" labelledBy="agi-features-artifacts-versions-title" rule>
+        <Section id="versions" labelledBy={IDS.versions} rule ground="2">
           <Stack gap="loose">
             <div>
               <Eyebrow>Versions</Eyebrow>
-              <h2 className="agi-ds-h2" id="agi-features-artifacts-versions-title">
+              <h2 className="agi-ds-h2" id={IDS.versions}>
                 Versions are keyed to the content.
               </h2>
               <Prose>
                 An artifact is worth keeping only if revising it does not cost you the draft you
-                liked. The panel tracks what actually changed, so the history is short enough to
-                walk through by hand.
+                liked, so the history tracks what actually changed.
               </Prose>
             </div>
             <Ledger
@@ -149,79 +188,65 @@ export default function ArtifactsFeaturePage() {
                 {
                   label: '01',
                   value:
-                    'A rewrite lands as the next version. Ask for a change and the panel keeps the old content and appends the new one. The chip in the header counts up, so v2/2 means you are reading the newer of the two.',
+                    'A rewrite lands as the next version. The chip in the header counts up, so v2/2 means you are reading the newer of the two.',
                 },
                 {
                   label: '02',
                   value:
-                    'An identical rewrite lands as nothing. Versions are keyed to the content. When a pass produces the same bytes the history does not move at all; only a changed title or language is written over the version you already have.',
+                    'An identical rewrite lands as nothing. Versions are keyed to the content, so the same bytes leave the history unmoved.',
                 },
                 {
                   label: '03',
                   value:
-                    'You can walk backwards through them. Arrows either side of the chip step through the history. The frame re-renders whichever version you land on, and copy and download take that one rather than the newest.',
+                    'Arrows either side of the chip step backwards through the history. The frame re-renders whichever version you land on.',
                 },
                 {
                   label: '04',
                   value:
-                    'Restoring costs you nothing. On any version but the newest, a restore control makes it current by adding it to the end of the history. The versions in between are still there behind the arrows.',
+                    'Restoring costs nothing. On any version but the newest, restore makes it current by adding it to the end of the history.',
                 },
                 {
                   label: '05',
                   value:
-                    'You can edit the source yourself. On a stored text artifact at its newest version the source is editable in place, and saving the edit stores it as the next version instead of overwriting the one you had.',
+                    'A stored text artifact at its newest version is editable in place, and saving stores the edit as the next version.',
                 },
               ]}
             />
           </Stack>
         </Section>
 
-        <Section id="exports" labelledBy="agi-features-artifacts-exports-title" rule ground="2">
+        <Section id="exports" labelledBy={IDS.exports} rule>
           <Stack gap="loose">
             <div>
               <Eyebrow>Export</Eyebrow>
-              <h2 className="agi-ds-h2" id="agi-features-artifacts-exports-title">
+              <h2 className="agi-ds-h2" id={IDS.exports}>
                 What leaves the panel with you.
               </h2>
               <Prose>
-                Every control below acts on the version currently on screen, so what you copy, save,
-                or publish is what you were looking at when you pressed it.
+                Every control acts on the version currently on screen, so what you copy, save, or
+                publish is what you were looking at when you pressed it.
               </Prose>
             </div>
-            <Ledger
-              caption="Export controls"
-              rows={[
-                { label: 'Copy', value: 'Puts the version you are reading on the clipboard.' },
-                {
-                  label: 'Download',
-                  value:
-                    'A menu: the artifact as a standalone HTML document, its source under its own extension, or the whole thing as Markdown. A table adds CSV, and an artifact backed by a generated file adds that file.',
-                },
-                {
-                  label: 'Download all',
-                  value:
-                    'Once a conversation holds more than one artifact, the panel header zips them, each entry named from its title and its language, with collisions numbered rather than overwritten.',
-                },
-                {
-                  label: 'Publish',
-                  value:
-                    'Puts the artifact on a public page under its own link. The page is not indexed, it is listed in Settings beside your shared links, and you revoke it from there whenever you want the link dead.',
-                },
-                {
-                  label: 'Local and BYOK',
-                  value:
-                    'An artifact made in Local or BYOK mode does not publish. Publishing would move it to AGI managed cloud, so the panel refuses by name and points you at the download instead.',
-                },
-              ]}
-            />
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {EXPORT_CONTROLS.map((item) => (
+                <div
+                  key={item.meta}
+                  className="flex flex-col gap-3 rounded-xl border border-[var(--agi-rule)] bg-[var(--agi-ground-2)] p-6"
+                >
+                  <Eyebrow>{item.meta}</Eyebrow>
+                  <h3 className="agi-ds-h3">{item.title}</h3>
+                  <Prose size="sm">{item.body}</Prose>
+                </div>
+              ))}
+            </div>
           </Stack>
         </Section>
 
-        <Section id="gallery" labelledBy="agi-features-artifacts-gallery-title" rule>
+        <Section id="gallery" labelledBy={IDS.gallery} rule ground="2">
           <Stack gap="loose">
             <div>
               <Eyebrow>The gallery</Eyebrow>
-              <h2 className="agi-ds-h2" id="agi-features-artifacts-gallery-title">
+              <h2 className="agi-ds-h2" id={IDS.gallery}>
                 Where the artifacts collect.
               </h2>
             </div>
@@ -229,46 +254,34 @@ export default function ArtifactsFeaturePage() {
               The panel belongs to one conversation, and Shift+A opens and closes it. The gallery is
               the account-wide view: your own artifacts on one tab and a set of worked examples on
               the other, with a search box and a type filter over both, plus a date window over your
-              own. The type filter only ever offers types the tab in front of you actually holds.
+              own.
             </Prose>
             <Prose>
-              Artifacts are held in browser storage on the device that rendered them, and when that
-              storage fills up the panel says so rather than dropping work quietly. Signed in, they
-              also sync to your account, so one made on another device appears in the gallery;
-              opening a row whose content this device has never rendered takes you to the
-              conversation that produced it, where it is rebuilt under the same identity.
+              Artifacts are held in browser storage on the device that rendered them. Signed in,
+              they also sync to your account, so one made on another device appears in the gallery;
+              opening a row this device has never rendered takes you to the conversation that
+              produced it, where it is rebuilt under the same identity.
             </Prose>
-            <ButtonRow>
-              <Button href="/features/ai-chat" variant="secondary">
-                How a reply becomes one
-              </Button>
-              <Button href="/desktop" variant="secondary">
-                The desktop workbench
-              </Button>
-            </ButtonRow>
           </Stack>
         </Section>
 
-        <Section
-          id="artifacts-close"
-          labelledBy="agi-features-artifacts-close-title"
-          rule
-          ground="2"
-        >
-          <Stack gap="loose">
-            <h2 className="agi-ds-h2" id="agi-features-artifacts-close-title">
-              Ask for something you can open.
-            </h2>
-            <Prose>
-              A chart, a component, a page, a diagram: ask for it and the panel opens beside the
-              reply with the render on one tab and the source on the other. From there it is a file
-              you own.
-            </Prose>
-            <ButtonRow>
-              <Button href="/login?redirectTo=%2Fchat">Open a chat</Button>
-            </ButtonRow>
-          </Stack>
-        </Section>
+        <section className="agi-lp-close" aria-labelledby={IDS.close}>
+          <div className="agi-ds-container">
+            <div className="agi-lp-close-inner">
+              <h2 className="agi-lp-h2" id={IDS.close}>
+                Ask for something <em className="agi-lp-accent">you can open.</em>
+              </h2>
+              <p className="agi-lp-lede">
+                A chart, a component, a page, a diagram: ask for it and the panel opens beside the
+                reply with the render on one tab and the source on the other. From there it is a
+                file you own.
+              </p>
+              <ButtonRow>
+                <Button href="/login?redirectTo=%2Fchat">Open a chat</Button>
+              </ButtonRow>
+            </div>
+          </div>
+        </section>
       </main>
       <MarketingFooter />
     </div>
