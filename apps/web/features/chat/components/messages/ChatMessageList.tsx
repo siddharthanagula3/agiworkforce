@@ -44,6 +44,7 @@ import {
   CircleAlert,
   RefreshCw,
   ShieldAlert,
+  Sparkles,
   Square,
 } from '@agiworkforce/icons';
 import { cn } from '@shared/lib/utils';
@@ -108,12 +109,30 @@ function streamErrorNoticeMessage(message: ChatMessage): string {
   return `${prefix}: ${getStreamErrorMessage(message) ?? STREAM_ERROR_CONNECTION_DETAIL}`;
 }
 
+// The provider's own quota/overload window is spent -- waiting a moment on the
+// SAME model cannot help, unlike a plain rate limit (kept to Retry alone, since
+// that one clears on its own). Matches the codes upstream-error-copy.ts sets.
+const MODEL_SWITCH_WORTHY_STREAM_ERROR_CODES = new Set([
+  'provider_quota_exhausted',
+  'provider_overloaded',
+]);
+
+function streamErrorNeedsModelSwitch(message: ChatMessage): boolean {
+  const streamError = (message.metadata as { streamError?: unknown } | undefined)?.streamError;
+  const code =
+    streamError && typeof streamError === 'object'
+      ? (streamError as { code?: unknown }).code
+      : undefined;
+  return typeof code === 'string' && MODEL_SWITCH_WORTHY_STREAM_ERROR_CODES.has(code);
+}
+
 export interface ChatMessageListProps {
   messages: ChatMessage[];
   currentTier?: UserTier;
   conversationId?: string | null;
   isLoading?: boolean;
   onRegenerate?: (messageId: string) => void;
+  onSwitchToAutoModel?: () => void;
   onRetryResearch?: (messageId: string) => void;
   onResearchPlanDecision?: (messageId: string, decision: ResearchPlanDecision) => void;
   retryingResearchMessageId?: string | null;
@@ -946,6 +965,7 @@ const ChatMessageListComponent = ({
   conversationId = null,
   isLoading,
   onRegenerate,
+  onSwitchToAutoModel,
   onRetryResearch,
   onResearchPlanDecision,
   retryingResearchMessageId = null,
@@ -1516,6 +1536,19 @@ const ChatMessageListComponent = ({
               tone="danger"
               icon={CircleAlert}
               message={streamErrorNoticeMessage(lastMessage)}
+              actionSlot={
+                onSwitchToAutoModel && streamErrorNeedsModelSwitch(lastMessage) ? (
+                  <button
+                    type="button"
+                    onClick={onSwitchToAutoModel}
+                    className="flex min-h-6 min-w-6 shrink-0 items-center gap-1 rounded-md px-2 py-1 font-medium text-foreground transition-colors hover:bg-muted"
+                    aria-label="Switch to Auto for this conversation"
+                  >
+                    <Sparkles className="h-3 w-3" aria-hidden="true" />
+                    Switch to Auto
+                  </button>
+                ) : undefined
+              }
               action={{
                 label: 'Retry',
                 ariaLabel: 'Regenerate this response',
@@ -1608,6 +1641,7 @@ const ChatMessageListComponent = ({
       onContinue,
       showStoppedNotice,
       onRegenerate,
+      onSwitchToAutoModel,
       showStreamErrorNotice,
       showRefusalNotice,
       conversationId,

@@ -1,4 +1,4 @@
-import type { ClassifiedError } from '@agiworkforce/provider-runtime';
+import { SPENDING_CAP_PROVIDER_HINT, type ClassifiedError } from '@agiworkforce/provider-runtime';
 import { markProviderDegraded } from '@/lib/services/provider-availability-service';
 
 export interface UpstreamErrorShape {
@@ -142,11 +142,15 @@ export function mapClassifiedUpstreamError(
     case 'quota_exhausted': {
       markProviderDegraded(provider, classified.category);
       const providerLabel = provider === 'google' ? 'Google' : provider;
+      const message =
+        classified.providerHint === SPENDING_CAP_PROVIDER_HINT
+          ? `${providerLabel}'s spending cap for this project is exceeded, so this model is unavailable right now. Pick another model or try later.`
+          : `${providerLabel} capacity for this model is exhausted for now. Choose Auto to use another available model, or try again later.`;
       return {
         status: 429,
         type: 'rate_limit_error',
         code: 'provider_quota_exhausted',
-        message: `${providerLabel} capacity for this model is exhausted for now. Choose Auto to use another available model, or try again later.`,
+        message,
       };
     }
 
