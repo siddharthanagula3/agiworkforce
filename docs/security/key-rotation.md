@@ -28,7 +28,7 @@ them.
 `TOTP_ENCRYPTION_KEY` is not hex. `lib/crypto/totp-envelope.ts` takes the first
 32 characters of the env value as raw bytes through
 `loadKeyRing(_, { encoding: 'utf8' })`. Do not "fix" it to hex without
-re-encrypting first — it would orphan every enrolled secret.
+re-encrypting first. It would orphan every enrolled secret.
 
 The desktop token minted by `apps/web/app/api/auth/desktop-token/route.ts` is
 also AES-256-GCM under `TOTP_ENCRYPTION_KEY`, but it is never stored: rotating
@@ -85,10 +85,10 @@ Owner named in the header.
 
 | Key env                                 | Interval  | Next due   | Sweep target                            | Downtime                         |
 | --------------------------------------- | --------- | ---------- | --------------------------------------- | -------------------------------- |
-| `CUSTOM_CONNECTOR_TOKEN_ENCRYPTION_KEY` | 12 months | 2027-08-17 | `connector-grants`, `custom-connectors` | none — ring-aware reader         |
-| `GITHUB_TOKEN_ENCRYPTION_KEY`           | 12 months | 2027-08-17 | `github-installations`                  | none — ring-aware reader         |
-| `TOTP_ENCRYPTION_KEY`                   | 12 months | 2027-08-17 | `two-factor`                            | none — ring-aware reader         |
-| `DEVICE_TOKEN_ENCRYPTION_KEY`           | 12 months | 2027-08-17 | none — no durable column                | in-flight device pairings re-run |
+| `CUSTOM_CONNECTOR_TOKEN_ENCRYPTION_KEY` | 12 months | 2027-08-17 | `connector-grants`, `custom-connectors` | none, ring-aware reader          |
+| `GITHUB_TOKEN_ENCRYPTION_KEY`           | 12 months | 2027-08-17 | `github-installations`                  | none, ring-aware reader          |
+| `TOTP_ENCRYPTION_KEY`                   | 12 months | 2027-08-17 | `two-factor`                            | none, ring-aware reader          |
+| `DEVICE_TOKEN_ENCRYPTION_KEY`           | 12 months | 2027-08-17 | none, no durable column                 | in-flight device pairings re-run |
 
 Rotate ahead of the date, not on it, whenever a key could have been read by
 someone who should not have it: a leaked deployment env, a departing operator
