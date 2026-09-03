@@ -1,4 +1,3 @@
-
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 vi.mock('../detect', async (importOriginal) => ({
@@ -42,7 +41,7 @@ describe('resolveCommandCapability (tier classification)', () => {
     expect(cap.featureGroup).toBe('MCP Tools');
   });
 
-  it('defaults an UNKNOWN command to desktop-only (safe fallback — never silently cloud)', () => {
+  it('defaults an UNKNOWN command to desktop-only (safe fallback, never silently cloud)', () => {
     const cap = resolveCommandCapability('totally_unknown_xyz_command');
     expect(cap.tier).toBe('desktop-only');
     expect(cap.featureGroup).toBe('Unknown');

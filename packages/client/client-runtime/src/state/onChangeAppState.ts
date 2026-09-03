@@ -1,4 +1,3 @@
-
 import type { AppState } from './AppStateStore';
 
 export const MAX_FANOUT_DEPTH = 2;
@@ -148,14 +147,6 @@ function channelModelSwitchBroadcast(prev: AppState, next: AppState): void {
   }
 }
 
-/**
- * onChangeAppState — call this as the `onChange` argument to createStore.
- *
- * @param newState — next state snapshot after the mutation.
- * @param oldState — previous state snapshot before the mutation.
- * @param depth    — re-entrancy depth (default 0, incremented by recursive calls).
- *                   Calls with depth > MAX_FANOUT_DEPTH are rejected.
- */
 export function onChangeAppState(
   {
     newState,

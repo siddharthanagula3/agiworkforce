@@ -1,4 +1,3 @@
-
 import { describe, expect, it, vi } from 'vitest';
 import {
   createKvStorageAdapter,
@@ -30,7 +29,7 @@ function basicCommand(overrides: Partial<QueuedCommand> = {}) {
   };
 }
 
-describe('createMessageQueue — basic correctness', () => {
+describe('createMessageQueue, basic correctness', () => {
   it('returns empty snapshot initially', () => {
     const q = createMessageQueue();
     expect(q.size()).toBe(0);
@@ -59,7 +58,7 @@ describe('createMessageQueue — basic correctness', () => {
     expect(cmd.enqueuedAt).toBe(1234567890);
   });
 
-  it('FIFO within a lane — same priority dequeues in insertion order', () => {
+  it('FIFO within a lane, same priority dequeues in insertion order', () => {
     const q = createMessageQueue();
     q.enqueue(basicCommand({ value: 'a', priority: 'next' }));
     q.enqueue(basicCommand({ value: 'b', priority: 'next' }));
@@ -71,7 +70,7 @@ describe('createMessageQueue — basic correctness', () => {
     expect(q.dequeue()).toBeUndefined();
   });
 
-  it('priority order — now > next > later', () => {
+  it('priority order, now > next > later', () => {
     const q = createMessageQueue();
     q.enqueue(basicCommand({ value: 'later1', priority: 'later' }));
     q.enqueue(basicCommand({ value: 'next1', priority: 'next' }));
@@ -145,7 +144,7 @@ describe('createMessageQueue — basic correctness', () => {
   });
 });
 
-describe('createMessageQueue — frozen snapshots', () => {
+describe('createMessageQueue, frozen snapshots', () => {
   it('returns the same snapshot reference between mutations', () => {
     const q = createMessageQueue();
     const a = q.getSnapshot();
@@ -160,13 +159,13 @@ describe('createMessageQueue — frozen snapshots', () => {
     expect(q.getSnapshot()).not.toBe(before);
   });
 
-  it('snapshot is frozen — mutation attempts throw', () => {
+  it('snapshot is frozen, mutation attempts throw', () => {
     const q = createMessageQueue();
     q.enqueue(basicCommand({ value: 'a' }));
     const snap = q.getSnapshot();
     expect(Object.isFrozen(snap)).toBe(true);
     expect(() => {
-      // @ts-expect-error — runtime test that frozen array rejects writes
+      // @ts-expect-error, runtime test that frozen array rejects writes
       snap.push({});
     }).toThrow();
   });
@@ -208,7 +207,7 @@ describe('createMessageQueue — frozen snapshots', () => {
   });
 });
 
-describe('createMessageQueue — popAllEditable', () => {
+describe('createMessageQueue, popAllEditable', () => {
   it('returns undefined when queue is empty', () => {
     const q = createMessageQueue();
     expect(q.popAllEditable('', 0)).toBeUndefined();
@@ -221,7 +220,7 @@ describe('createMessageQueue — popAllEditable', () => {
     expect(q.size()).toBe(1);
   });
 
-  it('combines queued texts with current input — insertion order', () => {
+  it('combines queued texts with current input, insertion order', () => {
     const q = createMessageQueue();
     q.enqueue(basicCommand({ value: 'first' }));
     q.enqueue(basicCommand({ value: 'second' }));
@@ -302,7 +301,7 @@ describe('createMessageQueue — popAllEditable', () => {
   });
 });
 
-describe('createMessageQueue — AbortSignal cancellation', () => {
+describe('createMessageQueue, AbortSignal cancellation', () => {
   it('aborting the signal removes the command from the queue', () => {
     const q = createMessageQueue();
     const ac = new AbortController();
@@ -333,7 +332,7 @@ describe('createMessageQueue — AbortSignal cancellation', () => {
   });
 });
 
-describe('createMessageQueue — overflow', () => {
+describe('createMessageQueue, overflow', () => {
   it('rejects with QueueFullError when a lane is at cap', () => {
     const q = createMessageQueue({ laneCap: 3 });
     q.enqueue(basicCommand({ value: '1' }));
@@ -391,7 +390,7 @@ describe('createMessageQueue — overflow', () => {
   });
 });
 
-describe('createMessageQueue — per-surface isolation', () => {
+describe('createMessageQueue, per-surface isolation', () => {
   it('two queues are completely independent', () => {
     const a = createMessageQueue();
     const b = createMessageQueue();
@@ -404,7 +403,7 @@ describe('createMessageQueue — per-surface isolation', () => {
   });
 });
 
-describe('createMessageQueue — persistence', () => {
+describe('createMessageQueue, persistence', () => {
   function createInMemoryStorage(): {
     adapter: QueueStorageAdapter;
     data: { value: string | null };
@@ -483,7 +482,7 @@ describe('createMessageQueue — persistence', () => {
   });
 });
 
-describe('createMessageQueue — dequeueIf (atomic compare-and-swap)', () => {
+describe('createMessageQueue, dequeueIf (atomic compare-and-swap)', () => {
   it('succeeds when the expected command is at the head of its lane', () => {
     const q = createMessageQueue();
     const a = q.enqueue(basicCommand({ value: 'a' }));
@@ -508,7 +507,7 @@ describe('createMessageQueue — dequeueIf (atomic compare-and-swap)', () => {
     expect(() => q.dequeueIf(a.id)).toThrow(QueueDequeueRaceError);
   });
 
-  it('two concurrent dequeueIf calls — only one wins, other throws', () => {
+  it('two concurrent dequeueIf calls, only one wins, other throws', () => {
     const q = createMessageQueue();
     const cmd = q.enqueue(basicCommand({ value: 'race' }));
     const winner = q.dequeueIf(cmd.id);
@@ -517,7 +516,7 @@ describe('createMessageQueue — dequeueIf (atomic compare-and-swap)', () => {
   });
 });
 
-describe('createMessageQueue — logger', () => {
+describe('createMessageQueue, logger', () => {
   it('logs enqueue / dequeue / pop / remove / clear events', () => {
     const events: string[] = [];
     const q = createMessageQueue({
@@ -613,7 +612,7 @@ describe('createKvStorageAdapter', () => {
   });
 });
 
-describe('createMessageQueue — property test (1000 random messages)', () => {
+describe('createMessageQueue, property test (1000 random messages)', () => {
   it('preserves FIFO within priority + total ordering by priority class', () => {
     const q = createMessageQueue({ laneCap: 2000 });
     const lanes: QueuePriority[] = ['now', 'next', 'later'];
@@ -644,8 +643,8 @@ describe('createMessageQueue — property test (1000 random messages)', () => {
   });
 });
 
-describe('createMessageQueue — edge cases', () => {
-  it('value as ContentBlock[] — text extraction joins with newline', () => {
+describe('createMessageQueue, edge cases', () => {
+  it('value as ContentBlock[], text extraction joins with newline', () => {
     const q = createMessageQueue();
     const blocks: ContentBlock[] = [
       { type: 'text', text: 'line1' },
