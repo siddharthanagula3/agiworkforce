@@ -1,36 +1,26 @@
 import { describe, expect, it } from 'vitest';
 
-import { createXAIAdapter } from '../index';
+import { createPerplexityAdapter } from '../index';
 
-describe('createXAIAdapter', () => {
-  it('returns adapter with id="xai" and label="xAI"', () => {
-    const adapter = createXAIAdapter({ apiKey: 'test-key' });
-    expect(adapter.id).toBe('xai');
-    expect(adapter.label).toBe('xAI');
+describe('createPerplexityAdapter', () => {
+  it('returns adapter with id="perplexity" and label="Perplexity"', () => {
+    const adapter = createPerplexityAdapter({ apiKey: 'test-key' });
+    expect(adapter.id).toBe('perplexity');
+    expect(adapter.label).toBe('Perplexity');
   });
 
-  it('declares an api-key auth method with envVar XAI_API_KEY', () => {
-    const adapter = createXAIAdapter({ apiKey: 'test-key' });
-    expect(Array.isArray(adapter.auth)).toBe(true);
+  it('declares an api-key auth method with envVar PERPLEXITY_API_KEY', () => {
+    const adapter = createPerplexityAdapter({ apiKey: 'test-key' });
     const apiKey = adapter.auth.find((a) => a.kind === 'api-key');
     expect(apiKey).toBeDefined();
     if (apiKey && apiKey.kind === 'api-key') {
-      expect(apiKey.envVar).toBe('XAI_API_KEY');
-    }
-  });
-
-  it('returns the curated catalog when skipDiscovery is true', async () => {
-    const adapter = createXAIAdapter({ apiKey: 'test-key', skipDiscovery: true });
-    const models = await adapter.catalog();
-    expect(models.length).toBeGreaterThan(0);
-    for (const m of models) {
-      expect(m.provider).toBe('xai');
+      expect(apiKey.envVar).toBe('PERPLEXITY_API_KEY');
     }
   });
 
   it('requests stream_options.include_usage=true on the wire', async () => {
     let seenBody: Record<string, unknown> | undefined;
-    const adapter = createXAIAdapter({
+    const adapter = createPerplexityAdapter({
       apiKey: 'test-key',
       fetch: async (_input, init) => {
         seenBody = JSON.parse(String(init?.body));
@@ -42,7 +32,7 @@ describe('createXAIAdapter', () => {
     });
 
     for await (const _chunk of adapter.stream(
-      { model: 'any-model', messages: [{ role: 'user', content: 'ping' }] },
+      { model: 'sonar', messages: [{ role: 'user', content: 'ping' }] },
       new AbortController().signal,
     )) {
       void _chunk;
@@ -53,8 +43,8 @@ describe('createXAIAdapter', () => {
     ).toBe(true);
   });
 
-  it('surfaces cacheReadTokens from the standard prompt_tokens_details.cached_tokens field', async () => {
-    const adapter = createXAIAdapter({
+  it('surfaces inputTokens and outputTokens from a plain usage object with no cache fields', async () => {
+    const adapter = createPerplexityAdapter({
       apiKey: 'test-key',
       fetch: async () => {
         const body =
@@ -62,20 +52,16 @@ describe('createXAIAdapter', () => {
             id: 'x',
             object: 'chat.completion.chunk',
             created: 0,
-            model: 'grok-test',
+            model: 'sonar',
             choices: [{ index: 0, delta: { content: 'hi' }, finish_reason: null }],
           })}\n\n` +
           `data: ${JSON.stringify({
             id: 'x',
             object: 'chat.completion.chunk',
             created: 0,
-            model: 'grok-test',
+            model: 'sonar',
             choices: [{ index: 0, delta: {}, finish_reason: 'stop' }],
-            usage: {
-              prompt_tokens: 125,
-              completion_tokens: 6,
-              prompt_tokens_details: { text_tokens: 125, cached_tokens: 98 },
-            },
+            usage: { prompt_tokens: 30, completion_tokens: 4, total_tokens: 34 },
           })}\n\n` +
           `data: [DONE]\n\n`;
         return new Response(body, {
@@ -87,7 +73,7 @@ describe('createXAIAdapter', () => {
 
     const chunks = [];
     for await (const chunk of adapter.stream(
-      { model: 'grok-test', messages: [{ role: 'user', content: 'ping' }] },
+      { model: 'sonar', messages: [{ role: 'user', content: 'ping' }] },
       new AbortController().signal,
     )) {
       chunks.push(chunk);
@@ -96,7 +82,8 @@ describe('createXAIAdapter', () => {
     const usage = chunks.find((c) => c.type === 'usage');
     expect(usage).toBeDefined();
     if (usage?.type === 'usage') {
-      expect(usage.cacheReadTokens).toBe(98);
+      expect(usage.inputTokens).toBe(30);
+      expect(usage.outputTokens).toBe(4);
     }
   });
 });

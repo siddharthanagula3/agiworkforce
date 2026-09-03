@@ -51,4 +51,29 @@ describe('createGroqAdapter', () => {
       expect(m.provider).toBe('groq');
     }
   });
+
+  it('requests stream_options.include_usage=true on the wire', async () => {
+    let seenBody: Record<string, unknown> | undefined;
+    const adapter = createGroqAdapter({
+      apiKey: 'test-key',
+      fetch: async (_input, init) => {
+        seenBody = JSON.parse(String(init?.body));
+        return new Response('data: [DONE]\n\n', {
+          status: 200,
+          headers: { 'content-type': 'text/event-stream' },
+        });
+      },
+    });
+
+    for await (const _chunk of adapter.stream(
+      { model: 'any-model', messages: [{ role: 'user', content: 'ping' }] },
+      new AbortController().signal,
+    )) {
+      void _chunk;
+    }
+
+    expect(
+      (seenBody?.stream_options as { include_usage?: boolean } | undefined)?.include_usage,
+    ).toBe(true);
+  });
 });
