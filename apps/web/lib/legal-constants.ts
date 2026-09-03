@@ -81,6 +81,8 @@ export const POLICY_LAST_UPDATED = {
   indiaPrivacy: '2026-08-13',
   dataRights: '2026-08-13',
   dataUse: '2026-08-14',
+  disclaimer: '2026-09-02',
+  agentPermissions: '2026-09-02',
 } as const;
 
 export const CANONICAL_POLICY_ROUTES = {
@@ -103,6 +105,8 @@ export const CANONICAL_POLICY_ROUTES = {
   indiaPrivacy: '/privacy/india',
   dataRights: '/privacy/requests',
   dataUse: '/data-use',
+  disclaimer: '/disclaimer',
+  agentPermissions: '/agent-permissions',
 } as const;
 
 export const POLICY_ROUTE_ALIASES: Readonly<Record<string, string>> = {

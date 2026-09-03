@@ -4,7 +4,12 @@ import { Header } from '@shared/components/layout/Header';
 import { MarketingFooter } from '@/features/marketing/components/MarketingFooter';
 import { Prose, Section, Stack } from '@/features/marketing/components/system';
 import { PageHero } from '@/features/marketing/components/pages/surfaces/shared';
-import { CONTACT_EMAIL, LEGAL_ENTITY, contactMailto } from '@/lib/legal-constants';
+import {
+  CONTACT_EMAIL,
+  LEGAL_ENTITY,
+  POLICY_LAST_UPDATED,
+  contactMailto,
+} from '@/lib/legal-constants';
 
 export const metadata = buildMetadata({
   title: 'Disclaimer',
@@ -22,7 +27,13 @@ export default function DisclaimerPage() {
           id="agi-disclaimer-title"
           eyebrow="Legal"
           title="Disclaimer."
-          lede="AGI generates text, code, and files with language models. Model output can be wrong, out of date, or confidently invented. Check anything you intend to rely on."
+          lede={
+            <>
+              AGI generates text, code, and files with language models. Model output can be wrong,
+              out of date, or confidently invented. Check anything you intend to rely on. Last
+              updated: {POLICY_LAST_UPDATED.disclaimer}.
+            </>
+          }
           ctas={[]}
         />
 
