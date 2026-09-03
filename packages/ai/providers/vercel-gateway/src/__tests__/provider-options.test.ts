@@ -2,10 +2,11 @@ import { describe, expect, it } from 'vitest';
 import type { OpenAIChatCompletionCreateParams } from '@agiworkforce/providers-openai';
 
 import { applyVercelGatewayProviderOptions } from '../provider-options';
+import { VERCEL_GATEWAY_ANTHROPIC_MODEL } from './model-fixtures';
 
 function buildParams(): OpenAIChatCompletionCreateParams {
   return {
-    model: 'anthropic/claude-opus-5',
+    model: VERCEL_GATEWAY_ANTHROPIC_MODEL,
     messages: [{ role: 'user', content: 'hi' }],
     stream: true,
   };
