@@ -139,6 +139,7 @@ import {
 import {
   createSkillToolDefinition,
   formatSkillsForToolPrompt,
+  hashSkillContent,
   matchSkillsForPrompt,
   SKILL_TOOL_NAME,
   type Skill,
@@ -148,6 +149,7 @@ import {
   getManagedSkillCatalogForPlugins,
   SkillCatalogUnavailableError,
 } from '@/lib/services/skill-catalog-service';
+import { findUserSkillByName, type UserSkillRecord } from '@/lib/services/user-skill-service';
 import { listEnabledPluginIdsForUser } from '@/lib/services/plugin-installation-service';
 import type { CloudChatSurface } from '@/lib/free-chat-surface-policy';
 import { buildCapabilityPreamble, extractToolNames } from './capability-preamble';
@@ -453,6 +455,33 @@ export function resolveToolAwareTaskType(
   if (request.work_mode === 'agiwork' || request.office_creation === true) return 'agentic';
   if (request.code_execution === true) return 'coding';
   return classifiedTaskType;
+}
+
+const USER_SKILL_SOURCE = 'personal' satisfies Skill['source'];
+const USER_SKILL_FILE_PATH_PREFIX = 'user-skills';
+
+export function toManagedSkillFromUserSkill(record: UserSkillRecord): Skill {
+  return {
+    name: record.name,
+    description: record.description,
+    body: record.body,
+    contentHash: hashSkillContent(Buffer.from(record.body, 'utf8')),
+    filePath: `${USER_SKILL_FILE_PATH_PREFIX}/${record.id}`,
+    source: USER_SKILL_SOURCE,
+    metadata: {},
+    frontmatter: {},
+  };
+}
+
+export async function resolveManagedSkillCatalogWithUserFallback(
+  requestedSkillName: string,
+  managedCatalog: readonly Skill[],
+  params: { db: Parameters<typeof findUserSkillByName>[0]; userId: string },
+): Promise<readonly Skill[]> {
+  if (managedCatalog.some((skill) => skill.name === requestedSkillName)) return managedCatalog;
+  const userSkill = await findUserSkillByName(params.db, params.userId, requestedSkillName);
+  if (!userSkill) return managedCatalog;
+  return [...managedCatalog, toManagedSkillFromUserSkill(userSkill)];
 }
 
 export function applyManagedSkillSelection(
@@ -2551,6 +2580,7 @@ export async function processRequest(
 
   const preSkillMessageCount = chatRequest.messages.length;
   if (chatRequest.skill_name) {
+    const requestedSkillName = chatRequest.skill_name;
     let managedSkillCatalog: Skill[];
     try {
       managedSkillCatalog = await getManagedSkillCatalogForPlugins(
@@ -2590,7 +2620,12 @@ export async function processRequest(
         ),
       };
     }
-    const selection = applyManagedSkillSelection(chatRequest, managedSkillCatalog);
+    const skillCatalogForSelection = await resolveManagedSkillCatalogWithUserFallback(
+      requestedSkillName,
+      managedSkillCatalog,
+      { db: (await scopedDbPromise).db, userId },
+    );
+    const selection = applyManagedSkillSelection(chatRequest, skillCatalogForSelection);
     if (!selection.ok) {
       return {
         ok: false,
