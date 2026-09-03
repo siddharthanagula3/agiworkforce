@@ -1,8 +1,12 @@
 import { buildMetadata } from '@/lib/seo/metadata';
 import { Header } from '@shared/components/layout/Header';
-import { MarketingFooter } from '@/features/marketing/components/MarketingFooter';
-import { Eyebrow, Prose, Section, Stack } from '@/features/marketing/components/system';
-import { PageHero, FactGrid } from '@/features/marketing/components/pages/surfaces/shared';
+import {
+  Button,
+  ButtonRow,
+  Eyebrow,
+  MarketingFooter,
+  Prose,
+} from '@/features/marketing/components/system';
 import { LinkGrid } from '@/features/marketing/components/pages/features/shared';
 import { loadPluginCatalog } from '@/features/plugins/server/registry-source';
 import { pluginAvailabilityClaim } from '@/features/plugins/availability';
@@ -38,34 +42,63 @@ function statusLabel(entry: PluginRegistryEntry): string {
 export default async function PluginsPage() {
   const catalog = await loadPluginCatalog();
   const entries = catalog.status === 'ok' ? catalog.entries : [];
+  const preview = entries.slice(0, 3);
 
   return (
     <div data-design="agi" className="agi-ds-page">
       <Header />
       <main id="main-content">
-        <PageHero
-          id="agi-plugins-title"
-          eyebrow="Plugins"
-          title="Workflow packs, not loose parts."
-          lede={
-            <>
-              Plugins bundle skills and connectors into a single install. The catalogue below is the
-              live hosted registry. <strong>{pluginAvailabilityClaim(catalog)}</strong>
-            </>
-          }
-          ctas={[{ href: '/features/plugins', label: 'What a plugin bundles' }]}
-        />
+        <section className="agi-lp-hero" aria-labelledby="agi-plugins-title">
+          <div className="agi-ds-container agi-lp-hero-grid">
+            <div className="agi-lp-hero-copy">
+              <Eyebrow>Plugins</Eyebrow>
+              <h1 className="agi-ds-h1" id="agi-plugins-title">
+                Workflow packs, <em className="agi-ds-accent">not loose parts.</em>
+              </h1>
+              <Prose size="lg">
+                Plugins bundle skills and connectors into a single install. The catalogue below is
+                the live hosted registry. <strong>{pluginAvailabilityClaim(catalog)}</strong>
+              </Prose>
+              <ButtonRow>
+                <Button href="/features/plugins">What a plugin bundles</Button>
+              </ButtonRow>
+            </div>
+            <div className="agi-lp-hero-stage">
+              <div className="agi-lp-console" aria-label="Plugin registry preview">
+                <div className="agi-lp-console-bar">
+                  <span>Plugin registry</span>
+                </div>
+                <div className="agi-lp-console-body">
+                  {preview.length > 0 ? (
+                    <ul className="agi-ds-ledger" aria-label="A sample of the plugin registry">
+                      {preview.map((entry) => (
+                        <li className="agi-ds-ledger-row" key={entry.id}>
+                          <span className="agi-ds-ledger-label">{entry.name}</span>
+                          <span className="agi-ds-ledger-value">{statusLabel(entry)}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p className="agi-ds-prose" data-size="sm">
+                      The catalogue below has the full picture.
+                    </p>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
 
-        <Section id="how-it-works" labelledBy="agi-plugins-model-title" rule>
-          <Stack gap="loose">
-            <div>
+        <section className="agi-lp-section" aria-labelledby="agi-plugins-model-title">
+          <div className="agi-ds-container">
+            <div className="agi-lp-heading">
               <Eyebrow>How a plugin works</Eyebrow>
               <h2 className="agi-ds-h2" id="agi-plugins-model-title">
                 Skills plus connectors, wired once.
               </h2>
             </div>
-            <FactGrid
-              items={[
+            <div className="agi-ds-grid-2">
+              {[
                 {
                   meta: 'Skills',
                   title: 'Bundled skills',
@@ -81,14 +114,20 @@ export default async function PluginsPage() {
                   title: 'What a status means',
                   body: 'Website packs install only from reviewed embedded manifests. CLI and Desktop packs still require a separately published, integrity-pinned artifact. Until one of those paths exists, the entry remains declared and no control pretends to install it.',
                 },
-              ]}
-            />
-          </Stack>
-        </Section>
+              ].map((item) => (
+                <div className="agi-ds-card" style={{ padding: '1.5rem' }} key={item.title}>
+                  <Eyebrow>{item.meta}</Eyebrow>
+                  <h3 className="agi-ds-h3">{item.title}</h3>
+                  <Prose size="sm">{item.body}</Prose>
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
 
-        <Section id="catalogue" labelledBy="agi-plugins-catalog-title" rule ground="2">
-          <Stack gap="loose">
-            <div>
+        <section className="agi-lp-section" aria-labelledby="agi-plugins-catalog-title">
+          <div className="agi-ds-container">
+            <div className="agi-lp-heading">
               <Eyebrow>Catalogue</Eyebrow>
               <h2 className="agi-ds-h2" id="agi-plugins-catalog-title">
                 The first packs.
@@ -123,24 +162,23 @@ export default async function PluginsPage() {
                 }))}
               />
             )}
-          </Stack>
-        </Section>
+          </div>
+        </section>
 
-        <Section id="request-access" labelledBy="agi-plugins-cta-title" rule>
-          <Stack gap="loose">
-            <div>
-              <Eyebrow>At launch</Eyebrow>
+        <section className="agi-lp-close" aria-labelledby="agi-plugins-cta-title">
+          <div className="agi-ds-container">
+            <div className="agi-lp-close-inner">
               <h2 className="agi-ds-h2" id="agi-plugins-cta-title">
-                Get notified when installation opens.
+                Get notified <em className="agi-ds-accent">when installation opens.</em>
               </h2>
-              <Prose>
+              <Prose size="lg">
                 Leave your email and we will tell you when hosted marketplace installation is live.
                 Local skills and desktop workflows do not depend on it.
               </Prose>
+              <WaitlistForm source="other" ctaLabel="Request marketplace access" />
             </div>
-            <WaitlistForm source="other" ctaLabel="Request marketplace access" />
-          </Stack>
-        </Section>
+          </div>
+        </section>
       </main>
       <MarketingFooter />
     </div>
