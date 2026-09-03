@@ -4,6 +4,7 @@ import {
   CITATION_HREF_PATTERN,
   citationGroupHref,
   citationHref,
+  findCitationIndexForUrl,
   linkifyCitationMarkers,
 } from './citationMarkers';
 
@@ -71,5 +72,45 @@ describe('citation href patterns', () => {
 
   it('does not match a single href against the group pattern', () => {
     expect(CITATION_GROUP_HREF_PATTERN.test(citationHref(1))).toBe(false);
+  });
+});
+
+describe('findCitationIndexForUrl', () => {
+  const sources = [
+    { url: 'https://www.nvidia.com/en-us/solutions/autonomous-vehicles/alpamayo/' },
+    { url: 'https://blog.google/innovation-and-ai/products/gemini-app/productivity-features/' },
+  ];
+
+  it('matches an exact, normalised URL', () => {
+    expect(
+      findCitationIndexForUrl(
+        'https://nvidia.com/en-us/solutions/autonomous-vehicles/alpamayo',
+        sources,
+      ),
+    ).toBe(1);
+  });
+
+  it('matches a bare domain link to the one source on that domain', () => {
+    expect(findCitationIndexForUrl('https://blog.google', sources)).toBe(2);
+  });
+
+  it('matches when the href is a URL-boundary prefix of exactly one source', () => {
+    expect(findCitationIndexForUrl('https://blog.google/innovation-and-ai', sources)).toBe(2);
+  });
+
+  it('does not match a domain string that is not a URL boundary prefix', () => {
+    expect(findCitationIndexForUrl('https://blog.google.evil.com', sources)).toBeUndefined();
+  });
+
+  it('leaves the link plain when two sources share the domain', () => {
+    const twoOnSameDomain = [
+      { url: 'https://blog.google/one-post/' },
+      { url: 'https://blog.google/two-post/' },
+    ];
+    expect(findCitationIndexForUrl('https://blog.google', twoOnSameDomain)).toBeUndefined();
+  });
+
+  it('leaves an unrelated domain unmatched', () => {
+    expect(findCitationIndexForUrl('https://openai.com', sources)).toBeUndefined();
   });
 });

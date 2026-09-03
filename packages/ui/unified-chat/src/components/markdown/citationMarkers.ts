@@ -29,6 +29,14 @@ function normalizeCitationUrl(url: string): string | null {
   }
 }
 
+function registrableDomain(url: string): string | null {
+  try {
+    return new URL(url).hostname.toLowerCase().replace(/^www\./, '');
+  } catch {
+    return null;
+  }
+}
+
 /**
  * Resolves a plain inline link's href to a delivered source's 1-based
  * position, the same numbering `linkifyCitationMarkers` gives a `[n]`
@@ -36,6 +44,13 @@ function normalizeCitationUrl(url: string): string | null {
  * Comparison ignores scheme, `www.`, a trailing slash, and tracking query
  * parameters (utm_*, fbclid, gclid, mc_cid/mc_eid) so a link the model
  * decorated with its own tracking params still matches a clean source URL.
+ *
+ * A model that writes a bare domain link (`blog.google`, `snaplogic.com`)
+ * instead of the article URL never clears that exact match, so this falls
+ * back to the registrable domain, and then to the href being a URL-boundary
+ * prefix of a source's URL — each only when it identifies exactly one
+ * source; two sources sharing a domain leave the link unmatched rather than
+ * guess.
  */
 export function findCitationIndexForUrl(
   href: string,
@@ -43,11 +58,33 @@ export function findCitationIndexForUrl(
 ): number | undefined {
   const target = normalizeCitationUrl(href);
   if (!target) return undefined;
+
   for (let i = 0; i < citations.length; i++) {
     const citation = citations[i];
     if (citation && normalizeCitationUrl(citation.url) === target) return i + 1;
   }
-  return undefined;
+
+  const domain = registrableDomain(href);
+  if (domain) {
+    const domainMatches: number[] = [];
+    citations.forEach((citation, i) => {
+      if (citation && registrableDomain(citation.url) === domain) domainMatches.push(i + 1);
+    });
+    if (domainMatches.length === 1) return domainMatches[0];
+    if (domainMatches.length > 1) return undefined;
+  }
+
+  const prefixMatches: number[] = [];
+  citations.forEach((citation, i) => {
+    if (!citation) return;
+    const citationTarget = normalizeCitationUrl(citation.url);
+    if (!citationTarget || !citationTarget.startsWith(target)) return;
+    const boundary = citationTarget[target.length];
+    if (boundary === undefined || boundary === '/' || boundary === '?') {
+      prefixMatches.push(i + 1);
+    }
+  });
+  return prefixMatches.length === 1 ? prefixMatches[0] : undefined;
 }
 
 export function stripTrackingParams(url: string): string {
