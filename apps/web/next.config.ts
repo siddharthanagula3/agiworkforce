@@ -2,6 +2,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { NextConfig } from 'next';
 import bundleAnalyzer from '@next/bundle-analyzer';
+import { withBotId } from 'botid/next/config';
 import { withWorkflow } from 'workflow/next';
 import { API_HOST_REWRITE_ROUTES } from './lib/api-host-route-contract';
 
@@ -143,4 +144,4 @@ const withBundleAnalyzer = bundleAnalyzer({
   enabled: process.env['ANALYZE'] === 'true',
 });
 
-export default withWorkflow(withBundleAnalyzer(nextConfig));
+export default withWorkflow(withBotId(withBundleAnalyzer(nextConfig)));
