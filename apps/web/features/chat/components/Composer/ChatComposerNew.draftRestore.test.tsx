@@ -1,5 +1,5 @@
 import { StrictMode } from 'react';
-import { act, fireEvent, render } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type {
   ComposerEditorHandle,
@@ -75,6 +75,14 @@ vi.mock('@features/chat/hooks/use-media-model-availability', () => ({
 }));
 
 vi.mock('./VoiceInputButton', () => ({ VoiceInputButton: () => null }));
+
+vi.mock('@features/connectors/hooks/use-connectors', () => ({
+  useConnectors: () => ({
+    connectedIds: new Set<string>(),
+    sources: {} as Record<string, string>,
+    customNames: {} as Record<string, string>,
+  }),
+}));
 
 const PRO_SUBSCRIPTION: SubscriptionPlan = {
   tier: 'pro',
@@ -252,6 +260,23 @@ describe('a send that never reached a model hands the text back', () => {
     act(() => parkUnsentDraft('conv-fresh', DRAFT));
 
     expect(textarea().value).toBe(DRAFT);
+  });
+
+  it('shows a plain notice alongside the restored text (search-sources-4)', () => {
+    render(<ChatComposerNew onSend={vi.fn()} conversationId="conv-1" />);
+
+    act(() => parkUnsentDraft('conv-1', DRAFT));
+
+    expect(screen.getByText("Couldn't send. Restored here so you can try again.")).toBeVisible();
+  });
+
+  it('clears the parked draft once it has been consumed, so nothing can replay it', () => {
+    render(<ChatComposerNew onSend={vi.fn()} conversationId="conv-1" />);
+
+    act(() => parkUnsentDraft('conv-1', DRAFT));
+
+    expect(textarea().value).toBe(DRAFT);
+    expect(draftFor('conv-1')).toBe('');
   });
 });
 
