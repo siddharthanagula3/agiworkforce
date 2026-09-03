@@ -87,8 +87,87 @@ describe('AgentActivityTimeline', () => {
     const trigger = screen.getByRole('button', { name: /show agent activity/i });
     expect(trigger.getAttribute('aria-expanded')).toBe('false');
     expect(screen.queryByText('Official agent documentation')).toBeNull();
-    expect(trigger.textContent).toContain('Searching official sources');
+    expect(trigger.textContent).toContain('Searched the web');
+    expect(trigger.textContent).not.toContain('Searching official sources');
     expect(trigger.textContent).not.toMatch(/Done in/i);
+  });
+
+  it('summarizes a finished turn whose last entry is a completed web search as searched, not searching', () => {
+    const completedSearch = activity({
+      status: 'completed',
+      completedAtMs: 2_000,
+      entries: [
+        {
+          kind: 'tool',
+          id: 'tool:search-1',
+          toolCallId: 'search-1',
+          name: 'web_search',
+          category: 'web-search',
+          summary: 'Searching the web',
+          status: 'completed',
+          startedAtMs: 1_100,
+          completedAtMs: 1_500,
+          sources: [
+            { url: 'https://example.com/a', title: 'A' },
+            { url: 'https://example.com/b', title: 'B' },
+          ],
+        },
+      ],
+    });
+
+    render(<AgentActivityTimeline activity={completedSearch} />);
+    const trigger = screen.getByRole('button', { name: /show agent activity/i });
+    expect(trigger.textContent).toContain('Searched the web');
+    expect(trigger.textContent).not.toContain('Searching the web');
+  });
+
+  it('phrases a stuck-running search entry as searched once the turn has stopped, even outcome-partial', () => {
+    const stuckSearch = activity({
+      status: 'partial',
+      completedAtMs: 2_000,
+      entries: [
+        {
+          kind: 'tool',
+          id: 'tool:search-1',
+          toolCallId: 'search-1',
+          name: 'web_search',
+          category: 'web-search',
+          summary: 'Searching the web',
+          status: 'running',
+          startedAtMs: 1_100,
+        },
+      ],
+    });
+
+    render(<AgentActivityTimeline activity={stuckSearch} />);
+    const trigger = screen.getByRole('button', { name: /show agent activity/i });
+    expect(trigger.textContent).toContain('Searched the web');
+    expect(trigger.textContent).not.toContain('Searching the web');
+  });
+
+  it('keeps a failed search entry on its own humanized failure summary', () => {
+    const failedSearch = activity({
+      status: 'failed',
+      completedAtMs: 2_000,
+      entries: [
+        {
+          kind: 'tool',
+          id: 'tool:search-1',
+          toolCallId: 'search-1',
+          name: 'web_search',
+          category: 'web-search',
+          summary: 'The tool failed',
+          status: 'failed',
+          startedAtMs: 1_100,
+          completedAtMs: 1_500,
+          error: 'Fetch failed (timeout): the page took too long',
+        },
+      ],
+    });
+
+    render(<AgentActivityTimeline activity={failedSearch} />);
+    const trigger = screen.getByRole('button', { name: /show agent activity/i });
+    expect(trigger.textContent).toContain('The tool failed');
   });
 
   it('wires approval actions to the canonical tool call id', () => {
