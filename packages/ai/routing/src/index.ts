@@ -69,6 +69,8 @@ export type {
   AutoFallbackRoute,
   AutoRoutingRequest,
   IntrinsicCapability,
+  RouteCacheClass,
+  RouteCommercialStatus,
   RoutingProfile,
   RoutingTrustMode,
   SelectedAutoRoute,
