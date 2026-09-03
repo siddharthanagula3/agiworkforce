@@ -1,5 +1,5 @@
 {
-  "$comment": "Which Vercel project the artifact sandbox origin deploys to. Tracked on purpose: the CLI's own .vercel/project.json is git-ignored, so CI never sees it, and a deploy that inherits the web environment's VERCEL_PROJECT_ID would publish these files into agiworkforce-chat. A Vercel project/org id is configuration, not a credential — never put a token or key in this file.",
+  "$comment": "Which Vercel project the artifact sandbox origin deploys to. Tracked on purpose: the CLI's own .vercel/project.json is git-ignored, so CI never sees it, and a deploy that inherits the web environment's VERCEL_PROJECT_ID would publish these files into agiworkforce-chat. A Vercel project/org id is configuration, not a credential, never put a token or key in this file.",
   "projectName": "agiworkforce-sandbox",
   "projectId": "prj_pYHrQTMQl9MXY4UvH3exnynEsz9A",
   "orgId": "team_QAqU2q6NTV4xxn971rfTy1F4"

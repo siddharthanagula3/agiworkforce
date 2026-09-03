@@ -1,14 +1,14 @@
 <!doctype html>
 <!--
-  AGI Artifact Sandbox — infrastructure/sandbox/index.html
+  AGI Artifact Sandbox, infrastructure/sandbox/index.html
   --------------------------------------------------------------------------
   Self-contained renderer for LLM-generated HTML / React / SVG / Mermaid /
   Markdown / JSON / CSV / Code artifacts.
 
   ONE renderer, two hosts:
-    - Web    — deployed to a separate origin (https://sandbox.agiworkforce.com)
+    - Web: deployed to a separate origin (https://sandbox.agiworkforce.com)
                and pointed at by NEXT_PUBLIC_SANDBOX_ORIGIN.
-    - Desktop — compiled into the Tauri binary and served from a dedicated URI
+    - Desktop: compiled into the Tauri binary and served from a dedicated URI
                scheme (`artifact://localhost`, `http://artifact.localhost` on
                Windows) by apps/desktop/src-tauri/src/ui/artifact_sandbox.rs.
                DES-C15: a same-document `srcdoc` preview inherits the app's
@@ -35,7 +35,7 @@
   assigning it with innerHTML. A srcdoc frame navigates to `about:srcdoc`,
   which browsers check against `frame-src` and match with `'self'`. It also
   INHERITS this document's CSP, so every directive above still applies inside
-  the artifact — the trust boundary is unchanged. See renderHtml() for why the
+  the artifact, the trust boundary is unchanged. See renderHtml() for why the
   innerHTML form could not render a real HTML document correctly.
 
   WEB-13 / WEB-20 / WEB-25 (audit 2026-05-19).
@@ -48,7 +48,7 @@
     <!--
       Generated from ARTIFACT_RENDERER_CSP_CONTENT in
       packages/contracts/types/src/artifact-csp.ts. Kept byte-identical by
-      packages/contracts/types/src/__tests__/artifact-csp.test.ts — edit the
+      packages/contracts/types/src/__tests__/artifact-csp.test.ts, edit the
       module, not this attribute.
     -->
     <meta
@@ -84,7 +84,7 @@
       }
       /*
         `el.hidden = true` sets the `hidden` ATTRIBUTE, whose UA rule is only
-        `[hidden] { display: none }` — a lower-specificity selector than the
+        `[hidden] { display: none }`, a lower-specificity selector than the
         `#idle` id rule above. Without this line showRoot() left the idle
         placeholder painted at full height and pushed the rendered artifact
         below the fold: the panel read "Waiting for artifact…" forever while
@@ -114,7 +114,7 @@
     <div id="idle">Waiting for artifact…</div>
     <div id="root" hidden></div>
     <!--
-      DOMPurify — sound HTML/SVG sanitizer used by renderSvg(). Loaded from the
+      DOMPurify, sound HTML/SVG sanitizer used by renderSvg(). Loaded from the
       CSP-allowed jsdelivr origin (see script-src in the CSP meta above). This
       blocking <script> runs before the main inline script, so window.DOMPurify
       is guaranteed ready before any postMessage 'render' arrives.
@@ -139,7 +139,7 @@
         // (apex + chat subdomain). Localhost is included for dev only.
         //
         // The `tauri://` / `http://tauri.localhost` entries are the AGI desktop
-        // app's own document origin — Tauri serves the app shell from
+        // app's own document origin, Tauri serves the app shell from
         // `tauri://localhost` on macOS/Linux and `http://tauri.localhost` on
         // Windows. Without them the desktop host's `render` message is dropped
         // here and the preview never leaves "Waiting for artifact…". These
@@ -234,7 +234,7 @@
         }
 
         // --------------------------------------------------------------
-        // Renderers — each takes the payload and writes into rootEl.
+        // Renderers, each takes the payload and writes into rootEl.
         // --------------------------------------------------------------
 
         /**
@@ -269,8 +269,8 @@
          *      by the fragment parser; a CSP <meta> outside <head> is ignored.
          *   2. `DOMContentLoaded` / `load` had ALREADY fired on this document,
          *      so every artifact that wraps its init in
-         *      `document.addEventListener('DOMContentLoaded', …)` — which is
-         *      most model-authored pages — never initialised. Sections that
+         *      `document.addEventListener('DOMContentLoaded', …)`, which is
+         *      most model-authored pages, never initialised. Sections that
          *      start at `opacity: 0` and are revealed by an IntersectionObserver
          *      stayed invisible: a nav bar followed by a blank page, while the
          *      same file opened from disk looked perfect.
@@ -298,7 +298,7 @@
           // renderer, which is already a dedicated origin cross-origin to the
           // app. Adding `sandbox` without `allow-same-origin` would put the
           // artifact on a null origin, where localStorage/sessionStorage access
-          // THROWS — breaking artifacts that legitimately persist state. The
+          // THROWS, breaking artifacts that legitimately persist state. The
           // parent app is protected by the renderer's own origin, not by this.
           frame.setAttribute('allow', 'fullscreen');
           frame.setAttribute('referrerpolicy', 'no-referrer');
@@ -370,9 +370,9 @@
           const svg = String(payload.svg || payload.html || '');
           rootEl.innerHTML = '';
 
-          // DOMPurify is the sound sanitizer here. The previous defense — a
+          // DOMPurify is the sound sanitizer here. The previous defense, a
           // regex strip of on*= handlers and javascript: hrefs followed by
-          // DOMParser.parseFromString(svg, 'image/svg+xml') — was unsafe on two
+          // DOMParser.parseFromString(svg, 'image/svg+xml'), was unsafe on two
           // counts: (1) the regex was trivially bypassable (unquoted handlers,
           // xlink:href, nested <foreignObject> HTML, entity-encoded payloads),
           // and (2) feeding attacker-controlled markup to an XML parser is an
@@ -387,7 +387,7 @@
           const clean = purifier.sanitize(svg, {
             USE_PROFILES: { svg: true, svgFilters: true },
           });
-          // Single fixed-width class after the literal — no ReDoS.
+          // Single fixed-width class after the literal, no ReDoS.
           if (!/<svg[\s>]/i.test(clean)) {
             showError('Invalid SVG structure');
             return;
@@ -484,7 +484,7 @@
             return;
           }
           if (!isAllowedParent(event.origin)) {
-            return; // silently drop — common during cross-origin probes
+            return; // silently drop, common during cross-origin probes
           }
           parentOrigin = event.origin;
           const data = event.data;
@@ -495,7 +495,7 @@
         });
 
         // Announce readiness to whichever parent is hosting us. We don't know
-        // the parent's exact origin yet, so use '*' — the parent's own listener
+        // the parent's exact origin yet, so use '*', the parent's own listener
         // is responsible for verifying our origin against its allowlist.
         if (window.parent && window.parent !== window) {
           window.parent.postMessage({ type: 'sandbox-ready' }, '*');
