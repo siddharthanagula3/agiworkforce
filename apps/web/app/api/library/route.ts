@@ -9,8 +9,8 @@ import {
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { createError } from '@/lib/errors';
-import { getClerkAuthUser } from '@/lib/api-auth';
 import { listLibraryAssets, type LibraryAssetRow } from '@/lib/server/media-assets';
+import { getUserScopedDb } from '@/lib/server/rls-db';
 import { handleCorsPreflightRequest, getCorsHeaders, getSecurityHeaders } from '@/lib/cors';
 
 export const runtime = 'nodejs';
@@ -68,7 +68,7 @@ async function handleListLibrary(request: NextRequest): Promise<NextResponse> {
   const rateLimitResponse = await withRateLimit(request, 'chat-conversation');
   if (rateLimitResponse) return rateLimitResponse;
 
-  const { userId } = await getClerkAuthUser(request);
+  const { db, userId } = await getUserScopedDb(request);
 
   const sp = request.nextUrl.searchParams;
   const parsed = LibraryListQuerySchema.safeParse({
@@ -85,15 +85,19 @@ async function handleListLibrary(request: NextRequest): Promise<NextResponse> {
   const { kind, surface, origin, q, limit, offset } = parsed.data;
   const deleted = sp.get('deleted') === 'true';
 
-  const rows = await listLibraryAssets(userId, {
-    kind,
-    surface,
-    origin,
-    search: q,
-    deleted,
-    limit: limit + 1,
-    offset,
-  });
+  const rows = await listLibraryAssets(
+    userId,
+    {
+      kind,
+      surface,
+      origin,
+      search: q,
+      deleted,
+      limit: limit + 1,
+      offset,
+    },
+    db,
+  );
   const hasMore = rows.length > limit;
   const page = hasMore ? rows.slice(0, limit) : rows;
 

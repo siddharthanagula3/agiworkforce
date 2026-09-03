@@ -831,12 +831,15 @@ describe('POST /api/media/image/generate', () => {
 
       expect(response.status).toBe(200);
       expect(rlsMocks.getUserScopedDb).toHaveBeenCalledOnce();
-      expect(mediaAssetReadinessMocks.insertAtomically).toHaveBeenCalledWith([
-        expect.objectContaining({
-          userId: TEST_USER.userId,
-          organizationId: admittedOrganizationId,
-        }),
-      ]);
+      expect(mediaAssetReadinessMocks.insertAtomically).toHaveBeenCalledWith(
+        [
+          expect.objectContaining({
+            userId: TEST_USER.userId,
+            organizationId: admittedOrganizationId,
+          }),
+        ],
+        expect.anything(),
+      );
       expect(await response.json()).toMatchObject({
         images: [{ url: `/api/files/${assetId}` }],
       });
