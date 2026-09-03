@@ -31,6 +31,7 @@ export default defineConfig({
           'packages/ui/icons',
           'packages/ui/ui',
           'packages/ui/unified-chat',
+          'tools/evals',
         ],
         coverage: {
           provider: 'v8',
