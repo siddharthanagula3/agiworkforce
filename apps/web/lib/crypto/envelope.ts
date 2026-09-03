@@ -1,4 +1,4 @@
-import { createCipheriv, createDecipheriv, randomBytes } from 'node:crypto';
+import { createCipheriv, createDecipheriv, hkdfSync, randomBytes } from 'node:crypto';
 
 export const ENVELOPE_VERSION = 'v1';
 
@@ -31,6 +31,32 @@ export interface OpenedEnvelope {
   contextBound: boolean;
 }
 
+export interface LoadKeyRingOptions {
+  encoding?: KeyEncoding;
+  env?: Record<string, string | undefined>;
+}
+
+export interface ProvidedKeyRing extends KeyRing {
+  provider: string;
+}
+
+/**
+ * The seam between "where key bytes come from" and everything that seals or
+ * opens an envelope with them. `envKeyProvider` below reads raw bytes out of
+ * an env var, matching every deployment today. A KMS-backed or CMEK provider
+ * implements the same shape and plugs in without touching the rest of this
+ * file: sealEnvelope/openEnvelope only ever see the resulting `KeyRing`.
+ */
+export interface KeyProvider {
+  readonly name: string;
+  resolveKeyRing(envName: string, options?: LoadKeyRingOptions): ProvidedKeyRing;
+  deriveTenantKey?(key: EnvelopeKey, organizationId: string): EnvelopeKey;
+}
+
+const KEY_PROVIDER_ENV = 'AGI_KEY_PROVIDER';
+const TENANT_HKDF_DIGEST = 'sha256';
+const TENANT_HKDF_SALT = Buffer.alloc(0);
+
 function decodeKeyMaterial(raw: string, encoding: KeyEncoding, label: string): Buffer {
   if (encoding === 'hex') {
     if (!HEX_64_RE.test(raw)) {
@@ -53,13 +79,26 @@ function assertKeyId(id: string, label: string): string {
   return id;
 }
 
-export function loadKeyRing(
-  envName: string,
-  options: { encoding?: KeyEncoding; env?: Record<string, string | undefined> } = {},
-): KeyRing {
-  const env = options.env ?? process.env;
-  const encoding = options.encoding ?? 'hex';
+function assertUniqueKeyIds(envName: string, keys: EnvelopeKey[]): void {
+  const seen = new Set<string>();
+  for (const key of keys) {
+    if (seen.has(key.id)) {
+      throw new Error(`${envName} key ring declares id "${key.id}" twice`);
+    }
+    seen.add(key.id);
+  }
+}
 
+/**
+ * Shared "<NAME>" / "<NAME>_ID" / "<NAME>_RETIRED" parsing for any provider.
+ * `decodeMaterial` is the only part that differs between an env-backed ring
+ * (raw bytes, hex or utf8) and a KMS-backed one (an unwrap call per entry).
+ */
+function parseKeyRingEntries(
+  envName: string,
+  env: Record<string, string | undefined>,
+  decodeMaterial: (raw: string, label: string) => Buffer,
+): KeyRing {
   const activeRaw = env[envName];
   if (!activeRaw) {
     throw new Error(`${envName} is not set; cannot build a key ring`);
@@ -67,7 +106,7 @@ export function loadKeyRing(
 
   const active: EnvelopeKey = {
     id: assertKeyId(env[`${envName}_ID`] ?? '1', `${envName}_ID`),
-    material: decodeKeyMaterial(activeRaw, encoding, envName),
+    material: decodeMaterial(activeRaw, envName),
   };
 
   const retired: EnvelopeKey[] = [];
@@ -82,23 +121,99 @@ export function loadKeyRing(
       }
       retired.push({
         id: assertKeyId(trimmed.slice(0, separator), `${envName}_RETIRED id`),
-        material: decodeKeyMaterial(
-          trimmed.slice(separator + 1),
-          encoding,
-          `${envName}_RETIRED entry`,
-        ),
+        material: decodeMaterial(trimmed.slice(separator + 1), `${envName}_RETIRED entry`),
       });
     }
   }
 
-  const seen = new Set<string>();
-  for (const key of [active, ...retired]) {
-    if (seen.has(key.id)) {
-      throw new Error(`${envName} key ring declares id "${key.id}" twice`);
-    }
-    seen.add(key.id);
-  }
+  assertUniqueKeyIds(envName, [active, ...retired]);
+  return { active, retired };
+}
 
+function hkdfDeriveTenantKey(key: EnvelopeKey, organizationId: string): EnvelopeKey {
+  const info = Buffer.from(organizationId, 'utf8');
+  const derived = hkdfSync(TENANT_HKDF_DIGEST, key.material, TENANT_HKDF_SALT, info, KEY_LENGTH);
+  return { id: key.id, material: Buffer.from(derived) };
+}
+
+/** The default provider: reads key bytes straight out of an env var, same as every deployment today. */
+export const envKeyProvider: KeyProvider = {
+  name: 'env',
+  resolveKeyRing(envName, options = {}) {
+    const env = options.env ?? process.env;
+    const encoding = options.encoding ?? 'hex';
+    const ring = parseKeyRingEntries(envName, env, (raw, label) =>
+      decodeKeyMaterial(raw, encoding, label),
+    );
+    return { ...ring, provider: envKeyProvider.name };
+  },
+  deriveTenantKey: hkdfDeriveTenantKey,
+};
+
+export type KmsUnwrapFn = (wrappedKeyMaterial: string) => Buffer;
+
+/**
+ * Stub seam for a KMS-backed provider: `<NAME>` and `<NAME>_RETIRED` hold
+ * whatever a real vendor SDK needs to identify a wrapped data key (an ARN, a
+ * key id, a ciphertext blob), and `unwrap` turns that reference into 32 raw
+ * bytes. Plugging in a vendor SDK later means passing its unwrap call here,
+ * not editing this file. `unwrap` is called synchronously, so an integrator
+ * backed by an async SDK call must resolve it before constructing the
+ * provider (for example by pre-fetching the data key at process start).
+ */
+export function createKmsKeyProvider(unwrap: KmsUnwrapFn): KeyProvider {
+  const decodeMaterial = (wrapped: string, label: string): Buffer => {
+    const material = unwrap(wrapped);
+    if (material.length !== KEY_LENGTH) {
+      throw new Error(`${label} unwrap must yield ${KEY_LENGTH} bytes, got ${material.length}`);
+    }
+    return material;
+  };
+  return {
+    name: 'kms',
+    resolveKeyRing(envName, options = {}) {
+      const env = options.env ?? process.env;
+      const ring = parseKeyRingEntries(envName, env, decodeMaterial);
+      return { ...ring, provider: 'kms' };
+    },
+    deriveTenantKey: hkdfDeriveTenantKey,
+  };
+}
+
+/**
+ * CMEK per organization, opt in. Nothing calls this on its own: a caller
+ * that wants per-tenant keys asks the provider for them explicitly, and a
+ * provider that has not implemented `deriveTenantKey` refuses rather than
+ * silently handing back the shared ring.
+ */
+export function resolveTenantKeyRing(
+  provider: KeyProvider,
+  envName: string,
+  organizationId: string,
+  options?: LoadKeyRingOptions,
+): KeyRing {
+  if (!provider.deriveTenantKey) {
+    throw new Error(`Key provider "${provider.name}" does not support per-tenant derivation`);
+  }
+  const ring = provider.resolveKeyRing(envName, options);
+  const derive = provider.deriveTenantKey;
+  return {
+    active: derive(ring.active, organizationId),
+    retired: ring.retired.map((key) => derive(key, organizationId)),
+  };
+}
+
+export function loadKeyRing(envName: string, options: LoadKeyRingOptions = {}): KeyRing {
+  const env = options.env ?? process.env;
+  const providerName = env[KEY_PROVIDER_ENV]?.trim() || envKeyProvider.name;
+  if (providerName !== envKeyProvider.name) {
+    throw new Error(
+      `${KEY_PROVIDER_ENV}=${providerName} names a key provider other than "${envKeyProvider.name}". ` +
+        'loadKeyRing() only resolves the env-backed provider; construct the named provider ' +
+        '(for example createKmsKeyProvider(unwrap)) and call its resolveKeyRing() directly.',
+    );
+  }
+  const { active, retired } = envKeyProvider.resolveKeyRing(envName, options);
   return { active, retired };
 }
 

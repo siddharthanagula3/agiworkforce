@@ -484,40 +484,36 @@ describe('scripts/reencrypt.mjs', () => {
     ).toBe('token-a');
   });
 
-  it('refuses --format=versioned for a column whose reader cannot parse it', async () => {
+  it('allows --format=versioned once every target reader is ring-aware', async () => {
     const { assertFormatSupported, REENCRYPT_TARGETS } = await loadScript();
 
-    expect(() => assertFormatSupported(['two-factor'], 'versioned')).toThrow(
-      /two-factor .* cannot take --format=versioned/,
-    );
-    expect(() => assertFormatSupported(Object.keys(REENCRYPT_TARGETS), 'versioned')).toThrow(
-      /two-factor/,
-    );
     expect(() => assertFormatSupported(Object.keys(REENCRYPT_TARGETS), 'preserve')).not.toThrow();
-    expect(() =>
-      assertFormatSupported(
-        ['connector-grants', 'custom-connectors', 'github-installations'],
-        'versioned',
-      ),
-    ).not.toThrow();
+    expect(() => assertFormatSupported(Object.keys(REENCRYPT_TARGETS), 'versioned')).not.toThrow();
   });
 
   it('only claims a reader is ready where the module is actually imported', async () => {
     const { REENCRYPT_TARGETS } = await loadScript();
     const targets = REENCRYPT_TARGETS as Record<string, { versionedReaderReady: boolean }>;
-    const readers: Record<string, string> = {
-      'connector-grants': 'lib/custom-connector-crypto.ts',
-      'custom-connectors': 'lib/custom-connector-crypto.ts',
-      'github-installations': 'lib/github-app.ts',
+    const readers: Record<string, { file: string; specifier: string }> = {
+      'connector-grants': {
+        file: 'lib/custom-connector-crypto.ts',
+        specifier: "from '@/lib/crypto/envelope'",
+      },
+      'custom-connectors': {
+        file: 'lib/custom-connector-crypto.ts',
+        specifier: "from '@/lib/crypto/envelope'",
+      },
+      'github-installations': {
+        file: 'lib/github-app.ts',
+        specifier: "from '@/lib/crypto/envelope'",
+      },
+      'two-factor': { file: 'lib/crypto/totp-envelope.ts', specifier: "from './envelope'" },
     };
 
-    for (const [name, file] of Object.entries(readers)) {
+    for (const [name, { file, specifier }] of Object.entries(readers)) {
       expect(targets[name]?.versionedReaderReady).toBe(true);
-      expect(readFileSync(join(process.cwd(), file), 'utf8')).toContain(
-        "from '@/lib/crypto/envelope'",
-      );
+      expect(readFileSync(join(process.cwd(), file), 'utf8')).toContain(specifier);
     }
-    expect(targets['two-factor']?.versionedReaderReady).toBe(false);
     expect(
       readFileSync(join(process.cwd(), 'features/settings/services/user-preferences.ts'), 'utf8'),
     ).not.toContain('lib/crypto/envelope');
