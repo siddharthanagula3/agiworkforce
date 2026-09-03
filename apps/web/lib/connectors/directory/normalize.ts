@@ -1,4 +1,6 @@
+import { GITHUB_NAMESPACE_PREFIX, deriveRegistryBadge } from '@/lib/connectors/directory/badge';
 import { deriveDirectoryCategories } from '@/lib/connectors/directory/categorize';
+import { deriveMonogram } from '@/lib/connectors/directory/monogram';
 import type { RegistryEntry, RegistryRemote } from '@/lib/connectors/directory/registry-client';
 import type {
   DirectoryAuthMode,
@@ -8,7 +10,6 @@ import type {
   DirectoryTransport,
 } from '@/lib/connectors/directory/types';
 
-const GITHUB_NAMESPACE_PREFIX = 'io.github.';
 const REMOTE_TRANSPORT_PRIORITY: readonly DirectoryTransport[] = [
   'streamable-http',
   'sse',
@@ -61,9 +62,11 @@ export function normalizeRegistryEntry(entry: RegistryEntry): DirectoryRecord | 
     connectable = 'needs-setup';
   }
 
+  const displayName = server.title ?? server.name;
+
   return {
     id: server.name,
-    name: server.title ?? server.name,
+    name: displayName,
     publisher: derivePublisherFromNamespace(server.name),
     description: server.description,
     categories: deriveDirectoryCategories(server.description, server.title),
@@ -74,5 +77,9 @@ export function normalizeRegistryEntry(entry: RegistryEntry): DirectoryRecord | 
     repositoryUrl: server.repository?.url ?? null,
     version: server.version,
     sourceRegistry: 'mcp-registry',
+    badge: deriveRegistryBadge(server.name),
+    iconUrl: server.icons?.[0]?.src ?? null,
+    monogram: deriveMonogram(displayName),
+    docsUrl: server.websiteUrl ?? null,
   };
 }

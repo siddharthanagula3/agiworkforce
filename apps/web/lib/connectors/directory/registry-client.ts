@@ -25,6 +25,11 @@ export interface RegistryRepository {
   readonly source: string;
 }
 
+export interface RegistryIcon {
+  readonly src: string;
+  readonly mimeType?: string;
+}
+
 export interface RegistryServer {
   readonly name: string;
   readonly description: string;
@@ -34,6 +39,7 @@ export interface RegistryServer {
   readonly packages?: readonly unknown[];
   readonly repository?: RegistryRepository;
   readonly websiteUrl?: string;
+  readonly icons?: readonly RegistryIcon[];
 }
 
 export interface RegistryOfficialMeta {
