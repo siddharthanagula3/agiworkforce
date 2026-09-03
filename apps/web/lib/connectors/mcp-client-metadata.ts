@@ -1,4 +1,3 @@
-
 import 'server-only';
 
 import {
@@ -6,9 +5,11 @@ import {
   MCP_CLIENT_METADATA_PATH,
 } from '@agiworkforce/cloud-contracts';
 
+import { isLocalDevOrigin } from '@/lib/connectors/oauth-registry';
+
 const CLIENT_NAME = 'AGI Workforce';
 
-export function resolveClientMetadataOrigin(): string | null {
+function resolveConfiguredBaseUrl(): URL | null {
   const configured = (
     process.env['CONNECTOR_OAUTH_REDIRECT_BASE_URL'] ??
     process.env['NEXT_PUBLIC_APP_URL'] ??
@@ -16,15 +17,23 @@ export function resolveClientMetadataOrigin(): string | null {
   ).trim();
   if (!configured) return null;
 
-  let url: URL;
   try {
-    url = new URL(configured);
+    return new URL(configured);
   } catch {
     return null;
   }
+}
 
-  if (url.protocol !== 'https:') return null;
+export function resolveClientMetadataOrigin(): string | null {
+  const url = resolveConfiguredBaseUrl();
+  if (!url || url.protocol !== 'https:') return null;
+  return url.origin;
+}
 
+function resolveClientRedirectOrigin(): string | null {
+  const url = resolveConfiguredBaseUrl();
+  if (!url) return null;
+  if (url.protocol !== 'https:' && !isLocalDevOrigin(url)) return null;
   return url.origin;
 }
 
@@ -34,7 +43,7 @@ export function resolveClientMetadataUrl(): string | null {
 }
 
 export function resolveClientRedirectUri(): string | null {
-  const origin = resolveClientMetadataOrigin();
+  const origin = resolveClientRedirectOrigin();
   return origin ? `${origin}${CONNECTOR_OAUTH_CALLBACK_PATH}` : null;
 }
 
