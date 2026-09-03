@@ -16,6 +16,7 @@ import {
 import { apiKeyHasScope, type ApiKeyScope } from '@/lib/api-key-scopes';
 import { ApiKeyScopeError } from '@/lib/api-key-scope-error';
 import { getClerkAuthorizedParties } from '@/lib/clerk-authorized-parties';
+import { resolveOrgMembership } from '@/lib/services/org-sharing-service';
 
 export { getClerkAuthorizedParties } from '@/lib/clerk-authorized-parties';
 
@@ -27,6 +28,31 @@ export interface AuthResult {
 
 export interface AuthOptions {
   apiKeyScope?: ApiKeyScope;
+  mfaGateExemptForOwner?: boolean;
+}
+
+const EXEMPT_ORGANIZATION_ROLE = 'owner';
+
+async function isExemptOrganizationOwner(userId: string): Promise<boolean> {
+  const membership = await resolveOrgMembership(getNeonDb(), userId);
+  return membership?.role === EXEMPT_ORGANIZATION_ROLE;
+}
+
+/**
+ * The MFA gate is the one an organization owner must be able to relax without
+ * outside help: enabling `requireMfa` while unenrolled, or the ip allow list
+ * excluding the owner's own network, would otherwise leave the workspace with
+ * no self-service way to turn the policy back off. Only the caller's own
+ * exemption opt-in and the requester actually being an owner skip it; the ip
+ * allow list is never exempted here.
+ */
+async function assertMfaPolicyUnlessExemptOwner(
+  userId: string,
+  request: NextRequest,
+  exempt: boolean,
+): Promise<void> {
+  if (exempt && (await isExemptOrganizationOwner(userId))) return;
+  await assertMfaPolicy(userId, request);
 }
 
 const ACCOUNT_STATUS_ATTEMPTS = 2;
@@ -193,7 +219,11 @@ export async function getClerkAuthUser(
         }
         await assertAccountActive(result.userId);
         setTenantScope({ userId: result.userId });
-        await assertMfaPolicy(result.userId, request);
+        await assertMfaPolicyUnlessExemptOwner(
+          result.userId,
+          request,
+          options.mfaGateExemptForOwner ?? false,
+        );
         await assertIpAllowList(result.userId, request);
         return { userId: result.userId };
       }
@@ -204,7 +234,11 @@ export async function getClerkAuthUser(
     if (result) {
       await assertAccountActive(result.userId);
       setTenantScope({ userId: result.userId });
-      await assertMfaPolicy(result.userId, request);
+      await assertMfaPolicyUnlessExemptOwner(
+        result.userId,
+        request,
+        options.mfaGateExemptForOwner ?? false,
+      );
       await assertIpAllowList(result.userId, request);
       return result;
     }
@@ -216,7 +250,7 @@ export async function getClerkAuthUser(
   if (userId) {
     await assertAccountActive(userId);
     setTenantScope({ userId });
-    await assertMfaPolicy(userId, request);
+    await assertMfaPolicyUnlessExemptOwner(userId, request, options.mfaGateExemptForOwner ?? false);
     await assertIpAllowList(userId, request);
     return { userId };
   }

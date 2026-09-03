@@ -24,7 +24,7 @@ async function handleValidateTOTP(request: NextRequest) {
   const csrfError = await requireCsrfToken(request);
   if (csrfError) return csrfError as NextResponse;
 
-  const { userId } = await getClerkAuthUser(request);
+  const { userId } = await getClerkAuthUser(request, { mfaGateExemptForOwner: true });
 
   const rateLimitResponse = await withRateLimit(request, '2fa-verify', `user:${userId}`);
   if (rateLimitResponse) return rateLimitResponse;
