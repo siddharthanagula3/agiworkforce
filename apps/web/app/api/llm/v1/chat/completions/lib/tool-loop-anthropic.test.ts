@@ -254,7 +254,7 @@ describe('runToolLoop Anthropic dispatch (mocked adapter)', () => {
     const parsed = JSON.parse(errorMarkerLine!.replace(/^data: /, ''));
     expect(parsed.choices[0].delta.x_stream_error).toMatchObject({
       message: expect.stringContaining('is temporarily at capacity'),
-      code: '429',
+      code: 'provider_rate_limited',
     });
     expect(errorMarkerLine).not.toContain('rate limited');
   });
