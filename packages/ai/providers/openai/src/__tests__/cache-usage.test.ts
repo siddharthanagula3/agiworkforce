@@ -16,7 +16,7 @@ async function collect(stream: AsyncIterable<StreamChunk>): Promise<StreamChunk[
   return out;
 }
 
-describe('translateOpenAIStream — cache token usage', () => {
+describe('translateOpenAIStream, cache token usage', () => {
   it('maps prompt_tokens_details.cache_write_tokens alongside cached_tokens into a usage chunk', async () => {
     const chunks = [
       {
@@ -83,7 +83,7 @@ describe('translateOpenAIStream — cache token usage', () => {
   });
 });
 
-describe('translateOpenAIResponsesStream — cache token usage', () => {
+describe('translateOpenAIResponsesStream, cache token usage', () => {
   it('maps input_tokens_details.cache_write_tokens alongside cached_tokens into a usage chunk', async () => {
     const events = [
       {
