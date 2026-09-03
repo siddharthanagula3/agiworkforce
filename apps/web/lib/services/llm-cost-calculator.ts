@@ -6,7 +6,51 @@ import {
   normalizeModelId,
   resolveEffectiveModelPricingForInputTokens,
 } from '@agiworkforce/types';
+import * as modelCatalogRegistry from '@agiworkforce/types';
 import { logger } from '@/lib/logger';
+
+const ANTHROPIC_PROVIDER_ID = 'anthropic';
+
+/**
+ * Mirrors `RoutePriceSheet` from `packages/ai/model-registry/generated/registry.ts`
+ * (`getRoutePricing`, `getRoutePricingForModel`), trimmed to the fields pricing
+ * needs. `@agiworkforce/types` does not re-export those yet; once it does, this
+ * package picks them up with no call needed here.
+ */
+export interface RoutePriceSheet {
+  provider: string;
+  isDefault: boolean;
+  inputPerMillion: number | null;
+  outputPerMillion: number | null;
+  cacheReadPerMillion: number | null;
+  cacheWritePerMillion: number | null;
+  cacheWrite1hPerMillion: number | null;
+}
+
+export interface RouteRegistryPricingLookup {
+  getRoutePricing?: (routeId: string) => RoutePriceSheet | null | undefined;
+  getRoutePricingForModel?: (modelId: string) => RoutePriceSheet[] | undefined;
+}
+
+const registryModuleLookup = modelCatalogRegistry as unknown as RouteRegistryPricingLookup;
+let routeRegistryLookup: RouteRegistryPricingLookup = registryModuleLookup;
+
+/**
+ * `in` rather than optional chaining: a namespace object (and, in tests, a
+ * `vi.mock` proxy) throws on a direct read of an export it does not carry,
+ * instead of yielding `undefined`.
+ */
+function registryExport<Key extends keyof RouteRegistryPricingLookup>(
+  lookup: RouteRegistryPricingLookup,
+  key: Key,
+): RouteRegistryPricingLookup[Key] | undefined {
+  return key in lookup ? lookup[key] : undefined;
+}
+
+/** Test/integration seam. Pass null to restore the `@agiworkforce/types` lookup. */
+export function setRouteRegistryPricingLookup(lookup: RouteRegistryPricingLookup | null): void {
+  routeRegistryLookup = lookup ?? registryModuleLookup;
+}
 
 export interface TokenUsage {
   promptTokens: number;
@@ -91,8 +135,9 @@ export class LLMCostCalculator {
     promptTokens: number,
     cacheReadTokens = 0,
     cacheCreationTokens = 0,
+    routeId?: string | null,
   ): number {
-    const untieredPricing = this.getPricing(provider, model, now, 0);
+    const untieredPricing = this.getPricing(provider, model, now, 0, routeId);
     return untieredPricing.cacheTokensDisjointFromInput
       ? promptTokens + cacheReadTokens + cacheCreationTokens
       : promptTokens;
@@ -108,8 +153,9 @@ export class LLMCostCalculator {
     model: string,
     usage: TokenUsage,
     now: Date = new Date(),
+    routeId?: string | null,
   ): number {
-    const costCents = this.calculateCostDollars(provider, model, usage, now) * 100;
+    const costCents = this.calculateCostDollars(provider, model, usage, now, routeId) * 100;
     return costCents > 0 ? Math.max(1, Math.ceil(costCents)) : 0;
   }
 
@@ -118,8 +164,9 @@ export class LLMCostCalculator {
     model: string,
     usage: TokenUsage,
     now: Date = new Date(),
+    routeId?: string | null,
   ): number {
-    return Math.ceil(this.calculateCostDollars(provider, model, usage, now) * 1_000_000);
+    return Math.ceil(this.calculateCostDollars(provider, model, usage, now, routeId) * 1_000_000);
   }
 
   static calculateCostDollars(
@@ -127,6 +174,7 @@ export class LLMCostCalculator {
     model: string,
     usage: TokenUsage,
     now: Date = new Date(),
+    routeId?: string | null,
   ): number {
     try {
       if (!provider || typeof provider !== 'string') {
@@ -165,8 +213,9 @@ export class LLMCostCalculator {
         promptTokens,
         cacheReadTokens,
         cacheCreationTokens,
+        routeId,
       );
-      const pricing = this.getPricing(provider, model, now, tierInputTokens);
+      const pricing = this.getPricing(provider, model, now, tierInputTokens, routeId);
 
       const {
         read: cacheReadRate,
@@ -200,6 +249,7 @@ export class LLMCostCalculator {
     inputTokens = 0,
     cacheReadTokens = 0,
     cacheCreationTokens = 0,
+    routeId?: string | null,
   ): number {
     try {
       const tierInputTokens = this.resolveTierInputTokens(
@@ -209,8 +259,10 @@ export class LLMCostCalculator {
         inputTokens,
         cacheReadTokens,
         cacheCreationTokens,
+        routeId,
       );
-      return resolveCacheRates(this.getPricing(provider, model, now, tierInputTokens)).write5m;
+      return resolveCacheRates(this.getPricing(provider, model, now, tierInputTokens, routeId))
+        .write5m;
     } catch {
       return FALLBACK_PRICING.inputCostPer1MTokens;
     }
@@ -223,6 +275,7 @@ export class LLMCostCalculator {
     inputTokens = 0,
     cacheReadTokens = 0,
     cacheCreationTokens = 0,
+    routeId?: string | null,
   ): number {
     try {
       const tierInputTokens = this.resolveTierInputTokens(
@@ -232,8 +285,10 @@ export class LLMCostCalculator {
         inputTokens,
         cacheReadTokens,
         cacheCreationTokens,
+        routeId,
       );
-      return resolveCacheRates(this.getPricing(provider, model, now, tierInputTokens)).read;
+      return resolveCacheRates(this.getPricing(provider, model, now, tierInputTokens, routeId))
+        .read;
     } catch {
       return FALLBACK_PRICING.inputCostPer1MTokens;
     }
@@ -249,11 +304,55 @@ export class LLMCostCalculator {
     return inputCost + outputCost;
   }
 
+  private static toModelPricingFromRouteSheet(
+    sheet: RoutePriceSheet,
+    fallbackProviderId: string | null,
+  ): ModelPricing | null {
+    if (sheet.inputPerMillion === null || sheet.outputPerMillion === null) {
+      return null;
+    }
+    return {
+      inputCostPer1MTokens: sheet.inputPerMillion,
+      outputCostPer1MTokens: sheet.outputPerMillion,
+      cachedInputCostPer1MTokens: sheet.cacheReadPerMillion ?? undefined,
+      cachedWriteCostPer1MTokens: sheet.cacheWritePerMillion ?? undefined,
+      cachedWrite1hCostPer1MTokens: sheet.cacheWrite1hPerMillion ?? undefined,
+      cacheTokensDisjointFromInput:
+        (sheet.provider ?? fallbackProviderId) === ANTHROPIC_PROVIDER_ID,
+    };
+  }
+
+  private static resolveRegistryRoutePricing(
+    routeId: string | null | undefined,
+    providerId: string | null,
+    modelId: string,
+  ): ModelPricing | null {
+    const getRoutePricing = registryExport(routeRegistryLookup, 'getRoutePricing');
+    const routeSheet = routeId ? getRoutePricing?.(routeId) : undefined;
+    if (routeSheet) {
+      const pricing = this.toModelPricingFromRouteSheet(routeSheet, providerId);
+      if (pricing) return pricing;
+    }
+
+    const getRoutePricingForModel = registryExport(routeRegistryLookup, 'getRoutePricingForModel');
+    const modelSheets = providerId ? getRoutePricingForModel?.(modelId) : undefined;
+    const matchedSheet =
+      modelSheets?.find((sheet) => sheet.provider === providerId && sheet.isDefault) ??
+      modelSheets?.find((sheet) => sheet.provider === providerId);
+    if (matchedSheet) {
+      const pricing = this.toModelPricingFromRouteSheet(matchedSheet, providerId);
+      if (pricing) return pricing;
+    }
+
+    return null;
+  }
+
   static getPricing(
     provider: string,
     model: string,
     now: Date = new Date(),
     inputTokens = 0,
+    routeId?: string | null,
   ): ModelPricing {
     try {
       const canonicalModelId = normalizeModelId(model);
@@ -261,7 +360,18 @@ export class LLMCostCalculator {
         return runtimePricingOverrides[canonicalModelId];
       }
 
+      const providerId = normalizeProviderId(provider);
       const resolvedModelId = canonicalModelId ?? model;
+
+      const registryRoutePricing = this.resolveRegistryRoutePricing(
+        routeId,
+        providerId,
+        resolvedModelId,
+      );
+      if (registryRoutePricing) {
+        return registryRoutePricing;
+      }
+
       const metadata = getModelMetadataById(resolvedModelId);
       if (metadata) {
         const effective = resolveEffectiveModelPricingForInputTokens(metadata, now, inputTokens);
@@ -271,11 +381,10 @@ export class LLMCostCalculator {
           cachedInputCostPer1MTokens: effective.cached_input,
           cachedWriteCostPer1MTokens: effective.cached_write,
           cachedWrite1hCostPer1MTokens: effective.cached_write_1h,
-          cacheTokensDisjointFromInput: metadata.provider === 'anthropic',
+          cacheTokensDisjointFromInput: metadata.provider === ANTHROPIC_PROVIDER_ID,
         };
       }
 
-      const providerId = normalizeProviderId(provider);
       if (providerId) {
         const providerConfig = getProviderConfig(providerId);
         if (providerConfig?.defaultPricing) {
@@ -344,6 +453,7 @@ export class LLMCostCalculator {
     inputTokens = 0,
     cacheReadTokens = 0,
     cacheCreationTokens = 0,
+    routeId?: string | null,
   ): number {
     try {
       const tierInputTokens = this.resolveTierInputTokens(
@@ -353,8 +463,9 @@ export class LLMCostCalculator {
         inputTokens,
         cacheReadTokens,
         cacheCreationTokens,
+        routeId,
       );
-      return this.getPricing(provider, model, now, tierInputTokens).inputCostPer1MTokens;
+      return this.getPricing(provider, model, now, tierInputTokens, routeId).inputCostPer1MTokens;
     } catch {
       return FALLBACK_PRICING.inputCostPer1MTokens;
     }
