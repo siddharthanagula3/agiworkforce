@@ -39,3 +39,32 @@ function isSourceListOnly(rest: string[]): boolean {
   }
   return true;
 }
+
+const MARKER_TOKEN = /\[\d{1,3}\]/;
+const LINK_TOKEN = /\[[^\]\n]*\]\([^)\n]*\)/;
+const MARKER_TOKEN_G = /\[\d{1,3}\]/g;
+const LINK_TOKEN_G = /\[[^\]\n]*\]\([^)\n]*\)/g;
+const BARE_HOST_TOKEN_G =
+  /\(?\b[a-z0-9](?:[a-z0-9-]*[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)+\)?/gi;
+
+function isCitationOnlyLine(raw: string): boolean {
+  const line = raw.trim();
+  if (!line) return false;
+  if (!MARKER_TOKEN.test(line) && !LINK_TOKEN.test(line)) return false;
+  const residue = line
+    .replace(MARKER_TOKEN_G, '')
+    .replace(LINK_TOKEN_G, '')
+    .replace(BARE_HOST_TOKEN_G, '')
+    .replace(/[()\s,;·|]/g, '');
+  return residue.length === 0;
+}
+
+export function stripTrailingCitationOnlyBlock(markdown: string): string {
+  const lines = markdown.split('\n');
+  let end = lines.length;
+  while (end > 0 && lines[end - 1]!.trim() === '') end -= 1;
+  let start = end;
+  while (start > 0 && isCitationOnlyLine(lines[start - 1]!)) start -= 1;
+  if (start === end) return markdown;
+  return lines.slice(0, start).join('\n').trimEnd();
+}
