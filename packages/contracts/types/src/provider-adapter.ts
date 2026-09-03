@@ -258,6 +258,7 @@ export interface StreamChunkResponseMeta {
   created?: number;
   systemFingerprint?: string;
   serviceTier?: string;
+  provider?: string;
 }
 
 export interface StreamChunkUsage {
@@ -268,6 +269,8 @@ export interface StreamChunkUsage {
   cacheWriteTokens?: number;
   cacheWrite1hTokens?: number;
   reasoningTokens?: number;
+  costUsd?: number;
+  cacheDiscountUsd?: number;
 }
 
 export interface StreamChunkError {

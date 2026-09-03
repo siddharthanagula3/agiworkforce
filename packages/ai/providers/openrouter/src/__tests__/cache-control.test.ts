@@ -52,11 +52,21 @@ describe('applyOpenRouterAnthropicCacheControl', () => {
     expect(JSON.stringify(params.messages)).toBe(before);
   });
 
-  it('does not mutate non-anthropic routes (e.g. nvidia/*)', () => {
+  it('does not mutate routes outside anthropic/* and google/* (e.g. nvidia/*)', () => {
     const params = buildParams('fixture-provider/fixture-model');
     const before = JSON.stringify(params.messages);
     applyOpenRouterAnthropicCacheControl(params, 'short');
     expect(JSON.stringify(params.messages)).toBe(before);
+  });
+
+  it('wraps the system message in a cache_control block for google/* routes (OpenRouter documents Gemini cache_control passthrough)', () => {
+    const params = buildParams('google/example-model');
+    applyOpenRouterAnthropicCacheControl(params, 'short');
+    const system = params.messages.find((m) => m.role === 'system' || m.role === 'developer');
+    const content = (system as unknown as { content: unknown }).content;
+    expect(content).toEqual([
+      { type: 'text', text: 'You are a helpful assistant.', cache_control: { type: 'ephemeral' } },
+    ]);
   });
 
   it('is a no-op when there is no system message', () => {
