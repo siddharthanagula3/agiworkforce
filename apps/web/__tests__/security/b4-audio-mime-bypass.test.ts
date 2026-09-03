@@ -41,7 +41,14 @@ vi.stubGlobal('fetch', fetchSpy);
 import { getClerkAuthUser } from '@/lib/api-auth';
 import { withRateLimit } from '@/lib/rate-limit';
 import { handleCorsPreflightRequest, getCorsHeaders, getSecurityHeaders } from '@/lib/cors';
+import { providerApiUrl } from '@/lib/server/provider-endpoints';
 import { POST } from '@/app/api/llm/v1/audio/transcriptions/route';
+
+const TRANSCRIPTION_ENDPOINT = providerApiUrl('openai', 'audio/transcriptions');
+
+function providerCalls(): unknown[][] {
+  return fetchSpy.mock.calls.filter(([target]) => String(target) === TRANSCRIPTION_ENDPOINT);
+}
 
 function makeRequest(file: File): NextRequest {
   const fd = new FormData();
@@ -81,14 +88,14 @@ describe('B4: audio MIME + magic-bytes validation', () => {
     const file = new File([mp3Blob()], 'a.mp3', { type: '' });
     const res = await POST(makeRequest(file));
     expect(res.status).toBe(415);
-    expect(fetchSpy).not.toHaveBeenCalled();
+    expect(providerCalls()).toEqual([]);
   });
 
   it('rejects upload with disallowed MIME type', async () => {
     const file = new File([mp3Blob()], 'a.exe', { type: 'application/x-msdownload' });
     const res = await POST(makeRequest(file));
     expect(res.status).toBe(415);
-    expect(fetchSpy).not.toHaveBeenCalled();
+    expect(providerCalls()).toEqual([]);
   });
 
   it('rejects upload that has audio MIME but non-audio magic bytes', async () => {
@@ -100,7 +107,7 @@ describe('B4: audio MIME + magic-bytes validation', () => {
     const file = new File([pdf], 'a.wav', { type: 'audio/wav' });
     const res = await POST(makeRequest(file));
     expect(res.status).toBe(415);
-    expect(fetchSpy).not.toHaveBeenCalled();
+    expect(providerCalls()).toEqual([]);
   });
 
   it('rejects upload exceeding 25 MiB', async () => {
@@ -111,6 +118,6 @@ describe('B4: audio MIME + magic-bytes validation', () => {
     const file = new File([big], 'a.mp3', { type: 'audio/mpeg' });
     const res = await POST(makeRequest(file));
     expect(res.status).toBe(413);
-    expect(fetchSpy).not.toHaveBeenCalled();
+    expect(providerCalls()).toEqual([]);
   });
 });
