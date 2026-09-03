@@ -475,434 +475,453 @@ export default function DpaPage() {
           ctas={[]}
         />
 
-        <Container className="mb-10">
-          <PolicyContents
-            sections={SECTIONS}
-            intro="Annex II (section 08) states the limit of every security measure next to the measure. If you are reviewing this before signing, read that one first."
-          />
-        </Container>
-
-        <Section id="s-01" labelledBy="agi-dpa-s01-title" rule>
-          <Stack gap="loose">
-            <h2 className="agi-ds-h2" id="agi-dpa-s01-title">
-              01 &middot; Parties, scope, and precedence
-            </h2>
-            <Prose>
-              This Data Processing Addendum (&ldquo;DPA&rdquo;) is entered into between{' '}
-              {LEGAL_ENTITY}, {LEGAL_ENTITY_DESCRIPTOR} (&ldquo;AGI&rdquo;), and the customer entity
-              that accepts the{' '}
-              <Link href="/terms" className="agi-ds-link">
-                Terms of Service
-              </Link>{' '}
-              (&ldquo;Customer&rdquo;). It forms part of those terms and applies where AGI processes
-              personal data on the Customer&rsquo;s behalf in connection with AGI Managed Cloud.
-            </Prose>
-            <Prose>
-              In the event of a conflict, this DPA prevails over the Terms of Service on matters of
-              data protection. A negotiated master services agreement or order form, once signed by
-              both parties, prevails over both.
-            </Prose>
-          </Stack>
-        </Section>
-
-        <Section id="s-02" labelledBy="agi-dpa-s02-title" rule ground="2">
-          <Stack gap="loose">
-            <h2 className="agi-ds-h2" id="agi-dpa-s02-title">
-              02 &middot; Definitions
-            </h2>
-            <Prose>
-              &ldquo;Applicable Data Protection Law&rdquo; means the EU General Data Protection
-              Regulation 2016/679 (&ldquo;GDPR&rdquo;), the UK GDPR and Data Protection Act 2018,
-              the Swiss Federal Act on Data Protection, the California Consumer Privacy Act as
-              amended (&ldquo;CCPA&rdquo;), and India&rsquo;s Digital Personal Data Protection Act,
-              2023 (&ldquo;DPDP Act&rdquo;) together with the rules made under it as and to the
-              extent they are in force, each to the extent it applies. &ldquo;Controller&rdquo;,
-              &ldquo;processor&rdquo;, &ldquo;data subject&rdquo;, &ldquo;personal data&rdquo; and
-              &ldquo;processing&rdquo; carry the meanings given in the GDPR. &ldquo;Customer
-              Personal Data&rdquo; means personal data contained in content the Customer or its
-              users submit to Managed Cloud. &ldquo;Sub-processor&rdquo; means a third party engaged
-              by AGI to process Customer Personal Data.
-            </Prose>
-            <Prose>
-              The DPDP Act does not use that vocabulary. Where it applies, &ldquo;Data
-              Fiduciary&rdquo; reads for controller, &ldquo;Data Processor&rdquo; for processor and
-              &ldquo;Data Principal&rdquo; for data subject, and the Act allocates duties
-              differently enough that a word swap is not a translation.{' '}
-              <strong>
-                Section 13 is the India annex and states the allocation in the Act&rsquo;s own
-                terms; where this DPA and that annex differ on processing subject to the DPDP Act,
-                the annex governs.
-              </strong>
-            </Prose>
-          </Stack>
-        </Section>
-
-        <Section id="s-03" labelledBy="agi-dpa-s03-title" rule>
-          <Stack gap="loose">
-            <h2 className="agi-ds-h2" id="agi-dpa-s03-title">
-              03 &middot; Role allocation, by trust boundary
-            </h2>
-            <Prose>
-              AGI runs across three separate trust boundaries. The controller/processor relationship
-              is not the same in all three, and stating one flat rule would be inaccurate for two of
-              them.
-            </Prose>
-            <Ledger caption="Role allocation by trust boundary" rows={BOUNDARY_LEDGER} />
-            <Prose size="sm">
-              Under the DPDP Act the same three rows read Data Fiduciary for controller and Data
-              Processor for processor, with one difference that matters: the Act puts substantially
-              all compliance duty on the Data Fiduciary, including for processing carried out by its
-              Data Processor, so a Customer subject to that Act cannot discharge a duty by pointing
-              at AGI. Section 13 sets that out row by row.
-            </Prose>
-            <Prose size="sm">
-              AGI is an independent controller for a narrow set of its own data: account
-              administration, billing records, security and audit logs, and service telemetry. It
-              processes those for its own legitimate interests in running and securing the service,
-              as described in the{' '}
-              <Link href="/privacy" className="agi-ds-link">
-                privacy policy
-              </Link>
-              .
-            </Prose>
-          </Stack>
-        </Section>
-
-        <Section id="s-04" labelledBy="agi-dpa-s04-title" rule ground="2">
-          <Stack gap="loose">
-            <h2 className="agi-ds-h2" id="agi-dpa-s04-title">
-              04 &middot; AGI&rsquo;s obligations as processor
-            </h2>
-            <Ledger
-              caption="AGI's obligations as processor"
-              rows={[
-                {
-                  label: 'Documented instructions',
-                  value:
-                    'AGI processes Customer Personal Data only on the Customer’s documented instructions, which comprise the Terms of Service, this DPA, and the Customer’s use of the service’s features. AGI will tell the Customer if an instruction appears to infringe Applicable Data Protection Law. Where AGI is required by law to process beyond those instructions, it will inform the Customer first unless that law prohibits it.',
-                },
-                {
-                  label: 'No training, no sale',
-                  value:
-                    'AGI does not train AGI-owned models on Customer Personal Data, does not sell it, and does not share it for cross-context behavioural advertising.',
-                },
-                {
-                  label: 'Confidentiality',
-                  value:
-                    'Personnel authorised to process Customer Personal Data are bound by confidentiality obligations, and access is limited to those who need it to operate or support the service.',
-                },
-                {
-                  label: 'Security',
-                  value:
-                    'AGI maintains the technical and organisational measures in Annex II. Because those measures include their own limits, the Customer should read Annex II before deciding what data to submit.',
-                },
-                {
-                  label: 'Assistance',
-                  value:
-                    'AGI assists the Customer, taking into account the nature of processing and the information available to it, with data-subject requests, security obligations under Art. 32, breach notification under Arts. 33–34, and data protection impact assessments and prior consultation under Arts. 35–36.',
-                },
-              ]}
-            />
-          </Stack>
-        </Section>
-
-        <Section id="s-05" labelledBy="agi-dpa-s05-title" rule>
-          <Stack gap="loose">
-            <h2 className="agi-ds-h2" id="agi-dpa-s05-title">
-              05 &middot; Sub-processors
-            </h2>
-            <Prose>
-              The Customer gives general written authorisation for AGI to engage sub-processors. The
-              current list, with each one&rsquo;s purpose and processing region, is published at{' '}
-              <Link href="/subprocessors" className="agi-ds-link">
-                /subprocessors
-              </Link>{' '}
-              and forms Annex III to this DPA. AGI imposes data protection obligations on each
-              sub-processor no less protective than those in this DPA, and remains liable for their
-              performance.
-            </Prose>
-            <Prose>
-              <strong>Change notice.</strong> AGI publishes additions and replacements on{' '}
-              <Link href="/subprocessors" className="agi-ds-link">
-                /subprocessors
-              </Link>{' '}
-              and records the change on{' '}
-              <Link href="/changelog" className="agi-ds-link">
-                /changelog
-              </Link>
-              , which is the notice mechanism AGI can actually operate today: no mailing path in the
-              product can reach an arbitrary list of customers, so this DPA does not promise emailed
-              notice. The Customer may subscribe to the changelog feed to receive changes. A
-              Customer may object to a new sub-processor on reasonable data protection grounds by
-              writing to {CONTACT_EMAIL} within 30 days of publication; if AGI cannot offer a
-              reasonable alternative, the Customer may terminate the affected subscription and
-              receive a pro-rata refund of prepaid fees for the unused term.
-            </Prose>
-          </Stack>
-        </Section>
-
-        <Section id="s-06" labelledBy="agi-dpa-s06-title" rule ground="2">
-          <Stack gap="loose">
-            <h2 className="agi-ds-h2" id="agi-dpa-s06-title">
-              06 &middot; International transfers
-            </h2>
-            <Prose>
-              AGI hosts data in the United States. It does not currently offer European or United
-              Kingdom data residency, so personal data of EU, UK and Swiss data subjects is
-              transferred to and processed in the United States.
-            </Prose>
-            <Ledger caption="Transfer mechanism by region" rows={TRANSFER_LEDGER} />
-            <Prose size="sm">
-              AGI has not appointed a representative under GDPR Art. 27. The current position is
-              stated at{' '}
-              <Link href="/legal/eu-representative" className="agi-ds-link">
-                /legal/eu-representative
-              </Link>{' '}
-              rather than left implied here.
-            </Prose>
-          </Stack>
-        </Section>
-
-        <Section id="s-07" labelledBy="agi-dpa-s07-title" rule>
-          <Stack gap="loose">
-            <h2 className="agi-ds-h2" id="agi-dpa-s07-title">
-              07 &middot; Annex I: processing details
-            </h2>
-            <Ledger caption="Annex I: processing details" rows={ANNEX_I} />
-            <Prose size="sm">
-              Competent supervisory authority for the purposes of the SCCs: the authority of the
-              member state in which the Customer&rsquo;s EU representative is established, or where
-              the Customer is not established in the EU, the authority of a member state in which
-              the data subjects are located.
-            </Prose>
-          </Stack>
-        </Section>
-
-        <Section id="s-08" labelledBy="agi-dpa-s08-title" rule ground="2">
-          <Stack gap="loose">
-            <h2 className="agi-ds-h2" id="agi-dpa-s08-title">
-              08 &middot; Annex II: technical and organisational measures
-            </h2>
-            <Prose>
-              Each measure is listed with its limit in the same row. A security annex that omits its
-              own limits is not usable in a security review, and the limits here are the answers to
-              the questions a reviewer would ask next.
-            </Prose>
-            <Ledger caption="Annex II: technical and organisational measures" rows={ANNEX_II} />
-          </Stack>
-        </Section>
-
-        <Section id="s-09" labelledBy="agi-dpa-s09-title" rule>
-          <Stack gap="loose">
-            <h2 className="agi-ds-h2" id="agi-dpa-s09-title">
-              09 &middot; Deletion, return, and data-subject requests
-            </h2>
-            <Prose>
-              <strong>Export.</strong> An authenticated user can export their data from the account
-              export endpoint at any time during the subscription, which satisfies the return limb
-              of SCC Clause 8.5 and GDPR Art. 20.
-            </Prose>
-            <Prose>
-              <strong>Deletion.</strong> An account deletion request records a deletion timestamp
-              and schedules erasure 24 hours later. A daily job then erases user-scoped records and
-              the stored objects belonging to that account and deletes the identity at the
-              authentication provider. No confirmation email is sent, because the product has no
-              account-lifecycle mailing path. Cancellation is self-serve: a user who changes their
-              mind can sign back in and cancel from Settings &gt; Account any time within the
-              24-hour window.
-            </Prose>
-            <Prose>
-              <strong>Backups.</strong> Database and object-storage snapshots are governed by the
-              vendors&rsquo; own retention configuration. AGI does not operate a separate process
-              that reaches into vendor snapshots to remove individual records, and does not claim
-              one. Restored data is re-subjected to the same erasure on the next scheduled run.
-            </Prose>
-            <Prose>
-              <strong>Data-subject requests.</strong> Where a data subject contacts AGI directly,
-              AGI refers them to the Customer unless the Customer instructs otherwise, and assists
-              the Customer in responding.
-            </Prose>
-          </Stack>
-        </Section>
-
-        <Section id="s-10" labelledBy="agi-dpa-s10-title" rule ground="2">
-          <Stack gap="loose">
-            <h2 className="agi-ds-h2" id="agi-dpa-s10-title">
-              10 &middot; Personal data breach
-            </h2>
-            <Prose>
-              AGI notifies the Customer without undue delay and in any event within 72 hours of
-              becoming aware of a personal data breach affecting Customer Personal Data, using the
-              account contact on file. The notification describes the nature of the breach, the
-              categories and approximate number of data subjects and records affected so far as
-              known, the likely consequences, the measures taken or proposed, and a contact point
-              for further information. Where the full picture is not available within that window,
-              AGI provides what it has and follows up in phases. Notification is not an admission of
-              fault.
-            </Prose>
-            <Prose>
-              <strong>Notification to the affected individuals.</strong> Where AGI is the processor
-              or Data Processor, the duty to notify individuals sits with the Customer as controller
-              or Data Fiduciary, and AGI does not notify the Customer&rsquo;s users behind the
-              Customer&rsquo;s back. Two commitments keep that from being the place the obligation
-              disappears. First, where the Customer instructs AGI in writing to deliver the notice,
-              AGI delivers it through the surfaces AGI controls. Second, where AGI is itself the
-              controller or Data Fiduciary of the affected data (the account, billing, security-log
-              and telemetry records described in section 03, and its own direct users), AGI notifies
-              each affected individual directly, and where the DPDP Act applies also intimates the
-              Data Protection Board of India, without waiting for its investigation to conclude and
-              without sequencing the individual notice behind the regulator one. The DPDP Act
-              carries no low-risk exception and does not let a public notice stand in for individual
-              intimation where the individuals are identifiable.
-            </Prose>
-            <Prose>
-              <strong>How that notice is delivered, honestly.</strong> The product sends
-              support-escalation and scheduled-task email, and nothing in it can mail an arbitrary
-              list of affected users. A notice to individuals is therefore delivered in-product on
-              next sign-in and as a dated public notice at a stable URL, with direct email only
-              where an address is held and someone sends it. That is a limit of the product today,
-              published here so no incident response is planned around a broadcast that does not
-              exist.
-            </Prose>
-          </Stack>
-        </Section>
-
-        <Section id="s-11" labelledBy="agi-dpa-s11-title" rule>
-          <Stack gap="loose">
-            <h2 className="agi-ds-h2" id="agi-dpa-s11-title">
-              11 &middot; Audit
-            </h2>
-            <Prose>
-              AGI makes available the information necessary to demonstrate compliance with this DPA.
-              In practice that means written responses to a security questionnaire and the published
-              material on{' '}
-              <Link href="/security" className="agi-ds-link">
-                /security
-              </Link>{' '}
-              and{' '}
-              <Link href="/trust" className="agi-ds-link">
-                /trust
-              </Link>
-              , once per twelve months on reasonable notice.{' '}
-              <strong>
-                AGI holds no SOC 2 report, ISO 27001 certificate, or other third-party attestation,
-                so none can be provided in place of an audit.
-              </strong>{' '}
-              On-site inspection is available only where Applicable Data Protection Law requires it,
-              at the Customer&rsquo;s expense, on 30 days&rsquo; notice, under confidentiality, and
-              scoped so as not to compromise other customers&rsquo; data.
-            </Prose>
-          </Stack>
-        </Section>
-
-        <Section id="s-12" labelledBy="agi-dpa-s12-title" rule ground="2">
-          <Stack gap="loose">
-            <h2 className="agi-ds-h2" id="agi-dpa-s12-title">
-              12 &middot; Alpha status, liability, and term
-            </h2>
-            <Prose>
-              Managed Cloud is in public alpha. Its features, capacity and operational controls
-              change as it develops, and no service level agreement applies during alpha. See{' '}
-              <Link href="/sla" className="agi-ds-link">
-                /sla
-              </Link>
-              . This does not reduce AGI&rsquo;s obligations as processor under this DPA or under
-              Applicable Data Protection Law, which are not conditioned on the release stage.
-            </Prose>
-            <Prose>
-              Each party&rsquo;s liability under this DPA is subject to the limitations in the Terms
-              of Service, except that nothing limits liability that cannot be limited under
-              Applicable Data Protection Law, including a data subject&rsquo;s rights under the
-              SCCs. This DPA takes effect when the Customer accepts the Terms of Service and
-              continues for as long as AGI processes Customer Personal Data. It is governed by{' '}
-              {GOVERNING_LAW}, except where the SCCs or the UK Addendum select a different governing
-              law for the transfer obligations, in which case that selection prevails for those
-              obligations.
-            </Prose>
-          </Stack>
-        </Section>
-
-        <Section id="s-13" labelledBy="agi-dpa-s13-title" rule>
-          <div data-legal-review="pending-counsel">
-            <Stack gap="loose">
-              <h2 className="agi-ds-h2" id="agi-dpa-s13-title">
-                13 &middot; Annex IV: India (DPDP Act, 2023)
-              </h2>
-              <Prose>
-                This annex applies where AGI processes digital personal data in connection with
-                offering the service to Data Principals in India. It is written out rather than
-                folded into the GDPR text because the DPDP Act is not a translation of the GDPR: it
-                uses its own vocabulary, puts the consent and breach-intimation duties in different
-                places, and gives a Data Processor no regulator-facing obligation to hand back to
-                the Customer.{' '}
-                <strong>
-                  This annex was drafted from the statute text and has not been reviewed by Indian
-                  counsel. Counsel review is an open item, not a completed one, and this page says
-                  so rather than letting a signature imply otherwise.
-                </strong>
-              </Prose>
-              <Ledger caption="GDPR to DPDP Act term mapping" rows={DPDP_TERMS} />
-              <Ledger caption="DPDP Act duties" rows={DPDP_DUTIES} />
-              <div className="agi-ds-card p-6">
-                <Stack gap="tight">
-                  <h3 className="agi-ds-h3">{GRIEVANCE_OFFICER_NAME}</h3>
-                  <Prose size="sm">
-                    Grievance redressal under s. 13: email{' '}
-                    <a href={contactMailto(CONTACT_SUBJECTS.dpdpGrievance)} className="agi-ds-link">
-                      {CONTACT_EMAIL}
-                    </a>{' '}
-                    with the subject line &ldquo;{CONTACT_SUBJECTS.dpdpGrievance}&rdquo;, or post to{' '}
-                    {LEGAL_ENTITY}, {NOTICE_ADDRESS}. We aim to respond within{' '}
-                    {GRIEVANCE_RESPONSE_TARGET_DAYS} days, our commitment, not a statutory deadline
-                    being quoted back to you. If our response does not resolve it, a Data Principal
-                    may complain to the Data Protection Board of India.
+        <Container>
+          <div className="agi-ds-sticky-scene">
+            <div className="agi-ds-sticky-pane">
+              <PolicyContents
+                sections={SECTIONS}
+                intro="Annex II (section 08) states the limit of every security measure next to the measure. If you are reviewing this before signing, read that one first."
+              />
+            </div>
+            <div className="agi-ds-sticky-flow">
+              <Section id="s-01" labelledBy="agi-dpa-s01-title" rule>
+                <Stack gap="loose">
+                  <h2 className="agi-ds-h2" id="agi-dpa-s01-title">
+                    01 &middot; Parties, scope, and precedence
+                  </h2>
+                  <Prose>
+                    This Data Processing Addendum (&ldquo;DPA&rdquo;) is entered into between{' '}
+                    {LEGAL_ENTITY}, {LEGAL_ENTITY_DESCRIPTOR} (&ldquo;AGI&rdquo;), and the customer
+                    entity that accepts the{' '}
+                    <Link href="/terms" className="agi-ds-link">
+                      Terms of Service
+                    </Link>{' '}
+                    (&ldquo;Customer&rdquo;). It forms part of those terms and applies where AGI
+                    processes personal data on the Customer&rsquo;s behalf in connection with AGI
+                    Managed Cloud.
+                  </Prose>
+                  <Prose>
+                    In the event of a conflict, this DPA prevails over the Terms of Service on
+                    matters of data protection. A negotiated master services agreement or order
+                    form, once signed by both parties, prevails over both.
                   </Prose>
                 </Stack>
-              </div>
-              <Prose size="sm">
-                The notice AGI gives its own Data Principals in India, including the consent
-                purposes and the retention schedule behind them, is at{' '}
-                <Link href={CANONICAL_POLICY_ROUTES.indiaPrivacy} className="agi-ds-link">
-                  /privacy/india
-                </Link>
-                , and rights are exercised at{' '}
-                <Link href={CANONICAL_POLICY_ROUTES.dataRights} className="agi-ds-link">
-                  /privacy/requests
-                </Link>
-                .
-              </Prose>
-            </Stack>
-          </div>
-        </Section>
+              </Section>
 
-        <Section id="s-14" labelledBy="agi-dpa-s14-title" rule ground="2">
-          <Stack gap="loose">
-            <h2 className="agi-ds-h2" id="agi-dpa-s14-title">
-              14 &middot; Signature
-            </h2>
-            <Prose>
-              This DPA is effective without signature once the Terms of Service are accepted. If
-              your procurement process needs a countersigned copy, email{' '}
-              <a href={contactMailto(CONTACT_SUBJECTS.dpa)} className="agi-ds-link">
-                {CONTACT_EMAIL}
-              </a>{' '}
-              with the subject line &ldquo;{CONTACT_SUBJECTS.dpa}&rdquo; and your entity&rsquo;s
-              legal name, address and signatory. AGI returns a pre-signed copy of this text for you
-              to counter-sign.
-            </Prose>
-            <ButtonRow>
-              <Button href={contactMailto(CONTACT_SUBJECTS.dpa)} variant="primary">
-                Request a countersigned copy
-              </Button>
-              <Button href="/subprocessors" variant="secondary">
-                Annex III: subprocessors
-              </Button>
-              <Button href="/privacy" variant="secondary">
-                Privacy policy
-              </Button>
-            </ButtonRow>
-          </Stack>
-        </Section>
+              <Section id="s-02" labelledBy="agi-dpa-s02-title" rule ground="2">
+                <Stack gap="loose">
+                  <h2 className="agi-ds-h2" id="agi-dpa-s02-title">
+                    02 &middot; Definitions
+                  </h2>
+                  <Prose>
+                    &ldquo;Applicable Data Protection Law&rdquo; means the EU General Data
+                    Protection Regulation 2016/679 (&ldquo;GDPR&rdquo;), the UK GDPR and Data
+                    Protection Act 2018, the Swiss Federal Act on Data Protection, the California
+                    Consumer Privacy Act as amended (&ldquo;CCPA&rdquo;), and India&rsquo;s Digital
+                    Personal Data Protection Act, 2023 (&ldquo;DPDP Act&rdquo;) together with the
+                    rules made under it as and to the extent they are in force, each to the extent
+                    it applies. &ldquo;Controller&rdquo;, &ldquo;processor&rdquo;, &ldquo;data
+                    subject&rdquo;, &ldquo;personal data&rdquo; and &ldquo;processing&rdquo; carry
+                    the meanings given in the GDPR. &ldquo;Customer Personal Data&rdquo; means
+                    personal data contained in content the Customer or its users submit to Managed
+                    Cloud. &ldquo;Sub-processor&rdquo; means a third party engaged by AGI to process
+                    Customer Personal Data.
+                  </Prose>
+                  <Prose>
+                    The DPDP Act does not use that vocabulary. Where it applies, &ldquo;Data
+                    Fiduciary&rdquo; reads for controller, &ldquo;Data Processor&rdquo; for
+                    processor and &ldquo;Data Principal&rdquo; for data subject, and the Act
+                    allocates duties differently enough that a word swap is not a translation.{' '}
+                    <strong>
+                      Section 13 is the India annex and states the allocation in the Act&rsquo;s own
+                      terms; where this DPA and that annex differ on processing subject to the DPDP
+                      Act, the annex governs.
+                    </strong>
+                  </Prose>
+                </Stack>
+              </Section>
+
+              <Section id="s-03" labelledBy="agi-dpa-s03-title" rule>
+                <Stack gap="loose">
+                  <h2 className="agi-ds-h2" id="agi-dpa-s03-title">
+                    03 &middot; Role allocation, by trust boundary
+                  </h2>
+                  <Prose>
+                    AGI runs across three separate trust boundaries. The controller/processor
+                    relationship is not the same in all three, and stating one flat rule would be
+                    inaccurate for two of them.
+                  </Prose>
+                  <Ledger caption="Role allocation by trust boundary" rows={BOUNDARY_LEDGER} />
+                  <Prose size="sm">
+                    Under the DPDP Act the same three rows read Data Fiduciary for controller and
+                    Data Processor for processor, with one difference that matters: the Act puts
+                    substantially all compliance duty on the Data Fiduciary, including for
+                    processing carried out by its Data Processor, so a Customer subject to that Act
+                    cannot discharge a duty by pointing at AGI. Section 13 sets that out row by row.
+                  </Prose>
+                  <Prose size="sm">
+                    AGI is an independent controller for a narrow set of its own data: account
+                    administration, billing records, security and audit logs, and service telemetry.
+                    It processes those for its own legitimate interests in running and securing the
+                    service, as described in the{' '}
+                    <Link href="/privacy" className="agi-ds-link">
+                      privacy policy
+                    </Link>
+                    .
+                  </Prose>
+                </Stack>
+              </Section>
+
+              <Section id="s-04" labelledBy="agi-dpa-s04-title" rule ground="2">
+                <Stack gap="loose">
+                  <h2 className="agi-ds-h2" id="agi-dpa-s04-title">
+                    04 &middot; AGI&rsquo;s obligations as processor
+                  </h2>
+                  <Ledger
+                    caption="AGI's obligations as processor"
+                    rows={[
+                      {
+                        label: 'Documented instructions',
+                        value:
+                          'AGI processes Customer Personal Data only on the Customer’s documented instructions, which comprise the Terms of Service, this DPA, and the Customer’s use of the service’s features. AGI will tell the Customer if an instruction appears to infringe Applicable Data Protection Law. Where AGI is required by law to process beyond those instructions, it will inform the Customer first unless that law prohibits it.',
+                      },
+                      {
+                        label: 'No training, no sale',
+                        value:
+                          'AGI does not train AGI-owned models on Customer Personal Data, does not sell it, and does not share it for cross-context behavioural advertising.',
+                      },
+                      {
+                        label: 'Confidentiality',
+                        value:
+                          'Personnel authorised to process Customer Personal Data are bound by confidentiality obligations, and access is limited to those who need it to operate or support the service.',
+                      },
+                      {
+                        label: 'Security',
+                        value:
+                          'AGI maintains the technical and organisational measures in Annex II. Because those measures include their own limits, the Customer should read Annex II before deciding what data to submit.',
+                      },
+                      {
+                        label: 'Assistance',
+                        value:
+                          'AGI assists the Customer, taking into account the nature of processing and the information available to it, with data-subject requests, security obligations under Art. 32, breach notification under Arts. 33–34, and data protection impact assessments and prior consultation under Arts. 35–36.',
+                      },
+                    ]}
+                  />
+                </Stack>
+              </Section>
+
+              <Section id="s-05" labelledBy="agi-dpa-s05-title" rule>
+                <Stack gap="loose">
+                  <h2 className="agi-ds-h2" id="agi-dpa-s05-title">
+                    05 &middot; Sub-processors
+                  </h2>
+                  <Prose>
+                    The Customer gives general written authorisation for AGI to engage
+                    sub-processors. The current list, with each one&rsquo;s purpose and processing
+                    region, is published at{' '}
+                    <Link href="/subprocessors" className="agi-ds-link">
+                      /subprocessors
+                    </Link>{' '}
+                    and forms Annex III to this DPA. AGI imposes data protection obligations on each
+                    sub-processor no less protective than those in this DPA, and remains liable for
+                    their performance.
+                  </Prose>
+                  <Prose>
+                    <strong>Change notice.</strong> AGI publishes additions and replacements on{' '}
+                    <Link href="/subprocessors" className="agi-ds-link">
+                      /subprocessors
+                    </Link>{' '}
+                    and records the change on{' '}
+                    <Link href="/changelog" className="agi-ds-link">
+                      /changelog
+                    </Link>
+                    , which is the notice mechanism AGI can actually operate today: no mailing path
+                    in the product can reach an arbitrary list of customers, so this DPA does not
+                    promise emailed notice. The Customer may subscribe to the changelog feed to
+                    receive changes. A Customer may object to a new sub-processor on reasonable data
+                    protection grounds by writing to {CONTACT_EMAIL} within 30 days of publication;
+                    if AGI cannot offer a reasonable alternative, the Customer may terminate the
+                    affected subscription and receive a pro-rata refund of prepaid fees for the
+                    unused term.
+                  </Prose>
+                </Stack>
+              </Section>
+
+              <Section id="s-06" labelledBy="agi-dpa-s06-title" rule ground="2">
+                <Stack gap="loose">
+                  <h2 className="agi-ds-h2" id="agi-dpa-s06-title">
+                    06 &middot; International transfers
+                  </h2>
+                  <Prose>
+                    AGI hosts data in the United States. It does not currently offer European or
+                    United Kingdom data residency, so personal data of EU, UK and Swiss data
+                    subjects is transferred to and processed in the United States.
+                  </Prose>
+                  <Ledger caption="Transfer mechanism by region" rows={TRANSFER_LEDGER} />
+                  <Prose size="sm">
+                    AGI has not appointed a representative under GDPR Art. 27. The current position
+                    is stated at{' '}
+                    <Link href="/legal/eu-representative" className="agi-ds-link">
+                      /legal/eu-representative
+                    </Link>{' '}
+                    rather than left implied here.
+                  </Prose>
+                </Stack>
+              </Section>
+
+              <Section id="s-07" labelledBy="agi-dpa-s07-title" rule>
+                <Stack gap="loose">
+                  <h2 className="agi-ds-h2" id="agi-dpa-s07-title">
+                    07 &middot; Annex I: processing details
+                  </h2>
+                  <Ledger caption="Annex I: processing details" rows={ANNEX_I} />
+                  <Prose size="sm">
+                    Competent supervisory authority for the purposes of the SCCs: the authority of
+                    the member state in which the Customer&rsquo;s EU representative is established,
+                    or where the Customer is not established in the EU, the authority of a member
+                    state in which the data subjects are located.
+                  </Prose>
+                </Stack>
+              </Section>
+
+              <Section id="s-08" labelledBy="agi-dpa-s08-title" rule ground="2">
+                <Stack gap="loose">
+                  <h2 className="agi-ds-h2" id="agi-dpa-s08-title">
+                    08 &middot; Annex II: technical and organisational measures
+                  </h2>
+                  <Prose>
+                    Each measure is listed with its limit in the same row. A security annex that
+                    omits its own limits is not usable in a security review, and the limits here are
+                    the answers to the questions a reviewer would ask next.
+                  </Prose>
+                  <Ledger
+                    caption="Annex II: technical and organisational measures"
+                    rows={ANNEX_II}
+                  />
+                </Stack>
+              </Section>
+
+              <Section id="s-09" labelledBy="agi-dpa-s09-title" rule>
+                <Stack gap="loose">
+                  <h2 className="agi-ds-h2" id="agi-dpa-s09-title">
+                    09 &middot; Deletion, return, and data-subject requests
+                  </h2>
+                  <Prose>
+                    <strong>Export.</strong> An authenticated user can export their data from the
+                    account export endpoint at any time during the subscription, which satisfies the
+                    return limb of SCC Clause 8.5 and GDPR Art. 20.
+                  </Prose>
+                  <Prose>
+                    <strong>Deletion.</strong> An account deletion request records a deletion
+                    timestamp and schedules erasure 24 hours later. A daily job then erases
+                    user-scoped records and the stored objects belonging to that account and deletes
+                    the identity at the authentication provider. No confirmation email is sent,
+                    because the product has no account-lifecycle mailing path. Cancellation is
+                    self-serve: a user who changes their mind can sign back in and cancel from
+                    Settings &gt; Account any time within the 24-hour window.
+                  </Prose>
+                  <Prose>
+                    <strong>Backups.</strong> Database and object-storage snapshots are governed by
+                    the vendors&rsquo; own retention configuration. AGI does not operate a separate
+                    process that reaches into vendor snapshots to remove individual records, and
+                    does not claim one. Restored data is re-subjected to the same erasure on the
+                    next scheduled run.
+                  </Prose>
+                  <Prose>
+                    <strong>Data-subject requests.</strong> Where a data subject contacts AGI
+                    directly, AGI refers them to the Customer unless the Customer instructs
+                    otherwise, and assists the Customer in responding.
+                  </Prose>
+                </Stack>
+              </Section>
+
+              <Section id="s-10" labelledBy="agi-dpa-s10-title" rule ground="2">
+                <Stack gap="loose">
+                  <h2 className="agi-ds-h2" id="agi-dpa-s10-title">
+                    10 &middot; Personal data breach
+                  </h2>
+                  <Prose>
+                    AGI notifies the Customer without undue delay and in any event within 72 hours
+                    of becoming aware of a personal data breach affecting Customer Personal Data,
+                    using the account contact on file. The notification describes the nature of the
+                    breach, the categories and approximate number of data subjects and records
+                    affected so far as known, the likely consequences, the measures taken or
+                    proposed, and a contact point for further information. Where the full picture is
+                    not available within that window, AGI provides what it has and follows up in
+                    phases. Notification is not an admission of fault.
+                  </Prose>
+                  <Prose>
+                    <strong>Notification to the affected individuals.</strong> Where AGI is the
+                    processor or Data Processor, the duty to notify individuals sits with the
+                    Customer as controller or Data Fiduciary, and AGI does not notify the
+                    Customer&rsquo;s users behind the Customer&rsquo;s back. Two commitments keep
+                    that from being the place the obligation disappears. First, where the Customer
+                    instructs AGI in writing to deliver the notice, AGI delivers it through the
+                    surfaces AGI controls. Second, where AGI is itself the controller or Data
+                    Fiduciary of the affected data (the account, billing, security-log and telemetry
+                    records described in section 03, and its own direct users), AGI notifies each
+                    affected individual directly, and where the DPDP Act applies also intimates the
+                    Data Protection Board of India, without waiting for its investigation to
+                    conclude and without sequencing the individual notice behind the regulator one.
+                    The DPDP Act carries no low-risk exception and does not let a public notice
+                    stand in for individual intimation where the individuals are identifiable.
+                  </Prose>
+                  <Prose>
+                    <strong>How that notice is delivered, honestly.</strong> The product sends
+                    support-escalation and scheduled-task email, and nothing in it can mail an
+                    arbitrary list of affected users. A notice to individuals is therefore delivered
+                    in-product on next sign-in and as a dated public notice at a stable URL, with
+                    direct email only where an address is held and someone sends it. That is a limit
+                    of the product today, published here so no incident response is planned around a
+                    broadcast that does not exist.
+                  </Prose>
+                </Stack>
+              </Section>
+
+              <Section id="s-11" labelledBy="agi-dpa-s11-title" rule>
+                <Stack gap="loose">
+                  <h2 className="agi-ds-h2" id="agi-dpa-s11-title">
+                    11 &middot; Audit
+                  </h2>
+                  <Prose>
+                    AGI makes available the information necessary to demonstrate compliance with
+                    this DPA. In practice that means written responses to a security questionnaire
+                    and the published material on{' '}
+                    <Link href="/security" className="agi-ds-link">
+                      /security
+                    </Link>{' '}
+                    and{' '}
+                    <Link href="/trust" className="agi-ds-link">
+                      /trust
+                    </Link>
+                    , once per twelve months on reasonable notice.{' '}
+                    <strong>
+                      AGI holds no SOC 2 report, ISO 27001 certificate, or other third-party
+                      attestation, so none can be provided in place of an audit.
+                    </strong>{' '}
+                    On-site inspection is available only where Applicable Data Protection Law
+                    requires it, at the Customer&rsquo;s expense, on 30 days&rsquo; notice, under
+                    confidentiality, and scoped so as not to compromise other customers&rsquo; data.
+                  </Prose>
+                </Stack>
+              </Section>
+
+              <Section id="s-12" labelledBy="agi-dpa-s12-title" rule ground="2">
+                <Stack gap="loose">
+                  <h2 className="agi-ds-h2" id="agi-dpa-s12-title">
+                    12 &middot; Alpha status, liability, and term
+                  </h2>
+                  <Prose>
+                    Managed Cloud is in public alpha. Its features, capacity and operational
+                    controls change as it develops, and no service level agreement applies during
+                    alpha. See{' '}
+                    <Link href="/sla" className="agi-ds-link">
+                      /sla
+                    </Link>
+                    . This does not reduce AGI&rsquo;s obligations as processor under this DPA or
+                    under Applicable Data Protection Law, which are not conditioned on the release
+                    stage.
+                  </Prose>
+                  <Prose>
+                    Each party&rsquo;s liability under this DPA is subject to the limitations in the
+                    Terms of Service, except that nothing limits liability that cannot be limited
+                    under Applicable Data Protection Law, including a data subject&rsquo;s rights
+                    under the SCCs. This DPA takes effect when the Customer accepts the Terms of
+                    Service and continues for as long as AGI processes Customer Personal Data. It is
+                    governed by {GOVERNING_LAW}, except where the SCCs or the UK Addendum select a
+                    different governing law for the transfer obligations, in which case that
+                    selection prevails for those obligations.
+                  </Prose>
+                </Stack>
+              </Section>
+
+              <Section id="s-13" labelledBy="agi-dpa-s13-title" rule>
+                <div data-legal-review="pending-counsel">
+                  <Stack gap="loose">
+                    <h2 className="agi-ds-h2" id="agi-dpa-s13-title">
+                      13 &middot; Annex IV: India (DPDP Act, 2023)
+                    </h2>
+                    <Prose>
+                      This annex applies where AGI processes digital personal data in connection
+                      with offering the service to Data Principals in India. It is written out
+                      rather than folded into the GDPR text because the DPDP Act is not a
+                      translation of the GDPR: it uses its own vocabulary, puts the consent and
+                      breach-intimation duties in different places, and gives a Data Processor no
+                      regulator-facing obligation to hand back to the Customer.{' '}
+                      <strong>
+                        This annex was drafted from the statute text and has not been reviewed by
+                        Indian counsel. Counsel review is an open item, not a completed one, and
+                        this page says so rather than letting a signature imply otherwise.
+                      </strong>
+                    </Prose>
+                    <Ledger caption="GDPR to DPDP Act term mapping" rows={DPDP_TERMS} />
+                    <Ledger caption="DPDP Act duties" rows={DPDP_DUTIES} />
+                    <div className="agi-ds-card p-6">
+                      <Stack gap="tight">
+                        <h3 className="agi-ds-h3">{GRIEVANCE_OFFICER_NAME}</h3>
+                        <Prose size="sm">
+                          Grievance redressal under s. 13: email{' '}
+                          <a
+                            href={contactMailto(CONTACT_SUBJECTS.dpdpGrievance)}
+                            className="agi-ds-link"
+                          >
+                            {CONTACT_EMAIL}
+                          </a>{' '}
+                          with the subject line &ldquo;{CONTACT_SUBJECTS.dpdpGrievance}&rdquo;, or
+                          post to {LEGAL_ENTITY}, {NOTICE_ADDRESS}. We aim to respond within{' '}
+                          {GRIEVANCE_RESPONSE_TARGET_DAYS} days, our commitment, not a statutory
+                          deadline being quoted back to you. If our response does not resolve it, a
+                          Data Principal may complain to the Data Protection Board of India.
+                        </Prose>
+                      </Stack>
+                    </div>
+                    <Prose size="sm">
+                      The notice AGI gives its own Data Principals in India, including the consent
+                      purposes and the retention schedule behind them, is at{' '}
+                      <Link href={CANONICAL_POLICY_ROUTES.indiaPrivacy} className="agi-ds-link">
+                        /privacy/india
+                      </Link>
+                      , and rights are exercised at{' '}
+                      <Link href={CANONICAL_POLICY_ROUTES.dataRights} className="agi-ds-link">
+                        /privacy/requests
+                      </Link>
+                      .
+                    </Prose>
+                  </Stack>
+                </div>
+              </Section>
+
+              <Section id="s-14" labelledBy="agi-dpa-s14-title" rule ground="2">
+                <Stack gap="loose">
+                  <h2 className="agi-ds-h2" id="agi-dpa-s14-title">
+                    14 &middot; Signature
+                  </h2>
+                  <Prose>
+                    This DPA is effective without signature once the Terms of Service are accepted.
+                    If your procurement process needs a countersigned copy, email{' '}
+                    <a href={contactMailto(CONTACT_SUBJECTS.dpa)} className="agi-ds-link">
+                      {CONTACT_EMAIL}
+                    </a>{' '}
+                    with the subject line &ldquo;{CONTACT_SUBJECTS.dpa}&rdquo; and your
+                    entity&rsquo;s legal name, address and signatory. AGI returns a pre-signed copy
+                    of this text for you to counter-sign.
+                  </Prose>
+                  <ButtonRow>
+                    <Button href={contactMailto(CONTACT_SUBJECTS.dpa)} variant="primary">
+                      Request a countersigned copy
+                    </Button>
+                    <Button href="/subprocessors" variant="secondary">
+                      Annex III: subprocessors
+                    </Button>
+                    <Button href="/privacy" variant="secondary">
+                      Privacy policy
+                    </Button>
+                  </ButtonRow>
+                </Stack>
+              </Section>
+            </div>
+          </div>
+        </Container>
       </main>
       <MarketingFooter />
     </div>

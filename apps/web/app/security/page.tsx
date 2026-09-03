@@ -455,232 +455,238 @@ export default function SecurityPage() {
           </Stack>
         </Section>
 
-        <Container className="mb-10">
-          <PolicyContents sections={SECTIONS} />
+        <Container>
+          <div className="agi-ds-sticky-scene">
+            <div className="agi-ds-sticky-pane">
+              <PolicyContents sections={SECTIONS} />
+            </div>
+            <div className="agi-ds-sticky-flow">
+              <Section id="boundaries" labelledBy="agi-security-boundaries-title" rule ground="2">
+                <Stack gap="loose">
+                  <div>
+                    <h2 className="agi-ds-h2" id="agi-security-boundaries-title">
+                      The mode decides the whole risk model.
+                    </h2>
+                    <Prose>
+                      Most of this page only applies to one of the three. In Local mode the honest
+                      answer to &ldquo;which of your subprocessors touches my data&rdquo; is none of
+                      them, because none of our infrastructure is in the path at all.
+                    </Prose>
+                  </div>
+                  <FactGrid items={BOUNDARIES} />
+                </Stack>
+              </Section>
+
+              <Section id="data" labelledBy="agi-security-data-title" rule>
+                <Stack gap="loose">
+                  <div>
+                    <h2 className="agi-ds-h2" id="agi-security-data-title">
+                      Where data lives, by category, by mode, by holder.
+                    </h2>
+                    <Prose>
+                      Named third parties and their regions are listed on{' '}
+                      <Link href="/subprocessors" className="agi-ds-link">
+                        /subprocessors
+                      </Link>
+                      . Processing terms are on{' '}
+                      <Link href="/dpa" className="agi-ds-link">
+                        /dpa
+                      </Link>
+                      .
+                    </Prose>
+                  </div>
+                  <Ledger caption="Where data lives" rows={DATA_ROWS} />
+                </Stack>
+              </Section>
+
+              <Section id="transit" labelledBy="agi-security-transit-title" rule ground="2">
+                <Stack gap="loose">
+                  <h2 className="agi-ds-h2" id="agi-security-transit-title">
+                    Encryption in transit: what the browser is told, and enforced with.
+                  </h2>
+                  <Ledger caption="Encryption in transit" rows={TRANSIT} />
+                </Stack>
+              </Section>
+
+              <Section id="rest" labelledBy="agi-security-rest-title" rule>
+                <Stack gap="loose">
+                  <h2 className="agi-ds-h2" id="agi-security-rest-title">
+                    Encryption at rest: named algorithms, named parameters.
+                  </h2>
+                  <Ledger caption="Encryption at rest" rows={AT_REST} />
+                </Stack>
+              </Section>
+
+              <Section id="access" labelledBy="agi-security-access-title" rule ground="2">
+                <Stack gap="loose">
+                  <h2 className="agi-ds-h2" id="agi-security-access-title">
+                    Access control: who gets in, and what stops them.
+                  </h2>
+                  <Ledger caption="Access control" rows={ACCESS} />
+                </Stack>
+              </Section>
+
+              <Section id="isolation" labelledBy="agi-security-isolation-title" rule>
+                <Stack gap="loose">
+                  <div>
+                    <h2 className="agi-ds-h2" id="agi-security-isolation-title">
+                      Execution isolation: untrusted code and untrusted URLs.
+                    </h2>
+                    <Prose>
+                      A model writes code and picks URLs. Both are untrusted input, and both are
+                      treated as such.
+                    </Prose>
+                  </div>
+                  <Ledger caption="Execution isolation" rows={ISOLATION} />
+                </Stack>
+              </Section>
+
+              <Section id="db" labelledBy="agi-security-db-title" rule ground="2">
+                <Stack gap="loose">
+                  <div>
+                    <h2 className="agi-ds-h2" id="agi-security-db-title">
+                      Tenant isolation: database isolation, including where it does not reach yet.
+                    </h2>
+                    <Prose>
+                      This is the section most vendors round up. We are not going to, because the
+                      number is checkable and rounding it up is exactly the failure a review is
+                      meant to catch.
+                    </Prose>
+                  </div>
+                  <Ledger caption="Database isolation" rows={DB_ROWS} />
+                </Stack>
+              </Section>
+
+              <Section id="logging" labelledBy="agi-security-logging-title" rule>
+                <Stack gap="loose">
+                  <h2 className="agi-ds-h2" id="agi-security-logging-title">
+                    Logging: what is captured, and what is deliberately not.
+                  </h2>
+                  <Ledger caption="Logging" rows={LOGGING} />
+                </Stack>
+              </Section>
+
+              <Section id="deletion" labelledBy="agi-security-deletion-title" rule ground="2">
+                <Stack gap="loose">
+                  <div>
+                    <h2 className="agi-ds-h2" id="agi-security-deletion-title">
+                      Deletion: what actually happens when you delete an account.
+                    </h2>
+                    <Prose>
+                      Deletion is the claim vendors are least often asked to demonstrate and most
+                      often fail. Here is the mechanism, in the order it runs.
+                    </Prose>
+                  </div>
+                  <Ledger caption="Deletion" rows={DELETION} />
+                </Stack>
+              </Section>
+
+              <Section id="release" labelledBy="agi-security-release-title" rule>
+                <Stack gap="loose">
+                  <h2 className="agi-ds-h2" id="agi-security-release-title">
+                    Release integrity: what runs before anything ships.
+                  </h2>
+                  <Ledger caption="Release integrity" rows={RELEASE} />
+                </Stack>
+              </Section>
+
+              <Section id="report" labelledBy="agi-security-report-title" rule ground="2">
+                <Stack gap="loose">
+                  <div>
+                    <h2 className="agi-ds-h2" id="agi-security-report-title">
+                      Reporting a vulnerability.
+                    </h2>
+                    <Prose>
+                      Email{' '}
+                      <Link href={contactMailto(CONTACT_SUBJECTS.security)} className="agi-ds-link">
+                        {CONTACT_EMAIL}
+                      </Link>{' '}
+                      with <strong>{CONTACT_SUBJECTS.security}</strong> in the subject line. This is
+                      the mailbox that is actually monitored; we would rather publish one address
+                      that works than a dedicated alias that bounces.
+                    </Prose>
+                  </div>
+                  <Ledger
+                    caption="Reporting a vulnerability"
+                    rows={[
+                      {
+                        label: 'Include',
+                        value:
+                          'The affected surface (web, desktop, mobile, extension, CLI), the version or URL, steps to reproduce, and what an attacker gains. A proof of concept helps. Please do not send video only.',
+                      },
+                      {
+                        label: 'In scope',
+                        value:
+                          'agiworkforce.com and its subdomains, the hosted API, the artifact sandbox origin, the desktop application and its updater, the CLI, and the browser and editor extensions.',
+                      },
+                      {
+                        label: 'Out of scope',
+                        value:
+                          'Findings in third-party services we consume, report those to the vendor. Denial of service, volumetric or brute-force testing, social engineering of our staff or users, physical attacks, spam or rate-limit exhaustion, and reports produced by a scanner with no demonstrated impact.',
+                      },
+                      {
+                        label: 'Safe harbour',
+                        value:
+                          'If you research in good faith, stay within the scope above, avoid privacy violations and service degradation, use only accounts you own or have permission to test, and give us a reasonable chance to fix the issue before disclosing it, we will not pursue or support legal action against you, and we will say so in writing if you ask.',
+                      },
+                      {
+                        label: 'Response',
+                        value:
+                          'We do not publish a fixed acknowledgement or remediation time. This is not a 24/7 reporting channel; reports are reviewed on a best-effort basis during working hours.',
+                      },
+                      {
+                        label: 'Reward',
+                        value:
+                          'There is no paid bounty programme. We will credit you by name in the changelog if you want the credit, and decline to name you if you do not.',
+                      },
+                    ]}
+                  />
+                </Stack>
+              </Section>
+
+              <Section id="not-done" labelledBy="agi-security-gaps-title" rule>
+                <Stack gap="loose">
+                  <div>
+                    <h2 className="agi-ds-h2" id="agi-security-gaps-title">
+                      What we have not done.
+                    </h2>
+                    <Prose>
+                      No dates are attached to any of these. A date we cannot keep is worse than an
+                      admission we can. As of {LAST_REVIEWED}:
+                    </Prose>
+                  </div>
+                  <Ledger caption="What we have not done" rows={NOT_DONE} />
+                </Stack>
+              </Section>
+
+              <Section id="related" labelledBy="agi-security-more-title" rule ground="2">
+                <Stack gap="loose">
+                  <h2 className="agi-ds-h2" id="agi-security-more-title">
+                    The rest of the trust surface.
+                  </h2>
+                  <ButtonRow>
+                    <Button href="/trust">Dated posture ledger</Button>
+                    <Button href="/status" variant="secondary">
+                      Live status
+                    </Button>
+                    <Button href="/privacy" variant="secondary">
+                      Privacy policy
+                    </Button>
+                    <Button href="/subprocessors" variant="secondary">
+                      Subprocessors
+                    </Button>
+                    <Button href="/dpa" variant="secondary">
+                      Data processing addendum
+                    </Button>
+                    <Button href="/sla" variant="secondary">
+                      Service levels
+                    </Button>
+                  </ButtonRow>
+                </Stack>
+              </Section>
+            </div>
+          </div>
         </Container>
-
-        <Section id="boundaries" labelledBy="agi-security-boundaries-title" rule ground="2">
-          <Stack gap="loose">
-            <div>
-              <h2 className="agi-ds-h2" id="agi-security-boundaries-title">
-                The mode decides the whole risk model.
-              </h2>
-              <Prose>
-                Most of this page only applies to one of the three. In Local mode the honest answer
-                to &ldquo;which of your subprocessors touches my data&rdquo; is none of them,
-                because none of our infrastructure is in the path at all.
-              </Prose>
-            </div>
-            <FactGrid items={BOUNDARIES} />
-          </Stack>
-        </Section>
-
-        <Section id="data" labelledBy="agi-security-data-title" rule>
-          <Stack gap="loose">
-            <div>
-              <h2 className="agi-ds-h2" id="agi-security-data-title">
-                Where data lives, by category, by mode, by holder.
-              </h2>
-              <Prose>
-                Named third parties and their regions are listed on{' '}
-                <Link href="/subprocessors" className="agi-ds-link">
-                  /subprocessors
-                </Link>
-                . Processing terms are on{' '}
-                <Link href="/dpa" className="agi-ds-link">
-                  /dpa
-                </Link>
-                .
-              </Prose>
-            </div>
-            <Ledger caption="Where data lives" rows={DATA_ROWS} />
-          </Stack>
-        </Section>
-
-        <Section id="transit" labelledBy="agi-security-transit-title" rule ground="2">
-          <Stack gap="loose">
-            <h2 className="agi-ds-h2" id="agi-security-transit-title">
-              Encryption in transit: what the browser is told, and enforced with.
-            </h2>
-            <Ledger caption="Encryption in transit" rows={TRANSIT} />
-          </Stack>
-        </Section>
-
-        <Section id="rest" labelledBy="agi-security-rest-title" rule>
-          <Stack gap="loose">
-            <h2 className="agi-ds-h2" id="agi-security-rest-title">
-              Encryption at rest: named algorithms, named parameters.
-            </h2>
-            <Ledger caption="Encryption at rest" rows={AT_REST} />
-          </Stack>
-        </Section>
-
-        <Section id="access" labelledBy="agi-security-access-title" rule ground="2">
-          <Stack gap="loose">
-            <h2 className="agi-ds-h2" id="agi-security-access-title">
-              Access control: who gets in, and what stops them.
-            </h2>
-            <Ledger caption="Access control" rows={ACCESS} />
-          </Stack>
-        </Section>
-
-        <Section id="isolation" labelledBy="agi-security-isolation-title" rule>
-          <Stack gap="loose">
-            <div>
-              <h2 className="agi-ds-h2" id="agi-security-isolation-title">
-                Execution isolation: untrusted code and untrusted URLs.
-              </h2>
-              <Prose>
-                A model writes code and picks URLs. Both are untrusted input, and both are treated
-                as such.
-              </Prose>
-            </div>
-            <Ledger caption="Execution isolation" rows={ISOLATION} />
-          </Stack>
-        </Section>
-
-        <Section id="db" labelledBy="agi-security-db-title" rule ground="2">
-          <Stack gap="loose">
-            <div>
-              <h2 className="agi-ds-h2" id="agi-security-db-title">
-                Tenant isolation: database isolation, including where it does not reach yet.
-              </h2>
-              <Prose>
-                This is the section most vendors round up. We are not going to, because the number
-                is checkable and rounding it up is exactly the failure a review is meant to catch.
-              </Prose>
-            </div>
-            <Ledger caption="Database isolation" rows={DB_ROWS} />
-          </Stack>
-        </Section>
-
-        <Section id="logging" labelledBy="agi-security-logging-title" rule>
-          <Stack gap="loose">
-            <h2 className="agi-ds-h2" id="agi-security-logging-title">
-              Logging: what is captured, and what is deliberately not.
-            </h2>
-            <Ledger caption="Logging" rows={LOGGING} />
-          </Stack>
-        </Section>
-
-        <Section id="deletion" labelledBy="agi-security-deletion-title" rule ground="2">
-          <Stack gap="loose">
-            <div>
-              <h2 className="agi-ds-h2" id="agi-security-deletion-title">
-                Deletion: what actually happens when you delete an account.
-              </h2>
-              <Prose>
-                Deletion is the claim vendors are least often asked to demonstrate and most often
-                fail. Here is the mechanism, in the order it runs.
-              </Prose>
-            </div>
-            <Ledger caption="Deletion" rows={DELETION} />
-          </Stack>
-        </Section>
-
-        <Section id="release" labelledBy="agi-security-release-title" rule>
-          <Stack gap="loose">
-            <h2 className="agi-ds-h2" id="agi-security-release-title">
-              Release integrity: what runs before anything ships.
-            </h2>
-            <Ledger caption="Release integrity" rows={RELEASE} />
-          </Stack>
-        </Section>
-
-        <Section id="report" labelledBy="agi-security-report-title" rule ground="2">
-          <Stack gap="loose">
-            <div>
-              <h2 className="agi-ds-h2" id="agi-security-report-title">
-                Reporting a vulnerability.
-              </h2>
-              <Prose>
-                Email{' '}
-                <Link href={contactMailto(CONTACT_SUBJECTS.security)} className="agi-ds-link">
-                  {CONTACT_EMAIL}
-                </Link>{' '}
-                with <strong>{CONTACT_SUBJECTS.security}</strong> in the subject line. This is the
-                mailbox that is actually monitored; we would rather publish one address that works
-                than a dedicated alias that bounces.
-              </Prose>
-            </div>
-            <Ledger
-              caption="Reporting a vulnerability"
-              rows={[
-                {
-                  label: 'Include',
-                  value:
-                    'The affected surface (web, desktop, mobile, extension, CLI), the version or URL, steps to reproduce, and what an attacker gains. A proof of concept helps. Please do not send video only.',
-                },
-                {
-                  label: 'In scope',
-                  value:
-                    'agiworkforce.com and its subdomains, the hosted API, the artifact sandbox origin, the desktop application and its updater, the CLI, and the browser and editor extensions.',
-                },
-                {
-                  label: 'Out of scope',
-                  value:
-                    'Findings in third-party services we consume, report those to the vendor. Denial of service, volumetric or brute-force testing, social engineering of our staff or users, physical attacks, spam or rate-limit exhaustion, and reports produced by a scanner with no demonstrated impact.',
-                },
-                {
-                  label: 'Safe harbour',
-                  value:
-                    'If you research in good faith, stay within the scope above, avoid privacy violations and service degradation, use only accounts you own or have permission to test, and give us a reasonable chance to fix the issue before disclosing it, we will not pursue or support legal action against you, and we will say so in writing if you ask.',
-                },
-                {
-                  label: 'Response',
-                  value:
-                    'We do not publish a fixed acknowledgement or remediation time. This is not a 24/7 reporting channel; reports are reviewed on a best-effort basis during working hours.',
-                },
-                {
-                  label: 'Reward',
-                  value:
-                    'There is no paid bounty programme. We will credit you by name in the changelog if you want the credit, and decline to name you if you do not.',
-                },
-              ]}
-            />
-          </Stack>
-        </Section>
-
-        <Section id="not-done" labelledBy="agi-security-gaps-title" rule>
-          <Stack gap="loose">
-            <div>
-              <h2 className="agi-ds-h2" id="agi-security-gaps-title">
-                What we have not done.
-              </h2>
-              <Prose>
-                No dates are attached to any of these. A date we cannot keep is worse than an
-                admission we can. As of {LAST_REVIEWED}:
-              </Prose>
-            </div>
-            <Ledger caption="What we have not done" rows={NOT_DONE} />
-          </Stack>
-        </Section>
-
-        <Section id="related" labelledBy="agi-security-more-title" rule ground="2">
-          <Stack gap="loose">
-            <h2 className="agi-ds-h2" id="agi-security-more-title">
-              The rest of the trust surface.
-            </h2>
-            <ButtonRow>
-              <Button href="/trust">Dated posture ledger</Button>
-              <Button href="/status" variant="secondary">
-                Live status
-              </Button>
-              <Button href="/privacy" variant="secondary">
-                Privacy policy
-              </Button>
-              <Button href="/subprocessors" variant="secondary">
-                Subprocessors
-              </Button>
-              <Button href="/dpa" variant="secondary">
-                Data processing addendum
-              </Button>
-              <Button href="/sla" variant="secondary">
-                Service levels
-              </Button>
-            </ButtonRow>
-          </Stack>
-        </Section>
       </main>
       <MarketingFooter />
     </div>

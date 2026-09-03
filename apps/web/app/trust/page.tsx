@@ -252,127 +252,133 @@ export default function TrustPage() {
           </Stack>
         </Section>
 
-        <Container className="mb-10">
-          <PolicyContents sections={SECTIONS} />
+        <Container>
+          <div className="agi-ds-sticky-scene">
+            <div className="agi-ds-sticky-pane">
+              <PolicyContents sections={SECTIONS} />
+            </div>
+            <div className="agi-ds-sticky-flow">
+              <Section id="compliance" labelledBy="agi-trust-compliance-title" rule ground="2">
+                <Stack gap="loose">
+                  <div>
+                    <h2 className="agi-ds-h2" id="agi-trust-compliance-title">
+                      What we hold, and what we do not.
+                    </h2>
+                    <Prose>
+                      A certification claim is only as good as the document behind it, so each row
+                      names the document. Several of these rows say the document does not exist.
+                    </Prose>
+                  </div>
+                  <Ledger caption="Certifications and obligations" rows={COMPLIANCE} />
+                </Stack>
+              </Section>
+
+              <Section id="posture" labelledBy="agi-trust-posture-title" rule>
+                <Stack gap="loose">
+                  <div>
+                    <h2 className="agi-ds-h2" id="agi-trust-posture-title">
+                      Control by control, dated.
+                    </h2>
+                    <Prose>
+                      Mechanisms are explained on{' '}
+                      <Link href="/security" className="agi-ds-link">
+                        /security
+                      </Link>
+                      . This table is the summary a reviewer can scan, including the rows that say a
+                      control is partial or absent.
+                    </Prose>
+                  </div>
+                  <Ledger caption="Security posture" rows={POSTURE} />
+                </Stack>
+              </Section>
+
+              <Section id="verify" labelledBy="agi-trust-verify-title" rule ground="2">
+                <Stack gap="loose">
+                  <div>
+                    <h2 className="agi-ds-h2" id="agi-trust-verify-title">
+                      Do not take our word for it.
+                    </h2>
+                    <Prose>
+                      Most of what this page asserts is externally observable. If any of these
+                      checks disagree with the tables above, the tables are wrong and we want to
+                      know.
+                    </Prose>
+                  </div>
+                  <NoteList items={VERIFY} />
+                </Stack>
+              </Section>
+
+              <Section id="changes" labelledBy="agi-trust-changes-title" rule>
+                <Stack gap="loose">
+                  <h2 className="agi-ds-h2" id="agi-trust-changes-title">
+                    When this page last moved.
+                  </h2>
+                  <Ledger
+                    caption="Change record"
+                    rows={[
+                      {
+                        label: '2026-09-03',
+                        value:
+                          'Restored two cross-user reads, the projects list and a shared project lookup, that the row-level-security migration below had broken. Both now read through the owner connection instead of the caller-scoped one. That moves the row-level-isolation count from 66 of 161 database-backed routes to 64 of 161, and the owner-connection count from 95 to 97.',
+                      },
+                      {
+                        label: '2026-09-03',
+                        value:
+                          'Migrated roughly 30 route handlers off the owner connection onto policy-scoped RLS clients, raising the row-level-isolation count from 39 of 154 database-backed routes to 66 of 161. The database-backed total moved too, since other routes shipped the same day; the count of routes touching no database is now 98.',
+                      },
+                      {
+                        label: '2026-09-02',
+                        value:
+                          'Corrected the database row-level isolation row: the count of hosted routes that touch no database at all was undercounted by one. The measured routes that reach the database, and the split between policy-scoped and owner-connection routes, are unchanged.',
+                      },
+                      {
+                        label: '2026-08-14',
+                        value:
+                          'Added the DPDP (India) surface: notice, consent, data-principal rights, grievance redressal, parental consent, notice languages, Significant Data Fiduciary status, and data residency, each rated against what the product does today. Corrected the GDPR/CCPA data-subject-rights row, which had cited 34 erasure-scoped tables against an actual 66; the count is now derived from code. Corrected the subprocessor-transparency row after a review found six live processors missing from the published list, including one delisted on a manifest check that could not see its direct HTTP calls.',
+                      },
+                      {
+                        label: '2026-08-05',
+                        value:
+                          'Rewritten as a dated ledger. Removed a claim that SOC 2 evidence collection was underway: no such programme exists. Corrected the code-signing rows, which described signing as planned when both macOS notarization and Windows signing are implemented and enforced in the release pipeline. Replaced the general database-isolation claim with the actual route coverage. Added the unappointed EU Article 27 representative, absent production access governance, and absent continuity evidence as explicit rows.',
+                      },
+                      {
+                        label: '2026-07',
+                        value:
+                          'Retention consolidated to a single enforced answer, and the subprocessor list corrected to include processors that were live but unlisted.',
+                      },
+                    ]}
+                  />
+                </Stack>
+              </Section>
+
+              <Section id="related" labelledBy="agi-trust-more-title" rule ground="2">
+                <Stack gap="loose">
+                  <h2 className="agi-ds-h2" id="agi-trust-more-title">
+                    Go deeper on any of it.
+                  </h2>
+                  <ButtonRow>
+                    <Button href="/security">Security mechanisms</Button>
+                    <Button href="/status" variant="secondary">
+                      Live status
+                    </Button>
+                    <Button href="/privacy" variant="secondary">
+                      Privacy policy
+                    </Button>
+                    <Button href="/subprocessors" variant="secondary">
+                      Subprocessors
+                    </Button>
+                    <Button href="/dpa" variant="secondary">
+                      Data processing addendum
+                    </Button>
+                    <Button href="/sla" variant="secondary">
+                      Service levels
+                    </Button>
+                  </ButtonRow>
+                </Stack>
+              </Section>
+            </div>
+          </div>
         </Container>
-
-        <Section id="compliance" labelledBy="agi-trust-compliance-title" rule ground="2">
-          <Stack gap="loose">
-            <div>
-              <h2 className="agi-ds-h2" id="agi-trust-compliance-title">
-                What we hold, and what we do not.
-              </h2>
-              <Prose>
-                A certification claim is only as good as the document behind it, so each row names
-                the document. Several of these rows say the document does not exist.
-              </Prose>
-            </div>
-            <Ledger caption="Certifications and obligations" rows={COMPLIANCE} />
-          </Stack>
-        </Section>
-
-        <Section id="posture" labelledBy="agi-trust-posture-title" rule>
-          <Stack gap="loose">
-            <div>
-              <h2 className="agi-ds-h2" id="agi-trust-posture-title">
-                Control by control, dated.
-              </h2>
-              <Prose>
-                Mechanisms are explained on{' '}
-                <Link href="/security" className="agi-ds-link">
-                  /security
-                </Link>
-                . This table is the summary a reviewer can scan, including the rows that say a
-                control is partial or absent.
-              </Prose>
-            </div>
-            <Ledger caption="Security posture" rows={POSTURE} />
-          </Stack>
-        </Section>
-
-        <Section id="verify" labelledBy="agi-trust-verify-title" rule ground="2">
-          <Stack gap="loose">
-            <div>
-              <h2 className="agi-ds-h2" id="agi-trust-verify-title">
-                Do not take our word for it.
-              </h2>
-              <Prose>
-                Most of what this page asserts is externally observable. If any of these checks
-                disagree with the tables above, the tables are wrong and we want to know.
-              </Prose>
-            </div>
-            <NoteList items={VERIFY} />
-          </Stack>
-        </Section>
-
-        <Section id="changes" labelledBy="agi-trust-changes-title" rule>
-          <Stack gap="loose">
-            <h2 className="agi-ds-h2" id="agi-trust-changes-title">
-              When this page last moved.
-            </h2>
-            <Ledger
-              caption="Change record"
-              rows={[
-                {
-                  label: '2026-09-03',
-                  value:
-                    'Restored two cross-user reads, the projects list and a shared project lookup, that the row-level-security migration below had broken. Both now read through the owner connection instead of the caller-scoped one. That moves the row-level-isolation count from 66 of 161 database-backed routes to 64 of 161, and the owner-connection count from 95 to 97.',
-                },
-                {
-                  label: '2026-09-03',
-                  value:
-                    'Migrated roughly 30 route handlers off the owner connection onto policy-scoped RLS clients, raising the row-level-isolation count from 39 of 154 database-backed routes to 66 of 161. The database-backed total moved too, since other routes shipped the same day; the count of routes touching no database is now 98.',
-                },
-                {
-                  label: '2026-09-02',
-                  value:
-                    'Corrected the database row-level isolation row: the count of hosted routes that touch no database at all was undercounted by one. The measured routes that reach the database, and the split between policy-scoped and owner-connection routes, are unchanged.',
-                },
-                {
-                  label: '2026-08-14',
-                  value:
-                    'Added the DPDP (India) surface: notice, consent, data-principal rights, grievance redressal, parental consent, notice languages, Significant Data Fiduciary status, and data residency, each rated against what the product does today. Corrected the GDPR/CCPA data-subject-rights row, which had cited 34 erasure-scoped tables against an actual 66; the count is now derived from code. Corrected the subprocessor-transparency row after a review found six live processors missing from the published list, including one delisted on a manifest check that could not see its direct HTTP calls.',
-                },
-                {
-                  label: '2026-08-05',
-                  value:
-                    'Rewritten as a dated ledger. Removed a claim that SOC 2 evidence collection was underway: no such programme exists. Corrected the code-signing rows, which described signing as planned when both macOS notarization and Windows signing are implemented and enforced in the release pipeline. Replaced the general database-isolation claim with the actual route coverage. Added the unappointed EU Article 27 representative, absent production access governance, and absent continuity evidence as explicit rows.',
-                },
-                {
-                  label: '2026-07',
-                  value:
-                    'Retention consolidated to a single enforced answer, and the subprocessor list corrected to include processors that were live but unlisted.',
-                },
-              ]}
-            />
-          </Stack>
-        </Section>
-
-        <Section id="related" labelledBy="agi-trust-more-title" rule ground="2">
-          <Stack gap="loose">
-            <h2 className="agi-ds-h2" id="agi-trust-more-title">
-              Go deeper on any of it.
-            </h2>
-            <ButtonRow>
-              <Button href="/security">Security mechanisms</Button>
-              <Button href="/status" variant="secondary">
-                Live status
-              </Button>
-              <Button href="/privacy" variant="secondary">
-                Privacy policy
-              </Button>
-              <Button href="/subprocessors" variant="secondary">
-                Subprocessors
-              </Button>
-              <Button href="/dpa" variant="secondary">
-                Data processing addendum
-              </Button>
-              <Button href="/sla" variant="secondary">
-                Service levels
-              </Button>
-            </ButtonRow>
-          </Stack>
-        </Section>
       </main>
       <MarketingFooter />
     </div>
