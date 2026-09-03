@@ -1,47 +1,3 @@
-/**
- * The capability envelope an Auto selection can actually guarantee.
- *
- * WHY THIS EXISTS
- * ---------------
- * A model picker showing "Auto" has to say something about what Auto can do —
- * whether it takes images, whether it calls tools, how much context it holds.
- * Auto is not one model, so that answer has to come from somewhere.
- *
- * It used to come from `resolveAutoModeModel` in `@agiworkforce/types`: a
- * second, simplified re-implementation of the routing walk that returned ONE
- * representative model, called with a HARD-CODED tier and a hard-coded
- * `'general'` task. Two problems followed from that.
- *
- *   1. It was a parallel routing implementation. It skipped every admission
- *      check `resolveAutoRoute` performs — no trust mode, no runtime profile,
- *      no lifecycle or availability check, no harness allow-list, no capability
- *      or context floor, no continuity, no affordability. So the model it named
- *      and the model that would actually be dispatched could differ.
- *   2. It answered with ONE model's capabilities. Auto reaches different models
- *      for different tasks, so a single representative can only ever be right by
- *      coincidence. Today the flags happen to agree across every reachable
- *      route; adding one Auto-reachable model without vision would silently make
- *      the picker lie, and nothing would catch it.
- *
- * WHAT THIS DOES INSTEAD
- * ----------------------
- * Ask the canonical resolver, for every task type Auto can classify into, which
- * model it would actually select for this exact tier and runtime — then report
- * the INTERSECTION of what those models support.
- *
- * Intersection is the only honest answer. The picker is a promise about a
- * request that has not been classified yet, so it may only advertise what holds
- * on EVERY branch the request might take. `contextWindow` takes the minimum for
- * the same reason: it is the bound a caller can rely on without knowing which
- * route they will get.
- *
- * There is no second routing implementation here. This module calls
- * `resolveAutoRoute` and reads the result; admission stays exactly where it is.
- *
- * @module routing/auto-capability-envelope
- * @packageDocumentation
- */
-
 import { getModelMetadataById, type RoutingTaskType } from '@agiworkforce/types';
 
 import { resolveAutoRoute, type RoutingTrustMode } from './auto';
@@ -77,18 +33,12 @@ export interface AutoCapabilityEnvelope {
   supportsTools: boolean;
   /** True only if EVERY reachable model supports extended thinking. */
   supportsThinking: boolean;
-  /**
-   * The distinct models this envelope was computed over, in task order.
-   * Exposed for diagnostics and tests — a caller that renders this is showing
-   * the user the real routing surface rather than a stand-in.
-   */
   reachableModelKeys: readonly string[];
 }
 
 export interface AutoCapabilityEnvelopeRequest {
   /** The Auto alias being described, e.g. `'auto'`. */
   selection: string;
-  /** The caller's real subscription tier — never a hard-coded stand-in. */
   subscriptionTier?: string | null;
   trustMode: RoutingTrustMode;
   /** Runtime profile of the surface asking, e.g. `'web/cloud-chat'`. */
@@ -116,13 +66,6 @@ function isMediaHarness(harnessId: string): boolean {
   return harnessId.endsWith('/media');
 }
 
-/**
- * Resolve what an Auto selection can guarantee for this caller.
- *
- * Returns `null` when Auto cannot resolve to anything at all for the given
- * tier and runtime — an unroutable Auto has no capabilities to advertise, and a
- * caller must render that as unavailable rather than as a capability-less model.
- */
 export function getAutoCapabilityEnvelope(
   request: AutoCapabilityEnvelopeRequest,
 ): AutoCapabilityEnvelope | null {
@@ -138,9 +81,6 @@ export function getAutoCapabilityEnvelope(
       // The picker describes a fresh request: no prior model, so continuity must
       // not pin the answer to whatever was used last.
       currentModelKey: null,
-      // The task-family stage only ever permutes the candidate set, so it cannot
-      // change WHICH models are reachable — only their order. Disabled here so
-      // the envelope does not depend on an operator flag.
       enableTaskFamilyStage: false,
     });
     if (decision.status !== 'selected') continue;

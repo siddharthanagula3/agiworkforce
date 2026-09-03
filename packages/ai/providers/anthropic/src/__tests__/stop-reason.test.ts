@@ -48,7 +48,7 @@ function messageStart(id: string): Event {
   } as unknown as Event;
 }
 
-describe('translateAnthropicStream — stop_reason mapping', () => {
+describe('translateAnthropicStream, stop_reason mapping', () => {
   it('maps a refusal stop_reason to the first-class refusal outcome, not error or a silent end_turn', async () => {
     const events: Event[] = [
       messageStart('msg_refusal'),

@@ -20,7 +20,6 @@ function mapFinishReason(
     case 'function_call':
       return 'tool_use';
     case 'content_filter':
-      // OpenAI's safety layer stopped the response — the same honest concept
       return 'refusal';
     default:
       return 'end_turn';

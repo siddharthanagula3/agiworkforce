@@ -740,7 +740,7 @@ describe('resolveAutoRoute session capability admission (capability-handshake in
     expect(result.reasons[0]).toContain('no session capability document');
   });
 
-  it('never blocks on optional requirements — denied-or-undocumented optionals still select', () => {
+  it('never blocks on optional requirements, denied-or-undocumented optionals still select', () => {
     const deniedOptional = resolveAutoRoute({
       selection: 'auto-premium',
       taskType: 'coding',

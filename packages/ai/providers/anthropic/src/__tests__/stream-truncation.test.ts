@@ -1,4 +1,3 @@
-
 import { describe, expect, it } from 'vitest';
 import type Anthropic from '@anthropic-ai/sdk';
 import type { StreamChunk } from '@agiworkforce/types';
@@ -18,7 +17,7 @@ async function collect(stream: AsyncIterable<StreamChunk>): Promise<StreamChunk[
   return out;
 }
 
-describe('translateAnthropicStream — truncation safety (P1-2)', () => {
+describe('translateAnthropicStream, truncation safety (P1-2)', () => {
   it('emits a fallback stop chunk when the SDK iterator drains without message_delta', async () => {
     const events: Event[] = [
       {
@@ -49,7 +48,6 @@ describe('translateAnthropicStream — truncation safety (P1-2)', () => {
         index: 0,
         delta: { type: 'text_delta', text: 'Hello' },
       } as unknown as Event,
-      // <— stream truncates here. No message_delta, no message_stop.
     ];
 
     const out = await collect(translateAnthropicStream(fromArray(events)));

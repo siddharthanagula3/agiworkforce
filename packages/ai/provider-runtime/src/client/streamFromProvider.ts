@@ -1,4 +1,3 @@
-
 import type { StreamChunk } from '@agiworkforce/types';
 import { DEFAULT_STREAM_IDLE_TIMEOUT_MS, StreamIdleTimeoutError } from '../watchdog';
 import { stripTrailingSlashes } from '@agiworkforce/types';
@@ -168,7 +167,7 @@ export async function* streamFromProvider<TRequest = unknown, TChunk = StreamChu
             return;
           }
         } catch {
-          // Not JSON — fall through to the generic error chunk below.
+          // noop
         }
       }
 

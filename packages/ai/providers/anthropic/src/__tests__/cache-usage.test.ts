@@ -1,4 +1,3 @@
-
 import { describe, expect, it } from 'vitest';
 import type Anthropic from '@anthropic-ai/sdk';
 import type { StreamChunk } from '@agiworkforce/types';
@@ -24,7 +23,7 @@ function findUsageChunk(chunks: StreamChunk[]): Extract<StreamChunk, { type: 'us
   return usage;
 }
 
-describe('translateAnthropicStream — 1h/5m cache-write split', () => {
+describe('translateAnthropicStream, 1h/5m cache-write split', () => {
   it('surfaces cacheWrite1hTokens when the response mixes 5m and 1h breakpoints', async () => {
     const events: Event[] = [
       {

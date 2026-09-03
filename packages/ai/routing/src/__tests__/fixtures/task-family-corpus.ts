@@ -1,53 +1,3 @@
-/**
- * Task-family eval corpus — SEED.
- *
- * Design source of truth:
- * `docs/architecture/execution-plan-contract.md` §6, which states
- * plainly that there is **no eval corpus and no `evals` directory in the repo
- * today** and that the corpus is a prerequisite for Stage 2, not a parallel
- * nice-to-have. This file is the first instalment of that prerequisite.
- *
- * WHAT IT IS
- * ----------
- * Twelve task families × six labelled requests each, plus a block of
- * deliberately-ambiguous requests. Each row pins two things against today's
- * behaviour:
- *
- *  1. `expectedFamily` — what `classifyTaskFamily` must return for these
- *     structural signals.
- *  2. `expectedBaselineRoute` — the model and effective profile the CURRENT
- *     Auto policy resolves for this task type and tier, with the task-family
- *     stage OFF. This is the control the design document's §5.1 quality gate
- *     ("≥ 98% of the balanced-model baseline") is measured against.
- *
- * WHAT IT IS NOT
- * --------------
- *  - **Not a learned router and not training data.** Nothing fits parameters to
- *    these rows. They are assertions.
- *  - **Not a grader.** §6 also requires a grader and a recorded quality
- *    baseline per family. Neither exists yet; a route is not a quality
- *    measurement, and this file must not be read as one. CPST cannot be
- *    computed from this file alone.
- *  - **Not a CPST baseline.** That needs the Stage 0 ledger rows
- *    (`apps/web/lib/cpst-telemetry.ts` writes the fields; two weeks of them are
- *    the exit criterion).
- *
- * PRIVACY
- * -------
- * Every row is synthetic and structural. A row carries flags, counts, MIME
- * strings, and lengths — never message text, never a user identifier, never a
- * transcript. There is no real user data here and there is no place to put any:
- * `TaskFamilySignals` has no content field.
- *
- * DETERMINISM
- * -----------
- * No wall-clock value appears in any row, and no assertion derived from these
- * rows may read one. Identical inputs must produce identical rows forever.
- *
- * @module routing/__tests__/fixtures/task-family-corpus
- * @packageDocumentation
- */
-
 import { getRoutingSlotModel } from '@agiworkforce/types';
 import type { TaskFamily, TaskFamilySignals } from '../../task-family';
 import type { RoutingTaskType } from '../../types';
@@ -80,11 +30,6 @@ const BASELINE_ROUTES = {
   reasoningEconomy: `${getRoutingSlotModel('reasoning_economy')}@economy`,
   reasoningBalanced: `${getRoutingSlotModel('reasoning_balanced')}@balanced`,
   reasoningPremium: `${getRoutingSlotModel('reasoning_premium_pro')}@premium`,
-  // The `research` task now prefers `search_premium` at every profile band.
-  // It previously preferred `search_fast`, whose model carries
-  // `capabilities.research: false` — so Deep Research resolved to a model that
-  // could not perform it, `researchModeAllowed()` refused, and the research loop
-  // silently never ran. These rows pinned that broken baseline.
   searchPremiumBalanced: `${getRoutingSlotModel('search_premium')}@balanced`,
 } as const satisfies Record<string, BaselineRoutePin>;
 
@@ -529,7 +474,7 @@ export const TASK_FAMILY_CORPUS: readonly TaskFamilyCorpusCase[] = [
     taskType: 'long_context',
     subscriptionTier: 'pro',
     expectedBaselineRoute: BASELINE_ROUTES.longContextBalanced,
-    note: 'One token over the threshold — the boundary is strict, as in classify.ts.',
+    note: 'One token over the threshold, the boundary is strict, as in classify.ts.',
   },
   {
     id: 'long_context/02',
@@ -602,7 +547,7 @@ export const TASK_FAMILY_CORPUS: readonly TaskFamilyCorpusCase[] = [
     taskType: 'coding',
     subscriptionTier: 'max',
     expectedBaselineRoute: BASELINE_ROUTES.codingPremium,
-    note: 'Caller tools never change the canonical task type — coding stays coding.',
+    note: 'Caller tools never change the canonical task type, coding stays coding.',
   },
   {
     id: 'caller_tool_loop/04',
@@ -739,7 +684,7 @@ export const TASK_FAMILY_CORPUS: readonly TaskFamilyCorpusCase[] = [
     taskType: 'simple_chat',
     subscriptionTier: 'max',
     expectedBaselineRoute: BASELINE_ROUTES.workhorseEconomy,
-    note: 'Exactly at the long-context threshold, which is strict — not over it.',
+    note: 'Exactly at the long-context threshold, which is strict, not over it.',
   },
 
   {
@@ -840,7 +785,7 @@ export const TASK_FAMILY_CORPUS: readonly TaskFamilyCorpusCase[] = [
     taskType: 'coding',
     subscriptionTier: 'max',
     expectedBaselineRoute: BASELINE_ROUTES.codingPremium,
-    note: 'Every toggle off and no length — the coding intent is content-only.',
+    note: 'Every toggle off and no length, the coding intent is content-only.',
   },
   {
     id: 'ambiguous/06',

@@ -1,28 +1,3 @@
-/**
- * Error taxonomy + classifier for the multi-provider runtime.
- *
- * Centralises the 30+ branch error matcher described in
- * `tasks/research/deep/m8-services-api.md` §3 (Anthropic's
- * `getAssistantMessageFromError` 30-branch matcher) and
- * §3.3 (`classifyAPIError`).
- *
- * The classifier returns a `ClassifiedError` with three orthogonal axes:
- *   - **category** — coarse Datadog tag (`rate_limit`, `auth`, …)
- *   - **retryable** — should the retry generator try this attempt again?
- *   - **fallbackable** — should the caller swap models?
- *
- * Each branch carries a human-readable `code` (e.g. `'rate_limit_429'`,
- * `'context_overflow'`) and an optional `retryAfterSeconds` so callers
- * can honour `Retry-After` headers without re-parsing.
- *
- * Two error classes are exported for the retry/fallback state machine:
- *   - `CannotRetryError` — retries exhausted; surface to user.
- *   - `FallbackTriggeredError` — switch model now; do not exhaust retries.
- *
- * NOTE: this module never logs. The retry generator decides whether to
- * pass the error to a user-facing renderer.
- */
-
 import { parseRetryAfter } from './retry-after-internal';
 
 export type ErrorCategory =
@@ -38,15 +13,6 @@ export type ErrorCategory =
   | 'invalid_input'
   | 'media_too_large'
   | 'auth'
-  /**
-   * The upstream account has no spend headroom left: a hard 402, or a provider
-   * message that plainly says the balance/credit is exhausted.
-   *
-   * Deliberately NOT `auth`. A credential that is merely unfunded is still a
-   * VALID credential, and conflating the two makes an economic failure look like
-   * a security failure — which then rotates the request onto a different PAID
-   * provider instead of surfacing that we have run out of money.
-   */
   | 'billing_exhausted'
   /**
    * A 429 whose provider-native signal says the quota WINDOW is spent (e.g.
@@ -58,24 +24,7 @@ export type ErrorCategory =
    */
   | 'quota_exhausted'
   | 'safety' // refusal / content filter / Google safety reasons
-  /**
-   * A step's stream completed with `status: ok` and a terminal signal that
-   * is a content-policy stop (refusal / content_filter / a Google safety
-   * finish reason), but produced no assistant text, tool call, or artifact.
-   * Distinct from `safety`: `safety` is derived from a THROWN error's text;
-   * this is derived from a clean, non-throwing stream termination that the
-   * tool loop must classify itself. Never failover-eligible, for the same
-   * reason `safety` is not — see `NEVER_ROTATE_CATEGORIES` in
-   * managed-failover.ts.
-   */
   | 'content_blocked'
-  /**
-   * A step's stream completed with `status: ok` and a non-blocked terminal
-   * signal (a clean stop, or output-length exhaustion), but produced no
-   * assistant text, tool call, or artifact — the provider claims success
-   * and delivered nothing. Failover-eligible for Auto: a different route
-   * may simply answer where this one did not.
-   */
   | 'empty_response'
   | 'connection'
   | 'pause_turn'
@@ -85,10 +34,6 @@ export type ErrorCategory =
 
 export interface ClassifiedError {
   category: ErrorCategory;
-  /**
-   * Specific code — e.g. `'rate_limit_429'`, `'context_overflow'`,
-   * `'safety_refusal'`. Stable strings, useful as map keys.
-   */
   code: string;
   retryable: boolean;
   fallbackable: boolean;
@@ -150,13 +95,6 @@ export class EmptyProviderResponseError extends Error {
 interface SDKErrorLike {
   status?: number;
   statusCode?: number;
-  /**
-   * A already-extracted Retry-After, in seconds.
-   *
-   * Set by layers that reconstruct an `Error` from a provider stream chunk
-   * (the raw HTTP headers are long gone by then). Read in preference to nothing
-   * at all — see `extractRetryAfterSeconds`.
-   */
   retryAfterSeconds?: number;
   message?: string;
   name?: string;
@@ -236,17 +174,6 @@ function matchesContextOverflow(message: string): boolean {
   );
 }
 
-/**
- * Provider-native codes that mean "this quota window is spent", as opposed to
- * "you are going too fast right now".
- *
- * The distinction is not cosmetic. A short 429 should be waited out on the same
- * route; an exhausted window must take the whole quota pool out of service until
- * it resets, or every subsequent request burns a round-trip rediscovering the
- * same wall. The signal is already present on the error object — OpenAI puts
- * `insufficient_quota` in `error.type`/`error.code`, Google reports
- * `RESOURCE_EXHAUSTED` in `error.status` — and was simply never read.
- */
 const QUOTA_EXHAUSTED_CODES: ReadonlySet<string> = new Set([
   'insufficient_quota',
   'quota_exceeded',
@@ -385,16 +312,6 @@ function matchesConnection(name: string | undefined, message: string): boolean {
   );
 }
 
-/**
- * Classify a thrown error from any provider into the canonical taxonomy.
- *
- * The branch order is significant — first match wins. Order is chosen so
- * the most specific signals are checked before the generic 4xx/5xx
- * fallbacks.
- *
- * @param err — the SDK or fetch error caught by the adapter.
- * @returns ClassifiedError with retry/fallback hints.
- */
 export function classifyError(err: unknown): ClassifiedError {
   if (err instanceof Error && (err.name === 'AbortError' || err.name === 'APIUserAbortError')) {
     return {
@@ -449,12 +366,6 @@ export function classifyError(err: unknown): ClassifiedError {
   }
 
   if (status === 429) {
-    // A 429 means two very different things depending on the provider-native
-    // code riding alongside it. OpenAI's `insufficient_quota` (and the
-    // equivalent wording other vendors use) says the billing/quota WINDOW is
-    // spent — retrying in a second cannot help, and the pool should be taken out
-    // of service until it resets. A plain 429 is back-pressure and IS worth
-    // waiting out. Both were previously collapsed into `rate_limit`.
     if (matchesQuotaExhausted(e, lower)) {
       return {
         category: 'quota_exhausted',
@@ -594,7 +505,6 @@ export function classifyError(err: unknown): ClassifiedError {
     };
   }
 
-  // Branch 12 — safety / refusal.
   if (matchesSafetyReason(message)) {
     return {
       category: 'safety',

@@ -1,33 +1,3 @@
-/**
- * @agiworkforce/providers-zhipu
- *
- * ZhipuAI (GLM / BigModel) provider adapter implementing `ProviderAdapter`
- * from `@agiworkforce/types`. Zhipu ships an OpenAI-compatible Chat
- * Completions endpoint at `https://open.bigmodel.cn/api/paas/v4` with Bearer
- * token auth. Source of truth for the quirks below:
- * `apps/web/lib/llm-providers/zhipu.ts`.
- *
- * Quirks NOT covered by the shared `detectOpenAICompletionsCompat` bundled
- * hostname table (`open.bigmodel.cn` isn't in it — only the newer global
- * `api.z.ai` alias resolves to `endpointClass: 'zai-native'` — so this
- * adapter applies two local overrides instead of relying on the shared
- * default for an unrecognized host, which would otherwise silently send
- * `max_completion_tokens` and never enable GLM's thinking mode):
- *
- *   1. `max_tokens` field — the web adapter always sends `max_tokens`
- *      (never `max_completion_tokens`); BigModel's documented API expects
- *      the legacy field name. We force `maxTokensField: 'max_tokens'`
- *      after compat detection rather than trusting the generic
- *      unrecognized-proxy default (`max_completion_tokens`).
- *   2. GLM "thinking mode" — a `{ thinking: { type: 'enabled' | 'disabled' } }`
- *      request field, distinct from OpenAI's `reasoning_effort` enum (which
- *      compat detection correctly disables for this unrecognized host, so it
- *      would otherwise never be set). Mapped from `ChatRequest.thinking`
- *      after the shared translate step.
- *
- * @packageDocumentation
- */
-
 import OpenAI from 'openai';
 import type {
   AuthMethod,

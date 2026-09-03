@@ -34,7 +34,7 @@ function findUsage(chunks: StreamChunk[]): Extract<StreamChunk, { type: 'usage' 
   return usage;
 }
 
-describe('createOpenRouterUsageNormalizer — Anthropic-routed usage shape', () => {
+describe('createOpenRouterUsageNormalizer, Anthropic-routed usage shape', () => {
   it('normalizes cache_read_input_tokens/cache_creation_input_tokens end-to-end', async () => {
     const chunks: OpenAIChatCompletionChunk[] = [
       baseChunk({ choices: [{ index: 0, delta: { content: 'hi' }, finish_reason: null }] }),
@@ -60,7 +60,7 @@ describe('createOpenRouterUsageNormalizer — Anthropic-routed usage shape', () 
   });
 });
 
-describe('createOpenRouterUsageNormalizer — non-Anthropic-routed usage shape', () => {
+describe('createOpenRouterUsageNormalizer, non-Anthropic-routed usage shape', () => {
   it('normalizes the alternate input_tokens_details.cached_tokens nesting', async () => {
     const chunks: OpenAIChatCompletionChunk[] = [
       baseChunk({

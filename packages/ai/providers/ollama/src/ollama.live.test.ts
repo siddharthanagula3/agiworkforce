@@ -1,4 +1,3 @@
-
 import { afterAll, describe, expect, it, beforeAll } from 'vitest';
 import type { StreamChunk } from '@agiworkforce/types';
 
@@ -30,7 +29,7 @@ const skip = !liveEnabled;
 describe.skipIf(skip)('Ollama adapter live', () => {
   it('streams a tiny completion end-to-end (or skips if no daemon)', async () => {
     if (!daemonAvailable || !firstModel) {
-      console.debug(`  Ollama daemon not reachable at ${baseUrl} — skipping stream test`);
+      console.debug(`  Ollama daemon not reachable at ${baseUrl}, skipping stream test`);
       return;
     }
     const adapter = createOllamaAdapter({ baseUrl });

@@ -8,10 +8,6 @@ const STATIC_ALLOWED_MANAGED_PROVIDER_HOSTS: readonly string[] = [
   'generativelanguage.googleapis.com',
   'api.x.ai',
   'dashscope.aliyuncs.com',
-  // Alibaba's international Model Studio deployment. A QwenCloud key is issued
-  // against exactly one of the two scopes, so an operator outside the Chinese
-  // mainland must be able to point QWEN_BASE_URL here — without this the
-  // override is refused as SSRF and Qwen is unusable for them.
   'dashscope-intl.aliyuncs.com',
   'api.mulerouter.ai',
   'api.moonshot.cn',

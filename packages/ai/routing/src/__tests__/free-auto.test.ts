@@ -67,7 +67,7 @@ function state(over: Partial<RoutingRuntimeState> = {}): RoutingRuntimeState {
 }
 
 describe('strict zero-cost gate', () => {
-  it('refuses a route with no verified free record — the default answer', () => {
+  it('refuses a route with no verified free record, the default answer', () => {
     const decision = resolveFreeAutoRoute({
       candidates: [candidate('r1')],
       state: state(),
@@ -78,7 +78,7 @@ describe('strict zero-cost gate', () => {
     expect(decision.rejected[0]).toMatchObject({ routeId: 'r1', reason: 'not_verified_free' });
   });
 
-  it('never infers eligibility from a zero price — a paid meta-router priced at 0 stays out', () => {
+  it('never infers eligibility from a zero price, a paid meta-router priced at 0 stays out', () => {
     // The automatic router is priced 0 in the catalog because its price is
     // unknowable at compile time, not because it is free. With no eligibility record it must
     // be refused no matter what the catalog says.

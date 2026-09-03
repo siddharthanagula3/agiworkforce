@@ -1,15 +1,3 @@
-/**
- * @agiworkforce/providers-nvidia
- *
- * NVIDIA NIM provider adapter. NIM's hosted catalog serves an
- * OpenAI-compatible Chat Completions endpoint at
- * `https://integrate.api.nvidia.com/v1`. That host is not one the compat layer
- * classifies natively, so it resolves as a proxy-like endpoint — the correct
- * reading for an aggregating inference host.
- *
- * @packageDocumentation
- */
-
 import {
   createOpenAICompatAdapter,
   type OpenAICompatAdapterConfig,

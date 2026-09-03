@@ -204,7 +204,7 @@ test('publishes the current Anthropic roster with canonical API IDs, limits, and
   assert.equal(compatibility.models[anthropicStandardModelKey].post_promo_prices, undefined);
 });
 
-test('publishes date-invariant prices — no shipped model carries a pricing schedule', () => {
+test('publishes date-invariant prices, no shipped model carries a pricing schedule', () => {
   const scheduled = Object.entries(registry.pricing)
     .filter(([, pricing]) => pricing.schedule !== undefined)
     .map(([modelKey]) => modelKey);

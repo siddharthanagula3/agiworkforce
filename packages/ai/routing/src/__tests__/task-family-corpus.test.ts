@@ -44,7 +44,7 @@ describe('corpus shape', () => {
     );
   });
 
-  it('carries no message text — the signal type has nowhere to put user data', () => {
+  it('carries no message text, the signal type has nowhere to put user data', () => {
     for (const row of TASK_FAMILY_CORPUS) {
       const keys = Object.keys(row.signals);
       expect(keys).not.toContain('message');

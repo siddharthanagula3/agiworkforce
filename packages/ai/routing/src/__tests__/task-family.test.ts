@@ -192,7 +192,7 @@ describe('classifyTaskFamily · boundaries', () => {
     expect(classifyTaskFamily({ messageCharCount: 0 }).family).toBe('simple_chat');
   });
 
-  it('is pure — the same input always yields the same output', () => {
+  it('is pure, the same input always yields the same output', () => {
     const signals = { declaredToolCount: 2, messageCharCount: 300, priorTurnCount: 7 };
     const first = classifyTaskFamily(signals);
     for (let index = 0; index < 5; index += 1) {

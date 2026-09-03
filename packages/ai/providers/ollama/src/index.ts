@@ -1,19 +1,3 @@
-/**
- * @agiworkforce/providers-ollama
- *
- * Ollama provider adapter implementing `ProviderAdapter` from
- * `@agiworkforce/types`. Talks directly to the Ollama HTTP API — no vendor
- * SDK required (Ollama's wire is small and stable).
- *
- * Default base URL: `http://localhost:11434`. Override via
- * `OllamaAdapterConfig.baseUrl` (e.g., for a remote machine on the LAN).
- *
- * Auth: typically none (local), but supports an optional bearer token for
- * private deployments fronted by reverse proxies.
- *
- * @packageDocumentation
- */
-
 import type {
   AuthMethod,
   ChatRequest,
