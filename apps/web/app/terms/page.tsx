@@ -83,8 +83,11 @@ const GENERAL_LEDGER: readonly LedgerRow[] = [
     value: (
       <>
         Notices to you are given in the product or posted at this URL. Notices to us must be sent to{' '}
-        {CONTACT_EMAIL} and, where a signed agreement requires written notice, also to{' '}
-        {LEGAL_ENTITY}, {NOTICE_ADDRESS}.
+        <a href={contactMailto()} className="agi-ds-link">
+          {CONTACT_EMAIL}
+        </a>{' '}
+        and, where a signed agreement requires written notice, also to {LEGAL_ENTITY},{' '}
+        {NOTICE_ADDRESS}.
       </>
     ),
   },
