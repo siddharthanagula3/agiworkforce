@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import { buildMetadata } from '@/lib/seo/metadata';
 import { Header } from '@shared/components/layout/Header';
 import { MarketingFooter } from '@/features/marketing/components/MarketingFooter';
@@ -11,8 +12,6 @@ import {
   Section,
   Stack,
 } from '@/features/marketing/components/system';
-import { PageHero } from '@/features/marketing/components/pages/surfaces/shared';
-import { LinkGrid } from '@/features/marketing/components/pages/features/shared';
 import { MARKETING } from '@/lib/marketing-constants';
 
 export const metadata = buildMetadata({
@@ -22,82 +21,135 @@ export const metadata = buildMetadata({
   path: '/features/ai-chat',
 });
 
+const IDS = {
+  hero: 'agi-features-ai-chat-title',
+  moment: 'agi-features-ai-chat-moment-title',
+  commands: 'agi-features-ai-chat-commands-title',
+  links: 'agi-features-ai-chat-links-title',
+  close: 'agi-features-ai-chat-close-title',
+} as const;
+
+const AROUND_THE_CHAT = [
+  {
+    meta: 'Artifacts',
+    title: 'Artifacts',
+    body: 'Long outputs leave the message stream and open in a panel with a code toggle and version history.',
+    href: '/features/artifacts',
+  },
+  {
+    meta: 'Projects',
+    title: 'Projects',
+    body: "Point a thread at a project and it starts with that project's files, sources, and instructions.",
+    href: '/features/projects',
+  },
+  {
+    meta: 'Memory',
+    title: 'Memory',
+    body: 'Type /memory to open what the assistant has kept about you and edit it directly.',
+    href: '/features/memory',
+  },
+  {
+    meta: 'Tools',
+    title: 'Tools and connectors',
+    body: 'Connected MCP servers and OAuth apps appear in the tool timeline under per-tool permissions.',
+    href: '/features/tools',
+  },
+] as const;
+
 export default function AiChatFeaturePage() {
   return (
     <div data-design="agi" className="agi-ds-page">
       <Header />
       <main id="main-content">
-        <PageHero
-          id="agi-features-ai-chat-title"
-          eyebrow="Features · AI chat"
-          title="The reply shows its work, and you pick the model."
-          lede="The composer takes files, images, dictation, and slash commands, then sends them to the model you picked for this thread. What comes back carries the reasoning it did, the tools it called, and the sources it read, and anything substantial opens as an artifact beside the conversation."
-          ctas={[{ href: '/login?redirectTo=%2F', label: 'Open AGI Web' }]}
-          visual={
-            <ProductFrame
-              src="/product/composer-dark.png"
-              srcLight="/product/composer-light.png"
-              alt="The AGI composer with attachments, dictation, and the model picker"
-              width={1472}
-              height={254}
-              caption={['Chat', 'Composer']}
-              priority
-            />
-          }
-        />
+        <section className="agi-lp-hero" aria-labelledby={IDS.hero}>
+          <div className="agi-ds-container agi-lp-hero-grid">
+            <div className="agi-lp-hero-copy">
+              <p className="agi-lp-eyebrow">Features &middot; AI chat</p>
+              <h1 className="agi-lp-h1" id={IDS.hero}>
+                <span className="agi-lp-line">One composer.</span>
+                <span className="agi-lp-line">Every model.</span>
+                <em className="agi-lp-accent">The reply shows its work.</em>
+              </h1>
+              <p className="agi-lp-lede">
+                Attach files, dictate, or type a slash command, then send it to the model you picked
+                for this thread. The reply carries its tool calls, its reasoning, and its sources,
+                and anything substantial opens as an artifact beside it.
+              </p>
+              <ButtonRow>
+                <Button href="/login?redirectTo=%2F">Open AGI Web</Button>
+                <Button href="/desktop" variant="secondary">
+                  See AGI Desktop
+                </Button>
+              </ButtonRow>
+            </div>
+            <div className="agi-lp-hero-stage">
+              <div className="agi-lp-browser">
+                <div className="agi-lp-browser-bar" aria-hidden="true">
+                  <span className="agi-lp-browser-dots">
+                    <i />
+                    <i />
+                    <i />
+                  </span>
+                  <span>agiworkforce.com/chat</span>
+                </div>
+                <ProductFrame
+                  src="/product/hero-thread-dark.png"
+                  srcLight="/product/hero-thread-light.png"
+                  alt="A working AGI chat thread in the browser"
+                  width={2392}
+                  height={1244}
+                  priority
+                />
+              </div>
+            </div>
+          </div>
+        </section>
 
-        <Section id="composer" labelledBy="agi-features-ai-chat-composer-title" rule>
-          <Stack gap="loose">
-            <div>
-              <Eyebrow>The composer</Eyebrow>
-              <h2 className="agi-ds-h2" id="agi-features-ai-chat-composer-title">
-                The composer takes more than text.
+        <section className="agi-lp-section" aria-labelledby={IDS.moment}>
+          <div className="agi-ds-container">
+            <div className="agi-lp-heading">
+              <p className="agi-lp-eyebrow">The composer</p>
+              <h2 className="agi-lp-h2" id={IDS.moment}>
+                One box, <em className="agi-lp-accent">more than text.</em>
               </h2>
             </div>
-            <Ledger
-              caption="Composer capabilities"
-              rows={[
-                {
-                  label: 'Attach',
-                  value:
-                    'Drag files and images straight into the composer. Each one becomes a preview you can inspect or remove before the message is sent.',
-                },
-                {
-                  label: 'Dictate',
-                  value:
-                    'The voice button records, transcribes, and drops the text into the composer, where you can edit it like anything else you typed.',
-                },
-                {
-                  label: 'Search',
-                  value:
-                    'Search-capable models reach the live web on their own when an answer should not come from model memory alone. The composer states whether search is on for the model you picked.',
-                },
-                {
-                  label: 'Commands',
-                  value:
-                    'Typing "/" opens a menu of the built-in commands, the custom commands you saved in Settings, and every skill installed on this surface.',
-                },
-                {
-                  label: 'Models',
-                  value: `The footer names the model in use and marks it with its provider. Reach ${MARKETING.models.display} models from ${MARKETING.providers.display} providers, and set the reasoning effort where the model supports one.`,
-                },
-              ]}
-            />
-          </Stack>
-        </Section>
+            <div className="agi-lp-moments">
+              <article className="agi-lp-moment">
+                <div className="agi-lp-moment-copy">
+                  <h3 className="agi-lp-moment-title">Attach, dictate, or search</h3>
+                  <p className="agi-lp-moment-body">
+                    Drag files and images straight into the composer; each becomes a preview you can
+                    inspect or remove before sending. The voice button transcribes speech into
+                    editable text, and search-capable models reach the live web on their own when an
+                    answer should not come from model memory alone. The footer names the model in
+                    use, reaching {MARKETING.models.display} models across{' '}
+                    {MARKETING.providers.display} providers.
+                  </p>
+                </div>
+                <ProductFrame
+                  src="/product/composer-dark.png"
+                  srcLight="/product/composer-light.png"
+                  alt="The AGI composer with attachments, dictation, and the model picker"
+                  width={1472}
+                  height={254}
+                  caption={['Chat', 'Composer']}
+                />
+              </article>
+            </div>
+          </div>
+        </section>
 
-        <Section
-          id="slash-commands"
-          labelledBy="agi-features-ai-chat-commands-title"
-          rule
-          ground="2"
-        >
+        <Section id="slash-commands" labelledBy={IDS.commands} rule ground="2">
           <Stack gap="loose">
             <div>
               <Eyebrow>Commands</Eyebrow>
-              <h2 className="agi-ds-h2" id="agi-features-ai-chat-commands-title">
+              <h2 className="agi-ds-h2" id={IDS.commands}>
                 Typing a slash opens the command menu.
               </h2>
+              <Prose>
+                The menu lists the built-in commands, the custom commands you saved in Settings, and
+                every skill installed on this surface.
+              </Prose>
             </div>
             <Ledger
               caption="Slash commands"
@@ -121,62 +173,51 @@ export default function AiChatFeaturePage() {
           </Stack>
         </Section>
 
-        <Section id="around-the-chat" labelledBy="agi-features-ai-chat-around-title" rule>
+        <Section id="around-the-chat" labelledBy={IDS.links} rule>
           <Stack gap="loose">
             <div>
               <Eyebrow>Around the chat</Eyebrow>
-              <h2 className="agi-ds-h2" id="agi-features-ai-chat-around-title">
+              <h2 className="agi-ds-h2" id={IDS.links}>
                 The chat opens into the rest of the workspace.
               </h2>
             </div>
-            <LinkGrid
-              items={[
-                {
-                  meta: 'Artifacts',
-                  title: 'Artifacts',
-                  body: 'Long outputs leave the message stream and open in a panel with a code toggle and version history.',
-                  href: '/features/artifacts',
-                },
-                {
-                  meta: 'Projects',
-                  title: 'Projects',
-                  body: "Point a thread at a project and it starts with that project's files, sources, and instructions.",
-                  href: '/features/projects',
-                },
-                {
-                  meta: 'Memory',
-                  title: 'Memory',
-                  body: 'Type /memory to open what the assistant has kept about you and edit it directly.',
-                  href: '/features/memory',
-                },
-                {
-                  meta: 'Tools',
-                  title: 'Tools and connectors',
-                  body: 'Connected MCP servers and OAuth apps appear in the tool timeline under per-tool permissions.',
-                  href: '/features/tools',
-                },
-              ]}
-            />
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+              {AROUND_THE_CHAT.map((item) => (
+                <div
+                  key={item.title}
+                  className="flex flex-col gap-3 rounded-xl border border-[var(--agi-rule)] bg-[var(--agi-ground-2)] p-6"
+                >
+                  <Eyebrow>{item.meta}</Eyebrow>
+                  <h3 className="agi-ds-h3">{item.title}</h3>
+                  <Prose size="sm">{item.body}</Prose>
+                  <Link href={item.href} className="agi-ds-link">
+                    Read more
+                  </Link>
+                </div>
+              ))}
+            </div>
           </Stack>
         </Section>
 
-        <Section id="ai-chat-close" labelledBy="agi-features-ai-chat-close-title" rule ground="2">
-          <Stack gap="loose">
-            <h2 className="agi-ds-h2" id="agi-features-ai-chat-close-title">
-              Send the first message.
-            </h2>
-            <Prose>
-              AGI Web runs in the browser with the command menu, the model footer, and the artifacts
-              panel. The desktop app adds the terminal, browser, and database commands.
-            </Prose>
-            <ButtonRow>
-              <Button href="/login?redirectTo=%2F">Open AGI Web</Button>
-              <Button href="/desktop" variant="secondary">
-                See AGI Desktop
-              </Button>
-            </ButtonRow>
-          </Stack>
-        </Section>
+        <section className="agi-lp-close" aria-labelledby={IDS.close}>
+          <div className="agi-ds-container">
+            <div className="agi-lp-close-inner">
+              <h2 className="agi-lp-h2" id={IDS.close}>
+                Send the first message. <em className="agi-lp-accent">See what comes back.</em>
+              </h2>
+              <p className="agi-lp-lede">
+                AGI Web runs in the browser with the command menu, the model footer, and the
+                artifacts panel. The desktop app adds the terminal, browser, and database commands.
+              </p>
+              <ButtonRow>
+                <Button href="/login?redirectTo=%2F">Open AGI Web</Button>
+                <Button href="/desktop" variant="secondary">
+                  See AGI Desktop
+                </Button>
+              </ButtonRow>
+            </div>
+          </div>
+        </section>
       </main>
       <MarketingFooter />
     </div>
