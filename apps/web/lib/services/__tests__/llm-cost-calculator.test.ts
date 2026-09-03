@@ -1,6 +1,11 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { listCanonicalModels, resolveEffectiveModelPricing } from '@agiworkforce/types';
+import {
+  listCanonicalModels,
+  requireProviderDefaultModel,
+  resolveEffectiveModelPricing,
+} from '@agiworkforce/types';
+import { getRoutePricingForModel } from '@agiworkforce/model-registry';
 
 import { LLMCostCalculator, setRouteRegistryPricingLookup } from '../llm-cost-calculator';
 
@@ -688,10 +693,12 @@ describe('LLMCostCalculator — route-aware pricing fallback tiers', () => {
 
 describe('LLMCostCalculator — live registry wiring', () => {
   const PRICED_ON = new Date('2026-09-01T00:00:00.000Z');
-  const LIVE_ROUTE_ID = 'open_router/claude-sonnet-5';
-  const LIVE_MODEL_ID = 'claude-sonnet-5';
+  const LIVE_MODEL_ID = requireProviderDefaultModel('anthropic');
+  const LIVE_ROUTE_ID = getRoutePricingForModel(LIVE_MODEL_ID).find(
+    (route) => route.provider === 'open_router',
+  )!.routeId;
 
-  it('prices a request served by open_router/claude-sonnet-5 at that route sheet, not the canonical model price', async () => {
+  it('prices a request served by the open_router route at that route sheet, not the canonical model price', async () => {
     const { getRoutePricing, getModelMetadataById: liveGetModelMetadataById } =
       await vi.importActual<typeof import('@agiworkforce/types')>('@agiworkforce/types');
     const routeSheet = getRoutePricing(LIVE_ROUTE_ID);

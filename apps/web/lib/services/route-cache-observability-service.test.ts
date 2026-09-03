@@ -22,7 +22,7 @@ describe('route cache observability · breakdown arithmetic', () => {
   it('computes cache hit rate from requests with a cache read over requests', async () => {
     const db = fakeDb([
       {
-        key: 'anthropic/claude-sonnet-5',
+        key: 'fixture_provider/fixture-model-a',
         requests: '10',
         cache_read_tokens: '4000',
         cache_write_tokens: '500',
@@ -56,7 +56,7 @@ describe('route cache observability · breakdown arithmetic', () => {
   it('prices the multiplier only over the retail-priced subset, not diluted by the full request count', async () => {
     const db = fakeDb([
       {
-        key: 'anthropic/claude-sonnet-5',
+        key: 'fixture_provider/fixture-model-a',
         requests: '10',
         cache_read_tokens: '0',
         cache_write_tokens: '0',
@@ -119,7 +119,7 @@ describe('route cache observability · breakdown arithmetic', () => {
   it('passes through the fallback count untouched', async () => {
     const db = fakeDb([
       {
-        key: 'openai/gpt-5.6',
+        key: 'fixture_provider/fixture-model-b',
         requests: '50',
         cache_read_tokens: '0',
         cache_write_tokens: '0',
@@ -167,13 +167,13 @@ describe('route cache observability · per-request explain', () => {
         user_id: 'user_1',
         idempotency_key: 'turn-1',
         requested_provider: 'anthropic',
-        requested_model: 'claude-opus-5',
+        requested_model: 'fixture-premium-model',
         delivered_provider: 'anthropic',
-        delivered_model: 'claude-sonnet-5',
-        route_id: 'anthropic/claude-sonnet-5',
-        reserved_route_id: 'anthropic/claude-opus-5',
+        delivered_model: 'fixture-fallback-model',
+        route_id: 'anthropic/fixture-fallback-model',
+        reserved_route_id: 'anthropic/fixture-premium-model',
         fallback_reason: null,
-        fallback_sequence: [{ provider: 'anthropic', model: 'claude-sonnet-5' }],
+        fallback_sequence: [{ provider: 'anthropic', model: 'fixture-fallback-model' }],
         cache_read_tokens: '1200',
         cache_write_tokens: '0',
         input_tokens: '3000',
@@ -202,10 +202,10 @@ describe('route cache observability · per-request explain', () => {
         user_id: 'user_2',
         idempotency_key: 'turn-2',
         requested_provider: 'openai',
-        requested_model: 'gpt-5.6',
+        requested_model: 'fixture-model',
         delivered_provider: 'openai',
-        delivered_model: 'gpt-5.6',
-        route_id: 'openai/gpt-5.6',
+        delivered_model: 'fixture-model',
+        route_id: 'openai/fixture-model',
         reserved_route_id: null,
         fallback_reason: null,
         fallback_sequence: [],

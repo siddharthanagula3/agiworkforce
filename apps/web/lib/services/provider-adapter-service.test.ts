@@ -93,7 +93,7 @@ describe('resolveProviderFromModel', () => {
 
   it('dispatches the provider of an explicitly selected route over the model default', () => {
     const model = requireProviderDefaultModel('minimax');
-    expect(resolveProviderFromModel(model, 'open_router/minimax-m3')).toBe('openrouter');
+    expect(resolveProviderFromModel(model, `open_router/${model}`)).toBe('openrouter');
   });
 
   it('redirects an explicitly selected direct route to OpenRouter when the direct key is absent', () => {
@@ -101,7 +101,7 @@ describe('resolveProviderFromModel', () => {
     getOptionalEnv.mockReturnValue(undefined);
     const model = requireProviderDefaultModel('minimax');
 
-    expect(resolveProviderFromModel(model, 'minimax/minimax-m3')).toBe('openrouter');
+    expect(resolveProviderFromModel(model, `minimax/${model}`)).toBe('openrouter');
   });
 
   it('trusts an explicitly selected direct route once its managed key is configured', () => {
@@ -111,7 +111,7 @@ describe('resolveProviderFromModel', () => {
     );
     const model = requireProviderDefaultModel('minimax');
 
-    expect(resolveProviderFromModel(model, 'minimax/minimax-m3')).toBe('minimax');
+    expect(resolveProviderFromModel(model, `minimax/${model}`)).toBe('minimax');
   });
 
   it('dispatches the direct provider when its managed key is configured, even with OpenRouter also configured', () => {
@@ -149,9 +149,10 @@ describe('resolveProviderFromModel', () => {
   it('falls back to default resolution and warns when the selected route serves a different model', () => {
     const model = requireProviderDefaultModel('openai');
 
-    expect(resolveProviderFromModel(model, 'anthropic/claude-sonnet-5')).toBe('openai');
+    const anthropicRouteId = `anthropic/${requireProviderDefaultModel('anthropic')}`;
+    expect(resolveProviderFromModel(model, anthropicRouteId)).toBe('openai');
     expect(loggerWarn).toHaveBeenCalledWith(
-      expect.objectContaining({ routeId: 'anthropic/claude-sonnet-5', reason: 'model_mismatch' }),
+      expect.objectContaining({ routeId: anthropicRouteId, reason: 'model_mismatch' }),
       expect.any(String),
     );
   });
@@ -159,12 +160,12 @@ describe('resolveProviderFromModel', () => {
   it('falls back to default resolution when the selected route is closed to the request trust mode', () => {
     const model = requireProviderDefaultModel('minimax');
 
-    expect(resolveProviderFromModel(model, 'open_router/minimax-m3', { trustMode: 'local' })).toBe(
+    expect(resolveProviderFromModel(model, `open_router/${model}`, { trustMode: 'local' })).toBe(
       'minimax',
     );
     expect(loggerWarn).toHaveBeenCalledWith(
       expect.objectContaining({
-        routeId: 'open_router/minimax-m3',
+        routeId: `open_router/${model}`,
         reason: 'trust_mode_not_permitted',
       }),
       expect.any(String),
@@ -175,14 +176,14 @@ describe('resolveProviderFromModel', () => {
     const model = requireProviderDefaultModel('anthropic');
 
     expect(
-      resolveProviderFromModel(model, 'vercel_gateway/claude-sonnet-5', {
+      resolveProviderFromModel(model, `vercel_gateway/${model}`, {
         trustMode: 'byok',
         hasUserProviderKey: false,
       }),
     ).toBe('anthropic');
     expect(loggerWarn).toHaveBeenCalledWith(
       expect.objectContaining({
-        routeId: 'vercel_gateway/claude-sonnet-5',
+        routeId: `vercel_gateway/${model}`,
         reason: 'commercial_status_not_admitted',
       }),
       expect.any(String),
@@ -192,10 +193,10 @@ describe('resolveProviderFromModel', () => {
   it('defaults an omitted trust mode to managed, rejecting a byok-only route', () => {
     const model = requireProviderDefaultModel('anthropic');
 
-    expect(resolveProviderFromModel(model, 'vercel_gateway/claude-sonnet-5')).toBe('anthropic');
+    expect(resolveProviderFromModel(model, `vercel_gateway/${model}`)).toBe('anthropic');
     expect(loggerWarn).toHaveBeenCalledWith(
       expect.objectContaining({
-        routeId: 'vercel_gateway/claude-sonnet-5',
+        routeId: `vercel_gateway/${model}`,
         reason: 'trust_mode_not_permitted',
       }),
       expect.any(String),
@@ -206,7 +207,7 @@ describe('resolveProviderFromModel', () => {
     const model = requireProviderDefaultModel('anthropic');
 
     expect(
-      resolveProviderFromModel(model, 'vercel_gateway/claude-sonnet-5', {
+      resolveProviderFromModel(model, `vercel_gateway/${model}`, {
         trustMode: 'byok',
         hasUserProviderKey: true,
       }),
