@@ -94,7 +94,6 @@ fn legacy_sim(with_sse: bool) -> (Router, Arc<AtomicUsize>) {
             let hits = Arc::clone(&sse_hits_get);
             async move {
                 hits.fetch_add(1, Ordering::SeqCst);
-                // Hold the stream open (no endpoint hint — legacy POSTs are fixed).
                 let body = Body::from_stream(futures_util::stream::pending::<
                     Result<axum::body::Bytes, std::io::Error>,
                 >());
@@ -284,8 +283,6 @@ async fn validate_urls_blocks_private_addresses() {
         ..McpTimeouts::default()
     };
 
-    // Http bringup is lazy (no I/O), so the SSRF rejection must fire at
-    // connect — before any network touch.
     let err = match McpClient::connect_without_handshake(
         "ssrf-http",
         TransportConfig::Http {

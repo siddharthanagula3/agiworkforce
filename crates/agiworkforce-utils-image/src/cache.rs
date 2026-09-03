@@ -195,7 +195,6 @@ mod tests {
         // Would panic on the old implementation; must succeed now.
         assert!(cache.get(&"first").is_none());
         cache.insert("first", 1);
-        // Real cache hit — proves the cache is enabled, not silently disabled.
         assert_eq!(cache.get(&"first"), Some(1));
 
         // Exercise the insert-with paths under current_thread too.

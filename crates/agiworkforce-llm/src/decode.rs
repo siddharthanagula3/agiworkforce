@@ -1,15 +1,3 @@
-//! Incremental UTF-8 decoder for streamed provider responses.
-//!
-//! Every provider stream loop reads raw `bytes` off the wire and appends them to
-//! a text buffer. Doing that with `String::from_utf8_lossy(&bytes)` per chunk is
-//! wrong: a multibyte codepoint (emoji, CJK, accented Latin) can straddle a TCP
-//! chunk boundary, so each half decodes to `U+FFFD` (`�`) — silent corruption on
-//! every provider. This decoder retains the incomplete trailing bytes of a chunk
-//! and only emits complete codepoints, so split multibyte sequences reassemble
-//! exactly across `push` calls.
-//!
-//! Re-implemented (not copied) from the MIT-licensed pattern in
-//! `graniet/llm` `src/chat/sse.rs` (`SseState::push_bytes` / `consume_valid_prefix`).
 
 /// Accumulates bytes across stream chunks and yields only the valid-UTF-8
 /// prefix on each `push`, holding back any partial trailing codepoint until the
@@ -81,7 +69,7 @@ mod tests {
         // "😀" = F0 9F 98 80
         let bytes = "😀".as_bytes();
         let mut d = Utf8StreamDecoder::new();
-        assert_eq!(d.push(&bytes[..2]), ""); // incomplete — nothing emitted
+        assert_eq!(d.push(&bytes[..2]), "");
         assert_eq!(d.push(&bytes[2..]), "😀"); // completed
         assert_eq!(d.finish(), "");
     }

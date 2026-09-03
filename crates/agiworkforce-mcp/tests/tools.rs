@@ -1,7 +1,3 @@
-//! Tools list + call, driving the TYPED protocol-wire methods
-//! (`list_tools -> Vec<Tool>`, `call_tool -> CallToolResult`). The CLI facade
-//! uses the raw-Value path, so these typed methods are the frozen contract the
-//! desktop d2 swap inherits — they must be exercised directly here.
 
 mod support;
 

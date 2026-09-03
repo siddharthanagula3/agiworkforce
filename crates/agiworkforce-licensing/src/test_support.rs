@@ -1,15 +1,3 @@
-//! TEST / FIXTURE-SIGNING SUPPORT ONLY — not part of the production verify API.
-//!
-//! Real licenses and org policies are signed OUT OF BAND by the issuer's private
-//! key; production code only ever *verifies*. This module exists so the
-//! boundary/rotation/tamper unit tests mint REAL Ed25519 signatures (never
-//! hand-forged bytes) and derive keypairs deterministically. It is gated behind
-//! `#[cfg(any(test, feature = "test-support"))]` so it never ships in a normal
-//! build. It mirrors `packages/contracts/licensing/src/test-support.ts`.
-//!
-//! Determinism: an Ed25519 secret key IS its 32-byte seed, so a keypair derived
-//! from a fixed committed seed is byte-reproducible — the same property the TS
-//! generator relies on so both languages replay one corpus.
 
 use ed25519_dalek::{Signer, SigningKey};
 
@@ -29,10 +17,6 @@ impl TestKeyPair {
     }
 }
 
-/// Derive a deterministic keypair from a fixed 32-byte seed. Pass a 32-byte
-/// array, or a short ASCII label that is truncated/zero-padded to 32 bytes
-/// (labels keep fixtures readable — e.g. `"agi-root-key-1"`). Mirrors the TS
-/// `deriveKeyPairFromSeed` byte-for-byte.
 pub fn derive_keypair_from_seed_label(label: &str) -> TestKeyPair {
     let mut seed = [0u8; 32];
     let label_bytes = label.as_bytes();
@@ -70,11 +54,6 @@ pub fn make_signed_container(
     serde_json::to_vec_pretty(&container).expect("container serializes")
 }
 
-/// Corrupt an already-signed container by flipping the last non-padding base64
-/// character of the payload while leaving the signature intact — yields a
-/// container whose signature no longer matches. Mirrors the TS
-/// `tamperContainerPayload` (a simple byte-flip, not a malleability edge case,
-/// so TS and Rust verifiers agree).
 pub fn tamper_container_payload(container_bytes: &[u8]) -> Vec<u8> {
     let text = std::str::from_utf8(container_bytes).expect("container is UTF-8");
     let mut container: serde_json::Value = serde_json::from_str(text).expect("container is JSON");

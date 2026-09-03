@@ -1,9 +1,3 @@
-//! Runaway/loop guard primitives, moved VERBATIM from the CLI's
-//! `apps/cli/src/agent/executor.rs` (Wave 5e1). These are pure, side-effect-free
-//! detectors plus the cross-turn [`RunawayTracker`] state the engine threads
-//! through the loop. The UI/hook RESPONSE to a detected runaway (strike prompts,
-//! dialoguer confirmation, hook fan-out) stays app-local in the host — only the
-//! detection math and the persistent counters live here.
 
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
@@ -88,11 +82,6 @@ pub fn detect_content_loop(text: &str) -> bool {
     false
 }
 
-/// Cross-turn runaway state: the rolling window of recent tool-call hashes and
-/// the session's loop-strike counter. Owned by the host session (it persists
-/// across turns — a second strike auto-stops), lent `&mut` to the engine so the
-/// detection math lives with the loop mechanics while the state lives with the
-/// session.
 #[derive(Debug, Default)]
 pub struct RunawayTracker {
     /// Hashes of tool calls seen this session, appended each iteration.

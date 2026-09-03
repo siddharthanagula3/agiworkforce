@@ -70,7 +70,6 @@ fn m22_targeted_commands_are_all_registered() {
             "/{name} was expected to already exist (pre-M22)"
         );
     }
-    // /branch is an alias of /fork — verify it resolves:
     assert_eq!(
         registry.find("branch").map(|c| c.name.as_str()),
         Some("fork"),
@@ -89,7 +88,7 @@ fn m22_targeted_commands_are_all_registered() {
     ] {
         assert!(
             registry.find(name).is_some(),
-            "/{name} must be registered (M22 — 2026-05-14 — Claude Code parity)"
+            "/{name} must be registered (M22 to 2026-05-14, Claude Code parity)"
         );
     }
 

@@ -464,12 +464,6 @@ pub fn model_keys_for_provider(provider: &str) -> Result<Option<Vec<String>>, Re
     Ok(registry.provider_model_keys.get(provider).cloned())
 }
 
-/// Resolve a routing slot to the concrete provider model the generated
-/// registry assigns it.
-///
-/// Surfaces that call a single canonical model for a modality — voice
-/// transcription is the first — read the slot instead of re-deriving the model
-/// from per-surface tier heuristics that drift apart.
 pub fn slot_model(slot: &str) -> Result<Option<SlotModel>, RegistryError> {
     let registry = registry()?;
     let Some(model_key) = registry

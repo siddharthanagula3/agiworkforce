@@ -3,7 +3,7 @@ publish = false
 name = "agiworkforce-agent-core"
 version = "0.1.0"
 edition = "2024"
-description = "AGI Workforce shared agent turn-loop engine: model-stream driving, tool-call scheduling (sequential + parallel read-only batches), runaway/iteration/budget guards, and turn-event emission. Host-agnostic — the CLI and desktop implement TurnHost to supply completion, tool dispatch, hooks, approval, and event routing."
+description = "AGI Workforce shared agent turn-loop engine: model-stream driving, tool-call scheduling (sequential + parallel read-only batches), runaway/iteration/budget guards, and turn-event emission. Host-agnostic, the CLI and desktop implement TurnHost to supply completion, tool dispatch, hooks, approval, and event routing."
 
 [lints]
 workspace = true
