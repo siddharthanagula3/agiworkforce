@@ -138,6 +138,31 @@ describe('runToolLoop — a provider rejection reaches the user as product copy'
     expect(output).not.toContain('x_stream_error');
   });
 
+  it('keeps the root spending-cap cause when a rescue route fails differently', async () => {
+    const SPENDING_CAP_MESSAGE =
+      'google API error (429): Google responded 429: {\n  "error": {\n    "code": 429,\n    "message": "Your project has exceeded its monthly spending cap. Please go to AI Studio at https://ai.studio/spend to manage your project spend cap.",\n    "status": "RESOURCE_EXHAUSTED"\n  }\n}';
+    mockBuildToolLoopStream
+      .mockRejectedValueOnce(providerRejection(429, SPENDING_CAP_MESSAGE))
+      .mockRejectedValueOnce(providerRejection(503, 'upstream detail for 503'));
+
+    const processed = makeProcessed();
+    const rotated = { ...processed, provider: 'openrouter' } as ProcessedRequest;
+    let calls = 0;
+    const next = vi.fn(() => {
+      calls += 1;
+      return calls === 1 ? { provider: 'openrouter', processed: rotated } : null;
+    });
+
+    const output = await drain(
+      runToolLoop(processed, { approvalMode: 'auto', failover: { next } }),
+    );
+    const streamError = streamErrorFrom(output);
+
+    expect(streamError.code).toBe('provider_quota_exhausted');
+    expect(streamError.message).toContain('spending cap');
+    expect(streamError.message).not.toContain('overloaded');
+  });
+
   it.each([
     [503, 'server_overload'],
     [401, 'auth'],
