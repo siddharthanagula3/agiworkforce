@@ -116,6 +116,7 @@ export const metadata = buildMetadata({
  * describe a document that is not there.
  */
 const SECTIONS = [
+  { label: 'Definitions', id: 's-definitions' },
   '00 · The mode decides the answer',
   '01 · What we collect',
   '02 · What we do not collect',
@@ -129,6 +130,49 @@ const SECTIONS = [
   '10 · Changes',
   '11 · Contact',
 ] as const;
+
+const DEFINITIONS_LEDGER: readonly LedgerRow[] = [
+  {
+    label: 'Personal data',
+    value: 'Any information relating to an identified or identifiable person.',
+  },
+  {
+    label: 'Processing',
+    value: 'Anything done with personal data: collecting, storing, using, disclosing, deleting it.',
+  },
+  {
+    label: 'Controller',
+    value: 'The party that decides why and how personal data is processed.',
+  },
+  {
+    label: 'Processor',
+    value: <>The party that processes personal data on a controller&rsquo;s instruction.</>,
+  },
+  {
+    label: 'Local',
+    value: 'Running AGI entirely on your own device. Nothing about the conversation reaches us.',
+  },
+  {
+    label: 'BYOK',
+    value: 'Bring your own key: routing a request through your own account with a model provider.',
+  },
+  {
+    label: 'Managed Cloud',
+    value: `The hosted, metered service ${LEGAL_ENTITY} operates, currently in public alpha.`,
+  },
+  {
+    label: 'Subprocessor',
+    value: (
+      <>
+        A third party we or our processor engage to help process personal data, listed at{' '}
+        <Link href="/subprocessors" className="agi-ds-link">
+          /subprocessors
+        </Link>
+        .
+      </>
+    ),
+  },
+];
 
 const MODE_LEDGER: readonly LedgerRow[] = [
   {
@@ -774,6 +818,15 @@ export default function PrivacyPage() {
             intro="Start with section 00: which mode you run changes almost every answer below it."
           />
         </Container>
+
+        <Section id="s-definitions" labelledBy="agi-privacy-definitions-title" rule ground="2">
+          <Stack gap="loose">
+            <h2 className="agi-ds-h2" id="agi-privacy-definitions-title">
+              Definitions
+            </h2>
+            <Ledger caption="Definitions" rows={DEFINITIONS_LEDGER} />
+          </Stack>
+        </Section>
 
         <Section id="s-00" labelledBy="agi-privacy-s00-title" rule>
           <Stack gap="loose">
