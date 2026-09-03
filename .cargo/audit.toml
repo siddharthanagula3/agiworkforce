@@ -41,20 +41,20 @@ ignore = [
     "RUSTSEC-2025-0100", # unic-ucd-ident - unmaintained (transitive, no security issue)
     "RUSTSEC-2025-0098", # unic-ucd-version - unmaintained (transitive, no security issue)
 
-    # FIX-018 (Sprint 3) — transitive deps from the `remote-databases` feature.
+    # FIX-018 (Sprint 3), transitive deps from the `remote-databases` feature.
     #
     # 2026-08-24: four of the five entries that used to sit here are GONE, and
     # they were removed by fixing the tree, not by rewording the excuse.
     #
-    #   RUSTSEC-2026-0119, RUSTSEC-2026-0118 (hickory-proto) — mongodb moved
+    #   RUSTSEC-2026-0119, RUSTSEC-2026-0118 (hickory-proto), mongodb moved
     #     3.5 -> 3.8, which carries hickory-proto 0.25.2 -> 0.26.1. Both
     #     advisories are fixed at 0.26.1, so there is nothing left to suppress.
-    #   RUSTSEC-2023-0071 (rsa Marvin Attack) — `rsa` is not in Cargo.lock and
+    #   RUSTSEC-2023-0071 (rsa Marvin Attack), `rsa` is not in Cargo.lock and
     #     was not in main's lock either. This entry suppressed an advisory for a
     #     crate the tree does not depend on. A stale ignore is not free: it is
     #     one more line that reads as "known and accepted" while covering
     #     nothing, which is how the rustls-webpki entry survived.
-    #   RUSTSEC-2026-0002 (lru unsound IterMut) — took three bumps, because
+    #   RUSTSEC-2026-0002 (lru unsound IterMut), took three bumps, because
     #     the comment had the parent wrong and removing the ignore revealed a
     #     second advisory. It said mysql_async; the 0.12.5 copy came from
     #     ratatui in apps/cli. ratatui 0.29 -> 0.30 moved that to 0.18.2, which
@@ -76,13 +76,13 @@ ignore = [
     # vulnerability:
     "RUSTSEC-2026-0173", # proc-macro-error2 unmaintained (mysql_async → mysql-common-derive)
 
-    # COVERAGE BOUNDARY — read this before trusting the CI advisory gate.
+    # COVERAGE BOUNDARY, read this before trusting the CI advisory gate.
     #
     # The three entries above are VULNERABILITY class, not maintenance warnings,
     # and they are suppressed on provenance ("optional feature, off by default")
-    # — the same shape of reasoning that hid the rustls-webpki line for months
+    #, the same shape of reasoning that hid the rustls-webpki line for months
     # under a claim about Tauri that turned out to be false. The difference is
-    # that this one is checkable — and on checking it, it was WRONG in the way
+    # that this one is checkable, and on checking it, it was WRONG in the way
     # that matters. `remote-databases` is indeed absent from the default feature
     # set, so a stock build cannot reach mongodb or mysql_async. The Windows
     # release build passes it explicitly, so the binary users install can and
@@ -93,14 +93,14 @@ ignore = [
     # `[graph] all-features = false`, so the blocking CI step never walks the
     # remote-databases, ocr, local-llm, webrtc-support or local-whisper edges at
     # all. Anyone who ships with one of those features enabled is building
-    # against an unaudited graph, and these ignores are not what protects them —
+    # against an unaudited graph, and these ignores are not what protects them.
     # nothing does. Turning `all-features` on is the fix and is tracked
     # separately, because it surfaces a backlog that has to be triaged rather
     # than bulk-ignored, and bulk-ignoring it here is precisely how this file
     # got into the state the rustls entry describes.
 
     # No rustls-webpki entry: the 0.101.x line (RUSTSEC-2026-0049/0098/0099/0104)
-    # was never pinned by Tauri as this list used to claim — it came in through
+    # was never pinned by Tauri as this list used to claim, it came in through
     # first-party `oauth2`, which now builds against the platform TLS stack, so
     # the only rustls-webpki left is the patched 0.103.13. Re-adding an ignore
     # here would hide a vulnerable TLS verifier, not a maintenance warning.
@@ -109,20 +109,20 @@ ignore = [
     # All five are unmaintained-status or narrow-impact unsoundness in
     # transitive deps we cannot upgrade past Tauri / lopdf / clap / indicatif
     # without forking the upstream chain. None are exploitable in our use.
-    "RUSTSEC-2026-0105", # core2 — all versions yanked (transitive from PDF parsing)
-    "RUSTSEC-2024-0388", # derivative — unmaintained (transitive derive macro)
-    "RUSTSEC-2025-0119", # number_prefix — unmaintained (indicatif progress-bar dep)
-    "RUSTSEC-2024-0320", # yaml-rust — unmaintained (config / serde-yaml legacy dep)
-    "RUSTSEC-2026-0097", # rand — unsound only when a custom global logger
+    "RUSTSEC-2026-0105", # core2, all versions yanked (transitive from PDF parsing)
+    "RUSTSEC-2024-0388", # derivative, unmaintained (transitive derive macro)
+    "RUSTSEC-2025-0119", # number_prefix, unmaintained (indicatif progress-bar dep)
+    "RUSTSEC-2024-0320", # yaml-rust, unmaintained (config / serde-yaml legacy dep)
+    "RUSTSEC-2026-0097", # rand, unsound only when a custom global logger
                          # calls into rand from inside a panic hook. We
                          # never call rand from tracing subscribers or
                          # panic hooks, so the unsoundness path is unreachable.
 
-    # http-types 2.12.0 — no patched release available; transitive dependency
+    # http-types 2.12.0, no patched release available; transitive dependency
     # with narrow impact. Ignored until upstream ships a fix.
     "RUSTSEC-2026-0174", # http-types (transitive, no patched release)
 
-    # h2 0.3.27 — low-severity DoS (unbounded empty DATA frames). Patched in
+    # h2 0.3.27, low-severity DoS (unbounded empty DATA frames). Patched in
     # 0.4.16, which the tree already carries for the crates that moved to
     # hyper 1.x. The 0.3 line is held by hyper 0.14.32, reached only through
     # reqwest 0.11.27 and async-stripe 0.31.2, so closing it needs a
@@ -135,7 +135,7 @@ ignore = [
 
 [yanked]
 # Yanked crate detection is disabled because the only flagged crate is
-# `core2 0.4.0`, which is yanked at every version with no successor — it's
+# `core2 0.4.0`, which is yanked at every version with no successor, it's
 # a transitive dep of bitstream-io → rav1e → ravif → image. We cannot fix
 # this without upstream rav1e dropping core2. Re-enable once that lands.
 enabled = false
