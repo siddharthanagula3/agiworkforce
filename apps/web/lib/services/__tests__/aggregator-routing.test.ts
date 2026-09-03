@@ -2,16 +2,24 @@ import { listCanonicalModels, type ModelMetadata } from '@agiworkforce/types';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import {
   canFailoverToOpenRouter,
+  dispatchProviderForRoute,
   failoverMappedModelIds,
-  isRoutedViaOpenRouter,
+  isManagedOpenRouterRoute,
   mappedModelIds,
   openRouterFailoverSlugFor,
   openRouterSlugFor,
 } from '../aggregator-routing';
 
-const ENV_KEYS = ['OPENROUTER_API_KEY', 'AGI_OPENROUTER_ROUTED_PROVIDERS'] as const;
+const ENV_KEYS = ['OPENROUTER_API_KEY'] as const;
 const saved: Record<string, string | undefined> = {};
 const ROUTED_PROVIDERS = new Set(['minimax', 'qwen', 'zhipu']);
+const MANAGED_ROUTED_MODEL_IDS = new Set([
+  'minimax-m3',
+  'qwen-3.5-flash',
+  'qwen-3.7-plus',
+  'glm-5.3',
+  'glm-5.3-flash',
+]);
 const DIRECT_FAILOVER_PROVIDERS = new Set([
   'anthropic',
   'openai',
@@ -40,7 +48,6 @@ function requireCatalogModel(predicate: (model: ModelMetadata) => boolean): Mode
 beforeEach(() => {
   for (const key of ENV_KEYS) saved[key] = process.env[key];
   process.env['OPENROUTER_API_KEY'] = 'fixture-openrouter-key';
-  delete process.env['AGI_OPENROUTER_ROUTED_PROVIDERS'];
 });
 
 afterEach(() => {
@@ -51,34 +58,34 @@ afterEach(() => {
 });
 
 describe('aggregator routing', () => {
-  it.each([...ROUTED_PROVIDERS])('routes %s through OpenRouter', (provider) => {
-    expect(isRoutedViaOpenRouter(provider)).toBe(true);
+  it('admits managed traffic to the OpenRouter route the registry names', () => {
+    const model = requireCatalogModel((candidate) => MANAGED_ROUTED_MODEL_IDS.has(candidate.id));
+    expect(isManagedOpenRouterRoute(providerApiModelId(model))).toBe(true);
   });
 
-  it.each([...DIRECT_FAILOVER_PROVIDERS])('leaves %s direct', (provider) => {
-    expect(isRoutedViaOpenRouter(provider)).toBe(false);
-  });
+  it.each([...DIRECT_FAILOVER_PROVIDERS])(
+    "does not admit %s's OpenRouter route to managed traffic",
+    (provider) => {
+      const model = requireCatalogModel(
+        (candidate) => candidate.provider === provider && isChatModel(candidate),
+      );
+      expect(isManagedOpenRouterRoute(providerApiModelId(model))).toBe(false);
+    },
+  );
 
-  it('does not route when there is no OpenRouter key', () => {
+  it('does not admit managed traffic when there is no OpenRouter key', () => {
     delete process.env['OPENROUTER_API_KEY'];
-    for (const provider of ROUTED_PROVIDERS) {
-      expect(isRoutedViaOpenRouter(provider)).toBe(false);
-    }
+    const model = requireCatalogModel((candidate) => MANAGED_ROUTED_MODEL_IDS.has(candidate.id));
+    expect(isManagedOpenRouterRoute(providerApiModelId(model))).toBe(false);
   });
 
-  it('honours an env override, including turning routing off entirely', () => {
-    const [enabledProvider, disabledProvider] = [...ROUTED_PROVIDERS];
-    if (!enabledProvider || !disabledProvider)
-      throw new Error('Routed provider fixtures are missing');
+  it('resolves the dispatch provider of a route id, mapping open_router to openrouter', () => {
+    expect(dispatchProviderForRoute('open_router/minimax-m3')).toBe('openrouter');
+    expect(dispatchProviderForRoute('minimax/minimax-m3')).toBe('minimax');
+  });
 
-    process.env['AGI_OPENROUTER_ROUTED_PROVIDERS'] = enabledProvider;
-    expect(isRoutedViaOpenRouter(enabledProvider)).toBe(true);
-    expect(isRoutedViaOpenRouter(disabledProvider)).toBe(false);
-
-    process.env['AGI_OPENROUTER_ROUTED_PROVIDERS'] = '';
-    for (const provider of ROUTED_PROVIDERS) {
-      expect(isRoutedViaOpenRouter(provider)).toBe(false);
-    }
+  it('has no dispatch provider for a route id the registry does not declare', () => {
+    expect(dispatchProviderForRoute('fixture-unknown/fixture-model')).toBeUndefined();
   });
 
   it('reads routed wire slugs from the canonical catalog', () => {

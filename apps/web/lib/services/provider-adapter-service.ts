@@ -10,7 +10,11 @@ import {
   type ProviderAdapterId,
 } from '@agiworkforce/providers-factory';
 import { detectProviderFromModelId, listProtocolRoutes } from '@agiworkforce/types';
-import { isRoutedViaOpenRouter, openRouterSlugFor } from './aggregator-routing';
+import {
+  dispatchProviderForRoute,
+  isManagedOpenRouterRoute,
+  openRouterSlugFor,
+} from './aggregator-routing';
 import type {
   HarnessProtocol,
   ProtocolHarness,
@@ -90,20 +94,42 @@ export const SUPPORTED_SERVER_PROVIDER_IDS: readonly string[] = Object.keys(SERV
 
 export const toApiModelId = toProviderApiModelId;
 
-export function resolveProviderFromModel(model: string): string {
+function resolveServerProviderApiKey(providerId: string): string | undefined {
+  const envPrefix = SERVER_PROVIDER_CONFIG[providerId]?.envPrefix;
+  if (!envPrefix) return undefined;
+  const apiKeyEnvKeys = PROVIDER_API_KEY_ENV_KEYS[providerId] ?? [`${envPrefix}_API_KEY`];
+  for (const envKey of apiKeyEnvKeys) {
+    const apiKey = getOptionalEnv(envKey);
+    if (apiKey) return apiKey;
+  }
+  return undefined;
+}
+
+function hasServerProviderKey(providerId: string): boolean {
+  return resolveServerProviderApiKey(providerId) !== undefined;
+}
+
+export function resolveProviderFromModel(model: string, selectedRouteId?: string): string {
   const catalogProvider = detectProviderFromModelId(model);
-  if (catalogProvider) {
-    if (catalogProvider === 'open_router') return 'openrouter';
-    if (
-      isRoutedViaOpenRouter(catalogProvider) &&
-      openRouterSlugFor(toProviderApiModelId(model)) !== undefined
-    ) {
-      return 'openrouter';
-    }
-    return catalogProvider;
+  if (!catalogProvider) {
+    throw new Error('Model is not registered in the canonical model catalog');
   }
 
-  throw new Error('Model is not registered in the canonical model catalog');
+  const selectedProvider = selectedRouteId ? dispatchProviderForRoute(selectedRouteId) : undefined;
+  if (selectedProvider) return selectedProvider;
+
+  if (catalogProvider === 'open_router') return 'openrouter';
+
+  const apiModelId = toProviderApiModelId(model);
+  if (
+    !hasServerProviderKey(catalogProvider) &&
+    isManagedOpenRouterRoute(apiModelId) &&
+    openRouterSlugFor(apiModelId) !== undefined
+  ) {
+    return 'openrouter';
+  }
+
+  return catalogProvider;
 }
 
 export function toGenericUpstreamError(
@@ -200,12 +226,7 @@ export function buildServerProviderAdapter(
   }
   const { adapterId, envPrefix } = providerConfig;
 
-  const apiKeyEnvKeys = PROVIDER_API_KEY_ENV_KEYS[providerId] ?? [`${envPrefix}_API_KEY`];
-  let apiKey: string | undefined;
-  for (const envKey of apiKeyEnvKeys) {
-    apiKey = getOptionalEnv(envKey);
-    if (apiKey) break;
-  }
+  const apiKey = resolveServerProviderApiKey(providerId);
   if (!apiKey) {
     if (providerId === 'google') {
       throw new Error(

@@ -23,6 +23,19 @@ import { modelRegistry } from '@agiworkforce/model-registry';
 
 export { getRoutePricing } from '@agiworkforce/model-registry';
 export type { RoutePriceSheet } from '@agiworkforce/model-registry';
+
+export interface RegistryRoute {
+  modelKey: string;
+  provider: string;
+  harnessId: string;
+  trustModes: readonly string[];
+  isDefault: boolean;
+}
+
+export function getRegistryRoute(routeId: string): RegistryRoute | null {
+  const routes = modelRegistry.routes as Readonly<Record<string, RegistryRoute>>;
+  return routes[routeId] ?? null;
+}
 import type { Provider } from './provider';
 import type { ModelInfo } from './provider-adapter';
 import type { SubscriptionTier } from './user';
