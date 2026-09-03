@@ -1,4 +1,3 @@
-
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -56,7 +55,4 @@ describe('Marketplace README', () => {
     expect(notes).toContain('pnpm --filter agi-workforce typecheck');
     expect(notes).toContain('Trust boundaries');
   });
-
-  // What actually lands in the archive is asserted in packageHygiene.test.ts —
-  // the vsce file listing is expensive and must not run twice in parallel.
 });

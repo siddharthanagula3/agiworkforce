@@ -1,25 +1,3 @@
-/**
- * privacy-control-claims.test.ts — the VS Code surface must not advertise a
- * privacy control that does not exist.
- *
- * `/settings/privacy` (the page both of these entry points open) offers a
- * telemetry-sharing toggle, bulk chat archive/delete, data export, and account
- * deletion. It has no retention-period setting, and it deliberately has no
- * model-training control: AGI does not train AGI-owned models on customer
- * prompts, responses, or files, so there is no data path to opt into. Web
- * (PrivacySection.training.test.tsx) and Mobile (model-training-policy.test.tsx)
- * already guard their own copy; the VS Code entry points labelled the same page
- * "Retention & training controls" / "Retention & training settings", which
- * promised a user two controls they could never find.
- *
- * Both call sites are user-reachable: the QuickPick row via the
- * `agi-workforce.showAccountUsage` command (core/commandSetup.ts), and the
- * onboarding button via the sidebar webview, whose click posts
- * `openPrivacySettings` to ChatStateManager.
- *
- * @vitest-environment jsdom
- */
-
 import { describe, expect, it } from 'vitest';
 
 import { buildTrustReviewItems } from '../features/account-auth/accountPresentation';

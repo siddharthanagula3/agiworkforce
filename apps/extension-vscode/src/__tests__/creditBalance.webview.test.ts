@@ -1,16 +1,3 @@
-/**
- * creditBalance.webview.test.ts — BILL-50.
- *
- * Credits are what keeps a developer working once a rolling limit binds, and
- * the IDE is where they are spent. These tests pin the whole chain for the
- * balance the way the bucket tests pin the limits: raw `/api/usage` JSON →
- * schema → meter → webview payload → rendered row, including the honest states
- * for an unspendable balance, an empty balance and a server that publishes no
- * balance at all.
- *
- * @vitest-environment jsdom
- */
-
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type * as vscode from 'vscode';
 import { fetchTierInfo, parseTierInfoResponse } from '../utils/api';

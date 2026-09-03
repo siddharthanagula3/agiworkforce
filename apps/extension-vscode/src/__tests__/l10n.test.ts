@@ -1,4 +1,3 @@
-
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import * as vscode from 'vscode';
 
@@ -89,7 +88,7 @@ describe('t', () => {
       'AGI: 3 subsystems unavailable',
     );
     expect(withLanguage('ru', () => t('subsystemHealth.manyUnavailable', { count: 3 }))).toBe(
-      'AGI: недоступных подсистем — 3',
+      'AGI: недоступных подсистем, 3',
     );
   });
 });
@@ -135,7 +134,7 @@ describe('applyLlmEdit in a translated editor', () => {
     await withLanguageAsync('ja', () => applyLlmEdit(editor, selection, response, 'Refactor'));
 
     expect(vscode.window.showWarningMessage).toHaveBeenCalledWith(
-      'AGI Workforce: 編集を適用できませんでした — ドキュメントが変更された可能性があります。',
+      'AGI Workforce: 編集を適用できませんでした, ドキュメントが変更された可能性があります。',
     );
   });
 });

@@ -203,7 +203,9 @@ export function validateEndpointUrl(raw: string): string | undefined {
   const isHttps = parsed.protocol === 'https:';
   // URL.hostname keeps the brackets on IPv6 literals, so '::1' would never match.
   const isLocalhost =
-    parsed.hostname === 'localhost' || parsed.hostname === '127.0.0.1' || parsed.hostname === '[::1]';
+    parsed.hostname === 'localhost' ||
+    parsed.hostname === '127.0.0.1' ||
+    parsed.hostname === '[::1]';
 
   if (!isHttps && !isLocalhost) {
     return undefined;
@@ -403,7 +405,7 @@ function httpsPostStream(
             const parsed = JSON.parse(data) as ChatCompletionChunk;
             onChunk(parsed);
           } catch {
-            // Malformed SSE line — skip
+            // noop
           }
         }
       });

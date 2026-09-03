@@ -1,4 +1,3 @@
-
 import { getModelMetadataById } from '@agiworkforce/types';
 import type { Tier } from './tierResolver';
 import { tierAtLeast } from './tierResolver';
@@ -16,17 +15,6 @@ export function extractProvider(modelId: string): string {
 
 export type SwitchGuardResult = 'allow' | 'upgrade-required';
 
-/**
- * Determine whether a provider switch is permitted for the given tier.
- *
- * Returns:
- *   - 'allow'            — switch is permitted (same provider, auto-mode, or max tier)
- *   - 'upgrade-required' — different providers, tier below max
- *
- * @param currentModelId - The currently active model ID (before the switch).
- * @param nextModelId    - The model ID the user is switching to.
- * @param tier           - The resolved subscription tier.
- */
 export function guardProviderSwitch(
   currentModelId: string,
   nextModelId: string,

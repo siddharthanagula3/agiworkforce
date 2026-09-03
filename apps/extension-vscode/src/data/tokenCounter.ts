@@ -1,4 +1,3 @@
-
 import * as vscode from 'vscode';
 import { MODEL_COST_RATES } from '../features/model-picker/modelConstants';
 import { isAutoRoutingModel } from '../integrations/routingTask';
@@ -144,7 +143,7 @@ export function activateTokenCounter(context: vscode.ExtensionContext): void {
         {
           label: `$(credit-card) Estimated Cost`,
           description: costLabel(counter),
-          detail: 'Published rates applied to measured tokens — not an invoice or provider bill',
+          detail: 'Published rates applied to measured tokens, not an invoice or provider bill',
         },
         {
           label: `$(request-changes) Turns`,

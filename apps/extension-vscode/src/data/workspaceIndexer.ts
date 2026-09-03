@@ -1,4 +1,3 @@
-
 import * as vscode from 'vscode';
 
 export interface FileEntry {
@@ -94,7 +93,7 @@ export class WorkspaceIndexer {
         files,
       } satisfies CacheEntry);
     } catch {
-      // File may have been deleted between event and handler — ignore.
+      // noop
     }
   }
 

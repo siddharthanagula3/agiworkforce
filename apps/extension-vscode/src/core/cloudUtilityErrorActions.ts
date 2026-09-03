@@ -52,7 +52,7 @@ export async function showCloudUtilityErrorActions(
   const kind = classifyCloudUtilityFailure(error);
   if (kind === 'cancelled') return;
 
-  const message = `${options.title} — ${failureMessage(error)}`;
+  const message = `${options.title}, ${failureMessage(error)}`;
   if (kind === 'account-auth') {
     const choice = await vscode.window.showErrorMessage(message, 'Sign in');
     if (choice === 'Sign in') {

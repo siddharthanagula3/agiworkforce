@@ -1,4 +1,3 @@
-
 import { describe, it, expect } from 'vitest';
 
 import { TIER_ORDER, tierAtLeast } from '../integrations/tierResolver';
@@ -19,7 +18,7 @@ describe('tier resolver ordering', () => {
     expect(TIER_ORDER.indexOf('max')).toBeLessThan(TIER_ORDER.indexOf('max_15x'));
   });
 
-  it('tierAtLeast — local and byok are peers, not a ladder', () => {
+  it('tierAtLeast, local and byok are peers, not a ladder', () => {
     expect(tierAtLeast('local', 'byok')).toBe(true);
     expect(tierAtLeast('byok', 'local')).toBe(true);
   });
@@ -30,19 +29,19 @@ describe('tier resolver ordering', () => {
     }
   });
 
-  it('tierAtLeast — byok meets byok requirement', () => {
+  it('tierAtLeast, byok meets byok requirement', () => {
     expect(tierAtLeast('byok', 'byok')).toBe(true);
   });
 
-  it('tierAtLeast — pro meets basic requirement', () => {
+  it('tierAtLeast, pro meets basic requirement', () => {
     expect(tierAtLeast('pro', 'basic')).toBe(true);
   });
 
-  it('tierAtLeast — basic does not meet pro requirement', () => {
+  it('tierAtLeast, basic does not meet pro requirement', () => {
     expect(tierAtLeast('basic', 'pro')).toBe(false);
   });
 
-  it('tierAtLeast — unknown tier always returns false', () => {
+  it('tierAtLeast, unknown tier always returns false', () => {
     expect(tierAtLeast('unknown', 'byok')).toBe(false);
     expect(tierAtLeast('byok', 'unknown')).toBe(false);
   });
@@ -62,7 +61,7 @@ describe('vscode extension trust-boundary gates', () => {
     expect(tierAtLeast('local', 'max')).toBe(false);
   });
 
-  it('tier transitions are monotonic (non-decreasing — equal ranks are peers)', () => {
+  it('tier transitions are monotonic (non-decreasing, equal ranks are peers)', () => {
     for (let i = 0; i < TIER_ORDER.length - 1; i++) {
       const lower = TIER_ORDER[i]!;
       const higher = TIER_ORDER[i + 1]!;

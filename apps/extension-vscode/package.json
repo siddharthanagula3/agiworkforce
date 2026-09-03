@@ -863,7 +863,7 @@
           "type": "boolean",
           "default": false,
           "deprecationMessage": "Use AGI Workforce: Open Settings and choose Agent mode → Plan instead.",
-          "description": "Deprecated — use agiWorkforce.agent.mode instead. When true, maps to agent.mode = 'plan'."
+          "description": "Deprecated, use agiWorkforce.agent.mode instead. When true, maps to agent.mode = 'plan'."
         },
         "agiWorkforce.agent.mode": {
           "type": "string",

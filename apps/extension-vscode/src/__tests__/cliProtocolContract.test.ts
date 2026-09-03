@@ -14,7 +14,7 @@ function rustU32Constant(relativePath: string, name: string): number {
   const match = new RegExp(`pub const ${name}: u32 = (\\d+);`, 'u').exec(source);
   expect(
     match,
-    `${name} is no longer declared as a \`pub const … : u32\` in ${relativePath}. This guard exists to catch that rename — re-point it before editing the extension's own constants.`,
+    `${name} is no longer declared as a \`pub const … : u32\` in ${relativePath}. This guard exists to catch that rename, re-point it before editing the extension's own constants.`,
   ).not.toBeNull();
   return Number(match?.[1]);
 }
@@ -35,7 +35,7 @@ function cliCrateVersion(relativePath: string): string {
   const version = cargoPackageVersion(readRepoFile(relativePath));
   expect(
     version,
-    `no version in the [package] table of ${relativePath}. This guard reads the CLI's shipped version from there — re-point it before changing the extension's minimum.`,
+    `no version in the [package] table of ${relativePath}. This guard reads the CLI's shipped version from there, re-point it before changing the extension's minimum.`,
   ).toBeDefined();
   return version ?? '';
 }
@@ -110,7 +110,7 @@ describe('missing-CLI copy never promises a distribution that does not exist', (
   it('keeps the install command behind a single named flag', () => {
     expect(
       npmPackageIsPublished,
-      'CLI_IS_PUBLISHED must stay a single boolean constant — it is the one-line switch that surfaces the install command once npm publishing lands.',
+      'CLI_IS_PUBLISHED must stay a single boolean constant, it is the one-line switch that surfaces the install command once npm publishing lands.',
     ).toBeDefined();
   });
 

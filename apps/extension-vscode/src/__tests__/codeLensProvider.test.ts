@@ -24,7 +24,7 @@ function isDeclaration(line: string, languageId: string): boolean {
   return lensesFor([line], languageId).length > 0;
 }
 
-describe('code lenses — TypeScript declarations', () => {
+describe('code lenses, TypeScript declarations', () => {
   const lang = 'typescript';
 
   it('lenses an exported async function', () => {
@@ -62,7 +62,7 @@ describe('code lenses — TypeScript declarations', () => {
   });
 });
 
-describe('code lenses — Python declarations', () => {
+describe('code lenses, Python declarations', () => {
   const lang = 'python';
 
   it('lenses def and async def', () => {
@@ -79,7 +79,7 @@ describe('code lenses — Python declarations', () => {
   });
 });
 
-describe('code lenses — Go declarations', () => {
+describe('code lenses, Go declarations', () => {
   const lang = 'go';
 
   it('lenses func', () => {
@@ -95,7 +95,7 @@ describe('code lenses — Go declarations', () => {
   });
 });
 
-describe('code lenses — Rust declarations', () => {
+describe('code lenses, Rust declarations', () => {
   const lang = 'rust';
 
   it('lenses pub fn and bare fn', () => {
@@ -113,7 +113,7 @@ describe('code lenses — Rust declarations', () => {
   });
 });
 
-describe('code lenses — Ruby declarations', () => {
+describe('code lenses, Ruby declarations', () => {
   const lang = 'ruby';
 
   it('lenses def, class and module', () => {
@@ -123,7 +123,7 @@ describe('code lenses — Ruby declarations', () => {
   });
 });
 
-describe('code lenses — the lens set on a declaration', () => {
+describe('code lenses, the lens set on a declaration', () => {
   const lines = [
     'export async function fetchUsers(): Promise<User[]> {',
     '  const result = await db.query();',
@@ -181,9 +181,9 @@ describe('code lenses — the lens set on a declaration', () => {
     );
 
     expect(lenses).toHaveLength(8);
-    expect([
-      ...new Set(lenses.map((lens) => (lens.range.start as vscode.Position).line)),
-    ]).toEqual([0, 3]);
+    expect([...new Set(lenses.map((lens) => (lens.range.start as vscode.Position).line))]).toEqual([
+      0, 3,
+    ]);
   });
 
   it('lenses Python class and def lines, four apiece', () => {
@@ -198,14 +198,14 @@ describe('code lenses — the lens set on a declaration', () => {
       'python',
     );
 
-    expect([
-      ...new Set(lenses.map((lens) => (lens.range.start as vscode.Position).line)),
-    ]).toEqual([0, 1, 3]);
+    expect([...new Set(lenses.map((lens) => (lens.range.start as vscode.Position).line))]).toEqual([
+      0, 1, 3,
+    ]);
     expect(lenses).toHaveLength(12);
   });
 });
 
-describe('code lenses — recomputation', () => {
+describe('code lenses, recomputation', () => {
   it('reuses the cached lenses until the document version changes', () => {
     const provider = new AgiCodeLensProvider();
     const lines = ['function foo() {', '  return 1;', '}'];

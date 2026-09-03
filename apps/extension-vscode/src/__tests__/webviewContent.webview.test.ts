@@ -1,15 +1,3 @@
-/**
- * webviewContent.webview.test.ts — jsdom-based smoke + security tests
- * for the rendered webview HTML produced by getWebviewContent().
- *
- * Catches F-01-class bugs (TS syntax leaking into the webview JS string
- * body causes the entire script to fail at parse time, breaking the
- * sidebar chat panel) and F-02-class bugs (CSP misconfiguration that
- * would allow inline scripts or third-party domains).
- *
- * @vitest-environment jsdom
- */
-
 import { describe, expect, it } from 'vitest';
 import { getWebviewContent } from '../features/sidebar-webview/webviewContent';
 
@@ -42,7 +30,7 @@ function render(tier?: string): string {
   );
 }
 
-describe('getWebviewContent — F-01 regression: script must parse without SyntaxError', () => {
+describe('getWebviewContent, F-01 regression: script must parse without SyntaxError', () => {
   it('every <script> tag body is valid JavaScript', () => {
     const html = render();
     const doc = new DOMParser().parseFromString(html, 'text/html');
@@ -73,7 +61,7 @@ describe('getWebviewContent — F-01 regression: script must parse without Synta
   });
 });
 
-describe('getWebviewContent — CSP', () => {
+describe('getWebviewContent, CSP', () => {
   it('declares default-src none', () => {
     const html = render();
     expect(html).toMatch(/default-src\s+'none'/);
@@ -99,7 +87,7 @@ describe('getWebviewContent — CSP', () => {
   });
 });
 
-describe('getWebviewContent — structural smoke', () => {
+describe('getWebviewContent, structural smoke', () => {
   it('presents workspace chat without a blanket cloud-auth gate', () => {
     const html = render();
     const doc = new DOMParser().parseFromString(html, 'text/html');

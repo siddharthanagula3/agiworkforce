@@ -1,4 +1,3 @@
-
 import * as vscode from 'vscode';
 import { t } from '../l10n';
 
@@ -68,12 +67,11 @@ export async function applyLlmEdit(
   } else if (choice === viewInNewTab) {
     await openInNewTab(llmResponse, commandLabel);
   }
-  // 'Cancel' or dismissed — do nothing
 }
 
 async function openInNewTab(content: string, label: string): Promise<void> {
   const doc = await vscode.workspace.openTextDocument({
-    content: `# AGI Workforce — ${label}\n\n${content}`,
+    content: `# AGI Workforce, ${label}\n\n${content}`,
     language: 'markdown',
   });
   await vscode.window.showTextDocument(doc, {

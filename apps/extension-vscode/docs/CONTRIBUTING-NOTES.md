@@ -1,4 +1,4 @@
-# AGI for VS Code — Contributor Notes
+# AGI for VS Code, Contributor Notes
 
 Status: Current
 
@@ -35,8 +35,8 @@ IDE-native access to AGI developer sessions. Chat is workspace scoped and runs t
 
 `activate()` in `src/extension.ts` must never lose the sidebar chat view.
 `setupProviders` and `setupChat` are individually guarded: a throw is recorded
-in subsystem health, surfaced with `showErrorMessage`, and — for the provider
-step — replaced with `createDegradedProviderState` so chat and commands still
+in subsystem health, surfaced with `showErrorMessage`, and, for the provider
+step, replaced with `createDegradedProviderState` so chat and commands still
 register. An unregistered `agi-workforce.sidebar` webview view renders VS
 Code's empty "no data provider registered" placeholder, which users read as
 "the panel will not open". `src/__tests__/activationResilience.test.ts` locks
