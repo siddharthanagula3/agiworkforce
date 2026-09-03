@@ -1,12 +1,4 @@
 #!/usr/bin/env bash
-# Vercel ignoredBuildStep. Exit 1 to BUILD, exit 0 to SKIP.
-#
-# Every push used to build the whole monorepo. On 2026-08-16 eight commits in
-# twelve minutes cost 8h30m of Turbo build CPU, and four of them only touched
-# guard configs and generated agent-context graphs that the web app never
-# renders. This decides whether the changed paths can affect the deployed site.
-#
-# Fail open: on any doubt — unknown base commit, git failure, no diff — build.
 
 set -uo pipefail
 
