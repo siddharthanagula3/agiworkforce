@@ -6,7 +6,7 @@ Last updated: 2026-08-09
 
 ## Decision
 
-Build AGI Guardian — the automated repository reviewer — as a two-plane system
+Build AGI Guardian, the automated repository reviewer, as a two-plane system
 that reuses the repository's existing infrastructure instead of introducing a
 parallel stack:
 
@@ -17,12 +17,12 @@ parallel stack:
    parsing, and Checks/PR payload builders all live here so every execution
    surface (Actions workflow, web control plane, future workers) shares one
    implementation.
-2. **Execution surface #1 — GitHub Actions** (`.github/workflows/guardian.yml`):
+2. **Execution surface #1, GitHub Actions** (`.github/workflows/guardian.yml`):
    the authoritative push/PR reviewer today. Runs the deterministic scan via
    `pnpm --filter @agiworkforce/guardian-github scan`, publishes per-category
    Check Runs on the exact reviewed SHA, and maintains one editable PR summary
    comment. Requires no external credentials beyond `GITHUB_TOKEN`.
-3. **Execution surface #2 — web control plane** (`apps/web/app/api/github/*`):
+3. **Execution surface #2, web control plane** (`apps/web/app/api/github/*`):
    the pre-existing GitHub App webhook (HMAC verification, rate limiting,
    installation auth, spend caps) now hardened with delivery-ID replay
    protection (migration 0106). Guardian review-run orchestration attaches

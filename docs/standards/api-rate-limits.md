@@ -50,7 +50,7 @@ allowed through instead.
 ## Buckets
 
 The bucket is the authenticated user (`user:<id>`) only when the request carries
-a credential the limiter can verify **locally** — a Clerk session JWT or a
+a credential the limiter can verify **locally**, a Clerk session JWT or a
 first-party device token. An AGI API key (`sk_live_…` / `sk_test_…`) is opaque to
 the limiter, so those requests fall back to the client IP.
 
@@ -97,7 +97,7 @@ its remaining budget without hitting the limit. Back off on `Retry-After`.
 
 ## Related quotas
 
-Rate limits bound request frequency only. They are not the spend ceiling —
+Rate limits bound request frequency only. They are not the spend ceiling.
 managed usage is metered separately and surfaces as `402` with
 `insufficient_quota`, and concurrent managed turns are capped per plan by
 `BILLING_PLAN_PRODUCT_LIMITS.maxConcurrentTurns`

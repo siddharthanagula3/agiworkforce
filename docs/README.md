@@ -24,7 +24,7 @@ new document does not fit a tier, settle ownership before writing it.
 
 ## Precedence
 
-Code, guards and tests outrank every document here — see `AGENTS.md` §2 for the
+Code, guards and tests outrank every document here, see `AGENTS.md` §2 for the
 full order. Within this directory:
 
 - Research under `research/` records what was observed on a date. It never

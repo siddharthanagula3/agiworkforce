@@ -1,12 +1,12 @@
 {
-  "$generated": "GENERATED FILE — do not edit. Run `node scripts/generate-agent-context-indexes.mjs`; `pnpm check:agent-context-indexes` byte-compares this against a fresh render.",
+  "$generated": "GENERATED FILE, do not edit. Run `node scripts/generate-agent-context-indexes.mjs`; `pnpm check:agent-context-indexes` byte-compares this against a fresh render.",
   "generatedFrom": "docs/agent-context/repo-map.json#workspaceUnits (unit list) + each unit's package.json description / Cargo.toml description / README.md ## Purpose|Scope section",
   "units": [
     {
       "name": "agiworkforce-agent-core",
       "path": "crates/agiworkforce-agent-core",
       "kind": "crate",
-      "purpose": "AGI Workforce shared agent turn-loop engine: model-stream driving, tool-call scheduling (sequential + parallel read-only batches), runaway/iteration/budget guards, and turn-event emission. Host-agnostic — the CLI and desktop implement TurnHost to supply completion, tool dispatch, hooks, approval, and event routing."
+      "purpose": "AGI Workforce shared agent turn-loop engine: model-stream driving, tool-call scheduling (sequential + parallel read-only batches), runaway/iteration/budget guards, and turn-event emission. Host-agnostic, the CLI and desktop implement TurnHost to supply completion, tool dispatch, hooks, approval, and event routing."
     },
     {
       "name": "agiworkforce-app-server",
@@ -78,7 +78,7 @@
       "name": "@agiworkforce/sandbox",
       "path": "infrastructure/sandbox",
       "kind": "deploy-target",
-      "purpose": "Cross-origin artifact renderer at sandbox.agiworkforce.com. Single static HTML — no build step."
+      "purpose": "Cross-origin artifact renderer at sandbox.agiworkforce.com. Single static HTML, no build step."
     },
     {
       "name": "@agiworkforce/agent-core",
@@ -252,7 +252,7 @@
       "name": "@agiworkforce/cloud-contracts",
       "path": "packages/contracts/cloud-contracts",
       "kind": "package",
-      "purpose": "Managed-cloud wire schemas, endpoint paths and stream deltas — one wire truth for every surface."
+      "purpose": "Managed-cloud wire schemas, endpoint paths and stream deltas, one wire truth for every surface."
     },
     {
       "name": "@agiworkforce/compliance",

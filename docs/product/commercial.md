@@ -23,7 +23,7 @@ AGI should not burn founder money on unmanaged cloud usage. Local and BYOK can l
 
 ## Managed Credit Requirements
 
-Managed cloud is open by default in public alpha (2026-06-27), so these controls must keep pace with public usage rather than gate access. They remain required GA-hardening work — build and prove them as usage scales:
+Managed cloud is open by default in public alpha (2026-06-27), so these controls must keep pace with public usage rather than gate access. They remain required GA-hardening work, build and prove them as usage scales:
 
 - usage ledger,
 - provider price table,
@@ -43,7 +43,7 @@ Cards and Stripe are acceptable for low-risk subscriptions and waitlist capture,
 ## Subscription Ownership Across Web and Store
 
 One user has one `subscriptions` row and exactly one billing owner: Stripe (web),
-Apple, or Google. The row must never carry identifiers from two channels at once —
+Apple, or Google. The row must never carry identifiers from two channels at once.
 `apps/web/lib/server/subscription-billing-owner.ts` reads that as `unverified` and
 fails every billing action closed, and store renewal notifications skip a row that
 also holds a Stripe subscription id.
@@ -56,8 +56,8 @@ Precedence and migration are decided by
 - While the recorded owner is still entitled, the second channel loses. A store
   purchase is refused with a conflict, and a Stripe write leaves the existing owner
   in place and logs the refusal rather than taking the row over silently.
-- Once the recorded owner is no longer entitled — cancelled, expired, or a store row
-  past its paid-through date plus renewal grace — the new purchase takes ownership
+- Once the recorded owner is no longer entitled, cancelled, expired, or a store row
+  past its paid-through date plus renewal grace, the new purchase takes ownership
   and the losing channel's identifiers are cleared in the same write, so exactly one
   effective entitlement survives.
 - Cancellation stays with the channel that sold the subscription. Nothing in this
@@ -90,7 +90,7 @@ Stripe is called with `proration_behavior: 'always_invoice'` and the same signed
 prorated difference for the remainder of the period and the renewal date is preserved.
 Raw usage survives the change: `SubscriptionService.carryCreditsForUpgradePeriod`
 refuses any non-upgrade delta and `CreditService.carryUsageIntoUpgradedPeriod` mutates
-the existing `token_credits` row in place — `credits_used_cents` is never reset and
+the existing `token_credits` row in place, `credits_used_cents` is never reset and
 `top_up_allocated_cents` is never touched, so consumed usage and purchased balance both
 carry forward. The adjustment is keyed by `upgrade_allocation_key`, so a replayed
 webhook cannot allocate twice.
@@ -126,7 +126,7 @@ Disputes and chargebacks share the rank-1 `past_due` state. `charge.dispute.crea
 stores `past_due`, sets `cancel_at_period_end`, revokes the entire remaining credit
 balance through `deduct_credits`, and writes a `plan_changed` audit event. Because the
 revocation drives `credits_used_cents` to the allocation, the next
-`reset_credits_for_period` carries zero purchased balance — a chargeback can never
+`reset_credits_for_period` carries zero purchased balance, a chargeback can never
 restore purchased value at renewal. A top-up refund instead calls
 `handle_top_up_refund`, which retires `top_up_allocated_cents` even after the balance
 was spent.
@@ -140,10 +140,10 @@ purchased portion inside it.
 | Attribute         | Included plan allowance   | Purchased balance                                                                      |
 | ----------------- | ------------------------- | -------------------------------------------------------------------------------------- |
 | Expiry            | End of the billing period | Carries across renewals; a purchase older than 12 months is excluded at the next carry |
-| Refundable        | No                        | Yes — `handle_top_up_refund` retires the purchase even after it was spent              |
+| Refundable        | No                        | Yes, `handle_top_up_refund` retires the purchase even after it was spent               |
 | Revocable         | Yes, on dispute           | Yes, on dispute                                                                        |
 | Transferable      | No                        | No                                                                                     |
-| Consumption order | First                     | Second — reachable only once the included allowance is exhausted                       |
+| Consumption order | First                     | Second, reachable only once the included allowance is exhausted                        |
 
 The consumption order is enforced by `reserve_managed_usage_request_with_limits`, which
 tags purchased-funded spend `is_overage` and excludes it from the plan window, and by
@@ -160,7 +160,7 @@ and from its refund and dispute path.
 cost figure and it says nothing about the capabilities that are not bought by the token.
 Migration `0127_cogs_ledger.sql` adds the two tables that answer the margin question:
 
-- `provider_cost_events` — one row per settled managed operation, written from
+- `provider_cost_events`: one row per settled managed operation, written from
   `finalizeManagedUsageRequest`, which every managed capability settles through except
   video: a completed video job settles inside `finalize_video_generation_job`, so
   `finalizeVideoGenerationJob` emits its own event. It
@@ -168,7 +168,7 @@ Migration `0127_cogs_ledger.sql` adds the two tables that answer the margin ques
   bought in (`token`, `image`, `second`, `minute`, `request`), how many of those units
   were consumed, what the provider cost, and what was billed. `source_ref` is the
   settlement identity, so a retried settlement cannot double count.
-- `cogs_adjustments` — processing fees, refunds, chargebacks and their reserve,
+- `cogs_adjustments`: processing fees, refunds, chargebacks and their reserve,
   discounts, support goodwill and tax. Stripe fees, refunds and chargebacks are imported
   from `balanceTransactions.list` by the daily `/api/cron/reconcile-credits` run over a
   three-day trailing window, which is wide enough for late settlement and idempotent

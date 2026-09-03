@@ -33,7 +33,7 @@ The suite has six first-class surfaces:
 6. CLI
 
 The development order is shortest-remaining-work-first (founder decision
-2026-08-05, Decision #20 — supersedes the prior fixed order): estimate the
+2026-08-05, Decision #20, supersedes the prior fixed order): estimate the
 remaining Class-1 work per surface, complete the fastest surface first, then
 the next fastest, until all six are at zero. AGI still works on one surface at
 a time; a later surface does not become active unless the founder advances the
@@ -810,7 +810,7 @@ Acceptance criteria:
 - Sign-in entry is visible from the Cloud toggle/model picker.
 - Cloud is labeled public alpha, not general availability.
 - Failed sign-in attempts produce a helpful error.
-- A successful sign-in unlocks Cloud immediately — no separate invite code or waitlist step.
+- A successful sign-in unlocks Cloud immediately, no separate invite code or waitlist step.
 - Cloud use is not silently mixed into Local chats.
 
 #### M-US-003: Returning Chat User

@@ -23,18 +23,18 @@ Commit `7214d0c70` deleted `tools/skill-vetting/README.md`, but
 `tools/skill-vetting/pyproject.toml:9` declares `readme = "README.md"`. Hatchling
 treats that as a hard requirement, so `uv pip install` fails with
 `OSError: Readme file does not exist: README.md`, and `verify.sh` runs under
-`set -euo pipefail` — it aborts before scanning anything.
+`set -euo pipefail`: it aborts before scanning anything.
 `.github/workflows/repo-operability.yml:188` runs that script, so the vetting
 proof and the follow-on `scan-skills-with-vetting.mjs` step are both skipped.
 
 Reproduced end to end by a verification agent. It does **not** reproduce on the
 current branch (`fix/codeql-high-severity-batch-1`), where the README is present
-and byte-identical to the pre-deletion version — so this is only a problem for
+and byte-identical to the pre-deletion version, so this is only a problem for
 `chore/retire-stale-docs`, and only until that branch merges.
 
 **Do:** on `chore/retire-stale-docs`, `git checkout 7214d0c70^ --
 tools/skill-vetting/README.md`. Restore the file rather than dropping `readme =`
-from `pyproject.toml` — the pointer is correct, the deletion was the mistake.
+from `pyproject.toml`, the pointer is correct, the deletion was the mistake.
 That commit's own message states its policy as "kept every markdown a build or a
 published artifact consumes" and lists the Cargo and npm cases; hatchling
 `readme =` is exactly that case and was missed.
@@ -111,7 +111,7 @@ founder-approved INR yearly price exists.
 
 ## 6. Register the first cross-platform connector OAuth applications
 
-**Narrowed on 2026-08-14.** Notion no longer belongs in this item — it connects
+**Narrowed on 2026-08-14.** Notion no longer belongs in this item, it connects
 through MCP authorization discovery with no registration at all (see §22). What
 remains are the providers that publish no MCP endpoint we can discover, or that
 publish one and still demand a pre-registered app: **Google Workspace
@@ -507,11 +507,11 @@ from the dirty multi-surface worktree.
     development-only with no SLA, so it must not back a shipped feature.
   - Geocoding is fine as-is: Nominatim is keyless and already in use.
 - **Exact founder steps.** Pick ONE:
-  1. **OpenRouteService** (recommended for a keyless-ish start) — sign up at
+  1. **OpenRouteService** (recommended for a keyless-ish start), sign up at
      `openrouteservice.org`, create a token, free tier is ~2,000 requests/day.
      Then `vercel env add OPENROUTE_API_KEY production` and add it to
      `.env.local`.
-  2. **Google Maps Platform** — in Google Cloud, enable _Directions API_,
+  2. **Google Maps Platform**: in Google Cloud, enable _Directions API_,
      _Geocoding API_ and _Maps Static API_, create a SEPARATE key from the
      Gemini one, restrict it by HTTP referrer/IP, then
      `vercel env add GOOGLE_MAPS_API_KEY production`. This also unlocks
@@ -521,7 +521,7 @@ from the dirty multi-surface worktree.
   Las Vegas". The card should draw a line following I-20/I-10/I-40 rather than
   only pinning the two endpoints.
 - **What becomes available afterward.** Route polylines, real distance and
-  duration in the answer text, and — on the Google option — themed tiles and
+  duration in the answer text, and, on the Google option, themed tiles and
   place thumbnails.
 - Status: `BLOCKED_BY_HUMAN`. The card ships and is useful without it; the
   renderer will gain the line with no further UI work once a provider exists.
@@ -690,7 +690,7 @@ as runtime-verified yet.
 ## 21. Store a Cloudflare API token so R2 CORS can be re-applied from the repo
 
 **Status:** `BLOCKED_BY_HUMAN` for reproducibility only. **The policy itself is
-already applied and verified in production** — this entry exists so the next
+already applied and verified in production**, this entry exists so the next
 person can re-apply it without me.
 
 **Blocks:** nothing at runtime today. It blocks `scripts/r2-apply-cors.mjs` from
@@ -700,7 +700,7 @@ running unattended (in CI, or after a bucket is recreated).
 PUT, so the browser sends a CORS preflight the bucket must answer. On
 2026-08-13 the private bucket (`agiworkforce-media-private`) had **no CORS
 configuration at all**, so every attachment upload in the web app failed at the
-preflight and the message was dropped — this had never worked in a browser, on
+preflight and the message was dropped, this had never worked in a browser, on
 any origin, production included. The public bucket had a policy but was missing
 the `chat.` and `*.vercel.app` origins.
 
@@ -725,7 +725,7 @@ The script therefore uses the Cloudflare REST API and needs an account token.
    - `CLOUDFLARE_ACCOUNT_ID=3c4f35af67459cbabbccb783f232fad9` (or reuse
      `CLOUDFLARE_R2_ACCOUNT_ID`)
 4. Verify: `node scripts/r2-apply-cors.mjs --check` → prints
-   `✔ <bucket>: verified — 6 origins, methods PUT/GET/HEAD` for both buckets and
+   `✔ <bucket>: verified, 6 origins, methods PUT/GET/HEAD` for both buckets and
    exits 0.
 
 **Afterwards:** the CORS policy becomes reproducible infrastructure rather than a
@@ -734,7 +734,7 @@ host) is a one-line edit to `ALLOWED_ORIGINS` plus one command.
 
 ---
 
-## 22. Turn on connectors — MOSTLY SUPERSEDED on 2026-08-14, GitHub only
+## 22. Turn on connectors, MOSTLY SUPERSEDED on 2026-08-14, GitHub only
 
 **Status:** the generic-connector half of this item is **closed**. Re-verified
 live against the running app on 2026-08-14, signed in:
@@ -751,7 +751,7 @@ obtains a client identity without anyone registering an OAuth app, so notion,
 linear, stripe, airtable, monday, clickup, todoist, sentry, datadog,
 cloudflare, canva, paypal, plaid, posthog, and huggingface connect with no
 founder action. Section A below (GitHub) is the only part of this item still
-open, and it needs exactly one secret — see the checklist there.
+open, and it needs exactly one secret, see the checklist there.
 
 The paragraph below about the registry shipping with zero providers is still
 true and still the right design; it is simply no longer the ONLY path to a
@@ -766,7 +766,7 @@ are installable from the web, and today's entries are `source: builtin`,
 founder action to appear.
 
 Connectors are empty because `apps/web/lib/connectors/oauth-registry.ts` ships
-with **zero providers on purpose** — authorize/token endpoints and scopes are
+with **zero providers on purpose**, authorize/token endpoints and scopes are
 provider facts the repo refuses to guess, because a wrong endpoint would send a
 user's authorization code to the wrong host. Nothing is broken; nothing is
 configured.
@@ -778,11 +778,11 @@ configured.
 `github` is a reserved connector id served by `apps/web/lib/github-app.ts`. It
 needs a **GitHub App**, not an OAuth app.
 
-GitHub does **not** use `/api/connectors/oauth/callback` — that path belongs to
+GitHub does **not** use `/api/connectors/oauth/callback`, that path belongs to
 the generic MCP broker. GitHub has its own three routes, and the install flow is
 deliberately two turns: install first, then a SEPARATE OAuth turn that proves
 the browser-supplied `installation_id` really belongs to the signed-in user
-(GitHub warns setup-URL ids can be spoofed — `install/route.ts:63-65`).
+(GitHub warns setup-URL ids can be spoofed, `install/route.ts:63-65`).
 
 Flow: Connect → `/api/github/install/start` (sets state cookie) → GitHub install
 → **Setup URL** `/api/github/install` → our own OAuth turn → **Callback URL**
@@ -809,7 +809,7 @@ Flow: Connect → `/api/github/install/start` (sets state cookie) → GitHub ins
 GitHub jumps straight to the Callback URL and the Setup URL never runs, so the
 install-state cookie is never validated and the linking turn breaks.
 
-**Repository permissions** — exactly what the three shipped tools need
+**Repository permissions**: exactly what the three shipped tools need
 (`user-connector-tools.ts`: get a PR, comment on an issue/PR, post a
 comment-only PR review):
 
@@ -818,22 +818,22 @@ comment-only PR review):
 - Metadata: Read-only (GitHub forces this)
 
 **Subscribe to events:** Issue comment. (`installation` and `ping` are delivered
-to every app automatically — `webhook-router.ts` handles those three and ignores
+to every app automatically, `webhook-router.ts` handles those three and ignores
 the rest.)
 
 **Then set seven env vars** in Vercel Production/Preview **and**
 `apps/web/.env.local`:
 
-- `GITHUB_APP_ID` — numeric, top of the app page
-- `GITHUB_APP_SLUG` — the slug in `github.com/apps/<slug>`
-- `GITHUB_APP_CLIENT_ID` — starts `Iv1.` / `Iv23`
-- `GITHUB_APP_CLIENT_SECRET` — "Generate a new client secret"
-- `GITHUB_APP_PRIVATE_KEY_BASE64` — `base64 -i key.pem | tr -d '\n'`
-- `GITHUB_WEBHOOK_SECRET` — the same value typed into the webhook form
-- `GITHUB_TOKEN_ENCRYPTION_KEY` — **64 hex chars**, `openssl rand -hex 32`
+- `GITHUB_APP_ID`: numeric, top of the app page
+- `GITHUB_APP_SLUG`: the slug in `github.com/apps/<slug>`
+- `GITHUB_APP_CLIENT_ID`: starts `Iv1.` / `Iv23`
+- `GITHUB_APP_CLIENT_SECRET`: "Generate a new client secret"
+- `GITHUB_APP_PRIVATE_KEY_BASE64`, `base64 -i key.pem | tr -d '\n'`
+- `GITHUB_WEBHOOK_SECRET`: the same value typed into the webhook form
+- `GITHUB_TOKEN_ENCRYPTION_KEY`, **64 hex chars**, `openssl rand -hex 32`
   (seals installation tokens at rest; `HEX_64_RE` rejects any other shape)
 
-The first five are the availability gate — `github-app.ts:97-101` treats a
+The first five are the availability gate, `github-app.ts:97-101` treats a
 partial set as absent, so a missing one makes the connector silently not appear
 rather than appear broken. Without the seventh, tokens cannot be stored at all.
 
@@ -847,7 +847,7 @@ Settings → Connectors completes install → OAuth → linked.
 2. Set `CONNECTOR_OAUTH_REDIRECT_BASE_URL=https://agiworkforce.com` (falls back
    to `NEXT_PUBLIC_APP_URL`). It is read server-side and never from the Host
    header, so it must be exact.
-3. Set `CONNECTOR_OAUTH_PROVIDERS_JSON` — one JSON blob, all providers, **no
+3. Set `CONNECTOR_OAUTH_PROVIDERS_JSON`, one JSON blob, all providers, **no
    secrets in it**:
 
    ```json
@@ -868,7 +868,7 @@ Settings → Connectors completes install → OAuth → linked.
    }
    ```
 
-   Take every URL and scope from that provider's **current** docs — do not copy
+   Take every URL and scope from that provider's **current** docs, do not copy
    them from memory or from an older integration.
    `connectorId` must match `^[a-z0-9][a-z0-9-]{0,63}$`, cannot be `github`, and
    becomes the MCP `serverId`, so no underscores.
@@ -878,7 +878,7 @@ Settings → Connectors completes install → OAuth → linked.
    - `CONNECTOR_OAUTH_LINEAR_CLIENT_SECRET`
      (a public client with `"tokenAuthMethod": "none"` needs only the id)
 5. Redeploy. A provider whose descriptor parses but whose secrets are missing is
-   treated as **absent**, not as broken-but-advertised — so a half-finished
+   treated as **absent**, not as broken-but-advertised, so a half-finished
    provider silently does not appear rather than offering a Connect button that
    500s.
 6. Verify: `GET /api/connectors` lists it under `available`, and the Connect
@@ -890,14 +890,14 @@ nothing from you.
 
 ---
 
-## 23. Mobile store credentials — the only remaining store-submission blockers
+## 23. Mobile store credentials, the only remaining store-submission blockers
 
 **Status:** `BLOCKED_BY_HUMAN`. Everything else in the release preflight now
 passes; see the fixed dependency defect below.
 
 `apps/mobile/scripts/release/preflight.sh production` was failing at its FIRST
-substantive gate — "Mobile and @agiworkforce/local-llm resolve different React
-Native runtimes" — which blocked every store build. Fixed (details in
+substantive gate, "Mobile and @agiworkforce/local-llm resolve different React
+Native runtimes", which blocked every store build. Fixed (details in
 `ExecutionPlan.md`); the preflight now reaches the credential checks and stops
 only there. Current output:
 
@@ -912,7 +912,7 @@ only there. Current output:
 
 **What this machine already has** (checked 2026-08-13, names/paths only):
 
-- `APPLE_TEAM_ID=D2PR62RLT4` exported from `~/.zshrc` — matches
+- `APPLE_TEAM_ID=D2PR62RLT4` exported from `~/.zshrc`, matches
   `eas.json submit.production.ios.appleTeamId` exactly. ✔
 - Two App Store Connect API keys, both valid PKCS#8:
   `~/.appstoreconnect/private_keys/AuthKey_36R2M2XQV2.p8` and
@@ -923,7 +923,7 @@ only there. Current output:
   the native-purchase path; do not point `ascApiKeyPath` at it.
 - `~/Documents/CertificateSigningRequest.certSigningRequest` is a **CSR**
   (`-----BEGIN CERTIFICATE REQUEST-----`), used to request a signing
-  certificate. It is not an API key and is not needed — EAS manages signing
+  certificate. It is not an API key and is not needed, EAS manages signing
   certificates itself.
 - `APPLE_ID` / `APPLE_PASSWORD` are also exported. Those drive the legacy
   altool/Transporter path; EAS prefers the API key and ignores them here.
@@ -933,10 +933,10 @@ only there. Current output:
 **Do, for iOS:**
 
 1. App Store Connect → Users and Access → Integrations → **App Store Connect
-   API**. Copy the **Issuer ID** (a UUID, shown above the key list — one per
+   API**. Copy the **Issuer ID** (a UUID, shown above the key list, one per
    account, shared by every key). Confirm which of the two keys above has the
    **App Manager** role.
-2. Probe it — this authenticates the key against Apple and, if the app record
+2. Probe it, this authenticates the key against Apple and, if the app record
    exists, prints the exact `ascAppId` so it is never transcribed by hand:
 
    ```bash
@@ -946,7 +946,7 @@ only there. Current output:
    pnpm release:asc-probe
    ```
 
-   Read-only. `401` means the Issuer ID does not match that key — try the other
+   Read-only. `401` means the Issuer ID does not match that key, try the other
    key id. A success prints every app record and flags the one whose bundle id
    is `com.agiworkforce.app`.
 
@@ -979,13 +979,13 @@ only there. Current output:
 
 **Then:** `release:ios:prod` / `release:android:prod`, and after the listings are
 live, update `apps/mobile/src/features/release-state/mobileReleaseState.json`.
-That registry fails closed — until it carries a store-verified listing id, the
+That registry fails closed, until it carries a store-verified listing id, the
 app will not name a store or hand out a store link, which is what keeps the
 distribution claims honest.
 
 ---
 
-## 46. Four pending migrations — apply 0152 first and 0150 LAST
+## 46. Four pending migrations, apply 0152 first and 0150 LAST
 
 **Status:** `BLOCKED_BY_HUMAN`. Migrations are never applied by an agent, so all four
 are authored and waiting. **The order matters and getting it wrong causes an outage.**
@@ -996,8 +996,8 @@ the production deploy is already blocked by the three that are committed, indepe
 of anything added since.
 
 **Apply 0152 now, on its own, ahead of any deploy.**
-`0152_restore_null_tolerant_usage_caps.sql` fixes a live outage: every uncapped —
-i.e. enterprise — plan currently 503s on every chat turn. `getPlanSessionUsageCapCents`
+`0152_restore_null_tolerant_usage_caps.sql` fixes a live outage: every uncapped.
+i.e. enterprise, plan currently 503s on every chat turn. `getPlanSessionUsageCapCents`
 returns NULL for those tiers, `reserveManagedUsageRequest` forwards it, and 0119's
 validation raises `22023` on NULL. The function is wrong, not the caller, so there is
 nothing to coordinate. It is a single `create or replace` with the signature
@@ -1006,29 +1006,29 @@ Applying it early is strictly safe and strictly good.
 
 The same migration also fixes a quieter bug in the other direction: 0119 reads a cap
 of exactly `0` as "no cap", which silently disables rolling enforcement for every
-zero-budget tier — the precise rule 0070 existed to enforce.
+zero-budget tier, the precise rule 0070 existed to enforce.
 
 **Do NOT apply 0150 until its code is deployed.**
 `0150_cloud_code_session_run_lease_check.sql` says so in its own header: applied
 before the code that claims a session under a lease has rolled out, every Code agent
 turn and terminal command fails the new constraint. It is the contract half of an
 expand/contract pair whose expand half (0149) is already committed, and both landed
-in the same commit — which is what created the deadlock, since the code cannot deploy
+in the same commit, which is what created the deadlock, since the code cannot deploy
 while 0150 is pending and 0150 breaks production if applied first.
 
 **Suggested order:**
 
-1. `0152` — now, standalone. Fixes the enterprise 503.
-2. `0149` and `0151` — with or before the next deploy. `0151` adds
+1. `0152`: now, standalone. Fixes the enterprise 503.
+2. `0149` and `0151`, with or before the next deploy. `0151` adds
    `web_push_subscriptions`; nothing reads it until web push ships, so it is inert.
 3. Deploy the code.
-4. `0150` — only after that deploy is live.
+4. `0150`: only after that deploy is live.
 
 **The thing to avoid** is treating these as one batch called "the pending
 migrations". That is the single action that turns a fixed outage into a new one.
 
 **Owed as engineering afterwards:** teach `db:migrate verify` to distinguish an
-expand step from a contract step — a `-- requires-code:` header it honours — so the
+expand step from a contract step, a `-- requires-code:` header it honours, so the
 deploy gate stops being all-or-nothing, and make production migration application a
 named workflow step. Today no workflow applies production migrations at all; it is a
 human step no file describes, which is why this sequencing lives in a document
@@ -1036,7 +1036,7 @@ instead of in the tool.
 
 ---
 
-## 45. Nothing verifies a release artifact — only the working tree
+## 45. Nothing verifies a release artifact, only the working tree
 
 **Status:** engineering work, but it needs your decision on scope first. Found
 2026-08-27 by the desktop lane, and it is the root cause of the item below it
@@ -1050,7 +1050,7 @@ sources, and it is useless for answering the only question that matters at relea
 time: **is the thing we shipped correct?**
 
 Nothing checks a property against HEAD. Nothing checks a property against a built
-artifact. There is no `check:release-binary` — not unwired, _absent_; the string does
+artifact. There is no `check:release-binary`, not unwired, _absent_; the string does
 not appear anywhere in the repository.
 
 **What that cost, concretely.** The desktop auto-updater was dead on every platform
@@ -1060,7 +1060,7 @@ test over that route passed the whole time, because each one hand-wrote a target
 string the real client never sent.
 
 It got worse during the fix. The new contract test went green against an
-_uncommitted_ edit to `tauri.conf.json` and was read — by me — as proof the client fix
+_uncommitted_ edit to `tauri.conf.json` and was read, by me, as proof the client fix
 had shipped, while HEAD still carried the broken template. For about an hour the repo
 was in the worst possible state: correct server selectors, a client that could not
 reach them, and a green test asserting the contract held.
@@ -1072,7 +1072,7 @@ reach them, and a green test asserting the contract held.
    exact hole above.
 2. `codesign --verify` and entitlement assertions against the real `.app`, in the
    release workflow. This is the one that would have caught App Sandbox being enabled
-   on a Developer ID build — a defect that only exists in the signed artifact and is
+   on a Developer ID build, a defect that only exists in the signed artifact and is
    invisible to every local check.
 3. An assertion that a published release actually carries the assets the updater
    requires. `v-desktop-1.2.0` has three Linux artifacts, no macOS, no Windows, and no
@@ -1096,13 +1096,13 @@ workflow, so it has never run in CI. Every secret scan that does run looks at th
 working tree only, which means a credential that was committed once and later
 gitignored reports clean forever.
 
-That gap is not hypothetical — an old vendor token from a since-removed integration
+That gap is not hypothetical, an old vendor token from a since-removed integration
 is sitting in this repository's history right now, reachable from `origin/main`, and
 no scan flagged it. It is harmless (the service it belonged to is not used by this
 product and holds no customer data), but the next one may not be.
 
 **The decision you owe:** the check currently reports roughly 378 findings, of which
-about 370 are placeholders and fixtures. It cannot gate anything in that state — a
+about 370 are placeholders and fixtures. It cannot gate anything in that state, a
 scanner that cries wolf 370 times is one everyone learns to ignore, which is exactly
 how the existing token survived. Someone has to sit down with the output once and
 sort real from fixture into an allowlist.
@@ -1116,11 +1116,11 @@ execution was.
 
 ---
 
-## 44. GitHub Actions is allocating no runners — nothing can build, test or ship
+## 44. GitHub Actions is allocating no runners, nothing can build, test or ship
 
 **Status:** `BLOCKED_BY_HUMAN`. Found 2026-08-27.
 
-Since 2026-08-26 every workflow run fails **before a runner is assigned** —
+Since 2026-08-26 every workflow run fails **before a runner is assigned**.
 `{"conclusion":"failure","runner":"","steps":0}`. Both sides of the break are the
 same commit, so this is not a code change. Confirmed against the live run list: the
 last successful run of anything needing a runner was 2026-08-26T13:37Z; every run
@@ -1136,14 +1136,14 @@ and spending limit.
 
 **Why it is at the top of this file:** every other CI or release finding in this
 document is unverifiable and unfixable until runners come back. "CI is green" is not
-currently a meaningful statement about this repository — nothing is running.
+currently a meaningful statement about this repository, nothing is running.
 
 ---
 
 ## 41. Mobile store listing assets and contact details
 
 **Status:** `BLOCKED_BY_HUMAN`. Found 2026-08-27 while auditing submission
-readiness. These sit alongside §23 (credentials) and §12 (IAP products) — the
+readiness. These sit alongside §23 (credentials) and §12 (IAP products), the
 same submission, three separate human dependencies.
 
 **Play Console will not accept the listing without these two graphics.**
@@ -1217,8 +1217,8 @@ outside the write set of the item that found it.
 
 ## 24. Deploy the client metadata document, then re-verify the CIMD connectors
 
-**Blocks:** eight connectors — airtable, canva, huggingface, linear, notion,
-posthog, sentry, todoist — completing their first real authorization.
+**Blocks:** eight connectors, airtable, canva, huggingface, linear, notion,
+posthog, sentry, todoist, completing their first real authorization.
 
 Nothing is wrong with the code. These vendors' authorization servers advertise
 `client_id_metadata_document_supported: true`, which means they accept a URL as
@@ -1232,7 +1232,7 @@ https://agiworkforce.com/.well-known/oauth-client-metadata
 It was served correctly on localhost and returned 404 in production, because the
 change had not shipped. An authorization server that fetches a 404 answers
 `invalid_client`, which is exactly what linear, sentry, canva, and todoist did
-when probed on 2026-08-14 — a symptom of the missing deploy, not of the flow.
+when probed on 2026-08-14, a symptom of the missing deploy, not of the flow.
 
 **Steps 1 and 2 are done as of 2026-08-30.** Production was promoted to
 `871f75caa` and the document now answers `200 application/json`:
@@ -1254,7 +1254,7 @@ correctly in Vercel production. The `invalid_client` cause is therefore removed.
 **Do:**
 
 1. ~~Ship this branch to production.~~ Done 2026-08-30 (`871f75caa`).
-2. ~~Confirm the document is public and unauthenticated.~~ Done 2026-08-30 — `200`,
+2. ~~Confirm the document is public and unauthenticated.~~ Done 2026-08-30, `200`,
    `client_id` matches the URL.
 3. Click Connect on Linear in the directory and complete consent once. **This is
    the only remaining step**, and it needs a human at a consent screen; no agent
@@ -1276,18 +1276,18 @@ connectable. They serve MCP and their authorization servers publish a dynamic
 registration endpoint, but a real registration attempt on 2026-08-14 was
 refused by each one:
 
-| Connector | Response                                                                         |
-| --------- | -------------------------------------------------------------------------------- |
-| asana     | `400 invalid_redirect_uri` — "One or more redirect URIs are not allowed"         |
-| dropbox   | `403 registration_not_supported` — "Only pre-registered MCP trusted partners"    |
-| figma     | `403 Forbidden`                                                                  |
-| intercom  | `400 invalid_redirect_uri` — "not in the allowlist, reach out to Intercom"       |
-| square    | `400 invalid_redirect_uri` — "domain not in allowlist"                           |
-| vercel    | `400 invalid_redirect_uri` — "not approved for use by this authorization server" |
+| Connector | Response                                                                        |
+| --------- | ------------------------------------------------------------------------------- |
+| asana     | `400 invalid_redirect_uri`, "One or more redirect URIs are not allowed"         |
+| dropbox   | `403 registration_not_supported`, "Only pre-registered MCP trusted partners"    |
+| figma     | `403 Forbidden`                                                                 |
+| intercom  | `400 invalid_redirect_uri`, "not in the allowlist, reach out to Intercom"       |
+| square    | `400 invalid_redirect_uri`, "domain not in allowlist"                           |
+| vercel    | `400 invalid_redirect_uri`, "not approved for use by this authorization server" |
 
 They are therefore recorded as `preregistered` in
 `apps/web/lib/connectors/mcp-endpoints.ts` and the directory does not offer
-them, which is the honest state — advertising a Connect button that fails on
+them, which is the honest state, advertising a Connect button that fails on
 click is the defect audit CRIT-001 was raised about.
 
 **Do:** apply to each vendor's MCP/partner programme and ask for this exact
@@ -1300,7 +1300,7 @@ https://agiworkforce.com/api/connectors/oauth/callback
 **Then, per vendor**, either tell Claude to flip that entry back to `dynamic`
 (if they allowlisted the URI and dynamic registration now succeeds), or supply
 `CONNECTOR_OAUTH_<ID>_CLIENT_ID` / `_CLIENT_SECRET` if they issued a normal
-OAuth app instead. Do not paste secrets into chat — add them straight to the
+OAuth app instead. Do not paste secrets into chat, add them straight to the
 Vercel Production and Preview environments.
 
 Seven vendors need none of this and already register automatically: clickup,
@@ -1308,7 +1308,7 @@ cloudflare, datadog, monday, paypal, plaid, stripe.
 
 ---
 
-## 26. Production Stripe is in TEST mode — no real customer can be charged
+## 26. Production Stripe is in TEST mode, no real customer can be charged
 
 **Status:** `BLOCKED_BY_HUMAN`. Established with the Stripe CLI on 2026-08-14 by
 resolving the price IDs stored against live production subscriptions.
@@ -1331,7 +1331,7 @@ exist in live mode.
 | Max     | $100 / mo                         | **$299.99 / mo**                |
 | Max 15x | $200 / mo                         | _does not exist_                |
 | Team    | $25 / seat / mo, $240 / seat / yr | _does not exist_                |
-| —       | —                                 | "Hobby" $10 / mo (retired name) |
+| ,       | ,                                 | "Hobby" $10 / mo (retired name) |
 
 So flipping `STRIPE_SECRET_KEY` to the live key ALONE would be worse than the
 current state: the live catalog has no Basic, Max 15x or Team, and would charge
@@ -1342,14 +1342,14 @@ Pro at $29.99 against a pricing page that promises $20.
 1. Decide whether to keep taking no money for now (public alpha) or go live.
 2. If going live: create the live products/prices to match
    `BILLING_PLAN_PRICING` in `packages/contracts/types/src/billing-catalog.ts`
-   — Basic $7, Pro $20/$200, Max $100, Max 15x $200, Team $25/$240 per seat.
-   Retire or ignore the legacy "Hobby" product.
+   - Basic $7, Pro $20/$200, Max $100, Max 15x $200, Team $25/$240 per seat.
+     Retire or ignore the legacy "Hobby" product.
 3. Repoint EVERY `STRIPE_PRICE_*` variable in Vercel Production at the new live
    IDs in the same change as the key swap. They move together or not at all.
 4. Re-run the upgrade flow end to end with a real card.
 
 **Separately, and true in either mode:** four price variables are missing and are
-logged on every production request —
+logged on every production request.
 
 ```
 STRIPE_PRICE_TEAM_MONTHLY_USD    STRIPE_PRICE_TEAM_MONTHLY_INR
@@ -1361,7 +1361,7 @@ the `_USD` suffix the code reads**, so Team checkout fails closed. In the curren
 test-mode configuration the correct values are the active prices
 `price_1Tv2zQ0zEfO6BZMh8EeLvWZJ` (Team $25/mo) and
 `price_1Tv2zR0zEfO6BZMhPTByLptE` (Team $240/yr). No INR price exists for Team at
-all, and the only Basic INR price (₹399) is inactive — so INR billing is
+all, and the only Basic INR price (₹399) is inactive, so INR billing is
 unconfigured rather than misnamed.
 
 I have not changed any Stripe object or production variable: the mode decision is
@@ -1369,7 +1369,7 @@ a founder call, and setting them piecemeal is how a catalog ends up half-migrate
 
 ---
 
-## 27. Stale live prices — RESOLVED 2026-08-14
+## 27. Stale live prices, RESOLVED 2026-08-14
 
 **Status:** `DONE`. All six live-mode prices are archived (`active=false`), confirmed
 by listing them back from Stripe rather than by trusting the write command. Zero
@@ -1379,7 +1379,7 @@ charging Pro at $29.99 against a page promising $20.
 The price env vars in `.env.local` (both copies) and Vercel Production were
 repointed at the verified test-mode IDs matching `BILLING_PLAN_PRICING`, and the
 missing `STRIPE_PRICE_TEAM_MONTHLY_USD` / `STRIPE_PRICE_TEAM_YEARLY_USD` were
-added — the local files had been pointing at the LIVE ids, which do not exist in
+added, the local files had been pointing at the LIVE ids, which do not exist in
 test mode, so local checkout was broken independently of everything else.
 
 **Still to do:** revoke the temporary write permission on the live restricted key
@@ -1408,7 +1408,7 @@ pricing, so they are a live trap the moment anyone flips `STRIPE_SECRET_KEY`:
 
 (`price_1Sgwx40zEfO6BZMhYS63EnfW`, Max $2,999.88/yr, is already archived.)
 
-Nothing depends on them — no production subscription references any live-mode
+Nothing depends on them, no production subscription references any live-mode
 price, because production runs in test mode (see §26). Archiving is reversible;
 Stripe cannot delete a price, only deactivate it.
 
@@ -1417,7 +1417,7 @@ Stripe cannot delete a price, only deactivate it.
 and enable **Prices Write** (`plan_write`) on that restricted key.
 
 **Then tell Claude**, and the five will be archived and re-verified by listing
-them back — the first attempt reported success on output that was actually the
+them back, the first attempt reported success on output that was actually the
 permission error, so the result is confirmed by re-reading Stripe, not by
 trusting the write command.
 
@@ -1426,7 +1426,7 @@ catalog and is in use.
 
 ## 28. India: the ₹15,000 RBI ceiling breaks two INR plans, and Razorpay is a sales question before it is an integration
 
-**Status:** `BLOCKED_BY_HUMAN` — needs a pricing decision and a Razorpay sales
+**Status:** `BLOCKED_BY_HUMAN`, needs a pricing decision and a Razorpay sales
 answer. No code can resolve either.
 
 Regional pricing is already built and is not the gap. `lib/regional-pricing.ts`
@@ -1440,17 +1440,17 @@ caller's current IP. What is missing is not plumbing.
 
 RBI's e-mandate framework requires additional factor authentication (AFA/3DS) on
 **every** recurring charge above **₹15,000**. The December 2023 increase to ₹1
-lakh applies only to mutual funds, insurance premiums and credit-card bills —
+lakh applies only to mutual funds, insurance premiums and credit-card bills.
 SaaS subscriptions stay at ₹15,000. Verified against Stripe's India recurring
 payments doc and RBI coverage, 2026-08-14.
 
-| Plan        | INR/mo      | Auto-renews on an Indian card?               |
-| ----------- | ----------- | -------------------------------------------- |
-| Basic       | ₹399        | Yes                                          |
-| Pro         | ₹1,999      | Yes                                          |
-| Max 5x      | ₹9,999      | Yes                                          |
-| **Max 15x** | **₹24,999** | **No** — buyer must complete 3DS every month |
-| **Team**    | ₹1,999/seat | **No at 8+ seats** (8 × 1,999 = ₹15,992)     |
+| Plan        | INR/mo      | Auto-renews on an Indian card?              |
+| ----------- | ----------- | ------------------------------------------- |
+| Basic       | ₹399        | Yes                                         |
+| Pro         | ₹1,999      | Yes                                         |
+| Max 5x      | ₹9,999      | Yes                                         |
+| **Max 15x** | **₹24,999** | **No**, buyer must complete 3DS every month |
+| **Team**    | ₹1,999/seat | **No at 8+ seats** (8 × 1,999 = ₹15,992)    |
 
 This is an RBI rule on the buyer's card, not a Stripe limitation. **Razorpay does
 not change it**, and UPI AutoPay is worse: UPI does not support recurring
@@ -1465,7 +1465,7 @@ mandates above ₹15,000 at all. Any provider hits the same ceiling.
 4. Do not sell those two tiers in India yet.
 
 Nothing is broken in production today because no INR Price object exists in
-Stripe (see 28c) — so this is a decision to make _before_ INR goes live, not an
+Stripe (see 28c), so this is a decision to make _before_ INR goes live, not an
 incident.
 
 ### 28b. Stripe delays every Indian card renewal by 26 hours
@@ -1474,13 +1474,13 @@ Stripe issues the mandatory 24-hour pre-debit notification through a partner and
 waits **26 hours** before charging. The PaymentIntent sits in `processing` for
 that whole window and cannot be cancelled. Renewals can also fail with
 `india_recurring_payment_mandate_canceled` or `payment_intent_mandate_invalid`
-when a buyer cancels the mandate at their bank — a path with no equivalent in
+when a buyer cancels the mandate at their bank, a path with no equivalent in
 card billing elsewhere.
 
 **Confirmed not handled anywhere in this repo**: a grep across
 `app/api/stripe-webhook` and `lib` finds no reference to `processing`,
 `approval_requested`, or any India mandate decline code. This is engineering
-work, not a founder decision, and it is only needed once INR billing is real —
+work, not a founder decision, and it is only needed once INR billing is real.
 recorded here so it is not discovered from a failed renewal.
 
 ### 28c. INR is published but not sellable
@@ -1488,26 +1488,26 @@ recorded here so it is not discovered from a failed renewal.
 `STRIPE_PRICE_BASIC_MONTHLY_INR` and `STRIPE_PRICE_TEAM_MONTHLY_INR` are read by
 `lib/pricing.ts` and are unset in every environment, because no active INR Price
 exists in Stripe. The only one that ever existed (Basic ₹399) is archived. The
-system fails closed correctly — `checkoutReady: false` — so India currently sees
+system fails closed correctly, `checkoutReady: false`, so India currently sees
 USD pricing rather than a broken button. Creating those Prices is blocked on 28a.
 
-### 28d. Top-ups were USD-only against regional plans — FIXED 2026-08-14
+### 28d. Top-ups were USD-only against regional plans, FIXED 2026-08-14
 
 `/api/billing/top-up` hardcoded `currency: 'usd'`. Because a top-up is
 `mode: 'payment'` (a PaymentIntent, not an invoice), Stripe would NOT have
-rejected a USD top-up on an INR subscription — it would have silently charged a
+rejected a USD top-up on an INR subscription, it would have silently charged a
 second currency on the same account, adding an undisclosed forex conversion and a
 cross-border card fee.
 
 The route now reads the live subscription's currency and refuses a non-USD
 subscriber with an honest message, failing closed if Stripe cannot be reached.
 Setting a per-currency top-up rate is a founder decision and cannot be derived:
-the published INR prices are price points, not one exchange rate — Basic is
+the published INR prices are price points, not one exchange rate, Basic is
 ₹57/$, Pro and Max are ₹100/$, Max 15x is ₹125/$, Team is ₹80/$.
 
 **Decide:** the INR price of one top-up unit, or leave top-ups USD-only.
 
-### 28e. Razorpay — what to ask sales before any code is written
+### 28e. Razorpay, what to ask sales before any code is written
 
 Razorpay is a reasonable choice and the reason is UPI, not price: UPI and
 netbanking are how most Indian consumers actually pay, and an international
@@ -1522,14 +1522,14 @@ from documentation:
    collection and does not confirm recurring; it even notes that "UPI and
    recurring payments are not supported by most payment providers." If the answer
    is one-time only, Razorpay cannot replace Stripe for subscriptions and would
-   be a UPI-funded credit purchase instead — a different product decision.
+   be a UPI-funded credit purchase instead, a different product decision.
 2. **Pricing.** Quoted case-by-case for cross-border; budget ~3% + GST.
 3. **GST/OIDAR.** Razorpay International is a payment service provider, **not** a
    merchant of record. Supplying digital services to Indian consumers as a
    foreign entity carries an OIDAR GST registration and 18% remittance
    obligation that stays with AGI Automation LLC. Stripe Tax does not cover it
    and neither does Razorpay. A merchant-of-record (Paddle, Polar) is the
-   alternative that does absorb it — at a higher rate and without UPI parity.
+   alternative that does absorb it, at a higher rate and without UPI parity.
 
 **Do:** contact Razorpay sales with question 1 first; it decides whether this is
 a subscription integration or a top-up integration. Then confirm the OIDAR
@@ -1541,16 +1541,16 @@ systems, and `resolveSubscriptionBillingSource` gaining a fourth owner alongside
 `stripe` / `apple` / `google`. That is a substantial build and should not start
 until question 1 is answered.
 
-## 29. Mobile IAP is built and dark — the blockers are all accounts, not code
+## 29. Mobile IAP is built and dark, the blockers are all accounts, not code
 
-**Status:** `BLOCKED_BY_HUMAN` — eight items, none of them engineering.
+**Status:** `BLOCKED_BY_HUMAN`, eight items, none of them engineering.
 
 Full decision document (pricing tables, per-surface UPI answer, sequencing):
 <https://claude.ai/code/artifact/58fe8b40-faa9-4247-bdbd-6595e43e7a62>
 
 ### 29a. The finding that reframes the mobile work
 
-The in-app purchase path is **already implemented end to end** — client purchase
+The in-app purchase path is **already implemented end to end**, client purchase
 via `expo-iap`, server-side Apple and Google verification
 (`apps/web/lib/server/mobile-iap-store-verification.ts`), notification receivers
 at `app/api/mobile/iap/{apple,google}-notifications`, catalog at
@@ -1561,8 +1561,8 @@ at `app/api/mobile/iap/{apple,google}-notifications`, catalog at
 Consequence: **turning IAP on is what ships UPI on mobile.** Play Billing carries
 UPI and UPI AutoPay natively; Apple accepts UPI as an Apple Account funding
 method. Both stores also auto-convert prices per storefront. Three of the four
-stated goals — regional pricing, UPI for Indian mobile users, native in-app
-purchases — are delivered on mobile by clearing paperwork, not by writing code.
+stated goals, regional pricing, UPI for Indian mobile users, native in-app
+purchases, are delivered on mobile by clearing paperwork, not by writing code.
 
 Running AGI's own UPI checkout (Razorpay, Stripe UPI) inside the **iOS** app for
 a subscription is not merely unbuilt, it is **prohibited** by App Store guideline
@@ -1574,7 +1574,7 @@ reporting every transaction to Google within 24 hours.
 
 The 2026-08-31 deadline is real and gates **new apps** (which AGI is), with an
 extension available to 2026-11-01. But `expo-iap@5.3.0` does not depend on
-BillingClient directly — it resolves `io.github.hyochan.openiap:openiap-google`
+BillingClient directly, it resolves `io.github.hyochan.openiap:openiap-google`
 `3.3.0` (pinned in the package's `openiap-versions.json`), which is built on
 Play Billing Library 8. **Compliant.** Confirm with a Gradle dependency tree on
 the first real Android build rather than trusting this note.
@@ -1587,16 +1587,16 @@ Ordered by what they unblock. Detail in the artifact above.
 | --- | --------------------------------- | ------------------------------------------------------------------------------------ |
 | 1   | Apple Paid Applications Agreement | Signed + Tax (W-9), Banking, Contacts. Gates 2–5.                                    |
 | 2   | Apple Small Business Program      | 30% → 15%. AGI qualifies today. Re-file annually.                                    |
-| 3   | Play Console merchant profile     | **Permanent link — cannot be changed later.**                                        |
+| 3   | Play Console merchant profile     | **Permanent link, cannot be changed later.**                                         |
 | 4   | 9 product IDs in both stores      | 5 subscriptions + 4 consumable top-ups                                               |
 | 5   | Store server credentials          | `APPLE_APP_STORE_*`, `GOOGLE_PLAY_*`, `MOBILE_IAP_*_PRODUCT_IDS_JSON`, Pub/Sub topic |
 | 6   | Store listing copy                | Still promises browser checkout; first-review rejection risk                         |
-| 7   | Tax registration                  | India OIDAR, EU Non-Union OSS, UK VAT — all threshold-free                           |
+| 7   | Tax registration                  | India OIDAR, EU Non-Union OSS, UK VAT, all threshold-free                            |
 | 8   | Max 15x India price               | Blocks INR Stripe Price creation (see §28a)                                          |
 
 Item 7 is the one where delay costs money rather than time: all three appear to
 trigger on the first sale with no minimum, and the web product is already live.
-Confirm the threshold claim with a tax advisor — it was not verifiable from
+Confirm the threshold claim with a tax advisor, it was not verifiable from
 primary sources.
 
 ### 29d. Engineering work this surfaced (not founder-blocked)
@@ -1608,7 +1608,7 @@ primary sources.
 - **India e-mandate handling.** Stripe holds Indian card renewals in `processing`
   for 26 hours with mandate-specific decline codes. Zero references in the repo
   (§28b). Only needed once INR billing is live.
-- **Per-currency Price ID slots for `pro`/`max`/`max_15x`** — only Basic and Team
+- **Per-currency Price ID slots for `pro`/`max`/`max_15x`**, only Basic and Team
   have them.
 - **The 7-seat Team threshold** as a real checkout check, not a docs note.
 
@@ -1619,7 +1619,7 @@ primary sources.
   and Google.
 - **"Match Claude's pricing" does not mean pricing lower in India.** Anthropic
   prices India _above_ a straight USD conversion. AGI's INR ladder already sits
-  below Claude's — a fine share-buying posture, but it should be deliberate.
+  below Claude's, a fine share-buying posture, but it should be deliberate.
 - **Check before launching Basic in India:** if OpenAI's free-ChatGPT-Go-for-a-year
   promotion is still running, paid ₹399 Basic competes with a free equivalent.
   Whether it is still live was not established.
@@ -1631,7 +1631,7 @@ primary sources.
 **Status:** `BLOCKED_BY_HUMAN`. The engineering side is finished. What is left is
 a lawyer reading two pages of wording and one line being changed in a file.
 
-**Blocks:** nothing operationally, and that is deliberate — read "This is not a
+**Blocks:** nothing operationally, and that is deliberate, read "This is not a
 hold" before treating it as a gate.
 
 `docs/runbooks/personal-data-breach.md` §4 (intimation to the Data Protection Board) and §5
@@ -1652,7 +1652,7 @@ unreviewed legal copy, sent under time pressure, to the two audiences least
 forgiving of a mistake in it.
 
 **Where a reviewer's time is worth most:** the "What data of yours was NOT
-involved" block in §5. Every line in it is a factual claim about this system —
+involved" block in §5. Every line in it is a factual claim about this system.
 card details never reach us, Local-mode data never leaves the device, BYOK
 provider traffic does not pass through us, the identity provider holds the
 password. A wrong line there is a second incident, and it is the block a
@@ -1673,7 +1673,7 @@ that scoping table is where those claims are sourced from.
    table, close `L-9` in `DPDP_PROGRESS.md`, and close `DPDP-26` in
    `docs/work/remediation-register.json`.
 4. Run `pnpm --filter @agiworkforce/web test app/__tests__/breach-runbook-counsel-gate.test.ts`.
-   That test holds steps 2 and 3 together — a half-applied approval, where the
+   That test holds steps 2 and 3 together, a half-applied approval, where the
    header claims counsel signed off but the templates still carry the pending
    notice or no reviewer is named, fails it.
 
@@ -1685,8 +1685,8 @@ that scoping table is where those claims are sourced from.
 `F-2`, `F-4` in `DPDP_PROGRESS.md`.
 
 **Blocks:** nothing in the product. Every surface publishes a working grievance
-route today — the role account, `contact@agiworkforce.com`, and the subject line
-"DPDP grievance" — on `/privacy/india`, `/privacy/requests`, `/terms` and in the
+route today, the role account, `contact@agiworkforce.com`, and the subject line
+"DPDP grievance", on `/privacy/india`, `/privacy/requests`, `/terms` and in the
 site footer. What is unresolved is whether those published facts are the ones
 you intend to stand behind.
 
@@ -1695,7 +1695,7 @@ The code side is done and no longer needs an engineer:
 - `GRIEVANCE_OFFICER_DESIGNATE` in `apps/web/lib/legal-constants.ts` is `null`.
   Set it to a person's name and every surface that publishes the officer
   switches from "Grievance Officer, AGI Automation LLC" to "<name>, Grievance
-  Officer, AGI Automation LLC" — one edit, no page copy to touch. Leaving it
+  Officer, AGI Automation LLC", one edit, no page copy to touch. Leaving it
   `null` keeps the role account, which is a decision, not a default.
 - `NOTICE_ADDRESS` is the only complete postal address anywhere in this
   repository, which is the sole reason it is the one published. It is printed on
@@ -1719,7 +1719,7 @@ The code side is done and no longer needs an engineer:
 2. Decide `F-2`: confirm `NOTICE_ADDRESS`, or replace it.
 3. Decide `F-4`: provision `privacy@` / `grievance@` and point `CONTACT_EMAIL`
    consumers at it, or confirm in writing that subject-line routing on
-   `contact@` is the intended arrangement — including who watches that inbox for
+   `contact@` is the intended arrangement, including who watches that inbox for
    the "DPDP grievance" subject and against what response target
    (`GRIEVANCE_RESPONSE_TARGET_DAYS`, published as 30 days, our commitment and
    not a statutory period).
@@ -1739,8 +1739,8 @@ instead of the input on a protected device, and Settings → Parental Controls n
 longer offers the route back to the self-declare screen. Proof:
 `apps/mobile/__tests__/minor-mode-not-child-clearable.test.tsx`.
 
-What code cannot decide is the half above it. The gate is still self-declared —
-a typed number, never verified — and `detectRegionRule` puts the threshold at 13
+What code cannot decide is the half above it. The gate is still self-declared.
+a typed number, never verified, and `detectRegionRule` puts the threshold at 13
 in the US and default regions, 16 across the EU, 18 in India and Brazil. Below
 that threshold both COPPA and the DPDP Act require _verifiable_ parental
 consent, which AGI does not have and cannot fake. Today a 9-year-old types "9",
@@ -1780,7 +1780,7 @@ pairing code, receives it again on `POST /pairings/{code}/claim` and in the
 WebSocket register frame, and receives the salt in register metadata. It holds
 both inputs. A relay compromise, an insider, or a TLS-intercepting proxy (mobile
 pinning is off and the pins in `apps/mobile/lib/pinning.ts` are placeholders)
-can therefore recompute the key and mint frames that verify in both directions —
+can therefore recompute the key and mint frames that verify in both directions.
 including a forged `approval_response {approved:true}` that Desktop treats as
 the user consenting to a tool execution. Fresh nonces and in-window timestamps
 do not help; the forger can produce both. The two module docstrings that used to
@@ -1790,7 +1790,7 @@ claim this layer stops a relay attacker were corrected on 2026-08-17.
 out of band: Desktop generates a random 32-byte secret, puts it in the QR code,
 and never sends it to the relay. That works for the QR path. It cannot work for
 the manual fallback, where the user reads a 12-character code off the Desktop
-screen and types it into `QRScanner`'s manual-entry field — a 64-hex secret is
+screen and types it into `QRScanner`'s manual-entry field, a 64-hex secret is
 not typeable, and that path exists precisely for when the camera is denied.
 
 Pick one:
@@ -1799,8 +1799,8 @@ Pick one:
    until they grant it. Simplest, and the pairing channel is then genuinely
    out of band.
 2. **Keep manual entry, honestly labelled.** The manual path stays
-   relay-derived and the companion says so before the first approval —
-   "this connection is trusted through our pairing service" — and, if you want
+   relay-derived and the companion says so before the first approval.
+   "this connection is trusted through our pairing service", and, if you want
    it to be more than a label, the approval card refuses high-risk tool classes
    on a manually-paired session.
 3. **Keep manual entry, verified by a short authentication string.** After
@@ -1815,8 +1815,8 @@ Pick one:
   picked, and the engineering steps are already written out in
   `ExecutionPlan.md` under the SEC-16 TODO.
 - Founder or release owner: the change breaks every currently paired device.
-  Confirm the cutover — a coordinated bump of `DISPATCH_HMAC_REQUIRED_AFTER`
-  and `DISPATCH_HMAC_MIN_MOBILE_VERSION` with a forced re-pair — is acceptable,
+  Confirm the cutover, a coordinated bump of `DISPATCH_HMAC_REQUIRED_AFTER`
+  and `DISPATCH_HMAC_MIN_MOBILE_VERSION` with a forced re-pair, is acceptable,
   and when.
 - Unrelated but adjacent: mobile TLS pins are still placeholders and
   `PINNING_ENFORCED` is `false`, which is what makes the interception variant
@@ -1836,16 +1836,16 @@ correction narrows the ask to a decision rather than a rebuild.
 **What already exists.** The developer-session control protocol is defined and
 wired end to end:
 
-- `crates/agiworkforce-protocol/src/developer_session.rs` — the contract
+- `crates/agiworkforce-protocol/src/developer_session.rs`, the contract
   (threads, turns, streaming, approvals, `AppServerCapabilities`,
   `DeveloperSessionTrustMode`), with a conformance test at
   `crates/agiworkforce-protocol/tests/developer_session_protocol.rs`.
-- `crates/agiworkforce-app-server/src/developer_sessions.rs` — the
+- `crates/agiworkforce-app-server/src/developer_sessions.rs`, the
   `DeveloperSessionHost` trait and server.
-- `apps/cli/src/app_server/developer_host.rs` — the CLI host implementation
+- `apps/cli/src/app_server/developer_host.rs`, the CLI host implementation
   (~4.1k lines): persisted sessions, live agent instances, turn tasks,
   cancellation, approval continuations, MCP attachment, streamed events.
-- `apps/extension-vscode/src/integrations/localRuntimeClient.ts:743` — the VS
+- `apps/extension-vscode/src/integrations/localRuntimeClient.ts:743`, the VS
   Code client, which spawns `agiworkforce app-server` and speaks that protocol.
 
 Desktop's companion host UI is also mounted
@@ -1871,11 +1871,11 @@ decision:
    revocable. A durable, revocable grant table does already exist for CLI
    device auth (`device_refresh_tokens`, with `revoked_at`, in
    `apps/web/app/api/auth/device/refresh/route.ts`) and is the obvious model to
-   extend — but extending it to developer sessions is only worth building once
+   extend, but extending it to developer sessions is only worth building once
    the answer to the question below is yes.
 
-**The decision.** Should a developer session — a live agent with the user's
-working directory, terminal and file-system tools — be drivable from a second
+**The decision.** Should a developer session, a live agent with the user's
+working directory, terminal and file-system tools, be drivable from a second
 device at all?
 
 1. **No.** Developer sessions stay local to the machine that owns the
@@ -1888,7 +1888,7 @@ device at all?
    blast radius of a stolen phone.
 3. **Full remote drive.** A remote transport for the app-server protocol plus a
    Mobile/Web projection client. This is the XL option, and it makes a stolen
-   or borrowed second device equivalent to a shell on the developer's machine —
+   or borrowed second device equivalent to a shell on the developer's machine.
    so it cannot ship without the grant lifecycle in (3) above, a visible
    host-side indicator, and a per-grant capability scope.
 
@@ -1921,7 +1921,7 @@ null otherwise (`apps/desktop/src/stores/chat/chatStore.ts:496`), proven by
 What is missing is the way in. The desktop ceremony dialog was written but never
 wired: it lived at apps/desktop/archive/features/chat/LocalByokHandoffDialog.tsx
 until the archive was deleted on 2026-08-28, and is recoverable from git history
-at 001a0bb87. `forkConversationForByok` has no production caller — so no user can
+at 001a0bb87. `forkConversationForByok` has no production caller, so no user can
 start a fork. Meanwhile the Local model picker lists configured BYOK
 models (`apps/desktop/src/App.tsx:889`), so selecting one is a control that can
 only fail. As of 2026-08-17 that failure at least explains itself and names the
@@ -1934,7 +1934,7 @@ fork (`local_only_no_candidate_message`, tested in
    a Local conversation, and the archived dialog should be deleted rather than
    left to look like a shipped feature.
 2. **Ship the fork.** Move the dialog into `apps/desktop/src/features/chat/`,
-   add the entry point (a conversation-header action is the natural place — the
+   add the entry point (a conversation-header action is the natural place, the
    header already takes host-supplied actions), and keep the six ceremony steps
    the store already enforces.
 
@@ -1958,16 +1958,16 @@ block rather than metadata".
 for monotonic tightening. It has no enforcement consumer anywhere, and no
 surface loads a signed org policy at all: `grep -r org_policy
 apps/desktop/src-tauri/src` returns nothing. The enforcement point on Desktop is
-obvious once a policy exists — `validate_provider_base_url` in
+obvious once a policy exists, `validate_provider_base_url` in
 `core/llm/providers/direct_api_provider.rs:251` already judges every BYOK base
-URL — but wiring a check to an allowlist no device ever receives would be a
+URL, but wiring a check to an allowlist no device ever receives would be a
 guard that is always empty.
 
 **What is needed and from whom**
 
 - Founder / security owner: decide where a signed org policy comes from (bundled
   with the license, fetched at sign-in, dropped by MDM), how often it refreshes,
-  and what a device does when it has none — fail open on product defaults, or
+  and what a device does when it has none, fail open on product defaults, or
   refuse BYOK entirely for managed orgs.
 - Only after that is the enforcement itself mechanical.
 
@@ -1975,7 +1975,7 @@ guard that is always empty.
 
 ## 37. Managed Cloud plan-tier gate needs a verifiable client surface (security sweep 2026-08-21, `apps/web` F4)
 
-**Status:** `BLOCKED_BY_HUMAN` — a product/protocol decision, not a code gap.
+**Status:** `BLOCKED_BY_HUMAN`, a product/protocol decision, not a code gap.
 
 **Blocks:** closing CLAUDE-SECURITY-20260821-144214 F4 (CWE-863, MEDIUM):
 `apps/web/app/api/llm/v1/chat/completions/lib/auth-gate.ts` decides which paid
@@ -1989,10 +1989,10 @@ not include.
 Two remediation rounds were adversarially reviewed and rejected: a bare Clerk
 session token carries no surface at all (`AuthResult.surfaceClass` is
 `'developer'`-only, `apps/web/lib/api-auth.ts:19`), and every first-party
-client — web (`lib/hooks/useChatStream.ts`), mobile
+client, web (`lib/hooks/useChatStream.ts`), mobile
 (`apps/mobile/services/streaming.ts`), the Chrome extension
 (`apps/extension/src/features/cloud-bridge/clerkAuth.ts`) and desktop
-(`cloudApi.ts`) — sends exactly that kind of token with a self-declared
+(`cloudApi.ts`), sends exactly that kind of token with a self-declared
 `X-AGI-Surface`. Swapping the header for the CSRF token was rejected because a
 non-browser client can obtain that too.
 
@@ -2008,7 +2008,7 @@ account that can mint a Clerk session (every account). No data exposure.
 2. Require a surface-bearing credential for non-browser callers (API key or the
    existing developer/device token) and treat a bare Clerk token as `web` only
    when the request also passes the browser-only checks (Origin + Sec-Fetch-Site
-   - CSRF cookie pair) — closes the scripting case without client changes.
+   - CSRF cookie pair), closes the scripting case without client changes.
 3. Accept the residual and gate the API capability on billing audit instead.
 
 The parked attempt (option-2 shape) is at
@@ -2018,12 +2018,12 @@ The parked attempt (option-2 shape) is at
 
 ## 38. Mobile TLS pinning: the mechanism is built and wired, but ops must choose the pinned keys (security sweep 2026-08-21, `apps/mobile` F6)
 
-**Status:** `BLOCKED_BY_HUMAN` — needs a key/rotation decision and two reviewed
+**Status:** `BLOCKED_BY_HUMAN`, needs a key/rotation decision and two reviewed
 commits (paste the pins, then flip the rollout), not more application code.
 
 **Blocks:** fully closing CLAUDE-SECURITY-20260821-170634 F6 (CWE-295, MEDIUM):
 `apps/mobile` ships placeholder SPKI pins, so every Clerk bearer token and every
-dispatch pairing exchange still rides on the OS trust store alone — a
+dispatch pairing exchange still rides on the OS trust store alone, a
 device-trusted rogue CA (MDM profile, compelled or mis-issued intermediate) can
 terminate TLS to `api.agiworkforce.com` and harvest the Authorization header.
 
@@ -2049,27 +2049,27 @@ PINNING_ROLLOUT … is 'enforced'`. That warning is the point of the stage:
 - `clerk.agiworkforce.com` is now one of `REQUIRED_PINNED_HOSTS` and has an entry
   in `PINS_BY_HOST`. Clerk's SDK does its own networking and never reaches
   `secureFetch`, so without it a build could satisfy every listed host, derive
-  `PINNING_ENFORCED = true`, and still hand the auth handshake — the exchange
-  that issues the bearer token this finding's exploit harvests — to whatever
+  `PINNING_ENFORCED = true`, and still hand the auth handshake, the exchange
+  that issues the bearer token this finding's exploit harvests, to whatever
   certificate the OS trust store accepted. Only the native pin config can cover
   that host, which is why it is required rather than optional.
 - A pinned host reached in absolute form (`https://api.agiworkforce.com./…`, and
   the `%2e` spelling that normalizes to it) is refused with `reason:
-'ambiguous-host'`. The table now keys on the destination — trailing dots
+'ambiguous-host'`. The table now keys on the destination, trailing dots
   stripped, as `packages/contracts/trust-boundaries` already does for the egress
-  guard — so the spelling no longer slips past the pin lookup, and the spelling
+  guard, so the spelling no longer slips past the pin lookup, and the spelling
   itself is rejected rather than treated as pinned because iOS `NSPinnedDomains`
   and the Android pin-set match the name as written and would not apply their
   pin-set to that form.
 - `apps/mobile/src/lib/runtimeMode.ts` classifies the build fail-closed: a runtime
   counts as dev/test only on an explicit signal (`__DEV__`, `NODE_ENV=test`,
   `EXPO_PUBLIC_APP_ENV=development`). A release build whose `NODE_ENV` was never
-  set — which is every EAS profile in `apps/mobile/eas.json` — is treated as a
+  set, which is every EAS profile in `apps/mobile/eas.json`, is treated as a
   release runtime instead of silently skipping the release-only gate.
 - `apps/mobile/native/withAGITlsPinning.cjs` + `native/tlsPinConfig.cjs` are a
   real Expo config plugin: from the same `PINS_BY_HOST` table they generate the
   iOS `NSAppTransportSecurity.NSPinnedDomains` dictionary (as
-  `NSPinnedCAIdentities` — iOS matches only certificates above the leaf) and the
+  `NSPinnedCAIdentities`: iOS matches only certificates above the leaf) and the
   Android `network_security_config.xml` pin-set, wire the manifest attribute,
   and record the hosts they covered in `extra.tlsPinning`.
 - `apps/mobile/services/secureFetch.ts` reads that build-stamped host list back
@@ -2082,7 +2082,7 @@ PINNING_ROLLOUT … is 'enforced'`. That warning is the point of the stage:
   shipping mistake rather than a rollout step (`reason:
 'no-native-enforcement'` when the table declares real pins, `reason:
 'unprovisioned-pins'` when it left a credential-bearing host on placeholders).
-  Only today's state — nothing declared, nothing compiled in — passes through,
+  Only today's state, nothing declared, nothing compiled in, passes through,
   which is what keeps this entry open.
 - Every outcome is now a named verdict, including the two that let a request
   through (`natively-verified`, `no-pins-required`) and the one that is this
@@ -2091,7 +2091,7 @@ PINNING_ROLLOUT … is 'enforced'`. That warning is the point of the stage:
   release build sends to each pinned host it cannot verify logs one warning
   naming the host, this finding and this entry, so the accepted gap shows up in
   device logs and crash breadcrumbs instead of looking like normal traffic. Only
-  the host is logged — the paths and queries carry tokens.
+  the host is logged, the paths and queries carry tokens.
 - A request that was really pinned may no longer be redirected off its host: once
   the first hop is `natively-verified`, a response that came back from a host the
   same build did not pin is refused with `reason: 'redirected-off-pinned-host'`
@@ -2099,8 +2099,8 @@ PINNING_ROLLOUT … is 'enforced'`. That warning is the point of the stage:
   redirect is a second connection. This cannot fire on today's build (no hop is
   verified), so no current request changes.
 - That check no longer treats silence as a same-host answer. A response whose URL
-  the transport never reported used to return early — React Native does not
-  always populate `Response.url` — which made the redirect defense fail open
+  the transport never reported used to return early, React Native does not
+  always populate `Response.url`, which made the redirect defense fail open
   exactly where it was needed. It now refuses with
   `reason: 'unverifiable-final-url'`: a verified first hop says nothing about a
   second connection, and a build that cannot see where the answer came from
@@ -2114,7 +2114,7 @@ they came from …` once per host instead. If that line appears at step 9.3, the
 - The generated Android config is scoped to pinned hosts only, with no app-wide
   `<base-config>`: a rule written there would apply to every endpoint the app can
   reach, and this file has no opinion about LAN dispatch targets or BYOK base
-  URLs. (It buys no cleartext protection either way — `app.config.js` sets no
+  URLs. (It buys no cleartext protection either way, `app.config.js` sets no
   `android:usesCleartextTraffic`, so the platform default already blocks cleartext
   at targetSdk 28+.) The security value is per host: `<trust-anchors>` with
   `system` only, plus the `<pin-set>`. The `<trust-anchors>` restate the platform
@@ -2127,7 +2127,7 @@ they came from …` once per host instead. If that line appears at step 9.3, the
   because that combination produces an installed app that refuses those hosts at
   runtime with no over-the-air remedy. Provision all six in one change.
 - It also fails on `PINNING_ROLLOUT = 'enforced'` over a table that provisions
-  nothing at all — the one combination `apps/mobile/scripts/check-tls-pins.mjs`
+  nothing at all, the one combination `apps/mobile/scripts/check-tls-pins.mjs`
   used to catch and, per item 6 below, no longer can. Putting it in the plugin
   makes it a property of every prebuild rather than of one release script, so no
   artifact can be produced from a config that asks for enforcement with nothing
@@ -2142,19 +2142,19 @@ they came from …` once per host instead. If that line appears at step 9.3, the
   pinning state inside the fingerprint `runtimeVersion`: the plugin only changes
   the evaluated Expo config once the rollout says `'enforced'`, so the flip
   changes the fingerprint and cannot be delivered over the air to a binary that
-  compiled no pins — which would otherwise refuse every pinned host on a device
+  compiled no pins, which would otherwise refuse every pinned host on a device
   with no remedy but a store release.
 - `scripts/compute-spki-pins.mjs` captures the live chain for every host in the
   table and prints the paste-ready `PINS_BY_HOST` block plus both native blocks.
   `--clerk-key pk_live_…` adds the Clerk FAPI host.
 - Coverage: `apps/mobile/__tests__/pinning.test.ts` (149 tests), and the
   enforcement assertions run the shipped `lib/pinning.ts` and
-  `services/secureFetch.ts` against the shipped pin table — only the build's own
+  `services/secureFetch.ts` against the shipped pin table, only the build's own
   `extra.tlsPinning` stamp is substituted, and one case stamps exactly what the
   plugin itself emitted for a provisioned table, so the two halves are checked
   against each other rather than against a hand-written expectation. The gate is
   composed from an exported fact-gatherer (`pinTransportFacts`), so what the
-  shipped module actually reads — including the derived `PINNING_ENFORCED` — is
+  shipped module actually reads, including the derived `PINNING_ENFORCED`, is
   asserted directly instead of inferred, and the single fact standing between
   today's build and a verified request (`pinsProvisioned`) is named by a test.
   Reinstating the pre-sweep decision (`if (!enforced) return undefined; if
@@ -2167,7 +2167,7 @@ they came from …` once per host instead. If that line appears at step 9.3, the
   accepted.
 - Two of those tests are the ones that would have caught this round's gap.
   "is registered in app.config.js, so a provisioned table reaches a real build"
-  loads `app.config.js` and asserts the plugin entry unconditionally — its
+  loads `app.config.js` and asserts the plugin entry unconditionally, its
   predecessor returned early while the table was placeholders, which is exactly
   why an unregistered plugin shipped as if it were a fix. "never changes a
   request when the rollout only stages it, so the paste is safe" replays all 128
@@ -2176,7 +2176,7 @@ they came from …` once per host instead. If that line appears at step 9.3, the
 
 **What is needed and from whom**
 
-1. Security owner — decide which key each host is pinned to and who holds the
+1. Security owner, decide which key each host is pinned to and who holds the
    backup. Captured 2026-08-22 with `node scripts/compute-spki-pins.mjs`:
 
    | host                                                 | leaf expires | issuing CA             | root                                               |
@@ -2202,7 +2202,7 @@ they came from …` once per host instead. If that line appears at step 9.3, the
    hashes in `NSPinnedDomains` are the only mechanism that refuses that
    certificate.
 
-2. Same owner — decide whether `api.openai.com` and `api.anthropic.com` should
+2. Same owner, decide whether `api.openai.com` and `api.anthropic.com` should
    be pinned at all. We do not control their rotation; both currently chain
    through Google's `WE1`, and a CA change on their side is a client-side outage
    with no remedy. Dropping them from `REQUIRED_PINNED_HOSTS` is a supported
@@ -2211,7 +2211,7 @@ they came from …` once per host instead. If that line appears at step 9.3, the
    the token the exploit steals, so unpinning it leaves the finding open by
    design. If Clerk's rotation cadence is unacceptable, pin the two roots above
    `WE1` rather than removing the host.
-3. Same owner — before flipping the rollout, inventory every host the app must
+3. Same owner, before flipping the rollout, inventory every host the app must
    reach. Once enforcement is on, `secureFetch` refuses any host with no entry in
    `PINS_BY_HOST`, so local/LAN dispatch targets and any model-download CDN need
    entries or a documented exemption. This is pre-existing behaviour and it was
@@ -2221,13 +2221,13 @@ they came from …` once per host instead. If that line appears at step 9.3, the
    the allowlist to the pin table's own hosts is a separate, owned change. You no
    longer have to do the inventory from memory: step 9.3 ships a build that logs
    every host enforcement would refuse, which is what the `'report-only'` rollout
-   stage exists for. The equivalent hazard on the native side is gone — the
+   stage exists for. The equivalent hazard on the native side is gone, the
    generated Android config ships only per-pinned-host rules.
-4. **Done in this sweep — no action, listed so nobody redoes it.**
+4. **Done in this sweep, no action, listed so nobody redoes it.**
    `'./native/withAGITlsPinning.cjs'` is registered in the `plugins` array of
    `apps/mobile/app.config.js`, next to
    `'./native/android/withAGIShareIntent.cjs'`. Applying the plugin to the
-   shipped config returns it byte-for-byte unchanged — no `mods`, no
+   shipped config returns it byte-for-byte unchanged, no `mods`, no
    `extra.tlsPinning`, no Info.plist key, no `network_security_config.xml`
    (verified 2026-08-22, asserted by "is a no-op on the shipped table" and "emits
    nothing while the rollout only stages a fully provisioned table"). One
@@ -2236,44 +2236,44 @@ they came from …` once per host instead. If that line appears at step 9.3, the
    for exactly one, so the pinning plugin throws at prebuild rather than produce
    an artifact that claims to pin while Android trusts whatever certificate it is
    handed. Unset `EXPO_ENABLE_DETOX` for any artifact that ships pins.
-5. Clerk — `@clerk/expo` does its own networking and never reaches
+5. Clerk, `@clerk/expo` does its own networking and never reaches
    `secureFetch`, so only the native config can cover the auth handshake. The
    FAPI host is `clerk.agiworkforce.com` (decoded from the publishable key,
    `pk_live_Y2xlcmsuYWdpd29ya2ZvcmNlLmNvbSQ`, TLS chain captured 2026-08-22). It
    now has a placeholder entry in `PINS_BY_HOST` and is in
-   `REQUIRED_PINNED_HOSTS`, so step 1 must capture its pins with the others —
+   `REQUIRED_PINNED_HOSTS`, so step 1 must capture its pins with the others.
    there is no longer a state where the app reports itself pinned while the auth
    handshake is not. If the production Clerk instance ever changes, re-derive the
    host with `node scripts/compute-spki-pins.mjs --clerk-key pk_live_…`.
-6. Release-tooling owner — `apps/mobile/scripts/check-tls-pins.mjs:31` greps for
+6. Release-tooling owner, `apps/mobile/scripts/check-tls-pins.mjs:31` greps for
    the literal `PINNING_ENFORCED = true`, which has not existed since
    enforcement became derived, so its FAIL branch at line 39 can never fire and
    its PASS message at line 56 still tells the reader to "flip
    `PINNING_ENFORCED=true`". That script gates production/beta/preview at
    `apps/mobile/scripts/release/preflight.sh:141` and
    `.github/workflows/release-mobile.yml:101`. It is outside this sweep's
-   ownership. Replace the regex check with the condition that now matters — fail
+   ownership. Replace the regex check with the condition that now matters, fail
    when `apps/mobile/lib/pinning.ts` contains
    `PINNING_ROLLOUT: PinningStage = 'enforced'` **and** any placeholder pin line
-   — and drop the "flip `PINNING_ENFORCED=true`" advice for "flip
-   `PINNING_ROLLOUT` to `'enforced'`". The hazard it was written to catch is no
-   longer riding on it: `native/withAGITlsPinning.cjs` now throws at prebuild on
-   exactly that combination (see the bullet above), so no artifact can be built
-   from it, and two tests in `apps/mobile/__tests__/pinning.test.ts` ("fails the
-   prebuild when the rollout says enforced and the table provisions nothing",
-   "keeps the shipped rollout behind the pin table, which is what CI would gate
-   on") fail the release build at
-   `.github/workflows/release-mobile.yml:96` (`pnpm --filter @agiworkforce/mobile
+   - and drop the "flip `PINNING_ENFORCED=true`" advice for "flip
+     `PINNING_ROLLOUT` to `'enforced'`". The hazard it was written to catch is no
+     longer riding on it: `native/withAGITlsPinning.cjs` now throws at prebuild on
+     exactly that combination (see the bullet above), so no artifact can be built
+     from it, and two tests in `apps/mobile/__tests__/pinning.test.ts` ("fails the
+     prebuild when the rollout says enforced and the table provisions nothing",
+     "keeps the shipped rollout behind the pin table, which is what CI would gate
+     on") fail the release build at
+     `.github/workflows/release-mobile.yml:96` (`pnpm --filter @agiworkforce/mobile
 test`), five lines before it reaches the stale check. Rewriting the script is
-   still owed — a dead gate that prints PASS reads like cover it is not
-   providing — but it is now stale tooling rather than an open door.
-7. Dispatch/mobile owner — **the pairing socket is not covered on iOS, and steps
+     still owed, a dead gate that prints PASS reads like cover it is not
+     providing, but it is now stale tooling rather than an open door.
+7. Dispatch/mobile owner, **the pairing socket is not covered on iOS, and steps
    1-6 will not cover it.** `SignalingClient` opens
    `new WebSocket(this.options.wsUrl)`
    (`packages/platform/utils/src/signaling.ts:113`, fed from
    `apps/mobile/stores/connectionStore.ts:1000`) and carries the pairing token
    and dispatch salt. It never goes through `secureFetch`, and on iOS ATS
-   `NSPinnedDomains` governs `NSURLSession` only — React Native's iOS WebSocket
+   `NSPinnedDomains` governs `NSURLSession` only, React Native's iOS WebSocket
    builds its own CFStream TLS session and does not consult it. Android is fine
    (RN's WebSocket there is OkHttp, which honours the generated
    `network_security_config`). So after steps 1 and 4 the mobile→signaling
@@ -2293,12 +2293,12 @@ test`), five lines before it reaches the stale check. Rewriting the script is
    `createDownloadResumable`. None of the three passes through `secureFetch`, so
    none of them gets the scheme refusal, the absolute-form refusal or the
    allowlist, and the presigned storage host they actually talk to has no
-   `PINS_BY_HOST` entry — so it stays unpinned after step 9 as well. Owner's
+   `PINS_BY_HOST` entry, so it stays unpinned after step 9 as well. Owner's
    call, and it is a real decision rather than an oversight: route them through
    `secureFetch`, or give the storage host an entry, or record the exemption. All
    three files are outside this sweep's ownership.
 
-8. Same owner — `wsUrl` is server-supplied and only shape-checked.
+8. Same owner, `wsUrl` is server-supplied and only shape-checked.
    `apps/mobile/services/manualPairing.ts:145` accepts any string matching
    `/^wss?:\/\//`, so a claim response can steer the credential-bearing socket
    to an arbitrary host and to cleartext `ws://`. That is the post-MITM pivot
@@ -2311,16 +2311,16 @@ test`), five lines before it reaches the stale check. Rewriting the script is
 
 9. **The actual provisioning sequence**, once steps 1-3 are decided. Each numbered
    item is its own commit and its own review; do not compress them.
-   1. `node scripts/compute-spki-pins.mjs` — probes all six
+   1. `node scripts/compute-spki-pins.mjs`, probes all six
       `REQUIRED_PINNED_HOSTS` (`agiworkforce.com`, `signaling.agiworkforce.com`,
       `api.agiworkforce.com`, `clerk.agiworkforce.com`, `api.openai.com`,
       `api.anthropic.com`) and prints the paste-ready block. For a different
       Clerk instance: `node scripts/compute-spki-pins.mjs --clerk-key pk_live_…`.
    2. Paste the printed `PINS_BY_HOST` block over every placeholder in
-      `apps/mobile/lib/pinning.ts`, **all six hosts in one commit** — a
+      `apps/mobile/lib/pinning.ts`, **all six hosts in one commit**, a
       half-provisioned table fails the prebuild by design. This commit changes no
       request and no build output; `PINNING_ROLLOUT` stays `'report-only'`.
-   3. Ship that build (a release channel — the report-only warnings are
+   3. Ship that build (a release channel, the report-only warnings are
       release-runtime only) and read its logs. Every
       `[pinning] rollout is report-only: "<host>" would be refused` line names a
       host enforcement would cut off. Give each one a `PINS_BY_HOST` entry or
@@ -2331,7 +2331,7 @@ test`), five lines before it reaches the stale check. Rewriting the script is
       then EAS). That commit is the whole security decision, reviewable on its
       own: it is what makes the plugin emit `NSPinnedDomains` and the Android
       pin-set, and what makes `secureFetch` apply the allowlist. It must not ship
-      as an over-the-air update — the fingerprint `runtimeVersion` prevents that
+      as an over-the-air update, the fingerprint `runtimeVersion` prevents that
       structurally, since the flip changes the evaluated Expo config.
 
 **Residuals that survive step 9**, worth knowing before the flip is reviewed:
@@ -2351,7 +2351,7 @@ test`), five lines before it reaches the stale check. Rewriting the script is
   without re-reading this.
 - The transports in item 7 are not covered by any of it.
 
-**Costs to leave it:** unchanged from today — no pinning, so a device-trusted
+**Costs to leave it:** unchanged from today, no pinning, so a device-trusted
 rogue CA can read and replay mobile session tokens, and (per steps 7-8) the
 pairing socket stays unpinned on iOS and reachable at a server-chosen host even
 after step 9 lands. **F6 is open, not closed:** the mechanism is now wired end to
@@ -2374,7 +2374,7 @@ against is now unreachable by construction.
 
 ## 39. Set `ALLOWED_ORIGINS` on the signaling deploy before the next release (security sweep 2026-08-21, `services/signaling-server` F4/F10)
 
-**Status:** `BLOCKED_BY_HUMAN` — needs a value only ops can supply (the real client
+**Status:** `BLOCKED_BY_HUMAN`, needs a value only ops can supply (the real client
 origins) plus a Fly/Railway dashboard action.
 
 **Blocks:** every WebSocket pairing on any production signaling deploy that ships
@@ -2388,7 +2388,7 @@ origin could open a WebSocket to the signaling server (CWE-346). The gate is now
 unconditional: an Origin that is not on the allow-list is closed with `1008
 forbidden_origin`, an empty allow-list closes with `1008 origin_not_configured`,
 and a connection with no Origin is admitted only when it presents a valid
-`x-signaling-internal-secret` — now compared with the file's existing
+`x-signaling-internal-secret`, now compared with the file's existing
 `constantTimeCompare` helper, after the blacklist and connection rate limiter
 rather than before them (CWE-208).
 
@@ -2398,7 +2398,7 @@ omits `ALLOWED_ORIGINS` now refuses connections instead of accepting all of them
 **Do, before the next signaling deploy:**
 
 1. Enumerate the exact `Origin` header each client sends to
-   `wss://signaling.agiworkforce.com/ws` — the Tauri desktop webview and the React
+   `wss://signaling.agiworkforce.com/ws`, the Tauri desktop webview and the React
    Native mobile client both send one, and the strings are build-specific
    (`tauri://localhost`, the dev-server origin, the packaged app origin). These
    must be observed, not guessed; a missing entry is a silent pairing outage for
@@ -2421,7 +2421,7 @@ omits `ALLOWED_ORIGINS` now refuses connections instead of accepting all of them
    make the omission loud.
 
 **Cost to leave it:** signaling pairing does not work at all on a deploy that skips
-step 2 — every client handshake closes with `1008 origin_not_configured`. Reverting
+step 2, every client handshake closes with `1008 origin_not_configured`. Reverting
 to the old behaviour is not an option: that is the cross-site WebSocket hijacking
 hole the sweep closed.
 
@@ -2430,7 +2430,7 @@ which boots the real server as a child process with and without `ALLOWED_ORIGINS
 and asserts the close codes. Five of its nine assertions fail against the pre-fix
 handler.
 
-## Three Neon migrations are written but not applied — RESOLVED 2026-08-21
+## Three Neon migrations are written but not applied, RESOLVED 2026-08-21
 
 Applied to production on 2026-08-21 with founder authorization, after
 `backup-pre-0131-20260821` was taken from production as the rollback point.
@@ -2439,12 +2439,12 @@ Applied to production on 2026-08-21 with founder authorization, after
 
 ## Chinese-HQ provider opt-in is enforced on mobile but not on web
 
-**Status:** `BLOCKED_BY_HUMAN` — the code is straightforward; the decision is not.
+**Status:** `BLOCKED_BY_HUMAN`, the code is straightforward; the decision is not.
 
 `deepseek`, `moonshot`, `qwen` and `zhipu` are in `models.json` and selectable
 on web. The compliance contract that gates them
 (`packages/contracts/compliance/src/provider-jurisdiction.ts`, via
-`ensureLlmGateOpen`) has exactly one production caller — `apps/mobile`. The same
+`ensureLlmGateOpen`) has exactly one production caller, `apps/mobile`. The same
 model selection on web reaches the provider with no named-provider consent.
 
 Mobile enforces it partly for Apple 5.1.2(i), which does not bind web. So this
@@ -2452,7 +2452,7 @@ is not automatically a web requirement; it is a question about what you want
 users to have agreed to before their prompt leaves for a Chinese-headquartered
 provider.
 
-No migration is needed — `consent_records.purpose` is a text column, so new
+No migration is needed, `consent_records.purpose` is a text column, so new
 consent purposes are code-only. The work is: per-provider consent purposes, an
 opt-in sheet in the model picker, and a check on the web send path.
 
@@ -2460,7 +2460,7 @@ opt-in sheet in the model picker, and a check on the web send path.
 
 Enforcing the check without the sheet blocks paying users mid-conversation with
 no way to proceed. Shipping the sheet without the check is a consent dialog that
-grants nothing — the fake-control pattern this goal exists to remove. Both
+grants nothing, the fake-control pattern this goal exists to remove. Both
 halves have to land together, and whether they should land at all is a
 founder/counsel call about legal exposure and user friction, not an engineering
 one.
@@ -2473,7 +2473,7 @@ one.
 - If no, say so and I will narrow the contract's documented scope to mobile so
   nothing claims coverage it does not have.
 
-## The plugin catalogue had only four plugins in it — three real packs added (Phase 1)
+## The plugin catalogue had only four plugins in it, three real packs added (Phase 1)
 
 **Status:** Resolved for the packs that can honestly exist today; still open for
 going beyond the real first-party skill set.
@@ -2482,13 +2482,13 @@ going beyond the real first-party skill set.
 installs nothing". Half of that was wrong and stays corrected: installing works,
 and it matters. `POST /api/plugins/installations` calls `installWebPlugin`, and
 `listEnabledPluginIdsForUser` gates real skill availability in the chat
-request-processor, the tool-loop and `/api/skills` — but only for a skill
+request-processor, the tool-loop and `/api/skills`, but only for a skill
 whose own `SKILL.md` names a `plugin:` owner. `research-pack`'s
 `literature-review` is the one skill in the tree that does; installing that
 pack is what makes it selectable.
 
-The other half — only four catalogue rows, one of them (`research-pack`)
-actually installable — is now three rows better. Migration
+The other half, only four catalogue rows, one of them (`research-pack`)
+actually installable, is now three rows better. Migration
 `db/neon/0145_web_pack_example_prompts.sql` adds three new published,
 web-installable, first-party packs that bundle ONLY skills `GET /api/skills`
 actually serves in production:
@@ -2500,13 +2500,13 @@ actually serves in production:
 `plugin_registry_entries` now holds seven rows, and all seven behave like real
 installs the same way: a genuine `plugin_installations` row, real enable/
 disable/remove, and a real count. `github-automation`, `calendar-assistant`,
-and `crm-sync` stay `preview` deliberately — their declared skills ("Code
+and `crm-sync` stay `preview` deliberately, their declared skills ("Code
 Review", "Meeting Summarizer", …) do not correspond to any real skill, and
 promoting them would advertise an install that installs nothing real.
 
 Skill _gating_ is a narrower claim than "real install," and I got it wrong on
 the first pass of this note: none of the seven skills the three new packs
-declare carries a `plugin:` owner in its `SKILL.md` — they are first-party
+declare carries a `plugin:` owner in its `SKILL.md`, they are first-party
 skills already available to every user regardless of any pack, unlike
 `literature-review`. Installing engineering-pack/writing-pack/data-pack
 therefore cannot change what shows up in Skills; it only adds the pack to the
@@ -2523,8 +2523,8 @@ on both routes, plus a 503 if the catalog can't be read), and
 migration content and the real `.agents/skills` tree agree: none of the three
 packs' declared skills is owned, `literature-review` still is).
 
-Going further than that — actually gating engineering-pack/writing-pack/
-data-pack's skills behind install, the way `research-pack` is gated — is a
+Going further than that, actually gating engineering-pack/writing-pack/
+data-pack's skills behind install, the way `research-pack` is gated, is a
 bigger, riskier change: those seven skills are meant to be globally available
 general-purpose skills today, and moving them behind a pack would take them
 away from anyone who doesn't install the matching pack. I left that choice to
@@ -2535,7 +2535,7 @@ you rather than making it silently.
 - Every first-party skill that exists is now spoken for by one of the four
   installable packs. Going past seven catalogue entries means either shipping
   new first-party skills to bundle, or deciding whether third-party submission
-  opens up — `plugin_registry_entries_first_party_only` is the one constraint
+  opens up, `plugin_registry_entries_first_party_only` is the one constraint
   to drop when that decision lands. I still should not invent a plugin's
   capabilities unprompted; a registry entry claims a capability, and a
   fabricated one is the same fake-availability defect this goal exists to
@@ -2543,12 +2543,12 @@ you rather than making it silently.
 
 ## Automatic credit recharge needs your decision before any UI
 
-**Status:** `BLOCKED_BY_HUMAN` — the toggle is trivial; what it authorises is not.
+**Status:** `BLOCKED_BY_HUMAN`, the toggle is trivial; what it authorises is not.
 
 Self-serve credit purchase already ships: Billing renders a Usage top-up
 section for Stripe-billed paid accounts with a unit rate, a minimum and a
 self-serve maximum. (The `CreditAlertModal` that once declared "no credit
-top-ups, ever" no longer exists — that record was stale.)
+top-ups, ever" no longer exists, that record was stale.)
 
 Automatic recharge does not exist at all: no `autoReload` field, column or
 handler anywhere in the tree. It is the one remaining half of GAP-280.
@@ -2557,7 +2557,7 @@ handler anywhere in the tree. It is the one remaining half of GAP-280.
 
 Auto-recharge is a standing authorisation to charge a saved card while the user
 is not present. The switch is an afternoon; the behaviour behind it is the real
-work — a threshold that triggers it, a cap so a runaway loop cannot bill someone
+work, a threshold that triggers it, a cap so a runaway loop cannot bill someone
 repeatedly, an idempotency guard so a retry does not double-charge, a receipt
 and a notification for a charge nobody watched happen, and a clear path to
 revoke it. Shipping the toggle first would be a control that promises to spend
@@ -2571,12 +2571,12 @@ money and does not, and shipping the behaviour without the guards is worse.
 
 ## Should new accounts get a pre-seeded example project?
 
-**Status:** `BLOCKED_BY_HUMAN` — a product call, not an engineering gap.
+**Status:** `BLOCKED_BY_HUMAN`, a product call, not an engineering gap.
 
 The reference seeds every new account's Projects list with a "How to use
 Claude" example that doubles as an interactive onboarding guide. Ours does not.
 
-Everything needed exists — projects, instructions, knowledge files — so this is
+Everything needed exists, projects, instructions, knowledge files, so this is
 buildable in an afternoon. I have not built it because it means creating a row
 in a real user's account at signup that they did not ask for and have to delete
 if they do not want it, and because it writes to production on every signup.
@@ -2585,15 +2585,15 @@ if they do not want it, and because it writes to production on every signup.
 
 - Say whether new accounts should get one, and what it should contain. If yes I
   will also need to know whether it is created at signup or lazily on first
-  visit to Projects — lazily is cheaper and leaves accounts that never open
+  visit to Projects, lazily is cheaper and leaves accounts that never open
   Projects untouched.
 
 ## Nine live API routes have no caller anywhere
 
-**Status:** `BLOCKED_BY_HUMAN` — wire or delete is your call, not mine.
+**Status:** `BLOCKED_BY_HUMAN`, wire or delete is your call, not mine.
 
 I swept all 233 routes under `apps/web/app/api` for a caller in apps, packages,
-docs or scripts. Most of the unreferenced ones are legitimately external — cron
+docs or scripts. Most of the unreferenced ones are legitimately external, cron
 via vercel.json, SCIM from an identity provider, IAP and GitHub webhooks, the
 desktop and mobile clients, the public `/api/v1` surface. Eight more are
 deliberate 410 Gone tombstones with tests pinning the status, which is correct
@@ -2605,7 +2605,7 @@ That leaves nine live routes, roughly 530 lines, that nothing calls:
     settings/test-provider   usage/history           usage/providers
     webhook-diagnostic       voice/health            debug/llm-status
 
-Three are plausibly ops endpoints hit by monitoring rather than app code —
+Three are plausibly ops endpoints hit by monitoring rather than app code.
 `voice/health`, `debug/llm-status`, `webhook-diagnostic`. If that is what they
 are, they are fine and I will annotate them so the next sweep does not re-flag
 them. `me/routing-preferences` corroborates an existing recorded flaw
@@ -2614,7 +2614,7 @@ threaded through routing.
 
 **Why I did not just delete them**
 
-An endpoint can have a caller outside this repository — a script of yours, a
+An endpoint can have a caller outside this repository, a script of yours, a
 partner integration, a saved request. Deleting a live route is a breaking change
 that no test in here would catch, and it is not reversible by the person who
 notices at 2am.
@@ -2646,7 +2646,7 @@ in a permission-denied directory for me, so this is yours to paste.
 ```
 # Server-side pepper for email pseudonymisation. Email addresses are
 # low-entropy and enumerable, so an unkeyed digest is reversible by dictionary;
-# this pepper is what makes the stored value a pseudonym. UNSET IS NOT INERT —
+# this pepper is what makes the stored value a pseudonym. UNSET IS NOT INERT.
 # pseudonymizeEmail() silently falls back to legacyEmailSha256(), an unkeyed
 # SHA-256, so production without this stores reversible digests.
 EMAIL_HASH_PEPPER=
@@ -2661,7 +2661,7 @@ APPLE_APP_STORE_ENVIRONMENT=
 
 **Worth your attention beyond the guard:** `EMAIL_HASH_PEPPER` unset is not a
 no-op. `pseudonymizeEmail()` falls back to an unkeyed SHA-256 of the address, and
-an unkeyed digest of a low-entropy value is reversible by dictionary — the exact
+an unkeyed digest of a low-entropy value is reversible by dictionary, the exact
 weakness the pepper exists to prevent. Please confirm it is actually set in the
 production environment; the code cannot tell you, because the fallback is silent.
 
@@ -2670,8 +2670,8 @@ production environment; the code cannot tell you, because the fallback is silent
 ## URGENT: an uncommitted change in the tree will break CI for every surface
 
 `pnpm install --frozen-lockfile` currently FAILS at the repo root. That is the
-exact command every workflow runs — `js-verify`, `rust-desktop-cli`,
-`release-mobile.yml:89`, all of them — before any test executes. If the current
+exact command every workflow runs, `js-verify`, `rust-desktop-cli`,
+`release-mobile.yml:89`, all of them, before any test executes. If the current
 working tree is committed as-is, CI does not fail a test; it fails to install,
 on every surface at once.
 
@@ -2689,13 +2689,13 @@ CAUSE: `apps/web/package.json:143` now declares `"undici": "^8.10.0"` as a
 direct dependency, while the root `overrides` block in `pnpm-lock.yaml:21`
 forces `undici: '>=8.9.0 <9'`. pnpm resolves the importer's effective spec
 through the override, so the recorded specifier and the computed spec can never
-agree. Regenerating the lockfile does not fix it — one of the two declarations
+agree. Regenerating the lockfile does not fix it, one of the two declarations
 has to change.
 
 THIS IS NOT ON THE BRANCH. `git show HEAD:apps/web/package.json` contains no
 undici entry at all. Both `apps/web/package.json` and `pnpm-lock.yaml` are
 modified-uncommitted, and they were not modified when this session began. They
-appear to be live work from another session — most likely a security-driven
+appear to be live work from another session, most likely a security-driven
 undici pin, given the override reads like a CVE floor.
 
 DECISION NEEDED, and it is not mine to make because I cannot know the intent
@@ -2720,7 +2720,7 @@ resolved.
 Desktop Settings -> Computer Use contains TWO app allow/deny mechanisms. One is
 real. The other sits ABOVE it on the same page and is inert.
 
-THE REAL ONE — "Per-app permission registry". `AppPermissionManager`
+THE REAL ONE, "Per-app permission registry". `AppPermissionManager`
 (`src-tauri/src/automation/computer_use/app_permissions.rs`) is constructed at
 startup (`lib.rs:1000-1009`), persisted to `app_permissions.json`, and consulted
 inside the actual agent action loop: `anthropic_agent.rs:321` and
@@ -2729,11 +2729,11 @@ inside the actual agent action loop: `anthropic_agent.rs:321` and
 `safety.check_app_permissions`, default true. Five IPC commands expose it and
 `ComputerUseSettings.tsx` calls all five. This section works.
 
-THE DECORATIVE ONE — "Allowed / denied app lists", higher in the same panel.
+THE DECORATIVE ONE, "Allowed / denied app lists", higher in the same panel.
 Backed by the `allowedApps`/`deniedApps` zustand arrays. `handleAddAllowedApp`
 and `handleAddDeniedApp` push onto a local array and nothing else. Those arrays
 are read in exactly two places, both of which render them back to the user. No
-`invoke` anywhere — the strings never reach Rust, never reach
+`invoke` anywhere, the strings never reach Rust, never reach
 `AppPermissionManager`, never reach the safety layer. `computerUseStore` has no
 `persist` middleware, so the lists are also discarded on restart.
 
@@ -2747,7 +2747,7 @@ gives them the feeling of having locked the door.
 
 DECISION NEEDED:
 (a) delete the decorative lists and their store plumbing, leaving the per-app
-permission registry as the single allow/deny surface — nothing is lost,
+permission registry as the single allow/deny surface, nothing is lost,
 the registry already carries the always-blocked list and active-window
 helper; or
 (b) keep them as a convenience front-end, in which case they MUST write
@@ -2759,12 +2759,12 @@ Nothing has been changed. Recommendation is (a).
 Related and already actioned on the same reasoning: `hideAppsOnTask`, a toggle
 in the same safety section whose copy read "Apps hidden during a task are
 restored when the agent stops", had no reader anywhere and no persistence. It
-has been removed — no OS-level app-hiding capability exists in the Rust tree at
+has been removed, no OS-level app-hiding capability exists in the Rust tree at
 all, so there was nothing to wire it to.
 
 ---
 
-## EMAIL_HASH_PEPPER: the code no longer degrades silently — but two things are yours
+## EMAIL_HASH_PEPPER: the code no longer degrades silently, but two things are yours
 
 The silent-degradation defect is fixed. `pseudonymizeEmail()` now FAILS CLOSED in
 production runtime when the pepper is absent, instead of quietly falling back to
@@ -2782,26 +2782,26 @@ Two things it deliberately does NOT do, both correct:
   naive check would have thrown on every preview deployment.
 
 MATCHING IS PRESERVED. `emailPseudonymCandidates()` no longer routes through the
-throwing function — it reads the pepper itself and returns the legacy digest
+throwing function, it reads the pepper itself and returns the legacy digest
 alone when the pepper is missing, without throwing, even in production. Rows
 written before the pepper stay findable and erasure still purges them. Had it
 kept routing through, the new throw would have propagated into the erasure query
-and made pre-pepper rows UNERASABLE — a confidentiality bug turned into a
+and made pre-pepper rows UNERASABLE, a confidentiality bug turned into a
 compliance failure.
 
-### DECISION 1 — a misconfigured production now BLOCKS erasure instead of degrading it
+### DECISION 1: a misconfigured production now BLOCKS erasure instead of degrading it
 
 The erasure RECEIPT (`anonymous-erasure.ts:48`) is a write. So if production ever
 runs without the pepper, a DPDP erasure request fails rather than stamping a
-reversible digest into the security-audit record. I judged that correct — the
-receipt is itself a stored pseudonym — but you should know the behaviour from me
+reversible digest into the security-audit record. I judged that correct, the
+receipt is itself a stored pseudonym, but you should know the behaviour from me
 rather than from an incident. The erasure QUERY is unaffected; only the receipt.
 
-### DECISION 2 — rows written before the pepper keep unkeyed digests, permanently
+### DECISION 2: rows written before the pepper keep unkeyed digests, permanently
 
 `docs/agent-context/known-flaws.md:89-92` states the variable was added to Vercel
 Production and Preview on 2026-08-20, effective on each surface's next deploy.
-That is an in-repo claim, not evidence — nobody in this session could see the
+That is an in-repo claim, not evidence, nobody in this session could see the
 dashboard.
 
 If no deploy has happened since then, production has been writing reversible
@@ -2810,7 +2810,7 @@ pseudonym cannot be recomputed from a hash. Affected columns are
 `waitlist.email` and `consent_records.subject_email_sha256`.
 
 You need to decide whether those rows are re-keyed from a plaintext source or
-accepted as legacy. Matching is unaffected either way — the exposure is the
+accepted as legacy. Matching is unaffected either way, the exposure is the
 stored value itself.
 
 ### STILL OUTSTANDING
@@ -2831,11 +2831,11 @@ The desktop app builds and code-signs correctly. Verified on this machine:
 
 Vite genuinely ran (9933 modules transformed), codesign used the real Developer
 ID with no keychain prompt, and notarization was skipped with a WARNING because
-`APPLE_ID`/`APPLE_PASSWORD`/`APPLE_TEAM_ID` are absent — the correct behaviour
+`APPLE_ID`/`APPLE_PASSWORD`/`APPLE_TEAM_ID` are absent, the correct behaviour
 for a local build.
 
 But the command exits 1. After bundling, Tauri builds an updater artifact that
-must be signed with `TAURI_SIGNING_PRIVATE_KEY` — a DIFFERENT secret from the
+must be signed with `TAURI_SIGNING_PRIVATE_KEY`, a DIFFERENT secret from the
 Developer ID codesigning identity. It is Tauri's own updater-manifest key, and
 only its public half is in the repo (`tauri.conf.json:103`). Without the private
 half that step throws a hard error:
@@ -2847,12 +2847,12 @@ half that step throws a hard error:
 THE ASYMMETRY IS THE FINDING. Notarization needs release-only secrets and
 degrades to a warning. Updater signing needs a release-only secret and hard
 fails. So `pnpm build:desktop` returns non-zero on EVERY developer machine, not
-just this one — a developer cannot run the documented full build and see it
+just this one, a developer cannot run the documented full build and see it
 succeed, and cannot distinguish "my change broke the build" from "I do not hold
 a release secret".
 
 YOUR CALL, two defensible options:
-(a) Intended — the full build is a release-only path, in which case the script
+(a) Intended, the full build is a release-only path, in which case the script
 or its docs should say so, because today it looks like a broken build.
 (b) Make updater-bundle generation conditional on `TAURI_SIGNING_PRIVATE_KEY`
 being present, mirroring how notarization already degrades. Local runs
@@ -2879,33 +2879,33 @@ extension does. Five files are entirely vacuous; six more are mixed.
 The proof they track nothing is that four have already DRIFTED from the
 production they impersonate:
 
-1. `api.test.ts` "withRetry pattern" — the local copy decides retryability with
+1. `api.test.ts` "withRetry pattern", the local copy decides retryability with
    `err.message.startsWith('CLIENT:')`. The string `CLIENT:` appears NOWHERE in
    production. Real `withRetry` retries on `AgiWorkforceApiError` with
    `statusCode >= 500`. Four tests assert the retry policy of a convention that
    does not exist.
 
-2. `inlineCompletionProvider.test.ts` "extractCompletionText" — production takes
+2. `inlineCompletionProvider.test.ts` "extractCompletionText", production takes
    `(raw, maxLength)` and truncates on both return paths. The copy takes `(raw)`
-   and never truncates. So `agiWorkforce.inlineCompletions.maxLength` — a
-   registered, shipped, user-facing setting — has ZERO test coverage, while a
+   and never truncates. So `agiWorkforce.inlineCompletions.maxLength`, a
+   registered, shipped, user-facing setting, has ZERO test coverage, while a
    file named after that provider shows 7 green tests over that function.
 
-3. `trust-boundary.test.ts` "endpoint validation" — 7 tests, 5 labelled
+3. `trust-boundary.test.ts` "endpoint validation", 7 tests, 5 labelled
    CRITICAL, over a local `isValidApiEndpoint` and a local host allowlist. The
    copy ALLOWS `agiworkforce-api.vercel.app`, which production REJECTS, and
    never covers `staging.agiworkforce.com` or `::1`, which production allows.
    Mitigating: the real `validateEndpointUrl` IS covered by security.test.ts
-   VSCODE-01, so the control is not unguarded — these 7 are drifted duplicates.
+   VSCODE-01, so the control is not unguarded, these 7 are drifted duplicates.
 
-4. THE ONE I MOST WANT YOU TO SEE — `security.test.ts` VSCODE-05 and VSCODE-06.
+4. THE ONE I MOST WANT YOU TO SEE, `security.test.ts` VSCODE-05 and VSCODE-06.
    VSCODE-05 defines `const SAFE_HREF_RE = /^(https?:|mailto:)/i` INSIDE each of
    its five tests and asserts the regex behaves as written. The actual
-   sanitization is DOMPurify in `src/webview/render.ts` — `ALLOWED_URI_REGEXP`,
-   `FORBID_TAGS`, `FORBID_ATTR`, and an `afterSanitizeAttributes` hook — which
+   sanitization is DOMPurify in `src/webview/render.ts`, `ALLOWED_URI_REGEXP`,
+   `FORBID_TAGS`, `FORBID_ATTR`, and an `afterSanitizeAttributes` hook, which
    this file never imports. VSCODE-06 does a `.replace()` inline and asserts the
    replacement worked; one of its tests even carries the comment "We just verify
-   the detection — the actual skip happens in sidebarProvider", so the author
+   the detection, the actual skip happens in sidebarProvider", so the author
    knew.
 
    NO TEST ANYWHERE asserts the real sanitizer's URI or tag policy. That is a
@@ -2916,7 +2916,7 @@ WHAT THE NUMBER MEANS: roughly 749 of the 890 exercise production. I have
 reported "887 / 890 extension tests passing" to you several times today; that
 number is real as a count and weaker as evidence than it sounds.
 
-The concentration is what matters more than the total — the vacuous blocks
+The concentration is what matters more than the total, the vacuous blocks
 cluster on retry policy, endpoint validation, completion truncation and HTML
 sanitization, which are precisely the places a green suite gets read as proof
 that a control works.
@@ -2938,7 +2938,7 @@ volume work and can follow.
 Found while auditing test coverage, not while looking for it.
 
 `apps/extension-vscode/src/data/workspaceIndexer.ts` exposes
-`getRelevantContext()` and `isStale()`. Both have ZERO callers in production —
+`getRelevantContext()` and `isStale()`. Both have ZERO callers in production.
 grep across `src` finds only their definitions.
 
 What IS wired is `registerFileWatcher()` (chatSetup.ts:64). On every change,
@@ -2948,22 +2948,22 @@ create and save of any `.ts .tsx .js .jsx .py .go .rs .java .cs .cpp .c .h .rb
 
 So the extension pays CPU, disk and battery to build and persist a symbol index
 on every save, and no code path ever reads the result. This is the same shape as
-the dead `contextBudget.ts` deleted earlier today — background work with no
-consumer — except this one is attached to a file watcher, so unlike dead code it
+the dead `contextBudget.ts` deleted earlier today, background work with no
+consumer, except this one is attached to a file watcher, so unlike dead code it
 costs the user something continuously.
 
 DECISION NEEDED, and it is a product call rather than a cleanup:
 (a) DELETE the indexer and its watcher. Nothing reads it, so nothing regresses,
 and users stop paying for it.
 (b) WIRE `getRelevantContext()` into chat context, which is evidently what it
-was built for. That is a feature decision — it changes what gets sent to
-the model — and it needs your intent, not a guess from me.
+was built for. That is a feature decision, it changes what gets sent to
+the model, and it needs your intent, not a guess from me.
 
 Not urgent in the incident sense; it has presumably always been this way. But it
 is the only finding today that costs the user resources continuously rather than
 merely misleading a reader.
 
-RELATED, for scale: its 30 tests are vacuous — they test a local copy whose
+RELATED, for scale: its 30 tests are vacuous, they test a local copy whose
 shape has drifted from production (free function vs method, top-10 vs top-20,
 hardcoded 2000 vs a `maxChars` parameter nothing tests). Do not spend effort
 rewriting them until (a) or (b) is decided, because (a) deletes them outright.
@@ -2980,10 +2980,11 @@ starts happening.
 
 It had NO test coverage anywhere. What sat in its place were six tautologies of
 the form `const shouldWarn = enabled && !acknowledged; expect(shouldWarn).toBe(true)`
-— assertions on a local expression, in a file named `extension.test.ts`.
 
-If that notice had silently stopped firing — an activate-ordering change, a
-guard inverted — nothing would have failed. Users would be sending surrounding
+- assertions on a local expression, in a file named `extension.test.ts`.
+
+If that notice had silently stopped firing, an activate-ordering change, a
+guard inverted, nothing would have failed. Users would be sending surrounding
 code with no disclosure, and the suite would still be green.
 
 It is now covered by three real tests driving the actual `activate`: the notice
@@ -2998,7 +2999,7 @@ redundant at all:
 
 - the privacy notice above (zero coverage anywhere)
 - `commandLabel`, real exported code behind the plan-mode confirmation prompt,
-  where the copy had also DRIFTED — production has five labels including
+  where the copy had also DRIFTED, production has five labels including
   `docs: 'Generate Docs'`, the copy had four
 - the API-key validator at `commandSetup.ts:515`, no coverage
   Only two blocks were genuinely deletable, plus one that described a function
@@ -3011,14 +3012,14 @@ second would have quietly removed the only marker that a privacy disclosure
 existed.
 
 ONE GAP RECORDED, NOT FIXED: the real configuration-change handler
-(`extension.ts:140`) reacts to `agent.mode`, `agent.effort` and `cliPath` —
+(`extension.ts:140`) reacts to `agent.mode`, `agent.effort` and `cliPath`.
 restarting local runtimes, reconciling consent. The tautologies that pretended to
 cover it named three DIFFERENT keys, so deleting them lost nothing true. But that
 handler still has no coverage.
 
 ---
 
-## Fake-test sweep across all six surfaces — web is fine, Chrome is not
+## Fake-test sweep across all six surfaces, web is fine, Chrome is not
 
 The VS Code finding (145 of 986 tests unable to fail) prompted a sweep of every
 other surface. Rates are ESTIMATES from biased samples, not censuses; the
@@ -3030,11 +3031,11 @@ web 113 / 8695 ~1.3%
 mobile 27 / 2897 ~0.9%
 cli 8 / 1942 ~0.4% effectively clean
 
-### WEB IS NOT INFECTED — the number I quoted you holds
+### WEB IS NOT INFECTED, the number I quoted you holds
 
 ~1.3%, and more importantly its security corpus is VERIFIED CLEAN: 145 files
 covering security/, billing/, csrf, auth, rate-limit, encryption, secrets, PII,
-redaction, consent, retention, erasure, entitlement, quota and paywall — ZERO
+redaction, consent, retention, erasure, entitlement, quota and paywall, ZERO
 vacuous. `html-sanitizer.test.ts` genuinely exercises the real sanitizer with 63
 tests. The exact thing that was hollow in VS Code is solid on web.
 
@@ -3051,13 +3052,13 @@ No subscription check.
 So a test carrying a CRITICAL label asserts a gate the product does not
 implement. Either the gate is enforced somewhere else and the test is merely
 misplaced, or cloud unlock genuinely has no auth check on mobile. I did not
-determine which — that needs someone who knows the intended trust boundary, and
+determine which, that needs someone who knows the intended trust boundary, and
 it is the single highest-priority item out of this sweep.
 
 ### CHROME IS THE WORST, AND IT READS AS A REMEDIATION LEDGER
 
-`apps/extension/__tests__/security-fixes.test.ts` is organised by finding ID —
-C-2, CHROME-CRIT-1, H-07, H-01, H-1/H-2/H-3, P0-D and others — with 63 of its
+`apps/extension/__tests__/security-fixes.test.ts` is organised by finding ID.
+C-2, CHROME-CRIT-1, H-07, H-01, H-1/H-2/H-3, P0-D and others, with 63 of its
 102 blocks vacuous. The code under test is either ABSENT from production
 (C-2's `resolveAuthHeader`/`isBridgeRequest` have no counterpart at all) or
 measurably DRIFTED (CHROME-CRIT-1 asserts a 16-hex-char fence nonce; production
@@ -3072,21 +3073,21 @@ Also on Chrome, all verified:
   to structured `CookieBlockEntry` parsing; the suite still holds 44 regexes and
   its own matcher, and never noticed. They also DISAGREE: the test's pattern
   blocks `foox.com`, production's suffix mode allows it.
-- `recorder-redaction.test.ts` 16/16 — PRIVACY, re-implements the API-key/JWT
+- `recorder-redaction.test.ts` 16/16, PRIVACY, re-implements the API-key/JWT
   redaction instead of calling `sanitizeRecordedValue`.
-- `connection-lifecycle.test.ts` 33/33 — the three classes it tests do not exist.
-- `screenshot-tab-restriction.test.ts` 4/4 — the cross-tab screenshot control.
+- `connection-lifecycle.test.ts` 33/33, the three classes it tests do not exist.
+- `screenshot-tab-restriction.test.ts` 4/4, the cross-tab screenshot control.
 
 ### DESKTOP HAS A DIFFERENT FAILURE MODE
 
 Mostly MOCK-ECHO rather than re-implementation: `expect(invoke).toHaveBeenCalledWith(x)`
 where the test passed `x` to the mock itself. Green regardless, without copying
 anything. `memory.test.ts` (55 blocks) and `scheduler.test.ts` (37) are this
-shape — `api/memory.ts` and its `fenceUntrustedMemoryContent` sanitisation never
+shape, `api/memory.ts` and its `fenceUntrustedMemoryContent` sanitisation never
 run. And `stores/__tests__/apiStore.test.ts` tests a store that WAS NEVER
-WRITTEN — `stores/apiStore.ts` does not exist.
+WRITTEN, `stores/apiStore.ts` does not exist.
 
-### CLI IS CLEAN — report it as such
+### CLI IS CLEAN: report it as such
 
 8 of 1942 (0.4%), both clusters self-labelled "// Simulate". Every auth,
 credential, permission, redaction, billing and policy module is genuinely wired.
@@ -3096,7 +3097,7 @@ against the canonical TS source and its docstring forbids re-typing thresholds.
 ### THE SEARCHABLE SIGNATURE, worth more than the counts
 
 CONCEPT-NAMED test files are the infected stratum. `trust-boundary.test.ts`
-exists on web, mobile AND extension — all three ~100% fake. Module-named files
+exists on web, mobile AND extension, all three ~100% fake. Module-named files
 (`fooStore.test.ts`, `fooProvider.test.ts`) were 0/12 in a random control and
 clean everywhere sampled. A file named after an IDEA rather than a module has
 nothing to import, so it invents its subject.
@@ -3108,7 +3109,7 @@ hit with only the SQL-migration family as noise.
 
 ---
 
-## RESOLVED: the mobile `isCloudUnlocked` question is BENIGN — cleared
+## RESOLVED: the mobile `isCloudUnlocked` question is BENIGN, cleared
 
 I flagged this as the highest-priority item from the fake-test sweep. It has
 been traced and it is NOT a security gap. Recording the clearance as prominently
@@ -3117,7 +3118,7 @@ as the alarm.
 VERIFIED: no managed compute is served without a Clerk-verified userId and a
 server-side subscription lookup keyed on that userId. Forcing
 `cloudUnlocked === true` on an unauthenticated device unlocks UI affordances and
-nothing else — every resulting request is rejected 401/403 at the server. A UI
+nothing else, every resulting request is rejected 401/403 at the server. A UI
 defect class, not compute theft.
 
 WHY, in the three places it matters:
@@ -3135,13 +3136,13 @@ WHY, in the three places it matters:
    the signup record only, so a legacy blob cannot reintroduce the grant. The
    code comment names the exact attack: a rehydrated `true` routing chats to
    managed cloud on cold start before that session is proven. The test covering
-   this is REAL — verified, given the session's subject.
+   this is REAL, verified, given the session's subject.
 
 3. THE SERVER ENFORCES INDEPENDENTLY. `auth-gate.ts`: no Bearer → 401 before
    anything else; token verified with real crypto via `@clerk/backend`; the
    subscription lookup is keyed on the SERVER-derived userId, never on anything
    the client sent; inactive plan → 403. The request body carries no
-   `cloudUnlocked` field — the flag is never transmitted.
+   `cloudUnlocked` field, the flag is never transmitted.
 
 The CRITICAL-labelled test was wrong about the function's shape AND testing the
 wrong layer, but it was not papering over a hole. The invariant it wants is
@@ -3151,10 +3152,10 @@ enforced in two other places.
 
 1. DELETE THE INVITE PATH. `'ALPHATESTER'` is a hardcoded unlock string still
    shipping in the mobile bundle (`waitlist/service.ts:36`), wired to a writer
-   that sets `cloudUnlocked: true` with no auth and no network — a pure local
+   that sets `cloudUnlocked: true` with no auth and no network, a pure local
    string compare that works offline. It is unreachable today only because
    `InviteCodeModal` is mounted nowhere; it is leftover from the waitlist-gate
-   removal. Still 401 at the server if it ever fired, so cosmetic — but it is one
+   removal. Still 401 at the server if it ever fired, so cosmetic, but it is one
    import away from being live and has no upside. Clean up the four stale
    `jest.mock('.../cloud-bridge')` calls that outlived the gate removal too.
 
@@ -3167,13 +3168,13 @@ enforced in two other places.
 
 ## 39. The operator console has no in-app entry point (merge of the security sweep, 2026-08-22)
 
-**Status:** `BLOCKED_BY_HUMAN` — a product decision, not a code gap.
+**Status:** `BLOCKED_BY_HUMAN`, a product decision, not a code gap.
 
 `apps/web/features/admin/components/AdminConsoleEntry.tsx` (since removed) was
 added on `compliance/dpdp` to surface an "Open admin console" card in Settings →
 Security.
-It gated on `hasAdminConsoleAccess(user.publicMetadata)` — the **organisation**
-`owner`/`admin` role — while the routes behind it are now gated on
+It gated on `hasAdminConsoleAccess(user.publicMetadata)`, the **organisation**
+`owner`/`admin` role, while the routes behind it are now gated on
 `requirePlatformAdmin`, i.e. the deploy-time `AGI_PLATFORM_ADMIN_USER_IDS`
 allowlist (CLAUDE-SECURITY-20260821-144214 F2/F3/F5/F6).
 
@@ -3183,36 +3184,36 @@ owns their own org, and then answers 404 when they click it. The component was
 deleted rather than kept dead, so nobody re-wires it with the same gate.
 
 **The decision needed:** whether the operator console should have an in-app
-entry at all. If yes, it cannot be gated client-side — `AGI_PLATFORM_ADMIN_USER_IDS`
-is server-only by design — so it needs a server component or an endpoint that
+entry at all. If yes, it cannot be gated client-side, `AGI_PLATFORM_ADMIN_USER_IDS`
+is server-only by design, so it needs a server component or an endpoint that
 reports platform membership for the signed-in user. Until then, reach the console
 by navigating to `/admin` directly; it works for allowlisted operators.
 
 ---
 
-## 40. Missing `ANTHROPIC_API_KEY` Actions secret — "AI output quality evals" has never passed on schedule
+## 40. Missing `ANTHROPIC_API_KEY` Actions secret, "AI output quality evals" has never passed on schedule
 
-**Status:** `BLOCKED_BY_HUMAN` — needs a repository secret only you can add.
+**Status:** `BLOCKED_BY_HUMAN`, needs a repository secret only you can add.
 
 **Blocks:** any real measurement of model output quality. Every scheduled run of
 `.github/workflows/evals.yml` has failed identically since it was added: run
 31363692413 (2026-08-10, its first scheduled run) and run 32695971124 (this
 week) both fail at the same guard,
 `evals.yml:119-124` ("Require the provider key"), which checks
-`ANTHROPIC_API_KEY` and exits 1 when it is empty — by design, per
+`ANTHROPIC_API_KEY` and exits 1 when it is empty, by design, per
 `tools/evals/README.md:58-60`, because a green run that measured nothing is the
 exact failure mode this directory exists to prevent. The env dump on run
 32695971124 confirms the secret is empty in this repository.
 
 **The fix:** add `ANTHROPIC_API_KEY` under repository Settings → Secrets and
 variables → Actions. Then trigger `workflow_dispatch` on "AI output quality
-evals" once to confirm the live job actually runs — the guard passing is not
+evals" once to confirm the live job actually runs, the guard passing is not
 enough by itself; the job downstream (`pnpm exec vitest run tools/evals` with
 `AGIWORKFORCE_LIVE_TEST=1`) must be seen scoring the three corpora.
 
 **Cost of adding it:** real, ongoing spend. The weekly live job
 (`__tests__/live.eval.test.ts`) runs the `golden` (12 rows), `refusal` (10
-rows), and `jailbreak` (11 rows) corpora — 33 rows total — through one
+rows), and `jailbreak` (11 rows) corpora, 33 rows total, through one
 non-streaming Anthropic Messages call per row, each capped at 512 max output
 tokens (`tools/evals/src/anthropic.ts`'s `maxOutputTokens` default). That is a
 small, bounded weekly cost, not a runaway one, but it is real production API
@@ -3223,7 +3224,7 @@ this rather than a shared production credential.
 claims this suite exists to back are actually being measured in CI. The offline
 harness job (`pnpm exec vitest run tools/evals`, no live model) still runs and
 passes on every change to the directory, so the grading logic itself is
-exercised — only the live measurement against a real model is dark.
+exercised, only the live measurement against a real model is dark.
 
 ---
 
@@ -3256,7 +3257,7 @@ channel: 'chrome' })`, run from inside the repo so `playwright` resolves.
 | chatgpt.com | Cloudflare "Just a moment" | **works, signed in**         |
 | claude.ai   | Cloudflare                 | still Cloudflare, 3 x 60s    |
 
-`headless: true` is the tell — both sites challenge it even with valid session
+`headless: true` is the tell, both sites challenge it even with valid session
 cookies. Headed clears ChatGPT. claude.ai issues `/api/challenge_redirect` and
 never settles.
 
@@ -3269,7 +3270,7 @@ references without probing them.
 **Cost of leaving it:** every parity claim against claude.ai rests on recorded
 observations rather than a live check. `audit/ui-gaps.csv` carries 341
 reference-derived records, so the comparison has been done before and written
-down — but it cannot be refreshed, and a claude.ai change since those records
+down, but it cannot be refreshed, and a claude.ai change since those records
 were written would go unnoticed.
 
 ---
@@ -3300,15 +3301,15 @@ first.
 
 Measured on 2026-08-31 against the signed-in QA account:
 
-- **`share-conversation`** — the Share control only renders once a conversation
+- **`share-conversation`**: the Share control only renders once a conversation
   has messages (`WebChatPage.tsx`, guarded by `hasMessages`). The sidebar
   conversation list did not render any anchor or labelled entry within 12s, so
   no conversation could be opened to make the control appear, even though the
   account has 25 conversations.
-- **`create-project`** — `/chat/projects` carries two controls that read the
+- **`create-project`**: `/chat/projects` carries two controls that read the
   same: a page-level "New" that opens the dialog, and a sidebar "New project"
   that navigates to `/chat`. Only the first is the dialog trigger.
-- **`export` / `feedback`** — behind menus rather than direct controls.
+- **`export` / `feedback`**: behind menus rather than direct controls.
 
 See also the `max_15x`, no-workspace shape of this account: several admin
 surfaces only ever render their empty state, so a dialog gated behind workspace

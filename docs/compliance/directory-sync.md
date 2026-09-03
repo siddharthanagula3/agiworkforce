@@ -28,8 +28,8 @@ Supported spec mechanics:
   `itemsPerPage`, capped at 200 resources per page.
 - `urn:ietf:params:scim:api:messages:2.0:ListResponse` and `:Error` envelopes,
   `application/scim+json` on every response including errors.
-- PATCH with both the pathed shape (`{"op":"replace","path":"active","value":false}` — Okta)
-  and the path-less shape (`{"op":"replace","value":{"active":false}}` — Entra).
+- PATCH with both the pathed shape (`{"op":"replace","path":"active","value":false}`, Okta)
+  and the path-less shape (`{"op":"replace","value":{"active":false}}`, Entra).
 
 Deliberately NOT supported, and advertised as unsupported in
 `/ServiceProviderConfig` so no IdP attempts them: `/Bulk`, sorting, ETag
@@ -75,7 +75,7 @@ So provisioning is modelled honestly:
   the account exists.
 
 **Known gap.** Linking does not yet happen automatically at the moment the
-person signs in — it happens on the next SCIM write for that resource. Wiring
+person signs in, it happens on the next SCIM write for that resource. Wiring
 sign-in-time linking requires changing a shared identity path
 (`lib/server/user-identity.ts` / `/api/me`), which is outside this change's
 ownership. Until that lands, provisioning is eventually consistent for people
@@ -166,7 +166,7 @@ boundary here is application-enforced, not RLS-enforced.** Every statement in
 `organization_id` predicate, resolved from the credential and never from the
 request body. `scripts/check-db-isolation.mjs` would not catch a mistake here
 (none of these tables are in its `USER_OWNED_TABLES` set), so the isolation is
-covered by tests instead — see the "SCIM tenant isolation" block in
+covered by tests instead, see the "SCIM tenant isolation" block in
 `app/api/scim/v2/__tests__/scim-routes.test.ts`.
 
 The RLS policies in `0084` exist for the ADMIN surface (`app_rls`), which is a
@@ -195,7 +195,7 @@ an IdP did must not be rewritable by the organization it describes.
    with `{"provider":"okta","directory_id":"…","display_name":"…"}`.
    `provider` is one of `okta`, `azure_ad`, `google`, `onelogin`, `generic_scim`.
    If your account administers more than one organization you must also pass
-   `organizationId` — the route refuses to guess.
+   `organizationId`: the route refuses to guess.
 2. Mint a token: `POST /api/admin/directory-sync/tokens`
    with `{"connectionId":"…","name":"Okta production"}`. Copy `raw_token` now.
 3. In the IdP, set the SCIM base URL to the returned `scim_base_url`
@@ -216,4 +216,4 @@ this migration.
 - Sign-in-time linking of a pending resource (see the known gap above).
 - A settings-modal surface for directory sync. The admin API is complete and
   covered by tests; the console UI lives at `/admin/directory-sync`.
-- `/Bulk`, sort, and ETag — advertised as unsupported rather than stubbed.
+- `/Bulk`, sort, and ETag, advertised as unsupported rather than stubbed.

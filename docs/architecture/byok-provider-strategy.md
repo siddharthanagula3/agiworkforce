@@ -50,7 +50,7 @@ A recent hosted-open-model measurement paper makes this explicit: production use
 ## Current AGI Catalog Position
 
 `packages/contracts/types/src/models.json` is the single live source for the
-current provider and model counts and the exact per-provider entries — read it
+current provider and model counts and the exact per-provider entries, read it
 directly; do not restate its numbers here (restated counts drift; a prior
 version of this section carried stale totals).
 

@@ -133,9 +133,9 @@
       "path": "infrastructure/sandbox",
       "owner": "Web lead",
       "stack": "Static HTML (single index.html, no build step), deployed to sandbox.agiworkforce.com via Vercel",
-      "purpose": "Cross-origin artifact renderer — sandboxed iframe/srcDoc rendering of generated artifacts and file previews with download-safety isolation (see risk-map artifact-rendering)",
+      "purpose": "Cross-origin artifact renderer, sandboxed iframe/srcDoc rendering of generated artifacts and file previews with download-safety isolation (see risk-map artifact-rendering)",
       "primaryChecks": ["pnpm --filter @agiworkforce/sandbox build"],
-      "allowedImports": ["none — isolated static renderer; receives content via postMessage only"]
+      "allowedImports": ["none, isolated static renderer; receives content via postMessage only"]
     }
   ],
   "workspaceUnitClassification": {

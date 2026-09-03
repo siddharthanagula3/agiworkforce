@@ -1,6 +1,6 @@
 # Personal data breach runbook
 
-Status: Draft — **not reviewed by counsel**
+Status: Draft, **not reviewed by counsel**
 Legal review: pending-counsel
 Owner: Founder (no incident commander is designated; see [Open gaps](#open-gaps))
 Last updated: 2026-08-15
@@ -8,7 +8,7 @@ Applies to: AGI Automation LLC, all surfaces (web, desktop, mobile, extensions, 
 
 This runbook exists because India's Digital Personal Data Protection Act, 2023
 requires a Data Fiduciary to notify **both** the Data Protection Board and
-**every affected Data Principal** when personal data is breached — and because
+**every affected Data Principal** when personal data is breached, and because
 the notification clock starts before anyone has finished understanding what
 happened. A runbook written during an incident is written too late.
 
@@ -52,14 +52,14 @@ late that a notification clock started is not recoverable.
 ## 1. Clock
 
 Start the clock at **the moment any employee or contractor first becomes aware
-of facts suggesting a breach** — not when it is confirmed, not when the root
+of facts suggesting a breach**, not when it is confirmed, not when the root
 cause is known.
 
 | Time from awareness              | What must have happened                                                                                          |
 | -------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
 | Immediately                      | Incident declared, an owner named, evidence preserved (§2)                                                       |
 | Without delay                    | Intimation to the **Data Protection Board** with what is known so far                                            |
-| Without delay                    | Intimation to **each affected Data Principal** (§5) — this is not gated on finishing the investigation           |
+| Without delay                    | Intimation to **each affected Data Principal** (§5), this is not gated on finishing the investigation            |
 | Within **72 hours** of awareness | Detailed report to the Board (§4). An extension must be requested from the Board in writing; it is not automatic |
 | Ongoing                          | Updates to the Board and to affected principals as facts change                                                  |
 
@@ -77,7 +77,7 @@ Two notes that matter operationally:
 
 ## 2. First 60 minutes
 
-Do these in order. Do not start the investigation before step 3 — the most
+Do these in order. Do not start the investigation before step 3, the most
 common way to lose an incident is to fix it and destroy the evidence of what it
 was.
 
@@ -89,7 +89,7 @@ was.
    [Open gaps](#open-gaps)).
 3. **Preserve evidence before remediating.**
    - Do **not** rotate credentials, delete rows, or redeploy until logs are
-     captured — remediation destroys the timeline.
+     captured, remediation destroys the timeline.
    - Capture Vercel runtime logs for the affected window. They are
      vendor-retained on the vendor's own schedule, which we do not set, so treat
      them as expiring.
@@ -114,7 +114,7 @@ was.
 
 ---
 
-## 3. Scoping — the questions the Board will ask
+## 3. Scoping, the questions the Board will ask
 
 You cannot notify accurately without answers to these. Get approximate answers
 fast rather than exact answers slowly; both notifications say what is known so
@@ -125,9 +125,9 @@ far and are updated.
 | What categories of personal data?       | The processing table in `apps/web/app/privacy/india/page.tsx` §02, and the schema under `apps/web/db/neon/`                                                                                                                                            |
 | Whose? Identify the affected principals | Query the affected tables by `user_id`; for anonymous rows, by `email` in `cloud_managed_waitlist` or `subject_email_sha256` in `consent_records`                                                                                                      |
 | How many?                               | `select count(distinct user_id) …` over the affected scope. Report a range if that is all you have                                                                                                                                                     |
-| Which surface / trust boundary?         | Local, BYOK and Managed Cloud are separate. **Local-mode data never reaches us**, so a server-side breach cannot expose it — say so explicitly, because it materially narrows scope                                                                    |
+| Which surface / trust boundary?         | Local, BYOK and Managed Cloud are separate. **Local-mode data never reaches us**, so a server-side breach cannot expose it, say so explicitly, because it materially narrows scope                                                                     |
 | Was it encrypted or pseudonymised?      | Object storage split: generated videos are in a private bucket, other files in a public one (`lib/server/object-storage.ts`). BYOK keys are encrypted on-device. `waitlist.email` is a SHA-256 digest; `cloud_managed_waitlist.email` is **plaintext** |
-| Third parties involved?                 | `apps/web/app/subprocessors/page.tsx` — **but that page is currently incomplete**, see [Open gaps](#open-gaps). Cross-check `resend-client.ts`, the video and geocoding providers, and the model providers in `lib/server/provider-endpoints.ts`       |
+| Third parties involved?                 | `apps/web/app/subprocessors/page.tsx`, **but that page is currently incomplete**, see [Open gaps](#open-gaps). Cross-check `resend-client.ts`, the video and geocoding providers, and the model providers in `lib/server/provider-endpoints.ts`        |
 | Did any of it leave India?              | All hosting is in the United States. For an Indian data principal, that is already a cross-border transfer under the Act and should be stated in the notice                                                                                            |
 | Root cause and remediation              | The incident record from §2                                                                                                                                                                                                                            |
 
@@ -135,21 +135,21 @@ far and are updated.
 
 ## 4. Board notification template
 
-**Legal review: pending-counsel — this template has not been reviewed by a
+**Legal review: pending-counsel, this template has not been reviewed by a
 lawyer.** It was drafted from the statute text by an engineer. Counsel must
 review it and the approval must be recorded in the header field at the top of
 this file before this wording is treated as settled.
 
 **This is not a hold on sending.** The statutory clock does not pause for legal
 review. If an incident is live and no approval exists yet, send this as drafted
-and put counsel on the wording in parallel — a late intimation breaches the Act,
+and put counsel on the wording in parallel, a late intimation breaches the Act,
 an imperfectly worded one does not.
 
 Send by the means the Board prescribes at the time. Fill every field; write
-"not yet established" where it is not known rather than omitting the line — an
+"not yet established" where it is not known rather than omitting the line, an
 omitted field reads as a fact withheld.
 
-> **Subject:** Personal data breach intimation — AGI Automation LLC — [initial | detailed] report
+> **Subject:** Personal data breach intimation, AGI Automation LLC, [initial | detailed] report
 >
 > **1. Reporting entity**
 > AGI Automation LLC, c/o registered agent, 5900 Balcones Drive STE 100, Austin, TX 78731, USA.
@@ -163,7 +163,7 @@ omitted field reads as a fact withheld.
 > **3. Timeline (all times IST, with UTC offset stated)**
 >
 > - Breach occurred / began: [timestamp, or estimated window]
-> - First became aware: [timestamp — this is the start of the clock]
+> - First became aware: [timestamp, this is the start of the clock]
 > - Contained: [timestamp, or "ongoing"]
 > - This report: [timestamp]
 >
@@ -183,7 +183,7 @@ omitted field reads as a fact withheld.
 > **7. Measures taken and proposed**
 > Containment: [what was done and when]
 > Remediation: [what has been fixed]
-> Prevention: [what changes so it cannot recur — with owners and dates]
+> Prevention: [what changes so it cannot recur, with owners and dates]
 >
 > **8. Intimation to data principals**
 > Method: [in-product notice / published notice at a public URL / email where a path exists]
@@ -198,7 +198,7 @@ omitted field reads as a fact withheld.
 
 ## 5. Data Principal notification template
 
-**Legal review: pending-counsel — this template has not been reviewed by a
+**Legal review: pending-counsel, this template has not been reviewed by a
 lawyer.** It was drafted from the statute text by an engineer. Counsel must
 review it and the approval must be recorded in the header field at the top of
 this file before this wording is treated as settled. Counsel's attention is
@@ -207,7 +207,7 @@ is a factual claim about this system, and a wrong one is a second incident.
 
 **This is not a hold on sending.** The statutory clock does not pause for legal
 review. If an incident is live and no approval exists yet, send this as drafted
-and put counsel on the wording in parallel — a late intimation breaches the Act,
+and put counsel on the wording in parallel, a late intimation breaches the Act,
 an imperfectly worded one does not.
 
 Send to **every** affected principal. The Act does not provide a
@@ -232,7 +232,7 @@ That is a real limitation, it is disclosed in
 > data we hold about you. We are telling you directly because you are affected,
 > not as a general announcement.
 >
-> **What happened.** [Plain description. No euphemism — "unauthorised access",
+> **What happened.** [Plain description. No euphemism, "unauthorised access",
 >
 > > not "an issue". No blaming a vendor unless it is the literal cause, and name
 > > them if it is.]
@@ -241,12 +241,12 @@ That is a real limitation, it is disclosed in
 >
 > **What data of yours was involved.** [Specific to this person's data, not the
 >
-> > full category list. If conversation content was involved, say so — it is the
+> > full category list. If conversation content was involved, say so, it is the
 > > most sensitive thing this product holds.]
 >
 > **What data of yours was NOT involved.** [State this where true. Examples that
 >
-> > matter to our users: card details never reach us — Stripe holds them; Local
+> > matter to our users: card details never reach us, Stripe holds them; Local
 > > mode data never leaves your device; BYOK provider traffic does not pass
 > > through us; your password is held by our identity provider and we never store
 > > it.]
@@ -270,9 +270,9 @@ That is a real limitation, it is disclosed in
 > line "DPDP grievance". If our response does not resolve it, data principals in
 > India may complain to the Data Protection Board of India.
 >
-> We are sorry. [Only if true — and it is.]
+> We are sorry. [Only if true, and it is.]
 >
-> — AGI Automation LLC
+> , AGI Automation LLC
 
 ---
 
@@ -295,12 +295,12 @@ These are the parts of this runbook that describe an intention rather than a
 capability. They are listed here rather than written into the procedure as if
 they worked. Each is tracked in `DPDP_PROGRESS.md`.
 
-| Gap                                                                                                                                                                                                     | Consequence during an incident                                                                                                                                                                    |
-| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **No designated incident commander or on-call rota.** The founder owns every incident by default.                                                                                                       | The clock runs while someone works out who is responsible.                                                                                                                                        |
-| **No mass-notification path.** Nothing can email an arbitrary list of affected users; the wired email provider serves support escalation and scheduled-task notifications only.                         | Individual intimation under §5 is manual, which does not scale past a small breach.                                                                                                               |
-| **No breach-notice page or in-product banner exists.**                                                                                                                                                  | The delivery method §5 assumes has to be built during the incident.                                                                                                                               |
-| **Vendor log retention is not set by us.** Vercel and Neon retain on their own schedules.                                                                                                               | Evidence may expire before the investigation reaches it.                                                                                                                                          |
-| **`/subprocessors` is incomplete.** Recipients confirmed in code and missing from the page include the email provider, the video-generation provider, the geocoding service, and the mobile store APIs. | §3's "third parties involved" cannot be answered from the published page; it must be answered from code.                                                                                          |
-| **No Data Protection Officer, and no Indian point of contact.**                                                                                                                                         | If AGI is ever notified as a Significant Data Fiduciary, a named India-based DPO becomes mandatory and does not exist.                                                                            |
-| **This runbook has not been reviewed by counsel.** Tracked as a founder action in `docs/work/founder-assistance.md`; `Legal review: pending-counsel` in the header is the live status.                  | The §4 and §5 templates are drafted from the statute by an engineer, so both carry a pre-send notice until counsel signs off. Sending is still not delayed for review — the clock does not pause. |
+| Gap                                                                                                                                                                                                     | Consequence during an incident                                                                                                                                                                   |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **No designated incident commander or on-call rota.** The founder owns every incident by default.                                                                                                       | The clock runs while someone works out who is responsible.                                                                                                                                       |
+| **No mass-notification path.** Nothing can email an arbitrary list of affected users; the wired email provider serves support escalation and scheduled-task notifications only.                         | Individual intimation under §5 is manual, which does not scale past a small breach.                                                                                                              |
+| **No breach-notice page or in-product banner exists.**                                                                                                                                                  | The delivery method §5 assumes has to be built during the incident.                                                                                                                              |
+| **Vendor log retention is not set by us.** Vercel and Neon retain on their own schedules.                                                                                                               | Evidence may expire before the investigation reaches it.                                                                                                                                         |
+| **`/subprocessors` is incomplete.** Recipients confirmed in code and missing from the page include the email provider, the video-generation provider, the geocoding service, and the mobile store APIs. | §3's "third parties involved" cannot be answered from the published page; it must be answered from code.                                                                                         |
+| **No Data Protection Officer, and no Indian point of contact.**                                                                                                                                         | If AGI is ever notified as a Significant Data Fiduciary, a named India-based DPO becomes mandatory and does not exist.                                                                           |
+| **This runbook has not been reviewed by counsel.** Tracked as a founder action in `docs/work/founder-assistance.md`; `Legal review: pending-counsel` in the header is the live status.                  | The §4 and §5 templates are drafted from the statute by an engineer, so both carry a pre-send notice until counsel signs off. Sending is still not delayed for review, the clock does not pause. |
