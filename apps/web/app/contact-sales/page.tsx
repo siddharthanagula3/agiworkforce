@@ -1,9 +1,24 @@
 import { buildMetadata } from '@/lib/seo/metadata';
 import { Header } from '@shared/components/layout/Header';
 import { MarketingFooter } from '@/features/marketing/components/MarketingFooter';
-import { Button, ButtonRow, Eyebrow, Section, Stack } from '@/features/marketing/components/system';
+import {
+  Button,
+  ButtonRow,
+  Eyebrow,
+  Ledger,
+  Section,
+  Stack,
+} from '@/features/marketing/components/system';
 import { FactGrid, PageHero } from '@/features/marketing/components/pages/surfaces/shared';
 import { CONTACT_EMAIL, contactMailto } from '@/lib/legal-constants';
+
+const AUDIENCE_ROUTES_CAPTION = 'Which door you need';
+
+const AUDIENCE_ROUTES = [
+  { label: 'Individuals', value: 'Sign in and start, no contract' },
+  { label: 'Teams', value: 'Self-serve checkout on the pricing page' },
+  { label: 'Enterprise', value: 'Security review, rollout, and contract terms' },
+] as const;
 
 export const metadata = buildMetadata({
   title: 'Contact sales',
@@ -28,6 +43,12 @@ export default function ContactSalesPage() {
             </>
           }
           ctas={[]}
+          visual={
+            <Stack gap="base">
+              <Eyebrow>{AUDIENCE_ROUTES_CAPTION}</Eyebrow>
+              <Ledger rows={AUDIENCE_ROUTES} caption={AUDIENCE_ROUTES_CAPTION} />
+            </Stack>
+          }
         />
 
         <Section id="what-to-include" labelledBy="agi-contact-sales-include-title" rule>
