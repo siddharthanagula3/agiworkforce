@@ -843,6 +843,7 @@ export default function WebChatPage() {
   }, [freeTrialModelId, isWebsiteFreeTrial, selectedModelId, setSelectedModelId]);
 
   const [composerPrefill, setComposerPrefill] = useState<string | undefined>(undefined);
+  const handleComposerPrefillConsumed = useCallback(() => setComposerPrefill(undefined), []);
 
   // Pending message edit (DATA-LOSS FIX). Clicking "Edit" on a user message
   // prefills the composer; the destructive rollback (delete that message + all
@@ -915,6 +916,7 @@ export default function WebChatPage() {
 
   const [composerClearSignal, setComposerClearSignal] = useState(0);
   const [restoredAttachments, setRestoredAttachments] = useState<File[] | null>(null);
+  const handleRestoredAttachmentsConsumed = useCallback(() => setRestoredAttachments(null), []);
   const [isUserTyping, setIsUserTyping] = useState(false);
   const [bareChatSessionId, setBareChatSessionId] = useState<string | null>(null);
   const [pendingByokHandoff, setPendingByokHandoff] = useState<PendingByokHandoff | null>(null);
@@ -5073,11 +5075,11 @@ export default function WebChatPage() {
                     isGenerating={isStreaming}
                     placeholder={t('chat:placeholderEmpty')}
                     prefillText={composerPrefill}
-                    onPrefillConsumed={() => setComposerPrefill(undefined)}
+                    onPrefillConsumed={handleComposerPrefillConsumed}
                     onTypingChange={handleTypingChange}
                     clearSignal={composerClearSignal}
                     droppedFiles={restoredAttachments}
-                    onDroppedFilesConsumed={() => setRestoredAttachments(null)}
+                    onDroppedFilesConsumed={handleRestoredAttachmentsConsumed}
                     emptyState
                     attachmentPrivacyShortLabel={sendPreviewPresentation.privacyShortLabel}
                     sendPreviewPresentation={sendPreviewPresentation}
@@ -5114,6 +5116,9 @@ export default function WebChatPage() {
                         isLoading={isLoading && !isStreaming}
                         isUserTyping={isUserTyping}
                         onRegenerate={handleRegenerateMessage}
+                        onSwitchToAutoModel={() => {
+                          void handleConversationModelChange('auto');
+                        }}
                         onRetryResearch={handleRetryResearch}
                         onResearchPlanDecision={handleResearchPlanDecision}
                         retryingResearchMessageId={retryingResearchMessageId}
@@ -5169,11 +5174,11 @@ export default function WebChatPage() {
                     isGenerating={isStreaming}
                     placeholder={t('chat:placeholder')}
                     prefillText={composerPrefill}
-                    onPrefillConsumed={() => setComposerPrefill(undefined)}
+                    onPrefillConsumed={handleComposerPrefillConsumed}
                     onTypingChange={handleTypingChange}
                     clearSignal={composerClearSignal}
                     droppedFiles={restoredAttachments}
-                    onDroppedFilesConsumed={() => setRestoredAttachments(null)}
+                    onDroppedFilesConsumed={handleRestoredAttachmentsConsumed}
                     attachmentPrivacyShortLabel={sendPreviewPresentation.privacyShortLabel}
                     sendPreviewPresentation={sendPreviewPresentation}
                     onUpgradeRequest={handleOpenUpgradeDialog}

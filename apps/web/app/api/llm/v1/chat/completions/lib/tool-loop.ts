@@ -2702,11 +2702,16 @@ export async function* runToolLoop(
         const msg = err instanceof Error ? err.message : String(err);
         const classified =
           err instanceof ProviderStreamDeadlineError ? undefined : classifyError(err);
+        const mappedUpstream = classified
+          ? mapClassifiedUpstreamError(classified, servingProcessed.provider)
+          : undefined;
         const streamError = {
-          message: classified
-            ? mapClassifiedUpstreamError(classified, servingProcessed.provider).message
-            : msg,
-          ...(classified?.status !== undefined ? { code: String(classified.status) } : {}),
+          message: mappedUpstream ? mappedUpstream.message : msg,
+          // The provider's own error family (e.g. provider_quota_exhausted,
+          // provider_overloaded), not the raw HTTP status -- the client needs
+          // this to tell a spent quota apart from a plain rate limit and offer
+          // the right recovery (switch model vs. wait out a retry-after).
+          ...(mappedUpstream ? { code: mappedUpstream.code } : {}),
           retryable: classified?.retryable ?? true,
         };
         logger.error(
