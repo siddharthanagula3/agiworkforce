@@ -2,28 +2,21 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('server-only', () => ({}));
 
-const { mockAuth, mockGetClerkAuthUser, mockQuery, mockExecute, mockTransaction, mockAudit } =
+const { mockAuth, mockGetUserScopedDb, mockQuery, mockExecute, mockTransaction, mockAudit } =
   vi.hoisted(() => ({
     mockAuth: vi.fn(),
-    mockGetClerkAuthUser: vi.fn(),
+    mockGetUserScopedDb: vi.fn(),
     mockQuery: vi.fn(),
     mockExecute: vi.fn(async () => 1),
     mockTransaction: vi.fn(),
     mockAudit: vi.fn(async () => {}),
   }));
 
-vi.mock('@/lib/server/neon-db', () => ({
-  getNeonDb: () => ({
-    query: mockQuery,
-    execute: mockExecute,
-    transaction: mockTransaction,
-  }),
+vi.mock('@/lib/server/rls-db', () => ({
+  getUserScopedDb: (...a: unknown[]) => mockGetUserScopedDb(...a),
 }));
 
 vi.mock('@clerk/nextjs/server', () => ({ auth: (...a: unknown[]) => mockAuth(...a) }));
-vi.mock('@/lib/api-auth', () => ({
-  getClerkAuthUser: (...a: unknown[]) => mockGetClerkAuthUser(...a),
-}));
 vi.mock('@/lib/rate-limit', () => ({ withRateLimit: vi.fn(async () => null) }));
 vi.mock('@/lib/csrf', () => ({ requireCsrfToken: vi.fn(async () => null) }));
 vi.mock('@/lib/logger', () => ({
@@ -47,7 +40,11 @@ function params(deviceId: string) {
 beforeEach(() => {
   vi.clearAllMocks();
   mockAuth.mockResolvedValue({ userId: 'user-1', sessionId: 'sess_current' });
-  mockGetClerkAuthUser.mockResolvedValue({ userId: 'user-1' });
+  mockGetUserScopedDb.mockResolvedValue({
+    db: { query: mockQuery, execute: mockExecute, transaction: mockTransaction },
+    userId: 'user-1',
+    organizationId: null,
+  });
 });
 
 describe('listing linked devices', () => {
@@ -125,7 +122,9 @@ describe('a pending migration degrades one column, not the panel', () => {
   });
 
   it('does not treat an unrelated database failure as a pending migration', async () => {
-    mockQuery.mockRejectedValue(Object.assign(new Error('connection terminated'), { code: '08006' }));
+    mockQuery.mockRejectedValue(
+      Object.assign(new Error('connection terminated'), { code: '08006' }),
+    );
 
     const response = await GET(req());
     expect(response.status).toBeGreaterThanOrEqual(500);
@@ -204,14 +203,14 @@ describe('unlinking a device', () => {
     expect(revokeSql).toContain('family_id in');
     expect(revokeSql).toContain('user_id = $2');
 
-    expect(mockExecute).toHaveBeenCalledWith(expect.stringContaining('delete from desktop_devices'), [
-      DEVICE_ID,
-      'user-1',
-    ]);
-    expect(mockExecute).toHaveBeenCalledWith(expect.stringContaining('delete from mobile_devices'), [
-      DEVICE_ID,
-      'user-1',
-    ]);
+    expect(mockExecute).toHaveBeenCalledWith(
+      expect.stringContaining('delete from desktop_devices'),
+      [DEVICE_ID, 'user-1'],
+    );
+    expect(mockExecute).toHaveBeenCalledWith(
+      expect.stringContaining('delete from mobile_devices'),
+      [DEVICE_ID, 'user-1'],
+    );
     expect(mockAudit).toHaveBeenCalled();
   });
 });
