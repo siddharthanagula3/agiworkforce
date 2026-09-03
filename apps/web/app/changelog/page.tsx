@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 import { Header } from '@shared/components/layout/Header';
 import { MarketingFooter } from '@/features/marketing/components/MarketingFooter';
 import { Ledger, Section, Stack } from '@/features/marketing/components/system';
-import { PageHero } from '@/features/marketing/components/pages/surfaces/shared';
+import { FactLine, PageHero } from '@/features/marketing/components/pages/surfaces/shared';
 import { DESKTOP_LOCAL_RUNTIMES, LAUNCH } from '../../lib/marketing-constants';
 
 export const metadata: Metadata = {
@@ -97,6 +97,12 @@ const FORTHCOMING: { item: string; detail: string; quarter: string }[] = [
   },
 ];
 
+const HERO_FACTS = [
+  `Dated releases: ${RELEASES.length}`,
+  ...RELEASES.slice(0, 1).map((release) => `Newest: ${release.date}`),
+  `Forthcoming: ${FORTHCOMING.length}`,
+];
+
 export default function ChangelogPage() {
   return (
     <div data-design="agi" className="agi-ds-page">
@@ -109,6 +115,8 @@ export default function ChangelogPage() {
           lede="Every 'in progress' item is named openly. We do not backdate, we do not pre-announce, and we do not list things we are not actively maintaining."
           ctas={[]}
         />
+
+        <FactLine facts={HERO_FACTS} />
 
         <Section id="releases" labelledBy="agi-changelog-releases-title" rule>
           <Stack gap="loose">
