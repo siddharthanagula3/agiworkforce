@@ -197,11 +197,11 @@ test('pins the Qwen deployment-scope pricing bands and standard Anthropic prices
   ]);
 
   assert.deepEqual(curation.models[anthropicDefaultModelKey].costOverride, {
-    inputCost: 3,
-    outputCost: 15,
-    cached_input: 0.3,
-    cached_write: 3.75,
-    cached_write_1h: 6,
+    inputCost: 2,
+    outputCost: 10,
+    cached_input: 0.2,
+    cached_write: 2.5,
+    cached_write_1h: 4,
   });
   assert.equal(curation.models[anthropicDefaultModelKey].promo_expires_at, undefined);
   assert.equal(curation.models[anthropicDefaultModelKey].post_promo_prices, undefined);
@@ -248,20 +248,22 @@ test('pins the Runway text-to-video route and fails closed without provisioning 
 });
 
 const ANTHROPIC_STANDARD_RATES = {
-  inputCost: 3,
-  outputCost: 15,
-  cached_input: 0.3,
-  cached_write: 3.75,
-  cached_write_1h: 6,
+  inputCost: 2,
+  outputCost: 10,
+  cached_input: 0.2,
+  cached_write: 2.5,
+  cached_write_1h: 4,
 };
 
 test('never prices the default Anthropic route below the standard rates on any date', () => {
   const model = curation.models[anthropicDefaultModelKey];
   const decision =
-    'Decision #22 (docs/decisions/README.md, reaffirmed 2026-08-05): the default Anthropic route bills ' +
-    'users the founder-selected standard $3/$15 per MTok (cache read $0.30, 5m write $3.75, 1h ' +
-    "write $6.00) on EVERY date. A provider's introductory window is a provider-cost fact for " +
-    'verificationLog, not a product price. Record it there and leave the billed rates alone.';
+    'Decision #22 (docs/decisions/README.md) is retired as of 2026-09-03 by founder instruction: ' +
+    'Anthropic reclassified $2/$10 per MTok as its permanent standard price and cancelled the ' +
+    'scheduled 2026-09-01 increase to $3/$15, so the provider-cost-versus-product-price premise no ' +
+    'longer applies. The default Anthropic route now bills users the founder-selected standard ' +
+    '$2/$10 per MTok (cache read $0.20, 5m write $2.50, 1h write $4.00) on EVERY date, tracking ' +
+    "Anthropic's own published rate.";
 
   assert.deepEqual(
     model.costOverride,
@@ -291,8 +293,9 @@ test('never prices the default Anthropic route below the standard rates on any d
 
 test('publishes the standard default Anthropic rates in the compiled registry on any date', () => {
   const decision =
-    'Decision #22 (docs/decisions/README.md, reaffirmed 2026-08-05): the default Anthropic route bills ' +
-    'users the founder-selected standard rates on EVERY date.';
+    'Decision #22 (docs/decisions/README.md) is retired as of 2026-09-03: the default Anthropic ' +
+    "route bills users the founder-selected standard rates, now tracking Anthropic's own permanent " +
+    '$2/$10 price, on EVERY date.';
   const pricing = registry.pricing[anthropicDefaultModelKey];
   const compiledStandard = {
     inputPerMillion: ANTHROPIC_STANDARD_RATES.inputCost,

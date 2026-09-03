@@ -73,11 +73,11 @@ const currentAnthropic = {
     maxOutput: 128_000,
   },
   [anthropicStandardModelKey]: {
-    input: 3,
-    cacheRead: 0.3,
-    cacheWrite5m: 3.75,
-    cacheWrite1h: 6,
-    output: 15,
+    input: 2,
+    cacheRead: 0.2,
+    cacheWrite5m: 2.5,
+    cacheWrite1h: 4,
+    output: 10,
     context: 1_000_000,
     maxOutput: 128_000,
   },
@@ -215,11 +215,11 @@ test('publishes date-invariant prices — no shipped model carries a pricing sch
   );
 
   const standard = registry.pricing[anthropicStandardModelKey];
-  assert.equal(standard.inputPerMillion, 3);
-  assert.equal(standard.outputPerMillion, 15);
-  assert.equal(standard.cacheReadPerMillion, 0.3);
-  assert.equal(standard.cacheWritePerMillion, 3.75);
-  assert.equal(standard.cacheWrite1hPerMillion, 6);
+  assert.equal(standard.inputPerMillion, 2);
+  assert.equal(standard.outputPerMillion, 10);
+  assert.equal(standard.cacheReadPerMillion, 0.2);
+  assert.equal(standard.cacheWritePerMillion, 2.5);
+  assert.equal(standard.cacheWrite1hPerMillion, 4);
 });
 
 test('records only verified openness metadata and leaves the rest unknown', () => {

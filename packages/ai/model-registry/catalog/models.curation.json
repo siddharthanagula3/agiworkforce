@@ -1,7 +1,13 @@
 {
   "version": 1,
-  "lastUpdated": "2026-09-02",
+  "lastUpdated": "2026-09-03",
   "verificationLog": [
+    {
+      "date": "2026-09-03",
+      "verifiedBy": "official-openai-anthropic-google-xai-openrouter-pricing-pages",
+      "status": "CORRECTION",
+      "notes": "Founder-directed full catalog price refresh against official provider pricing pages (developers.openai.com/api/docs/pricing, platform.claude.com/docs/en/about-claude/pricing, ai.google.dev/gemini-api/docs/pricing, docs.x.ai/docs/models, api-docs.deepseek.com/quick_start/pricing, docs.z.ai/guides/overview/pricing, help.aliyun.com/zh/model-studio/model-pricing, platform.kimi.ai/docs/pricing/chat-k3, docs.perplexity.ai/getting-started/pricing, console.groq.com/docs/model, openrouter.ai/api/v1/models), retrieved 2026-09-03. Four corrections: (1) gpt-5.6-sol's costOverride and its >272,000-token inputTokenPricingTiers entry were both roughly 20-25% above OpenAI's current published rate; corrected to $4/$20 (cache read $0.40, cache write $5) under 272K and $8/$30 (cache read $0.80, cache write $10) above it. gpt-5.6-terra and gpt-5.6-luna were re-verified and already matched exactly; the founder's initial flag named gpt-5.6-luna, but luna was correct and sol was the stale one. (2) gemini-3.1-pro-preview was missing Google's published pricing tier above 200,000 input tokens ($4.00 input, $18.00 output, $0.40 cache read); added as inputTokenPricingTiers. The base rate (2/12/0.2) already matched. (3) grok-4.5 was missing xAI's published pricing tier at or above 200,000 prompt tokens ($4.00 input, $12.00 output); added as inputTokenPricingTiers with no cache-read field since capabilitiesOverride.caching is false for this model. The base rate (2/6) already matched; xAI confirms the 500,000-token context window directly, so the bestFor label 'Long Context (1M)' is inaccurate copy, not a pricing fact, and is left for whoever owns that copy. (4) claude-sonnet-5: Decision #22 (docs/decisions/README.md) pinned this model's costOverride to $3/$15 on every date specifically because a provider introductory discount is a provider-cost fact, not a product price, and Anthropic's promotional $2/$10 window was scheduled to revert to $3/$15 on 2026-09-01. Anthropic's pricing page now states $2/$10 'is now the standard price' and that the scheduled increase 'will not occur', so the premise behind Decision #22 no longer holds. Per explicit founder instruction 2026-09-03, Decision #22 is retired (docs/decisions/README.md updated in the same change) and claude-sonnet-5.costOverride is set to the founder-selected standard tracking Anthropic's now-permanent rate: $2 input, $10 output, $0.20 cache read, $2.50 five-minute cache write, $4.00 one-hour cache write. packages/ai/model-registry/tests/catalog-policy.test.mjs was updated in the same change to assert the new values and cite the retirement instead of the reaffirmation. Every other model and OpenRouter route in the catalog was checked against its official source in this pass and found correct; minimax-m3's suspected missing cache-read price and >512K tier could not be confirmed against a first-party page (MiniMax's pricing pages are JS-rendered SPAs that returned no text to a direct fetch) and were left unchanged rather than applied from aggregator corroboration alone. Perplexity's per-request search fee and sonar-deep-research's citation/reasoning-token and search-query fees are confirmed to exist on Perplexity's pricing page but have no schema field to record them; flagged for a future schema change, not applied here."
+    },
     {
       "date": "2026-09-02",
       "verifiedBy": "official-z-ai-glm-model-and-pricing-docs-and-openrouter-model-list",
@@ -711,10 +717,10 @@
       "inputTokenPricingTiers": [
         {
           "thresholdTokens": 272000,
-          "inputCost": 10,
-          "cached_input": 1,
-          "cached_write": 12.5,
-          "outputCost": 45
+          "inputCost": 8,
+          "cached_input": 0.8,
+          "cached_write": 10,
+          "outputCost": 30
         }
       ],
       "quality": "excellent",
@@ -780,10 +786,10 @@
         "minTier": "max"
       },
       "costOverride": {
-        "inputCost": 5,
-        "outputCost": 30,
-        "cached_input": 0.5,
-        "cached_write": 6.25
+        "inputCost": 4,
+        "outputCost": 20,
+        "cached_input": 0.4,
+        "cached_write": 5
       },
       "contextOverride": 1050000,
       "capabilitiesOverride": {
@@ -1178,11 +1184,11 @@
         "minTier": "pro"
       },
       "costOverride": {
-        "inputCost": 3,
-        "outputCost": 15,
-        "cached_input": 0.3,
-        "cached_write": 3.75,
-        "cached_write_1h": 6
+        "inputCost": 2,
+        "outputCost": 10,
+        "cached_input": 0.2,
+        "cached_write": 2.5,
+        "cached_write_1h": 4
       },
       "contextOverride": 1000000,
       "capabilitiesOverride": {
@@ -1255,6 +1261,15 @@
       "qualityTier": "balanced",
       "bestFor": ["Long Context", "Research", "Multimodal", "Code Execution"],
       "deprecation_date": null,
+      "inputTokenPricingTiers": [
+        {
+          "thresholdTokens": 200000,
+          "inputCost": 4,
+          "cached_input": 0.4,
+          "outputCost": 18
+        }
+      ],
+      "pricingNote": "Base rate (≤200,000 input tokens) is $2.00/M input, $12.00/M output, $0.20/M cache read, matching the synced models.dev baseline. Google's Gemini API pricing table publishes a higher tier above 200,000 input tokens at $4.00/M input, $18.00/M output, $0.40/M cache read, which the catalog previously omitted entirely. Verified against ai.google.dev/gemini-api/docs/pricing, retrieved 2026-09-03.",
       "reasoning": {
         "capable": true,
         "control": "effort_levels",
@@ -2057,6 +2072,14 @@
       "qualityTier": "best",
       "bestFor": ["Real-time Info", "Video Input", "Long Context (1M)", "Reasoning"],
       "deprecation_date": null,
+      "inputTokenPricingTiers": [
+        {
+          "thresholdTokens": 200000,
+          "inputCost": 4,
+          "outputCost": 12
+        }
+      ],
+      "pricingNote": "Base rate (<200,000 prompt tokens) is $2.00/M input, $6.00/M output, matching the synced models.dev baseline. xAI's own docs publish a higher tier at or above 200,000 prompt tokens: $4.00/M input, $12.00/M output. capabilitiesOverride.caching is false for this model, so no cache-read price is recorded at either tier. contextWindow is confirmed at 500,000 tokens by xAI directly; the \"Long Context (1M)\" bestFor label is inaccurate but is descriptive copy, not a pricing field, and is left for whoever owns that copy. Verified against docs.x.ai/docs/models, retrieved 2026-09-03.",
       "reasoning": {
         "capable": true,
         "control": "always_on",
