@@ -1,16 +1,13 @@
 import { buildMetadata } from '@/lib/seo/metadata';
 import { Header } from '@shared/components/layout/Header';
-import { MarketingFooter } from '@/features/marketing/components/MarketingFooter';
 import {
   Button,
   ButtonRow,
   Eyebrow,
   Ledger,
+  MarketingFooter,
   Prose,
-  Section,
-  Stack,
 } from '@/features/marketing/components/system';
-import { PageHero } from '@/features/marketing/components/pages/surfaces/shared';
 import { BYOK_PROVIDERS } from '@/lib/byok-providers';
 import { BYOK_SURFACES } from '@/lib/marketing-constants';
 
@@ -20,47 +17,95 @@ export const metadata = buildMetadata({
   path: '/byok',
 });
 
+const CUSTODY_ROWS = [
+  {
+    label: 'Desktop',
+    value:
+      'The key is encrypted before it reaches local application storage, and saving it activates a direct-provider route in the running app without a restart.',
+  },
+  {
+    label: 'CLI',
+    value:
+      'One OS-keyring entry per provider, under the service com.agiworkforce.cli.auth. The on-disk index keeps provider names only, since keyrings cannot be enumerated.',
+  },
+  {
+    label: 'VS Code',
+    value:
+      'The extension hands the key to the editor’s own SecretStorage and reads it back from there.',
+  },
+  {
+    label: 'Self-hosted',
+    value:
+      'An operator sets one environment variable per provider on their own deployment. The settings screen reports whether a variable is present and never the value behind it.',
+  },
+] as const;
+
 export default function ByokPage() {
   return (
     <div data-design="agi" className="agi-ds-page">
       <Header />
       <main id="main-content">
-        <PageHero
-          id="agi-byok-hero-title"
-          eyebrow="Bring your own keys"
-          title="AGI Cloud never sees your API key."
-          lede={
-            <>
-              Bring your own API keys to AGI {BYOK_SURFACES.label}. Each runtime holds the key in
-              its own platform credential store, then calls the provider&rsquo;s endpoint directly,
-              so the usage lands on your provider account.
-            </>
-          }
-          ctas={[
-            { href: '/docs/byok-env', label: 'Set up a provider key' },
-            { href: '/download', label: 'Check surface availability', variant: 'secondary' },
-          ]}
-        />
+        <section className="agi-lp-hero" aria-labelledby="agi-byok-hero-title">
+          <div className="agi-ds-container agi-lp-hero-grid">
+            <div className="agi-lp-hero-copy">
+              <Eyebrow>Bring your own keys</Eyebrow>
+              <h1 className="agi-ds-h1" id="agi-byok-hero-title">
+                AGI Cloud never sees <em className="agi-ds-accent">your API key.</em>
+              </h1>
+              <Prose size="lg">
+                Bring your own API keys to AGI {BYOK_SURFACES.label}. Each runtime holds the key in
+                its own platform credential store, then calls the provider&rsquo;s endpoint
+                directly, so the usage lands on your provider account.
+              </Prose>
+              <ButtonRow>
+                <Button href="/docs/byok-env">Set up a provider key</Button>
+                <Button href="/download" variant="secondary">
+                  Check surface availability
+                </Button>
+              </ButtonRow>
+            </div>
+            <div className="agi-lp-hero-stage">
+              <div className="agi-lp-console" aria-label="BYOK key custody by surface">
+                <div className="agi-lp-console-bar">
+                  <span>BYOK &middot; key custody</span>
+                </div>
+                <div className="agi-lp-console-body">
+                  <Ledger caption="Where a key lives, by surface" rows={CUSTODY_ROWS.slice(0, 3)} />
+                </div>
+                <p className="agi-lp-receipt">
+                  <span className="agi-lp-receipt-mark" aria-hidden="true">
+                    &#9671;
+                  </span>
+                  <span className="agi-lp-receipt-part">your key</span>
+                  <span className="agi-lp-receipt-part">direct to provider</span>
+                  <span className="agi-lp-receipt-part">never held by AGI</span>
+                </p>
+              </div>
+            </div>
+          </div>
+        </section>
 
-        <Section id="byok-scope" labelledBy="agi-byok-scope-title" rule>
-          <Stack>
+        <section className="agi-lp-section" aria-labelledby="agi-byok-scope-title">
+          <div className="agi-ds-container">
             <h2 className="agi-ds-h2" id="agi-byok-scope-title">
               What BYOK covers.
             </h2>
-            <Ledger
-              caption="BYOK scope"
-              rows={[
-                { label: 'Surfaces', value: BYOK_SURFACES.compact },
-                { label: 'Providers', value: `${BYOK_PROVIDERS.length} provider env vars` },
-                { label: 'Routing', value: 'Direct to the provider endpoint' },
-              ]}
-            />
-          </Stack>
-        </Section>
+            <div style={{ marginTop: '2rem' }}>
+              <Ledger
+                caption="BYOK scope"
+                rows={[
+                  { label: 'Surfaces', value: BYOK_SURFACES.compact },
+                  { label: 'Providers', value: `${BYOK_PROVIDERS.length} provider env vars` },
+                  { label: 'Routing', value: 'Direct to the provider endpoint' },
+                ]}
+              />
+            </div>
+          </div>
+        </section>
 
-        <Section id="byok-custody" labelledBy="agi-byok-custody-title" rule ground="2">
-          <Stack gap="loose">
-            <div>
+        <section className="agi-lp-section" aria-labelledby="agi-byok-custody-title">
+          <div className="agi-ds-container">
+            <div className="agi-lp-heading">
               <Eyebrow>Key custody</Eyebrow>
               <h2 className="agi-ds-h2" id="agi-byok-custody-title">
                 The key stays on the machine you typed it into.
@@ -71,37 +116,13 @@ export default function ByokPage() {
                 to the credential store its own platform provides.
               </Prose>
             </div>
-            <Ledger
-              caption="Key custody by surface"
-              rows={[
-                {
-                  label: 'Desktop',
-                  value:
-                    'The key is encrypted before it reaches local application storage, and saving it activates a direct-provider route in the running app without a restart.',
-                },
-                {
-                  label: 'CLI',
-                  value:
-                    'One OS-keyring entry per provider, under the service com.agiworkforce.cli.auth. The on-disk index keeps provider names only, since keyrings cannot be enumerated.',
-                },
-                {
-                  label: 'VS Code',
-                  value:
-                    'The extension hands the key to the editor’s own SecretStorage and reads it back from there.',
-                },
-                {
-                  label: 'Self-hosted',
-                  value:
-                    'An operator sets one environment variable per provider on their own deployment. The settings screen reports whether a variable is present and never the value behind it.',
-                },
-              ]}
-            />
-          </Stack>
-        </Section>
+            <Ledger caption="Key custody by surface" rows={CUSTODY_ROWS} />
+          </div>
+        </section>
 
-        <Section id="byok-env" labelledBy="agi-byok-env-title" rule>
-          <Stack gap="loose">
-            <div>
+        <section className="agi-lp-section" aria-labelledby="agi-byok-env-title">
+          <div className="agi-ds-container">
+            <div className="agi-lp-heading">
               <Eyebrow>The env-var contract</Eyebrow>
               <h2 className="agi-ds-h2" id="agi-byok-env-title">
                 A provider key arrives as an environment variable.
@@ -119,18 +140,18 @@ export default function ByokPage() {
                 value: provider.envVar,
               }))}
             />
-          </Stack>
-        </Section>
+          </div>
+        </section>
 
-        <Section id="byok-boundary" labelledBy="agi-byok-boundary-title" rule ground="2">
-          <Stack gap="loose">
-            <div>
+        <section className="agi-lp-section" aria-labelledby="agi-byok-boundary-title">
+          <div className="agi-ds-container">
+            <div className="agi-lp-heading">
               <Eyebrow>Surface boundary</Eyebrow>
               <h2 className="agi-ds-h2" id="agi-byok-boundary-title">
                 Key entry exists where the key can stay local.
               </h2>
             </div>
-            <Prose>
+            <Prose size="lg">
               {BYOK_SURFACES.exclusion} Those surfaces have nowhere private to put a key, so they do
               not ask for one. Carrying an existing thread across local, BYOK, and managed cloud is
               a separate question, answered on the{' '}
@@ -139,25 +160,28 @@ export default function ByokPage() {
               </a>
               .
             </Prose>
-          </Stack>
-        </Section>
+          </div>
+        </section>
 
-        <Section id="byok-close" labelledBy="agi-byok-close-title" rule>
-          <Stack gap="loose">
-            <h2 className="agi-ds-h2" id="agi-byok-close-title">
-              Route your work through the provider you already pay.
-            </h2>
-            <Prose>
-              The catalog lists each provider AGI can address, how many models it exposes, how it
-              authenticates, and the per-million-token price it publishes.
-            </Prose>
-            <ButtonRow>
-              <Button href="/providers" variant="secondary">
-                Browse the provider catalog
-              </Button>
-            </ButtonRow>
-          </Stack>
-        </Section>
+        <section className="agi-lp-close" aria-labelledby="agi-byok-close-title">
+          <div className="agi-ds-container">
+            <div className="agi-lp-close-inner">
+              <h2 className="agi-ds-h2" id="agi-byok-close-title">
+                Route your work{' '}
+                <em className="agi-ds-accent">through the provider you already pay.</em>
+              </h2>
+              <Prose size="lg">
+                The catalog lists each provider AGI can address, how many models it exposes, how it
+                authenticates, and the per-million-token price it publishes.
+              </Prose>
+              <ButtonRow>
+                <Button href="/providers" variant="secondary">
+                  Browse the provider catalog
+                </Button>
+              </ButtonRow>
+            </div>
+          </div>
+        </section>
       </main>
       <MarketingFooter />
     </div>
