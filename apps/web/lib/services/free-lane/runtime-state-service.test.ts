@@ -14,12 +14,15 @@ import {
   classifyFreeLaneFailure,
   getFreeLaneRuntimeState,
   getRouteHealthSnapshot,
+  getServedRouteAffinity,
   recordFreeLaneRouteFailure,
   recordFreeLaneRouteSuccess,
   recordFreeLaneUsage,
   recordRouteOutcome,
+  recordServedRouteAffinity,
   resetFreeLaneRuntimeStateCache,
   resetRouteHealthSnapshotCache,
+  routeAffinityTtlMs,
 } from './runtime-state-service';
 import type { FreePoolEntry, FreePoolsDocument } from '@/lib/server/free-pools';
 
@@ -65,6 +68,7 @@ class FakeRedis {
       incrby: record('incrby'),
       set: record('set'),
       pexpireat: record('pexpireat'),
+      pexpire: record('pexpire'),
       hset: record('hset'),
       expire: record('expire'),
       zadd: record('zadd'),
@@ -678,5 +682,76 @@ describe('generic route outcome recording', () => {
       consecutiveFailures: 0,
       sampleCount: 0,
     });
+  });
+});
+
+const CONVERSATION_ID = 'conversation-42';
+const AFFINITY_KEY = `agi-raffinity:${CONVERSATION_ID}`;
+
+describe('route affinity TTL by cache class', () => {
+  it('gives an explicit provider cache and a gateway prompt cache the same hour-long ceiling', () => {
+    expect(routeAffinityTtlMs('provider_explicit_prompt_cache')).toBe(
+      routeAffinityTtlMs('gateway_prompt_cache'),
+    );
+    expect(routeAffinityTtlMs('provider_explicit_prompt_cache')).toBeGreaterThan(
+      routeAffinityTtlMs('provider_implicit_prompt_cache'),
+    );
+  });
+
+  it('records no affinity worth pinning for a route with no cache', () => {
+    expect(routeAffinityTtlMs('no_provider_cache')).toBe(0);
+    expect(routeAffinityTtlMs(undefined)).toBe(0);
+  });
+});
+
+describe('served route affinity', () => {
+  it('writes the served route and upstream provider with the given TTL', async () => {
+    const ttlMs = routeAffinityTtlMs('gateway_prompt_cache');
+    await recordServedRouteAffinity({
+      conversationId: CONVERSATION_ID,
+      routeId: HEALTH_ROUTE_ID,
+      ttlMs,
+      upstreamProvider: 'deepinfra',
+    });
+
+    const hset = redisClient!.ops.find((op) => op.command === 'hset');
+    expect(hset!.args).toEqual([
+      AFFINITY_KEY,
+      { routeId: HEALTH_ROUTE_ID, upstreamProvider: 'deepinfra' },
+    ]);
+    const pexpire = redisClient!.ops.find((op) => op.command === 'pexpire');
+    expect(pexpire!.args).toEqual([AFFINITY_KEY, ttlMs]);
+  });
+
+  it('records nothing for a route whose cache class buys no affinity', async () => {
+    await recordServedRouteAffinity({
+      conversationId: CONVERSATION_ID,
+      routeId: HEALTH_ROUTE_ID,
+      ttlMs: routeAffinityTtlMs('no_provider_cache'),
+    });
+
+    expect(redisClient!.ops).toEqual([]);
+  });
+
+  it('reads back a recorded affinity', async () => {
+    redisClient!.hashes.set(AFFINITY_KEY, {
+      routeId: HEALTH_ROUTE_ID,
+      upstreamProvider: 'bedrock',
+    });
+
+    const affinity = await getServedRouteAffinity(CONVERSATION_ID);
+
+    expect(affinity).toEqual({ routeId: HEALTH_ROUTE_ID, upstreamProvider: 'bedrock' });
+  });
+
+  it('has no affinity for an unknown conversation', async () => {
+    const affinity = await getServedRouteAffinity('never-seen-conversation');
+    expect(affinity).toBeNull();
+  });
+
+  it('fails open on a read error', async () => {
+    redisClient!.failOnHgetall = true;
+    const affinity = await getServedRouteAffinity(CONVERSATION_ID);
+    expect(affinity).toBeNull();
   });
 });
