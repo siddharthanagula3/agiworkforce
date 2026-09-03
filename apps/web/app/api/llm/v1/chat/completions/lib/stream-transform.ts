@@ -86,6 +86,18 @@ function reportedCostCentsFromUsd(reportedCostUsd: number): number {
   return costCents > 0 ? Math.max(1, Math.ceil(costCents)) : 0;
 }
 
+const REPORTED_COST_SANITY_BAND_MIN_MULTIPLE = 0.1;
+const REPORTED_COST_SANITY_BAND_MAX_MULTIPLE = 10;
+const CENTS_PER_USD = 100;
+
+function isReportedCostWithinSanityBand(reportedCostUsd: number, estimateUsd: number): boolean {
+  if (estimateUsd <= 0) return true;
+  return (
+    reportedCostUsd >= estimateUsd * REPORTED_COST_SANITY_BAND_MIN_MULTIPLE &&
+    reportedCostUsd <= estimateUsd * REPORTED_COST_SANITY_BAND_MAX_MULTIPLE
+  );
+}
+
 async function settleStreamBilling(input: {
   processed: ProcessedRequest;
   userId: string;
@@ -133,32 +145,47 @@ async function settleStreamBilling(input: {
   });
 
   const reportedCostUsd = usage.providerReportedCostUsd;
-  const costSource: 'provider_reported' | 'estimated' =
-    Number.isFinite(reportedCostUsd) && reportedCostUsd !== undefined && reportedCostUsd >= 0
-      ? 'provider_reported'
-      : 'estimated';
+  const hasReportedCost =
+    Number.isFinite(reportedCostUsd) && reportedCostUsd !== undefined && reportedCostUsd > 0;
 
-  const actualCostCents =
-    billedOutcome === 'failed'
-      ? 0
-      : totalTokens > 0
-        ? costSource === 'provider_reported'
-          ? reportedCostCentsFromUsd(reportedCostUsd as number)
-          : LLMCostCalculator.calculateCost(
-              provider,
-              model,
-              {
-                promptTokens: usage.inputTokens,
-                completionTokens: usage.outputTokens,
-                totalTokens,
-                cacheReadInputTokens: usage.cacheReadInputTokens || undefined,
-                cacheCreationInputTokens: usage.cacheCreationInputTokens || undefined,
-                cacheCreation1hInputTokens: usage.cacheCreation1hInputTokens || undefined,
-              },
-              undefined,
-              buildServingRouteId(provider, model),
-            )
-        : processed.estimatedCostCents;
+  let actualCostCents: number;
+  let costSource: 'provider_reported' | 'estimated';
+
+  if (billedOutcome === 'failed') {
+    actualCostCents = 0;
+    costSource = 'estimated';
+  } else if (totalTokens > 0) {
+    const estimateCostCents = LLMCostCalculator.calculateCost(
+      provider,
+      model,
+      {
+        promptTokens: usage.inputTokens,
+        completionTokens: usage.outputTokens,
+        totalTokens,
+        cacheReadInputTokens: usage.cacheReadInputTokens || undefined,
+        cacheCreationInputTokens: usage.cacheCreationInputTokens || undefined,
+        cacheCreation1hInputTokens: usage.cacheCreation1hInputTokens || undefined,
+      },
+      undefined,
+      buildServingRouteId(provider, model),
+    );
+    const estimateUsd = estimateCostCents / CENTS_PER_USD;
+    const reportedAdmitted =
+      hasReportedCost && isReportedCostWithinSanityBand(reportedCostUsd as number, estimateUsd);
+    if (hasReportedCost && !reportedAdmitted) {
+      logger.warn(
+        { provider, model, reportedCostUsd, estimateUsd },
+        'Ignored provider-reported cost outside the catalog sanity band',
+      );
+    }
+    actualCostCents = reportedAdmitted
+      ? reportedCostCentsFromUsd(reportedCostUsd as number)
+      : estimateCostCents;
+    costSource = reportedAdmitted ? 'provider_reported' : 'estimated';
+  } else {
+    actualCostCents = processed.estimatedCostCents;
+    costSource = 'estimated';
+  }
 
   if (processed.managedUsage) {
     await finalizeManagedUsageRequest({
