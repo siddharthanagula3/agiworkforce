@@ -19,7 +19,10 @@ const CODEX = {
   binary: 'codex',
   exec: 'exec',
   resume: 'resume',
-  fullAuto: '--full-auto',
+  // `exec` has no `--full-auto`/`--ask-for-approval`; `exec resume` has no
+  // `--sandbox` at all (codex-cli 0.147.0, verified live in the template).
+  sandboxWorkspaceWrite: '--sandbox workspace-write',
+  bypassApprovalsAndSandbox: '--dangerously-bypass-approvals-and-sandbox',
   skipGitRepoCheck: '--skip-git-repo-check',
   json: '--json',
 } as const;
@@ -79,7 +82,7 @@ const codexRunner: HarnessRunner = {
       CODEX.binary,
       CODEX.exec,
       request.resumeSessionId ? `${CODEX.resume} ${quoteArgument(request.resumeSessionId)}` : null,
-      CODEX.fullAuto,
+      request.resumeSessionId ? CODEX.bypassApprovalsAndSandbox : CODEX.sandboxWorkspaceWrite,
       CODEX.skipGitRepoCheck,
       request.resumeSessionId ? null : CODEX.json,
       quoteArgument(request.prompt),

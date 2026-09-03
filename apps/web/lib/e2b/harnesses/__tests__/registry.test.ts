@@ -51,7 +51,7 @@ describe('harness start commands', () => {
       `claude --dangerously-skip-permissions --output-format stream-json --verbose --max-turns ${HARNESS_MAX_TURNS} -p '${PROMPT}'`,
     );
     expect(commandFor('codex')).toBe(
-      `codex exec --full-auto --skip-git-repo-check --json '${PROMPT}'`,
+      `codex exec --sandbox workspace-write --skip-git-repo-check --json '${PROMPT}'`,
     );
     expect(commandFor('amp')).toBe(
       `amp --dangerously-allow-all --stream-json --stream-json-thinking -x '${PROMPT}'`,
@@ -90,7 +90,7 @@ describe('harness resume', () => {
     expect(commandFor('amp', { resumeSessionId: 'T-1' })).toContain("threads continue 'T-1'");
     expect(commandFor('droid', { resumeSessionId: 'droid-1' })).toContain("--session-id 'droid-1'");
     expect(commandFor('codex', { resumeSessionId: 'thread-1' })).toBe(
-      `codex exec resume 'thread-1' --full-auto --skip-git-repo-check '${PROMPT}'`,
+      `codex exec resume 'thread-1' --dangerously-bypass-approvals-and-sandbox --skip-git-repo-check '${PROMPT}'`,
     );
   });
 
