@@ -39,6 +39,7 @@ interface RouteRecord {
   provider: string;
   providerModelId: string;
   harnessId: string;
+  trustModes: readonly string[];
   isDefault: boolean;
   cacheClass: RouteCacheClass;
   commercialStatus: RouteCommercialStatus;
@@ -96,5 +97,95 @@ export function getRoutePricingForModel(modelKey: string): RoutePriceSheet[] {
     .filter(([, route]) => route.modelKey === modelKey)
     .map(([routeId, route]) => toPriceSheet(routeId, route));
 }
+export type HarnessProtocol =
+  | 'openai_chat'
+  | 'openai_responses'
+  | 'anthropic_messages'
+  | 'gemini_native'
+  | 'provider_native';
+
+export type HarnessHostPolicy = 'allowlist_only' | 'registry_declared';
+
+interface HarnessRecord {
+  provider: string;
+  apiFamily: string;
+  adapter: string;
+  trustModes: readonly string[];
+  protocol: HarnessProtocol;
+  hostPolicy: HarnessHostPolicy;
+  baseUrl?: string;
+  apiKeyEnv?: string;
+}
+
+export interface ProtocolHarness {
+  harnessId: string;
+  provider: string;
+  apiFamily: string;
+  protocol: Exclude<HarnessProtocol, 'provider_native'>;
+  baseUrl: string;
+  apiKeyEnv: string;
+  hostPolicy: HarnessHostPolicy;
+  trustModes: readonly string[];
+}
+
+export interface ProtocolRoute extends ProtocolHarness {
+  routeId: string;
+  modelKey: string;
+  providerModelId: string;
+  cacheClass: RouteCacheClass;
+  commercialStatus: RouteCommercialStatus;
+}
+
+const PROVIDER_NATIVE_PROTOCOL = 'provider_native' satisfies HarnessProtocol;
+const REGISTRY_DECLARED_HOST_POLICY = 'registry_declared' satisfies HarnessHostPolicy;
+
+const harnessRecords = registry.harnesses as unknown as Readonly<Record<string, HarnessRecord>>;
+
+function toProtocolHarness(harnessId: string, harness: HarnessRecord): ProtocolHarness | null {
+  const { protocol, baseUrl, apiKeyEnv } = harness;
+  if (protocol === PROVIDER_NATIVE_PROTOCOL || !baseUrl || !apiKeyEnv) return null;
+  return {
+    harnessId,
+    provider: harness.provider,
+    apiFamily: harness.apiFamily,
+    protocol,
+    baseUrl,
+    apiKeyEnv,
+    hostPolicy: harness.hostPolicy,
+    trustModes: harness.trustModes,
+  };
+}
+
+export function getProtocolHarness(harnessId: string): ProtocolHarness | null {
+  const harness = harnessRecords[harnessId];
+  return harness ? toProtocolHarness(harnessId, harness) : null;
+}
+
+export function listProtocolRoutes(): ProtocolRoute[] {
+  return Object.entries(routeRecords).flatMap(([routeId, route]) => {
+    const harness = getProtocolHarness(route.harnessId);
+    if (!harness) return [];
+    return [
+      {
+        ...harness,
+        routeId,
+        modelKey: route.modelKey,
+        provider: route.provider,
+        providerModelId: route.providerModelId,
+        cacheClass: route.cacheClass,
+        commercialStatus: route.commercialStatus,
+        trustModes: route.trustModes,
+      },
+    ];
+  });
+}
+
+export const REGISTRY_DECLARED_PROVIDER_HOSTS: readonly string[] = [
+  ...new Set(
+    Object.values(harnessRecords)
+      .filter((harness) => harness.hostPolicy === REGISTRY_DECLARED_HOST_POLICY && harness.baseUrl)
+      .map((harness) => new URL(harness.baseUrl as string).hostname.toLowerCase()),
+  ),
+];
 
 export default registry;
