@@ -1,4 +1,4 @@
-import { WEB_SEARCH_CITATION_DELTA_KEY } from '@agiworkforce/types';
+import { WEB_SEARCH_CITATION_DELTA_KEY, WEB_SEARCH_CITATION_KIND } from '@agiworkforce/types';
 import type {
   ChatRequest,
   ContentBlock,
@@ -10,13 +10,18 @@ import type {
   ToolDef,
   ToolResultBlock,
   ToolUseBlock,
+  WebSearchCitationDeltaWire,
 } from '@agiworkforce/types';
 import { toolStatusPhrase } from './tool-status-phrases';
 
-function urlCitationDelta(payload: unknown): { url: string; title: string } | undefined {
+function urlCitationDelta(payload: unknown): WebSearchCitationDeltaWire | undefined {
   if (typeof payload !== 'object' || payload === null) return undefined;
   const candidate = payload as Record<string, unknown>;
-  if (typeof candidate['url'] !== 'string' || typeof candidate['title'] !== 'string') {
+  if (
+    candidate['type'] !== WEB_SEARCH_CITATION_KIND ||
+    typeof candidate['url'] !== 'string' ||
+    typeof candidate['title'] !== 'string'
+  ) {
     return undefined;
   }
   return { url: candidate['url'], title: candidate['title'] };
