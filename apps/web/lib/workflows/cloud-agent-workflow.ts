@@ -52,6 +52,10 @@ const ProviderCallObservationSchema = z
     provider: z.string().min(1).optional(),
     model: z.string().min(1).optional(),
     costDollars: z.number().finite().nonnegative().optional(),
+    costSource: z.enum(['provider_reported', 'estimated']).optional(),
+    routeId: z.string().min(1).nullable().optional(),
+    upstreamProvider: z.string().min(1).optional(),
+    providerReportedCostUsd: z.number().finite().nonnegative().optional(),
   })
   .strict();
 
@@ -141,6 +145,12 @@ const ProviderStepResultSchema = z
     usage: UsageSchema,
   })
   .strict();
+
+export function parseCloudAgentProviderStepResult(
+  value: unknown,
+): z.infer<typeof ProviderStepResultSchema> {
+  return ProviderStepResultSchema.parse(value);
+}
 
 const ToolResultSchema = z
   .object({
