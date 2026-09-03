@@ -65,6 +65,18 @@ export function PageHero({
   );
 }
 
+export function FactLine({ facts }: { facts: readonly string[] }) {
+  return (
+    <div className="agi-lp-factline">
+      <ul className="agi-ds-container agi-lp-factline-list">
+        {facts.map((fact) => (
+          <li key={fact}>{fact}</li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
 export interface FactItem {
   meta: string;
   title: string;
