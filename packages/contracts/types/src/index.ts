@@ -122,6 +122,7 @@ export * from './capabilities';
 export * from './tool-display';
 
 export type {
+  AgentEvent,
   AgentEventApprovalDecision,
   AgentEventApprovalRiskLevel,
   AgentEventEnvelope,
