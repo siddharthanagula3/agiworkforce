@@ -25,7 +25,7 @@ const SUBCOMMANDS: { cmd: string; desc: string }[] = [
   { cmd: 'review', desc: 'Review the working diff, or a range with --base' },
   { cmd: 'apply', desc: 'Apply the latest diff as a git patch (alias: a)' },
   { cmd: 'sandbox', desc: 'Run a command inside the OS sandbox' },
-  { cmd: 'mcp-server', desc: 'Speak MCP over stdio; advertises no tools yet' },
+  { cmd: 'mcp-server', desc: 'Speak MCP over stdio; advertises an empty tool list on purpose' },
   { cmd: 'app-server', desc: 'Serve an editor over stdio or a WebSocket' },
   { cmd: 'resume', desc: 'Continue a previous session' },
   { cmd: 'fork', desc: 'Fork a previous session' },
