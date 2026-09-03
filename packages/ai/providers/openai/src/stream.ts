@@ -1,4 +1,3 @@
-
 import type { StreamChunk } from '@agiworkforce/types';
 
 import type { OpenAIChatCompletionChunk } from './types';
@@ -109,6 +108,9 @@ export async function* translateOpenAIStream(
           ...(lastUsage.prompt_tokens_details?.cached_tokens !== undefined
             ? { cacheReadTokens: lastUsage.prompt_tokens_details.cached_tokens }
             : {}),
+          ...(lastUsage.prompt_tokens_details?.cache_write_tokens !== undefined
+            ? { cacheWriteTokens: lastUsage.prompt_tokens_details.cache_write_tokens }
+            : {}),
           ...(lastUsage.completion_tokens_details?.reasoning_tokens !== undefined
             ? { reasoningTokens: lastUsage.completion_tokens_details.reasoning_tokens }
             : {}),
@@ -131,6 +133,9 @@ export async function* translateOpenAIStream(
         : {}),
       ...(lastUsage.prompt_tokens_details?.cached_tokens !== undefined
         ? { cacheReadTokens: lastUsage.prompt_tokens_details.cached_tokens }
+        : {}),
+      ...(lastUsage.prompt_tokens_details?.cache_write_tokens !== undefined
+        ? { cacheWriteTokens: lastUsage.prompt_tokens_details.cache_write_tokens }
         : {}),
       ...(lastUsage.completion_tokens_details?.reasoning_tokens !== undefined
         ? { reasoningTokens: lastUsage.completion_tokens_details.reasoning_tokens }
