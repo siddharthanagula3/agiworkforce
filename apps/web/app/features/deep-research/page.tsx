@@ -37,8 +37,7 @@ export default function DeepResearchPage() {
           ctas={[{ href: '/login?redirectTo=%2Fchat', label: 'Start a research run' }]}
           visual={
             <ProductFrame
-              light="/product/deep-research-report-light.png"
-              dark="/product/deep-research-report-dark.png"
+              src="/product/deep-research-report-dark.png"
               alt="A finished AGI deep research report with numbered inline citations and a sources list"
               width={2392}
               height={1402}

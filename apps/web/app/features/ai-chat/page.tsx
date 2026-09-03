@@ -35,8 +35,7 @@ export default function AiChatFeaturePage() {
           ctas={[{ href: '/login?redirectTo=%2F', label: 'Open AGI Web' }]}
           visual={
             <ProductFrame
-              light="/product/composer-light.png"
-              dark="/product/composer-dark.png"
+              src="/product/composer-dark.png"
               alt="The AGI composer with attachments, dictation, and the model picker"
               width={1472}
               height={254}

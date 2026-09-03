@@ -33,8 +33,7 @@ export default function MemoryFeaturePage() {
           ctas={[{ href: '/settings/memory', label: 'Open your memory list' }]}
           visual={
             <ProductFrame
-              light="/product/memory-settings-light.png"
-              dark="/product/memory-settings-dark.png"
+              src="/product/memory-settings-dark.png"
               alt="The memory settings panel in AGI, listing where memories come from and how to suppress a source"
               width={1720}
               height={1360}

@@ -3,7 +3,6 @@ import { AgiMark } from '@shared/components/agi/AgiMark';
 import './system.css';
 import { Button } from './Button';
 import { MarketingMobileNav } from './MarketingMobileNav';
-import { ThemeToggle } from './ThemeToggle';
 import { Container } from './Container';
 import { CHAT_ROOT_HREF, HEADER_LINKS, WEB_ENTRY_HREF } from './nav';
 
@@ -29,9 +28,7 @@ export function MarketingHeader({
         <Container>
           <div className="agi-ds-header-row">
             {wordmark}
-            <div className="agi-ds-header-end">
-              <ThemeToggle />
-            </div>
+            <div className="agi-ds-header-end" />
           </div>
         </Container>
       </header>
@@ -51,7 +48,6 @@ export function MarketingHeader({
             ))}
           </nav>
           <div className="agi-ds-header-end">
-            <ThemeToggle />
             {signedIn ? (
               <Button href={CHAT_ROOT_HREF}>Open AGI</Button>
             ) : (
