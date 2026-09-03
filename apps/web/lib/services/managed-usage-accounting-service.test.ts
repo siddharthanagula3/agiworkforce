@@ -23,6 +23,7 @@ import { finalizeManagedUsageRequest } from '@/lib/services/managed-usage-reques
 import type { ManagedUsageRequestReservation } from '@/lib/services/managed-usage-request-service';
 import {
   accumulateObservedProviderUsage,
+  calculateObservedProviderUsageCostDollars,
   createObservedProviderUsage,
   finalizeObservedManagedUsage,
   hasObservedProviderUsage,
@@ -102,6 +103,62 @@ describe('managed usage accounting', () => {
     expect(hasObservedProviderUsage(usage)).toBe(true);
   });
 
+  it('records the serving route id and upstream provider attribution on the observation', () => {
+    const usage = createObservedProviderUsage();
+
+    accumulateObservedProviderUsage(
+      usage,
+      { inputTokens: 100, outputTokens: 20, upstreamProvider: 'anthropic/claude-sonnet-5' },
+      { provider: 'open_router', model: 'claude-sonnet-5', routeId: 'open_router/claude-sonnet-5' },
+    );
+
+    expect(usage.providerCallObservations?.[0]).toMatchObject({
+      routeId: 'open_router/claude-sonnet-5',
+      upstreamProvider: 'anthropic/claude-sonnet-5',
+    });
+    expect(LLMCostCalculator.calculateCostDollars).toHaveBeenCalledWith(
+      'open_router',
+      'claude-sonnet-5',
+      expect.objectContaining({ promptTokens: 100, completionTokens: 20 }),
+      undefined,
+      'open_router/claude-sonnet-5',
+    );
+  });
+
+  it('recomputes a missing observation cost using that observation own route id, not the fallback', () => {
+    const usage = createObservedProviderUsage();
+    usage.providerCalls = 1;
+    usage.inputTokens = 100;
+    usage.outputTokens = 20;
+    usage.providerCallObservations = [
+      {
+        inputTokens: 100,
+        outputTokens: 20,
+        cacheReadTokens: 0,
+        cacheWriteTokens: 0,
+        cacheWrite1hTokens: 0,
+        reasoningTokens: 0,
+        provider: 'open_router',
+        model: 'claude-sonnet-5',
+        routeId: 'open_router/claude-sonnet-5',
+      },
+    ];
+
+    calculateObservedProviderUsageCostDollars(usage, {
+      provider: 'anthropic',
+      model: 'claude-sonnet-5',
+      routeId: 'anthropic/claude-sonnet-5',
+    });
+
+    expect(LLMCostCalculator.calculateCostDollars).toHaveBeenCalledWith(
+      'open_router',
+      'claude-sonnet-5',
+      expect.anything(),
+      undefined,
+      'open_router/claude-sonnet-5',
+    );
+  });
+
   it('settles observed multi-call usage once through the managed lifecycle', async () => {
     const usage = createObservedProviderUsage();
     accumulateObservedProviderUsage(usage, { inputTokens: 300, outputTokens: 50 });
@@ -125,6 +182,8 @@ describe('managed usage accounting', () => {
         cacheCreationInputTokens: 0,
         cacheCreation1hInputTokens: 0,
       },
+      undefined,
+      undefined,
     );
     expect(finalizeManagedUsageRequest).toHaveBeenCalledWith({
       ...reservation,

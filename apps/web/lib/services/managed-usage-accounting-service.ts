@@ -42,15 +42,18 @@ export interface ProviderUsageObservation {
   provider?: string;
   model?: string;
   costDollars?: number;
+  routeId?: string | null;
+  upstreamProvider?: string;
 }
 
 type ProviderUsageObservationInput = Partial<
-  Omit<ProviderUsageObservation, 'provider' | 'model' | 'costDollars'>
+  Omit<ProviderUsageObservation, 'provider' | 'model' | 'costDollars' | 'routeId'>
 >;
 
 export interface ProviderUsagePricingContext {
   provider: string;
   model: string;
+  routeId?: string | null;
 }
 
 function nonNegative(value: number | undefined): number {
@@ -78,6 +81,7 @@ function normalizeObservation(
     cacheWriteTokens: nonNegative(observation.cacheWriteTokens),
     cacheWrite1hTokens: nonNegative(observation.cacheWrite1hTokens),
     reasoningTokens: nonNegative(observation.reasoningTokens),
+    ...(observation.upstreamProvider ? { upstreamProvider: observation.upstreamProvider } : {}),
   };
 }
 
@@ -100,10 +104,13 @@ export function accumulateObservedProviderUsage(
         ...normalized,
         provider: pricing.provider,
         model: pricing.model,
+        routeId: pricing.routeId ?? null,
         costDollars: LLMCostCalculator.calculateCostDollars(
           pricing.provider,
           pricing.model,
           toTokenUsage(normalized),
+          undefined,
+          pricing.routeId,
         ),
       }
     : normalized;
@@ -153,19 +160,27 @@ export function calculateObservedProviderUsageCostDollars(
           observation.provider ?? fallbackPricing.provider,
           observation.model ?? fallbackPricing.model,
           toTokenUsage(observation),
+          undefined,
+          observation.routeId ?? fallbackPricing.routeId,
         )
       );
     }, 0);
   }
 
-  return LLMCostCalculator.calculateCostDollars(fallbackPricing.provider, fallbackPricing.model, {
-    promptTokens: usage.inputTokens,
-    completionTokens: usage.outputTokens,
-    totalTokens: usage.inputTokens + usage.outputTokens,
-    cacheReadInputTokens: usage.cacheReadTokens,
-    cacheCreationInputTokens: usage.cacheWriteTokens,
-    cacheCreation1hInputTokens: usage.cacheWrite1hTokens,
-  });
+  return LLMCostCalculator.calculateCostDollars(
+    fallbackPricing.provider,
+    fallbackPricing.model,
+    {
+      promptTokens: usage.inputTokens,
+      completionTokens: usage.outputTokens,
+      totalTokens: usage.inputTokens + usage.outputTokens,
+      cacheReadInputTokens: usage.cacheReadTokens,
+      cacheCreationInputTokens: usage.cacheWriteTokens,
+      cacheCreation1hInputTokens: usage.cacheWrite1hTokens,
+    },
+    undefined,
+    fallbackPricing.routeId,
+  );
 }
 
 export function observedProviderUsageLedgerCents(
