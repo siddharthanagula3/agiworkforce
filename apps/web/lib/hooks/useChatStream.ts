@@ -883,7 +883,11 @@ function isEmptyAssistantTurn(message: Message | undefined | null): boolean {
   if ((message.attachments?.length ?? 0) > 0) return false;
   const meta = message.metadata;
   if (!meta) return true;
+  if (meta.finishReason === 'error') return false;
   if (meta.streamError) return false;
+  if (meta.agentActivity?.status === 'failed' || meta.agentActivity?.status === 'partial') {
+    return false;
+  }
   if ((meta.tools?.length ?? 0) > 0) return false;
   if (hasCanonicalToolActivity(meta.agentActivity)) return false;
   return !(
@@ -1637,6 +1641,15 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
               coalescedAppends.append('content', assistantMessageId, reconciled.unmatchedIncoming);
             }
           }
+          if (envelope.event.type === 'error' && !streamErrorInfo) {
+            streamErrorInfo = {
+              message: envelope.event.message,
+              ...(envelope.event.code ? { code: envelope.event.code } : {}),
+              ...(envelope.event.retryable !== undefined
+                ? { retryable: envelope.event.retryable }
+                : {}),
+            };
+          }
           if (envelope.event.type === 'stop') {
             finishReason =
               envelope.event.reason === 'max-tokens'
@@ -1788,6 +1801,33 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
                 unacknowledgedPublicText,
                 agentEnvelope.event.delta,
               ).pending;
+            }
+            // The inline dialect's own 'error'/'stop' events are the only place
+            // a provider failure (for example Google quota_exhausted) is ever
+            // announced on this path -- unlike the OpenAI-shaped delta, it
+            // carries no top-level finish_reason field and no x_stream_error,
+            // so without this the turn settles with empty, error-free metadata
+            // and reads as a plain empty response instead of the failure it
+            // was. finishReason mapping mirrors the durable follow-run
+            // handler's identical logic above.
+            if (agentEnvelope.event.type === 'error' && !streamErrorInfo) {
+              streamErrorInfo = {
+                message: agentEnvelope.event.message,
+                ...(agentEnvelope.event.code ? { code: agentEnvelope.event.code } : {}),
+                ...(agentEnvelope.event.retryable !== undefined
+                  ? { retryable: agentEnvelope.event.retryable }
+                  : {}),
+              };
+            }
+            if (agentEnvelope.event.type === 'stop') {
+              finishReason =
+                agentEnvelope.event.reason === 'max-tokens'
+                  ? 'length'
+                  : agentEnvelope.event.reason === 'cancelled'
+                    ? 'stopped'
+                    : agentEnvelope.event.reason === 'error'
+                      ? 'error'
+                      : 'stop';
             }
             applySourceListEvent(agentEnvelope.event);
             currentAgentActivity = collapseDuplicateAgentActivityErrors(
