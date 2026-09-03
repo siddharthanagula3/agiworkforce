@@ -13,7 +13,7 @@ export const PROVIDER_TOGGLE_TEST_ID_PREFIX = 'disclosure-provider-toggle-';
 
 const PROVIDER_SECTION_TITLE = 'China-headquartered providers';
 const PROVIDER_SECTION_BODY =
-  'Each one is off until you turn it on here. Leaving them off keeps their models out of your chats — you can change this later in Settings, Privacy.';
+  'Each one is off until you turn it on here. Leaving them off keeps their models out of your chats, you can change this later in Settings, Privacy.';
 
 const PRIVACY_NOTICE_TITLE = 'What we collect';
 const PRIVACY_NOTICE_BODY = [

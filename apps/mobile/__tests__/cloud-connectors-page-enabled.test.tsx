@@ -103,7 +103,7 @@ jest.mock('@/services/connectors', () => ({
 
 import CloudConnectorsScreen from '../app/(app)/settings/cloud-connectors';
 
-describe('Cloud Connectors screen — shipped-feature state', () => {
+describe('Cloud Connectors screen, shipped-feature state', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     Object.assign(mockAuthState, {
@@ -142,7 +142,7 @@ describe('Cloud Connectors screen — shipped-feature state', () => {
     const { getByText, queryByText } = render(<CloudConnectorsScreen />);
 
     expect(getByText('Notion')).toBeTruthy();
-    expect(queryByText('Connectors — AGI Cloud')).toBeNull();
+    expect(queryByText('Connectors, AGI Cloud')).toBeNull();
     await waitFor(() => expect(mockFetchDirectory).toHaveBeenCalledTimes(1));
   });
 

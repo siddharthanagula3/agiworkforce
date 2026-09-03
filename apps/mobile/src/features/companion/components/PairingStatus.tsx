@@ -50,7 +50,7 @@ function getStatusConfig(
     case 'stale':
       return {
         color: colors.agentWarning,
-        label: `${desktopName ?? 'Desktop'} — heartbeat missed`,
+        label: `${desktopName ?? 'Desktop'}, heartbeat missed`,
         animate: true,
       };
     case 'reconnecting':
@@ -172,7 +172,7 @@ export function PairingStatus({
       <Text className="text-sm flex-1" style={{ color: config.color }} numberOfLines={2}>
         {config.label}
       </Text>
-      {/* Connection quality indicator — only shown when connected */}
+      {/* Connection quality indicator, only shown when connected */}
       {status === 'connected' && connectionQuality != null && (
         <ConnectionQualityBadge quality={connectionQuality} latencyMs={latencyMs} />
       )}

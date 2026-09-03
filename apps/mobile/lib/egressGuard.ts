@@ -40,21 +40,6 @@ function hostOfConfig(urlString: string): string {
   }
 }
 
-/**
- * Config-derived managed-cloud hosts, discovered from the mobile config — NOT
- * invented. These are UNIONED on top of the shared floor
- * ({@link SHARED_OUR_CLOUD_HOSTS} from @agiworkforce/trust-boundaries) so a
- * non-default/staging deployment host still gets blocked in Local mode even if
- * it is not one of the shared apex domains.
- *
- *   - API_URL  → our HTTP API + api-gateway base (services/api.ts,
- *     services/streaming.ts, lib/providerStreamClient.ts all hit `${API_URL}/...`)
- *     Default: agiworkforce.com. The gateway lives at api.agiworkforce.com.
- *   - WS_URL   → signaling relay (lib/constants.ts) → signaling.agiworkforce.com
- *
- * The shared floor already covers agiworkforce.com / neon.tech / Clerk / Vercel;
- * these entries only ADD hosts (never remove), keeping the guard fail-closed.
- */
 const apiHost = hostOfConfig(API_URL);
 const wsHost = hostOfConfig(WS_URL);
 
@@ -83,21 +68,6 @@ function resolveAppMode(): 'local' | 'cloud' {
   }
 }
 
-/**
- * Guarded outbound fetch — the privacy chokepoint.
- *
- * Behaviour:
- *   - Local mode + our-cloud host → throw `EgressBlockedError` BEFORE any
- *     network I/O. Nothing leaves the device.
- *   - Local mode + provider/other host (BYOK direct-to-provider) → allowed,
- *     delegated to `secureFetch`.
- *   - Cloud mode → all hosts allowed, delegated to `secureFetch`.
- *
- * Use this for every our-cloud-capable call site instead of `fetch`/`secureFetch`.
- *
- * `opts.stream` opts the request into the streaming-capable fetch (expo/fetch)
- * so SSE replies can be read token-by-token; see {@link SecureFetchOptions}.
- */
 export async function guardedFetch(
   input: RequestInfo | URL,
   init?: RequestInit,

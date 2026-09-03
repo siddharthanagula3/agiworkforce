@@ -208,7 +208,7 @@ jest.mock('@/src/features/voice/components/VoiceSelector', () => {
 
 import SettingsTabScreen from '@/src/features/settings';
 
-describe('SettingsScreen — inset-grouped card layout', () => {
+describe('SettingsScreen, inset-grouped card layout', () => {
   it('locks the full settings screen tree (system mode, local demo)', () => {
     const { toJSON } = render(<SettingsTabScreen />);
     expect(toJSON()).toMatchSnapshot();

@@ -1,4 +1,3 @@
-
 const {
   withAppBuildGradle,
   withProjectBuildGradle,
@@ -108,10 +107,6 @@ function withAICoreDetoxNativeLibPickFirst(config) {
 // (e.g. react-native-executorch vs react-android) when Detox is enabled.
 subprojects { subproject ->
   subproject.plugins.withId('com.android.library') {
-    // NOTE: the closure-style "jniLibs { pickFirst 'x' }" DSL silently no-ops when
-    // called on subprojects from outside their own build.gradle (verified via direct
-    // packagingOptions.jniLibs.pickFirsts inspection) — mutate the pickFirsts set
-    // directly instead.
     subproject.android.packagingOptions.jniLibs.pickFirsts.add('**/*.so')
   }
 }

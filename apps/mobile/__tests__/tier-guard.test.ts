@@ -1,4 +1,3 @@
-
 import {
   guardProviderSwitch,
   mapBillingPlanToUIPlan,
@@ -8,7 +7,7 @@ import { requireAutoMode } from '../test-utils/modelFixtures';
 type Tier = Parameters<typeof guardProviderSwitch>[2];
 const AUTO_MODEL_ID = requireAutoMode().id;
 
-describe('mapBillingPlanToUIPlan — all current BillingPlanTier values', () => {
+describe('mapBillingPlanToUIPlan, all current BillingPlanTier values', () => {
   it('maps local-only → local', () => {
     expect(mapBillingPlanToUIPlan('local-only')).toBe('local');
   });
@@ -38,7 +37,7 @@ describe('mapBillingPlanToUIPlan — all current BillingPlanTier values', () => 
   });
 });
 
-describe('guardProviderSwitch — allow cases', () => {
+describe('guardProviderSwitch, allow cases', () => {
   it('allows switch when currentProvider is null (new conversation)', () => {
     expect(guardProviderSwitch(null, 'openai', 'free')).toBe('allow');
   });
@@ -71,7 +70,7 @@ describe('guardProviderSwitch — allow cases', () => {
   });
 });
 
-describe('guardProviderSwitch — upgrade-required cases', () => {
+describe('guardProviderSwitch, upgrade-required cases', () => {
   const belowMaxTiers: Tier[] = ['free', 'byok', 'local-only', 'pro', 'team'];
 
   for (const tier of belowMaxTiers) {
@@ -101,7 +100,7 @@ describe('guardProviderSwitch — upgrade-required cases', () => {
   });
 });
 
-describe('guardProviderSwitch — edge cases and stress tests', () => {
+describe('guardProviderSwitch, edge cases and stress tests', () => {
   it('treats unknown tier string as local (most restrictive) and blocks switch', () => {
     expect(guardProviderSwitch('anthropic', 'openai', 'unknown_tier' as Tier)).toBe(
       'upgrade-required',

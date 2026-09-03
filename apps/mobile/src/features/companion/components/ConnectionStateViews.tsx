@@ -90,7 +90,7 @@ export function DisconnectedView({ onScanPress }: { onScanPress: () => void }) {
 
         {/*
           PAR-M28: the prerequisites used to render BELOW the primary CTA under
-          a "HOW IT WORKS" divider — scan first, read later. They now precede
+          a "HOW IT WORKS" divider, scan first, read later. They now precede
           the button, and the risk disclosure follows it, so no path reaches
           the scanner without both being on screen first.
         */}

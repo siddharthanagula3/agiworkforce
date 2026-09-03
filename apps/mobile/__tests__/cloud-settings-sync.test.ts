@@ -151,7 +151,7 @@ beforeEach(() => {
   });
 });
 
-describe('settings sync — managed gate', () => {
+describe('settings sync, managed gate', () => {
   it('makes ZERO settings network calls (GET and POST) in local mode', async () => {
     useChatAppModeStore.getState().setAppMode('local');
     useCloudSettingsStore.getState().setThemeMode('dark');
@@ -181,7 +181,7 @@ describe('settings sync — managed gate', () => {
   });
 });
 
-describe('settings sync — fresh device guard', () => {
+describe('settings sync, fresh device guard', () => {
   it('does NOT POST when settingsUpdatedAt is null, and pulls + applies server state', async () => {
     expect(useCloudSettingsStore.getState().settingsUpdatedAt).toBeNull();
     expect(useCloudSettingsStore.getState().themeMode).toBe('system');
@@ -222,7 +222,7 @@ describe('settings sync — fresh device guard', () => {
   });
 });
 
-describe('settings sync — cursor independence', () => {
+describe('settings sync, cursor independence', () => {
   it('starts at "0" and advances to the server cursor after a pull that returns new data', async () => {
     expect(useSettingsSyncStateStore.getState().settingsCursor).toBe('0');
 
@@ -290,7 +290,7 @@ describe('settings sync — cursor independence', () => {
   });
 });
 
-describe('settings sync — dirty detection and push', () => {
+describe('settings sync, dirty detection and push', () => {
   it('does NOT POST when settingsUpdatedAt is null (fresh device with factory defaults)', async () => {
     expect(useCloudSettingsStore.getState().settingsUpdatedAt).toBeNull();
 
@@ -441,7 +441,7 @@ describe('settings sync — dirty detection and push', () => {
   });
 });
 
-describe('settings sync — pull applies into useCloudSettingsStore', () => {
+describe('settings sync, pull applies into useCloudSettingsStore', () => {
   it('rebases a local edit made while the settings GET is in flight onto the server response', async () => {
     const pullStarted = deferred<void>();
     const pendingPull = deferred<ReturnType<typeof emptySettingsPull>>();
@@ -701,7 +701,7 @@ describe('settings sync — pull applies into useCloudSettingsStore', () => {
       if ((path as string).startsWith(SETTINGS_SYNC_PATH))
         return {
           settings: { appearance: { theme: 'dark' } },
-          cursor: '5', // same as current cursor — nothing new
+          cursor: '5',
           hasMore: false,
         } as never;
       if ((path as string).startsWith('/api/memory/sync')) return emptyMemoryPull() as never;
@@ -715,7 +715,7 @@ describe('settings sync — pull applies into useCloudSettingsStore', () => {
   });
 });
 
-describe('settings sync — anti-churn after pull', () => {
+describe('settings sync, anti-churn after pull', () => {
   it('does not POST on the cycle immediately following a pull that updated the store', async () => {
     mockGet.mockImplementation(async (path: string) => {
       if ((path as string).startsWith(SETTINGS_SYNC_PATH))
@@ -761,7 +761,7 @@ describe('settings sync — anti-churn after pull', () => {
   });
 });
 
-describe('settings mapping — leak guard (toCloudSettings)', () => {
+describe('settings mapping, leak guard (toCloudSettings)', () => {
   it('NEVER emits forbidden namespace keys even when injected into the store snapshot', () => {
     const storeWithFakeSecrets = {
       ...useCloudSettingsStore.getState(),

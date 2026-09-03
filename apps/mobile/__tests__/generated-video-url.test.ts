@@ -1,12 +1,6 @@
 import { resolveGeneratedVideoUri } from '../src/features/video/services/videoUri';
 import { API_URL } from '../lib/constants';
 
-/**
- * The server hands back a durable video as an auth-gated, workspace-relative
- * path. Passed straight to the OS browser it opened nothing — the external-URL
- * allowlist refuses a relative URL — so a completed video was untappable.
- */
-
 const DURABLE = '/api/files/2f4a1c8e-9b3d-4f11-8a52-7c6e0d1b93af';
 
 describe('resolveGeneratedVideoUri', () => {

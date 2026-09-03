@@ -1,4 +1,3 @@
-
 import {
   parseAgent,
   MAX_AGENT_NAME_LEN,
@@ -18,7 +17,7 @@ const validAgent = () => ({
   toolCalls: [],
 });
 
-describe('parseAgent — accepts well-formed payload', () => {
+describe('parseAgent, accepts well-formed payload', () => {
   it('parses a minimal valid agent', () => {
     const result = parseAgent(validAgent());
     expect(result).not.toBeNull();
@@ -48,7 +47,7 @@ describe('parseAgent — accepts well-formed payload', () => {
   });
 });
 
-describe('parseAgent — rejects', () => {
+describe('parseAgent, rejects', () => {
   it.each([
     ['null', null],
     ['number', 42],
@@ -116,7 +115,7 @@ describe('parseAgent — rejects', () => {
   });
 });
 
-describe('parseAgent — UI-injection attacker payloads (the actual threat)', () => {
+describe('parseAgent, UI-injection attacker payloads (the actual threat)', () => {
   it('rejects status spoofing as a non-enum value', () => {
     const result = parseAgent({
       ...validAgent(),

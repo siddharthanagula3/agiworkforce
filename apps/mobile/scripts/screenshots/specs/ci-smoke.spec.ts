@@ -14,9 +14,6 @@ describe('Mobile first-run shell', () => {
     await device.terminateApp();
   });
 
-  // The age gate guards Cloud sign-in, not first launch — app/_layout.tsx only
-  // raises it when a signed-out user heads for /(auth). A first run in Local
-  // Mode sends nothing off the device, so it goes straight to the hero.
   it('lands on the local-first onboarding hero', async () => {
     await waitFor(element(by.id('onboarding-hero-screen')))
       .toBeVisible()

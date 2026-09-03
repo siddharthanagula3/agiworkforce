@@ -51,11 +51,11 @@ jest.mock('@/src/features/auth/store', () => ({
 
 import CloudConnectorsScreen from '../app/(app)/settings/cloud-connectors';
 
-describe('Cloud Connectors screen — unshipped-feature gating (public alpha)', () => {
+describe('Cloud Connectors screen, unshipped-feature gating (public alpha)', () => {
   it('shows only the waitlist placeholder, not the interactive catalog, when FEATURES.connectors is false', () => {
     const { getByText, queryByText } = render(<CloudConnectorsScreen />);
 
-    expect(getByText('Connectors — AGI Cloud')).toBeTruthy();
+    expect(getByText('Connectors, AGI Cloud')).toBeTruthy();
     expect(queryByText('Notion')).toBeNull();
     expect(queryByText('Slack')).toBeNull();
   });

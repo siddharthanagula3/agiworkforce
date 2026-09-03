@@ -60,7 +60,7 @@ describe('resolveMobileVideoGenerationRequest', () => {
     expect(decision.code).toBe('empty_prompt');
   });
 
-  it('blocks in Local mode — video only exists behind Managed Cloud', () => {
+  it('blocks in Local mode, video only exists behind Managed Cloud', () => {
     const decision = resolveMobileVideoGenerationRequest({
       ...ENTITLED,
       executionMode: 'local',
@@ -135,7 +135,7 @@ describe('resolveMobileVideoGenerationRequest', () => {
   });
 });
 
-describe('resolveMobileVideoGenerationRequest — Auto intent routing', () => {
+describe('resolveMobileVideoGenerationRequest, Auto intent routing', () => {
   const TEXT_MODE = { ...ENTITLED, mediaMode: 'text' as const };
 
   it.each([
@@ -202,7 +202,7 @@ describe('resolveMobileVideoGenerationRequest — Auto intent routing', () => {
   });
 });
 
-describe('resolveMobileVideoGenerationRequest — output shape follows the routed model', () => {
+describe('resolveMobileVideoGenerationRequest, output shape follows the routed model', () => {
   const routed = resolveMobileVideoGenerationRequest({
     ...ENTITLED,
     text: 'a cat surfing',

@@ -93,16 +93,6 @@ function provisionedPins(table) {
   return provisioned;
 }
 
-// NSPinnedCAIdentities matches intermediate and root certificates only — iOS
-// never compares these hashes against the leaf — so PINS_BY_HOST holds CA keys
-// and this file must not emit them as NSPinnedLeafIdentities.
-//
-// Coverage limit, iOS only: ATS governs NSURLSession, which is what RN's fetch
-// uses. RN's iOS WebSocket builds its own CFStream TLS session and never
-// consults NSPinnedDomains, so signaling.agiworkforce.com is pinned here for
-// fetch traffic but NOT for the pairing socket (packages/platform/utils
-// signaling.ts). Android's network_security_config below does cover it, because
-// RN's Android WebSocket is OkHttp. Tracked in docs/work/founder-assistance.md.
 function iosPinnedDomains(pins) {
   const domains = {};
   for (const [host, digests] of Object.entries(pins)) {
@@ -114,19 +104,6 @@ function iosPinnedDomains(pins) {
   return domains;
 }
 
-/**
- * Everything here is scoped to a pinned host. There is deliberately no
- * app-wide <base-config>: one would apply to every endpoint the app can reach,
- * including cleartext LAN dispatch targets and user-supplied BYOK base URLs,
- * so provisioning pins for agiworkforce.com would silently break connections
- * this file has no opinion about. The per-host <trust-anchors> only restate the
- * platform default — apps targeting API 24+ already exclude user-added CAs and
- * this app overrides no targetSdkVersion — so on Android it is the <pin-set>
- * that defeats this finding's attacker. iOS has no equivalent default: apps
- * there trust roots a user or an MDM installed, and Apple exempts certificates
- * issued by such a CA from Certificate Transparency, so nothing short of the
- * real hashes in NSPinnedDomains refuses one.
- */
 function androidNetworkSecurityConfigXml(pins) {
   const domainConfigs = Object.entries(pins).map(([host, digests]) =>
     [

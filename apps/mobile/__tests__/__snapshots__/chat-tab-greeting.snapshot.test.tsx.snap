@@ -1,6 +1,6 @@
 // Jest Snapshot v1, https://goo.gl/fbAQLP
 
-exports[`Chat tab — time-of-day greeting locks greeting component tree at hour 19 (evening) 1`] = `
+exports[`Chat tab, time-of-day greeting locks greeting component tree at hour 19 (evening) 1`] = `
 <Text
   style={
     {

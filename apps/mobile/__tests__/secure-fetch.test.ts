@@ -1,4 +1,3 @@
-
 const mockFetch = jest.fn();
 
 let mockEnforced = false;
@@ -52,7 +51,7 @@ afterAll(() => {
   (global as any).fetch = _origFetch;
 });
 
-describe('secureFetch — passthrough mode (PINNING_ENFORCED = false)', () => {
+describe('secureFetch, passthrough mode (PINNING_ENFORCED = false)', () => {
   it('forwards every URL untouched to fetch', async () => {
     await secureFetch('https://agiworkforce.com/api/health');
     expect(mockFetch).toHaveBeenCalledWith('https://agiworkforce.com/api/health', undefined);
@@ -79,7 +78,7 @@ describe('secureFetch — passthrough mode (PINNING_ENFORCED = false)', () => {
   });
 });
 
-describe('secureFetch — enforced mode (PINNING_ENFORCED = true)', () => {
+describe('secureFetch, enforced mode (PINNING_ENFORCED = true)', () => {
   it('refuses requests to hosts with no provisioned pins (fail-closed)', async () => {
     mockEnforced = true;
     await expect(secureFetch('https://agiworkforce.com/api/health')).rejects.toBeInstanceOf(
@@ -139,7 +138,7 @@ describe('secureFetch — enforced mode (PINNING_ENFORCED = true)', () => {
   });
 });
 
-describe('drift sentinel — config knobs are still exposed', () => {
+describe('drift sentinel, config knobs are still exposed', () => {
   it('lib/pinning.ts still exports PINNING_ENFORCED + PINS_BY_HOST', () => {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const fs = require('fs');

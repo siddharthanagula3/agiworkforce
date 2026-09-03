@@ -1,4 +1,3 @@
-
 import fs from 'fs';
 import path from 'path';
 
@@ -111,7 +110,7 @@ describe('App Intents deep-link URL construction', () => {
   });
 
   it('Share URL roundtrips multi-line and non-ASCII shared text', () => {
-    const text = 'Line one\nLine two — précis 100%';
+    const text = 'Line one\nLine two, précis 100%';
     const u = makeIntentUrl('share', { text });
     expect(u.searchParams.get('text')).toBe(text);
   });

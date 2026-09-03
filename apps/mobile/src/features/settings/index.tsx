@@ -175,7 +175,7 @@ function SettingsListRow({ row, isLast }: { row: SettingsRow; isLast: boolean })
           <Text style={{ color: badge.color, fontSize: 10, fontWeight: '700' }}>{row.tag}</Text>
         </View>
       ) : null}
-      {/* A danger row is terminal — Log Out raises a confirm Alert, it does not
+      {/* A danger row is terminal, Log Out raises a confirm Alert, it does not
           push a screen. A chevron there advertises navigation that never
           happens, so it is suppressed for the whole tone. */}
       {row.tone === 'danger' ? null : <ChevronRight size={17} color={colors.textMuted} />}

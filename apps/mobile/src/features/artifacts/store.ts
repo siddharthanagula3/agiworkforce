@@ -457,7 +457,7 @@ export function deriveAndMapToMobileArtifacts(
   return shared.map((s) => {
     const kind = toMobileKind(s.type);
     return {
-      id: s.id, // shared deterministic id — do NOT regenerate
+      id: s.id,
       messageId,
       title: s.title,
       kind,

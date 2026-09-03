@@ -27,7 +27,7 @@ function projectionOf(speechLanguage: string) {
   return toCloudSettings({ ...store, speechLanguage });
 }
 
-describe('cloudSettingsMapping — language namespace', () => {
+describe('cloudSettingsMapping, language namespace', () => {
   beforeEach(() => {
     useCloudSettingsStore.setState({ speechLanguage: 'en' });
   });
@@ -60,7 +60,7 @@ describe('cloudSettingsMapping — language namespace', () => {
   });
 });
 
-describe('cloudSettingsMapping — identity namespace the server actually reads', () => {
+describe('cloudSettingsMapping, identity namespace the server actually reads', () => {
   const SERVER_IDENTITY_NAMESPACE = 'general';
   const SERVER_IDENTITY_KEYS = ['instructions', 'preferredName', 'workDescription'];
 

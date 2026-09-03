@@ -1,6 +1,6 @@
 // Jest Snapshot v1, https://goo.gl/fbAQLP
 
-exports[`SettingsScreen — inset-grouped card layout locks the full settings screen tree (system mode, local demo) 1`] = `
+exports[`SettingsScreen, inset-grouped card layout locks the full settings screen tree (system mode, local demo) 1`] = `
 <View
   className="flex-1"
   style={

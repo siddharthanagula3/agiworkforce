@@ -1,4 +1,3 @@
-
 jest.mock('../lib/mmkv', () => ({
   whenMmkvReady: jest.fn((cb: () => void) => cb()),
   rehydrateWhenMmkvReady: jest.fn(),
@@ -141,7 +140,7 @@ beforeEach(() => {
   });
 });
 
-describe('memory sync — managed gate', () => {
+describe('memory sync, managed gate', () => {
   it('makes ZERO memory network calls in local mode', async () => {
     useChatAppModeStore.getState().setAppMode('local');
     await syncNow();
@@ -165,7 +164,7 @@ describe('memory sync — managed gate', () => {
   });
 });
 
-describe('memory sync — cursor', () => {
+describe('memory sync, cursor', () => {
   it('starts at "0" and advances to the server cursor after a pull', async () => {
     expect(useMemorySyncStateStore.getState().memoryCursor).toBe('0');
 
@@ -232,7 +231,7 @@ describe('memory sync — cursor', () => {
   });
 });
 
-describe('memory sync — tombstone application', () => {
+describe('memory sync, tombstone application', () => {
   it('hard-deletes a memory entry when is_deleted:true is pulled', async () => {
     seedCloudMemory('m-del', 'to be deleted');
     expect(useCloudMemoryStore.getState().entries.find((e) => e.id === 'm-del')).toBeDefined();
@@ -268,7 +267,7 @@ describe('memory sync — tombstone application', () => {
   });
 });
 
-describe('memory sync — push', () => {
+describe('memory sync, push', () => {
   it('pushes dirty cloud memories and clears the dirty queue on ack', async () => {
     seedCloudMemory('m-push', 'push me');
     markMemoryForSync('m-push');
@@ -374,7 +373,7 @@ describe('memory sync — push', () => {
 
 const mockInsertMemoryFact = insertMemoryFact as jest.MockedFunction<typeof insertMemoryFact>;
 
-describe('memory store — local/cloud separation', () => {
+describe('memory store, local/cloud separation', () => {
   it('a local-mode addMemory NEVER writes to the cloud store or dirty queue', async () => {
     useChatAppModeStore.getState().setAppMode('local');
     mockInsertMemoryFact.mockResolvedValue(undefined);
@@ -403,7 +402,7 @@ describe('memory store — local/cloud separation', () => {
   });
 });
 
-describe('memory store — cloud pin/unpin persistence', () => {
+describe('memory store, cloud pin/unpin persistence', () => {
   it('a cloud-mode togglePin writes to the cloud store and marks it dirty, not SQLite', async () => {
     useChatAppModeStore.getState().setAppMode('cloud');
     mockTogglePinMemoryFact.mockClear();
@@ -434,7 +433,7 @@ describe('memory store — cloud pin/unpin persistence', () => {
     expect(pushedEntry?.pinned).toBe(true);
   });
 
-  it('adopts the server pinned state from a pulled delta (LWW — pinned always on the wire)', async () => {
+  it('adopts the server pinned state from a pulled delta (LWW, pinned always on the wire)', async () => {
     mockGet.mockImplementation(async (path: string) => {
       if ((path as string).startsWith('/api/memory/sync')) {
         return {

@@ -19,7 +19,7 @@ interface AGIShareInboxModule {
 function getShareInboxModule(): AGIShareInboxModule {
   const module = NativeModules.AGIShareInbox as AGIShareInboxModule | undefined;
   if (!module?.consumePendingShares) {
-    throw new Error('AGIShareInbox native module not linked — rebuild the iOS app');
+    throw new Error('AGIShareInbox native module not linked, rebuild the iOS app');
   }
   return module;
 }

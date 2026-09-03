@@ -69,9 +69,6 @@ class AGIAICoreModule(private val reactContext: ReactApplicationContext) :
 
   override fun getName() = MODULE_NAME
 
-  // Starts (or joins) the AICore feature download without blocking the caller.
-  // Safe to call repeatedly — download() is idempotent on Google's side and
-  // downloadInFlight prevents us from spawning duplicate collectors.
   private fun triggerBackgroundDownload(model: GenerativeModel) {
     if (!downloadInFlight.compareAndSet(false, true)) return
     launch {
@@ -201,9 +198,6 @@ class AGIAICoreModule(private val reactContext: ReactApplicationContext) :
     generationJobs.remove(requestId)?.cancel()
   }
 
-  // genai-prompt's GenerateContentRequest carries a single TextPart plus an
-  // optional PromptPrefix — there's no native multi-turn session API, so prior
-  // turns are folded into one transcript ahead of the current prompt.
   private fun buildPrompt(messages: ReadableArray, prompt: String): String {
     val sb = StringBuilder()
     for (i in 0 until messages.size()) {

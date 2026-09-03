@@ -1,6 +1,5 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
 /**
- * PAR-M28 — pre-pair desktop setup checklist, download path, risk disclosure.
  *
  * Before this, the first Dispatch screen was a "Scan QR Code" primary with the
  * prerequisites rendered *below* it under a "HOW IT WORKS" divider, no download
@@ -133,7 +132,7 @@ beforeEach(() => {
   useDispatchSetupStore.setState({ hasSeenDispatchSetup: false });
 });
 
-describe('PAR-M28 — DesktopSetupChecklistView', () => {
+describe('PAR-M28, DesktopSetupChecklistView', () => {
   it('renders the three prerequisites ABOVE the pairing CTA', () => {
     const screen = render(<DesktopSetupChecklistView />);
     const texts = textsInOrder(screen.toJSON());
@@ -170,7 +169,7 @@ describe('PAR-M28 — DesktopSetupChecklistView', () => {
     const screen = render(<DesktopSetupChecklistView onContinue={onContinue} />);
 
     expect(useDispatchSetupStore.getState().hasSeenDispatchSetup).toBe(false);
-    fireEvent.press(screen.getByLabelText('Done — continue to pairing'));
+    fireEvent.press(screen.getByLabelText('Done, continue to pairing'));
 
     expect(useDispatchSetupStore.getState().hasSeenDispatchSetup).toBe(true);
     expect(onContinue).toHaveBeenCalledTimes(1);
@@ -194,7 +193,7 @@ describe('PAR-M28 — DesktopSetupChecklistView', () => {
   });
 });
 
-describe('PAR-M28 — PairingRiskDisclosure', () => {
+describe('PAR-M28, PairingRiskDisclosure', () => {
   it('routes the safety link through the openExternalUrl allowlist', async () => {
     const screen = render(<PairingRiskDisclosure />);
 
@@ -218,7 +217,7 @@ describe('PAR-M28 — PairingRiskDisclosure', () => {
   });
 });
 
-describe('PAR-M28 — DisconnectedView (returning users)', () => {
+describe('PAR-M28, DisconnectedView (returning users)', () => {
   it('also states the risk before the scanner is reachable', () => {
     const screen = render(<DisconnectedView onScanPress={jest.fn()} />);
 

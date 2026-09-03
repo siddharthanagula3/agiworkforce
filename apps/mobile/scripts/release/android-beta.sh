@@ -1,13 +1,4 @@
 #!/usr/bin/env bash
-# Build an Android Play Internal Testing beta via EAS.
-# Usage: pnpm --filter @agiworkforce/mobile release:android:beta [--auto-submit]
-#
-# What it does:
-#   1. Preflight (EAS login, jq, eas.json, app.config.js)
-#   2. eas build --platform android --profile beta (AAB for Play Internal Testing)
-#   3. If --auto-submit: bind that exact build to the beta submit profile
-#
-# Founder action required first — see scripts/release/EAS_SIGNING_RUNBOOK.md.
 
 set -euo pipefail
 # shellcheck source=_lib.sh

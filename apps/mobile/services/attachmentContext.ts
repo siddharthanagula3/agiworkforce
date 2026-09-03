@@ -13,7 +13,7 @@ export async function buildAttachedDocumentContext(
       const parsed = await parseDocument(file.url, file.mimeType);
       const text = parsed.text.trim();
       if (text.length === 0) {
-        context.push(`[Attached file: ${name} (${file.mimeType}) — no extractable text]`);
+        context.push(`[Attached file: ${name} (${file.mimeType}), no extractable text]`);
         continue;
       }
       const body =
@@ -23,7 +23,7 @@ export async function buildAttachedDocumentContext(
       context.push(`[Attached file: ${name} (${file.mimeType})]\n${body}`);
     } catch {
       context.push(
-        `[Attached file: ${name} (${file.mimeType}) — content could not be extracted on-device]`,
+        `[Attached file: ${name} (${file.mimeType}), content could not be extracted on-device]`,
       );
     }
   }

@@ -71,7 +71,6 @@ class AGIVisionOCR: NSObject {
     // Accurate recognition, multilingual.
     request.recognitionLevel = .accurate
     request.usesLanguageCorrection = true
-    // Broad language set — Vision picks the right one automatically.
     request.recognitionLanguages = [
       "en-US", "fr-FR", "de-DE", "es-ES", "it-IT", "pt-BR",
       "zh-Hans", "zh-Hant", "ja-JP", "ko-KR",

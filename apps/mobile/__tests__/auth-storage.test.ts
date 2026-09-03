@@ -1,5 +1,3 @@
-
-
 const WHEN_UNLOCKED_THIS_DEVICE_ONLY = 'AfterFirstUnlockThisDeviceOnly';
 
 jest.mock('expo-secure-store', () => ({
@@ -414,7 +412,7 @@ describe('secureStorage adapter', () => {
   });
 });
 
-describe('authStore — secure storage persistence', () => {
+describe('authStore, secure storage persistence', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     resetAuthStore();
@@ -598,7 +596,6 @@ describe('authStore — secure storage persistence', () => {
   });
 
   it('onRehydrateStorage clears session and marks store uninitialized (biometric gate)', () => {
-
     const session = makeSession();
 
     const storePersistConfig = (

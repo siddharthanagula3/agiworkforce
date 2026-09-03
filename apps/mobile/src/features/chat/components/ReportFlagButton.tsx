@@ -1,18 +1,3 @@
-/**
- * ReportFlagButton — per-turn in-app report/flag control.
- *
- * Google Play GenAI policy requires a report/flag mechanism on every
- * assistant turn. This button renders as a small flag icon below assistant
- * messages and opens a modal for category selection + optional support email.
- *
- * Reports are submitted to the server trust-and-safety intake route (see
- * services/contentReport.ts), with an on-device copy kept as an offline / Local
- * Mode fallback. The confirmation reports the outcome the service actually
- * produced (ReportDelivery) — it must never read as "submitted" for a report
- * that never left the phone.
- *
- * Usage: rendered inside MessageBubble for assistant turns only.
- */
 import { useState, useCallback } from 'react';
 import {
   View,
@@ -47,7 +32,7 @@ const DELIVERY_BODY: Record<ReportDelivery['kind'], string> = {
   'submitted-to-server':
     'Your report was sent to the AGI safety team for review. A copy is also kept on this device.',
   'stored-on-device':
-    'You are offline (or in Local Mode), so it stays on this device for now — nothing was sent. Email it to support if you want someone to review it sooner.',
+    'You are offline (or in Local Mode), so it stays on this device for now, nothing was sent. Email it to support if you want someone to review it sooner.',
   'email-composer-opened':
     'Your mail app opened with the report filled in. Send that email to reach the support team.',
   'email-unavailable':
@@ -280,7 +265,7 @@ export function ReportFlagButton({
                 accessibilityLabel="Additional details about the issue"
               />
 
-              {/* Email hand-off opt-in — the only path off this device */}
+              {/* Email hand-off opt-in, the only path off this device */}
               <Pressable
                 testID="report-email-toggle"
                 onPress={() => setSendEmail((v) => !v)}
@@ -330,7 +315,7 @@ export function ReportFlagButton({
                 </Text>
               )}
 
-              {/* Save — "submit" would name a transmission that does not happen */}
+              {/* Save, "submit" would name a transmission that does not happen */}
               <Pressable
                 testID="report-submit-btn"
                 onPress={handleSubmit}

@@ -1,7 +1,5 @@
 import AppIntents
 
-// "Scan with AGI" — camera intent. Opens the camera-scan flow (document / QR / text OCR).
-// Registers as a Visual Intelligence onscreen intent via @available(iOS 18.0, *) guard below.
 @available(iOS 16.0, *)
 struct ScanIntent: AppIntent {
     static var title: LocalizedStringResource = "Scan with AGI"

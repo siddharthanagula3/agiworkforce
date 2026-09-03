@@ -1,4 +1,3 @@
-
 import { renderHook, act } from '@testing-library/react-native';
 
 const mockAuthenticateAsync = jest.fn();
@@ -32,7 +31,7 @@ afterEach(() => {
   consoleWarnSpy.mockRestore();
 });
 
-describe('useBiometricGate — fail-closed on error', () => {
+describe('useBiometricGate, fail-closed on error', () => {
   it('stays locked when authenticateAsync throws', async () => {
     mockHasHardwareAsync.mockResolvedValue(true);
     mockIsEnrolledAsync.mockResolvedValue(true);
@@ -133,7 +132,7 @@ describe('useBiometricGate — fail-closed on error', () => {
   });
 });
 
-describe('useBiometricGate — visual QA bypass', () => {
+describe('useBiometricGate, visual QA bypass', () => {
   it('unlocks in dev visual QA mode without calling OS authentication', async () => {
     process.env.EXPO_PUBLIC_AGI_VISUAL_QA_DISABLE_BIOMETRIC = '1';
     mockHasHardwareAsync.mockResolvedValue(true);
@@ -156,7 +155,7 @@ describe('useBiometricGate — visual QA bypass', () => {
   });
 });
 
-describe('useBiometricGate — gate disabled', () => {
+describe('useBiometricGate, gate disabled', () => {
   it('always reports unlocked when biometricLockEnabled is false', async () => {
     mockBiometricLockEnabledFlag = false;
     mockAuthenticateAsync.mockResolvedValue({ success: false });

@@ -20,7 +20,7 @@ function formatGeneratedAt(value: string): string {
 function packageLines(group: OssLicenseGroup): string {
   return group.packages
     .map((entry) => {
-      const copyright = entry.copyright ? ` — ${entry.copyright}` : '';
+      const copyright = entry.copyright ? `, ${entry.copyright}` : '';
       return `${entry.name} ${entry.version}${copyright}`;
     })
     .join('\n');

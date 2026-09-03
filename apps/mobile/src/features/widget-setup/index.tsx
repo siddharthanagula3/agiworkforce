@@ -32,12 +32,12 @@ const SIRI_ACTIONS: Array<{ icon: typeof MessageSquare; label: string; descripti
   {
     icon: HelpCircle,
     label: 'Ask AGI',
-    description: 'Dictate a question — review it in chat before sending',
+    description: 'Dictate a question, review it in chat before sending',
   },
   {
     icon: FileText,
     label: 'Summarize',
-    description: 'Summarize text — review it in chat before sending',
+    description: 'Summarize text, review it in chat before sending',
   },
   {
     icon: Camera,
@@ -187,7 +187,7 @@ export default function WidgetSetupScreen() {
               <Text className="text-xs text-white/50 mb-3">
                 These actions register automatically in the{' '}
                 <Text className="text-xs text-white/70 font-medium">Shortcuts</Text> app under AGI
-                Workforce — no setup needed. Trigger them by voice or combine them into your own
+                Workforce, no setup needed. Trigger them by voice or combine them into your own
                 shortcuts.
               </Text>
               <View

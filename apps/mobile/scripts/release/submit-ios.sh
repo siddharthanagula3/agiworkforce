@@ -56,4 +56,4 @@ require_cmd eas
 bash "$(dirname "${BASH_SOURCE[0]}")/preflight.sh" "${PROFILE}" 1 ios 0
 log "submitting iOS profile=${PROFILE}"
 eas_submit ios "${PROFILE}" "${ARGS[@]}"
-log_ok "submitted to App Store Connect — appears in TestFlight in 5-30 min after Apple processing."
+log_ok "submitted to App Store Connect, appears in TestFlight in 5-30 min after Apple processing."

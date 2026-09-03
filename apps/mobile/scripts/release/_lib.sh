@@ -1,6 +1,4 @@
 #!/usr/bin/env bash
-# Shared helpers for AGI mobile release scripts.
-# Not executed directly — sourced by release:* scripts.
 
 set -euo pipefail
 
@@ -25,35 +23,35 @@ die()      { log_err "$*"; exit 1; }
 # --- Preflight ------------------------------------------------------------
 
 require_cmd() {
-  command -v "$1" >/dev/null 2>&1 || die "missing required command: $1 — see scripts/release/EAS_SIGNING_RUNBOOK.md"
+  command -v "$1" >/dev/null 2>&1 || die "missing required command: $1, see scripts/release/EAS_SIGNING_RUNBOOK.md"
 }
 
 require_env() {
   local var="$1"
   if [[ -z "${!var:-}" ]]; then
-    die "missing required env var: $var — see scripts/release/EAS_SIGNING_RUNBOOK.md"
+    die "missing required env var: $var, see scripts/release/EAS_SIGNING_RUNBOOK.md"
   fi
 }
 
 require_file() {
-  [[ -f "$1" ]] || die "missing required file: $1 — see scripts/release/EAS_SIGNING_RUNBOOK.md"
+  [[ -f "$1" ]] || die "missing required file: $1, see scripts/release/EAS_SIGNING_RUNBOOK.md"
 }
 
 # Verify the working tree is clean (EAS requireCommit will reject otherwise,
 # but failing fast here gives a clearer error).
 require_clean_git() {
   if [[ "${EAS_SKIP_CLEAN_CHECK:-0}" == "1" ]]; then
-    log_warn "EAS_SKIP_CLEAN_CHECK=1 — skipping git clean check"
+    log_warn "EAS_SKIP_CLEAN_CHECK=1, skipping git clean check"
     return 0
   fi
   if [[ -n "$(git -C "${REPO_ROOT}" status --porcelain)" ]]; then
-    die "git working tree is dirty — commit or stash before release (or set EAS_SKIP_CLEAN_CHECK=1 for a local dry-run)"
+    die "git working tree is dirty, commit or stash before release (or set EAS_SKIP_CLEAN_CHECK=1 for a local dry-run)"
   fi
 }
 
 require_eas_login() {
   if ! eas whoami >/dev/null 2>&1; then
-    die "not logged in to EAS — run: eas login"
+    die "not logged in to EAS, run: eas login"
   fi
 }
 

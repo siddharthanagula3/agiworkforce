@@ -1,4 +1,3 @@
-
 const mockSecureFetch = jest.fn();
 jest.mock('@/services/secureFetch', () => ({
   secureFetch: (input: unknown, init: unknown) => mockSecureFetch(input, init),
@@ -146,7 +145,7 @@ describe('AppSession invariants fire on a deliberately inconsistent fixture', ()
 describe('ExecutionProfile agreement with the REAL 4-layer egress enforcement (guardedFetch)', () => {
   const OUR_CLOUD_URL = 'https://agiworkforce.com/api/llm/v1/chat/completions';
 
-  it('a local ExecutionProfile implies our-cloud egress is blocked — and guardedFetch actually blocks it', async () => {
+  it('a local ExecutionProfile implies our-cloud egress is blocked, and guardedFetch actually blocks it', async () => {
     mockAppMode = 'local';
     const profile = mobileExecutionProfileFor('local');
     expect(profile.tools.cloudExecutionAllowed).toBe(false);
@@ -154,7 +153,7 @@ describe('ExecutionProfile agreement with the REAL 4-layer egress enforcement (g
     expect(mockSecureFetch).not.toHaveBeenCalled();
   });
 
-  it('a cloud ExecutionProfile implies our-cloud egress is allowed — and guardedFetch actually allows it', async () => {
+  it('a cloud ExecutionProfile implies our-cloud egress is allowed, and guardedFetch actually allows it', async () => {
     mockAppMode = 'cloud';
     const profile = mobileExecutionProfileFor('cloud');
     expect(profile.tools.cloudExecutionAllowed).toBe(true);

@@ -138,7 +138,7 @@ function AttachmentThumbnail({
         </View>
       )}
 
-      {/* Remove button — hitSlop 12 lifts the 20pt circle to a 44pt target */}
+      {/* Remove button, hitSlop 12 lifts the 20pt circle to a 44pt target */}
       <Pressable
         onPress={handleRemove}
         className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full items-center justify-center"
@@ -154,7 +154,7 @@ function AttachmentThumbnail({
         <X size={10} color={colors.textSecondary} />
       </Pressable>
 
-      {/* Privacy chip — outbound destination per attachment */}
+      {/* Privacy chip, outbound destination per attachment */}
       {privacyShortLabel ? (
         <View
           accessibilityLabel={`Outbound destination: ${privacyShortLabel}`}

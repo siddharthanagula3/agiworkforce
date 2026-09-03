@@ -1,5 +1,3 @@
-
-
 jest.mock('../lib/mmkv', () => ({
   whenMmkvReady: jest.fn((cb) => cb()),
   rehydrateWhenMmkvReady: jest.fn((store, _name) => {
@@ -156,7 +154,7 @@ describe('tierStore defaults', () => {
   });
 });
 
-describe('refreshTier — success cases', () => {
+describe('refreshTier, success cases', () => {
   it('hydrates tier from /api/me plan field', async () => {
     mockApiGet.mockResolvedValueOnce(mePayload('basic'));
 
@@ -270,7 +268,7 @@ describe('refreshTier — success cases', () => {
   });
 });
 
-describe('refreshTier — failure cases', () => {
+describe('refreshTier, failure cases', () => {
   it('keeps cached tier when network call fails', async () => {
     useTierStore.setState({ tier: 'pro', isRefreshing: false, lastRefreshedAt: null });
     mockApiGet.mockRejectedValueOnce(new Error('Network error'));
@@ -297,7 +295,7 @@ describe('refreshTier — failure cases', () => {
   });
 });
 
-describe('refreshTier — concurrent call de-duplication', () => {
+describe('refreshTier, concurrent call de-duplication', () => {
   it('skips a second concurrent call if one is already in flight', async () => {
     let resolveFirst!: (v: unknown) => void;
     const firstPromise = new Promise<{ plan: string }>((resolve) => {

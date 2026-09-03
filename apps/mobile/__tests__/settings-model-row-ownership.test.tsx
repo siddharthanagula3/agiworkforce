@@ -104,7 +104,7 @@ function collectRenderedStrings(node: unknown, out: string[] = []): string[] {
   return out;
 }
 
-describe('PAR-M21 — Settings model value ownership', () => {
+describe('PAR-M21, Settings model value ownership', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockSelectedModel.id = DEFAULT_LOCAL_MODEL_ID;
@@ -150,7 +150,7 @@ describe('PAR-M21 — Settings model value ownership', () => {
   });
 });
 
-describe('PAR-M21 — getShortDisplayName fallback', () => {
+describe('PAR-M21, getShortDisplayName fallback', () => {
   it('returns the catalog name for a known id', () => {
     expect(getShortDisplayName(DEFAULT_LOCAL_MODEL_ID)).not.toBe(DEFAULT_LOCAL_MODEL_ID);
   });

@@ -166,7 +166,7 @@ export default function ProfileScreen() {
           }}
         >
           {/* Reads the signed-in account's photo, which this screen previously
-              ignored while the Account screen rendered it — the same user saw
+              ignored while the Account screen rendered it, the same user saw
               their picture on one screen and a grey letter tile here. */}
           <UserAvatar
             size={76}
@@ -392,7 +392,7 @@ function ProfileRow({
         </Text>
       ) : null}
       {/* Log Out raises a confirm Alert instead of pushing a screen, so the
-          danger tone carries no chevron — matching the Settings root. */}
+          danger tone carries no chevron, matching the Settings root. */}
       {tone === 'danger' ? null : <ChevronRight size={17} color={colors.textMuted} />}
     </Pressable>
   );

@@ -330,7 +330,7 @@ function captureForDevice(
   console.log(
     `\n=== ${device.platform}/${device.className} (${device.width}x${device.height}) ===`,
   );
-  console.log(`  ${device.storeSlot ?? 'not an uploadable store size — internal use only'}`);
+  console.log(`  ${device.storeSlot ?? 'not an uploadable store size, internal use only'}`);
   ensureAppBuilt(device.platform, variant);
   const udid = bootSimulator(device);
   installApp(device, udid, variant);

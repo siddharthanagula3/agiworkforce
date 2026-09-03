@@ -73,12 +73,6 @@ const PRIMARY_ITEMS: PrimaryItem[] = [
     icon: FolderOpen,
     route: '/(app)/(tabs)/projects',
   },
-  // Library is the single place generated media and files live. "Artifacts"
-  // was a second grid over the same material — and a worse one, since its
-  // tiles rendered no thumbnails — so it is de-listed here rather than kept as
-  // a competing entry point (founder 2026-08-13). The `/(app)/artifacts`
-  // route still exists and is still reachable from an artifact card in a
-  // message; only the drawer row is gone.
   {
     key: 'library',
     label: 'Library',
@@ -111,13 +105,6 @@ const PRIMARY_ITEMS: PrimaryItem[] = [
     icon: MonitorSmartphone,
     route: '/(app)/companion',
   },
-  // AGI Work NAVIGATES; it does not toggle (founder 2026-08-13). A drawer row
-  // that silently flipped a session stance gave no feedback about what it had
-  // changed and no way to see the work it produced. `workMode` is a property of
-  // a cloud agent RUN (cloud-contracts/cloud-agent-runs.ts), not of a
-  // conversation, so "the AGI Work chats" are exactly the runs list at
-  // /(app)/tasks — which is also why no separate "Tasks" row sits beside this
-  // one showing the same records.
   {
     key: 'tasks',
     label: 'AGI Work',
@@ -403,7 +390,7 @@ export function DrawerContent(props: DrawerContentComponentProps) {
             gap: 10,
           }}
         >
-          {/* Newsreader — the brand typeface, same as the chat empty state and
+          {/* Newsreader, the brand typeface, same as the chat empty state and
               web's var(--font-newsreader). The weight is carried by the family
               name, so no fontWeight: setting one makes iOS synthesise a bolder
               face on top of an already-semibold cut. */}
@@ -424,7 +411,7 @@ export function DrawerContent(props: DrawerContentComponentProps) {
               to reach search at all. A circular glyph cannot widen. */}
           <HeaderIconButton label="Search" icon={Search} onPress={handleOpenSearch} />
           {/* New-chat sits in the header beside the profile symbol (its original,
-              thumb-and-eye-level home) — not dropped to a bottom pill. */}
+              thumb-and-eye-level home), not dropped to a bottom pill. */}
           <HeaderIconButton label="New chat" icon={SquarePen} onPress={handleNewChat} />
           <HeaderIconButton
             label="Open profile"

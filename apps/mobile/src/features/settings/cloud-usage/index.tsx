@@ -1,4 +1,3 @@
-
 import { useCallback, useEffect, useState } from 'react';
 import { managedUsageBucketLabel } from '@agiworkforce/types';
 import { View, ActivityIndicator } from 'react-native';
@@ -267,7 +266,7 @@ export default function CloudUsageScreen() {
 
           {snapshot && (
             <>
-              {/* Current session — rolling 5h window, layers on top of the
+              {/* Current session, rolling 5h window, layers on top of the
                   monthly budget (founder decision, 2026-07-05). Percentage-only
                   contract: a null reset means the window is inactive for this
                   tier (e.g. free) or unused, so hide the section entirely. */}
@@ -294,7 +293,7 @@ export default function CloudUsageScreen() {
                 </View>
               )}
 
-              {/* Weekly limits — "All models" + flagship-only sub-bucket,
+              {/* Weekly limits, "All models" + flagship-only sub-bucket,
                   both rolling 7-day windows. Same layering rationale as session. */}
               {snapshot.weeklyResetAt !== null && (
                 <>
@@ -344,7 +343,7 @@ export default function CloudUsageScreen() {
                 </>
               )}
 
-              {/* Primary card — percentage only, Claude-style */}
+              {/* Primary card, percentage only, Claude-style */}
               <View
                 style={{
                   borderRadius: 14,
@@ -391,7 +390,7 @@ export default function CloudUsageScreen() {
                   />
                 </View>
 
-                {/* Footer — refresh */}
+                {/* Footer, refresh */}
                 <View
                   style={{
                     padding: 12,
@@ -403,13 +402,13 @@ export default function CloudUsageScreen() {
                   }}
                 >
                   {/*
-                    No `style` prop on Pressable — its function-style
+                    No `style` prop on Pressable, its function-style
                     `style={({pressed}) => ({...})}` callback silently drops
                     layout properties (flexDirection/alignItems/padding) in
                     this stack (nativewind 4.2.3 + react-native-css-interop
                     0.2.3), which stacked the icon above "Refresh" instead of
                     beside it. Same class as MOBILE-PRESSABLE-CSSINTEROP-FLEXDIR-01
-                    (docs/agent-context/known-flaws.md) — using `children` as a
+                    (docs/agent-context/known-flaws.md), using `children` as a
                     function instead routes pressed state through a plain
                     object-literal-style View, which renders correctly.
                   */}

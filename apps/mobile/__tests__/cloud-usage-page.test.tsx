@@ -1,4 +1,3 @@
-
 /* eslint-disable @typescript-eslint/no-require-imports */
 import React from 'react';
 import { managedUsageBucketLabel } from '@agiworkforce/types';
@@ -120,7 +119,7 @@ function deferred<T>() {
   return { promise, resolve };
 }
 
-describe('Cloud Usage screen — percentage-first (Claude-style), real endpoint', () => {
+describe('Cloud Usage screen, percentage-first (Claude-style), real endpoint', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     Object.assign(mockAuthState, {
@@ -209,7 +208,7 @@ describe('Cloud Usage screen — percentage-first (Claude-style), real endpoint'
   });
 });
 
-describe('Cloud Usage screen — session (rolling 5h) + weekly limits', () => {
+describe('Cloud Usage screen, session (rolling 5h) + weekly limits', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     Object.assign(mockAuthState, {
@@ -272,7 +271,7 @@ describe('Cloud Usage screen — session (rolling 5h) + weekly limits', () => {
   });
 });
 
-describe('Cloud Usage screen — blocked by Local Mode', () => {
+describe('Cloud Usage screen, blocked by Local Mode', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     Object.assign(mockAuthState, {
@@ -315,7 +314,7 @@ describe('Cloud Usage screen — blocked by Local Mode', () => {
   });
 });
 
-describe('Cloud Usage screen — signed-out gate', () => {
+describe('Cloud Usage screen, signed-out gate', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     Object.assign(mockAuthState, {

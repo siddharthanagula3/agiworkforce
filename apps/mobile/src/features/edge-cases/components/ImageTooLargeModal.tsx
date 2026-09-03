@@ -42,7 +42,7 @@ export function ImageTooLargeModal({ visible, onDismiss }: ImageTooLargeModalPro
             gap: spacing.lg,
           }}
           // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-          // @ts-ignore — alertdialog valid role
+          // @ts-ignore, alertdialog valid role
           accessibilityRole="alertdialog"
           accessibilityLabel={EDGE_COPY.imageTooLarge.title}
         >

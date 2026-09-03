@@ -1,4 +1,3 @@
-
 jest.mock('../lib/mmkv', () => ({
   whenMmkvReady: jest.fn((cb: () => void) => cb()),
   rehydrateWhenMmkvReady: jest.fn(),
@@ -149,7 +148,7 @@ beforeEach(() => {
   });
 });
 
-describe('project sync — managed gate', () => {
+describe('project sync, managed gate', () => {
   it('makes ZERO project network calls in local mode', async () => {
     useChatAppModeStore.getState().setAppMode('local');
     await syncNow();
@@ -173,7 +172,7 @@ describe('project sync — managed gate', () => {
   });
 });
 
-describe('project sync — cursor', () => {
+describe('project sync, cursor', () => {
   it('starts at "0" and advances to the server cursor after a pull', async () => {
     expect(useProjectSyncStateStore.getState().projectCursor).toBe('0');
 
@@ -250,7 +249,7 @@ describe('project sync — cursor', () => {
   });
 });
 
-describe('project sync — tombstone application', () => {
+describe('project sync, tombstone application', () => {
   it('hard-deletes a project entry when deleted_at is non-null in pull', async () => {
     seedCloudProject('p-del', 'to be deleted');
     expect(useCloudProjectStore.getState().projects.find((p) => p.id === 'p-del')).toBeDefined();
@@ -288,7 +287,7 @@ describe('project sync — tombstone application', () => {
   });
 });
 
-describe('project sync — push', () => {
+describe('project sync, push', () => {
   it('pushes dirty cloud projects and clears the dirty queue on ack', async () => {
     seedCloudProject(PUSH_PROJECT_ID, 'push me');
     markProjectForSync(PUSH_PROJECT_ID);
@@ -543,7 +542,7 @@ describe('project sync — push', () => {
   });
 });
 
-describe('project store — local/cloud separation', () => {
+describe('project store, local/cloud separation', () => {
   it('a local-mode createProject NEVER writes to the cloud store or dirty queue', () => {
     useChatAppModeStore.getState().setAppMode('local');
 

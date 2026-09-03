@@ -1,4 +1,3 @@
-
 jest.mock('../lib/mmkv', () => ({
   mmkvStorage: { getItem: jest.fn(), setItem: jest.fn(), removeItem: jest.fn() },
   rehydrateWhenMmkvReady: jest.fn(),
@@ -20,7 +19,7 @@ beforeEach(() => {
   jest.clearAllMocks();
 });
 
-describe('consolidateFactsFromTurn — on-device (local) persistence', () => {
+describe('consolidateFactsFromTurn, on-device (local) persistence', () => {
   it('writes extracted facts to on-device SQLite', async () => {
     const res = await consolidateFactsFromTurn({
       message: 'my name is Grace Hopper',

@@ -129,7 +129,7 @@ function reconcile(store, record, live) {
   }
   if (!published && live.live) {
     throw new Error(
-      `"${store}" has a live listing (${live.listingId}) while the release-state registry still says unpublished — update src/features/release-state/mobileReleaseState.json deliberately`,
+      `"${store}" has a live listing (${live.listingId}) while the release-state registry still says unpublished, update src/features/release-state/mobileReleaseState.json deliberately`,
     );
   }
   if (!published) {

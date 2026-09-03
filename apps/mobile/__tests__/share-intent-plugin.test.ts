@@ -1,4 +1,3 @@
-
 /* eslint-disable @typescript-eslint/no-require-imports */
 
 const { patchMainActivity } = require('../native/android/withAGIShareIntent.cjs') as {
@@ -73,7 +72,7 @@ describe('withAGIShareIntent patchMainActivity', () => {
     );
   });
 
-  it('is idempotent — patching twice changes nothing', () => {
+  it('is idempotent, patching twice changes nothing', () => {
     const once = patchMainActivity(STOCK_MAIN_ACTIVITY);
     const twice = patchMainActivity(once);
     expect(twice).toBe(once);

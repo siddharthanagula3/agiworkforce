@@ -152,9 +152,6 @@ describe('cloud run blocking', () => {
 });
 
 describe('cloud run grouping', () => {
-  // groupCloudRunsByRecency reads the wall clock, so pinning it is what keeps
-  // "Today" meaning today — the fixtures are stamped relative to NOW and this
-  // suite began failing the day after NOW passed.
   beforeEach(() => {
     jest.useFakeTimers().setSystemTime(NOW);
   });

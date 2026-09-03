@@ -521,7 +521,7 @@ function LanguageButton({ lang, onPress, colors }: LanguageButtonProps) {
     >
       <View style={{ flex: 1 }}>
         <Text style={{ fontSize: 13, fontWeight: '600', color: colors.textPrimary }}>
-          {lang?.label ?? '—'}
+          {lang?.label ?? ', '}
         </Text>
         <Text style={{ fontSize: 11, color: colors.textMuted }}>{lang?.nativeLabel ?? ''}</Text>
       </View>

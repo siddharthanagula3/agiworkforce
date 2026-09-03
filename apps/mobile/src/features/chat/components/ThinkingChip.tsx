@@ -52,7 +52,7 @@ export function ThinkingChip({
 
   return (
     <View style={{ marginVertical: 2 }}>
-      {/* Status line — no card, no fill, no border. */}
+      {/* Status line, no card, no fill, no border. */}
       <Pressable
         onPress={() => setSheetOpen(true)}
         accessibilityRole="button"

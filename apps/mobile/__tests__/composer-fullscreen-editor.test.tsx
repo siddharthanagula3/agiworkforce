@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { render, fireEvent } from '@testing-library/react-native';
 import { SafeAreaProvider, type Metrics } from 'react-native-safe-area-context';
@@ -47,7 +46,7 @@ describe('ComposerFullScreenEditor', () => {
     expect(input.props.style?.maxHeight).toBeUndefined();
   });
 
-  it('owns no text state — every edit is reported upward', () => {
+  it('owns no text state, every edit is reported upward', () => {
     const { getByTestId, onChangeText } = renderEditor({ value: 'before' });
 
     fireEvent.changeText(getByTestId('chat.composer.fullscreen.input'), 'after');

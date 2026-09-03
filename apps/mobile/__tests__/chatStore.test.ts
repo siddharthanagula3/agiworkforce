@@ -273,7 +273,7 @@ function seedCloudConversation(model = CLOUD_MODEL) {
   });
 }
 
-describe('chatStore — streaming state', () => {
+describe('chatStore, streaming state', () => {
   beforeEach(() => {
     __resetCloudAccountSessionForTests();
     activateCloudAccount('chat-store-test-user');
@@ -2125,7 +2125,7 @@ describe('chatStore — streaming state', () => {
       expect(mockStreamChat).not.toHaveBeenCalled();
     });
 
-    it('fires onAccepted when the user message commits — before the stream finishes', async () => {
+    it('fires onAccepted when the user message commits, before the stream finishes', async () => {
       const onAccepted = jest.fn();
       let acceptedBeforeDone = false;
 

@@ -14,7 +14,7 @@ function readCatalog(file: string, marker: string): CatalogEntry[] {
   const source = fs.readFileSync(file, 'utf8');
   const markerIndex = source.indexOf(marker);
   if (markerIndex < 0) {
-    throw new Error(`${file}: could not find "${marker}" — has the catalog been renamed or moved?`);
+    throw new Error(`${file}: could not find "${marker}", has the catalog been renamed or moved?`);
   }
 
   const rest = source.slice(markerIndex);

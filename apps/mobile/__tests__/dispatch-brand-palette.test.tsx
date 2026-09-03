@@ -28,7 +28,7 @@ function walk(dir: string, acc: string[] = []): string[] {
   return acc;
 }
 
-describe('PAR-M27 — no literal teal ramp survives', () => {
+describe('PAR-M27, no literal teal ramp survives', () => {
   it('has removed the teal ramp from tailwind.config.js', () => {
     const config = require('../tailwind.config.js');
     expect(config.theme.extend.colors.teal).toBeUndefined();
@@ -145,7 +145,7 @@ function flatStyles(node: unknown): Record<string, unknown>[] {
     .filter((value): value is Record<string, unknown> => !!value && typeof value === 'object');
 }
 
-describe('PAR-M27 — QR viewfinder stays visible over the camera feed', () => {
+describe('PAR-M27, QR viewfinder stays visible over the camera feed', () => {
   it('draws the corner brackets with the camera scan-region token, never the accent token', () => {
     const screen = render(<QRScanner onScan={jest.fn()} onClose={jest.fn()} />);
     const styles = flatStyles(screen.toJSON());

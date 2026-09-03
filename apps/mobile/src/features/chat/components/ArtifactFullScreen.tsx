@@ -41,16 +41,6 @@ interface ArtifactFullScreenProps {
   onRegenerate?: () => void;
 }
 
-/**
- * Languages/types for which a preview pane is offered.
- *
- * SECURITY: `html`/`svg` render LIVE through {@link SafeArtifactPreview}, a
- * hardened WebView (JS disabled, strict CSP `default-src 'none'`, no RN bridge,
- * navigation blocked) — safe for untrusted artifact markup. `mermaid`/`jsx`/`tsx`
- * need JavaScript or compilation to render and therefore CANNOT be shown in the
- * JS-disabled sandbox; they keep the preview toggle but display an honest
- * "source only" note rather than executing anything.
- */
 const PREVIEWABLE_LANGUAGES = new Set(['html', 'svg', 'mermaid', 'jsx', 'tsx']);
 
 function livePreviewKind(artifact: Artifact): PreviewableKind | null {
@@ -341,7 +331,7 @@ export function ArtifactFullScreen({
         >
           {/* Row 1: toggle (left) + title·type (flex) + action buttons (right) */}
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-            {/* Preview / Source segmented toggle — only for previewable artifacts */}
+            {/* Preview / Source segmented toggle, only for previewable artifacts */}
             {canPreview ? (
               <View
                 style={{
@@ -403,7 +393,7 @@ export function ArtifactFullScreen({
               <Badge label={generatedFileSummary.privacyShortLabel} color="gray" />
             ) : null}
 
-            {/* Publish to a public link — only kinds the public renderer supports */}
+            {/* Publish to a public link, only kinds the public renderer supports */}
             {canPublish(artifact, activeContent) ? (
               <Pressable
                 onPress={handlePublish}
@@ -458,7 +448,7 @@ export function ArtifactFullScreen({
               </Pressable>
             ) : null}
 
-            {/* Refresh — re-generate the artifact (only when handler is wired) */}
+            {/* Refresh, re-generate the artifact (only when handler is wired) */}
             {onRegenerate ? (
               <Pressable
                 onPress={() => {
@@ -743,7 +733,7 @@ export function ArtifactFullScreen({
               </View>
             ) : null}
 
-            {/* Main content — horizontally scrollable monospace for code, formatted
+            {/* Main content, horizontally scrollable monospace for code, formatted
              * markdown for prose artifacts. Prose previously shared the monospace
              * path's single flat Text, which printed heading/list/emphasis markers
              * literally instead of rendering them. */}

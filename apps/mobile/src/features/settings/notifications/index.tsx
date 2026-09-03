@@ -456,7 +456,7 @@ export default function NotificationPreferencesScreen() {
       </Card>
       <Text className="text-[11px] mt-2 px-1" style={{ color: colors.textMuted }}>
         {agentActivityPush.status === 'local'
-          ? 'Switch to AGI Cloud to control agent run push — local mode has no cloud agents to notify you.'
+          ? 'Switch to AGI Cloud to control agent run push, local mode has no cloud agents to notify you.'
           : agentActivityPush.status === 'loading'
             ? 'Loading your account settings…'
             : agentActivityPush.status === 'saving'
@@ -499,7 +499,7 @@ export default function NotificationPreferencesScreen() {
         {quietHours.enabled && (
           <>
             <Separator />
-            {/* Days — quiet hours apply only on the days selected here, the
+            {/* Days, quiet hours apply only on the days selected here, the
                   same set web has always offered. */}
             <View className="py-3 px-1">
               <Text className="text-sm mb-2" style={{ color: colors.textPrimary }}>
@@ -661,7 +661,7 @@ export default function NotificationPreferencesScreen() {
               ? 'Saving to your account…'
               : timeFocusSync.status === 'error'
                 ? (timeFocusSync.error ?? 'Could not reach your account settings.')
-                : 'Synced with your account — the same schedule applies on web and desktop.'}
+                : 'Synced with your account, the same schedule applies on web and desktop.'}
       </Text>
 
       {/* Vibration */}

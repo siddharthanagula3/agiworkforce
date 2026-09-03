@@ -1,36 +1,4 @@
 #!/usr/bin/env node
-/**
- * Probe an App Store Connect API key and report what it can actually do.
- *
- * WHY THIS EXISTS
- *
- * `preflight.sh` requires three iOS submission values — `ascAppId` in
- * `eas.json`, plus `ASC_API_KEY_ID` / `ASC_API_KEY_ISSUER_ID` and the `.p8`
- * private key — and a wrong or under-privileged key fails LATE, during an
- * actual `eas submit`, after a full production build has already been spent.
- *
- * It also answers two questions that are otherwise guesswork when several keys
- * are sitting in `~/.appstoreconnect/private_keys/`:
- *
- *   1. Which key works, and does it have enough role to submit?
- *   2. What is the numeric `ascAppId` for the bundle id we ship?
- *
- * Both are read straight from Apple rather than copied by hand from the App
- * Store Connect UI, so `eas.json` cannot end up carrying a typo'd app id.
- *
- * USAGE
- *
- *   ASC_API_KEY_ID=XXXXXXXXXX \
- *   ASC_API_KEY_ISSUER_ID=xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx \
- *   node scripts/release/asc-probe.mjs [--key <path to .p8>]
- *
- * The key is resolved in this order: `--key`, `ASC_API_KEY_PATH`,
- * `apps/mobile/secrets/asc-api-key.p8`, then
- * `~/.appstoreconnect/private_keys/AuthKey_<ASC_API_KEY_ID>.p8`.
- *
- * Read-only: it performs GETs and never writes to App Store Connect. It prints
- * app names, bundle ids and numeric ids; it never prints key material.
- */
 
 import { createSign } from 'node:crypto';
 import { readFileSync, existsSync } from 'node:fs';
@@ -111,7 +79,7 @@ async function main() {
     console.error(`✖ ${keyPath} is not a PKCS#8 private key.`);
     console.error('  An App Store Connect API key is PKCS#8: its first line is BEGIN PRIVATE KEY,');
     console.error('  wrapped in five dashes on each side.');
-    console.error('  A .certSigningRequest ("BEGIN CERTIFICATE REQUEST") is a DIFFERENT thing —');
+    console.error('  A .certSigningRequest ("BEGIN CERTIFICATE REQUEST") is a DIFFERENT thing, ');
     console.error('  that requests a signing certificate and cannot authenticate the API.');
     process.exit(2);
   }
@@ -125,7 +93,7 @@ async function main() {
   if (!apps.ok) {
     const detail = apps.body?.errors?.map((e) => `${e.status} ${e.title}: ${e.detail}`).join('; ');
     console.error(
-      `✖ App Store Connect rejected the key (HTTP ${apps.status})${detail ? ` — ${detail}` : ''}`,
+      `✖ App Store Connect rejected the key (HTTP ${apps.status})${detail ? `, ${detail}` : ''}`,
     );
     if (apps.status === 401) {
       console.error(
@@ -136,11 +104,11 @@ async function main() {
   }
 
   const records = apps.body?.data ?? [];
-  console.log(`✔ key authenticated — ${records.length} app record(s) visible\n`);
+  console.log(`✔ key authenticated, ${records.length} app record(s) visible\n`);
 
   if (records.length === 0) {
     console.log('No app records yet. Create the app in App Store Connect (bundle id');
-    console.log('com.agiworkforce.app), then re-run — this will print the ascAppId to paste.');
+    console.log('com.agiworkforce.app), then re-run, this will print the ascAppId to paste.');
     return;
   }
 
@@ -159,7 +127,7 @@ async function main() {
     console.log(`✔ ascAppId for ${bundleId}: ${ours.id}`);
     console.log('  Put it in apps/mobile/eas.json → submit.production.ios.ascAppId');
   } else {
-    console.log(`✖ No app record for ${bundleId} yet — create it in App Store Connect first.`);
+    console.log(`✖ No app record for ${bundleId} yet, create it in App Store Connect first.`);
   }
 }
 

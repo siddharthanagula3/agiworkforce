@@ -1,4 +1,3 @@
-
 import { offlineQueue, type QueuedMessage } from '../services/offlineQueue';
 
 function makeMsg(
@@ -77,7 +76,7 @@ describe('enqueue', () => {
   });
 });
 
-describe('processQueue — success path', () => {
+describe('processQueue, success path', () => {
   it('processes all items when sendFn succeeds for each', async () => {
     offlineQueue.enqueue(makeMsg({ content: 'a' }));
     offlineQueue.enqueue(makeMsg({ content: 'b', conversationId: 'conv-2' }));
@@ -234,10 +233,7 @@ describe('max retry count', () => {
 
     const permanentError = new Error('Always fails');
     for (let i = 0; i < 3; i++) {
-      const sendFn = jest
-        .fn()
-        .mockRejectedValueOnce(permanentError)
-        .mockResolvedValue(undefined);
+      const sendFn = jest.fn().mockRejectedValueOnce(permanentError).mockResolvedValue(undefined);
 
       const p = offlineQueue.processQueue(sendFn);
       await flushMicrotasks();

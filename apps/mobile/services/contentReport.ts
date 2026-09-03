@@ -1,32 +1,3 @@
-/**
- * Content report / flag service.
- *
- * Google Play GenAI policy requires an in-app mechanism for users to flag
- * harmful or inaccurate AI-generated content. This service:
- *
- *   1. Saves the report locally to MMKV first, so a failing network can never
- *      lose it (local-first).
- *   2. Submits the report to the server intake route
- *      `POST /api/mobile/content-report` (apps/web) so it reaches the AGI
- *      trust-and-safety queue (MOBILE-CONTENT-REPORT-NO-INTAKE-ENDPOINT-01).
- *   3. Optionally hands the report to the device mail client, addressed to
- *      support, when the user asks for that explicitly.
- *
- * The on-device copy is now an OFFLINE fallback, not the only sink. Reporting
- * still has to work in Local Mode, where the egress guard refuses our-cloud
- * requests outright: there the server POST throws, is caught, and the report
- * stays on the device. Every caller must describe the ACTUAL outcome truthfully
- * (see ReportDelivery) — a report that never left the phone must never read as
- * "submitted".
- *
- * No new npm deps. The server POST goes through the shared `api` client (auth +
- * egress guard). Email uses React Native's Linking.openURL with a mailto deep
- * link — the OS mail client handles the actual send, and the user still has to
- * press send there.
- *
- * MMKV key: "content-reports:v1" → JSON array of ContentReport
- */
-
 import { Linking } from 'react-native';
 import { storage } from '@/lib/mmkv';
 import { api } from '@/services/api';
@@ -152,13 +123,6 @@ async function submitReportToServer(report: ContentReport): Promise<boolean> {
   }
 }
 
-/**
- * Saves a content report locally, submits it to the server intake route (with an
- * on-device offline fallback), and — if sendEmail is true — also opens the
- * device mail client pre-filled with the report details.
- *
- * @returns the saved record plus what actually happened to it.
- */
 export async function saveContentReport(params: {
   messageId: string;
   conversationId: string;

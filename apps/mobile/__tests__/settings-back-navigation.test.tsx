@@ -1,11 +1,9 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
 /**
- * PAR-M15 — settings sub-screens must pop the stack they were pushed from.
  *
  * Voice, Permissions and Notification Preferences are each reachable from more
  * than one parent (the Settings root, Safety & Security, and Capabilities), so
  * a hard `navigate` to one fixed parent dropped the user on a screen they never
- * came from — backing out of Permissions opened from Capabilities landed on
  * Safety & Security. All three now use SettingsScreenShell, which pops the real
  * stack and keeps `backHref` only for deep-linked entries with no history.
  */

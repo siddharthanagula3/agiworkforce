@@ -1,10 +1,4 @@
 #!/usr/bin/env bash
-# Wave 0 smoke-test prep — Android
-# Verifies toolchain, builds a dev client via EAS, and prints install instructions.
-# Re-runnable: safe to run more than once.
-#
-# Usage: bash apps/mobile/scripts/wave0-smoke/android-smoke.sh
-#        Or from the mobile dir: bash scripts/wave0-smoke/android-smoke.sh
 
 set -euo pipefail
 
@@ -26,7 +20,7 @@ die()      { printf '\033[1;31m[fail]\033[0m %s\n' "$*" >&2; exit 1; }
 # Helpers
 # ---------------------------------------------------------------------------
 require_cmd() {
-  command -v "$1" >/dev/null 2>&1 || die "Missing required command: $1 — install it and re-run."
+  command -v "$1" >/dev/null 2>&1 || die "Missing required command: $1, install it and re-run."
 }
 
 # ---------------------------------------------------------------------------
@@ -131,7 +125,7 @@ printf '\n'
 
 # If EAS_AUTO_BUILD is set to 1, actually run the build.
 if [[ "${EAS_AUTO_BUILD:-0}" == "1" ]]; then
-  smoke "EAS_AUTO_BUILD=1 — starting build now..."
+  smoke "EAS_AUTO_BUILD=1, starting build now..."
   (cd "${MOBILE_DIR}" && eas build --platform android --profile preview --non-interactive) || \
     die "EAS build failed. Check the output above."
 fi
@@ -143,17 +137,17 @@ smoke "=== Step 6: Install on device ==="
 smoke ""
 smoke "After the build completes (EAS will print the APK download URL):"
 smoke ""
-smoke "  Option A — QR code (easiest):"
+smoke "  Option A, QR code (easiest):"
 smoke "    1. Open the EAS build URL in a browser on your Mac"
 smoke "    2. Scan the QR code with the Pixel camera"
 smoke "    3. Tap the download link, then 'Install' (may need to allow 'Install unknown apps')"
 smoke ""
-smoke "  Option B — adb install (faster, requires USB):"
+smoke "  Option B, adb install (faster, requires USB):"
 smoke "    1. Download the .apk from the EAS build URL to your Mac"
 smoke "    2. Run: adb install /path/to/AGIWorkforce-preview.apk"
 smoke "    3. Confirm: adb shell am start -n com.agiworkforce.app/.MainActivity"
 smoke ""
-smoke "  Option C — Expo Go (Metro, no native modules):"
+smoke "  Option C, Expo Go (Metro, no native modules):"
 smoke "    npx expo start --android"
 smoke "    Note: native modules (llama.rn, executorch) will not work in Expo Go."
 smoke ""

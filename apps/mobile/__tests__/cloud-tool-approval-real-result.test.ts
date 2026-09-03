@@ -116,7 +116,7 @@ function lastAssistantMessage() {
   return msgs.find((m) => m.role === 'assistant');
 }
 
-describe('resolveToolApproval — durable server-owned checkpoint', () => {
+describe('resolveToolApproval, durable server-owned checkpoint', () => {
   it('does not resume or mutate a pending Cloud approval without an active account owner', async () => {
     mockStreamChat.mockImplementation(async (_body, callbacks: StreamCallbacks) => {
       callbacks.onRunReference?.({

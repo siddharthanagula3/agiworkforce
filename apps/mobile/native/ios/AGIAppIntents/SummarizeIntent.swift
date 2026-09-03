@@ -1,7 +1,5 @@
 import AppIntents
 
-// "Summarize this with AGI" — text intent + share extension entry point.
-// Accepts text from the share sheet or typed directly via Siri.
 @available(iOS 16.0, *)
 struct SummarizeIntent: AppIntent {
     static var title: LocalizedStringResource = "Summarize with AGI"

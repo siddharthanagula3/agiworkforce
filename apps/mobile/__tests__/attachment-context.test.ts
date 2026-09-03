@@ -39,7 +39,7 @@ describe('buildAttachedDocumentContext', () => {
     ]);
 
     expect(entry).toBe(
-      '[Attached file: deck.docx (application/vnd.openxmlformats) — content could not be extracted on-device]',
+      '[Attached file: deck.docx (application/vnd.openxmlformats), content could not be extracted on-device]',
     );
   });
 

@@ -1111,7 +1111,7 @@ export default function ChatScreen() {
             borderBottomColor: colors.border,
           }}
         >
-          {/* Hamburger — opens drawer */}
+          {/* Hamburger, opens drawer */}
           <Pressable
             onPress={handleOpenDrawer}
             style={({ pressed }) => ({
@@ -1128,7 +1128,7 @@ export default function ChatScreen() {
             <Menu size={18} color={colors.textSecondary} />
           </Pressable>
 
-          {/* Active project chip — tappable, navigates to project detail */}
+          {/* Active project chip, tappable, navigates to project detail */}
           {conversationExecutionMode === 'local' && activeProjectId && activeProject ? (
             <Pressable
               onPress={() =>
@@ -1160,7 +1160,7 @@ export default function ChatScreen() {
             </Pressable>
           ) : null}
 
-          {/* ModeToggle — flex:1 ensures true center regardless of left/right widths */}
+          {/* ModeToggle, flex:1 ensures true center regardless of left/right widths */}
           <View style={{ flex: 1, alignItems: 'center' }}>
             <ModeToggle
               mode={currentAppMode}
@@ -1224,12 +1224,12 @@ export default function ChatScreen() {
           >
             <WifiOff size={12} color={colors.agentError} />
             <Text style={{ fontSize: 12, color: colors.agentError }}>
-              You're offline — viewing cached conversations
+              You're offline, viewing cached conversations
             </Text>
           </View>
         )}
 
-        {/* Temporary chat explainer — shown once per app session */}
+        {/* Temporary chat explainer, shown once per app session */}
         <TemporaryChatBanner />
 
         {/* Messages */}
@@ -1255,7 +1255,7 @@ export default function ChatScreen() {
         {quotedMessage && <QuotedReplyBar message={quotedMessage} onDismiss={handleDismissQuote} />}
 
         {/* Context-budget warning. The component computes its own threshold and
-            renders null below it, so it is mounted unconditionally — it appears
+            renders null below it, so it is mounted unconditionally, it appears
             only once the thread crosses ~70% of the model's context window. */}
         <ContextWarningChip
           modelId={selectedModel}
@@ -1263,17 +1263,17 @@ export default function ChatScreen() {
           onStartFreshChat={handleNewChat}
         />
 
-        {/* Model-tier warning — shown when Opus-class model selected on free tier */}
+        {/* Model-tier warning, shown when Opus-class model selected on free tier */}
         <ModelTierWarningBanner />
 
-        {/* Named-provider consent gate — specific, with an inline opt-in */}
+        {/* Named-provider consent gate, specific, with an inline opt-in */}
         <ProviderConsentBanner
           state={providerConsentError}
           onEnabled={handleProviderConsentEnabled}
           onDismiss={handleProviderConsentDismiss}
         />
 
-        {/* Send/stream failure banner with retry — surfaces store.error (was silent) */}
+        {/* Send/stream failure banner with retry, surfaces store.error (was silent) */}
         <SendErrorBanner
           error={providerConsentError ? null : sendError}
           freeCapacity={providerConsentError ? null : freeCapacityError}
@@ -1292,7 +1292,7 @@ export default function ChatScreen() {
           onDismiss={clearError}
         />
 
-        {/* Composer — shows TaskChips when conversation is empty.
+        {/* Composer, shows TaskChips when conversation is empty.
             Hidden in inline voice mode: VoiceInlineBar IS the composer there,
             and rendering both stacked two input rows on screen at once, which
             is neither reference-03 nor what VoiceInlineBar's own docstring
@@ -1343,7 +1343,7 @@ export default function ChatScreen() {
         {/* Picker modal only -- the trigger lives in the "+" sheet. */}
         <ProjectSelectorBar openSignal={projectPickerOpenSignal} />
 
-        {/* Model picker bottom sheet — conversationId scopes the reasoning-effort
+        {/* Model picker bottom sheet, conversationId scopes the reasoning-effort
             selector to this conversation (agentControlStore override). */}
         <ModelPickerSheet
           sheetRef={modelPickerRef}
@@ -1356,7 +1356,7 @@ export default function ChatScreen() {
 
         {/* First-run intro carrying the recording disclosure, then the voice
             picker, then the inline bar. The thread above stays visible for the
-            inline mode — references-2 voice-03. */}
+            inline mode, references-2 voice-03. */}
         <VoiceOnboardingSheet
           visible={voiceIntroVisible}
           onContinue={handleVoiceIntroContinue}
@@ -1369,7 +1369,7 @@ export default function ChatScreen() {
           onDismiss={handleVoicePickerDismiss}
         />
 
-        {/* The only voice presentation — identical to the new-chat tab's. */}
+        {/* The only voice presentation, identical to the new-chat tab's. */}
         <VoiceInlineBar
           visible={voiceInlineVisible}
           phase={inlineVoicePhase}
@@ -1389,7 +1389,7 @@ export default function ChatScreen() {
           title={title}
         />
 
-        {/* Billing recovery sheet — preserves upgrade/subscribe/inactive semantics. */}
+        {/* Billing recovery sheet, preserves upgrade/subscribe/inactive semantics. */}
         <PaywallBottomSheet
           ref={paywallSheetRef}
           feature={paywallError?.feature ?? 'token_cap'}
@@ -1408,7 +1408,7 @@ export default function ChatScreen() {
           onCancel={handleModeSwitchCancel}
         />
 
-        {/* Rename modal (Android — Alert.prompt is iOS-only) */}
+        {/* Rename modal (Android, Alert.prompt is iOS-only) */}
         <Modal
           visible={renameModalVisible}
           transparent

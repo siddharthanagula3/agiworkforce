@@ -1,4 +1,3 @@
-
 import fs from 'fs';
 import path from 'path';
 
@@ -46,7 +45,7 @@ const appConfig = require('../app.config.js') as {
 
 const filters = appConfig.expo.android.intentFilters;
 
-describe('app.config.js — Android intentFilters use Expo short names', () => {
+describe('app.config.js, Android intentFilters use Expo short names', () => {
   it('never uses fully-qualified action/category names (prebuild adds the prefix)', () => {
     for (const filter of filters) {
       expect(filter.action).not.toMatch(/^android\.intent\./);
@@ -56,7 +55,7 @@ describe('app.config.js — Android intentFilters use Expo short names', () => {
     }
   });
 
-  it('declares a text/plain-only SEND share target (no image/* — no ingestion path exists)', () => {
+  it('declares a text/plain-only SEND share target (no image/*, no ingestion path exists)', () => {
     const send = filters.find((f) => f.action === 'SEND');
     expect(send).toBeDefined();
     expect(send!.category).toEqual(['DEFAULT']);

@@ -455,7 +455,7 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
             thumb travel rather than sitting at the bottom with the rarely
             touched config links (founder 2026-08-07). In a media mode the
             Create section below owns the model choice, so this row would be a
-            second, conflicting control — it is hidden there. */}
+            second, conflicting control, it is hidden there. */}
         {mediaMode === 'text' ? (
           <>
             <View style={{ paddingHorizontal: 20, paddingVertical: 4 }}>
@@ -472,12 +472,12 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
           </>
         ) : null}
 
-        {/* Section 2: Create — output kind.
+        {/* Section 2: Create, output kind.
             Image and video are MODES, not flags: picking one switches the
             selected model to the registry's media model for that slot (founder
             2026-08-06), replacing the old boolean toggles that sat on top of a
             text model the send path never actually used. AGI Work moved out of
-            this sheet to the drawer in the same pass — it is a session-wide
+            this sheet to the drawer in the same pass, it is a session-wide
             stance, not a per-message attachment. */}
         {showImageOption || showVideoOption ? (
           <>
@@ -530,7 +530,7 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
                 />
               ) : null}
               {/* Model catalog for the ACTIVE kind. Picking Image or Video is
-                  only half the decision — the catalog carries several models
+                  only half the decision, the catalog carries several models
                   per kind at very different prices, so the choice belongs to
                   the user. */}
               {mediaMode !== 'text' ? (
@@ -619,7 +619,7 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
                   {/* Video output shape. Options come from the shared model
                       catalog, so a model without a published 4k tuple never
                       offers 4k here, and quality is scoped BY aspect because
-                      the two are not independent — a resolution can exist in
+                      the two are not independent, a resolution can exist in
                       landscape and not in portrait. */}
                   {mediaMode === 'video' && videoAspectOptions.length > 1 ? (
                     <>

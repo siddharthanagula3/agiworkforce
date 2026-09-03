@@ -31,12 +31,6 @@ export interface AttachmentValidationResult<T> {
   rejected: AttachmentRejection[];
 }
 
-/**
- * @param destination where the send will put this file — pass the live
- * `appMode`. Defaults to the stricter `'cloud'` ceiling so that a caller which
- * has not resolved its destination is never the reason an unsendable file gets
- * staged. The production caller (ChatInput) always passes it.
- */
 export function isAcceptableAttachment(
   a: ValidatableAttachment,
   destination: AttachmentDestination = 'cloud',

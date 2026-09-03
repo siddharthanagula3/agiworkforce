@@ -1,4 +1,3 @@
-
 const mockSecureFetch = jest.fn();
 jest.mock('@/services/secureFetch', () => ({
   secureFetch: (input: unknown, init: unknown) => mockSecureFetch(input, init),
@@ -30,7 +29,7 @@ beforeEach(() => {
   mockAppMode = 'local';
 });
 
-describe('isOurCloudHost — host classification', () => {
+describe('isOurCloudHost, host classification', () => {
   it('matches our product apex and any subdomain', () => {
     expect(isOurCloudHost('agiworkforce.com')).toBe(true);
     expect(isOurCloudHost('api.agiworkforce.com')).toBe(true);
@@ -76,7 +75,7 @@ describe('isOurCloudHost — host classification', () => {
   });
 });
 
-describe('guardedFetch — DRIFT REGRESSION (vercel.app mobile missed is now blocked in Local mode)', () => {
+describe('guardedFetch, DRIFT REGRESSION (vercel.app mobile missed is now blocked in Local mode)', () => {
   it('BLOCKS a *.vercel.app host in Local mode before any network I/O', async () => {
     mockAppMode = 'local';
     await expect(
@@ -86,7 +85,7 @@ describe('guardedFetch — DRIFT REGRESSION (vercel.app mobile missed is now blo
   });
 });
 
-describe('guardedFetch — Local mode (block our-cloud, allow provider)', () => {
+describe('guardedFetch, Local mode (block our-cloud, allow provider)', () => {
   it('BLOCKS our-cloud requests before any network I/O', async () => {
     mockAppMode = 'local';
     await expect(
@@ -112,7 +111,7 @@ describe('guardedFetch — Local mode (block our-cloud, allow provider)', () => 
   });
 });
 
-describe('guardedFetch — Cloud mode (managed allows our-cloud)', () => {
+describe('guardedFetch, Cloud mode (managed allows our-cloud)', () => {
   it('ALLOWS our-cloud requests, delegating to secureFetch', async () => {
     mockAppMode = 'cloud';
     await guardedFetch('https://agiworkforce.com/api/usage/summary');
@@ -124,7 +123,7 @@ describe('guardedFetch — Cloud mode (managed allows our-cloud)', () => {
   });
 });
 
-describe('guardedFetch — fail-closed mode resolution', () => {
+describe('guardedFetch, fail-closed mode resolution', () => {
   it('treats an unknown mode value as Local and blocks our-cloud', async () => {
     mockAppMode = undefined;
     await expect(guardedFetch('https://agiworkforce.com/api/x')).rejects.toBeInstanceOf(
@@ -150,7 +149,7 @@ describe('guardedFetch — fail-closed mode resolution', () => {
   });
 });
 
-describe('guardedFetch — NetInfo self-correction on a successful round-trip', () => {
+describe('guardedFetch, NetInfo self-correction on a successful round-trip', () => {
   it('force-refreshes NetInfo after a successful (2xx) response', async () => {
     mockAppMode = 'cloud';
     mockSecureFetch.mockResolvedValue(new Response('ok', { status: 200 }));

@@ -138,7 +138,7 @@ export function GeneratedImage({
           </View>
         )}
 
-        {/* Image — opacity controlled by loadState, expo-image handles its own transition */}
+        {/* Image, opacity controlled by loadState, expo-image handles its own transition */}
         <View
           style={{
             opacity: loadState === 'loaded' ? 1 : 0,

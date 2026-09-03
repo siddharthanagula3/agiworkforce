@@ -250,7 +250,7 @@ export default function SharedLinksScreen() {
                   }
                 >
                   {link.expired
-                    ? 'Expired — no longer opens'
+                    ? 'Expired, no longer opens'
                     : `Expires ${formatDate(link.expiresAt)}`}
                 </Text>
 

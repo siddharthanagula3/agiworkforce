@@ -1,6 +1,5 @@
 import AppIntents
 
-// "Transcribe with AGI" — audio file intent. Routes to the voice transcription flow.
 @available(iOS 16.0, *)
 struct TranscribeIntent: AppIntent {
     static var title: LocalizedStringResource = "Transcribe with AGI"

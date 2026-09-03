@@ -1,4 +1,3 @@
-
 import { device, element, by, waitFor } from 'detox';
 
 const SHORT = 6000;
@@ -18,7 +17,7 @@ const findings: string[] = [];
 function record(capability: string, state: string, detail: string): void {
   findings.push(`${capability.padEnd(22)} ${state.padEnd(14)} ${detail}`);
   // eslint-disable-next-line no-console -- this spec's output IS the report
-  console.log(`[drive] ${capability}: ${state} — ${detail}`);
+  console.log(`[drive] ${capability}: ${state}, ${detail}`);
 }
 
 describe('Live capability drive', () => {
@@ -133,7 +132,7 @@ describe('Live capability drive', () => {
       streaming ? 'REACHED' : 'BLOCKED',
       streaming
         ? 'assistant bubble began streaming'
-        : 'no streaming bubble — check for a gate alert or missing local model',
+        : 'no streaming bubble, check for a gate alert or missing local model',
     );
 
     if (streaming) {
