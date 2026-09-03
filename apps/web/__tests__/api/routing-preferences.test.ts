@@ -1,4 +1,3 @@
-
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { NextRequest } from 'next/server';
 
@@ -38,6 +37,9 @@ vi.mock('@/lib/server/neon-db', () => ({
   getNeonDb: vi.fn(() => ({
     query: (sql: string, params: unknown[]) => {
       if (typeof sql === 'string' && sql.includes('account_status')) {
+        return Promise.resolve([]);
+      }
+      if (typeof sql === 'string' && sql.includes('user_settings')) {
         return Promise.resolve([]);
       }
       return mockQuery(sql, params);
