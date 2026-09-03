@@ -6,16 +6,28 @@ vi.mock('@/lib/e2b/runtime', () => ({ getE2BExecutor: vi.fn(), killE2BSession: v
 vi.mock('@/lib/e2b/session-store', () => ({
   managedCloudCodeSessionScope: vi.fn(() => ({ scope: 'test' })),
 }));
+vi.mock('@/lib/github-app', () => ({
+  isGitHubAppConfigured: vi.fn(() => true),
+  isGitHubInstallationLinkingAvailable: vi.fn(() => true),
+  getInstallationAccessToken: vi.fn(),
+}));
+vi.mock('@/lib/user-connector-tools', () => ({
+  getUserGithubInstallations: vi.fn(async () => []),
+}));
 
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import { getPlanMaxSandboxes, type CreateCloudCodeSessionInput } from '@agiworkforce/types';
 import { CHAT_COMPLETIONS_FUNCTION_LIMIT_MS } from '@/lib/deadline-policy';
 import { getE2BExecutor } from '@/lib/e2b/runtime';
+import { getInstallationAccessToken } from '@/lib/github-app';
+import { getUserGithubInstallations } from '@/lib/user-connector-tools';
 import {
   CLOUD_CODE_RUN_LEASE_SECONDS,
   CloudCodeConflictError,
   CloudCodeLimitError,
+  CloudCodeValidationError,
   claimCloudCodeSessionForRun,
+  commitAndPushCloudCodeSession,
   createCloudCodeSession,
   releaseCloudCodeSessionAfterRun,
   runCloudCodeCommand,
@@ -821,5 +833,150 @@ describe('cloud code session run lease', () => {
     await expect(runCloudCodeCommand(db, OWNER, sessionId, 'ls', PLAN_TIER)).rejects.toThrow(
       new CloudCodeConflictError('Code session is busy; wait and try again'),
     );
+  });
+});
+
+const REPO_URL = 'https://github.com/acme/widgets.git';
+
+function repoInput(index: number): CreateCloudCodeSessionInput {
+  return {
+    requestId: `request-repo-${index}`,
+    title: `Repo session ${index}`,
+    networkAccess: 'trusted',
+    repositoryUrl: REPO_URL,
+  } as CreateCloudCodeSessionInput;
+}
+
+function gitExecutor() {
+  return {
+    runCommand: vi.fn(async () => ({ ok: true, stdout: '', stderr: '', exitCode: 0 })),
+    git: {
+      clone: vi.fn(async (_input: Record<string, unknown>) => ({
+        ok: true,
+        output: '',
+        stdout: '',
+        stderr: '',
+        exitCode: 0,
+      })),
+      add: vi.fn(async () => ({ ok: true, output: '', stdout: '', stderr: '', exitCode: 0 })),
+      commit: vi.fn(async () => ({ ok: true, output: '', stdout: '', stderr: '', exitCode: 0 })),
+      push: vi.fn(async () => ({
+        ok: true,
+        output: 'pushed',
+        stdout: 'pushed',
+        stderr: '',
+        exitCode: 0,
+      })),
+    },
+    pause: vi.fn(async () => {}),
+    dispose: vi.fn(async () => {}),
+  };
+}
+
+describe('cloud code session GitHub App credentials', () => {
+  beforeEach(() => {
+    vi.mocked(getUserGithubInstallations).mockResolvedValue([]);
+  });
+
+  it('clones with the connected GitHub App installation token', async () => {
+    const db = createFakeDb();
+    const executor = gitExecutor();
+    vi.mocked(getE2BExecutor).mockResolvedValue(
+      executor as unknown as Awaited<ReturnType<typeof getE2BExecutor>>,
+    );
+    vi.mocked(getUserGithubInstallations).mockResolvedValue([
+      { installationId: 42, login: 'acme' },
+    ]);
+    vi.mocked(getInstallationAccessToken).mockResolvedValue('installation-token');
+
+    await createCloudCodeSession(db, OWNER, repoInput(0), PLAN_TIER);
+
+    expect(executor.git.clone).toHaveBeenCalledWith(
+      expect.objectContaining({
+        url: REPO_URL,
+        username: 'x-access-token',
+        password: 'installation-token',
+      }),
+    );
+  });
+
+  it('clones anonymously when no installation covers the repository owner', async () => {
+    const db = createFakeDb();
+    const executor = gitExecutor();
+    vi.mocked(getE2BExecutor).mockResolvedValue(
+      executor as unknown as Awaited<ReturnType<typeof getE2BExecutor>>,
+    );
+    vi.mocked(getUserGithubInstallations).mockResolvedValue([]);
+
+    await createCloudCodeSession(db, OWNER, repoInput(1), PLAN_TIER);
+
+    const call = executor.git.clone.mock.calls[0]![0] as Record<string, unknown>;
+    expect(call['username']).toBeUndefined();
+    expect(call['password']).toBeUndefined();
+  });
+});
+
+describe('commitAndPushCloudCodeSession', () => {
+  async function readySession(
+    db: FakeDb,
+    executor: ReturnType<typeof gitExecutor>,
+  ): Promise<string> {
+    vi.mocked(getE2BExecutor).mockResolvedValue(
+      executor as unknown as Awaited<ReturnType<typeof getE2BExecutor>>,
+    );
+    const session = await createCloudCodeSession(db, OWNER, repoInput(0), PLAN_TIER);
+    expect(session.state).toBe('ready');
+    return session.id;
+  }
+
+  it('refuses to push when no GitHub installation can authenticate the remote', async () => {
+    const db = createFakeDb();
+    const executor = gitExecutor();
+    vi.mocked(getUserGithubInstallations).mockResolvedValue([]);
+    const sessionId = await readySession(db, executor);
+
+    await expect(
+      commitAndPushCloudCodeSession(db, OWNER, sessionId, PLAN_TIER, 'fix things'),
+    ).rejects.toBeInstanceOf(CloudCodeValidationError);
+    expect(executor.git.push).not.toHaveBeenCalled();
+  });
+
+  it('stages, commits and pushes through the authenticated remote', async () => {
+    const db = createFakeDb();
+    const executor = gitExecutor();
+    vi.mocked(getUserGithubInstallations).mockResolvedValue([{ installationId: 7, login: 'acme' }]);
+    vi.mocked(getInstallationAccessToken).mockResolvedValue('push-token');
+    const sessionId = await readySession(db, executor);
+
+    const result = await commitAndPushCloudCodeSession(
+      db,
+      OWNER,
+      sessionId,
+      PLAN_TIER,
+      'fix things',
+    );
+
+    expect(executor.git.add).toHaveBeenCalledWith(expect.objectContaining({ all: true }));
+    expect(executor.git.commit).toHaveBeenCalledWith(
+      expect.objectContaining({ message: 'fix things' }),
+    );
+    expect(executor.git.push).toHaveBeenCalledWith(
+      expect.objectContaining({ username: 'x-access-token', password: 'push-token' }),
+    );
+    expect(result.session.state).toBe('ready');
+    expect(result.push.stdout).toBe('pushed');
+  });
+
+  it('rejects an empty commit message', async () => {
+    const db = createFakeDb();
+    const executor = gitExecutor();
+    vi.mocked(getUserGithubInstallations).mockResolvedValue([{ installationId: 7, login: 'acme' }]);
+    vi.mocked(getInstallationAccessToken).mockResolvedValue('push-token');
+    const sessionId = await readySession(db, executor);
+
+    await expect(
+      commitAndPushCloudCodeSession(db, OWNER, sessionId, PLAN_TIER, '  '),
+    ).rejects.toBeInstanceOf(CloudCodeValidationError);
+    expect(executor.git.add).not.toHaveBeenCalled();
   });
 });

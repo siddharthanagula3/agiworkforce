@@ -13,8 +13,8 @@ import {
   CloudCodeNotFoundError,
   CloudCodeUnavailableError,
   CloudCodeValidationError,
+  commitAndPushCloudCodeSession,
   isCloudCodeSchemaUnavailable,
-  runCloudCodeCommand,
 } from '@/lib/services/cloud-code-session-service';
 import { SubscriptionService } from '@/lib/services/subscription-service';
 import { isManagedComputePrivateBetaEnabled } from '@/lib/managed-compute-gate';
@@ -52,7 +52,7 @@ async function requestObject(request: NextRequest): Promise<Record<string, unkno
   return value as Record<string, unknown>;
 }
 
-async function handleRun(request: NextRequest, context: RouteContext) {
+async function handleCommit(request: NextRequest, context: RouteContext) {
   const { db, userId, organizationId } = await getUserScopedDb(request);
   const limited = await withRateLimit(request, 'chat-conversation', `user:${userId}`);
   if (limited) return limited;
@@ -73,13 +73,12 @@ async function handleRun(request: NextRequest, context: RouteContext) {
   const planTier = effectivePlanTier(subscription?.plan_tier, subscription?.status);
   try {
     return NextResponse.json(
-      await runCloudCodeCommand(
+      await commitAndPushCloudCodeSession(
         db,
         { userId, organizationId },
         sessionId,
-        body['command'],
         planTier,
-        request.signal,
+        body['message'],
       ),
     );
   } catch (error) {
@@ -87,4 +86,4 @@ async function handleRun(request: NextRequest, context: RouteContext) {
   }
 }
 
-export const POST = withErrorHandler(handleRun);
+export const POST = withErrorHandler(handleCommit);
