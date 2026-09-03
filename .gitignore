@@ -128,7 +128,7 @@ $RECYCLE.BIN/
 .env.*.local
 # Timestamped backups written before an env rewrite (.env.local.bak-<stamp>).
 # None of the patterns above match a suffix AFTER `.local`, so these were
-# committable — a backup of a secret file is still a secret file.
+# committable, a backup of a secret file is still a secret file.
 .env*.bak*
 !.env.example
 !.env.local.example
@@ -168,7 +168,7 @@ yarn.lock
 *.crt
 *.p12
 *.pfx
-# Test fixtures — these are self-signed certs used only by unit
+# Test fixtures, these are self-signed certs used only by unit
 # tests for the custom-CA loader. Safe to commit; do not contain
 # any production secrets.
 !crates/agiworkforce-client/tests/fixtures/*.pem
@@ -233,8 +233,8 @@ dist-web
 # Build artifacts (Vite SPA output)
 apps/web/public/chat
 
-# Expo local state. Every other ignore surface already excludes it —
-# .dockerignore:33, .claudeignore:9, apps/mobile/.gitignore:9 — and its absence
+# Expo local state. Every other ignore surface already excludes it.
+# .dockerignore:33, .claudeignore:9, apps/mobile/.gitignore:9, and its absence
 # here is why a stray root .expo/ from an expo command run at the repo root got
 # committed. The real project's copy lives at apps/mobile/.expo/.
 .expo/
