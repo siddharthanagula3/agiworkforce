@@ -503,6 +503,50 @@
   height: auto;
 }
 
+[data-design='agi'] .agi-ds-frame-media[data-frame-theme='light'] {
+  display: none;
+}
+
+[data-theme='light']
+  [data-design='agi']
+  .agi-ds-frame[data-paired='true']
+  .agi-ds-frame-media[data-frame-theme='dark'] {
+  display: none;
+}
+
+[data-theme='light']
+  [data-design='agi']
+  .agi-ds-frame[data-paired='true']
+  .agi-ds-frame-media[data-frame-theme='light'] {
+  display: block;
+}
+
+[data-design='agi'] .agi-ds-theme-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: 1px solid transparent;
+  border-radius: var(--agi-radius-control);
+  background: transparent;
+  color: var(--agi-ink-2);
+  cursor: pointer;
+  transition:
+    color var(--agi-dur-hover) var(--agi-ease-expo),
+    border-color var(--agi-dur-hover) var(--agi-ease-expo);
+}
+
+[data-design='agi'] .agi-ds-theme-toggle:hover {
+  color: var(--agi-ink);
+  border-color: var(--agi-rule-strong);
+}
+
+[data-design='agi'] .agi-ds-theme-toggle:focus-visible {
+  outline: 2px solid var(--agi-ink);
+  outline-offset: 2px;
+}
+
 [data-design='agi'] .agi-ds-frame-caption {
   display: flex;
   flex-wrap: wrap;
@@ -742,6 +786,51 @@
 
 [data-design='agi'] .agi-ds-footer-link-status {
   color: var(--agi-ink-2);
+}
+
+[data-design='agi'] .agi-ds-footer-brand {
+  position: relative;
+  display: grid;
+  gap: var(--agi-space-3);
+  margin-bottom: var(--agi-space-7);
+  padding-bottom: var(--agi-space-6);
+  border-bottom: 1px solid var(--agi-rule);
+  overflow: hidden;
+}
+
+[data-design='agi'] .agi-ds-footer-wordmark {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--agi-space-1);
+  font-family: var(--agi-font-display);
+  font-size: var(--agi-text-lg);
+  color: var(--agi-ink);
+}
+
+[data-design='agi'] .agi-ds-footer-statement {
+  position: relative;
+  z-index: 1;
+  max-width: 22rem;
+  margin: 0;
+  font-family: var(--agi-font-display);
+  font-size: var(--agi-text-lg);
+  line-height: 1.35;
+  color: var(--agi-ink);
+  text-wrap: pretty;
+}
+
+[data-design='agi'] .agi-ds-footer-watermark {
+  position: absolute;
+  right: -0.04em;
+  bottom: -0.32em;
+  font-family: var(--agi-font-display);
+  font-size: clamp(7rem, 20vw, 16rem);
+  line-height: 1;
+  letter-spacing: -0.04em;
+  color: transparent;
+  -webkit-text-stroke: 1px var(--agi-rule-strong);
+  pointer-events: none;
+  user-select: none;
 }
 
 [data-design='agi'] .agi-ds-footer-cols {

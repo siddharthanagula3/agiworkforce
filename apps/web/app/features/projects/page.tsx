@@ -36,6 +36,7 @@ export default function ProjectsFeaturePage() {
           visual={
             <ProductFrame
               src="/product/projects-dark.png"
+              srcLight="/product/projects-light.png"
               alt="The AGI projects view listing standing instructions, files, and threads"
               width={2880}
               height={1800}

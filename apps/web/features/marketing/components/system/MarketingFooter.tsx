@@ -6,15 +6,37 @@ import {
   GRIEVANCE_OFFICER_NAME,
   contactMailto,
 } from '@/lib/legal-constants';
+import { AgiMark } from '@shared/components/agi/AgiMark';
 import { Container } from './Container';
 import { FOOTER_COLUMNS, FOOTER_LEGAL } from './nav';
 
 const COPYRIGHT_YEAR = 2026;
+const MARK_SIZE = 18;
+const BRAND_STATEMENT = {
+  lead: 'One AI workspace across six surfaces.',
+  accent: 'Local, your keys, or managed cloud.',
+  tail: 'You see the route before anything leaves your device.',
+} as const;
 
 export function MarketingFooter({ condensed = false }: { condensed?: boolean } = {}) {
   return (
     <footer className={condensed ? 'agi-ds-footer agi-ds-footer--condensed' : 'agi-ds-footer'}>
       <Container>
+        {!condensed && (
+          <div className="agi-ds-footer-brand">
+            <span className="agi-ds-footer-wordmark">
+              <AgiMark size={MARK_SIZE} />
+              AGI
+            </span>
+            <p className="agi-ds-footer-statement">
+              {BRAND_STATEMENT.lead} <em className="agi-ds-accent">{BRAND_STATEMENT.accent}</em>{' '}
+              {BRAND_STATEMENT.tail}
+            </p>
+            <span className="agi-ds-footer-watermark" aria-hidden="true">
+              AGI
+            </span>
+          </div>
+        )}
         {!condensed && (
           <div className="agi-ds-footer-cols">
             {FOOTER_COLUMNS.map((column) => (
