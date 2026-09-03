@@ -129,6 +129,38 @@ The one obligation this acceptance creates is step 6's sealed record. A
 rotation that drops `_RETIRED` without writing the old key somewhere durable
 converts this accepted risk into a live one.
 
+### The seam a KMS adapter plugs into
+
+`lib/crypto/envelope.ts` no longer reads env bytes directly. `loadKeyRing`
+delegates to a `KeyProvider`, and the only provider wired up today is
+`envKeyProvider`, which reproduces the env-backed behavior above byte for
+byte. Nothing about this accepted risk has changed yet: no deployment sets
+`AGI_KEY_PROVIDER` to anything other than the default, so every key still
+lives only as a deployment environment variable.
+
+A KMS-backed provider does not require touching `envelope.ts`, `sealEnvelope`,
+or `openEnvelope`. It needs three things. First, a way to identify a wrapped
+data key per key id, in the same `<NAME>` / `<NAME>_ID` / `<NAME>_RETIRED`
+shape the env provider already uses, holding whatever the vendor SDK expects
+instead of raw bytes: an ARN, a key id, or a ciphertext blob. Second, an
+unwrap call that turns one of those references into 32 raw bytes, passed to
+`createKmsKeyProvider(unwrap)`. Third, because `unwrap` runs synchronously,
+an integrator backed by an async vendor SDK call must resolve the data key
+before constructing the provider, for example by fetching it once at process
+start rather than on every `resolveKeyRing` call. Adopting one moves this
+risk from "an operator holds the only copy of the key" to "the KMS vendor's
+availability and access controls hold it," which is a real change of risk,
+not its removal, and should get its own review before it is treated as
+closing this acceptance.
+
+The same interface carries a per-tenant derivation hook: `deriveTenantKey`
+runs HKDF over a provider's ring key with the organization id as the HKDF
+info parameter, so customer-managed keys per organization become a provider
+concern rather than a schema change. It is off by default. `loadKeyRing` and
+the providers above never call it on their own; a caller must ask for it
+explicitly through `resolveTenantKeyRing`, and nothing in this codebase does
+that yet.
+
 ## Rotating a key
 
 1. **Generate the new key.**
