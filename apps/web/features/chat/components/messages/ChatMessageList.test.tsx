@@ -726,6 +726,171 @@ describe('ChatMessageList auto-scroll', () => {
       expect(screen.getByLabelText('Scroll to bottom')).toBeInTheDocument();
     });
   });
+
+  it('disengages follow-output on a user wheel scroll even while a programmatic catch-up scroll is still settling', async () => {
+    const scrollTo = window.HTMLElement.prototype.scrollTo as ReturnType<typeof vi.fn>;
+    const messages = [
+      makeMessage({ id: '1', role: 'user', content: 'msg 1' }),
+      makeMessage({ id: '2', role: 'assistant', content: 'msg 2' }),
+    ];
+    render(<ChatMessageList messages={messages} />);
+
+    const scrollContainer = screen.getByRole('log');
+    Object.defineProperty(scrollContainer, 'scrollHeight', { value: 1000, configurable: true });
+    Object.defineProperty(scrollContainer, 'clientHeight', { value: 300, configurable: true });
+    Object.defineProperty(scrollContainer, 'scrollTop', { value: 0, configurable: true });
+
+    act(() => {
+      fireEvent.scroll(scrollContainer);
+    });
+    await waitFor(() => {
+      expect(screen.getByLabelText('Scroll to bottom')).toBeInTheDocument();
+    });
+
+    const callsBefore = scrollTo.mock.calls.length;
+    act(() => {
+      fireEvent.click(screen.getByLabelText('Scroll to bottom'));
+    });
+    await waitFor(() => {
+      expect(scrollTo.mock.calls.length).toBeGreaterThan(callsBefore);
+    });
+
+    Object.defineProperty(scrollContainer, 'scrollHeight', { value: 1600, configurable: true });
+    Object.defineProperty(scrollContainer, 'scrollTop', { value: 700, configurable: true });
+    act(() => {
+      fireEvent.wheel(scrollContainer);
+      fireEvent.scroll(scrollContainer);
+    });
+
+    await waitFor(() => {
+      expect(screen.getByLabelText('Scroll to bottom')).toBeInTheDocument();
+    });
+  });
+
+  it('treats a scroll-relevant key as user intent but ignores an unrelated keypress', async () => {
+    const scrollTo = window.HTMLElement.prototype.scrollTo as ReturnType<typeof vi.fn>;
+    const messages = [
+      makeMessage({ id: '1', role: 'user', content: 'msg 1' }),
+      makeMessage({ id: '2', role: 'assistant', content: 'msg 2' }),
+    ];
+    render(<ChatMessageList messages={messages} />);
+
+    const scrollContainer = screen.getByRole('log');
+    Object.defineProperty(scrollContainer, 'scrollHeight', { value: 1000, configurable: true });
+    Object.defineProperty(scrollContainer, 'clientHeight', { value: 300, configurable: true });
+    Object.defineProperty(scrollContainer, 'scrollTop', { value: 0, configurable: true });
+
+    act(() => {
+      fireEvent.scroll(scrollContainer);
+    });
+    await waitFor(() => {
+      expect(screen.getByLabelText('Scroll to bottom')).toBeInTheDocument();
+    });
+
+    const callsBefore = scrollTo.mock.calls.length;
+    act(() => {
+      fireEvent.click(screen.getByLabelText('Scroll to bottom'));
+    });
+    await waitFor(() => {
+      expect(scrollTo.mock.calls.length).toBeGreaterThan(callsBefore);
+    });
+
+    Object.defineProperty(scrollContainer, 'scrollHeight', { value: 1600, configurable: true });
+    Object.defineProperty(scrollContainer, 'scrollTop', { value: 700, configurable: true });
+    act(() => {
+      fireEvent.keyDown(scrollContainer, { key: 'a' });
+      fireEvent.scroll(scrollContainer);
+    });
+    expect(screen.queryByLabelText('Scroll to bottom')).not.toBeInTheDocument();
+
+    act(() => {
+      fireEvent.keyDown(scrollContainer, { key: 'ArrowUp' });
+      fireEvent.scroll(scrollContainer);
+    });
+    await waitFor(() => {
+      expect(screen.getByLabelText('Scroll to bottom')).toBeInTheDocument();
+    });
+  });
+
+  it('does not resume following after the reader scrolls up mid-stream, even as more content streams in', async () => {
+    const scrollTo = window.HTMLElement.prototype.scrollTo as ReturnType<typeof vi.fn>;
+    const streamingMessage = makeMessage({
+      id: 's1',
+      role: 'assistant',
+      content: 'part 1',
+      isStreaming: true,
+    });
+    const { rerender } = render(<ChatMessageList messages={[streamingMessage]} />);
+
+    const scrollContainer = screen.getByRole('log');
+    Object.defineProperty(scrollContainer, 'scrollHeight', { value: 1000, configurable: true });
+    Object.defineProperty(scrollContainer, 'clientHeight', { value: 300, configurable: true });
+    Object.defineProperty(scrollContainer, 'scrollTop', { value: 0, configurable: true });
+
+    act(() => {
+      fireEvent.wheel(scrollContainer);
+      fireEvent.scroll(scrollContainer);
+    });
+    await waitFor(() => {
+      expect(screen.getByLabelText('Scroll to bottom')).toBeInTheDocument();
+    });
+
+    const callsBefore = scrollTo.mock.calls.length;
+    act(() => {
+      rerender(
+        <ChatMessageList
+          messages={[
+            makeMessage({
+              id: 's1',
+              role: 'assistant',
+              content: 'part 1 more content',
+              isStreaming: true,
+            }),
+          ]}
+        />,
+      );
+    });
+
+    expect(scrollTo.mock.calls.length).toBe(callsBefore);
+    expect(screen.getByLabelText('Scroll to bottom')).toBeInTheDocument();
+  });
+
+  it('re-engages follow-output when the user sends a new message while scrolled up', async () => {
+    const scrollTo = window.HTMLElement.prototype.scrollTo as ReturnType<typeof vi.fn>;
+    const messages = [
+      makeMessage({ id: '1', role: 'user', content: 'msg 1' }),
+      makeMessage({ id: '2', role: 'assistant', content: 'msg 2' }),
+    ];
+    const { rerender } = render(<ChatMessageList messages={messages} />);
+
+    const scrollContainer = screen.getByRole('log');
+    Object.defineProperty(scrollContainer, 'scrollHeight', { value: 1000, configurable: true });
+    Object.defineProperty(scrollContainer, 'clientHeight', { value: 300, configurable: true });
+    Object.defineProperty(scrollContainer, 'scrollTop', { value: 0, configurable: true });
+
+    act(() => {
+      fireEvent.scroll(scrollContainer);
+    });
+    await waitFor(() => {
+      expect(screen.getByLabelText('Scroll to bottom')).toBeInTheDocument();
+    });
+
+    const callsBefore = scrollTo.mock.calls.length;
+    act(() => {
+      rerender(
+        <ChatMessageList
+          messages={[...messages, makeMessage({ id: '3', role: 'user', content: 'follow-up' })]}
+        />,
+      );
+    });
+
+    await waitFor(() => {
+      expect(scrollTo.mock.calls.length).toBeGreaterThan(callsBefore);
+    });
+    await waitFor(() => {
+      expect(screen.queryByLabelText('Scroll to bottom')).not.toBeInTheDocument();
+    });
+  });
 });
 
 describe('ChatMessageList message grouping', () => {
