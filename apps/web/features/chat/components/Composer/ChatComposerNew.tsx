@@ -78,7 +78,7 @@ import {
   type CloudWorkMode,
   type SendPreviewPresentation,
 } from '@agiworkforce/types';
-import { isWebSearchAvailable, providerSupportsWebSearch } from '@/lib/web-search-support';
+import { isWebSearchAvailable } from '@/lib/web-search-support';
 import {
   BUILT_IN_SLASH_COMMANDS,
   decideComposerPaste,
@@ -142,6 +142,8 @@ export {
 const COMPOSER_MAX_CHARS = MANAGED_CLOUD_CHAT_MAX_MESSAGE_LENGTH;
 /** Show the counter only once the message is long enough for it to matter. */
 const COMPOSER_COUNTER_THRESHOLD = Math.floor(COMPOSER_MAX_CHARS * 0.75);
+
+export const COMPOSER_RESEARCH_MIN_CONTEXT_WINDOW = 500_000;
 
 /** Composer work mode — claude.ai Chat/Cowork parity ("AGI Work" here). */
 export type ComposerWorkMode = CloudWorkMode;
@@ -1105,11 +1107,6 @@ const ChatComposerNewComponent = ({
         ? FREE_TRIAL_MODELS.includes(model.id)
         : isModelAllowedForTier(model.id, subscriptionTier)),
   );
-  // Plain search can use either a provider-native path or AGI's generic
-  // function-tool fallback. `/api/me` exposes only whether that fallback is
-  // configured; the shared helper combines it with the selected model's real
-  // native-search/tool capabilities so Web/Desktop/Mobile cannot drift.
-  const providerCanWebSearch = providerSupportsWebSearch(selectedModelMeta?.provider);
   const genericWebSearchConfigured = useBillingStore(
     (s) => s.featureFlags?.generic_web_search ?? false,
   );
@@ -1125,15 +1122,11 @@ const ChatComposerNewComponent = ({
         modelSupportsTools: selectedModelCaps?.tools,
         genericBackendConfigured: genericWebSearchConfigured,
       });
-  // Deep Research is its own capability field in models.json, distinct from
-  // plain web search. A search-only catalog entry can have
-  // search:true/research:false, so the two controls cannot share one flag.
-  // Gating on modelSupportsSearch alone both wrongly exposes Research for
-  // search-only models and wrongly blocks it for research-only models.
-  // Deep Research forces web_search on server-side (applyResearchMode), so it needs
-  // the same provider search path — gate it the same way to avoid a cosmetic toggle.
   const modelSupportsResearch =
-    isAutoSelected || ((selectedModelCaps?.research ?? false) && providerCanWebSearch);
+    isAutoSelected ||
+    (selectedModelCaps?.research ?? false) ||
+    ((selectedModelCaps?.tools ?? false) &&
+      (selectedModelMeta?.contextWindow ?? 0) >= COMPOSER_RESEARCH_MIN_CONTEXT_WINDOW);
   const modelSupportsThinkingCap = selectedModelCaps?.thinking ?? false;
   // Same both-signals rule as web search above: the catalog capability is
   // necessary but not sufficient. Native-tier providers (anthropic/google/
