@@ -108,6 +108,13 @@ updates:
       # Major bumps for the entire JS ecosystem require manual review
       - dependency-name: '*'
         update-types: ['version-update:semver-major']
+      # GHSA-w3rx-r6r6-pgpr / GHSA-5p2g-fcmc-qvqq / GHSA-jmr9-qjv8-65gv: no
+      # patched release exists yet for these three advisories (see the
+      # auditConfig.ignoreGhsas comment in the root package.json). Mirrored
+      # here so Dependabot does not raise unfillable security PRs; remove
+      # once image-size and extract-zip publish a patched version.
+      - dependency-name: 'image-size'
+      - dependency-name: 'extract-zip'
 
   # ─── npm / pnpm — apps/desktop ──────────────────────────────────────────────
   - package-ecosystem: 'npm'
