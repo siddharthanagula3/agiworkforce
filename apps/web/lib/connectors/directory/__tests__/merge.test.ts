@@ -189,6 +189,38 @@ describe('applyFirstPartyTargets', () => {
 
     expect(other?.docsUrl).toBeNull();
   });
+
+  it('derives categories for a first-party target through the same keyword rules as the registry', () => {
+    const [hubspot] = applyFirstPartyTargets([internalRecord({ id: 'hubspot', categories: [] })]);
+
+    expect(hubspot?.categories).toContain('Sales and marketing');
+  });
+
+  it('keeps the richer of the internal and first-party descriptions', () => {
+    const [gmail] = applyFirstPartyTargets([
+      internalRecord({ id: 'gmail', description: 'Gmail.' }),
+    ]);
+
+    expect(gmail?.description).toBe('Search, draft, and send email through Gmail.');
+  });
+
+  it('adds a directory-only provider as a standalone record with no wired remote', () => {
+    const withStandalone = applyFirstPartyTargets(buildInternalDirectoryRecords());
+    const microsoft365 = withStandalone.find((record) => record.id === 'microsoft-365');
+
+    expect(microsoft365).toBeDefined();
+    expect(microsoft365?.remotes).toEqual([]);
+    expect(microsoft365?.connectable).toBe('needs-setup');
+    expect(microsoft365?.badge).toBe('first-party');
+  });
+
+  it('applies exactly one standalone record on top of the full internal catalog, with no duplicate ids', () => {
+    const internal = buildInternalDirectoryRecords();
+    const withStandalone = applyFirstPartyTargets(internal);
+
+    expect(withStandalone).toHaveLength(internal.length + 1);
+    expect(new Set(withStandalone.map((record) => record.id)).size).toBe(withStandalone.length);
+  });
 });
 
 describe('buildInternalDirectoryRecords', () => {
