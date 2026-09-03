@@ -41,6 +41,11 @@ const chatComposerMocks = vi.hoisted(() => ({
     admissionFor: vi.fn(),
     retry: vi.fn(),
   },
+  connectors: {
+    connectedIds: new Set<string>(),
+    sources: {} as Record<string, string>,
+    customNames: {} as Record<string, string>,
+  },
 }));
 
 vi.mock('next/navigation', () => ({
@@ -68,6 +73,10 @@ vi.mock('@features/chat/hooks/use-skills-list', () => ({
 
 vi.mock('@features/chat/hooks/use-media-model-availability', () => ({
   useMediaModelAvailability: () => chatComposerMocks.mediaAvailability,
+}));
+
+vi.mock('@features/connectors/hooks/use-connectors', () => ({
+  useConnectors: () => chatComposerMocks.connectors,
 }));
 
 vi.mock('./DragDropOverlay', () => ({
@@ -144,6 +153,9 @@ describe('ChatComposerNew', () => {
       state: 'enabled',
     }));
     chatComposerMocks.mediaAvailability.retry.mockReset();
+    chatComposerMocks.connectors.connectedIds = new Set();
+    chatComposerMocks.connectors.sources = {};
+    chatComposerMocks.connectors.customNames = {};
     originalModelId = useModelStore.getState().selectedModelId;
     originalFeatureFlags = useBillingStore.getState().featureFlags;
     originalSubscription = useBillingStore.getState().subscription;
@@ -156,6 +168,7 @@ describe('ChatComposerNew', () => {
     // parked text outlives the render and would restore into the next case.
     useChatStore.setState({
       composerTogglesByConversation: {},
+      disabledConnectorIdsByConversation: {},
       draftsByConversation: {},
       draftContent: '',
     });
@@ -173,6 +186,7 @@ describe('ChatComposerNew', () => {
     });
     useChatStore.setState({
       composerTogglesByConversation: {},
+      disabledConnectorIdsByConversation: {},
       draftsByConversation: {},
       draftContent: '',
     });
@@ -751,10 +765,6 @@ describe('ChatComposerNew', () => {
     render(<ChatComposerNew onSend={vi.fn()} />);
 
     fireEvent.click(screen.getByRole('button', { name: /add attachments and tools/i }));
-    fireEvent.click(screen.getByText('Connectors'));
-    expect(chatComposerMocks.openSettings).toHaveBeenLastCalledWith('connectors');
-
-    fireEvent.click(screen.getByRole('button', { name: /add attachments and tools/i }));
     fireEvent.click(screen.getByText('Skills'));
     expect(chatComposerMocks.openSettings).toHaveBeenLastCalledWith('skills');
 
@@ -763,10 +773,47 @@ describe('ChatComposerNew', () => {
     expect(chatComposerMocks.openSettings).toHaveBeenLastCalledWith('plugins');
 
     fireEvent.click(screen.getByRole('button', { name: /add attachments and tools/i }));
-    expect(screen.getByText('Connectors').closest('a')).toBeNull();
     expect(screen.getByText('Plugins').closest('a')).toBeNull();
     expect(screen.queryByRole('textbox', { name: /search skills/i })).toBeNull();
     expect(screen.queryByRole('switch', { name: /toggle/i })).toBeNull();
+  });
+
+  it('the Connectors row expands a submenu instead of navigating straight to Settings', () => {
+    chatComposerMocks.openSettings.mockClear();
+    render(<ChatComposerNew onSend={vi.fn()} />);
+
+    fireEvent.click(screen.getByRole('button', { name: /add attachments and tools/i }));
+    expect(screen.getByText('Connectors').closest('a')).toBeNull();
+    fireEvent.click(screen.getByText('Connectors'));
+
+    expect(chatComposerMocks.openSettings).not.toHaveBeenCalled();
+    expect(screen.getByRole('menu', { name: 'Connectors' })).toBeInTheDocument();
+    expect(screen.getByText('No connectors connected yet.')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Manage in Settings' }));
+    expect(chatComposerMocks.openSettings).toHaveBeenLastCalledWith('connectors');
+  });
+
+  it('lists a connected connector with a checkbox that disables it for this conversation only', () => {
+    chatComposerMocks.connectors.connectedIds = new Set(['custom-abc123']);
+    chatComposerMocks.connectors.sources = { 'custom-abc123': 'custom' };
+    chatComposerMocks.connectors.customNames = { 'custom-abc123': 'Internal Docs MCP' };
+
+    render(<ChatComposerNew onSend={vi.fn()} />);
+
+    fireEvent.click(screen.getByRole('button', { name: /add attachments and tools/i }));
+    fireEvent.click(screen.getByText('Connectors'));
+
+    const checkbox = screen.getByRole('menuitemcheckbox', { name: 'Internal Docs MCP' });
+    expect(checkbox).toHaveAttribute('aria-checked', 'true');
+
+    fireEvent.click(checkbox);
+    expect(checkbox).toHaveAttribute('aria-checked', 'false');
+    expect(useChatStore.getState().getDisabledConnectorIds(null)).toEqual(['custom-abc123']);
+
+    fireEvent.click(checkbox);
+    expect(checkbox).toHaveAttribute('aria-checked', 'true');
+    expect(useChatStore.getState().getDisabledConnectorIds(null)).toEqual([]);
   });
 
   it('disables Send button when loading', () => {
