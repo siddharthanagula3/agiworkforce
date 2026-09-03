@@ -110,6 +110,7 @@ export function toConnectorSection(
 ): DirectorySection {
   return {
     entries: records.map((record) => toConnectorEntry(record, connectedIds)),
+    installable: true,
     sourcesHeading: CONNECTOR_SOURCES_HEADING,
     sources: connectorSources(records),
     filterGroups: connectorFilterGroups(records),

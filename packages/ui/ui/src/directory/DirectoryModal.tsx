@@ -187,7 +187,10 @@ export function DirectoryModal({
     const openSettings = adapter.openSettings
       ? () => void adapter.openSettings?.(section, detail.id)
       : undefined;
-    const install = adapter.install ? () => void runAction(detail.id, adapter.install) : undefined;
+    const install =
+      adapter.install && data.installable
+        ? () => void runAction(detail.id, adapter.install)
+        : undefined;
 
     if (detail.kind === 'skill') {
       return (
@@ -289,10 +292,10 @@ export function DirectoryModal({
                     error={data.error ?? null}
                     onRetry={data.retry}
                     onOpen={setEntryId}
-                    {...(adapter.install
+                    {...(adapter.install && data.installable
                       ? { onInstall: (id: string) => void runAction(id, adapter.install) }
                       : {})}
-                    {...(adapter.openSettings
+                    {...(adapter.openSettings && data.installable
                       ? {
                           onOpenSettings: (id: string) => void adapter.openSettings?.(section, id),
                         }

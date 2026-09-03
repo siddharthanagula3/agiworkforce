@@ -45,6 +45,7 @@ export interface DirectoryEntry {
 
 export interface DirectorySection {
   entries: readonly DirectoryEntry[];
+  installable?: boolean;
   loading?: boolean;
   error?: string | null;
   sources?: readonly DirectorySourceChip[];
