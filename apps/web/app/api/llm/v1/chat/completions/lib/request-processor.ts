@@ -1393,13 +1393,16 @@ function checkModelTierAccess(model: string, subscriptionTier: string): boolean 
  * than skipped: a model rule still decides, and an allowlisted-provider policy
  * denies the unknown id instead of waving it through.
  */
-function resolveProviderIdentities(model: string): {
+function resolveProviderIdentities(
+  model: string,
+  routeId?: string,
+): {
   vendor: string | null;
   transport: string | null;
 } {
   let transport: string | null;
   try {
-    transport = resolveProviderFromModel(model, undefined, {
+    transport = resolveProviderFromModel(model, routeId, {
       trustMode: MANAGED_WEB_CLOUD_TRUST_MODE,
     });
   } catch {
@@ -2377,7 +2380,7 @@ export async function processRequest(
   // catalog says owns this model and, separately, the TRANSPORT the dispatch
   // layer resolved. See `resolveProviderIdentities` for why one string was not
   // enough, and the evaluator for what each identity is allowed to decide.
-  const primaryIdentities = resolveProviderIdentities(chatRequest.model);
+  const primaryIdentities = resolveProviderIdentities(chatRequest.model, routeDecision.routeId);
   const modelAccess = await evaluateModelAccessForOrganization(
     scopedForPolicy.db,
     scopedForPolicy.organizationId,
@@ -2941,7 +2944,8 @@ export async function processRequest(
       }
 
       if (fallbackModel) {
-        const fallbackProvider = resolveProviderFromModel(fallbackModel.model, undefined, {
+        const fallbackRouteId = `${fallbackModel.provider}/${fallbackModel.model}`;
+        const fallbackProvider = resolveProviderFromModel(fallbackModel.model, fallbackRouteId, {
           trustMode: MANAGED_WEB_CLOUD_TRUST_MODE,
         });
         const fallbackCostCents = LLMCostCalculator.estimateCost(
