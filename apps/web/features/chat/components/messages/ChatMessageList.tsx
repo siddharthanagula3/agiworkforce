@@ -98,6 +98,60 @@ function isIncompleteTurn(message: ChatMessage | undefined | null): boolean {
   return (message.metadata as { truncated?: unknown } | undefined)?.truncated === true;
 }
 
+type IncompleteTurnCause =
+  | 'rateLimit'
+  | 'providerOutage'
+  | 'timeout'
+  | 'modelRestriction'
+  | 'emptyResponse';
+
+const INCOMPLETE_TURN_CAUSE_BY_ERROR_CODE: Readonly<Record<string, IncompleteTurnCause>> = {
+  provider_rate_limited: 'rateLimit',
+  provider_quota_exhausted: 'rateLimit',
+  provider_overloaded: 'providerOutage',
+  provider_unreachable: 'providerOutage',
+  provider_error: 'providerOutage',
+  provider_billing_exhausted: 'providerOutage',
+  provider_credentials_rejected: 'providerOutage',
+  provider_paused_turn: 'providerOutage',
+  provider_timeout: 'timeout',
+  model_not_found: 'modelRestriction',
+  context_length_exceeded: 'modelRestriction',
+  attachment_too_large: 'modelRestriction',
+  tool_call_invalid: 'modelRestriction',
+};
+
+const INCOMPLETE_TURN_MESSAGE_BY_CAUSE: Readonly<Record<IncompleteTurnCause, string>> = {
+  rateLimit:
+    'This model is receiving too many requests right now. Wait a moment and retry, or choose Auto to use another available model.',
+  providerOutage:
+    'The model provider is temporarily unreachable. Retry, or choose Auto to use another available model.',
+  timeout:
+    'The model took too long to respond. Retry, or pick a faster model from the model picker.',
+  modelRestriction:
+    'The selected model could not complete this request. Retry, or choose a different model.',
+  emptyResponse: 'The model returned no response for this turn. Retry, or rephrase your message.',
+};
+
+export const INCOMPLETE_TURN_DEFAULT_MESSAGE =
+  "This turn didn't complete. No response was received.";
+
+export function incompleteTurnNoticeMessage(message: ChatMessage | undefined | null): string {
+  if (message?.role === 'user') return INCOMPLETE_TURN_MESSAGE_BY_CAUSE.emptyResponse;
+
+  const errorCode = (message?.metadata as { errorCode?: unknown } | undefined)?.errorCode;
+  const cause =
+    typeof errorCode === 'string' ? INCOMPLETE_TURN_CAUSE_BY_ERROR_CODE[errorCode] : undefined;
+  if (cause) return INCOMPLETE_TURN_MESSAGE_BY_CAUSE[cause];
+
+  const truncated = (message?.metadata as { truncated?: unknown } | undefined)?.truncated === true;
+  if (truncated && !hasVisibleContent(message?.content)) {
+    return INCOMPLETE_TURN_MESSAGE_BY_CAUSE.emptyResponse;
+  }
+
+  return INCOMPLETE_TURN_DEFAULT_MESSAGE;
+}
+
 export const INCOMPLETE_TURN_GRACE_MS = 45_000;
 
 export function isWithinIncompleteTurnGracePeriod(
@@ -1629,7 +1683,7 @@ const ChatMessageListComponent = ({
             <TranscriptNotice
               tone="danger"
               icon={CircleAlert}
-              message="This turn didn't complete. No response was received."
+              message={incompleteTurnNoticeMessage(lastMessage)}
               action={{
                 label: 'Retry',
                 ariaLabel: 'Retry this turn',
