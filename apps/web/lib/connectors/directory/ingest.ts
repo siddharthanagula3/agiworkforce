@@ -2,6 +2,7 @@ import 'server-only';
 
 import { logger } from '@/lib/logger';
 import { resolveAuthModeForRecord } from '@/lib/connectors/directory/auth-probe';
+import { applyFirstPartyTargets } from '@/lib/connectors/directory/first-party';
 import {
   buildInternalDirectoryRecords,
   mergeDirectoryRecords,
@@ -84,7 +85,7 @@ export async function ingestConnectorDirectory(
     registryRecords.set(id, await resolveAuthModeForRecord(record));
   }
 
-  const internalRecords = buildInternalDirectoryRecords();
+  const internalRecords = applyFirstPartyTargets(buildInternalDirectoryRecords());
   const merged = mergeDirectoryRecords(internalRecords, [...registryRecords.values()]);
 
   await writeDirectorySnapshot({
