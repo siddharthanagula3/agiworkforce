@@ -162,6 +162,37 @@ export interface FreeEligibility {
   expiresAtMs?: number;
 }
 
+export type RouteOutcomeClass =
+  | 'success'
+  | 'rate_limit'
+  | 'server_error'
+  | 'timeout'
+  | 'stream_corruption'
+  | 'unsupported_capability';
+
+export interface RouteOutcome {
+  class: RouteOutcomeClass;
+  ttftMs?: number;
+  durationMs?: number;
+  outputTokens?: number;
+}
+
+export interface RouteHealthSnapshot {
+  available: boolean;
+  halfOpen: boolean;
+  cooldownUntilMs?: number;
+  consecutiveFailures: number;
+  sampleCount: number;
+  successRate?: number;
+  rateLimitRate?: number;
+  serverErrorRate?: number;
+  timeoutRate?: number;
+  streamCorruptionRate?: number;
+  ttftP50Ms?: number;
+  ttftP95Ms?: number;
+  throughputTokensPerSecond?: number;
+}
+
 /**
  * Everything the stages need to know about the world right now.
  *
@@ -178,6 +209,7 @@ export interface RoutingRuntimeState {
   quotaPools: Readonly<Record<string, QuotaPool>>;
   /** Verified zero-cost eligibility by route id. Absence ⇒ not free. */
   freeEligibility: Readonly<Record<string, FreeEligibility>>;
+  routeHealthSnapshots?: Readonly<Record<string, RouteHealthSnapshot>>;
   /** Epoch ms this snapshot was taken, for staleness decisions. */
   capturedAtMs: number;
 }

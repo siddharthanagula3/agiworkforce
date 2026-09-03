@@ -57,6 +57,9 @@ export type {
   FreeEligibility,
   QuotaPool,
   RouteHealth,
+  RouteHealthSnapshot,
+  RouteOutcome,
+  RouteOutcomeClass,
   RouteUnavailabilityReason,
   RoutingRuntimeState,
 } from './runtime-state';
