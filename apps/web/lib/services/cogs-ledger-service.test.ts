@@ -9,6 +9,7 @@ vi.mock('@/lib/server/neon-db', () => ({
 }));
 
 import {
+  getServedRouteIdFromCostEventMetadata,
   importStripeCogsAdjustments,
   recordCogsAdjustment,
   recordProviderCostEvent,
@@ -124,6 +125,53 @@ describe('cogs ledger · writes', () => {
         db: db as never,
       }),
     ).resolves.toBeUndefined();
+  });
+
+  it('stores the serving route id in the ledger row metadata when supplied', async () => {
+    const db = fakeDb();
+    await recordSettledProviderCost({
+      userId: 'user-1',
+      provider: 'anthropic',
+      model: 'served-model',
+      routeId: 'open_router/served-model',
+      actualCostCents: 9,
+      sourceRef: 'managed_usage:user-1:key:hash',
+      usage: { inputTokens: 10, outputTokens: 5 },
+      db: db as never,
+    });
+
+    const [, params] = db.execute.mock.calls[0] as unknown as [string, unknown[]];
+    const metadata = JSON.parse(String(params[9]));
+    expect(metadata).toEqual({
+      inputTokens: 10,
+      outputTokens: 5,
+      servedRouteId: 'open_router/served-model',
+    });
+    expect(getServedRouteIdFromCostEventMetadata(metadata)).toBe('open_router/served-model');
+  });
+
+  it('leaves ledger metadata untouched when no route id is supplied', async () => {
+    const db = fakeDb();
+    await recordSettledProviderCost({
+      userId: 'user-1',
+      provider: 'openai',
+      model: 'catalog-model',
+      actualCostCents: 9,
+      sourceRef: 'managed_usage:user-1:key:hash',
+      usage: { operation: 'image', outputCount: 1 },
+      db: db as never,
+    });
+
+    const [, params] = db.execute.mock.calls[0] as unknown as [string, unknown[]];
+    const metadata = JSON.parse(String(params[9]));
+    expect(metadata).toEqual({ operation: 'image', outputCount: 1 });
+    expect(getServedRouteIdFromCostEventMetadata(metadata)).toBeNull();
+  });
+
+  it('reads null back for metadata with no served route facts', () => {
+    expect(getServedRouteIdFromCostEventMetadata({})).toBeNull();
+    expect(getServedRouteIdFromCostEventMetadata(null)).toBeNull();
+    expect(getServedRouteIdFromCostEventMetadata(undefined)).toBeNull();
   });
 });
 

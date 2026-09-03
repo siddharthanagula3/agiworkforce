@@ -88,6 +88,58 @@ export interface ManagedUsageRequestReservation {
   quotaFeature?: string;
   provider?: string;
   model?: string;
+  routeId?: string | null;
+}
+
+export interface ServedRoute {
+  provider: string | null;
+  model: string | null;
+  routeId: string | null;
+}
+
+function buildRouteId(
+  provider: string | null | undefined,
+  model: string | null | undefined,
+): string | null {
+  return provider && model ? `${provider}/${model}` : null;
+}
+
+/**
+ * Reads served-route facts back from a managed usage or COGS ledger metadata
+ * blob. Populated at {@link finalizeManagedUsageRequest} only when the
+ * settlement usage carried per-call provider observations (agent paths that
+ * can fail over mid-turn); absent otherwise, since the reservation route and
+ * the serving route are then the same by construction.
+ */
+export function getServedRouteFromUsage(
+  usage: Record<string, unknown> | null | undefined,
+): ServedRoute {
+  const provider =
+    typeof usage?.['servedProvider'] === 'string' ? (usage['servedProvider'] as string) : null;
+  const model =
+    typeof usage?.['servedModel'] === 'string' ? (usage['servedModel'] as string) : null;
+  const routeId =
+    typeof usage?.['servedRouteId'] === 'string'
+      ? (usage['servedRouteId'] as string)
+      : buildRouteId(provider, model);
+  return { provider, model, routeId };
+}
+
+function resolveServedRouteFromObservations(
+  usage: Record<string, unknown> | null | undefined,
+): ServedRoute | null {
+  const observations = usage?.['providerCallObservations'];
+  if (!Array.isArray(observations) || observations.length === 0) return null;
+
+  const last = observations[observations.length - 1];
+  if (!last || typeof last !== 'object') return null;
+
+  const provider = (last as Record<string, unknown>)['provider'];
+  if (typeof provider !== 'string' || provider.length === 0) return null;
+
+  const model = (last as Record<string, unknown>)['model'];
+  const modelId = typeof model === 'string' ? model : null;
+  return { provider, model: modelId, routeId: buildRouteId(provider, modelId) };
 }
 
 export interface ManagedUsageFinalization {
@@ -307,6 +359,7 @@ export async function reserveManagedUsageRequest(input: {
     estimatedCostCents: row['estimated_cost_cents'],
     provider: input.provider,
     model: input.model,
+    routeId: buildRouteId(input.provider, input.model),
     ...(input.quotaFeature ? { quotaFeature: input.quotaFeature } : {}),
   };
 }
@@ -419,9 +472,21 @@ export async function finalizeManagedUsageRequest(
   },
 ): Promise<ManagedUsageFinalization> {
   const actualCostCents = input.outcome === 'failed' ? 0 : Math.max(0, input.actualCostCents);
-  const usage = input.quotaFeature
+  const quotaTaggedUsage = input.quotaFeature
     ? { ...(input.usage ?? {}), quotaFeature: input.quotaFeature }
     : (input.usage ?? {});
+  const servedRoute = resolveServedRouteFromObservations(quotaTaggedUsage);
+  const usage = servedRoute
+    ? {
+        ...quotaTaggedUsage,
+        servedProvider: servedRoute.provider,
+        servedModel: servedRoute.model,
+        servedRouteId: servedRoute.routeId,
+        reservedProvider: input.provider ?? null,
+        reservedModel: input.model ?? null,
+        reservedRouteId: input.routeId ?? buildRouteId(input.provider, input.model),
+      }
+    : quotaTaggedUsage;
   const row = await queryOne(
     input.db,
     `select * from public.finalize_managed_usage_request(
@@ -475,8 +540,9 @@ export async function finalizeManagedUsageRequest(
   if (settledTaskOutcome !== null && operationResult === 'finalized') {
     await recordSettledProviderCost({
       userId: input.userId,
-      provider: input.provider ?? 'unknown',
-      model: input.model ?? null,
+      provider: servedRoute?.provider ?? input.provider ?? 'unknown',
+      model: servedRoute?.model ?? input.model ?? null,
+      routeId: servedRoute?.routeId ?? input.routeId ?? buildRouteId(input.provider, input.model),
       actualCostCents: settledCostCents,
       sourceRef: `managed_usage:${input.userId}:${input.idempotencyKey}:${input.requestHash}`,
       taskOutcome: settledTaskOutcome,

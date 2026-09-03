@@ -13,6 +13,7 @@ import {
   createManagedUsageErrorBody,
   finalizeManagedUsageRequest,
   fingerprintManagedUsageRequest,
+  getServedRouteFromUsage,
   markManagedUsageProviderStarted,
   parseManagedUsageIdempotencyKey,
   reserveManagedUsageProviderStep,
@@ -109,6 +110,7 @@ describe('managed usage request service', () => {
       requestHash: 'a'.repeat(64),
       leaseToken: 'lease-1',
       estimatedCostCents: 7,
+      routeId: 'anthropic/fixture-model',
     });
     expect(db.query).toHaveBeenCalledWith(
       expect.stringContaining('reserve_managed_usage_request_with_limits'),
@@ -425,11 +427,65 @@ describe('managed usage settlement feeds the COGS ledger', () => {
       userId: 'user_1',
       provider: 'openai',
       model: 'fixture-image-model',
+      routeId: 'openai/fixture-image-model',
       actualCostCents: 14,
       sourceRef: `managed_usage:user_1:agi.image.web.turn_1:${'b'.repeat(64)}`,
       taskOutcome: 'delivered',
       taskRef: 'b'.repeat(64),
       usage: { operation: 'image', outputCount: 2, quotaFeature: 'image' },
+    });
+  });
+
+  it('finalizes a failed-over turn with the serving route, not the reserved one', async () => {
+    recordSettledProviderCost.mockClear();
+    const db = fakeDb([
+      {
+        request_status: 'completed',
+        operation_result: 'finalized',
+        settlement_status: 'succeeded',
+        actual_cost_cents: 11,
+      },
+    ]);
+
+    await finalizeManagedUsageRequest({
+      db,
+      userId: 'user_1',
+      idempotencyKey: 'agi.chat.web.turn_failover',
+      requestHash: 'e'.repeat(64),
+      leaseToken: 'lease-failover',
+      estimatedCostCents: 20,
+      provider: 'anthropic',
+      model: 'reserved-model',
+      routeId: 'anthropic/reserved-model',
+      outcome: 'completed',
+      actualCostCents: 11,
+      usage: {
+        inputTokens: 100,
+        outputTokens: 20,
+        providerCallObservations: [
+          { provider: 'anthropic', model: 'reserved-model', inputTokens: 40, outputTokens: 8 },
+          { provider: 'open_router', model: 'served-model', inputTokens: 60, outputTokens: 12 },
+        ],
+      },
+    });
+
+    expect(recordSettledProviderCost).toHaveBeenCalledWith(
+      expect.objectContaining({
+        provider: 'open_router',
+        model: 'served-model',
+        routeId: 'open_router/served-model',
+      }),
+    );
+
+    const finalizeCallArgs = vi.mocked(db.query).mock.calls[0]?.[1] as unknown[];
+    const finalizedUsage = JSON.parse(String(finalizeCallArgs[6]));
+    expect(finalizedUsage).toMatchObject({
+      servedProvider: 'open_router',
+      servedModel: 'served-model',
+      servedRouteId: 'open_router/served-model',
+      reservedProvider: 'anthropic',
+      reservedModel: 'reserved-model',
+      reservedRouteId: 'anthropic/reserved-model',
     });
   });
 
@@ -488,5 +544,35 @@ describe('managed usage settlement feeds the COGS ledger', () => {
     });
 
     expect(recordSettledProviderCost).not.toHaveBeenCalled();
+  });
+});
+
+describe('getServedRouteFromUsage', () => {
+  it('reads served-route facts back from a tagged usage blob', () => {
+    expect(
+      getServedRouteFromUsage({
+        servedProvider: 'open_router',
+        servedModel: 'served-model',
+        servedRouteId: 'open_router/served-model',
+      }),
+    ).toEqual({
+      provider: 'open_router',
+      model: 'served-model',
+      routeId: 'open_router/served-model',
+    });
+  });
+
+  it('returns nulls for a usage blob with no served-route facts', () => {
+    expect(getServedRouteFromUsage({ inputTokens: 10 })).toEqual({
+      provider: null,
+      model: null,
+      routeId: null,
+    });
+    expect(getServedRouteFromUsage(null)).toEqual({ provider: null, model: null, routeId: null });
+    expect(getServedRouteFromUsage(undefined)).toEqual({
+      provider: null,
+      model: null,
+      routeId: null,
+    });
   });
 });
