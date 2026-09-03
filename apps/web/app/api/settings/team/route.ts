@@ -139,7 +139,7 @@ async function handleAddMember(request: NextRequest) {
 
       await expirePendingInvitations(tx, organizationId);
 
-      const [targetProfile] = await tx.query<
+      const [targetProfile] = await getNeonDb().query<
         Pick<ProfileRow, 'id' | 'email' | 'display_name' | 'avatar_url'>
       >(
         `select id, email, display_name, avatar_url
