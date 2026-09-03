@@ -136,13 +136,35 @@ let _neonModule: NeonModule | null = null;
  * traffic, credentials included, over an unencrypted socket to somebody else's
  * machine.
  */
-function applyLocalWebSocketProxy(neon: NeonModule): boolean {
+function isLoopbackHost(hostname: string): boolean {
+  return hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '::1';
+}
+
+function localWebSocketProxyHost(): string | null {
   const proxy = process.env['AGI_DATABASE_WS_PROXY']?.trim();
-  if (!proxy) return false;
+  if (!proxy) return null;
+  return proxy.split(':')[0] ?? '';
+}
+
+/**
+ * Whether THIS connection's own host is the local proxy's target, so the
+ * insecure websocket setting below is safe to apply to the pool built from
+ * it. `AGI_DATABASE_WS_PROXY` being set somewhere in the process is not
+ * enough — that would also flip a same-process pool built from a real
+ * `neon.tech` connection string to plaintext (see {@link applyLocalWebSocketProxy}).
+ */
+function isLocalWebSocketProxyTarget(hostname: string): boolean {
+  const proxyHost = localWebSocketProxyHost();
+  if (proxyHost === null) return false;
+  return isLoopbackHost(hostname) || hostname === proxyHost;
+}
+
+function applyLocalWebSocketProxy(neon: NeonModule): void {
+  const proxy = process.env['AGI_DATABASE_WS_PROXY']?.trim();
+  if (!proxy) return;
 
   const host = proxy.split(':')[0] ?? '';
-  const isLoopback = host === 'localhost' || host === '127.0.0.1' || host === '::1';
-  if (!isLoopback) {
+  if (!isLoopbackHost(host)) {
     throw new DataLayerConfigError(
       `AGI_DATABASE_WS_PROXY must point at a loopback address; got "${proxy}". ` +
         'It exists so a local Postgres can be reached through neondatabase/wsproxy ' +
@@ -160,7 +182,41 @@ function applyLocalWebSocketProxy(neon: NeonModule): boolean {
   neon.neonConfig.useSecureWebSocket = false;
   neon.neonConfig.pipelineTLS = false;
   neon.neonConfig.pipelineConnect = false;
-  return true;
+}
+
+interface SecureWebSocketDefaults {
+  wsProxy: NeonModule['neonConfig']['wsProxy'];
+  useSecureWebSocket: boolean;
+  pipelineTLS: boolean;
+  pipelineConnect: NeonModule['neonConfig']['pipelineConnect'];
+}
+
+let _secureWebSocketDefaults: SecureWebSocketDefaults | null = null;
+
+/**
+ * Captures the driver's own (secure) websocket defaults the first time the
+ * module loads, before {@link applyLocalWebSocketProxy} can have mutated
+ * them, so a later pool built for a non-proxy host can be restored to them
+ * rather than inheriting whatever an earlier loopback pool left behind on
+ * this shared, process-wide `neonConfig` singleton.
+ */
+function captureSecureWebSocketDefaults(neon: NeonModule): SecureWebSocketDefaults {
+  if (!_secureWebSocketDefaults) {
+    _secureWebSocketDefaults = {
+      wsProxy: neon.neonConfig.wsProxy,
+      useSecureWebSocket: neon.neonConfig.useSecureWebSocket,
+      pipelineTLS: neon.neonConfig.pipelineTLS,
+      pipelineConnect: neon.neonConfig.pipelineConnect,
+    };
+  }
+  return _secureWebSocketDefaults;
+}
+
+function restoreSecureWebSocketDefaults(neon: NeonModule, defaults: SecureWebSocketDefaults): void {
+  neon.neonConfig.wsProxy = defaults.wsProxy;
+  neon.neonConfig.useSecureWebSocket = defaults.useSecureWebSocket;
+  neon.neonConfig.pipelineTLS = defaults.pipelineTLS;
+  neon.neonConfig.pipelineConnect = defaults.pipelineConnect;
 }
 
 /**
@@ -177,11 +233,10 @@ function applyPoolQueryViaFetch(neon: NeonModule, usingLocalProxy: boolean): voi
   neon.neonConfig.poolQueryViaFetch = true;
 }
 
-async function loadNeon(): Promise<NeonModule> {
+async function importNeonModule(): Promise<NeonModule> {
   if (_neonModule) return _neonModule;
-  let loaded: NeonModule;
   try {
-    loaded = (await import('@neondatabase/serverless')) as NeonModule;
+    _neonModule = (await import('@neondatabase/serverless')) as NeonModule;
   } catch (e) {
     throw new DataLayerConfigError(
       'Tried to use the Neon adapter but @neondatabase/serverless is not installed. ' +
@@ -190,14 +245,28 @@ async function loadNeon(): Promise<NeonModule> {
         `Underlying error: ${e instanceof Error ? e.message : String(e)}`,
     );
   }
-
-  // Applied BEFORE the cache is populated. Caching first would mean a refused
-  // proxy config throws once and is then silently skipped on every later call,
-  // leaving the driver pointed at the real host with nobody told.
-  const usingLocalProxy = applyLocalWebSocketProxy(loaded);
-  applyPoolQueryViaFetch(loaded, usingLocalProxy);
-  _neonModule = loaded;
   return _neonModule;
+}
+
+/**
+ * Decides the websocket transport freshly for EVERY pool, keyed on that
+ * pool's own connection host, rather than once at module load. `neonConfig`
+ * is a singleton shared by every pool built from this driver module in the
+ * process, so a one-time decision at load time cannot tell a loopback pool
+ * from a same-process `neon.tech` pool built later — whichever host asked
+ * last would decide the transport for everyone.
+ */
+async function loadNeon(connectionHost: string): Promise<NeonModule> {
+  const loaded = await importNeonModule();
+  const defaults = captureSecureWebSocketDefaults(loaded);
+  const usingLocalProxy = isLocalWebSocketProxyTarget(connectionHost);
+  if (usingLocalProxy) {
+    applyLocalWebSocketProxy(loaded);
+  } else {
+    restoreSecureWebSocketDefaults(loaded, defaults);
+  }
+  applyPoolQueryViaFetch(loaded, usingLocalProxy);
+  return loaded;
 }
 
 /**
@@ -263,10 +332,6 @@ const SECURE_SSL_MODES = new Set(['require', 'verify-ca', 'verify-full']);
 const NEON_APEX_HOST = 'neon.tech';
 const NEON_HOST_SUFFIX = `.${NEON_APEX_HOST}`;
 
-function isLocalWebSocketProxyConfigured(): boolean {
-  return Boolean(process.env['AGI_DATABASE_WS_PROXY']?.trim());
-}
-
 /**
  * A Neon endpoint (`ep-xxx.us-east-2.aws.neon.tech`, and the bare apex
  * domain) is reached exclusively through `@neondatabase/serverless`'s
@@ -287,12 +352,12 @@ function isNeonHost(hostname: string): boolean {
  * `postgres` adapter today or a future driver change tomorrow — must set
  * `sslmode=require` (or `verify-ca` / `verify-full`) itself, since nothing
  * here can vouch for its transport.
- * Skipped only for the loopback-only local WebSocket proxy, whose own
- * loopback check ({@link applyLocalWebSocketProxy}) is the real guard there.
+ * Skipped only for a connection string whose own host is the loopback-only
+ * local WebSocket proxy's target ({@link isLocalWebSocketProxyTarget}); the
+ * proxy's own loopback check ({@link applyLocalWebSocketProxy}) is the real
+ * guard on the proxy address itself.
  */
 function assertSecureConnectionString(connectionString: string): void {
-  if (isLocalWebSocketProxyConfigured()) return;
-
   let url: URL;
   try {
     url = new URL(connectionString);
@@ -302,6 +367,8 @@ function assertSecureConnectionString(connectionString: string): void {
         'postgresql://user:pwd@host/db?sslmode=require.',
     );
   }
+
+  if (isLocalWebSocketProxyTarget(url.hostname)) return;
 
   const sslmode = url.searchParams.get('sslmode');
   if (sslmode === 'disable') {
@@ -373,8 +440,9 @@ export class NeonDatabaseAdapter implements DatabaseAdapter {
       this.ownsPool = false;
     } else {
       assertSecureConnectionString(config.connectionString);
+      const connectionHost = new URL(config.connectionString).hostname;
       this.poolPromise = (async () => {
-        const mod = await loadNeon();
+        const mod = await loadNeon(connectionHost);
         return this.guardTransportErrors(
           new mod.Pool({
             connectionString: config.connectionString,

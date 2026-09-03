@@ -89,10 +89,45 @@ describe('NeonDatabaseAdapter TLS enforcement', () => {
     },
   );
 
-  it('skips the sslmode requirement when the loopback-only local proxy is configured', async () => {
+  it('skips the sslmode requirement for a connection string that targets the local proxy host', async () => {
     process.env[VAR] = '127.0.0.1:5433';
-    const adapter = new NeonDatabaseAdapter({ connectionString: 'postgresql://u:p@ignored/db' });
+    const adapter = new NeonDatabaseAdapter({ connectionString: 'postgresql://u:p@localhost/db' });
     expect(adapter).toBeInstanceOf(NeonDatabaseAdapter);
+  });
+
+  it('still enforces sslmode on a real host when the proxy variable happens to be set', async () => {
+    process.env[VAR] = '127.0.0.1:5433';
+    expect(
+      () =>
+        new NeonDatabaseAdapter({
+          connectionString: 'postgresql://u:p@example.com/db',
+        }),
+    ).toThrow(/sslmode=require/);
+  });
+
+  it('accepts a real neon.tech connection with no sslmode even when the proxy variable is set', async () => {
+    process.env[VAR] = '127.0.0.1:5433';
+    const adapter = new NeonDatabaseAdapter({
+      connectionString: 'postgresql://u:p@ep-xxx.us-east-2.aws.neon.tech/db',
+    });
+    expect(adapter).toBeInstanceOf(NeonDatabaseAdapter);
+  });
+
+  it('restores secure websocket defaults for a neon.tech pool built after a loopback pool', async () => {
+    process.env[VAR] = '127.0.0.1:5433';
+    const { neonConfig } = await import('@neondatabase/serverless');
+
+    const loopbackAdapter = new NeonDatabaseAdapter({
+      connectionString: 'postgresql://u:p@localhost/db',
+    });
+    await loopbackAdapter.dispose();
+    expect(neonConfig.useSecureWebSocket).toBe(false);
+
+    const neonAdapter = new NeonDatabaseAdapter({
+      connectionString: 'postgresql://u:p@ep-xxx.us-east-2.aws.neon.tech/db',
+    });
+    await neonAdapter.dispose();
+    expect(neonConfig.useSecureWebSocket).toBe(true);
   });
 
   it('never validates a connection string when a pool is injected directly', () => {
