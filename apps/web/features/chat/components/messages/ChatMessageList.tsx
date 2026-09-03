@@ -814,13 +814,10 @@ type TranscriptRowComponent = (
   props: RowComponentProps<VirtualizedTranscriptRowData>,
 ) => React.ReactElement | null;
 
-function shallowEqualRecord(
-  prev: Record<string, unknown> | undefined,
-  next: Record<string, unknown> | undefined,
-): boolean {
+function shallowEqualRecord<T extends object>(prev: T | undefined, next: T | undefined): boolean {
   if (prev === next) return true;
   if (!prev || !next) return false;
-  const keys = Object.keys(prev);
+  const keys = Object.keys(prev) as Array<keyof T>;
   if (keys.length !== Object.keys(next).length) return false;
   return keys.every((key) => Object.is(prev[key], next[key]));
 }
