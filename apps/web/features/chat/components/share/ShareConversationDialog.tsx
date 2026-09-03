@@ -15,6 +15,7 @@ import {
 import { Check, Copy, Globe2, ShieldAlert, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useShareConversation, type ShareExpiryDays } from '../../hooks/use-share-conversation';
+import { memoWhenClosed } from '@shared/lib/memo-when-closed';
 
 const EXPIRY_OPTIONS: ReadonlyArray<{ days: ShareExpiryDays; label: string; detail: string }> = [
   { days: 1, label: '1 day', detail: 'Best for a quick review' },
@@ -41,7 +42,7 @@ function formatExpiry(value: string): string {
   });
 }
 
-export function ShareConversationDialog({
+function ShareConversationDialogImpl({
   open,
   onOpenChange,
   conversationTitle,
@@ -195,3 +196,5 @@ export function ShareConversationDialog({
     </>
   );
 }
+
+export const ShareConversationDialog = memoWhenClosed(ShareConversationDialogImpl);

@@ -19,6 +19,7 @@ import type { Project } from '@features/projects/stores/project-store';
 import { webManagedCloudProjects } from '@/features/projects/services/managed-cloud-projects';
 import { PROJECT_TEMPLATES, getProjectTemplate } from '@/features/projects/data/project-templates';
 import { toUserMessage } from '@/lib/user-error-message';
+import { memoWhenClosed } from '@shared/lib/memo-when-closed';
 
 interface CreateProjectDialogProps {
   open: boolean;
@@ -28,7 +29,7 @@ interface CreateProjectDialogProps {
 
 type SubmitState = 'idle' | 'submitting' | 'error';
 
-export function CreateProjectDialog({ open, onOpenChange, onCreated }: CreateProjectDialogProps) {
+function CreateProjectDialogImpl({ open, onOpenChange, onCreated }: CreateProjectDialogProps) {
   const router = useRouter();
   const addProject = useProjectStore((s) => s.addProject);
 
@@ -239,3 +240,5 @@ export function CreateProjectDialog({ open, onOpenChange, onCreated }: CreatePro
     </Dialog>
   );
 }
+
+export const CreateProjectDialog = memoWhenClosed(CreateProjectDialogImpl);
