@@ -4729,6 +4729,31 @@ export default function WebChatPage() {
   // ONE Sidebar wiring, rendered either as the desktop rail or inside the
   // narrow-viewport Sheet. The handlers that close the drawer stay handlers:
   // the drawer's dismissal is a consequence of the action, not a listener.
+  const handleSidebarNewChat = useCallback(() => {
+    setMobileNavOpen(false);
+    handleNewChat();
+  }, [handleNewChat]);
+  const handleSidebarOpenSearch = useCallback(() => {
+    setMobileNavOpen(false);
+    handleOpenSearch();
+  }, [handleOpenSearch]);
+  const handleSidebarOpenUsage = useCallback(() => {
+    setMobileNavOpen(false);
+    // CRIT-008: open in place — /settings/usage only bounces to /chat.
+    openSettings('usage');
+  }, [openSettings]);
+  const handleSidebarSelect = useCallback(
+    (id: string) => {
+      setMobileNavOpen(false);
+      handleSelectSession(id);
+    },
+    [handleSelectSession],
+  );
+  const handleSidebarDelete = useCallback(
+    (id: string) => void handleDeleteSession(id),
+    [handleDeleteSession],
+  );
+
   const sharedSidebarProps = {
     sessions: sidebarSessions,
     projects: sidebarProjects,
@@ -4737,31 +4762,18 @@ export default function WebChatPage() {
     error: conversationListError,
     mode: 'cloud' as const,
     headerSlot: <SidebarWordmark />,
-    onNewChat: () => {
-      setMobileNavOpen(false);
-      handleNewChat();
-    },
+    onNewChat: handleSidebarNewChat,
     onToggleCollapse: handleToggleSidebar,
-    onOpenSearch: () => {
-      setMobileNavOpen(false);
-      handleOpenSearch();
-    },
+    onOpenSearch: handleSidebarOpenSearch,
     navItems: sidebarNavItems,
     footerSlot: sidebarFooterSlot,
     collapsedFooterSlot: sidebarCollapsedFooterSlot,
     // GOV-19: the two props the shared Sidebar's usage widget needs.
     showUsageWidget: managedUsageSummary !== null,
     budgetPercent: managedBudgetPercent,
-    onOpenUsage: () => {
-      setMobileNavOpen(false);
-      // CRIT-008: open in place — /settings/usage only bounces to /chat.
-      openSettings('usage');
-    },
-    onSelect: (id: string) => {
-      setMobileNavOpen(false);
-      handleSelectSession(id);
-    },
-    onDelete: (id: string) => void handleDeleteSession(id),
+    onOpenUsage: handleSidebarOpenUsage,
+    onSelect: handleSidebarSelect,
+    onDelete: handleSidebarDelete,
     onRename: handleRenameSession,
     onTogglePin: handlePinSession,
     onStar: handleStarSession,
