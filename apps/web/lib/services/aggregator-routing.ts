@@ -1,6 +1,14 @@
 import 'server-only';
 
-import { getModelMetadataById, listCanonicalModels, type ModelMetadata } from '@agiworkforce/types';
+import {
+  getModelMetadataById,
+  getRegistryRoute,
+  listCanonicalModels,
+  type ModelMetadata,
+} from '@agiworkforce/types';
+
+const MANAGED_CLOUD_TRUST_MODE = 'managed_cloud';
+const OPEN_ROUTER_PROVIDER = 'open_router';
 
 const DEFAULT_ROUTED_PROVIDERS = ['minimax', 'qwen', 'zhipu'] as const;
 const DEFAULT_ROUTED_PROVIDER_SET: ReadonlySet<string> = new Set(DEFAULT_ROUTED_PROVIDERS);
@@ -25,20 +33,18 @@ function isOpenRouterFailoverRoute(model: ModelMetadata): boolean {
   );
 }
 
-function routedProviders(): ReadonlySet<string> {
-  const override = process.env['AGI_OPENROUTER_ROUTED_PROVIDERS'];
-  if (override === undefined) return new Set(DEFAULT_ROUTED_PROVIDERS);
-  return new Set(
-    override
-      .split(',')
-      .map((entry) => entry.trim().toLowerCase())
-      .filter(Boolean),
-  );
+export function isManagedOpenRouterRoute(apiModelId: string): boolean {
+  if (!process.env['OPENROUTER_API_KEY']) return false;
+  const model = getModelMetadataById(apiModelId);
+  if (!model) return false;
+  const route = getRegistryRoute(`${OPEN_ROUTER_PROVIDER}/${model.id}`);
+  return route?.trustModes.includes(MANAGED_CLOUD_TRUST_MODE) ?? false;
 }
 
-export function isRoutedViaOpenRouter(providerId: string): boolean {
-  if (!process.env['OPENROUTER_API_KEY']) return false;
-  return routedProviders().has(providerId.toLowerCase());
+export function dispatchProviderForRoute(routeId: string): string | undefined {
+  const route = getRegistryRoute(routeId);
+  if (!route) return undefined;
+  return route.provider === OPEN_ROUTER_PROVIDER ? 'openrouter' : route.provider;
 }
 
 export function openRouterSlugFor(apiModelId: string): string | undefined {

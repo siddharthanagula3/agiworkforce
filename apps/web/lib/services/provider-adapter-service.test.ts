@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { getProviderDefaultModel, requireProviderDefaultModel } from '@agiworkforce/types';
 import type { ProtocolRoute } from '@agiworkforce/types';
 
@@ -63,6 +63,19 @@ async function loadService(): Promise<typeof import('./provider-adapter-service'
 import { buildServerProviderAdapter, resolveProviderFromModel } from './provider-adapter-service';
 
 describe('resolveProviderFromModel', () => {
+  const savedOpenRouterKey = process.env['OPENROUTER_API_KEY'];
+
+  beforeEach(() => {
+    getOptionalEnv.mockReset();
+    getOptionalEnv.mockReturnValue(undefined);
+    delete process.env['OPENROUTER_API_KEY'];
+  });
+
+  afterEach(() => {
+    if (savedOpenRouterKey === undefined) delete process.env['OPENROUTER_API_KEY'];
+    else process.env['OPENROUTER_API_KEY'] = savedOpenRouterKey;
+  });
+
   it('derives provider ownership from the canonical catalog', () => {
     expect(resolveProviderFromModel(requireProviderDefaultModel('openai'))).toBe('openai');
   });
@@ -71,6 +84,43 @@ describe('resolveProviderFromModel', () => {
     expect(() => resolveProviderFromModel('fixture-unknown-model')).toThrow(
       /canonical model catalog/i,
     );
+  });
+
+  it('dispatches the provider of an explicitly selected route over the model default', () => {
+    const model = requireProviderDefaultModel('minimax');
+    expect(resolveProviderFromModel(model, 'open_router/minimax-m3')).toBe('openrouter');
+  });
+
+  it('dispatches the direct provider when its managed key is configured, even with OpenRouter also configured', () => {
+    process.env['OPENROUTER_API_KEY'] = 'fixture-openrouter-key';
+    getOptionalEnv.mockImplementation((key) =>
+      key === 'MINIMAX_API_KEY' ? 'fixture-minimax-key' : undefined,
+    );
+
+    expect(resolveProviderFromModel(requireProviderDefaultModel('minimax'))).toBe('minimax');
+  });
+
+  it('falls back to the registry-admitted OpenRouter route when the direct managed key is absent', () => {
+    process.env['OPENROUTER_API_KEY'] = 'fixture-openrouter-key';
+    getOptionalEnv.mockReturnValue(undefined);
+
+    expect(resolveProviderFromModel(requireProviderDefaultModel('minimax'))).toBe('openrouter');
+  });
+
+  it('never falls back to OpenRouter for a provider the registry does not admit to managed traffic', () => {
+    process.env['OPENROUTER_API_KEY'] = 'fixture-openrouter-key';
+    getOptionalEnv.mockReturnValue(undefined);
+
+    expect(resolveProviderFromModel(requireProviderDefaultModel('xai'))).toBe('xai');
+  });
+
+  it('dispatches direct for a BYOK caller who configured their own provider key', () => {
+    process.env['OPENROUTER_API_KEY'] = 'fixture-openrouter-key';
+    getOptionalEnv.mockImplementation((key) =>
+      key === 'QWEN_API_KEY' ? 'fixture-byok-qwen-key' : undefined,
+    );
+
+    expect(resolveProviderFromModel(requireProviderDefaultModel('qwen'))).toBe('qwen');
   });
 });
 
