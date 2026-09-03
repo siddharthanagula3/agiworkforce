@@ -11,7 +11,6 @@ import {
   Section,
   Stack,
 } from '@/features/marketing/components/system';
-import { FactGrid, PageHero } from '@/features/marketing/components/pages/surfaces/shared';
 
 export const metadata = buildMetadata({
   title: 'Agents: delegated work that stops to ask',
@@ -20,72 +19,100 @@ export const metadata = buildMetadata({
   path: '/features/agents',
 });
 
+const IDS = {
+  hero: 'agi-features-agents-title',
+  anatomy: 'agi-features-agents-anatomy-title',
+  defaults: 'agi-features-agents-defaults-title',
+  containment: 'agi-features-agents-containment-title',
+  close: 'agi-features-agents-close-title',
+} as const;
+
+const ANATOMY = [
+  {
+    meta: 'Define',
+    title: 'The definition is a file',
+    body: 'A markdown file with frontmatter: a name, a description of when to use it, an optional model, and the tools it may or may not call. Start a session on one with --agent.',
+  },
+  {
+    meta: 'Fan out',
+    title: 'Subagents run beside you',
+    body: 'The task tool spawns a subagent on its own thread. It reports as running, completed, failed, or cancelled, and hands back its output with the files it modified.',
+  },
+  {
+    meta: 'Observe',
+    title: 'Hooks on the session lifecycle',
+    body: 'Handlers fire on session start, on prompt submit, before and after a tool call, on a permission request, and on stop.',
+  },
+] as const;
+
 export default function FeaturesAgentsPage() {
   return (
     <div data-design="agi" className="agi-ds-page">
       <Header />
       <main id="main-content">
-        <PageHero
-          id="agi-features-agents-title"
-          eyebrow="Features · Agents"
-          title="Delegation only works if the default is no."
-          lede="An agent is a session you hand work to: it reads files, runs commands, calls connectors, and reports back with what it changed. Every risky step opens an approval you have to answer, and the commands themselves run inside an OS sandbox the CLI refuses to start without."
-          ctas={[
-            { href: '/cli', label: 'See the agi CLI' },
-            {
-              href: '/agent-permissions',
-              label: 'Read the permission model',
-              variant: 'secondary',
-            },
-          ]}
-          visual={
-            <ProductFrame
-              src="/product/agents-tool-approvals-dark.png"
-              srcLight="/product/agents-tool-approvals-light.png"
-              alt='The tool approvals setting in AGI, with "Ask before every action" selected'
-              width={1132}
-              height={584}
-              caption={['Settings', 'Tool approvals']}
-              priority
-            />
-          }
-        />
+        <section className="agi-lp-hero" aria-labelledby={IDS.hero}>
+          <div className="agi-ds-container agi-lp-hero-grid">
+            <div className="agi-lp-hero-copy">
+              <p className="agi-lp-eyebrow">Features &middot; Agents</p>
+              <h1 className="agi-lp-h1" id={IDS.hero}>
+                <span className="agi-lp-line">Delegation only works</span>
+                <em className="agi-lp-accent">if the default is no.</em>
+              </h1>
+              <p className="agi-lp-lede">
+                An agent is a session you hand work to: it reads files, runs commands, calls
+                connectors, and reports back with what it changed. Every risky step opens an
+                approval you have to answer, and commands run inside an OS sandbox the CLI refuses
+                to start without.
+              </p>
+              <ButtonRow>
+                <Button href="/cli">See the agi CLI</Button>
+                <Button href="/agent-permissions" variant="secondary">
+                  Read the permission model
+                </Button>
+              </ButtonRow>
+            </div>
+            <div className="agi-lp-hero-stage">
+              <ProductFrame
+                src="/product/agents-tool-approvals-dark.png"
+                srcLight="/product/agents-tool-approvals-light.png"
+                alt='The tool approvals setting in AGI, with "Ask before every action" selected'
+                width={1132}
+                height={584}
+                caption={['Settings', 'Tool approvals']}
+                priority
+              />
+            </div>
+          </div>
+        </section>
 
-        <Section id="anatomy" labelledBy="agi-features-agents-anatomy-title" rule>
+        <Section id="anatomy" labelledBy={IDS.anatomy} rule>
           <Stack gap="loose">
             <div>
               <Eyebrow>Anatomy</Eyebrow>
-              <h2 className="agi-ds-h2" id="agi-features-agents-anatomy-title">
+              <h2 className="agi-ds-h2" id={IDS.anatomy}>
                 An agent is a session you named and narrowed.
               </h2>
             </div>
-            <FactGrid
-              items={[
-                {
-                  meta: 'Define',
-                  title: 'The definition is a file',
-                  body: 'A markdown file with frontmatter: a name, a description of when to use it, an optional model, and the tools it may or may not call. Project definitions sit in .agiworkforce/agents; global ones live in your home directory. Start a session on one with --agent.',
-                },
-                {
-                  meta: 'Fan out',
-                  title: 'Subagents run beside you',
-                  body: 'The task tool spawns a subagent on its own thread. It reports as running, completed, failed, or cancelled, and hands back its output together with the files it modified. Seven run at once, and the tree stops three levels deep.',
-                },
-                {
-                  meta: 'Observe',
-                  title: 'Hooks on the session lifecycle',
-                  body: 'Handlers fire on session start, on prompt submit, before and after a tool call, on a permission request, and on stop. That is where your own guardrails, logs, and automations attach.',
-                },
-              ]}
-            />
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+              {ANATOMY.map((item) => (
+                <div
+                  key={item.meta}
+                  className="flex flex-col gap-3 rounded-xl border border-[var(--agi-rule)] bg-[var(--agi-ground-2)] p-6"
+                >
+                  <Eyebrow>{item.meta}</Eyebrow>
+                  <h3 className="agi-ds-h3">{item.title}</h3>
+                  <Prose size="sm">{item.body}</Prose>
+                </div>
+              ))}
+            </div>
           </Stack>
         </Section>
 
-        <Section id="defaults" labelledBy="agi-features-agents-defaults-title" rule ground="2">
+        <Section id="defaults" labelledBy={IDS.defaults} rule ground="2">
           <Stack gap="loose">
             <div>
               <Eyebrow>Defaults</Eyebrow>
-              <h2 className="agi-ds-h2" id="agi-features-agents-defaults-title">
+              <h2 className="agi-ds-h2" id={IDS.defaults}>
                 Where a setting could have gone either way, it shipped closed.
               </h2>
               <Prose>
@@ -99,38 +126,38 @@ export default function FeaturesAgentsPage() {
                 {
                   label: 'Approval',
                   value:
-                    'The overlay opens with the cursor parked on No, held there by an assertion the build checks. Hitting Enter on a prompt you did not read denies the call.',
+                    'The overlay opens with the cursor parked on No, held there by an assertion the build checks.',
                 },
                 {
                   label: 'Your answer',
                   value:
-                    'Yes allows one call and persists nothing. Allow Session lasts until you quit. Always Allow is written to the permission store on disk, and /permissions reset clears it again. Deny All cancels the rest of the turn.',
+                    'Yes allows one call. Allow Session lasts until you quit. Always Allow writes to disk and /permissions reset clears it.',
                 },
                 {
                   label: 'Sandbox',
                   value:
-                    'Command execution asks the OS for a sandbox: Seatbelt on macOS, bubblewrap on Linux. When neither is present the run fails rather than quietly continuing without one. Passing --no-sandbox is the way past, and it prints a warning.',
+                    'Command execution asks the OS for a sandbox: Seatbelt on macOS, bubblewrap on Linux. Missing either, the run fails rather than continuing without one.',
                 },
                 {
                   label: 'Network',
                   value:
-                    'A sandboxed command has no outbound network. An install, a clone, or an API call has to be granted it explicitly.',
+                    'A sandboxed command has no outbound network unless granted it explicitly.',
                 },
                 {
                   label: 'Subagents',
                   value:
-                    "A subagent inherits the parent's model, permission mode, and tool filters. A named definition can narrow that set further and can never widen it.",
+                    "A subagent inherits the parent's model, permission mode, and tool filters, and a named definition can only narrow that set further.",
                 },
               ]}
             />
           </Stack>
         </Section>
 
-        <Section id="containment" labelledBy="agi-features-agents-containment-title" rule>
+        <Section id="containment" labelledBy={IDS.containment} rule>
           <Stack gap="loose">
             <div>
               <Eyebrow>Containment</Eyebrow>
-              <h2 className="agi-ds-h2" id="agi-features-agents-containment-title">
+              <h2 className="agi-ds-h2" id={IDS.containment}>
                 The session will tell you what its sandbox allows.
               </h2>
             </div>
@@ -148,20 +175,22 @@ export default function FeaturesAgentsPage() {
           </Stack>
         </Section>
 
-        <Section id="agents-close" labelledBy="agi-features-agents-close-title" rule ground="2">
-          <Stack gap="loose">
-            <h2 className="agi-ds-h2" id="agi-features-agents-close-title">
-              Write one agent file and hand it a task.
-            </h2>
-            <Prose>
-              Agent definitions, parallel subagents, lifecycle hooks, the approval overlay, and the
-              OS sandbox are all in the agi CLI source today.
-            </Prose>
-            <ButtonRow>
-              <Button href="/download">Get the CLI</Button>
-            </ButtonRow>
-          </Stack>
-        </Section>
+        <section className="agi-lp-close" aria-labelledby={IDS.close}>
+          <div className="agi-ds-container">
+            <div className="agi-lp-close-inner">
+              <h2 className="agi-lp-h2" id={IDS.close}>
+                Write one agent file <em className="agi-lp-accent">and hand it a task.</em>
+              </h2>
+              <p className="agi-lp-lede">
+                Agent definitions, parallel subagents, lifecycle hooks, the approval overlay, and
+                the OS sandbox are all in the agi CLI source today.
+              </p>
+              <ButtonRow>
+                <Button href="/download">Get the CLI</Button>
+              </ButtonRow>
+            </div>
+          </div>
+        </section>
       </main>
       <MarketingFooter />
     </div>
