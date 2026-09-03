@@ -34,6 +34,7 @@ import { useThinkingStore } from '@shared/stores/thinking-store';
 import { logger } from '@shared/lib/logger';
 import {
   getModelMetadataById,
+  getModelReasoning,
   resolveModelEffort,
   WEB_SEARCH_CITATION_DELTA_KEY,
   WEB_SEARCH_CITATION_KIND,
@@ -723,6 +724,8 @@ const CLARIFY_DISMISSED_SILENTLY = 'The user declined the clarifying questions w
  * so a faster poll returns the same rows more often.
  */
 const DURABLE_RUN_POLL_INTERVAL_MS = 2_500;
+
+export const REASONING_ACTIVITY_FALLBACK_THRESHOLD_MS = 1_500;
 
 function describeSettledInteractiveCard(card: InteractiveCard): string | null {
   if (!card.recognized || card.kind !== RESPONDABLE_INTERACTIVE_CARD_KIND) return null;
@@ -1575,6 +1578,24 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
   let contentBuffer = '';
   let unacknowledgedPublicText = '';
 
+  let firstStreamActivitySeen = false;
+  const reasoningFallbackTimer = getModelReasoning(model).capable
+    ? setTimeout(() => {
+        if (firstStreamActivitySeen) return;
+        applyLocalAgentEvent({
+          type: 'progress-update',
+          progressId: 'thinking',
+          summary: deriveAgentActivityLabel({ kind: 'thinking' }),
+          status: 'running',
+        });
+      }, REASONING_ACTIVITY_FALLBACK_THRESHOLD_MS)
+    : undefined;
+  const markFirstStreamActivitySeen = () => {
+    if (firstStreamActivitySeen) return;
+    firstStreamActivitySeen = true;
+    if (reasoningFallbackTimer !== undefined) clearTimeout(reasoningFallbackTimer);
+  };
+
   const HOLD_BACK = 11;
 
   const seamSeed = ctx.seedContent ?? '';
@@ -1806,6 +1827,7 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
   try {
     while (true) {
       const { done, value } = await reader.read();
+      markFirstStreamActivitySeen();
 
       buffer += done ? decoder.decode() : decoder.decode(value, { stream: true });
 
@@ -2347,6 +2369,7 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
     }
     throw terminalError;
   } finally {
+    markFirstStreamActivitySeen();
     coalescedAppends.flush();
     await reader.cancel().catch(() => undefined);
   }
