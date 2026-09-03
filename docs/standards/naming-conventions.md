@@ -60,7 +60,7 @@ Do not create new root docs such as `ROADMAP.md`, `PRD.md`, `TASKS.md`, `FIXME.m
 - Use `CHANGELOG.md` for completed work.
 - Do not add `TASKS.md`, `FIXME.md`, or `AUDIT_LOG.md` at root.
 - Use inline `TODO(<owner-or-area>):` comments only for small local follow-up notes that are next to the affected code.
-- Put durable findings in `docs/agent-context/known-flaws.md` or `docs/security/`. (The former `reports/`, `tasks/`, and `docs/archive/` root directories were removed repo-wide on 2026-06-28 — do not cite them as existing or route new work there without a current decision doc. The root `audit/` directory remains live as the evidence-ledger root, e.g. `audit/capability-gaps.csv`.)
+- Put durable findings in `docs/agent-context/known-flaws.md` or `docs/security/`. (The former `reports/`, `tasks/`, and `docs/archive/` root directories were removed repo-wide on 2026-06-28, do not cite them as existing or route new work there without a current decision doc. The root `audit/` directory remains live as the evidence-ledger root, e.g. `audit/capability-gaps.csv`.)
 
 ## Directory Names
 
@@ -91,7 +91,7 @@ Do not create new root docs such as `ROADMAP.md`, `PRD.md`, `TASKS.md`, `FIXME.m
 Canonical as of 2026-06-28. Full version + CI enforcement: `docs/strategy/15-structure-and-granularity-conventions.md`.
 
 - **Folder-per-feature.** Every tool, command, agent, and major UI feature is a folder, not a loose file.
-- **Co-locate by feature.** A tool's logic, `prompt`, `UI`, `constants`, validators, and `types` live in the same folder — never split across `prompts/`, `ui/`, `logic/`.
+- **Co-locate by feature.** A tool's logic, `prompt`, `UI`, `constants`, validators, and `types` live in the same folder, never split across `prompts/`, `ui/`, `logic/`.
 - **Barrels.** Each folder exposes one public surface via `index.ts` (TS) / `mod.rs` (Rust); consumers import the folder, not deep paths.
 - **One concern per file.** One tool/hook/migration per file; soft cap ~300 lines, split beyond.
 - **Tool layout (TS):** `tools/<Name>Tool/{<Name>Tool.ts, prompt.ts, UI.tsx, constants.ts, <helpers>.ts, index.ts}`.

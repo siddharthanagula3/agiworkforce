@@ -93,10 +93,10 @@ tracked through CODEOWNERS instead.
 Three of the six shipping surfaces (`apps/desktop`, `apps/web`, `apps/mobile`)
 currently mix two layouts:
 
-- **Layer-first** — top-level directories named after _what kind of file_ they
+- **Layer-first**: top-level directories named after _what kind of file_ they
   contain: `components/`, `hooks/`, `stores/`, `services/`, `lib/`, `data/`,
   `api/`. Everything for a single feature is sprinkled across all of those.
-- **Domain-first** — top-level directories named after _what the user-visible
+- **Domain-first**: top-level directories named after _what the user-visible
   feature is_: `chat/`, `billing/`, `connectors/`, `projects/`. Each contains
   its own `components/`, `hooks/`, `stores/`, etc.
 
@@ -110,8 +110,8 @@ that should be either pushed into a domain or pulled out to `packages/`.
 At the time of this plan, the desktop frontend was the worst offender: its
 former components tree had 76 subdirectories, most mapping to one product domain.
 
-The cost of the current layout is reviewer cognitive load — to make a
-single feature change you read four-to-six unrelated directories — and a
+The cost of the current layout is reviewer cognitive load, to make a
+single feature change you read four-to-six unrelated directories, and a
 weak coupling signal in CI: cross-domain regressions don't surface
 because the file boundaries don't match the domain boundaries.
 
@@ -124,7 +124,7 @@ of scope because they already match a better convention:
 | ----------------------- | ------------ | -------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `apps/web`              | YES (first)  | `features/` already exists; finish the migration.                                                                                                  |
 | `apps/desktop`          | YES (second) | 76 component subdirs is the highest payoff per move.                                                                                               |
-| `apps/mobile`           | YES (third)  | Smaller surface — 43 screens — natural fit, lower risk.                                                                                            |
+| `apps/mobile`           | YES (third)  | Smaller surface, 43 screens, natural fit, lower risk.                                                                                              |
 | `apps/cli`              | NO           | Rust workspace; domain split is already by module (`tui/`, `agent.rs`, `models.rs`, `mcp/`, `runtime/`). Module structure work tracked separately. |
 | `apps/extension`        | NO           | 15 files total in `dist/`; layer-first remains cheaper than domain-first at this size.                                                             |
 | `apps/extension-vscode` | NO           | Single product surface (chat participant + commands); already grouped by feature in `src/`.                                                        |
@@ -136,14 +136,14 @@ The current shape:
 ```
 apps/web/
 ├── api/           # 91 endpoint files mixed by URL not by domain
-├── app/           # Next.js app router (kept as-is — router is the bind point)
-├── components/    # shared "atoms" — most can be inlined or moved
+├── app/           # Next.js app router (kept as-is, router is the bind point)
+├── components/    # shared "atoms", most can be inlined or moved
 ├── core/          # mode detection, auth core, identity, env
-├── data/          # database clients, schemas — keep as cross-domain
-├── features/      # 11 domain folders — destination of the moves
-├── handlers/      # request handlers — push into domain or app/api
-├── hooks/         # 22 cross-cutting hooks — push into domain or @agiworkforce/utils
-└── lib/           # 60-odd shared modules — split into domain vs platform
+├── data/          # database clients, schemas, keep as cross-domain
+├── features/      # 11 domain folders, destination of the moves
+├── handlers/      # request handlers, push into domain or app/api
+├── hooks/         # 22 cross-cutting hooks, push into domain or @agiworkforce/utils
+└── lib/           # 60-odd shared modules, split into domain vs platform
 ```
 
 Target shape:
@@ -151,7 +151,7 @@ Target shape:
 ```
 apps/web/
 ├── app/           # Next.js router only (page.tsx, layout.tsx, route.ts)
-├── core/          # platform primitives — auth, env, database client, types
+├── core/          # platform primitives, auth, env, database client, types
 ├── features/
 │   ├── analytics/{components,hooks,stores,services,api,types,pages}/
 │   ├── billing/{...}
@@ -163,7 +163,7 @@ apps/web/
 │   ├── settings/{...}
 │   ├── support/{...}
 │   └── ui/               # genuinely cross-feature primitives only (buttons, modals)
-└── shared/        # what `core/` is too narrow for — design tokens, env-detect
+└── shared/        # what `core/` is too narrow for, design tokens, env-detect
 ```
 
 ### Mapping (current → target)
@@ -182,7 +182,7 @@ apps/web/
 | `apps/web/handlers/*-billing-*.ts`           | `apps/web/features/billing/handlers/*`                                        |
 | `apps/web/lib/billing/*`                     | `apps/web/features/billing/lib/*`                                             |
 | `apps/web/lib/chat/*`                        | `apps/web/features/chat/lib/*`                                                |
-| `apps/web/lib/auth/*`                        | `apps/web/core/auth/*` (cross-domain — stays platform)                        |
+| `apps/web/lib/auth/*`                        | `apps/web/core/auth/*` (cross-domain, stays platform)                         |
 | `apps/web/lib/server/neon-db.ts`             | `apps/web/core/data/*`                                                        |
 | `apps/web/data/schemas/*`                    | `apps/web/core/schemas/*`                                                     |
 
@@ -212,7 +212,7 @@ Target:
 
 ```
 apps/desktop/src/
-├── core/          # services/, runtime/, providers/, integrations/ — platform glue
+├── core/          # services/, runtime/, providers/, integrations/, platform glue
 ├── features/
 │   ├── agent/{components,hooks,stores,services}/
 │   ├── analytics/{...}
@@ -233,7 +233,7 @@ apps/desktop/src/
 └── App.tsx        # router/composition only
 ```
 
-### Mapping (sample — full set in tracking spreadsheet)
+### Mapping (sample, full set in tracking spreadsheet)
 
 | Current                                            | Target                                             |
 | -------------------------------------------------- | -------------------------------------------------- |
@@ -255,7 +255,7 @@ Current:
 
 ```
 apps/mobile/
-├── app/         # Expo Router — drawer + tabs + stack
+├── app/         # Expo Router, drawer + tabs + stack
 ├── components/  # ~80 components
 ├── hooks/       # ~55 hooks
 ├── lib/         # Expo wrappers, secure store, biometric, MMKV, deepgram
@@ -280,21 +280,21 @@ apps/mobile/
 └── components/    # legacy barrels/shared atoms during migration
 ```
 
-`app/` stays put — file-based router is the public contract Expo enforces.
+`app/` stays put, file-based router is the public contract Expo enforces.
 Screen _implementations_ under `app/` should import from
 `@/src/features/<domain>/` rather than from sibling `components/` paths.
 
 ## Recommended order (start small, validate, expand)
 
-1. **Web first** (Wave A — already 60% there).
+1. **Web first** (Wave A, already 60% there).
    - Move `apps/web/components/billing/*` → `apps/web/features/billing/components/*`
    - Move `apps/web/hooks/use-billing-*` → `apps/web/features/billing/hooks/*`
    - Verify: `pnpm --filter @agiworkforce/web build`, `pnpm --filter @agiworkforce/web test`, Playwright smoke.
-   - Then chat, then one domain per PR — never two domains in one PR.
-2. **Mobile second** (Wave B — smaller blast radius than desktop).
+   - Then chat, then one domain per PR, never two domains in one PR.
+2. **Mobile second** (Wave B, smaller blast radius than desktop).
    - Same per-domain pattern; verify with `pnpm --filter @agiworkforce/mobile test`
      and `expo prebuild --no-install --clean` after each move (catches plugin paths).
-3. **Desktop last** (Wave C — largest, highest blast radius).
+3. **Desktop last** (Wave C, largest, highest blast radius).
    - One domain per PR. Tauri bundle smoke (`pnpm build:desktop` on macOS)
      plus E2E (`pnpm --filter desktop exec playwright test`) per move.
 
@@ -311,7 +311,7 @@ Per-PR checklist for every domain move:
 3. **Run the surface's full test suite.** Vitest + Playwright (web/desktop),
    Jest (mobile). Zero new failures.
 4. **Run typecheck across the whole workspace.** `pnpm typecheck:all` must
-   stay clean — domain moves often expose hidden cross-surface imports.
+   stay clean, domain moves often expose hidden cross-surface imports.
 5. **Update path aliases.** `tsconfig.base.json` `paths` keys and any
    `vite.config.ts` / `next.config.ts` alias entries.
 6. **Update barrel re-exports.** Each domain gets a single `features/<domain>/index.ts`
@@ -321,14 +321,14 @@ Per-PR checklist for every domain move:
    Watch for string-literal paths in test fixtures, snapshot files, and
    `playwright.config.ts`.
 8. **Stage your files only.** `git add` specific paths. Never `git add -A`.
-9. **Commit message follows the locked convention** —
+9. **Commit message follows the locked convention**.
    lowercase, ≤100 chars, conventional commits, with the
    `Co-Authored-By: Claude <noreply@anthropic.com>` footer.
 
 ## Acceptance criteria per wave
 
 - **Web (Wave A) done when:** zero files under `apps/web/components/` that
-  belong to a single domain — only true cross-feature atoms remain. The
+  belong to a single domain, only true cross-feature atoms remain. The
   `apps/web/hooks/`, `apps/web/handlers/`, `apps/web/api/v1/<domain>/`,
   `apps/web/lib/<domain>/` directories are empty of domain-scoped code.
 - **Mobile (Wave B) done when:** `apps/mobile/components/` only contains
@@ -345,25 +345,25 @@ Per-PR checklist for every domain move:
 - Desktop: 25–35 PRs over 5–8 weeks (76 component subdirs collapsed into ~25 features).
 
 Total: 8–13 weeks of part-time work, depending on how many PRs land per
-day. This is _strictly mechanical_ — no behavior changes are permitted.
+day. This is _strictly mechanical_, no behavior changes are permitted.
 
 ## What this plan deliberately does NOT do
 
 - **Does not migrate `apps/cli`.** Rust module structure work is a separate
   initiative.
 - **Does not introduce a new layer (`ui/lib`/`atoms`/etc.).** The split is
-  binary — feature-scoped vs platform-scoped. No third bucket.
+  binary, feature-scoped vs platform-scoped. No third bucket.
 - **Does not change package boundaries (`packages/*`).** If a domain wants
   cross-surface reuse, that's a different PR that extracts to a workspace
-  package — out of scope here.
+  package, out of scope here.
 - **Does not change build tooling.** Vite, Next.js, Tauri, Metro all keep
   their current configs; only `paths` aliases are updated.
 
 ## Open questions to resolve before Wave A starts
 
 1. Do we keep `apps/web/handlers/` or fold it into `features/<domain>/handlers/`?
-   (Current spread is 50/50 — needs an owner decision.)
-2. `apps/web/api/v1/*` vs `apps/web/app/api/*` (App Router) — only one of
+   (Current spread is 50/50, needs an owner decision.)
+2. `apps/web/api/v1/*` vs `apps/web/app/api/*` (App Router), only one of
    these should exist; the migration should consolidate.
 3. Naming: `features/` vs `domains/` vs `modules/`. Plan currently uses
    `features/` to match the existing `apps/web/features/` convention.
@@ -372,5 +372,5 @@ day. This is _strictly mechanical_ — no behavior changes are permitted.
 
 - Existing `apps/web/features/` structure (already domain-first; the model).
 - Wave 2 plan: `docs/plans/wave2-desktop-v1.md` (lists desktop component subdirs).
-- Composite tsconfig commit `291bf6ccb` + scope-A follow-up — pre-req for
+- Composite tsconfig commit `291bf6ccb` + scope-A follow-up, pre-req for
   per-domain incremental builds.

@@ -1,4 +1,4 @@
-# Guardian phase 3 — tasks
+# Guardian phase 3: tasks
 
 Status: Active
 Owner: Guardian

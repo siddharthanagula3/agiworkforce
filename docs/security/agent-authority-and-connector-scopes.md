@@ -12,13 +12,13 @@ pages in the same change.
 ## Why this file exists
 
 A prior audit found that marketing copy described a permission model the code did
-not implement. The fix is not "write more careful copy" — it is to keep a single
+not implement. The fix is not "write more careful copy", it is to keep a single
 matrix that copy is rendered against, so a behaviour change is visibly a copy
 change. Do not add a row you cannot cite.
 
 ---
 
-## 1. Managed Cloud — default tool authority
+## 1. Managed Cloud, default tool authority
 
 The gate is `resolveToolCallGate()` in
 `apps/web/app/api/llm/v1/chat/completions/lib/tool-loop.ts` (~L1466-1486).
@@ -41,16 +41,16 @@ Precedence, highest first:
 pages:** a turn that carries no connector/MCP tool runs in `auto` mode. In `auto`
 mode, with no saved verdict, the built-in tools execute with no approval prompt.
 
-| Tool                     | Runs without approval by default?        | Declared metadata (`tool-metadata.ts`)                           |
-| ------------------------ | ---------------------------------------- | ---------------------------------------------------------------- |
-| `web_search`             | yes                                      | read, reversible, acceptsUntrustedContent, createsEgressPath     |
-| `url_fetch`              | yes                                      | read, reversible, acceptsUntrustedContent, createsEgressPath     |
-| `execute_code`           | yes                                      | execute, **not** reversible, createsEgressPath                   |
-| `write_file`             | yes                                      | write, **not** reversible, no egress                             |
-| `create_folder`          | yes                                      | write, reversible, no egress                                     |
-| `create_office_file`     | yes                                      | write, reversible, no egress                                     |
-| skill tool               | yes                                      | —                                                                |
-| any connector / MCP tool | **no** — forces `approvalMode: 'manual'` | per-tool; undeclared defaults to the conservative classification |
+| Tool                     | Runs without approval by default?       | Declared metadata (`tool-metadata.ts`)                           |
+| ------------------------ | --------------------------------------- | ---------------------------------------------------------------- |
+| `web_search`             | yes                                     | read, reversible, acceptsUntrustedContent, createsEgressPath     |
+| `url_fetch`              | yes                                     | read, reversible, acceptsUntrustedContent, createsEgressPath     |
+| `execute_code`           | yes                                     | execute, **not** reversible, createsEgressPath                   |
+| `write_file`             | yes                                     | write, **not** reversible, no egress                             |
+| `create_folder`          | yes                                     | write, reversible, no egress                                     |
+| `create_office_file`     | yes                                     | write, reversible, no egress                                     |
+| skill tool               | yes                                     | ,                                                                |
+| any connector / MCP tool | **no**, forces `approvalMode: 'manual'` | per-tool; undeclared defaults to the conservative classification |
 
 `write_file` / `create_folder` / `create_office_file` / `execute_code` act inside
 the conversation's own E2B sandbox workspace, not on the user's device. Public
@@ -66,18 +66,18 @@ mitigation, not a proof. The limits are published verbatim on `/agent-permission
 because a security reviewer will find them anyway:
 
 - U is raised by **tool-fetched** third-party content. Content the user **pasted
-  or attached is not counted** — a real injection vector the heuristic does not see.
+  or attached is not counted**, a real injection vector the heuristic does not see.
 - S is derived from the offered catalog, not from what was actually read, so it
   over-triggers rather than under-triggers (deliberate).
 - E is per-tool metadata, so an MCP server that exfiltrates through an undeclared
   channel is invisible. Undeclared tools are therefore classified as having egress.
 - It gates auto-approval only. It cannot stop a user who approves.
 
-### 1b. A Block is absolute — with the accurate scope of "absolute"
+### 1b. A Block is absolute, with the accurate scope of "absolute"
 
 A saved `deny` is enforced server-side before any side effect, on the tool loop
 (`tool-loop.ts` L2444) and on the approve/resume path
-(`approve/route.ts` L267, `tool-loop.ts` L2078) — so an approving client, or a
+(`approve/route.ts` L267, `tool-loop.ts` L2078), so an approving client, or a
 hand-rolled POST, cannot execute a blocked tool.
 
 **Do NOT claim** blocked tools are withheld from the model's offered catalog. No
@@ -100,7 +100,7 @@ catalog-assembly path.
 
 The fourth source is the only one where **the platform holds the OAuth client and
 the user holds the grant**. Its authority is therefore bounded by the scopes the
-user consented to at the provider, recorded on the grant row — not by operator
+user consented to at the provider, recorded on the grant row, not by operator
 configuration. The client credentials live in
 `CONNECTOR_OAUTH_<ID>_CLIENT_ID` / `_CLIENT_SECRET`, never in the descriptor
 JSON. Grants are strictly personal: `connector_oauth_grants` is scoped by
@@ -127,7 +127,7 @@ DNS-resolution SSRF validation (`assertResolvedPublicHostname`).
 
 ---
 
-## 3. Desktop (Local) — the only place real OAuth scopes are requested
+## 3. Desktop (Local), the only place real OAuth scopes are requested
 
 User's **own** OAuth client id/secret, PKCE, tokens encrypted with a
 machine-derived key into local SQLite.
@@ -150,16 +150,16 @@ API calls each scope covers.
 
 ---
 
-## 4. Chrome extension — computer use
+## 4. Chrome extension, computer use
 
-| Fact                                                                                                      | Citation                                                                                  |
-| --------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
-| Ask-before-acting defaults ON; autopilot is an explicit opt-out (only a stored `false` disables the gate) | `apps/extension/src/background.ts` L3905-3919                                             |
-| Unanswered approval denies after 30 s (fail-closed)                                                       | `background.ts` L3943, L3964, L3990                                                       |
-| Navigation destinations gated by the user's `agi_site_allowlist`                                          | `cdpDriver.ts`; `background.ts` L2542-2563                                                |
-| Text egress (DOM summaries, field readbacks) is redacted by `cdpDriver`                                   | `agentLoop.ts` L20-22                                                                     |
-| **Screenshots are NOT and cannot be redacted** and reach the cloud gateway                                | `agentLoop.ts` L24-35 — "Do not claim screenshots are redacted anywhere in this codebase" |
-| Computer use requires Managed Cloud auth and posts from the extension to the cloud gateway                | `background.ts` L3889-3902; `cloudAgentClient.ts`                                         |
+| Fact                                                                                                      | Citation                                                                                 |
+| --------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
+| Ask-before-acting defaults ON; autopilot is an explicit opt-out (only a stored `false` disables the gate) | `apps/extension/src/background.ts` L3905-3919                                            |
+| Unanswered approval denies after 30 s (fail-closed)                                                       | `background.ts` L3943, L3964, L3990                                                      |
+| Navigation destinations gated by the user's `agi_site_allowlist`                                          | `cdpDriver.ts`; `background.ts` L2542-2563                                               |
+| Text egress (DOM summaries, field readbacks) is redacted by `cdpDriver`                                   | `agentLoop.ts` L20-22                                                                    |
+| **Screenshots are NOT and cannot be redacted** and reach the cloud gateway                                | `agentLoop.ts` L24-35, "Do not claim screenshots are redacted anywhere in this codebase" |
+| Computer use requires Managed Cloud auth and posts from the extension to the cloud gateway                | `background.ts` L3889-3902; `cloudAgentClient.ts`                                        |
 
 ---
 
@@ -172,7 +172,7 @@ API calls each scope covers.
 | LLM requests per user                                                              | 30 / min, failClosed                                      | `apps/web/lib/rate-limit.ts` L233-236                       |
 | LLM requests per IP (pre-auth abuse ceiling)                                       | 1500 / min, failClosed                                    | `rate-limit.ts` L228-231                                    |
 | Conversation operations                                                            | 60 / min                                                  | `rate-limit.ts` L207-210                                    |
-| Public API scopes — the complete set                                               | `models:read`, `inference:write`, `usage:read`            | `apps/web/lib/api-key-scopes.ts` L1                         |
+| Public API scopes, the complete set                                                | `models:read`, `inference:write`, `usage:read`            | `apps/web/lib/api-key-scopes.ts` L1                         |
 | Crawler policy; Common Crawl blocked                                               | `CCBot: disallow /`                                       | `apps/web/app/robots.ts` L47                                |
 | Connector add/remove audited                                                       | `connector_added` / `connector_removed`                   | `lib/security-audit.ts`, `api/connectors/route.ts` L437     |
 
@@ -180,7 +180,7 @@ API calls each scope covers.
 
 ## 6. Sandbox limits
 
-`apps/web/lib/e2b/gate.ts` — fail-closed: provisioning requires **both**
+`apps/web/lib/e2b/gate.ts`, fail-closed: provisioning requires **both**
 `AGI_E2B_EXECUTION=1` and `E2B_API_KEY`.
 
 `apps/web/lib/e2b/runtime.ts`:
@@ -188,26 +188,26 @@ API calls each scope covers.
 - ephemeral sandbox timeout 60 s (`E2B_SANDBOX_TIMEOUT_MS` L56); conversation
   sandbox 10 min (`E2B_CONVERSATION_TIMEOUT_MS` L65); per-command 60 s (L66).
 - per-plan concurrent sandbox allowance (`getPlanMaxSandboxes`, L97).
-- network: none, or an allowlist of `TRUSTED_CODE_HOSTS` (L68-76) —
+- network: none, or an allowlist of `TRUSTED_CODE_HOSTS` (L68-76).
   `github.com`, `api.github.com`, `raw.githubusercontent.com`,
   `objects.githubusercontent.com`, `registry.npmjs.org`, `npmjs.com`,
   `pypi.org`, `files.pythonhosted.org`.
 
 ---
 
-## 7. Revocation paths — the complete set
+## 7. Revocation paths, the complete set
 
-| Path                                             | Mechanism                                                                                                         | Also clears saved per-tool verdicts?                          |
-| ------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------- |
-| Disconnect a connector                           | `DELETE /api/connectors?connectorId=`                                                                             | yes — `clearConnectorToolPermissions` (`route.ts` L436, L466) |
-| Reset one tool's verdict, or a whole connector's | `DELETE /api/connectors/permissions`                                                                              | n/a — this _is_ the verdict store                             |
-| Set a tool back to "ask"                         | `PUT /api/connectors/permissions` with `level: "ask"`                                                             | —                                                             |
-| Unlink GitHub                                    | `DELETE /api/connectors?connectorId=github` deletes the user's `github_installations` rows                        | yes                                                           |
-| Fully uninstall the GitHub App                   | github.com/settings/installations — **the app stays installed on GitHub until you do this** (`route.ts` L428-430) | —                                                             |
-| Remove a custom MCP connector                    | `DELETE /api/connectors/custom?id=`                                                                               | —                                                             |
-| Extension: remove a site                         | `agi_site_allowlist` in extension options                                                                         | —                                                             |
-| Extension: re-enable the gate                    | turn ask-before-acting back on                                                                                    | —                                                             |
-| Desktop: per-tool policy                         | Always allow / Needs approval / Blocked in `ConnectorDetailView.tsx`                                              | —                                                             |
+| Path                                             | Mechanism                                                                                                        | Also clears saved per-tool verdicts?                         |
+| ------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------ |
+| Disconnect a connector                           | `DELETE /api/connectors?connectorId=`                                                                            | yes, `clearConnectorToolPermissions` (`route.ts` L436, L466) |
+| Reset one tool's verdict, or a whole connector's | `DELETE /api/connectors/permissions`                                                                             | n/a, this _is_ the verdict store                             |
+| Set a tool back to "ask"                         | `PUT /api/connectors/permissions` with `level: "ask"`                                                            | ,                                                            |
+| Unlink GitHub                                    | `DELETE /api/connectors?connectorId=github` deletes the user's `github_installations` rows                       | yes                                                          |
+| Fully uninstall the GitHub App                   | github.com/settings/installations, **the app stays installed on GitHub until you do this** (`route.ts` L428-430) | ,                                                            |
+| Remove a custom MCP connector                    | `DELETE /api/connectors/custom?id=`                                                                              | ,                                                            |
+| Extension: remove a site                         | `agi_site_allowlist` in extension options                                                                        | ,                                                            |
+| Extension: re-enable the gate                    | turn ask-before-acting back on                                                                                   | ,                                                            |
+| Desktop: per-tool policy                         | Always allow / Needs approval / Blocked in `ConnectorDetailView.tsx`                                             | ,                                                            |
 
 ---
 
@@ -218,7 +218,7 @@ API calls each scope covers.
    (`/api/connectors/oauth/start` → `/api/connectors/oauth/callback`, grants in
    `apps/web/lib/connectors/oauth-store.ts`), but
    `apps/web/lib/connectors/oauth-registry.ts` ships **zero** providers on
-   purpose — a provider becomes connectable only when an operator supplies its
+   purpose, a provider becomes connectable only when an operator supplies its
    endpoints and client credentials. `GET /api/connectors` reports the ids that
    are genuinely connectable in a given deployment, and the catalog labels every
    other entry from that answer, so an unconfigured connector renders as
@@ -234,7 +234,7 @@ API calls each scope covers.
 4. **The standing per-tool permission UI on web is GitHub-only.**
    `ToolPermissionsPanel.tsx` is imported and rendered by
    `features/connectors/pages/ConnectorsPage.tsx`, but its "Tool permissions"
-   button is gated on `hasWireToolNames(connector.id)` — true only for `github`,
+   button is gated on `hasWireToolNames(connector.id)`, true only for `github`,
    because only that catalog entry holds real wire tool names (see gap 5). For
    every other connector the sole web control remains the in-chat approval card
    (`ToolTimeline.tsx`), reachable only while a tool is asking. Marketing copy

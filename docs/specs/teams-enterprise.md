@@ -1,4 +1,4 @@
-# Teams & Enterprise — Control Plane Plan
+# Teams & Enterprise: Control Plane Plan
 
 Status: Active
 Owner: Enterprise/platform lead
@@ -27,59 +27,59 @@ four states are used:
 
 ### SHIPPED
 
-- **Tenant model** — `organizations` + `organization_members`, roles
+- **Tenant model**: `organizations` + `organization_members`, roles
   owner/admin/member/viewer (`0015`). Legacy `teams`/`team_members` dropped in
   `0058`; "Team" is a plan name, the tenant entity is an organization.
-- **Tenant isolation** — `current_app_org_id()`, `app_row_is_visible`,
+- **Tenant isolation**: `current_app_org_id()`, `app_row_is_visible`,
   `app_row_is_writable` across twelve content roots (`0073`), tightened by
   `0110` so Personal and each workspace are mutually exclusive scopes. Fails
   closed when the org GUC is unset; tenancy cannot be forged on write.
-- **Active workspace scope** — `lib/services/active-workspace-service.ts`,
+- **Active workspace scope**: `lib/services/active-workspace-service.ts`,
   persisted in `user_settings.workspace.activeOrganizationId`, overridable per
   request by `x-agi-organization-id` (`MANAGED_CLOUD_ORGANIZATION_HEADER`) after
   a membership check. Switchers on Web (`features/workspaces/components/
 WorkspaceMenuItems.tsx`), Desktop (`features/v3/WorkspaceSwitcher.tsx`), and
   Mobile (`app/(app)/settings/workspace.tsx`).
-- **Member lifecycle** — invite, accept, resend, revoke, role change, ownership
+- **Member lifecycle**: invite, accept, resend, revoke, role change, ownership
   transfer, leave under `/api/settings/team/*` and
   `/api/settings/organization/*`. Last-owner protection enforced. Invite tokens
   hashed with expiry (`0085`).
-- **Seat accounting** — `licensed_seats` / `seats_consumed` (`0085`), written
+- **Seat accounting**: `licensed_seats` / `seats_consumed` (`0085`), written
   only by `app/api/stripe-webhook/lib/seats.ts`, which refuses to lower the
   count below occupied seats. `/api/settings/organization/seats` reports
   `seatsWritable: false` honestly.
-- **Enterprise SSO** — SAML 2.0 and OIDC via Clerk enterprise connections with
+- **Enterprise SSO**: SAML 2.0 and OIDC via Clerk enterprise connections with
   DNS TXT domain verification and SP metadata display (`0076`, `0083`, `0092`,
   `lib/server/sso/*`, `/api/admin/sso`). Owner-only writes, gated on
   `enterprise_controls`.
-- **SCIM 2.0** — Users, Groups, ResourceTypes, Schemas, ServiceProviderConfig,
+- **SCIM 2.0**, Users, Groups, ResourceTypes, Schemas, ServiceProviderConfig,
   scoped tokens, directory-sync event log (`0084`, `/api/scim/v2/*`).
-- **Sharing grants** — `organization_shared_projects`,
+- **Sharing grants**: `organization_shared_projects`,
   `organization_project_access`, `organization_shared_connectors` (`0086`,
   read/write split fixed in `0090`). Sharing predicates are deliberately kept
   textually separate from the governance predicate. Wired into
   `/api/projects` and `/api/projects/[id]` via `resolveSharedProjectScope`.
-- **Append-only audit write** — `0087` revokes direct INSERT from `app_rls` and
+- **Append-only audit write**: `0087` revokes direct INSERT from `app_rls` and
   routes writes through a SECURITY DEFINER function.
-- **Usage ledger table** — `organization_usage_ledger` with privacy mode,
+- **Usage ledger table**: `organization_usage_ledger` with privacy mode,
   provider, model, tokens, provider cost, charged amount, and gross margin.
 
 ### PARTIAL
 
-- **Shared projects are invisible in-product** — `/api/projects/route.ts:52`
+- **Shared projects are invisible in-product**, `/api/projects/route.ts:52`
   computes `is_org_shared` and `lib/projects.ts:138` maps it onto the type; no
   projects UI renders it. A member cannot see that a project is shared, who owns
   it, or whether their grant is read or write.
-- **Shared projects do not share conversations** — the project conversation
+- **Shared projects do not share conversations**, the project conversation
   count is scoped `c.user_id = $1` (`/api/projects/route.ts`), so members of one
   shared project see disjoint conversation sets.
-- **Invitations have no delivery** — `/api/settings/team/invitations/route.ts`
+- **Invitations have no delivery**, `/api/settings/team/invitations/route.ts`
   returns a copyable link and discloses that no transactional email provider is
   configured.
-- **Self-serve Team checkout** — seat selector, per-seat pricing, and checkout
+- **Self-serve Team checkout**: seat selector, per-seat pricing, and checkout
   body are catalog-derived and working; live Stripe Team Price IDs do not exist
   (`docs/work/founder-assistance.md` item 5). Human action, not a code gap.
-- **Administration is a settings section** — `features/settings/sections/
+- **Administration is a settings section**, `features/settings/sections/
 TeamSection.tsx` (1093 lines) plus `OrganizationSharingSection.tsx` (446).
   `/admin` is the internal operator console gated on Clerk `publicMetadata`.
 
@@ -90,7 +90,7 @@ TeamSection.tsx` (1093 lines) plus `OrganizationSharingSection.tsx` (446).
   `/api/settings/organization/policy`, edited in `WorkspacePolicySection`, and
   enforced on all seven managed-compute routes through
   `buildOrganizationPolicyGateResponse`. Three fields are recorded but not yet
-  enforced — see ORGPOLICY-03 in `known-flaws.md`.
+  enforced, see ORGPOLICY-03 in `known-flaws.md`.
 - ~~**The admin console renders a constant as configuration.**~~ **FIXED
   2026-08-22 (Wave 1).** The readiness row and both policy tiles in
   `AdminConsolePage` now say explicitly that they show the shipped default a
@@ -100,7 +100,7 @@ TeamSection.tsx` (1093 lines) plus `OrganizationSharingSection.tsx` (446).
   owner/admin SELECT and no route exposes it. Writes DO reach it: any
   `recordAuditEvent` call carrying an `organizationId` goes through the
   `0087` SECURITY DEFINER writer, and policy changes now do. The missing half is
-  read and export — Wave 3. `0087`'s stale reference to the removed
+  read and export, Wave 3. `0087`'s stale reference to the removed
   services/api-gateway reader was corrected on 2026-08-22.
 - **`organization_usage_ledger` has NO WRITER, and is not the usage table.**
   Only `lib/server/account-erasure.ts` and `lib/billing/financial-record-retention.ts`
@@ -108,8 +108,8 @@ TeamSection.tsx` (1093 lines) plus `OrganizationSharingSection.tsx` (446).
   forever while looking authoritative. Workspace usage analytics
   (`/workspace/usage`, 2026-08-23) therefore reads `managed_usage_requests`,
   which is where a managed turn actually lands. Either give the ledger a writer
-  or drop it — do not build a second read path on it.
-- **One designed contract with no implementation** — `AuditExportRequest` in
+  or drop it, do not build a second read path on it.
+- **One designed contract with no implementation**, `AuditExportRequest` in
   `packages/contracts/types/src/enterprise/index.ts` is referenced nowhere else
   in the tree. `ConnectorPolicy`'s substance shipped as
   `organization_connector_policies` (0141). `AdminPolicy` (Wave 1),
@@ -185,18 +185,18 @@ Dependency-ordered; each wave is unsafe to start before the one above it lands.
 Each runs as a workflow of four to five agents. Waves 1–3 are load-bearing;
 4–7 parallelize once the plane exists.
 
-### Wave 1 — Make the policy plane real (keystone) — LANDED 2026-08-22
+### Wave 1: Make the policy plane real (keystone), LANDED 2026-08-22
 
 Shipped in this pass. Open gaps are ORGPOLICY-01/02/03 in
 `docs/agent-context/known-flaws.md`; read those before extending this wave.
 
-- `lib/services/organization-policy-evaluator.ts` — pure, total evaluator.
-- `lib/services/organization-policy-service.ts` — read, effective-read, whole-row
+- `lib/services/organization-policy-evaluator.ts`, pure, total evaluator.
+- `lib/services/organization-policy-service.ts`, read, effective-read, whole-row
   upsert, and field diff.
-- `lib/services/organization-policy-gate.ts` — scope resolution; answers
+- `lib/services/organization-policy-gate.ts`, scope resolution; answers
   `unscoped` for personal scope, for an org with no saved policy, and for a
   policy read that fails.
-- `GET`/`PATCH /api/settings/organization/policy` — owner/admin gated, CSRF and
+- `GET`/`PATCH /api/settings/organization/policy`, owner/admin gated, CSRF and
   rate limited, Zod validated, coherence-checked against the table's own CHECK
   constraints, and audited on every write.
 - `features/settings/sections/WorkspacePolicySection.tsx`, mounted in the Team
@@ -222,35 +222,35 @@ Original scope, for reference:
 
 **Exit:** setting `allow_managed_compute = false` blocks a member's managed turn
 in an observed network request, and the denial lands in
-`enterprise_audit_events`. Not a passing typecheck — a watched request.
+`enterprise_audit_events`. Not a passing typecheck, a watched request.
 
 **Exit status: NOT met.** Every layer is unit-tested and the deny path returns a
 403 with a stable code, but no turn has been observed being denied against a
 live Neon organization. Tracked as ORGPOLICY-01. This is the first thing to do
 when a seeded workspace is available.
 
-### Wave 2 — Workspace admin console — LANDED 2026-08-23
+### Wave 2: Workspace admin console, LANDED 2026-08-23
 
 Shipped in this pass at `/workspace`, kept deliberately distinct from `/admin`
 (the platform operator console, gated on Clerk `publicMetadata` that no customer
 holds). Seven routes: Overview, Members, Identity, Policy, Sharing, Audit,
 Billing.
 
-- `app/workspace/layout.tsx` — resolves role server-side and renders one of
+- `app/workspace/layout.tsx`, resolves role server-side and renders one of
   three named states rather than an empty frame: personal scope, non-admin
   denial, and membership-read failure, which is deliberately NOT collapsed into
   the personal-scope state (that would tell an administrator their organization
   had vanished).
-- `lib/services/workspace-posture-service.ts` — reads the live configuration of
+- `lib/services/workspace-posture-service.ts`, reads the live configuration of
   one workspace across identity, provisioning, access, AI controls, data, and
   audit. Every signal carries an `enforcement` field of `enforced` /
   `stated` / `unconfigured`, so a recorded value can never wear the same badge
   as a runtime control. `retentionDays` and per-surface sync are `stated`;
   managed compute and privacy modes are `enforced`.
-- `GET /api/settings/organization/posture` — owner/admin gated, rate limited,
+- `GET /api/settings/organization/posture`, owner/admin gated, rate limited,
   entitlement checked. The posture enumerates how a workspace authenticates and
   shares, so the role check is a real gate rather than a UI hint.
-- `features/workspace-console/` — nav, shell, posture dashboard, identity
+- `features/workspace-console/`, nav, shell, posture dashboard, identity
   panels, billing summary.
 - Settings keeps a pointer, not a duplicate: the Team panel used to stack
   `TeamSection` + policy + sharing + audit (~78KB of admin UI behind one scroll
@@ -281,11 +281,11 @@ weeks:** server-side `auth()` verifies the session's authorized party against
 `CLERK_AUTHORIZED_PARTIES`, which falls back to `NEXT_PUBLIC_APP_URL`'s origin
 (`lib/clerk-authorized-parties.ts`). Against a localhost dev server that
 fallback is the production origin, so EVERY protected page redirects to sign-in
-no matter how valid the browser session is — which reads exactly like broken
+no matter how valid the browser session is, which reads exactly like broken
 auth. Start the dev server with `CLERK_AUTHORIZED_PARTIES=http://localhost:3000`
 to render any authenticated page locally.
 
-### Wave 3 — Audit and compliance backbone (5 agents)
+### Wave 3: Audit and compliance backbone (5 agents)
 
 - Audit read API with actor, action, resource, outcome, severity, date filters
   and stable pagination.
@@ -301,32 +301,32 @@ to render any authenticated page locally.
 resource, policy decision, and outcome; a held record survives a retention
 sweep.
 
-### Wave 3 — Audit and compliance backbone — PARTIALLY LANDED
+### Wave 3: Audit and compliance backbone, PARTIALLY LANDED
 
-- **Audit read API — LANDED 2026-08-23.** Keyset pagination over
+- **Audit read API, LANDED 2026-08-23.** Keyset pagination over
   `(created_at DESC, id DESC)` with actor, action, resource, outcome, severity
   and date filters.
-- **JSONL export — LANDED 2026-08-23.** Gated on the `audit_export` policy
+- **JSONL export, LANDED 2026-08-23.** Gated on the `audit_export` policy
   resource; every export and every refusal is written back to the trail.
-- **Retention enforcement — LANDED 2026-08-23.** `0138` adds
+- **Retention enforcement, LANDED 2026-08-23.** `0138` adds
   `retention_enforced` (opt-in, defaults false), `legal_holds`, and
   `organization_retention_sweeps`. `lib/services/retention-service.ts` sweeps
   from `updated_at`, excludes held subjects, and FAILS CLOSED when the hold set
   cannot be read. `/api/cron/enforce-workspace-retention` runs nightly at 04:20
   and accepts `?dryRun=1`. Administered at `/workspace/data`; the workspace
   posture badge follows the workspace's own opt-in rather than a constant.
-- **Legal hold — LANDED 2026-08-23.** Organization-wide or per-member, with
+- **Legal hold, LANDED 2026-08-23.** Organization-wide or per-member, with
   release recorded at critical severity. Both tables are SELECT-only for the
   application role.
-- **SIEM streaming — LANDED 2026-08-23.** `organization_audit_destinations`
+- **SIEM streaming, LANDED 2026-08-23.** `organization_audit_destinations`
   (0143). Events are POSTed with an HMAC-SHA256 signature over timestamp and
   body, drained every ten minutes rather than written during the audited action
-  — an unreachable endpoint must never stop the thing it records. A failed
-  delivery HOLDS the keyset cursor, so events are retried rather than dropped.
-  The endpoint is validated with `assertResolvedPublicHostname` on save AND on
-  every send, and delivered through `pinnedPublicFetch`, so a DNS rebind cannot
-  turn it into an internal request.
-- **One writer for `audit_logs` and `enterprise_audit_events` — STILL OPEN.**
+  - an unreachable endpoint must never stop the thing it records. A failed
+    delivery HOLDS the keyset cursor, so events are retried rather than dropped.
+    The endpoint is validated with `assertResolvedPublicHostname` on save AND on
+    every send, and delivered through `pinnedPublicFetch`, so a DNS rebind cannot
+    turn it into an internal request.
+- **One writer for `audit_logs` and `enterprise_audit_events`, STILL OPEN.**
 
 **Exit:** a privileged action is reconstructable from the export with actor,
 resource, policy decision, and outcome; a held record survives a retention
@@ -334,10 +334,11 @@ sweep.
 
 **Exit status: half met.** The first clause holds and is verified. The second is
 unit-tested across 24 tests but has never been observed against a live database
-— tracked as RETENTION-01. Do not describe retention as proven to a customer
-until a dry run has been watched against a seeded workspace.
 
-### Wave 4 — Sharing that reads as sharing (5 agents)
+- tracked as RETENTION-01. Do not describe retention as proven to a customer
+  until a dry run has been watched against a seeded workspace.
+
+### Wave 4: Sharing that reads as sharing (5 agents)
 
 - Render shared state in the projects UI: badge, owner, access level, working
   read-only mode for `read` grants.
@@ -345,26 +346,26 @@ until a dry run has been watched against a seeded workspace.
 - Shared knowledge files surfaced with provenance; the owner-only write rule
   made visible rather than silent.
 - Extend sharing to prompts, skills, and artifacts through the same grant-row
-  pattern — never a flag on the content row.
+  pattern, never a flag on the content row.
 - Group-addressable grants, giving `scim_groups` product meaning.
 
 **Exit:** a member opens a shared project and can see whose it is, what they may
 do in it, and the team's conversations; a `read` grant visibly cannot write.
 
-### Wave 5 — Identity lifecycle, login to offboarding (4 agents)
+### Wave 5: Identity lifecycle, login to offboarding (4 agents)
 
 - "Sign in with SSO" with domain routing, org-level SSO enforcement, documented
   break-glass.
 - Deprovision fans out to session and device-token revocation across all six
   surfaces.
 - Invitation email delivery, retiring the copy-the-link fallback.
-- Live verification against a real Clerk instance — the open blocker recorded
+- Live verification against a real Clerk instance, the open blocker recorded
   2026-08-04 in `known-flaws.md`.
 
 **Exit:** deactivating a user at the IdP removes access from Web, Desktop,
 Mobile, CLI, VS Code, and Chrome within the stated window.
 
-### Wave 6 — Cost, seats, and roles (4 agents)
+### Wave 6: Cost, seats, and roles (4 agents)
 
 - Admin usage and cost analytics from `organization_usage_ledger`, by member,
   project, model, connector.
@@ -375,7 +376,7 @@ Mobile, CLI, VS Code, and Chrome within the stated window.
 **Exit:** a concurrent load test cannot exceed a hard workspace budget, and the
 admin can attribute the spend that did occur.
 
-### Wave 7 — Six-surface and network parity (5 agents)
+### Wave 7: Six-surface and network parity (5 agents)
 
 - Workspace scope selection and policy obedience in CLI, VS Code, Chrome.
 - IP allowlist and tenant restrictions.
@@ -389,11 +390,11 @@ policy denial holds identically on every one.
 
 | Capability                    | Reference products         | Us today                        | Wave |
 | ----------------------------- | -------------------------- | ------------------------------- | ---- |
-| Dedicated workspace           | Both                       | SHIPPED                         | —    |
+| Dedicated workspace           | Both                       | SHIPPED                         | ,    |
 | Roles                         | Both, custom at Enterprise | SHIPPED, four fixed             | 6    |
 | SSO (SAML/OIDC)               | Both                       | SHIPPED, unverified live        | 5    |
-| Domain verification           | Both                       | SHIPPED                         | —    |
-| SCIM provisioning             | Enterprise on both         | SHIPPED                         | —    |
+| Domain verification           | Both                       | SHIPPED                         | ,    |
+| SCIM provisioning             | Enterprise on both         | SHIPPED                         | ,    |
 | Deprovision revokes sessions  | Both                       | SHIPPED, both paths, unrun live | 5    |
 | Shared projects               | Both                       | PARTIAL, invisible in UI        | 4    |
 | Shared project conversations  | Both                       | ABSENT                          | 4    |
@@ -416,9 +417,9 @@ policy denial holds identically on every one.
 Both are recorded in `docs/work/founder-assistance.md`; repeated here because they gate
 wave exits.
 
-1. **Stripe** — Wave 6 cannot complete self-serve Team checkout until the live
+1. **Stripe**: Wave 6 cannot complete self-serve Team checkout until the live
    Team product and Price IDs exist (`docs/work/founder-assistance.md` item 5). Everything
    else in Wave 6 proceeds without it.
-2. **Clerk** — Wave 5's live SSO verification needs a paid Clerk plan with
+2. **Clerk**: Wave 5's live SSO verification needs a paid Clerk plan with
    enterprise connections enabled. Until then SSO stays
    implemented-but-unverified and must be described that way.

@@ -1,6 +1,6 @@
-# Release Readiness — Single Source of Truth
+# Release Readiness: Single Source of Truth
 
-Status: ACTIVE — release-execution session
+Status: ACTIVE, release-execution session
 Owner: Release lead (orchestrator)
 Branch: `release/readiness-2026-08-25`
 Last updated: 2026-08-26
@@ -20,9 +20,9 @@ broken before building what is merely missing; defer/document speculative work.
 
 | Check                                                    | Result                                               |
 | -------------------------------------------------------- | ---------------------------------------------------- |
-| `pnpm build` (turbo, all but desktop)                    | GREEN — 40/40 tasks; web compiled in 60s             |
-| `pnpm typecheck:all`                                     | GREEN — 0 TS errors                                  |
-| `pnpm check:llm-operability`                             | GREEN — full chain EXIT 0 (re-run after every slice) |
+| `pnpm build` (turbo, all but desktop)                    | GREEN, 40/40 tasks; web compiled in 60s              |
+| `pnpm typecheck:all`                                     | GREEN, 0 TS errors                                   |
+| `pnpm check:llm-operability`                             | GREEN, full chain EXIT 0 (re-run after every slice)  |
 | `cargo check --workspace`                                | GREEN                                                |
 | `cargo test -p agiworkforce-desktop --lib` (macOS local) | 6 macOS-keychain-local fails only; GREEN on Linux CI |
 | Security review (2 waves, adversarial)                   | 7 findings: 0 high (after downgrade), 5 med, 2 low   |
@@ -33,7 +33,7 @@ broken before building what is merely missing; defer/document speculative work.
 
 New-since-PR#416 code (workspace/platform admin consoles, audit/SIEM streaming +
 cron, plugin directory, enterprise verification) came back **clean** under a
-dedicated adversarial pass — a real result, not a coverage gap.
+dedicated adversarial pass, a real result, not a coverage gap.
 
 | ID    | Finding                                                            | Sev | Status                                                        |
 | ----- | ------------------------------------------------------------------ | --- | ------------------------------------------------------------- |
@@ -41,38 +41,38 @@ dedicated adversarial pass — a real result, not a coverage gap.
 | W1-03 | connector OAuth open redirect (tab/newline smuggling)              | med | FIXED `998119a06` (F1)                                        |
 | W2-01 | signaling-server trusts leftmost XFF → cap/limit/blacklist bypass  | med | FIXED `1a9759610` (F6)                                        |
 | W1-05 | `/tasks` protected but no server-side auth                         | low | FIXED `e13298dd6` (F5)                                        |
-| W1-02 | SCIM cross-tenant membership → platform-wide forced logout         | med | DECISION (F2) — see checklist                                 |
-| W1-04 | per-unit quota TOCTOU (bounded 7–11 req)                           | low | DECISION (F4) — needs Postgres run                            |
-| W2-02 | Chinese-HQ provider consent gate not enforced server-side          | med | DECISION (F7) — partial; changes paid routing                 |
+| W1-02 | SCIM cross-tenant membership → platform-wide forced logout         | med | DECISION (F2), see checklist                                  |
+| W1-04 | per-unit quota TOCTOU (bounded 7–11 req)                           | low | DECISION (F4), needs Postgres run                             |
+| W2-02 | Chinese-HQ provider consent gate not enforced server-side          | med | DECISION (F7), partial; changes paid routing                  |
 
 Patch files: `CLAUDE-SECURITY-20260826-{WAVE1-web,WAVE2-server}/patches/`. F3 was
 rejected and superseded by the W1-01 commit above.
 
 ---
 
-## Tier 0 — Blockers (all founder-only)
+## Tier 0: Blockers (all founder-only)
 
-| ID      | Title                                                                                                             | Status | Evidence / action                                                                                           |
-| ------- | ----------------------------------------------------------------------------------------------------------------- | ------ | ----------------------------------------------------------------------------------------------------------- |
-| REL-002 | GHA production deploy dead since 2026-08-09 (missing `VERCEL_TOKEN` + `AGI_DATABASE_URL` in `production-web` env) | MANUAL | `scripts/founder/provision-deploy-environments.sh` automates it — export the values, run it. See checklist. |
-| REL-010 | Chrome extension has no stable CRX key → cloud sign-in breaks each rebuild                                        | MANUAL | set `CHROME_EXTENSION_PUBLIC_KEY` in the ext build env                                                      |
-| REL-011 | Free-tier/spend-cap enforcement depends on migrations 0065/0066 applied in prod                                   | MANUAL | query prod for `extend_managed_usage_request_provider_step`; apply 0065→0066 if absent                      |
+| ID      | Title                                                                                                             | Status | Evidence / action                                                                                          |
+| ------- | ----------------------------------------------------------------------------------------------------------------- | ------ | ---------------------------------------------------------------------------------------------------------- |
+| REL-002 | GHA production deploy dead since 2026-08-09 (missing `VERCEL_TOKEN` + `AGI_DATABASE_URL` in `production-web` env) | MANUAL | `scripts/founder/provision-deploy-environments.sh` automates it, export the values, run it. See checklist. |
+| REL-010 | Chrome extension has no stable CRX key → cloud sign-in breaks each rebuild                                        | MANUAL | set `CHROME_EXTENSION_PUBLIC_KEY` in the ext build env                                                     |
+| REL-011 | Free-tier/spend-cap enforcement depends on migrations 0065/0066 applied in prod                                   | MANUAL | query prod for `extend_managed_usage_request_provider_step`; apply 0065→0066 if absent                     |
 
 ---
 
 ## Active autonomous backlog (in progress, no founder needed)
 
-| ID      | Title                                                                                                                                                                                       | Surface   | Impact               | Auto?  |
-| ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------- | -------------------- | ------ |
-| REL-073 | Vacuous CI test tier — `Test Priority Levels 3-4` (and level-2) pass without running any test (fake gate)                                                                                   | ci        | high-integrity/minor | yes    |
-| REL-074 | Stale doc cleanup — `docs/remediation/{register.json,WAVES.md}`, `docs/agent-context/HANDOFF.md`, `docs/current/gap-audit-2026-08-08.md`, and the 3797-line `known-flaws.md` are superseded | docs      | cleanup              | yes    |
-| REL-076 | Stale code comments citing deleted docs (UNIFIED_LAUNCH_PLAN/PLAN.md sections, ExecutionPlan.md, PUBLIC-ALPHA-CUTOVER, AUDIT-FIX/SYS-21 ticket tags) across web/desktop/mobile/packages     | multi     | cleanup              | yes    |
-| REL-077 | Incident-response health-probe cron still daily; project is on Pro so it can tighten                                                                                                        | web/infra | minor                | yes    |
-| REL-078 | CodeQL: committed `codeql-config.yml` is inert (default setup ignores it) — delete or document                                                                                              | ci        | minor                | manual |
+| ID      | Title                                                                                                                                                                                      | Surface   | Impact               | Auto?  |
+| ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------- | -------------------- | ------ |
+| REL-073 | Vacuous CI test tier, `Test Priority Levels 3-4` (and level-2) pass without running any test (fake gate)                                                                                   | ci        | high-integrity/minor | yes    |
+| REL-074 | Stale doc cleanup, `docs/remediation/{register.json,WAVES.md}`, `docs/agent-context/HANDOFF.md`, `docs/current/gap-audit-2026-08-08.md`, and the 3797-line `known-flaws.md` are superseded | docs      | cleanup              | yes    |
+| REL-076 | Stale code comments citing deleted docs (UNIFIED_LAUNCH_PLAN/PLAN.md sections, ExecutionPlan.md, PUBLIC-ALPHA-CUTOVER, AUDIT-FIX/SYS-21 ticket tags) across web/desktop/mobile/packages    | multi     | cleanup              | yes    |
+| REL-077 | Incident-response health-probe cron still daily; project is on Pro so it can tighten                                                                                                       | web/infra | minor                | yes    |
+| REL-078 | CodeQL: committed `codeql-config.yml` is inert (default setup ignores it), delete or document                                                                                              | ci        | minor                | manual |
 
 ---
 
-## Wire-or-cut — built but unmounted (founder decides; git preserves either way)
+## Wire-or-cut: built but unmounted (founder decides; git preserves either way)
 
 Each is a fully-built surface with zero live importers/mount points. Decision:
 wire it in, or cut it for release. None is currently reachable by users.
@@ -93,7 +93,7 @@ wire it in, or cut it for release. None is currently reachable by users.
 4. **Set `NEXT_PUBLIC_SANDBOX_ORIGIN` in prod (REL-019).**
 5. **App Store / Play Console IAP product IDs (REL-016).**
 
-**Security decisions** 6. **F2 (SCIM).** Query prod for Enterprise orgs with an active directory-sync connection and NO verified domain (F2 returns 400 on their SCIM without grace). Ship F2 with a cleanup migration for links poisoned before it lands (a stale link still reaches platform-wide credential revocation). 7. **F4 (quota migration).** Run `0146` against a throwaway Postgres (`db/neon/verify/README.md`) — the SQL was never executed; a bad column ref would 503 the billing path. 8. **F7 (jurisdiction routing).** Approves changing paid users' model routing (Pro balanced-reasoning drops to a cheaper catalog model; premium-reasoning rises to a higher-tier one — exact catalog IDs are in the F7 patch, not repeated here). Needs `@agiworkforce/compliance` declared in `packages/ai/routing/package.json`. W2-02 stays partly open (explicit provider selection + the Rust desktop/CLI resolver are still ungated). 9. **R2 upload bucket is public.** Uploads are world-readable before the scanner runs. Decide: private bucket + proxied reads (egress cost), or scan-at-presign. 10. **Delete stale secret backups** `.env.local.bak`, `.env.local.bak-20260814-021900` (deletion was permission-blocked for me).
+**Security decisions** 6. **F2 (SCIM).** Query prod for Enterprise orgs with an active directory-sync connection and NO verified domain (F2 returns 400 on their SCIM without grace). Ship F2 with a cleanup migration for links poisoned before it lands (a stale link still reaches platform-wide credential revocation). 7. **F4 (quota migration).** Run `0146` against a throwaway Postgres (`db/neon/verify/README.md`), the SQL was never executed; a bad column ref would 503 the billing path. 8. **F7 (jurisdiction routing).** Approves changing paid users' model routing (Pro balanced-reasoning drops to a cheaper catalog model; premium-reasoning rises to a higher-tier one, exact catalog IDs are in the F7 patch, not repeated here). Needs `@agiworkforce/compliance` declared in `packages/ai/routing/package.json`. W2-02 stays partly open (explicit provider selection + the Rust desktop/CLI resolver are still ungated). 9. **R2 upload bucket is public.** Uploads are world-readable before the scanner runs. Decide: private bucket + proxied reads (egress cost), or scan-at-presign. 10. **Delete stale secret backups** `.env.local.bak`, `.env.local.bak-20260814-021900` (deletion was permission-blocked for me).
 
 ---
 

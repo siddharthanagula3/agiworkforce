@@ -8,7 +8,7 @@ Dead-export and dead-file detection for the TypeScript workspaces.
 
 `knip` has been a devDependency since the repo restructure, and `PLAN.md` item 2
 assumed a sweep that never ran, because no config and no script existed. The
-2026-08-05 checklist audit then found ~26 unwired modules **by hand** — exactly
+2026-08-05 checklist audit then found ~26 unwired modules **by hand**, exactly
 the class this finds mechanically.
 
 Rust reachability is covered separately by
@@ -37,7 +37,7 @@ Measured 2026-08-28, after the unused-dependency sweep:
 | Unlisted dependencies |   161 |
 
 Those numbers are **not** 699 dead files. They are a starting signal that still
-needs config tuning before it can be trusted as a gate — the entry-point globs
+needs config tuning before it can be trusted as a gate, the entry-point globs
 above do not yet model every way this repo reaches a module (React `lazy()`
 dynamic imports, Next.js route co-location, adapter-driven settings panels, and
 the shared-package re-export chains all produce false positives).
@@ -51,7 +51,7 @@ workspace's graph is never walked, so its whole dependency set reports as
 unused.
 
 The 2026-08-28 dependency sweep measured the cost: of 99 reported unused
-dependencies, 46 had real importers — `openai` alone had 111. Fixing these two
+dependencies, 46 had real importers, `openai` alone had 111. Fixing these two
 loaders is step 0 of the tuning below, because until they load, the false-positive
 rate is not a property of the `entry` globs at all.
 
@@ -67,4 +67,4 @@ Turning this into a real gate is its own piece of work, in this order:
 
 Do not add `check:knip` to a required CI step before step 2. A gate that fails
 with hundreds of untriaged findings gets skipped, and a skipped gate is worse
-than no gate — it looks like coverage that is not there.
+than no gate, it looks like coverage that is not there.

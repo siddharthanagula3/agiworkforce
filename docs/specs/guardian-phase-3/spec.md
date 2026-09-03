@@ -1,4 +1,4 @@
-# Guardian phase 3 — spec
+# Guardian phase 3: spec
 
 Status: Active
 Owner: Guardian
