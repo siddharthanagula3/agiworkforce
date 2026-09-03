@@ -234,6 +234,13 @@
       "trustModes": ["managed_cloud"],
       "features": {}
     },
+    "vercel_gateway/chat-completions": {
+      "provider": "vercel_gateway",
+      "apiFamily": "chat_completions",
+      "adapter": "@agiworkforce/providers-vercel-gateway",
+      "trustModes": ["byok"],
+      "features": {}
+    },
     "nvidia-nim/chat-completions": {
       "provider": "nvidia_nim",
       "apiFamily": "chat_completions",
