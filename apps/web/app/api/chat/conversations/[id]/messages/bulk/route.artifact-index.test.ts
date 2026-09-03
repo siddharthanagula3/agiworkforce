@@ -9,12 +9,14 @@ vi.mock('@/lib/logger', () => ({
 
 const mockQuery = vi.fn();
 const mockExecute = vi.fn();
-const mockRequireCurrentUserId = vi.fn();
+const mockGetUserScopedDb = vi.fn();
 
 vi.mock('@/lib/server/neon-chat', () => ({
-  getNeonChatDb: () => ({ query: mockQuery, execute: mockExecute }),
-  requireCurrentUserId: (...args: unknown[]) => mockRequireCurrentUserId(...args),
   normalizeMessageMetadata: (v: unknown) => v,
+}));
+
+vi.mock('@/lib/server/rls-db', () => ({
+  getUserScopedDb: (...args: unknown[]) => mockGetUserScopedDb(...args),
 }));
 
 vi.mock('@/lib/services/active-workspace-service', () => ({
@@ -58,7 +60,11 @@ function mockSavedRow(id: string, role: string, content: string) {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  mockRequireCurrentUserId.mockResolvedValue(USER_ID);
+  mockGetUserScopedDb.mockResolvedValue({
+    db: { query: mockQuery, execute: mockExecute },
+    userId: USER_ID,
+    organizationId: null,
+  });
   mockQuery.mockResolvedValueOnce([{ id: CONVERSATION_ID }]); // ownership check
 });
 
