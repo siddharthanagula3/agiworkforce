@@ -5,6 +5,7 @@ import {
   type EffectiveCapabilityDocument,
 } from '@agiworkforce/types';
 import { effectiveModelPricing } from './pricing';
+import { effectiveRouteHealth, type RoutingRuntimeState } from './runtime-state';
 import type { TaskFamily } from './task-family';
 import {
   resolveTaskFamilyOrdering,
@@ -35,6 +36,31 @@ interface RegistryModel {
   lifecycle: { availability: string; deprecated: boolean };
 }
 
+export type RouteCacheClass =
+  | 'provider_implicit_prompt_cache'
+  | 'provider_explicit_prompt_cache'
+  | 'gateway_prompt_cache'
+  | 'gateway_response_cache'
+  | 'no_provider_cache';
+
+export type RouteCommercialStatus =
+  | 'agi_direct'
+  | 'customer_byok'
+  | 'authorized_marketplace'
+  | 'free_commercial'
+  | 'experimental_only'
+  | 'blocked';
+
+interface RegistryRoutePricing {
+  currency: string;
+  unit: string;
+  inputPerMillion?: number;
+  outputPerMillion?: number;
+  cacheReadPerMillion?: number;
+  cacheWritePerMillion?: number;
+  cacheWrite1hPerMillion?: number;
+}
+
 interface RegistryRoute {
   modelKey: string;
   provider: string;
@@ -43,6 +69,10 @@ interface RegistryRoute {
   trustModes: RoutingTrustMode[];
   availability: string;
   selectable: boolean;
+  isDefault: boolean;
+  cacheClass: RouteCacheClass;
+  commercialStatus: RouteCommercialStatus;
+  pricing: RegistryRoutePricing;
 }
 
 interface RegistryHarnessFeature {
@@ -91,7 +121,7 @@ interface AutoPolicy {
   taskFamilies?: Record<string, TaskFamilyPolicyEntry>;
 }
 
-interface RoutingRegistry {
+export interface RoutingRegistryView {
   models: Record<string, RegistryModel>;
   routes: Record<string, RegistryRoute>;
   harnesses: Record<string, RegistryHarness>;
@@ -101,7 +131,7 @@ interface RoutingRegistry {
   policies: { auto: AutoPolicy };
 }
 
-const registry = modelRegistry as unknown as RoutingRegistry;
+const registry = modelRegistry as unknown as RoutingRegistryView;
 
 export interface AutoRoutingRequest {
   selection?: string | null;
@@ -131,6 +161,27 @@ export interface AutoRoutingRequest {
    * needs no counterpart.
    */
   preferSlots?: readonly string[];
+  /**
+   * The route that already holds a warm prompt cache for this conversation.
+   *
+   * Cache affinity is a live, caller-known fact, so it stays out of the
+   * compiled catalog for the same reason `preferSlots` does: the TS/Rust
+   * conformance fixture never sets it, and the Rust resolver needs no
+   * counterpart. Absent, route ranking is pure cost over static policy.
+   *
+   * Preference, never admission: a warm route still has to clear commercial
+   * status, trust mode, harness and health, and it loses to the cheapest route
+   * once it costs more than `PREFERRED_ROUTE_COST_CEILING_MULTIPLE` times it.
+   */
+  preferredRouteId?: string | null;
+  /**
+   * Live health for the candidate routes, when the caller has a snapshot.
+   *
+   * Same layering as Free Auto: routing stays pure, and the surface that owns
+   * the I/O passes the snapshot in. Missing state means "no signal", which
+   * ranks a route as healthy rather than parking it.
+   */
+  runtimeState?: RoutingRuntimeState | null;
 }
 
 export interface AutoFallbackRoute {
@@ -183,9 +234,18 @@ export interface UnavailableAutoRoute {
 
 export type AutoRouteDecision = SelectedAutoRoute | UnavailableAutoRoute;
 
+interface RankedRoute {
+  routeId: string;
+  route: RegistryRoute;
+  expectedCents: number;
+  healthy: boolean;
+}
+
 interface EligibilityResult {
   routeId?: string;
   route?: RegistryRoute;
+  /** Every admissible route of the chosen model, best first. */
+  rankedRoutes: readonly RankedRoute[];
   reasons: string[];
 }
 
@@ -383,6 +443,150 @@ function clampProfile(
   return order[Math.min(requestedIndex, maximumIndex)] ?? maximum;
 }
 
+const DEFAULT_AFFORDABILITY_OUTPUT_TOKENS = 1000;
+const MANAGED_TRUST_MODE: RoutingTrustMode = 'managed_cloud';
+const BLOCKED_COMMERCIAL_STATUS: RouteCommercialStatus = 'blocked';
+const EXPERIMENTAL_COMMERCIAL_STATUS: RouteCommercialStatus = 'experimental_only';
+const TOKENS_PER_PRICED_MILLION = 1_000_000;
+const CENTS_PER_USD = 100;
+
+/**
+ * Share of the input a warm route is assumed to serve from cache.
+ *
+ * A single number rather than an observed hit rate: the caller knows only that
+ * a route served the previous turn, not how much of the prefix survived. Below
+ * 1 so a warm route never looks free, above nothing so cache-aware ranking can
+ * actually change the answer.
+ */
+const WARM_ROUTE_CACHE_HIT_FRACTION = 0.9;
+
+/**
+ * How much more a warm route may cost before the cheapest route wins anyway.
+ *
+ * Stickiness is worth paying for only up to a point. Past this multiple the
+ * cache saving cannot recover the per-token premium, so affinity yields.
+ */
+const PREFERRED_ROUTE_COST_CEILING_MULTIPLE = 1.25;
+
+const routesByModelKey = ((): Map<string, readonly (readonly [string, RegistryRoute])[]> => {
+  const grouped = new Map<string, (readonly [string, RegistryRoute])[]>();
+  for (const [routeId, route] of Object.entries(registry.routes)) {
+    grouped.set(route.modelKey, [...(grouped.get(route.modelKey) ?? []), [routeId, route]]);
+  }
+  for (const entries of grouped.values()) {
+    entries.sort(([leftId, left], [rightId, right]) => {
+      if (left.isDefault !== right.isDefault) return left.isDefault ? -1 : 1;
+      return leftId < rightId ? -1 : leftId > rightId ? 1 : 0;
+    });
+  }
+  return grouped;
+})();
+
+function routeExpectedCents(
+  routeId: string,
+  route: RegistryRoute,
+  request: AutoRoutingRequest,
+): number {
+  const inputTokens = request.estimatedInputTokens ?? 0;
+  const outputTokens = request.estimatedOutputTokens ?? DEFAULT_AFFORDABILITY_OUTPUT_TOKENS;
+  const inputPerMillion = route.pricing.inputPerMillion ?? 0;
+  const outputPerMillion = route.pricing.outputPerMillion ?? 0;
+  const cacheReadPerMillion = route.pricing.cacheReadPerMillion;
+  const warm = request.preferredRouteId === routeId && cacheReadPerMillion !== undefined;
+  const effectiveInputPerMillion = warm
+    ? (1 - WARM_ROUTE_CACHE_HIT_FRACTION) * inputPerMillion +
+      WARM_ROUTE_CACHE_HIT_FRACTION * cacheReadPerMillion
+    : inputPerMillion;
+  const usd =
+    (inputTokens * effectiveInputPerMillion + outputTokens * outputPerMillion) /
+    TOKENS_PER_PRICED_MILLION;
+  return usd * CENTS_PER_USD;
+}
+
+function routeIsHealthy(
+  routeId: string,
+  route: RegistryRoute,
+  request: AutoRoutingRequest,
+): boolean {
+  const state = request.runtimeState;
+  if (!state) return true;
+  return effectiveRouteHealth(state, routeId, route.provider).available;
+}
+
+function routeAdmissionRejections(
+  routeId: string,
+  route: RegistryRoute,
+  task: AutoTaskPolicy,
+  request: AutoRoutingRequest,
+): string[] {
+  const reasons: string[] = [];
+  if (route.commercialStatus === BLOCKED_COMMERCIAL_STATUS) {
+    reasons.push(`route ${routeId} commercial status is ${route.commercialStatus}`);
+  }
+  if (
+    route.commercialStatus === EXPERIMENTAL_COMMERCIAL_STATUS &&
+    request.trustMode === MANAGED_TRUST_MODE
+  ) {
+    reasons.push(`route ${routeId} is ${route.commercialStatus} and cannot serve managed traffic`);
+  }
+  if (!route.selectable || route.availability !== 'live') {
+    reasons.push(`route ${routeId} is not selectable`);
+  }
+  if (request.allowedHarnessIds && !request.allowedHarnessIds.includes(route.harnessId)) {
+    reasons.push(`harness ${route.harnessId} is not executable on the calling runtime`);
+  }
+
+  const harness = registry.harnesses[route.harnessId];
+  for (const feature of task.requiredHarnessFeatures) {
+    const runtimeProfile = request.runtimeProfileId
+      ? registry.runtimeProfiles[request.runtimeProfileId]
+      : undefined;
+    const implementation = runtimeProfile
+      ? runtimeProfile.features[feature]?.implementation
+      : harness?.features[feature]?.implementation;
+    if (implementation !== 'implemented') {
+      reasons.push(
+        `${runtimeProfile ? `runtime ${request.runtimeProfileId}` : `harness ${route.harnessId}`} feature ${feature} is ${implementation ?? 'undeclared'}`,
+      );
+    }
+  }
+
+  return reasons;
+}
+
+/**
+ * Order every admissible route of one canonical model, best first.
+ *
+ * Never a model substitution: each candidate serves the same canonical model
+ * through a different provider, harness and price sheet. Ranking is
+ * health, then the route's own expected cost, then the model's default route,
+ * then route id — the last two so two equally priced routes cannot reorder
+ * between runs or between the TypeScript and Rust resolvers.
+ */
+function rankRoutes(
+  candidates: readonly RankedRoute[],
+  request: AutoRoutingRequest,
+): readonly RankedRoute[] {
+  const ordered = [...candidates].sort((left, right) => {
+    if (left.healthy !== right.healthy) return left.healthy ? -1 : 1;
+    if (left.expectedCents !== right.expectedCents) return left.expectedCents - right.expectedCents;
+    if (left.route.isDefault !== right.route.isDefault) return left.route.isDefault ? -1 : 1;
+    return left.routeId < right.routeId ? -1 : left.routeId > right.routeId ? 1 : 0;
+  });
+
+  const preferredRouteId = request.preferredRouteId;
+  if (!preferredRouteId) return ordered;
+  const preferredIndex = ordered.findIndex((entry) => entry.routeId === preferredRouteId);
+  if (preferredIndex <= 0) return ordered;
+  const preferred = ordered[preferredIndex];
+  const cheapest = ordered[0];
+  if (!preferred || !cheapest || !preferred.healthy) return ordered;
+  if (preferred.expectedCents > cheapest.expectedCents * PREFERRED_ROUTE_COST_CEILING_MULTIPLE) {
+    return ordered;
+  }
+  return [preferred, ...ordered.filter((entry) => entry !== preferred)];
+}
+
 function evaluateEligibility(
   modelKey: string,
   task: AutoTaskPolicy,
@@ -390,7 +594,7 @@ function evaluateEligibility(
 ): EligibilityResult {
   const reasons: string[] = [];
   const model = registry.models[modelKey];
-  if (!model) return { reasons: [`unknown model: ${modelKey}`] };
+  if (!model) return { rankedRoutes: [], reasons: [`unknown model: ${modelKey}`] };
 
   if (model.lifecycle.availability !== 'live') {
     reasons.push(`model ${modelKey} availability is ${model.lifecycle.availability}`);
@@ -408,19 +612,28 @@ function evaluateEligibility(
     reasons.push(`provider ${model.identity.provider} is excluded by the US-only policy`);
   }
 
-  const routeEntry = Object.entries(registry.routes).find(
-    ([, route]) => route.modelKey === modelKey && route.trustModes.includes(request.trustMode),
+  const trustModeRoutes = (routesByModelKey.get(modelKey) ?? []).filter(([, route]) =>
+    route.trustModes.includes(request.trustMode),
   );
-  if (!routeEntry) {
+  if (trustModeRoutes.length === 0) {
     reasons.push(`model ${modelKey} has no ${request.trustMode} route`);
-    return { reasons };
+    return { rankedRoutes: [], reasons };
   }
-  const [routeId, route] = routeEntry;
-  if (!route.selectable || route.availability !== 'live') {
-    reasons.push(`route ${routeId} is not selectable`);
-  }
-  if (request.allowedHarnessIds && !request.allowedHarnessIds.includes(route.harnessId)) {
-    reasons.push(`harness ${route.harnessId} is not executable on the calling runtime`);
+
+  const routeReasons: string[] = [];
+  const admissible: RankedRoute[] = [];
+  for (const [routeId, route] of trustModeRoutes) {
+    const rejections = routeAdmissionRejections(routeId, route, task, request);
+    if (rejections.length > 0) {
+      routeReasons.push(...rejections);
+      continue;
+    }
+    admissible.push({
+      routeId,
+      route,
+      expectedCents: routeExpectedCents(routeId, route, request),
+      healthy: routeIsHealthy(routeId, route, request),
+    });
   }
 
   const capabilities = registry.capabilities[modelKey];
@@ -441,22 +654,12 @@ function evaluateEligibility(
     reasons.push(`model ${modelKey} does not meet ${task.minimumContextTokens} context tokens`);
   }
 
-  const harness = registry.harnesses[route.harnessId];
-  for (const feature of task.requiredHarnessFeatures) {
-    const runtimeProfile = request.runtimeProfileId
-      ? registry.runtimeProfiles[request.runtimeProfileId]
-      : undefined;
-    const implementation = runtimeProfile
-      ? runtimeProfile.features[feature]?.implementation
-      : harness?.features[feature]?.implementation;
-    if (implementation !== 'implemented') {
-      reasons.push(
-        `${runtimeProfile ? `runtime ${request.runtimeProfileId}` : `harness ${route.harnessId}`} feature ${feature} is ${implementation ?? 'undeclared'}`,
-      );
-    }
-  }
+  if (reasons.length > 0) return { rankedRoutes: [], reasons: [...reasons, ...routeReasons] };
 
-  return reasons.length === 0 ? { routeId, route, reasons } : { reasons };
+  const rankedRoutes = rankRoutes(admissible, request);
+  const selected = rankedRoutes[0];
+  if (!selected) return { rankedRoutes: [], reasons: routeReasons };
+  return { routeId: selected.routeId, route: selected.route, rankedRoutes, reasons };
 }
 
 function selectedDecision(
@@ -491,6 +694,41 @@ function selectedDecision(
   };
 }
 
+/**
+ * The remaining admissible routes of ONE canonical model, one per provider.
+ *
+ * Not a substitution: every entry serves the model the caller asked for, so an
+ * exact-model selection may fail over across these without ever answering with
+ * a different model.
+ */
+function sameModelFallbacks(
+  selectedModelKey: string,
+  selectedModelRoutes: readonly RankedRoute[],
+  seenProviders: Set<string>,
+): AutoFallbackRoute[] {
+  const fallbacks: AutoFallbackRoute[] = [];
+  for (const candidate of selectedModelRoutes) {
+    if (seenProviders.has(candidate.route.provider)) continue;
+    seenProviders.add(candidate.route.provider);
+    fallbacks.push({
+      modelKey: selectedModelKey,
+      provider: candidate.route.provider,
+      providerModelId: candidate.route.providerModelId,
+      routeId: candidate.routeId,
+      harnessId: candidate.route.harnessId,
+    });
+  }
+  return fallbacks;
+}
+
+/**
+ * Ordered failover after the selected route, still one provider per entry.
+ *
+ * The selected model's OWN other routes come first: reaching the same
+ * canonical model through a second provider is not a model substitution, and
+ * substituting the model is the more expensive change for the caller. Only
+ * once those are exhausted does the slot loop offer a different model.
+ */
 function buildProviderFallbacks(
   request: AutoRoutingRequest,
   task: AutoTaskPolicy,
@@ -499,13 +737,14 @@ function buildProviderFallbacks(
   preferredSlots: readonly string[],
   selectedModelKey: string,
   selectedProvider: string,
+  selectedModelRoutes: readonly RankedRoute[] = [],
 ): AutoFallbackRoute[] {
   const candidateSlots = preferredSlots.includes(policy.fallbackSlot)
     ? preferredSlots
     : [...preferredSlots, policy.fallbackSlot];
   const seenModels = new Set([selectedModelKey]);
   const seenProviders = new Set([selectedProvider]);
-  const fallbacks: AutoFallbackRoute[] = [];
+  const fallbacks = sameModelFallbacks(selectedModelKey, selectedModelRoutes, seenProviders);
 
   for (const slotId of candidateSlots) {
     if (!allowedSlots.has(slotId)) continue;
@@ -529,8 +768,6 @@ function buildProviderFallbacks(
 
   return fallbacks;
 }
-
-const DEFAULT_AFFORDABILITY_OUTPUT_TOKENS = 1000;
 
 function estimatedRequestCents(modelKey: string, request: AutoRoutingRequest): number {
   const inputTokens = request.estimatedInputTokens ?? 0;
@@ -591,6 +828,11 @@ export function resolveAutoRoute(request: AutoRoutingRequest): AutoRouteDecision
         requestedSelection,
         eligibility,
         'explicit',
+        sameModelFallbacks(
+          requestedSelection,
+          eligibility.rankedRoutes,
+          new Set([eligibility.route.provider]),
+        ),
       );
     }
 
@@ -672,6 +914,7 @@ export function resolveAutoRoute(request: AutoRoutingRequest): AutoRouteDecision
         orderedSlots,
         request.currentModelKey,
         eligibility.route.provider,
+        eligibility.rankedRoutes,
       );
       return selectedDecision(
         request,
@@ -712,6 +955,7 @@ export function resolveAutoRoute(request: AutoRoutingRequest): AutoRouteDecision
         orderedSlots,
         modelKey,
         eligibility.route.provider,
+        eligibility.rankedRoutes,
       );
       return selectedDecision(
         request,
@@ -741,6 +985,7 @@ export function resolveAutoRoute(request: AutoRoutingRequest): AutoRouteDecision
           orderedSlots,
           fallbackModelKey,
           eligibility.route.provider,
+          eligibility.rankedRoutes,
         );
         return selectedDecision(
           request,
