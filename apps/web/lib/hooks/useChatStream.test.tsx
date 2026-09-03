@@ -634,7 +634,7 @@ describe('useChatStream', () => {
           entries: [
             expect.objectContaining({
               kind: 'progress',
-              summary: 'Generating response',
+              summary: 'Connecting to the model',
               status: 'running',
             }),
           ],
