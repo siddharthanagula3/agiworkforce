@@ -85,6 +85,17 @@ describe('resolveAuthModeForRecord', () => {
     repositoryUrl: null,
     version: null,
     sourceRegistry: 'mcp-registry',
+    badge: 'community',
+    iconUrl: null,
+    monogram: 'X',
+    documentationUrl: null,
+    iconSource: 'monogram',
+    brandSlug: null,
+    authorName: null,
+    authorUrl: null,
+    websiteUrl: null,
+    supportUrl: null,
+    privacyPolicyUrl: null,
   };
 
   beforeEach(() => {

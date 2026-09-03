@@ -121,7 +121,7 @@ describe('normalizeRegistryEntry', () => {
     expect(record?.badge).toBe('community');
   });
 
-  it('badges a GitHub-verified namespace as registry and carries its icon and docs url', () => {
+  it('badges a GitHub-verified namespace as registry and carries its icon and website url', () => {
     const record = normalizeRegistryEntry({
       server: {
         name: 'io.github.acme/weather',
@@ -136,14 +136,60 @@ describe('normalizeRegistryEntry', () => {
     expect(record).toMatchObject({
       badge: 'registry',
       iconUrl: 'https://weather.example.com/icon.png',
-      docsUrl: 'https://weather.example.com/docs',
+      websiteUrl: 'https://weather.example.com/docs',
+      documentationUrl: null,
       monogram: 'WS',
+      iconSource: 'registry',
     });
   });
 
-  it('has no icon or docs url when the registry entry declares neither', () => {
+  it('has no icon or website url when the registry entry declares neither', () => {
     const record = normalizeRegistryEntry(TANDEM_DOCS_ENTRY);
     expect(record?.iconUrl).toBeNull();
-    expect(record?.docsUrl).toBeNull();
+    expect(record?.websiteUrl).toBeNull();
+    expect(record?.iconSource).toBe('monogram');
+  });
+
+  it('derives the author url from a github repository owner', () => {
+    const record = normalizeRegistryEntry(SMITHERY_SLACK_ENTRY);
+    expect(record?.authorUrl).toBe('https://github.com/smithery-ai');
+    expect(record?.authorName).toBe('smithery.ai');
+  });
+
+  it('gives no author url when the repository is not on github', () => {
+    const record = normalizeRegistryEntry({
+      server: {
+        name: 'io.github.acme/tool',
+        description: 'A tool.',
+        version: '1.0.0',
+        remotes: [{ type: 'streamable-http', url: 'https://tool.example.com/mcp' }],
+        repository: { url: 'https://gitlab.com/acme/tool', source: 'gitlab' },
+      },
+    });
+    expect(record?.authorUrl).toBeNull();
+  });
+
+  it('resolves iconSource to brand when the namespace owner matches a verified simple-icons slug', () => {
+    const record = normalizeRegistryEntry({
+      server: {
+        name: 'io.github.notion/community-tool',
+        description: 'A community tool published under the notion GitHub org.',
+        version: '1.0.0',
+        remotes: [{ type: 'streamable-http', url: 'https://notion-tool.example.com/mcp' }],
+      },
+    });
+    expect(record?.publisher).toBe('notion');
+    expect(record?.iconSource).toBe('brand');
+    expect(record?.brandSlug).toBe('notion');
+  });
+
+  it('resolves iconSource to site when a website url exists with no registry icon or brand match', () => {
+    const record = normalizeRegistryEntry(TANDEM_DOCS_ENTRY);
+    expect(record?.iconSource).toBe('monogram');
+
+    const withWebsite = normalizeRegistryEntry({
+      server: { ...TANDEM_DOCS_ENTRY.server, websiteUrl: 'https://tandem.ac/docs-mcp' },
+    });
+    expect(withWebsite?.iconSource).toBe('site');
   });
 });

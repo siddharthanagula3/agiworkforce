@@ -2,10 +2,15 @@ import 'server-only';
 
 import firstPartyTargetsJson from '@/lib/connectors/directory/sources/first-party.json';
 import { deriveInternalBadge } from '@/lib/connectors/directory/badge';
+import { brandSlugForConnectorId } from '@/lib/connectors/directory/brand-icons';
 import { connectableForInternalId } from '@/lib/connectors/directory/connectable';
 import { deriveDirectoryCategories } from '@/lib/connectors/directory/categorize';
 import { deriveMonogram } from '@/lib/connectors/directory/monogram';
-import type { DirectoryRecord, DirectoryTransport } from '@/lib/connectors/directory/types';
+import type {
+  DirectoryIconSource,
+  DirectoryRecord,
+  DirectoryTransport,
+} from '@/lib/connectors/directory/types';
 
 export interface FirstPartyTarget {
   readonly connectorId: string;
@@ -14,7 +19,7 @@ export interface FirstPartyTarget {
   readonly url: string;
   readonly transport: DirectoryTransport;
   readonly toolNames: readonly string[];
-  readonly docsUrl: string;
+  readonly documentationUrl: string;
   readonly overridesInternalUrl: boolean;
   readonly directoryOnly: boolean;
 }
@@ -33,6 +38,18 @@ function richerDescription(current: string, incoming: string): string {
   return incoming.length > current.length ? incoming : current;
 }
 
+function deriveAuthorUrl(documentationUrl: string): string | null {
+  try {
+    return new URL(documentationUrl).origin;
+  } catch {
+    return null;
+  }
+}
+
+function upgradeIconSource(current: DirectoryIconSource): DirectoryIconSource {
+  return current === 'monogram' ? 'site' : current;
+}
+
 function enrichRecord(record: DirectoryRecord, target: FirstPartyTarget): DirectoryRecord {
   const useTargetUrl =
     !target.directoryOnly && (target.overridesInternalUrl || record.remotes.length === 0);
@@ -43,12 +60,16 @@ function enrichRecord(record: DirectoryRecord, target: FirstPartyTarget): Direct
     description: richerDescription(record.description, target.description),
     remotes: useTargetUrl ? [{ url: target.url, transport: target.transport }] : record.remotes,
     toolNames: target.toolNames.length > 0 ? target.toolNames : record.toolNames,
-    docsUrl: target.docsUrl,
+    documentationUrl: target.documentationUrl,
     categories: unionCategories(record.categories, targetCategories),
+    authorUrl: record.authorUrl ?? deriveAuthorUrl(target.documentationUrl),
+    iconSource: upgradeIconSource(record.iconSource),
   };
 }
 
 function standaloneRecord(target: FirstPartyTarget): DirectoryRecord {
+  const brandSlug = brandSlugForConnectorId(target.connectorId);
+
   return {
     id: target.connectorId,
     name: target.name,
@@ -65,7 +86,14 @@ function standaloneRecord(target: FirstPartyTarget): DirectoryRecord {
     badge: deriveInternalBadge(),
     iconUrl: null,
     monogram: deriveMonogram(target.name),
-    docsUrl: target.docsUrl,
+    documentationUrl: target.documentationUrl,
+    iconSource: brandSlug ? 'brand' : 'site',
+    brandSlug,
+    authorName: target.name,
+    authorUrl: deriveAuthorUrl(target.documentationUrl),
+    websiteUrl: null,
+    supportUrl: null,
+    privacyPolicyUrl: null,
   };
 }
 

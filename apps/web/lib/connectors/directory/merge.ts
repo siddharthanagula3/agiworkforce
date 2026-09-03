@@ -8,15 +8,23 @@ import {
 } from '@/lib/connectors/catalog';
 import { getMcpEndpoint } from '@/lib/connectors/mcp-endpoints';
 import { deriveInternalBadge } from '@/lib/connectors/directory/badge';
+import { brandSlugForConnectorId } from '@/lib/connectors/directory/brand-icons';
 import { connectableForInternalId } from '@/lib/connectors/directory/connectable';
 import { deriveMonogram } from '@/lib/connectors/directory/monogram';
 import type {
   DirectoryAuthMode,
+  DirectoryIconSource,
   DirectoryRecord,
   DirectoryRemote,
 } from '@/lib/connectors/directory/types';
 
 const AGI_PUBLISHER_LABEL = 'AGI Workforce';
+const ICON_SOURCE_PRIORITY: Readonly<Record<DirectoryIconSource, number>> = {
+  brand: 3,
+  registry: 2,
+  site: 1,
+  monogram: 0,
+};
 
 function authModeForCapability(authScheme: string | undefined): DirectoryAuthMode {
   if (authScheme === 'api-key' || authScheme === 'connection-string' || authScheme === 'pat')
@@ -32,11 +40,13 @@ export function buildInternalDirectoryRecords(): DirectoryRecord[] {
       ? [{ url: endpoint.url, transport: endpoint.transport }]
       : [];
     const capability = getConnectorCapability(connector.id);
+    const publisher = allowsPresentTenseCopy(connector.id) ? AGI_PUBLISHER_LABEL : connector.name;
+    const brandSlug = brandSlugForConnectorId(connector.id);
 
     return {
       id: connector.id,
       name: connector.name,
-      publisher: allowsPresentTenseCopy(connector.id) ? AGI_PUBLISHER_LABEL : connector.name,
+      publisher,
       description: connector.description,
       categories: [connector.category],
       remotes,
@@ -49,7 +59,14 @@ export function buildInternalDirectoryRecords(): DirectoryRecord[] {
       badge: deriveInternalBadge(),
       iconUrl: null,
       monogram: deriveMonogram(connector.name),
-      docsUrl: null,
+      documentationUrl: null,
+      iconSource: brandSlug ? 'brand' : 'monogram',
+      brandSlug,
+      authorName: publisher,
+      authorUrl: null,
+      websiteUrl: null,
+      supportUrl: null,
+      privacyPolicyUrl: null,
     };
   });
 }
@@ -102,14 +119,23 @@ function enrichWithRegistryRecord(
   current: DirectoryRecord,
   registryRecord: DirectoryRecord,
 ): DirectoryRecord {
+  const takeIncomingIcon =
+    ICON_SOURCE_PRIORITY[registryRecord.iconSource] > ICON_SOURCE_PRIORITY[current.iconSource];
+
   return {
     ...current,
     description: richerDescription(current.description, registryRecord.description),
     categories: unionCategories(current.categories, registryRecord.categories),
     toolNames: current.toolNames.length > 0 ? current.toolNames : registryRecord.toolNames,
     repositoryUrl: current.repositoryUrl ?? registryRecord.repositoryUrl,
-    iconUrl: current.iconUrl ?? registryRecord.iconUrl,
-    docsUrl: current.docsUrl ?? registryRecord.docsUrl,
+    documentationUrl: current.documentationUrl ?? registryRecord.documentationUrl,
+    authorUrl: current.authorUrl ?? registryRecord.authorUrl,
+    websiteUrl: current.websiteUrl ?? registryRecord.websiteUrl,
+    supportUrl: current.supportUrl ?? registryRecord.supportUrl,
+    privacyPolicyUrl: current.privacyPolicyUrl ?? registryRecord.privacyPolicyUrl,
+    iconUrl: takeIncomingIcon ? registryRecord.iconUrl : current.iconUrl,
+    iconSource: takeIncomingIcon ? registryRecord.iconSource : current.iconSource,
+    brandSlug: takeIncomingIcon ? registryRecord.brandSlug : current.brandSlug,
   };
 }
 
