@@ -24,5 +24,11 @@ export function pluginAvailabilityClaim(catalog: PluginCatalogResult): string {
   if (installable === 0) {
     return 'No pack is installable in this environment yet.';
   }
-  return `${installable} of ${catalog.entries.length} packs are installable today; the rest are declared and not yet published.`;
+  const total = catalog.entries.length;
+  if (installable === total) {
+    return total === 1
+      ? 'The 1 pack in the registry is installable today.'
+      : `All ${total} packs in the registry are installable today.`;
+  }
+  return `${installable} of ${total} packs are installable today; the rest are declared and not yet published.`;
 }
