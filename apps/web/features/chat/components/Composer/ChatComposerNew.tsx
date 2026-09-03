@@ -7,6 +7,7 @@ import React, {
   useLayoutEffect,
   useCallback,
   useMemo,
+  useSyncExternalStore,
   memo,
 } from 'react';
 import {
@@ -529,6 +530,37 @@ function MenuToggleRow({
   );
 }
 
+/**
+ * Sending the first message of a brand-new chat flips `isEmptyChat` in
+ * WebChatPage the instant a client-only conversation id is claimed --
+ * synchronously, before the attachment upload that triggered the send even
+ * starts -- which unmounts this composer and mounts a second instance in the
+ * other branch of that page's ternary. A component-local `useState` for "is a
+ * send in flight" is wiped out by that remount before it ever paints,
+ * reopening the exact gap it exists to close. Module scope survives the
+ * remount; `sendPendingListeners` exists so the mounted instance re-renders
+ * when an earlier, already-unmounted instance changed the flag.
+ */
+let sendPendingFlag = false;
+const sendPendingListeners = new Set<() => void>();
+function setSendPendingFlag(next: boolean): void {
+  if (sendPendingFlag === next) return;
+  sendPendingFlag = next;
+  for (const listener of sendPendingListeners) listener();
+}
+function subscribeSendPendingFlag(listener: () => void): () => void {
+  sendPendingListeners.add(listener);
+  return () => sendPendingListeners.delete(listener);
+}
+function getSendPendingFlag(): boolean {
+  return sendPendingFlag;
+}
+/** Test-only: the flag is module scope by design (see above), so a suite
+ *  that renders more than one send must reset it between cases itself. */
+export function resetSendPendingFlagForTests(): void {
+  setSendPendingFlag(false);
+}
+
 const ChatComposerNewComponent = ({
   onSend,
   conversationId = null,
@@ -557,6 +589,36 @@ const ChatComposerNewComponent = ({
 }: ChatComposerProps) => {
   const isTurnActive = isLoading || isGenerating;
   const [message, setMessage] = useState('');
+  /**
+   * True from the moment `handleSubmit` hands a real chat send to `onSend`
+   * until the parent-visible turn actually starts (`isTurnActive`) or the
+   * send is handed back through one of the composer's existing restoration
+   * channels (prefillText, droppedFiles, the parked-draft store slot). Covers
+   * the gap between pressing Send and the turn appearing -- attachment
+   * upload plus conversation creation happen in that gap with no other
+   * visible signal, so the composer otherwise looks identical to its idle
+   * state for the whole window.
+   */
+  const isSendPending = useSyncExternalStore(
+    subscribeSendPendingFlag,
+    getSendPendingFlag,
+    getSendPendingFlag,
+  );
+  useEffect(() => {
+    if (isTurnActive) setSendPendingFlag(false);
+  }, [isTurnActive]);
+  // A composer that mounts on the bare landing surface (no conversation
+  // claimed yet) never carries a real in-flight send of its own -- the
+  // remount that DOES carry one forward (see the module comment above) always
+  // arrives with the client-only conversation id already attached. Without
+  // this, a send that fails before its content is ever handed back through
+  // prefillText/droppedFiles (a message that already reached the transcript
+  // needs no hand-back -- see `abandonSend`'s `survived` check) leaves the
+  // flag set with nothing left to clear it, permanently disabling Send.
+  useEffect(() => {
+    if (emptyState && conversationId === null) setSendPendingFlag(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const [localNotice, setLocalNotice] = useState<string | null>(null);
   const [pastedTextUndo, setPastedTextUndo] = useState<{ fileName: string; text: string } | null>(
     null,
@@ -1362,6 +1424,7 @@ const ChatComposerNewComponent = ({
       setPrevPrefill(prefillText);
       writeComposerMessage(prefillText);
       onPrefillConsumed?.();
+      setSendPendingFlag(false);
     }
   }, [prefillText, prevPrefill, onPrefillConsumed, writeComposerMessage]);
 
@@ -1533,6 +1596,7 @@ const ChatComposerNewComponent = ({
     lastDroppedFilesRef.current = droppedFiles;
     handleFileDrop(droppedFiles);
     onDroppedFilesConsumed?.();
+    setSendPendingFlag(false);
   }, [droppedFiles, handleFileDrop, onDroppedFilesConsumed]);
 
   // Auto-resize textarea
@@ -2307,9 +2371,13 @@ const ChatComposerNewComponent = ({
       return;
     }
 
+    setSendPendingFlag(true);
     const result = onSend(...sendArgs);
 
-    if (result === false) return;
+    if (result === false) {
+      setSendPendingFlag(false);
+      return;
+    }
     clearComposerState();
   }, [
     message,
@@ -2413,6 +2481,7 @@ const ChatComposerNewComponent = ({
   useEffect(() => {
     if (parkedDraft === seenParkedDraftRef.current) return;
     seenParkedDraftRef.current = parkedDraft;
+    setSendPendingFlag(false);
     if (!parkedDraft || messageRef.current.trim()) return;
     writeComposerMessage(parkedDraft);
   }, [parkedDraft, writeComposerMessage]);
@@ -4187,6 +4256,7 @@ const ChatComposerNewComponent = ({
             {/* Send / Stop Button */}
             <SendButton
               mode={sendButtonMode}
+              isSending={isSendPending}
               hasContent={hasContent}
               disabled={
                 composerDisabled ||
