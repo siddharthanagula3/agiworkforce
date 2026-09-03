@@ -110,6 +110,14 @@ function hasServerProviderKey(providerId: string): boolean {
   return resolveServerProviderApiKey(providerId) !== undefined;
 }
 
+export function listAvailableManagedProviderIds(): ReadonlySet<string> {
+  const available = new Set<string>();
+  for (const [providerId, config] of Object.entries(SERVER_PROVIDER_CONFIG)) {
+    if (hasServerProviderKey(providerId)) available.add(config.adapterId);
+  }
+  return available;
+}
+
 const DEFAULT_ROUTE_SELECTION_TRUST_MODE = 'managed_cloud';
 
 export interface RouteSelectionContext {
