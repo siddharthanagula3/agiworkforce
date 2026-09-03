@@ -230,6 +230,7 @@ type SendMeta = {
   /** Exact server-catalog skill name. */
   skillName?: string;
   mcpContext?: McpContextSelection;
+  disabledConnectorIds?: string[];
   /** CAP-048: structured AGI Work goal captured by the composer. */
   agiWorkGoal?: AgiWorkGoalInput;
 };
@@ -1634,6 +1635,7 @@ export default function WebChatPage() {
             styleInstruction: options.meta?.styleInstruction,
             skillName: options.meta?.skillName,
             mcpContext: options.meta?.mcpContext,
+            disabledConnectorIds: options.meta?.disabledConnectorIds,
           });
 
         const pendingEdit = consumePendingEdit(pendingEditRollbackRef.current, convId);

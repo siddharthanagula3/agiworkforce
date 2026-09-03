@@ -320,4 +320,20 @@ describe('WebChatPage concurrent send during attachment upload', () => {
     expect(mocks.sendMessage.mock.calls[0]![0]).toBe(FIRST_MESSAGE);
     expect(mocks.toastError).not.toHaveBeenCalled();
   });
+
+  it('forwards the composer disabled connector ids to sendMessage', async () => {
+    render(<WebChatPage />);
+    await waitFor(() => expect(mocks.composerOnSend).not.toBeNull());
+
+    act(() => {
+      mocks.composerOnSend!('Check my calendar', undefined, undefined, {
+        disabledConnectorIds: ['gmail', 'notion'],
+      });
+    });
+
+    await waitFor(() => expect(mocks.sendMessage).toHaveBeenCalledTimes(1));
+    expect(mocks.sendMessage.mock.calls[0]![1]).toMatchObject({
+      disabledConnectorIds: ['gmail', 'notion'],
+    });
+  });
 });
