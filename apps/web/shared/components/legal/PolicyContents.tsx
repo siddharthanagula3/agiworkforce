@@ -11,9 +11,24 @@ export function policySectionId(eyebrow: string): string {
     .slice(0, 48)}`;
 }
 
+export interface PolicyContentsExplicitSection {
+  readonly label: string;
+  readonly id: string;
+}
+
+export type PolicyContentsSection = string | PolicyContentsExplicitSection;
+
 export interface PolicyContentsProps {
-  sections: readonly string[];
+  sections: readonly PolicyContentsSection[];
   intro?: React.ReactNode;
+}
+
+function sectionLabel(section: PolicyContentsSection): string {
+  return typeof section === 'string' ? section : section.label;
+}
+
+function sectionId(section: PolicyContentsSection): string {
+  return typeof section === 'string' ? policySectionId(section) : section.id;
 }
 
 export function PolicyContents({ sections, intro }: PolicyContentsProps) {
@@ -23,10 +38,10 @@ export function PolicyContents({ sections, intro }: PolicyContentsProps) {
         <Eyebrow>Contents</Eyebrow>
         {intro ? <Prose size="sm">{intro}</Prose> : null}
         <ol className="agi-ds-policy-toc-list">
-          {sections.map((eyebrow) => (
-            <li key={eyebrow}>
-              <Link href={`#${policySectionId(eyebrow)}`} className="agi-ds-link">
-                {eyebrow}
+          {sections.map((section) => (
+            <li key={sectionLabel(section)}>
+              <Link href={`#${sectionId(section)}`} className="agi-ds-link">
+                {sectionLabel(section)}
               </Link>
             </li>
           ))}
