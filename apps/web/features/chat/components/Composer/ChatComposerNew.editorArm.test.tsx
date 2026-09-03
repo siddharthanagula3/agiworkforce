@@ -85,6 +85,14 @@ vi.mock('@features/chat/hooks/use-media-model-availability', () => ({
   }),
 }));
 
+vi.mock('@features/connectors/hooks/use-connectors', () => ({
+  useConnectors: () => ({
+    connectedIds: new Set<string>(),
+    sources: {} as Record<string, string>,
+    customNames: {} as Record<string, string>,
+  }),
+}));
+
 const TRANSCRIPT = 'dictated tail';
 vi.mock('./VoiceInputButton', () => ({
   VoiceInputButton: ({ onTranscript }: { onTranscript: (text: string) => void }) => (
