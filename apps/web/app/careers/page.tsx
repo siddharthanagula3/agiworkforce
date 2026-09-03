@@ -2,7 +2,7 @@ import { buildMetadata } from '@/lib/seo/metadata';
 import { Header } from '@shared/components/layout/Header';
 import { MarketingFooter } from '@/features/marketing/components/MarketingFooter';
 import { Section, Stack } from '@/features/marketing/components/system';
-import { PageHero } from '@/features/marketing/components/pages/surfaces/shared';
+import { FactLine, PageHero } from '@/features/marketing/components/pages/surfaces/shared';
 import { LinkGrid } from '@/features/marketing/components/pages/features/shared';
 import { contactMailto } from '@/lib/legal-constants';
 
@@ -11,6 +11,12 @@ export const metadata = buildMetadata({
   description: 'AGI Automation LLC is small and intentional. We do not have open roles right now.',
   path: '/careers',
 });
+
+const HERO_FACTS = [
+  'Open roles: 0',
+  'Structure: founder-led',
+  'Ownership: independent and privately held',
+];
 
 export default function CareersPage() {
   return (
@@ -27,6 +33,8 @@ export default function CareersPage() {
             { href: '/changelog', label: 'Follow the changelog', variant: 'secondary' },
           ]}
         />
+
+        <FactLine facts={HERO_FACTS} />
 
         <Section id="meanwhile" labelledBy="agi-careers-meanwhile-title" rule>
           <Stack gap="loose">
