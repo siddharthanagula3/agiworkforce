@@ -32,7 +32,7 @@ export function buildSummaryComment(input: SummaryInput): string {
 
   const lines: string[] = [SUMMARY_MARKER, '## AGI Guardian review', ''];
   lines.push(
-    `Reviewed head \`${input.headSha.slice(0, 12)}\` in **${input.mode} mode** — ` +
+    `Reviewed head \`${input.headSha.slice(0, 12)}\` in **${input.mode} mode**, ` +
       (decision.conclusion === 'failure'
         ? `❌ ${decision.blocking.length} blocking finding(s)`
         : ranked.length === 0
@@ -51,7 +51,7 @@ export function buildSummaryComment(input: SummaryInput): string {
     lines.push('<details><summary>Top findings</summary>', '');
     for (const f of ranked.slice(0, 15)) {
       const location = f.start_line ? `\`${f.path}:${f.start_line}\`` : `\`${f.path}\``;
-      lines.push(`- **${f.severity}** ${location} — ${f.title} _(${f.rule_id})_`);
+      lines.push(`- **${f.severity}** ${location}, ${f.title} _(${f.rule_id})_`);
     }
     if (ranked.length > 15)
       lines.push(`- …and ${ranked.length - 15} more in the check-run summaries`);
