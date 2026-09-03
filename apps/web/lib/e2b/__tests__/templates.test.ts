@@ -2,7 +2,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('@/lib/logger', () => ({ logger: { warn: vi.fn(), info: vi.fn(), error: vi.fn() } }));
 
-import { clearCloudCodeRuntimeCache, listCloudCodeRuntimes } from '../templates';
+import {
+  clearCloudCodeRuntimeCache,
+  harnessCredentialSpecs,
+  knownHarnessCommandIds,
+  listCloudCodeRuntimes,
+} from '../templates';
 
 const ORIGINAL_ENV = { ...process.env };
 
@@ -183,5 +188,45 @@ describe('E2B template catalogue', () => {
     await listCloudCodeRuntimes();
 
     expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('harness credential specs', () => {
+  it('names the env var each harness CLI reads and the provider that resolves it', () => {
+    expect(harnessCredentialSpecs('claude')).toEqual([
+      { envVar: 'ANTHROPIC_API_KEY', providerId: 'anthropic' },
+    ]);
+    expect(harnessCredentialSpecs('codex')).toEqual([
+      { envVar: 'CODEX_API_KEY', providerId: 'openai' },
+    ]);
+    expect(harnessCredentialSpecs('droid')).toEqual([
+      { envVar: 'FACTORY_API_KEY', providerId: 'factory' },
+    ]);
+    expect(harnessCredentialSpecs('grok')).toEqual([{ envVar: 'XAI_API_KEY', providerId: 'xai' }]);
+    expect(harnessCredentialSpecs('amp')).toEqual([{ envVar: 'AMP_API_KEY', providerId: 'amp' }]);
+  });
+
+  it('lists every provider opencode can auto-detect', () => {
+    expect(harnessCredentialSpecs('opencode')).toEqual([
+      { envVar: 'ANTHROPIC_API_KEY', providerId: 'anthropic' },
+      { envVar: 'OPENAI_API_KEY', providerId: 'openai' },
+      { envVar: 'GEMINI_API_KEY', providerId: 'google' },
+    ]);
+  });
+
+  it('returns nothing for a harness with no declared credential, including openclaw', () => {
+    expect(harnessCredentialSpecs('openclaw')).toEqual([]);
+    expect(harnessCredentialSpecs('not-a-harness')).toEqual([]);
+  });
+});
+
+describe('knownHarnessCommandIds', () => {
+  it('lists the binary name of every declared harness, not the image kinds', () => {
+    const ids = knownHarnessCommandIds();
+    expect(ids).toEqual(
+      new Set(['claude', 'codex', 'droid', 'amp', 'opencode', 'grok', 'openclaw']),
+    );
+    expect(ids.has('code-interpreter-v1')).toBe(false);
+    expect(ids.has('k3s')).toBe(false);
   });
 });
