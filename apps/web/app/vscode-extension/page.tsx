@@ -52,7 +52,7 @@ export default function VscodeExtensionPage() {
           eyebrow="AGI in VS Code"
           title="The apply button opens a diff you can reject before it touches your file."
           lede="AGI in VS Code adds a chat participant called @agi to the VS Code chat panel, and an AGI panel of its own to the sidebar. Ask @agi something and it attaches the file you have open and the text you have selected. When an answer comes back with code in it, apply opens that code as a diff against your selection, and a lens above the change offers accept and reject."
-          ctas={[{ href: '/download', label: 'Get preview access' }]}
+          ctas={[{ href: '/download#other-surfaces', label: 'Get notified' }]}
         />
 
         <Section id="vscode-status" labelledBy="agi-vscode-status-title" rule>
