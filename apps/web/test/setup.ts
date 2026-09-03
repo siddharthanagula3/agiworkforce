@@ -37,7 +37,8 @@ process.env['AGI_MANAGED_COMPUTE_PRIVATE_BETA'] = '1';
 // is the same shape as the desktop bug where AGIWORKFORCE_APP_DATA_DIR was set
 // for isolation but never read. Pointing both at an unroutable host turns that
 // silent reach into a loud connection failure.
-process.env['AGI_DATABASE_URL'] = 'postgresql://test:test@127.0.0.1:1/agi_test_must_not_connect';
+process.env['AGI_DATABASE_URL'] =
+  'postgresql://test:test@127.0.0.1:1/agi_test_must_not_connect?sslmode=require';
 process.env['DATABASE_URL'] = process.env['AGI_DATABASE_URL'];
 
 vi.mock('next/headers', () => ({
