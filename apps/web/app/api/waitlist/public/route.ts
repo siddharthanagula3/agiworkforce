@@ -11,13 +11,19 @@ import { handleCorsPreflightRequest } from '@/lib/cors';
 import { requireCsrfToken } from '@/lib/csrf';
 import {
   WAITLIST_CONSENT_PURPOSES,
+  PLATFORM_AVAILABILITY_CONSENT_PURPOSES,
   isConsentPurpose,
   recordConsentBatch,
   type ConsentDecision,
   type ConsentSurface,
+  type ConsentPurpose,
 } from '@/lib/server/consent-records';
 
 type PublicWaitlistSource = 'website' | 'byok' | 'sync' | 'billing' | 'mobile' | 'other';
+
+function requiredConsentPurposesForSource(source: PublicWaitlistSource): readonly ConsentPurpose[] {
+  return source === 'other' ? PLATFORM_AVAILABILITY_CONSENT_PURPOSES : WAITLIST_CONSENT_PURPOSES;
+}
 
 const VALID_SOURCES = new Set<PublicWaitlistSource>([
   'website',
@@ -105,16 +111,17 @@ async function handlePost(request: NextRequest): Promise<NextResponse> {
     ? payload.consentSurface
     : 'web-waitlist-inline';
   const decisions = parseConsentDecisions(payload.consent);
+  const requiredPurposes = requiredConsentPurposesForSource(source);
 
   const decided = new Set(decisions.map((decision) => decision.purpose));
-  const undecided = WAITLIST_CONSENT_PURPOSES.filter((purpose) => !decided.has(purpose.id));
+  const undecided = requiredPurposes.filter((purpose) => !decided.has(purpose.id));
   if (undecided.length > 0) {
     throw createError.validation(
       `A consent decision is required for: ${undecided.map((purpose) => purpose.id).join(', ')}`,
     );
   }
 
-  const refusedRequired = WAITLIST_CONSENT_PURPOSES.filter(
+  const refusedRequired = requiredPurposes.filter(
     (purpose) =>
       purpose.necessaryForRequest &&
       !decisions.some((decision) => decision.purpose === purpose.id && decision.granted),
