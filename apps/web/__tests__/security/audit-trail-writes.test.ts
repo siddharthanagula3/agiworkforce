@@ -33,6 +33,11 @@ vi.mock('@/lib/api-auth', () => ({
   getClerkAuthUser: (...args: unknown[]) => mockGetClerkAuthUser(...args),
 }));
 
+const mockGetUserScopedDb = vi.fn();
+vi.mock('@/lib/server/rls-db', () => ({
+  getUserScopedDb: (...args: unknown[]) => mockGetUserScopedDb(...args),
+}));
+
 const mockCreateApiKey = vi.fn();
 const mockRevokeApiKey = vi.fn();
 vi.mock('@/lib/services/api-key-service', () => ({
@@ -92,6 +97,14 @@ beforeEach(() => {
   mockTransaction.mockImplementation(async (fn: (tx: unknown) => unknown) =>
     fn({ query: mockQuery, execute: mockExecute }),
   );
+  mockGetUserScopedDb.mockImplementation(async () => {
+    const authUser = await mockGetClerkAuthUser();
+    return {
+      db: { query: mockQuery, execute: mockExecute, transaction: mockTransaction },
+      userId: authUser?.userId,
+      organizationId: null,
+    };
+  });
 });
 
 describe('recordAuditEvent — writes a real security_audit_logs row', () => {
