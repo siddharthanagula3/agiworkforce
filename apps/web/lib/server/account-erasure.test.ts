@@ -298,6 +298,9 @@ describe('eraseUserAccountData', () => {
     for (const { table } of USER_SCOPED_TABLES) {
       expect(statements.some((sql) => sql.includes(`delete from public.${table} `))).toBe(true);
     }
+    expect(
+      statements.some((sql) => sql.includes('delete from public.user_skills where user_id = $1')),
+    ).toBe(true);
     for (const { table, column } of ANONYMIZED_USER_COLUMNS) {
       expect(
         statements.some((sql) => sql.includes(`update public.${table} set ${column} = null`)),
