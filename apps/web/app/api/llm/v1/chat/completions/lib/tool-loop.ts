@@ -1802,14 +1802,16 @@ function toolResultSecretBlockedMessage(toolName: string): string {
 /**
  * Applies the same organization secret-handling policy that
  * `applySecretHandlingToRequest` (secret-handling-gate.ts) enforces on the
- * inbound user turn, but to a tool RESULT before it is appended to the
- * conversation and re-sent to the provider. A fetched URL, a connector
- * response or a code-execution stdout is exactly as capable of carrying a
- * live credential as anything a user typed, and none of it passed through
- * the request-level gate.
+ * inbound user turn, but to a tool RESULT before it reaches either the
+ * client (the `x_tool_result` SSE event and the `tool-execution-end` stream
+ * event) or the provider (appended to `messages` and re-sent). A fetched
+ * URL, a connector response or a code-execution stdout is exactly as
+ * capable of carrying a live credential as anything a user typed, and none
+ * of it passed through the request-level gate.
  *
- * Exported for unit tests; every `messages.push({ role: 'tool', ... })` site
- * in `runToolLoop` routes its content through this first.
+ * Exported for unit tests; every site in `runToolLoop` that emits a tool
+ * result to the client or pushes one onto `messages` routes the single
+ * scan result through both.
  */
 export async function applyToolResultSecretPolicy(
   userId: string | undefined,
@@ -2480,9 +2482,14 @@ export async function* runToolLoop(
           inputRequiredCalls.push({ tc, inputRequired, boundedRequests, round });
           continue;
         }
-        const failText = boundedRequests
+        const rawFailText = boundedRequests
           ? inputRequiredFailSafeMessage(tc.qualifiedName)
           : `Tool "${tc.qualifiedName}" asked for additional input, but its request exceeded the safe size limit and was not presented. The call was not completed.`;
+        const failText = await applyToolResultSecretPolicy(
+          options.userId,
+          tc.qualifiedName,
+          rawFailText,
+        );
         yield encoder.encode(toolStatusEvent(tc.qualifiedName, 'failed', responseModel));
         yield encoder.encode(
           toolResultEvent(tc.id, tc.qualifiedName, failText, true, responseModel),
@@ -2499,7 +2506,7 @@ export async function* runToolLoop(
         );
         messages.push({
           role: 'tool',
-          content: await applyToolResultSecretPolicy(options.userId, tc.qualifiedName, failText),
+          content: failText,
           tool_call_id: tc.id,
         });
         continue;
@@ -2529,15 +2536,20 @@ export async function* runToolLoop(
       if (interactiveCard) {
         yield encoder.encode(interactiveCardEvent(interactiveCard, responseModel));
       }
+      const policedContent = await applyToolResultSecretPolicy(
+        options.userId,
+        tc.qualifiedName,
+        content,
+      );
       yield encoder.encode(
-        toolResultEvent(tc.id, tc.qualifiedName, content, isError, responseModel),
+        toolResultEvent(tc.id, tc.qualifiedName, policedContent, isError, responseModel),
       );
       yield encoder.encode(
         eventStream.emit({
           type: 'tool-execution-end',
           toolCallId: tc.id,
           name: tc.qualifiedName,
-          output: toAgentEventJson(content),
+          output: toAgentEventJson(policedContent),
           isError,
           elapsedMs: Math.max(0, Date.now() - (toolStartedAt.get(tc.id) ?? Date.now())),
         }),
@@ -2586,7 +2598,7 @@ export async function* runToolLoop(
 
       messages.push({
         role: 'tool',
-        content: await applyToolResultSecretPolicy(options.userId, tc.qualifiedName, content),
+        content: policedContent,
         tool_call_id: tc.id,
       });
       if (!isError && interactiveCard && isMapSearchTool(tc.qualifiedName)) {
@@ -2828,25 +2840,33 @@ export async function* runToolLoop(
             eventStream.emit({ type: 'input-resolved', toolCallId: p.id, outcome: 'resolved' }),
           );
           if (connectorPermissions.isDenied(p.qualifiedName)) {
-            const content = blockedToolResultMessage(p.qualifiedName);
+            const content = await applyToolResultSecretPolicy(
+              options.userId,
+              p.qualifiedName,
+              blockedToolResultMessage(p.qualifiedName),
+            );
             yield encoder.encode(
               toolResultEvent(p.id, p.qualifiedName, content, true, responseModel),
             );
             messages.push({
               role: 'tool',
-              content: await applyToolResultSecretPolicy(options.userId, p.qualifiedName, content),
+              content,
               tool_call_id: p.id,
             });
           } else if (isToolOffered(p.qualifiedName, mcpTools, availableTools)) {
             toRun.push(p);
           } else {
-            const content = `Tool "${p.qualifiedName}" is not available and was not executed.`;
+            const content = await applyToolResultSecretPolicy(
+              options.userId,
+              p.qualifiedName,
+              `Tool "${p.qualifiedName}" is not available and was not executed.`,
+            );
             yield encoder.encode(
               toolResultEvent(p.id, p.qualifiedName, content, true, responseModel),
             );
             messages.push({
               role: 'tool',
-              content: await applyToolResultSecretPolicy(options.userId, p.qualifiedName, content),
+              content,
               tool_call_id: p.id,
             });
           }
@@ -2867,13 +2887,17 @@ export async function* runToolLoop(
             { tool: p.qualifiedName, requestId: processed.requestId },
             '[tool-loop] approval rejected: tool is blocked by the user permission store',
           );
-          const content = blockedToolResultMessage(p.qualifiedName);
+          const content = await applyToolResultSecretPolicy(
+            options.userId,
+            p.qualifiedName,
+            blockedToolResultMessage(p.qualifiedName),
+          );
           yield encoder.encode(
             toolResultEvent(p.id, p.qualifiedName, content, true, responseModel),
           );
           messages.push({
             role: 'tool',
-            content: await applyToolResultSecretPolicy(options.userId, p.qualifiedName, content),
+            content,
             tool_call_id: p.id,
           });
         } else if (
@@ -2882,26 +2906,31 @@ export async function* runToolLoop(
         ) {
           toRun.push(p);
         } else if (decision === 'approved') {
-          const content = `Tool "${p.qualifiedName}" is not available and was not executed.`;
+          const content = await applyToolResultSecretPolicy(
+            options.userId,
+            p.qualifiedName,
+            `Tool "${p.qualifiedName}" is not available and was not executed.`,
+          );
           yield encoder.encode(
             toolResultEvent(p.id, p.qualifiedName, content, true, responseModel),
           );
           messages.push({
             role: 'tool',
-            content: await applyToolResultSecretPolicy(options.userId, p.qualifiedName, content),
+            content,
             tool_call_id: p.id,
           });
         } else {
+          const content = await applyToolResultSecretPolicy(
+            options.userId,
+            p.qualifiedName,
+            TOOL_DENIED_MESSAGE,
+          );
           yield encoder.encode(
-            toolResultEvent(p.id, p.qualifiedName, TOOL_DENIED_MESSAGE, false, responseModel),
+            toolResultEvent(p.id, p.qualifiedName, content, false, responseModel),
           );
           messages.push({
             role: 'tool',
-            content: await applyToolResultSecretPolicy(
-              options.userId,
-              p.qualifiedName,
-              TOOL_DENIED_MESSAGE,
-            ),
+            content,
             tool_call_id: p.id,
           });
         }
@@ -3207,9 +3236,13 @@ export async function* runToolLoop(
             ? '[tool-loop] egress escalation denied on an unattended run: untrusted content + sensitive source + egress path, no human to approve'
             : '[tool-loop] tool call blocked by the user permission store',
         );
-        const content = escalationDenied
-          ? refusedToolResultMessage(tc.qualifiedName)
-          : blockedToolResultMessage(tc.qualifiedName);
+        const content = await applyToolResultSecretPolicy(
+          options.userId,
+          tc.qualifiedName,
+          escalationDenied
+            ? refusedToolResultMessage(tc.qualifiedName)
+            : blockedToolResultMessage(tc.qualifiedName),
+        );
         const blockedCategory = canonicalToolCategory(tc.qualifiedName, mcpTools);
         yield encoder.encode(
           eventStream.emit({
@@ -3241,7 +3274,7 @@ export async function* runToolLoop(
         );
         messages.push({
           role: 'tool',
-          content: await applyToolResultSecretPolicy(options.userId, tc.qualifiedName, content),
+          content,
           tool_call_id: tc.id,
         });
       }
