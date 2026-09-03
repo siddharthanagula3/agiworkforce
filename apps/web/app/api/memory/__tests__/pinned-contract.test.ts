@@ -4,15 +4,16 @@ import { NextRequest } from 'next/server';
 const mocks = vi.hoisted(() => ({ query: vi.fn(), execute: vi.fn() }));
 
 vi.mock('server-only', () => ({}));
-vi.mock('@/lib/api-auth', () => ({
-  getClerkAuthUser: vi.fn(async () => ({ userId: 'user-1' })),
-}));
 vi.mock('@/lib/csrf', () => ({ requireCsrfToken: vi.fn(async () => null) }));
 vi.mock('@/lib/rate-limit', () => ({ withRateLimit: vi.fn(async () => null) }));
-vi.mock('@/lib/server/neon-db', () => ({
-  getNeonDb: vi.fn(() => ({
-    query: (...args: unknown[]) => mocks.query(...args),
-    execute: (...args: unknown[]) => mocks.execute(...args),
+vi.mock('@/lib/server/rls-db', () => ({
+  getUserScopedDb: vi.fn(async () => ({
+    db: {
+      query: (...args: unknown[]) => mocks.query(...args),
+      execute: (...args: unknown[]) => mocks.execute(...args),
+    },
+    userId: 'user-1',
+    organizationId: null,
   })),
 }));
 vi.mock('@/lib/cors', () => ({

@@ -4,8 +4,7 @@ import { withRateLimit } from '@/lib/rate-limit';
 import { requireCsrfToken } from '@/lib/csrf';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
-import { getClerkAuthUser } from '@/lib/api-auth';
-import { getNeonDb } from '@/lib/server/neon-db';
+import { getUserScopedDb } from '@/lib/server/rls-db';
 import type { UserMemoryRow } from '@/lib/server/neon-types';
 import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
 
@@ -29,8 +28,7 @@ async function handleGetMemory(request: NextRequest, context: RouteContext) {
   const rateLimitResponse = await withRateLimit(request, 'chat-conversation');
   if (rateLimitResponse) return rateLimitResponse;
 
-  const { userId } = await getClerkAuthUser(request);
-  const db = getNeonDb();
+  const { db, userId } = await getUserScopedDb(request);
   const { id } = await context.params;
 
   const [data] = await db.query<MemoryRow>(
@@ -55,8 +53,7 @@ async function handleUpdateMemory(request: NextRequest, context: RouteContext) {
   const rateLimitResponse = await withRateLimit(request, 'chat-conversation');
   if (rateLimitResponse) return rateLimitResponse;
 
-  const { userId } = await getClerkAuthUser(request);
-  const db = getNeonDb();
+  const { db, userId } = await getUserScopedDb(request);
   const { id } = await context.params;
 
   let body: { content?: string; pinned?: boolean };
@@ -116,8 +113,7 @@ async function handleDeleteMemory(request: NextRequest, context: RouteContext) {
   const rateLimitResponse = await withRateLimit(request, 'chat-conversation');
   if (rateLimitResponse) return rateLimitResponse;
 
-  const { userId } = await getClerkAuthUser(request);
-  const db = getNeonDb();
+  const { db, userId } = await getUserScopedDb(request);
   const { id } = await context.params;
 
   try {
