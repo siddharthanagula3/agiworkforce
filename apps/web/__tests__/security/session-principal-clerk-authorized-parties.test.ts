@@ -3,10 +3,11 @@ import type { NextRequest } from 'next/server';
 
 vi.mock('server-only', () => ({}));
 
-const { mockAuth, mockGetClerkAuthUser, mockVerifyToken } = vi.hoisted(() => ({
+const { mockAuth, mockGetClerkAuthUser, mockVerifyToken, mockGetUserScopedDb } = vi.hoisted(() => ({
   mockAuth: vi.fn(),
   mockGetClerkAuthUser: vi.fn(),
   mockVerifyToken: vi.fn(),
+  mockGetUserScopedDb: vi.fn(),
 }));
 
 vi.mock('@clerk/nextjs/server', () => ({
@@ -19,6 +20,10 @@ vi.mock('@clerk/backend', () => ({
 
 vi.mock('@/lib/api-auth', () => ({
   getClerkAuthUser: (...args: unknown[]) => mockGetClerkAuthUser(...args),
+}));
+
+vi.mock('@/lib/server/rls-db', () => ({
+  getUserScopedDb: (...args: unknown[]) => mockGetUserScopedDb(...args),
 }));
 
 import { resolveSessionsPrincipal } from '@/app/api/settings/sessions/session-principal';
@@ -41,7 +46,13 @@ describe('resolveSessionsPrincipal binds Clerk bearer verification to an authori
     mockAuth.mockReset();
     mockGetClerkAuthUser.mockReset();
     mockVerifyToken.mockReset();
+    mockGetUserScopedDb.mockReset();
     mockGetClerkAuthUser.mockResolvedValue({ userId: 'user_sessions_1' });
+    mockGetUserScopedDb.mockResolvedValue({
+      db: {} as never,
+      userId: 'user_sessions_1',
+      organizationId: null,
+    });
     mockVerifyToken.mockResolvedValue({ sub: 'user_sessions_1', sid: 'sess_abc' });
     delete process.env['CLERK_AUTHORIZED_PARTIES'];
     process.env['NEXT_PUBLIC_APP_URL'] = DEPLOYMENT_ORIGIN;
@@ -60,7 +71,7 @@ describe('resolveSessionsPrincipal binds Clerk bearer verification to an authori
   it('falls back to the deployment origin when CLERK_AUTHORIZED_PARTIES is unset', async () => {
     const principal = await resolveSessionsPrincipal(bearerRequest());
 
-    expect(principal).toEqual({ userId: 'user_sessions_1', currentSessionId: 'sess_abc' });
+    expect(principal).toMatchObject({ userId: 'user_sessions_1', currentSessionId: 'sess_abc' });
     expect(mockVerifyToken).toHaveBeenCalledWith(BEARER, {
       secretKey: 'sk_test_sessions',
       authorizedParties: [DEPLOYMENT_ORIGIN],
@@ -84,6 +95,6 @@ describe('resolveSessionsPrincipal binds Clerk bearer verification to an authori
     const principal = await resolveSessionsPrincipal(bearerRequest());
 
     expect(mockVerifyToken).not.toHaveBeenCalled();
-    expect(principal).toEqual({ userId: 'user_sessions_1', currentSessionId: null });
+    expect(principal).toMatchObject({ userId: 'user_sessions_1', currentSessionId: null });
   });
 });
