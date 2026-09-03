@@ -17,6 +17,7 @@ vi.mock('@shared/lib/get-auth-token', () => ({
 import { parseManagedMediaIdempotencyKey } from '@agiworkforce/utils';
 import { isExecutableVideoModel, modelsCatalog } from '@agiworkforce/types';
 import { IMAGE_MODELS } from '@features/chat/lib/imageGenerationOptions';
+import { IMAGE_GENERATION_FUNCTION_LIMIT_MS } from '@/lib/deadline-policy';
 import { useMediaGeneration, MediaGenerationApiError } from './useMediaGeneration';
 
 const GOOGLE_IMAGE_MODEL = IMAGE_MODELS.find((model) => model.provider === 'google');
@@ -208,6 +209,71 @@ describe('useMediaGeneration', () => {
     });
 
     expect(fetchMock).toHaveBeenCalledOnce();
+  });
+
+  describe('generateImage deadline', () => {
+    it('aborts and reports an image-specific notice once the shared deadline elapses', async () => {
+      vi.useFakeTimers();
+      try {
+        vi.spyOn(globalThis, 'fetch').mockImplementation(
+          (_input, init) =>
+            new Promise((_resolve, reject) => {
+              const signal = init?.signal;
+              signal?.addEventListener('abort', () => {
+                reject(new DOMException('The operation was aborted.', 'AbortError'));
+              });
+            }),
+        );
+        const { result } = renderHook(() => useMediaGeneration());
+        const pending = result.current.generateImage('a slow lighthouse');
+        const settled = pending.catch((error: unknown) => error);
+
+        await vi.advanceTimersByTimeAsync(IMAGE_GENERATION_FUNCTION_LIMIT_MS);
+
+        const error = await settled;
+        expect(error).toBeInstanceOf(MediaGenerationApiError);
+        const timeoutError = error as MediaGenerationApiError;
+        expect(timeoutError.message).toBe(
+          'The image did not finish in time. Try again or pick another image model.',
+        );
+        expect(timeoutError.code).toBe('image_generation_timeout');
+        expect(mediaStoreMocks.updateJob).toHaveBeenLastCalledWith(
+          expect.any(String),
+          expect.objectContaining({
+            status: 'failed',
+            errorMessage:
+              'The image did not finish in time. Try again or pick another image model.',
+          }),
+        );
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('does not abort a response that finishes before the deadline', async () => {
+      vi.useFakeTimers();
+      try {
+        vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+          ok: true,
+          json: async () => ({
+            images: [{ url: 'https://cdn.example/fast.png' }],
+            provider: GOOGLE_IMAGE_MODEL.provider,
+            catalog_model: GOOGLE_IMAGE_MODEL.id,
+          }),
+        } as Response);
+        const { result } = renderHook(() => useMediaGeneration());
+
+        const value = await result.current.generateImage('a fast lighthouse');
+
+        expect(value.imageUrl).toBe('https://cdn.example/fast.png');
+        expect(mediaStoreMocks.updateJob).not.toHaveBeenCalledWith(
+          expect.any(String),
+          expect.objectContaining({ status: 'failed' }),
+        );
+      } finally {
+        vi.useRealTimers();
+      }
+    });
   });
 
   describe('generateVideo', () => {
