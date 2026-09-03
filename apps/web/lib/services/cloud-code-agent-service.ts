@@ -15,7 +15,9 @@ import {
   reserveManagedUsageRequest,
   type ManagedUsageRequestReservation,
 } from './managed-usage-request-service';
+import { selectHarnessRunner } from '@/lib/e2b/harnesses';
 import { createCloudCodeToolRunner } from './cloud-code-agent-runner';
+import { createHarnessStepProjector, runCloudCodeHarnessTurn } from './cloud-code-harness-turn';
 import {
   createObservedProviderUsage,
   observedProviderUsageLedgerCents,
@@ -39,6 +41,10 @@ import {
 const ESTIMATED_TURN_COST_CENTS = 25;
 
 const MINIMUM_BILLED_TURN_CENTS = 1;
+
+const UNKNOWN_TOOL_NAME = 'unknown';
+
+const MAX_STEP_OUTPUT_LENGTH = 100_000;
 
 /**
  * The wall-clock ceiling the platform enforces on the two routes that reach this
@@ -186,10 +192,11 @@ async function settleReservationQuietly(
 function settledTurnCostCents(provider: string, model: string, usage: CloudCodeTurnUsage): number {
   const reportedTokens =
     usage.inputTokens + usage.outputTokens + usage.cacheReadTokens + usage.cacheWriteTokens;
-  if (reportedTokens <= 0) return ESTIMATED_TURN_COST_CENTS;
+  const reportedCostDollars = usage.providerCostDollars ?? 0;
+  if (reportedTokens <= 0 && reportedCostDollars <= 0) return ESTIMATED_TURN_COST_CENTS;
 
   const costCents = observedProviderUsageLedgerCents(usage, { provider, model });
-  return Math.max(MINIMUM_BILLED_TURN_CENTS, costCents);
+  return costCents > 0 ? Math.max(MINIMUM_BILLED_TURN_CENTS, costCents) : ESTIMATED_TURN_COST_CENTS;
 }
 
 const FLAGSHIP_MODEL_IDS: ReadonlySet<string> = new Set(
@@ -369,50 +376,72 @@ async function runClaimedAgentTurn(
   let result: CloudCodeAgentResult;
   let stepIndex = initialStepIndex;
   const deadline = withTurnDeadline(input.signal, CLOUD_CODE_AGENT_TURN_BUDGET_MS);
+  const resumingOwnLoop = Boolean(input.preApproved ?? input.priorMessages);
+  const harness = resumingOwnLoop ? null : selectHarnessRunner(session.runtimeId);
+
+  const recordStep = async (event: CloudCodeAgentEvent): Promise<void> => {
+    if (event.type !== 'tool-end') return;
+    stepIndex += 1;
+    await db.query(
+      `insert into cloud_code_agent_steps
+         (turn_id, step_index, tool_name, tool_args, output, is_error, completed_at)
+       values ($1, $2, $3, $4::jsonb, $5, $6, now())
+       on conflict (turn_id, step_index) do nothing`,
+      [
+        turnId,
+        stepIndex,
+        event.toolName ?? UNKNOWN_TOOL_NAME,
+        JSON.stringify(event.toolArgs ?? {}),
+        (event.output ?? '').slice(0, MAX_STEP_OUTPUT_LENGTH),
+        event.isError ?? false,
+      ],
+    );
+  };
 
   try {
-    result = await runCloudCodeAgentTurn({
-      adapter: buildServerProviderAdapter(provider),
-      model,
-      goal,
-      runner: createCloudCodeToolRunner(executor, session.workspacePath),
-      // The composed signal, not the raw request signal: the turn must abort on
-      // its own budget as well as on a client disconnect, so the unwind below
-      // runs inside the platform's window instead of being killed mid-turn.
-      signal: deadline.signal,
-      maxDurationMs: CLOUD_CODE_AGENT_TURN_BUDGET_MS,
-      repositoryUrl: session.repositoryUrl,
-      workspacePath: session.workspacePath,
-      ...(input.priorMessages ? { priorMessages: input.priorMessages } : {}),
-      ...(input.preApproved ? { preApproved: input.preApproved } : {}),
-      onStepCommitted: async (step: number) => {
-        await reserveManagedUsageProviderStep({
-          reservation,
-          operationKey: `provider:${step + 1}`,
-          estimatedCostCents: ESTIMATED_TURN_COST_CENTS,
-          planTier,
-          isFlagship,
-        });
-      },
-      onEvent: async (event: CloudCodeAgentEvent) => {
-        if (event.type !== 'tool-end') return;
-        stepIndex += 1;
-        await db.query(
-          `insert into cloud_code_agent_steps
-             (turn_id, step_index, tool_name, tool_args, output, is_error, completed_at)
-           values ($1, $2, $3, $4::jsonb, $5, $6, now())
-           on conflict (turn_id, step_index) do nothing`,
-          [
-            turnId,
-            stepIndex,
-            event.toolName ?? 'unknown',
-            JSON.stringify(event.toolArgs ?? {}),
-            (event.output ?? '').slice(0, 100_000),
-            event.isError ?? false,
-          ],
-        );
-      },
-    });
+    if (harness) {
+      const projectStep = createHarnessStepProjector();
+      result = await runCloudCodeHarnessTurn({
+        runner: harness,
+        executor,
+        goal,
+        workspacePath: session.workspacePath,
+        provider,
+        model,
+        signal: deadline.signal,
+        maxDurationMs: CLOUD_CODE_AGENT_TURN_BUDGET_MS,
+        onEvent: async (event) => {
+          const step = projectStep(event);
+          if (step) await recordStep(step);
+        },
+      });
+    } else {
+      result = await runCloudCodeAgentTurn({
+        adapter: buildServerProviderAdapter(provider),
+        model,
+        goal,
+        runner: createCloudCodeToolRunner(executor, session.workspacePath),
+        // The composed signal, not the raw request signal: the turn must abort on
+        // its own budget as well as on a client disconnect, so the unwind below
+        // runs inside the platform's window instead of being killed mid-turn.
+        signal: deadline.signal,
+        maxDurationMs: CLOUD_CODE_AGENT_TURN_BUDGET_MS,
+        repositoryUrl: session.repositoryUrl,
+        workspacePath: session.workspacePath,
+        ...(input.priorMessages ? { priorMessages: input.priorMessages } : {}),
+        ...(input.preApproved ? { preApproved: input.preApproved } : {}),
+        onStepCommitted: async (step: number) => {
+          await reserveManagedUsageProviderStep({
+            reservation,
+            operationKey: `provider:${step + 1}`,
+            estimatedCostCents: ESTIMATED_TURN_COST_CENTS,
+            planTier,
+            isFlagship,
+          });
+        },
+        onEvent: recordStep,
+      });
+    }
 
     if (deadline.expired() && result.stopReason === 'cancelled') {
       // The loop saw our budget abort, not a client disconnect. Persisting that

@@ -57,6 +57,7 @@ import type {
 } from '@/lib/services/cloud-code-agent-loop';
 import {
   CLOUD_CODE_AGENT_TURN_BUDGET_MS,
+  executePersistedAgentTurn,
   startCloudCodeAgentTurn,
 } from '@/lib/services/cloud-code-agent-service';
 
@@ -427,5 +428,121 @@ describe('Cloud Code turn releases its resources when it blows the budget', () =
     const params = terminalTurnUpdate(db);
     expect(params?.[1]).toBe('cancelled');
     expect(params?.[3]).toBe('cancelled');
+  });
+});
+
+describe('Cloud Code runs the harness the session was created with', () => {
+  const CLAUDE_RESULT_LINE = `${JSON.stringify({
+    type: 'result',
+    subtype: 'success',
+    is_error: false,
+    num_turns: 2,
+    result: 'Patched the guard.',
+    session_id: 'harness-session-1',
+    total_cost_usd: 0.31,
+  })}\n`;
+
+  function harnessExecutor(stdout: string) {
+    const runCommand = vi.fn(async (_input: { command: string; cwd?: string }) => ({
+      ok: true,
+      output: '',
+      stdout,
+      stderr: '',
+      exitCode: 0,
+    }));
+    vi.mocked(getE2BExecutor).mockResolvedValue({
+      runCommand,
+      writeFile: vi.fn(async () => ({ ok: true, output: '' })),
+      createFolder: vi.fn(async () => ({ ok: true, output: '' })),
+      readFileBytes: vi.fn(async () => null),
+      pause: vi.fn(),
+      dispose: vi.fn(),
+    } as never);
+    return runCommand;
+  }
+
+  function sessionOn(runtimeId: string | null) {
+    vi.mocked(getCloudCodeSession).mockResolvedValue({
+      state: 'ready',
+      repositoryUrl: null,
+      networkAccess: 'none',
+      workspacePath: '/home/user/project',
+      runtimeId,
+    } as never);
+  }
+
+  it('invokes the harness CLI instead of the generic tool loop', async () => {
+    sessionOn('claude');
+    const runCommand = harnessExecutor(CLAUDE_RESULT_LINE);
+
+    const record = await startTurn(trackedDb());
+
+    expect(String(runCommand.mock.calls[0]?.[0]?.command)).toContain(
+      'claude --dangerously-skip-permissions --output-format stream-json',
+    );
+    expect(vi.mocked(runCloudCodeAgentTurn)).not.toHaveBeenCalled();
+    expect(record.stopReason).toBe('done');
+    expect(record.finalMessage).toBe('Patched the guard.');
+  });
+
+  it('settles a harness turn at the cost the harness reported', async () => {
+    sessionOn('claude');
+    harnessExecutor(CLAUDE_RESULT_LINE);
+
+    await startTurn(trackedDb());
+
+    expect(settledCostCents()).toBe(31);
+  });
+
+  it('falls back to the generic loop when the runtime carries no harness binary', async () => {
+    sessionOn('code-interpreter-v1');
+    harnessExecutor(CLAUDE_RESULT_LINE);
+    vi.mocked(runCloudCodeAgentTurn).mockResolvedValue({
+      stopReason: 'done',
+      stepsUsed: 1,
+      usage: NO_USAGE,
+      finalMessage: 'generic loop',
+      messages: [],
+    });
+
+    const record = await startTurn(trackedDb());
+
+    expect(vi.mocked(runCloudCodeAgentTurn)).toHaveBeenCalledTimes(1);
+    expect(record.finalMessage).toBe('generic loop');
+  });
+  it('leaves an approval resume on the loop that asked for it', async () => {
+    sessionOn('claude');
+    const runCommand = harnessExecutor(CLAUDE_RESULT_LINE);
+    vi.mocked(runCloudCodeAgentTurn).mockResolvedValue({
+      stopReason: 'done',
+      stepsUsed: 1,
+      usage: NO_USAGE,
+      finalMessage: 'ran the approved command',
+      messages: [],
+    });
+
+    await executePersistedAgentTurn({
+      db: trackedDb() as never,
+      owner: { userId: 'user-1', organizationId: null },
+      session: {
+        state: 'ready',
+        repositoryUrl: null,
+        networkAccess: 'none',
+        workspacePath: '/home/user/project',
+        runtimeId: 'claude',
+      } as never,
+      sessionId: 'session-1',
+      turnId: 'turn-1',
+      goal: 'Fix the failing test',
+      model: STANDARD_MODEL,
+      provider: 'anthropic',
+      planTier: 'pro',
+      idempotencyKey: '11111111-1111-4111-8111-111111111111',
+      signal: new AbortController().signal,
+      preApproved: { toolUseId: 'call-1', command: 'rm build.log', approved: true },
+    });
+
+    expect(vi.mocked(runCloudCodeAgentTurn)).toHaveBeenCalledTimes(1);
+    expect(runCommand).not.toHaveBeenCalled();
   });
 });
