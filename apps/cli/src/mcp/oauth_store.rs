@@ -139,16 +139,6 @@ pub struct McpServerToken {
     pub client_id: Option<String>,
 }
 
-/// Keyring-backed OAuth token store keyed by a SHA-256 digest of the canonical
-/// server URL, so tenant/path details never appear in credential metadata.
-///
-/// Strategy:
-/// 1. Primary: OS keyring (`keyring` crate) — survives reboots, OS-encrypted.
-/// 2. Explicit headless opt-out: file at
-///    `~/.agiworkforce/secrets/<server-hash>.token` with 0o600 permissions.
-///
-/// On Linux without DBus, callers receive an actionable keyring error unless
-/// `AGIWORKFORCE_NO_KEYRING=1` was explicitly configured.
 #[allow(dead_code)]
 pub struct McpServerOAuthStore {
     base_dir: PathBuf,
@@ -158,9 +148,6 @@ pub struct McpServerOAuthStore {
     use_keyring: bool,
 }
 
-/// Honor `AGIWORKFORCE_NO_KEYRING=1` (or any non-empty value) — opt-out for
-/// environments where the OS keyring is unavailable or undesirable (CI,
-/// sandboxes, devs who don't want the Mac to prompt them constantly).
 fn env_disables_keyring() -> bool {
     std::env::var("AGIWORKFORCE_NO_KEYRING")
         .map(|v| !v.is_empty() && v != "0")

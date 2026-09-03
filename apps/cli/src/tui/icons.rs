@@ -9,31 +9,18 @@
 /// Tool types that correspond to Lucide icons in the design spec.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum ToolIcon {
-    /// `Terminal` — bash / shell execution
     Terminal,
-    /// `FileText` — file read
     FileText,
-    /// `FilePlus2` — file write (new file)
     FilePlus2,
-    /// `FilePen` — file edit / patch
     FilePen,
-    /// `Search` — web-search
     Search,
-    /// `Globe` — web-fetch
     Globe,
-    /// `Folder` — filesystem list
     Folder,
-    /// `Image` — image generation
     Image,
-    /// `MousePointerClick` — browser / computer use
     MousePointerClick,
-    /// `Plug` — MCP custom tool
     Plug,
-    /// `CircleCheck` — done terminator
     CircleCheck,
-    /// `Brain` — thinking / reasoning
     Brain,
-    /// `Loader2` — pending spinner (animated braille cycle)
     Loader2,
 }
 

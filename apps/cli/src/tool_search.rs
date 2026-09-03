@@ -1,16 +1,4 @@
 #![allow(dead_code)]
-//! Phase E (W2-W6): Tool search and on-demand schema loader.
-//!
-//! Translates Claude Code's `ToolSearchTool.ts` / `shouldDefer` / `shouldDefer`
-//! pattern into Rust. The model receives only the ~11 core tool schemas in its
-//! initial context; niche tools (apply_patch, update_plan, glob, batch,
-//! multiedit, todo_*, ask_user, read_many_files) are deferred and loaded here
-//! on demand.
-//!
-//! Query syntax:
-//!   - `select:tool1,tool2`  — load exact schemas for named tools
-//!   - `"file edit"`          — fuzzy keyword search across name + description
-//!   - `"patch"`              — same, returns up to max_results matches
 
 use crate::models::ToolDefinition;
 use crate::plugins::DiscoverableTool;
@@ -78,7 +66,7 @@ pub fn format_search_results(results: &[ToolSearchResult]) -> String {
     }
     results
         .iter()
-        .map(|r| format!("  {} — {}", r.name, r.description))
+        .map(|r| format!("  {}, {}", r.name, r.description))
         .collect::<Vec<_>>()
         .join("\n")
 }
@@ -101,14 +89,6 @@ pub struct ToolSchemaResult {
     pub was_deferred: bool,
 }
 
-/// Parse the query string and return matching `ToolSchemaResult` entries.
-///
-/// Query formats:
-/// - `"select:apply_patch,glob"` — exact names, comma-separated after `select:`
-/// - `"patch"` / `"file edit"` — keyword fuzzy search (space-separated terms)
-///
-/// `catalog` should be the full built-in catalog including deferred tools
-/// (use `all_builtin_tool_definitions()`).
 pub fn search_tool_schemas(
     query: &str,
     catalog: &[ToolDefinition],
@@ -117,7 +97,6 @@ pub fn search_tool_schemas(
     let trimmed = query.trim();
 
     if let Some(names_str) = trimmed.strip_prefix("select:") {
-        // Exact select — return full schemas for explicitly named tools.
         let names: Vec<&str> = names_str
             .split(',')
             .map(str::trim)
@@ -186,11 +165,6 @@ pub fn search_tool_schemas(
     }
 }
 
-/// Render a list of `ToolSchemaResult` entries as the JSON string the model
-/// expects — one JSON object per tool with `name`, `description`, and
-/// `input_schema` fields, wrapped in a JSON array.
-///
-/// The model can use these schemas to call the loaded tools immediately.
 pub fn render_schema_results(results: &[ToolSchemaResult]) -> String {
     if results.is_empty() {
         return "No matching tools found. Try a different keyword or check the tool name."
@@ -206,9 +180,6 @@ pub fn render_schema_results(results: &[ToolSchemaResult]) -> String {
     }
 }
 
-// ---------------------------------------------------------------------------
-// Feature flags (stable — kept from original tool_search.rs)
-// ---------------------------------------------------------------------------
 
 #[derive(Debug, Clone, Default)]
 pub struct FeatureFlags {

@@ -12,15 +12,11 @@ pub(super) enum SlashResult {
     Exit,
     Login,
     Logout,
-    /// Side query — carries the question text for async execution.
     Btw(String),
-    /// Advisor side query — carries the question text for async execution.
     Advisor(String),
     /// Enter voice mode with the given language code.
     Voice(String),
-    /// A2A command — carries (subcommand, args) for async execution.
     A2a(String, String),
-    /// Batch operation — carries (glob_pattern, prompt) for parallel file processing.
     Batch(String, String),
     /// Turn the slash command into a first-class prompt.
     Prompt(String),
@@ -41,7 +37,6 @@ pub(super) enum SlashResult {
     Sync(String),
     /// Re-run onboarding wizard.
     Onboarding,
-    /// Invoke an agent by name — applies its overrides to the current session.
     AgentInvoke(String),
 }
 
@@ -158,8 +153,6 @@ pub(super) async fn handle_slash_command(
             dialogs::handle_setup(config);
         }
         "/permissions" | "/perms" | "/approvals" | "/approve" => {
-            // `/approve` is a thin alias to the approvals surface — the same
-            // PermissionStore the top-level `agi approvals` subcommand mutates.
             registry::handle_permissions(arg);
         }
         "/raw" => {
@@ -174,8 +167,6 @@ pub(super) async fn handle_slash_command(
             output::print_block(&crate::skills::format_skill_list(&all));
         }
         "/agents" | "/agent" => {
-            // Quick-invoke: /agents <name> — apply agent overrides to current session.
-            // Management subcommands and bare /agents — display text output.
             let is_quick_invoke = !arg.is_empty()
                 && !matches!(
                     arg.split_whitespace().next().unwrap_or(""),
@@ -278,7 +269,7 @@ pub(super) async fn handle_slash_command(
         "/advisor" => {
             if arg.is_empty() {
                 output::print_warn(
-                    "Usage: /advisor <question> — consult a catalog-selected advisor model",
+                    "Usage: /advisor <question>, consult a catalog-selected advisor model",
                 );
             } else {
                 return SlashResult::Advisor(arg.to_string());
@@ -357,7 +348,7 @@ pub(super) async fn handle_slash_command(
                             return SlashResult::Handled;
                         }
                     }
-                    output::print_info(&format!("Fast mode ON — using {}", session.model));
+                    output::print_info(&format!("Fast mode ON, using {}", session.model));
                 }
                 "off" => {
                     if session.fast_mode {
@@ -366,7 +357,7 @@ pub(super) async fn handle_slash_command(
                             return SlashResult::Handled;
                         }
                     }
-                    output::print_info(&format!("Fast mode OFF — using {}", session.model));
+                    output::print_info(&format!("Fast mode OFF, using {}", session.model));
                 }
                 _ => {
                     if let Err(err) = session.toggle_fast_mode(fast_model) {
@@ -374,7 +365,7 @@ pub(super) async fn handle_slash_command(
                         return SlashResult::Handled;
                     }
                     let status = if session.fast_mode { "ON" } else { "OFF" };
-                    output::print_info(&format!("Fast mode {} — using {}", status, session.model));
+                    output::print_info(&format!("Fast mode {}, using {}", status, session.model));
                 }
             }
         }
@@ -678,8 +669,6 @@ mod tests {
         ));
         let mut config = crate::config::CliConfig::default();
 
-        // `/approve help` routes into the approvals surface (prints help, no store
-        // mutation) and is Handled — not reported as an unknown command.
         let approve = handle_slash_command("/approve help", &mut session, &mut config).await;
         assert!(matches!(approve, SlashResult::Handled));
 

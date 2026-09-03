@@ -135,14 +135,6 @@ fn truncate_on_char_boundary(s: &str, max_bytes: usize) -> &str {
     &s[..end]
 }
 
-/// Parse the model's reply into a `ReviewOutput`, stripping terminal escapes
-/// from every field it carries.
-///
-/// The reviewed diff comes from a checkout the operator may not trust, the
-/// model quotes it back, and `serde_json` decodes `\u001b` into a real ESC
-/// byte. Sanitizing here — the single place a model reply becomes a
-/// `ReviewOutput` — keeps the escape out of stdout and out of the value
-/// returned to callers.
 fn parse_review(text: &str) -> ReviewOutput {
     if let Ok(r) = serde_json::from_str::<ReviewOutput>(text) {
         return sanitize_review(r);

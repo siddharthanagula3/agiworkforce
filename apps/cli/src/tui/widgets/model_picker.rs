@@ -31,13 +31,6 @@ use crate::tui::{display_width, pad_to_cols, truncate_cols};
 // Environment-gate stub (Phase A)
 // ---------------------------------------------------------------------------
 
-/// Returns true if the named environment is configured and available for use.
-///
-/// Phase A stub: always returns false — any model with `requires_environment`
-/// set is hidden from the picker until the environment is live.
-///
-/// Phase B: replace this body with a real check against the E2B SDK connection
-/// state (or local-runtime presence) passed through from the session context.
 fn environment_available(_env: &str) -> bool {
     // Phase B: wire real env signal here.
     false
@@ -91,11 +84,6 @@ impl Default for ModelPickerState {
             visible: false,
             search: String::new(),
             cursor: 0,
-            // Search starts focused so the "type to filter..." placeholder is
-            // true from the moment the picker opens — typing immediately
-            // filters without requiring the user to discover the `/` key
-            // first. Up/Down still unfocus search to navigate the list, and
-            // `/` remains available to re-focus after that.
             search_focused: true,
             effort: Effort::Medium,
             rows: Vec::new(),
@@ -110,12 +98,6 @@ impl ModelPickerState {
         let query = self.search.to_lowercase();
         self.rows.clear();
 
-        // CLI-PICKER-TIER-01: the picker previously listed every managed-cloud
-        // model regardless of sign-in state, presenting cloud access the user
-        // did not have. Read the cached tier (sync, no network) and fall back to
-        // Free — the fail-closed default the tier cache itself uses for an
-        // unknown tier — so a signed-out user sees Cloud rows marked, not
-        // silently offered.
         self.tier = crate::models::gateway_models::cached_user_tier()
             .or_else(|| crate::tier_cache::read_tier_cache().map(|cached| cached.tier))
             .unwrap_or(crate::tier_cache::UserTier::Free);
@@ -178,16 +160,6 @@ impl ModelPickerState {
         }
     }
 
-    /// True when `row` is a managed-cloud model the active tier cannot route
-    /// (CLI-PICKER-TIER-01).
-    ///
-    /// Locked rows are still listed and still selectable — annotated, not
-    /// hidden. Hiding them would misrepresent the catalog, and with no local
-    /// runtime discovered the picker could end up empty. Selecting one surfaces
-    /// the real entitlement error from the request path instead of pretending
-    /// the model was reachable.
-    ///
-    /// Local and BYOK rows are user-provided access and are never gated here.
     pub fn is_locked(&self, row: &PickerRow) -> bool {
         match row {
             PickerRow::ModelRow { provider_id, model } => {
@@ -255,7 +227,6 @@ impl ModelPickerState {
         match self.rows.get(self.cursor) {
             Some(PickerRow::ModelRow { model, .. }) => Some(model),
             _ => {
-                // Cursor on a header — return first model below it.
                 self.rows[self.cursor..].iter().find_map(|r| match r {
                     PickerRow::ModelRow { model, .. } => Some(model),
                     _ => None,
@@ -508,8 +479,6 @@ fn render_list(
                         .fg(ui_accent())
                         .add_modifier(Modifier::BOLD)
                 } else if locked {
-                    // Dim unreachable rows — same visual language the TUI uses
-                    // elsewhere for unavailable affordances.
                     Style::default().add_modifier(Modifier::DIM)
                 } else {
                     Style::default()
@@ -558,10 +527,8 @@ fn format_model_row(
         );
     }
 
-    // Local models discovered at runtime don't report a context window
-    // (Ollama's /api/tags omits it), so show "—" instead of a bogus "0K ctx".
     let ctx_col = if ctx_k == 0 {
-        format!("{:>9}", "—")
+        format!("{:>9}", ", ")
     } else {
         format!("{ctx_k:>4}K ctx")
     };
@@ -572,9 +539,6 @@ fn format_model_row(
     format!("{}{}{}", prefix, pad_to_cols(model_id, id_width), suffix)
 }
 
-// ---------------------------------------------------------------------------
-// Key handling (pure state transitions — no I/O)
-// ---------------------------------------------------------------------------
 
 /// What the host `TuiApp` should do after a key is handled.
 pub enum PickerAction {
@@ -781,13 +745,6 @@ mod tests {
 
     #[test]
     fn effort_bar_depends_on_model_reasoning_not_just_provider() {
-        // The Anthropic provider exposes an effort knob, but the bar must follow
-        // the highlighted MODEL's reasoning capability, not its provider.
-        //
-        // Synthetic ids on purpose: the pair only has to differ in the
-        // `supports_reasoning` flag, and naming real models tied this test to
-        // whichever ones happened to have opposite capabilities — it broke when
-        // Haiku 4.5 was retired and every Anthropic model reasoned.
         let models = vec![
             model_with_reasoning("fixture-no-reasoning", "anthropic", false),
             model_with_reasoning("fixture-reasoning", "anthropic", true),
@@ -831,7 +788,6 @@ mod tests {
         let mut state = ModelPickerState::default();
         state.rebuild_rows(&models);
 
-        // OpenRouter is a BYOK provider — it must get its own provider section.
         let has_openrouter_header = state.rows.iter().any(|r| {
             matches!(r, PickerRow::ProviderHeader { provider_id } if *provider_id == ProviderId::OpenRouter)
         });
@@ -958,8 +914,8 @@ mod tests {
     #[test]
     fn env_gate_e2b_model_filtered_when_unavailable() {
         let models = vec![
-            model("fixture-ungated-model", "anthropic"), // no env gate — must appear
-            model_env_gated("fixture-e2b-model", "anthropic", "e2b"), // e2b gate — must be hidden
+            model("fixture-ungated-model", "anthropic"),
+            model_env_gated("fixture-e2b-model", "anthropic", "e2b"),
         ];
         let mut state = ModelPickerState::default();
         state.rebuild_rows(&models);
@@ -983,13 +939,6 @@ mod tests {
         );
     }
 
-    /// CLI-PICKER-TIER-01. The picker listed every managed-cloud model
-    /// regardless of sign-in state. Cloud rows the active tier cannot route are
-    /// now marked `locked` — but still listed, and Local/BYOK rows are never
-    /// gated, so the picker cannot end up empty.
-    ///
-    /// These assert the invariants that hold for ANY cached tier, since the
-    /// tier is read from the user's real cache and a test cannot set it.
     #[test]
     fn local_and_byok_rows_are_never_tier_locked() {
         let models = vec![
@@ -1007,7 +956,7 @@ mod tests {
                 if provider_id.access_mode() != AccessMode::Cloud {
                     assert!(
                         !state.is_locked(row),
-                        "{} is {:?}, not Cloud — subscription tier must never gate it",
+                        "{} is {:?}, not Cloud, subscription tier must never gate it",
                         model.id,
                         provider_id.access_mode()
                     );
@@ -1041,7 +990,7 @@ mod tests {
         assert!(model_ids.contains(&"fixture-anthropic-model"));
         assert!(
             !state.selectable_indices().is_empty(),
-            "picker must never be empty — locked rows stay selectable"
+            "picker must never be empty, locked rows stay selectable"
         );
     }
 

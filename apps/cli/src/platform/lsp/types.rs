@@ -1,4 +1,3 @@
-//! LSP wire types. Subset of the full spec — symbols, hover, definition, diagnostics.
 
 use serde::{Deserialize, Serialize};
 

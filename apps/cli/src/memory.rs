@@ -23,12 +23,8 @@ static LEGACY_GLOBAL_MEMORY_MIGRATION_WARNED: AtomicBool = AtomicBool::new(false
 /// last.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub enum MemoryTier {
-    /// `~/.agiworkforce/CLAUDE.md` — user-wide defaults.
     Global,
-    /// `<project_root>/CLAUDE.md` — project-level instructions.
     Project,
-    /// `<cwd>/CLAUDE.md` — directory-local overrides (only when cwd differs
-    /// from the project root).
     Local,
 }
 
@@ -62,11 +58,6 @@ pub struct MemoryEntry {
 pub struct MemoryManager {
     /// `~/.agiworkforce/CLAUDE.md`
     global_path: PathBuf,
-    /// `~/.agi/CLAUDE.md` — undocumented legacy location used by older
-    /// builds. Read-only fallback: if `global_path` has no content, we read
-    /// from here instead of silently ignoring pre-existing user memory. We
-    /// never write to or delete this file; `agi migrate` (see
-    /// `ecosystem.rs`) is the explicit, user-initiated way to move it.
     legacy_global_path: PathBuf,
     /// `<project_root>/CLAUDE.md` (None when no project root found)
     project_path: Option<PathBuf>,
@@ -84,19 +75,15 @@ impl MemoryManager {
     /// - **Local**: `<cwd>/CLAUDE.md` only when cwd differs from the project
     ///   root (avoids double-loading).
     pub fn new(cwd: &Path) -> Self {
-        // Global — documented home directory is `~/.agiworkforce/`, matching
-        // every other subsystem (config, rules, prompts, etc.).
         let home_dir = dirs::home_dir()
             .or_else(|| std::env::var("HOME").ok().map(PathBuf::from))
             .unwrap_or_else(|| PathBuf::from("."));
         let global_path = home_dir.join(".agiworkforce").join("CLAUDE.md");
         let legacy_global_path = home_dir.join(".agi").join("CLAUDE.md");
 
-        // Project — reuse the existing project-root discovery
         let project_root = find_git_root(cwd);
         let project_path = project_root.as_ref().map(|root| root.join("CLAUDE.md"));
 
-        // Local — only set if cwd != project root to avoid duplication.
         let local_path = {
             let cwd_canon = cwd.canonicalize().unwrap_or_else(|_| cwd.to_path_buf());
             let is_same_as_project = project_root.as_ref().is_some_and(|root| {
@@ -143,16 +130,12 @@ impl MemoryManager {
                 file_path: self.global_path.clone(),
             });
         } else if let Some(content) = read_if_exists(&self.legacy_global_path) {
-            // Read-only fallback: older builds wrote global memory to the
-            // undocumented `~/.agi/CLAUDE.md`. Keep loading it so existing
-            // user memory isn't silently dropped, but never write to or
-            // delete it here — `agi migrate` is the explicit way to move it.
             if LEGACY_GLOBAL_MEMORY_MIGRATION_WARNED
                 .compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst)
                 .is_ok()
             {
                 eprintln!(
-                    "[memory] Loaded global memory from legacy path {} — this location is undocumented and deprecated. \
+                    "[memory] Loaded global memory from legacy path {}, this location is undocumented and deprecated. \
 Move the file to {} (or run `agi migrate`) to keep using it going forward.",
                     self.legacy_global_path.display(),
                     self.global_path.display()
@@ -304,17 +287,11 @@ Move the file to {} (or run `agi migrate`) to keep using it going forward.",
 // Glob-matched rules (.agiworkforce/rules/*.md)
 // ---------------------------------------------------------------------------
 
-/// Phase 9: semantic type of a memory or rule entry. Different kinds decay
-/// differently — feedback should never be silently removed, project memories
-/// age out, reference is stable. Optional on each rule; entries without an
-/// explicit kind are routed to `<untyped>` for back-compat.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum MemoryKind {
     /// User-specific preferences. Survives across projects. Private to the user.
     User,
-    /// Direct guidance from the user — never violate without explicit permission.
-    /// Memory pipeline must never silently drop feedback entries.
     Feedback,
     /// Project state, ongoing initiatives, current decisions. Decays naturally.
     Project,
@@ -415,7 +392,6 @@ fn parse_rule_file(path: &Path) -> Option<Rule> {
 
     let trimmed = content.trim_start();
     if !trimmed.starts_with("---") {
-        // No frontmatter — rule always applies
         return Some(Rule {
             globs: Vec::new(),
             body: content,
@@ -934,8 +910,6 @@ mod tests {
         let mgr = MemoryManager::new(&path);
         // Filter out global if it happens to exist on the test machine
         let prompt = mgr.get_context_prompt();
-        // The prompt should be empty or contain content from user's real global
-        // This is fine — just verify no panic.
         let _ = prompt;
     }
 

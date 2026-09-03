@@ -145,7 +145,7 @@ pub fn format_agent_list(agents: &[AgentCard]) -> String {
         };
 
         out.push_str(&format!(
-            "  {} — {} [{}]\n    Endpoint: {}\n    Capabilities: {}\n    Models: {}\n",
+            "  {}, {} [{}]\n    Endpoint: {}\n    Capabilities: {}\n    Models: {}\n",
             card.name.bold(),
             card.agent_id.dimmed(),
             status,

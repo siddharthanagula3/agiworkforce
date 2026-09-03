@@ -31,7 +31,7 @@ pause
 echo "--- 1. Live cost HUD (top-right of the TUI) ---"
 echo "Token / cache / dollar / ctx% updates in real time, pricing from"
 echo "models.json. Color-shifts grey → orange → red as ctx% grows."
-echo "(Skipping live TUI — see screencap; the next steps are all CLI.)"
+echo "(Skipping live TUI, see screencap; the next steps are all CLI.)"
 pause
 
 echo "--- 2. Typed JSON event stream ---"
@@ -60,4 +60,4 @@ echo "Three baked styles, user overrides via ~/.agiworkforce/output-styles/."
 echo "Swap mid-session with /output-style explanatory."
 pause
 
-echo "Done. agi — the AI CLI that doesn't surprise you."
+echo "Done. agi, the AI CLI that doesn't surprise you."

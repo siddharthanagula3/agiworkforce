@@ -514,7 +514,7 @@ pub(super) async fn execute_lsp_diagnostics(args: &HashMap<String, String>) -> R
             "message": format!(
                 "lsp_diagnostics is not implemented. The LSP client does not subscribe to \
                  textDocument/publishDiagnostics, so no diagnostics were collected for {target}. \
-                 This is not an empty diagnostic list — nothing was checked, and no conclusion \
+                 This is not an empty diagnostic list, nothing was checked, and no conclusion \
                  about errors or warnings in this file may be drawn from it."
             ),
             "next": "Run the project's own compiler or linter (for example a type-check or lint \

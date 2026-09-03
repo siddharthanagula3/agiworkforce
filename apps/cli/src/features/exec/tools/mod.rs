@@ -58,7 +58,6 @@ pub struct ToolResult {
 }
 
 impl ToolResult {
-    // AUDIT-FIX: H-8 — marker accessor for callers; web_fetch wraps output in <web_fetch_result untrusted="true" ...>.
     #[allow(dead_code)]
     pub fn is_untrusted(&self) -> bool {
         let output = self.output.trim_start();
@@ -93,14 +92,6 @@ pub struct ToolExecOptions {
 // Public API
 // ---------------------------------------------------------------------------
 
-// ---------------------------------------------------------------------------
-// C1 Tool-trait registry — read-only cluster
-// ---------------------------------------------------------------------------
-// Each read-only tool is a `registry::Tool` adapter over its existing executor.
-// `build_read_only_registry()` assembles them so the dispatch can resolve these
-// tools through the trait instead of a hard-coded match arm. Mutating tools
-// (write/run/edit/patch) keep their bespoke approval-callback signatures and
-// migrate in follow-on increments.
 
 struct ReadFileTool;
 #[async_trait::async_trait]
@@ -655,7 +646,7 @@ async fn execute_batch(call: &ToolCall, opts: &ToolExecOptions) -> Result<ToolRe
                     success_count += 1;
                 }
                 output_parts.push(format!(
-                    "[{}/{}] {} — {}: {}",
+                    "[{}/{}] {}, {}: {}",
                     i + 1,
                     total,
                     if tr.success { "OK" } else { "FAIL" },
@@ -1956,8 +1947,6 @@ mod private_ip_classifier_tests {
 
     #[test]
     fn read_only_registry_excludes_mutating_tools() {
-        // Mutating tools (write/run/edit) are NOT in the read-only registry — they
-        // must keep flowing through the confirmation-aware dispatch match.
         let reg = super::build_read_only_registry();
         assert!(reg.get("write_file").is_none());
         assert!(reg.get("run_command").is_none());

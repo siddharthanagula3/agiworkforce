@@ -1,8 +1,3 @@
-//! Ecosystem scanner — detects and imports config from competing AI tools and IDEs.
-//!
-//! Scans well-known paths for tools like Claude Code, Codex CLI, Gemini CLI,
-//! Cursor, VS Code, Zed, etc. Imports their MCP server configs and skill
-//! definitions so AGI Workforce can leverage the user's existing setup.
 
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
@@ -288,8 +283,6 @@ fn tool_registry() -> Vec<ToolDefinition> {
 // Scanning
 // ---------------------------------------------------------------------------
 
-/// Scan the filesystem for known AI tools and IDEs.
-/// Fast path-existence checks only — no file parsing.
 pub fn scan() -> Vec<DetectedTool> {
     let home = match dirs::home_dir() {
         Some(h) => h,
@@ -906,7 +899,7 @@ fn parse_mcp_config(source: &str, contents: &str, path: &Path) -> Vec<ImportedMc
     match ext {
         "toml" => parse_toml_mcp(source, contents),
         "json" | "jsonc" => parse_json_mcp(source, contents, path),
-        "yaml" | "yml" => Vec::new(), // Gemini YAML — future extension
+        "yaml" | "yml" => Vec::new(),
         _ => parse_json_mcp(source, contents, path),
     }
 }
@@ -1119,7 +1112,6 @@ fn strip_jsonc_comments(input: &str) -> String {
 
         if c == '/' {
             if chars.peek() == Some(&'/') {
-                // Single-line comment — skip to end of line
                 chars.next();
                 for ch in chars.by_ref() {
                     if ch == '\n' {
@@ -1129,7 +1121,6 @@ fn strip_jsonc_comments(input: &str) -> String {
                 }
                 continue;
             } else if chars.peek() == Some(&'*') {
-                // Multi-line comment — skip to */
                 chars.next();
                 let mut prev = ' ';
                 for ch in chars.by_ref() {
@@ -1226,7 +1217,7 @@ pub fn format_ecosystem_prompt(ctx: &EcosystemContext) -> String {
         }
 
         out.push_str(&format!(
-            "- {} ({}) — {}\n",
+            "- {} ({}), {}\n",
             tool.name,
             tool.path.display(),
             features.join(", ")

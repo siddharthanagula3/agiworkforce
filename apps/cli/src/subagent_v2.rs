@@ -1,12 +1,3 @@
-//! Subagent v2 — full IPC + bidirectional message passing.
-//!
-//! Architecture: each subagent runs as an isolated tokio task with its own
-//! `AgentSession`, its own message channels (in/out), and a status field.
-//! Parent agent sends prompts via `send_message`; subagent results stream back
-//! via `recv_message`. Parent can `wait` for completion or `kill` mid-flight.
-//!
-//! M34 of v1.3 — closes the last v1.2 architectural backlog item.
-//! M34a of v1.4 — SubagentTaskRunner trait abstraction (swappable task body).
 
 #![allow(dead_code)]
 

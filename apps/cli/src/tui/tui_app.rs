@@ -51,7 +51,6 @@ const EXIT_CONFIRM_WINDOW: Duration = Duration::from_secs(2);
 enum InteractionMode {
     /// Normal conversation mode (maps to `PermissionMode::Default`).
     Chat,
-    /// Plan mode — read-only tools, no file edits.
     Plan,
     /// Auto-accept file edits; commands still prompt.
     AcceptEdits,
@@ -263,8 +262,6 @@ struct TuiApp {
     // Git branch
     git_branch: Option<String>,
     command_registry: CommandRegistry,
-    // Fallback rotation banner — shared with the agent send loop. The banner
-    // self-clears after FALLBACK_BANNER_TTL seconds.
     fallback_banner: Arc<std::sync::Mutex<Option<FallbackBanner>>>,
     // Modal overlay slot: intercepts all key events while active.
     active_overlay: Option<Box<dyn crate::tui::widgets::interactive::InteractiveView>>,
@@ -305,16 +302,6 @@ impl TuiApp {
         let model_name = session.model.clone();
         let provider_name = format!("{:?}", session.provider).to_lowercase();
 
-        // Resume support: `run()` loads a resumed session's prior turns into
-        // `session.messages`/`session.turn_count` *before* constructing
-        // `TuiApp` (see the `resume_messages`/`resume_managed_session` match
-        // above), but until now that only fed the model/context-loading
-        // state — the transcript pane's own `chat_messages` was always
-        // seeded empty, so a resumed TUI launch rendered the blank welcome
-        // screen with "Turns: 0" even though the underlying session (and any
-        // follow-up prompt) had the full prior history. Hydrate the
-        // transcript widget state from the same `session.messages` here so
-        // the first render already shows the resumed conversation.
         let turn_count = session.turn_count;
         let chat_messages: Vec<ChatMessage> = session
             .messages
@@ -433,8 +420,6 @@ impl TuiApp {
         }
     }
 
-    /// Install the fallback banner sink on the underlying session. Idempotent
-    /// — calling twice replaces the previous sink.
     fn wire_fallback_banner(&mut self) {
         let banner = Arc::clone(&self.fallback_banner);
         self.session.on_fallback = Some(crate::agent::FallbackSink(Box::new(
@@ -475,8 +460,6 @@ impl TuiApp {
         spinner_frame(self.spinner_tick)
     }
 
-    /// AGI Agent loading verb — stable within a turn, rotating across turns.
-    /// Our own words; deliberately not copied from any reference CLI.
     fn loading_verb(&self) -> &'static str {
         loading_verb_for(self.turn_count)
     }
@@ -525,8 +508,6 @@ impl TuiApp {
                 self.active_overlay = None;
             }
             ViewAction::Submit(_) => {
-                // Apply the overlay's committed result (was previously dropped —
-                // the root cause of every generic overlay "saving" nothing).
                 let result = ov.take_result();
                 self.overlay_scroll = 0;
                 self.active_overlay = None;
@@ -572,9 +553,6 @@ impl TuiApp {
                 }
             }
             OverlayResult::DiffApproved(paths) => {
-                // Stage the approved files (reversible via `git reset`). Rejected /
-                // skipped files are deliberately left untouched — never auto-discard
-                // the user's working-tree changes.
                 let staged = paths
                     .iter()
                     .filter(|path| {
@@ -600,8 +578,6 @@ impl TuiApp {
         }
     }
 
-    /// Emit the OS window title from the current config + live session data. Called
-    /// on /title save (best-effort — a title-set escape never affects the screen).
     fn emit_terminal_title(&self) {
         let cwd = std::env::current_dir()
             .ok()
@@ -620,8 +596,6 @@ impl TuiApp {
     }
 }
 
-/// Build the OS window-title string from the enabled fields. `None` when no field
-/// is enabled (so the caller does not set an empty title). Pure — unit-tested.
 fn build_terminal_title(
     cfg: &crate::tui::widgets::terminal_title_setup::TerminalTitleConfig,
     session_id: &str,
@@ -647,7 +621,7 @@ fn build_terminal_title(
     if parts.is_empty() {
         None
     } else {
-        Some(format!("agi — {}", parts.join(" · ")))
+        Some(format!("agi, {}", parts.join(" · ")))
     }
 }
 
@@ -718,17 +692,6 @@ fn approval_overlay_for(
     overlay
 }
 
-/// Render a keyboard-navigable approval modal and return the user's choice.
-///
-/// The agent turn is parked on the broker (`request().await`) while this runs,
-/// so a synchronous key loop here cannot starve it. This intentionally touches
-/// only `terminal` + local overlay state — never `TuiApp` — so it composes with
-/// the `&mut app.session` borrow held by the in-flight agent future. To avoid
-/// blanking the surrounding UI (header/cost-HUD/transcript/composer/status),
-/// each frame first redraws the normal in-turn chrome via `draw_turn_chrome`
-/// (the same helper `render_turn_frame` uses) and then layers the approval
-/// overlay on top *within the same `terminal.draw` closure* — mirroring how
-/// `render()` composites `active_overlay`/pickers on top of the main frame.
 fn run_tui_approval_modal(
     terminal: &mut Terminal<CrosstermBackend<Stdout>>,
     ctx: &FrameCtx,
@@ -855,15 +818,6 @@ fn run_turn_mcp_elicitation_modal(
 // Terminal setup
 // ---------------------------------------------------------------------------
 
-/// Leave the terminal usable if the TUI panics.
-///
-/// `restore_terminal` only runs on the normal return path, and the release
-/// profile builds with `panic = "abort"` and `strip = true`. Without this hook
-/// a panic drops the user back into a shell that is still in raw mode inside
-/// the alternate screen with a hidden cursor — no echo, no line editing, and no
-/// visible message — which needs a blind `reset` to recover. Undoing the three
-/// terminal state changes before chaining to the previous hook means the
-/// panic message actually lands on a working terminal.
 fn install_panic_restore_hook() {
     static INSTALLED: std::sync::Once = std::sync::Once::new();
     INSTALLED.call_once(|| {
@@ -978,12 +932,6 @@ fn draw_app_frame(frame: &mut ratatui::Frame, app: &TuiApp) -> Rect {
     chunks[1]
 }
 
-/// Live in-turn frame. Drawn on each 80ms tick while the send future holds
-/// `&mut app.session`, so it can only consume a `FrameCtx` of disjoint fields —
-/// never `&app`. Mirrors `render`'s layout (header / chat / composer / status)
-/// minus the picker/overlay/HUD layers, which are never active mid-turn. This is
-/// what makes streamed output, the animated spinner, and the stall hint visible
-/// during a turn instead of appearing all at once when it ends.
 fn render_turn_frame(
     terminal: &mut Terminal<CrosstermBackend<Stdout>>,
     ctx: &FrameCtx,
@@ -1015,7 +963,7 @@ fn draw_turn_chrome(frame: &mut ratatui::Frame, ctx: &FrameCtx) -> Rect {
     render_chat(frame, chunks[1], ctx);
 
     let hint = Paragraph::new(Line::from(Span::styled(
-        "  … working — Esc or Ctrl-C to cancel",
+        "  … working, Esc or Ctrl-C to cancel",
         Style::default().fg(crate::tui::terminal_palette::ui_muted()),
     )))
     .block(
@@ -1038,7 +986,6 @@ fn spinner_frame(tick: u8) -> &'static str {
     FRAMES[(tick as usize) % FRAMES.len()]
 }
 
-/// AGI loading verb for a given turn — stable within a turn, rotating across.
 fn loading_verb_for(turn_count: u32) -> &'static str {
     const VERBS: &[&str] = &[
         "Synthesizing",
@@ -1071,11 +1018,6 @@ fn context_percent_for(model_name: &str, in_tokens: u32, out_tokens: u32) -> u8 
     ((used * 100) / ctx_window).min(100) as u8
 }
 
-/// Disjoint snapshot of the fields the header/chat/status renderers read. Built
-/// either from `&TuiApp` (normal frame) or field-by-field during a turn (live
-/// frame) — the latter is why these are owned/borrowed values rather than
-/// `&TuiApp`: while the send future holds `&mut app.session`, the renderers may
-/// only touch fields *other* than `session`, so they can't take `&app`.
 struct FrameCtx<'a> {
     model_name: &'a str,
     provider_name: &'a str,
@@ -1618,11 +1560,6 @@ fn discovered_local_to_catalog_model(
     }
 }
 
-/// Classify the active runtime provider into an access mode for the status
-/// chip. Presentation only — mirrors the model-picker grouping and never
-/// affects routing. A keyless OpenAI-compatible endpoint (e.g. LM Studio) and
-/// Ollama are Local; the AGI-managed endpoint is Cloud; anything with a key is
-/// BYOK.
 fn provider_access_mode(provider: &crate::models::Provider) -> crate::design_system::AccessMode {
     use crate::design_system::AccessMode;
     use crate::models::{OllamaMode, Provider};
@@ -1682,10 +1619,6 @@ fn render_status_bar(frame: &mut ratatui::Frame, area: Rect, ctx: &FrameCtx) {
         Some(crate::sandbox::SandboxType::None) | None => ("no sandbox", ui_danger()),
     };
 
-    // Access-mode chip: always show whether the active model is reached via
-    // LOCAL (on-device), BYOK (your own key), or CLOUD (managed subscription).
-    // Keeps AGI's core differentiator visible at all times. Purely a label —
-    // it reflects the active provider, it never changes routing.
     let access_span = {
         use crate::agent::PrivacyMode;
         use crate::design_system::AccessMode;
@@ -1694,12 +1627,6 @@ fn render_status_bar(frame: &mut ratatui::Frame, area: Rect, ctx: &FrameCtx) {
             AccessMode::Byok => "byok",
             AccessMode::Cloud => "cloud",
         };
-        // The session privacy mode governs whether a send is allowed; the access
-        // tier only reflects where the active model routes. A Local session with
-        // an off-device model is BLOCKED — surface the mismatch in danger color
-        // so the session mode is visible. (Previously the chip showed only the
-        // tier — e.g. "byok" — which hid that the session was Local and left
-        // users confused about why sends were refused.)
         if ctx.privacy_mode == PrivacyMode::Local && ctx.access_mode != AccessMode::Local {
             Span::styled(
                 format!("◉ local≠{tier}"),
@@ -1751,10 +1678,6 @@ fn render_status_bar(frame: &mut ratatui::Frame, area: Rect, ctx: &FrameCtx) {
     spans.push(Span::styled(ctx_str, Style::default().fg(ctx_color)));
     spans.push(Span::raw("  "));
 
-    // Optional items in descending priority — added only while they fit, so a
-    // narrow terminal drops the low-priority hints instead of hard-clipping the
-    // important indicators on the right. The model/tokens/cost/branch fields are
-    // gated by /statusline (model/tokens/branch default off, cost default on).
     let mut optional: Vec<Span> = Vec::new();
     if sl.show_model {
         optional.push(Span::styled(
@@ -2122,7 +2045,6 @@ fn composer_move_up(app: &mut TuiApp) -> bool {
     // Find start of current line
     let line_start = app.input[..cursor].rfind('\n').map(|p| p + 1).unwrap_or(0);
     if line_start == 0 {
-        // Already on the first line — let the event fall through to scroll chat.
         return false;
     }
     // Column offset within current line
@@ -2163,19 +2085,6 @@ fn composer_move_down(app: &mut TuiApp) -> bool {
     true
 }
 
-/// Register any MCP-discovered prompt commands (`/mcp:<server>:<prompt>`)
-/// into `registry` that aren't already present.
-///
-/// Idempotent — skips prompts already registered by name (matching
-/// `CommandRegistry::find`), so it's safe to call both at `TuiApp`
-/// construction time (when MCP servers connected synchronously before the
-/// background attach was spawned, or not at all) and again once the
-/// background `mcp_attach_join` task finishes and injects the manager via
-/// `session.set_mcp_manager`. Without the second call, `/mcp:<server>:<prompt>`
-/// stayed permanently absent from `app.command_registry` — and therefore from
-/// the command popup's candidate list — for the overwhelmingly common case
-/// where MCP finishes connecting *after* the TUI has already started (the
-/// whole point of the non-blocking background attach).
 fn register_mcp_prompt_commands(registry: &mut CommandRegistry, prompts: &[crate::mcp::McpPrompt]) {
     for prompt in prompts {
         if registry.find(&prompt.command_name).is_some() {
@@ -2463,16 +2372,6 @@ fn handle_theme_picker_key(app: &mut TuiApp, key: KeyEvent) -> InputAction {
 // Natural language mode detection
 // ---------------------------------------------------------------------------
 
-/// Detect if user is asking to switch modes via natural language.
-///
-/// SECURITY: Permission-*escalating* modes (AcceptEdits, BypassPermissions,
-/// FullAuto) are only triggered by an explicit, command-style utterance whose
-/// entire (trimmed) text is the trigger phrase — never by a fuzzy substring
-/// buried in conversational prose. This prevents a user who merely *discusses*
-/// those words (e.g. "don't give me no prompts about this") from silently
-/// disabling tool-approval prompts for the rest of the session. The
-/// non-escalating modes (Plan, Chat) — which only restrict or normalize
-/// behavior — keep the more permissive natural-language matching.
 fn detect_mode_intent(text: &str) -> Option<InteractionMode> {
     let lower = text.to_lowercase();
     // Normalize to the bare command phrase: trim surrounding whitespace and a
@@ -2480,7 +2379,6 @@ fn detect_mode_intent(text: &str) -> Option<InteractionMode> {
     let exact = lower.trim();
     let exact = exact.strip_prefix('/').unwrap_or(exact).trim();
 
-    // Plan mode triggers — non-escalating (read-only), natural language allowed.
     if lower == "/plan"
         || lower.contains("go to plan mode")
         || lower.contains("enter plan mode")
@@ -2495,7 +2393,6 @@ fn detect_mode_intent(text: &str) -> Option<InteractionMode> {
         return Some(InteractionMode::Plan);
     }
 
-    // Accept edits mode — escalating: require the message to BE the command.
     if matches!(
         exact,
         "accept edits"
@@ -2510,7 +2407,6 @@ fn detect_mode_intent(text: &str) -> Option<InteractionMode> {
         return Some(InteractionMode::AcceptEdits);
     }
 
-    // Bypass permissions — escalating: require the message to BE the command.
     if matches!(
         exact,
         "bypass permissions"
@@ -2524,7 +2420,6 @@ fn detect_mode_intent(text: &str) -> Option<InteractionMode> {
         return Some(InteractionMode::BypassPermissions);
     }
 
-    // FullAuto — escalating: require the message to BE the command.
     if matches!(
         exact,
         "full auto" | "fullauto" | "full-auto" | "full auto mode" | "full-auto mode"
@@ -2532,7 +2427,6 @@ fn detect_mode_intent(text: &str) -> Option<InteractionMode> {
         return Some(InteractionMode::FullAuto);
     }
 
-    // Back to chat mode — non-escalating (de-escalates), natural language allowed.
     if lower.contains("normal mode")
         || lower.contains("chat mode")
         || lower.contains("exit plan")
@@ -2575,16 +2469,16 @@ fn mode_description(mode: InteractionMode) -> &'static str {
     match mode {
         InteractionMode::Chat => "Normal conversation mode",
         InteractionMode::Plan => {
-            "Plan mode — read-only tools only, no file edits. Model will plan before acting."
+            "Plan mode, read-only tools only, no file edits. Model will plan before acting."
         }
         InteractionMode::AcceptEdits => {
             "Safe, read-only operations run automatically; writes and commands still require approval."
         }
         InteractionMode::BypassPermissions => {
-            "Bypass — all tool prompts skipped. Use with caution!"
+            "Bypass, all tool prompts skipped. Use with caution!"
         }
         InteractionMode::FullAuto => {
-            "FullAuto — no prompts, no confirmations. Extreme caution required!"
+            "FullAuto, no prompts, no confirmations. Extreme caution required!"
         }
     }
 }
@@ -2668,7 +2562,7 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
                 InteractionMode::Plan
             };
             apply_mode(app, new_mode);
-            SlashResult::SystemMessage(format!("{} — {}", app.mode.label(), mode_description(app.mode)))
+            SlashResult::SystemMessage(format!("{}, {}", app.mode.label(), mode_description(app.mode)))
         }
 
         "/cost" => {
@@ -2781,9 +2675,9 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
                 Ok(()) => {
                     app.sync_stats();
                     let status = if app.session.fast_mode {
-                        format!("ON — using {} for speed", app.session.model)
+                        format!("ON, using {} for speed", app.session.model)
                     } else {
-                        format!("OFF — back to {}", app.session.model)
+                        format!("OFF, back to {}", app.session.model)
                     };
                     SlashResult::SystemMessage(format!("Fast mode {status}"))
                 }
@@ -2911,14 +2805,10 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
             }
         }
 
-        // Both arms report the outcome themselves rather than trusting the
-        // handler's `output::print_*` — stdout is not visible under the
-        // alternate screen, so an unconditional "Session saved." would be a
-        // false claim whenever the write was refused.
         "/fork" | "/branch" => {
             if !app.session.session_persistence_enabled() {
                 SlashResult::SystemMessage(
-                    "Cannot branch — this run was started with --no-session-persistence, so no session file exists to fork."
+                    "Cannot branch, this run was started with --no-session-persistence, so no session file exists to fork."
                         .to_string(),
                 )
             } else {
@@ -2931,7 +2821,7 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
         "/save" => {
             if !app.session.session_persistence_enabled() {
                 SlashResult::SystemMessage(
-                    "Cannot save — this run was started with --no-session-persistence, so nothing is written to disk."
+                    "Cannot save, this run was started with --no-session-persistence, so nothing is written to disk."
                         .to_string(),
                 )
             } else {
@@ -2994,14 +2884,8 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
         }
 
         "/permissions" | "/perms" | "/approvals" => {
-            // The TUI previously opened a FAKE hardcoded "Approve action?" overlay
-            // with no real pending tool call, and its choice was dropped — a dead
-            // interface. Real allow/deny/session rule management lives in the REPL
-            // (repl::registry::handle_permissions). Point the user at the working
-            // commands instead of showing a fake prompt. (Inline TUI rule editing
-            // is tracked as CLI-TUI-OVERLAY-SUBMIT-DROP.)
             SlashResult::SystemMessage(
-                "Manage tool permissions with these commands (run in the REPL — `agi --no-tui`):\n  \
+                "Manage tool permissions with these commands (run in the REPL, `agi --no-tui`):\n  \
                  /permissions                      show current allow/deny/session rules\n  \
                  /permissions allow <prefix>       always allow a command prefix\n  \
                  /permissions deny <prefix>        always deny a command prefix\n  \
@@ -3111,11 +2995,6 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
             SlashResult::SystemMessage("Memory shown above.".to_string())
         }
 
-        // ── Voice ──
-        // The slash handler is sync and `run_voice_mode` is async, which is why
-        // this used to print "Voice mode requires the REPL" over a complete
-        // implementation. It does not require the REPL — it requires leaving the
-        // alt-screen, which is exactly what RunLogin/RunAdvisor already do.
         "/voice" | "/v" => {
             let lang = if arg.is_empty() { "en" } else { arg };
             if crate::voice_languages::is_valid_language(lang) {
@@ -3157,7 +3036,7 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
         // ── Side query ──
         "/btw" => {
             if arg.is_empty() {
-                SlashResult::SystemMessage("Usage: /btw <question> — ask a side question".to_string())
+                SlashResult::SystemMessage("Usage: /btw <question>, ask a side question".to_string())
             } else {
                 // Send as a prompt but mark as side query
                 SlashResult::SendAsPrompt
@@ -3363,7 +3242,7 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
         "/advisor" => {
             if arg.is_empty() {
                 SlashResult::SystemMessage(
-                    "Usage: /advisor <question> — consult a catalog-selected advisor model".into(),
+                    "Usage: /advisor <question>, consult a catalog-selected advisor model".into(),
                 )
             } else {
                 SlashResult::RunAdvisor(arg.to_string())
@@ -3645,10 +3524,6 @@ pub async fn run(
         }))
     };
 
-    // Populate the OpenRouter BYOK model cache in the background (public
-    // `/models` endpoint — no key needed) so the model picker can list current
-    // OpenRouter models without blocking startup. Skipped while the cache is
-    // fresh; the picker reads the cache directly, so this task just refreshes it.
     if crate::models::openrouter_models::load_cached_models().is_empty() {
         tokio::spawn(async move {
             if let Ok(models) = crate::models::openrouter_models::fetch_openrouter_models().await {
@@ -3774,8 +3649,6 @@ async fn run_event_loop(
     render(terminal, app)?;
 
     loop {
-        // Inject the MCP manager once the background attach finishes — without
-        // blocking the UI. Until then, turns simply run without MCP tools.
         if mcp_attach_join
             .as_ref()
             .map(|h| h.is_finished())
@@ -3784,13 +3657,6 @@ async fn run_event_loop(
             if let Some(handle) = mcp_attach_join.take() {
                 if let Ok(Some(mgr)) = handle.await {
                     app.session.set_mcp_manager(mgr);
-                    // `TuiApp::new` only saw whatever MCP prompts were
-                    // available *before* this background attach finished
-                    // (almost always none — that's the whole point of not
-                    // blocking startup on it). Refresh the command registry
-                    // now so `/mcp:<server>:<prompt>` becomes dispatchable
-                    // and shows up in the `/` command popup as soon as the
-                    // servers are actually connected.
                     if let Some(prompts) = app.session.mcp_prompt_info() {
                         register_mcp_prompt_commands(&mut app.command_registry, prompts);
                     }
@@ -3860,7 +3726,7 @@ async fn run_event_loop(
                     apply_mode(app, new_mode);
                     // Stamp the banner so it shows for MODE_BANNER_TTL seconds.
                     app.mode_banner_shown_at = Some(Instant::now());
-                    let mut msg = format!("{} — {}", app.mode.label(), mode_description(app.mode));
+                    let mut msg = format!("{}, {}", app.mode.label(), mode_description(app.mode));
                     if new_mode == InteractionMode::BypassPermissions {
                         msg.push_str("\n\n  WARNING: All tool confirmations are bypassed!");
                         msg.push_str(
@@ -3870,7 +3736,7 @@ async fn run_event_loop(
                     }
                     if new_mode == InteractionMode::FullAuto {
                         msg.push_str(
-                            "\n\n  WARNING: Full-auto mode — no prompts, no confirmations.",
+                            "\n\n  WARNING: Full-auto mode, no prompts, no confirmations.",
                         );
                         msg.push_str("\n  Use with extreme caution in trusted environments only.");
                     }
@@ -3919,7 +3785,7 @@ async fn run_event_loop(
                         .await;
                         app.chat_messages.push(ChatMessage {
                             role: ChatRole::System,
-                            text: format!("{} — {}", app.mode.label(), mode_description(app.mode)),
+                            text: format!("{}, {}", app.mode.label(), mode_description(app.mode)),
                         });
                         // A pure utterance that escalates into a permission-weakening
                         // mode is a command, not a chat turn: do NOT also forward it
@@ -3970,10 +3836,6 @@ async fn run_event_loop(
                                 }
                             }
                             SlashResult::RunVoice(lang) => {
-                                // Voice owns the terminal (it prints prompts and
-                                // reads audio state), so drop the alt-screen for
-                                // the duration and restore it after — the same
-                                // shape as RunLogin above.
                                 restore_terminal(terminal)?;
                                 let result = crate::voice::run_voice_mode(
                                     &mut app.session,
@@ -4215,12 +4077,6 @@ async fn send_message(
         app.session.on_tool_approval = Some(crate::agent::ToolApprovalSink(callback));
     }
 
-    // Stream tool lifecycle events into a local cell list during the turn, then
-    // surface them in the transcript after it ends. Drained in the select! loop
-    // below into a local Vec (never `app`) so it can't conflict with the
-    // `&mut app.session` borrow the turn future holds. A live mid-turn spinner
-    // needs the spawned agent-task model (future work); for now the cells appear
-    // once the turn completes — already a large win over invisible tool calls.
     let (tool_tx, mut tool_rx) =
         tokio::sync::mpsc::unbounded_channel::<crate::tui::app_event::TuiAppEvent>();
     {
@@ -4719,8 +4575,6 @@ mod tests {
             AccessMode::Local
         );
 
-        // BYOK: keyed cloud providers + Ollama Cloud (hosted, needs a key, so
-        // data leaves the device — must NOT read as Local).
         assert_eq!(provider_access_mode(&Provider::Anthropic), AccessMode::Byok);
         assert_eq!(
             provider_access_mode(&crate::models::openai_provider()),
@@ -4825,11 +4679,6 @@ mod tests {
         assert!(preview.ends_with('…'));
     }
 
-    /// End-to-end: a denied decision routed through callback → broker → tool
-    /// must produce an observable "denied" tool result and never touch disk —
-    /// proving behavior, not just compilation. The whole flow is wrapped in a
-    /// timeout so that a future deadlock regression fails fast instead of
-    /// hanging the suite (the symptom we want CI to catch).
     #[tokio::test]
     async fn denied_approval_blocks_tool_execution_via_callback() {
         use crate::tui::approval_broker::{ApprovalBroker, ApprovalDecision};
@@ -5062,14 +4911,10 @@ mod tests {
             "allowed tool must land its exact content on disk"
         );
 
-        // The denied tool observed Deny: it failed and never touched disk —
-        // proving the two decisions were routed per-request, not swapped.
         assert!(!deny_success, "denied tool must report failure");
         assert!(!deny_exists, "denied tool must not create its file on disk");
     }
 
-    // Build the thinnest possible TuiApp without touching the filesystem or
-    // spawning terminals — we only test the overlay slot, not the TUI render.
     fn minimal_app() -> TuiApp {
         let sys_ctx = crate::context::SystemContext {
             cwd: "/tmp".into(),
@@ -5094,10 +4939,6 @@ mod tests {
         TuiApp::new(session, config, true /* sandbox_disabled */)
     }
 
-    /// Regression: `/voice` in the TUI printed "Voice mode requires the REPL
-    /// (not TUI). Run: agi --no-tui --voice-lang en" on top of a complete,
-    /// working 1,186-line implementation. Voice never needed the REPL — it
-    /// needed the alt-screen dropped, which RunLogin/RunAdvisor already do.
     #[test]
     fn voice_slash_dispatches_instead_of_redirecting_to_the_repl() {
         let mut app = minimal_app();
@@ -5112,8 +4953,6 @@ mod tests {
             SlashResult::RunVoice(ref l) if l == "es"
         ));
 
-        // An unsupported language is rejected in place, listing what works —
-        // it must not dispatch a voice session that would immediately fail.
         match handle_slash("/voice klingon", &mut app) {
             SlashResult::SystemMessage(msg) => {
                 assert!(msg.contains("Unsupported language"), "got: {msg}");
@@ -5156,12 +4995,10 @@ mod tests {
         app.open_overlay(view);
         assert!(app.active_overlay.is_some());
 
-        // Down — consumed by overlay, not forwarded
         let consumed = app.dispatch_key_to_overlay(make_key(crossterm::event::KeyCode::Down));
         assert!(consumed);
         assert!(app.active_overlay.is_some(), "overlay stays open on Down");
 
-        // Enter — overlay should close and slot cleared
         let consumed = app.dispatch_key_to_overlay(make_key(crossterm::event::KeyCode::Enter));
         assert!(consumed);
         assert!(app.active_overlay.is_none(), "overlay cleared after Submit");
@@ -5227,7 +5064,7 @@ mod tests {
         };
         assert_eq!(
             build_terminal_title(&all, "abcdef", "some-model", "myrepo", Some("main")),
-            Some("agi — some-model · myrepo · ⎇ main".to_string())
+            Some("agi, some-model · myrepo · ⎇ main".to_string())
         );
         let only_id = TerminalTitleConfig {
             show_session_id: true,
@@ -5237,7 +5074,7 @@ mod tests {
         };
         assert_eq!(
             build_terminal_title(&only_id, "abcdef12", "m", "c", Some("b")),
-            Some("agi — #abcdef12".to_string())
+            Some("agi, #abcdef12".to_string())
         );
         let none = TerminalTitleConfig {
             show_session_id: false,
@@ -5579,20 +5416,6 @@ mod tests {
         }
     }
 
-    /// Regression for the tool-approval-modal blanking bug: `run_tui_approval_modal`
-    /// used to run its own isolated `terminal.draw` that cleared the *entire*
-    /// frame and rendered only the approval box, wiping out the
-    /// header/cost-HUD/transcript/composer/status chrome underneath. The fix
-    /// makes it share `draw_turn_chrome` (the same helper `render_turn_frame`
-    /// uses for the live in-turn frame) and layer the overlay on top within the
-    /// same `terminal.draw` closure — mirroring how `render()` composites
-    /// `active_overlay`/pickers over the main frame instead of replacing it.
-    ///
-    /// This exercises the exact draw sequence `run_tui_approval_modal` performs
-    /// (`draw_turn_chrome` then `overlay.render_into` in one `terminal.draw`)
-    /// against a `TestBackend` and asserts the rendered buffer contains BOTH
-    /// the chrome (header title + a distinctive transcript message) AND the
-    /// approval box, proving compositing rather than full-frame replacement.
     #[test]
     fn approval_modal_composites_over_chrome_instead_of_blanking_it() {
         use crate::tui::widgets::approval_overlay::ApprovalOverlayState;
@@ -5696,11 +5519,6 @@ mod tests {
         );
     }
 
-    /// Every externally-sourced string in the transcript — streamed provider
-    /// chunks, tool/system message text, and tool-cell summary/output rows —
-    /// used to reach the frame buffer verbatim: `Paragraph` only skips
-    /// zero-width graphemes and `unicode-width` scores ESC as one column, so
-    /// crossterm printed the escape to the operator's terminal.
     #[test]
     fn transcript_frame_strips_model_and_tool_escape_sequences() {
         use ratatui::backend::TestBackend;

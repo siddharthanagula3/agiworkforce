@@ -80,8 +80,6 @@ pub fn is_available() -> bool {
 /// `windows-appcontainer` feature; without it, this fails closed.
 #[cfg(feature = "windows-appcontainer")]
 pub fn install_filter(_opts: &WindowsSandboxOptions) -> anyhow::Result<()> {
-    // Real impl: CreateAppContainerProfile + assignment.
-    // Placeholder — leaves the implementation to the feature-gated build.
     anyhow::bail!("install_filter is not yet implemented even with the feature flag; tracking issue: AppContainer integration is a v1.8 work item")
 }
 

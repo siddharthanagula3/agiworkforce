@@ -134,8 +134,6 @@ pub(crate) async fn terminate_owners_and_wait(
         .copied()
         .collect::<std::collections::HashSet<_>>();
     let deadline = Instant::now() + timeout;
-    // Every group we have signalled. The registry draining only proves we
-    // stopped TRACKING a tree — see `await_process_groups_reaped`.
     let mut signalled = std::collections::HashSet::<u32>::new();
 
     loop {
@@ -187,22 +185,6 @@ pub(crate) async fn terminate_owners_and_wait(
     }
 }
 
-/// Wait until every signalled process group is actually gone from the OS.
-///
-/// `terminate_owners_and_wait` used to return as soon as the in-process
-/// registry drained. A registry entry disappears when its supervisor task drops
-/// the tracked child — which is the DIRECT child exiting, not the group being
-/// reaped. `killpg(SIGKILL)` is delivered asynchronously, so between those two
-/// moments the grandchildren are doomed but still present.
-///
-/// On an idle machine that window is invisible. Under load it is not: CI ran
-/// this alongside 1,833 other tests and caught shutdown acknowledging while
-/// `[pid, pid, pid]` were still alive, which is precisely the contract
-/// `shutdown()` advertises and did not keep. It failed 100 consecutive runs and
-/// blocked every downstream E2E job for 18 days.
-///
-/// A zombie still answers signal 0 until its parent reaps it, so this waits for
-/// genuine `ESRCH` rather than treating "doomed" as "gone".
 #[cfg(unix)]
 async fn await_process_groups_reaped(
     groups: &std::collections::HashSet<u32>,

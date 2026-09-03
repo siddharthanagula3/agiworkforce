@@ -1,23 +1,3 @@
-//! Output styles — system-prompt override layer.
-//!
-//! Three styles ship in-binary; users can drop additional styles into
-//! `~/.agiworkforce/output-styles/<name>.md` to override or add new ones.
-//! The active style is persisted in `~/.agiworkforce/config.toml` under
-//! `[ui] output_style = "<name>"`.
-//!
-//! Design parity hook: Claude Code ships the same three core styles
-//! (default / Explanatory / Learning) plus user/project overrides. We match
-//! the shape on purpose — every prompt becomes:
-//!
-//! ```text
-//! <base assistant instructions>
-//!
-//! <output style preamble>   <-- injected here
-//!
-//! <project context, memory, ...>
-//! ```
-//!
-//! Slash command: `/output-style [name]` lists or switches.
 
 use std::path::PathBuf;
 

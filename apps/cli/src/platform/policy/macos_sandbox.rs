@@ -29,7 +29,6 @@ impl std::fmt::Display for SandboxError {
 
 impl std::error::Error for SandboxError {}
 
-// AUDIT-FIX: C-8 — refuse paths whose characters would break out of the SBPL string literal.
 fn sbpl_quote(p: &Path) -> Result<String, SandboxError> {
     let s = p
         .to_str()

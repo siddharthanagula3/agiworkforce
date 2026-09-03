@@ -3,38 +3,15 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::{Component, Path, PathBuf};
 
-// ---------------------------------------------------------------------------
-// Manifest discovery — Sprint B6
-// ---------------------------------------------------------------------------
-//
-// AGI Workforce CLI accepts plugin manifests in five locations, in priority
-// order. The first one found wins; legacy paths emit a one-time deprecation
-// notice on stderr per session per plugin.
-//
-//   1. .agiworkforce-plugin/plugin.json  (own format — preferred)
-//   2. .claude-plugin/plugin.json        (Claude Code interop)
-//   3. .codex-plugin/plugin.json         (Codex CLI interop)
-//   4. .app.json                         (legacy — pre-B6)
-//   5. .mcp.json                         (legacy — pre-B6)
-//
-// All five share one schema: PluginManifest. Unknown fields land in
-// `extra` via serde-flatten so claude/codex-format manifests with
-// surplus keys (e.g. `transport`, `url`, `marketplace`) load without
-// error.
 
 /// Format origin of a plugin manifest. Used for `plugin list` display
 /// + deprecation notices when legacy formats are loaded.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ManifestFormat {
-    /// `.agiworkforce-plugin/plugin.json` — own format, preferred.
     Agiworkforce,
-    /// `.claude-plugin/plugin.json` — Claude Code interop.
     ClaudeCode,
-    /// `.codex-plugin/plugin.json` — Codex CLI interop.
     Codex,
-    /// `.app.json` — legacy AGI format pre-B6.
     LegacyApp,
-    /// `.mcp.json` — legacy AGI format pre-B6.
     LegacyMcp,
 }
 
@@ -94,10 +71,6 @@ pub struct LoadedPlugin {
     pub mcp_servers: HashMap<String, McpServerConfig>,
     pub apps: Vec<String>,
     pub error: Option<String>,
-    /// Format of the manifest this plugin was loaded from. Always `Some` —
-    /// directories with none of the 5 recognized manifest files are skipped
-    /// during discovery (see `PluginsManager::load_from_dir`) rather than
-    /// loaded as an inert, capability-less entry.
     pub format: Option<ManifestFormat>,
     /// Plugin-declared command markdown paths (relative to plugin root).
     pub manifest_commands: Vec<PathBuf>,
@@ -105,8 +78,6 @@ pub struct LoadedPlugin {
     pub manifest_agents: Vec<PathBuf>,
     /// Plugin-declared skill paths (file or dir, relative to plugin root).
     pub manifest_skills: Vec<PathBuf>,
-    /// Plugin-declared inline hooks config — same shape as the `hooks`
-    /// field of `~/.agiworkforce/hooks.json`. `None` if absent.
     pub manifest_hooks: Option<serde_json::Value>,
     /// Cross-plugin dependencies (e.g. `"otherplugin"` or
     /// `"otherplugin@marketplace"`). Recorded for later resolution.
@@ -161,9 +132,6 @@ pub struct PluginManifest {
     /// `hooks` field).
     #[serde(default)]
     pub hooks: Option<serde_json::Value>,
-    /// MCP server map (same shape as before, plus passthrough for
-    /// Claude/Codex formats which may include `transport`/`url` fields
-    /// — accept via flatten on McpServerConfig).
     #[serde(default)]
     pub mcp_servers: HashMap<String, McpServerConfig>,
     /// Apps (B5-era field): list of app/connector ids declared by this
@@ -191,7 +159,6 @@ pub enum PluginSource {
     Git { url: String, branch: Option<String> },
 }
 
-// AUDIT-FIX: H-16 — supply-chain integrity claim required on install.
 pub enum PluginIntegrity {
     PinnedSha256(String),
     UnsafeSkip,
@@ -327,24 +294,11 @@ impl PluginsManager {
                 .map(|n| n.to_string_lossy().to_string())
                 .unwrap_or_default();
 
-            // Try each manifest path in priority order. A directory with none
-            // of the 5 recognized manifest files (or an unparsable one — see
-            // `load_manifest_for`'s eprintln) contributes zero commands,
-            // skills, agents, or MCP servers, so surfacing it as a loaded
-            // "[no-manifest]" plugin in `doctor`/`plugin list` was a fake
-            // availability badge: it looked installed/enabled but did
-            // nothing. Skip it instead of fabricating an inert entry.
             let Some((mut m, fmt)) = load_manifest_for(&path) else {
                 continue;
             };
-            // Validate MCP server commands in stdio entries — reject shell
-            // metacharacters that could enable command injection. HTTP/SSE
-            // entries (no command, url in `extra`) are passed through
-            // untouched.
             m.mcp_servers.retain(|sname, cfg| {
                 if cfg.command.is_empty() {
-                    // No command means HTTP/SSE transport —
-                    // safety check doesn't apply.
                     return true;
                 }
                 let has_metachar = cfg.command.contains(&['|', ';', '&', '$', '`', '\0'][..]);
@@ -442,7 +396,7 @@ impl PluginsManager {
                             Some(u) => u.to_string(),
                             None => {
                                 eprintln!(
-                                    "[plugins] MCP server '{}' declares transport=sse but has no `url` — skipping",
+                                    "[plugins] MCP server '{}' declares transport=sse but has no `url`, skipping",
                                     name
                                 );
                                 continue;
@@ -456,7 +410,7 @@ impl PluginsManager {
                             Some(u) => u.to_string(),
                             None => {
                                 eprintln!(
-                                    "[plugins] MCP server '{}' declares transport=http but has no `url` — skipping",
+                                    "[plugins] MCP server '{}' declares transport=http but has no `url`, skipping",
                                     name
                                 );
                                 continue;
@@ -490,7 +444,6 @@ impl PluginsManager {
                     }
                     Some("stdio") | None => {
                         if cfg.command.is_empty() {
-                            // No command + no recognized transport — skip.
                             continue;
                         }
                         out.insert(
@@ -505,7 +458,7 @@ impl PluginsManager {
                     Some(other) => {
                         // B3 will add "oauth" here. Anything else is unknown.
                         eprintln!(
-                            "[plugins] MCP server '{}' uses unsupported transport '{}' — skipping (B3 wiring pending)",
+                            "[plugins] MCP server '{}' uses unsupported transport '{}', skipping (B3 wiring pending)",
                             name, other
                         );
                     }
@@ -574,21 +527,6 @@ impl PluginsManager {
             .collect()
     }
 
-    /// Merged hook configs from all plugins, keyed by event name.
-    ///
-    /// Each plugin's `manifest_hooks` is expected to be either:
-    ///   - `{ "hooks": { "PreToolUse": [...], "Stop": [...] } }` (full
-    ///     hooks.json shape — `hooks` field unwrapped), or
-    ///   - `{ "PreToolUse": [...], "Stop": [...] }` (the inner hooks
-    ///     map directly — shorthand).
-    ///
-    /// Returns a flattened `event -> [hook_value, ...]` map. Caller
-    /// merges into the user's `~/.agiworkforce/hooks.json` config; plugin
-    /// hooks append after user hooks (documented in `hooks.rs`
-    /// `merge_plugin_hooks`).
-    /// Returns merged hook configs from plugins, including whether each plugin
-    /// was sourced from a project-local directory (untrusted by default).
-    /// Callers should skip hook execution for untrusted project-local plugins.
     pub fn hook_configs_with_trust(&self) -> Vec<(String, Vec<serde_json::Value>, bool)> {
         // Returns vec of (event_name, [hook_values], is_from_project_dir).
         let mut result = Vec::new();
@@ -705,7 +643,6 @@ impl PluginsManager {
             return PluginInstallOutcome::Failed { error };
         }
 
-        // AUDIT-FIX: H-16 — verify integrity claim before accepting the plugin tree.
         if let Err(error) = verify_plugin_integrity(&target, &req.integrity) {
             let _ = std::fs::remove_dir_all(&target);
             return PluginInstallOutcome::Failed { error };
@@ -730,7 +667,6 @@ impl PluginsManager {
     }
 }
 
-// AUDIT-FIX: H-16 — supply-chain integrity gate. SHA-256 is verified locally.
 fn verify_plugin_integrity(target: &Path, integrity: &PluginIntegrity) -> Result<(), String> {
     match integrity {
         PluginIntegrity::PinnedSha256(expected) => {
@@ -1199,12 +1135,6 @@ mod tests {
 
     #[test]
     fn load_from_dir_skips_directories_with_no_recognized_manifest() {
-        // A bare directory under ~/.agiworkforce/plugins/ (e.g. an empty dir
-        // left over from a failed install, or an unrelated stray folder) has
-        // none of the 5 recognized manifest files. Previously this was still
-        // reported as a "loaded" plugin (format: None, "[no-manifest]") even
-        // though it contributes zero commands/skills/agents/MCP servers — a
-        // fake availability badge. It must be skipped entirely.
         let home = tempfile::tempdir().unwrap();
         let plugins_dir = home.path().join("plugins");
         std::fs::create_dir_all(plugins_dir.join("stray-empty-dir")).unwrap();

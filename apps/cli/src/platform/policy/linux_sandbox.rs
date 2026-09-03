@@ -1,22 +1,3 @@
-//! Linux seccomp-BPF allow-list builder. Architecture-aware (x86_64, aarch64).
-//! Three presets matching SandboxMode in screen_renderers.rs.
-//!
-//! NOT A SHIPPING SANDBOX. Nothing calls `install_filter`: `sandbox.rs` runs
-//! sandboxed commands exclusively through bubblewrap, and the `linux-seccomp`
-//! feature this module's runtime half is gated on is absent from `default` and
-//! from the release workflow's `cargo build`. Two reasons it stays that way:
-//!
-//! 1. seccomp filters syscalls, not paths. `Contained` permits `openat`/`write`
-//!    against the entire filesystem, so enabling it would not deliver the
-//!    workspace confinement `SandboxPolicy` promises — it would only advertise
-//!    it. Path confinement needs Landlock, which is not implemented here.
-//! 2. `install_filter` applies to the calling thread. Sandboxing a child needs
-//!    the filter installed in a `pre_exec` hook between fork and exec; no such
-//!    call site exists.
-//!
-//! Until both are done, bubblewrap is a hard runtime dependency on Linux
-//! (see `sandbox::missing_sandbox_message`), and `doctor` must not let this
-//! module's presence upgrade its sandbox verdict.
 
 #![cfg(target_os = "linux")]
 #![allow(dead_code)]
@@ -38,18 +19,8 @@ pub struct LinuxSandboxOptions {
 /// fall back to a conservative subset.
 pub fn allowed_syscalls(preset: LinuxSandboxPreset) -> Vec<&'static str> {
     if matches!(preset, LinuxSandboxPreset::Unrestricted) {
-        // Sentinel — caller skips installation entirely.
         return vec![];
     }
-    // Common safe syscalls: process / time / mmap / signals / fd / read.
-    //
-    // This base set lists only syscalls that exist on every supported
-    // architecture (x86_64, aarch64). Architecture-specific legacy syscalls —
-    // e.g. `open`/`stat`/`pipe`/`select`/`fork`, which were dropped on aarch64
-    // in favour of the `*at`/`*2` variants already present below — are added via
-    // the `#[cfg(target_arch = "x86_64")]` block so the compiled filter never
-    // references a syscall number that `syscall_number_for` cannot resolve on
-    // the target arch (which would otherwise make `compile_bpf` bail).
     let mut allow: Vec<&'static str> = vec![
         "read",
         "write",
@@ -137,11 +108,6 @@ pub fn allowed_syscalls(preset: LinuxSandboxPreset) -> Vec<&'static str> {
         "epoll_wait",
     ]);
     if !matches!(preset, LinuxSandboxPreset::ReadOnly) {
-        // Contained: also allow writes + process spawn for /tmp + workspace.
-        // (The actual filesystem-path filtering is enforced by Landlock or by
-        // the wrapping permission layer — seccomp only filters syscalls, not
-        // paths.) `wait4`, `rt_sigreturn`, `rt_sigtimedwait`, and `tgkill` are
-        // already in the portable base set, so they are not repeated here.
         allow.extend(["execve", "clone", "rt_sigsuspend", "pipe2", "socketpair"]);
         // `fork`/`vfork` exist on x86_64 but not aarch64 (which uses `clone`).
         #[cfg(target_arch = "x86_64")]

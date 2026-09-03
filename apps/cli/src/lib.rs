@@ -7,7 +7,6 @@
 #![allow(clippy::ptr_arg)]
 #![allow(clippy::result_large_err)]
 
-// Active modules — core CLI functionality
 pub mod agent;
 pub mod agent_events;
 pub mod agents;
@@ -87,7 +86,6 @@ pub mod voice {
     }
 }
 
-// Extended CLI modules — used by subcommand handlers
 pub mod app_server;
 pub mod apply_patch;
 pub mod approval_audit;
@@ -122,8 +120,6 @@ pub mod tier_cache;
 pub(crate) mod tool_filters;
 pub mod tool_search;
 
-// Phase-2 candidates — implementations exist but the user-facing surface is
-// not yet wired. Each carries an inline PHASE2 marker explaining the unblock.
 #[allow(dead_code)]
 // PHASE2: registry.agiworkforce.com not deployed; rewires to plugin-manifest discovery (Sprint B6)
 pub mod marketplace;
@@ -133,19 +129,13 @@ pub mod sdk_io; // used by OneShotOutputMode::JsonLine in lib.rs
                 // `crate::policy::*` continue to resolve unchanged.
 pub use platform::policy;
 #[allow(dead_code)]
-// PHASE2: WS transport for a2a — wraps jsonrpc::handle_request over persistent WS connections
 pub mod a2a_ws;
 pub mod memory_pipeline; // used by agent/mod.rs + agent/chat.rs + agent/prompt.rs
 pub mod skill_learner; // used by agent/chat.rs session-end hook
 
-// A2A protocol — lives at features::a2a; re-exported here so 6 call-sites in
-// a2a_ws.rs, agent/mod.rs, and repl/mod.rs resolve unchanged.
 #[allow(dead_code)] // PHASE2: expose `agi a2a serve/discover/delegate`
 pub use features::a2a;
 
-// Phase 6 reorg — feature/platform/data layers.
-// features/ has a real mod.rs; submodules migrate here incrementally.
-// platform/ and data/ are layout anchors for future surface-specific code.
 #[allow(dead_code)]
 pub mod data;
 pub mod features;
@@ -159,12 +149,11 @@ use clap::{CommandFactory, Parser, Subcommand, ValueEnum};
 use colored::Colorize;
 use std::io::{self, IsTerminal, Read};
 
-/// AGI CLI — multi-model AI agent in your terminal
 #[derive(Parser, Debug)]
 #[command(
     name = "agi",
     version,
-    about = "AGI CLI — multi-model AI agent in your terminal",
+    about = "AGI CLI, multi-model AI agent in your terminal",
     long_about = "Multi-provider AI agent for your terminal. \
                   Connects to Anthropic, OpenAI, Google, Ollama, and more."
 )]
@@ -466,7 +455,6 @@ enum EffortLevel {
     Medium,
     /// Thorough analysis and implementation (max_turns=50, max_tokens=16384)
     High,
-    /// Exhaustive — use all available context (max_turns=100, max_tokens=32768)
     Max,
 }
 
@@ -537,22 +525,6 @@ pub fn oneshot_result_json_value(
     })
 }
 
-/// Compute the effective `tracing`/`log` env-filter directive string from the
-/// `-v/--verbose` and `--debug[=categories]` controls.
-///
-/// Precedence:
-/// 1. An explicit `RUST_LOG` (or `AGIWORKFORCE_LOG`) env value always wins — it
-///    is returned verbatim so operators keep full control.
-/// 2. `--debug` with an explicit comma-separated category list raises exactly
-///    those crate sub-modules (`agiworkforce_cli::<category>`) to `debug`, on
-///    top of a crate-wide `info` floor. This is the category-aware behavior the
-///    `--debug` help text promises.
-/// 3. `--debug` with no categories, or `-v/--verbose`, raises the whole
-///    `agiworkforce_cli` crate to `debug`.
-/// 4. Otherwise the crate logs at `warn` (quiet default).
-///
-/// Returned as a directive string so it is unit-testable without installing a
-/// global subscriber.
 pub fn compute_log_filter(
     verbose: bool,
     debug: Option<&Option<String>>,
@@ -708,14 +680,6 @@ enum Command {
         full_auto: bool,
         command: Vec<String>,
     },
-    /// Run as MCP server (stdio). Exposes no tools yet — see `agi app-server`.
-    ///
-    /// The handler speaks the protocol and answers initialize/tools/list, but
-    /// advertises an empty tool list on purpose: one-shot agent exec over stdio
-    /// MCP needs provider/model session, approval plumbing and event streaming,
-    /// and advertising a tool before it is callable would be fake wiring. Stated
-    /// here so the command's help matches what it does — the behaviour itself is
-    /// deliberate, not a defect.
     McpServer,
     /// Generate shell completion scripts.
     #[command(alias = "completions")]
@@ -937,11 +901,8 @@ enum SessionAction {
 /// Outcome of gating a destructive operation on confirmation.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DestructiveDecision {
-    /// `--force`/`--yes` supplied — proceed without prompting.
     Proceed,
-    /// Interactive terminal — ask the user to confirm.
     Prompt,
-    /// Neither forced nor interactive — refuse rather than delete blindly.
     Refuse,
 }
 
@@ -971,7 +932,6 @@ enum PluginSubcommand {
         /// `sha256:<hex>` integrity claim. AUDIT-FIX: H-16
         #[arg(long)]
         integrity: Option<String>,
-        /// Bypass integrity verification. AUDIT-FIX: H-16 — prints a warning to stderr every install.
         #[arg(long)]
         unsafe_no_integrity: bool,
     },
@@ -1364,9 +1324,6 @@ fn handle_approvals_command(action: &ApprovalsSubcommand) -> Result<()> {
     }
 }
 
-// ---------------------------------------------------------------------------
-// Session subcommand handler — replay / branch points
-// ---------------------------------------------------------------------------
 
 async fn handle_session_action(action: SessionAction) -> Result<()> {
     match action {
@@ -1478,7 +1435,7 @@ async fn handle_session_action(action: SessionAction) -> Result<()> {
             // id/name unless the user explicitly opts in with --force.
             if !force && runtime::session_control::managed_session_exists(&new_id)? {
                 anyhow::bail!(
-                    "session '{new_id}' already exists — use --force to overwrite it or choose a different --as name",
+                    "session '{new_id}' already exists, use --force to overwrite it or choose a different --as name",
                 );
             }
             // Preserve ancestry and routing authority instead of recreating a
@@ -1598,15 +1555,12 @@ fn is_git_plugin_source(source: &str) -> bool {
     {
         return true;
     }
-    // scp-like SSH shorthand: user@host:path — but not an absolute local
-    // path that happens to contain a colon-free '@' somewhere.
     if source.contains('@') && source.contains(':') && !source.starts_with('/') {
         return true;
     }
     source.ends_with(".git")
 }
 
-/// Main async entry point — called from `main.rs`.
 pub async fn run_main() -> Result<()> {
     let cli = Cli::parse();
 
@@ -1618,11 +1572,6 @@ pub async fn run_main() -> Result<()> {
 
     sandbox::set_sandbox_disabled(cli.no_sandbox);
     let normalized_cli_options = cli_options::CliOptions::from_cli(&cli);
-    // `--no-session-persistence` is a privacy opt-out, so it has to be in force
-    // before ANY session is constructed — including inside the subcommand arms
-    // below, which dispatch ahead of the per-run option resolution. Every
-    // `AgentSession` reads this policy once at construction and refuses to
-    // write managed-session state when it is off.
     cli_options::set_session_persistence_enabled(normalized_cli_options.session_persistence);
 
     for dir in &normalized_cli_options.additional_dirs {
@@ -1651,9 +1600,6 @@ pub async fn run_main() -> Result<()> {
             eprintln!("Warning: failed to initialize home directory: {}", e);
         }
 
-        // First-run onboarding wizard (only if interactive terminal and no subcommand).
-        // Skipped when the user is running a non-interactive read-only flag like
-        // `--dump-system-prompt` — those should never block on a TTY prompt.
         if cli.command.is_none()
             && cli.prompt.is_none()
             && !cli.dump_system_prompt
@@ -1710,13 +1656,8 @@ pub async fn run_main() -> Result<()> {
         config::CliConfig::load_without_project()?
     };
 
-    // Pull any user-defined `[providers.<name>]` blocks into the runtime
-    // OpenAI-compatible registry (OpenRouter, NVIDIA NIM, Groq, Together,
-    // Fireworks, etc.). Reserved provider names are ignored — see
-    // `models::register_custom_providers`.
     models::register_custom_providers(&app_config);
 
-    // Validate configuration — warn but continue with defaults on failure
     if let Err(e) = app_config.validate() {
         eprintln!(
             "Warning: config validation failed: {}. Continuing with defaults.",
@@ -1735,10 +1676,6 @@ pub async fn run_main() -> Result<()> {
                 full_auto,
                 json,
             } => {
-                // Honor an explicit model: exec-level --model first, then the
-                // top-level --model, then config. Mirrors the provider fallback
-                // below — without this, `agi --model X exec` silently dropped X
-                // and ran the config-default model.
                 let raw_model = models::resolve_exec_model(
                     model.as_deref(),
                     cli.model.as_deref(),
@@ -1895,7 +1832,7 @@ pub async fn run_main() -> Result<()> {
                         .emit_stdout();
                     } else {
                         eprintln!();
-                        eprintln!("Interrupted — turn cancelled before completion.");
+                        eprintln!("Interrupted, turn cancelled before completion.");
                     }
                     // 130 = 128 + SIGINT, the conventional exit code.
                     std::process::exit(130);
@@ -1909,8 +1846,6 @@ pub async fn run_main() -> Result<()> {
                                 out_tokens: turn.output_tokens,
                                 cache_read: turn.cache_read_tokens,
                                 cache_creation: turn.cache_creation_tokens,
-                                // Read accumulated cost from the session ledger instead of
-                                // hardcoding 0.0 — the ledger is updated by send() internally.
                                 cumulative_dollars: session.cost_ledger.total_usd,
                             }
                             .emit_stdout();
@@ -2199,7 +2134,6 @@ pub async fn run_main() -> Result<()> {
                         } else {
                             plugins::PluginSource::Local(std::path::PathBuf::from(source))
                         };
-                        // AUDIT-FIX: H-16 — supply-chain integrity is required.
                         let pintegrity = match (integrity.as_deref(), *unsafe_no_integrity) {
                             (Some(s), _) if s.starts_with("sha256:") => {
                                 plugins::PluginIntegrity::PinnedSha256(s.to_string())
@@ -2315,7 +2249,7 @@ pub async fn run_main() -> Result<()> {
                         println!("\nAvailable instruction files:");
                         for i in &ctx.available_instructions {
                             println!(
-                                "  {} — {} ({} bytes)",
+                                "  {}, {} ({} bytes)",
                                 i.tool,
                                 i.path.display(),
                                 i.size_bytes
@@ -2332,7 +2266,7 @@ pub async fn run_main() -> Result<()> {
                                 .or(s.url.as_deref())
                                 .unwrap_or("(unknown)");
                             println!(
-                                "  {} — {}",
+                                "  {}, {}",
                                 terminal_text::sanitize_terminal_text(&s.name),
                                 terminal_text::sanitize_terminal_text(cmd_display)
                             );
@@ -2771,7 +2705,7 @@ pub async fn run_main() -> Result<()> {
             eprintln!(
                 "{}",
                 colored::Colorize::yellow(
-                    "AGI session expired — run `agi login` (or set AGIWORKFORCE_JWT) to use managed Auto routing."
+                    "AGI session expired, run `agi login` (or set AGIWORKFORCE_JWT) to use managed Auto routing."
                 )
             );
         }
@@ -2782,11 +2716,6 @@ pub async fn run_main() -> Result<()> {
             // closed to the Free policy until an account tier is proven.
             .map(|cached| cached.tier.managed_auto_routing_tier())
             .unwrap_or("free");
-        // AUTO-ROUTER-MIGRATION-01 (CLI clause): classify the launch prompt
-        // through the canonical taxonomy instead of hardcoding Coding.
-        // One-shot runs classify their real prompt text; interactive launches
-        // have no text yet and land on simple_chat — AgentSession::send then
-        // re-classifies and re-resolves every turn with continuity.
         let launch_text = match cli.prompt.as_deref() {
             Some("-") | None => stdin_content.as_deref().unwrap_or(""),
             Some(prompt) => prompt,
@@ -2812,13 +2741,6 @@ pub async fn run_main() -> Result<()> {
         app_config.default.model.clone()
     };
 
-    // Parse `-m model1,model2,...` fallback-chain syntax. Without this the
-    // whole comma-joined string was passed through as a single literal model
-    // id (for example, two comma-separated local catalog selections), so the fallback chain never
-    // fired and lookups failed with a bogus "model not installed" error. The
-    // `Exec` subcommand already parses this correctly (see `FallbackChain::parse`
-    // above) — mirror that here for the interactive/one-shot path so `-m`
-    // behaves consistently across `agi exec` and plain `agi`.
     let model_fallback_chain = routing::fallback::FallbackChain::parse(&model);
     let model: String = model_fallback_chain
         .head()
@@ -2839,7 +2761,6 @@ pub async fn run_main() -> Result<()> {
         );
     }
 
-    // Read file contents for -f flag — text files and images are handled separately
     let file_context_result = read_file_contexts(&cli.files)?;
 
     // Gather system context
@@ -3029,9 +2950,6 @@ pub async fn run_main() -> Result<()> {
     // Resolve team mode from --team flag or AGI_TEAM env var
     let team_mode = cli.team || std::env::var("AGI_TEAM").is_ok_and(|v| v == "1" || v == "true");
 
-    // Seed interactive sessions with the Auto launch state so per-turn
-    // re-classification has full continuity (selection, model_key, task,
-    // trust, tier) — see AgentSession::re_resolve_auto_route_for_turn.
     let auto_route_seed =
         auto_route
             .as_ref()
@@ -3265,13 +3183,6 @@ pub(crate) async fn attach_mcp_manager_for_session(
     Ok(())
 }
 
-/// Load MCP configs, connect all servers, and return the connected manager.
-///
-/// This is the sessionless half of `attach_mcp_manager_for_session` — it can
-/// be called from a `tokio::spawn` background task and the resulting
-/// `McpManager` injected into a session later via `set_mcp_manager`.
-///
-/// Returns `Ok(None)` when there are no servers to connect (no-op case).
 pub(crate) async fn build_mcp_manager(
     mcp_config_options: &mcp::McpConfigLoadOptions,
     include_default_configs: bool,
@@ -3430,9 +3341,6 @@ pub async fn run_oneshot(
     session.skip_permissions = skip_permissions;
     session.auto_approve_safe = auto_approve_safe;
     session.quiet = quiet;
-    // `-m model1,model2,...` fallback chain — mirrors the `Exec` subcommand's
-    // handling so a `,`-separated `-m` list actually rotates through
-    // fallback models on transient failure instead of being silently dropped.
     if fallback_chain.primaries.len() > 1 {
         session.fallback_chain = Some(fallback_chain);
     }
@@ -3466,12 +3374,6 @@ pub async fn run_oneshot(
     if let Some(ref sid) = session_id_override {
         session.override_session_id(sid)?;
     }
-    // Event-stream correlation id. `--no-session-persistence` suppresses the
-    // managed session entirely, so an explicit `--session-id` has to be read
-    // straight from the flag — otherwise a caller that opted out of disk
-    // persistence would silently lose the id it correlates events by. When
-    // persistence is on this is the same value `override_session_id` just
-    // wrote, so the two paths agree.
     let event_session_id = session_id_override
         .clone()
         .or_else(|| session.managed_session_id().map(str::to_string));
@@ -3638,8 +3540,6 @@ pub async fn run_oneshot(
             }
         }
     } else if output_mode == OneShotOutputMode::JsonPretty {
-        // Pretty-printed single JSON object — non-streaming, for shell users
-        // running `agi -p '...' --output-format json`.
         let start = std::time::Instant::now();
         let result = session.send(config, prompt, Box::new(|_chunk| {})).await;
         let duration_ms = start.elapsed().as_millis() as u64;
@@ -3781,7 +3681,6 @@ mod tests {
             compute_log_filter(false, None, None),
             "agiworkforce_cli=warn"
         );
-        // -v/--verbose raises the whole crate to debug — the flag now has effect.
         assert_eq!(
             compute_log_filter(true, None, None),
             "agiworkforce_cli=debug"
@@ -3811,9 +3710,6 @@ mod tests {
             compute_log_filter(true, Some(&None), Some("warn,foo=trace")),
             "warn,foo=trace"
         );
-        // The computed directive must be a valid EnvFilter that installs cleanly
-        // (idempotent — safe even if another test already installed a subscriber).
-        // Skip the exact-value assertion when the environment pins a log filter.
         let applied = init_tracing(true, None);
         if std::env::var("RUST_LOG").is_err() && std::env::var("AGIWORKFORCE_LOG").is_err() {
             assert_eq!(

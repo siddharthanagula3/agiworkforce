@@ -1,21 +1,3 @@
-//! MCP (Model Context Protocol) client — CLI facade.
-//!
-//! The transport MECHANICS (JSON-RPC framing/correlation/timeouts, the three
-//! transports, and the RFC 9728/8414/7591 OAuth flow) live in the shared
-//! `agiworkforce-mcp` crate (Wave 5 stage d1 extraction). This module keeps the
-//! CLI-app-local pieces only:
-//!   * config loading (`McpServerConfig`/`McpTransport`/`McpOAuthConfig` +
-//!     `.mcp.json`/`mcp.json` discovery) — CLI back-compat shapes;
-//!   * product-shaping of results — strict `tools/list` validation +
-//!     `mcp_{server}_{tool}` namespacing, prompt slash-command parsing, and
-//!     tool-result text extraction;
-//!   * the host capability adapters wired into the crate via `ClientHooks`:
-//!     [`KeyringTokenStore`] (OAuth persistence), [`HookFiringElicitationHandler`]
-//!     (fires the CLI hooks around elicitation), and [`CliBrowserAuthorizer`]
-//!     (the user-action browser chokepoint);
-//!   * the elicitation UI (`tui_handler`) and the connection pool.
-//!
-//! `McpConnection` is now a thin adapter over `agiworkforce_mcp::McpClient`.
 
 use anyhow::{bail, Context, Result};
 use serde::{Deserialize, Serialize};
@@ -66,11 +48,6 @@ pub enum McpServerConfig {
     Legacy(LegacyStdioConfig),
 }
 
-/// OAuth configuration for an MCP HTTP transport.
-///
-/// All fields optional — when absent we run RFC 9728 → RFC 8414 discovery on
-/// first 401. When `client_id` is also absent we attempt RFC 7591 dynamic
-/// client registration against the discovered AS.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub struct McpOAuthConfig {
@@ -354,9 +331,6 @@ impl BrowserAuthorizer for CliBrowserAuthorizer {
     }
 }
 
-/// Wraps an inner elicitation handler and fires the CLI `Elicitation` /
-/// `ElicitationResult` hooks around it — preserving the human-in-the-loop
-/// audit/approval boundary the transport previously implemented inline.
 struct HookFiringElicitationHandler {
     inner: Arc<dyn ElicitationHandler>,
 }
@@ -669,25 +643,6 @@ fn load_mcp_config_file_into_result(
     Ok(())
 }
 
-/// Normalize an MCP server entry written in the nested-transport shape.
-///
-/// `McpTransport` is internally tagged on a **string** `transport` field
-/// (`"stdio" | "sse" | "http"`) with the transport's own fields alongside it.
-/// Some entries on disk instead carry an *object* under `transport`, tagged on
-/// `type`, next to a vestigial `command: ""`:
-///
-/// ```json
-/// { "command": "", "args": [], "transport": { "type": "http", "url": "..." } }
-/// ```
-///
-/// Because `McpServerConfig` is `#[serde(untagged)]`, that shape fails the
-/// Tagged variant (no string `transport`) and falls through to Legacy, which
-/// matches on `command` — so a working HTTP server was loaded as a stdio server
-/// with an empty command. Every such entry then failed `agi doctor` with
-/// "stdio command is empty", and would never have connected.
-///
-/// Rewrites the entry into the canonical shape. Anything unrecognised is
-/// returned untouched so normal configs take no new code path.
 fn normalize_nested_transport(value: &serde_json::Value) -> Option<serde_json::Value> {
     let object = value.as_object()?;
     let transport = object.get("transport")?.as_object()?;
@@ -895,9 +850,6 @@ impl McpManager {
         privacy_mode: crate::agent::PrivacyMode,
         elicitation: Arc<dyn ElicitationHandler>,
     ) -> Result<()> {
-        // Suppress raw stderr progress while the full-screen TUI owns the
-        // terminal — otherwise these lines bleed into and corrupt the display.
-        // In exec / non-TUI mode the flag is false and they render normally.
         let quiet = crate::tui::tui_active();
         for (name, config) in configs {
             let is_remote = !matches!(config.as_transport(), McpTransport::Stdio { .. });
@@ -1023,11 +975,6 @@ impl McpManager {
             .collect()
     }
 
-    /// Convert MCP tools to ToolDefinitions for the LLM.
-    ///
-    /// Concurrency flags default to false (safe, sequential) for MCP tools —
-    /// the MCP protocol exposes `annotations.readOnlyHint` and similar but we
-    /// don't plumb those through yet.
     pub fn tool_definitions(
         &self,
         privacy_mode: crate::agent::PrivacyMode,
@@ -1042,8 +989,6 @@ impl McpManager {
                 is_read_only: false,
                 is_concurrency_safe: false,
                 max_result_size_chars: None,
-                // MCP tools are never deferred — they come from external servers
-                // and are only registered when the server is connected.
                 should_defer: false,
                 aliases: Vec::new(),
                 owner: format!("mcp:{}", t.server_name),
@@ -1294,9 +1239,6 @@ fn normalize_mcp_prompt_part(value: &str) -> String {
     }
 }
 
-// ---------------------------------------------------------------------------
-// Tests (config loading + result shaping — the CLI-app-local behavior)
-// ---------------------------------------------------------------------------
 
 #[cfg(test)]
 mod tests {
