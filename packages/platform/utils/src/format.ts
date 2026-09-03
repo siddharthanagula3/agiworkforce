@@ -8,26 +8,6 @@
  * @packageDocumentation
  */
 
-/**
- * Format a date using the user's locale.
- *
- * @param date - Date to format (string, number timestamp, or Date object)
- * @param options - Intl.DateTimeFormat options
- * @returns Formatted date string
- *
- * @example
- * ```typescript
- * formatDate(new Date()); // "January 15, 2026"
- * formatDate('2026-01-15', { dateStyle: 'short' }); // "1/15/26"
- * ```
- */
-/**
- * These formatters pass `undefined` as the locale so Intl uses the viewer's
- * own locale. They previously pinned 'en-US', which meant a non-US user saw
- * US date order and separators — and the consistency work that wanted every
- * ad-hoc `toLocaleString()` call routed through here would have spread that
- * to every screen rather than fixing it.
- */
 export function formatDate(
   date: string | number | Date,
   options: Intl.DateTimeFormatOptions = {

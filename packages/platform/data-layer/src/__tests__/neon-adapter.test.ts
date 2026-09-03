@@ -253,8 +253,8 @@ describe('NeonDatabaseAdapter.transaction', () => {
   });
 });
 
-describe('NeonDatabaseAdapter.withUser — UNVERIFIED-JWT default-deny (P1-DATALAYER-JWT)', () => {
-  it('THROWS by default — refuses an attacker-influenced JWT when no opt-in flag is set', () => {
+describe('NeonDatabaseAdapter.withUser, UNVERIFIED-JWT default-deny (P1-DATALAYER-JWT)', () => {
+  it('THROWS by default, refuses an attacker-influenced JWT when no opt-in flag is set', () => {
     const adapter = new NeonDatabaseAdapter({
       connectionString: 'postgresql://u:p@ep.neon.tech/db?sslmode=require',
       // unsafeAllowUnverifiedJwtSubject intentionally NOT set → default-deny.
@@ -264,7 +264,7 @@ describe('NeonDatabaseAdapter.withUser — UNVERIFIED-JWT default-deny (P1-DATAL
     expect(() => adapter.withUser(forged)).toThrow(/unsafeAllowUnverifiedJwtSubject/);
   });
 
-  it('default-deny throws BEFORE decoding — no pool client is ever checked out', async () => {
+  it('default-deny throws BEFORE decoding, no pool client is ever checked out', async () => {
     const adapter = new NeonDatabaseAdapter({
       connectionString: 'postgresql://u:p@ep.neon.tech/db?sslmode=require',
     });
@@ -357,7 +357,7 @@ describe('NeonDatabaseAdapter.withUser', () => {
   });
 });
 
-describe('NeonDatabaseAdapter.withOrg — tenancy scope (migration 0073)', () => {
+describe('NeonDatabaseAdapter.withOrg, tenancy scope (migration 0073)', () => {
   const makeAdapter = () =>
     new NeonDatabaseAdapter({
       connectionString: 'postgresql://u:p@ep.neon.tech/db?sslmode=require',
@@ -498,7 +498,7 @@ describe('NeonDatabaseAdapter.dispose', () => {
 });
 
 describe('NeonDatabaseAdapter pool sharing (P0-J)', () => {
-  it('100x withUser shares a single Pool — does not reconstruct per request', async () => {
+  it('100x withUser shares a single Pool, does not reconstruct per request', async () => {
     state.poolQueryHandler = async () => ({ rows: [{ id: 1 }], rowCount: 1 });
     state.clientQueryHandler = async (sql) =>
       sql.toLowerCase().startsWith('select')

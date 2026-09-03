@@ -53,19 +53,6 @@ export interface DatabaseConnectionConfig {
   onConnectionError?: DatabaseConnectionErrorListener;
 }
 
-/**
- * Generic relational database adapter. RLS-aware via `withUser()`.
- *
- * All methods are parameterized — never concatenate user input into SQL.
- *
- * @example
- *   const db = createDatabaseClient({ provider: 'neon' });
- *   const userDb = db.withUser(jwt);
- *   const rows = await userDb.query<{ id: string }>(
- *     'select id from conversations where user_id = $1',
- *     [userId],
- *   );
- */
 export interface DatabaseAdapter {
   /**
    * Run a parameterized SELECT. Returns typed rows.
@@ -130,15 +117,6 @@ export interface StorageAdapter {
   signedUrl(bucket: string, key: string, ttlSeconds: number): Promise<string>;
 }
 
-/**
- * Realtime adapter for low-latency pub/sub. Not durable — for durable queues
- * use a separate adapter (TODO: add `QueueAdapter` when we ship background jobs).
- *
- * Implementations:
- * - Pusher: `channel.bind(event, ...)`.
- * - Ably: `channel.subscribe(name, ...)`.
- * - Self-hosted ws: thin wrapper over a single websocket connection.
- */
 export interface RealtimeAdapter {
   subscribe(channel: string, onMessage: (payload: unknown) => void): () => void;
 

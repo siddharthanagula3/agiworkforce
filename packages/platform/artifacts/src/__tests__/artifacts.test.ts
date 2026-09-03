@@ -16,7 +16,7 @@ const fakeLocalWriter: LocalFileWriter = async (artifact) =>
 const nonFileWriter: LocalFileWriter = async (artifact) =>
   `https://cloud.example.com/artifacts/${artifact.id}`;
 
-describe('publishArtifact — local path', () => {
+describe('publishArtifact, local path', () => {
   it('returns a LocalPublishResult with a file:// shareUrl', async () => {
     const result = await publishArtifact({
       artifact: baseArtifact,
@@ -52,7 +52,7 @@ describe('publishArtifact — local path', () => {
   });
 });
 
-describe('publishArtifact — cloud path (no waitlist gate)', () => {
+describe('publishArtifact, cloud path (no waitlist gate)', () => {
   it.each(['byok', 'managed'] as const)(
     'returns an honest unavailable result for privacyMode=%s when no cloudPublisher is injected',
     async (privacyMode) => {
@@ -63,7 +63,6 @@ describe('publishArtifact — cloud path (no waitlist gate)', () => {
         privacyMode,
         originPrivacyMode: privacyMode,
         surface: 'desktop',
-        // localFileWriter intentionally omitted — cloud path must not use it
       });
 
       expect(result.kind).toBe('unavailable');
@@ -113,7 +112,7 @@ describe('publishArtifact — cloud path (no waitlist gate)', () => {
 // SECURITY-FIX F3 (CWE-863): the caller-declared privacyMode is no longer the
 // authorization decision on its own. These cases fail on the pre-fix code,
 // where a UI hardcoding `privacyMode: 'managed'` uploaded Local/BYOK content.
-describe('publishArtifact — origin trust-boundary cross-check', () => {
+describe('publishArtifact, origin trust-boundary cross-check', () => {
   const cloudPublisher = () =>
     vi.fn(async () => ({ shareUrl: 'https://share.example.invalid/leak' }));
 
@@ -184,7 +183,7 @@ describe('publishArtifact — origin trust-boundary cross-check', () => {
   });
 });
 
-describe('publishArtifact — trust-boundary enforcement', () => {
+describe('publishArtifact, trust-boundary enforcement', () => {
   it('throws when the localFileWriter returns a non-file:// URL', async () => {
     await expect(
       publishArtifact({
@@ -197,7 +196,7 @@ describe('publishArtifact — trust-boundary enforcement', () => {
   });
 });
 
-describe('publishArtifact — surface sync-rule enforcement', () => {
+describe('publishArtifact, surface sync-rule enforcement', () => {
   it.each(['cli', 'vscode', 'chrome'] as const)(
     'throws AGI sync-rule violation for surface=%s',
     async (surface) => {
@@ -227,7 +226,7 @@ describe('publishArtifact — surface sync-rule enforcement', () => {
   );
 });
 
-describe('resolveOriginPrivacyMode — most restrictive observed boundary wins', () => {
+describe('resolveOriginPrivacyMode, most restrictive observed boundary wins', () => {
   it('reports no origin at all when the host observed no signal', () => {
     expect(resolveOriginPrivacyMode([])).toBeUndefined();
     expect(resolveOriginPrivacyMode([undefined, null, ''])).toBeUndefined();

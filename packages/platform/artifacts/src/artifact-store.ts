@@ -1,24 +1,3 @@
-/**
- * Shared, platform-agnostic artifact store (consolidation Step 1b).
- *
- * Returns a Zustand **vanilla** store (`createStore`) so each surface wraps it with its own
- * React bindings + persistence — exactly like {@link createChatStore}. PURE: no `next/`, no
- * `@tauri-apps`, no DOM. Operates on the canonical {@link SharedArtifact} (from
- * `@agiworkforce/types`); each surface maps it to its own view type (web `ArtifactData`,
- * mobile `MobileArtifact`).
- *
- * Replaces the three forked artifact stores (web `features/chat/stores/artifacts-store.ts`,
- * desktop Tauri-SQLite store, mobile MMKV store) — see
- * `docs/plans/shared-packages-consolidation-plan-2026-06-21.md` §4 (Step 1b).
- *
- * Versioning is CONTENT-keyed: re-upserting an artifact with identical content is idempotent
- * (so deterministic re-derivation never spuriously bumps a version, despite changing
- * timestamps); upserting the SAME id with DIFFERENT content appends a new version. This makes
- * derived artifacts stable and editable artifacts versioned, on one model.
- *
- * @module artifacts/artifactStore
- */
-
 import { createStore, type StoreApi } from 'zustand/vanilla';
 import type { SharedArtifact } from '@agiworkforce/types';
 
