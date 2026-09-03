@@ -238,6 +238,93 @@ describe('cloud agent execution service', () => {
     );
   });
 
+  it('reacquires a stale safe operation lease within the replay attempt limit', async () => {
+    vi.mocked(db.query)
+      .mockResolvedValueOnce([
+        {
+          ...RUNNING_ROW,
+          operation_key: 'tool:call-1',
+          operation_kind: 'tool',
+          retry_safety: 'safe',
+          attempt: 4,
+          lease_expires_at: '2026-07-17T20:05:00.000Z',
+        },
+      ])
+      .mockResolvedValueOnce([
+        {
+          ...RUNNING_ROW,
+          operation_key: 'tool:call-1',
+          operation_kind: 'tool',
+          retry_safety: 'safe',
+          attempt: 5,
+        },
+      ]);
+
+    const claim = await claimCloudAgentExecutionOperation(db, {
+      userId: 'user-1',
+      runId: RUN_ID,
+      operationKey: 'tool:call-1',
+      operationKind: 'tool',
+      inputHash: INPUT_HASH,
+      retrySafety: 'safe',
+      now: new Date('2026-07-17T20:10:00.000Z'),
+    });
+
+    expect(claim).toMatchObject({ disposition: 'acquired', attempt: 5 });
+  });
+
+  it('fails a safe operation closed once its stale lease exceeds the replay attempt limit', async () => {
+    vi.mocked(db.query)
+      .mockResolvedValueOnce([
+        {
+          ...RUNNING_ROW,
+          operation_key: 'tool:call-1',
+          operation_kind: 'tool',
+          retry_safety: 'safe',
+          attempt: 5,
+          lease_expires_at: '2026-07-17T20:05:00.000Z',
+        },
+      ])
+      .mockResolvedValueOnce([
+        {
+          ...RUNNING_ROW,
+          operation_key: 'tool:call-1',
+          operation_kind: 'tool',
+          retry_safety: 'safe',
+          status: 'failed',
+          attempt: 5,
+          lease_token: null,
+          lease_expires_at: null,
+          error: { code: 'operation_replay_limit_exceeded', message: 'exceeded' },
+        },
+      ]);
+
+    const claim = await claimCloudAgentExecutionOperation(db, {
+      userId: 'user-1',
+      runId: RUN_ID,
+      operationKey: 'tool:call-1',
+      operationKind: 'tool',
+      inputHash: INPUT_HASH,
+      retrySafety: 'safe',
+      now: new Date('2026-07-17T20:10:00.000Z'),
+    });
+
+    expect(claim).toMatchObject({
+      disposition: 'failed',
+      error: { code: 'operation_replay_limit_exceeded' },
+    });
+    expect(db.query).toHaveBeenNthCalledWith(
+      2,
+      expect.stringMatching(/status = 'failed'/i),
+      expect.arrayContaining([OPERATION_ID, 'user-1']),
+    );
+    expect(db.query).not.toHaveBeenNthCalledWith(
+      2,
+      expect.stringMatching(/attempt = attempt \+ 1/i),
+      expect.anything(),
+    );
+  });
+
   it('rejects reuse of an operation key for different input', async () => {
     vi.mocked(db.query).mockResolvedValueOnce([RUNNING_ROW]);
 

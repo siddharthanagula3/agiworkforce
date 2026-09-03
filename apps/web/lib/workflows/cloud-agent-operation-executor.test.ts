@@ -105,6 +105,27 @@ describe('durable cloud agent operation executor', () => {
     ).rejects.toBeInstanceOf(RetryableError);
   });
 
+  it('ends the run terminal once the replay attempt cap has failed the operation closed', async () => {
+    receiptMocks.claim.mockResolvedValue({
+      disposition: 'failed',
+      error: { code: 'operation_replay_limit_exceeded', message: 'exceeded' },
+    });
+
+    await expect(
+      executeCloudAgentOperation(db, {
+        userId: 'user-1',
+        runId: '0190a000-0000-7000-8000-000000000001',
+        billingIdempotencyKey: 'agi.chat.web.request-1',
+        operationKey: 'tool:call-1',
+        operationKind: 'tool',
+        retrySafety: 'safe',
+        payload: {},
+        resultSchema: ResultSchema,
+        execute: vi.fn(),
+      }),
+    ).rejects.toBeInstanceOf(FatalError);
+  });
+
   it('fails closed when an unsafe operation outcome cannot be proven', async () => {
     receiptMocks.claim.mockResolvedValue({ disposition: 'outcome_unknown' });
 
