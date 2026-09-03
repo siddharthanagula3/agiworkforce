@@ -1,17 +1,14 @@
 import { buildMetadata } from '@/lib/seo/metadata';
 import { Header } from '@shared/components/layout/Header';
-import { MarketingFooter } from '@/features/marketing/components/MarketingFooter';
 import {
   Button,
   ButtonRow,
   Eyebrow,
   Ledger,
+  MarketingFooter,
   Prose,
-  Section,
-  Stack,
   SurfaceStatus,
 } from '@/features/marketing/components/system';
-import { FactGrid, PageHero } from '@/features/marketing/components/pages/surfaces/shared';
 import { SURFACE_STATUS } from '@/lib/marketing-constants';
 
 export const metadata = buildMetadata({
@@ -49,94 +46,138 @@ const SUBCOMMANDS: { cmd: string; desc: string }[] = [
   { cmd: 'onboarding', desc: 'Re-run the first-run onboarding wizard' },
 ];
 
+const HELP_TRANSCRIPT: { kind: 'cmd' | 'out' | 'dim'; text: string }[] = [
+  { kind: 'cmd', text: 'agi --help' },
+  { kind: 'out', text: 'Multi-provider AI agent for your terminal.' },
+  { kind: 'dim', text: 'Usage: agi [OPTIONS] [PROMPT] [COMMAND]' },
+  { kind: 'dim', text: '  exec         Run non-interactively (alias: e)' },
+  { kind: 'dim', text: '  review       Non-interactive code review' },
+  { kind: 'dim', text: '  sandbox      Run commands inside a sandbox' },
+  { kind: 'dim', text: '  resume       Continue previous session' },
+  { kind: 'dim', text: '  models       Manage and inspect model configuration' },
+  { kind: 'dim', text: '  doctor       Run local preflight diagnostics' },
+  { kind: 'cmd', text: 'agi --json-events exec "Summarize this PR diff"' },
+];
+
+const CAPABILITIES = [
+  {
+    meta: 'Headless',
+    title: 'The run comes back as JSONL',
+    body: 'Every lifecycle event lands on stdout as one JSON object: spawning, ready_for_prompt, running_tool, tool_result, message_delta, turn_usage, fallback_triggered, finished. Failures carry a stable kind, such as api_rate_limit or auth_expired, so a job can branch on the kind instead of matching an error string.',
+  },
+  {
+    meta: 'Sessions',
+    title: 'Fork at the turn it went wrong',
+    body: 'Runs persist under ~/.agiworkforce/managed_sessions. agi session fork --at-turn cuts a copy at one user turn under a name you pick with --as. The original stays as it was, and agi --resume picks either of them back up.',
+  },
+  {
+    meta: 'Sandbox',
+    title: 'Tool execution runs boxed',
+    body: 'macOS uses Seatbelt, Linux uses bubblewrap, and agi sandbox puts a bare command through the same box. When the sandbox binary is missing from PATH the run stops and prints the install line for your distribution.',
+  },
+  {
+    meta: 'Approvals',
+    title: 'Turning the box off is loud',
+    body: '--no-sandbox suppresses Seatbelt or bwrap and keeps a no sandbox indicator in the TUI footer for as long as it is off. agi approvals list, allow, deny, session and remove show and edit the answers you saved.',
+  },
+  {
+    meta: 'Extensibility',
+    title: 'Hooks, skills, and markdown commands',
+    body: 'Hooks fire on session start and end, before and after every tool call, on prompt submit, and at model resolution. Slash commands are markdown files under .agiworkforce/commands, and a nested file becomes a namespaced command such as /review:security.',
+  },
+  {
+    meta: 'MCP',
+    title: 'What agi mcp-server does',
+    body: 'As a client, agi connects MCP servers over stdio, SSE, or streamable HTTP, with OAuth tokens held in the OS credential store. As a server, agi mcp-server answers initialize and tools/list but advertises an empty tool list on purpose.',
+  },
+  {
+    meta: 'Routing',
+    title: 'A comma in -m buys a fallback chain',
+    body: 'Pass -m with a comma-separated list and a rate limit, a network error, a 5xx, or a dropped stream moves the turn to the next model. A fallback_triggered event goes out on the JSONL stream when it happens.',
+  },
+  {
+    meta: 'Cost',
+    title: 'The HUD reads the catalog',
+    body: 'Tokens in and out, cache reads, dollars spent, and context percentage sit in the top-right of the TUI. Prices resolve from the shared models catalog rather than a table typed into the CLI.',
+  },
+] as const;
+
 export default function CliPage() {
   return (
     <div data-design="agi" className="agi-ds-page">
       <Header />
       <main id="main-content">
-        <PageHero
-          id="agi-cli-hero-title"
-          eyebrow="AGI CLI"
-          title="Every step the agent takes prints a JSON line."
-          lede="The agent is a single Rust program, and it does not need a person at the prompt. Put --json-events before the subcommand and stdout becomes JSONL: one object per lifecycle event, covering every tool call, every model rotation, and the token count for each turn. A pipeline reads the run instead of scraping it."
-          ctas={[
-            { href: '/download#cli-downloads', label: 'Get the CLI archives' },
-            { href: '/agi-code', label: 'See it with the editor', variant: 'secondary' },
-          ]}
-        />
+        <section className="agi-lp-hero" aria-labelledby="agi-cli-hero-title">
+          <div className="agi-ds-container agi-lp-hero-grid">
+            <div className="agi-lp-hero-copy">
+              <Eyebrow>AGI CLI</Eyebrow>
+              <h1 className="agi-ds-h1" id="agi-cli-hero-title">
+                Every step the agent takes <em className="agi-ds-accent">prints a JSON line.</em>
+              </h1>
+              <Prose size="lg">
+                The agent is a single Rust program and does not need a person at the prompt. Put
+                --json-events before the subcommand and stdout becomes JSONL: one object per
+                lifecycle event, every tool call, every model rotation, every turn&rsquo;s token
+                count. A pipeline reads the run instead of scraping it.
+              </Prose>
+              <ButtonRow>
+                <Button href="/download#cli-downloads">Get the CLI archives</Button>
+                <Button href="/agi-code" variant="secondary">
+                  See it with the editor
+                </Button>
+              </ButtonRow>
+            </div>
+            <div className="agi-lp-hero-stage">
+              <pre className="agi-lp-terminal" aria-label="A real AGI CLI session">
+                {HELP_TRANSCRIPT.map((line, index) => (
+                  <span className="agi-lp-terminal-line" data-kind={line.kind} key={index}>
+                    {line.text}
+                  </span>
+                ))}
+              </pre>
+            </div>
+          </div>
+        </section>
 
-        <Section id="cli-status" labelledBy="agi-cli-status-title" rule>
-          <Stack>
+        <section className="agi-lp-section" aria-labelledby="agi-cli-status-title">
+          <div className="agi-ds-container">
             <h2 className="agi-ds-h2" id="agi-cli-status-title">
               What is published today.
             </h2>
-            <SurfaceStatus
-              state="live"
-              name="AGI CLI"
-              detail={`${SURFACE_STATUS.cli}. Five signed archives for macOS, Linux, and Windows, each checked against a Sigstore signature.`}
-              action={{ label: 'See the release table', href: '/download#cli-downloads' }}
-            />
-          </Stack>
-        </Section>
+            <div style={{ marginTop: '2rem' }}>
+              <SurfaceStatus
+                state="live"
+                name="AGI CLI"
+                detail={`${SURFACE_STATUS.cli}. Five signed archives for macOS, Linux, and Windows, each checked against a Sigstore signature.`}
+                action={{ label: 'See the release table', href: '/download#cli-downloads' }}
+              />
+            </div>
+          </div>
+        </section>
 
-        <Section id="cli-capabilities" labelledBy="agi-cli-capabilities-title" rule ground="2">
-          <Stack gap="loose">
-            <div>
+        <section className="agi-lp-section" aria-labelledby="agi-cli-capabilities-title">
+          <div className="agi-ds-container">
+            <div className="agi-lp-heading">
               <Eyebrow>Capabilities</Eyebrow>
               <h2 className="agi-ds-h2" id="agi-cli-capabilities-title">
                 Every capability here has a command behind it.
               </h2>
             </div>
-            <FactGrid
-              items={[
-                {
-                  meta: 'Headless',
-                  title: 'The run comes back as JSONL',
-                  body: 'Every lifecycle event lands on stdout as one JSON object: spawning, ready_for_prompt, running_tool, tool_result, message_delta, turn_usage, fallback_triggered, finished. Failures carry a stable kind, such as api_rate_limit or auth_expired, so a job can branch on the kind instead of matching an error string.',
-                },
-                {
-                  meta: 'Sessions',
-                  title: 'Fork at the turn it went wrong',
-                  body: 'Runs persist under ~/.agiworkforce/managed_sessions. agi session fork --at-turn cuts a copy at one user turn under a name you pick with --as. The original stays as it was, and agi --resume picks either of them back up.',
-                },
-                {
-                  meta: 'Sandbox',
-                  title: 'Tool execution runs boxed',
-                  body: 'macOS uses Seatbelt, Linux uses bubblewrap, and agi sandbox puts a bare command through the same box. When the sandbox binary is missing from PATH the run stops and prints the install line for your distribution.',
-                },
-                {
-                  meta: 'Approvals',
-                  title: 'Turning the box off is loud',
-                  body: '--no-sandbox suppresses Seatbelt or bwrap and keeps a no sandbox indicator in the TUI footer for as long as it is off. agi approvals list, allow, deny, session and remove show and edit the answers you saved.',
-                },
-                {
-                  meta: 'Extensibility',
-                  title: 'Hooks, skills, and markdown commands',
-                  body: 'Hooks fire on session start and end, before and after every tool call, on prompt submit, and at model resolution. Slash commands are markdown files under .agiworkforce/commands, and a nested file becomes a namespaced command such as /review:security.',
-                },
-                {
-                  meta: 'MCP',
-                  title: 'What agi mcp-server does',
-                  body: 'As a client, agi connects MCP servers over stdio, SSE, or streamable HTTP, with OAuth tokens held in the OS credential store. As a server, agi mcp-server answers initialize and tools/list but advertises an empty tool list on purpose.',
-                },
-                {
-                  meta: 'Routing',
-                  title: 'A comma in -m buys a fallback chain',
-                  body: 'Pass -m with a comma-separated list and a rate limit, a network error, a 5xx, or a dropped stream moves the turn to the next model. A fallback_triggered event goes out on the JSONL stream when it happens.',
-                },
-                {
-                  meta: 'Cost',
-                  title: 'The HUD reads the catalog',
-                  body: 'Tokens in and out, cache reads, dollars spent, and context percentage sit in the top-right of the TUI. Prices resolve from the shared models catalog rather than a table typed into the CLI.',
-                },
-              ]}
-            />
-          </Stack>
-        </Section>
+            <div className="agi-ds-grid-2">
+              {CAPABILITIES.map((item) => (
+                <div className="agi-ds-card" style={{ padding: '1.5rem' }} key={item.title}>
+                  <Eyebrow>{item.meta}</Eyebrow>
+                  <h3 className="agi-ds-h3">{item.title}</h3>
+                  <Prose size="sm">{item.body}</Prose>
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
 
-        <Section id="cli-subcommands" labelledBy="agi-cli-subcommands-title" rule>
-          <Stack gap="loose">
-            <div>
+        <section className="agi-lp-section" aria-labelledby="agi-cli-subcommands-title">
+          <div className="agi-ds-container">
+            <div className="agi-lp-heading">
               <Eyebrow>Subcommands</Eyebrow>
               <h2 className="agi-ds-h2" id="agi-cli-subcommands-title">
                 This is the list agi help prints.
@@ -156,18 +197,18 @@ export default function CliPage() {
                 rows={SUBCOMMANDS.map((s) => ({ label: s.cmd, value: s.desc }))}
               />
             </details>
-          </Stack>
-        </Section>
+          </div>
+        </section>
 
-        <Section id="cli-boundary" labelledBy="agi-cli-boundary-title" rule ground="2">
-          <Stack gap="loose">
-            <div>
+        <section className="agi-lp-section" aria-labelledby="agi-cli-boundary-title">
+          <div className="agi-ds-container">
+            <div className="agi-lp-heading">
               <Eyebrow>At the prompt</Eyebrow>
               <h2 className="agi-ds-h2" id="agi-cli-boundary-title">
                 A local session will not silently become a remote one.
               </h2>
             </div>
-            <Prose>
+            <Prose size="lg">
               /privacy-mode reports the session&rsquo;s current authority, local, byok, or managed,
               and refuses a switch typed at the prompt: running /privacy-mode byok on a local
               session leaves the mode unchanged and prints that the move needs an explicit,
@@ -176,31 +217,33 @@ export default function CliPage() {
               payload with counts of what was included, excluded, and truncated before it sends
               anything.
             </Prose>
-          </Stack>
-        </Section>
+          </div>
+        </section>
 
-        <Section id="cli-close" labelledBy="agi-cli-close-title" rule>
-          <Stack gap="loose">
-            <h2 className="agi-ds-h2" id="agi-cli-close-title">
-              Set it up against a local model or a provider key.
-            </h2>
-            <Prose>
-              The CLI reaches every lane: a model on your own hardware, your own provider key in the
-              OS keyring, or AGI Cloud once you sign in.
-            </Prose>
-            <ButtonRow>
-              <Button href="/local" variant="secondary">
-                Run it against a local model
-              </Button>
-              <Button href="/byok" variant="secondary">
-                Set up a provider key
-              </Button>
-              <Button href="/agent-permissions" variant="secondary">
-                See what runs without asking
-              </Button>
-            </ButtonRow>
-          </Stack>
-        </Section>
+        <section className="agi-lp-close" aria-labelledby="agi-cli-close-title">
+          <div className="agi-ds-container">
+            <div className="agi-lp-close-inner">
+              <h2 className="agi-ds-h2" id="agi-cli-close-title">
+                Set it up against <em className="agi-ds-accent">a local model or a key.</em>
+              </h2>
+              <Prose size="lg">
+                The CLI reaches every lane: a model on your own hardware, your own provider key in
+                the OS keyring, or AGI Cloud once you sign in.
+              </Prose>
+              <ButtonRow>
+                <Button href="/local" variant="secondary">
+                  Run it against a local model
+                </Button>
+                <Button href="/byok" variant="secondary">
+                  Set up a provider key
+                </Button>
+                <Button href="/agent-permissions" variant="secondary">
+                  See what runs without asking
+                </Button>
+              </ButtonRow>
+            </div>
+          </div>
+        </section>
       </main>
       <MarketingFooter />
     </div>
