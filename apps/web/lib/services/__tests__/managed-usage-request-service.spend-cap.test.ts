@@ -30,6 +30,7 @@ vi.mock('@/lib/security-audit', () => ({
 const { reserveManagedUsageRequest } = await import('../managed-usage-request-service');
 
 const ORGANIZATION_ID = '11111111-1111-4111-8111-111111111111';
+const SERVED_MODEL_ID = 'served-model';
 
 function dbStub() {
   const query = vi.fn(async (sql: string) => {
@@ -56,7 +57,7 @@ function baseInput(overrides: Record<string, unknown> = {}) {
     idempotencyKey: 'req-00000001',
     requestHash: 'hash-1',
     provider: 'anthropic',
-    model: 'claude-sonnet-5',
+    model: SERVED_MODEL_ID,
     estimatedCostCents: 100,
     planTier: 'pro',
     isFlagship: false,
