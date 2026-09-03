@@ -263,14 +263,6 @@ export function webSearchResultsToFetchedSources(
   }));
 }
 
-/**
- * Title enrichment for the search results this call is about to render — the
- * Perplexity Search API leaves `title` empty on most hits, so the sources
- * panel falls back to a path-trimmed URL instead of the article headline.
- * Runs on the already-capped result list (never more than
- * WEB_SEARCH_MAX_RESULTS), one fetch per untitled URL, bounded so the extra
- * round trip cannot meaningfully delay the stream.
- */
 export const TITLE_ENRICHMENT_TIMEOUT_MS = 2_000;
 export const TITLE_ENRICHMENT_MAX_RESPONSE_BYTES = 65_536;
 export const TITLE_ENRICHMENT_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
@@ -383,14 +375,6 @@ async function fetchPageTitle(
   }
 }
 
-/**
- * Generic over both result shapes this enriches: {@link WebSearchResultItem}
- * from the Perplexity-backed generic tool, and the client-facing
- * `FetchedSource` the native-provider path (`serverToolResultSources` in
- * tool-loop.ts) already reduces Anthropic/Gemini/OpenAI search results to.
- * Both are already capped to WEB_SEARCH_RESULT_RENDER_CAP by the time they
- * reach here, so this never enriches more than that many URLs per call.
- */
 export async function enrichWebSearchResultTitles<T extends { url: string; title: string }>(
   results: T[],
   overrides: TitleEnrichmentOverrides = {},

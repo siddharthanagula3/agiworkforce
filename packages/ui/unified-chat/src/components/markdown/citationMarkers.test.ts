@@ -115,11 +115,6 @@ describe('findCitationIndexForUrl', () => {
   });
 
   it('leaves a full article url unmatched rather than swap in an unrelated page on the same domain', () => {
-    // The model cited a real, specific blog.google article that this turn's
-    // search never retrieved - only a different blog.google page is in the
-    // pool. Domain fallback exists for a model that wrote just "blog.google"
-    // with no path, not for this: silently attaching the wrong article to
-    // the claim is worse than no pill at all.
     expect(
       findCitationIndexForUrl(
         'https://blog.google/products/ads-commerce/google-ads-analytics-ai-updates/',

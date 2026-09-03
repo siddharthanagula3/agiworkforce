@@ -50,14 +50,6 @@ const SLUG_EXTENSION_PATTERN = /\.\w{2,5}$/;
 const SLUG_SEPARATOR_PATTERN = /[-_]+/g;
 const WORD_START_PATTERN = /\b\w/g;
 
-/**
- * A source with no title (the provider never cited it, and page-title
- * enrichment can't reach a site behind a bot challenge - openai.com among
- * them) used to fall straight to `pathTrimmedUrl`, showing the same host
- * twice: once as a fake headline ("openai.com/index/previewing-ultrafast")
- * and again on the line right below it. Humanizing the last path segment
- * gives a real headline-shaped fallback instead of a duplicated URL.
- */
 export function humanizedPathTitle(url: string): string | undefined {
   try {
     const segments = new URL(url).pathname.split('/').filter(Boolean);

@@ -861,15 +861,6 @@
   background: var(--agi-ground-2);
 }
 
-/* ── Landing identity ──────────────────────────────────────────────────
- * Scoped to .agi-landing so no other page's headings, body copy, or hero
- * layout are touched. Display type moves to Geist (this page only); the
- * quoted example question is the one place Newsreader italic appears. The
- * route receipt is the signature element: the same visible route label a
- * real answer carries in the product, shown once, at hero scale, built only
- * from HERO_ROUTES data.
- * ────────────────────────────────────────────────────────────────────── */
-
 [data-design='agi'].agi-landing .agi-ds-h1,
 [data-design='agi'].agi-landing .agi-ds-h2,
 [data-design='agi'].agi-landing .agi-ds-h3 {

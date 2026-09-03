@@ -329,12 +329,6 @@ function metaTagContent(html: string, keys: readonly string[]): string | undefin
 
 export const PAGE_TITLE_MAX_CHARS = 160;
 
-/**
- * Best-available title for a fetched page: `og:title`, then `twitter:title`,
- * then the `<title>` element — the same cascade browsers and link-preview
- * generators use, since a publisher's `<title>` is often a site-wide brand
- * string ("Example News") while its `og:title` carries the actual headline.
- */
 export function extractPageTitle(html: string): string | undefined {
   const bounded = bound(html);
   const metaRaw =
