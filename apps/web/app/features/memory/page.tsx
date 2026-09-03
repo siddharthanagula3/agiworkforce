@@ -34,6 +34,7 @@ export default function MemoryFeaturePage() {
           visual={
             <ProductFrame
               src="/product/memory-settings-dark.png"
+              srcLight="/product/memory-settings-light.png"
               alt="The memory settings panel in AGI, listing where memories come from and how to suppress a source"
               width={1720}
               height={1360}

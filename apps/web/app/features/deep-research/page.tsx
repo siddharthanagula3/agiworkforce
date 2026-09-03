@@ -38,6 +38,7 @@ export default function DeepResearchPage() {
           visual={
             <ProductFrame
               src="/product/deep-research-report-dark.png"
+              srcLight="/product/deep-research-report-light.png"
               alt="A finished AGI deep research report with numbered inline citations and a sources list"
               width={2392}
               height={1402}

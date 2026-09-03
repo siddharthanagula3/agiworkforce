@@ -34,6 +34,7 @@ export default function ArtifactsFeaturePage() {
           visual={
             <ProductFrame
               src="/product/artifacts-library-dark.png"
+              srcLight="/product/artifacts-library-light.png"
               alt="The AGI library listing generated artifacts with their type, size, and route labels"
               width={2880}
               height={1800}
