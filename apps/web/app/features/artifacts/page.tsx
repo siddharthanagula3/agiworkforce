@@ -33,8 +33,7 @@ export default function ArtifactsFeaturePage() {
           ctas={[{ href: '/gallery', label: 'Browse the gallery' }]}
           visual={
             <ProductFrame
-              light="/product/artifacts-library-light.png"
-              dark="/product/artifacts-library-dark.png"
+              src="/product/artifacts-library-dark.png"
               alt="The AGI library listing generated artifacts with their type, size, and route labels"
               width={2880}
               height={1800}

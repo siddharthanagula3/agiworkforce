@@ -35,8 +35,7 @@ export default function ProjectsFeaturePage() {
           ctas={[{ href: PROJECTS_ENTRY_HREF, label: 'Open Projects in AGI Web' }]}
           visual={
             <ProductFrame
-              light="/product/projects-light.png"
-              dark="/product/projects-dark.png"
+              src="/product/projects-dark.png"
               alt="The AGI projects view listing standing instructions, files, and threads"
               width={2880}
               height={1800}

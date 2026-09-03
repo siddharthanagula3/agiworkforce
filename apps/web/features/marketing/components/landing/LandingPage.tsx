@@ -25,7 +25,6 @@ import {
   SURFACES_SECTION,
   WEB_SHOT,
 } from './landing-content';
-import './landing.css';
 
 const IDS = {
   hero: 'agi-landing-hero-title',
@@ -185,8 +184,7 @@ export function LandingPage() {
                   <span>{WEB_SHOT.url}</span>
                 </div>
                 <ProductFrame
-                  light={WEB_SHOT.light}
-                  dark={WEB_SHOT.dark}
+                  src={WEB_SHOT.dark}
                   alt={WEB_SHOT.alt}
                   width={WEB_SHOT.width}
                   height={WEB_SHOT.height}
@@ -206,8 +204,7 @@ export function LandingPage() {
               <MotionReveal delay={0.1}>
                 <div className="agi-lp-phone">
                   <ProductFrame
-                    light={MOBILE_SHOT.light}
-                    dark={MOBILE_SHOT.dark}
+                    src={MOBILE_SHOT.dark}
                     alt={MOBILE_SHOT.alt}
                     width={MOBILE_SHOT.width}
                     height={MOBILE_SHOT.height}
@@ -249,8 +246,7 @@ export function LandingPage() {
                   </div>
                   <MotionReveal>
                     <ProductFrame
-                      light={moment.image.light}
-                      dark={moment.image.dark}
+                      src={moment.image.dark}
                       alt={moment.image.alt}
                       width={moment.image.width}
                       height={moment.image.height}

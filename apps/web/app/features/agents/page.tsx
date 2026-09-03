@@ -40,8 +40,7 @@ export default function FeaturesAgentsPage() {
           ]}
           visual={
             <ProductFrame
-              light="/product/agents-tool-approvals-light.png"
-              dark="/product/agents-tool-approvals-dark.png"
+              src="/product/agents-tool-approvals-dark.png"
               alt='The tool approvals setting in AGI, with "Ask before every action" selected'
               width={1132}
               height={584}

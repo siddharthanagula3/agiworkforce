@@ -1,16 +1,14 @@
 import Image from 'next/image';
 
 export function ProductFrame({
-  light,
-  dark,
+  src,
   alt,
   width,
   height,
   caption,
   priority,
 }: {
-  light: string;
-  dark: string;
+  src: string;
   alt: string;
   width: number;
   height: number;
@@ -21,20 +19,8 @@ export function ProductFrame({
     <figure className="agi-ds-frame">
       <Image
         className="agi-ds-frame-media"
-        data-frame-theme="light"
-        src={light}
+        src={src}
         alt={alt}
-        width={width}
-        height={height}
-        sizes="(max-width: 900px) 100vw, 50vw"
-        priority={priority}
-      />
-      <Image
-        className="agi-ds-frame-media"
-        data-frame-theme="dark"
-        src={dark}
-        alt=""
-        aria-hidden="true"
         width={width}
         height={height}
         sizes="(max-width: 900px) 100vw, 50vw"

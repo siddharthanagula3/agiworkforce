@@ -56,8 +56,7 @@ export default async function UseCaseDetailPage({ params }: Props) {
           visual={
             entry.visual ? (
               <ProductFrame
-                light={entry.visual.light}
-                dark={entry.visual.dark}
+                src={entry.visual.dark}
                 alt={entry.visual.alt}
                 width={entry.visual.width}
                 height={entry.visual.height}
