@@ -107,6 +107,12 @@ export default function FeaturesHubPage() {
                   body: 'A directory of reusable instruction sets to start a workspace from.',
                   href: '/skills',
                 },
+                {
+                  meta: 'Integrations',
+                  title: 'Integrations',
+                  body: 'MCP plugins, the native messaging bridge, and BYOK provider keys, wired the same way on Desktop, CLI, and VS Code.',
+                  href: '/integrations',
+                },
               ]}
             />
           </Stack>
