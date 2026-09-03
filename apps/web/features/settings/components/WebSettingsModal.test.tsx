@@ -45,6 +45,7 @@ function stubFetch({
     lifecycle?: 'included' | 'draft';
     downloadable?: boolean;
   }>,
+  canAuthorSkills = false,
   plugins = [
     {
       id: 'github-automation',
@@ -86,6 +87,7 @@ function stubFetch({
             lifecycle: skill.lifecycle ?? 'included',
             downloadable: skill.downloadable ?? false,
           })),
+          canAuthorSkills,
         }),
       } as Response;
     }
@@ -572,6 +574,40 @@ describe('WebSettingsModal connectors adapter (honest web semantics)', () => {
         'Skills could not be loaded because the server returned an error. This is not a problem with your connection — retry, or contact support if it persists.',
       ),
     ).toBeNull();
+  });
+
+  it('hides New skill and row actions when the server has not enabled skill authoring', async () => {
+    stubFetch({
+      canAuthorSkills: false,
+      skills: [
+        {
+          name: 'fixture-reviewed-skill',
+          description: 'A reviewed fixture skill.',
+          source: 'bundled',
+        },
+      ],
+    });
+    render(<WebSettingsModal open onClose={vi.fn()} initialSection="skills" />);
+
+    await screen.findByText('fixture-reviewed-skill');
+    expect(screen.queryByRole('button', { name: 'New skill' })).toBeNull();
+  });
+
+  it('shows New skill when the server enables skill authoring', async () => {
+    stubFetch({
+      canAuthorSkills: true,
+      skills: [
+        {
+          name: 'fixture-reviewed-skill',
+          description: 'A reviewed fixture skill.',
+          source: 'bundled',
+        },
+      ],
+    });
+    render(<WebSettingsModal open onClose={vi.fn()} initialSection="skills" />);
+
+    await screen.findByText('fixture-reviewed-skill');
+    expect(await screen.findByRole('button', { name: 'New skill' })).toBeTruthy();
   });
 
   it('shows a plugin loading failure and retries instead of presenting a fake directory', async () => {

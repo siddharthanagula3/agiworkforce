@@ -13,6 +13,7 @@ import { SKILL_CATALOG_CHANGED_EVENT } from '@shared/events/skill-catalog-events
  */
 let inFlight: Promise<ManagedSkillSummary[]> | null = null;
 let loadedAt = 0;
+let canAuthorSkills = false;
 
 /**
  * Long enough to collapse the mount storm that made a single page issue four
@@ -31,9 +32,15 @@ export class SkillsCatalogError extends Error {
 async function request(): Promise<ManagedSkillSummary[]> {
   const response = await fetch('/api/skills', { cache: 'no-store' });
   if (!response.ok) throw new SkillsCatalogError(response.status);
-  const parsed = ManagedSkillsResponseSchema.safeParse(await response.json());
+  const raw = await response.json();
+  const parsed = ManagedSkillsResponseSchema.safeParse(raw);
   if (!parsed.success) throw new Error('Invalid skills response');
+  canAuthorSkills = raw?.canAuthorSkills === true;
   return parsed.data.skills;
+}
+
+export function skillAuthoringCapability(): boolean {
+  return canAuthorSkills;
 }
 
 export function loadSkillsCatalog(): Promise<ManagedSkillSummary[]> {
@@ -53,6 +60,7 @@ export function loadSkillsCatalog(): Promise<ManagedSkillSummary[]> {
 export function invalidateSkillsCatalog(): void {
   inFlight = null;
   loadedAt = 0;
+  canAuthorSkills = false;
 }
 
 if (typeof window !== 'undefined') {
