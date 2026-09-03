@@ -14,6 +14,7 @@ import { PageHero } from '@/features/marketing/components/pages/surfaces/shared'
 import { PublicWaitlistForm } from '@/features/marketing/components/PublicWaitlistForm';
 import { DesktopDownloadAvailability } from './DesktopDownloadAvailability';
 import { CliDownloadAvailability } from './CliDownloadAvailability';
+import '@/features/marketing/components/pages/business/code-block.css';
 
 const WEB_CHAT_ENTRY_HREF = '/login?redirectTo=%2F';
 const CHECKSUM_FILE = 'SHA256SUMS';
@@ -129,24 +130,16 @@ export default function DownloadPage() {
 
             <div>
               <Eyebrow>Verify a download on your own machine</Eyebrow>
-              <pre className="agi-ds-thread" style={{ overflowX: 'auto' }}>
-                <code
-                  style={{ fontFamily: 'var(--agi-font-mono)', fontSize: 'var(--agi-text-sm)' }}
-                >
-                  {SELF_VERIFY_TRANSCRIPT}
-                </code>
-              </pre>
+              <div className="agi-ds-codeblock">
+                <pre className="agi-ds-codeblock-pre">{SELF_VERIFY_TRANSCRIPT}</pre>
+              </div>
             </div>
 
             <div>
               <Eyebrow>A verified CLI archive, checked and unpacked</Eyebrow>
-              <pre className="agi-ds-thread" style={{ overflowX: 'auto' }}>
-                <code
-                  style={{ fontFamily: 'var(--agi-font-mono)', fontSize: 'var(--agi-text-sm)' }}
-                >
-                  {VERIFY_TRANSCRIPT}
-                </code>
-              </pre>
+              <div className="agi-ds-codeblock">
+                <pre className="agi-ds-codeblock-pre">{VERIFY_TRANSCRIPT}</pre>
+              </div>
             </div>
           </Stack>
         </Section>
