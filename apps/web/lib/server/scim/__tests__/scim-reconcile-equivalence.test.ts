@@ -96,8 +96,6 @@ function simulate(world: World) {
           },
         ] as unknown as T[];
       }
-      // Every fixture email sits on x.test, and linking now requires the
-      // organization to have verified the domain it is claiming.
       if (t.includes('from sso_connections')) {
         return [{ domain: 'x.test' }] as unknown as T[];
       }
