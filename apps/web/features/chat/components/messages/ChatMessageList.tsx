@@ -115,6 +115,9 @@ function streamErrorNoticeMessage(message: ChatMessage): string {
 const MODEL_SWITCH_WORTHY_STREAM_ERROR_CODES = new Set([
   'provider_quota_exhausted',
   'provider_overloaded',
+  'provider_unreachable',
+  'provider_error',
+  'model_not_found',
 ]);
 
 function streamErrorNeedsModelSwitch(message: ChatMessage): boolean {

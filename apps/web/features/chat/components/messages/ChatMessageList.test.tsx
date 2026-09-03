@@ -951,6 +951,46 @@ describe('ChatMessageList stream error notice', () => {
     expect(screen.queryByText(/no response was returned/i)).not.toBeInTheDocument();
   });
 
+  function streamErrorCodeThread(code: string) {
+    return [
+      makeMessage({ id: 'u1', role: 'user', content: 'write something long' }),
+      makeMessage({
+        id: 'a1',
+        role: 'assistant',
+        content: 'partial answer',
+        metadata: { streamError: { code, message: 'boom' } },
+      }),
+    ];
+  }
+
+  const switchToAutoButton = () =>
+    screen.queryByRole('button', { name: /switch to auto for this conversation/i });
+
+  it.each(['provider_unreachable', 'provider_error', 'model_not_found'])(
+    'offers Switch to Auto for the %s stream error code',
+    (code) => {
+      render(
+        <ChatMessageList
+          messages={streamErrorCodeThread(code)}
+          onRegenerate={vi.fn()}
+          onSwitchToAutoModel={vi.fn()}
+        />,
+      );
+      expect(switchToAutoButton()).toBeInTheDocument();
+    },
+  );
+
+  it('does NOT offer Switch to Auto for a plain client_error stream error code', () => {
+    render(
+      <ChatMessageList
+        messages={streamErrorCodeThread('provider_rejected_request')}
+        onRegenerate={vi.fn()}
+        onSwitchToAutoModel={vi.fn()}
+      />,
+    );
+    expect(switchToAutoButton()).not.toBeInTheDocument();
+  });
+
   it('is mutually exclusive with Continue Generation (finishReason takes precedence)', () => {
     const messages = [
       makeMessage({ id: 'u1', role: 'user', content: 'q' }),
