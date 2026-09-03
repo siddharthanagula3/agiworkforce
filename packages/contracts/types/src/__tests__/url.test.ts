@@ -35,7 +35,7 @@ describe('stripTrailingSlashes', () => {
   });
 });
 
-describe('getToolDisplayLabel — mcp name parsing parity', () => {
+describe('getToolDisplayLabel, mcp name parsing parity', () => {
   const LEGACY = /^mcp__([a-z0-9_-]+)__(.+)$/i;
 
   it.each([

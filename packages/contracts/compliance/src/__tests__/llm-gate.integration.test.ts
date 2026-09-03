@@ -48,7 +48,7 @@ class FakeLlmClient {
   }
 }
 
-describe('Article 50 gate — runs before the first /api/llm/* request', () => {
+describe('Article 50 gate, runs before the first /api/llm/* request', () => {
   it('(a) clean install: first send throws and NO request hits the network', async () => {
     const disclosureLedger = new InMemoryDisclosureLedger();
     const consentLedger = new InMemoryConsentLedger();
@@ -155,7 +155,7 @@ describe('Article 50 gate — runs before the first /api/llm/* request', () => {
     expect(result.exported).toMatch(/<meta\s+name="agi:ai-generated"/);
   });
 
-  it('(e) every export through the wrap helper carries the marker — regardless of provider', () => {
+  it('(e) every export through the wrap helper carries the marker, regardless of provider', () => {
     for (const providerId of ['anthropic', 'openai', 'google', 'deepseek', 'moonshot']) {
       const exported = wrapTextExportWithMarker({
         text: 'sample',

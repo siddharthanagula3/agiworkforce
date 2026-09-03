@@ -49,11 +49,6 @@ function orderKeyOf(message: ThreadedMessage): string {
   return message.createdAt ?? UNDATED_ORDER_KEY;
 }
 
-/**
- * The server orders a sibling group by `(created_at, id)` — see the pager order
- * in the messages route's message-thread lib. The client has to sort by the same
- * key or a variant would sit at a different position on either side of a reload.
- */
 export function compareThreadOrder(left: ThreadedMessage, right: ThreadedMessage): number {
   const leftKey = orderKeyOf(left);
   const rightKey = orderKeyOf(right);
@@ -100,16 +95,6 @@ export function deepestDescendant(rows: readonly ThreadedMessage[], id: string):
   return current;
 }
 
-/**
- * `id` and everything descended from it, which is what a subtree delete takes:
- * the variant plus the exchange that continued from it.
- *
- * The client mirror of `collectSubtree` in the messages route's thread lib, and
- * the same shape of answer — a set, so a row that somehow points back into its
- * own ancestry terminates the walk instead of growing it. A caller holding one
- * page of a long conversation gets the part of the subtree it can see, which is
- * exactly the part it renders.
- */
 export function subtreeIds(rows: readonly ThreadedMessage[], id: string): string[] {
   if (!rows.some((row) => row.id === id)) return [];
   const childrenByParent = new Map<string | null, ThreadedMessage[]>();
@@ -142,16 +127,6 @@ export function resolveLeafForSibling(rows: readonly ThreadedMessage[], siblingI
   return deepestDescendant(rows, siblingId);
 }
 
-/**
- * Where the reader lands once `messageId` and everything under it is gone: the
- * end of the newest surviving sibling's own tail, or the branch point itself
- * when the deleted variant was the last one.
- *
- * The client mirror of `resolveSurvivingLeaf` in the messages route's thread
- * lib, for a surface deleting a variant with no server rows to ask — a temporary
- * conversation, or a local-only transcript. A caller that did make the request
- * applies the route's answer instead: it can see rows this one has not loaded.
- */
 export function resolveSurvivingLeaf(
   rows: readonly ThreadedMessage[],
   messageId: string,
@@ -194,19 +169,6 @@ function deepestLatestChain<TMessage extends ThreadedMessage>(
   return chain;
 }
 
-/**
- * The transcript the reader is looking at: the ancestors of the active leaf,
- * root first.
- *
- * A null leaf means the conversation has never branched, and the answer is the
- * whole bucket **by identity** — every legacy conversation keeps the array it
- * already had, so no memo downstream sees a change that did not happen.
- *
- * Every other exit is defensive. An unknown parent ends the walk (the row is
- * read as a root), a cycle ends it at the repeat, and a leaf this client cannot
- * resolve falls back to the newest chain: a pointer written by another device,
- * or left behind by a delete, must never blank a transcript.
- */
 export function resolveVisibleThread<TMessage extends ThreadedMessage>(
   rows: readonly TMessage[],
   activeLeafId: string | null | undefined,
@@ -244,12 +206,6 @@ export function siblingGroup(
   return { ids, index: ids.indexOf(message.id), total: ids.length };
 }
 
-/**
- * Pager state for each message on the visible path. Off-path rows are excluded
- * because nothing renders them, and a conversation with no branch anywhere gets
- * the shared empty map — that stable identity is what keeps every row's memo
- * comparator passing while a response streams.
- */
 export function variantInfoByMessage(
   rows: readonly ThreadedMessage[],
   activeLeafId: string | null | undefined,

@@ -351,7 +351,7 @@ const EXPECTED_SESSION_KIND_DEFAULTS: Record<SessionKind, SessionKindDefaults> =
   },
 };
 
-describe('getSessionKindDefaults — value correctness (not just "does not throw")', () => {
+describe('getSessionKindDefaults, value correctness (not just "does not throw")', () => {
   for (const kind of SESSION_KINDS) {
     it(`"${kind}" matches the CC §4.1/§4.2/§4.3/§5 structural mapping exactly`, () => {
       expect(getSessionKindDefaults(kind)).toEqual(EXPECTED_SESSION_KIND_DEFAULTS[kind]);
@@ -373,7 +373,7 @@ describe('getSessionKindDefaults — value correctness (not just "does not throw
 
 describe('per-kind fixtures satisfy validateSessionInvariants', () => {
   for (const kind of SESSION_KINDS) {
-    it(`"${kind}" — well-formed fixture has zero violations`, () => {
+    it(`"${kind}", well-formed fixture has zero violations`, () => {
       const fixture = ALL_FIXTURES[kind]();
       expect(validateSessionInvariants(fixture)).toEqual([]);
       expect(() => assertSessionInvariants(fixture)).not.toThrow();
@@ -381,7 +381,7 @@ describe('per-kind fixtures satisfy validateSessionInvariants', () => {
   }
 });
 
-describe('kernel composition — sync eligibility reuses ../suite-contracts, not a fork', () => {
+describe('kernel composition, sync eligibility reuses ../suite-contracts, not a fork', () => {
   it("assertSurfaceCanSyncChats throws for a developer_local session's originSurface", () => {
     const session = makeDeveloperLocalSession();
     expect(() => assertSurfaceCanSyncChats(session.originSurface)).toThrowError(
@@ -402,7 +402,7 @@ describe('kernel composition — sync eligibility reuses ../suite-contracts, not
   });
 });
 
-describe('validateSessionInvariants — trust-boundary-provider-mismatch', () => {
+describe('validateSessionInvariants, trust-boundary-provider-mismatch', () => {
   it('flags a providerMode/privacyMode pair that do not agree', () => {
     const tampered: DeveloperLocalSession = {
       ...makeDeveloperLocalSession(),
@@ -414,7 +414,7 @@ describe('validateSessionInvariants — trust-boundary-provider-mismatch', () =>
   });
 });
 
-describe('validateSessionInvariants — sync-eligible-kind-not-allowed', () => {
+describe('validateSessionInvariants, sync-eligible-kind-not-allowed', () => {
   it('flags a developer_local session that claims sync eligibility', () => {
     const tampered = {
       ...makeDeveloperLocalSession(),
@@ -435,7 +435,7 @@ describe('validateSessionInvariants — sync-eligible-kind-not-allowed', () => {
   });
 });
 
-describe('validateSessionInvariants — sync-eligible-surface-not-synced', () => {
+describe('validateSessionInvariants, sync-eligible-surface-not-synced', () => {
   it('flags an allowed kind whose originSurface is not actually sync-eligible', () => {
     const tampered = {
       ...makeCloudChatSession(),
@@ -447,7 +447,7 @@ describe('validateSessionInvariants — sync-eligible-surface-not-synced', () =>
   });
 });
 
-describe('validateSessionInvariants — remote-projection-requires-live-host', () => {
+describe('validateSessionInvariants, remote-projection-requires-live-host', () => {
   it('flags a remote_projection session missing hostRequirement.required', () => {
     const tampered = {
       ...makeRemoteProjectionSession(),
@@ -473,7 +473,7 @@ describe('validateSessionInvariants — remote-projection-requires-live-host', (
   });
 });
 
-describe('validateSessionInvariants — handoff-snapshot-requires-provenance-or-pending-consent', () => {
+describe('validateSessionInvariants, handoff-snapshot-requires-provenance-or-pending-consent', () => {
   it('flags a snapshot that is neither a pending target nor carries accepted provenance', () => {
     const tampered: HandoffSnapshotSession = {
       ...makeHandoffSnapshotSession(),

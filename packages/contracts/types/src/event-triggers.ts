@@ -1,18 +1,3 @@
-/**
- * Event Trigger Types
- *
- * Types for the event-triggered agents system. Defines the contract for
- * automated agent execution driven by external events — cron schedules,
- * inbound webhooks, Slack messages, GitHub events, Linear updates, and
- * local file-system changes.
- *
- * All surfaces (desktop, web, mobile, CLI) can read trigger definitions
- * and execution history. The desktop app is the primary execution engine.
- *
- * @module event-triggers
- * @packageDocumentation
- */
-
 export type TriggerType = 'cron' | 'webhook' | 'slack' | 'github' | 'linear' | 'file_watcher';
 
 /**

@@ -11,12 +11,12 @@ import {
 import { getSessionKindDefaults } from '../sessions/taxonomy';
 
 describe('EXECUTION_PROFILE_TOGGLES', () => {
-  it('is exactly the two-way local/cloud toggle — BYOK is a sub-mode, not a third value', () => {
+  it('is exactly the two-way local/cloud toggle, BYOK is a sub-mode, not a third value', () => {
     expect(EXECUTION_PROFILE_TOGGLES).toEqual(['local', 'cloud']);
   });
 });
 
-describe('resolveExecutionProfile — local toggle', () => {
+describe('resolveExecutionProfile, local toggle', () => {
   it('defaults to on-device Local inference when no sub-mode is given', () => {
     const profile = resolveExecutionProfile({ toggle: 'local' });
     expect(profile.toggle).toBe('local');
@@ -52,7 +52,7 @@ describe('resolveExecutionProfile — local toggle', () => {
   });
 });
 
-describe('resolveExecutionProfile — cloud toggle', () => {
+describe('resolveExecutionProfile, cloud toggle', () => {
   it('defaults to ManagedGateway routing when no sub-mode is given', () => {
     const profile = resolveExecutionProfile({ toggle: 'cloud' });
     expect(profile.toggle).toBe('cloud');
@@ -77,7 +77,7 @@ describe('resolveExecutionProfile — cloud toggle', () => {
   });
 });
 
-describe('resolveExecutionProfile — every resolved combination round-trips clean', () => {
+describe('resolveExecutionProfile, every resolved combination round-trips clean', () => {
   const cases: Array<[string, () => ExecutionProfile]> = [
     ['local default (on-device)', () => resolveExecutionProfile({ toggle: 'local' })],
     [
@@ -92,7 +92,7 @@ describe('resolveExecutionProfile — every resolved combination round-trips cle
   ];
 
   for (const [label, build] of cases) {
-    it(`${label} — zero invariant violations`, () => {
+    it(`${label}, zero invariant violations`, () => {
       const profile = build();
       expect(validateExecutionProfile(profile)).toEqual([]);
       expect(() => assertExecutionProfile(profile)).not.toThrow();
@@ -100,7 +100,7 @@ describe('resolveExecutionProfile — every resolved combination round-trips cle
   }
 });
 
-describe('validateExecutionProfile — catches a local toggle with a mismatched plane', () => {
+describe('validateExecutionProfile, catches a local toggle with a mismatched plane', () => {
   it('flags managed-cloud inference under the local toggle', () => {
     const bad: ExecutionProfile = {
       ...resolveExecutionProfile({ toggle: 'local' }),
@@ -149,7 +149,7 @@ describe('validateExecutionProfile — catches a local toggle with a mismatched 
   });
 });
 
-describe('validateExecutionProfile — catches a cloud toggle with a mismatched plane', () => {
+describe('validateExecutionProfile, catches a cloud toggle with a mismatched plane', () => {
   it('flags local/BYOK inference under the cloud toggle', () => {
     const bad: ExecutionProfile = {
       ...resolveExecutionProfile({ toggle: 'cloud' }),
@@ -177,7 +177,7 @@ describe('validateExecutionProfile — catches a cloud toggle with a mismatched 
   });
 });
 
-describe('validateExecutionProfile — accumulates every violation at once', () => {
+describe('validateExecutionProfile, accumulates every violation at once', () => {
   it('reports all five codes for a fully cloud-shaped profile under the local toggle', () => {
     const bad: ExecutionProfile = {
       toggle: 'local',
@@ -200,7 +200,7 @@ describe('validateExecutionProfile — accumulates every violation at once', () 
   });
 });
 
-describe('executionProfileForSessionKind — cross-module coherence with ../sessions/taxonomy', () => {
+describe('executionProfileForSessionKind, cross-module coherence with ../sessions/taxonomy', () => {
   it('governs exactly the four consumer-chat kinds the R5 adjudication names, no more', () => {
     expect([...EXECUTION_PROFILE_GOVERNED_SESSION_KINDS].sort()).toEqual(
       ['cloud_chat', 'desktop_byok_chat', 'desktop_local_chat', 'mobile_local_chat'].sort(),

@@ -6,7 +6,7 @@ import {
   type TierPolicy,
 } from '../model-catalog';
 
-describe('TIER_POLICIES — Free chat tier', () => {
+describe('TIER_POLICIES, Free chat tier', () => {
   const policy = getTierPolicy('free');
 
   it('does not publish the private dynamic usage ceiling', () => {
@@ -15,7 +15,7 @@ describe('TIER_POLICIES — Free chat tier', () => {
     expect(policy.capBehavior).toBeUndefined();
   });
 
-  it('exposes the workhorse and voice slots — no escalation/reasoning/image', () => {
+  it('exposes the workhorse and voice slots, no escalation/reasoning/image', () => {
     expect(policy.allowedSlots).toEqual([
       'workhorse_general',
       'voice_transcription',
@@ -46,7 +46,7 @@ describe('TIER_POLICIES — Free chat tier', () => {
   });
 });
 
-describe('TIER_POLICIES — Pro tier compatibility policy', () => {
+describe('TIER_POLICIES, Pro tier compatibility policy', () => {
   const policy = getTierPolicy('pro');
 
   it('caps monthly text tokens at 40M', () => {
@@ -147,7 +147,7 @@ describe('TIER_POLICIES — Pro tier compatibility policy', () => {
   });
 });
 
-describe('TIER_POLICIES — freeze guarantees (Vercel server-no-shared-module-state)', () => {
+describe('TIER_POLICIES, freeze guarantees (Vercel server-no-shared-module-state)', () => {
   it('freezes the registry root', () => {
     expect(Object.isFrozen(TIER_POLICIES)).toBe(true);
   });
@@ -188,7 +188,7 @@ describe('TIER_POLICIES — freeze guarantees (Vercel server-no-shared-module-st
   });
 });
 
-describe('getTierPolicy — public getter', () => {
+describe('getTierPolicy, public getter', () => {
   it('returns the same Free policy reference on repeated calls (no per-call allocation)', () => {
     expect(getTierPolicy('free')).toBe(TIER_POLICIES.free);
     expect(getTierPolicy('free')).toBe(getTierPolicy('free'));
@@ -244,7 +244,7 @@ describe('getTierPolicy — public getter', () => {
   });
 });
 
-describe('Task #26 — TierPolicy declaration consolidation', () => {
+describe('Task #26, TierPolicy declaration consolidation', () => {
   it('exposes the Advanced-mode manual picker for Pro on both legacy and aliased fields', () => {
     expect(getTierPolicy('pro').manualModelSelection).toBe(true);
     expect(getTierPolicy('pro').allowManualSelection).toBe(true);

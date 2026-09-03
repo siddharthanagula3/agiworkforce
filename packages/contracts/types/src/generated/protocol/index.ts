@@ -1,6 +1,3 @@
-// GENERATED FILE — do not edit by hand.
-// Produced by scripts/generate-protocol-types.mjs from crates/agiworkforce-protocol
-// (ts-rs). Regenerate with: pnpm generate:protocol-types
 export * from './AbsolutePathBuf';
 export * from './AcknowledgedResponse';
 export * from './AdditionalPermissionProfile';

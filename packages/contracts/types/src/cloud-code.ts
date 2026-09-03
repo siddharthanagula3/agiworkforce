@@ -16,7 +16,6 @@ export type CloudCodeSessionState = (typeof CLOUD_CODE_SESSION_STATES)[number];
  * the E2B console is offered here without a release.
  */
 export interface CloudCodeRuntime {
-  /** E2B template name or id — the value handed to `Sandbox.create`. */
   id: string;
   name: string;
   /**

@@ -14,28 +14,6 @@
  * @packageDocumentation
  */
 
-/**
- * A capability advertisement published by an agent.
- *
- * Agent cards are exchanged during discovery so that orchestrator agents
- * can select the most suitable specialist for a given sub-task. Cards are
- * ephemeral — they reflect the agent's capabilities at the moment of
- * publication and may expire.
- *
- * @example
- * ```typescript
- * const card: A2AAgentCard = {
- *   agentId: 'agent-rust-expert',
- *   name: 'Rust Expert',
- *   version: '1.0.0',
- *   capabilities: ['code_review', 'refactor', 'explain_error'],
- *   supportedModels: catalogModels.map(({ id }) => id),
- *   endpoint: 'local://swarm/agent-rust-expert',
- *   authRequired: false,
- *   metadata: { maxContextTokens: 200000 },
- * };
- * ```
- */
 export interface A2AAgentCard {
   agentId: string;
 
@@ -111,26 +89,6 @@ export interface A2ATaskResponse {
   durationMs: number;
 }
 
-/**
- * A full conversation handoff from one agent to another.
- *
- * Unlike a task delegation (which is fire-and-forget), a handoff transfers
- * the entire conversation context so the receiving agent can continue
- * interacting with the user seamlessly.
- *
- * @example
- * ```typescript
- * const handoff: A2AHandoffRequest = {
- *   fromAgent: 'agent-generalist',
- *   toAgent: 'agent-tax-specialist',
- *   conversationContext: 'User is preparing their 2025 tax return and needs specialist advice.',
- *   messages: [
- *     { role: 'user',      content: 'I have a question about capital gains.' },
- *     { role: 'assistant', content: 'Sure — could you share the details?' },
- *   ],
- * };
- * ```
- */
 export interface A2AHandoffRequest {
   fromAgent: string;
 

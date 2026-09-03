@@ -12,7 +12,7 @@ function parse(overrides: Record<string, unknown>) {
   });
 }
 
-describe('managed image generation — operation validation', () => {
+describe('managed image generation, operation validation', () => {
   it('defaults to plain text-to-image', () => {
     const result = parse({});
     expect(result.success).toBe(true);

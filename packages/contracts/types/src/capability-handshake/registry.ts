@@ -1,12 +1,3 @@
-/**
- * Pure composition of the four capability layers into one
- * `EffectiveCapabilityDocument`. No I/O, no model-registry reads, no store
- * access — callers gather each layer's already-normalized `granted` set
- * (see `./types` module doc) and this function only intersects them.
- *
- * @module capability-handshake/registry
- */
-
 import type { PlatformCapability } from '../capabilities';
 import {
   CAPABILITY_LAYERS,
