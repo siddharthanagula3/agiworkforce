@@ -351,6 +351,60 @@ describe('OpenAIWireAssembler streaming', () => {
     expect(serialized).not.toContain('<thinking>');
     expect(serialized).not.toContain('reasoning_content');
   });
+
+  it('forwards each citation-delta as its own x_citation event in openai-passthrough mode, exact url and title, never dropped', () => {
+    const assembler = new OpenAIWireAssembler({
+      model: FIXTURE_MODEL_ID,
+      now: NOW,
+      wireMode: 'openai-passthrough',
+    });
+
+    const first = assembler.sseChunks({
+      type: 'citation-delta',
+      blockIndex: 2,
+      payload: {
+        type: 'url_citation',
+        url: 'https://openai.com/index/expanding-daybreak/',
+        title: 'Expanding Daybreak',
+        start_index: 0,
+        end_index: 10,
+      },
+    });
+    const second = assembler.sseChunks({
+      type: 'citation-delta',
+      blockIndex: 2,
+      payload: {
+        type: 'url_citation',
+        url: 'https://blog.google/products/pixel-watch-5/',
+        title: 'Pixel Watch 5: Proactive assistance and advanced health tracking',
+        start_index: 20,
+        end_index: 30,
+      },
+    });
+
+    expect((first.at(-1) as { choices: Array<{ delta: unknown }> }).choices[0]?.delta).toEqual({
+      x_citation: {
+        url: 'https://openai.com/index/expanding-daybreak/',
+        title: 'Expanding Daybreak',
+      },
+    });
+    expect((second.at(-1) as { choices: Array<{ delta: unknown }> }).choices[0]?.delta).toEqual({
+      x_citation: {
+        url: 'https://blog.google/products/pixel-watch-5/',
+        title: 'Pixel Watch 5: Proactive assistance and advanced health tracking',
+      },
+    });
+  });
+
+  it('drops citation-delta in the plain (default) wire mode, same as before', () => {
+    const assembler = new OpenAIWireAssembler({ model: FIXTURE_MODEL_ID, now: NOW });
+    const events = assembler.sseChunks({
+      type: 'citation-delta',
+      blockIndex: 0,
+      payload: { type: 'url_citation', url: 'https://example.com', title: 'Example' },
+    });
+    expect(events).toHaveLength(0);
+  });
 });
 
 describe('assembleOpenAIWireResponse (non-streaming)', () => {

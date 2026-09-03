@@ -1,3 +1,4 @@
+import { WEB_SEARCH_CITATION_DELTA_KEY } from '@agiworkforce/types';
 import type {
   ChatRequest,
   ContentBlock,
@@ -11,6 +12,15 @@ import type {
   ToolUseBlock,
 } from '@agiworkforce/types';
 import { toolStatusPhrase } from './tool-status-phrases';
+
+function urlCitationDelta(payload: unknown): { url: string; title: string } | undefined {
+  if (typeof payload !== 'object' || payload === null) return undefined;
+  const candidate = payload as Record<string, unknown>;
+  if (typeof candidate['url'] !== 'string' || typeof candidate['title'] !== 'string') {
+    return undefined;
+  }
+  return { url: candidate['url'], title: candidate['title'] };
+}
 
 export interface OpenAIWireToolCall {
   id: string;
@@ -480,7 +490,9 @@ export class OpenAIWireAssembler {
         return;
       }
       case 'citation-delta':
-        if (this.wireMode === 'legacy-web') this.citations.push(chunk.payload);
+        if (this.wireMode === 'legacy-web' || this.wireMode === 'openai-passthrough') {
+          this.citations.push(chunk.payload);
+        }
         return;
       case 'vendor-raw':
         return;
@@ -646,12 +658,18 @@ export class OpenAIWireAssembler {
         break;
       }
       case 'citation-delta': {
-        if (!legacyWeb) break;
-        out.push({
-          type: 'content_block_delta',
-          index: chunk.blockIndex,
-          delta: { type: 'citations_delta', citation: chunk.payload },
-        });
+        if (legacyWeb) {
+          out.push({
+            type: 'content_block_delta',
+            index: chunk.blockIndex,
+            delta: { type: 'citations_delta', citation: chunk.payload },
+          });
+        } else if (openaiPassthrough) {
+          const citation = urlCitationDelta(chunk.payload);
+          if (citation) {
+            out.push(this.chunkEnvelope({ [WEB_SEARCH_CITATION_DELTA_KEY]: citation }, null));
+          }
+        }
         break;
       }
       case 'vendor-raw': {
@@ -791,7 +809,7 @@ export class OpenAIWireAssembler {
         },
       ],
       ...(usage ? { usage } : {}),
-      ...(legacyWeb && this.citations.length > 0 ? { citations: this.citations } : {}),
+      ...(richWebSearch && this.citations.length > 0 ? { citations: this.citations } : {}),
       ...(richWebSearch && this.searchResults.length > 0
         ? { search_results: this.searchResults }
         : {}),
