@@ -49,6 +49,14 @@ export const USE_CASE_CONTENT: Record<string, UseCaseContent> = {
       { href: '/download', label: 'Get the CLI' },
       { href: '/pricing', label: 'See pricing', variant: 'secondary' },
     ],
+    visual: {
+      light: '/product/usage-light.png',
+      dark: '/product/usage-dark.png',
+      alt: 'The account usage screen, showing spend against the plan window',
+      width: 1128,
+      height: 716,
+      caption: ['Account', 'Usage'],
+    },
     factsEyebrow: 'Why startups pick this shape',
     factsTitle: 'Three reasons this fits a small team.',
     facts: [
@@ -171,6 +179,14 @@ export const USE_CASE_CONTENT: Record<string, UseCaseContent> = {
       { href: '/contact-sales', label: 'Contact sales' },
       { href: '/cli', label: 'See the CLI', variant: 'secondary' },
     ],
+    visual: {
+      light: '/product/agents-tool-approvals-light.png',
+      dark: '/product/agents-tool-approvals-dark.png',
+      alt: 'The tool approvals setting in AGI, with "Ask before every action" selected',
+      width: 1132,
+      height: 584,
+      caption: ['Settings', 'Tool approvals'],
+    },
     factsEyebrow: 'Where it shows up',
     factsTitle: 'Ticket in, resolution out.',
     facts: [
@@ -233,6 +249,14 @@ export const USE_CASE_CONTENT: Record<string, UseCaseContent> = {
       { href: '/contact-sales', label: 'Contact sales' },
       { href: '/byok', label: 'Set up BYOK', variant: 'secondary' },
     ],
+    visual: {
+      light: '/product/deep-research-report-light.png',
+      dark: '/product/deep-research-report-dark.png',
+      alt: 'A finished AGI deep research report with numbered inline citations and a sources list',
+      width: 2392,
+      height: 1402,
+      caption: ['Deep research', 'Report'],
+    },
     factsEyebrow: 'Where it shows up',
     factsTitle: 'The engagement, end to end.',
     facts: [
