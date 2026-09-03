@@ -57,6 +57,7 @@ import {
   toolStatusEvent as loopToolStatusEvent,
   toolResultEvent,
   trimToolResultHistory,
+  applyToolResultSecretPolicy,
 } from './tool-loop';
 import { mapClassifiedUpstreamError } from './upstream-error-copy';
 import { isUrlFetchTool, executeUrlFetch } from '@/lib/url-fetch/url-fetch-tool';
@@ -1243,15 +1244,22 @@ export async function* runResearchLoop(
       let isError: boolean;
 
       if (!isUrlFetchTool(call.name)) {
-        content = `Tool "${call.name}" is not available in research mode.`;
+        content = await applyToolResultSecretPolicy(
+          _billing.userId,
+          call.name,
+          `Tool "${call.name}" is not available in research mode.`,
+        );
         isError = true;
         yield encoder.encode(toolResultEvent(call.id, call.name, content, isError, responseModel));
       } else if (
         totalFetches >= MAX_RESEARCH_FETCHES ||
         roundFetchCount.count >= MAX_RESEARCH_FETCHES_PER_ROUND
       ) {
-        content =
-          'Fetch budget for this research run is exhausted; continue with the material already gathered.';
+        content = await applyToolResultSecretPolicy(
+          _billing.userId,
+          call.name,
+          'Fetch budget for this research run is exhausted; continue with the material already gathered.',
+        );
         isError = true;
         yield encoder.encode(toolResultEvent(call.id, call.name, content, isError, responseModel));
       } else {
@@ -1269,6 +1277,7 @@ export async function* runResearchLoop(
           content = `Fetch failed (${outcome.errorCode}): ${outcome.error}`;
           isError = true;
         }
+        content = await applyToolResultSecretPolicy(_billing.userId, call.name, content);
         yield encoder.encode(
           loopToolStatusEvent(call.name, isError ? 'failed' : 'completed', responseModel),
         );
