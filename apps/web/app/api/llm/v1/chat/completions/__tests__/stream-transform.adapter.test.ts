@@ -215,11 +215,38 @@ describe('buildAdapterStreamResponse · billing reconciliation', () => {
         cacheReadTokens: 10,
         cacheWriteTokens: undefined,
         cacheWrite1hTokens: undefined,
+        costSource: 'estimated',
         taskOutcome: 'unknown',
         verifierResult: 'skipped',
         fallbackUsed: false,
       },
     });
+  });
+
+  it('prefers a gateway-reported cost over the calculator estimate, and records that source', async () => {
+    const chunks: StreamChunk[] = [
+      { type: 'text-delta', delta: 'Hi' },
+      { type: 'usage', inputTokens: 120, outputTokens: 80, costUsd: 0.0009 },
+      { type: 'stop', reason: 'end_turn' },
+    ];
+
+    const response = await buildAdapterStreamResponse(
+      makeRequest() as any,
+      chunksOf(chunks),
+      makeProcessed({ provider: 'openrouter', estimatedCostCents: 5 }),
+      'user-002b',
+      'token-002b',
+      1_700_000_000_000,
+    );
+    await readAllText(response as any);
+
+    expect(mockCalculateCost).not.toHaveBeenCalled();
+    expect(mockFinalizeManagedUsageRequest).toHaveBeenCalledWith(
+      expect.objectContaining({
+        actualCostCents: 1,
+        usage: expect.objectContaining({ costSource: 'provider_reported' }),
+      }),
+    );
   });
 
   it('finalizes even when actual cost matches the estimate exactly', async () => {

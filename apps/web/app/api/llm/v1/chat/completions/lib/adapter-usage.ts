@@ -9,6 +9,7 @@ export interface UsageAccumulator {
   cacheReadInputTokens?: number;
   cacheCreationInputTokens?: number;
   cacheCreation1hInputTokens?: number;
+  providerReportedCostUsd?: number;
 }
 
 export function createUsageAccumulator(): UsageAccumulator {
@@ -34,5 +35,9 @@ export function ingestUsageChunk(acc: UsageAccumulator, chunk: StreamChunk): voi
   }
   if (chunk.reasoningTokens !== undefined) {
     acc.reasoningOutputTokens = chunk.reasoningTokens;
+  }
+  const reportedCost = chunk.providerReportedCostUsd ?? chunk.costUsd;
+  if (reportedCost !== undefined) {
+    acc.providerReportedCostUsd = reportedCost;
   }
 }
