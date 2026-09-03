@@ -1177,6 +1177,36 @@ describe('useChatStream', () => {
     });
   });
 
+  describe('completions retry fetches a fresh token', () => {
+    it('does not reuse the send-time token for the silent empty-turn retry', async () => {
+      authMocks.getToken
+        .mockResolvedValueOnce('token-at-send')
+        .mockResolvedValueOnce('token-at-send')
+        .mockResolvedValue('token-after-expiry');
+
+      mockSseStream([]);
+      mockSseStream([{ choices: [{ delta: { content: 'answer' }, finish_reason: 'stop' }] }]);
+
+      const { result } = renderHook(() => useChatStream());
+      await act(async () => {
+        await result.current.sendMessage('a slow question', {
+          conversationId: TEMP_CONVERSATION.id,
+        });
+      });
+
+      const completionCalls = vi
+        .mocked(fetch)
+        .mock.calls.filter(([input]) => String(input).includes('/api/llm/v1/chat/completions'));
+      expect(completionCalls).toHaveLength(2);
+
+      const authorization = (call: (typeof completionCalls)[number]) =>
+        ((call[1]?.headers ?? {}) as Record<string, string>)['Authorization'];
+
+      expect(authorization(completionCalls[0]!)).toBe('Bearer token-at-send');
+      expect(authorization(completionCalls[1]!)).toBe('Bearer token-after-expiry');
+    });
+  });
+
   describe('saveMessageToDb durability (persist after a long stream)', () => {
     function headerRecord(init: RequestInit | undefined): Record<string, string> {
       return (init?.headers ?? {}) as Record<string, string>;
