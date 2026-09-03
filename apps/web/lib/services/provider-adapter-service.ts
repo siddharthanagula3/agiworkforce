@@ -127,6 +127,11 @@ export function resolveProviderFromModel(
     throw new Error('Model is not registered in the canonical model catalog');
   }
   const catalogProvider = metadata.provider;
+  const apiModelId = toProviderApiModelId(model);
+  const openRouterFallbackAvailable =
+    !hasServerProviderKey(catalogProvider) &&
+    isManagedOpenRouterRoute(apiModelId) &&
+    openRouterSlugFor(apiModelId) !== undefined;
 
   if (selectedRouteId) {
     const validation = validateRouteSelection(selectedRouteId, {
@@ -136,7 +141,9 @@ export function resolveProviderFromModel(
     });
     if (validation.ok) {
       const selectedProvider = dispatchProviderForRoute(selectedRouteId);
-      if (selectedProvider) return selectedProvider;
+      const selectedRouteIsUndispatchableDirect =
+        selectedProvider === catalogProvider && openRouterFallbackAvailable;
+      if (selectedProvider && !selectedRouteIsUndispatchableDirect) return selectedProvider;
     } else {
       logger.warn(
         { routeId: selectedRouteId, model, reason: validation.reason },
@@ -147,12 +154,7 @@ export function resolveProviderFromModel(
 
   if (catalogProvider === 'open_router') return 'openrouter';
 
-  const apiModelId = toProviderApiModelId(model);
-  if (
-    !hasServerProviderKey(catalogProvider) &&
-    isManagedOpenRouterRoute(apiModelId) &&
-    openRouterSlugFor(apiModelId) !== undefined
-  ) {
+  if (openRouterFallbackAvailable) {
     return 'openrouter';
   }
 
