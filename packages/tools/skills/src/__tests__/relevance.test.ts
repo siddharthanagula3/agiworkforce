@@ -61,31 +61,52 @@ describe('matchSkillsForPrompt', () => {
   });
 });
 
-/**
- * Trigger rate against the real bundled catalogue, measured rather than assumed.
- *
- * The previous Jaccard scoring failed every one of these: it divided by the
- * union, so a longer and more specific prompt scored LOWER. "here is a csv of
- * Q3 signups by channel, which channel actually converted best?" scored 0.000
- * against data-analysis. Coverage asks the directional question instead — how
- * much of the skill's own vocabulary the prompt hits.
- */
 describe('trigger rate on realistic prompts', () => {
   const bundled = [
-    skill('code-review', 'Review code for concrete correctness, security, and regression risks with actionable evidence.'),
-    skill('data-analysis', 'Analyze structured data reproducibly and report validated findings with limitations.'),
-    skill('document-creation', 'Create polished Word documents from verified content and an audience-aware structure.'),
-    skill('frontend-design-review', 'Review rendered interfaces for usability, accessibility, responsive behavior, and product polish.'),
-    skill('systematic-debugging', 'Reproduce failures, isolate their cause, and verify the smallest safe correction.'),
-    skill('skill-creator', 'Draft a small AGI skill bundle with explicit triggers, trust boundaries, and verification steps.'),
+    skill(
+      'code-review',
+      'Review code for concrete correctness, security, and regression risks with actionable evidence.',
+    ),
+    skill(
+      'data-analysis',
+      'Analyze structured data reproducibly and report validated findings with limitations.',
+    ),
+    skill(
+      'document-creation',
+      'Create polished Word documents from verified content and an audience-aware structure.',
+    ),
+    skill(
+      'frontend-design-review',
+      'Review rendered interfaces for usability, accessibility, responsive behavior, and product polish.',
+    ),
+    skill(
+      'systematic-debugging',
+      'Reproduce failures, isolate their cause, and verify the smallest safe correction.',
+    ),
+    skill(
+      'skill-creator',
+      'Draft a small AGI skill bundle with explicit triggers, trust boundaries, and verification steps.',
+    ),
   ];
 
   const shouldTrigger: Array<[string, string]> = [
     ['code-review', 'Can you review this code for security and correctness risks before I merge?'],
-    ['data-analysis', 'Analyze this structured data and report the findings with their limitations.'],
-    ['document-creation', 'Create a polished Word document from this verified content for a board audience.'],
-    ['frontend-design-review', 'Review this rendered interface for accessibility and responsive behavior.'],
-    ['systematic-debugging', 'Help me reproduce this failure, isolate the cause, and verify a safe correction.'],
+    [
+      'data-analysis',
+      'Analyze this structured data and report the findings with their limitations.',
+    ],
+    [
+      'document-creation',
+      'Create a polished Word document from this verified content for a board audience.',
+    ],
+    [
+      'frontend-design-review',
+      'Review this rendered interface for accessibility and responsive behavior.',
+    ],
+    [
+      'systematic-debugging',
+      'Help me reproduce this failure, isolate the cause, and verify a safe correction.',
+    ],
   ];
 
   it.each(shouldTrigger)('offers %s for a prompt about its job', (expected, prompt) => {

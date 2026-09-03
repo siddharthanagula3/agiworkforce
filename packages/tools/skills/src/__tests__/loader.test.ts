@@ -1,4 +1,3 @@
-
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -17,7 +16,7 @@ afterEach(async () => {
   if (root) await rm(root, { recursive: true, force: true });
 });
 
-describe('loadSkillsFromDir — directory layout', () => {
+describe('loadSkillsFromDir, directory layout', () => {
   it('loads <id>/SKILL.md and uses dirname as fallback name', async () => {
     await mkdir(join(root, 'diffs'), { recursive: true });
     await writeFile(
@@ -81,7 +80,7 @@ describe('loadSkillsFromDir — directory layout', () => {
   });
 });
 
-describe('loadSkillsFromDir — flat layout', () => {
+describe('loadSkillsFromDir, flat layout', () => {
   it('loads <name>.md and uses filename (without .md) as fallback name', async () => {
     await writeFile(
       join(root, 'planner.md'),
@@ -114,7 +113,7 @@ describe('loadSkillsFromDir — flat layout', () => {
   });
 });
 
-describe('loadSkillsFromDir — security: name field sanitization', () => {
+describe('loadSkillsFromDir, security: name field sanitization', () => {
   it('a skill whose frontmatter `name` has whitespace/punct is loaded verbatim (no shell escape required)', async () => {
     await writeFile(
       join(root, 'shell.md'),
