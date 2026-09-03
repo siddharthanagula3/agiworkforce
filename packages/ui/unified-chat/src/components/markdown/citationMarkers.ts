@@ -1,10 +1,15 @@
 const FENCE = /^\s{0,3}(`{3,}|~{3,})/;
-const MARKER = /(?<!\])\[(\d{1,3})\](?![([:])/g;
+const MARKER_RUN = /(?<!\])(?:\[\d{1,3}\])+(?![(:[])/g;
 
 export const CITATION_HREF_PATTERN = /^#chat-citation-(\d{1,3})$/;
+export const CITATION_GROUP_HREF_PATTERN = /^#chat-citations-(\d{1,3}(?:,\d{1,3})+)$/;
 
 export function citationHref(oneBasedIndex: number): string {
   return `#chat-citation-${oneBasedIndex}`;
+}
+
+export function citationGroupHref(oneBasedIndices: readonly number[]): string {
+  return `#chat-citations-${oneBasedIndices.join(',')}`;
 }
 
 const TRACKING_PARAM_PATTERN = /^(utm_[a-z_]+|fbclid|gclid|mc_[ce]id)$/i;
@@ -64,20 +69,50 @@ function splitInlineCode(segment: string): string[] {
   return segment.split(/(`+[^`]*`+)/);
 }
 
-function linkifyPart(part: string, citationCount: number): string {
-  return part.replace(MARKER, (match, digits: string) => {
-    const n = Number(digits);
-    if (!Number.isInteger(n) || n < 1 || n > citationCount) return match;
+function markerMarkdown(indices: readonly number[]): string {
+  if (indices.length === 1) {
+    const n = indices[0] as number;
     return `[&#91;${n}&#93;](${citationHref(n)})`;
-  });
+  }
+  const label = indices.map((n) => `&#91;${n}&#93;`).join('');
+  return `[${label}](${citationGroupHref(indices)})`;
+}
+
+function linkifyRun(run: string, citationCount: number): string {
+  const tokens = (run.match(/\d{1,3}/g) ?? []).map(Number);
+  const out: string[] = [];
+  let group: number[] = [];
+  const flushGroup = () => {
+    if (group.length > 0) {
+      out.push(markerMarkdown(group));
+      group = [];
+    }
+  };
+  for (const n of tokens) {
+    if (n >= 1 && n <= citationCount) {
+      group.push(n);
+    } else {
+      flushGroup();
+      out.push(`[${n}]`);
+    }
+  }
+  flushGroup();
+  return out.join('');
+}
+
+function linkifyPart(part: string, citationCount: number): string {
+  return part.replace(MARKER_RUN, (run) => linkifyRun(run, citationCount));
 }
 
 /**
- * Turns a `[n]` marker naming a source the message actually carries into a
- * link the `a` renderer resolves to a `CitationChip`, the same way
- * apps/web/features/chat/lib/citation-links.ts does for research reports —
- * ported here because this component cannot depend on apps/web, and the two
- * link targets differ (a same-page anchor there, an open-in-tab chip here).
+ * Turns each `[n]` marker (or unbroken run of them, "[1][2]") naming a source
+ * the message actually carries into a link the `a` renderer resolves to a
+ * `CitationChip`, the same way apps/web/features/chat/lib/citation-links.ts
+ * does for research reports — ported here because this component cannot
+ * depend on apps/web, and the two link targets differ (a same-page anchor
+ * there, an open-in-tab chip here). A run of two or more markers becomes one
+ * link carrying every index, so the renderer can group them into a single
+ * pill instead of one chip per source.
  *
  * Fence- and inline-code-safe so `rows[1]` in a snippet is never mistaken for
  * a citation, and only run on markers that are already fully closed, so a
