@@ -36,8 +36,25 @@ import {
 } from './services/cloud-code-api';
 import styles from './CloudCodePage.module.css';
 import { toUserMessage } from '@/lib/user-error-message';
+import { selectHarnessRunner } from '@/lib/e2b/harnesses/registry';
+import { HARNESS_MAX_TURNS, HARNESS_RUN_DEADLINE_MS } from '@/lib/e2b/harnesses/budget';
 
 const AGENT_MODEL_ID = getRoutingSlotModel('coding_balanced');
+const HARNESS_HINT_TASK_PLACEHOLDER = 'your task';
+const MS_PER_MINUTE = 60_000;
+const HARNESS_BUDGET_MINUTES = Math.round(HARNESS_RUN_DEADLINE_MS / MS_PER_MINUTE);
+
+function headlessHarnessCommand(runtimeId: string): string | null {
+  const runner = selectHarnessRunner(runtimeId);
+  if (!runner) return null;
+  return runner.buildCommand({
+    prompt: HARNESS_HINT_TASK_PLACEHOLDER,
+    workspacePath: '',
+    maxTurns: HARNESS_MAX_TURNS,
+    timeoutMs: HARNESS_RUN_DEADLINE_MS,
+    resumeSessionId: null,
+  });
+}
 
 type ApprovalPrompt = {
   turnId: string;
@@ -160,12 +177,28 @@ export function CloudCodePage({ api = cloudCodeApi }: CloudCodePageProps) {
     [runtimes, runtimeId],
   );
   const runtimeHelpId = `${runtimeFieldId}-help`;
+  const runtimeHelpText = useMemo(() => {
+    if (runtimes.length === 0) {
+      return 'Managed Code is not configured for this deployment, so no harness can be started.';
+    }
+    if (!selectedRuntime?.agentCommand) {
+      return 'Pick a coding agent to have its CLI already installed in the workspace, or an environment to drive yourself. This cannot be changed after the session is created.';
+    }
+    const headless = headlessHarnessCommand(selectedRuntime.id);
+    if (!headless) {
+      return `The workspace starts with ${selectedRuntime.name} installed, but an agent turn runs the generic tool-calling loop rather than ${selectedRuntime.name} directly; run \`${selectedRuntime.agentCommand}\` yourself in the terminal to use it as a harness. This cannot be changed after the session is created.`;
+    }
+    return `The workspace starts with ${selectedRuntime.name} installed. An agent turn runs it headlessly as \`${headless}\`, capped at ${HARNESS_BUDGET_MINUTES} minutes; run it yourself in the terminal to drive it interactively, then use Commit and push to publish the result. This cannot be changed after the session is created.`;
+  }, [runtimes.length, selectedRuntime]);
   const [fullNetworkAccepted, setFullNetworkAccepted] = useState(false);
   const [creating, setCreating] = useState(false);
   const [command, setCommand] = useState('');
   const [running, setRunning] = useState(false);
   const [closing, setClosing] = useState(false);
   const [confirmClose, setConfirmClose] = useState(false);
+  const [commitMessage, setCommitMessage] = useState('');
+  const [committing, setCommitting] = useState(false);
+  const [commitNotice, setCommitNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [goal, setGoal] = useState('');
   const [agentTurn, setAgentTurn] = useState<CloudCodeAgentTurn | null>(null);
@@ -447,6 +480,25 @@ export function CloudCodePage({ api = cloudCodeApi }: CloudCodePageProps) {
     }
   }
 
+  async function handleCommit(event: FormEvent) {
+    event.preventDefault();
+    if (!selectedSession || !commitMessage.trim() || committing) return;
+    const submitted = commitMessage.trim();
+    setCommitting(true);
+    setError(null);
+    setCommitNotice(null);
+    try {
+      const result = await api.commit(selectedSession.id, submitted);
+      replaceSession(result.session);
+      setCommitMessage('');
+      setCommitNotice(result.push.ok ? 'Pushed to the repository.' : result.push.output);
+    } catch (commitError) {
+      setError(friendlyError(commitError));
+    } finally {
+      setCommitting(false);
+    }
+  }
+
   return (
     <WebAppShell>
       <main className={styles['main']}>
@@ -694,11 +746,7 @@ export function CloudCodePage({ api = cloudCodeApi }: CloudCodePageProps) {
                         )}
                       </select>
                       <span className={styles['help']} id={runtimeHelpId}>
-                        {runtimes.length === 0
-                          ? 'Managed Code is not configured for this deployment, so no harness can be started.'
-                          : selectedRuntime?.agentCommand
-                            ? `The workspace starts with ${selectedRuntime.name} installed; run \`${selectedRuntime.agentCommand}\` in the terminal to use it. This cannot be changed after the session is created.`
-                            : 'Pick a coding agent to have its CLI already installed in the workspace, or an environment to drive yourself. This cannot be changed after the session is created.'}
+                        {runtimeHelpText}
                       </span>
                     </div>
 
@@ -827,6 +875,34 @@ export function CloudCodePage({ api = cloudCodeApi }: CloudCodePageProps) {
                         </button>
                       ))}
                   </div>
+                  {selectedSession.repositoryUrl &&
+                    selectedSession.state !== 'closed' &&
+                    selectedSession.state !== 'provisioning' &&
+                    selectedSession.state !== 'failed' && (
+                      <form
+                        className={styles['commitRow']}
+                        onSubmit={(event) => void handleCommit(event)}
+                      >
+                        <input
+                          className={styles['input']}
+                          value={commitMessage}
+                          onChange={(event) => setCommitMessage(event.target.value)}
+                          placeholder="Commit message"
+                          maxLength={500}
+                          disabled={committing}
+                          aria-label="Commit message"
+                        />
+                        <button
+                          className={styles['secondaryButton']}
+                          type="submit"
+                          disabled={committing || !commitMessage.trim()}
+                        >
+                          {committing ? <Loader2 className={styles['spin']} size={13} /> : null}
+                          Commit and push
+                        </button>
+                      </form>
+                    )}
+                  {commitNotice && <div className={styles['help']}>{commitNotice}</div>}
                   {detailLoading ? (
                     <div className={styles['loading']}>
                       <Loader2

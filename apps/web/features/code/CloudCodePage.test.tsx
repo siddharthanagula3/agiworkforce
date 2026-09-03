@@ -74,6 +74,10 @@ function createApi(overrides: Partial<CloudCodeApi> = {}): CloudCodeApi {
       },
     })),
     close: vi.fn(async (): Promise<CloudCodeSession> => ({ ...session, state: 'closed' })),
+    commit: vi.fn(async () => ({
+      session,
+      push: { ok: true, output: 'pushed to origin/main', exitCode: 0 },
+    })),
     startAgentTurn: vi.fn(async () => ({
       turnId: '22222222-2222-4222-8222-222222222222',
       stopReason: 'done' as const,
@@ -244,6 +248,138 @@ describe('CloudCodePage', () => {
     expect(
       screen.getByText(/Managed Code is not configured for this deployment/i),
     ).toBeInTheDocument();
+  });
+
+  it('shows the exact headless command and the harness budget for a runtime with a registered runner', async () => {
+    const user = userEvent.setup();
+    const api = createApi({
+      list: vi.fn(async () => ({
+        availability: {
+          deploymentEnabled: true,
+          storageReady: true,
+          planEntitled: true,
+          planTier: 'pro',
+          maxSessions: 5,
+        },
+        sessions: [],
+        runtimes: [
+          {
+            id: 'codex',
+            name: 'Codex',
+            kind: 'harness' as const,
+            summary: 'OpenAI’s coding agent CLI.',
+            agentCommand: 'codex',
+            cpuCount: 4,
+            memoryMB: 8192,
+            diskSizeMB: 40960,
+            isPublic: true,
+          },
+        ],
+      })),
+    });
+
+    render(<CloudCodePage api={api} />);
+
+    const picker = await screen.findByLabelText('Coding harness');
+    await user.selectOptions(picker, 'codex');
+
+    expect(
+      screen.getByText(/codex exec --sandbox workspace-write --skip-git-repo-check --json/),
+    ).toBeInTheDocument();
+    expect(screen.getByText(/capped at 9 minutes/)).toBeInTheDocument();
+  });
+
+  it('falls back to the generic-loop copy when the runtime has no registered harness runner', async () => {
+    const user = userEvent.setup();
+    const api = createApi({
+      list: vi.fn(async () => ({
+        availability: {
+          deploymentEnabled: true,
+          storageReady: true,
+          planEntitled: true,
+          planTier: 'pro',
+          maxSessions: 5,
+        },
+        sessions: [],
+        runtimes: [
+          {
+            id: 'openclaw',
+            name: 'OpenClaw',
+            kind: 'harness' as const,
+            summary: 'Open-source agent harness.',
+            agentCommand: 'openclaw',
+            cpuCount: 2,
+            memoryMB: 4096,
+            diskSizeMB: 20480,
+            isPublic: true,
+          },
+        ],
+      })),
+    });
+
+    render(<CloudCodePage api={api} />);
+
+    const picker = await screen.findByLabelText('Coding harness');
+    await user.selectOptions(picker, 'openclaw');
+
+    expect(screen.getByText(/generic tool-calling loop/)).toBeInTheDocument();
+    expect(screen.queryByText(/capped at \d+ minutes/)).not.toBeInTheDocument();
+  });
+
+  it('surfaces commit and push for a session with a repository, and reports the result', async () => {
+    const user = userEvent.setup();
+    const repoSession: CloudCodeSession = { ...session, repositoryUrl: 'https://github.com/o/r' };
+    const commit: CloudCodeApi['commit'] = vi.fn(async () => ({
+      session: repoSession,
+      push: { ok: true, output: 'pushed to origin/main', exitCode: 0 },
+    }));
+    const api = createApi({
+      commit,
+      list: vi.fn(async () => ({
+        availability: {
+          deploymentEnabled: true,
+          storageReady: true,
+          planEntitled: true,
+          planTier: 'pro',
+          maxSessions: 5,
+        },
+        sessions: [repoSession],
+        runtimes: [],
+      })),
+      get: vi.fn(async () => ({ session: repoSession, terminalEntries: [] })),
+    });
+
+    render(<CloudCodePage api={api} />);
+
+    const commitInput = await screen.findByLabelText('Commit message');
+    await user.type(commitInput, 'wire the settings toggle');
+    await user.click(screen.getByRole('button', { name: 'Commit and push' }));
+
+    await waitFor(() =>
+      expect(commit).toHaveBeenCalledWith(repoSession.id, 'wire the settings toggle'),
+    );
+    expect(await screen.findByText('Pushed to the repository.')).toBeInTheDocument();
+  });
+
+  it('does not offer commit and push for a session with no repository', async () => {
+    const api = createApi({
+      list: vi.fn(async () => ({
+        availability: {
+          deploymentEnabled: true,
+          storageReady: true,
+          planEntitled: true,
+          planTier: 'pro',
+          maxSessions: 5,
+        },
+        sessions: [session],
+        runtimes: [],
+      })),
+    });
+
+    render(<CloudCodePage api={api} />);
+
+    await screen.findByRole('textbox', { name: 'Terminal command' });
+    expect(screen.queryByLabelText('Commit message')).not.toBeInTheDocument();
   });
 
   it('renders inside the shared app shell instead of a private Code-only nav rail', async () => {

@@ -124,6 +124,28 @@ describe('cloudCodeApi', () => {
     });
   });
 
+  it('reaches the commit endpoint with CSRF and the commit message', async () => {
+    const fetchImpl = vi.fn(async () =>
+      json({
+        session,
+        push: { ok: true, output: 'pushed to origin/main', exitCode: 0 },
+      }),
+    );
+    const api = createCloudCodeApi({
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+      getCsrfToken: vi.fn(async () => 'csrf-code'),
+    });
+
+    await expect(api.commit(session.id, 'wire the settings toggle')).resolves.toMatchObject({
+      push: { ok: true, exitCode: 0 },
+    });
+
+    const [path, init] = fetchImpl.mock.calls[0] as unknown as [string, RequestInit];
+    expect(path).toBe(`/api/code/sessions/${session.id}/commit`);
+    expect(init.headers).toMatchObject({ 'x-csrf-token': 'csrf-code' });
+    expect(JSON.parse(String(init.body))).toEqual({ message: 'wire the settings toggle' });
+  });
+
   it('lists and decides agent approvals on the approvals endpoint', async () => {
     const fetchImpl = vi
       .fn()
