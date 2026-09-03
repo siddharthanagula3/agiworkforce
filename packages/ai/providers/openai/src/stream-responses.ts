@@ -131,6 +131,7 @@ export async function* translateOpenAIResponsesStream(
   };
   let stopEmitted = false;
   const emittedWebSearchResultIds = new Set<string>();
+  const emittedCitationUrls = new Set<string>();
   let textStarted = false;
   let diagnosticsEmitted = false;
   let visibleText = '';
@@ -228,6 +229,29 @@ export async function* translateOpenAIResponsesStream(
     return chunks;
   }
 
+  function recordCitation(
+    blockIndex: number,
+    url: string,
+    title: string,
+    startIndex?: number,
+    endIndex?: number,
+  ): Extract<StreamChunk, { type: 'citation-delta' }> | undefined {
+    citationTitles.set(url, title);
+    if (emittedCitationUrls.has(url)) return undefined;
+    emittedCitationUrls.add(url);
+    return {
+      type: 'citation-delta',
+      blockIndex,
+      payload: {
+        type: 'url_citation',
+        url,
+        title,
+        ...(startIndex !== undefined ? { start_index: startIndex } : {}),
+        ...(endIndex !== undefined ? { end_index: endIndex } : {}),
+      },
+    };
+  }
+
   function recoverOutputItem(
     outputIndex: number,
     item: ResponseOutputItem,
@@ -237,18 +261,31 @@ export async function* translateOpenAIResponsesStream(
       return recoverFunctionCall(outputIndex, item, closeFunctionCall);
     }
     if (isMessageItem(item)) {
+      const citationChunks: StreamChunk[] = [];
       for (const content of item.content ?? []) {
         if (content.type !== 'output_text') continue;
         for (const raw of content.annotations ?? []) {
           const citation = annotationTitle(raw);
-          if (citation) citationTitles.set(citation.url, citation.title);
+          if (!citation) continue;
+          const annotation = raw as Record<string, unknown>;
+          const chunk = recordCitation(
+            outputIndex,
+            citation.url,
+            citation.title,
+            typeof annotation['start_index'] === 'number' ? annotation['start_index'] : undefined,
+            typeof annotation['end_index'] === 'number' ? annotation['end_index'] : undefined,
+          );
+          if (chunk) citationChunks.push(chunk);
         }
       }
-      return (item.content ?? []).flatMap((content, contentIndex) =>
-        content.type === 'output_text'
-          ? recoverText(`${outputIndex}:${contentIndex}`, content.text)
-          : recoverText(`${outputIndex}:${contentIndex}`, content.refusal),
-      );
+      return [
+        ...citationChunks,
+        ...(item.content ?? []).flatMap((content, contentIndex) =>
+          content.type === 'output_text'
+            ? recoverText(`${outputIndex}:${contentIndex}`, content.text)
+            : recoverText(`${outputIndex}:${contentIndex}`, content.refusal),
+        ),
+      ];
     }
     return [];
   }
@@ -414,19 +451,14 @@ export async function* translateOpenAIResponsesStream(
           typeof annotation['start_index'] === 'number' &&
           typeof annotation['end_index'] === 'number'
         ) {
-          const citation = {
-            type: 'url_citation' as const,
-            url: stripOpenAITrackingParam(annotation['url']),
-            title: annotation['title'],
-            start_index: annotation['start_index'],
-            end_index: annotation['end_index'],
-          };
-          citationTitles.set(citation.url, citation.title);
-          yield {
-            type: 'citation-delta',
-            blockIndex: ev.output_index,
-            payload: citation,
-          };
+          const chunk = recordCitation(
+            ev.output_index,
+            stripOpenAITrackingParam(annotation['url']),
+            annotation['title'],
+            annotation['start_index'],
+            annotation['end_index'],
+          );
+          if (chunk) yield chunk;
         }
         break;
       }
