@@ -162,7 +162,7 @@ export function PromptStash({ currentText, onLoad, disabled = false, onToast }: 
         aria-label="Prompt stash"
         aria-expanded={isOpen}
         aria-haspopup="listbox"
-        title="Prompt Stash — save &amp; restore prompts"
+        title="Prompt Stash, save &amp; restore prompts"
         onClick={() => setIsOpen((v) => !v)}
         className={cn(
           'flex h-7 w-7 items-center justify-center rounded-lg transition-colors',

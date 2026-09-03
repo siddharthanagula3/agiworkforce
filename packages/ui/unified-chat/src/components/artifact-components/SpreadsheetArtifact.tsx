@@ -90,7 +90,7 @@ export function SpreadsheetArtifact({ artifact, className }: SpreadsheetArtifact
         <div className="flex items-center gap-2 px-3 py-2 border-b bg-muted/30 text-muted-foreground">
           <FileSpreadsheet className="h-3.5 w-3.5" aria-hidden="true" />
           <span className="text-xs">
-            This content couldn&apos;t be parsed as a table — showing it as text.
+            This content couldn&apos;t be parsed as a table, showing it as text.
           </span>
         </div>
         <pre className="p-3 text-xs text-foreground whitespace-pre-wrap break-words overflow-auto max-h-[400px]">
@@ -223,7 +223,7 @@ export function SpreadsheetArtifact({ artifact, className }: SpreadsheetArtifact
         </table>
       </div>
 
-      {/* Footer — honest truncation note */}
+      {/* Footer, honest truncation note */}
       {truncated && (
         <div
           className="border-t bg-muted/20 px-3 py-1.5 text-[12px] text-muted-foreground"

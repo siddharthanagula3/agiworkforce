@@ -78,12 +78,6 @@ export function taskStateTone(state: AgentTaskState): TaskStateTone {
   }
 }
 
-/**
- * The -600 tints read at 2.83:1 against their own /10 background — below the
- * 4.5:1 floor for text this size. Amber needs -800 because its -700 still
- * measured 4.45:1 on the warm tint; the others clear at -700. Dark-mode values
- * are unchanged: they sit on a dark surface where the light tints are correct.
- */
 export const TASK_TONE_BADGE_CLASS: Record<TaskStateTone, string> = {
   active: 'border-blue-500/30 bg-blue-500/10 text-blue-700 dark:text-blue-400',
   attention: 'border-amber-500/30 bg-amber-500/10 text-amber-800 dark:text-amber-400',
@@ -98,16 +92,6 @@ export function isCancellableState(state: AgentTaskState): boolean {
   );
 }
 
-/**
- * Is this run still capable of appending to its journal?
- *
- * Narrower than {@link isCancellableState} on purpose: this drives the detail
- * panel's background refresh, and polling a run that will never emit another
- * event is pure waste. `ready_for_review` is excluded — the agent loop emits it
- * as its FINAL state, so the journal is already complete. `awaiting_input` IS
- * included: another device can answer the approval, after which this run starts
- * producing events again without anything happening on this client.
- */
 export function isLiveTaskState(state: AgentTaskState): boolean {
   return (
     state === 'queued' || state === 'running' || state === 'awaiting_input' || state === 'paused'

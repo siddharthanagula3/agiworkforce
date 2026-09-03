@@ -136,12 +136,6 @@ export const CHAT_COMPOSER_EDITOR_MODES = {
 export type ChatComposerEditorMode =
   (typeof CHAT_COMPOSER_EDITOR_MODES)[keyof typeof CHAT_COMPOSER_EDITOR_MODES];
 
-/**
- * `composer-editor.css` sizes the editor for web's composer box. These reproduce
- * the textarea arm's own geometry — `min-h-[28px]` and the `px-4 pt-3 pb-1`
- * padding — on the content node and on the placeholder, so the two arms rest at
- * the same height and their first line starts on the same pixel.
- */
 const COMPOSER_EDITOR_ARM_CLASS =
   'w-full [&_.ProseMirror]:min-h-[28px] [&_.ProseMirror]:px-4 [&_.ProseMirror]:pt-3 [&_.ProseMirror]:pb-1 [&_.composer-editor\\_\\_placeholder]:px-4 [&_.composer-editor\\_\\_placeholder]:pt-3';
 
@@ -953,12 +947,6 @@ export function ChatInput({
     handle.focus();
   }, []);
 
-  /**
-   * The editor owns its own text, so every store write that did not come from a
-   * keystroke — a conversation switch, a voice transcript, a consumed skill
-   * mention, the clear on send — has to be pushed back into it. Comparing the
-   * text first is what keeps typing out of this path.
-   */
   useEffect(() => {
     const handle = composerEditorRef.current;
     if (!handle || handle.getText() === draftContent) return;
@@ -1048,7 +1036,7 @@ export function ChatInput({
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
       >
-        {/* Inline attachment validation error — dismissed on next valid add. */}
+        {/* Inline attachment validation error, dismissed on next valid add. */}
         {attachmentError && (
           <div
             role="status"
@@ -1075,7 +1063,7 @@ export function ChatInput({
           </div>
         ) : null}
 
-        {/* Attached files preview — image thumbnails for image/*, text chip otherwise */}
+        {/* Attached files preview, image thumbnails for image/*, text chip otherwise */}
         {attachedFiles.length > 0 && (
           <div className="flex flex-wrap gap-1.5 px-3 pt-2">
             {attachedFiles.map((file, i) => {
@@ -1152,7 +1140,7 @@ export function ChatInput({
         )}
 
         {/* Bottom toolbar.
-            SINGLE non-wrapping control row (flex-nowrap) — mirrors web's
+            SINGLE non-wrapping control row (flex-nowrap), mirrors web's
             ChatComposerNew, which deliberately avoids flex-wrap so the send
             button can never drop to a second line as the column narrows.
             The min-w-0 shrink chain lets the left group (plus + AgentControl
@@ -1161,7 +1149,7 @@ export function ChatInput({
         <div className="flex flex-col gap-1 px-3 pt-1.5 pb-2">
           <div className="flex flex-nowrap items-center gap-1 sm:gap-2">
             <div className="flex min-w-0 flex-1 items-center gap-2">
-              {/* Left: Plus button — opens attachment menu */}
+              {/* Left: Plus button, opens attachment menu */}
               <div className="flex shrink-0 items-center">
                 <input
                   ref={fileInputRef}
@@ -1227,7 +1215,7 @@ export function ChatInput({
                 </AttachmentMenu>
               </div>
 
-              {/* Work-mode segmented toggle (Chat | AGI Work) — web parity,
+              {/* Work-mode segmented toggle (Chat | AGI Work), web parity,
                   sitting immediately right of "+". Rendered only when the host
                   feeds projectPicker. */}
               {projectPicker && canUseAgiWork && (
@@ -1273,7 +1261,7 @@ export function ChatInput({
               {/* Extended thinking. Renders only what the selected model's
                   catalog reasoning contract actually supports: an operable
                   switch, a static "always on" badge, or nothing. Gated on the
-                  same capability as the effort chip — a runtime that does not
+                  same capability as the effort chip, a runtime that does not
                   forward reasoning parameters must not advertise one. */}
               {supportsReasoningEffort && (
                 <ThinkingControl modelId={selectedModelId} disabled={disabled} />
@@ -1302,7 +1290,7 @@ export function ChatInput({
 
             {/* Right: Model selector + mic + send.
                 min-w-0 (NOT shrink-0) so the model pill is the item that
-                truncates first as the column narrows — mirroring web, where the
+                truncates first as the column narrows, mirroring web, where the
                 shrinkable model area shares the nowrap row. The mic + send below
                 are shrink-0, so under flex-nowrap + the container's overflow-hidden
                 the send button can never be pushed off-edge or clipped. */}
@@ -1321,7 +1309,7 @@ export function ChatInput({
                 }
               />
 
-              {/* Mic button — ghost, hidden when streaming */}
+              {/* Mic button, ghost, hidden when streaming */}
               {!isStreaming &&
                 (voiceInputController !== undefined || voiceState !== 'unsupported') && (
                   <button
@@ -1349,7 +1337,7 @@ export function ChatInput({
                   </button>
                 )}
 
-              {/* Send / Stop — shared 3-state SendButton (mirrors web's composer).
+              {/* Send / Stop, shared 3-state SendButton (mirrors web's composer).
                   The desktop chat store only models `isStreaming`, so we drive
                   the honest two reachable states (stop while streaming, otherwise
                   send). The button's `queue` state exists in the shared API for
@@ -1367,7 +1355,7 @@ export function ChatInput({
         </div>
       </div>
 
-      {/* AGI Work scope row — "Project or folder ▾" chip DIRECTLY BELOW the
+      {/* AGI Work scope row, "Project or folder ▾" chip DIRECTLY BELOW the
           composer (web ChatComposerNew / claude.ai Cowork reference layout).
           Rendered only in AGI Work mode with host-provided project data; the
           local-folder action appears only when the host feeds the folder seam
@@ -1497,7 +1485,7 @@ export function ChatInput({
                 </>
               )}
 
-              {/* Local folder — rendered only when the host feeds the folder
+              {/* Local folder, rendered only when the host feeds the folder
                   seam (desktop-only + privacy-gated at the host). */}
               {canUseAgiWork && onSelectFolder && (
                 <>

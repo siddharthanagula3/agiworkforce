@@ -229,7 +229,7 @@ function labelSuffix(status: InlineToolCallStatus, errorMessage?: string): strin
     case 'error':
       return errorMessage ? `Error: ${errorMessage}` : 'Error';
     case 'partial':
-      return 'Partial — see body';
+      return 'Partial, see body';
     case 'success':
     default:
       return '';
@@ -316,7 +316,7 @@ export function InlineToolCall({
           tabIndex={isExpandable ? 0 : undefined}
           aria-expanded={isExpandable ? effectiveOpen : undefined}
           aria-controls={isExpandable ? bodyId : undefined}
-          aria-label={`${label}${suffix ? ` — ${suffix}` : ''}`}
+          aria-label={`${label}${suffix ? `, ${suffix}` : ''}`}
           onClick={isExpandable ? toggle : undefined}
           onKeyDown={onKeyDown}
           className={cn(
@@ -329,7 +329,7 @@ export function InlineToolCall({
           )}
         >
           <BadgeIcon config={badgeConfig} />
-          {/* Tool names are arbitrary-length — MCP servers namespace them
+          {/* Tool names are arbitrary-length, MCP servers namespace them
               ("mcp__filesystem__read_text_file"). shrink-0 with no ellipsis made
               the label hold its full intrinsic width and push the status dot and
               chevron off the row's right edge. An error label is a full status
@@ -427,7 +427,7 @@ export function InlineToolCall({
         tabIndex={isExpandable ? 0 : undefined}
         aria-expanded={isExpandable ? effectiveOpen : undefined}
         aria-controls={isExpandable ? bodyId : undefined}
-        aria-label={`${label}${suffix ? ` — ${suffix}` : ''}`}
+        aria-label={`${label}${suffix ? `, ${suffix}` : ''}`}
         onClick={isExpandable ? toggle : undefined}
         onKeyDown={onKeyDown}
         className={cn(

@@ -18,20 +18,13 @@ beforeEach(() => {
   useProjectStore.setState({ projects: [{ ...PROJECT }], activeProjectId: null });
 });
 
-describe('ProjectCard — valid HTML nesting', () => {
+describe('ProjectCard, valid HTML nesting', () => {
   it('does not render a <button> nested inside another <button>', () => {
     const { container } = render(<ProjectCard project={PROJECT} onDelete={vi.fn()} />);
     const nested = container.querySelectorAll('button button');
     expect(nested.length).toBe(0);
   });
 
-  /**
-   * The previous fix for nested <button> markup made the card a
-   * `div role="button"` wrapping the star and menu buttons. That satisfies an
-   * HTML validator but is the same defect to assistive tech — a control cannot
-   * contain controls, and axe reports nested-interactive on the live page. The
-   * open action is now a sibling stretched over the card instead.
-   */
   it('never makes the open control an ancestor of the other controls', () => {
     render(<ProjectCard project={PROJECT} onDelete={vi.fn()} onEdit={vi.fn()} />);
     const open = screen.getByRole('button', { name: /open project design system/i });
@@ -51,7 +44,7 @@ describe('ProjectCard — valid HTML nesting', () => {
   });
 });
 
-describe('ProjectCard — independent click handlers', () => {
+describe('ProjectCard, independent click handlers', () => {
   it('renders the canonical server conversation count when ids are not loaded', () => {
     render(
       <ProjectCard project={{ ...PROJECT, conversationIds: undefined, conversationCount: 2 }} />,
@@ -92,7 +85,7 @@ describe('ProjectCard — independent click handlers', () => {
   });
 });
 
-describe('ProjectCard — archive/unarchive menu', () => {
+describe('ProjectCard, archive/unarchive menu', () => {
   it('shows Archive for an active project and calls onArchive', () => {
     const onArchive = vi.fn();
     render(<ProjectCard project={PROJECT} onArchive={onArchive} onUnarchive={vi.fn()} />);

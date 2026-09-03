@@ -1,15 +1,3 @@
-/**
- * artifactPreviewScriptsBlocked.test.tsx — DES-C15.
- *
- * Inside the packaged desktop app a srcdoc preview inherits
- * `script-src 'self' 'wasm-unsafe-eval'` from the embedder, so an interactive
- * HTML artifact renders inert and a React artifact renders nothing at all while
- * its toolbar claims "Loading..." forever. Neither told the user anything. These
- * tests pin the honest states — and, just as importantly, that they stay hidden
- * everywhere the restriction does not apply.
- *
- * @vitest-environment jsdom
- */
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, render, screen } from '@testing-library/react';
 import { ReactPreview } from '../artifact-components/ReactPreview';

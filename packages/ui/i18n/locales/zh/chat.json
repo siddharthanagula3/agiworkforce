@@ -209,7 +209,7 @@
   "list": {
     "continueGenerating": "继续生成",
     "continueGeneratingAria": "继续生成上一条回复",
-    "incomplete": "此回复可能不完整——与模型的连接已中断。",
+    "incomplete": "此回复可能不完整,, 与模型的连接已中断。",
     "incompleteWithReason": "回复可能不完整：{{reason}}",
     "regenerateAria": "重新生成此回复",
     "scrollToLatest": "滚动到最新",

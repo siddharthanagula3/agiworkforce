@@ -3,7 +3,7 @@ import { describe, it, expect } from 'vitest';
 import { completeInlineTokens } from './completeInlineTokens';
 import { MARKDOWN_STREAM_CORPUS, lines } from './__fixtures__/markdownStreamCorpus';
 
-describe('completeInlineTokens — closes what the tail has left open', () => {
+describe('completeInlineTokens, closes what the tail has left open', () => {
   const OPEN_CASES: ReadonlyArray<{
     readonly name: string;
     readonly tail: string;
@@ -43,7 +43,7 @@ describe('completeInlineTokens — closes what the tail has left open', () => {
   });
 });
 
-describe('completeInlineTokens — leaves finished markdown alone', () => {
+describe('completeInlineTokens, leaves finished markdown alone', () => {
   const UNTOUCHED_CASES: ReadonlyArray<{ readonly name: string; readonly tail: string }> = [
     { name: 'balanced strong', tail: 'A **bold claim** stands.' },
     { name: 'bold italic', tail: 'A ***very bold*** claim.' },

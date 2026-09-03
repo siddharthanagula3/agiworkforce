@@ -13,10 +13,6 @@ import {
 
 const IMPORT_SEPARATORS = [',', ';', '\t'];
 
-// deliberately not parseDelimited: this suite exists to catch cells the module's own reader
-// cannot see, so the oracle reads an export the way Excel, Sheets and python's csv module do
-// — one separator at a time, a lone CR ends a record, and junk after a closing quote stays
-// in the cell it started in
 function importCells(text: string, separator: string): string[] {
   const cells: string[] = [];
   let cell = '';
@@ -205,8 +201,6 @@ describe('a number the attacker glues a payload to', () => {
     expect(csv).toContain('Aug 21,read_file,42');
   });
 
-  // a writer that sees the whole record can prove a number harmless — the cell is a number
-  // under every separator an importer might pick — so numeric columns keep their bytes
   it('still exempts a numeric cell where the record is there to judge it', () => {
     expect(neutralizeSpreadsheetText('name,score\nAlice,30\nBob,-7')).toBe(
       'name,score\nAlice,30\nBob,-7',

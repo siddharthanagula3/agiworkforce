@@ -1,4 +1,3 @@
-
 import { afterEach, describe, expect, it } from 'vitest';
 import type { ConnectorPermissionLevel } from '@agiworkforce/types';
 import {
@@ -11,7 +10,7 @@ afterEach(() => {
   delete (globalThis as any).__agi_cloud_db__;
 });
 
-describe('getConnectorPermissionStore — non-Tauri runtime', () => {
+describe('getConnectorPermissionStore, non-Tauri runtime', () => {
   it('reports its storage as unsupported rather than claiming a cloud backend', () => {
     expect(getConnectorPermissionStore().storage).toBe('unsupported');
   });

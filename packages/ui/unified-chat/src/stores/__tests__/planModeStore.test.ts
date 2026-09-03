@@ -26,7 +26,7 @@ const SAMPLE_PLAN: PlanProposal = {
 describe('planModeStore', () => {
   beforeEach(reset);
 
-  it('starts off — planMode false, pendingPlan null', () => {
+  it('starts off, planMode false, pendingPlan null', () => {
     expect(selectPlanMode(usePlanModeStore.getState())).toBe(false);
     expect(selectPendingPlan(usePlanModeStore.getState())).toBeNull();
     expect(selectHasPendingApproval(usePlanModeStore.getState())).toBe(false);

@@ -16,7 +16,7 @@ const baseMessage: Pick<
   createdAt: new Date().toISOString(),
 };
 
-describe('ProvenanceFooter — source modes', () => {
+describe('ProvenanceFooter, source modes', () => {
   it('manual source: renders provenance row, no routing trace', () => {
     const { container, queryByTestId } = render(
       <ProvenanceFooter

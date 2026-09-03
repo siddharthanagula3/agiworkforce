@@ -333,7 +333,7 @@ export function MemoryEditor({
         )}
       </div>
 
-      {/* Destructive "forget everything" — hidden when empty or by prop */}
+      {/* Destructive "forget everything", hidden when empty or by prop */}
       {!hideClearAll && facts.length > 0 ? (
         <div
           className="flex justify-end border-t pt-3"

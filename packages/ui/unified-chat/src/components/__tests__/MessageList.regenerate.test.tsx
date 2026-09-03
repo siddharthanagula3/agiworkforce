@@ -31,7 +31,7 @@ const completedExchange: ChatMessage[] = [
   },
 ];
 
-describe('MessageList — regenerate prop chain (DES-C04)', () => {
+describe('MessageList, regenerate prop chain (DES-C04)', () => {
   beforeEach(() => {
     Element.prototype.scrollIntoView = vi.fn();
     seed(completedExchange);

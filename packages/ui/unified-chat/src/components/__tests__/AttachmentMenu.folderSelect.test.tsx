@@ -13,7 +13,7 @@ const baseProps = {
   onResearchToggle: vi.fn(),
 };
 
-describe('AttachmentMenu — automatic Web search', () => {
+describe('AttachmentMenu, automatic Web search', () => {
   it('does not expose automatic Web search as a user-facing menu toggle', () => {
     render(
       <CapabilityProvider platform="desktop">
@@ -48,7 +48,7 @@ describe('AttachmentMenu — automatic Web search', () => {
   });
 });
 
-describe('AttachmentMenu — Select folder', () => {
+describe('AttachmentMenu, Select folder', () => {
   it('renders "Select folder" on desktop (canUseWorkingDirectory) and calls back on click', () => {
     const onSelectFolder = vi.fn();
     const onOpenChange = vi.fn();
@@ -125,7 +125,7 @@ describe('AttachmentMenu — Select folder', () => {
   });
 });
 
-describe('AttachmentMenu — Record a skill host bridge', () => {
+describe('AttachmentMenu, Record a skill host bridge', () => {
   it('renders the action only when the host provides a real recorder', () => {
     const onRecordSkill = vi.fn();
     const onOpenChange = vi.fn();
@@ -153,7 +153,7 @@ describe('AttachmentMenu — Record a skill host bridge', () => {
   });
 });
 
-describe('AttachmentMenu — Research capability honesty', () => {
+describe('AttachmentMenu, Research capability honesty', () => {
   it('omits Research when the active runtime cannot transport research requests', () => {
     render(
       <CapabilityProvider platform="desktop">
@@ -179,7 +179,7 @@ describe('AttachmentMenu — Research capability honesty', () => {
   });
 });
 
-describe('AttachmentMenu — source action honesty', () => {
+describe('AttachmentMenu, source action honesty', () => {
   it('omits project and connector source actions when the host has no real picker flow', () => {
     render(
       <CapabilityProvider platform="desktop">

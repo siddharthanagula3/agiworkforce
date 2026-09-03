@@ -48,8 +48,6 @@ export type SettingsNavKey =
   | 'voice'
   | 'extensions'
   | 'developer'
-  // Web-only sections (not part of the desktop SETTINGS_NAV, which drives the
-  // desktop panel renderer — see apps/desktop settings-ia contract test).
   | 'security'
   | 'safety'
   | 'team'
@@ -171,14 +169,6 @@ export const SETTINGS_NAV: SettingsNavEntry[] = [
   },
 ];
 
-/**
- * Every key a settings route may address, derived from the union type's own
- * members rather than restated — a second hardcoded list would drift, and the
- * drift shows up as a deep link 404 nobody notices.
- *
- * Includes the conversation-data sections, which are real routes even though
- * SETTINGS_NAV_GROUPS_WEB deliberately omits them from the rail.
- */
 const SETTINGS_NAV_KEY_SET: ReadonlySet<string> = new Set<SettingsNavKey>([
   ...SETTINGS_NAV.map((entry) => entry.key),
   'security',

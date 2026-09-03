@@ -60,7 +60,7 @@ async function openDetails() {
   fireEvent.click(await screen.findByRole('button', { name: /^View details for AGI Work,/ }));
 }
 
-describe('Tasks — in-flight journal auto-refresh', () => {
+describe('Tasks, in-flight journal auto-refresh', () => {
   beforeEach(() => {
     vi.useFakeTimers({ shouldAdvanceTime: true });
   });
@@ -244,7 +244,7 @@ describe('Tasks — in-flight journal auto-refresh', () => {
   });
 });
 
-describe('Tasks — failure reason', () => {
+describe('Tasks, failure reason', () => {
   it('renders the engine error message recorded on a failed run', async () => {
     const failed = makeRun({ state: 'failed', lastEventSequence: 1, completedAt: null });
     const getRun = vi.fn(async () => ({
@@ -281,7 +281,7 @@ describe('Tasks — failure reason', () => {
       'The code_execution sandbox ran out of memory before the file was written.',
     );
     expect(panel.textContent).toContain('sandbox_oom');
-    expect(panel.textContent).toContain('Temporary — safe to run again');
+    expect(panel.textContent).toContain('Temporary, safe to run again');
   });
 
   it('admits when a failed run recorded no reason instead of showing a bare badge', async () => {

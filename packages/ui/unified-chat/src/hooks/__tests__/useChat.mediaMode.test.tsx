@@ -79,7 +79,7 @@ function makeRuntime(
   };
 }
 
-describe('useChat — the composer media mode reaches the runtime', () => {
+describe('useChat, the composer media mode reaches the runtime', () => {
   beforeEach(() => {
     seedConversation();
     useMediaModeStore.setState({ mediaMode: 'text' });

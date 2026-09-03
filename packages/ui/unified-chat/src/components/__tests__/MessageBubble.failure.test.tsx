@@ -14,7 +14,7 @@ function assistantMessage(overrides: Partial<ChatMessage>): ChatMessage {
   };
 }
 
-describe('MessageBubble — failed turn (DES-C23)', () => {
+describe('MessageBubble, failed turn (DES-C23)', () => {
   it('renders the live failure in the transcript', () => {
     render(<MessageBubble message={assistantMessage({ error: 'Provider stream collapsed' })} />);
 
@@ -57,7 +57,7 @@ describe('MessageBubble — failed turn (DES-C23)', () => {
   });
 });
 
-describe('MessageBubble — managed quota refusal (DES-C22)', () => {
+describe('MessageBubble, managed quota refusal (DES-C22)', () => {
   const paywallMessage = assistantMessage({
     metadata: {
       paywall: {

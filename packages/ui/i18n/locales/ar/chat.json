@@ -209,7 +209,7 @@
   "list": {
     "continueGenerating": "متابعة التوليد",
     "continueGeneratingAria": "متابعة توليد الرد السابق",
-    "incomplete": "قد يكون هذا الرد غير مكتمل — تم قطع الاتصال بالنموذج.",
+    "incomplete": "قد يكون هذا الرد غير مكتمل, تم قطع الاتصال بالنموذج.",
     "incompleteWithReason": "قد يكون الرد غير مكتمل: {{reason}}",
     "regenerateAria": "إعادة توليد هذا الرد",
     "scrollToLatest": "الانتقال إلى الأحدث",

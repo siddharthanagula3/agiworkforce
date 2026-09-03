@@ -332,17 +332,12 @@ describe('SettingsModal nav (web IA)', () => {
     expect(within(nav).queryByText('Customize')).toBeNull();
     expect(SETTINGS_NAV_GROUPS_WEB).toHaveLength(1);
     expect(SETTINGS_NAV_GROUPS_WEB[0]?.label).toBeUndefined();
-    // Skills/Connectors/Plugins come AFTER the core settings items, as one
-    // contiguous run. This used to assert `keys.slice(-3)`, which pinned the
-    // trio to the literal END of the list and so failed the moment Help was
-    // added below them — position, not the invariant it meant to protect.
     const keys = SETTINGS_NAV_GROUPS_WEB[0]!.items.map((i) => i.key);
     expect(keys).toContain('reflect');
     expect(keys).toContain('time-focus');
     const customizeRun = keys.indexOf('skills');
     expect(customizeRun).toBeGreaterThan(keys.indexOf('time-focus'));
     expect(keys.slice(customizeRun, customizeRun + 3)).toEqual(['skills', 'connectors', 'plugins']);
-    // Help is the last entry — it is a link-out, not a settings surface.
     expect(keys[keys.length - 1]).toBe('help');
   });
 
@@ -360,12 +355,6 @@ describe('SettingsModal nav (web IA)', () => {
   });
 });
 
-/**
- * Nav attention badges. `/api/connectors` has always reported which OAuth
- * grants expired, but nothing outside the Connectors page read it — a
- * connector could stop working and the only way to find out was to open that
- * page and scroll to the right row.
- */
 describe('SettingsModal nav badges', () => {
   it('renders no badge when nothing needs attention', () => {
     renderModal();
@@ -407,8 +396,6 @@ describe('Connectors pane (table)', () => {
     expect(screen.getByRole('columnheader', { name: 'Type' })).toBeTruthy();
     expect(screen.getByRole('columnheader', { name: 'Status' })).toBeTruthy();
 
-    // Connected row shows the real connected state (scoped to the table —
-    // the "Connected" filter tab shares the word).
     const table = screen.getByRole('table');
     expect(within(table).getByText('Connected')).toBeTruthy();
     // Preview-only rows stay in Browse rather than flooding the operational
@@ -547,7 +534,6 @@ describe('Connectors pane (table)', () => {
     const connectBtn = screen.getByRole('button', { name: 'Connect Notion' });
     fireEvent.click(connectBtn);
     await waitFor(() => expect(connectConnector).toHaveBeenCalledWith('notion'));
-    // The failure renders inline — never a silent rollback or fake success.
     expect(await screen.findByText('OAuth flow failed.')).toBeTruthy();
   });
 
@@ -873,15 +859,10 @@ describe('Connectors pane (table)', () => {
         authToken: 'secret-token',
       }),
     );
-    // Honest failure — the form shows the error and does NOT fake a success.
     expect(await screen.findByText('Custom connectors are not yet supported on web.')).toBeTruthy();
     expect(screen.getByText('Add custom connector')).toBeTruthy();
   });
 
-  // Moved here from the web-only ConnectorsPage directory, which signed-in
-  // users never reach (apps/web/app/connectors/page.tsx redirects them to
-  // this modal) — the JSON importer was previously invisible to every user
-  // who could actually persist a connector.
   it('prefills name/url/token from a pasted JSON config, then submits through the normal Add flow', async () => {
     const addCustomConnector = vi.fn().mockResolvedValue(undefined);
     renderModal(
@@ -895,8 +876,6 @@ describe('Connectors pane (table)', () => {
     fireEvent.click(screen.getByRole('button', { name: /^Add$/ }));
     fireEvent.click(screen.getByRole('menuitem', { name: 'Add custom connector' }));
 
-    // Add is disabled before any JSON is parsed — parsing only prefills state,
-    // it is never a second submit path.
     const addBtn = screen.getByRole('button', { name: 'Add' });
     expect(addBtn).toHaveProperty('disabled', true);
 
@@ -1056,7 +1035,6 @@ describe('Plugins pane (table)', () => {
     fireEvent.click(screen.getByRole('button', { name: /^Add$/ }));
     expect(screen.getByRole('menuitem', { name: 'Add marketplace' })).toBeTruthy();
     expect(screen.getByRole('menuitem', { name: 'Upload plugin' })).toBeTruthy();
-    // No "Create with AGI" — no real plugin-creation flow exists to back it.
     expect(screen.queryByRole('menuitem', { name: /Create/ })).toBeNull();
   });
 });

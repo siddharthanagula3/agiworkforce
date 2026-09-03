@@ -267,10 +267,6 @@ export function Sidebar(props: SidebarProps) {
       pendingFocusRef.current = false;
       rowButtonAt(activeRowIndex)?.focus();
     }
-    // `focusedIndex` is a dependency even though `activeRowIndex` is derived
-    // from it: -1 -> 0 leaves `activeRowIndex` at 0 (its no-selection default),
-    // so without it the FIRST ArrowDown would update the highlight but never
-    // move real focus — exactly the divergence this fix exists to remove.
   }, [activeRowIndex, focusedIndex, visible, rowButtonAt]);
 
   useEffect(() => {
@@ -488,7 +484,7 @@ export function Sidebar(props: SidebarProps) {
       >
         {/* Header: brand wordmark (optional) + collapse + compose + search */}
         <div className="border-b border-[hsl(var(--border))] p-4">
-          {/* Brand row — only rendered when a surface supplies a headerSlot
+          {/* Brand row, only rendered when a surface supplies a headerSlot
               (e.g. the web app-shell wordmark). Surfaces that pass no headerSlot
               stay byte-identical to the previous layout. */}
           {headerSlot && <div className="mb-3 flex items-center">{headerSlot}</div>}
@@ -578,11 +574,11 @@ export function Sidebar(props: SidebarProps) {
           )}
 
           {/* Conversation list.
-            AUDIT-FIX GOV-31: the roving-tabindex container — it owns the row
+            AUDIT-FIX GOV-31: the roving-tabindex container, it owns the row
             refs, syncs the highlight with real focus, and releases it on blur. */}
           <div ref={listRef} className="flex-1" onFocus={handleListFocus} onBlur={handleListBlur}>
             <div className="p-2">
-              {/* Projects section — header + pinned sub-section + unpinned list */}
+              {/* Projects section, header + pinned sub-section + unpinned list */}
               {projectListEnabled && (pinnedProjects.length > 0 || unpinnedProjects.length > 0) && (
                 <div className="mb-4">
                   {/* Section header row: "Projects" + collapse chevron + "+" + "..." */}
@@ -808,7 +804,7 @@ export function Sidebar(props: SidebarProps) {
                 );
               })}
 
-              {/* Loading skeleton — only while the list is genuinely empty so far,
+              {/* Loading skeleton, only while the list is genuinely empty so far,
                 so a background refetch on an already-populated list never
                 replaces real rows with placeholders. */}
               {visible.length === 0 && isLoading && (
@@ -827,7 +823,7 @@ export function Sidebar(props: SidebarProps) {
                 </div>
               )}
 
-              {/* Error state — distinguishes a failed fetch from a genuinely
+              {/* Error state, distinguishes a failed fetch from a genuinely
                 empty account so users don't mistake a transient error for
                 "you have no chats". */}
               {!hasMatchingConversations && !isLoading && error && (
@@ -1021,7 +1017,7 @@ function ProjectRow({
           (menuOpen || isExpanded) && 'bg-[hsl(var(--accent))]',
         )}
       >
-        {/* Folder icon + project name — clicking toggles expand */}
+        {/* Folder icon + project name, clicking toggles expand */}
         <button
           type="button"
           className="flex min-h-6 min-w-0 flex-1 items-center gap-2 text-left"

@@ -25,8 +25,6 @@ const HEX_RADIX = 16;
 const CHANNEL_MAX = 255;
 const SERIES_SHADE_RATIO = 0.45;
 
-/** Model-authored colours land in an SVG presentation attribute, so only plain
- *  colour syntax is accepted — never `url(...)` references or CSS functions. */
 const SAFE_COLOR_RE = /^(#[0-9a-f]{3,8}|(?:rgb|hsl)a?\(\s*[\d\s.,%/-]+\s*\)|[a-z]{3,20})$/i;
 const HEX_RE = /^[0-9a-f]{6}$/i;
 

@@ -1,14 +1,3 @@
-/**
- * LibraryView.test.tsx — the shared Library surface.
- *
- * The view was web-only, so Desktop had no Library at all. It now takes a
- * LibraryTransport, which is the entire difference between hosts: web supplies
- * Clerk session cookies and a CSRF header, desktop supplies a bearer-token
- * fetch. These tests drive the view through a stub transport, so they cover the
- * behaviour both hosts inherit.
- *
- * @vitest-environment jsdom
- */
 import { describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { LibraryView, type LibraryTransport } from '../LibraryView';

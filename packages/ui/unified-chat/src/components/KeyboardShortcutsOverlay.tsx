@@ -172,7 +172,7 @@ export function KeyboardShortcutsOverlay({
               </Button>
             </div>
 
-            {/* Scrollable body — two-column grid */}
+            {/* Scrollable body, two-column grid */}
             <div className="overflow-y-auto flex-1 p-5">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 {allSections.map((section) => (

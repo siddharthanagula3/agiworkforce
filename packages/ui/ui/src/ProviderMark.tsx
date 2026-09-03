@@ -15,7 +15,7 @@ const ICON_BY_PROVIDER: Record<string, SimpleIcon> = {
   anthropic: siClaude,
   claude: siClaude,
   deepseek: siDeepseek,
-  google: siGooglegemini, // our Google models are Gemini — show the Gemini mark
+  google: siGooglegemini,
   gemini: siGooglegemini,
   mistral: siMistralai,
   moonshot: siMoonshotai,

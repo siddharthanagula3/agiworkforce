@@ -1,23 +1,3 @@
-/**
- * Chat Package Types
- *
- * Local type definitions for the `packages/chat` shared component library.
- * `Provider` is imported from `@agiworkforce/types` — the single source of truth
- * for all LLM provider identifiers across the monorepo.
- *
- * `Conversation`, `ChatMessage`, and `ModelInfo` here are **UI-tier shapes**
- * tailored to chat-component rendering needs (inline citations, thinking
- * blocks, streaming state, routing trace, attachments rendered inline, etc.).
- *
- * They are intentionally **siblings**, not subtypes, of the wire/storage
- * shapes in `@agiworkforce/types` (`ChatMessage`, `Conversation` in
- * `packages/contracts/types/src/chat.ts`). Mapping between the two is the responsibility
- * of the chat hook layer (`useChat`, `useSendMessage`) when persisting messages
- * or fetching them back from storage.
- *
- * @module types
- */
-
 import type {
   Provider,
   ArtifactBase,
@@ -184,14 +164,6 @@ export interface MessageArtifactDerivationContext {
   conversationId: string;
 }
 
-/**
- * Host capability that turns one assistant message into a
- * {@link MessageArtifactProjection}. Return `null` when the message yields no
- * artifacts — callers then render `message.content` untouched.
- *
- * MUST be referentially stable (module-level function or `useCallback`): it is
- * a `useMemo` dependency for the whole transcript.
- */
 export type DeriveMessageArtifacts = (
   message: ChatMessage,
   context: MessageArtifactDerivationContext,

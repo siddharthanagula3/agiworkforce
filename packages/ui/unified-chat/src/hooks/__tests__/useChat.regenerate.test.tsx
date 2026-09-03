@@ -115,7 +115,7 @@ function makeRuntime(overrides?: Partial<ChatRuntime>): ChatRuntime {
   };
 }
 
-describe('useChat — regenerate (DES-C04)', () => {
+describe('useChat, regenerate (DES-C04)', () => {
   beforeEach(() => {
     toastError.mockClear();
     useSettingsStore.setState({ codeExecutionEnabled: false });

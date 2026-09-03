@@ -137,7 +137,7 @@
   },
   "capModal": {
     "title": "Has alcanzado tu límite de mensajes",
-    "subtitle": "Elige cómo continuar — cambia a un modelo más pequeño o espera a que se restablezca tu uso.",
+    "subtitle": "Elige cómo continuar, cambia a un modelo más pequeño o espera a que se restablezca tu uso.",
     "dismiss": "Descartar hasta el próximo reinicio",
     "switchModel": "Cambiar a un modelo más pequeño",
     "waitReset": "Esperar al reinicio"
@@ -160,7 +160,7 @@
     "shareTitle": "Compartir este artefacto",
     "shareSubtitle": "Cualquiera con el enlace puede verlo, pero no ejecutar código. La conversación se mantiene privada.",
     "provenance": "Se preserva la procedencia",
-    "provenanceDesc": "Los destinatarios ven qué modelo generó esto — sin suplantación.",
+    "provenanceDesc": "Los destinatarios ven qué modelo generó esto, sin suplantación.",
     "htmlPreview": "Vista previa HTML",
     "fileCount_one": "{{count}} archivo",
     "fileCount_other": "{{count}} archivos",
@@ -284,7 +284,7 @@
   },
   "plugins": {
     "installed": "Plugins instalados",
-    "installedDesc": "Herramientas del servidor que AGI puede llamar mientras responde. Distintas de los conectores — los plugins no necesitan una cuenta.",
+    "installedDesc": "Herramientas del servidor que AGI puede llamar mientras responde. Distintas de los conectores, los plugins no necesitan una cuenta.",
     "featured": "Destacado en el directorio",
     "browseAll": "Ver todos los plugins",
     "loading": "Cargando...",
@@ -319,7 +319,7 @@
         "startTitle": "Inicia tu primera tarea",
         "startDesc": "Describe un trabajo recurrente arriba y deja que tu equipo de IA lo gestione.",
         "connectTitle": "Conecta un proyecto",
-        "connectDesc": "Vincula un proyecto para dar contexto a las tareas — correos, docs, CRM, repo.",
+        "connectDesc": "Vincula un proyecto para dar contexto a las tareas, correos, docs, CRM, repo.",
         "scheduleTitle": "Programa una tarea recurrente",
         "scheduleDesc": "Ejecuta tareas automáticamente en un horario cron, incluso mientras duermes.",
         "phoneTitle": "Envía una tarea desde tu teléfono",

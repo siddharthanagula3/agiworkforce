@@ -1,15 +1,3 @@
-/**
- * ConversationHeader.test.tsx — DCL-08.
- *
- * The header was a title and nothing else, so Desktop chat had no rename, no
- * share and no route to artifacts while web's own header offered all three.
- * Actions are now injected: a host that cannot perform one does not pass a
- * handler, and the control is not rendered — the alternative is a visible
- * button that does nothing, which is the defect class removed across the
- * surfaces today.
- *
- * @vitest-environment jsdom
- */
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen } from '@testing-library/react';
 import { ConversationHeader } from '../ConversationHeader';

@@ -8,13 +8,13 @@ const imageModel = requireCatalogModel(
 );
 
 describe('classifyPrompt', () => {
-  it('detects computer use — click keyword', () => {
+  it('detects computer use, click keyword', () => {
     const r = classifyPrompt('click on the submit button');
     expect(r.task).toBe('computer_use');
     expect(r.slot).toBe('computer_use');
   });
 
-  it('detects computer use — automation keyword', () => {
+  it('detects computer use, automation keyword', () => {
     const r = classifyPrompt('automate filling out the login form');
     expect(r.task).toBe('computer_use');
   });
@@ -27,13 +27,13 @@ describe('classifyPrompt', () => {
     expect(r.slot).toBe('computer_use_premium');
   });
 
-  it('detects image generation — generate image', () => {
+  it('detects image generation, generate image', () => {
     const r = classifyPrompt('generate an image of a sunset over mountains');
     expect(r.task).toBe('image_generation');
     expect(r.slot).toBe('image_generation');
   });
 
-  it('detects image generation — draw keyword', () => {
+  it('detects image generation, draw keyword', () => {
     const r = classifyPrompt('draw me a cartoon cat');
     expect(r.task).toBe('image_generation');
   });
@@ -49,7 +49,7 @@ describe('classifyPrompt', () => {
     expect(r.slot).toBe('video_generation');
   });
 
-  it('detects video generation — animate keyword', () => {
+  it('detects video generation, animate keyword', () => {
     const r = classifyPrompt('animate this character running');
     expect(r.task).toBe('video_generation');
   });
@@ -74,34 +74,34 @@ describe('classifyPrompt', () => {
     expect(r.slot).toBe('search_fast');
   });
 
-  it('detects search — latest keyword', () => {
+  it('detects search, latest keyword', () => {
     const r = classifyPrompt("what's the latest news about OpenAI?");
     expect(r.task).toBe('search');
   });
 
-  it('detects search — current price', () => {
+  it('detects search, current price', () => {
     const r = classifyPrompt('what is the current price of Bitcoin?');
     expect(r.task).toBe('search');
     expect(r.slot).toBe('search_fast');
   });
 
-  it('detects search — today keyword', () => {
+  it('detects search, today keyword', () => {
     const r = classifyPrompt('what happened in tech today?');
     expect(r.task).toBe('search');
   });
 
-  it('detects coding — code fence', () => {
+  it('detects coding, code fence', () => {
     const r = classifyPrompt('fix this:\n```python\ndef foo():\n  return 1/0\n```');
     expect(r.task).toBe('coding');
     expect(r.slot).toBe('coding_fast');
   });
 
-  it('detects coding — write a function', () => {
+  it('detects coding, write a function', () => {
     const r = classifyPrompt('write a function to reverse a linked list in TypeScript');
     expect(r.task).toBe('coding');
   });
 
-  it('detects coding — SQL keyword', () => {
+  it('detects coding, SQL keyword', () => {
     const r = classifyPrompt('write a SQL query to find duplicate rows in a table');
     expect(r.task).toBe('coding');
   });
@@ -114,12 +114,12 @@ describe('classifyPrompt', () => {
     expect(r.slot).toBe('coding_premium');
   });
 
-  it('detects reasoning — step by step', () => {
+  it('detects reasoning, step by step', () => {
     const r = classifyPrompt('solve this step by step: 3x² + 2x - 8 = 0');
     expect(r.task).toBe('reasoning');
   });
 
-  it('detects reasoning — math keyword', () => {
+  it('detects reasoning, math keyword', () => {
     const r = classifyPrompt('explain the mathematics behind gradient descent');
     expect(r.task).toBe('reasoning');
   });
@@ -153,12 +153,12 @@ describe('classifyPrompt', () => {
     expect(r.slot).toBe('vision_premium');
   });
 
-  it('detects creative writing — write a story', () => {
+  it('detects creative writing, write a story', () => {
     const r = classifyPrompt('write a short story about a robot learning to paint');
     expect(r.task).toBe('creative_writing');
   });
 
-  it('detects creative writing — poem', () => {
+  it('detects creative writing, poem', () => {
     const r = classifyPrompt('write a haiku about autumn leaves');
     expect(r.task).toBe('creative_writing');
   });
