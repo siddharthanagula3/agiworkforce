@@ -6,11 +6,11 @@ import {
   ButtonRow,
   Eyebrow,
   Ledger,
+  ProductFrame,
   Prose,
   Section,
   Stack,
 } from '@/features/marketing/components/system';
-import { FactGrid, PageHero } from '@/features/marketing/components/pages/surfaces/shared';
 
 export const metadata = buildMetadata({
   title: 'AGI Work: goal in, autonomous tool loop, reviewable deliverables',
@@ -19,57 +19,125 @@ export const metadata = buildMetadata({
   path: '/agi-work',
 });
 
+const IDS = {
+  hero: 'agi-work-hero-title',
+  facts: 'agi-work-facts-title',
+  inside: 'agi-work-inside-title',
+  states: 'agi-work-states-title',
+  close: 'agi-work-close-title',
+} as const;
+
+const RUN_FACTS = [
+  'three to six step plan before the first tool call',
+  'Pro plans and above',
+  'every run listed end to end at /tasks',
+  'approvals pause the run, never skip it',
+] as const;
+
+const INSIDE_A_RUN = [
+  {
+    meta: 'Composer',
+    title: 'A mode of the box you already type in',
+    body: 'Chat and AGI Work are two positions of one segmented control. Switching it reveals a project scope chip and two optional fields, constraints and deliverable.',
+  },
+  {
+    meta: 'Plan',
+    title: 'The plan lands before the first tool call',
+    body: 'AGI Work asks the model for three to six concrete steps, each moving from pending to in progress to completed as the run works.',
+  },
+  {
+    meta: 'Approval',
+    title: 'A call you have not cleared stops the run',
+    body: 'The run switches to awaiting input and shows the tool name with the arguments it wants to send. Approve, deny, or attach guidance.',
+  },
+] as const;
+
 export default function AgiWorkPage() {
   return (
     <div data-design="agi" className="agi-ds-page">
       <Header />
       <main id="main-content">
-        <PageHero
-          id="agi-work-hero-title"
-          eyebrow="AGI Work"
-          title="AGI Work writes a plan first, then asks before it acts."
-          lede="Switch the composer from Chat to AGI Work, describe the outcome, and pin the constraints and the deliverable if they matter. Before it touches a tool, AGI Work sends back a three-to-six step plan for the objective you gave it. Then it works that plan with web search, page fetches, sandboxed code, and files, stopping the run whenever a call needs your say-so."
-          ctas={[
-            { href: '/chat', label: 'Open AGI Work' },
-            { href: '/tasks', label: 'See your runs', variant: 'secondary' },
-          ]}
-        />
+        <section className="agi-lp-hero" aria-labelledby={IDS.hero}>
+          <div className="agi-ds-container agi-lp-hero-grid">
+            <div className="agi-lp-hero-copy">
+              <p className="agi-lp-eyebrow">AGI Work</p>
+              <h1 className="agi-lp-h1" id={IDS.hero}>
+                <span className="agi-lp-line">AGI Work writes a plan first,</span>
+                <em className="agi-lp-accent">then asks before it acts.</em>
+              </h1>
+              <p className="agi-lp-lede">
+                Switch the composer from Chat to AGI Work, describe the outcome, and pin the
+                constraints and the deliverable if they matter. It works the plan with web search,
+                page fetches, sandboxed code, and files, stopping whenever a call needs your say-so.
+              </p>
+              <ButtonRow>
+                <Button href="/chat">Open AGI Work</Button>
+                <Button href="/tasks" variant="secondary">
+                  See your runs
+                </Button>
+              </ButtonRow>
+            </div>
+            <div className="agi-lp-hero-stage">
+              <div className="agi-lp-browser">
+                <div className="agi-lp-browser-bar" aria-hidden="true">
+                  <span className="agi-lp-browser-dots">
+                    <i />
+                    <i />
+                    <i />
+                  </span>
+                  <span>agiworkforce.com/chat</span>
+                </div>
+                <ProductFrame
+                  src="/product/composer-dark.png"
+                  srcLight="/product/composer-light.png"
+                  alt="The AGI composer, where the Chat and AGI Work modes live side by side"
+                  width={1472}
+                  height={254}
+                  priority
+                />
+              </div>
+            </div>
+          </div>
+        </section>
 
-        <Section id="agi-work-inside" labelledBy="agi-work-inside-title" rule>
+        <div className="agi-lp-factline">
+          <div className="agi-ds-container">
+            <ul className="agi-lp-factline-list">
+              {RUN_FACTS.map((fact) => (
+                <li key={fact}>{fact}</li>
+              ))}
+            </ul>
+          </div>
+        </div>
+
+        <Section id="agi-work-inside" labelledBy={IDS.inside} rule>
           <Stack gap="loose">
             <div>
               <Eyebrow>Inside a run</Eyebrow>
-              <h2 className="agi-ds-h2" id="agi-work-inside-title">
+              <h2 className="agi-ds-h2" id={IDS.inside}>
                 The run tells you what it will do before it does it.
               </h2>
             </div>
-            <FactGrid
-              items={[
-                {
-                  meta: 'Composer',
-                  title: 'A mode of the box you already type in',
-                  body: 'Chat and AGI Work are two positions of one segmented control: right of the attachment button on a wide screen, inside the plus menu on a narrow one. Switching it reveals a project scope chip and two optional fields, constraints and deliverable, under the composer.',
-                },
-                {
-                  meta: 'Plan',
-                  title: 'The plan lands before the first tool call',
-                  body: 'AGI Work asks the model for three to six concrete steps and shows them under a plan heading. Each step moves from pending to in progress to completed as the run works, so a stalled run is visible at the step that stalled.',
-                },
-                {
-                  meta: 'Approval',
-                  title: 'A call you have not cleared stops the run',
-                  body: 'The run switches to awaiting input and shows the tool name with the arguments it wants to send. Approve it, deny it, or attach guidance that redirects what happens next. Another device signed into the same account can answer too, and the first answer wins.',
-                },
-              ]}
-            />
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+              {INSIDE_A_RUN.map((item) => (
+                <div
+                  key={item.meta}
+                  className="flex flex-col gap-3 rounded-xl border border-[var(--agi-rule)] bg-[var(--agi-ground-2)] p-6"
+                >
+                  <Eyebrow>{item.meta}</Eyebrow>
+                  <h3 className="agi-ds-h3">{item.title}</h3>
+                  <Prose size="sm">{item.body}</Prose>
+                </div>
+              ))}
+            </div>
           </Stack>
         </Section>
 
-        <Section id="agi-work-states" labelledBy="agi-work-states-title" rule ground="2">
+        <Section id="agi-work-states" labelledBy={IDS.states} rule ground="2">
           <Stack gap="loose">
             <div>
               <Eyebrow>Run states</Eyebrow>
-              <h2 className="agi-ds-h2" id="agi-work-states-title">
+              <h2 className="agi-ds-h2" id={IDS.states}>
                 Every run wears one of these labels in the task list.
               </h2>
             </div>
@@ -79,65 +147,61 @@ export default function AgiWorkPage() {
                 {
                   label: 'Queued',
                   value:
-                    'The run exists before the model has done anything with it. It is already listed, and Stop already works.',
+                    'The run exists before the model has done anything with it. Stop already works.',
                 },
                 {
                   label: 'Running',
                   value:
-                    'The run is working through the plan, and an open run re-reads its own journal every few seconds.',
+                    'Working through the plan; an open run re-reads its own journal every few seconds.',
                 },
                 {
                   label: 'Awaiting input',
                   value:
-                    'The run is blocked on you: either a tool call is waiting for approval, or a connector asked for a field before it can continue.',
+                    'Blocked on you: either a tool call needs approval, or a connector asked for a field.',
                 },
-                {
-                  label: 'Paused',
-                  value: 'The run is held but still live, and Stop still works on it.',
-                },
+                { label: 'Paused', value: 'Held but still live, and Stop still works on it.' },
                 {
                   label: 'Ready for review',
                   value:
-                    'The last state the agent loop emits: the journal is complete, and any files the run generated are attached for download.',
+                    'The last state the agent loop emits: the journal is complete and any files are attached.',
                 },
                 {
                   label: 'Completed',
-                  value: 'The run is settled, and nothing further will ever be appended to it.',
+                  value: 'Settled, and nothing further will ever be appended to it.',
                 },
                 {
                   label: 'Failed',
-                  value:
-                    'The run stopped on an error, and the activity list shows the step it stopped on.',
+                  value: 'Stopped on an error, and the activity list shows the step it stopped on.',
                 },
                 { label: 'Cancelled', value: 'You pressed Stop.' },
                 {
                   label: 'Archived',
-                  value: 'The run drops out of the Active filter and stays readable under All.',
+                  value: 'Drops out of the Active filter and stays readable under All.',
                 },
               ]}
             />
           </Stack>
         </Section>
 
-        <Section id="agi-work-close" labelledBy="agi-work-close-title" rule>
-          <Stack gap="loose">
-            <h2 className="agi-ds-h2" id="agi-work-close-title">
-              Give AGI Work its first goal.
-            </h2>
-            <Prose>
-              The composer toggle appears on Pro plans and above; on a plan without the capability
-              the control never renders, so nothing breaks at send time. Once it is there, every run
-              you start is readable end to end at /tasks: goal, plan, tool calls, approvals, and
-              outputs. AGI Work runs on AGI Managed Cloud, so runs can fail or stall, and behaviour
-              may change.
-            </Prose>
-            <ButtonRow>
-              <Button href="/pricing" variant="secondary">
-                See which plans include AGI Work
-              </Button>
-            </ButtonRow>
-          </Stack>
-        </Section>
+        <section className="agi-lp-close" aria-labelledby={IDS.close}>
+          <div className="agi-ds-container">
+            <div className="agi-lp-close-inner">
+              <h2 className="agi-lp-h2" id={IDS.close}>
+                Give AGI Work <em className="agi-lp-accent">its first goal.</em>
+              </h2>
+              <p className="agi-lp-lede">
+                On a plan without the capability the control never renders, so nothing breaks at
+                send time. AGI Work runs on AGI Managed Cloud, so runs can fail or stall, and
+                behaviour may change.
+              </p>
+              <ButtonRow>
+                <Button href="/pricing" variant="secondary">
+                  See which plans include AGI Work
+                </Button>
+              </ButtonRow>
+            </div>
+          </div>
+        </section>
       </main>
       <MarketingFooter />
     </div>
