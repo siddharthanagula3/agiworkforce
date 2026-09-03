@@ -49,6 +49,10 @@ function record(overrides: Record<string, unknown> = {}) {
     repositoryUrl: null,
     version: '1.0.0',
     sourceRegistry: 'mcp-registry',
+    badge: 'community',
+    iconUrl: null,
+    monogram: 'ST',
+    docsUrl: null,
     ...overrides,
   };
 }

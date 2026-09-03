@@ -34,13 +34,17 @@ function makeSnapshot() {
         repositoryUrl: null,
         version: null,
         sourceRegistry: 'internal',
+        badge: 'first-party',
+        iconUrl: null,
+        monogram: 'N',
+        docsUrl: null,
       },
       {
         id: 'io.github.someone/tool',
         name: 'Some Tool',
         publisher: 'someone',
         description: 'A community connector for shipping invoices.',
-        categories: ['Financial Services'],
+        categories: ['Financial services'],
         remotes: [{ url: 'https://tool.example.com/mcp', transport: 'streamable-http' }],
         authMode: 'unknown',
         connectable: 'needs-setup',
@@ -48,6 +52,10 @@ function makeSnapshot() {
         repositoryUrl: 'https://github.com/someone/tool',
         version: '1.0.0',
         sourceRegistry: 'mcp-registry',
+        badge: 'community',
+        iconUrl: 'https://cdn.example.com/tool.png',
+        monogram: 'ST',
+        docsUrl: 'https://example.com/docs',
       },
     ],
   };
@@ -93,7 +101,7 @@ describe('GET /api/connectors/directory', () => {
   it('filters by category', async () => {
     mocks.readDirectorySnapshot.mockResolvedValueOnce(makeSnapshot());
 
-    const response = await GET(request('?category=Financial+Services'));
+    const response = await GET(request('?category=Financial+services'));
     const body = await response.json();
 
     expect(body.entries).toHaveLength(1);
@@ -115,6 +123,23 @@ describe('GET /api/connectors/directory', () => {
 
     const response = await GET(request('?limit=not-a-number'));
     expect(response.status).toBe(400);
+  });
+
+  it('carries the badge, icon url, monogram and docs url through unfiltered', async () => {
+    mocks.readDirectorySnapshot.mockResolvedValueOnce(makeSnapshot());
+
+    const response = await GET(request());
+    const body = await response.json();
+
+    const tool = body.entries.find(
+      (entry: { id: string }) => entry.id === 'io.github.someone/tool',
+    );
+    expect(tool).toMatchObject({
+      badge: 'community',
+      iconUrl: 'https://cdn.example.com/tool.png',
+      monogram: 'ST',
+      docsUrl: 'https://example.com/docs',
+    });
   });
 
   it('returns an empty directory rather than failing when no snapshot has been ingested yet', async () => {
