@@ -39,7 +39,7 @@ afterEach(() => {
 
 describe('createDatabaseClient', () => {
   it('defaults to neon when no env is set and connection string provided', () => {
-    process.env['AGI_DATABASE_URL'] = 'postgresql://u:p@ep.neon.tech/db';
+    process.env['AGI_DATABASE_URL'] = 'postgresql://u:p@ep.neon.tech/db?sslmode=require';
     const db = createDatabaseClient();
     expect(db).toBeInstanceOf(NeonDatabaseAdapter);
   });
@@ -50,14 +50,14 @@ describe('createDatabaseClient', () => {
 
   it('returns Neon adapter when AGI_DATABASE_PROVIDER=neon', () => {
     process.env['AGI_DATABASE_PROVIDER'] = 'neon';
-    process.env['AGI_DATABASE_URL'] = 'postgresql://u:p@ep.neon.tech/db';
+    process.env['AGI_DATABASE_URL'] = 'postgresql://u:p@ep.neon.tech/db?sslmode=require';
     const db = createDatabaseClient();
     expect(db).toBeInstanceOf(NeonDatabaseAdapter);
   });
 
   it('Neon adapter is constructed lazily without opening a connection', async () => {
     process.env['AGI_DATABASE_PROVIDER'] = 'neon';
-    process.env['AGI_DATABASE_URL'] = 'postgresql://u:p@ep.neon.tech/db';
+    process.env['AGI_DATABASE_URL'] = 'postgresql://u:p@ep.neon.tech/db?sslmode=require';
     const db = createDatabaseClient();
     expect(db).toBeInstanceOf(NeonDatabaseAdapter);
     await expect(db.dispose()).resolves.toBeUndefined();
@@ -83,16 +83,16 @@ describe('createDatabaseClient', () => {
 
   it('respects explicit Neon provider options over env', () => {
     process.env['AGI_DATABASE_PROVIDER'] = 'postgres';
-    process.env['AGI_DATABASE_URL'] = 'postgresql://u:p@ep1.neon.tech/db';
+    process.env['AGI_DATABASE_URL'] = 'postgresql://u:p@ep1.neon.tech/db?sslmode=require';
     const db = createDatabaseClient({
       provider: 'neon',
-      connectionString: 'postgresql://u:p@override.neon.tech/db',
+      connectionString: 'postgresql://u:p@override.neon.tech/db?sslmode=require',
     });
     expect(db).toBeInstanceOf(NeonDatabaseAdapter);
   });
 
   it('falls back to DATABASE_URL when AGI_DATABASE_URL is unset', () => {
-    process.env['DATABASE_URL'] = 'postgresql://u:p@fallback:5432/db';
+    process.env['DATABASE_URL'] = 'postgresql://u:p@fallback:5432/db?sslmode=require';
     const db = createDatabaseClient();
     expect(db).toBeInstanceOf(NeonDatabaseAdapter);
   });

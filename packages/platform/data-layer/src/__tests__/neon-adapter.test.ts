@@ -113,7 +113,7 @@ describe('NeonDatabaseAdapter pool configuration', () => {
   it('always bounds connection acquisition so a dead socket cannot hang forever', async () => {
     state.poolQueryHandler = async () => ({ rows: [], rowCount: 0 });
     const adapter = new NeonDatabaseAdapter({
-      connectionString: 'postgresql://u:p@ep.neon.tech/db',
+      connectionString: 'postgresql://u:p@ep.neon.tech/db?sslmode=require',
     });
     await adapter.query('select 1');
     expect(state.lastPoolConfig).toMatchObject({
@@ -127,7 +127,7 @@ describe('NeonDatabaseAdapter pool configuration', () => {
   it('forwards every declared timeout and application name to the driver', async () => {
     state.poolQueryHandler = async () => ({ rows: [], rowCount: 0 });
     const adapter = new NeonDatabaseAdapter({
-      connectionString: 'postgresql://u:p@ep.neon.tech/db',
+      connectionString: 'postgresql://u:p@ep.neon.tech/db?sslmode=require',
       connectionTimeoutMs: 1_234,
       statementTimeoutMs: 5_678,
       queryTimeoutMs: 9_012,
@@ -147,7 +147,7 @@ describe('NeonDatabaseAdapter.query', () => {
   it('passes sql + params to pool.query and returns rows', async () => {
     state.poolQueryHandler = async () => ({ rows: [{ id: 'u1' }], rowCount: 1 });
     const adapter = new NeonDatabaseAdapter({
-      connectionString: 'postgresql://u:p@ep.neon.tech/db',
+      connectionString: 'postgresql://u:p@ep.neon.tech/db?sslmode=require',
     });
     const rows = await adapter.query<{ id: string }>('select id from users where id = $1', ['u1']);
     expect(rows).toEqual([{ id: 'u1' }]);
@@ -159,7 +159,7 @@ describe('NeonDatabaseAdapter.query', () => {
   it('returns an empty array when pool.query returns no rows', async () => {
     state.poolQueryHandler = async () => ({ rows: [], rowCount: 0 });
     const adapter = new NeonDatabaseAdapter({
-      connectionString: 'postgresql://u:p@ep.neon.tech/db',
+      connectionString: 'postgresql://u:p@ep.neon.tech/db?sslmode=require',
     });
     const rows = await adapter.query('select 1');
     expect(rows).toEqual([]);
@@ -170,7 +170,7 @@ describe('NeonDatabaseAdapter.query', () => {
       throw new Error('connection refused');
     };
     const adapter = new NeonDatabaseAdapter({
-      connectionString: 'postgresql://u:p@ep.neon.tech/db',
+      connectionString: 'postgresql://u:p@ep.neon.tech/db?sslmode=require',
     });
     await expect(adapter.query('select 1')).rejects.toThrow('connection refused');
   });
@@ -180,7 +180,7 @@ describe('NeonDatabaseAdapter.execute', () => {
   it('returns rowCount from the QueryResult', async () => {
     state.poolQueryHandler = async () => ({ rows: [], rowCount: 5 });
     const adapter = new NeonDatabaseAdapter({
-      connectionString: 'postgresql://u:p@ep.neon.tech/db',
+      connectionString: 'postgresql://u:p@ep.neon.tech/db?sslmode=require',
     });
     const n = await adapter.execute('delete from sessions where expired = true');
     expect(n).toBe(5);
@@ -189,7 +189,7 @@ describe('NeonDatabaseAdapter.execute', () => {
   it('coerces null rowCount to 0', async () => {
     state.poolQueryHandler = async () => ({ rows: [], rowCount: null });
     const adapter = new NeonDatabaseAdapter({
-      connectionString: 'postgresql://u:p@ep.neon.tech/db',
+      connectionString: 'postgresql://u:p@ep.neon.tech/db?sslmode=require',
     });
     expect(await adapter.execute('create table t ()')).toBe(0);
   });
@@ -204,7 +204,7 @@ describe('NeonDatabaseAdapter.transaction', () => {
       return { rows: [], rowCount: 0 };
     };
     const adapter = new NeonDatabaseAdapter({
-      connectionString: 'postgresql://u:p@ep.neon.tech/db',
+      connectionString: 'postgresql://u:p@ep.neon.tech/db?sslmode=require',
     });
     const captured: DatabaseAdapter[] = [];
     const result = await adapter.transaction(async (tx) => {
@@ -224,7 +224,7 @@ describe('NeonDatabaseAdapter.transaction', () => {
 
   it('ROLLBACKs and rethrows when the callback throws', async () => {
     const adapter = new NeonDatabaseAdapter({
-      connectionString: 'postgresql://u:p@ep.neon.tech/db',
+      connectionString: 'postgresql://u:p@ep.neon.tech/db?sslmode=require',
     });
     await expect(
       adapter.transaction(async () => {
@@ -240,7 +240,7 @@ describe('NeonDatabaseAdapter.transaction', () => {
 
   it('binds the JWT subject via SET LOCAL when withUser was called', async () => {
     const adapter = new NeonDatabaseAdapter({
-      connectionString: 'postgresql://u:p@ep.neon.tech/db',
+      connectionString: 'postgresql://u:p@ep.neon.tech/db?sslmode=require',
       unsafeAllowUnverifiedJwtSubject: true,
     });
     const scoped = adapter.withUser(makeJwt({ sub: 'user-42' }));
@@ -256,7 +256,7 @@ describe('NeonDatabaseAdapter.transaction', () => {
 describe('NeonDatabaseAdapter.withUser — UNVERIFIED-JWT default-deny (P1-DATALAYER-JWT)', () => {
   it('THROWS by default — refuses an attacker-influenced JWT when no opt-in flag is set', () => {
     const adapter = new NeonDatabaseAdapter({
-      connectionString: 'postgresql://u:p@ep.neon.tech/db',
+      connectionString: 'postgresql://u:p@ep.neon.tech/db?sslmode=require',
       // unsafeAllowUnverifiedJwtSubject intentionally NOT set → default-deny.
     });
     const forged = makeJwt({ sub: 'victim-admin-user' });
@@ -266,7 +266,7 @@ describe('NeonDatabaseAdapter.withUser — UNVERIFIED-JWT default-deny (P1-DATAL
 
   it('default-deny throws BEFORE decoding — no pool client is ever checked out', async () => {
     const adapter = new NeonDatabaseAdapter({
-      connectionString: 'postgresql://u:p@ep.neon.tech/db',
+      connectionString: 'postgresql://u:p@ep.neon.tech/db?sslmode=require',
     });
     expect(() => adapter.withUser(makeJwt({ sub: 'attacker' }))).toThrow(DataLayerConfigError);
     const setLocal = state.clientCalls.find((c) =>
@@ -277,7 +277,7 @@ describe('NeonDatabaseAdapter.withUser — UNVERIFIED-JWT default-deny (P1-DATAL
 
   it('opt-in is required even for a well-formed token (the flag, not the token, gates)', () => {
     const adapter = new NeonDatabaseAdapter({
-      connectionString: 'postgresql://u:p@ep.neon.tech/db',
+      connectionString: 'postgresql://u:p@ep.neon.tech/db?sslmode=require',
     });
     expect(() => adapter.withUser(makeJwt({ sub: 'well-formed' }))).toThrow(
       /verify the token signature upstream|Verify the token signature upstream/i,
@@ -290,7 +290,7 @@ describe('NeonDatabaseAdapter.withUser — UNVERIFIED-JWT default-deny (P1-DATAL
         ? { rows: [{ id: 7 }], rowCount: 1 }
         : { rows: [], rowCount: 0 };
     const adapter = new NeonDatabaseAdapter({
-      connectionString: 'postgresql://u:p@ep.neon.tech/db',
+      connectionString: 'postgresql://u:p@ep.neon.tech/db?sslmode=require',
       unsafeAllowUnverifiedJwtSubject: true,
     });
     const scoped = adapter.withUser(makeJwt({ sub: 'user-abc' }));
@@ -305,7 +305,7 @@ describe('NeonDatabaseAdapter.withUser — UNVERIFIED-JWT default-deny (P1-DATAL
         ? { rows: [{ id: 1 }], rowCount: 1 }
         : { rows: [], rowCount: 0 };
     const adapter = new NeonDatabaseAdapter({
-      connectionString: 'postgresql://u:p@ep.neon.tech/db',
+      connectionString: 'postgresql://u:p@ep.neon.tech/db?sslmode=require',
       unsafeAllowUnverifiedJwtSubject: true,
     });
     const scoped = adapter.withUser(makeJwt({ sub: 'u-1' }));
@@ -316,7 +316,7 @@ describe('NeonDatabaseAdapter.withUser — UNVERIFIED-JWT default-deny (P1-DATAL
 describe('NeonDatabaseAdapter.withUser', () => {
   it('returns a NEW adapter instance (immutable)', () => {
     const adapter = new NeonDatabaseAdapter({
-      connectionString: 'postgresql://u:p@ep.neon.tech/db',
+      connectionString: 'postgresql://u:p@ep.neon.tech/db?sslmode=require',
       unsafeAllowUnverifiedJwtSubject: true,
     });
     const scoped = adapter.withUser(makeJwt({ sub: 'u-1' }));
@@ -330,7 +330,7 @@ describe('NeonDatabaseAdapter.withUser', () => {
         ? { rows: [{ id: 7 }], rowCount: 1 }
         : { rows: [], rowCount: 0 };
     const adapter = new NeonDatabaseAdapter({
-      connectionString: 'postgresql://u:p@ep.neon.tech/db',
+      connectionString: 'postgresql://u:p@ep.neon.tech/db?sslmode=require',
       unsafeAllowUnverifiedJwtSubject: true,
     });
     const scoped = adapter.withUser(makeJwt({ sub: 'user-abc' }));
@@ -342,7 +342,7 @@ describe('NeonDatabaseAdapter.withUser', () => {
 
   it('throws DataLayerConfigError when the JWT is malformed', () => {
     const adapter = new NeonDatabaseAdapter({
-      connectionString: 'postgresql://u:p@ep.neon.tech/db',
+      connectionString: 'postgresql://u:p@ep.neon.tech/db?sslmode=require',
       unsafeAllowUnverifiedJwtSubject: true,
     });
     expect(() => adapter.withUser('not-a-jwt')).toThrow(/3-segment JWT/);
@@ -350,7 +350,7 @@ describe('NeonDatabaseAdapter.withUser', () => {
 
   it('throws when JWT has no sub claim', () => {
     const adapter = new NeonDatabaseAdapter({
-      connectionString: 'postgresql://u:p@ep.neon.tech/db',
+      connectionString: 'postgresql://u:p@ep.neon.tech/db?sslmode=require',
       unsafeAllowUnverifiedJwtSubject: true,
     });
     expect(() => adapter.withUser(makeJwt({ name: 'Ada' }))).toThrow(/no string `sub` claim/);
@@ -360,7 +360,7 @@ describe('NeonDatabaseAdapter.withUser', () => {
 describe('NeonDatabaseAdapter.withOrg — tenancy scope (migration 0073)', () => {
   const makeAdapter = () =>
     new NeonDatabaseAdapter({
-      connectionString: 'postgresql://u:p@ep.neon.tech/db',
+      connectionString: 'postgresql://u:p@ep.neon.tech/db?sslmode=require',
       unsafeAllowUnverifiedJwtSubject: true,
     });
 
@@ -433,7 +433,7 @@ describe('NeonDatabaseAdapter.withOrg — tenancy scope (migration 0073)', () =>
 describe('NeonDatabaseAdapter RLS preamble round trips', () => {
   const makeScoped = () =>
     new NeonDatabaseAdapter({
-      connectionString: 'postgresql://u:p@ep.neon.tech/db',
+      connectionString: 'postgresql://u:p@ep.neon.tech/db?sslmode=require',
       unsafeAllowUnverifiedJwtSubject: true,
     }).withUser(makeJwt({ sub: 'user-abc' }));
 
@@ -468,7 +468,7 @@ describe('NeonDatabaseAdapter RLS preamble round trips', () => {
   it('leaves the unscoped transaction preamble at a bare BEGIN', async () => {
     state.clientQueryHandler = async () => ({ rows: [], rowCount: 0 });
     const adapter = new NeonDatabaseAdapter({
-      connectionString: 'postgresql://u:p@ep.neon.tech/db',
+      connectionString: 'postgresql://u:p@ep.neon.tech/db?sslmode=require',
     });
     await adapter.transaction(async () => null);
     expect(state.clientCalls.map((c) => c.sql)).toEqual(['BEGIN', 'COMMIT']);
@@ -478,7 +478,7 @@ describe('NeonDatabaseAdapter RLS preamble round trips', () => {
 describe('NeonDatabaseAdapter.dispose', () => {
   it('calls pool.end() on first dispose and is safe to call twice', async () => {
     const adapter = new NeonDatabaseAdapter({
-      connectionString: 'postgresql://u:p@ep.neon.tech/db',
+      connectionString: 'postgresql://u:p@ep.neon.tech/db?sslmode=require',
     });
     await adapter.query('select 1');
     expect(state.poolConstructions).toBe(1);
@@ -490,7 +490,7 @@ describe('NeonDatabaseAdapter.dispose', () => {
 
   it('rejects subsequent queries after dispose', async () => {
     const adapter = new NeonDatabaseAdapter({
-      connectionString: 'postgresql://u:p@ep.neon.tech/db',
+      connectionString: 'postgresql://u:p@ep.neon.tech/db?sslmode=require',
     });
     await adapter.dispose();
     await expect(adapter.query('select 1')).rejects.toThrow(/disposed/);
@@ -506,7 +506,7 @@ describe('NeonDatabaseAdapter pool sharing (P0-J)', () => {
         : { rows: [], rowCount: 0 };
 
     const root = new NeonDatabaseAdapter({
-      connectionString: 'postgresql://u:p@ep.neon.tech/db',
+      connectionString: 'postgresql://u:p@ep.neon.tech/db?sslmode=require',
       unsafeAllowUnverifiedJwtSubject: true,
     });
 
@@ -528,7 +528,7 @@ describe('NeonDatabaseAdapter pool sharing (P0-J)', () => {
         ? { rows: [{ id: 1 }], rowCount: 1 }
         : { rows: [], rowCount: 0 };
     const root = new NeonDatabaseAdapter({
-      connectionString: 'postgresql://u:p@ep.neon.tech/db',
+      connectionString: 'postgresql://u:p@ep.neon.tech/db?sslmode=require',
       unsafeAllowUnverifiedJwtSubject: true,
     });
     await root.query('select 1');
@@ -543,7 +543,7 @@ describe('NeonDatabaseAdapter pool sharing (P0-J)', () => {
 
   it('child created from withUser rejects on its own query after child dispose', async () => {
     const root = new NeonDatabaseAdapter({
-      connectionString: 'postgresql://u:p@ep.neon.tech/db',
+      connectionString: 'postgresql://u:p@ep.neon.tech/db?sslmode=require',
       unsafeAllowUnverifiedJwtSubject: true,
     });
     const child = root.withUser(makeJwt({ sub: 'c1' }));
@@ -554,26 +554,28 @@ describe('NeonDatabaseAdapter pool sharing (P0-J)', () => {
 
 describe('NeonDatabaseAdapter constructor / raw', () => {
   it('does NOT open the pool at construction time', () => {
-    new NeonDatabaseAdapter({ connectionString: 'postgresql://u:p@ep.neon.tech/db' });
+    new NeonDatabaseAdapter({
+      connectionString: 'postgresql://u:p@ep.neon.tech/db?sslmode=require',
+    });
     expect(state.poolConstructions).toBe(0);
   });
 
   it('passes connectionString and poolSize through to the Pool constructor', async () => {
     const adapter = new NeonDatabaseAdapter({
-      connectionString: 'postgresql://u:p@ep.neon.tech/db',
+      connectionString: 'postgresql://u:p@ep.neon.tech/db?sslmode=require',
       poolSize: 7,
     });
     await adapter.query('select 1');
     expect(state.poolConstructions).toBe(1);
     expect(state.lastPoolConfig).toMatchObject({
-      connectionString: 'postgresql://u:p@ep.neon.tech/db',
+      connectionString: 'postgresql://u:p@ep.neon.tech/db?sslmode=require',
       max: 7,
     });
   });
 
   it('raw() returns the underlying Pool typed as unknown', async () => {
     const adapter = new NeonDatabaseAdapter({
-      connectionString: 'postgresql://u:p@ep.neon.tech/db',
+      connectionString: 'postgresql://u:p@ep.neon.tech/db?sslmode=require',
     });
     const pool = await adapter.raw();
     expect(pool).toBeDefined();
@@ -583,7 +585,7 @@ describe('NeonDatabaseAdapter constructor / raw', () => {
 });
 
 describe('NeonDatabaseAdapter connection transport errors', () => {
-  const CONNECTION_STRING = 'postgresql://u:p@ep.neon.tech/db';
+  const CONNECTION_STRING = 'postgresql://u:p@ep.neon.tech/db?sslmode=require';
 
   async function warmedAdapter(events: DatabaseConnectionErrorEvent[]) {
     const adapter = new NeonDatabaseAdapter({
