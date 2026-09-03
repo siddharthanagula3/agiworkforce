@@ -13,10 +13,13 @@ vi.mock('@/lib/rate-limit', () => ({
 import {
   classifyFreeLaneFailure,
   getFreeLaneRuntimeState,
+  getRouteHealthSnapshot,
   recordFreeLaneRouteFailure,
   recordFreeLaneRouteSuccess,
   recordFreeLaneUsage,
+  recordRouteOutcome,
   resetFreeLaneRuntimeStateCache,
+  resetRouteHealthSnapshotCache,
 } from './runtime-state-service';
 import type { FreePoolEntry, FreePoolsDocument } from '@/lib/server/free-pools';
 
@@ -28,6 +31,8 @@ const DAY_START_MS = Date.UTC(2026, 8, 1);
 const DAY_END_MS = Date.UTC(2026, 8, 2);
 const HOUR_MS = 60 * 60 * 1000;
 const POOL_LIMIT = 1000;
+const HEALTH_ROUTE_ID = 'any-provider/model-y';
+const MINUTE_MS = 60_000;
 
 type PipelineOp = { command: string; args: unknown[] };
 
@@ -42,6 +47,7 @@ class FakeRedis {
   ops: PipelineOp[] = [];
   execResults: unknown[] = [];
   hashes = new Map<string, Record<string, unknown>>();
+  sortedSets = new Map<string, Map<string, number>>();
   failOnExec = false;
   failOnHgetall = false;
 
@@ -61,11 +67,63 @@ class FakeRedis {
       pexpireat: record('pexpireat'),
       hset: record('hset'),
       expire: record('expire'),
+      zadd: record('zadd'),
+      zrange: record('zrange'),
+      zremrangebyscore: record('zremrangebyscore'),
       exec: async () => {
         if (this.failOnExec) throw new Error('upstash unavailable');
-        return this.execResults;
+        let legacyIndex = 0;
+        return queued.map((op) => {
+          if (op.command === 'zadd') return this.applyZadd(op.args);
+          if (op.command === 'zremrangebyscore') return this.applyZremrangebyscore(op.args);
+          if (op.command === 'zrange') return this.applyZrange(op.args);
+          const result = this.execResults[legacyIndex];
+          legacyIndex += 1;
+          return result;
+        });
       },
     };
+  }
+
+  private setFor(key: string): Map<string, number> {
+    const existing = this.sortedSets.get(key);
+    if (existing) return existing;
+    const created = new Map<string, number>();
+    this.sortedSets.set(key, created);
+    return created;
+  }
+
+  private applyZadd(args: unknown[]): number {
+    const [key, entryArg] = args as [string, { score: number; member: string }];
+    const set = this.setFor(key);
+    const isNew = !set.has(entryArg.member);
+    set.set(entryArg.member, entryArg.score);
+    return isNew ? 1 : 0;
+  }
+
+  private applyZremrangebyscore(args: unknown[]): number {
+    const [key, min, max] = args as [string, number, number];
+    const set = this.sortedSets.get(key);
+    if (!set) return 0;
+    let removed = 0;
+    for (const [member, score] of [...set.entries()]) {
+      if (score >= min && score <= max) {
+        set.delete(member);
+        removed += 1;
+      }
+    }
+    return removed;
+  }
+
+  private applyZrange(args: unknown[]): string[] {
+    const [key, min, max] = args as [string, number, string | number];
+    const set = this.sortedSets.get(key);
+    if (!set) return [];
+    const upper = max === '+inf' ? Number.POSITIVE_INFINITY : Number(max);
+    return [...set.entries()]
+      .filter(([, score]) => score >= min && score <= upper)
+      .sort((a, b) => a[1] - b[1])
+      .map(([member]) => member);
   }
 
   async hgetall(key: string): Promise<Record<string, unknown> | null> {
@@ -107,6 +165,7 @@ function candidate(routeId = ROUTE_ID): FreeAutoCandidate {
 beforeEach(() => {
   vi.clearAllMocks();
   resetFreeLaneRuntimeStateCache();
+  resetRouteHealthSnapshotCache();
   redisClient = new FakeRedis();
 });
 
@@ -467,5 +526,157 @@ describe('recording route health', () => {
       document: document(),
     });
     expect(redisClient!.ops).toEqual([]);
+  });
+});
+
+describe('generic route outcome recording', () => {
+  it('opens the breaker after a named threshold of consecutive failures', async () => {
+    await recordRouteOutcome(HEALTH_ROUTE_ID, { class: 'server_error' }, NOW_MS);
+    await recordRouteOutcome(HEALTH_ROUTE_ID, { class: 'server_error' }, NOW_MS + 1000);
+    await recordRouteOutcome(HEALTH_ROUTE_ID, { class: 'server_error' }, NOW_MS + 2000);
+    const snapshot = await getRouteHealthSnapshot([HEALTH_ROUTE_ID], NOW_MS + 3000);
+    expect(snapshot[HEALTH_ROUTE_ID]).toMatchObject({
+      available: false,
+      halfOpen: false,
+      consecutiveFailures: 3,
+    });
+    expect(snapshot[HEALTH_ROUTE_ID]!.cooldownUntilMs).toBe(NOW_MS + 2000 + 30_000);
+  });
+
+  it('opens the breaker on a failure ratio without three consecutive failures', async () => {
+    const classes: Array<'success' | 'rate_limit'> = [
+      'success',
+      'rate_limit',
+      'success',
+      'rate_limit',
+      'rate_limit',
+    ];
+    for (const [index, outcomeClass] of classes.entries()) {
+      await recordRouteOutcome(HEALTH_ROUTE_ID, { class: outcomeClass }, NOW_MS + index * 1000);
+    }
+    const snapshot = await getRouteHealthSnapshot([HEALTH_ROUTE_ID], NOW_MS + 5000);
+    expect(snapshot[HEALTH_ROUTE_ID]).toMatchObject({ available: false, consecutiveFailures: 2 });
+  });
+
+  it('does not trip a failure ratio below the minimum sample count', async () => {
+    await recordRouteOutcome(HEALTH_ROUTE_ID, { class: 'rate_limit' }, NOW_MS);
+    await recordRouteOutcome(HEALTH_ROUTE_ID, { class: 'rate_limit' }, NOW_MS + 1000);
+    const snapshot = await getRouteHealthSnapshot([HEALTH_ROUTE_ID], NOW_MS + 2000);
+    expect(snapshot[HEALTH_ROUTE_ID]).toMatchObject({ available: true, consecutiveFailures: 2 });
+  });
+
+  it('allows a half-open probe once the cooldown elapses', async () => {
+    await recordRouteOutcome(HEALTH_ROUTE_ID, { class: 'server_error' }, NOW_MS);
+    await recordRouteOutcome(HEALTH_ROUTE_ID, { class: 'server_error' }, NOW_MS + 1000);
+    await recordRouteOutcome(HEALTH_ROUTE_ID, { class: 'server_error' }, NOW_MS + 2000);
+
+    const stillCoolingDown = await getRouteHealthSnapshot(
+      [HEALTH_ROUTE_ID],
+      NOW_MS + 2000 + 30_000 - 1,
+    );
+    expect(stillCoolingDown[HEALTH_ROUTE_ID]).toMatchObject({ available: false, halfOpen: false });
+
+    resetRouteHealthSnapshotCache();
+    const halfOpen = await getRouteHealthSnapshot([HEALTH_ROUTE_ID], NOW_MS + 2000 + 30_000);
+    expect(halfOpen[HEALTH_ROUTE_ID]).toMatchObject({ available: true, halfOpen: true });
+  });
+
+  it('closes the breaker the moment the most recent outcome succeeds', async () => {
+    await recordRouteOutcome(HEALTH_ROUTE_ID, { class: 'server_error' }, NOW_MS);
+    await recordRouteOutcome(HEALTH_ROUTE_ID, { class: 'server_error' }, NOW_MS + 1000);
+    await recordRouteOutcome(HEALTH_ROUTE_ID, { class: 'server_error' }, NOW_MS + 2000);
+    await recordRouteOutcome(HEALTH_ROUTE_ID, { class: 'success' }, NOW_MS + 3000);
+
+    const snapshot = await getRouteHealthSnapshot([HEALTH_ROUTE_ID], NOW_MS + 3000);
+    expect(snapshot[HEALTH_ROUTE_ID]).toMatchObject({
+      available: true,
+      halfOpen: false,
+      consecutiveFailures: 0,
+    });
+    expect(snapshot[HEALTH_ROUTE_ID]!.cooldownUntilMs).toBeUndefined();
+  });
+
+  it('computes per-class rates, ttft percentiles and throughput over the window', async () => {
+    await recordRouteOutcome(
+      HEALTH_ROUTE_ID,
+      { class: 'success', ttftMs: 100, durationMs: 1000, outputTokens: 100 },
+      NOW_MS,
+    );
+    await recordRouteOutcome(
+      HEALTH_ROUTE_ID,
+      { class: 'success', ttftMs: 200, durationMs: 1000, outputTokens: 100 },
+      NOW_MS + 1000,
+    );
+    await recordRouteOutcome(HEALTH_ROUTE_ID, { class: 'timeout' }, NOW_MS + 2000);
+
+    const snapshot = await getRouteHealthSnapshot([HEALTH_ROUTE_ID], NOW_MS + 2000);
+    expect(snapshot[HEALTH_ROUTE_ID]).toMatchObject({
+      sampleCount: 3,
+      successRate: 2 / 3,
+      timeoutRate: 1 / 3,
+      ttftP50Ms: 100,
+      ttftP95Ms: 200,
+      throughputTokensPerSecond: 100,
+    });
+  });
+
+  it('excludes an unsupported-capability outcome from the breaker and the sample count', async () => {
+    await recordRouteOutcome(HEALTH_ROUTE_ID, { class: 'success' }, NOW_MS);
+    await recordRouteOutcome(HEALTH_ROUTE_ID, { class: 'unsupported_capability' }, NOW_MS + 1000);
+    await recordRouteOutcome(HEALTH_ROUTE_ID, { class: 'unsupported_capability' }, NOW_MS + 2000);
+
+    const snapshot = await getRouteHealthSnapshot([HEALTH_ROUTE_ID], NOW_MS + 2000);
+    expect(snapshot[HEALTH_ROUTE_ID]).toMatchObject({
+      available: true,
+      sampleCount: 1,
+      consecutiveFailures: 0,
+    });
+  });
+
+  it('caches the read for the short cache window and refreshes after it', async () => {
+    await recordRouteOutcome(HEALTH_ROUTE_ID, { class: 'success' }, NOW_MS);
+    await getRouteHealthSnapshot([HEALTH_ROUTE_ID], NOW_MS + 1000);
+    const afterFirst = redisClient!.ops.filter((op) => op.command === 'zrange').length;
+    await getRouteHealthSnapshot([HEALTH_ROUTE_ID], NOW_MS + 1500);
+    expect(redisClient!.ops.filter((op) => op.command === 'zrange').length).toBe(afterFirst);
+    await getRouteHealthSnapshot([HEALTH_ROUTE_ID], NOW_MS + 7000);
+    expect(redisClient!.ops.filter((op) => op.command === 'zrange').length).toBeGreaterThan(
+      afterFirst,
+    );
+  });
+
+  it('fails open with no route reporting unhealthy when there is no client', async () => {
+    redisClient = null;
+    const snapshot = await getRouteHealthSnapshot([HEALTH_ROUTE_ID], NOW_MS);
+    expect(snapshot[HEALTH_ROUTE_ID]).toEqual({
+      available: true,
+      halfOpen: false,
+      consecutiveFailures: 0,
+      sampleCount: 0,
+    });
+  });
+
+  it('fails open when the pipeline read throws', async () => {
+    redisClient!.failOnExec = true;
+    const snapshot = await getRouteHealthSnapshot([HEALTH_ROUTE_ID], NOW_MS);
+    expect(snapshot[HEALTH_ROUTE_ID]).toMatchObject({ available: true });
+  });
+
+  it('does not throw when the outcome write fails', async () => {
+    redisClient!.failOnExec = true;
+    await expect(
+      recordRouteOutcome(HEALTH_ROUTE_ID, { class: 'server_error' }, NOW_MS),
+    ).resolves.toBeUndefined();
+  });
+
+  it('drops an event older than the reporting window from the snapshot', async () => {
+    await recordRouteOutcome(HEALTH_ROUTE_ID, { class: 'server_error' }, NOW_MS);
+    const snapshot = await getRouteHealthSnapshot([HEALTH_ROUTE_ID], NOW_MS + 30 * MINUTE_MS + 1);
+    expect(snapshot[HEALTH_ROUTE_ID]).toEqual({
+      available: true,
+      halfOpen: false,
+      consecutiveFailures: 0,
+      sampleCount: 0,
+    });
   });
 });
