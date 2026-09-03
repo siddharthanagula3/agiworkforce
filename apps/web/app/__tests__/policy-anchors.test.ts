@@ -41,7 +41,7 @@ function sectionId(section: DeclaredSection): string {
 }
 
 function renderedIds(source: string): string[] {
-  return [...source.matchAll(/<Section id="(s-[^"]+)"/g)].map((m) => m[1] as string);
+  return [...source.matchAll(/<Section\s+id="(s-[^"]+)"/g)].map((m) => m[1] as string);
 }
 
 /**
