@@ -233,13 +233,23 @@ describe('ranked route selection', () => {
     expect(decision.fallbacks).toEqual([]);
   });
 
-  it('reports no eligible route when no admissible provider has a credential', async () => {
+  it('keeps every route admissible when no route of the model has a credential', async () => {
     const decision = await resolveWithRegistry({
       ...BYOK_REQUEST,
       availableProviderIds: new Set(['route-ranking-test-unrelated-provider']),
     });
+    if (decision.status !== 'selected') throw new Error('expected a selected route');
 
-    expect(decision).toMatchObject({ status: 'unavailable', code: 'explicit_model_ineligible' });
+    expect(decision.routeId).toBe(DEFAULT_ROUTE_ID);
+    expect(decision.fallbacks).toEqual([
+      {
+        modelKey: SYNTHETIC_MODEL_KEY,
+        provider: ALTERNATE_PROVIDER,
+        providerModelId: expect.any(String),
+        routeId: ALTERNATE_ROUTE_ID,
+        harnessId: expect.any(String),
+      },
+    ]);
   });
 
   it('leaves an unhealthy route behind the healthy alternative', async () => {
