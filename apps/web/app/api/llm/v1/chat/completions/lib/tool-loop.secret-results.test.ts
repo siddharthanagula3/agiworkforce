@@ -215,7 +215,7 @@ describe('applyToolResultSecretPolicy', () => {
   });
 });
 
-describe('runToolLoop — secret handling policy applied to tool results before they are pushed', () => {
+describe('runToolLoop, secret handling policy applied to tool results before they are pushed', () => {
   it('redacts a secret a connector returns before the follow-up provider call ever sees it', async () => {
     mocks.resolvePolicy.mockResolvedValue({ mode: 'redact', organizationId: ORGANIZATION_ID });
     mocks.streamRequest
@@ -240,8 +240,6 @@ describe('runToolLoop — secret handling policy applied to tool results before 
     const toolMsg = secondRequestMessages().find((m) => m.role === 'tool');
     expect(toolMsg?.content).not.toContain(STRIPE_KEY);
     expect(toolMsg?.content).toContain('[REDACTED]');
-    // The x_tool_result SSE event carries the same redacted content as the
-    // provider-bound message: the client transcript never sees the secret.
     expect(output).not.toContain(STRIPE_KEY);
     expect(output).toContain('[REDACTED]');
     expect(mocks.recordAuditEvent).toHaveBeenCalledTimes(1);

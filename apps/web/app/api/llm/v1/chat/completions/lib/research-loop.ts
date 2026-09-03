@@ -513,12 +513,6 @@ export class SourceAggregator {
     return [...this.byUrl.values()].map((s, i) => ({ ...s, position: i + 1 }));
   }
 
-  /**
-   * Fetch real headlines for entries still missing a title, in place.
-   * Delegates to `enrichWebSearchResultTitles` for the cache, concurrency cap,
-   * and timeout, then writes the results back onto the SAME keys so later
-   * `list()`/event calls see the enriched titles.
-   */
   async enrichTitles(): Promise<void> {
     const entries = [...this.byUrl.entries()];
     if (entries.length === 0) return;

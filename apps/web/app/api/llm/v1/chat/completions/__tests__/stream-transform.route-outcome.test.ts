@@ -103,7 +103,7 @@ const SUCCESSFUL_CHUNKS: StreamChunk[] = [
   { type: 'stop', reason: 'end_turn' },
 ];
 
-describe('buildAdapterStreamResponse — route outcome recording', () => {
+describe('buildAdapterStreamResponse, route outcome recording', () => {
   beforeEach(() => {
     mockRecordRouteOutcome.mockClear();
     mockRecordServedRouteAffinity.mockClear();

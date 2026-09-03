@@ -218,7 +218,7 @@ describe('runToolLoop — the provider stream is clamped to the loop budget too'
   });
 });
 
-describe('runToolLoop — a provider stream deadline maps to plain user copy', () => {
+describe('runToolLoop, a provider stream deadline maps to plain user copy', () => {
   beforeEach(() => {
     mockBuildToolLoopStream.mockReset();
     vi.useFakeTimers();

@@ -170,7 +170,7 @@ const RICH_SCENARIO_GOLDEN_DATA_LINES = [
   'data: [DONE]',
 ].join('\n');
 
-describe('buildAdapterStreamResponse — rich text/web_search/thinking/tool_use golden wire', () => {
+describe('buildAdapterStreamResponse, rich text/web_search/thinking/tool_use golden wire', () => {
   it('emits the exact `data:` channel bytes for the scenario', async () => {
     const adapterResponse = await buildAdapterStreamResponse(
       makeRequest() as any,

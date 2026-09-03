@@ -89,7 +89,7 @@ async function drain(generator: AsyncGenerator<Uint8Array>): Promise<string> {
   return out;
 }
 
-describe('runToolLoop — route outcome recording', () => {
+describe('runToolLoop, route outcome recording', () => {
   beforeEach(() => {
     mockBuildToolLoopStream.mockReset();
     mockRecordRouteOutcome.mockClear();

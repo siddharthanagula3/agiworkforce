@@ -108,12 +108,6 @@ function clientTruncatedTitleCandidate(rawContent: string): string {
   return rawContent.trim().slice(0, 60).replace(/\n/g, ' ');
 }
 
-/**
- * A temporary (incognito) conversation carries an explicit no-persistence
- * expectation that outlives this single request — writing its title prompt
- * into the shared exact-response cache, even scoped to this user, would break
- * that expectation for a TTL well past the conversation's own lifetime.
- */
 async function isTemporaryConversation(
   db: ChatDb,
   conversationId: string,

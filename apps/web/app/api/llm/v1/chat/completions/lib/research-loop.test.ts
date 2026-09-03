@@ -8,8 +8,6 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 const dnsMocks = vi.hoisted(() => ({ lookup: vi.fn() }));
 vi.mock('undici', async (importOriginal) => {
-  // pinnedPublicFetch (used by title enrichment) calls undici's own fetch;
-  // route it back to the global fetch these tests drive with vi.stubGlobal.
   const actual = await importOriginal<typeof import('undici')>();
   return {
     ...actual,
@@ -247,8 +245,6 @@ describe('SourceAggregator', () => {
     expect(agg.size).toBe(2);
   });
 });
-
-// ─── Title enrichment on gathering rounds ─────────────────────────────────────
 
 describe('title enrichment on gathering rounds', () => {
   it('enriches a search result missing a title with the page headline before the round-end source event', async () => {
