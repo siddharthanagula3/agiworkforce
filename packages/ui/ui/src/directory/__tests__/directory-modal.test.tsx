@@ -14,10 +14,9 @@ const DETAILS: Record<DirectorySectionKey, DirectoryDetail> = {
     publisher: 'AGI',
     description: 'Create visual art',
     license: 'Complete terms in LICENSE.txt',
-    files: [
-      { path: 'SKILL.md', content: 'First block\n\nSecond block' },
-      { path: 'fonts/Bold.ttf', content: 'binary' },
-    ],
+    files: [{ path: 'SKILL.md', content: 'First block\n\nSecond block' }, { path: 'fonts/Bold.ttf' }],
+    readFile: () => Promise.resolve('loaded font notes'),
+    installed: true,
   },
   connectors: {
     kind: 'connector',
@@ -78,7 +77,7 @@ function makeAdapter(patch: Partial<DirectoryAdapter> = {}): DirectoryAdapter {
         },
       ],
       sortOptions: ['name', 'popular'],
-      installable: false,
+      installable: true,
     },
     connectors: {
       entries: [{ id: 'customerscore', name: 'Customerscore', description: 'Customer health' }],
@@ -224,17 +223,35 @@ describe('DirectoryModal shell', () => {
   });
 
   it('renders no card action for a section that installs nothing', () => {
-    renderModal({ install: vi.fn(), openSettings: vi.fn() });
-    expect(screen.queryByRole('button', { name: /^Add \/?canvas-design$/ })).toBeNull();
+    renderModal({
+      install: vi.fn(),
+      openSettings: vi.fn(),
+      skills: { entries: [{ id: 'a', name: 'Alpha', description: '' }], installable: false },
+    });
+    expect(screen.queryByRole('button', { name: 'Add Alpha' })).toBeNull();
     fireEvent.click(screen.getByRole('tab', { name: 'Connectors' }));
     expect(screen.getByRole('button', { name: 'Add Customerscore' })).toBeTruthy();
   });
 
-  it('offers no install control on a skill detail, since no route installs one', async () => {
-    renderModal({ install: vi.fn() });
-    fireEvent.click(screen.getByRole('button', { name: '/canvas-design' }));
-    expect(await screen.findByRole('heading', { name: 'canvas-design' })).toBeTruthy();
-    expect(screen.queryByRole('button', { name: 'Install' })).toBeNull();
+  it('offers a remove control instead of a gear when a section has no settings pane', () => {
+    const uninstall = vi.fn();
+    renderModal({ uninstall });
+    expect(screen.getByRole('button', { name: 'Remove my-skill' })).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Remove my-skill' }));
+    expect(uninstall).toHaveBeenCalledWith('skills', 'my-skill');
+  });
+
+  it('prefers the settings gear over remove when both are available', () => {
+    renderModal({ uninstall: vi.fn(), openSettings: vi.fn() });
+    expect(screen.getByRole('button', { name: 'Settings my-skill' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Remove my-skill' })).toBeNull();
+  });
+
+  it('installs a skill the account had removed', () => {
+    const install = vi.fn();
+    renderModal({ install });
+    fireEvent.click(screen.getByRole('button', { name: 'Add canvas-design' }));
+    expect(install).toHaveBeenCalledWith('skills', 'canvas-design');
   });
 
   it('hides the add marketplace control unless the adapter supports it', () => {
@@ -252,6 +269,30 @@ describe('DirectoryModal shell', () => {
 });
 
 describe('DirectoryModal detail views', () => {
+  it('loads a file the detail did not carry inline', async () => {
+    const readFile = vi.fn().mockResolvedValue('loaded font notes');
+    renderModal({
+      loadDetail: () => Promise.resolve({ ...DETAILS.skills, readFile }),
+    });
+    fireEvent.click(screen.getByRole('button', { name: '/canvas-design' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Bold.ttf' }));
+    expect(await screen.findByText('loaded font notes')).toBeTruthy();
+    expect(readFile).toHaveBeenCalledWith('fonts/Bold.ttf');
+  });
+
+  it('reports a file it could not read instead of showing an empty pane', async () => {
+    renderModal({
+      loadDetail: () =>
+        Promise.resolve({
+          ...DETAILS.skills,
+          readFile: () => Promise.reject(new Error('This file is not text.')),
+        }),
+    });
+    fireEvent.click(screen.getByRole('button', { name: '/canvas-design' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Bold.ttf' }));
+    expect(await screen.findByText('This file is not text.')).toBeTruthy();
+  });
+
   it('opens the skill detail with its file tree, callouts and raw toggle', async () => {
     renderModal();
     fireEvent.click(screen.getByRole('button', { name: '/canvas-design' }));

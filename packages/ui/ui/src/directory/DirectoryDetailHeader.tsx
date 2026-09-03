@@ -5,7 +5,7 @@ import type { ReactNode } from 'react';
 
 import { cn } from '../cn';
 import { Spinner } from '../primitives/Spinner';
-import { COPY_LINK_LABEL, DIRECTORY_BACK_LABEL, SETTINGS_LABEL } from './constants';
+import { COPY_LINK_LABEL, DIRECTORY_BACK_LABEL, REMOVE_LABEL, SETTINGS_LABEL } from './constants';
 import { DIRECTORY_FOCUS_RING, DIRECTORY_ICON_BUTTON } from './styles';
 
 export function DirectoryBackLink({ onBack }: { onBack: () => void }) {
@@ -34,6 +34,7 @@ export function DirectoryDetailHeader({
   primaryDone,
   onPrimary,
   onOpenSettings,
+  onRemove,
   onCopyLink,
   busy,
 }: {
@@ -46,6 +47,7 @@ export function DirectoryDetailHeader({
   primaryDone: boolean;
   onPrimary?: () => void;
   onOpenSettings?: () => void;
+  onRemove?: () => void;
   onCopyLink?: () => void;
   busy?: boolean;
 }) {
@@ -81,6 +83,18 @@ export function DirectoryDetailHeader({
                 className={cn(DIRECTORY_ICON_BUTTON, DIRECTORY_FOCUS_RING)}
               >
                 <SettingsIcon aria-hidden className="size-4" />
+              </button>
+            ) : onRemove ? (
+              <button
+                type="button"
+                onClick={onRemove}
+                disabled={busy}
+                className={cn(
+                  'inline-flex min-h-9 items-center rounded-md border border-border px-3 text-sm text-foreground transition-colors motion-reduce:transition-none hover:bg-muted disabled:opacity-50',
+                  DIRECTORY_FOCUS_RING,
+                )}
+              >
+                {REMOVE_LABEL}
               </button>
             ) : null}
           </>
