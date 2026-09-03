@@ -2,8 +2,9 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('server-only', () => ({}));
 
-const { mockQuery, mockGetUserScopedDb } = vi.hoisted(() => ({
+const { mockQuery, mockNeonQuery, mockGetUserScopedDb } = vi.hoisted(() => ({
   mockQuery: vi.fn(),
+  mockNeonQuery: vi.fn(),
   mockGetUserScopedDb: vi.fn(),
 }));
 
@@ -12,6 +13,9 @@ vi.mock('@/lib/logger', () => ({
   logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() },
 }));
 vi.mock('@/lib/server/rls-db', () => ({ getUserScopedDb: mockGetUserScopedDb }));
+vi.mock('@/lib/server/neon-db', () => ({
+  getNeonDb: vi.fn(() => ({ query: (...args: unknown[]) => mockNeonQuery(...args) })),
+}));
 
 import { GET } from '../route';
 
@@ -20,6 +24,22 @@ const PROJECT = '33333333-3333-4333-8333-333333333333';
 const CONNECTOR = '44444444-4444-4444-8444-444444444444';
 
 function respondFor(role: 'owner' | 'admin' | 'member' | 'viewer') {
+  mockNeonQuery.mockImplementation(async (sql: string) => {
+    if (/from public\.organization_shared_projects s/i.test(sql)) {
+      return [
+        {
+          organization_id: ORG,
+          project_id: PROJECT,
+          shared_by_user_id: 'user-owner',
+          default_access: 'read',
+          created_at: '2026-01-03T00:00:00.000Z',
+          name: 'Roadmap',
+          user_id: 'user-owner',
+        },
+      ];
+    }
+    return [];
+  });
   mockQuery.mockImplementation(async (sql: string) => {
     if (/from public\.user_settings/i.test(sql) && /where s\.user_id = \$1/i.test(sql)) {
       return [{ organization_id: ORG }];
@@ -34,19 +54,6 @@ function respondFor(role: 'owner' | 'admin' | 'member' | 'viewer') {
       return [
         { user_id: 'user-owner', role: 'owner', joined_at: '2026-01-01T00:00:00.000Z' },
         { user_id: 'user-member', role: 'member', joined_at: '2026-01-02T00:00:00.000Z' },
-      ];
-    }
-    if (/from public\.organization_shared_projects s/i.test(sql)) {
-      return [
-        {
-          organization_id: ORG,
-          project_id: PROJECT,
-          shared_by_user_id: 'user-owner',
-          default_access: 'read',
-          created_at: '2026-01-03T00:00:00.000Z',
-          name: 'Roadmap',
-          user_id: 'user-owner',
-        },
       ];
     }
     if (/from public\.organization_project_access/i.test(sql)) {
@@ -107,6 +114,12 @@ describe('GET /api/settings/organization/shared', () => {
       { userId: 'user-member', access: 'none' },
     ]);
     expect(body.sharedConnectors[0]!.orgShortId).toBe('a1b2c3d4e5');
+    expect(
+      mockQuery.mock.calls.some(([sql]) =>
+        /from public\.organization_shared_projects s/i.test(String(sql)),
+      ),
+    ).toBe(false);
+    expect(mockNeonQuery).toHaveBeenCalledTimes(1);
   });
 
   it('never lets a connector credential reach the wire', async () => {

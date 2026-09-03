@@ -2,11 +2,18 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('server-only', () => ({}));
 
-const { mockEntitlements } = vi.hoisted(() => ({ mockEntitlements: vi.fn() }));
+const { mockEntitlements, mockNeonQuery } = vi.hoisted(() => ({
+  mockEntitlements: vi.fn(),
+  mockNeonQuery: vi.fn(),
+}));
 
 vi.mock('@/lib/services/org-entitlements', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/lib/services/org-entitlements')>()),
   getOrganizationEntitlements: mockEntitlements,
+}));
+
+vi.mock('@/lib/server/neon-db', () => ({
+  getNeonDb: vi.fn(() => ({ query: (...args: unknown[]) => mockNeonQuery(...args) })),
 }));
 
 import {
@@ -101,23 +108,21 @@ describe('resolveOrgMembership', () => {
 });
 
 describe('listSharedProjects', () => {
-  it('binds the organization on both the share read and the grant read', async () => {
-    const { db, issued } = makeDb((sql) => {
-      if (/organization_shared_projects/i.test(sql)) {
-        return [
-          {
-            organization_id: ORG,
-            project_id: PROJECT,
-            shared_by_user_id: 'admin-1',
-            default_access: 'read',
-            created_at: '2026-01-01T00:00:00.000Z',
-            name: 'Roadmap',
-            user_id: 'owner-1',
-          },
-        ];
-      }
-      return [{ project_id: PROJECT, user_id: 'member-2', access: 'none' }];
-    });
+  it('reads the cross-member share list through the bypass connection, not the caller-scoped one', async () => {
+    mockNeonQuery.mockResolvedValue([
+      {
+        organization_id: ORG,
+        project_id: PROJECT,
+        shared_by_user_id: 'admin-1',
+        default_access: 'read',
+        created_at: '2026-01-01T00:00:00.000Z',
+        name: 'Roadmap',
+        user_id: 'owner-1',
+      },
+    ]);
+    const { db, issued } = makeDb(() => [
+      { project_id: PROJECT, user_id: 'member-2', access: 'none' },
+    ]);
 
     const shared = await listSharedProjects(db, ORG);
 
@@ -129,6 +134,30 @@ describe('listSharedProjects', () => {
       ownerUserId: 'owner-1',
       memberGrants: [{ userId: 'member-2', access: 'none' }],
     });
+    expect(issued.every(({ sql }) => !/organization_shared_projects/i.test(sql))).toBe(true);
+  });
+
+  it('binds the organization on both the share read and the grant read', async () => {
+    mockNeonQuery.mockResolvedValue([
+      {
+        organization_id: ORG,
+        project_id: PROJECT,
+        shared_by_user_id: 'admin-1',
+        default_access: 'read',
+        created_at: '2026-01-01T00:00:00.000Z',
+        name: 'Roadmap',
+        user_id: 'owner-1',
+      },
+    ]);
+    const { db, issued } = makeDb(() => [
+      { project_id: PROJECT, user_id: 'member-2', access: 'none' },
+    ]);
+
+    await listSharedProjects(db, ORG);
+
+    const [sharesSql, sharesParams] = mockNeonQuery.mock.calls[0]!;
+    expect(sharesSql).toMatch(/organization_id = \$1/i);
+    expect((sharesParams as unknown[])[0]).toBe(ORG);
     for (const { sql, params } of issued) {
       expect(sql).toMatch(/organization_id = \$1/i);
       expect(params[0]).toBe(ORG);
@@ -136,15 +165,18 @@ describe('listSharedProjects', () => {
   });
 
   it('skips the grant read entirely when nothing is shared', async () => {
+    mockNeonQuery.mockResolvedValue([]);
     const { db, issued } = makeDb(() => []);
     expect(await listSharedProjects(db, ORG)).toEqual([]);
-    expect(issued).toHaveLength(1);
+    expect(issued).toHaveLength(0);
+    expect(mockNeonQuery).toHaveBeenCalledTimes(1);
   });
 
   it('hides soft-deleted projects so a deleted project cannot linger in the org view', async () => {
-    const { db, issued } = makeDb(() => []);
+    mockNeonQuery.mockResolvedValue([]);
+    const { db } = makeDb(() => []);
     await listSharedProjects(db, ORG);
-    expect(issued[0]!.sql).toMatch(/p\.deleted_at is null/i);
+    expect(String(mockNeonQuery.mock.calls[0]![0])).toMatch(/p\.deleted_at is null/i);
   });
 });
 
