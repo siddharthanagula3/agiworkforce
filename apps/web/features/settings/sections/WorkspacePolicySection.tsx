@@ -636,13 +636,13 @@ export function WorkspacePolicySection() {
             {ipAllowListInputError ? (
               <div
                 role="alert"
-                style={{ fontSize: 11, color: 'var(--settings-destructive-text)', marginTop: 4 }}
+                style={{ fontSize: 12, color: 'var(--settings-destructive-text)', marginTop: 4 }}
               >
                 {ipAllowListInputError}
               </div>
             ) : null}
             {!ipAllowListInputError && ipAllowListFull ? (
-              <div style={{ fontSize: 11, color: 'var(--text-3)', marginTop: 4 }}>
+              <div style={{ fontSize: 12, color: 'var(--text-3)', marginTop: 4 }}>
                 The allow list holds at most {MAX_IP_ALLOW_LIST_ENTRIES} entries.
               </div>
             ) : null}
