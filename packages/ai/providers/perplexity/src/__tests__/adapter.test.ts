@@ -1,6 +1,15 @@
 import { describe, expect, it } from 'vitest';
+import { getModelsForProvider } from '@agiworkforce/types';
 
 import { createPerplexityAdapter } from '../index';
+
+const perplexityFastModel = getModelsForProvider('perplexity').find(
+  (model) => model.qualityTier === 'fast',
+);
+if (!perplexityFastModel) {
+  throw new Error('The canonical Perplexity fast-tier fixture must exist');
+}
+const PERPLEXITY_FAST_MODEL_ID = perplexityFastModel.id;
 
 describe('createPerplexityAdapter', () => {
   it('returns adapter with id="perplexity" and label="Perplexity"', () => {
@@ -32,7 +41,7 @@ describe('createPerplexityAdapter', () => {
     });
 
     for await (const _chunk of adapter.stream(
-      { model: 'sonar', messages: [{ role: 'user', content: 'ping' }] },
+      { model: PERPLEXITY_FAST_MODEL_ID, messages: [{ role: 'user', content: 'ping' }] },
       new AbortController().signal,
     )) {
       void _chunk;
@@ -52,14 +61,14 @@ describe('createPerplexityAdapter', () => {
             id: 'x',
             object: 'chat.completion.chunk',
             created: 0,
-            model: 'sonar',
+            model: PERPLEXITY_FAST_MODEL_ID,
             choices: [{ index: 0, delta: { content: 'hi' }, finish_reason: null }],
           })}\n\n` +
           `data: ${JSON.stringify({
             id: 'x',
             object: 'chat.completion.chunk',
             created: 0,
-            model: 'sonar',
+            model: PERPLEXITY_FAST_MODEL_ID,
             choices: [{ index: 0, delta: {}, finish_reason: 'stop' }],
             usage: { prompt_tokens: 30, completion_tokens: 4, total_tokens: 34 },
           })}\n\n` +
@@ -73,7 +82,7 @@ describe('createPerplexityAdapter', () => {
 
     const chunks = [];
     for await (const chunk of adapter.stream(
-      { model: 'sonar', messages: [{ role: 'user', content: 'ping' }] },
+      { model: PERPLEXITY_FAST_MODEL_ID, messages: [{ role: 'user', content: 'ping' }] },
       new AbortController().signal,
     )) {
       chunks.push(chunk);

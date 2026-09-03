@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
+import { requireProviderDefaultModel } from '@agiworkforce/types';
 
 import { createDeepSeekAdapter } from '../index';
+
+const DEEPSEEK_DEFAULT_MODEL_ID = requireProviderDefaultModel('deepseek');
 
 function sseResponse(lines: string[]): Response {
   const body = lines.map((l) => `data: ${l}\n\n`).join('') + 'data: [DONE]\n\n';
@@ -43,7 +46,7 @@ describe('createDeepSeekAdapter', () => {
     });
 
     for await (const _chunk of adapter.stream(
-      { model: 'deepseek-chat', messages: [{ role: 'user', content: 'ping' }] },
+      { model: DEEPSEEK_DEFAULT_MODEL_ID, messages: [{ role: 'user', content: 'ping' }] },
       new AbortController().signal,
     )) {
       void _chunk;
@@ -63,14 +66,14 @@ describe('createDeepSeekAdapter', () => {
             id: 'x',
             object: 'chat.completion.chunk',
             created: 0,
-            model: 'deepseek-chat',
+            model: DEEPSEEK_DEFAULT_MODEL_ID,
             choices: [{ index: 0, delta: { content: 'hi' }, finish_reason: null }],
           }),
           JSON.stringify({
             id: 'x',
             object: 'chat.completion.chunk',
             created: 0,
-            model: 'deepseek-chat',
+            model: DEEPSEEK_DEFAULT_MODEL_ID,
             choices: [{ index: 0, delta: {}, finish_reason: 'stop' }],
             usage: {
               prompt_tokens: 1988,
@@ -85,7 +88,7 @@ describe('createDeepSeekAdapter', () => {
 
     const chunks = [];
     for await (const chunk of adapter.stream(
-      { model: 'deepseek-chat', messages: [{ role: 'user', content: 'ping' }] },
+      { model: DEEPSEEK_DEFAULT_MODEL_ID, messages: [{ role: 'user', content: 'ping' }] },
       new AbortController().signal,
     )) {
       chunks.push(chunk);
