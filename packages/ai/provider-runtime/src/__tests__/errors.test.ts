@@ -83,6 +83,26 @@ describe('classifyError', () => {
     expect(c.fallbackable).toBe(true);
   });
 
+  it("classifies Google's input-token-overflow wording as context_overflow", () => {
+    const err = {
+      status: 400,
+      message:
+        'The input token count (1234567) exceeds the maximum number of tokens allowed (1000000).',
+    };
+    const c = classifyError(err);
+    expect(c.category).toBe('context_overflow');
+    expect(c.category).not.toBe('client_error');
+  });
+
+  it('classifies EmptyStreamError as connection/retryable', () => {
+    const err = Object.assign(new Error('Stream ended without receiving any events'), {
+      name: 'EmptyStreamError',
+    });
+    const c = classifyError(err);
+    expect(c.category).toBe('connection');
+    expect(c.retryable).toBe(true);
+  });
+
   it('classifies 401 as auth/retryable-once', () => {
     const err = { status: 401, message: 'invalid api key' };
     const c = classifyError(err);

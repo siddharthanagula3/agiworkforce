@@ -190,6 +190,8 @@ function extractAnthropicOverageHint(e: SDKErrorLike): string | undefined {
 const CONTEXT_OVERFLOW_REGEX =
   /context (?:limit|window|length).{0,256}?(\d{1,64})[^\d]{1,64}(\d{1,64})[^\d]{1,64}(\d{1,64})/i;
 
+const GOOGLE_TOKEN_OVERFLOW_PHRASE = 'exceeds the maximum number of tokens allowed';
+
 function matchesContextOverflow(message: string): boolean {
   if (CONTEXT_OVERFLOW_REGEX.test(message)) return true;
   const lower = message.toLowerCase();
@@ -197,7 +199,8 @@ function matchesContextOverflow(message: string): boolean {
     lower.includes('context_length_exceeded') ||
     lower.includes('model_context_window_exceeded') ||
     lower.includes('prompt is too long') ||
-    lower.includes('maximum context length')
+    lower.includes('maximum context length') ||
+    lower.includes(GOOGLE_TOKEN_OVERFLOW_PHRASE)
   );
 }
 
@@ -348,6 +351,7 @@ function matchesConnection(name: string | undefined, message: string): boolean {
   return (
     name === 'APIConnectionError' ||
     name === 'APIConnectionTimeoutError' ||
+    name === 'EmptyStreamError' ||
     lower.includes('econnreset') ||
     lower.includes('epipe') ||
     lower.includes('socket hang up') ||
