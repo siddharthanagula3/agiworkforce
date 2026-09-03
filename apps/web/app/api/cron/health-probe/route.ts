@@ -16,7 +16,7 @@ const PAGER_TIMEOUT_MS = 5_000;
 
 const TIMED_OUT = Symbol('health-check-timeout');
 
-type AlertSeverity = 'critical' | 'warning';
+export type AlertSeverity = 'critical' | 'warning';
 
 interface ProbeSummary {
   status: HealthCheckResult['status'] | 'probe_failed';
@@ -95,7 +95,7 @@ function buildAlert(
  * person. Best-effort by design — a pager that is down must not stop the email
  * from going out, so this never throws.
  */
-async function pageOnCall(
+export async function pageOnCall(
   severity: AlertSeverity,
   subject: string,
   text: string,
