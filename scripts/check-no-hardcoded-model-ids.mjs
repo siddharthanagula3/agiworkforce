@@ -19,6 +19,7 @@ const FAMILY_CATALOG_DIR = 'packages/ai/model-registry/catalog';
 const CURATION_PATH = 'packages/ai/model-registry/catalog/models.curation.json';
 const SYNCED_PATH = 'packages/ai/model-registry/catalog/models.synced.json';
 const RETIRED_MODELS_PATH = 'packages/ai/model-registry/catalog/retired-models.json';
+const MODEL_ROUTES_PATH = 'packages/ai/model-registry/catalog/model-routes.json';
 const LOCAL_MODEL_CATALOG_PATH = 'packages/platform/local-llm/src/catalog.ts';
 export const SPEECH_ARTIFACT_REGISTRY_PATH =
   'packages/ai/model-registry/catalog/speech-artifacts.json';
@@ -27,6 +28,7 @@ export const MODEL_ID_OWNER_PATHS = Object.freeze([
   CURATION_PATH,
   SYNCED_PATH,
   RETIRED_MODELS_PATH,
+  MODEL_ROUTES_PATH,
   LOCAL_MODEL_CATALOG_PATH,
   SPEECH_ARTIFACT_REGISTRY_PATH,
   'packages/ai/model-registry/catalog/harnesses.json',
@@ -219,6 +221,7 @@ export function loadCanonicalModelIdTokens(repoRoot = REPO_ROOT) {
   };
   const synced = readJson(repoRoot, SYNCED_PATH);
   const retired = readJson(repoRoot, RETIRED_MODELS_PATH);
+  const modelRoutes = readJson(repoRoot, MODEL_ROUTES_PATH);
   const speechArtifacts = readJson(repoRoot, SPEECH_ARTIFACT_REGISTRY_PATH);
   const tokenSources = new Map();
 
@@ -249,6 +252,16 @@ export function loadCanonicalModelIdTokens(repoRoot = REPO_ROOT) {
 
   for (const modelKey of Object.keys(synced.models ?? {})) {
     addToken(tokenSources, modelKey, `synced.models.${modelKey}`);
+  }
+
+  for (const [modelKey, declaration] of Object.entries(modelRoutes.models ?? {})) {
+    for (const [index, route] of (declaration?.additionalRoutes ?? []).entries()) {
+      addToken(
+        tokenSources,
+        route?.upstreamModelId,
+        `modelRoutes.${modelKey}.additionalRoutes.${index}.upstreamModelId`,
+      );
+    }
   }
 
   for (const modelId of retired.retiredModelIds ?? []) {

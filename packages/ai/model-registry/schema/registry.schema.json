@@ -205,7 +205,11 @@
         "harnessId",
         "trustModes",
         "availability",
-        "selectable"
+        "selectable",
+        "isDefault",
+        "cacheClass",
+        "commercialStatus",
+        "pricing"
       ],
       "properties": {
         "modelKey": {
@@ -233,8 +237,40 @@
         },
         "selectable": {
           "type": "boolean"
+        },
+        "isDefault": {
+          "type": "boolean",
+          "description": "True for the route on the model's own canonical provider. Exactly one route per model carries it, and its id is the historic `${provider}/${modelKey}` key."
+        },
+        "cacheClass": {
+          "$ref": "#/definitions/routeCacheClass"
+        },
+        "commercialStatus": {
+          "$ref": "#/definitions/routeCommercialStatus"
+        },
+        "pricing": {
+          "$ref": "#/definitions/pricing"
         }
       }
+    },
+    "routeCacheClass": {
+      "enum": [
+        "provider_implicit_prompt_cache",
+        "provider_explicit_prompt_cache",
+        "gateway_prompt_cache",
+        "gateway_response_cache",
+        "no_provider_cache"
+      ]
+    },
+    "routeCommercialStatus": {
+      "enum": [
+        "agi_direct",
+        "customer_byok",
+        "authorized_marketplace",
+        "free_commercial",
+        "experimental_only",
+        "blocked"
+      ]
     },
     "harness": {
       "type": "object",

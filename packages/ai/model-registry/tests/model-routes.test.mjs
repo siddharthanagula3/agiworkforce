@@ -1,0 +1,109 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import path from 'node:path';
+import test from 'node:test';
+import { fileURLToPath } from 'node:url';
+
+const PACKAGE_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const REGISTRY_JSON = path.join(PACKAGE_ROOT, 'generated', 'registry.json');
+const MODEL_ROUTES_JSON = path.join(PACKAGE_ROOT, 'catalog', 'model-routes.json');
+const HARNESSES_JSON = path.join(PACKAGE_ROOT, 'catalog', 'harnesses.json');
+
+const CACHE_CLASSES = new Set([
+  'provider_implicit_prompt_cache',
+  'provider_explicit_prompt_cache',
+  'gateway_prompt_cache',
+  'gateway_response_cache',
+  'no_provider_cache',
+]);
+const COMMERCIAL_STATUSES = new Set([
+  'agi_direct',
+  'customer_byok',
+  'authorized_marketplace',
+  'free_commercial',
+  'experimental_only',
+  'blocked',
+]);
+
+const registry = JSON.parse(fs.readFileSync(REGISTRY_JSON, 'utf8'));
+const declarations = JSON.parse(fs.readFileSync(MODEL_ROUTES_JSON, 'utf8'));
+const harnesses = JSON.parse(fs.readFileSync(HARNESSES_JSON, 'utf8')).harnesses;
+
+function routesForModel(modelKey) {
+  return Object.entries(registry.routes).filter(([, route]) => route.modelKey === modelKey);
+}
+
+test('every canonical model keeps exactly one default route at its historic id', () => {
+  for (const modelKey of Object.keys(registry.models)) {
+    const routes = routesForModel(modelKey);
+    assert.ok(routes.length >= 1, `${modelKey} must have at least one route`);
+    const defaults = routes.filter(([, route]) => route.isDefault);
+    assert.equal(defaults.length, 1, `${modelKey} must have exactly one default route`);
+    const [defaultRouteId, defaultRoute] = defaults[0];
+    assert.equal(
+      defaultRouteId,
+      `${registry.models[modelKey].identity.provider}/${modelKey}`,
+      `${modelKey} default route id must stay provider-keyed`,
+    );
+    assert.equal(defaultRoute.provider, registry.models[modelKey].identity.provider);
+    assert.deepEqual(
+      defaultRoute.pricing,
+      registry.pricing[modelKey],
+      `${modelKey} default route must carry the model-level price sheet`,
+    );
+  }
+});
+
+test('every route declares a known cache class, commercial status and its own prices', () => {
+  for (const [routeId, route] of Object.entries(registry.routes)) {
+    assert.ok(CACHE_CLASSES.has(route.cacheClass), `${routeId} cache class ${route.cacheClass}`);
+    assert.ok(
+      COMMERCIAL_STATUSES.has(route.commercialStatus),
+      `${routeId} commercial status ${route.commercialStatus}`,
+    );
+    assert.equal(route.pricing.currency, 'USD', `${routeId} must price in USD`);
+    assert.ok(route.pricing.unit.length > 0, `${routeId} must name a pricing unit`);
+    assert.equal(
+      route.harnessId in harnesses,
+      true,
+      `${routeId} references unknown harness ${route.harnessId}`,
+    );
+    assert.equal(
+      harnesses[route.harnessId].provider,
+      route.provider,
+      `${routeId} harness must serve its own provider`,
+    );
+    assert.deepEqual(
+      route.trustModes,
+      harnesses[route.harnessId].trustModes,
+      `${routeId} trust modes must come from its own harness`,
+    );
+  }
+});
+
+test('a declared additional route compiles to a second priced route on the same model', () => {
+  const declared = Object.entries(declarations.models).flatMap(([modelKey, declaration]) =>
+    (declaration.additionalRoutes ?? []).map((route) => [modelKey, route]),
+  );
+  assert.ok(declared.length > 0, 'the catalog must exercise at least one additional route');
+
+  for (const [modelKey, declaration] of declared) {
+    const routeId = `${declaration.provider}/${modelKey}`;
+    const route = registry.routes[routeId];
+    assert.ok(route, `${routeId} must be compiled`);
+    assert.equal(route.isDefault, false);
+    assert.equal(route.modelKey, modelKey);
+    assert.equal(route.providerModelId, declaration.upstreamModelId);
+    assert.equal(route.cacheClass, declaration.cacheClass);
+    assert.equal(route.commercialStatus, declaration.commercialStatus);
+    assert.equal(route.pricing.inputPerMillion, declaration.pricing.inputPerMillion);
+    assert.equal(route.pricing.outputPerMillion, declaration.pricing.outputPerMillion);
+    assert.equal(route.pricing.cacheReadPerMillion, declaration.pricing.cacheReadPerMillion);
+    assert.equal(route.pricing.cacheWritePerMillion, declaration.pricing.cacheWritePerMillion);
+    assert.notEqual(
+      route.provider,
+      registry.models[modelKey].identity.provider,
+      `${routeId} must reach the model through a different provider than the default route`,
+    );
+  }
+});
