@@ -12,6 +12,7 @@ import {
 } from '@/features/marketing/components/system';
 import { PageHero } from '@/features/marketing/components/pages/surfaces/shared';
 import { PublicWaitlistForm } from '@/features/marketing/components/PublicWaitlistForm';
+import { PLATFORM_AVAILABILITY_CONSENT_PURPOSES } from '@/lib/consent-purposes';
 import { DesktopDownloadAvailability } from './DesktopDownloadAvailability';
 import { CliDownloadAvailability } from './CliDownloadAvailability';
 import '@/features/marketing/components/pages/business/code-block.css';
@@ -223,6 +224,7 @@ export default function DownloadPage() {
               source="other"
               ctaLabel="Get notified"
               successMessage="You're on the list. We'll email you when a platform has a verified installer to download."
+              purposes={PLATFORM_AVAILABILITY_CONSENT_PURPOSES}
             />
           </Stack>
         </Section>
