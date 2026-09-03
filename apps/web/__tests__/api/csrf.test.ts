@@ -1,4 +1,3 @@
-
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { NextRequest } from 'next/server';
 
@@ -100,8 +99,10 @@ function makeMemoryRequest(method: 'GET' | 'PUT' | 'DELETE', body?: unknown): Ne
   });
 }
 
+const CONVERSATION_ID = '11111111-1111-4111-8111-111111111111';
+
 function makeConvRequest(method: 'GET' | 'PUT' | 'DELETE', body?: unknown): NextRequest {
-  return new NextRequest('http://localhost/api/chat/conversations/test-conv-id', {
+  return new NextRequest(`http://localhost/api/chat/conversations/${CONVERSATION_ID}`, {
     method,
     headers: {
       'Content-Type': 'application/json',
@@ -112,7 +113,7 @@ function makeConvRequest(method: 'GET' | 'PUT' | 'DELETE', body?: unknown): Next
 }
 
 const routeContext = { params: Promise.resolve({ id: 'test-id' }) };
-const convRouteContext = { params: Promise.resolve({ id: 'test-conv-id' }) };
+const convRouteContext = { params: Promise.resolve({ id: CONVERSATION_ID }) };
 
 describe('CSRF protection on state-changing endpoints', () => {
   beforeEach(() => {
@@ -135,7 +136,7 @@ describe('CSRF protection on state-changing endpoints', () => {
     mockRequireCurrentUserId.mockResolvedValue('user-1');
     mockNeonQuery.mockResolvedValue([
       {
-        id: 'test-conv-id',
+        id: CONVERSATION_ID,
         title: 'Test',
         model: 'auto',
         created_at: '2026-01-01',
@@ -290,7 +291,7 @@ describe('CSRF protection on state-changing endpoints', () => {
         .mockReset()
         .mockResolvedValueOnce([
           {
-            id: 'test-conv-id',
+            id: CONVERSATION_ID,
             title: 'Test',
             model: 'auto',
             created_at: '2026-01-01',
