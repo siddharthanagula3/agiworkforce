@@ -133,7 +133,7 @@ import {
   WEB_SEARCH_MAX_RESULTS,
   webSearchResultsToFetchedSources,
 } from '@/lib/web-search/web-search-tool';
-import type { ProcessedRequest } from './request-processor';
+import { toManagedSkillFromUserSkill, type ProcessedRequest } from './request-processor';
 import {
   calculateObservedProviderUsageCostDollars,
   createObservedProviderUsage,
@@ -145,7 +145,7 @@ import {
   createPublicTextDeltaProjector,
   toAgentEventJson,
 } from './agent-event-stream';
-import { SKILL_TOOL_NAME } from '@agiworkforce/skills';
+import { executeSkillTool, SKILL_TOOL_NAME } from '@agiworkforce/skills';
 import {
   isParallelSafeTool,
   isSensitiveSourceTool,
@@ -166,6 +166,7 @@ import {
   executeManagedSkillToolForPlugins,
 } from '@/lib/services/skill-catalog-service';
 import { listEnabledPluginIdsForUser } from '@/lib/services/plugin-installation-service';
+import { findUserSkillByName } from '@/lib/services/user-skill-service';
 import { functionToolName } from './tool-loop-routing';
 import {
   generateManagedOfficeFile,
@@ -1310,6 +1311,16 @@ function toolErrorContent(err: unknown): string {
   return fenced ? `Tool error:\n${fenced}` : 'Tool error: the tool failed without a message.';
 }
 
+const SKILL_LOAD_ACTION = 'load';
+
+function skillLoadRequestedName(args: Record<string, unknown>): string | null {
+  return args['action'] === SKILL_LOAD_ACTION &&
+    typeof args['name'] === 'string' &&
+    args['name'].length > 0
+    ? args['name']
+    : null;
+}
+
 async function runMcpTool(
   toolCall: PendingToolCall,
   e2bExecutor: () => Promise<E2BExecutor | null>,
@@ -1330,13 +1341,26 @@ async function runMcpTool(
     if (!availableTools.has(SKILL_TOOL_NAME)) {
       return { content: `Unknown tool: ${SKILL_TOOL_NAME}`, isError: true };
     }
-    const result = executionContext?.userId
+    const userId = executionContext?.userId;
+    const result = userId
       ? await executeManagedSkillToolForPlugins(
-          await listEnabledPluginIdsForUser(executionContext.userId),
+          await listEnabledPluginIdsForUser(userId),
           toolCall.args,
           { availableTools },
         )
       : await executeManagedSkillTool(toolCall.args, { availableTools });
+    if (result.code === 'skill_not_found' && userId) {
+      const requestedSkillName = skillLoadRequestedName(toolCall.args);
+      const userSkill = requestedSkillName
+        ? await findUserSkillByName(getNeonDb(), userId, requestedSkillName)
+        : null;
+      if (userSkill) {
+        const fallback = executeSkillTool([toManagedSkillFromUserSkill(userSkill)], toolCall.args, {
+          availableTools,
+        });
+        return { content: fallback.content, isError: fallback.isError };
+      }
+    }
     return { content: result.content, isError: result.isError };
   }
 

@@ -21,9 +21,25 @@ vi.mock('@/lib/server/generated-file-persist', () => ({
   persistGeneratedFileBytes: vi.fn(),
 }));
 
+const userSkillService = vi.hoisted(() => ({ findUserSkillByName: vi.fn() }));
+vi.mock('@/lib/services/user-skill-service', () => userSkillService);
+
+vi.mock('@/lib/server/neon-db', () => {
+  const emptyAdapter = {
+    query: async () => [],
+    execute: async () => 0,
+    transaction: async (fn: (tx: unknown) => unknown) => fn(emptyAdapter),
+    withUser: () => emptyAdapter,
+    withOrg: () => emptyAdapter,
+    dispose: async () => {},
+  };
+  return { getNeonDb: () => emptyAdapter };
+});
+
 import { resetManagedSkillCatalogCacheForTests } from '@/lib/services/skill-catalog-service';
 import { resolveToolRetrySafety, runToolLoop } from './tool-loop';
 import type { ProcessedRequest } from './request-processor';
+import type { UserSkillRecord } from '@/lib/services/user-skill-service';
 
 function sseStream(events: unknown[]): ReadableStream<Uint8Array> {
   const encoder = new TextEncoder();
@@ -154,6 +170,7 @@ describe('managed Cloud Skill tool loop', () => {
 
   beforeEach(async () => {
     provider.stream.mockReset();
+    userSkillService.findUserSkillByName.mockReset();
     root = await mkdtemp(join(tmpdir(), 'cloud-skill-loop-'));
     const directory = join(root, 'design-review');
     await mkdir(directory, { recursive: true });
@@ -265,6 +282,49 @@ describe('managed Cloud Skill tool loop', () => {
         }),
       ]),
     );
+  });
+
+  it("loads a signed-in caller's own skill when it is absent from the managed catalog", async () => {
+    userSkillService.findUserSkillByName.mockResolvedValueOnce({
+      id: 'user-skill-1',
+      name: 'my-standup-notes',
+      description: 'Format my daily standup notes.',
+      body: 'Lead with blockers, then yesterday, then today.',
+      createdAt: '2026-08-01T00:00:00.000Z',
+      updatedAt: '2026-08-01T00:00:00.000Z',
+    } satisfies UserSkillRecord);
+    provider.stream
+      .mockResolvedValueOnce(toolCallStream('my-standup-notes'))
+      .mockResolvedValueOnce(finalAnswerStream('Notes formatted.'));
+
+    const output = await collect(
+      runToolLoop(makeProcessed(root), { approvalMode: 'auto', userId: 'caller-1' }),
+    );
+
+    expect(userSkillService.findUserSkillByName).toHaveBeenCalledWith(
+      expect.anything(),
+      'caller-1',
+      'my-standup-notes',
+    );
+    expect(output).toContain('"status":"completed"');
+    expect(output).toContain('skill_result untrusted');
+    expect(output).toContain('my-standup-notes');
+    expect(output).toContain('Lead with blockers, then yesterday, then today.');
+    expect(output).toContain('Notes formatted.');
+  });
+
+  it('still fails a name that matches neither the managed catalog nor the caller skills', async () => {
+    userSkillService.findUserSkillByName.mockResolvedValueOnce(null);
+    provider.stream
+      .mockResolvedValueOnce(toolCallStream('nowhere-skill'))
+      .mockResolvedValueOnce(finalAnswerStream('That skill is unavailable.'));
+
+    const output = await collect(
+      runToolLoop(makeProcessed(root), { approvalMode: 'auto', userId: 'caller-1' }),
+    );
+
+    expect(output).toContain('"status":"failed"');
+    expect(output).toContain('Unknown skill: nowhere-skill');
   });
 
   it('refuses a hallucinated skill call when the server did not offer the tool', async () => {
