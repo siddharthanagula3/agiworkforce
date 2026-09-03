@@ -19,6 +19,7 @@ import {
   getVideoStatus,
   MediaApiError,
 } from '@features/media/services/media-api-service';
+import { IMAGE_GENERATION_FUNCTION_LIMIT_MS } from '@/lib/deadline-policy';
 
 async function getAuthToken(): Promise<string> {
   const { getAuthToken: getClerkToken } = await import('@shared/lib/get-auth-token');
@@ -101,6 +102,9 @@ const PAYWALL_ERROR_RECOVERY: Readonly<Record<string, MediaPaywallRecoveryAction
 };
 const PAYWALL_ERROR_TYPES = new Set(['insufficient_quota', 'plan_upgrade_required']);
 const MAX_MEDIA_RETRY_AFTER_SECONDS = 5 * 60;
+const IMAGE_GENERATION_TIMEOUT_CODE = 'image_generation_timeout';
+const IMAGE_GENERATION_TIMEOUT_MESSAGE =
+  'The image did not finish in time. Try again or pick another image model.';
 
 function retryAtFromStructuredSeconds(value: unknown): string | undefined {
   if (
@@ -189,6 +193,12 @@ function toMediaGenerationError(err: unknown): unknown {
   });
 }
 
+function isAbortError(err: unknown): boolean {
+  return (
+    typeof err === 'object' && err !== null && (err as { name?: unknown }).name === 'AbortError'
+  );
+}
+
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 export function useMediaGeneration() {
@@ -214,6 +224,9 @@ export function useMediaGeneration() {
         createdAt: new Date().toISOString(),
       });
 
+      const deadline = new AbortController();
+      const deadlineTimer = setTimeout(() => deadline.abort(), IMAGE_GENERATION_FUNCTION_LIMIT_MS);
+
       try {
         const response = await fetch('/api/media/image/generate', {
           method: 'POST',
@@ -230,6 +243,7 @@ export function useMediaGeneration() {
             ...(options.provider ? { provider: options.provider } : {}),
             ...(options.model ? { model: options.model } : {}),
           }),
+          signal: deadline.signal,
         });
 
         if (!response.ok) {
@@ -300,9 +314,16 @@ export function useMediaGeneration() {
           model: catalogModel.id,
         } satisfies GeneratedImageResult;
       } catch (err) {
-        const message = err instanceof Error ? err.message : 'Unknown error';
+        const error = isAbortError(err)
+          ? new MediaGenerationApiError(IMAGE_GENERATION_TIMEOUT_MESSAGE, {
+              code: IMAGE_GENERATION_TIMEOUT_CODE,
+            })
+          : err;
+        const message = error instanceof Error ? error.message : 'Unknown error';
         updateJob(jobId, { status: 'failed', errorMessage: message });
-        throw err;
+        throw error;
+      } finally {
+        clearTimeout(deadlineTimer);
       }
     },
     [addJob, updateJob],
