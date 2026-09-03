@@ -49,6 +49,7 @@ import {
   SPENDING_CAP_PROVIDER_HINT,
 } from '@agiworkforce/provider-runtime';
 import { markProviderDegraded } from '@/lib/services/provider-availability-service';
+import { IMAGE_GENERATION_PROVIDER_DEADLINE_MS } from '@/lib/deadline-policy';
 import { parseManagedMediaIdempotencyKey } from '@agiworkforce/utils';
 import {
   aiGeneratedHeaders,
@@ -430,7 +431,7 @@ async function generateWithOpenAIImage(
       method: 'POST',
       headers: { Authorization: `Bearer ${apiKey}` },
       body: form,
-      signal: AbortSignal.timeout(55_000),
+      signal: AbortSignal.timeout(IMAGE_GENERATION_PROVIDER_DEADLINE_MS),
     });
 
     if (!editResponse.ok) {
@@ -465,7 +466,7 @@ async function generateWithOpenAIImage(
       n: Math.min(n, 4),
       ...(edit === undefined ? {} : {}),
     }),
-    signal: AbortSignal.timeout(55_000),
+    signal: AbortSignal.timeout(IMAGE_GENERATION_PROVIDER_DEADLINE_MS),
   });
 
   if (!response.ok) {
@@ -525,7 +526,7 @@ async function generateWithImagen(
           aspectRatio,
         },
       }),
-      signal: AbortSignal.timeout(55_000),
+      signal: AbortSignal.timeout(IMAGE_GENERATION_PROVIDER_DEADLINE_MS),
     },
   );
 
@@ -577,7 +578,7 @@ async function generateWithGeminiImage(
         image_size: '1K',
       },
     }),
-    signal: AbortSignal.timeout(55_000),
+    signal: AbortSignal.timeout(IMAGE_GENERATION_PROVIDER_DEADLINE_MS),
   });
 
   if (!response.ok) {
