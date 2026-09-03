@@ -343,7 +343,7 @@ describe('runToolLoop Anthropic dispatch (mocked adapter)', () => {
   it('records the OpenRouter upstream-provider attribution reported on a response-meta chunk', async () => {
     mockAnthropicStream.mockImplementationOnce(
       fakeAdapterStream([
-        { type: 'response-meta', provider: 'anthropic/claude-sonnet-5' },
+        { type: 'response-meta', provider: `anthropic/${ANTHROPIC_MODEL}` },
         { type: 'text-delta', delta: 'Hi there.' },
         { type: 'usage', inputTokens: 10, outputTokens: 2 },
         { type: 'stop', reason: 'end_turn' },
@@ -354,7 +354,7 @@ describe('runToolLoop Anthropic dispatch (mocked adapter)', () => {
     await drain(runToolLoop(makeProcessed(), { approvalMode: 'auto', usage }));
 
     expect(usage.providerCallObservations?.[0]).toMatchObject({
-      upstreamProvider: 'anthropic/claude-sonnet-5',
+      upstreamProvider: `anthropic/${ANTHROPIC_MODEL}`,
       routeId: `anthropic/${ANTHROPIC_MODEL}`,
     });
   });

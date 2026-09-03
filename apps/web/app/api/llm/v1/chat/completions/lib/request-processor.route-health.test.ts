@@ -1,5 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { emptyRuntimeState, type RouteHealthSnapshot } from '@agiworkforce/routing';
+import { getModelsForProvider, requireProviderDefaultModel } from '@agiworkforce/types';
+import { getRoutePricingForModel } from '@agiworkforce/model-registry';
 
 const mockGetRouteHealthSnapshot = vi.fn(async (routeIds: readonly string[], _nowMs: number) => {
   const snapshots: Record<string, RouteHealthSnapshot> = {};
@@ -21,13 +23,31 @@ vi.mock('@/lib/services/free-lane/runtime-state-service', () => ({
 
 import { resolveRouteHealthRuntimeState, resolveWebCloudModelRoute } from './request-processor';
 
-const MODEL = 'glm-5.3-flash';
-const DEFAULT_ROUTE_ID = 'zhipu/glm-5.3-flash';
-const NON_DEFAULT_SAME_MODEL_ROUTE_ID = 'open_router/glm-5.3-flash';
-const OTHER_MODEL_ROUTE_ID = 'anthropic/claude-opus-5';
+const ANTHROPIC_DEFAULT_MODEL_ID = requireProviderDefaultModel('anthropic');
+const anthropicPremiumModel = getModelsForProvider('anthropic').find(
+  (model) =>
+    model.reasoning?.thinkingDefault === 'adaptive' &&
+    model.reasoning.rejectsSamplingParameters === true,
+);
+if (!anthropicPremiumModel) {
+  throw new Error('The canonical Anthropic premium reasoning fixture must exist');
+}
 
-const SAME_MODEL_REGISTRY_ROUTE_ID = 'anthropic/claude-sonnet-5';
-const SAME_MODEL_REGISTRY_SIBLING_ROUTE_ID = 'cheaperinference_anthropic/claude-sonnet-5';
+const MODEL = requireProviderDefaultModel('zhipu');
+const modelRoutes = getRoutePricingForModel(MODEL);
+const DEFAULT_ROUTE_ID = modelRoutes.find((route) => route.isDefault)!.routeId;
+const NON_DEFAULT_SAME_MODEL_ROUTE_ID = modelRoutes.find((route) => !route.isDefault)!.routeId;
+const OTHER_MODEL_ROUTE_ID = getRoutePricingForModel(anthropicPremiumModel.id).find(
+  (route) => route.isDefault,
+)!.routeId;
+
+const anthropicDefaultRoutes = getRoutePricingForModel(ANTHROPIC_DEFAULT_MODEL_ID);
+const SAME_MODEL_REGISTRY_ROUTE_ID = anthropicDefaultRoutes.find(
+  (route) => route.isDefault,
+)!.routeId;
+const SAME_MODEL_REGISTRY_SIBLING_ROUTE_ID = anthropicDefaultRoutes.find(
+  (route) => !route.isDefault,
+)!.routeId;
 
 const ZERO_COST_USAGE = { estimatedInputTokens: 0, estimatedOutputTokens: 0 };
 
@@ -125,7 +145,7 @@ describe('resolveWebCloudModelRoute · route health and warm-route affinity', ()
 describe('resolveRouteHealthRuntimeState · candidate route ids', () => {
   it('fetches health only for the exact model’s own routes', async () => {
     mockGetRouteHealthSnapshot.mockClear();
-    await resolveRouteHealthRuntimeState('claude-sonnet-5', Date.now());
+    await resolveRouteHealthRuntimeState(ANTHROPIC_DEFAULT_MODEL_ID, Date.now());
 
     const [routeIds] = mockGetRouteHealthSnapshot.mock.calls[0]!;
     expect(routeIds).toContain(SAME_MODEL_REGISTRY_ROUTE_ID);
