@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   CannotRetryError,
   FallbackTriggeredError,
+  EmptyProviderResponseError,
   classifyError,
   parseContextOverflow,
 } from '../errors';
@@ -154,6 +155,15 @@ describe('classifyError', () => {
     expect(c.fallbackable).toBe(true);
   });
 
+  it('classifies EmptyProviderResponseError as empty_response + fallbackable', () => {
+    const err = Object.assign(new Error('no content'), { name: 'EmptyProviderResponseError' });
+    const c = classifyError(err);
+    expect(c.category).toBe('empty_response');
+    expect(c.code).toBe('empty_response');
+    expect(c.retryable).toBe(false);
+    expect(c.fallbackable).toBe(true);
+  });
+
   it('classifies pause_turn as pause_turn category', () => {
     const err = { error: { type: 'pause_turn' }, message: 'pause_turn' };
     const c = classifyError(err);
@@ -241,5 +251,18 @@ describe('FallbackTriggeredError', () => {
     expect(err.message).toContain(FALLBACK_FIXTURE_MODEL_ID);
     expect(err.originalModel).toBe(PRIMARY_FIXTURE_MODEL_ID);
     expect(err.fallbackModel).toBe(FALLBACK_FIXTURE_MODEL_ID);
+  });
+});
+
+describe('EmptyProviderResponseError', () => {
+  it('names the finish reason in its message', () => {
+    const err = new EmptyProviderResponseError('length');
+    expect(err.name).toBe('EmptyProviderResponseError');
+    expect(err.message).toContain('length');
+  });
+
+  it('falls back to "none" for a null finish reason', () => {
+    const err = new EmptyProviderResponseError(null);
+    expect(err.message).toContain('none');
   });
 });
