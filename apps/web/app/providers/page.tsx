@@ -1,17 +1,14 @@
 import { buildMetadata } from '@/lib/seo/metadata';
 import { modelsCatalog } from '@agiworkforce/types';
 import { Header } from '@shared/components/layout/Header';
-import { MarketingFooter } from '@/features/marketing/components/MarketingFooter';
 import {
   Button,
   ButtonRow,
   Eyebrow,
   Ledger,
+  MarketingFooter,
   Prose,
-  Section,
-  Stack,
 } from '@/features/marketing/components/system';
-import { PageHero } from '@/features/marketing/components/pages/surfaces/shared';
 import { BYOK_PROVIDER_IDS } from '@/app/byok/byok-providers';
 import { CATALOG_AS_OF, DESKTOP_LOCAL_RUNTIMES, SURFACE_STATUS } from '@/lib/marketing-constants';
 
@@ -74,20 +71,52 @@ export default function ProvidersPage() {
     <div data-design="agi" className="agi-ds-page">
       <Header />
       <main id="main-content">
-        <PageHero
-          id="agi-providers-title"
-          eyebrow="Provider catalog"
-          title="Every provider here comes out of the catalog the apps compile in."
-          lede={`A cloud provider needs a key you own; a local runtime needs a URL for a server you already run. The label, the default model, the model count, and the list price on every row are read from the shared model catalog and the key list the apps ship with, so this page cannot name a provider they do not. ${PROVIDER_ROWS.length} providers take a key, ${LOCAL_RUNTIMES.length} runtimes take a URL, and the catalog is dated ${CATALOG_AS_OF}.`}
-          ctas={[
-            { href: '/byok', label: 'Add a provider key' },
-            { href: '/local', label: 'Point at a local runtime', variant: 'secondary' },
-          ]}
-        />
+        <section className="agi-lp-hero" aria-labelledby="agi-providers-title">
+          <div className="agi-ds-container agi-lp-hero-grid">
+            <div className="agi-lp-hero-copy">
+              <Eyebrow>Provider catalog</Eyebrow>
+              <h1 className="agi-ds-h1" id="agi-providers-title">
+                Every provider here comes out of{' '}
+                <em className="agi-ds-accent">the catalog the apps compile in.</em>
+              </h1>
+              <Prose size="lg">
+                A cloud provider needs a key you own; a local runtime needs a URL for a server you
+                already run. The label, the default model, and the list price on every row are read
+                from the shared model catalog, so this page cannot name a provider the apps do not.
+              </Prose>
+              <ButtonRow>
+                <Button href="/byok">Add a provider key</Button>
+                <Button href="/local" variant="secondary">
+                  Point at a local runtime
+                </Button>
+              </ButtonRow>
+            </div>
+            <div className="agi-lp-hero-stage">
+              <div className="agi-lp-console" aria-label="Provider catalog preview">
+                <div className="agi-lp-console-bar">
+                  <span>models.json &middot; catalog dated {CATALOG_AS_OF}</span>
+                </div>
+                <div className="agi-lp-console-body">
+                  <Ledger
+                    caption="A sample of the provider catalog"
+                    rows={PROVIDER_ROWS.slice(0, 4).map((row) => ({
+                      label: row.label,
+                      value: providerRowValue(row),
+                    }))}
+                  />
+                </div>
+                <p className="agi-lp-console-note">
+                  {PROVIDER_ROWS.length} providers, {LOCAL_RUNTIMES.length} local runtimes.{' '}
+                  <span>Full roster below.</span>
+                </p>
+              </div>
+            </div>
+          </div>
+        </section>
 
-        <Section id="roster" labelledBy="agi-providers-roster-title" rule>
-          <Stack gap="loose">
-            <div>
+        <section className="agi-lp-section" aria-labelledby="agi-providers-roster-title">
+          <div className="agi-ds-container">
+            <div className="agi-lp-heading">
               <Eyebrow>The roster</Eyebrow>
               <h2 className="agi-ds-h2" id="agi-providers-roster-title">
                 Each row is a read from the shared model catalog.
@@ -106,42 +135,46 @@ export default function ProvidersPage() {
                 value: providerRowValue(row),
               }))}
             />
-            <Prose>
-              Desktop also talks to {DESKTOP_LOCAL_RUNTIMES.label}. None of them carry catalogued
-              models, because AGI asks the server you started what it is holding rather than
-              assuming.
-            </Prose>
-            <Ledger
-              caption="Local runtimes"
-              rows={LOCAL_RUNTIMES.map((runtime) => ({
-                label: runtime,
-                value:
-                  'You give it a server URL; it reports the models it has loaded. No key, no meter.',
-              }))}
-            />
-          </Stack>
-        </Section>
+            <div style={{ marginTop: '2rem' }}>
+              <Prose>
+                Desktop also talks to {DESKTOP_LOCAL_RUNTIMES.label}. None of them carry catalogued
+                models, because AGI asks the server you started what it is holding rather than
+                assuming.
+              </Prose>
+            </div>
+            <div style={{ marginTop: '1.5rem' }}>
+              <Ledger
+                caption="Local runtimes"
+                rows={LOCAL_RUNTIMES.map((runtime) => ({
+                  label: runtime,
+                  value:
+                    'You give it a server URL; it reports the models it has loaded. No key, no meter.',
+                }))}
+              />
+            </div>
+          </div>
+        </section>
 
-        <Section id="source-file" labelledBy="agi-providers-source-title" rule ground="2">
-          <Stack gap="loose">
-            <div>
+        <section className="agi-lp-section" aria-labelledby="agi-providers-source-title">
+          <div className="agi-ds-container">
+            <div className="agi-lp-heading">
               <Eyebrow>The source file</Eyebrow>
               <h2 className="agi-ds-h2" id="agi-providers-source-title">
                 The CLI and Desktop compile this catalog into their binaries.
               </h2>
             </div>
-            <Prose>
+            <Prose size="lg">
               <code>packages/contracts/types/src/models.json</code> is embedded in the CLI and in
               the Desktop Rust runtime with <code>include_str!</code>, and the web app imports the
               same module. Adding a provider or moving a price moves every surface and this page at
               once. The CLI surface itself is {SURFACE_STATUS.cli.toLowerCase()}.
             </Prose>
-          </Stack>
-        </Section>
+          </div>
+        </section>
 
-        <Section id="session-boundary" labelledBy="agi-providers-session-title" rule>
-          <Stack gap="loose">
-            <div>
+        <section className="agi-lp-section" aria-labelledby="agi-providers-session-title">
+          <div className="agi-ds-container">
+            <div className="agi-lp-heading">
               <Eyebrow>Inside one session</Eyebrow>
               <h2 className="agi-ds-h2" id="agi-providers-session-title">
                 Swapping a model is not the same as moving a session.
@@ -160,27 +193,29 @@ export default function ProvidersPage() {
                 How a Local session moves
               </Button>
             </ButtonRow>
-          </Stack>
-        </Section>
+          </div>
+        </section>
 
-        <Section id="providers-close" labelledBy="agi-providers-close-title" rule ground="2">
-          <Stack gap="loose">
-            <h2 className="agi-ds-h2" id="agi-providers-close-title">
-              Bring the key and the catalog is already there.
-            </h2>
-            <Prose>
-              Desktop holds the encrypted key store and every local runtime URL (
-              {SURFACE_STATUS.desktop}). The CLI compiles the same catalog and is{' '}
-              {SURFACE_STATUS.cli.toLowerCase()}.
-            </Prose>
-            <ButtonRow>
-              <Button href="/docs/byok-env">Read the provider-key guide</Button>
-              <Button href="/download" variant="secondary">
-                Check surface availability
-              </Button>
-            </ButtonRow>
-          </Stack>
-        </Section>
+        <section className="agi-lp-close" aria-labelledby="agi-providers-close-title">
+          <div className="agi-ds-container">
+            <div className="agi-lp-close-inner">
+              <h2 className="agi-ds-h2" id="agi-providers-close-title">
+                Bring the key <em className="agi-ds-accent">and the catalog is already there.</em>
+              </h2>
+              <Prose size="lg">
+                Desktop holds the encrypted key store and every local runtime URL (
+                {SURFACE_STATUS.desktop}). The CLI compiles the same catalog and is{' '}
+                {SURFACE_STATUS.cli.toLowerCase()}.
+              </Prose>
+              <ButtonRow>
+                <Button href="/docs/byok-env">Read the provider-key guide</Button>
+                <Button href="/download" variant="secondary">
+                  Check surface availability
+                </Button>
+              </ButtonRow>
+            </div>
+          </div>
+        </section>
       </main>
       <MarketingFooter />
     </div>
