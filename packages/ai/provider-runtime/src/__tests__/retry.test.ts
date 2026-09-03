@@ -132,6 +132,43 @@ describe('withRetry', () => {
     expect(observedOverride).toBeLessThan(8192);
   });
 
+  it('gives up on the first attempt when a context_overflow message cannot be parsed', async () => {
+    const ctx = createRetryContext({ model: PRIMARY_FIXTURE_MODEL_ID });
+    let calls = 0;
+    await expect(
+      withRetry(
+        async () => {
+          calls++;
+          throw new Error('context_length_exceeded');
+        },
+        ctx,
+        { baseDelayMs: 1, maxRetries: 10 },
+      ),
+    ).rejects.toBeInstanceOf(CannotRetryError);
+    expect(calls).toBe(1);
+  });
+
+  it('falls back immediately on an unparseable context_overflow when a fallback model exists', async () => {
+    const ctx = createRetryContext({
+      model: PRIMARY_FIXTURE_MODEL_ID,
+      fallbackModel: FALLBACK_FIXTURE_MODEL_ID,
+    });
+    let calls = 0;
+    await expect(
+      withRetry(
+        async () => {
+          calls++;
+          throw new Error(
+            'The input token count (1234567) exceeds the maximum number of tokens allowed (1000000).',
+          );
+        },
+        ctx,
+        { baseDelayMs: 1, maxRetries: 10 },
+      ),
+    ).rejects.toBeInstanceOf(FallbackTriggeredError);
+    expect(calls).toBe(1);
+  });
+
   it('triggers fallback when context_overflow has zero headroom', async () => {
     const ctx = createRetryContext({
       model: PRIMARY_FIXTURE_MODEL_ID,
