@@ -359,6 +359,25 @@ describe('runToolLoop Anthropic dispatch (mocked adapter)', () => {
     });
   });
 
+  it('prefers a gateway-reported cost over the calculator estimate for the actual charge', async () => {
+    mockAnthropicStream.mockImplementationOnce(
+      fakeAdapterStream([
+        { type: 'text-delta', delta: 'Hi there.' },
+        { type: 'usage', inputTokens: 10, outputTokens: 2, costUsd: 0.0007 },
+        { type: 'stop', reason: 'end_turn' },
+      ]),
+    );
+
+    const usage = createObservedProviderUsage();
+    await drain(runToolLoop(makeProcessed(), { approvalMode: 'auto', usage }));
+
+    expect(usage.providerCallObservations?.[0]).toMatchObject({
+      providerReportedCostUsd: 0.0007,
+      costDollars: 0.0007,
+      costSource: 'provider_reported',
+    });
+  });
+
   it('replays the signed thinking block before tool_use on the follow-up request, with tag-free text', async () => {
     mockAnthropicStream
       .mockImplementationOnce(

@@ -39,6 +39,7 @@ interface StreamBillingUsage {
   cacheReadInputTokens?: number;
   cacheCreationInputTokens?: number;
   cacheCreation1hInputTokens?: number;
+  providerReportedCostUsd?: number;
 }
 
 /**
@@ -72,6 +73,17 @@ export function resolveBilledOutcome(input: {
 }): 'completed' | 'failed' {
   if (input.cancelled === true && input.totalTokens > 0) return 'completed';
   return input.outcome ?? 'completed';
+}
+
+/**
+ * Whole ledger cents from a gateway-reported charge, matching
+ * `LLMCostCalculator.calculateCost`'s rounding: non-empty paid usage always
+ * consumes at least one cent, so a sub-cent gateway charge cannot bypass paid
+ * caps.
+ */
+function reportedCostCentsFromUsd(reportedCostUsd: number): number {
+  const costCents = reportedCostUsd * 100;
+  return costCents > 0 ? Math.max(1, Math.ceil(costCents)) : 0;
 }
 
 async function settleStreamBilling(input: {
@@ -120,24 +132,32 @@ async function settleStreamBilling(input: {
     totalTokens,
   });
 
+  const reportedCostUsd = usage.providerReportedCostUsd;
+  const costSource: 'provider_reported' | 'estimated' =
+    Number.isFinite(reportedCostUsd) && reportedCostUsd !== undefined && reportedCostUsd >= 0
+      ? 'provider_reported'
+      : 'estimated';
+
   const actualCostCents =
     billedOutcome === 'failed'
       ? 0
       : totalTokens > 0
-        ? LLMCostCalculator.calculateCost(
-            provider,
-            model,
-            {
-              promptTokens: usage.inputTokens,
-              completionTokens: usage.outputTokens,
-              totalTokens,
-              cacheReadInputTokens: usage.cacheReadInputTokens || undefined,
-              cacheCreationInputTokens: usage.cacheCreationInputTokens || undefined,
-              cacheCreation1hInputTokens: usage.cacheCreation1hInputTokens || undefined,
-            },
-            undefined,
-            buildServingRouteId(provider, model),
-          )
+        ? costSource === 'provider_reported'
+          ? reportedCostCentsFromUsd(reportedCostUsd as number)
+          : LLMCostCalculator.calculateCost(
+              provider,
+              model,
+              {
+                promptTokens: usage.inputTokens,
+                completionTokens: usage.outputTokens,
+                totalTokens,
+                cacheReadInputTokens: usage.cacheReadInputTokens || undefined,
+                cacheCreationInputTokens: usage.cacheCreationInputTokens || undefined,
+                cacheCreation1hInputTokens: usage.cacheCreation1hInputTokens || undefined,
+              },
+              undefined,
+              buildServingRouteId(provider, model),
+            )
         : processed.estimatedCostCents;
 
   if (processed.managedUsage) {
@@ -152,6 +172,7 @@ async function settleStreamBilling(input: {
         cacheReadTokens: usage.cacheReadInputTokens,
         cacheWriteTokens: usage.cacheCreationInputTokens,
         cacheWrite1hTokens: usage.cacheCreation1hInputTokens,
+        ...(totalTokens > 0 && billedOutcome !== 'failed' ? { costSource } : {}),
         ...compactionUsageFields(processed.contextTrim),
         ...buildCpstUsageFields(processed, {
           billingOutcome: billedOutcome,
@@ -815,6 +836,7 @@ export async function buildAdapterStreamResponse(
               cacheReadInputTokens: usage.cacheReadInputTokens,
               cacheCreationInputTokens: usage.cacheCreationInputTokens,
               cacheCreation1hInputTokens: usage.cacheCreation1hInputTokens,
+              providerReportedCostUsd: usage.providerReportedCostUsd,
             },
             outcome: 'failed',
             ...(request.signal.aborted ? { cancelled: true } : {}),
@@ -919,6 +941,7 @@ export async function buildAdapterStreamResponse(
             cacheReadInputTokens: usage.cacheReadInputTokens,
             cacheCreationInputTokens: usage.cacheCreationInputTokens,
             cacheCreation1hInputTokens: usage.cacheCreation1hInputTokens,
+            providerReportedCostUsd: usage.providerReportedCostUsd,
           },
           outcome: assembler.lastError === null ? 'completed' : 'failed',
           ...(firstTokenTimestampMs !== null ? { latencyMs: firstTokenTimestampMs } : {}),
@@ -994,6 +1017,7 @@ export async function buildAdapterStreamResponse(
             cacheReadInputTokens: usage.cacheReadInputTokens,
             cacheCreationInputTokens: usage.cacheCreationInputTokens,
             cacheCreation1hInputTokens: usage.cacheCreation1hInputTokens,
+            providerReportedCostUsd: usage.providerReportedCostUsd,
           },
           outcome: 'failed',
           cancelled: true,

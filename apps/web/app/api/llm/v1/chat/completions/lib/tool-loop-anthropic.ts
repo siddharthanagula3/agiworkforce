@@ -92,6 +92,7 @@ export function chunksToOpenAiSse(
   let sawUsage = false;
   let usageCommitted = false;
   let upstreamProvider: string | undefined;
+  let providerReportedCostUsd: number | undefined;
   const streamUsage = {
     inputTokens: 0,
     outputTokens: 0,
@@ -106,7 +107,11 @@ export function chunksToOpenAiSse(
     usageCommitted = true;
     accumulateObservedProviderUsage(
       sink.usage,
-      { ...streamUsage, ...(upstreamProvider ? { upstreamProvider } : {}) },
+      {
+        ...streamUsage,
+        ...(upstreamProvider ? { upstreamProvider } : {}),
+        ...(providerReportedCostUsd !== undefined ? { providerReportedCostUsd } : {}),
+      },
       pricing,
     );
   };
@@ -138,6 +143,10 @@ export function chunksToOpenAiSse(
               streamUsage.reasoningTokens,
               chunk.reasoningTokens ?? 0,
             );
+            const reportedCost = chunk.providerReportedCostUsd ?? chunk.costUsd;
+            if (reportedCost !== undefined) {
+              providerReportedCostUsd = reportedCost;
+            }
           }
           const wireEvents = assembler.sseChunks(chunk);
           if (wireEvents.length === 0) continue;
