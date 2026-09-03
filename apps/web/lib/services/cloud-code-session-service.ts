@@ -11,14 +11,27 @@ import {
   type CreateCloudCodeSessionInput,
 } from '@agiworkforce/types';
 import { logger } from '@/lib/logger';
-import { CLOUD_CODE_COMMAND_DEADLINE_MS } from '@/lib/deadline-policy';
+import {
+  CLOUD_CODE_COMMAND_DEADLINE_MS,
+  resolveCloudCodeCommandDeadlineMs,
+} from '@/lib/deadline-policy';
 import { getE2BExecutor, killE2BSession } from '@/lib/e2b/runtime';
-import { listCloudCodeRuntimes } from '@/lib/e2b/templates';
+import type { CommandExecutionResult } from '@/lib/e2b/types';
+import { knownHarnessCommandIds, listCloudCodeRuntimes } from '@/lib/e2b/templates';
 import { managedCloudCodeSessionScope } from '@/lib/e2b/session-store';
+import {
+  getInstallationAccessToken,
+  isGitHubAppConfigured,
+  isGitHubInstallationLinkingAvailable,
+} from '@/lib/github-app';
+import { getUserGithubInstallations } from '@/lib/user-connector-tools';
 
 const MAX_TITLE_LENGTH = 120;
 const MAX_COMMAND_LENGTH = 2_000;
 const MAX_ERROR_LENGTH = 2_000;
+const MAX_COMMIT_MESSAGE_LENGTH = 2_000;
+const GITHUB_INSTALLATION_TOKEN_USERNAME = 'x-access-token';
+const GITHUB_REPOSITORY_URL_RE = /^https:\/\/github\.com\/([^/]+)\/([^/]+)\.git$/;
 const DEFAULT_WORKSPACE_PATH = '/home/user';
 const REPOSITORY_WORKSPACE_PATH = '/home/user/project';
 const REQUEST_ID_RE = /^[A-Za-z0-9_-]{8,128}$/;
@@ -520,8 +533,32 @@ function sameCreateRequest(row: SessionRow, input: ValidatedCreateInput): boolea
   );
 }
 
-function shellQuote(value: string): string {
-  return `'${value.replaceAll("'", "'\"'\"'")}'`;
+interface GitHubCloneCredential {
+  username: string;
+  password: string;
+}
+
+function parseGithubRepositoryUrl(url: string): { owner: string; repo: string } | null {
+  const match = GITHUB_REPOSITORY_URL_RE.exec(url);
+  return match ? { owner: match[1]!, repo: match[2]! } : null;
+}
+
+async function resolveGithubCloneCredential(
+  userId: string,
+  repositoryUrl: string,
+): Promise<GitHubCloneCredential | null> {
+  if (!isGitHubInstallationLinkingAvailable() || !isGitHubAppConfigured()) return null;
+  const parsed = parseGithubRepositoryUrl(repositoryUrl);
+  if (!parsed) return null;
+  const installations = await getUserGithubInstallations(userId);
+  if (installations.length === 0) return null;
+  const match =
+    installations.find(
+      (installation) => installation.login.toLowerCase() === parsed.owner.toLowerCase(),
+    ) ?? (installations.length === 1 ? installations[0] : undefined);
+  if (!match) return null;
+  const password = await getInstallationAccessToken(match.installationId);
+  return { username: GITHUB_INSTALLATION_TOKEN_USERNAME, password };
 }
 
 export async function createCloudCodeSession(
@@ -628,13 +665,16 @@ export async function createCloudCodeSession(
   let disposed = false;
   try {
     if (validated.repositoryUrl) {
-      const clone = await executor.runCommand({
-        // The ref goes before `--`, which is why validateRepositoryBranch
-        // refuses anything that could read as a flag.
-        command: `git clone --depth=1 ${
-          validated.repositoryBranch ? `--branch ${shellQuote(validated.repositoryBranch)} ` : ''
-        }-- ${shellQuote(validated.repositoryUrl)} ${shellQuote(REPOSITORY_WORKSPACE_PATH)}`,
-        cwd: DEFAULT_WORKSPACE_PATH,
+      if (!executor.git) {
+        throw new CloudCodeUnavailableError('Managed Code environment cannot clone repositories');
+      }
+      const credential = await resolveGithubCloneCredential(owner.userId, validated.repositoryUrl);
+      const clone = await executor.git.clone({
+        url: validated.repositoryUrl,
+        path: REPOSITORY_WORKSPACE_PATH,
+        depth: 1,
+        ...(validated.repositoryBranch ? { branch: validated.repositoryBranch } : {}),
+        ...(credential ? credential : {}),
         timeoutMs: CLOUD_CODE_COMMAND_DEADLINE_MS,
       });
       if (!clone.ok) {
@@ -734,6 +774,7 @@ export async function runCloudCodeCommand(
   sessionId: string,
   commandValue: unknown,
   planTier: string,
+  signal?: AbortSignal,
 ): Promise<{ session: CloudCodeSession; terminalEntry: CloudCodeTerminalEntry }> {
   const command = typeof commandValue === 'string' ? commandValue.trim() : '';
   if (!command || command.length > MAX_COMMAND_LENGTH || command.includes('\0')) {
@@ -784,7 +825,8 @@ export async function runCloudCodeCommand(
     const result = await executor.runCommand({
       command,
       cwd: claim.session.workspacePath,
-      timeoutMs: CLOUD_CODE_COMMAND_DEADLINE_MS,
+      timeoutMs: resolveCloudCodeCommandDeadlineMs(command, knownHarnessCommandIds()),
+      ...(signal ? { signal } : {}),
     });
     const completedAt = new Date();
     const scoped = ownerSql(owner, 3);
@@ -828,6 +870,100 @@ export async function runCloudCodeCommand(
       terminalEntry: mapCloudCodeTerminalEntry(rows.entry),
       session: mapCloudCodeSession(rows.session),
     };
+  } catch (error) {
+    await failSessionIfOpen(
+      db,
+      owner,
+      sessionId,
+      error instanceof Error ? error.message : String(error),
+      claim.leaseToken,
+    );
+    throw error;
+  } finally {
+    await executor.pause?.();
+    await executor.dispose();
+  }
+}
+
+export async function commitAndPushCloudCodeSession(
+  db: DatabaseAdapter,
+  owner: CloudCodeOwner,
+  sessionId: string,
+  planTier: string,
+  messageValue: unknown,
+): Promise<{ session: CloudCodeSession; push: CommandExecutionResult }> {
+  const message = typeof messageValue === 'string' ? messageValue.trim() : '';
+  if (!message || message.length > MAX_COMMIT_MESSAGE_LENGTH || message.includes('\0')) {
+    throw new CloudCodeValidationError(
+      `Commit message must be 1–${MAX_COMMIT_MESSAGE_LENGTH} characters and contain no null bytes`,
+    );
+  }
+
+  const session = await getCloudCodeSession(db, owner, sessionId);
+  if (!session.repositoryUrl) {
+    throw new CloudCodeValidationError('Code session has no repository to push to');
+  }
+  if (session.state === 'closed') {
+    throw new CloudCodeConflictError('Closed Code sessions cannot be pushed');
+  }
+  if (session.state === 'provisioning') {
+    throw new CloudCodeConflictError('Code session is busy; wait and try again');
+  }
+  if (session.state === 'failed') {
+    throw new CloudCodeConflictError('Failed Code sessions must be closed and recreated');
+  }
+
+  const credential = await resolveGithubCloneCredential(owner.userId, session.repositoryUrl);
+  if (!credential) {
+    throw new CloudCodeValidationError(
+      'No connected GitHub installation can push to this repository',
+    );
+  }
+
+  const claim = await claimCloudCodeSessionForRun(db, owner, sessionId);
+  if (!claim) {
+    throw new CloudCodeConflictError('Code session is busy; wait and try again');
+  }
+  const scope = managedCloudCodeSessionScope(
+    owner.userId,
+    sessionId,
+    claim.session.networkAccess,
+    planTier,
+    claim.session.runtimeId,
+  );
+  const executor = await getE2BExecutor(scope);
+  if (!executor?.git) {
+    await failSessionIfOpen(
+      db,
+      owner,
+      sessionId,
+      'Managed Code environment could not be attached',
+      claim.leaseToken,
+    );
+    throw new CloudCodeUnavailableError('Managed Code environment could not be attached');
+  }
+
+  try {
+    const add = await executor.git.add({ path: claim.session.workspacePath, all: true });
+    if (!add.ok) {
+      throw new CloudCodeUnavailableError(add.error || add.stderr || 'Staging changes failed');
+    }
+    const commit = await executor.git.commit({ path: claim.session.workspacePath, message });
+    if (!commit.ok) {
+      throw new CloudCodeUnavailableError(commit.error || commit.stderr || 'Commit failed');
+    }
+    const push = await executor.git.push({
+      path: claim.session.workspacePath,
+      username: credential.username,
+      password: credential.password,
+      timeoutMs: CLOUD_CODE_COMMAND_DEADLINE_MS,
+    });
+    if (!push.ok) {
+      throw new CloudCodeUnavailableError(push.error || push.stderr || 'Push failed');
+    }
+    const released = await releaseCloudCodeSessionAfterRun(db, owner, sessionId, claim.leaseToken);
+    if (!released) throw new CloudCodeNotFoundError();
+    return { session: released, push };
   } catch (error) {
     await failSessionIfOpen(
       db,
