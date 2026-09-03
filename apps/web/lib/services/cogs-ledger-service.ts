@@ -423,10 +423,25 @@ export async function importStripeCogsAdjustments(input: {
   };
 }
 
+/**
+ * Reads the route id a settled COGS row served under back out of its
+ * `metadata`. Present only when {@link recordSettledProviderCost} was called
+ * with a `routeId` — the `provider`/`model` the route resolved to are the
+ * row's own columns, already the served values, not duplicated here.
+ */
+export function getServedRouteIdFromCostEventMetadata(
+  metadata: Record<string, unknown> | null | undefined,
+): string | null {
+  return typeof metadata?.['servedRouteId'] === 'string'
+    ? (metadata['servedRouteId'] as string)
+    : null;
+}
+
 export async function recordSettledProviderCost(input: {
   userId: string;
   provider: string;
   model?: string | null;
+  routeId?: string | null;
   actualCostCents: number;
   sourceRef: string;
   taskOutcome?: CogsTaskOutcome;
@@ -444,6 +459,8 @@ export async function recordSettledProviderCost(input: {
     );
   }
 
+  const metadata = input.routeId ? { ...input.usage, servedRouteId: input.routeId } : input.usage;
+
   try {
     await recordProviderCostEvent(
       {
@@ -458,7 +475,7 @@ export async function recordSettledProviderCost(input: {
         sourceRef: input.sourceRef,
         taskOutcome: input.taskOutcome ?? 'delivered',
         taskRef: input.taskRef ?? null,
-        metadata: input.usage,
+        metadata,
         tokenClasses: resolveTokenClassDimensions({
           capability,
           provider: input.provider,
