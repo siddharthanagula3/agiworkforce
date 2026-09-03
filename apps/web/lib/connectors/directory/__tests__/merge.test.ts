@@ -34,7 +34,14 @@ function internalRecord(overrides: Partial<DirectoryRecord> = {}): DirectoryReco
     badge: 'first-party',
     iconUrl: null,
     monogram: 'N',
-    docsUrl: null,
+    documentationUrl: null,
+    iconSource: 'monogram',
+    brandSlug: null,
+    authorName: 'Notion',
+    authorUrl: null,
+    websiteUrl: null,
+    supportUrl: null,
+    privacyPolicyUrl: null,
     ...overrides,
   };
 }
@@ -56,7 +63,14 @@ function registryRecord(overrides: Partial<DirectoryRecord> = {}): DirectoryReco
     badge: 'registry',
     iconUrl: null,
     monogram: 'NM',
-    docsUrl: null,
+    documentationUrl: null,
+    iconSource: 'monogram',
+    brandSlug: null,
+    authorName: 'someone',
+    authorUrl: 'https://github.com/someone',
+    websiteUrl: null,
+    supportUrl: null,
+    privacyPolicyUrl: null,
     ...overrides,
   };
 }
@@ -138,17 +152,44 @@ describe('mergeDirectoryRecords', () => {
 
   it('fills in a missing icon and docs url from the matched registry record', () => {
     const merged = mergeDirectoryRecords(
-      [internalRecord({ iconUrl: null, docsUrl: null })],
+      [internalRecord({ iconUrl: null, documentationUrl: null, iconSource: 'monogram' })],
       [
         registryRecord({
           iconUrl: 'https://cdn.example.com/notion-mirror.png',
-          docsUrl: 'https://example.com/docs',
+          documentationUrl: 'https://example.com/docs',
+          iconSource: 'registry',
         }),
       ],
     );
 
     expect(merged[0]?.iconUrl).toBe('https://cdn.example.com/notion-mirror.png');
-    expect(merged[0]?.docsUrl).toBe('https://example.com/docs');
+    expect(merged[0]?.documentationUrl).toBe('https://example.com/docs');
+    expect(merged[0]?.iconSource).toBe('registry');
+  });
+
+  it('never lets a lower-priority registry icon source downgrade a brand match', () => {
+    const merged = mergeDirectoryRecords(
+      [internalRecord({ iconSource: 'brand', brandSlug: 'notion' })],
+      [registryRecord({ iconSource: 'site', iconUrl: 'https://cdn.example.com/favicon.ico' })],
+    );
+
+    expect(merged[0]?.iconSource).toBe('brand');
+    expect(merged[0]?.brandSlug).toBe('notion');
+  });
+
+  it('fills in a missing author url and website url from the matched registry record', () => {
+    const merged = mergeDirectoryRecords(
+      [internalRecord({ authorUrl: null, websiteUrl: null })],
+      [
+        registryRecord({
+          authorUrl: 'https://github.com/someone',
+          websiteUrl: 'https://example.com',
+        }),
+      ],
+    );
+
+    expect(merged[0]?.authorUrl).toBe('https://github.com/someone');
+    expect(merged[0]?.websiteUrl).toBe('https://example.com');
   });
 });
 
@@ -173,7 +214,9 @@ describe('applyFirstPartyTargets', () => {
     expect(notion?.remotes).toEqual([
       { url: 'https://mcp.notion.com/mcp', transport: 'streamable-http' },
     ]);
-    expect(notion?.docsUrl).toBe('https://developers.notion.com/guides/mcp/mcp-supported-tools');
+    expect(notion?.documentationUrl).toBe(
+      'https://developers.notion.com/guides/mcp/mcp-supported-tools',
+    );
   });
 
   it('fills in a real remote for a catalog entry that had none at all', () => {
@@ -187,7 +230,7 @@ describe('applyFirstPartyTargets', () => {
   it('leaves records with no first-party target untouched', () => {
     const [other] = applyFirstPartyTargets([internalRecord({ id: 'stripe' })]);
 
-    expect(other?.docsUrl).toBeNull();
+    expect(other?.documentationUrl).toBeNull();
   });
 
   it('derives categories for a first-party target through the same keyword rules as the registry', () => {
@@ -221,6 +264,39 @@ describe('applyFirstPartyTargets', () => {
     expect(withStandalone).toHaveLength(internal.length + 1);
     expect(new Set(withStandalone.map((record) => record.id)).size).toBe(withStandalone.length);
   });
+
+  it('keeps the brand icon source it already had from the connector id, for a provider we ship a mark for', () => {
+    const [jira] = applyFirstPartyTargets([
+      internalRecord({ id: 'jira', iconSource: 'brand', brandSlug: 'jira' }),
+    ]);
+
+    expect(jira?.iconSource).toBe('brand');
+    expect(jira?.brandSlug).toBe('jira');
+  });
+
+  it('upgrades a monogram-only provider to site once a documentation url exists', () => {
+    const [slack] = applyFirstPartyTargets([
+      internalRecord({ id: 'slack', iconSource: 'monogram' }),
+    ]);
+
+    expect(slack?.iconSource).toBe('site');
+  });
+
+  it('derives an author url from the documentation url origin', () => {
+    const [notion] = applyFirstPartyTargets([internalRecord({ id: 'notion', authorUrl: null })]);
+
+    expect(notion?.authorUrl).toBe('https://developers.notion.com');
+  });
+
+  it('gives the microsoft-365 standalone record a site icon source, not brand', () => {
+    const microsoft365 = applyFirstPartyTargets(buildInternalDirectoryRecords()).find(
+      (record) => record.id === 'microsoft-365',
+    );
+
+    expect(microsoft365?.iconSource).toBe('site');
+    expect(microsoft365?.brandSlug).toBeNull();
+    expect(microsoft365?.authorUrl).toBe('https://learn.microsoft.com');
+  });
 });
 
 describe('buildInternalDirectoryRecords', () => {
@@ -239,5 +315,19 @@ describe('buildInternalDirectoryRecords', () => {
       { url: 'https://mcp.notion.com/mcp', transport: 'streamable-http' },
     ]);
     expect(notion?.connectable).toBe('connect');
+  });
+
+  it('marks a connector with a verified simple-icons entry as a brand icon', () => {
+    const notion = buildInternalDirectoryRecords().find((record) => record.id === 'notion');
+
+    expect(notion?.iconSource).toBe('brand');
+    expect(notion?.brandSlug).toBe('notion');
+  });
+
+  it('falls back to monogram for a connector with no simple-icons entry', () => {
+    const slack = buildInternalDirectoryRecords().find((record) => record.id === 'slack');
+
+    expect(slack?.iconSource).toBe('monogram');
+    expect(slack?.brandSlug).toBeNull();
   });
 });
