@@ -34,6 +34,17 @@ vi.mock('@/lib/server/neon-db', () => ({
     transaction: (...args: unknown[]) => mockTransaction(...args),
   })),
 }));
+vi.mock('@/lib/server/rls-db', () => ({
+  getUserScopedDb: vi.fn(async () => ({
+    db: {
+      query: (...args: unknown[]) => mockQuery(...args),
+      execute: (...args: unknown[]) => mockExecute(...args),
+      transaction: (...args: unknown[]) => mockTransaction(...args),
+    },
+    userId: 'current-owner',
+    organizationId: null,
+  })),
+}));
 
 import { POST } from '../route';
 import { PATCH, DELETE } from '@/app/api/settings/team/[memberId]/route';
@@ -181,9 +192,7 @@ describe('sole-owner protection on the member routes', () => {
 
   it('refuses to promote a second owner and names the transfer flow instead', async () => {
     const memberId = `${ORG_A}:successor`;
-    mockQuery
-      .mockResolvedValueOnce([])
-      .mockResolvedValueOnce([member('current-owner', 'owner')]);
+    mockQuery.mockResolvedValueOnce([]).mockResolvedValueOnce([member('current-owner', 'owner')]);
 
     const response = await PATCH(
       new Request(`http://localhost:3000/api/settings/team/${memberId}`, {
