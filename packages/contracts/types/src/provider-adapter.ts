@@ -307,6 +307,16 @@ export interface StreamChunkStop {
     | 'pause_turn'
     | 'error'
     | 'cancel';
+  /**
+   * The vendor's own terminal signal verbatim (Gemini `finishReason` or
+   * `promptFeedback.blockReason`, e.g. `'SAFETY'`, `'MAX_TOKENS'`, `'OTHER'`).
+   * `reason` above is the canonical 8-way vocabulary every adapter maps onto;
+   * this field preserves the untranslated vendor string for a consumer that
+   * needs finer granularity than that vocabulary carries (SAFETY vs
+   * RECITATION vs BLOCKLIST all collapse to `reason: 'refusal'`). Omitted
+   * when the adapter has no such signal to report.
+   */
+  providerFinishReason?: string;
 }
 
 export type StreamChunk =

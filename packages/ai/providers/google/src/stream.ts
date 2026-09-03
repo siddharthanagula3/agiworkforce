@@ -115,7 +115,7 @@ const PARSE_ERROR_SENTINEL = {
 function mapFinishReason(
   reason: string | undefined,
   hasToolCall: boolean,
-): 'end_turn' | 'max_tokens' | 'tool_use' | 'stop_sequence' | 'error' | 'cancel' {
+): 'end_turn' | 'max_tokens' | 'tool_use' | 'stop_sequence' | 'refusal' | 'error' | 'cancel' {
   if (hasToolCall) return 'tool_use';
   switch (reason) {
     case 'STOP':
@@ -128,9 +128,9 @@ function mapFinishReason(
     case 'PROHIBITED_CONTENT':
     case 'SPII':
     case 'IMAGE_SAFETY':
-      return 'error';
+      return 'refusal';
     default:
-      return 'end_turn';
+      return 'error';
   }
 }
 
@@ -201,6 +201,7 @@ export async function* translateGeminiStream(
 ): AsyncIterable<StreamChunk> {
   let toolCounter = 0;
   let lastFinish: string | undefined;
+  let blockReason: string | undefined;
   let turnHadToolCall = false;
   let lastUsage: GeminiStreamChunk['usageMetadata'] | undefined;
   let groundingEmitted = false;
@@ -211,6 +212,7 @@ export async function* translateGeminiStream(
       lastUsage = chunk.usageMetadata;
     }
     if (chunk.promptFeedback?.blockReason) {
+      blockReason = chunk.promptFeedback.blockReason;
       yield {
         type: 'error',
         message: `Prompt blocked: ${chunk.promptFeedback.blockReason}`,
@@ -304,5 +306,10 @@ export async function* translateGeminiStream(
     yield usageChunk;
   }
 
-  yield { type: 'stop', reason: mapFinishReason(lastFinish, turnHadToolCall) };
+  const effectiveFinish = lastFinish ?? blockReason;
+  yield {
+    type: 'stop',
+    reason: mapFinishReason(effectiveFinish, turnHadToolCall),
+    ...(effectiveFinish !== undefined ? { providerFinishReason: effectiveFinish } : {}),
+  };
 }
