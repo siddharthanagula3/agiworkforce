@@ -508,8 +508,8 @@ describe('managed usage settlement feeds the COGS ledger', () => {
       leaseToken: 'lease-gateway',
       estimatedCostCents: 10,
       provider: 'anthropic',
-      model: 'claude-sonnet-5',
-      routeId: 'anthropic/claude-sonnet-5',
+      model: 'served-model',
+      routeId: 'anthropic/served-model',
       outcome: 'completed',
       actualCostCents: 7,
       usage: {
@@ -518,8 +518,8 @@ describe('managed usage settlement feeds the COGS ledger', () => {
         providerCallObservations: [
           {
             provider: 'openrouter',
-            model: 'claude-sonnet-5',
-            routeId: 'open_router/claude-sonnet-5',
+            model: 'served-model',
+            routeId: 'open_router/served-model',
             inputTokens: 50,
             outputTokens: 10,
           },
@@ -530,8 +530,8 @@ describe('managed usage settlement feeds the COGS ledger', () => {
     expect(recordSettledProviderCost).toHaveBeenCalledWith(
       expect.objectContaining({
         provider: 'openrouter',
-        model: 'claude-sonnet-5',
-        routeId: 'open_router/claude-sonnet-5',
+        model: 'served-model',
+        routeId: 'open_router/served-model',
       }),
     );
   });
