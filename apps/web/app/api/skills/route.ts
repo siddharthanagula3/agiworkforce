@@ -14,6 +14,7 @@ import {
   getManagedSkillDirectoryForPlugins,
   SkillCatalogUnavailableError,
 } from '@/lib/services/skill-catalog-service';
+import { resolveInstalledManagedSkills } from '@/lib/services/skill-install-service';
 import {
   createUserSkill,
   listUserSkills,
@@ -33,7 +34,8 @@ async function handleListSkills(request: NextRequest) {
   let skills;
   try {
     const enabledPluginIds = await listEnabledPluginIds(getNeonDb(), userId);
-    skills = await getManagedSkillDirectoryForPlugins(enabledPluginIds);
+    const directory = await getManagedSkillDirectoryForPlugins(enabledPluginIds);
+    skills = await resolveInstalledManagedSkills(getNeonDb(), userId, directory);
   } catch (error) {
     if (error instanceof SkillCatalogUnavailableError) {
       throw createError.internal('Failed to load skills');
