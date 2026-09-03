@@ -107,6 +107,7 @@ import {
 import {
   isWebSearchTool,
   executeWebSearch,
+  enrichWebSearchResultTitles,
   formatWebSearchResultForModel,
   webSearchBudgetExhaustedMessage,
   WEB_SEARCH_FREE_MAX_RESULTS,
@@ -1398,10 +1399,16 @@ async function runMcpTool(
       maxResults: executionContext?.webSearchMaxResults,
       ...(executionContext?.signal ? { signal: executionContext.signal } : {}),
     });
+    // Enrich AFTER the cap (executeWebSearch already bounds results to
+    // WEB_SEARCH_MAX_RESULTS) and BEFORE either consumer below, so the model's
+    // view and the client's sources panel both see the real headline in one pass.
+    const enriched = outcome.ok
+      ? { ...outcome, results: await enrichWebSearchResultTitles(outcome.results) }
+      : outcome;
     return {
-      content: formatWebSearchResultForModel(outcome),
-      isError: !outcome.ok,
-      sources: webSearchResultsToFetchedSources(outcome),
+      content: formatWebSearchResultForModel(enriched),
+      isError: !enriched.ok,
+      sources: webSearchResultsToFetchedSources(enriched),
     };
   }
 
@@ -1767,6 +1774,14 @@ export async function* runToolLoop(
     step: number,
     stepRequest: ProcessedRequest['llmRequest'],
   ): Promise<ToolLoopProviderStepResult> {
+    // The first non-retryable quota/spending-cap failure in a rotation chain
+    // is the true reason this turn could not be served -- a later rescue
+    // attempt's OWN failure (an overloaded 503 from a different route, say)
+    // is a fact about the rescue, not about why the request failed, and
+    // showing that instead buries the one specific, actionable cause under a
+    // generic "overloaded" that does not match what the provider actually
+    // said.
+    let rootQuotaExhaustedError: unknown | undefined;
     for (;;) {
       const attemptProcessed = servingProcessed;
       const attemptRequest: ProcessedRequest['llmRequest'] = {
@@ -1816,8 +1831,16 @@ export async function* runToolLoop(
       } catch (err) {
         if (options.shouldPropagateExecutionError?.(err)) throw err;
         if (err instanceof ProviderStreamDeadlineError) throw err;
+        const classified = classifyError(err);
+        if (!rootQuotaExhaustedError && classified.category === 'quota_exhausted') {
+          rootQuotaExhaustedError = err;
+        }
         const nextAttempt = options.failover?.next(err, { step });
-        if (!nextAttempt) throw err;
+        if (!nextAttempt) {
+          throw rootQuotaExhaustedError && classified.category !== 'quota_exhausted'
+            ? rootQuotaExhaustedError
+            : err;
+        }
         servingProcessed = nextAttempt.processed;
       }
     }
@@ -2782,11 +2805,17 @@ export async function* runToolLoop(
           );
         }
         for (const result of entry.serverToolResults ?? []) {
+          // Anthropic/Gemini/OpenAI native search all normalize to this shape
+          // (serverToolResultSources), and the provider's own title — when it
+          // has one at all — is often just a citation label, not the
+          // headline. Enrich here, on the already-capped list, before either
+          // client-facing event goes out.
+          const sources = await enrichWebSearchResultTitles(result.sources);
           yield encoder.encode(
             eventStream.emit({
               type: 'source-list',
               toolCallId: result.toolCallId,
-              sources: result.sources,
+              sources,
             }),
           );
           yield encoder.encode(
@@ -2794,7 +2823,7 @@ export async function* runToolLoop(
               type: 'tool-execution-end',
               toolCallId: result.toolCallId,
               name: result.name,
-              output: toAgentEventJson(result.sources),
+              output: toAgentEventJson(sources),
               isError: false,
               elapsedMs: result.elapsedMs,
             }),
