@@ -194,7 +194,8 @@ export type AuditEventType =
   | 'retention_sweep_completed'
   | 'legal_hold_created'
   | 'legal_hold_released'
-  | 'secret_detected';
+  | 'secret_detected'
+  | 'spend_cap_exceeded';
 
 export type AuditOutcome = 'success' | 'failure' | 'denied';
 
