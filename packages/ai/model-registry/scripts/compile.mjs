@@ -778,12 +778,20 @@ export function normalizePricingSchedule(modelKey, schedule) {
   return normalizedSchedule;
 }
 
+const PRICING_TIER_THRESHOLD_BOUNDARIES = new Set(['inclusive', 'exclusive']);
+
 function normalizeInputTokenPricingTier(label, tier) {
   assert.ok(tier && typeof tier === 'object' && !Array.isArray(tier), `${label} must be an object`);
   assert.ok(
     Number.isInteger(tier.thresholdTokens) && tier.thresholdTokens > 0,
     `${label}.thresholdTokens must be a positive integer`,
   );
+  if (tier.thresholdBoundary !== undefined) {
+    assert.ok(
+      PRICING_TIER_THRESHOLD_BOUNDARIES.has(tier.thresholdBoundary),
+      `${label}.thresholdBoundary must be inclusive or exclusive when present`,
+    );
+  }
   for (const field of ['inputCost', 'outputCost']) {
     assert.ok(
       Number.isFinite(tier[field]) && tier[field] >= 0,
@@ -801,6 +809,7 @@ function normalizeInputTokenPricingTier(label, tier) {
     (key) =>
       ![
         'thresholdTokens',
+        'thresholdBoundary',
         'inputCost',
         'outputCost',
         'cached_input',
@@ -811,6 +820,7 @@ function normalizeInputTokenPricingTier(label, tier) {
   assert.equal(unknownKeys.length, 0, `${label} has unsupported keys: ${unknownKeys.join(', ')}`);
   return defined({
     thresholdTokens: tier.thresholdTokens,
+    thresholdBoundary: tier.thresholdBoundary,
     inputPerMillion: tier.inputCost,
     outputPerMillion: tier.outputCost,
     cacheReadPerMillion: tier.cached_input,

@@ -2075,6 +2075,7 @@
       "inputTokenPricingTiers": [
         {
           "thresholdTokens": 200000,
+          "thresholdBoundary": "inclusive",
           "inputCost": 4,
           "outputCost": 12
         }
