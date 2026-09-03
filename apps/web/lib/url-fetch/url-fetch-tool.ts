@@ -296,6 +296,58 @@ export function extractHtmlTitle(html: string): string | undefined {
   return title || undefined;
 }
 
+const META_ATTR =
+  /([a-zA-Z][a-zA-Z0-9:-]*)\s*=\s*"([^"]*)"|([a-zA-Z][a-zA-Z0-9:-]*)\s*=\s*'([^']*)'/g;
+
+function metaTagAttrs(tagSource: string): Record<string, string> {
+  const attrs: Record<string, string> = {};
+  META_ATTR.lastIndex = 0;
+  let match: RegExpExecArray | null;
+  while ((match = META_ATTR.exec(tagSource))) {
+    const name = (match[1] ?? match[3])?.toLowerCase();
+    const value = match[2] ?? match[4] ?? '';
+    if (name) attrs[name] = value;
+  }
+  return attrs;
+}
+
+function metaTagContent(html: string, keys: readonly string[]): string | undefined {
+  const lower = html.toLowerCase();
+  let cursor = 0;
+  while (cursor < html.length) {
+    const open = findOpenTag(lower, 'meta', cursor);
+    if (open === -1) return undefined;
+    const gt = html.indexOf('>', open);
+    if (gt === -1) return undefined;
+    const attrs = metaTagAttrs(html.slice(open, gt + 1));
+    const key = (attrs['property'] ?? attrs['name'] ?? '').toLowerCase();
+    if (keys.includes(key) && attrs['content']) return attrs['content'];
+    cursor = gt + 1;
+  }
+  return undefined;
+}
+
+export const PAGE_TITLE_MAX_CHARS = 160;
+
+/**
+ * Best-available title for a fetched page: `og:title`, then `twitter:title`,
+ * then the `<title>` element — the same cascade browsers and link-preview
+ * generators use, since a publisher's `<title>` is often a site-wide brand
+ * string ("Example News") while its `og:title` carries the actual headline.
+ */
+export function extractPageTitle(html: string): string | undefined {
+  const bounded = bound(html);
+  const metaRaw =
+    metaTagContent(bounded, ['og:title']) ?? metaTagContent(bounded, ['twitter:title']);
+  const decoded = metaRaw
+    ? decodeHtmlEntities(metaRaw).replace(/\s+/g, ' ').trim()
+    : extractHtmlTitle(bounded);
+  if (!decoded) return undefined;
+  return decoded.length > PAGE_TITLE_MAX_CHARS
+    ? decoded.slice(0, PAGE_TITLE_MAX_CHARS).trim()
+    : decoded;
+}
+
 export function extractHtmlText(html: string): string {
   const bounded = bound(html);
   let doc = stripComments(bounded);

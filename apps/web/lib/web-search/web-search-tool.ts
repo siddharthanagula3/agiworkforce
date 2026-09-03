@@ -1,5 +1,12 @@
 import 'server-only';
 
+import {
+  assertResolvedPublicHostname,
+  EgressPolicyError,
+  pinnedPublicFetch,
+} from '@/lib/egress-policy';
+import { extractPageTitle } from '@/lib/url-fetch/url-fetch-tool';
+
 export const WEB_SEARCH_TOOL = 'web_search';
 
 export function isWebSearchTool(name: string): boolean {
@@ -254,4 +261,167 @@ export function webSearchResultsToFetchedSources(
     title: r.title,
     ...(r.snippet ? { snippet: r.snippet } : {}),
   }));
+}
+
+/**
+ * Title enrichment for the search results this call is about to render — the
+ * Perplexity Search API leaves `title` empty on most hits, so the sources
+ * panel falls back to a path-trimmed URL instead of the article headline.
+ * Runs on the already-capped result list (never more than
+ * WEB_SEARCH_MAX_RESULTS), one fetch per untitled URL, bounded so the extra
+ * round trip cannot meaningfully delay the stream.
+ */
+export const TITLE_ENRICHMENT_TIMEOUT_MS = 2_000;
+export const TITLE_ENRICHMENT_MAX_RESPONSE_BYTES = 65_536;
+export const TITLE_ENRICHMENT_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
+export const TITLE_ENRICHMENT_MAX_CONCURRENCY = WEB_SEARCH_MAX_RESULTS;
+
+interface TitleCacheEntry {
+  title: string | null;
+  expiresAt: number;
+}
+
+const titleCache = new Map<string, TitleCacheEntry>();
+
+function cachedTitle(url: string): string | null | undefined {
+  const entry = titleCache.get(url);
+  if (!entry || entry.expiresAt <= Date.now()) return undefined;
+  return entry.title;
+}
+
+function setCachedTitle(url: string, title: string | null): void {
+  if (titleCache.size > 5_000) {
+    const now = Date.now();
+    for (const [key, entry] of titleCache) {
+      if (entry.expiresAt <= now) titleCache.delete(key);
+    }
+  }
+  titleCache.set(url, { title, expiresAt: Date.now() + TITLE_ENRICHMENT_CACHE_TTL_MS });
+}
+
+async function readBodyTruncated(response: Response, maxBytes: number): Promise<Uint8Array> {
+  const body = response.body;
+  if (!body) return new Uint8Array(0);
+  const reader = body.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  try {
+    while (total < maxBytes) {
+      const { done, value } = await reader.read();
+      if (done || !value) break;
+      const remaining = maxBytes - total;
+      const chunk = value.byteLength > remaining ? value.subarray(0, remaining) : value;
+      chunks.push(chunk);
+      total += chunk.byteLength;
+    }
+  } finally {
+    await reader.cancel().catch(() => undefined);
+    reader.releaseLock();
+  }
+  const out = new Uint8Array(total);
+  let offset = 0;
+  for (const chunk of chunks) {
+    out.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return out;
+}
+
+export interface TitleEnrichmentOverrides {
+  fetchImpl?: typeof fetch;
+  timeoutMs?: number;
+  maxResponseBytes?: number;
+  maxConcurrency?: number;
+}
+
+async function fetchPageTitle(
+  url: string,
+  fetchImpl: typeof fetch,
+  timeoutMs: number,
+  maxResponseBytes: number,
+): Promise<string | null> {
+  try {
+    await assertResolvedPublicHostname(url);
+  } catch (guardErr) {
+    if (guardErr instanceof EgressPolicyError) return null;
+    throw guardErr;
+  }
+
+  const controller = new AbortController();
+  const deadline = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    let response: Response;
+    try {
+      response = await fetchImpl(url, {
+        method: 'GET',
+        redirect: 'follow',
+        signal: controller.signal,
+        headers: {
+          Accept: 'text/html',
+          'User-Agent': 'AGIWorkforce-TitleEnrichment/1.0 (+https://agiworkforce.com)',
+        },
+      });
+    } catch {
+      return null;
+    }
+    if (!response.ok) {
+      await response.body?.cancel().catch(() => undefined);
+      return null;
+    }
+    const mime = (response.headers.get('content-type') ?? '').split(';')[0]?.trim().toLowerCase();
+    if (mime && mime !== 'text/html' && mime !== 'application/xhtml+xml') {
+      await response.body?.cancel().catch(() => undefined);
+      return null;
+    }
+    const bytes = await readBodyTruncated(response, maxResponseBytes);
+    const html = new TextDecoder('utf-8', { fatal: false }).decode(bytes);
+    return extractPageTitle(html) ?? null;
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(deadline);
+  }
+}
+
+/**
+ * Generic over both result shapes this enriches: {@link WebSearchResultItem}
+ * from the Perplexity-backed generic tool, and the client-facing
+ * `FetchedSource` the native-provider path (`serverToolResultSources` in
+ * tool-loop.ts) already reduces Anthropic/Gemini/OpenAI search results to.
+ * Both are already capped to WEB_SEARCH_RESULT_RENDER_CAP by the time they
+ * reach here, so this never enriches more than that many URLs per call.
+ */
+export async function enrichWebSearchResultTitles<T extends { url: string; title: string }>(
+  results: T[],
+  overrides: TitleEnrichmentOverrides = {},
+): Promise<T[]> {
+  const candidates = results
+    .map((result, index) => ({ result, index }))
+    .filter(({ result }) => !result.title && isHttpUrl(result.url));
+  if (candidates.length === 0) return results;
+
+  const fetchImpl = overrides.fetchImpl ?? pinnedPublicFetch;
+  const timeoutMs = overrides.timeoutMs ?? TITLE_ENRICHMENT_TIMEOUT_MS;
+  const maxResponseBytes = overrides.maxResponseBytes ?? TITLE_ENRICHMENT_MAX_RESPONSE_BYTES;
+  const maxConcurrency = Math.max(1, overrides.maxConcurrency ?? TITLE_ENRICHMENT_MAX_CONCURRENCY);
+
+  const enriched = [...results];
+  let cursor = 0;
+  const worker = async (): Promise<void> => {
+    while (cursor < candidates.length) {
+      const next = candidates[cursor++]!;
+      const { result, index } = next;
+      let title = cachedTitle(result.url);
+      if (title === undefined) {
+        title = await fetchPageTitle(result.url, fetchImpl, timeoutMs, maxResponseBytes);
+        setCachedTitle(result.url, title);
+      }
+      if (title) enriched[index] = { ...result, title };
+    }
+  };
+
+  await Promise.all(
+    Array.from({ length: Math.min(maxConcurrency, candidates.length) }, () => worker()),
+  );
+  return enriched;
 }
