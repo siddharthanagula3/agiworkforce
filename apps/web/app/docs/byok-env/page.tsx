@@ -68,8 +68,9 @@ export default function ByokEnvDocsPage() {
             <h2 className="agi-ds-h2" id="agi-byok-env-example-title">
               Example .env.local.
             </h2>
-            <pre className="agi-ds-prose" data-size="sm" style={{ overflowX: 'auto' }}>
-              {`# .env.local - never commit this file
+            <pre className="agi-ds-thread" style={{ overflowX: 'auto' }}>
+              <code style={{ fontFamily: 'var(--agi-font-mono)', fontSize: 'var(--agi-text-sm)' }}>
+                {`# .env.local - never commit this file
 ANTHROPIC_API_KEY=sk-ant-...
 OPENAI_API_KEY=sk-...
 GOOGLE_API_KEY=AIza...
@@ -77,6 +78,7 @@ GOOGLE_API_KEY=AIza...
 # Add any others you want active
 # DEEPSEEK_API_KEY=...
 # PERPLEXITY_API_KEY=pplx-...`}
+              </code>
             </pre>
           </Stack>
         </Section>
