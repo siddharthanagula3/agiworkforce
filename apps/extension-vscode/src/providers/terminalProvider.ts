@@ -728,7 +728,7 @@ export class TerminalProvider implements vscode.Disposable {
   runSuggestedCommand(command: string): boolean {
     const rejection = validateSuggestedCommand(command) ?? this._terminalLeftTheWorkspace();
     if (rejection !== undefined) {
-      vscode.window.showErrorMessage(`AGI Workforce: Refused to run command — ${rejection}`);
+      vscode.window.showErrorMessage(`AGI Workforce: Refused to run command, ${rejection}`);
       return false;
     }
     this.runCommand(command);
@@ -825,7 +825,7 @@ export class TerminalProvider implements vscode.Disposable {
       if (err !== undefined) {
         return {
           label: `$(error) ${cmd}`,
-          description: `BLOCKED — ${err}`,
+          description: `BLOCKED, ${err}`,
           detail: 'This command will NOT be run.',
           _cmd: cmd,
           _valid: false,
@@ -833,14 +833,14 @@ export class TerminalProvider implements vscode.Disposable {
       }
       return {
         label: cmd,
-        description: 'Suggested by AI — review carefully before running',
+        description: 'Suggested by AI, review carefully before running',
         _cmd: cmd,
         _valid: true,
       };
     });
 
     const picked = await vscode.window.showQuickPick(items, {
-      title: 'AGI Workforce — Suggested Commands (AI-generated, verify before running)',
+      title: 'AGI Workforce, Suggested Commands (AI-generated, verify before running)',
       placeHolder: 'Select a command to run in the terminal',
     });
 
@@ -850,7 +850,7 @@ export class TerminalProvider implements vscode.Disposable {
 
     if (!picked._valid) {
       vscode.window.showErrorMessage(
-        `AGI Workforce: Refused to run command — ${picked.description ?? 'safety check failed'}`,
+        `AGI Workforce: Refused to run command, ${picked.description ?? 'safety check failed'}`,
       );
       return undefined;
     }
@@ -909,7 +909,7 @@ export class TerminalProvider implements vscode.Disposable {
         : 'No command output has been captured in this terminal yet.';
 
     const pastedOutput = await vscode.window.showInputBox({
-      title: 'AGI Workforce — Paste Terminal Output',
+      title: 'AGI Workforce, Paste Terminal Output',
       prompt: `${reason} Copy the terminal output you want explained and paste it here.`,
       placeHolder: 'Paste terminal output here…',
       ignoreFocusOut: true,
@@ -928,7 +928,6 @@ export class TerminalProvider implements vscode.Disposable {
     }
     this._disposables.length = 0;
     this._lastExecutions.clear();
-    // Do not dispose the terminal itself — the user may still want it
   }
 }
 
@@ -976,7 +975,7 @@ export function activateTerminal(
   context.subscriptions.push(
     vscode.commands.registerCommand('agi-workforce.runCommand', async () => {
       const command = await vscode.window.showInputBox({
-        title: 'AGI Workforce — Run Command',
+        title: 'AGI Workforce, Run Command',
         prompt: 'Enter a command to run in the AGI Workforce terminal',
         placeHolder: 'e.g. npm install, git status, cargo build',
         ignoreFocusOut: true,
@@ -994,7 +993,7 @@ export function activateTerminal(
         provider.runCommand(command.trim());
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
-        vscode.window.showErrorMessage(`AGI Workforce: Failed to run command — ${message}`);
+        vscode.window.showErrorMessage(`AGI Workforce: Failed to run command, ${message}`);
       }
     }),
   );
@@ -1057,7 +1056,7 @@ export function activateTerminal(
       }
 
       const userContext = await vscode.window.showInputBox({
-        title: 'AGI Workforce — Suggest Command',
+        title: 'AGI Workforce, Suggest Command',
         prompt:
           'What are you trying to do? (e.g., "run tests", "find large files", "check git history")',
         placeHolder: 'Describe what you need…',

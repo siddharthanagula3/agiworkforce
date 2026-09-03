@@ -1,4 +1,3 @@
-
 const esbuild = require('esbuild');
 const fs = require('fs');
 const path = require('path');
@@ -78,7 +77,7 @@ async function build() {
       }
       copyCodiconAssets();
       const mode = isProduction ? 'production' : 'development';
-      console.log(`[esbuild] Build complete (${mode}) — extension + webview render`);
+      console.log(`[esbuild] Build complete (${mode}), extension + webview render`);
     }
   } catch (/** @type {unknown} */ err) {
     console.error('[esbuild] Fatal build error:', err);

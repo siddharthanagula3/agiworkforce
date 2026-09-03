@@ -170,9 +170,7 @@ export function activate(context: vscode.ExtensionContext): vscode.Disposable {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
-      }).catch(() => {
-        // Network errors are silently swallowed — telemetry must never crash the extension.
-      });
+      }).catch(() => {});
     } catch {
       // Synchronous errors (e.g. JSON.stringify failure) are also swallowed.
     }

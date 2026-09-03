@@ -1,4 +1,3 @@
-
 import * as vscode from 'vscode';
 import { execFile } from 'child_process';
 import { promisify } from 'util';
@@ -118,7 +117,7 @@ export class ContextBuilder {
         const result = await execFileAsync('git', ['diff', '--stat'], execOpts);
         diffOutput = result.stdout.trim();
       } catch {
-        // diff failed — continue with status only
+        // noop
       }
 
       if (statusOutput === '' && diffOutput === '') {

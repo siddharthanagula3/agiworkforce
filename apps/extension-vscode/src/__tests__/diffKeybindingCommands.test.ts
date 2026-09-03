@@ -1,4 +1,3 @@
-
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -74,7 +73,7 @@ describe('diff keybinding commands (SIX-14)', () => {
     vi.mocked(vscode.workspace.applyEdit).mockResolvedValue(true);
   });
 
-  it('binds acceptDiff and rejectDiff with no arguments — the shape under test', () => {
+  it('binds acceptDiff and rejectDiff with no arguments, the shape under test', () => {
     const bindings = readKeybindings().filter(
       (kb) =>
         kb.command === 'agi-workforce.acceptDiff' || kb.command === 'agi-workforce.rejectDiff',

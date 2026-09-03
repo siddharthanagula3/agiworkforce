@@ -1,11 +1,10 @@
-
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 import * as vscode from 'vscode';
 import { validateEndpointUrl } from '../utils/api';
 import { buildPromptReferenceInputs } from '../features/chat-participant/promptReferences';
 
-describe('VSCODE-01 — validateEndpointUrl (API key exfil via workspace endpoint override)', () => {
+describe('VSCODE-01, validateEndpointUrl (API key exfil via workspace endpoint override)', () => {
   it('accepts the default production endpoint', () => {
     expect(validateEndpointUrl('https://agiworkforce.com/api/llm/v1')).toBe(
       'https://agiworkforce.com/api/llm/v1',
@@ -81,8 +80,7 @@ describe('VSCODE-01 — validateEndpointUrl (API key exfil via workspace endpoin
 
 import { validateSuggestedCommand } from '../providers/terminalProvider';
 
-describe('VSCODE-04 / PR-3B — validateSuggestedCommand (allowlist semantics)', () => {
-
+describe('VSCODE-04 / PR-3B, validateSuggestedCommand (allowlist semantics)', () => {
   it('accepts allowlisted build/test/VCS commands', () => {
     expect(validateSuggestedCommand('git status')).toBeUndefined();
     expect(validateSuggestedCommand('cargo build')).toBeUndefined();
@@ -144,7 +142,7 @@ describe('VSCODE-04 / PR-3B — validateSuggestedCommand (allowlist semantics)',
   });
 });
 
-describe('VSCODE-06 — @file injection (system-role trust elevation via file content)', () => {
+describe('VSCODE-06, @file injection (system-role trust elevation via file content)', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vscode.workspace.workspaceFolders = [

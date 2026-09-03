@@ -1,4 +1,3 @@
-
 import * as vscode from 'vscode';
 import { MODEL_COST_BLENDED, DEFAULT_BLENDED_RATE } from './modelConstants';
 import { escapeHtml } from '../sidebar-webview/webviewContent';
@@ -67,10 +66,7 @@ class ModelMetrics {
     for (const [key, value] of this._data) {
       obj[key] = value;
     }
-    void Promise.resolve(this._context.globalState.update(STORAGE_KEY, obj)).catch(() => {
-      // Storage write failed (disk error, permission issue) — log but don't crash.
-      // Metrics accumulate in memory and retry on next persist.
-    });
+    void Promise.resolve(this._context.globalState.update(STORAGE_KEY, obj)).catch(() => {});
   }
 }
 

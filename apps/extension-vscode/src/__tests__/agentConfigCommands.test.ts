@@ -85,7 +85,7 @@ describe('agent configuration commands', () => {
     );
   });
 
-  it('never claims the restarted runtime is ready — the sidebar re-probes and decides', async () => {
+  it('never claims the restarted runtime is ready, the sidebar re-probes and decides', async () => {
     await handlers.get('agi-workforce.restartLocalRuntime')!();
 
     const announced = vi
@@ -101,7 +101,7 @@ describe('agent configuration commands', () => {
 
     expect(result).toEqual({ ok: false, error: 'protocol handshake failed' });
     expect(vscode.window.showErrorMessage).toHaveBeenCalledWith(
-      'AGI Workforce: Local runtime restart failed — protocol handshake failed',
+      'AGI Workforce: Local runtime restart failed, protocol handshake failed',
     );
   });
 });

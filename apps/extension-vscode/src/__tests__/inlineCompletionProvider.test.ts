@@ -45,10 +45,14 @@ async function complete(
   modelResponse: string,
   options: { lineText?: string; maxLength?: number } = {},
 ): Promise<string | undefined> {
-  configure(options.maxLength === undefined ? {} : { 'inlineCompletions.maxLength': options.maxLength });
+  configure(
+    options.maxLength === undefined ? {} : { 'inlineCompletions.maxLength': options.maxLength },
+  );
   vi.mocked(chatCompletion).mockResolvedValue(modelResponse);
 
-  const items = await new AgiInlineCompletionProvider({} as vscode.SecretStorage).provideInlineCompletionItems(
+  const items = await new AgiInlineCompletionProvider(
+    {} as vscode.SecretStorage,
+  ).provideInlineCompletionItems(
     documentAt(options.lineText ?? 'const value = '),
     new vscode.Position(0, (options.lineText ?? 'const value = ').length),
     {} as vscode.InlineCompletionContext,
@@ -77,7 +81,7 @@ afterEach(() => {
   vi.mocked(chatCompletion).mockReset();
 });
 
-describe('inline completions — real provider extraction', () => {
+describe('inline completions, real provider extraction', () => {
   it('suggests nothing when the model returns blank text', async () => {
     expect(await complete('')).toBeUndefined();
     expect(await complete('   \n  ')).toBeUndefined();
@@ -95,7 +99,9 @@ describe('inline completions — real provider extraction', () => {
   it('truncates a fenced completion at the configured maxLength', async () => {
     const long = 'x'.repeat(900);
 
-    expect(await complete(`\`\`\`typescript\n${long}\n\`\`\``, { maxLength: 120 })).toHaveLength(120);
+    expect(await complete(`\`\`\`typescript\n${long}\n\`\`\``, { maxLength: 120 })).toHaveLength(
+      120,
+    );
   });
 
   it('truncates a bare first-line completion at the configured maxLength', async () => {
@@ -107,10 +113,9 @@ describe('inline completions — real provider extraction', () => {
   it('sends the whole completion when it fits inside maxLength', async () => {
     expect(await complete('const x = 42;', { maxLength: 500 })).toBe('const x = 42;');
   });
-
 });
 
-describe('inline completions — real cursor filtering', () => {
+describe('inline completions, real cursor filtering', () => {
   function askAt(lineText: string, character: number): Promise<unknown[]> {
     return new AgiInlineCompletionProvider({} as vscode.SecretStorage).provideInlineCompletionItems(
       documentAt(lineText),
@@ -174,7 +179,7 @@ describe('inline completions — real cursor filtering', () => {
   });
 });
 
-describe('inline completions — real completion cache', () => {
+describe('inline completions, real completion cache', () => {
   let now = 1_000_000;
 
   function askAt(
@@ -266,7 +271,7 @@ describe('inline completions — real completion cache', () => {
   });
 });
 
-describe('inline completions — real paywall suppression', () => {
+describe('inline completions, real paywall suppression', () => {
   function provider(): AgiInlineCompletionProvider {
     return new AgiInlineCompletionProvider({} as vscode.SecretStorage);
   }

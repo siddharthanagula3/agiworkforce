@@ -1,4 +1,3 @@
-
 import { describe, it, expect } from 'vitest';
 import { canAccessModelForSubscriptionTier, getCoreManualModelOptions } from '@agiworkforce/types';
 import {
@@ -45,7 +44,7 @@ describe('isModelReachableForTier', () => {
   });
 });
 
-describe('buildGroupedQuickPickItems — tier gating', () => {
+describe('buildGroupedQuickPickItems, tier gating', () => {
   it('never returns an empty roster on the lowest tier', () => {
     const items = buildGroupedQuickPickItems('local').filter((i) => i.modelId !== undefined);
     expect(items.length).toBeGreaterThan(0);
@@ -86,7 +85,7 @@ describe('buildGroupedQuickPickItems — tier gating', () => {
   });
 });
 
-describe('getModelPickerOptionsForTier — webview <select>', () => {
+describe('getModelPickerOptionsForTier, webview <select>', () => {
   it('flags managed-cloud models unreachable on the local tier', () => {
     const options = getModelPickerOptionsForTier('local');
     const cloudOption = options.find((o) => o.id === CLOUD_MODEL);

@@ -116,12 +116,12 @@ function run() {
   const newViolations = allViolations.filter((v) => !baselineKeys.has(baselineKey(v)));
 
   if (newViolations.length === 0) {
-    console.log(`check:vscode-theme-tokens — PASS (${allViolations.length} grandfathered, 0 new)`);
+    console.log(`check:vscode-theme-tokens, PASS (${allViolations.length} grandfathered, 0 new)`);
     process.exit(0);
   }
 
   console.error(
-    `check:vscode-theme-tokens — FAIL: ${newViolations.length} new hardcoded color literal(s) found.\n`,
+    `check:vscode-theme-tokens, FAIL: ${newViolations.length} new hardcoded color literal(s) found.\n`,
   );
   console.error(`Recommendation: use var(--vscode-*) theme tokens instead.`);
   console.error(`Reference: https://code.visualstudio.com/api/references/theme-color\n`);

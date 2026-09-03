@@ -1,4 +1,3 @@
-
 import { createMessageQueue, type MessageQueue } from '@agiworkforce/client-runtime';
 import type { QueuedCommand } from '@agiworkforce/client-runtime';
 
@@ -11,12 +10,6 @@ export interface MementoLike {
 
 let cached: MessageQueue | null = null;
 
-/**
- * Singleton getter for the VS Code extension send queue.
- *
- * @param memento — typically `context.workspaceState`; pass `null` for a
- *                  volatile (in-memory only) queue.
- */
 export function getVSCodeSendQueue(memento: MementoLike | null): MessageQueue {
   if (cached) return cached;
   if (memento) {
@@ -29,7 +22,7 @@ export function getVSCodeSendQueue(memento: MementoLike | null): MessageQueue {
         write: (commands) => {
           Promise.resolve(memento.update(STORAGE_KEY, commands)).catch((err: unknown) => {
             console.error(
-              `[agi] sendQueue: failed to persist queue — ${
+              `[agi] sendQueue: failed to persist queue, ${
                 err instanceof Error ? err.message : String(err)
               }`,
             );

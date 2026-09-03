@@ -62,7 +62,7 @@ function describeSpawnFailure(cliPath: string, error: Error): Error {
       `${CLI_NOT_EXECUTABLE_MARKER}: ${target} exists but this editor is not allowed to run it. Grant it execute permission, or point ${CLI_PATH_SETTING} at an executable AGI CLI ${MINIMUM_SUPPORTED_CLI_VERSION_LABEL} or newer.`,
     );
   }
-  return new Error(`The AGI CLI at ${target} could not be started — ${error.message}`);
+  return new Error(`The AGI CLI at ${target} could not be started, ${error.message}`);
 }
 
 const errorSchema = z.object({

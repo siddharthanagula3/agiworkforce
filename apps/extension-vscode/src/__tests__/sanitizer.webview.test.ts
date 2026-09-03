@@ -23,7 +23,7 @@ function sanitize(html: string): Document {
   );
 }
 
-describe('VSCODE-05 — sanitizeHtml (command: URI and javascript: stripping in webview)', () => {
+describe('VSCODE-05, sanitizeHtml (command: URI and javascript: stripping in webview)', () => {
   it('keeps the link text but strips a command: href the model asked the webview to render', () => {
     const anchor = parse('[open](command:agi-workforce.agentMode)').querySelector('a');
 

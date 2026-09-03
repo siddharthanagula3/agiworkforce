@@ -1,11 +1,3 @@
-/**
- * api.test.ts — Tests for API utility functions
- *
- * Tests the exported AgiWorkforceApiError class, secret storage wrappers,
- * retry logic, and request structure patterns.
- * Imports real source code via the vscode mock alias in vitest.config.ts.
- */
-
 import { afterEach, describe, it, expect, vi, beforeEach } from 'vitest';
 import { EventEmitter } from 'events';
 import * as https from 'https';
@@ -60,7 +52,7 @@ describe('AgiWorkforceApiError', () => {
   });
 });
 
-describe('SecretStorage wrapper — getApiKey / setApiKey / clearApiKey', () => {
+describe('SecretStorage wrapper, getApiKey / setApiKey / clearApiKey', () => {
   let ctx: InstanceType<typeof ExtensionContext>;
 
   beforeEach(() => {
@@ -412,7 +404,7 @@ describe('cloud request retry policy', () => {
     expect(https.request).toHaveBeenCalledTimes(3);
   });
 
-  it('never retries a client error — a bad request is the caller\'s fault', async () => {
+  it("never retries a client error, a bad request is the caller's fault", async () => {
     queueResponses({ status: 400, body: 'bad request' }, { status: 200, body: sseBody('unused') });
 
     await expect(askCloud()).rejects.toBeInstanceOf(AgiWorkforceApiError);
@@ -516,7 +508,7 @@ describe('AgiWorkforcePaywallError', () => {
   });
 });
 
-describe('paywall 429 JSON parsing — pattern test', () => {
+describe('paywall 429 JSON parsing, pattern test', () => {
   function parsePaywallBody(statusCode: number, body: string): AgiWorkforcePaywallError | null {
     if (statusCode !== 429) return null;
     try {

@@ -1,16 +1,3 @@
-/**
- * pathSafety.ts — VS Code-aware path resolution against open workspace folders.
- *
- * Wraps `@agiworkforce/utils`'s pure `resolveContained` helper with:
- *   - workspace-folder iteration (multi-root aware)
- *   - sensitive-file denylist enforcement (.env, .pem, .ssh/, credentials)
- *   - optional symlink-escape detection via fs.realpath
- *
- * This is the single function every agent / chat / patch code path should
- * call before reading or writing a workspace-relative path. It replaces
- * five inline traversal checks (audit findings F-05, F-06, F-13).
- */
-
 import * as vscode from 'vscode';
 import * as fs from 'node:fs/promises';
 import { isSensitiveFile } from '@agiworkforce/utils';
@@ -72,9 +59,7 @@ export async function safeResolveWorkspacePath(
             return { ok: false, reason: 'sensitive' };
           }
         } catch {
-          // File doesn't exist yet (creation case) — realpath fails. Don't
-          // treat as symlink-escape; the path itself already passed
-          // containment, and new-file creation is gated separately.
+          // noop
         }
       }
       return {

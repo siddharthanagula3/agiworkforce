@@ -1,16 +1,3 @@
-/**
- * modelEnvironmentGating.test.ts — P3 Phase A: environment-gating in the model picker.
- *
- * Three test suites:
- *   1. Pure unit — evaluateModelEnvironment + environmentAvailability (no mock needed).
- *   2. Real catalog — every model from getCoreManualModelOptions() appears in the
- *      picker output (safety property: current catalog has no flagged models).
- *   3. Synthetic flagged model — a model with requiresEnvironment:'e2b' is filtered
- *      out of buildGroupedQuickPickItems() (gating property).
- *
- * The flagged model lives ONLY in the test mock — models.json is NOT modified.
- */
-
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { evaluateModelEnvironment } from '@agiworkforce/types';
 import { environmentAvailability } from '../features/model-picker/modelConstants';
@@ -28,7 +15,7 @@ describe('environmentAvailability (Phase A stub)', () => {
   });
 });
 
-describe('evaluateModelEnvironment — logic', () => {
+describe('evaluateModelEnvironment, logic', () => {
   it('model without requiresEnvironment is always selectable', () => {
     // Safety property: undefined env → selectable regardless of availability.
     expect(evaluateModelEnvironment(undefined, { configured: false })).toEqual({
@@ -60,9 +47,7 @@ describe('evaluateModelEnvironment — logic', () => {
   });
 });
 
-// ─── Suite 2: Real catalog — safety property ──────────────────────────────────
-
-describe('buildGroupedQuickPickItems — real catalog, no flagged models', () => {
+describe('buildGroupedQuickPickItems, real catalog, no flagged models', () => {
   it('every LIVE model appears in the picker output; non-live models never do', async () => {
     const { getCoreManualModelOptions, isModelSelectable } = await import('@agiworkforce/types');
     const { buildGroupedQuickPickItems } = await import('../features/model-picker/modelConstants');
@@ -79,7 +64,7 @@ describe('buildGroupedQuickPickItems — real catalog, no flagged models', () =>
   });
 });
 
-describe('buildGroupedQuickPickItems — e2b-flagged synthetic model is filtered out', () => {
+describe('buildGroupedQuickPickItems, e2b-flagged synthetic model is filtered out', () => {
   beforeEach(() => {
     vi.resetModules();
   });

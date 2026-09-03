@@ -1,4 +1,3 @@
-
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -75,7 +74,7 @@ describe('keybinding when-clause context parity', () => {
     expect(
       unwired,
       `Found keybinding when-clause(s) referencing an agi-workforce.* context key that is never ` +
-        `set via setContext anywhere in src/ — the keybinding can never fire:\n${unwired.join('\n')}`,
+        `set via setContext anywhere in src/, the keybinding can never fire:\n${unwired.join('\n')}`,
     ).toEqual([]);
   });
 });
@@ -161,7 +160,7 @@ describe('keybound commands tolerate a zero-argument invocation', () => {
 
     expect(
       failures,
-      `keybound command(s) failed when invoked with no arguments — the keyboard path is dead:\n${failures.join('\n')}`,
+      `keybound command(s) failed when invoked with no arguments, the keyboard path is dead:\n${failures.join('\n')}`,
     ).toEqual([]);
   });
 

@@ -29,7 +29,7 @@ let activeLocalRuntimes: LocalRuntimePool | undefined;
 function reportBootFailure(subsystem: string, err: unknown, impact: string): void {
   recordFailure(subsystem, err);
   const message = err instanceof Error ? err.message : String(err);
-  void vscode.window.showErrorMessage(`AGI Workforce: ${impact} — ${message}`);
+  void vscode.window.showErrorMessage(`AGI Workforce: ${impact}, ${message}`);
 }
 
 export function activate(context: vscode.ExtensionContext): void {
@@ -51,7 +51,7 @@ export function activate(context: vscode.ExtensionContext): void {
     const errMsg = err instanceof Error ? err.message : String(err);
     recordFailure('desktop-bridge', err);
     vscode.window.showWarningMessage(
-      `AGI Workforce: Desktop bridge failed to initialize — ${errMsg}. ` +
+      `AGI Workforce: Desktop bridge failed to initialize, ${errMsg}. ` +
         'Some features may be unavailable.',
     );
   }
@@ -128,7 +128,7 @@ export function activate(context: vscode.ExtensionContext): void {
 
   const statusBar = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100);
   statusBar.command = 'agi-workforce.selectModel';
-  statusBar.tooltip = 'AGI Workforce — click to change model';
+  statusBar.tooltip = 'AGI Workforce, click to change model';
   context.subscriptions.push(statusBar);
 
   function updateStatusBar(): void {
@@ -164,7 +164,7 @@ export function activate(context: vscode.ExtensionContext): void {
           .catch((error: unknown) => {
             const message = error instanceof Error ? error.message : String(error);
             vscode.window.showErrorMessage(
-              `AGI Workforce: Could not restart the local runtime after the CLI path changed — ${message}`,
+              `AGI Workforce: Could not restart the local runtime after the CLI path changed, ${message}`,
             );
           })
           .finally(refreshRuntimeSurfaces);
@@ -216,10 +216,7 @@ export function activate(context: vscode.ExtensionContext): void {
 
   void checkInlineCompletionsFirstRun(context);
 
-  void refreshAccountTierCache(context).catch(() => {
-    // Non-critical — model admission falls back to BYOK when the account tier
-    // cannot be persisted (for example, a read-only editor profile).
-  });
+  void refreshAccountTierCache(context).catch(() => {});
 }
 
 export async function deactivate(): Promise<void> {

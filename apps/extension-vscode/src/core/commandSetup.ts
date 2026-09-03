@@ -271,7 +271,7 @@ async function runGitToOutputChannel(args: string[], cwd: string, title: string)
     const msg = err instanceof Error ? err.message : String(err);
     channel.appendLine(`[error] ${msg}`);
     channel.show(true);
-    vscode.window.showErrorMessage(`AGI Workforce: ${title} failed — ${msg}`);
+    vscode.window.showErrorMessage(`AGI Workforce: ${title} failed, ${msg}`);
   }
 }
 
@@ -371,7 +371,7 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
         return { ok: true as const, restartedWorkspaces: result.restartedWorkspaces };
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
-        vscode.window.showErrorMessage(`AGI Workforce: Local runtime restart failed — ${message}`);
+        vscode.window.showErrorMessage(`AGI Workforce: Local runtime restart failed, ${message}`);
         return { ok: false as const, error: message };
       } finally {
         sidebarProvider.refreshRuntimeStatus();
@@ -639,10 +639,10 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
 
     register('agi-workforce.setApiKey', async () => {
       const existing = await getApiKey(context.secrets);
-      const placeholder = existing !== undefined ? '(already set — enter new key to replace)' : '';
+      const placeholder = existing !== undefined ? '(already set, enter new key to replace)' : '';
 
       const apiKey = await vscode.window.showInputBox({
-        title: 'AGI Workforce — Set API Key',
+        title: 'AGI Workforce, Set API Key',
         prompt:
           'Enter your AGI Workforce API key. It will be stored in VS Code SecretStorage (encrypted).',
         placeHolder: placeholder !== '' ? placeholder : 'sk-agi-…',
@@ -691,7 +691,7 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
       );
 
       const picked = await vscode.window.showQuickPick(allItems, {
-        title: 'AGI Workforce — Select Model',
+        title: 'AGI Workforce, Select Model',
         placeHolder: `Current: ${currentModel}`,
         matchOnDescription: true,
         matchOnDetail: true,
@@ -783,7 +783,7 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
       );
 
       const pick = await vscode.window.showQuickPick(items, {
-        title: 'AGI Workforce — Sessions History',
+        title: 'AGI Workforce, Sessions History',
         placeHolder: 'Search sessions…',
         matchOnDescription: true,
         matchOnDetail: true,
@@ -808,14 +808,14 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
       ];
 
       const picked = await vscode.window.showQuickPick(FEEDBACK_TYPES, {
-        title: 'AGI Workforce — Send Feedback',
+        title: 'AGI Workforce, Send Feedback',
         placeHolder: 'What kind of feedback?',
       });
 
       if (picked === undefined) return;
 
       const feedbackText = await vscode.window.showInputBox({
-        title: 'AGI Workforce — Send Feedback',
+        title: 'AGI Workforce, Send Feedback',
         prompt: `${picked.label.replace(/\$\([^)]+\)\s*/, '')}: Describe your feedback`,
         placeHolder: 'Your feedback here…',
         ignoreFocusOut: true,
@@ -882,7 +882,7 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
       const folder = await getActiveWorkspaceFolder();
       if (!folder) {
         vscode.window.showErrorMessage(
-          'AGI Workforce: open a workspace folder before committing — there is no repository to commit to.',
+          'AGI Workforce: open a workspace folder before committing, there is no repository to commit to.',
         );
         return;
       }
@@ -1033,7 +1033,7 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
         ? allItems.filter((item) => item.action === 'mode' || item.action === 'effort')
         : allItems;
       const pick = await vscode.window.showQuickPick(items, {
-        title: composerScope ? 'AGI Workforce — Mode and effort' : 'AGI Workforce — Actions',
+        title: composerScope ? 'AGI Workforce, Mode and effort' : 'AGI Workforce, Actions',
         placeHolder: composerScope ? 'Choose mode or reasoning effort…' : 'Search actions…',
         matchOnDescription: true,
       });
@@ -1047,7 +1047,7 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
             canSelectFiles: true,
             canSelectFolders: false,
             openLabel: 'Add to Context',
-            title: 'AGI Workforce — Attach Workspace Files to Context',
+            title: 'AGI Workforce, Attach Workspace Files to Context',
           });
           if (uris !== undefined && uris.length > 0) {
             for (const uri of uris) {
@@ -1073,17 +1073,17 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
           const effortItems: EffortItem[] = [
             {
               label: '$(circle-outline) Low',
-              description: 'Minimal reasoning — fastest, lowest cost',
+              description: 'Minimal reasoning, fastest, lowest cost',
               value: 'low',
             },
             {
               label: '$(circle-filled) Medium',
-              description: 'Balanced reasoning — default',
+              description: 'Balanced reasoning, default',
               value: 'medium',
             },
             {
               label: '$(pulse) High',
-              description: 'Extended reasoning — slower, higher quality',
+              description: 'Extended reasoning, slower, higher quality',
               value: 'high',
             },
             {
@@ -1093,7 +1093,7 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
             },
           ];
           const effortPick = await vscode.window.showQuickPick(effortItems, {
-            title: 'AGI Workforce — Set Effort',
+            title: 'AGI Workforce, Set Effort',
             placeHolder: `Current: ${cap(currentEffort)}`,
           });
           const selectedEffort = effortPick?.value;
@@ -1133,7 +1133,7 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
             },
           ];
           const modePick = await vscode.window.showQuickPick(modeItems, {
-            title: 'AGI Workforce — Set Agent Mode',
+            title: 'AGI Workforce, Set Agent Mode',
             placeHolder: `Current: ${cap(currentMode)}`,
           });
           const selectedMode = modePick?.value;
@@ -1192,7 +1192,7 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
         },
       ];
       const modePick = await vscode.window.showQuickPick(modeItems, {
-        title: 'AGI Workforce — Modes',
+        title: 'AGI Workforce, Modes',
         placeHolder: `Current: ${capMode(currentMode)} · choose the authority for future actions`,
         matchOnDescription: true,
       });
@@ -1214,19 +1214,19 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
       const effortItems: vscode.QuickPickItem[] = [
         {
           label: '$(circle-outline) Low',
-          description: 'Minimal reasoning — fastest, lowest cost',
+          description: 'Minimal reasoning, fastest, lowest cost',
           detail: 'low',
           picked: currentEffort === 'low',
         },
         {
           label: '$(circle-filled) Medium',
-          description: 'Balanced reasoning — default',
+          description: 'Balanced reasoning, default',
           detail: 'medium',
           picked: currentEffort === 'medium',
         },
         {
           label: '$(pulse) High',
-          description: 'Extended reasoning — slower, higher quality',
+          description: 'Extended reasoning, slower, higher quality',
           detail: 'high',
           picked: currentEffort === 'high',
         },
@@ -1238,7 +1238,7 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
         },
       ];
       const effortPick = await vscode.window.showQuickPick(effortItems, {
-        title: 'AGI Workforce — Effort',
+        title: 'AGI Workforce, Effort',
         placeHolder: `Current: ${capEffort(currentEffort)}`,
         matchOnDescription: true,
       });
@@ -1266,7 +1266,7 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
           { label: '$(trash) Forget everything', detail: 'clear' },
         ],
         {
-          title: `AGI Workforce — Memory (${enabled ? 'on' : 'off'})`,
+          title: `AGI Workforce, Memory (${enabled ? 'on' : 'off'})`,
           placeHolder: enabled
             ? 'Choose an action'
             : 'Saved facts are kept but not sent with your turns',
@@ -1297,7 +1297,7 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
             detail: f.id,
           })),
           {
-            title: 'AGI Workforce — Memory facts',
+            title: 'AGI Workforce, Memory facts',
             placeHolder: 'Select a fact to remove (Esc to keep all)',
           },
         );
@@ -1331,8 +1331,8 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
       memoryTreeProvider.refresh();
       vscode.window.showInformationMessage(
         next
-          ? 'Memory on — saved facts are included with your turns.'
-          : 'Memory off — saved facts stay stored but are not sent.',
+          ? 'Memory on, saved facts are included with your turns.'
+          : 'Memory off, saved facts stay stored but are not sent.',
       );
     }),
 
@@ -1344,7 +1344,7 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
       if (!requireWorkspaceMemoryScope()) return;
       if (!(await requireMemoryEnabledForCapture(context))) return;
       const text = await vscode.window.showInputBox({
-        title: 'AGI Workforce — Add Memory Fact',
+        title: 'AGI Workforce, Add Memory Fact',
         prompt:
           'A short fact included with future developer turns. Stored locally; sent only to the model/provider you choose for that turn.',
         placeHolder: 'Example: I prefer Python over JavaScript for data work.',
@@ -1370,7 +1370,7 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
     register('agi-workforce.memory.edit', async (item: MemoryFactItem) => {
       if (!requireWorkspaceMemoryScope()) return;
       const newText = await vscode.window.showInputBox({
-        title: 'AGI Workforce — Edit Memory Fact',
+        title: 'AGI Workforce, Edit Memory Fact',
         value: item.fact.text,
         prompt:
           'Update this locally stored fact. It is included only with turns sent to your selected model/provider.',
@@ -1576,7 +1576,7 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
       });
 
       const pick = await vscode.window.showQuickPick(items, {
-        title: `AGI Workforce — Account & Usage (${tier})`,
+        title: `AGI Workforce, Account & Usage (${tier})`,
         placeHolder: 'Session stats',
         matchOnDescription: true,
       });
@@ -1641,7 +1641,7 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
         canSelectFiles: true,
         canSelectFolders: false,
         openLabel: 'Mention in Chat',
-        title: 'AGI Workforce — Mention File from Project',
+        title: 'AGI Workforce, Mention File from Project',
       });
       if (uris === undefined || uris.length === 0 || uris[0] === undefined) return;
       const result = await validateWorkspaceContextFile(uris[0]);
