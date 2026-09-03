@@ -744,3 +744,23 @@ export async function summarizeTaskEconomics(
     unattributedCostCents: numberFrom(row?.unattributed_cost_cents),
   };
 }
+
+interface OrganizationSpendRow {
+  spend_cents: number | string | null;
+}
+
+export async function getOrganizationMonthToDateSpendCents(
+  organizationId: string,
+  db: DatabaseAdapter = getNeonDb(),
+): Promise<number> {
+  const [row] = await db.query<OrganizationSpendRow>(
+    `select coalesce(sum(event.provider_cost_cents), 0)::bigint as spend_cents
+       from public.provider_cost_events event
+       join public.organization_members member on member.user_id = event.user_id
+      where member.organization_id = $1
+        and event.occurred_at >= date_trunc('month', now())
+        and event.occurred_at < date_trunc('month', now()) + interval '1 month'`,
+    [organizationId],
+  );
+  return numberFrom(row?.spend_cents);
+}

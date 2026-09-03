@@ -14,7 +14,13 @@ import {
   getPlanWeeklyUsageCapCents,
 } from '@/lib/server/managed-usage-policy';
 import { logger } from '@/lib/logger';
-import { recordSettledProviderCost } from '@/lib/services/cogs-ledger-service';
+import {
+  getOrganizationMonthToDateSpendCents,
+  recordSettledProviderCost,
+} from '@/lib/services/cogs-ledger-service';
+import { readOrganizationPolicy } from '@/lib/services/organization-policy-service';
+import { evaluateOrganizationPolicy } from '@/lib/services/organization-policy-evaluator';
+import { recordAuditEvent } from '@/lib/security-audit';
 
 export const MANAGED_CHAT_CONTRACT_VERSION = '2026-07-15' as const;
 
@@ -216,6 +222,62 @@ async function queryOne(
   );
 }
 
+async function assertOrganizationSpendCap(
+  db: DatabaseAdapter,
+  organizationId: string,
+  userId: string,
+): Promise<void> {
+  let policy;
+  try {
+    policy = await readOrganizationPolicy(db, organizationId);
+  } catch (error) {
+    logger.error(
+      { error, organizationId, userId },
+      '[managed-usage] organization policy read failed; spend cap treated as ungoverned',
+    );
+    return;
+  }
+
+  if (!policy || policy.monthlySpendCapCents === null) return;
+
+  let monthToDateSpendCents: number;
+  try {
+    monthToDateSpendCents = await getOrganizationMonthToDateSpendCents(organizationId, db);
+  } catch (error) {
+    logger.error(
+      { error, organizationId, userId },
+      '[managed-usage] organization spend lookup failed; spend cap treated as ungoverned',
+    );
+    return;
+  }
+
+  const decision = evaluateOrganizationPolicy(policy, {
+    resource: 'spend_cap',
+    monthToDateSpendCents,
+  });
+  if (decision.allowed) return;
+
+  await recordAuditEvent({
+    userId,
+    organizationId,
+    eventType: 'spend_cap_exceeded',
+    outcome: 'denied',
+    severity: 'warning',
+    detail: {
+      resourceType: 'organization_spend_cap',
+      status: 'exceeded',
+      reason: decision.reason,
+    },
+  }).catch((error) => {
+    logger.error(
+      { error, organizationId },
+      '[managed-usage] spend cap audit event could not be recorded',
+    );
+  });
+
+  throw new ManagedUsageRequestError(decision.reason, 402, 'organization_spend_cap_reached');
+}
+
 function reservationError(decision: string): ManagedUsageRequestError {
   switch (decision) {
     case 'in_progress':
@@ -299,6 +361,7 @@ async function resolveOverageHeadroomCents(db: DatabaseAdapter, userId: string):
 export async function reserveManagedUsageRequest(input: {
   db: DatabaseAdapter;
   userId: string;
+  organizationId?: string | null;
   idempotencyKey: string;
   requestHash: string;
   provider: string;
@@ -310,6 +373,10 @@ export async function reserveManagedUsageRequest(input: {
   isFlagship: boolean;
   quotaFeature?: string;
 }): Promise<ManagedUsageRequestReservation> {
+  if (input.organizationId) {
+    await assertOrganizationSpendCap(input.db, input.organizationId, input.userId);
+  }
+
   const idempotencyKey = parseManagedUsageIdempotencyKey(input.idempotencyKey);
   const leaseToken = input.leaseToken ?? randomUUID();
   const sessionCapCents = getPlanSessionUsageCapCents(input.planTier);
