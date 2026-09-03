@@ -209,161 +209,168 @@ export default function AcceptableUsePage() {
           ctas={[]}
         />
 
-        <Container className="mb-10">
-          <PolicyContents sections={SECTIONS} />
+        <Container>
+          <div className="agi-ds-sticky-scene">
+            <div className="agi-ds-sticky-pane">
+              <PolicyContents sections={SECTIONS} />
+            </div>
+            <div className="agi-ds-sticky-flow">
+              <Section id="summary" labelledBy="agi-acceptable-use-summary-title" rule>
+                <Stack gap="loose">
+                  <h2 className="agi-ds-h2" id="agi-acceptable-use-summary-title">
+                    The short version.
+                  </h2>
+                  <Ledger caption="Summary" rows={SUMMARY} />
+                  <Prose size="sm">
+                    The precise default authority for every tool (what runs without asking, what
+                    always asks, and how to revoke) is on{' '}
+                    <Link href="/agent-permissions" className="agi-ds-link">
+                      /agent-permissions
+                    </Link>
+                    .
+                  </Prose>
+                </Stack>
+              </Section>
+
+              <Section id="s-01" labelledBy="agi-acceptable-use-scope-title" rule ground="2">
+                <Stack gap="loose">
+                  <h2 className="agi-ds-h2" id="agi-acceptable-use-scope-title">
+                    01 &middot; What this covers.
+                  </h2>
+                  <Prose>
+                    These rules apply to every AGI surface (web, desktop, mobile, the Chrome
+                    extension, the VS Code extension, and the CLI) and to all three trust
+                    boundaries: Local on-device execution, BYOK using your own provider keys, and
+                    Managed Cloud that AGI hosts and meters.
+                  </Prose>
+                  <Prose>
+                    <strong>Managed Cloud is in {MANAGED_CLOUD_STATUS} and open by default.</strong>{' '}
+                    Read this page as the rules for an alpha service, not as a general-availability
+                    contract. Where you use BYOK, the provider whose key you supply also applies
+                    their own terms to your usage, and those govern that traffic. See
+                    &ldquo;Third-party services and connectors&rdquo; in the{' '}
+                    <Link href="/terms" className="agi-ds-link">
+                      terms
+                    </Link>
+                    .
+                  </Prose>
+                </Stack>
+              </Section>
+
+              <Section id="s-02" labelledBy="agi-acceptable-use-prohibited-title" rule>
+                <Stack gap="loose">
+                  <div>
+                    <h2 className="agi-ds-h2" id="agi-acceptable-use-prohibited-title">
+                      02 &middot; Prohibited uses.
+                    </h2>
+                    <Prose>
+                      Each rule below names the capability it constrains, so you can tell whether it
+                      applies to what you are building.
+                    </Prose>
+                  </div>
+                  <NoteList items={PROHIBITED} />
+                </Stack>
+              </Section>
+
+              <Section id="s-03" labelledBy="agi-acceptable-use-limits-title" rule ground="2">
+                <Stack gap="loose">
+                  <div>
+                    <h2 className="agi-ds-h2" id="agi-acceptable-use-limits-title">
+                      03 &middot; Automated access and limits.
+                    </h2>
+                    <Prose>
+                      Programmatic use is expected and supported. These are the rules it operates
+                      under. The specific numbers below reflect the limits configured at the time of
+                      writing and may change; the enforced values are the ones in the product, and
+                      exceeding them returns an error rather than degrading quietly.
+                    </Prose>
+                  </div>
+                  <Ledger caption="Automated access limits" rows={LIMITS} />
+                  <Prose size="sm">
+                    Do not attempt to evade a limit by rotating accounts, addresses, or keys. Retry
+                    with backoff when you receive a rate-limit response rather than retrying
+                    immediately in a loop.
+                  </Prose>
+                </Stack>
+              </Section>
+
+              <Section id="s-04" labelledBy="agi-acceptable-use-violation-title" rule>
+                <Stack gap="loose">
+                  <div>
+                    <h2 className="agi-ds-h2" id="agi-acceptable-use-violation-title">
+                      04 &middot; What happens on a violation.
+                    </h2>
+                    <Prose>
+                      Enforcement is a ladder, not a single switch. Which rung applies depends on
+                      severity and on whether the behaviour continues. Severe abuse (CSAM, credible
+                      threats, active attack traffic) goes straight to the top of the ladder.
+                    </Prose>
+                  </div>
+                  <Ledger caption="Enforcement ladder" rows={ENFORCEMENT} />
+                  <Prose size="sm">
+                    <strong>Appeals.</strong> If your account is suspended or banned and you believe
+                    it was wrong, email{' '}
+                    <a href={contactMailto(CONTACT_SUBJECTS.appeal)} className="agi-ds-link">
+                      {CONTACT_EMAIL}
+                    </a>{' '}
+                    with the subject &ldquo;{CONTACT_SUBJECTS.appeal}&rdquo; and the email address
+                    on the account. A suspension can be reversed by reinstatement; we will tell you
+                    what triggered it unless doing so would compromise an investigation or another
+                    person&rsquo;s safety.
+                  </Prose>
+                </Stack>
+              </Section>
+
+              <Section id="s-05" labelledBy="agi-acceptable-use-report-title" rule ground="2">
+                <Stack gap="loose">
+                  <h2 className="agi-ds-h2" id="agi-acceptable-use-report-title">
+                    05 &middot; Reporting abuse.
+                  </h2>
+                  <Prose>
+                    <strong>If an AGI agent is acting against you or your systems</strong> (unwanted
+                    automated traffic, messages from a connected account, or activity you did not
+                    authorize), email{' '}
+                    <a href={contactMailto(CONTACT_SUBJECTS.abuse)} className="agi-ds-link">
+                      {CONTACT_EMAIL}
+                    </a>{' '}
+                    with the subject &ldquo;{CONTACT_SUBJECTS.abuse}&rdquo;. Include the affected
+                    domain or account, timestamps with timezone, and any request identifiers, log
+                    lines, or message headers you have. You do not need an AGI account to report
+                    abuse.
+                  </Prose>
+                  <Prose>
+                    <strong>If you found a security vulnerability</strong>, use the subject line
+                    &ldquo;
+                    {CONTACT_SUBJECTS.security}&rdquo; and follow the guidance on{' '}
+                    <Link href="/security" className="agi-ds-link">
+                      /security
+                    </Link>
+                    .
+                  </Prose>
+                  <Prose>
+                    {LEGAL_ENTITY}, {NOTICE_ADDRESS}. We may update this policy with notice posted
+                    on this page; material changes are recorded on{' '}
+                    <Link href="/changelog" className="agi-ds-link">
+                      /changelog
+                    </Link>
+                    .
+                  </Prose>
+                  <ButtonRow>
+                    <Button href="/agent-permissions" variant="secondary">
+                      Agent permissions
+                    </Button>
+                    <Button href="/terms" variant="secondary">
+                      Terms
+                    </Button>
+                    <Button href="/privacy" variant="secondary">
+                      Privacy
+                    </Button>
+                  </ButtonRow>
+                </Stack>
+              </Section>
+            </div>
+          </div>
         </Container>
-
-        <Section id="summary" labelledBy="agi-acceptable-use-summary-title" rule>
-          <Stack gap="loose">
-            <h2 className="agi-ds-h2" id="agi-acceptable-use-summary-title">
-              The short version.
-            </h2>
-            <Ledger caption="Summary" rows={SUMMARY} />
-            <Prose size="sm">
-              The precise default authority for every tool (what runs without asking, what always
-              asks, and how to revoke) is on{' '}
-              <Link href="/agent-permissions" className="agi-ds-link">
-                /agent-permissions
-              </Link>
-              .
-            </Prose>
-          </Stack>
-        </Section>
-
-        <Section id="s-01" labelledBy="agi-acceptable-use-scope-title" rule ground="2">
-          <Stack gap="loose">
-            <h2 className="agi-ds-h2" id="agi-acceptable-use-scope-title">
-              01 &middot; What this covers.
-            </h2>
-            <Prose>
-              These rules apply to every AGI surface (web, desktop, mobile, the Chrome extension,
-              the VS Code extension, and the CLI) and to all three trust boundaries: Local on-device
-              execution, BYOK using your own provider keys, and Managed Cloud that AGI hosts and
-              meters.
-            </Prose>
-            <Prose>
-              <strong>Managed Cloud is in {MANAGED_CLOUD_STATUS} and open by default.</strong> Read
-              this page as the rules for an alpha service, not as a general-availability contract.
-              Where you use BYOK, the provider whose key you supply also applies their own terms to
-              your usage, and those govern that traffic. See &ldquo;Third-party services and
-              connectors&rdquo; in the{' '}
-              <Link href="/terms" className="agi-ds-link">
-                terms
-              </Link>
-              .
-            </Prose>
-          </Stack>
-        </Section>
-
-        <Section id="s-02" labelledBy="agi-acceptable-use-prohibited-title" rule>
-          <Stack gap="loose">
-            <div>
-              <h2 className="agi-ds-h2" id="agi-acceptable-use-prohibited-title">
-                02 &middot; Prohibited uses.
-              </h2>
-              <Prose>
-                Each rule below names the capability it constrains, so you can tell whether it
-                applies to what you are building.
-              </Prose>
-            </div>
-            <NoteList items={PROHIBITED} />
-          </Stack>
-        </Section>
-
-        <Section id="s-03" labelledBy="agi-acceptable-use-limits-title" rule ground="2">
-          <Stack gap="loose">
-            <div>
-              <h2 className="agi-ds-h2" id="agi-acceptable-use-limits-title">
-                03 &middot; Automated access and limits.
-              </h2>
-              <Prose>
-                Programmatic use is expected and supported. These are the rules it operates under.
-                The specific numbers below reflect the limits configured at the time of writing and
-                may change; the enforced values are the ones in the product, and exceeding them
-                returns an error rather than degrading quietly.
-              </Prose>
-            </div>
-            <Ledger caption="Automated access limits" rows={LIMITS} />
-            <Prose size="sm">
-              Do not attempt to evade a limit by rotating accounts, addresses, or keys. Retry with
-              backoff when you receive a rate-limit response rather than retrying immediately in a
-              loop.
-            </Prose>
-          </Stack>
-        </Section>
-
-        <Section id="s-04" labelledBy="agi-acceptable-use-violation-title" rule>
-          <Stack gap="loose">
-            <div>
-              <h2 className="agi-ds-h2" id="agi-acceptable-use-violation-title">
-                04 &middot; What happens on a violation.
-              </h2>
-              <Prose>
-                Enforcement is a ladder, not a single switch. Which rung applies depends on severity
-                and on whether the behaviour continues. Severe abuse (CSAM, credible threats, active
-                attack traffic) goes straight to the top of the ladder.
-              </Prose>
-            </div>
-            <Ledger caption="Enforcement ladder" rows={ENFORCEMENT} />
-            <Prose size="sm">
-              <strong>Appeals.</strong> If your account is suspended or banned and you believe it
-              was wrong, email{' '}
-              <a href={contactMailto(CONTACT_SUBJECTS.appeal)} className="agi-ds-link">
-                {CONTACT_EMAIL}
-              </a>{' '}
-              with the subject &ldquo;{CONTACT_SUBJECTS.appeal}&rdquo; and the email address on the
-              account. A suspension can be reversed by reinstatement; we will tell you what
-              triggered it unless doing so would compromise an investigation or another
-              person&rsquo;s safety.
-            </Prose>
-          </Stack>
-        </Section>
-
-        <Section id="s-05" labelledBy="agi-acceptable-use-report-title" rule ground="2">
-          <Stack gap="loose">
-            <h2 className="agi-ds-h2" id="agi-acceptable-use-report-title">
-              05 &middot; Reporting abuse.
-            </h2>
-            <Prose>
-              <strong>If an AGI agent is acting against you or your systems</strong> (unwanted
-              automated traffic, messages from a connected account, or activity you did not
-              authorize), email{' '}
-              <a href={contactMailto(CONTACT_SUBJECTS.abuse)} className="agi-ds-link">
-                {CONTACT_EMAIL}
-              </a>{' '}
-              with the subject &ldquo;{CONTACT_SUBJECTS.abuse}&rdquo;. Include the affected domain
-              or account, timestamps with timezone, and any request identifiers, log lines, or
-              message headers you have. You do not need an AGI account to report abuse.
-            </Prose>
-            <Prose>
-              <strong>If you found a security vulnerability</strong>, use the subject line &ldquo;
-              {CONTACT_SUBJECTS.security}&rdquo; and follow the guidance on{' '}
-              <Link href="/security" className="agi-ds-link">
-                /security
-              </Link>
-              .
-            </Prose>
-            <Prose>
-              {LEGAL_ENTITY}, {NOTICE_ADDRESS}. We may update this policy with notice posted on this
-              page; material changes are recorded on{' '}
-              <Link href="/changelog" className="agi-ds-link">
-                /changelog
-              </Link>
-              .
-            </Prose>
-            <ButtonRow>
-              <Button href="/agent-permissions" variant="secondary">
-                Agent permissions
-              </Button>
-              <Button href="/terms" variant="secondary">
-                Terms
-              </Button>
-              <Button href="/privacy" variant="secondary">
-                Privacy
-              </Button>
-            </ButtonRow>
-          </Stack>
-        </Section>
       </main>
       <MarketingFooter />
     </div>

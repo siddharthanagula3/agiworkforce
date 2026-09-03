@@ -245,113 +245,119 @@ export default function CookiesPage() {
           ctas={[]}
         />
 
-        <Container className="mb-10">
-          <PolicyContents sections={SECTIONS} />
+        <Container>
+          <div className="agi-ds-sticky-scene">
+            <div className="agi-ds-sticky-pane">
+              <PolicyContents sections={SECTIONS} />
+            </div>
+            <div className="agi-ds-sticky-flow">
+              <Section id="s-01" labelledBy="agi-cookies-set-title" rule>
+                <Stack gap="loose">
+                  <div>
+                    <h2 className="agi-ds-h2" id="agi-cookies-set-title">
+                      01 &middot; Cookies we set.
+                    </h2>
+                    <Prose>
+                      Every cookie this site sets, including the two third parties that set their
+                      own. Each row names the file that sets it, so you can check this table against
+                      the code rather than take our word for it.
+                    </Prose>
+                  </div>
+                  <Ledger caption="Cookies we set" rows={cookieRows(COOKIES)} />
+                  <Prose size="sm">
+                    We set no advertising or cross-site tracking cookies, and we do not sell or
+                    share personal information for cross-context behavioural advertising. Only the
+                    analytics row needs your consent; the rest are necessary to keep you signed in,
+                    keep the site functional, or complete a payment you asked for.
+                  </Prose>
+                </Stack>
+              </Section>
+
+              <Section id="s-02" labelledBy="agi-cookies-storage-title" rule ground="2">
+                <Stack gap="loose">
+                  <div>
+                    <h2 className="agi-ds-h2" id="agi-cookies-storage-title">
+                      02 &middot; What else we put on your device.
+                    </h2>
+                    <Prose>
+                      <strong>
+                        A cookie policy that only lists cookies is answering a narrower question
+                        than the one you asked.
+                      </strong>{' '}
+                      Most of what this product stores on your device is in local or session
+                      storage, not cookies, including your session credentials. None of it is a
+                      tracking technology and none of it is shared, but you should be able to see
+                      it, so here it is in full. The ones that carry an identifier or a credential
+                      are listed first.
+                    </Prose>
+                  </div>
+                  <Ledger caption="Device storage" rows={storageRows(STORAGE)} />
+                  <Prose size="sm">
+                    Local storage survives closing the browser; session storage does not. Clearing
+                    site data in your browser removes both, and will sign you out.
+                  </Prose>
+                </Stack>
+              </Section>
+
+              <Section id="s-03" labelledBy="agi-cookies-myths-title" rule>
+                <Stack gap="loose">
+                  <h2 className="agi-ds-h2" id="agi-cookies-myths-title">
+                    03 &middot; Two things people usually get told wrong.
+                  </h2>
+                  <NoteList items={MISCONCEPTIONS} />
+                </Stack>
+              </Section>
+
+              <Section id="s-04" labelledBy="agi-cookies-dnt-title" rule ground="2">
+                <Stack gap="loose">
+                  <h2 className="agi-ds-h2" id="agi-cookies-dnt-title">
+                    04 &middot; Do Not Track and Global Privacy Control.
+                  </h2>
+                  <Prose>
+                    <strong>We do not read either signal today.</strong> Browsers can send a Do Not
+                    Track header or a Global Privacy Control signal, and nothing in this product
+                    currently checks for them. We are stating that plainly rather than leaving you
+                    to assume one way or the other, because a site that silently ignores GPC while
+                    implying otherwise is worse than one that says so.
+                  </Prose>
+                  <Prose size="sm">
+                    What this does and does not cost you: analytics is opt-in here regardless, so a
+                    browser sending GPC already gets the outcome it is asking for: nothing loads
+                    until you turn it on. The signal would matter for a sale or sharing of personal
+                    data for advertising, and we do neither. Reading the signal explicitly is
+                    tracked as an open item.
+                  </Prose>
+                </Stack>
+              </Section>
+
+              <Section id="s-05" labelledBy="agi-cookies-choices-title" rule>
+                <Stack gap="loose">
+                  <h2 className="agi-ds-h2" id="agi-cookies-choices-title">
+                    05 &middot; Your choices.
+                  </h2>
+                  <Prose>
+                    <CookiePreferencesButton /> at any time: analytics stays off until you turn it
+                    on, and switching it back off stops it loading on your next page view. You can
+                    also manage cookies through your browser; clearing them will sign you out of any
+                    active session. For data export or deletion, see the{' '}
+                    <Link href="/privacy" className="agi-ds-link">
+                      privacy policy
+                    </Link>
+                    .
+                  </Prose>
+                  <ButtonRow>
+                    <Button href="/privacy" variant="secondary">
+                      Privacy
+                    </Button>
+                    <Button href="/subprocessors" variant="secondary">
+                      Subprocessors
+                    </Button>
+                  </ButtonRow>
+                </Stack>
+              </Section>
+            </div>
+          </div>
         </Container>
-
-        <Section id="s-01" labelledBy="agi-cookies-set-title" rule>
-          <Stack gap="loose">
-            <div>
-              <h2 className="agi-ds-h2" id="agi-cookies-set-title">
-                01 &middot; Cookies we set.
-              </h2>
-              <Prose>
-                Every cookie this site sets, including the two third parties that set their own.
-                Each row names the file that sets it, so you can check this table against the code
-                rather than take our word for it.
-              </Prose>
-            </div>
-            <Ledger caption="Cookies we set" rows={cookieRows(COOKIES)} />
-            <Prose size="sm">
-              We set no advertising or cross-site tracking cookies, and we do not sell or share
-              personal information for cross-context behavioural advertising. Only the analytics row
-              needs your consent; the rest are necessary to keep you signed in, keep the site
-              functional, or complete a payment you asked for.
-            </Prose>
-          </Stack>
-        </Section>
-
-        <Section id="s-02" labelledBy="agi-cookies-storage-title" rule ground="2">
-          <Stack gap="loose">
-            <div>
-              <h2 className="agi-ds-h2" id="agi-cookies-storage-title">
-                02 &middot; What else we put on your device.
-              </h2>
-              <Prose>
-                <strong>
-                  A cookie policy that only lists cookies is answering a narrower question than the
-                  one you asked.
-                </strong>{' '}
-                Most of what this product stores on your device is in local or session storage, not
-                cookies, including your session credentials. None of it is a tracking technology and
-                none of it is shared, but you should be able to see it, so here it is in full. The
-                ones that carry an identifier or a credential are listed first.
-              </Prose>
-            </div>
-            <Ledger caption="Device storage" rows={storageRows(STORAGE)} />
-            <Prose size="sm">
-              Local storage survives closing the browser; session storage does not. Clearing site
-              data in your browser removes both, and will sign you out.
-            </Prose>
-          </Stack>
-        </Section>
-
-        <Section id="s-03" labelledBy="agi-cookies-myths-title" rule>
-          <Stack gap="loose">
-            <h2 className="agi-ds-h2" id="agi-cookies-myths-title">
-              03 &middot; Two things people usually get told wrong.
-            </h2>
-            <NoteList items={MISCONCEPTIONS} />
-          </Stack>
-        </Section>
-
-        <Section id="s-04" labelledBy="agi-cookies-dnt-title" rule ground="2">
-          <Stack gap="loose">
-            <h2 className="agi-ds-h2" id="agi-cookies-dnt-title">
-              04 &middot; Do Not Track and Global Privacy Control.
-            </h2>
-            <Prose>
-              <strong>We do not read either signal today.</strong> Browsers can send a Do Not Track
-              header or a Global Privacy Control signal, and nothing in this product currently
-              checks for them. We are stating that plainly rather than leaving you to assume one way
-              or the other, because a site that silently ignores GPC while implying otherwise is
-              worse than one that says so.
-            </Prose>
-            <Prose size="sm">
-              What this does and does not cost you: analytics is opt-in here regardless, so a
-              browser sending GPC already gets the outcome it is asking for: nothing loads until you
-              turn it on. The signal would matter for a sale or sharing of personal data for
-              advertising, and we do neither. Reading the signal explicitly is tracked as an open
-              item.
-            </Prose>
-          </Stack>
-        </Section>
-
-        <Section id="s-05" labelledBy="agi-cookies-choices-title" rule>
-          <Stack gap="loose">
-            <h2 className="agi-ds-h2" id="agi-cookies-choices-title">
-              05 &middot; Your choices.
-            </h2>
-            <Prose>
-              <CookiePreferencesButton /> at any time: analytics stays off until you turn it on, and
-              switching it back off stops it loading on your next page view. You can also manage
-              cookies through your browser; clearing them will sign you out of any active session.
-              For data export or deletion, see the{' '}
-              <Link href="/privacy" className="agi-ds-link">
-                privacy policy
-              </Link>
-              .
-            </Prose>
-            <ButtonRow>
-              <Button href="/privacy" variant="secondary">
-                Privacy
-              </Button>
-              <Button href="/subprocessors" variant="secondary">
-                Subprocessors
-              </Button>
-            </ButtonRow>
-          </Stack>
-        </Section>
       </main>
       <MarketingFooter />
     </div>

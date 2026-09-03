@@ -812,359 +812,378 @@ export default function PrivacyPage() {
           ctas={[]}
         />
 
-        <Container className="mb-10">
-          <PolicyContents
-            sections={SECTIONS}
-            intro="Start with section 00: which mode you run changes almost every answer below it."
-          />
+        <Container>
+          <div className="agi-ds-sticky-scene">
+            <div className="agi-ds-sticky-pane">
+              <PolicyContents
+                sections={SECTIONS}
+                intro="Start with section 00: which mode you run changes almost every answer below it."
+              />
+            </div>
+            <div className="agi-ds-sticky-flow">
+              <Section
+                id="s-definitions"
+                labelledBy="agi-privacy-definitions-title"
+                rule
+                ground="2"
+              >
+                <Stack gap="loose">
+                  <h2 className="agi-ds-h2" id="agi-privacy-definitions-title">
+                    Definitions
+                  </h2>
+                  <Ledger caption="Definitions" rows={DEFINITIONS_LEDGER} />
+                </Stack>
+              </Section>
+
+              <Section id="s-00" labelledBy="agi-privacy-s00-title" rule>
+                <Stack gap="loose">
+                  <div>
+                    <h2 className="agi-ds-h2" id="agi-privacy-s00-title">
+                      00 · The mode decides the answer
+                    </h2>
+                    <Prose>
+                      Most privacy policies have one answer. This product has three, because Local,
+                      BYOK and Managed Cloud are separate trust boundaries and your data goes to
+                      genuinely different places in each. Read this table first; the rest of the
+                      page is detail.
+                    </Prose>
+                  </div>
+                  <Ledger caption="Mode and where your data goes" rows={MODE_LEDGER} />
+                </Stack>
+              </Section>
+
+              <Section id="s-01" labelledBy="agi-privacy-s01-title" rule ground="2">
+                <Stack gap="loose">
+                  <h2 className="agi-ds-h2" id="agi-privacy-s01-title">
+                    01 · What we collect
+                  </h2>
+                  <Ledger caption="What we collect" rows={COLLECT_LEDGER} />
+                  <Prose size="sm">
+                    <strong>Why this table grew on {POLICY_LAST_UPDATED.privacy}.</strong> A review
+                    compared it against every write path in the product and found the six categories
+                    above missing: the things you send us on purpose (feedback with its diagnostic
+                    logs, content reports and support transcripts), search history and memories,
+                    profile fields, the early-access list, device tokens and download records, and
+                    directory-provisioned identities. All of it was already being collected; this
+                    page had not kept up. If you add a collection point and do not add a row here,
+                    that is the defect this paragraph exists to prevent.
+                  </Prose>
+                  <Prose size="sm">
+                    <strong>Hosted AI providers we may route requests to (Managed Cloud):</strong>{' '}
+                    Anthropic, OpenAI, Google, xAI, DeepSeek, Perplexity and Moonshot directly;
+                    MiniMax, Qwen and Zhipu through OpenRouter, which therefore also handles those
+                    requests. Which one depends on the model you select.{' '}
+                    <strong>
+                      OpenRouter is additionally the failover for every other chat model in the
+                      catalogue
+                    </strong>
+                    , so if a direct route fails, prompt content for a model from any provider can
+                    pass through it. We would rather say that than let the three named families
+                    imply a narrower answer. The full current list with regions is at{' '}
+                    <Link href="/subprocessors" className="agi-ds-link">
+                      /subprocessors
+                    </Link>
+                    . BYOK routes from your client directly to the provider; Local contacts none of
+                    them.
+                  </Prose>
+                  <div className="agi-ds-card p-6">
+                    <Stack gap="tight">
+                      <h3 className="agi-ds-h3">
+                        If you never opened an account and your data is in here anyway
+                      </h3>
+                      <Prose size="sm">
+                        The rest of this notice is written to the person holding the account. This
+                        part is written to everyone else. Text typed or pasted into a chat, files
+                        uploaded to it, and whatever a connector fetches when an account holder
+                        points the agent at a mailbox, calendar, drive or CRM routinely carries
+                        personal data about people who never signed up: a colleague on the thread, a
+                        guest on the invite, a name in the spreadsheet. So do the identities an
+                        employer&rsquo;s directory provisions for people who may never sign in. We
+                        do not ask those people for anything and we do not contact them; nothing in
+                        the product does.
+                      </Prose>
+                      <Prose size="sm">
+                        <strong>What happens to it.</strong> It is kept as part of the record it
+                        arrived in and gets that record&rsquo;s treatment: the storage described in
+                        the table above and the clock in section 05, nothing separate. In Local it
+                        never reaches us. In BYOK it goes from the account holder&rsquo;s client to
+                        their provider, not to us.
+                      </Prose>
+                      <Prose size="sm">
+                        <strong>On what basis.</strong> In Managed Cloud we hold it as the account
+                        holder&rsquo;s processor and act on their instruction under the{' '}
+                        <Link href="/dpa" className="agi-ds-link">
+                          DPA
+                        </Link>
+                        ; they are the controller, and bringing your data in was their decision, not
+                        ours. Our own processing rests on our contract with them rather than on any
+                        consent from you, and the{' '}
+                        <Link href="/terms" className="agi-ds-link">
+                          terms
+                        </Link>{' '}
+                        make them confirm they were entitled to give it to us, including having
+                        given any notice or obtained any consent your law required first. That duty
+                        is theirs and we cannot discharge it for them.
+                      </Prose>
+                      <Prose size="sm">
+                        <strong>What you can do about it.</strong> File an access, correction,
+                        erasure or grievance request at{' '}
+                        <Link href="/privacy/requests" className="agi-ds-link">
+                          /privacy/requests
+                        </Link>{' '}
+                        without signing in: the form asks for a contact address, not an account. Two
+                        limits, said here rather than discovered later: we can only act on a record
+                        we can locate, so the request needs enough detail to find it; and where the
+                        data sits inside a customer&rsquo;s account we hold it on that
+                        customer&rsquo;s instruction, so we will usually have to route your request
+                        to them rather than act on it ourselves.
+                      </Prose>
+                    </Stack>
+                  </div>
+                </Stack>
+              </Section>
+
+              <Section id="s-02" labelledBy="agi-privacy-s02-title" rule>
+                <Stack gap="loose">
+                  <h2 className="agi-ds-h2" id="agi-privacy-s02-title">
+                    02 · What we do not collect
+                  </h2>
+                  <NoteList items={NOT_COLLECTED} />
+                </Stack>
+              </Section>
+
+              <Section id="s-03" labelledBy="agi-privacy-s03-title" rule ground="2">
+                <Stack gap="loose">
+                  <h2 className="agi-ds-h2" id="agi-privacy-s03-title">
+                    03 · How we use it, and on what basis
+                  </h2>
+                  <Prose>
+                    One row per purpose, rather than a sentence listing four bases and leaving you
+                    to work out which applies to what. Where a row says{' '}
+                    <em>legitimate interests</em>, it also says why we think ours do not override
+                    yours. That balancing test is the part a bare list omits.
+                  </Prose>
+                  <Ledger caption="How we use it, and on what basis" rows={BASIS_LEDGER} />
+                  <Prose size="sm">
+                    <strong>India works differently and has its own page.</strong> Under the Digital
+                    Personal Data Protection Act, 2023 consent is the default ground rather than one
+                    of several, so the analysis is not the same as the table above. It is at{' '}
+                    <Link href="/privacy/india" className="agi-ds-link">
+                      /privacy/india
+                    </Link>
+                    , and it governs for data principals in India where the two differ.
+                  </Prose>
+                </Stack>
+              </Section>
+
+              <Section id="s-04" labelledBy="agi-privacy-s04-title" rule>
+                <Stack gap="loose">
+                  <h2 className="agi-ds-h2" id="agi-privacy-s04-title">
+                    04 · Sharing
+                  </h2>
+                  <Prose>
+                    We share data only with the subprocessors listed at{' '}
+                    <Link href="/subprocessors" className="agi-ds-link">
+                      /subprocessors
+                    </Link>
+                    , and only as necessary to run the service. We do not sell data. We may disclose
+                    data if compelled by valid legal process; we narrow such disclosures to the
+                    minimum required. If AGI is involved in a merger or sale of assets, personal
+                    data may transfer as part of it, and this policy continues to apply until the
+                    acquirer publishes its own.
+                  </Prose>
+                </Stack>
+              </Section>
+
+              <Section id="s-05" labelledBy="agi-privacy-s05-title" rule ground="2">
+                <Stack gap="loose">
+                  <h2 className="agi-ds-h2" id="agi-privacy-s05-title">
+                    05 · Retention
+                  </h2>
+                  <Prose>
+                    Every row below is a job or a mechanism that exists in the product, with the
+                    ones we do not control named as such. We would rather publish a shorter schedule
+                    that is true than a complete-looking one that is not.
+                  </Prose>
+                  <Ledger caption="Retention schedule" rows={RETENTION_LEDGER} />
+                  <div className="agi-ds-card p-6">
+                    <Stack gap="tight">
+                      <h3 className="agi-ds-h3">
+                        What deliberately survives deleting your account
+                      </h3>
+                      <Prose size="sm">
+                        &ldquo;Delete my account&rdquo; erases an enumerated list of 70 user-scoped
+                        tables and your stored files. A short list of things is kept on purpose, and
+                        you should know what before you decide, not after.
+                      </Prose>
+                    </Stack>
+                  </div>
+                  <Ledger caption="What survives deletion, and why" rows={SURVIVORS_LEDGER} />
+                </Stack>
+              </Section>
+
+              <Section id="s-06" labelledBy="agi-privacy-s06-title" rule>
+                <Stack gap="loose">
+                  <h2 className="agi-ds-h2" id="agi-privacy-s06-title">
+                    06 · What you can change yourself
+                  </h2>
+                  <Prose>
+                    Controls that exist in the product right now, separated from the statutory
+                    rights in the next section on purpose. A right you have to write in and ask for
+                    is not the same thing as a switch you can reach, and a policy that mixes them
+                    makes the product sound more self-serve than it is.
+                  </Prose>
+                  <Ledger caption="Controls you can use today" rows={CONTROLS_LEDGER} />
+                </Stack>
+              </Section>
+
+              <Section id="s-07" labelledBy="agi-privacy-s07-title" rule ground="2">
+                <Stack gap="loose">
+                  <h2 className="agi-ds-h2" id="agi-privacy-s07-title">
+                    07 · Your rights, and how to use them
+                  </h2>
+                  <Prose>
+                    Depending on where you live and subject to applicable exceptions, privacy laws
+                    such as the GDPR, UK GDPR, and CCPA may give you rights of access, correction,
+                    deletion, portability, objection or restriction, and non-discrimination. Two
+                    requests are self-serve in the product:
+                  </Prose>
+                  <Ledger
+                    caption="Rights and how to use them"
+                    rows={[
+                      {
+                        label: 'Export',
+                        value:
+                          'Signed in, you can export your data from the account export endpoint at any time. It is rate limited and each export is recorded in the security audit log.',
+                      },
+                      {
+                        label: 'Deletion',
+                        value:
+                          'Request account deletion from the product. Erasure is scheduled 24 hours later and then performed. You get no confirmation email, because the only email this product sends is support escalation, scheduled-task notifications and operational alerts to us: there is no account-lifecycle mail. Cancellation is self-serve: sign back in and cancel from Settings > Account any time before the 24 hours are up, and the request is discarded without touching your data. Once that window has closed the product refuses to cancel, so the request cannot be revived after erasure begins.',
+                      },
+                      {
+                        label: 'Everything else',
+                        value: (
+                          <>
+                            Email{' '}
+                            <a
+                              href={contactMailto(CONTACT_SUBJECTS.privacy)}
+                              className="agi-ds-link"
+                            >
+                              {CONTACT_EMAIL}
+                            </a>{' '}
+                            from your account address with the subject line &ldquo;
+                            {CONTACT_SUBJECTS.privacy}&rdquo;. Applicable law determines the
+                            response period. You may use an authorised agent where the law allows.
+                          </>
+                        ),
+                      },
+                    ]}
+                  />
+                  <Prose size="sm">
+                    EU, UK and Swiss residents may also lodge a complaint with their supervisory
+                    authority. California residents: we do not sell or share personal information,
+                    so there is no opt-out to exercise, and the CCPA service-provider terms we
+                    operate under are in section 06 of the{' '}
+                    <Link href="/dpa" className="agi-ds-link">
+                      DPA
+                    </Link>
+                    .
+                  </Prose>
+                </Stack>
+              </Section>
+
+              <Section id="s-08" labelledBy="agi-privacy-s08-title" rule>
+                <Stack gap="loose">
+                  <h2 className="agi-ds-h2" id="agi-privacy-s08-title">
+                    08 · International transfers
+                  </h2>
+                  <Prose>
+                    AGI data is hosted in the United States.{' '}
+                    <strong>We do not offer EU or UK data residency</strong>, so European
+                    customers&rsquo; data is transferred to and processed in the US. For EU, UK and
+                    Swiss personal data we rely on the Standard Contractual Clauses with the UK
+                    Addendum and the Swiss adaptations, set out in section 06 of the{' '}
+                    <Link href="/dpa#s-06" className="agi-ds-link">
+                      DPA
+                    </Link>
+                    . AGI has not appointed a representative under GDPR Art. 27; the current
+                    position is at{' '}
+                    <Link href="/legal/eu-representative" className="agi-ds-link">
+                      /legal/eu-representative
+                    </Link>
+                    .
+                  </Prose>
+                </Stack>
+              </Section>
+
+              <Section id="s-09" labelledBy="agi-privacy-s09-title" rule ground="2">
+                <Stack gap="loose">
+                  <h2 className="agi-ds-h2" id="agi-privacy-s09-title">
+                    09 · Children
+                  </h2>
+                  <Prose>
+                    AGI accounts are for people aged 18 and over; 13- to 17-year-olds may use it
+                    only under an account opened and supervised by a parent, guardian or school, as
+                    set out in section 02 of the{' '}
+                    <Link href="/terms" className="agi-ds-link">
+                      terms
+                    </Link>
+                    . We do not knowingly collect personal data from children under 13, or under the
+                    higher digital-consent age where one applies. If you believe a child has
+                    provided us data, email us and we will delete it.
+                  </Prose>
+                </Stack>
+              </Section>
+
+              <Section id="s-10" labelledBy="agi-privacy-s10-title" rule>
+                <Stack gap="loose">
+                  <h2 className="agi-ds-h2" id="agi-privacy-s10-title">
+                    10 · Changes
+                  </h2>
+                  <Prose>
+                    We may update this policy. The current version is always at this URL with the
+                    revision date at the top, and material changes are recorded on{' '}
+                    <Link href="/changelog" className="agi-ds-link">
+                      /changelog
+                    </Link>
+                    . No mailing path in this product can reach an arbitrary list of customers, so
+                    we do not promise emailed notice of a change.
+                  </Prose>
+                </Stack>
+              </Section>
+
+              <Section id="s-11" labelledBy="agi-privacy-s11-title" rule ground="2">
+                <Stack gap="loose">
+                  <h2 className="agi-ds-h2" id="agi-privacy-s11-title">
+                    11 · Contact
+                  </h2>
+                  <Prose>
+                    {LEGAL_ENTITY}, {NOTICE_ADDRESS}. Email{' '}
+                    <a href={contactMailto(CONTACT_SUBJECTS.privacy)} className="agi-ds-link">
+                      {CONTACT_EMAIL}
+                    </a>
+                    .
+                  </Prose>
+                  <nav aria-label="Related legal pages" className="agi-ds-btn-row">
+                    <Link href="/terms" className="agi-ds-link">
+                      Terms
+                    </Link>
+                    <Link href="/dpa" className="agi-ds-link">
+                      DPA
+                    </Link>
+                    <Link href="/cookies" className="agi-ds-link">
+                      Cookies
+                    </Link>
+                    <Link href="/subprocessors" className="agi-ds-link">
+                      Subprocessors
+                    </Link>
+                  </nav>
+                </Stack>
+              </Section>
+            </div>
+          </div>
         </Container>
-
-        <Section id="s-definitions" labelledBy="agi-privacy-definitions-title" rule ground="2">
-          <Stack gap="loose">
-            <h2 className="agi-ds-h2" id="agi-privacy-definitions-title">
-              Definitions
-            </h2>
-            <Ledger caption="Definitions" rows={DEFINITIONS_LEDGER} />
-          </Stack>
-        </Section>
-
-        <Section id="s-00" labelledBy="agi-privacy-s00-title" rule>
-          <Stack gap="loose">
-            <div>
-              <h2 className="agi-ds-h2" id="agi-privacy-s00-title">
-                00 · The mode decides the answer
-              </h2>
-              <Prose>
-                Most privacy policies have one answer. This product has three, because Local, BYOK
-                and Managed Cloud are separate trust boundaries and your data goes to genuinely
-                different places in each. Read this table first; the rest of the page is detail.
-              </Prose>
-            </div>
-            <Ledger caption="Mode and where your data goes" rows={MODE_LEDGER} />
-          </Stack>
-        </Section>
-
-        <Section id="s-01" labelledBy="agi-privacy-s01-title" rule ground="2">
-          <Stack gap="loose">
-            <h2 className="agi-ds-h2" id="agi-privacy-s01-title">
-              01 · What we collect
-            </h2>
-            <Ledger caption="What we collect" rows={COLLECT_LEDGER} />
-            <Prose size="sm">
-              <strong>Why this table grew on {POLICY_LAST_UPDATED.privacy}.</strong> A review
-              compared it against every write path in the product and found the six categories above
-              missing: the things you send us on purpose (feedback with its diagnostic logs, content
-              reports and support transcripts), search history and memories, profile fields, the
-              early-access list, device tokens and download records, and directory-provisioned
-              identities. All of it was already being collected; this page had not kept up. If you
-              add a collection point and do not add a row here, that is the defect this paragraph
-              exists to prevent.
-            </Prose>
-            <Prose size="sm">
-              <strong>Hosted AI providers we may route requests to (Managed Cloud):</strong>{' '}
-              Anthropic, OpenAI, Google, xAI, DeepSeek, Perplexity and Moonshot directly; MiniMax,
-              Qwen and Zhipu through OpenRouter, which therefore also handles those requests. Which
-              one depends on the model you select.{' '}
-              <strong>
-                OpenRouter is additionally the failover for every other chat model in the catalogue
-              </strong>
-              , so if a direct route fails, prompt content for a model from any provider can pass
-              through it. We would rather say that than let the three named families imply a
-              narrower answer. The full current list with regions is at{' '}
-              <Link href="/subprocessors" className="agi-ds-link">
-                /subprocessors
-              </Link>
-              . BYOK routes from your client directly to the provider; Local contacts none of them.
-            </Prose>
-            <div className="agi-ds-card p-6">
-              <Stack gap="tight">
-                <h3 className="agi-ds-h3">
-                  If you never opened an account and your data is in here anyway
-                </h3>
-                <Prose size="sm">
-                  The rest of this notice is written to the person holding the account. This part is
-                  written to everyone else. Text typed or pasted into a chat, files uploaded to it,
-                  and whatever a connector fetches when an account holder points the agent at a
-                  mailbox, calendar, drive or CRM routinely carries personal data about people who
-                  never signed up: a colleague on the thread, a guest on the invite, a name in the
-                  spreadsheet. So do the identities an employer&rsquo;s directory provisions for
-                  people who may never sign in. We do not ask those people for anything and we do
-                  not contact them; nothing in the product does.
-                </Prose>
-                <Prose size="sm">
-                  <strong>What happens to it.</strong> It is kept as part of the record it arrived
-                  in and gets that record&rsquo;s treatment: the storage described in the table
-                  above and the clock in section 05, nothing separate. In Local it never reaches us.
-                  In BYOK it goes from the account holder&rsquo;s client to their provider, not to
-                  us.
-                </Prose>
-                <Prose size="sm">
-                  <strong>On what basis.</strong> In Managed Cloud we hold it as the account
-                  holder&rsquo;s processor and act on their instruction under the{' '}
-                  <Link href="/dpa" className="agi-ds-link">
-                    DPA
-                  </Link>
-                  ; they are the controller, and bringing your data in was their decision, not ours.
-                  Our own processing rests on our contract with them rather than on any consent from
-                  you, and the{' '}
-                  <Link href="/terms" className="agi-ds-link">
-                    terms
-                  </Link>{' '}
-                  make them confirm they were entitled to give it to us, including having given any
-                  notice or obtained any consent your law required first. That duty is theirs and we
-                  cannot discharge it for them.
-                </Prose>
-                <Prose size="sm">
-                  <strong>What you can do about it.</strong> File an access, correction, erasure or
-                  grievance request at{' '}
-                  <Link href="/privacy/requests" className="agi-ds-link">
-                    /privacy/requests
-                  </Link>{' '}
-                  without signing in: the form asks for a contact address, not an account. Two
-                  limits, said here rather than discovered later: we can only act on a record we can
-                  locate, so the request needs enough detail to find it; and where the data sits
-                  inside a customer&rsquo;s account we hold it on that customer&rsquo;s instruction,
-                  so we will usually have to route your request to them rather than act on it
-                  ourselves.
-                </Prose>
-              </Stack>
-            </div>
-          </Stack>
-        </Section>
-
-        <Section id="s-02" labelledBy="agi-privacy-s02-title" rule>
-          <Stack gap="loose">
-            <h2 className="agi-ds-h2" id="agi-privacy-s02-title">
-              02 · What we do not collect
-            </h2>
-            <NoteList items={NOT_COLLECTED} />
-          </Stack>
-        </Section>
-
-        <Section id="s-03" labelledBy="agi-privacy-s03-title" rule ground="2">
-          <Stack gap="loose">
-            <h2 className="agi-ds-h2" id="agi-privacy-s03-title">
-              03 · How we use it, and on what basis
-            </h2>
-            <Prose>
-              One row per purpose, rather than a sentence listing four bases and leaving you to work
-              out which applies to what. Where a row says <em>legitimate interests</em>, it also
-              says why we think ours do not override yours. That balancing test is the part a bare
-              list omits.
-            </Prose>
-            <Ledger caption="How we use it, and on what basis" rows={BASIS_LEDGER} />
-            <Prose size="sm">
-              <strong>India works differently and has its own page.</strong> Under the Digital
-              Personal Data Protection Act, 2023 consent is the default ground rather than one of
-              several, so the analysis is not the same as the table above. It is at{' '}
-              <Link href="/privacy/india" className="agi-ds-link">
-                /privacy/india
-              </Link>
-              , and it governs for data principals in India where the two differ.
-            </Prose>
-          </Stack>
-        </Section>
-
-        <Section id="s-04" labelledBy="agi-privacy-s04-title" rule>
-          <Stack gap="loose">
-            <h2 className="agi-ds-h2" id="agi-privacy-s04-title">
-              04 · Sharing
-            </h2>
-            <Prose>
-              We share data only with the subprocessors listed at{' '}
-              <Link href="/subprocessors" className="agi-ds-link">
-                /subprocessors
-              </Link>
-              , and only as necessary to run the service. We do not sell data. We may disclose data
-              if compelled by valid legal process; we narrow such disclosures to the minimum
-              required. If AGI is involved in a merger or sale of assets, personal data may transfer
-              as part of it, and this policy continues to apply until the acquirer publishes its
-              own.
-            </Prose>
-          </Stack>
-        </Section>
-
-        <Section id="s-05" labelledBy="agi-privacy-s05-title" rule ground="2">
-          <Stack gap="loose">
-            <h2 className="agi-ds-h2" id="agi-privacy-s05-title">
-              05 · Retention
-            </h2>
-            <Prose>
-              Every row below is a job or a mechanism that exists in the product, with the ones we
-              do not control named as such. We would rather publish a shorter schedule that is true
-              than a complete-looking one that is not.
-            </Prose>
-            <Ledger caption="Retention schedule" rows={RETENTION_LEDGER} />
-            <div className="agi-ds-card p-6">
-              <Stack gap="tight">
-                <h3 className="agi-ds-h3">What deliberately survives deleting your account</h3>
-                <Prose size="sm">
-                  &ldquo;Delete my account&rdquo; erases an enumerated list of 70 user-scoped tables
-                  and your stored files. A short list of things is kept on purpose, and you should
-                  know what before you decide, not after.
-                </Prose>
-              </Stack>
-            </div>
-            <Ledger caption="What survives deletion, and why" rows={SURVIVORS_LEDGER} />
-          </Stack>
-        </Section>
-
-        <Section id="s-06" labelledBy="agi-privacy-s06-title" rule>
-          <Stack gap="loose">
-            <h2 className="agi-ds-h2" id="agi-privacy-s06-title">
-              06 · What you can change yourself
-            </h2>
-            <Prose>
-              Controls that exist in the product right now, separated from the statutory rights in
-              the next section on purpose. A right you have to write in and ask for is not the same
-              thing as a switch you can reach, and a policy that mixes them makes the product sound
-              more self-serve than it is.
-            </Prose>
-            <Ledger caption="Controls you can use today" rows={CONTROLS_LEDGER} />
-          </Stack>
-        </Section>
-
-        <Section id="s-07" labelledBy="agi-privacy-s07-title" rule ground="2">
-          <Stack gap="loose">
-            <h2 className="agi-ds-h2" id="agi-privacy-s07-title">
-              07 · Your rights, and how to use them
-            </h2>
-            <Prose>
-              Depending on where you live and subject to applicable exceptions, privacy laws such as
-              the GDPR, UK GDPR, and CCPA may give you rights of access, correction, deletion,
-              portability, objection or restriction, and non-discrimination. Two requests are
-              self-serve in the product:
-            </Prose>
-            <Ledger
-              caption="Rights and how to use them"
-              rows={[
-                {
-                  label: 'Export',
-                  value:
-                    'Signed in, you can export your data from the account export endpoint at any time. It is rate limited and each export is recorded in the security audit log.',
-                },
-                {
-                  label: 'Deletion',
-                  value:
-                    'Request account deletion from the product. Erasure is scheduled 24 hours later and then performed. You get no confirmation email, because the only email this product sends is support escalation, scheduled-task notifications and operational alerts to us: there is no account-lifecycle mail. Cancellation is self-serve: sign back in and cancel from Settings > Account any time before the 24 hours are up, and the request is discarded without touching your data. Once that window has closed the product refuses to cancel, so the request cannot be revived after erasure begins.',
-                },
-                {
-                  label: 'Everything else',
-                  value: (
-                    <>
-                      Email{' '}
-                      <a href={contactMailto(CONTACT_SUBJECTS.privacy)} className="agi-ds-link">
-                        {CONTACT_EMAIL}
-                      </a>{' '}
-                      from your account address with the subject line &ldquo;
-                      {CONTACT_SUBJECTS.privacy}&rdquo;. Applicable law determines the response
-                      period. You may use an authorised agent where the law allows.
-                    </>
-                  ),
-                },
-              ]}
-            />
-            <Prose size="sm">
-              EU, UK and Swiss residents may also lodge a complaint with their supervisory
-              authority. California residents: we do not sell or share personal information, so
-              there is no opt-out to exercise, and the CCPA service-provider terms we operate under
-              are in section 06 of the{' '}
-              <Link href="/dpa" className="agi-ds-link">
-                DPA
-              </Link>
-              .
-            </Prose>
-          </Stack>
-        </Section>
-
-        <Section id="s-08" labelledBy="agi-privacy-s08-title" rule>
-          <Stack gap="loose">
-            <h2 className="agi-ds-h2" id="agi-privacy-s08-title">
-              08 · International transfers
-            </h2>
-            <Prose>
-              AGI data is hosted in the United States.{' '}
-              <strong>We do not offer EU or UK data residency</strong>, so European customers&rsquo;
-              data is transferred to and processed in the US. For EU, UK and Swiss personal data we
-              rely on the Standard Contractual Clauses with the UK Addendum and the Swiss
-              adaptations, set out in section 06 of the{' '}
-              <Link href="/dpa#s-06" className="agi-ds-link">
-                DPA
-              </Link>
-              . AGI has not appointed a representative under GDPR Art. 27; the current position is
-              at{' '}
-              <Link href="/legal/eu-representative" className="agi-ds-link">
-                /legal/eu-representative
-              </Link>
-              .
-            </Prose>
-          </Stack>
-        </Section>
-
-        <Section id="s-09" labelledBy="agi-privacy-s09-title" rule ground="2">
-          <Stack gap="loose">
-            <h2 className="agi-ds-h2" id="agi-privacy-s09-title">
-              09 · Children
-            </h2>
-            <Prose>
-              AGI accounts are for people aged 18 and over; 13- to 17-year-olds may use it only
-              under an account opened and supervised by a parent, guardian or school, as set out in
-              section 02 of the{' '}
-              <Link href="/terms" className="agi-ds-link">
-                terms
-              </Link>
-              . We do not knowingly collect personal data from children under 13, or under the
-              higher digital-consent age where one applies. If you believe a child has provided us
-              data, email us and we will delete it.
-            </Prose>
-          </Stack>
-        </Section>
-
-        <Section id="s-10" labelledBy="agi-privacy-s10-title" rule>
-          <Stack gap="loose">
-            <h2 className="agi-ds-h2" id="agi-privacy-s10-title">
-              10 · Changes
-            </h2>
-            <Prose>
-              We may update this policy. The current version is always at this URL with the revision
-              date at the top, and material changes are recorded on{' '}
-              <Link href="/changelog" className="agi-ds-link">
-                /changelog
-              </Link>
-              . No mailing path in this product can reach an arbitrary list of customers, so we do
-              not promise emailed notice of a change.
-            </Prose>
-          </Stack>
-        </Section>
-
-        <Section id="s-11" labelledBy="agi-privacy-s11-title" rule ground="2">
-          <Stack gap="loose">
-            <h2 className="agi-ds-h2" id="agi-privacy-s11-title">
-              11 · Contact
-            </h2>
-            <Prose>
-              {LEGAL_ENTITY}, {NOTICE_ADDRESS}. Email{' '}
-              <a href={contactMailto(CONTACT_SUBJECTS.privacy)} className="agi-ds-link">
-                {CONTACT_EMAIL}
-              </a>
-              .
-            </Prose>
-            <nav aria-label="Related legal pages" className="agi-ds-btn-row">
-              <Link href="/terms" className="agi-ds-link">
-                Terms
-              </Link>
-              <Link href="/dpa" className="agi-ds-link">
-                DPA
-              </Link>
-              <Link href="/cookies" className="agi-ds-link">
-                Cookies
-              </Link>
-              <Link href="/subprocessors" className="agi-ds-link">
-                Subprocessors
-              </Link>
-            </nav>
-          </Stack>
-        </Section>
       </main>
       <MarketingFooter />
     </div>
