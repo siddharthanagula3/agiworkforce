@@ -20,6 +20,7 @@ import {
   ADD_MARKETPLACE_CANCEL_LABEL,
   ADD_MARKETPLACE_DONE_LABEL,
   ADD_MARKETPLACE_EMPTY_LABEL,
+  ADD_MARKETPLACE_INTRO,
   ADD_MARKETPLACE_LABEL,
   ADD_MARKETPLACE_REF_LABEL,
   ADD_MARKETPLACE_REMOVE_CONFIRM_BODY,
@@ -144,7 +145,11 @@ export function AddMarketplaceDialog({
           <DialogHeader>
             <DialogTitle>{ADD_MARKETPLACE_LABEL}</DialogTitle>
             <DialogDescription>
-              {step === 'result' ? ADD_MARKETPLACE_SYNCED_LABEL : ADD_MARKETPLACE_REPOSITORY_BODY}
+              {step === 'result'
+                ? ADD_MARKETPLACE_SYNCED_LABEL
+                : step === 'form'
+                  ? ADD_MARKETPLACE_REPOSITORY_BODY
+                  : ADD_MARKETPLACE_INTRO}
             </DialogDescription>
           </DialogHeader>
 

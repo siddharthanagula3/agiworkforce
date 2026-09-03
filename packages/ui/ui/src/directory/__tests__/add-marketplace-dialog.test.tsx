@@ -41,6 +41,14 @@ describe('AddMarketplaceDialog', () => {
     expect(onClose).toHaveBeenCalled();
   });
 
+  it('introduces the choice instead of repeating an option label', () => {
+    renderDialog();
+    expect(screen.getByText('Choose where these plugins come from.')).toBeTruthy();
+    expect(
+      screen.getAllByText('Sync a plugin marketplace from a GitHub repository or git url'),
+    ).toHaveLength(1);
+  });
+
   it('closes from cancel without submitting', () => {
     const { onClose, onSubmit } = renderDialog();
     fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
