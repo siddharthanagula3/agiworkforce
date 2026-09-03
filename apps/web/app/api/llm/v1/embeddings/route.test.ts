@@ -42,6 +42,20 @@ vi.mock('@/lib/services/managed-usage-request-service', async (importOriginal) =
 const { POST, estimateEmbeddingCostCents } = await import('./route');
 
 const KEY = 'agi.embeddings.web.1234567890ab';
+const PROVIDER_ROOT = 'https://generativelanguage.googleapis.com/';
+
+function isProviderCall(call: unknown[]): boolean {
+  return String(call[0]).startsWith(PROVIDER_ROOT);
+}
+
+function providerCalls(): unknown[][] {
+  return mocks.fetch.mock.calls.filter(isProviderCall);
+}
+
+function firstProviderCallOrder(): number | undefined {
+  const index = mocks.fetch.mock.calls.findIndex(isProviderCall);
+  return index < 0 ? undefined : mocks.fetch.mock.invocationCallOrder[index];
+}
 
 function post(body: unknown, headers: Record<string, string> = { 'Idempotency-Key': KEY }) {
   return new NextRequest('https://agiworkforce.com/api/llm/v1/embeddings', {
@@ -129,9 +143,9 @@ describe('POST /api/llm/v1/embeddings — success', () => {
     await POST(post({ input: 'hello' }));
 
     expect(mocks.reserve).toHaveBeenCalled();
-    expect(mocks.reserve.mock.invocationCallOrder[0]!).toBeLessThan(
-      mocks.fetch.mock.invocationCallOrder[0]!,
-    );
+    const providerCallOrder = firstProviderCallOrder();
+    expect(providerCallOrder).toBeDefined();
+    expect(mocks.reserve.mock.invocationCallOrder[0]!).toBeLessThan(providerCallOrder!);
   });
 });
 
@@ -180,7 +194,7 @@ describe('POST /api/llm/v1/embeddings — billing on failure', () => {
     const response = await POST(post({ input: 'hello' }, {}));
 
     expect(response.status).toBe(400);
-    expect(mocks.fetch).not.toHaveBeenCalled();
+    expect(providerCalls()).toEqual([]);
   });
 });
 

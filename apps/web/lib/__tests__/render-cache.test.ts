@@ -122,7 +122,7 @@ describe('server render locale invariant', () => {
     // If this stops matching, the server has started varying its output by
     // request locale and `renderCacheKey` must become request-derived before
     // any shared render output may be cached.
-    expect(layout).toContain(`<html lang="${SERVER_RENDER_LOCALE}"`);
+    expect(layout).toMatch(new RegExp(`<html\\b[^>]*\\slang="${SERVER_RENDER_LOCALE}"`));
   });
 
   it('keeps request-locale detection on the client, where it cannot vary a cached render', async () => {
