@@ -46,11 +46,28 @@ function cloudDesktopManifest() {
   };
 }
 
+const CLOUD_RELEASE_PATH = 'desktop-cloud';
+const MAC_DESKTOP_RELEASE_PATH = 'darwin-universal';
+
+function releaseNotFound() {
+  return Response.json(
+    { error: { code: 'NOT_FOUND', message: 'No release found' } },
+    { status: 404 },
+  );
+}
+
+function requestPath(input: RequestInfo | URL): string {
+  return typeof input === 'string' ? input : input.toString();
+}
+
 beforeEach(() => {
   fetchMock.mockImplementation((input: RequestInfo | URL) => {
-    const url = typeof input === 'string' ? input : input.toString();
+    const url = requestPath(input);
+    if (url.includes(MAC_DESKTOP_RELEASE_PATH)) return Promise.resolve(releaseNotFound());
     return Promise.resolve(
-      Response.json(url.includes('desktop-cloud') ? cloudDesktopManifest() : signedLinuxManifest()),
+      Response.json(
+        url.includes(CLOUD_RELEASE_PATH) ? cloudDesktopManifest() : signedLinuxManifest(),
+      ),
     );
   });
 });
@@ -75,14 +92,9 @@ describe('public Desktop download surfaces', () => {
 
   it('offers only the verified Linux AppImage from the shared download API', async () => {
     fetchMock.mockImplementation((input: RequestInfo | URL) => {
-      const url = typeof input === 'string' ? input : input.toString();
-      if (url.includes('desktop-cloud')) {
-        return Promise.resolve(
-          Response.json(
-            { error: { code: 'NOT_FOUND', message: 'No release found' } },
-            { status: 404 },
-          ),
-        );
+      const url = requestPath(input);
+      if (url.includes(CLOUD_RELEASE_PATH) || url.includes(MAC_DESKTOP_RELEASE_PATH)) {
+        return Promise.resolve(releaseNotFound());
       }
       return Promise.resolve(Response.json(signedLinuxManifest()));
     });
@@ -94,17 +106,23 @@ describe('public Desktop download surfaces', () => {
       within(region).getByRole('link', { name: 'Download Linux x64 AppImage' }),
     ).toHaveAttribute('href', '/api/download?platform=linux');
     expect(
-      within(region).getByText('No signed macOS installer is available right now.'),
+      await within(region).findByText(
+        'No signed AGI Desktop macOS installer is available right now.',
+      ),
     ).toBeInTheDocument();
-    expect(within(region).getByText('Windows installer not published')).toBeInTheDocument();
+    expect(
+      within(region).getByText('No signed AGI Cloud installer is available right now.'),
+    ).toBeInTheDocument();
+    expect(within(region).getByText('Windows installer not published.')).toBeInTheDocument();
     expect(within(region).queryByRole('link', { name: /macOS|Windows/i })).not.toBeInTheDocument();
     expect(screen.queryByText(/July 12, 2026|July 12/i)).not.toBeInTheDocument();
   });
 
   it('offers architecture-specific signed AGI Cloud installers', async () => {
     fetchMock.mockImplementation((input: RequestInfo | URL) => {
-      const url = typeof input === 'string' ? input : input.toString();
-      if (url.includes('desktop-cloud')) {
+      const url = requestPath(input);
+      if (url.includes(MAC_DESKTOP_RELEASE_PATH)) return Promise.resolve(releaseNotFound());
+      if (url.includes(CLOUD_RELEASE_PATH)) {
         return Promise.resolve(Response.json(cloudDesktopManifest()));
       }
       return Promise.resolve(Response.json(signedLinuxManifest()));
@@ -143,8 +161,9 @@ describe('public Desktop download surfaces', () => {
   it('shows an accessible error with a working retry action', async () => {
     let linuxRequests = 0;
     fetchMock.mockImplementation((input: RequestInfo | URL) => {
-      const url = typeof input === 'string' ? input : input.toString();
-      if (url.includes('desktop-cloud')) {
+      const url = requestPath(input);
+      if (url.includes(MAC_DESKTOP_RELEASE_PATH)) return Promise.resolve(releaseNotFound());
+      if (url.includes(CLOUD_RELEASE_PATH)) {
         return Promise.resolve(Response.json(cloudDesktopManifest()));
       }
       linuxRequests += 1;
