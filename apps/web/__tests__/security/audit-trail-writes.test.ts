@@ -1,4 +1,3 @@
-
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 vi.mock('server-only', () => ({}));
@@ -231,6 +230,42 @@ describe('recordAuditEvent — enterprise dual-write', () => {
 
     const [, params] = enterpriseWrites()[0]!;
     expect(params[4]).toBe('organization_member');
+  });
+
+  it('carries the captured ip address and user agent into the metadata argument', async () => {
+    const request = new Request('https://app.example.com/api/settings/team', {
+      method: 'PATCH',
+      headers: {
+        'x-forwarded-for': '9.9.9.9, 203.0.113.7',
+        'user-agent': 'AGI-Desktop/1.2.3',
+      },
+    });
+
+    await recordAuditEvent({
+      userId: 'user_admin',
+      eventType: 'member_role_changed',
+      organizationId: '11111111-2222-3333-4444-555555555555',
+      request,
+    });
+
+    const [, params] = enterpriseWrites()[0]!;
+    const metadata = JSON.parse(String(params[8])) as Record<string, unknown>;
+    expect(metadata['ipAddress']).toBe('203.0.113.7');
+    expect(metadata['userAgent']).toBe('AGI-Desktop/1.2.3');
+  });
+
+  it('omits ip address and user agent from metadata when no request was given', async () => {
+    await recordAuditEvent({
+      userId: 'user_admin',
+      eventType: 'member_invited',
+      organizationId: '11111111-2222-3333-4444-555555555555',
+      endpoint: '/api/settings/team',
+    });
+
+    const [, params] = enterpriseWrites()[0]!;
+    const metadata = JSON.parse(String(params[8])) as Record<string, unknown>;
+    expect(metadata['ipAddress']).toBeUndefined();
+    expect(metadata['userAgent']).toBeUndefined();
   });
 });
 
