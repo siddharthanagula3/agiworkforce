@@ -241,9 +241,8 @@ export function ResearchPanel({ onAskFollowUp }: ResearchPanelProps) {
   const closePanel = useResearchPanelStore((s) => s.closePanel);
   const sourcesFor = useResearchPanelStore((s) => s.sourcesFor);
   const activeConversationId = useChatStore((s) => s.activeConversationId);
-  // Scope to the active conversation: a chat that didn't run a web search shows
-  // no sources, never a previous chat's leftover sources.
-  const { sources, query } = sourcesFor(activeConversationId);
+  const { cited, more, query } = sourcesFor(activeConversationId);
+  const sourceCount = cited.length + more.length;
   // Three views: the live source list, the durable report THIS run persisted
   // (CAP-045 slice 3), and every report the user owns across all conversations
   // (the gallery — `GET /api/research/reports` with no conversationId).
@@ -340,9 +339,9 @@ export function ResearchPanel({ onAskFollowUp }: ResearchPanelProps) {
                 Library
               </button>
             </div>
-            {tab === 'sources' && sources.length > 0 && (
+            {tab === 'sources' && sourceCount > 0 && (
               <span className="rounded-full bg-primary/10 px-1.5 py-0.5 text-[12px] font-medium text-primary">
-                {sources.length}
+                {sourceCount}
               </span>
             )}
           </div>
@@ -382,14 +381,30 @@ export function ResearchPanel({ onAskFollowUp }: ResearchPanelProps) {
               </div>
             )}
 
-            {/* Source list */}
-            {sources.length === 0 ? (
+            {sourceCount === 0 ? (
               <SourcesEmptyState />
             ) : (
-              <div className="flex-1 space-y-2 overflow-y-auto p-3 [scrollbar-width:thin]">
-                {sources.map((source, index) => (
-                  <SourceRow key={`${source.url}-${index}`} source={source} index={index} />
-                ))}
+              <div className="flex-1 space-y-4 overflow-y-auto p-3 [scrollbar-width:thin]">
+                {cited.length > 0 && (
+                  <div className="space-y-2">
+                    <h3 className="px-1 text-[12px] font-semibold uppercase tracking-wide text-muted-foreground">
+                      Citations
+                    </h3>
+                    {cited.map((source, index) => (
+                      <SourceRow key={`${source.url}-${index}`} source={source} index={index} />
+                    ))}
+                  </div>
+                )}
+                {more.length > 0 && (
+                  <div className="space-y-2">
+                    <h3 className="px-1 text-[12px] font-semibold uppercase tracking-wide text-muted-foreground">
+                      More
+                    </h3>
+                    {more.map((source, index) => (
+                      <SourceRow key={`${source.url}-${index}`} source={source} index={index} />
+                    ))}
+                  </div>
+                )}
               </div>
             )}
           </>
@@ -429,104 +444,75 @@ export function ResearchToggleButton({ count = 0 }: { count?: number }) {
 }
 
 // ============================================================================
-// Collapsible inline sources list (used inside MessageBubble)
+// Compact sources control (used inside MessageBubble's action row)
 // ============================================================================
 
-interface InlineSourcesListProps {
-  sources: ResearchSource[];
-  query?: string;
-}
-
-/** Derive a clean host and a favicon URL (provider favicon → Google fallback). */
 function sourceDisplay(source: ResearchSource): { host: string; favicon?: string } {
-  let host = source.url;
-  let favicon = source.favicon;
   try {
     const parsed = new URL(source.url);
-    host = parsed.hostname.replace(/^www\./, '');
-    if (!favicon) {
-      favicon = `https://www.google.com/s2/favicons?domain=${parsed.hostname}&sz=32`;
-    }
+    return {
+      host: parsed.hostname.replace(/^www\./, ''),
+      favicon:
+        source.favicon ?? `https://www.google.com/s2/favicons?domain=${parsed.hostname}&sz=32`,
+    };
   } catch {
-    // Non-URL string: keep raw host, no favicon.
+    return { host: source.url, favicon: source.favicon };
   }
-  return { host, favicon };
 }
 
-/** A single inline source chip: number badge + favicon + domain. */
-function SourcePill({ source, index }: { source: ResearchSource; index: number }) {
+function SourceFavicon({ source }: { source: ResearchSource }) {
   const [imgError, setImgError] = useState(false);
-  const { host, favicon } = sourceDisplay(source);
-  const label = source.title || host;
-  const number = source.citationIndex ?? index + 1;
+  const { favicon } = sourceDisplay(source);
 
+  if (favicon && !imgError) {
+    return (
+      <img
+        src={favicon}
+        alt=""
+        aria-hidden="true"
+        width={16}
+        height={16}
+        className="h-4 w-4 shrink-0 rounded-full bg-card object-contain ring-2 ring-background"
+        onError={() => setImgError(true)}
+      />
+    );
+  }
   return (
-    <a
-      href={source.url}
-      target="_blank"
-      rel="noopener noreferrer"
-      role="listitem"
-      title={label}
-      aria-label={`Source ${number}: ${label}`}
-      className={cn(
-        'inline-flex items-center gap-1 rounded-full border border-border/30',
-        'bg-muted/30 px-2 py-0.5 text-[12px] no-underline',
-        'text-muted-foreground hover:border-border/60 hover:bg-muted/60 hover:text-foreground',
-        'transition-colors duration-100',
-      )}
-    >
-      <span className="flex h-3.5 min-w-[14px] items-center justify-center rounded-full bg-primary/15 px-0.5 text-[12px] font-bold text-primary">
-        {number}
-      </span>
-      {favicon && !imgError ? (
-        <img
-          src={favicon}
-          alt=""
-          aria-hidden="true"
-          width={12}
-          height={12}
-          className="h-3 w-3 shrink-0 rounded-[2px] object-contain"
-          onError={() => setImgError(true)}
-        />
-      ) : (
-        <Globe className="h-3 w-3 shrink-0 text-muted-foreground" aria-hidden="true" />
-      )}
-      <span className="max-w-[120px] truncate">{host}</span>
-    </a>
+    <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-muted ring-2 ring-background">
+      <Globe className="h-2.5 w-2.5 text-muted-foreground" aria-hidden="true" />
+    </span>
   );
 }
 
-export function InlineSourcesList({ sources, query }: InlineSourcesListProps) {
+interface SourcesControlProps {
+  messageId: string;
+  cited: ResearchSource[];
+  more: ResearchSource[];
+  query?: string;
+}
+
+export function SourcesControl({ messageId, cited, more, query }: SourcesControlProps) {
   const openPanel = useResearchPanelStore((s) => s.openPanel);
   const activeConversationId = useChatStore((s) => s.activeConversationId);
+  const total = cited.length + more.length;
 
-  if (sources.length === 0) return null;
+  if (total === 0) return null;
+
+  const preview = (cited.length > 0 ? cited : more).slice(0, 3);
 
   return (
-    <div
-      className="mt-2 flex flex-wrap items-center gap-1.5"
-      role="list"
-      aria-label={query ? `Sources for "${query}"` : 'Web search sources'}
+    <button
+      type="button"
+      onClick={() => openPanel(activeConversationId, messageId, cited, more, query)}
+      className="inline-flex items-center gap-1.5 rounded-full border border-border/30 bg-muted/20 py-1 pl-1 pr-2.5 text-[12px] text-muted-foreground transition-colors hover:border-border/60 hover:bg-muted/50 hover:text-foreground"
+      aria-label={`View ${total} ${total === 1 ? 'source' : 'sources'}`}
     >
-      {/* Compact "Sources" label (claude.ai parity) with the deduped count. */}
-      <span className="mr-0.5 text-[12px] font-medium text-muted-foreground">
-        {sources.length} {sources.length === 1 ? 'source' : 'sources'}
+      <span className="flex items-center -space-x-1.5">
+        {preview.map((source, index) => (
+          <SourceFavicon key={`${source.url}-${index}`} source={source} />
+        ))}
       </span>
-
-      {sources.map((source, index) => (
-        <SourcePill key={`${source.url}-${index}`} source={source} index={index} />
-      ))}
-
-      {/* View all link -- opens the full-detail panel */}
-      <button
-        type="button"
-        onClick={() => openPanel(activeConversationId, sources, query)}
-        className="inline-flex items-center gap-1 rounded-full border border-border/20 bg-transparent px-2 py-0.5 text-[12px] text-muted-foreground transition-colors hover:border-border/50 hover:text-primary"
-        aria-label="Open all sources in panel"
-      >
-        <PanelRight className="h-2.5 w-2.5 shrink-0" aria-hidden="true" />
-        <span>All sources</span>
-      </button>
-    </div>
+      <span className="font-medium">Sources{total > 3 ? ` · ${total}` : ''}</span>
+    </button>
   );
 }

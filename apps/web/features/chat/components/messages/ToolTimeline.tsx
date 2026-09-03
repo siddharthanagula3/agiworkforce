@@ -8,7 +8,6 @@ import {
   Check,
   ChevronRight,
   CircleCheck,
-  ExternalLink,
   FilePen,
   FilePlus2,
   FileText,
@@ -154,82 +153,6 @@ export function humanizeToolName(
   if (statusPhrase) return statusPhrase;
 
   return name;
-}
-
-interface InlineSourceCardsProps {
-  sources: ResearchSource[];
-  query?: string;
-}
-
-function InlineSourceCards({ sources, query: _query }: InlineSourceCardsProps) {
-  if (sources.length === 0) return null;
-
-  return (
-    <div className="mt-2 space-y-0.5">
-      {/* Results container matching image-381: bordered rounded box, rows inside */}
-      <div className="rounded-lg border border-border/40 bg-muted/10 overflow-hidden">
-        <div className="divide-y divide-border/20 px-3">
-          {sources.map((source, i) => (
-            <InlineSourceRow key={`${source.url}-${i}`} source={source} index={i} />
-          ))}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function InlineSourceRow({ source, index }: { source: ResearchSource; index: number }) {
-  const [imgError, setImgError] = useState(false);
-
-  let displayHost = source.url;
-  try {
-    const parsed = new URL(source.url);
-    displayHost = parsed.hostname.replace(/^www\./, '');
-  } catch {
-    // keep raw
-  }
-
-  const faviconSrc =
-    source.favicon && !imgError
-      ? source.favicon
-      : (() => {
-          try {
-            const domain = new URL(source.url).hostname;
-            return `https://www.google.com/s2/favicons?domain=${domain}&sz=32`;
-          } catch {
-            return undefined;
-          }
-        })();
-
-  return (
-    <a
-      href={/^https?:\/\//i.test(source.url || '') ? source.url : '#'}
-      target="_blank"
-      rel="noopener noreferrer"
-      className="flex items-center gap-2 py-1.5 min-w-0 hover:opacity-80 transition-opacity"
-      aria-label={`Source ${source.citationIndex ?? index + 1}: ${source.title || displayHost}`}
-    >
-      {/* Favicon */}
-      {faviconSrc ? (
-        <img
-          src={faviconSrc}
-          alt=""
-          className="h-3.5 w-3.5 shrink-0 rounded-sm"
-          onError={() => setImgError(true)}
-        />
-      ) : (
-        <Globe className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
-      )}
-      {/* Title: takes remaining space, truncated */}
-      <span className="flex-1 truncate text-xs text-foreground">{source.title || displayHost}</span>
-      {/* Domain: right-aligned, muted */}
-      <span className="shrink-0 text-[12px] text-muted-foreground ml-2">{displayHost}</span>
-      <ExternalLink
-        className="h-2.5 w-2.5 shrink-0 text-muted-foreground/0 group-hover:text-muted-foreground"
-        aria-hidden="true"
-      />
-    </a>
-  );
 }
 
 export interface ToolEntry {
@@ -441,7 +364,6 @@ function TimelineStepRow({
   toolCall,
   showParameters,
   searchSources,
-  searchQuery,
   onApprove,
   onReject,
   expired,
@@ -452,7 +374,6 @@ function TimelineStepRow({
   toolCall: ToolCall;
   showParameters: boolean;
   searchSources?: ResearchSource[];
-  searchQuery?: string;
   onApprove?: (toolCallId: string) => void;
   onReject?: (toolCallId: string) => void;
   expired?: boolean;
@@ -487,9 +408,9 @@ function TimelineStepRow({
           ) : null}
         </div>
         {/* Tool call card (label + expand). Web-search steps have no request/
-            response payload and surface their result as source cards below, so
-            we render a plain label instead of the ToolCallCard's (empty) expand
-            box to avoid a hollow container under "Web search". */}
+            response payload and surface their result count below, so we render
+            a plain label instead of the ToolCallCard's (empty) expand box to
+            avoid a hollow container under "Web search". */}
         <div className="flex-1 min-w-0">
           {isWebSearch ? (
             <span className="text-sm text-foreground">{humanLabel}</span>
@@ -523,10 +444,9 @@ function TimelineStepRow({
           />
         </div>
       )}
-      {/* Inline source cards: rendered INSIDE the web-search step (Claude reference image 381) */}
       {hasSources && (
-        <div className="pl-7 mt-1">
-          <InlineSourceCards sources={searchSources!} query={searchQuery} />
+        <div className="pl-7 mt-1 text-xs text-muted-foreground">
+          {searchSources!.length} {searchSources!.length === 1 ? 'source' : 'sources'}
         </div>
       )}
       {/* Per-tool permission quick-pick: only for a connector call awaiting
@@ -632,7 +552,7 @@ function ToolTimeline({
   className,
   compact: compactProp,
   searchSources,
-  searchQuery,
+  searchQuery: _searchQuery,
   onApprove,
   onReject,
   expired,
@@ -822,7 +742,6 @@ function ToolTimeline({
                                 toolCall={toolCall}
                                 showParameters={Boolean(tool.args ?? tool.parameters)}
                                 searchSources={attachSources ? searchSources : undefined}
-                                searchQuery={attachSources ? searchQuery : undefined}
                                 onApprove={onApprove}
                                 onReject={onReject}
                                 expired={expired}
@@ -860,7 +779,6 @@ function ToolTimeline({
                           toolCall={toolCall}
                           showParameters={Boolean(tool.args ?? tool.parameters)}
                           searchSources={attachSources ? searchSources : undefined}
-                          searchQuery={attachSources ? searchQuery : undefined}
                           onApprove={onApprove}
                           onReject={onReject}
                           expired={expired}
