@@ -12,6 +12,10 @@ import {
   buildDeepSeekAdapter,
   buildXAIAdapter,
   buildPerplexityAdapter,
+  buildGroqAdapter,
+  buildNvidiaNimAdapter,
+  buildWorkersAiAdapter,
+  buildVercelGatewayAdapter,
 } from './adapter-factory';
 import {
   buildAnthropicChatRequest,
@@ -31,6 +35,10 @@ import {
   toDeepSeekUpstreamError,
   toXAIUpstreamError,
   toPerplexityUpstreamError,
+  toGroqUpstreamError,
+  toNvidiaNimUpstreamError,
+  toWorkersAiUpstreamError,
+  toVercelGatewayUpstreamError,
 } from './adapter-errors';
 import type { ChatRequest, ProviderAdapter, StreamChunk } from '@agiworkforce/types';
 import type { ProcessedRequest } from './request-processor';
@@ -108,6 +116,30 @@ export const ADAPTER_PROVIDERS: Record<
     buildAdapter: buildPerplexityAdapter,
     buildChatRequest: toCanonicalChatRequest,
     mapError: toPerplexityUpstreamError,
+    wireMode: 'openai-passthrough',
+  },
+  groq: {
+    buildAdapter: buildGroqAdapter,
+    buildChatRequest: toCanonicalChatRequest,
+    mapError: toGroqUpstreamError,
+    wireMode: 'openai-passthrough',
+  },
+  nvidia_nim: {
+    buildAdapter: buildNvidiaNimAdapter,
+    buildChatRequest: toCanonicalChatRequest,
+    mapError: toNvidiaNimUpstreamError,
+    wireMode: 'openai-passthrough',
+  },
+  workers_ai: {
+    buildAdapter: buildWorkersAiAdapter,
+    buildChatRequest: toCanonicalChatRequest,
+    mapError: toWorkersAiUpstreamError,
+    wireMode: 'openai-passthrough',
+  },
+  vercel_gateway: {
+    buildAdapter: buildVercelGatewayAdapter,
+    buildChatRequest: toCanonicalChatRequest,
+    mapError: toVercelGatewayUpstreamError,
     wireMode: 'openai-passthrough',
   },
 };

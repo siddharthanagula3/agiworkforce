@@ -79,3 +79,7 @@ export const toOpenRouterUpstreamError = makeUpstreamErrorMapper('OpenRouter');
 export const toDeepSeekUpstreamError = makeUpstreamErrorMapper('DeepSeek');
 export const toXAIUpstreamError = makeUpstreamErrorMapper('XAI');
 export const toPerplexityUpstreamError = makeUpstreamErrorMapper('Perplexity');
+export const toGroqUpstreamError = makeUpstreamErrorMapper('Groq');
+export const toNvidiaNimUpstreamError = makeUpstreamErrorMapper('NVIDIA NIM');
+export const toWorkersAiUpstreamError = makeUpstreamErrorMapper('Cloudflare Workers AI');
+export const toVercelGatewayUpstreamError = makeUpstreamErrorMapper('Vercel AI Gateway');
