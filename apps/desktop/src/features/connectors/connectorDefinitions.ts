@@ -70,7 +70,10 @@ export const CONNECTORS: ConnectorDef[] = [
     featured: true,
     authType: 'oauth',
     oauthProvider: 'google',
-    oauthScopes: ['https://www.googleapis.com/auth/gmail.modify'],
+    oauthScopes: [
+      'https://www.googleapis.com/auth/gmail.readonly',
+      'https://www.googleapis.com/auth/gmail.send',
+    ],
     docsUrl: 'https://developers.google.com/gmail/api',
   },
   {
@@ -85,7 +88,10 @@ export const CONNECTORS: ConnectorDef[] = [
     featured: true,
     authType: 'oauth',
     oauthProvider: 'google',
-    oauthScopes: ['https://www.googleapis.com/auth/calendar'],
+    oauthScopes: [
+      'https://www.googleapis.com/auth/calendar.readonly',
+      'https://www.googleapis.com/auth/calendar.events',
+    ],
     docsUrl: 'https://developers.google.com/calendar/api',
   },
   {
