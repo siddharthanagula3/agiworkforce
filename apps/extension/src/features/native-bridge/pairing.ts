@@ -247,9 +247,6 @@ async function storeIssuedPairToken(data: Record<string, unknown>): Promise<Pair
   return getPairingState();
 }
 
-// Step one of the handshake: Desktop parks a code and shows it in its own
-// window. Nothing here authorizes an install — the reply carries an opaque
-// request id only, so reaching the loopback port is not enough to pair.
 export async function startPairing(): Promise<PairingState> {
   if (_state.phase === 'requesting' || _state.phase === 'confirming' || _state.phase === 'paired') {
     return getPairingState();

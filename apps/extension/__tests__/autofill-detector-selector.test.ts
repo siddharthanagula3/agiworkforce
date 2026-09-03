@@ -16,7 +16,7 @@ afterEach(() => {
   document.body.innerHTML = '';
 });
 
-describe('uniqueCssSelector — mixed-tag container', () => {
+describe('uniqueCssSelector, mixed-tag container', () => {
   it('resolves to the intended field in a mixed input/textarea/select set', () => {
     const container = document.createElement('div');
     container.id = 'apply-form';

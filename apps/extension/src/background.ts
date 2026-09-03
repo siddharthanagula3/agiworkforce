@@ -1051,7 +1051,7 @@ function handleNativeMessage(message: NativeMessageEnvelope): void {
       if (nativeSessionSecret) {
         if (typeof respMac !== 'string' || typeof respTs !== 'number') {
           logger.warn(
-            '[native-mac] Strict mode — rejecting response with missing mac/timestamp ' +
+            '[native-mac] Strict mode, rejecting response with missing mac/timestamp ' +
               '(downgrade attack guard)',
             { id: message.id },
           );
@@ -1068,7 +1068,7 @@ function handleNativeMessage(message: NativeMessageEnvelope): void {
         void computeEnvelopeMac(message.id, respTs, body).then((expected) => {
           if (expected === null || !timingSafeEqual(expected, respMac)) {
             logger.warn(
-              '[native-mac] Response MAC mismatch — rejecting (potential shuffle attack)',
+              '[native-mac] Response MAC mismatch, rejecting (potential shuffle attack)',
               { id: message.id },
             );
             reject(new Error('Native response MAC mismatch'));
@@ -2117,15 +2117,6 @@ function disarmMaintenanceAlarm(): void {
   void chrome.alarms.clear(MAINTENANCE_ALARM);
 }
 
-/**
- * One maintenance pass: retry interrupted scheduled runs, mirror any
- * conversation still owing a sync, and resume native reconnection.
- *
- * @returns whether anything is still outstanding. This is what decides if the
- *   worker gets woken again — the two unconditional one-minute alarms this
- *   replaced woke it every minute for the life of the browser, with no panel
- *   open, no run active, and usually nothing to do.
- */
 async function runMaintenancePass(): Promise<boolean> {
   let outstanding = false;
 
@@ -2730,12 +2721,6 @@ function handleMessage(
   return dispatchAuthorizedMessage(msg, sender, sendResponse);
 }
 
-/**
- * Every gate past the site allowlist, plus dispatch. Split out so the allowlist
- * decision can be retried asynchronously on a cold worker wake without pushing
- * the rest — notably OPEN_SIDE_PANEL, which must open inside the synchronous
- * turn of the user gesture — behind an await in the common case.
- */
 function dispatchAuthorizedMessage(
   msg: ExtensionMessage,
   sender: chrome.runtime.MessageSender,

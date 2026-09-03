@@ -51,7 +51,7 @@ function isCookieDomainAllowed(urlOrDomain: string): boolean {
   return !BLOCKED_COOKIE_DOMAINS.some((pattern) => pattern.test(domain));
 }
 
-describe('isCookieDomainAllowed — cookie domain blocklist', () => {
+describe('isCookieDomainAllowed, cookie domain blocklist', () => {
   it('blocks bank-related domains', () => {
     expect(isCookieDomainAllowed('https://mybank.com/login')).toBe(false);
     expect(isCookieDomainAllowed('bankofamerica.com')).toBe(false);
@@ -94,7 +94,7 @@ describe('isCookieDomainAllowed — cookie domain blocklist', () => {
     expect(isCookieDomainAllowed('https://health.com/wellness')).toBe(false);
   });
 
-  it('blocks linkedin.com (extension target — DOM access only, no cookies)', () => {
+  it('blocks linkedin.com (extension target, DOM access only, no cookies)', () => {
     expect(isCookieDomainAllowed('https://linkedin.com/jobs')).toBe(false);
     expect(isCookieDomainAllowed('https://www.linkedin.com/feed')).toBe(false);
   });

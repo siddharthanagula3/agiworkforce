@@ -44,7 +44,7 @@ do not substitute for these checks.
   reduced motion, keyboard-only navigation, visible focus, menu/dialog focus
   return, screen-reader names/status announcements, long content, and empty,
   loading, error, disabled, and success states. Confirm Chrome's user-rebound
-  command values—not only manifest defaults—are shown in Options.
+  command values, not only manifest defaults, are shown in Options.
 - **Permissions and privacy:** manually compare every packaged permission, host,
   approved-site capture disclosure, debugger use, native messaging boundary,
   Managed Cloud endpoint, local storage record, and deletion behavior with

@@ -54,7 +54,7 @@ function extractPageHtmlSafely(): string {
   try {
     const elementCount = document.querySelectorAll('*').length;
     if (elementCount > MAX_DOM_ELEMENTS_FOR_EXTRACTION) {
-      logger.debug('Skipping page-text extraction — DOM too large', { elementCount });
+      logger.debug('Skipping page-text extraction, DOM too large', { elementCount });
       return '';
     }
     const extractStart = Date.now();
@@ -92,15 +92,6 @@ const automationState: AutomationState = {
 };
 let lastPointerTarget: Element | null = null;
 
-/**
- * Whether this page's origin carries the user's approval.
- *
- * Read once per document and shared, because every startup call this gates
- * wakes the service worker. Ungated, an extension declaring `http://*\/*`
- * content scripts woke the worker twice on every page load of every site the
- * user visits — and on a site the user never approved, both wakes could only
- * end in the allowlist rejection.
- */
 const originApproved: Promise<boolean> = (async () => {
   if (!/^https?:/.test(location.protocol)) return false;
   try {
@@ -108,7 +99,7 @@ const originApproved: Promise<boolean> = (async () => {
     const list = result[SITE_ALLOWLIST_STORAGE_KEY];
     return Array.isArray(list) && (list as string[]).includes(window.location.origin);
   } catch (err) {
-    logger.debug('Could not read the site allowlist — treating this origin as unapproved', err);
+    logger.debug('Could not read the site allowlist, treating this origin as unapproved', err);
     return false;
   }
 })();
@@ -1151,7 +1142,7 @@ async function handleFillForm(message: FillFormMessage): Promise<ExtensionRespon
 let _isAutofillingNow = false;
 
 const AUTOFILL_ORIGIN_BLOCKED_ERROR =
-  'Autofill is blocked here — this site is not on your approved-site allowlist';
+  'Autofill is blocked here, this site is not on your approved-site allowlist';
 
 async function isAutofillOriginAllowed(): Promise<boolean> {
   try {
@@ -1171,7 +1162,7 @@ async function handleAutoFillJobApplication(
   if (_isAutofillingNow) {
     return {
       success: false,
-      error: 'Autofill already in progress — please wait for it to finish',
+      error: 'Autofill already in progress, please wait for it to finish',
     } as ExtensionResponse;
   }
   if (!(await isAutofillOriginAllowed())) {
@@ -1773,9 +1764,7 @@ function handleStopRecording(): ExtensionResponse {
       type: 'STOP_RECORDING',
       actions,
     })
-    .catch(() => {
-      // Background may not be listening — not fatal
-    });
+    .catch(() => {});
 
   return { success: true, recording: false, actions } as ExtensionResponse;
 }

@@ -1,4 +1,3 @@
-
 import {
   createLauncher,
   loadPosition,
@@ -48,7 +47,7 @@ export async function setupInPagePanel(logger?: {
     return;
   }
   if (!allowlist.has(window.location.origin)) {
-    logger?.debug('in-page panel skipped — origin not on user allowlist', {
+    logger?.debug('in-page panel skipped, origin not on user allowlist', {
       origin: window.location.origin,
     });
     return;

@@ -1,4 +1,3 @@
-
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 function isPermanentError(error: string): boolean {
@@ -81,9 +80,7 @@ class ConnectionStateBroadcaster {
             type: 'CONNECTION_STATUS_CHANGED',
             connected,
             timestamp: Date.now(),
-          }).catch(() => {
-            // Ignore closed-tab errors — non-fatal
-          }),
+          }).catch(() => {}),
         ),
     );
   }

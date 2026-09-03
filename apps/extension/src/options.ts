@@ -149,7 +149,7 @@ function injectStyles(): void {
       border-radius: 50%;
       background: #ffffff;
       /* Definition ring. The OFF track is --agi-ext-hover, which is #f0f0f0 in
-         the light theme — a plain white knob on it was ~1.05:1 and the OFF
+         the light theme, a plain white knob on it was ~1.05:1 and the OFF
          state read as an empty pill. An outset ring costs no layout and
          reads on both grounds. */
       box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.28), 0 1px 2px rgba(0, 0, 0, 0.28);
@@ -1092,7 +1092,7 @@ function buildPage(): void {
   const currentOriginLabel = el(
     'span',
     { class: 'opt-allowlist-origin', id: 'opt-current-origin' },
-    '—',
+    ', ',
   );
   const addBtn = el(
     'button',
@@ -1178,7 +1178,7 @@ function buildPage(): void {
       const originSpan = el(
         'span',
         { class: 'opt-allowlist-item-origin' },
-        controlled.includes(origin) ? `${origin} — browser control granted` : origin,
+        controlled.includes(origin) ? `${origin}, browser control granted` : origin,
       );
       const removeBtn = el(
         'button',
@@ -1258,10 +1258,6 @@ function buildPage(): void {
   consentGrantBtn.addEventListener('click', async () => {
     const origin = normalizeApprovedSiteOrigin(currentSiteOrigin);
     if (!origin) return;
-    // Chrome spends the user gesture on the first await, so the site-access
-    // prompt has to be raised before any storage read. Nothing is recorded
-    // unless Chrome itself grants the host — the extension's own record must
-    // never be the only thing authorizing DevTools-Protocol reach.
     const hostGranted = await requestBrowserControlHostPermission(origin);
     consentGrantBtn.disabled = true;
     if (!hostGranted) {
@@ -1614,7 +1610,7 @@ function buildPage(): void {
   if (import.meta.env.DEV) {
     const bearerSection = el('section', { class: 'opt-section', id: 'opt-cloud-auth' });
     const bearerHeader = el('div', { class: 'opt-section-header' });
-    bearerHeader.appendChild(el('h2', { class: 'opt-section-title' }, 'Computer Use — Cloud Auth'));
+    bearerHeader.appendChild(el('h2', { class: 'opt-section-title' }, 'Computer Use, Cloud Auth'));
     bearerSection.appendChild(bearerHeader);
 
     const bearerBody = el('div', { class: 'opt-bearer-body' });

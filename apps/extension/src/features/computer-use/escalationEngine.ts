@@ -1,4 +1,3 @@
-
 import type { FillResult } from '../content/autofill/filler';
 import type { DetectedField } from '../content/autofill/detector';
 
@@ -216,7 +215,7 @@ export function makeEscalationDecision(
     `Escalation triggers:\n${triggerSummary}\n\n` +
     `Instructions:\n` +
     `1. Do NOT re-fill fields that were already successfully filled.\n` +
-    `2. Handle each blocked field: for file uploads, look for a visible upload button and interact with it. For typeaheads, click the input and type slowly then select from the dropdown. For login walls, stop and report — do not attempt to log in.\n` +
+    `2. Handle each blocked field: for file uploads, look for a visible upload button and interact with it. For typeaheads, click the input and type slowly then select from the dropdown. For login walls, stop and report, do not attempt to log in.\n` +
     `3. NEVER click Submit or any form submission button.\n` +
     `4. When all accessible fields are filled, report what you completed and what still needs human review.`;
 
@@ -233,6 +232,6 @@ export function emitEscalationEvent(event: EscalationEvent): void {
   try {
     window.dispatchEvent(new CustomEvent('agi:escalate', { detail: event }));
   } catch {
-    // window may not be available in service worker context — ignore
+    /* noop */
   }
 }

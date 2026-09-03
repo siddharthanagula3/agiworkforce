@@ -1,4 +1,3 @@
-
 function truncate(value: unknown, max: number): string {
   const text = typeof value === 'string' ? value : String(value ?? '');
   const collapsed = text.replace(/\s+/g, ' ').trim();
@@ -64,7 +63,7 @@ export function describeComputerUseAction(
 
     default: {
       const name = truncate(toolName, 40) || 'an action';
-      return `Run "${name}" on this page. This action is not one AGI can describe in detail — approve it only if you expect it.`;
+      return `Run "${name}" on this page. This action is not one AGI can describe in detail, approve it only if you expect it.`;
     }
   }
 }

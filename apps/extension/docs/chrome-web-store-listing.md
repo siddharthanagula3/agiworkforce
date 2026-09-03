@@ -1,4 +1,4 @@
-# Chrome Web Store listing — source of truth
+# Chrome Web Store listing, source of truth
 
 Everything a reviewer reads in the Developer Dashboard is written here first and
 copied there verbatim. The dashboard has no version history and no diff; this
@@ -38,7 +38,7 @@ optional link to the AGI Desktop app.
 >
 > **Let it act, on sites you choose.** On a site you have added to your approved
 > list and separately confirmed for browser control, the assistant can click,
-> type, scroll and navigate for you — filling a long job application, for
+> type, scroll and navigate for you, filling a long job application, for
 > instance. You approve each action before it runs unless you turn that off.
 > Chrome shows its own debugging bar the whole time; dismissing that bar stops
 > the run immediately.
@@ -49,7 +49,7 @@ optional link to the AGI Desktop app.
 >
 > **Your approvals are real approvals.** Sites are added one at a time by you.
 > Browser control is a second, separate confirmation, and granting it asks
-> Chrome for site access for that one origin — a grant you can see and withdraw
+> Chrome for site access for that one origin, a grant you can see and withdraw
 > at `chrome://extensions` at any time. Removing a site revokes both.
 >
 > Requires a free or paid AGI account. Not available in incognito.

@@ -61,7 +61,7 @@ for (const file of files) {
       if (matches) {
         for (const match of matches) {
           console.error(
-            `[AP-10] ${relPath}:${idx + 1} — ${label}: \`${match.trim()}\`\n` +
+            `[AP-10] ${relPath}:${idx + 1}, ${label}: \`${match.trim()}\`\n` +
               `        Fix: wrap call in cloud-unlock check OR route through InviteCodeModal.`,
           );
           violations++;

@@ -1,8 +1,7 @@
-
 import { describe, expect, it } from 'vitest';
 import { renderMarkdown, sanitizeHtml } from '../src/features/side-panel/markdown';
 
-describe('renderMarkdown (live module) — C-04 href percent-encoding', () => {
+describe('renderMarkdown (live module), C-04 href percent-encoding', () => {
   it('percent-encodes a double quote in the URL', () => {
     const result = renderMarkdown('[click](https://example.com/")');
     expect(result).toContain('href="https://example.com/%22"');
@@ -43,7 +42,7 @@ describe('renderMarkdown (live module) — C-04 href percent-encoding', () => {
   });
 });
 
-describe('renderMarkdown + sanitizeHtml (live module) — end-to-end XSS defense in depth', () => {
+describe('renderMarkdown + sanitizeHtml (live module), end-to-end XSS defense in depth', () => {
   it('a hostile href-breakout payload never becomes a real onerror attribute', () => {
     const hostile = '[click](https://e.com" onerror="alert(1))';
     const clean = sanitizeHtml(renderMarkdown(hostile));

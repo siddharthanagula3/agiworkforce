@@ -17,7 +17,7 @@ function isRejectedByExtensionPageOnlyGate(
   return Boolean(sender.tab) || sender.id !== extensionId;
 }
 
-describe('EXTENSION_PAGE_ONLY_MESSAGE_TYPES gate — content-script senders rejected', () => {
+describe('EXTENSION_PAGE_ONLY_MESSAGE_TYPES gate, content-script senders rejected', () => {
   it('rejects CREATE_SCHEDULED_TASK from an allowlisted content script', () => {
     const sender: SenderShape = {
       id: EXTENSION_ID,
@@ -124,7 +124,7 @@ describe('EXTENSION_PAGE_ONLY_MESSAGE_TYPES gate — content-script senders reje
   });
 });
 
-describe('EXTENSION_PAGE_ONLY_MESSAGE_TYPES gate — extension pages allowed', () => {
+describe('EXTENSION_PAGE_ONLY_MESSAGE_TYPES gate, extension pages allowed', () => {
   it('allows CREATE_SCHEDULED_TASK from the side panel (no tab, own id)', () => {
     const sender: SenderShape = { id: EXTENSION_ID, tab: undefined };
     expect(isRejectedByExtensionPageOnlyGate('CREATE_SCHEDULED_TASK', sender)).toBe(false);
@@ -149,7 +149,7 @@ describe('EXTENSION_PAGE_ONLY_MESSAGE_TYPES gate — extension pages allowed', (
   });
 });
 
-describe('EXTENSION_PAGE_ONLY_MESSAGE_TYPES gate — non-gated types pass through', () => {
+describe('EXTENSION_PAGE_ONLY_MESSAGE_TYPES gate, non-gated types pass through', () => {
   it('does not gate CLICK', () => {
     const sender: SenderShape = {
       id: EXTENSION_ID,

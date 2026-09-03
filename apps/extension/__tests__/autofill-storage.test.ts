@@ -42,7 +42,7 @@ beforeEach(() => {
   vi.resetModules();
 });
 
-describe('autofill profile storage — H-04', () => {
+describe('autofill profile storage, H-04', () => {
   it('loadAutofillProfile reads from chrome.storage.local', async () => {
     const { local } = installChromeStub();
     const profile: JobApplicationProfile = { firstName: 'Ada', lastName: 'Lovelace' };
@@ -67,7 +67,7 @@ describe('autofill profile storage — H-04', () => {
   });
 });
 
-describe('clearAutofillProfile — SEC-49 erasure path', () => {
+describe('clearAutofillProfile, SEC-49 erasure path', () => {
   it('removes the identity and employment profile from chrome.storage.local', async () => {
     const { local } = installChromeStub();
     const profile: JobApplicationProfile = {
@@ -96,7 +96,7 @@ describe('clearAutofillProfile — SEC-49 erasure path', () => {
   });
 });
 
-describe('migrateAutofillProfile — H-04', () => {
+describe('migrateAutofillProfile, H-04', () => {
   it('copies a profile from sync into local on first run', async () => {
     const { local, sync } = installChromeStub();
     const legacy: JobApplicationProfile = { firstName: 'Grace', email: 'gh@x' };
@@ -116,7 +116,7 @@ describe('migrateAutofillProfile — H-04', () => {
     expect(sync.store['agi_autofill_profile']).toBeUndefined();
   });
 
-  it('is idempotent — second call is a no-op', async () => {
+  it('is idempotent, second call is a no-op', async () => {
     const { local, sync } = installChromeStub();
     await sync.set({ agi_autofill_profile: { email: 'first@x' } });
     const { migrateAutofillProfile } = await import('../src/features/content/autofill/filler');

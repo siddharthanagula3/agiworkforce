@@ -1,18 +1,3 @@
-/**
- * The side-panel composer must not hold attachments the managed transport will
- * refuse to send. `executeChromeManagedChat` runs `assertAttachmentBudget`
- * (freeTrialClient) on the way out: at most MANAGED_CHAT_MAX_ATTACHMENTS images
- * totalling MANAGED_CHAT_MAX_ATTACHMENT_BYTES decoded bytes, each a base64 PNG,
- * JPEG, WebP or GIF. Anything the composer admits past that is discovered as a
- * failed turn *after* send, with the user's text already consumed.
- *
- * These tests drive the real listeners built by `buildUI()` — drop, paste, the
- * `+` menu file picker and the `+` menu screenshot — and read the resulting
- * attachments back out of the preview chips.
- *
- * @vitest-environment jsdom
- */
-
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 
 const chromeMock = vi.hoisted(() => {

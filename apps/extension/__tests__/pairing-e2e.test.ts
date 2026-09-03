@@ -162,7 +162,7 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-describe('e2e pairing — SEC-11: only the desktop bridge secret authorizes a manifest install', () => {
+describe('e2e pairing, SEC-11: only the desktop bridge secret authorizes a manifest install', () => {
   it('the manifest install is authorized by the operator secret, never by a token the desktop minted', async () => {
     const desktop = makeDesktopPairResponder();
     seedBridgeSecret();
@@ -218,7 +218,7 @@ describe('e2e pairing — SEC-11: only the desktop bridge secret authorizes a ma
   });
 });
 
-describe('e2e pairing flow — IDLE → REQUESTING → PAIRED', () => {
+describe('e2e pairing flow, IDLE → REQUESTING → PAIRED', () => {
   it('walks the full state machine with a pre-seeded bridge secret', async () => {
     const desktop = makeDesktopPairResponder();
     seedBridgeSecret();
@@ -259,7 +259,7 @@ describe('e2e pairing flow — IDLE → REQUESTING → PAIRED', () => {
   });
 });
 
-describe('e2e pairing flow — fingerprint match across the joint', () => {
+describe('e2e pairing flow, fingerprint match across the joint', () => {
   it('stored fingerprint equals the value the desktop returned (no truncation)', async () => {
     const desktop = makeDesktopPairResponder();
     seedBridgeSecret();
@@ -289,7 +289,7 @@ describe('e2e pairing flow — fingerprint match across the joint', () => {
   });
 });
 
-describe('e2e pairing flow — idempotent re-requests', () => {
+describe('e2e pairing flow, idempotent re-requests', () => {
   it('does not double-fire fetch while a request is in flight', async () => {
     const desktop = makeDesktopPairResponder();
     seedBridgeSecret();
@@ -418,7 +418,7 @@ function makeDesktopHandshakeResponder() {
   return { fetchMock, screen, wire, installs, mintedTokens };
 }
 
-describe('e2e handshake — the code travels Desktop → human → extension', () => {
+describe('e2e handshake, the code travels Desktop → human → extension', () => {
   it('pairs once the user types the code Desktop displayed', async () => {
     const desktop = makeDesktopHandshakeResponder();
     vi.stubGlobal('fetch', desktop.fetchMock);

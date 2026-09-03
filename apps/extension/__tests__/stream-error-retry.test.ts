@@ -1,12 +1,3 @@
-/**
- * stream-error-retry.test.ts — EXT-09.
- *
- * A failed stream used to render as ordinary assistant markdown reading
- * "Error: <provider string>", visually indistinguishable from an answer, with
- * nothing to act on: the only way forward was to retype the prompt.
- *
- * @vitest-environment jsdom
- */
 import { describe, expect, it, vi } from 'vitest';
 import { buildBubbleWithTools } from '../src/features/side-panel/bubbles';
 import {

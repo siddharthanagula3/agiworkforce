@@ -200,7 +200,7 @@ describe('MCP tool discovery from web page content', () => {
   });
 });
 
-describe('callTool — execution via modelContextTesting.executeTool', () => {
+describe('callTool, execution via modelContextTesting.executeTool', () => {
   it('passes tool name and JSON-serialized arguments', async () => {
     const executeTool = vi.fn().mockResolvedValue(JSON.stringify({ status: 'ok' }));
     stubModelContextTesting({ executeTool });
@@ -243,7 +243,7 @@ describe('callTool — execution via modelContextTesting.executeTool', () => {
   });
 });
 
-describe('callTool — execution via modelContext.callTool', () => {
+describe('callTool, execution via modelContext.callTool', () => {
   it('passes tool name and arguments object to callTool', async () => {
     const callToolMock = vi.fn().mockResolvedValue({ translation: 'Bonjour' });
     stubModelContext({ callTool: callToolMock });
@@ -270,7 +270,7 @@ describe('callTool — execution via modelContext.callTool', () => {
   });
 });
 
-describe('callTool — declarative form fallback', () => {
+describe('callTool, declarative form fallback', () => {
   beforeEach(() => {
     vi.spyOn(window, 'confirm').mockReturnValue(true);
   });
@@ -339,7 +339,7 @@ describe('callTool — declarative form fallback', () => {
   });
 });
 
-describe('callTool — complex argument shapes', () => {
+describe('callTool, complex argument shapes', () => {
   it('handles nested object arguments', async () => {
     const executeTool = vi.fn().mockResolvedValue('null');
     stubModelContextTesting({ executeTool });
@@ -423,7 +423,7 @@ describe('error handling for malformed MCP responses', () => {
   });
 });
 
-describe('watchForToolChanges — MutationObserver', () => {
+describe('watchForToolChanges, MutationObserver', () => {
   it('invokes callback when a new tool form is added to the DOM', async () => {
     const callback = vi.fn();
     watchForToolChanges(callback);
@@ -477,7 +477,7 @@ describe('watchForToolChanges — MutationObserver', () => {
   });
 });
 
-describe('watchForToolChanges — modelContext toolschanged event', () => {
+describe('watchForToolChanges, modelContext toolschanged event', () => {
   it('calls callback when toolschanged event fires on modelContext', () => {
     const toolsChangedListeners: Array<() => void> = [];
 
@@ -501,7 +501,7 @@ describe('watchForToolChanges — modelContext toolschanged event', () => {
   });
 });
 
-describe('watchForToolChanges — modelContextTesting registerToolsChangedCallback', () => {
+describe('watchForToolChanges, modelContextTesting registerToolsChangedCallback', () => {
   it('calls callback when registerToolsChangedCallback fires', () => {
     let registeredCb: (() => void) | null = null;
 
@@ -542,7 +542,7 @@ describe('stopWatchingToolChanges', () => {
   });
 });
 
-describe('security — declarative tool discovery does not execute scripts', () => {
+describe('security, declarative tool discovery does not execute scripts', () => {
   it('CHROME-MED-5: rejects a tool whose name contains URL-scheme metacharacters', () => {
     addDeclarativeForm({ toolName: 'javascript:alert(1)', toolDescription: 'XSS attempt' });
 
@@ -577,7 +577,7 @@ describe('security — declarative tool discovery does not execute scripts', () 
   });
 });
 
-describe('discoverAllTools — deduplication edge cases', () => {
+describe('discoverAllTools, deduplication edge cases', () => {
   it('imperative tool overrides declarative tool with the same name', () => {
     addDeclarativeForm({
       toolName: 'search',

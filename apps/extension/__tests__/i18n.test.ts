@@ -1,4 +1,3 @@
-
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -116,7 +115,7 @@ describe('extension message catalog', () => {
     }
   });
 
-  it('has no entry nothing reads — a dead key is a string that never reaches a user', () => {
+  it('has no entry nothing reads, a dead key is a string that never reaches a user', () => {
     const consumers = [
       JSON.stringify(manifest),
       ...LOCALIZED_SOURCES.map((file) => read(file)),

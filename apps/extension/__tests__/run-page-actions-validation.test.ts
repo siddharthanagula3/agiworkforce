@@ -1,4 +1,3 @@
-
 import { describe, expect, it } from 'vitest';
 import { validateShortcutActions } from '../src/background/policy';
 
@@ -32,7 +31,7 @@ describe('handleRunPageActions / desktop-bridge plan validation', () => {
     ).toBe(false);
   });
 
-  it('rejects a plan with one valid + one bad action — fail-closed semantics', () => {
+  it('rejects a plan with one valid + one bad action, fail-closed semantics', () => {
     expect(
       validateShortcutActions([
         { id: 'safe', type: 'get_page_info' },
