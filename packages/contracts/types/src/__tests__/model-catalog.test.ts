@@ -372,17 +372,17 @@ describe('resolveEffectiveModelPricing', () => {
     ).toEqual(base);
   });
 
-  it('resolves the catalog-owned Anthropic default rates identically on every date', () => {
+  it('resolves the catalog-owned Anthropic default rates identically on every date, refreshed after the Decision 22 retirement', () => {
     const defaultModel = getModelMetadataById(requireProviderDefaultModel('anthropic'));
     expect(defaultModel).not.toBeNull();
     expect(defaultModel?.pricingSchedule).toBeUndefined();
 
     const standard = {
-      inputCost: 3,
-      outputCost: 15,
-      cached_input: 0.3,
-      cached_write: 3.75,
-      cached_write_1h: 6,
+      inputCost: 2,
+      outputCost: 10,
+      cached_input: 0.2,
+      cached_write: 2.5,
+      cached_write_1h: 4,
     };
     for (const day of ['2020-01-01', '2026-08-15', '2026-09-15', '2099-12-31']) {
       expect(resolveEffectiveModelPricing(defaultModel!, new Date(`${day}T00:00:00Z`))).toEqual(
