@@ -18,6 +18,7 @@ import {
   getModelContextLimits,
   getEconomyFallbackModels,
   getModelIdsForProvider,
+  getModelsForProvider,
   resolveMaxOutputTokens,
   modelsById,
   getModelMetadataById,
@@ -341,7 +342,9 @@ describe('resolveEffectiveModelPricing', () => {
   });
 
   it('matches the Google-documented exclusive boundary at exactly 200,000 input tokens', () => {
-    const model = getModelMetadataById('gemini-3.1-pro-preview');
+    const model = getModelsForProvider('google').find(
+      (candidate) => candidate.inputTokenPricingTiers !== undefined,
+    );
     const tier = model?.inputTokenPricingTiers?.[0];
     expect(tier?.thresholdTokens).toBe(200_000);
     const asOf = new Date('2030-01-01T00:00:00Z');
@@ -354,8 +357,10 @@ describe('resolveEffectiveModelPricing', () => {
     );
   });
 
-  it('matches the xAI-documented inclusive boundary at exactly 200,000 input tokens for grok-4.5', () => {
-    const model = getModelMetadataById('grok-4.5');
+  it('matches the xAI-documented inclusive boundary at exactly 200,000 input tokens', () => {
+    const model = getModelsForProvider('xai').find(
+      (candidate) => candidate.inputTokenPricingTiers !== undefined,
+    );
     const tier = model?.inputTokenPricingTiers?.[0];
     expect(tier?.thresholdTokens).toBe(200_000);
     expect(tier?.thresholdBoundary).toBe('inclusive');
