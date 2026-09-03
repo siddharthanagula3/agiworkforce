@@ -8,6 +8,7 @@ import {
   CloudAgentWorkflowBillingUnavailableError,
   parseCloudAgentWorkflowInput,
   rehydrateCloudAgentWorkflowRequest,
+  type SerializedManagedUsageReservation,
 } from './cloud-agent-workflow-input';
 import { connectorToolPermissionsFromEntries } from '@/app/api/llm/v1/chat/completions/lib/connector-tool-permissions';
 
@@ -117,20 +118,22 @@ describe('cloud agent workflow input', () => {
     expect(parseCloudAgentWorkflowInput(JSON.parse(JSON.stringify(input)))).toEqual(input);
   });
 
-  // `reserveManagedUsageRequest` really returns `provider`, `model` and (when a
-  // quota feature applies) `quotaFeature` on every reservation it hands back.
-  // The billing schema used to be a `.strict()` object listing none of the three,
-  // so every REAL production reservation failed this parse: the initial turn
-  // caught the throw and silently never went durable, and the resume routes
-  // turned it into a 503 on every pending approval.
-  it('accepts the full reservation shape the managed usage service actually returns', () => {
+  it('accepts every field the managed usage service puts on a reservation', () => {
     const processed = makeProcessed();
-    processed.managedUsage = {
-      ...processed.managedUsage!,
+    const full: Required<SerializedManagedUsageReservation> = {
+      kind: 'managed',
+      userId: 'user-1',
+      idempotencyKey: 'agi.chat.web.request-1',
+      requestHash: 'request-hash-1',
+      leaseToken: '0190a000-0000-7000-8000-000000000002',
+      estimatedCostCents: 12,
       provider: 'openai',
       model: 'fixture-model',
       quotaFeature: 'chat',
+      routeId: 'openai/fixture-model',
     };
+    const { kind: _kind, ...reservation } = full;
+    processed.managedUsage = { ...processed.managedUsage!, ...reservation };
 
     const input = buildCloudAgentWorkflowInput({
       runId: RUN_ID,
@@ -140,12 +143,7 @@ describe('cloud agent workflow input', () => {
       approvalMode: 'manual',
     });
 
-    expect(input.billing).toMatchObject({
-      kind: 'managed',
-      provider: 'openai',
-      model: 'fixture-model',
-      quotaFeature: 'chat',
-    });
+    expect(input.billing).toEqual(full);
     expect(parseCloudAgentWorkflowInput(JSON.parse(JSON.stringify(input)))).toEqual(input);
   });
 
