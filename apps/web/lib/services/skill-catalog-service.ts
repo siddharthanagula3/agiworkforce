@@ -1,8 +1,8 @@
 import 'server-only';
 
 import { existsSync } from 'node:fs';
-import { readFile, realpath } from 'node:fs/promises';
-import { isAbsolute, relative, resolve } from 'node:path';
+import { readdir, readFile, realpath, stat } from 'node:fs/promises';
+import { dirname, isAbsolute, join, relative, resolve } from 'node:path';
 
 import {
   executeSkillTool,
@@ -35,8 +35,21 @@ function skillPluginOwner(skill: Skill): string | null {
   return typeof owner === 'string' && owner.trim().length > 0 ? owner.trim() : null;
 }
 
+export function isPluginOwnedSkill(skill: Skill): boolean {
+  return skillPluginOwner(skill) !== null;
+}
+
 function isExecutableSkill(skill: Skill): boolean {
   return skill.frontmatter['draft'] !== true;
+}
+
+export function filterSkillsByInstallOverrides(
+  skills: readonly Skill[],
+  installOverrides: ReadonlyMap<string, boolean>,
+): Skill[] {
+  return skills.filter(
+    (skill) => isPluginOwnedSkill(skill) || installOverrides.get(skill.name) !== false,
+  );
 }
 
 export class SkillCatalogUnavailableError extends Error {
@@ -179,6 +192,87 @@ export async function getBundledSkillDownloadForPlugins(
     (candidate) => candidate.name === name,
   );
   return readBundledSkillDownload(skill ?? null);
+}
+
+const SKILL_FILE_MAX_BYTES = 512 * 1024;
+
+export interface SkillFileEntry {
+  path: string;
+  size: number;
+}
+
+async function skillPackageRealRoot(skill: Skill): Promise<string | null> {
+  try {
+    return await realpath(/* turbopackIgnore: true */ dirname(skill.filePath));
+  } catch {
+    return null;
+  }
+}
+
+async function collectSkillFileEntries(root: string, prefix: string): Promise<SkillFileEntry[]> {
+  const entries = await readdir(join(root, prefix), { withFileTypes: true });
+  const out: SkillFileEntry[] = [];
+  for (const entry of entries) {
+    if (entry.name.startsWith('.') || entry.isSymbolicLink()) continue;
+    const entryPath = prefix === '' ? entry.name : `${prefix}/${entry.name}`;
+    if (entry.isDirectory()) {
+      out.push(...(await collectSkillFileEntries(root, entryPath)));
+      continue;
+    }
+    if (!entry.isFile()) continue;
+    const stats = await stat(join(root, entryPath));
+    out.push({ path: entryPath, size: stats.size });
+  }
+  return out;
+}
+
+export async function listManagedSkillFiles(skill: Skill): Promise<SkillFileEntry[] | null> {
+  const root = await skillPackageRealRoot(skill);
+  if (root === null) return null;
+  const files = await collectSkillFileEntries(root, '');
+  return files.sort((left, right) =>
+    left.path < right.path ? -1 : left.path > right.path ? 1 : 0,
+  );
+}
+
+export interface SkillFileContent extends SkillFileEntry {
+  content: string;
+}
+
+export type SkillFileReadResult =
+  | { ok: true; file: SkillFileContent }
+  | { ok: false; reason: 'not_found' }
+  | { ok: false; reason: 'too_large'; size: number }
+  | { ok: false; reason: 'binary' };
+
+export async function readManagedSkillFile(
+  skill: Skill,
+  requestedPath: string,
+): Promise<SkillFileReadResult> {
+  const root = await skillPackageRealRoot(skill);
+  if (root === null) return { ok: false, reason: 'not_found' };
+
+  let realCandidate: string;
+  try {
+    realCandidate = await realpath(/* turbopackIgnore: true */ resolve(root, requestedPath));
+  } catch {
+    return { ok: false, reason: 'not_found' };
+  }
+
+  const fromRoot = relative(root, realCandidate);
+  if (fromRoot === '' || fromRoot.startsWith('..') || isAbsolute(fromRoot)) {
+    return { ok: false, reason: 'not_found' };
+  }
+
+  const stats = await stat(realCandidate);
+  if (!stats.isFile()) return { ok: false, reason: 'not_found' };
+  if (stats.size > SKILL_FILE_MAX_BYTES)
+    return { ok: false, reason: 'too_large', size: stats.size };
+
+  const bytes = await readFile(realCandidate);
+  if (bytes.includes(0)) return { ok: false, reason: 'binary' };
+
+  return { ok: true, file: { path: fromRoot, size: stats.size, content: bytes.toString('utf-8') } };
 }
 
 export interface ExecuteManagedSkillToolOptions extends Pick<
