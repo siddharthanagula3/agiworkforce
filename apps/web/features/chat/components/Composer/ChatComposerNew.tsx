@@ -119,6 +119,8 @@ import {
   MCP_CONTEXT_SELECTED_EVENT,
   type McpContextSelection,
 } from '@/features/connectors/lib/mcp-context-selection';
+import { useConnectors } from '@/features/connectors/hooks/use-connectors';
+import { CONNECTORS } from '@/features/connectors/data/connectors';
 
 export {
   getImageAspectOptionsForModel,
@@ -210,6 +212,10 @@ const DESK_ONLY_COMPOSER_FOOTER_KEYS: ReadonlySet<string> = new Set<string>([
 
 const COMPOSER_FOOTER_ENTRY_TESTID_PREFIX = 'composer-footer-entry-';
 const COMPOSER_MENU_SEND_ROUTE_TESTID = 'composer-menu-send-route';
+// One shared empty array for "this conversation has no disabled connectors",
+// so the store selector returns a stable reference and cannot loop under
+// useSyncExternalStore (mirrors EMPTY_MESSAGES in the chat store).
+const EMPTY_DISABLED_CONNECTOR_IDS: string[] = [];
 
 export interface ComposerSendMeta {
   /** Active mode at send time. 'agiwork' = project-scoped work chat. */
@@ -230,6 +236,8 @@ export interface ComposerSendMeta {
   mcpContext?: McpContextSelection;
   /** CAP-048: structured AGI Work goal captured by the composer. */
   agiWorkGoal?: AgiWorkGoalInput;
+  /** Connector ids switched off for this conversation; their tools are not offered to the model. */
+  disabledConnectorIds?: string[];
 }
 
 interface ChatComposerProps {
@@ -532,6 +540,50 @@ function MenuToggleRow({
 }
 
 /**
+ * One connector row inside the Connectors submenu. `role="menuitemcheckbox"`
+ * is the correct ARIA role for a toggleable item in a menu (as opposed to
+ * `MenuToggleRow`'s plain `aria-pressed` button, used for composer-wide
+ * capability toggles rather than a list of named items).
+ *
+ * Deliberately a plain focusable button, not a `useMenuKeyboard` panel: this
+ * submenu renders inside `AnchoredComposerMenu`, which already runs its own
+ * document-capture-phase Arrow/Home/End/Escape handling over every focusable
+ * element in the popover. A second capture-phase listener here would not
+ * replace that one -- both run on every keypress -- and would fight it for
+ * which "next item" wins.
+ */
+function ConnectorCheckboxRow({
+  label,
+  checked,
+  onToggle,
+}: {
+  label: string;
+  checked: boolean;
+  onToggle: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      role="menuitemcheckbox"
+      aria-checked={checked}
+      onClick={onToggle}
+      className="flex w-full items-center gap-3 rounded-lg py-2 pl-8 pr-3 text-sm transition-colors hover:bg-muted/60"
+    >
+      <span
+        aria-hidden="true"
+        className={cn(
+          'flex h-4 w-4 shrink-0 items-center justify-center rounded border',
+          checked ? 'border-primary bg-primary text-primary-foreground' : 'border-border',
+        )}
+      >
+        {checked && <Check className="h-3 w-3" />}
+      </span>
+      <span className="flex-1 truncate text-left">{label}</span>
+    </button>
+  );
+}
+
+/**
  * Sending the first message of a brand-new chat flips `isEmptyChat` in
  * WebChatPage the instant a client-only conversation id is claimed --
  * synchronously, before the attachment upload that triggered the send even
@@ -675,9 +727,21 @@ const ChatComposerNewComponent = ({
     onError: (message) => setLocalNotice(message),
   });
   const [showOverflowMenu, setShowOverflowMenu] = useState(false);
+  // The Connectors row's own submenu (list of connected connectors, each with
+  // an enable/disable checkbox). Collapsed whenever the plus-menu closes, so
+  // it never reopens already expanded.
+  const [connectorsSubmenuOpen, setConnectorsSubmenuOpen] = useState(false);
+  useEffect(() => {
+    if (!showOverflowMenu) setConnectorsSubmenuOpen(false);
+  }, [showOverflowMenu]);
   // Settings-modal opener for the plus-menu Skills/Connectors/Plugins entries
   // (founder directive 2026-07-10: entries open the modal pane, no inline lists).
   const { openSettings } = useSettingsModal();
+  const {
+    connectedIds: connectedConnectorIds,
+    sources: connectorSources,
+    customNames: connectorCustomNames,
+  } = useConnectors();
   // AUDIT-FIX CMP-8: user-defined commands are read here so `template` is
   // actually applied (it was previously never read by any composer code).
   const customCommands = useSettingsStore((s) => s.customCommands);
@@ -825,6 +889,31 @@ const ChatComposerNewComponent = ({
   const setSelectedSkillName = useCallback(
     (name: string | null) => setComposerToggles({ selectedSkillName: name }),
     [setComposerToggles],
+  );
+
+  // Per-conversation connector opt-out (persisted, unlike the toggles above --
+  // see `disabledConnectorIdsByConversation` in the chat store).
+  const disabledConnectorIds = useChatStore(
+    (s) => s.disabledConnectorIdsByConversation[toggleBucketKey] ?? EMPTY_DISABLED_CONNECTOR_IDS,
+  );
+  const setConnectorEnabledInStore = useChatStore((s) => s.setConnectorEnabled);
+  const setConnectorEnabled = useCallback(
+    (connectorId: string, enabled: boolean) =>
+      setConnectorEnabledInStore(connectorId, enabled, conversationId),
+    [setConnectorEnabledInStore, conversationId],
+  );
+  const connectedConnectorOptions = useMemo(
+    () =>
+      Array.from(connectedConnectorIds)
+        .map((id) => ({
+          id,
+          label:
+            connectorSources[id] === 'custom'
+              ? (connectorCustomNames[id] ?? id)
+              : (CONNECTORS.find((connector) => connector.id === id)?.name ?? id),
+        }))
+        .sort((a, b) => a.label.localeCompare(b.label)),
+    [connectedConnectorIds, connectorSources, connectorCustomNames],
   );
 
   // "Project or folder" picker state (rendered only when the host passes
@@ -2329,6 +2418,7 @@ const ChatComposerNewComponent = ({
         styleInstruction: getStyleInstruction(responseStyle, activeCustomStyleId, responseLength),
         skillName: selectedSkillName ?? undefined,
         mcpContext: selectedMcpContext ?? undefined,
+        disabledConnectorIds: disabledConnectorIds.length > 0 ? disabledConnectorIds : undefined,
         // CAP-048: attach the structured goal on an AGI Work send. The objective
         // is the composed message; the optional scope fields ride alongside.
         agiWorkGoal:
@@ -2385,6 +2475,7 @@ const ChatComposerNewComponent = ({
     attachments,
     selectedSkillName,
     selectedMcpContext,
+    disabledConnectorIds,
     isTurnActive,
     disabled,
     hasAttachmentConflict,
@@ -3664,18 +3755,18 @@ const ChatComposerNewComponent = ({
                       <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
                     </button>
 
-                    {/* 6. Connectors -- entry point that opens the settings modal
-                        at the Connectors pane. An inline connect toggle here would
-                        imply a mid-chat capability that does not exist (per-
-                        conversation connector enablement has no runtime backing),
-                        so the honest surface is the settings pane — no fake
-                        toggles, no inline list. */}
+                    {/* 6. Connectors -- expands into a submenu of the CONNECTED
+                        connectors, each with an enable/disable checkbox for
+                        THIS conversation (AUDIT-FIX WEB-CONNECTORS-PER-CONVO-01:
+                        the row used to only deep-link to Settings because
+                        per-conversation enablement had no runtime backing; the
+                        chat store and the completion request now carry it). The
+                        deep link to Settings stays, as the last row, for
+                        connect/disconnect and per-tool permissions. */}
                     <button
                       type="button"
-                      onClick={() => {
-                        closeMenu();
-                        openSettings('connectors');
-                      }}
+                      onClick={() => setConnectorsSubmenuOpen((open) => !open)}
+                      aria-expanded={connectorsSubmenuOpen}
                       className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors hover:bg-muted/60"
                     >
                       {/* Simple connector icon */}
@@ -3692,8 +3783,47 @@ const ChatComposerNewComponent = ({
                         <path d="M5.5 8h5" />
                       </svg>
                       <span className="flex-1 text-left">Connectors</span>
-                      <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
+                      <ChevronRight
+                        className={cn(
+                          'h-3.5 w-3.5 text-muted-foreground transition-transform',
+                          connectorsSubmenuOpen && 'rotate-90',
+                        )}
+                      />
                     </button>
+                    {connectorsSubmenuOpen && (
+                      <div role="menu" aria-label="Connectors" className="space-y-0.5 pb-1">
+                        {connectedConnectorOptions.length === 0 ? (
+                          <p className="px-3 py-2 pl-8 text-[12px] text-muted-foreground">
+                            No connectors connected yet.
+                          </p>
+                        ) : (
+                          connectedConnectorOptions.map((connector) => (
+                            <ConnectorCheckboxRow
+                              key={connector.id}
+                              label={connector.label}
+                              checked={!disabledConnectorIds.includes(connector.id)}
+                              onToggle={() =>
+                                setConnectorEnabled(
+                                  connector.id,
+                                  disabledConnectorIds.includes(connector.id),
+                                )
+                              }
+                            />
+                          ))
+                        )}
+                        <button
+                          type="button"
+                          role="menuitem"
+                          onClick={() => {
+                            closeMenu();
+                            openSettings('connectors');
+                          }}
+                          className="flex w-full items-center gap-3 rounded-lg py-2 pl-8 pr-3 text-left text-sm text-muted-foreground transition-colors hover:bg-muted/60"
+                        >
+                          Manage in Settings
+                        </button>
+                      </div>
+                    )}
 
                     {/* 7. Plugins -- entry point that opens the settings modal at
                         the Plugins pane. */}

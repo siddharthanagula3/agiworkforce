@@ -146,6 +146,8 @@ interface SendMessageOptions {
   styleInstruction?: string;
   skillName?: string;
   mcpContext?: McpContextSelection;
+  /** Connector ids switched off for this conversation; their tools are not offered to the model. */
+  disabledConnectorIds?: string[];
   research?: boolean;
   researchResume?: {
     sources: Array<{ url: string; title?: string; snippet?: string }>;
@@ -2665,6 +2667,9 @@ export function useChatStream(): UseChatStreamReturn {
               code_execution: options.codeExecution || undefined,
               office_creation: options.officeCreation || undefined,
               skill_name: options.skillName,
+              disabled_connector_ids: options.disabledConnectorIds?.length
+                ? options.disabledConnectorIds
+                : undefined,
               mcp_context: options.mcpContext
                 ? {
                     ...(options.mcpContext.prompt ? { prompt: options.mcpContext.prompt } : {}),

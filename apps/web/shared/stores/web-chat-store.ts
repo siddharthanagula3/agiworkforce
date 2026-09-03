@@ -587,6 +587,19 @@ interface ChatState {
    */
   composerTogglesByConversation: Record<string, ComposerToggleState>;
 
+  /**
+   * Per-conversation connector opt-outs: connector ids the user has switched
+   * OFF for this one chat, sent with the completion request so their tools
+   * are not offered to the model. Absent from the map (or an empty array)
+   * means every connected connector is enabled -- the default -- so a newly
+   * connected connector never has to be explicitly turned on.
+   *
+   * Unlike `composerTogglesByConversation`, THIS IS PERSISTED (see the
+   * `partialize` below): a connector disabled for a conversation must still
+   * be disabled after a reload, not just for the live tab.
+   */
+  disabledConnectorIdsByConversation: Record<string, string[]>;
+
   // Sidebar state
   sidebarCollapsed: boolean;
 
@@ -749,6 +762,16 @@ interface ChatState {
   /** Move the new-chat toggles onto the conversation the first send created. */
   adoptPendingComposerToggles: (conversationId: string | null | undefined) => void;
 
+  // Actions - Per-conversation connector opt-outs
+  /** Connector ids disabled for one conversation ([] when none are). */
+  getDisabledConnectorIds: (conversationId?: string | null) => string[];
+  /** Enable or disable one connector's tools for one conversation. */
+  setConnectorEnabled: (
+    connectorId: string,
+    enabled: boolean,
+    conversationId?: string | null,
+  ) => void;
+
   // Actions - Sidebar
   toggleSidebar: () => void;
   setSidebarCollapsed: (collapsed: boolean) => void;
@@ -773,6 +796,7 @@ const initialState = {
   draftsByConversation: {} as Record<string, string>,
   draftContent: '',
   composerTogglesByConversation: {} as Record<string, ComposerToggleState>,
+  disabledConnectorIdsByConversation: {} as Record<string, string[]>,
   sidebarCollapsed: false,
 };
 
@@ -970,6 +994,9 @@ export const useChatStore = create<ChatState>()(
               // recreated id must never resurrect a dead conversation's tools.
               const { [id]: _removedToggles, ...composerTogglesByConversation } =
                 state.composerTogglesByConversation;
+              // A recreated id must not resurrect a dead conversation's connector opt-outs.
+              const { [id]: _removedDisabledConnectors, ...disabledConnectorIdsByConversation } =
+                state.disabledConnectorIdsByConversation;
               // A deleted conversation's leaf dies with its transcript, or a
               // recreated id would resolve its path against a dead pointer.
               const { [id]: _removedLeaf, ...activeLeafByConversation } =
@@ -981,6 +1008,7 @@ export const useChatStore = create<ChatState>()(
                 conversations: state.conversations.filter((c) => c.id !== id),
                 draftsByConversation,
                 composerTogglesByConversation,
+                disabledConnectorIdsByConversation,
                 activeLeafByConversation,
                 draftContent: draftsByConversation[nextKey] ?? '',
                 activeConversationId,
@@ -1540,26 +1568,75 @@ export const useChatStore = create<ChatState>()(
          * pending toggles bleed onto an existing chat opened from the sidebar.
          * Existing toggles on the target win, and the pending bucket is cleared
          * so the next new chat starts clean.
+         *
+         * Also migrates the new-chat surface's disabled-connector set for the
+         * same reason: a connector switched off before the first message is
+         * sent must stay off once that message creates the real conversation.
          */
         adoptPendingComposerToggles: (conversationId) =>
           set(
             (state) => {
               const pending = state.composerTogglesByConversation[PENDING_CONVERSATION_KEY];
-              if (!pending || !conversationId) return {};
-              const { [PENDING_CONVERSATION_KEY]: _pending, ...rest } =
-                state.composerTogglesByConversation;
-              return {
-                composerTogglesByConversation: {
+              const pendingDisabledConnectors =
+                state.disabledConnectorIdsByConversation[PENDING_CONVERSATION_KEY];
+              if ((!pending && !pendingDisabledConnectors) || !conversationId) return {};
+              const targetKey = conversationKey(conversationId);
+              const update: Partial<ChatState> = {};
+              if (pending) {
+                const { [PENDING_CONVERSATION_KEY]: _pending, ...rest } =
+                  state.composerTogglesByConversation;
+                update.composerTogglesByConversation = {
                   ...rest,
-                  [conversationKey(conversationId)]: {
+                  [targetKey]: {
                     ...pending,
-                    ...(state.composerTogglesByConversation[conversationKey(conversationId)] ?? {}),
+                    ...(state.composerTogglesByConversation[targetKey] ?? {}),
                   },
+                };
+              }
+              if (pendingDisabledConnectors) {
+                const { [PENDING_CONVERSATION_KEY]: _pendingIds, ...rest } =
+                  state.disabledConnectorIdsByConversation;
+                update.disabledConnectorIdsByConversation = {
+                  ...rest,
+                  [targetKey]: state.disabledConnectorIdsByConversation[targetKey] ?? [
+                    ...pendingDisabledConnectors,
+                  ],
+                };
+              }
+              return update;
+            },
+            undefined,
+            'chat/adoptPendingComposerToggles',
+          ),
+
+        getDisabledConnectorIds: (conversationId) => {
+          const state = get();
+          const targetId =
+            conversationId === undefined ? state.activeConversationId : conversationId;
+          return state.disabledConnectorIdsByConversation[conversationKey(targetId)] ?? [];
+        },
+
+        setConnectorEnabled: (connectorId, enabled, conversationId) =>
+          set(
+            (state) => {
+              const targetId =
+                conversationId === undefined ? state.activeConversationId : conversationId;
+              const key = conversationKey(targetId);
+              const current = state.disabledConnectorIdsByConversation[key] ?? [];
+              const next = enabled
+                ? current.filter((id) => id !== connectorId)
+                : current.includes(connectorId)
+                  ? current
+                  : [...current, connectorId];
+              return {
+                disabledConnectorIdsByConversation: {
+                  ...state.disabledConnectorIdsByConversation,
+                  [key]: next,
                 },
               };
             },
             undefined,
-            'chat/adoptPendingComposerToggles',
+            'chat/setConnectorEnabled',
           ),
 
         // Sidebar
@@ -1587,6 +1664,10 @@ export const useChatStore = create<ChatState>()(
           selectedModel: state.selectedModel,
           selectedModelTier: state.selectedModelTier,
           sidebarCollapsed: state.sidebarCollapsed,
+          // Unlike the composer toggles above, a per-conversation connector
+          // opt-out is a standing decision about what a chat is allowed to
+          // reach, not a next-turn default -- it must survive a reload.
+          disabledConnectorIdsByConversation: state.disabledConnectorIdsByConversation,
         }),
         migrate: (persisted: unknown) => {
           const next = { ...(persisted as Record<string, unknown>) };

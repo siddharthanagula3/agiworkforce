@@ -87,6 +87,32 @@ export const LOCKED_DOWN_CONNECTOR_TOOL_PERMISSIONS: ConnectorToolPermissions = 
   size: 0,
 };
 
+/**
+ * Layers a per-conversation connector opt-out on top of a user's standing
+ * allow/ask/deny verdicts. Neither replaces the other: a connector switched
+ * off for one chat stays off for that catalog build, while every other
+ * conversation keeps reading the saved verdicts unchanged.
+ */
+export function withDisabledConnectorIds(
+  permissions: ConnectorToolPermissions,
+  disabledConnectorIds: ReadonlySet<string>,
+): ConnectorToolPermissions {
+  if (disabledConnectorIds.size === 0) return permissions;
+  return {
+    ...permissions,
+    isConnectorToolDenied: (connectorId, toolName) =>
+      disabledConnectorIds.has(connectorId) ||
+      permissions.isConnectorToolDenied(connectorId, toolName),
+    isDenied: (qualifiedName) => {
+      const parsed = parseQualifiedToolName(qualifiedName);
+      return (
+        (parsed !== null && disabledConnectorIds.has(parsed.serverId)) ||
+        permissions.isDenied(qualifiedName)
+      );
+    },
+  };
+}
+
 export function connectorToolPermissionsFromEntries(
   entries: ReadonlyArray<ConnectorToolPermissionEntry>,
 ): ConnectorToolPermissions {

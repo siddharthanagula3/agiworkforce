@@ -321,6 +321,12 @@ export const ChatCompletionRequestSchema = z
       .optional(),
     code_execution: z.boolean().optional(),
     office_creation: z.boolean().optional(),
+    /**
+     * Connector ids the client has switched off for THIS conversation. The
+     * tool catalog builder drops any tool whose server id is in this set, so
+     * a disabled connector is never advertised to the model for this turn.
+     */
+    disabled_connector_ids: z.array(z.string().min(1).max(200)).max(64).optional(),
     work_mode: z.enum(CLOUD_WORK_MODES).optional(),
     agi_work_goal: AgiWorkGoalSchema.optional(),
     thinking_mode: z.boolean().optional(),
