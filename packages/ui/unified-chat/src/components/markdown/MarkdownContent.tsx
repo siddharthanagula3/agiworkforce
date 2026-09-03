@@ -197,12 +197,6 @@ function citationItemsForIndices(
   return items;
 }
 
-/**
- * Mirrors the branching in `MarkdownLink` below - a child of `p`/`li`/`td` is
- * still an unrendered `MarkdownLink` element at this point, not the
- * `CitationChip` it may resolve to, so paren-stripping has to run the same
- * three checks to know whether it will.
- */
 function isCitationLinkElement(
   node: React.ReactNode,
   citations: readonly MarkdownCitation[],
@@ -223,14 +217,6 @@ function isCitationLinkElement(
   return findCitationIndexForUrl(href, citations) !== undefined;
 }
 
-/**
- * The model wraps a citation in its own parentheses ("(openai.com)"); once
- * that link becomes a pill the parentheses read as the model's punctuation
- * around a sentence fragment that no longer exists. Strips only the "(" and
- * ")" immediately touching a citation link - and only those, so "developed X
- * (see openai.com)." keeps its parenthetical and "microsoft.com)." keeps its
- * trailing period.
- */
 function unwrapCitationParens(
   children: React.ReactNode,
   citations: readonly MarkdownCitation[],
