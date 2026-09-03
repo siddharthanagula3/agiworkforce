@@ -74,7 +74,7 @@ const QA: { title: string; body: string }[] = [
   },
   {
     title: 'Is there an Enterprise plan?',
-    body: 'Enterprise is contract-scoped rather than self-serve. There is no checkout for it, so it starts with a conversation. On what actually exists rather than what is planned: single sign-on and SCIM directory provisioning are built and are provisioned by us for an organisation. A customer-facing audit-log export and per-organisation retention windows are NOT built, and we would rather say that here than let Enterprise imply the whole category. Contact sales to discuss requirements and timing.',
+    body: 'Enterprise is contract-scoped rather than self-serve. There is no checkout for it, so it starts with a conversation. On what actually exists rather than what is planned: single sign-on, SCIM directory provisioning, a customer-facing audit-log export (filterable and downloaded as JSONL at /workspace/audit), and per-workspace retention windows are all implemented, gated on the enterprise_controls entitlement and configured by your own workspace owner. What is NOT built: dedicated capacity, org-wide BYOK enforcement, and data-region pinning, and we would rather say that here than let Enterprise imply the whole category. Contact sales to discuss requirements and timing.',
   },
   {
     title: 'Where do you host data?',
