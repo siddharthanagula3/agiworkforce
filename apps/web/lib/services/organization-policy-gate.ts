@@ -1,6 +1,7 @@
 import 'server-only';
 
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
+import { SECRET_HANDLING_MODE_DEFAULT, type SecretHandlingMode } from '@agiworkforce/types';
 import { logger } from '@/lib/logger';
 import { resolveActiveOrganizationId } from '@/lib/services/active-workspace-service';
 import { readOrganizationPolicy } from '@/lib/services/organization-policy-service';
@@ -74,4 +75,42 @@ export async function evaluateActiveWorkspacePolicy(
   }
 
   return { ...decision, organizationId };
+}
+
+export interface SecretHandlingPolicyResult {
+  mode: SecretHandlingMode;
+  organizationId: string | null;
+}
+
+export async function resolveSecretHandlingPolicy(
+  db: DatabaseAdapter,
+  userId: string,
+  request?: ScopedRequest,
+): Promise<SecretHandlingPolicyResult> {
+  let organizationId: string | null = null;
+
+  try {
+    organizationId = await resolveActiveOrganizationId(db, userId, request);
+  } catch (error) {
+    logger.warn({ error, userId }, '[secret-handling] active workspace could not be resolved');
+    return { mode: SECRET_HANDLING_MODE_DEFAULT.personal, organizationId: null };
+  }
+
+  if (!organizationId) {
+    return { mode: SECRET_HANDLING_MODE_DEFAULT.personal, organizationId: null };
+  }
+
+  try {
+    const policy = await readOrganizationPolicy(db, organizationId);
+    return {
+      mode: policy?.secretHandling ?? SECRET_HANDLING_MODE_DEFAULT.organization,
+      organizationId,
+    };
+  } catch (error) {
+    logger.error(
+      { error, userId, organizationId },
+      '[secret-handling] policy read failed; falling back to the organization default',
+    );
+    return { mode: SECRET_HANDLING_MODE_DEFAULT.organization, organizationId };
+  }
 }
