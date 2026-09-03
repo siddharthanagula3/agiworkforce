@@ -32,10 +32,10 @@ help.
 
 Neon exposes both, and they behave differently:
 
-| Operation                            | Endpoint                                                                                                | What happens to the branch                                                                                                                  | Connection string                                                                                  |
-| ------------------------------------ | ------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
-| Create a branch from a point in time | `POST /projects/{project_id}/branches` with `branch.parent_timestamp`                                   | A brand new branch, disposable, existing branches untouched                                                                                 | New, separate URI                                                                                  |
-| Restore a branch in place            | `POST /projects/{project_id}/branches/{branch_id}/restore` with `source_branch_id` + `source_timestamp` | The named branch's data is replaced by the historical state; pass `preserve_under_name` to keep the pre-restore state as a new branch first | Unchanged — same host, same compute, connections reconnect automatically once the restore finishes |
+| Operation                            | Endpoint                                                                                                | What happens to the branch                                                                                                                  | Connection string                                                                                 |
+| ------------------------------------ | ------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
+| Create a branch from a point in time | `POST /projects/{project_id}/branches` with `branch.parent_timestamp`                                   | A brand new branch, disposable, existing branches untouched                                                                                 | New, separate URI                                                                                 |
+| Restore a branch in place            | `POST /projects/{project_id}/branches/{branch_id}/restore` with `source_branch_id` + `source_timestamp` | The named branch's data is replaced by the historical state; pass `preserve_under_name` to keep the pre-restore state as a new branch first | Unchanged. Same host, same compute; connections reconnect automatically once the restore finishes |
 
 The drill script only ever uses the first form. It creates a disposable
 branch, never touches the branch it is restoring from, and deletes what it
@@ -57,8 +57,8 @@ below has passed against a branch made the first way.
 
    `--keep` leaves the branch up so the verification step below has something
    to point at; omit it for a routine drill that only needs the row counts.
-   The script never prints the branch's connection string or the API key —
-   only the branch id and the row counts.
+   The script never prints the branch's connection string or the API key. It
+   only prints the branch id and the row counts.
 
 3. **Point a preview at the restored branch and verify.** In the Vercel
    project, set `AGI_DATABASE_URL` to the drill branch's connection URI
@@ -72,9 +72,9 @@ below has passed against a branch made the first way.
    `scripts/verify-deployment.mjs` already asserts the exact contract that
    matters here: `/api/health` returns this app's health envelope (not just
    any 200), and `/api/me` / `/api/usage` return the application's
-   `UNAUTHORIZED` envelope rather than a raw framework error — proof the
-   restored branch has the schema and the RLS policies the app expects, not
-   just rows.
+   `UNAUTHORIZED` envelope rather than a raw framework error. That is proof
+   the restored branch has the schema and the RLS policies the app expects,
+   not just rows.
 
 4. **Check the schema is current**, not just queryable:
 
@@ -95,7 +95,7 @@ decision after that point is one of:
 - **Promote**: perform the in-place restore (`POST
 .../branches/{branch_id}/restore`) against the actual production branch,
   with `preserve_under_name` set so the pre-restore state is not discarded.
-  Connection strings do not change, so no surface needs a redeploy — traffic
+  Connection strings do not change, so no surface needs a redeploy. Traffic
   reconnects once the restore completes.
 - **Roll back the decision, not the database**: if verification failed, or a
   later recovery point looks safer, delete the disposable branch (or, for a
@@ -116,7 +116,7 @@ backup") already covers: put that old key into `<NAME>_RETIRED` under the id
 the restored rows carry, then run `scripts/reencrypt.mjs`'s sweep to bring
 them forward. Skipping that step leaves `connector_oauth_grants`,
 `user_custom_connectors`, `github_installations`, and `user_two_factor` rows
-permanently unreadable — read `docs/security/key-rotation.md`'s "Accepted
+permanently unreadable. Read `docs/security/key-rotation.md`'s "Accepted
 risk: no KMS, no escrow" section before promoting a restore that crosses a
 rotation boundary.
 
@@ -140,7 +140,7 @@ the updater signing key.
 ## Open gaps
 
 - This project's actual `history_retention_seconds` has never been read and
-  recorded here — do that the first time the drill runs.
+  recorded here. Do that the first time the drill runs.
 - No RPO/RTO has been published to customers; that is a vendor-SLA
   commitment against Neon's plan, not something this document can assert.
 - No third-party uptime monitor calls `/api/health`, so an outage that
@@ -150,5 +150,5 @@ the updater signing key.
 Related: `docs/security/key-rotation.md` for what a restore does to encrypted
 columns, `docs/runbooks/incident-response.md` for what paged this in the first
 place, `apps/web/db/neon/verify/README.md` for standing up a throwaway
-Postgres to test migration SQL directly (a different tool for a different
-question — that one never talks to Neon's API).
+Postgres to test migration SQL directly. That is a different tool for a
+different question: it never talks to Neon's API.
