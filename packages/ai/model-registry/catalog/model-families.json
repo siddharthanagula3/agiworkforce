@@ -13,10 +13,7 @@
       "-[0-9]{4}-[0-9]{2}-[0-9]{2}$"
     ],
     "lifecycleOrder": ["stable", "preview"],
-    "promotableLifecycles": {
-      "stable": ["stable"],
-      "preview": ["stable", "preview"]
-    },
+    "promotableLifecycles": { "stable": ["stable"], "preview": ["stable", "preview"] },
     "blockedLifecycles": ["deprecated", "experimental", "retired"],
     "requiredAvailability": "live",
     "thresholds": {
@@ -61,10 +58,7 @@
         "lifecycle": "stable",
         "promotedAt": "2026-08-18",
         "promotionReason": "seeded from the authored catalog roster when family slots were introduced",
-        "evaluation": {
-          "gates": {},
-          "seeded": true
-        },
+        "evaluation": { "gates": {}, "seeded": true },
         "availability": "live",
         "pricingSnapshot": {
           "currency": "USD",
@@ -123,10 +117,7 @@
         "lifecycle": "stable",
         "promotedAt": "2026-08-18",
         "promotionReason": "seeded from the authored catalog roster when family slots were introduced",
-        "evaluation": {
-          "gates": {},
-          "seeded": true
-        },
+        "evaluation": { "gates": {}, "seeded": true },
         "availability": "live",
         "pricingSnapshot": {
           "currency": "USD",
@@ -185,10 +176,7 @@
         "lifecycle": "stable",
         "promotedAt": "2026-08-18",
         "promotionReason": "seeded from the authored catalog roster when family slots were introduced",
-        "evaluation": {
-          "gates": {},
-          "seeded": true
-        },
+        "evaluation": { "gates": {}, "seeded": true },
         "availability": "live",
         "pricingSnapshot": {
           "currency": "USD",
@@ -239,10 +227,7 @@
         "lifecycle": "stable",
         "promotedAt": "2026-08-18",
         "promotionReason": "seeded from the authored catalog roster when family slots were introduced",
-        "evaluation": {
-          "gates": {},
-          "seeded": true
-        },
+        "evaluation": { "gates": {}, "seeded": true },
         "availability": "live",
         "pricingSnapshot": {
           "currency": "USD",
@@ -265,9 +250,7 @@
           "functionCalling": false,
           "reasoning": false
         },
-        "limitSnapshot": {
-          "contextTokens": 4000
-        },
+        "limitSnapshot": { "contextTokens": 4000 },
         "benchmarkSnapshot": {}
       },
       "previous": null,
@@ -290,10 +273,7 @@
         "lifecycle": "stable",
         "promotedAt": "2026-08-18",
         "promotionReason": "seeded from the authored catalog roster when family slots were introduced",
-        "evaluation": {
-          "gates": {},
-          "seeded": true
-        },
+        "evaluation": { "gates": {}, "seeded": true },
         "availability": "live",
         "pricingSnapshot": {
           "currency": "USD",
@@ -315,9 +295,7 @@
           "functionCalling": false,
           "reasoning": false
         },
-        "limitSnapshot": {
-          "contextTokens": 16000
-        },
+        "limitSnapshot": { "contextTokens": 16000 },
         "benchmarkSnapshot": {}
       },
       "previous": null,
@@ -340,10 +318,7 @@
         "lifecycle": "stable",
         "promotedAt": "2026-08-18",
         "promotionReason": "seeded from the authored catalog roster when family slots were introduced",
-        "evaluation": {
-          "gates": {},
-          "seeded": true
-        },
+        "evaluation": { "gates": {}, "seeded": true },
         "availability": "live",
         "pricingSnapshot": {
           "currency": "USD",
@@ -365,9 +340,7 @@
           "functionCalling": false,
           "reasoning": false
         },
-        "limitSnapshot": {
-          "contextTokens": 16000
-        },
+        "limitSnapshot": { "contextTokens": 16000 },
         "benchmarkSnapshot": {}
       },
       "previous": null,
@@ -390,10 +363,7 @@
         "lifecycle": "deprecated",
         "promotedAt": "2026-08-18",
         "promotionReason": "seeded from the authored catalog roster when family slots were introduced",
-        "evaluation": {
-          "gates": {},
-          "seeded": true
-        },
+        "evaluation": { "gates": {}, "seeded": true },
         "availability": "live",
         "pricingSnapshot": {
           "currency": "USD",
@@ -415,9 +385,7 @@
           "functionCalling": false,
           "reasoning": false
         },
-        "limitSnapshot": {
-          "contextTokens": 2000
-        },
+        "limitSnapshot": { "contextTokens": 2000 },
         "benchmarkSnapshot": {}
       },
       "previous": null,
@@ -448,10 +416,7 @@
         "lifecycle": "stable",
         "promotedAt": "2026-08-18",
         "promotionReason": "seeded from the authored catalog roster when family slots were introduced",
-        "evaluation": {
-          "gates": {},
-          "seeded": true
-        },
+        "evaluation": { "gates": {}, "seeded": true },
         "availability": "live",
         "pricingSnapshot": {
           "currency": "USD",
@@ -510,10 +475,7 @@
         "lifecycle": "stable",
         "promotedAt": "2026-08-18",
         "promotionReason": "seeded from the authored catalog roster when family slots were introduced",
-        "evaluation": {
-          "gates": {},
-          "seeded": true
-        },
+        "evaluation": { "gates": {}, "seeded": true },
         "availability": "live",
         "pricingSnapshot": {
           "currency": "USD",
@@ -572,10 +534,7 @@
         "lifecycle": "stable",
         "promotedAt": "2026-08-18",
         "promotionReason": "seeded from the authored catalog roster when family slots were introduced",
-        "evaluation": {
-          "gates": {},
-          "seeded": true
-        },
+        "evaluation": { "gates": {}, "seeded": true },
         "availability": "live",
         "pricingSnapshot": {
           "currency": "USD",
@@ -631,14 +590,20 @@
       "minContextTokens": 1048576,
       "minMaxOutputTokens": 65536,
       "active": {
-        "modelKey": "gemini-3.7-flash",
-        "generation": "3.7",
+        "modelKey": "gemini-3.8-flash",
+        "generation": "3.8",
         "lifecycle": "stable",
-        "promotedAt": "2026-08-18",
-        "promotionReason": "seeded from the authored catalog roster when family slots were introduced",
+        "promotedAt": "2026-09-03",
+        "promotionReason": "automatic family upgrade from gemini-3.7-flash to gemini-3.8-flash",
         "evaluation": {
-          "gates": {},
-          "seeded": true
+          "gates": {
+            "providerAvailability": "configured on google",
+            "familyIdentity": "matches gemini-flash at tier balanced",
+            "lifecycleEligibility": "lifecycle stable is allowed",
+            "capabilityCoverage": "covers 9 capabilities",
+            "regressionThresholds": "no shared benchmarks published"
+          },
+          "seeded": false
         },
         "availability": "live",
         "pricingSnapshot": {
@@ -662,15 +627,50 @@
           "functionCalling": true,
           "reasoning": true
         },
-        "limitSnapshot": {
-          "contextTokens": 1048576,
-          "maxOutputTokens": 65536
-        },
+        "limitSnapshot": { "contextTokens": 1048576, "maxOutputTokens": 65536 },
         "benchmarkSnapshot": {}
       },
-      "previous": null,
+      "previous": {
+        "modelKey": "gemini-3.7-flash",
+        "generation": "3.7",
+        "lifecycle": "stable",
+        "promotedAt": "2026-08-18",
+        "promotionReason": "seeded from the authored catalog roster when family slots were introduced",
+        "evaluation": { "gates": {}, "seeded": true },
+        "availability": "live",
+        "pricingSnapshot": {
+          "currency": "USD",
+          "unit": "per_million_tokens",
+          "inputPerMillion": 0.75,
+          "outputPerMillion": 3.75,
+          "cacheReadPerMillion": 0.075
+        },
+        "capabilitySnapshot": {
+          "textInput": true,
+          "imageInput": true,
+          "audioInput": true,
+          "videoInput": true,
+          "textOutput": true,
+          "imageOutput": false,
+          "audioOutput": false,
+          "videoOutput": false,
+          "streaming": true,
+          "structuredOutput": true,
+          "functionCalling": true,
+          "reasoning": true
+        },
+        "limitSnapshot": { "contextTokens": 1048576, "maxOutputTokens": 65536 },
+        "benchmarkSnapshot": {}
+      },
       "fallbackChain": [],
-      "history": []
+      "history": [
+        {
+          "promotedAt": "2026-09-03",
+          "from": "gemini-3.7-flash",
+          "to": "gemini-3.8-flash",
+          "reason": "automatic family upgrade from gemini-3.7-flash to gemini-3.8-flash"
+        }
+      ]
     },
     "google/gemini-flash-lite": {
       "provider": "google",
@@ -698,10 +698,7 @@
         "lifecycle": "stable",
         "promotedAt": "2026-08-18",
         "promotionReason": "seeded from the authored catalog roster when family slots were introduced",
-        "evaluation": {
-          "gates": {},
-          "seeded": true
-        },
+        "evaluation": { "gates": {}, "seeded": true },
         "availability": "live",
         "pricingSnapshot": {
           "currency": "USD",
@@ -724,10 +721,7 @@
           "functionCalling": true,
           "reasoning": true
         },
-        "limitSnapshot": {
-          "contextTokens": 1048576,
-          "maxOutputTokens": 65536
-        },
+        "limitSnapshot": { "contextTokens": 1048576, "maxOutputTokens": 65536 },
         "benchmarkSnapshot": {}
       },
       "previous": null,
@@ -758,10 +752,7 @@
         "lifecycle": "preview",
         "promotedAt": "2026-08-18",
         "promotionReason": "seeded from the authored catalog roster when family slots were introduced",
-        "evaluation": {
-          "gates": {},
-          "seeded": true
-        },
+        "evaluation": { "gates": {}, "seeded": true },
         "availability": "live",
         "pricingSnapshot": {
           "currency": "USD",
@@ -784,9 +775,7 @@
           "functionCalling": true,
           "reasoning": true
         },
-        "limitSnapshot": {
-          "contextTokens": 2000000
-        },
+        "limitSnapshot": { "contextTokens": 2000000 },
         "benchmarkSnapshot": {
           "swebench": 74.2,
           "humaneval": 93.5,
@@ -815,10 +804,7 @@
         "lifecycle": "stable",
         "promotedAt": "2026-08-18",
         "promotionReason": "seeded from the authored catalog roster when family slots were introduced",
-        "evaluation": {
-          "gates": {},
-          "seeded": true
-        },
+        "evaluation": { "gates": {}, "seeded": true },
         "availability": "live",
         "pricingSnapshot": {
           "currency": "USD",
@@ -841,9 +827,7 @@
           "functionCalling": false,
           "reasoning": false
         },
-        "limitSnapshot": {
-          "contextTokens": 1000000
-        },
+        "limitSnapshot": { "contextTokens": 1000000 },
         "benchmarkSnapshot": {}
       },
       "previous": null,
@@ -866,10 +850,7 @@
         "lifecycle": "stable",
         "promotedAt": "2026-08-18",
         "promotionReason": "seeded from the authored catalog roster when family slots were introduced",
-        "evaluation": {
-          "gates": {},
-          "seeded": true
-        },
+        "evaluation": { "gates": {}, "seeded": true },
         "availability": "live",
         "pricingSnapshot": {
           "currency": "USD",
@@ -891,9 +872,7 @@
           "functionCalling": false,
           "reasoning": false
         },
-        "limitSnapshot": {
-          "contextTokens": 8192
-        },
+        "limitSnapshot": { "contextTokens": 8192 },
         "benchmarkSnapshot": {}
       },
       "previous": null,
@@ -916,10 +895,7 @@
         "lifecycle": "preview",
         "promotedAt": "2026-08-18",
         "promotionReason": "seeded from the authored catalog roster when family slots were introduced",
-        "evaluation": {
-          "gates": {},
-          "seeded": true
-        },
+        "evaluation": { "gates": {}, "seeded": true },
         "availability": "live",
         "pricingSnapshot": {
           "currency": "USD",
@@ -942,9 +918,7 @@
           "functionCalling": false,
           "reasoning": false
         },
-        "limitSnapshot": {
-          "contextTokens": 4000
-        },
+        "limitSnapshot": { "contextTokens": 4000 },
         "benchmarkSnapshot": {}
       },
       "previous": null,
@@ -967,10 +941,7 @@
         "lifecycle": "preview",
         "promotedAt": "2026-08-18",
         "promotionReason": "seeded from the authored catalog roster when family slots were introduced",
-        "evaluation": {
-          "gates": {},
-          "seeded": true
-        },
+        "evaluation": { "gates": {}, "seeded": true },
         "availability": "live",
         "pricingSnapshot": {
           "currency": "USD",
@@ -993,9 +964,7 @@
           "functionCalling": false,
           "reasoning": false
         },
-        "limitSnapshot": {
-          "contextTokens": 4000
-        },
+        "limitSnapshot": { "contextTokens": 4000 },
         "benchmarkSnapshot": {}
       },
       "previous": null,
@@ -1018,10 +987,7 @@
         "lifecycle": "preview",
         "promotedAt": "2026-08-18",
         "promotionReason": "seeded from the authored catalog roster when family slots were introduced",
-        "evaluation": {
-          "gates": {},
-          "seeded": true
-        },
+        "evaluation": { "gates": {}, "seeded": true },
         "availability": "live",
         "pricingSnapshot": {
           "currency": "USD",
@@ -1044,9 +1010,7 @@
           "functionCalling": false,
           "reasoning": false
         },
-        "limitSnapshot": {
-          "contextTokens": 4000
-        },
+        "limitSnapshot": { "contextTokens": 4000 },
         "benchmarkSnapshot": {}
       },
       "previous": null,
@@ -1077,10 +1041,7 @@
         "lifecycle": "stable",
         "promotedAt": "2026-08-18",
         "promotionReason": "seeded from the authored catalog roster when family slots were introduced",
-        "evaluation": {
-          "gates": {},
-          "seeded": true
-        },
+        "evaluation": { "gates": {}, "seeded": true },
         "availability": "live",
         "pricingSnapshot": {
           "currency": "USD",
@@ -1103,16 +1064,8 @@
           "functionCalling": true,
           "reasoning": true
         },
-        "limitSnapshot": {
-          "contextTokens": 1000000
-        },
-        "benchmarkSnapshot": {
-          "swebench": 75,
-          "humaneval": 95,
-          "mmlu": 87,
-          "gpqa": 75,
-          "aime": 85
-        }
+        "limitSnapshot": { "contextTokens": 1000000 },
+        "benchmarkSnapshot": { "swebench": 75, "humaneval": 95, "mmlu": 87, "gpqa": 75, "aime": 85 }
       },
       "previous": null,
       "fallbackChain": [],
@@ -1142,10 +1095,7 @@
         "lifecycle": "stable",
         "promotedAt": "2026-08-18",
         "promotionReason": "seeded from the authored catalog roster when family slots were introduced",
-        "evaluation": {
-          "gates": {},
-          "seeded": true
-        },
+        "evaluation": { "gates": {}, "seeded": true },
         "availability": "live",
         "pricingSnapshot": {
           "currency": "USD",
@@ -1168,16 +1118,8 @@
           "functionCalling": true,
           "reasoning": true
         },
-        "limitSnapshot": {
-          "contextTokens": 1000000
-        },
-        "benchmarkSnapshot": {
-          "swebench": 81,
-          "humaneval": 96,
-          "mmlu": 92,
-          "gpqa": 87,
-          "aime": 95
-        }
+        "limitSnapshot": { "contextTokens": 1000000 },
+        "benchmarkSnapshot": { "swebench": 81, "humaneval": 96, "mmlu": 92, "gpqa": 87, "aime": 95 }
       },
       "previous": null,
       "fallbackChain": [],
@@ -1208,10 +1150,7 @@
         "lifecycle": "stable",
         "promotedAt": "2026-08-18",
         "promotionReason": "seeded from the authored catalog roster when family slots were introduced",
-        "evaluation": {
-          "gates": {},
-          "seeded": true
-        },
+        "evaluation": { "gates": {}, "seeded": true },
         "availability": "live",
         "pricingSnapshot": {
           "currency": "USD",
@@ -1235,10 +1174,7 @@
           "functionCalling": true,
           "reasoning": true
         },
-        "limitSnapshot": {
-          "contextTokens": 1000000,
-          "maxOutputTokens": 64000
-        },
+        "limitSnapshot": { "contextTokens": 1000000, "maxOutputTokens": 64000 },
         "benchmarkSnapshot": {}
       },
       "previous": null,
@@ -1270,10 +1206,7 @@
         "lifecycle": "stable",
         "promotedAt": "2026-08-18",
         "promotionReason": "seeded from the authored catalog roster when family slots were introduced",
-        "evaluation": {
-          "gates": {},
-          "seeded": true
-        },
+        "evaluation": { "gates": {}, "seeded": true },
         "availability": "live",
         "pricingSnapshot": {
           "currency": "USD",
@@ -1297,10 +1230,7 @@
           "functionCalling": true,
           "reasoning": true
         },
-        "limitSnapshot": {
-          "contextTokens": 1000000,
-          "maxOutputTokens": 64000
-        },
+        "limitSnapshot": { "contextTokens": 1000000, "maxOutputTokens": 64000 },
         "benchmarkSnapshot": {}
       },
       "previous": null,
@@ -1331,10 +1261,7 @@
         "lifecycle": "stable",
         "promotedAt": "2026-08-18",
         "promotionReason": "seeded from the authored catalog roster when family slots were introduced",
-        "evaluation": {
-          "gates": {},
-          "seeded": true
-        },
+        "evaluation": { "gates": {}, "seeded": true },
         "availability": "live",
         "pricingSnapshot": {
           "currency": "USD",
@@ -1357,9 +1284,7 @@
           "functionCalling": true,
           "reasoning": true
         },
-        "limitSnapshot": {
-          "contextTokens": 1048576
-        },
+        "limitSnapshot": { "contextTokens": 1048576 },
         "benchmarkSnapshot": {}
       },
       "previous": null,
@@ -1390,10 +1315,7 @@
         "lifecycle": "stable",
         "promotedAt": "2026-08-18",
         "promotionReason": "seeded from the authored catalog roster when family slots were introduced",
-        "evaluation": {
-          "gates": {},
-          "seeded": true
-        },
+        "evaluation": { "gates": {}, "seeded": true },
         "availability": "live",
         "pricingSnapshot": {
           "currency": "USD",
@@ -1415,9 +1337,7 @@
           "functionCalling": true,
           "reasoning": true
         },
-        "limitSnapshot": {
-          "contextTokens": 500000
-        },
+        "limitSnapshot": { "contextTokens": 500000 },
         "benchmarkSnapshot": {
           "swebench": 68,
           "humaneval": 96.5,
@@ -1453,10 +1373,7 @@
         "lifecycle": "stable",
         "promotedAt": "2026-08-18",
         "promotionReason": "seeded from the authored catalog roster when family slots were introduced",
-        "evaluation": {
-          "gates": {},
-          "seeded": true
-        },
+        "evaluation": { "gates": {}, "seeded": true },
         "availability": "live",
         "pricingSnapshot": {
           "currency": "USD",
@@ -1479,16 +1396,8 @@
           "functionCalling": true,
           "reasoning": true
         },
-        "limitSnapshot": {
-          "contextTokens": 1000000
-        },
-        "benchmarkSnapshot": {
-          "swebench": 79,
-          "humaneval": 92,
-          "mmlu": 90,
-          "gpqa": 84,
-          "aime": 92
-        }
+        "limitSnapshot": { "contextTokens": 1000000 },
+        "benchmarkSnapshot": { "swebench": 79, "humaneval": 92, "mmlu": 90, "gpqa": 84, "aime": 92 }
       },
       "previous": null,
       "fallbackChain": [],
@@ -1517,10 +1426,7 @@
         "lifecycle": "stable",
         "promotedAt": "2026-08-18",
         "promotionReason": "seeded from the authored catalog roster when family slots were introduced",
-        "evaluation": {
-          "gates": {},
-          "seeded": true
-        },
+        "evaluation": { "gates": {}, "seeded": true },
         "availability": "live",
         "pricingSnapshot": {
           "currency": "USD",
@@ -1542,9 +1448,7 @@
           "functionCalling": true,
           "reasoning": true
         },
-        "limitSnapshot": {
-          "contextTokens": 1000000
-        },
+        "limitSnapshot": { "contextTokens": 1000000 },
         "benchmarkSnapshot": {}
       },
       "previous": null,

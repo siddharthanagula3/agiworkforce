@@ -1,7 +1,13 @@
 {
   "version": 1,
-  "lastUpdated": "2026-08-18",
+  "lastUpdated": "2026-09-02",
   "verificationLog": [
+    {
+      "date": "2026-09-02",
+      "verifiedBy": "official-google-gemini-model-and-pricing-docs-and-openrouter-model-list",
+      "status": "PASS",
+      "notes": "Added Gemini 3.8 Flash to the catalog and promoted the google/gemini-flash family slot from gemini-3.7-flash to gemini-3.8-flash via the family-slots promotion script, then removed gemini-3.7-flash from the roster and added it to retired-models.json. Official Google documentation confirms the exact gemini-3.8-flash API ID, the same 1,048,576-token input and 65,536-token output limits as 3.7, text/image/audio/video/PDF input with text-only output, function calling, code execution, search grounding, context caching, and low/medium/high thinking levels (minimal remains unsupported). Pricing is unchanged from 3.7's promotional rate of $0.75/M input, $3.75/M output, $0.075/M cache read, which Google's pricing page lists as reverting to $1.50/$7.50/$0.15 on 2027-01-01 and must be re-verified before that date. Benchmarks are omitted because Google publishes none for 3.8. openrouter.ai/google/gemini-3.8-flash confirms the google/gemini-3.8-flash slug at the same context/output limits and pricing. Sources retrieved 2026-09-02: ai.google.dev/gemini-api/docs/models/gemini-3.8-flash, /docs/latest-model, /docs/pricing, and openrouter.ai/google/gemini-3.8-flash."
+    },
     {
       "date": "2026-08-18",
       "verifiedBy": "official-google-gemini-model-and-pricing-docs-and-openrouter-model-list",
@@ -258,7 +264,7 @@
         "nvidia/nemotron-3-ultra-550b-a55b": "gemini-3.5-flash-lite",
         "nvidia/nemotron-3-super-120b-a12b:free": "gemini-3.5-flash-lite",
         "google/gemma-4-26b-a4b-it:free": "gemini-3.5-flash-lite",
-        "gemini-3.5-flash": "gemini-3.7-flash"
+        "gemini-3.5-flash": "gemini-3.8-flash"
       }
     },
     "openai": {
@@ -306,13 +312,13 @@
       "defaultPricing": { "inputPerMillion": 1, "outputPerMillion": 5 },
       "modelPrefixes": ["gemini", "imagen", "veo"],
       "aliases": [],
-      "defaultModel": "gemini-3.7-flash",
+      "defaultModel": "gemini-3.8-flash",
       "taskRouting": {
         "fast_completion": "gemini-3.5-flash-lite",
-        "code_generation": "gemini-3.7-flash",
+        "code_generation": "gemini-3.8-flash",
         "complex_reasoning": "gemini-3.1-pro-preview",
-        "chat": "gemini-3.7-flash",
-        "vision": "gemini-3.7-flash",
+        "chat": "gemini-3.8-flash",
+        "vision": "gemini-3.8-flash",
         "long_context": "gemini-3.1-pro-preview"
       },
       "canonicalization": {}
@@ -1707,11 +1713,11 @@
       "pricingNote": "$0.60/1M input text tokens, $12/1M output audio tokens. Default snapshot gpt-4o-mini-tts-2025-12-15 (the 2025-03-20 snapshot shut down 2026-07-23). DEPRECATED on developers.openai.com's model catalog listing, but retained because it is the only model OpenAI serves on /v1/audio/speech — gpt-audio-1.5 explicitly does not support that endpoint, no successor is named in the deprecations table, no shutdown date is published, and the text-to-speech guide still calls it \"our newest and most reliable text-to-speech model\". The migration path OpenAI is signalling is audio-native chat (gpt-audio-1.5) and realtime (gpt-realtime-2.1), neither of which is a drop-in for a REST speech call. Verified 2026-07-28.",
       "reasoning": { "capable": false, "control": "none" }
     },
-    "gemini-3.7-flash": {
-      "id": "gemini-3.7-flash",
-      "apiModelId": "gemini-3.7-flash",
-      "openRouterSlug": "google/gemini-3.7-flash",
-      "name": "Gemini 3.7 Flash",
+    "gemini-3.8-flash": {
+      "id": "gemini-3.8-flash",
+      "apiModelId": "gemini-3.8-flash",
+      "openRouterSlug": "google/gemini-3.8-flash",
+      "name": "Gemini 3.8 Flash",
       "provider": "google",
       "modelType": "multimodal",
       "inputModalities": ["text", "image", "audio", "video", "pdf"],
@@ -1745,7 +1751,7 @@
         "Multimodal Reasoning",
         "Long Context"
       ],
-      "released": "August 2026",
+      "released": "September 2026",
       "deprecation_date": null,
       "openWeight": false,
       "license": "proprietary",
@@ -2527,7 +2533,7 @@
     }
   },
   "tierAllowedModels": {
-    "economy": ["gpt-5.6-luna", "gemini-3.5-flash-lite", "gemini-3.7-flash", "qwen-3.5-flash"],
+    "economy": ["gpt-5.6-luna", "gemini-3.5-flash-lite", "gemini-3.8-flash", "qwen-3.5-flash"],
     "pro_additions": [
       "gpt-5.6-terra",
       "claude-sonnet-5",

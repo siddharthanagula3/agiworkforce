@@ -268,7 +268,7 @@
       "speed": "medium",
       "released": "April 2026"
     },
-    "gemini-3.7-flash": {
+    "gemini-3.8-flash": {
       "contextWindow": 1048576,
       "inputCost": 0.75,
       "outputCost": 3.75,
@@ -289,7 +289,7 @@
         "caching": true
       },
       "speed": "fast",
-      "released": "August 2026"
+      "released": "September 2026"
     },
     "glm-5.2": {
       "contextWindow": 1000000,
