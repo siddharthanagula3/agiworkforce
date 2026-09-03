@@ -173,6 +173,86 @@ describe('SettingsModal nav (web IA)', () => {
     expect(screen.getByText('Included')).toBeTruthy();
   });
 
+  it('renders no New skill control or Actions column when the adapter cannot author skills', () => {
+    renderModal({ activeSection: 'skills' });
+
+    expect(screen.queryByRole('button', { name: 'New skill' })).toBeNull();
+    expect(screen.queryByRole('columnheader', { name: 'Actions' })).toBeNull();
+  });
+
+  it('shows New skill and per-row Edit/Delete only for a skill the adapter marks editable', () => {
+    renderModal(
+      { activeSection: 'skills' },
+      {
+        skills: [
+          {
+            id: 'humanizer',
+            name: 'humanizer',
+            description: 'Rewrite text',
+            source: 'personal',
+            tab: 'prompts',
+            editable: true,
+          },
+          {
+            id: 'docx',
+            name: 'docx',
+            description: 'Word documents',
+            source: 'bundled',
+            tab: 'prompts',
+            statusLabel: 'Included',
+          },
+        ],
+        onCreateSkill: vi.fn(),
+        editSkill: vi.fn(),
+        removeSkill: vi.fn(),
+      },
+    );
+
+    expect(screen.getByRole('button', { name: 'New skill' })).toBeTruthy();
+    const editableRow = screen.getByText('humanizer').closest('tr') as HTMLElement;
+    expect(within(editableRow).getByRole('button', { name: 'Edit' })).toBeTruthy();
+    expect(within(editableRow).getByRole('button', { name: 'Delete' })).toBeTruthy();
+    const bundledRow = screen.getByText('docx').closest('tr') as HTMLElement;
+    expect(within(bundledRow).queryByRole('button', { name: 'Edit' })).toBeNull();
+    expect(within(bundledRow).queryByRole('button', { name: 'Delete' })).toBeNull();
+  });
+
+  it('opens the editor for the clicked skill and asks for confirmation before deleting', async () => {
+    const editSkill = vi.fn();
+    const removeSkill = vi.fn();
+    renderModal(
+      { activeSection: 'skills' },
+      {
+        skills: [
+          {
+            id: 'humanizer',
+            name: 'humanizer',
+            description: 'Rewrite text',
+            source: 'personal',
+            tab: 'prompts',
+            editable: true,
+          },
+        ],
+        onCreateSkill: vi.fn(),
+        editSkill,
+        removeSkill,
+      },
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
+    expect(editSkill).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'humanizer', name: 'humanizer' }),
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Delete' }));
+    expect(removeSkill).not.toHaveBeenCalled();
+    const dialog = await screen.findByRole('alertdialog');
+    expect(dialog.textContent).toContain('Delete skill?');
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Delete' }));
+
+    await waitFor(() => expect(removeSkill).toHaveBeenCalledWith('humanizer'));
+  });
+
   it('hides secondary Plugin metadata below sm while preserving lifecycle actions', () => {
     renderModal(
       { activeSection: 'plugins' },
