@@ -35,6 +35,18 @@ vi.mock('@/lib/server/neon-db', () => ({
   })),
 }));
 
+vi.mock('@/lib/server/rls-db', () => ({
+  getUserScopedDb: vi.fn(async () => ({
+    db: {
+      query: (...args: unknown[]) => mockQuery(...args),
+      execute: (...args: unknown[]) => mockExecute(...args),
+      transaction: (...args: unknown[]) => mockTransaction(...args),
+    },
+    userId: 'org-a-admin',
+    organizationId: null,
+  })),
+}));
+
 import { GET, POST } from '../route';
 import { DELETE, PATCH } from '../[memberId]/route';
 

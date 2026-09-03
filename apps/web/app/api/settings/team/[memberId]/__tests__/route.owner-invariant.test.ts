@@ -40,6 +40,18 @@ vi.mock('@/lib/server/neon-db', () => ({
   })),
 }));
 
+vi.mock('@/lib/server/rls-db', () => ({
+  getUserScopedDb: vi.fn(async () => ({
+    db: {
+      query: (...args: unknown[]) => mockQuery(...args),
+      execute: (...args: unknown[]) => mockExecute(...args),
+      transaction: (...args: unknown[]) => mockTransaction(...args),
+    },
+    userId: 'owner-user',
+    organizationId: null,
+  })),
+}));
+
 import { PATCH } from '../route';
 
 const organizationId = '11111111-1111-4111-8111-111111111111';

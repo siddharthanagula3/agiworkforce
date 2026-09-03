@@ -10,6 +10,7 @@ import { logger } from '@/lib/logger';
 import { getClerkAuthUser } from '@/lib/api-auth';
 import { requireCsrfToken } from '@/lib/csrf';
 import { getNeonDb } from '@/lib/server/neon-db';
+import { getUserScopedDb } from '@/lib/server/rls-db';
 import type { OrganizationMemberRow, ProfileRow } from '@/lib/server/neon-types';
 import { handleCorsPreflightRequest } from '@/lib/cors';
 import { recordAuditEvent } from '@/lib/security-audit';
@@ -103,7 +104,7 @@ async function handleAddMember(request: NextRequest) {
   const csrfError = await requireCsrfToken(request);
   if (csrfError) return csrfError as NextResponse;
 
-  const { userId } = await getClerkAuthUser(request);
+  const { db, userId } = await getUserScopedDb(request);
 
   const body = await request.json().catch(() => ({}));
   const parsed = AddMemberSchema.safeParse(body);
@@ -112,7 +113,6 @@ async function handleAddMember(request: NextRequest) {
   }
   const { organizationId, email, role } = parsed.data;
 
-  const db = getNeonDb();
   await requireTeamAdminAccess(db, userId, organizationId);
 
   const member = await withSeatAccountingErrors(() =>
