@@ -74,6 +74,7 @@ import {
 } from '@/app/api/interactive-cards/response-contract';
 import { addCsrfHeaders } from '@/lib/client/csrf';
 import { FALLBACK_REASON_HEADER } from '@/lib/chat-fallback-reason';
+import { SECRET_REDACTION_COUNT_HEADER } from '@/lib/chat-secret-redaction-notice';
 import { getBrowserTimeZone } from '@/lib/client/browser-timezone';
 import { createFrameCoalescedAppender } from '@/lib/client/frame-coalesced-appender';
 import { isFreeTrialErrorCode, useFreeTrialStore } from '@/features/chat/stores/freeTrialStore';
@@ -971,6 +972,16 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
   } else if (!isTurnContinuation) {
     updateMessage(assistantMessageId, { routeLane: undefined }, conversationId);
   }
+  const streamSecretRedactionCount = response.headers.get(SECRET_REDACTION_COUNT_HEADER);
+  if (streamSecretRedactionCount) {
+    updateMessage(
+      assistantMessageId,
+      { secretRedactionCount: Number(streamSecretRedactionCount) },
+      conversationId,
+    );
+  } else if (!isTurnContinuation) {
+    updateMessage(assistantMessageId, { secretRedactionCount: undefined }, conversationId);
+  }
   const appendToMessage = store.appendToMessage;
   const appendToThinking = store.appendToThinking;
   const coalescedAppends = createFrameCoalescedAppender({
@@ -1009,7 +1020,7 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
   const webSearchRequestedForTurn = liveMessageMetadata?.webSearchRequested === true;
   const interactiveCardsResumed = seedMetadata?.interactiveCardsResumed;
   let currentSearchResults: MessageMetadata['searchResults'] = seedMetadata?.searchResults;
-  const currentAnnotationCitations: NonNullable<MessageMetadata['citations']> = [
+  const citationsInModelMarkerOrder: NonNullable<MessageMetadata['citations']> = [
     ...(seedMetadata?.citations ?? []),
   ];
   let currentCodeExecutionResult: MessageMetadata['codeExecutionResult'] =
@@ -1055,20 +1066,14 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
     return merged;
   };
 
-  // The Nth distinct annotation url a provider cites, in the order the model
-  // wrote it, is exactly what a `[n]` marker in that model's own text refers
-  // to (see the capability preamble's "in the order those sources first
-  // appear" instruction). That numbering has no reliable relationship to the
-  // aggregate cross-search `searchResults` pool above, which the model never
-  // sees, so this is tracked and persisted separately.
-  const applyCitationDelta = (url: string, title: string) => {
+  const appendMarkerOrderedCitation = (url: string, title: string) => {
     if (!url || !title) return;
     const dedupeKey = normalizeCitationUrl(url) ?? url;
     const existingKey = (existingUrl: string | undefined) =>
       existingUrl ? (normalizeCitationUrl(existingUrl) ?? existingUrl) : existingUrl;
-    if (currentAnnotationCitations.some((c) => existingKey(c.url) === dedupeKey)) return;
-    currentAnnotationCitations.push({ type: WEB_SEARCH_CITATION_KIND, url, title });
-    patchMessageMeta({ citations: [...currentAnnotationCitations] });
+    if (citationsInModelMarkerOrder.some((c) => existingKey(c.url) === dedupeKey)) return;
+    citationsInModelMarkerOrder.push({ type: WEB_SEARCH_CITATION_KIND, url, title });
+    patchMessageMeta({ citations: [...citationsInModelMarkerOrder] });
   };
 
   const applySourceListEvent = (event: AgentEventEnvelope['event']) => {
@@ -1443,8 +1448,8 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
     if (hasWebSearchSources(currentSearchResults)) {
       metadata.searchResults = currentSearchResults;
     }
-    if (currentAnnotationCitations.length > 0) {
-      metadata.citations = currentAnnotationCitations;
+    if (citationsInModelMarkerOrder.length > 0) {
+      metadata.citations = citationsInModelMarkerOrder;
     }
     if (webSearchRequestedForTurn) {
       metadata.webSearchRequested = true;
@@ -1828,14 +1833,6 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
                 agentEnvelope.event.delta,
               ).pending;
             }
-            // The inline dialect's own 'error'/'stop' events are the only place
-            // a provider failure (for example Google quota_exhausted) is ever
-            // announced on this path -- unlike the OpenAI-shaped delta, it
-            // carries no top-level finish_reason field and no x_stream_error,
-            // so without this the turn settles with empty, error-free metadata
-            // and reads as a plain empty response instead of the failure it
-            // was. finishReason mapping mirrors the durable follow-run
-            // handler's identical logic above.
             if (agentEnvelope.event.type === 'error' && !streamErrorInfo) {
               streamErrorInfo = {
                 message: agentEnvelope.event.message,
@@ -2089,7 +2086,7 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
             | Partial<WebSearchCitationDeltaWire>
             | undefined;
           if (typeof citationBlock?.url === 'string' && typeof citationBlock.title === 'string') {
-            applyCitationDelta(citationBlock.url, citationBlock.title);
+            appendMarkerOrderedCitation(citationBlock.url, citationBlock.title);
           }
 
           const searchResultsBlock = parsed.choices?.[0]?.delta?.x_search_results;

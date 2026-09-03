@@ -53,13 +53,6 @@ function isBareDomainHref(url: string): boolean {
  * Comparison ignores scheme, `www.`, a trailing slash, and tracking query
  * parameters (utm_*, fbclid, gclid, mc_cid/mc_eid) so a link the model
  * decorated with its own tracking params still matches a clean source URL.
- *
- * A model that writes a bare domain link (`blog.google`, `snaplogic.com`)
- * instead of the article URL never clears that exact match, so a bare-domain
- * href falls back to the registrable domain, and then to the href being a
- * URL-boundary prefix of a source's URL, each only when it identifies
- * exactly one source; two sources sharing a domain leave the link unmatched
- * rather than guess.
  */
 export function findCitationIndexForUrl(
   href: string,
@@ -151,15 +144,6 @@ function linkifyPart(part: string, citationCount: number): string {
 }
 
 /**
- * Turns each `[n]` marker (or unbroken run of them, "[1][2]") naming a source
- * the message actually carries into a link the `a` renderer resolves to a
- * `CitationChip`, the same way apps/web/features/chat/lib/citation-links.ts
- * does for research reports — ported here because this component cannot
- * depend on apps/web, and the two link targets differ (a same-page anchor
- * there, an open-in-tab chip here). A run of two or more markers becomes one
- * link carrying every index, so the renderer can group them into a single
- * pill instead of one chip per source.
- *
  * Fence- and inline-code-safe so `rows[1]` in a snippet is never mistaken for
  * a citation, and only run on markers that are already fully closed, so a
  * still-streaming `[4` is left as plain text until its `]` arrives.

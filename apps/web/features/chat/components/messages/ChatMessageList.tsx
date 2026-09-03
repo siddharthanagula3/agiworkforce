@@ -109,9 +109,6 @@ function streamErrorNoticeMessage(message: ChatMessage): string {
   return `${prefix}: ${getStreamErrorMessage(message) ?? STREAM_ERROR_CONNECTION_DETAIL}`;
 }
 
-// The provider's own quota/overload window is spent -- waiting a moment on the
-// SAME model cannot help, unlike a plain rate limit (kept to Retry alone, since
-// that one clears on its own). Matches the codes upstream-error-copy.ts sets.
 const MODEL_SWITCH_WORTHY_STREAM_ERROR_CODES = new Set([
   'provider_quota_exhausted',
   'provider_overloaded',
