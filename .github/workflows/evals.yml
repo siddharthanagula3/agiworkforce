@@ -10,7 +10,7 @@ name: AI output quality evals
 # `live-quality` is the measurement, and it is the only job whose result says
 # anything about a model. It bills real tokens (33 rows, one non-streaming
 # Messages call each, 512 output tokens max), so it runs weekly on a schedule
-# and on demand from the Actions tab — not per push or per PR.
+# and on demand from the Actions tab, not per push or per PR.
 #
 # What it measures, exactly: the catalog's default Anthropic model answering a
 # bare single-turn prompt. No system prompt, no capability preamble, no routing,

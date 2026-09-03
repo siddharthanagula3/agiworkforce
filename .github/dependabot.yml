@@ -27,7 +27,7 @@ updates:
         update-types:
           - 'major'
 
-  # ─── Cargo (Rust) — root workspace (apps/cli, crates/*) ─────────────────────
+  # ─── Cargo (Rust), root workspace (apps/cli, crates/*) ─────────────────────
   - package-ecosystem: 'cargo'
     directory: '/'
     schedule:
@@ -48,7 +48,7 @@ updates:
         update-types:
           - 'major'
 
-  # ─── Cargo (Rust) — apps/desktop/src-tauri ──────────────────────────────────
+  # ─── Cargo (Rust), apps/desktop/src-tauri ──────────────────────────────────
   - package-ecosystem: 'cargo'
     directory: '/apps/desktop/src-tauri'
     schedule:
@@ -59,7 +59,7 @@ updates:
       - 'dependencies'
       - 'rust'
     groups:
-      # Group all Tauri crates together — they must be upgraded as a set
+      # Group all Tauri crates together, they must be upgraded as a set
       tauri-ecosystem:
         applies-to: version-updates
         patterns:
@@ -84,7 +84,7 @@ updates:
       - dependency-name: 'tauri-plugin-*'
         update-types: ['version-update:semver-major']
 
-  # ─── npm / pnpm — root workspace ────────────────────────────────────────────
+  # ─── npm / pnpm, root workspace ────────────────────────────────────────────
   - package-ecosystem: 'npm'
     directory: '/'
     schedule:
@@ -116,7 +116,7 @@ updates:
       - dependency-name: 'image-size'
       - dependency-name: 'extract-zip'
 
-  # ─── npm / pnpm — apps/desktop ──────────────────────────────────────────────
+  # ─── npm / pnpm, apps/desktop ──────────────────────────────────────────────
   - package-ecosystem: 'npm'
     directory: '/apps/desktop'
     schedule:
@@ -154,7 +154,7 @@ updates:
       - dependency-name: 'react-dom'
         update-types: ['version-update:semver-major']
 
-  # ─── npm / pnpm — apps/web ──────────────────────────────────────────────────
+  # ─── npm / pnpm, apps/web ──────────────────────────────────────────────────
   - package-ecosystem: 'npm'
     directory: '/apps/web'
     schedule:
@@ -184,7 +184,7 @@ updates:
       - dependency-name: 'react-dom'
         update-types: ['version-update:semver-major']
 
-  # ─── npm / pnpm — apps/mobile ────────────────────────────────────────────────
+  # ─── npm / pnpm, apps/mobile ────────────────────────────────────────────────
   - package-ecosystem: 'npm'
     directory: '/apps/mobile'
     schedule:
@@ -209,7 +209,7 @@ updates:
       - dependency-name: '*'
         update-types: ['version-update:semver-major']
 
-  # ─── npm / pnpm — apps/extension ────────────────────────────────────────────
+  # ─── npm / pnpm, apps/extension ────────────────────────────────────────────
   - package-ecosystem: 'npm'
     directory: '/apps/extension'
     schedule:
@@ -234,7 +234,7 @@ updates:
       - dependency-name: '*'
         update-types: ['version-update:semver-major']
 
-  # ─── npm / pnpm — packages/contracts/types ────────────────────────────────────────────
+  # ─── npm / pnpm, packages/contracts/types ────────────────────────────────────────────
   - package-ecosystem: 'npm'
     directory: '/packages/contracts/types'
     schedule:
@@ -254,7 +254,7 @@ updates:
       - dependency-name: '*'
         update-types: ['version-update:semver-major']
 
-  # ─── npm / pnpm — packages/platform/utils ────────────────────────────────────────────
+  # ─── npm / pnpm, packages/platform/utils ────────────────────────────────────────────
   - package-ecosystem: 'npm'
     directory: '/packages/platform/utils'
     schedule:
@@ -274,7 +274,7 @@ updates:
       - dependency-name: '*'
         update-types: ['version-update:semver-major']
 
-  # ─── npm / pnpm — services/signaling-server ─────────────────────────────────
+  # ─── npm / pnpm, services/signaling-server ─────────────────────────────────
   - package-ecosystem: 'npm'
     directory: '/services/signaling-server'
     schedule:

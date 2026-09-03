@@ -1,5 +1,5 @@
 # Desktop only, and only the smoke/chat/v3-locks Playwright projects. Do not
-# read this workflow as cross-surface coverage — the per-surface E2E lanes are
+# read this workflow as cross-surface coverage, the per-surface E2E lanes are
 # jobs in ci.yml (desktop deterministic mocks, Chrome extension, VS Code + CLI,
 # mobile, web).
 name: Desktop E2E Tests
@@ -38,7 +38,7 @@ jobs:
     name: E2E Tests
     runs-on: ubuntu-24.04
     timeout-minutes: 30
-    # M22: No continue-on-error here — E2E failures intentionally block the pipeline on main/develop.
+    # M22: No continue-on-error here, E2E failures intentionally block the pipeline on main/develop.
     # Do NOT add continue-on-error: true without a documented exception.
 
     steps:
@@ -101,18 +101,18 @@ jobs:
           exit 1
         working-directory: apps/desktop
 
-      # M22: No continue-on-error — E2E failures intentionally block CI.
+      # M22: No continue-on-error, E2E failures intentionally block CI.
       #
       # One invocation for all three projects: separate invocations each
       # overwrote the same results.json, so the gate below could only ever see
-      # the last one. There is deliberately no --reporter flag — passing it
+      # the last one. There is deliberately no --reporter flag, passing it
       # replaces the reporters in playwright.config.ts and sends the JSON to
       # stdout, which is what left the results gate reading a file that was
       # never written.
       #
       # v3-locks/v3-reachability/v3-smoke were dev-local-only until 2026-07-03
       # (fixed to mount deterministically via mock cloud auth, see git history
-      # on these spec files) — kept in CI so v3 shell regressions block the
+      # on these spec files), kept in CI so v3 shell regressions block the
       # pipeline instead of only surfacing to whoever happens to run them locally.
       - name: Run desktop E2E projects (smoke, chat, v3-locks)
         run: |
