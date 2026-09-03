@@ -135,6 +135,7 @@ export function toPluginSection(snapshot: PluginDirectorySnapshot, now: number):
   const hasCounts = entries.some((entry) => entry.installCount !== undefined);
   return {
     entries,
+    installable: true,
     sources: pluginSources(entries, snapshot.marketplaceSources),
     filterGroups: pluginFilterGroups(entries),
     sortOptions: hasCounts ? ['popular', 'updated', 'name'] : ['updated', 'name'],

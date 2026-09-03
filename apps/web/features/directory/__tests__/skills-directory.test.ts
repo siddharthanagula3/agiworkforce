@@ -45,7 +45,6 @@ describe('toSkillEntry', () => {
       slashName: true,
       publisher: 'AGI',
       sourceId: 'agi',
-      badges: ['agi'],
       facets: { lifecycle: ['included'] },
     });
   });
@@ -53,7 +52,6 @@ describe('toSkillEntry', () => {
   it('renders an authored skill under the Yours source', () => {
     const entry = toSkillEntry(skill({ source: 'personal', editable: true }));
     expect(entry.sourceId).toBe('yours');
-    expect(entry.badges).toEqual(['yours']);
   });
 
   it('never invents an install count or an updated date', () => {
@@ -85,6 +83,10 @@ describe('toSkillSection', () => {
 
   it('offers only the sorts the data supports', () => {
     expect(toSkillSection([skill()]).sortOptions).toEqual(['name']);
+  });
+
+  it('declares skills as not installable, since no route installs one', () => {
+    expect(toSkillSection([skill()]).installable).toBe(false);
   });
 });
 
