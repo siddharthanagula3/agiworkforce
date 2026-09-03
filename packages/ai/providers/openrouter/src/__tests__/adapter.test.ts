@@ -1,4 +1,3 @@
-
 import { describe, expect, it } from 'vitest';
 
 import { createOpenRouterAdapter, OPENROUTER_MODEL_CATALOG } from '../index';
@@ -52,5 +51,52 @@ describe('createOpenRouterAdapter', () => {
     expect(() =>
       createOpenRouterAdapter({ apiKey: 'test-key', baseUrl: 'https://evil.attacker.com/v1' }),
     ).not.toThrow();
+  });
+
+  it('sends no provider routing field on the wire when providerRouting is unset (never forces ordering by default)', async () => {
+    let seenBody: Record<string, unknown> | undefined;
+    const adapter = createOpenRouterAdapter({
+      apiKey: 'test-key',
+      fetch: async (_input, init) => {
+        seenBody = JSON.parse(String(init?.body));
+        return new Response('data: [DONE]\n\n', {
+          status: 200,
+          headers: { 'content-type': 'text/event-stream' },
+        });
+      },
+    });
+    for await (const _c of adapter.stream(
+      { model: 'anthropic/example-model', messages: [{ role: 'user', content: 'hi' }] },
+      new AbortController().signal,
+    )) {
+      void _c;
+    }
+    expect(seenBody?.provider).toBeUndefined();
+  });
+
+  it('sends the configured provider routing preferences on the wire, overridable by request metadata', async () => {
+    let seenBody: Record<string, unknown> | undefined;
+    const adapter = createOpenRouterAdapter({
+      apiKey: 'test-key',
+      providerRouting: { order: ['anthropic'], dataCollection: 'deny' },
+      fetch: async (_input, init) => {
+        seenBody = JSON.parse(String(init?.body));
+        return new Response('data: [DONE]\n\n', {
+          status: 200,
+          headers: { 'content-type': 'text/event-stream' },
+        });
+      },
+    });
+    for await (const _c of adapter.stream(
+      {
+        model: 'anthropic/example-model',
+        messages: [{ role: 'user', content: 'hi' }],
+        metadata: { openRouterProviderRouting: { order: ['together'] } },
+      },
+      new AbortController().signal,
+    )) {
+      void _c;
+    }
+    expect(seenBody?.provider).toEqual({ order: ['together'], data_collection: 'deny' });
   });
 });

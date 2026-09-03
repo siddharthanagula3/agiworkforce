@@ -8,15 +8,17 @@
  * `endpointClass: 'openrouter'` (see provider-attribution.ts), which sets
  * `thinkingFormat: 'openrouter'` for reasoning-model routes.
  *
- * Three quirks ported from `apps/web/lib/llm-providers/openrouter.ts`
+ * Four quirks ported from `apps/web/lib/llm-providers/openrouter.ts`
  * (source of truth for this port — see the per-module docstrings):
  *   1. Required attribution headers (`HTTP-Referer` / `X-Title`) per
  *      OpenRouter ToS — configurable via `siteUrl` / `appTitle`, no hard
  *      Next.js env dependency (see below).
- *   2. Anthropic `cache_control` passthrough on the system message for
- *      `anthropic/*` routes — `./cache-control.ts`.
- *   3. Usage normalization for the two non-standard cache-token shapes
- *      OpenRouter emits depending on the routed model — `./usage.ts`.
+ *   2. `cache_control` passthrough on the system message for `anthropic/*`
+ *      and `google/*` routes — `./cache-control.ts`.
+ *   3. Usage normalization for the non-standard cache-token, cost and
+ *      provider-attribution shapes OpenRouter emits — `./usage.ts`.
+ *   4. Provider routing preferences (order / fallback / data collection)
+ *      sourced from adapter config or per-request metadata — `./provider-routing.ts`.
  *
  * @packageDocumentation
  */
@@ -46,6 +48,10 @@ import {
   type OpenRouterAnthropicCacheRetention,
 } from './cache-control';
 import { createOpenRouterUsageNormalizer } from './usage';
+import {
+  applyOpenRouterProviderRouting,
+  type OpenRouterProviderRoutingPreferences,
+} from './provider-routing';
 
 const OPENROUTER_DEFAULT_BASE_URL = 'https://openrouter.ai/api/v1';
 
@@ -73,6 +79,7 @@ export interface OpenRouterAdapterConfig extends ProviderAdapterConfig {
   siteUrl?: string;
   appTitle?: string;
   anthropicCacheRetention?: OpenRouterAnthropicCacheRetention;
+  providerRouting?: OpenRouterProviderRoutingPreferences;
 }
 
 export function createOpenRouterAdapter(config: OpenRouterAdapterConfig = {}): ProviderAdapter {
@@ -137,6 +144,7 @@ export function createOpenRouterAdapter(config: OpenRouterAdapterConfig = {}): P
       });
 
       applyOpenRouterAnthropicCacheControl(params, anthropicCacheRetention);
+      applyOpenRouterProviderRouting(params, config.providerRouting, req.metadata);
 
       params.stream_options = { include_usage: true };
 
@@ -182,3 +190,8 @@ export {
   type OpenRouterAnthropicCacheRetention,
 } from './cache-control';
 export { createOpenRouterUsageNormalizer, type OpenRouterUsageNormalizer } from './usage';
+export {
+  applyOpenRouterProviderRouting,
+  type OpenRouterProviderRoutingPreferences,
+  type OpenRouterDataCollectionPolicy,
+} from './provider-routing';
