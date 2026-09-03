@@ -17,7 +17,7 @@
  *            (surface trims via activeKeys)
  */
 
-import React, { useMemo, useState, useCallback } from 'react';
+import React, { useMemo, useState, useCallback, useEffect, useRef } from 'react';
 import { toUserMessage } from '../lib/network-error';
 import {
   Search,
@@ -228,6 +228,7 @@ function ConnectorDetail({
   onBack,
   error,
   disclosure,
+  scopes,
   capabilities,
   toolPermissions,
 }: {
@@ -245,6 +246,12 @@ function ConnectorDetail({
    * routes or web-specific policy copy into a shell that Desktop also renders.
    */
   disclosure?: React.ReactNode;
+  /**
+   * Surface-supplied per-scope permission list, shown both before connecting
+   * and on the connected card. Surface-owned for the same reason as
+   * `disclosure`: the scope ceiling data belongs to the surface.
+   */
+  scopes?: React.ReactNode;
   /** Live capability catalog supplied by the owning surface. */
   capabilities?: React.ReactNode;
   /**
@@ -344,6 +351,7 @@ function ConnectorDetail({
           revoke). Rendered before the Details block so it is above the fold at
           the moment the user is deciding. */}
       {disclosure}
+      {scopes}
 
       {connection && capabilities}
 
@@ -1553,6 +1561,7 @@ function suggestedConnectorIdsFor(role: string | null | undefined): readonly str
 function ConnectorsPanel({
   adapter,
   connectorDisclosure,
+  renderConnectorScopes,
   renderConnectorCapabilities,
   renderConnectorToolPermissions,
   workRole,
@@ -1561,6 +1570,12 @@ function ConnectorsPanel({
   connectorDisclosure?: React.ReactNode;
   /** Work description from General settings, used only to order suggestions. */
   workRole?: string | null;
+  /**
+   * Renders the per-scope permission list for a connector, before and after
+   * connecting. Supplied by the surface because the scope ceiling data lives
+   * there.
+   */
+  renderConnectorScopes?: (connectorId: string) => React.ReactNode;
   /**
    * Renders per-tool permission controls for a connected connector. Supplied by
    * the surface because the permission store and its API live there.
@@ -1691,6 +1706,7 @@ function ConnectorsPanel({
           onBack={() => setDetailId(null)}
           error={rowErrors[detailConnector.id]}
           disclosure={connectorDisclosure}
+          scopes={renderConnectorScopes?.(detailConnector.id)}
           capabilities={renderConnectorCapabilities?.(detailConnector.id)}
           toolPermissions={renderConnectorToolPermissions?.(detailConnector.id)}
         />
@@ -2471,6 +2487,52 @@ function PluginsPanel({ adapter }: { adapter?: SettingsDataAdapter }) {
 // and legacy flat renderers.
 // ---------------------------------------------------------------------------
 
+const NAV_SCROLL_EDGE_EPSILON_PX = 1;
+
+interface NavScrollEdges {
+  canScrollUp: boolean;
+  canScrollDown: boolean;
+}
+
+function useNavScrollEdges(
+  ref: React.RefObject<HTMLElement | null>,
+  dependency: unknown,
+): NavScrollEdges {
+  const [edges, setEdges] = useState<NavScrollEdges>({
+    canScrollUp: false,
+    canScrollDown: false,
+  });
+
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+
+    function measure() {
+      if (!el) return;
+      const canScrollUp = el.scrollTop > NAV_SCROLL_EDGE_EPSILON_PX;
+      const canScrollDown =
+        el.scrollHeight - el.clientHeight - el.scrollTop > NAV_SCROLL_EDGE_EPSILON_PX;
+      setEdges((prev) =>
+        prev.canScrollUp === canScrollUp && prev.canScrollDown === canScrollDown
+          ? prev
+          : { canScrollUp, canScrollDown },
+      );
+    }
+
+    measure();
+    el.addEventListener('scroll', measure, { passive: true });
+    const resizeObserver = new ResizeObserver(measure);
+    resizeObserver.observe(el);
+
+    return () => {
+      el.removeEventListener('scroll', measure);
+      resizeObserver.disconnect();
+    };
+  }, [ref, dependency]);
+
+  return edges;
+}
+
 function NavButton({
   itemKey,
   label,
@@ -2573,6 +2635,12 @@ export interface SettingsModalProps {
   /** Surface-owned live MCP capability catalog. */
   renderConnectorCapabilities?: (connectorId: string) => React.ReactNode;
   /**
+   * Renders the per-scope permission list inside the built-in connector detail
+   * view, both before and after connecting. Surface-owned for the same reason
+   * as `connectorDisclosure`: the scope ceiling data belongs to the surface.
+   */
+  renderConnectorScopes?: (connectorId: string) => React.ReactNode;
+  /**
    * Per-section attention badges, keyed by nav key. A section with no entry —
    * or a zero count — renders exactly as before.
    */
@@ -2594,11 +2662,13 @@ export function SettingsModal({
   workRole,
   renderConnectorToolPermissions,
   renderConnectorCapabilities,
+  renderConnectorScopes,
   navBadges,
   title,
 }: SettingsModalProps) {
   const { t } = useUiTranslation('settings');
   const [navSearch, setNavSearch] = useState('');
+  const navScrollRef = useRef<HTMLElement>(null);
 
   // Grouped nav (preferred): filter items within each group, dropping groups
   // that end up empty so headers never orphan.
@@ -2624,6 +2694,9 @@ export function SettingsModal({
     });
   }, [navSearch, activeKeys]);
 
+  const navScrollDependency = visibleGroups ?? visibleEntries;
+  const { canScrollUp, canScrollDown } = useNavScrollEdges(navScrollRef, navScrollDependency);
+
   function renderSection() {
     if (activeSection === 'connectors') {
       return (
@@ -2631,6 +2704,7 @@ export function SettingsModal({
           <ConnectorsPanel
             adapter={adapter}
             connectorDisclosure={connectorDisclosure}
+            renderConnectorScopes={renderConnectorScopes}
             renderConnectorCapabilities={renderConnectorCapabilities}
             renderConnectorToolPermissions={renderConnectorToolPermissions}
             workRole={workRole}
@@ -2673,9 +2747,18 @@ export function SettingsModal({
       >
         {/* Left nav */}
         <nav
+          ref={navScrollRef}
           aria-label={t('modal.navigation', 'Settings navigation')}
-          className="flex max-h-[42%] w-full shrink-0 flex-col overflow-y-auto overscroll-contain border-b border-border/60 py-4 md:max-h-none md:w-[220px] md:border-b-0 md:border-r md:pb-5 md:pt-7"
+          className="relative flex max-h-[64%] w-full shrink-0 flex-col overflow-y-auto overscroll-contain border-b border-border/60 py-4 md:max-h-none md:w-[220px] md:border-b-0 md:border-r md:pb-5 md:pt-7"
         >
+          <div
+            aria-hidden="true"
+            data-testid="settings-nav-scroll-fade-top"
+            className={cn(
+              'pointer-events-none sticky left-0 top-0 z-10 -mb-6 h-6 w-full bg-gradient-to-b from-background to-transparent transition-opacity',
+              canScrollUp ? 'opacity-100' : 'opacity-0',
+            )}
+          />
           {/* Title */}
           <DialogTitle className="mb-3 px-4 pr-12 text-base font-semibold text-foreground md:pr-4">
             {title ?? t('modal.title', 'Settings')}
@@ -2747,6 +2830,14 @@ export function SettingsModal({
               ))}
             </div>
           )}
+          <div
+            aria-hidden="true"
+            data-testid="settings-nav-scroll-fade-bottom"
+            className={cn(
+              'pointer-events-none sticky bottom-0 left-0 z-10 -mt-6 h-6 w-full bg-gradient-to-t from-background to-transparent transition-opacity',
+              canScrollDown ? 'opacity-100' : 'opacity-0',
+            )}
+          />
         </nav>
 
         {/* Right pane */}

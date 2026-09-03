@@ -189,6 +189,17 @@ export const CONNECTOR_OAUTH_SCOPE_CEILINGS: Readonly<Record<string, ConnectorSc
   cerner: SMART_ON_FHIR_PATIENT_SCOPES,
 };
 
+/**
+ * Strips the Google and Microsoft Graph URL prefixes so the same scope
+ * described once (`gmail.readonly`, `User.Read`) matches both the bare and
+ * fully-qualified forms `graph()` emits for every Graph scope.
+ */
+export function canonicalConnectorScope(scope: string): string {
+  if (scope.startsWith(GOOGLE_SCOPE_PREFIX)) return scope.slice(GOOGLE_SCOPE_PREFIX.length);
+  if (scope.startsWith(MS_GRAPH_SCOPE_PREFIX)) return scope.slice(MS_GRAPH_SCOPE_PREFIX.length);
+  return scope;
+}
+
 export function getConnectorScopeCeiling(connectorId: string): ConnectorScopeCeiling | null {
   return CONNECTOR_OAUTH_SCOPE_CEILINGS[connectorId] ?? null;
 }
