@@ -3014,6 +3014,7 @@ export async function processRequest(
       managedUsage = await reserveManagedUsageRequest({
         db: scoped.db,
         userId,
+        organizationId: scoped.organizationId,
         idempotencyKey: requestId,
         requestHash: managedRequestHash,
         provider,
