@@ -950,6 +950,37 @@ describe('Connectors pane (table)', () => {
 
     expect(screen.getByText('That is not valid JSON.')).toBeTruthy();
   });
+
+  it('labels a custom_mcp connector Unverified in the table, its detail card, and the add form', () => {
+    const customConnector = {
+      id: 'my-mcp',
+      name: 'My MCP',
+      description: 'A user-added remote server.',
+      category: 'Custom',
+      authType: 'custom_mcp',
+      actionCount: 0,
+      phase: 1,
+      iconBg: 'from-slate-500 to-slate-700',
+      iconText: 'MC',
+      canConnect: true,
+    };
+    renderModal(
+      {},
+      { connectors: [...(adapter.connectors ?? []), customConnector], addCustomConnector: vi.fn() },
+    );
+
+    const row = screen.getByRole('button', { name: 'My MCP' }).closest('tr') as HTMLElement;
+    expect(within(row).getByText('Unverified')).toBeTruthy();
+
+    fireEvent.click(within(row).getByRole('button', { name: 'My MCP' }));
+    expect(screen.getAllByText('Unverified').length).toBeGreaterThan(0);
+    expect(screen.getByText(/AGI has not reviewed this server/)).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Back' }));
+    fireEvent.click(screen.getByRole('button', { name: /^Add$/ }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Add custom connector' }));
+    expect(screen.getByText(/AGI has not reviewed this server/)).toBeTruthy();
+  });
 });
 
 describe('Skills pane (table)', () => {
