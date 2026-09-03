@@ -1054,14 +1054,19 @@ export function serverToolResultSources(content: unknown[]): FetchedSource[] {
   return sources;
 }
 
+export interface CollectedProviderLine {
+  line: SseLine;
+  publicTextDelta?: string;
+  serverToolStart?: ServerToolStartSignal;
+  serverToolResults?: ServerToolResultSignal[];
+}
+
 /** Exported for unit tests (untrusted-provider-stream accumulation bounds). */
-export async function collectProviderStream(stream: ReadableStream): Promise<{
-  lines: Array<{
-    line: SseLine;
-    publicTextDelta?: string;
-    serverToolStart?: ServerToolStartSignal;
-    serverToolResults?: ServerToolResultSignal[];
-  }>;
+export async function collectProviderStream(
+  stream: ReadableStream,
+  onLine?: (entry: CollectedProviderLine) => void,
+): Promise<{
+  lines: CollectedProviderLine[];
   finishReason: string | null;
   pendingToolCalls: PendingToolCall[];
   textContent: string;
@@ -1070,12 +1075,11 @@ export async function collectProviderStream(stream: ReadableStream): Promise<{
 }> {
   const reader = stream.getReader();
   const decoder = new TextDecoder();
-  const lines: Array<{
-    line: SseLine;
-    publicTextDelta?: string;
-    serverToolStart?: ServerToolStartSignal;
-    serverToolResults?: ServerToolResultSignal[];
-  }> = [];
+  const lines: CollectedProviderLine[] = [];
+  const pushLine = (entry: CollectedProviderLine): void => {
+    lines.push(entry);
+    onLine?.(entry);
+  };
   const publicTextProjector = createPublicTextDeltaProjector();
   let buffer = '';
   let finishReason: string | null = null;
@@ -1103,7 +1107,7 @@ export async function collectProviderStream(stream: ReadableStream): Promise<{
       if (!line) continue;
 
       if (!line.startsWith('data: ')) {
-        lines.push({ line: raw + '\n' });
+        pushLine({ line: raw + '\n' });
         continue;
       }
 
@@ -1180,7 +1184,7 @@ export async function collectProviderStream(stream: ReadableStream): Promise<{
           }
         }
 
-        lines.push({ line: raw + '\n', publicTextDelta, serverToolStart, serverToolResults });
+        pushLine({ line: raw + '\n', publicTextDelta, serverToolStart, serverToolResults });
 
         const toolCallDeltas: unknown[] | undefined = event?.choices?.[0]?.delta?.tool_calls;
         if (Array.isArray(toolCallDeltas)) {
@@ -1220,13 +1224,13 @@ export async function collectProviderStream(stream: ReadableStream): Promise<{
           finishReason = fr;
         }
       } catch {
-        lines.push({ line: raw + '\n' });
+        pushLine({ line: raw + '\n' });
       }
     }
   }
 
   if (buffer.trim()) {
-    lines.push({ line: buffer });
+    pushLine({ line: buffer });
   }
 
   const pendingToolCalls: PendingToolCall[] = [];
@@ -1621,6 +1625,59 @@ export function isToolOffered(
 
 const TOOL_DENIED_MESSAGE = 'The user denied permission to run this tool.';
 
+/**
+ * Drains a provider step as its lines are produced instead of after the step
+ * resolves. `collectProviderStream` still returns the full result once the
+ * step finishes -- this queue is the side channel that lets a caller `yield`
+ * each line the moment it is parsed, so a client sees it while the provider
+ * is still generating rather than in one burst afterward.
+ */
+function createLiveLineQueue<T>(): {
+  push: (item: T) => void;
+  close: (error?: unknown) => void;
+  drain: () => AsyncGenerator<T>;
+} {
+  const buffered: T[] = [];
+  let wake: (() => void) | null = null;
+  let closed = false;
+  let closeError: unknown;
+
+  const push = (item: T): void => {
+    buffered.push(item);
+    if (wake) {
+      const resolve = wake;
+      wake = null;
+      resolve();
+    }
+  };
+
+  const close = (error?: unknown): void => {
+    if (closed) return;
+    closed = true;
+    closeError = error;
+    if (wake) {
+      const resolve = wake;
+      wake = null;
+      resolve();
+    }
+  };
+
+  async function* drain(): AsyncGenerator<T> {
+    for (;;) {
+      while (buffered.length > 0) yield buffered.shift() as T;
+      if (closed) {
+        if (closeError) throw closeError;
+        return;
+      }
+      await new Promise<void>((resolve) => {
+        wake = resolve;
+      });
+    }
+  }
+
+  return { push, close, drain };
+}
+
 export async function* runToolLoop(
   processed: ProcessedRequest,
   options: ToolLoopOptions = {},
@@ -1783,6 +1840,7 @@ export async function* runToolLoop(
   async function runProviderStepWithFailover(
     step: number,
     stepRequest: ProcessedRequest['llmRequest'],
+    onLine?: (entry: CollectedProviderLine) => void,
   ): Promise<ToolLoopProviderStepResult> {
     // The first non-retryable quota/spending-cap failure in a rotation chain
     // is the true reason this turn could not be served -- a later rescue
@@ -1792,6 +1850,11 @@ export async function* runToolLoop(
     // generic "overloaded" that does not match what the provider actually
     // said.
     let rootQuotaExhaustedError: unknown | undefined;
+    // Once any provider line has already reached the client live, a failover
+    // retry would splice a second attempt's text onto the first attempt's --
+    // visible corruption, not a clean recovery. From that point on this step
+    // owns its failure: surface it instead of rotating to a rescue route.
+    let liveContentStreamed = false;
     for (;;) {
       const attemptProcessed = servingProcessed;
       const attemptRequest: ProcessedRequest['llmRequest'] = {
@@ -1817,7 +1880,12 @@ export async function* runToolLoop(
               stepSink,
               signal,
             );
-            return collectProviderStream(providerStream);
+            return collectProviderStream(providerStream, (entry) => {
+              if (entry.publicTextDelta || entry.serverToolStart || entry.serverToolResults) {
+                liveContentStreamed = true;
+              }
+              onLine?.(entry);
+            });
           },
           nestedDeadlineMs(PROVIDER_STREAM_DEADLINE_MS, maxDurationMs, now() - startedAt),
           options.signal,
@@ -1841,6 +1909,7 @@ export async function* runToolLoop(
       } catch (err) {
         if (options.shouldPropagateExecutionError?.(err)) throw err;
         if (err instanceof ProviderStreamDeadlineError) throw err;
+        if (liveContentStreamed) throw err;
         const classified = classifyError(err);
         if (!rootQuotaExhaustedError && classified.category === 'quota_exhausted') {
           rootQuotaExhaustedError = err;
@@ -2725,7 +2794,61 @@ export async function* runToolLoop(
       }
       let providerStep: ToolLoopProviderStepResult;
       try {
-        providerStep = await runProviderStepWithFailover(step, stepRequest);
+        const liveLines = createLiveLineQueue<CollectedProviderLine>();
+        const stepPromise = runProviderStepWithFailover(step, stepRequest, (entry) =>
+          liveLines.push(entry),
+        );
+        stepPromise.then(
+          () => liveLines.close(),
+          (error: unknown) => liveLines.close(error),
+        );
+        for await (const entry of liveLines.drain()) {
+          yield encoder.encode(entry.line);
+          if (entry.publicTextDelta) {
+            yield encoder.encode(
+              eventStream.emit({ type: 'text-delta', delta: entry.publicTextDelta }),
+            );
+          }
+          if (entry.serverToolStart) {
+            const category = canonicalToolCategory(entry.serverToolStart.name, mcpTools);
+            yield encoder.encode(
+              eventStream.emit({
+                type: 'tool-execution-start',
+                toolCallId: entry.serverToolStart.toolCallId,
+                name: entry.serverToolStart.name,
+                category,
+                summary: canonicalToolSummary(entry.serverToolStart.name, category),
+                input: toAgentEventJson({}),
+              }),
+            );
+          }
+          for (const result of entry.serverToolResults ?? []) {
+            // Anthropic/Gemini/OpenAI native search all normalize to this shape
+            // (serverToolResultSources), and the provider's own title — when it
+            // has one at all — is often just a citation label, not the
+            // headline. Enrich here, on the already-capped list, before either
+            // client-facing event goes out.
+            const sources = await enrichWebSearchResultTitles(result.sources);
+            yield encoder.encode(
+              eventStream.emit({
+                type: 'source-list',
+                toolCallId: result.toolCallId,
+                sources,
+              }),
+            );
+            yield encoder.encode(
+              eventStream.emit({
+                type: 'tool-execution-end',
+                toolCallId: result.toolCallId,
+                name: result.name,
+                output: toAgentEventJson(sources),
+                isError: false,
+                elapsedMs: result.elapsedMs,
+              }),
+            );
+          }
+        }
+        providerStep = await stepPromise;
         mergeObservedProviderUsage(observedUsage, providerStep.usage);
         for (const ref of providerStep.generatedFileRefs ?? []) {
           if (ref.fileId) providerGeneratedFileRefs.set(`${ref.provider}:${ref.fileId}`, ref);
@@ -2779,7 +2902,7 @@ export async function* runToolLoop(
         return;
       }
 
-      const { lines, finishReason, pendingToolCalls, textContent, publicTextTail } = providerStep;
+      const { finishReason, pendingToolCalls, textContent, publicTextTail } = providerStep;
       if (showWorkPhases) {
         const hasNextActions = finishReason === 'tool_calls' && pendingToolCalls.length > 0;
         yield encoder.encode(
@@ -2794,52 +2917,6 @@ export async function* runToolLoop(
         );
       }
 
-      for (const entry of lines) {
-        yield encoder.encode(entry.line);
-        if (entry.publicTextDelta) {
-          yield encoder.encode(
-            eventStream.emit({ type: 'text-delta', delta: entry.publicTextDelta }),
-          );
-        }
-        if (entry.serverToolStart) {
-          const category = canonicalToolCategory(entry.serverToolStart.name, mcpTools);
-          yield encoder.encode(
-            eventStream.emit({
-              type: 'tool-execution-start',
-              toolCallId: entry.serverToolStart.toolCallId,
-              name: entry.serverToolStart.name,
-              category,
-              summary: canonicalToolSummary(entry.serverToolStart.name, category),
-              input: toAgentEventJson({}),
-            }),
-          );
-        }
-        for (const result of entry.serverToolResults ?? []) {
-          // Anthropic/Gemini/OpenAI native search all normalize to this shape
-          // (serverToolResultSources), and the provider's own title — when it
-          // has one at all — is often just a citation label, not the
-          // headline. Enrich here, on the already-capped list, before either
-          // client-facing event goes out.
-          const sources = await enrichWebSearchResultTitles(result.sources);
-          yield encoder.encode(
-            eventStream.emit({
-              type: 'source-list',
-              toolCallId: result.toolCallId,
-              sources,
-            }),
-          );
-          yield encoder.encode(
-            eventStream.emit({
-              type: 'tool-execution-end',
-              toolCallId: result.toolCallId,
-              name: result.name,
-              output: toAgentEventJson(sources),
-              isError: false,
-              elapsedMs: result.elapsedMs,
-            }),
-          );
-        }
-      }
       if (publicTextTail) {
         yield encoder.encode(eventStream.emit({ type: 'text-delta', delta: publicTextTail }));
       }
