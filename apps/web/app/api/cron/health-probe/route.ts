@@ -2,6 +2,7 @@ import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
 import { logger } from '@/lib/logger';
+import { getSharedRedisClient } from '@/lib/rate-limit';
 import { verifyCronRequest } from '@/lib/server/cron-auth';
 import { runHealthChecks, type HealthCheckResult } from '@/lib/server/health-check';
 import { getHandoffConfig } from '@/lib/support/handoff/config';
@@ -13,6 +14,26 @@ export const maxDuration = 30;
 
 const HEALTH_CHECK_TIMEOUT_MS = 8_000;
 const PAGER_TIMEOUT_MS = 5_000;
+const FAILURE_STREAK_REDIS_KEY = 'agi-health-probe:consecutive-failures';
+const FAILURE_STREAK_TTL_SECONDS = 1_800;
+const CONSECUTIVE_FAILURES_BEFORE_PAGE = 2;
+
+async function recordFailureStreak(healthy: boolean): Promise<number | null> {
+  const redis = getSharedRedisClient();
+  if (!redis) return null;
+  try {
+    if (healthy) {
+      await redis.del(FAILURE_STREAK_REDIS_KEY);
+      return 0;
+    }
+    const streak = await redis.incr(FAILURE_STREAK_REDIS_KEY);
+    await redis.expire(FAILURE_STREAK_REDIS_KEY, FAILURE_STREAK_TTL_SECONDS);
+    return streak;
+  } catch (error) {
+    logger.error({ error }, 'Health probe failure-streak tracking failed');
+    return null;
+  }
+}
 
 const TIMED_OUT = Symbol('health-check-timeout');
 
@@ -230,6 +251,20 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   }
 
   if (result.status === 'healthy') {
+    await recordFailureStreak(true);
+    return NextResponse.json({
+      status: result.status,
+      alerted: false,
+      delivery: 'not_needed',
+    } satisfies ProbeSummary);
+  }
+
+  const streak = await recordFailureStreak(false);
+  if (streak !== null && streak < CONSECUTIVE_FAILURES_BEFORE_PAGE) {
+    logger.warn(
+      { status: result.status, streak },
+      'Health probe miss did not repeat on the next run yet; holding the page',
+    );
     return NextResponse.json({
       status: result.status,
       alerted: false,

@@ -1,4 +1,3 @@
-
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
@@ -9,6 +8,7 @@ const mocks = vi.hoisted(() => ({
   runHealthChecks: vi.fn(),
   sendSupportEmail: vi.fn(),
   getHandoffConfig: vi.fn(),
+  getSharedRedisClient: vi.fn(),
 }));
 
 vi.mock('@/lib/server/cron-auth', () => ({ verifyCronRequest: mocks.verifyCronRequest }));
@@ -17,6 +17,7 @@ vi.mock('@/lib/support/handoff/resend-client', () => ({
   sendSupportEmail: mocks.sendSupportEmail,
 }));
 vi.mock('@/lib/support/handoff/config', () => ({ getHandoffConfig: mocks.getHandoffConfig }));
+vi.mock('@/lib/rate-limit', () => ({ getSharedRedisClient: mocks.getSharedRedisClient }));
 vi.mock('@/lib/logger', () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
@@ -48,6 +49,7 @@ beforeEach(() => {
   mocks.runHealthChecks.mockResolvedValue(health('healthy'));
   mocks.sendSupportEmail.mockResolvedValue({ delivered: true, providerMessageId: 'msg_1' });
   mocks.getHandoffConfig.mockReturnValue({ fallbackEmail: 'support@agiworkforce.com' });
+  mocks.getSharedRedisClient.mockReturnValue(null);
 });
 
 describe('health probe schedule', () => {
@@ -57,10 +59,10 @@ describe('health probe schedule', () => {
     }
   ).crons;
 
-  it('registers the probe on a daily schedule the Hobby plan accepts', () => {
+  it('registers the probe on the ten-minute cadence the Pro plan accepts', () => {
     const entry = crons?.find((cron) => cron.path === '/api/cron/health-probe');
     expect(entry).toBeDefined();
-    expect(entry?.schedule).toMatch(/^\d+ \d+ \* \* \*$/u);
+    expect(entry?.schedule).toBe('*/10 * * * *');
   });
 });
 
@@ -198,5 +200,84 @@ describe('GET /api/cron/health-probe', () => {
     expect(mocks.sendSupportEmail).toHaveBeenCalledWith(
       expect.objectContaining({ subject: expect.stringContaining('CRITICAL') }),
     );
+  });
+});
+
+function fakeStreakRedis() {
+  const store = new Map<string, number>();
+  return {
+    incr: vi.fn(async (key: string) => {
+      const next = (store.get(key) ?? 0) + 1;
+      store.set(key, next);
+      return next;
+    }),
+    expire: vi.fn(async () => 1),
+    del: vi.fn(async (key: string) => {
+      store.delete(key);
+      return 1;
+    }),
+  };
+}
+
+describe('health probe consecutive-failure debounce', () => {
+  it('holds the page on the first miss and pages on the second consecutive miss', async () => {
+    const redis = fakeStreakRedis();
+    mocks.getSharedRedisClient.mockReturnValue(redis);
+    mocks.runHealthChecks.mockResolvedValue(health('unhealthy'));
+
+    const first = await GET(req());
+    expect(first.status).toBe(200);
+    expect(await first.json()).toEqual({
+      status: 'unhealthy',
+      alerted: false,
+      delivery: 'not_needed',
+    });
+    expect(mocks.sendSupportEmail).not.toHaveBeenCalled();
+
+    const second = await GET(req());
+    expect(second.status).toBe(200);
+    expect(await second.json()).toMatchObject({
+      status: 'unhealthy',
+      alerted: true,
+      delivery: 'delivered',
+    });
+    expect(mocks.sendSupportEmail).toHaveBeenCalledTimes(1);
+  });
+
+  it('resets the streak once the platform recovers, so the next miss holds again', async () => {
+    const redis = fakeStreakRedis();
+    mocks.getSharedRedisClient.mockReturnValue(redis);
+    mocks.runHealthChecks.mockResolvedValue(health('unhealthy'));
+    await GET(req());
+
+    mocks.runHealthChecks.mockResolvedValue(health('healthy'));
+    await GET(req());
+    expect(redis.del).toHaveBeenCalledWith('agi-health-probe:consecutive-failures');
+
+    mocks.runHealthChecks.mockResolvedValue(health('unhealthy'));
+    const afterRecovery = await GET(req());
+    expect(await afterRecovery.json()).toMatchObject({ alerted: false });
+    expect(mocks.sendSupportEmail).not.toHaveBeenCalled();
+  });
+
+  it('fails open and pages on the first miss when redis is unavailable', async () => {
+    mocks.getSharedRedisClient.mockReturnValue(null);
+    mocks.runHealthChecks.mockResolvedValue(health('unhealthy'));
+
+    const response = await GET(req());
+
+    expect(await response.json()).toMatchObject({ alerted: true, delivery: 'delivered' });
+    expect(mocks.sendSupportEmail).toHaveBeenCalledTimes(1);
+  });
+
+  it('fails open and pages immediately when the streak tracker throws', async () => {
+    const redis = fakeStreakRedis();
+    redis.incr.mockRejectedValue(new Error('redis unavailable'));
+    mocks.getSharedRedisClient.mockReturnValue(redis);
+    mocks.runHealthChecks.mockResolvedValue(health('unhealthy'));
+
+    const response = await GET(req());
+
+    expect(await response.json()).toMatchObject({ alerted: true, delivery: 'delivered' });
   });
 });
