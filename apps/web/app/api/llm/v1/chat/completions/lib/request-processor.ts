@@ -32,7 +32,10 @@ import {
 } from '@/lib/services/free-trial-service';
 import { LLMCostCalculator } from '@/lib/services/llm-cost-calculator';
 import { selectCheapestRequestFallback } from '@/lib/services/request-cost-fallback';
-import { resolveProviderFromModel } from '@/lib/services/provider-adapter-service';
+import {
+  listAvailableManagedProviderIds,
+  resolveProviderFromModel,
+} from '@/lib/services/provider-adapter-service';
 import { evaluateModelAccessForOrganization } from '@/lib/services/model-policy-gate';
 import { readModelPolicy } from '@/lib/services/model-policy-service';
 import { resolveZeroDataRetentionPolicy } from '@/lib/services/organization-policy-gate';
@@ -1340,6 +1343,7 @@ export function resolveWebCloudModelRoute(
     runtimeState?: RoutingRuntimeState | null;
     preferredRouteId?: string | null;
   },
+  availableProviderIds?: ReadonlySet<string>,
   zeroDataRetentionOnly?: boolean,
   zeroDataRetentionProviders?: ReadonlySet<string>,
 ) {
@@ -1362,6 +1366,7 @@ export function resolveWebCloudModelRoute(
     ...(usage?.taskFamily !== undefined ? { taskFamily: usage.taskFamily } : {}),
     ...(routeHealth?.runtimeState ? { runtimeState: routeHealth.runtimeState } : {}),
     ...(routeHealth?.preferredRouteId ? { preferredRouteId: routeHealth.preferredRouteId } : {}),
+    ...(availableProviderIds && availableProviderIds.size > 0 ? { availableProviderIds } : {}),
     ...(zeroDataRetentionOnly ? { zeroDataRetentionOnly } : {}),
     ...(zeroDataRetentionProviders && zeroDataRetentionProviders.size > 0
       ? { zeroDataRetentionProviders }
@@ -2272,6 +2277,7 @@ export async function processRequest(
       ? getServedRouteAffinity(chatRequest.conversation_id)
       : Promise.resolve(null),
   ]);
+  const availableProviderIds = listAvailableManagedProviderIds();
   const zdrScoped = await scopedDbPromise;
   const { required: zeroDataRetentionOnly } = await resolveZeroDataRetentionPolicy(
     zdrScoped.db,
@@ -2290,6 +2296,7 @@ export async function processRequest(
       runtimeState: baseRouteHealthState,
       ...(routeAffinity ? { preferredRouteId: routeAffinity.routeId } : {}),
     },
+    availableProviderIds,
     zeroDataRetentionOnly,
     zeroDataRetentionProviders,
   );
@@ -2320,6 +2327,7 @@ export async function processRequest(
             routeResolutionNowMs,
           ),
         },
+        availableProviderIds,
         zeroDataRetentionOnly,
         zeroDataRetentionProviders,
       )
