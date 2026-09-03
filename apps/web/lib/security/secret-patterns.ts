@@ -16,7 +16,7 @@ export const SECRET_PATTERN_REGISTRY: readonly SecretPattern[] = Object.freeze([
     pattern: /sk-[A-Za-z0-9_-]{32,}/,
     severity: 'critical',
     assertable: true,
-    confidence: 'high',
+    confidence: 'low',
   },
   {
     name: 'Stripe Live Key',
@@ -30,7 +30,7 @@ export const SECRET_PATTERN_REGISTRY: readonly SecretPattern[] = Object.freeze([
     pattern: /sk_test_[A-Za-z0-9]{24,}/,
     severity: 'high',
     assertable: true,
-    confidence: 'high',
+    confidence: 'low',
   },
   {
     name: 'JWT',

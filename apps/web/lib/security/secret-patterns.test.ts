@@ -37,11 +37,9 @@ describe('secret pattern registry', () => {
     }
   });
 
-  it('marks provider-prefixed and credentialed patterns as high confidence', () => {
+  it('marks live-shaped provider keys and credentialed patterns as high confidence', () => {
     for (const name of [
-      'Anthropic/OpenAI API Key',
       'Stripe Live Key',
-      'Stripe Test Key',
       'Neon Connection String',
       'Google API Key',
       'AWS Access Key',
@@ -56,8 +54,10 @@ describe('secret pattern registry', () => {
     }
   });
 
-  it('marks generic and JWT-shaped patterns as low confidence', () => {
+  it('marks generic, JWT-shaped and test-mode patterns as low confidence', () => {
     for (const name of [
+      'Anthropic/OpenAI API Key',
+      'Stripe Test Key',
       'JWT',
       'Bearer Token',
       'Generic API Key',
