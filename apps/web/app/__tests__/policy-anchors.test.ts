@@ -13,11 +13,31 @@ function read(page: string): string {
   return readFileSync(path.join(APP_DIR, page, 'page.tsx'), 'utf8');
 }
 
-function declaredSections(source: string): string[] {
+interface DeclaredSection {
+  readonly label: string;
+  readonly id?: string;
+}
+
+function declaredSections(source: string): DeclaredSection[] {
   const block = /const SECTIONS = \[([\s\S]*?)\] as const;/.exec(source);
   const body = block?.[1];
   if (!body) return [];
-  return [...body.matchAll(/'([^']+)'/g)].map((m) => decodeEntities(m[1] as string));
+  const entries: DeclaredSection[] = [];
+  for (const match of body.matchAll(/\{[^{}]*\}|'[^']*'/g)) {
+    const raw = match[0];
+    if (raw.startsWith('{')) {
+      const label = /label:\s*'([^']+)'/.exec(raw)?.[1];
+      const id = /id:\s*'([^']+)'/.exec(raw)?.[1];
+      if (label) entries.push({ label: decodeEntities(label), id });
+    } else {
+      entries.push({ label: decodeEntities(raw.slice(1, -1)) });
+    }
+  }
+  return entries;
+}
+
+function sectionId(section: DeclaredSection): string {
+  return section.id ?? policySectionId(section.label);
 }
 
 function renderedIds(source: string): string[] {
@@ -51,9 +71,9 @@ function decodeEntities(text: string): string {
 }
 
 function renderedEyebrows(source: string): string[] {
-  return [...source.matchAll(/<h2 className="agi-ds-h2" id="[^"]*">\s*([\s\S]*?)\s*<\/h2>/g)]
-    .map((m) => decodeEntities((m[1] as string).replace(/\s+/g, ' ').trim()))
-    .filter((text) => /^\d{1,2} \u00b7/.test(text));
+  return [...source.matchAll(/<h2 className="agi-ds-h2" id="[^"]*">\s*([\s\S]*?)\s*<\/h2>/g)].map(
+    (m) => decodeEntities((m[1] as string).replace(/\s+/g, ' ').trim()),
+  );
 }
 
 describe('policy anchors', () => {
@@ -66,18 +86,18 @@ describe('policy anchors', () => {
       it('has an anchored section for every contents entry', () => {
         const source = read(page);
         const ids = new Set(renderedIds(source));
-        for (const eyebrow of declaredSections(source)) {
-          const id = policySectionId(eyebrow);
+        for (const section of declaredSections(source)) {
+          const id = sectionId(section);
           expect(
             ids.has(id),
-            `/${page} contents lists "${eyebrow}" (#${id}) but no section carries that id`,
+            `/${page} contents lists "${section.label}" (#${id}) but no section carries that id`,
           ).toBe(true);
         }
       });
 
       it('lists every anchored section in the contents', () => {
         const source = read(page);
-        const listed = new Set(declaredSections(source).map(policySectionId));
+        const listed = new Set(declaredSections(source).map(sectionId));
         for (const id of renderedIds(source)) {
           expect(listed.has(id), `/${page} has section #${id} but the contents omits it`).toBe(
             true,
@@ -88,10 +108,10 @@ describe('policy anchors', () => {
       it('uses the rendered eyebrow text as the contents label', () => {
         const source = read(page);
         const rendered = new Set(renderedEyebrows(source));
-        for (const eyebrow of declaredSections(source)) {
+        for (const section of declaredSections(source)) {
           expect(
-            rendered.has(eyebrow),
-            `/${page} contents says "${eyebrow}" but no section eyebrow renders that text`,
+            rendered.has(section.label),
+            `/${page} contents says "${section.label}" but no section eyebrow renders that text`,
           ).toBe(true);
         }
       });
