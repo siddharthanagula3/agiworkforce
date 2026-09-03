@@ -316,6 +316,14 @@ test('selects the founder-approved roster and subscription bands', () => {
     assert.equal(selectableRoster.has(modelKey), false);
   }
 
+  for (const modelKey of registry.providerModelKeys.minimax) {
+    const minTier = compatibility.models[modelKey].tierPolicy?.minTier;
+    assert.equal(minTier, 'pro', `${modelKey} tierPolicy.minTier must match its roster band`);
+    assert.equal(compatibility.tierAllowedModels.pro_additions.includes(modelKey), true);
+    assert.equal(basicRoster.has(modelKey), false);
+    assert.equal(selectableRoster.has(modelKey), true);
+  }
+
   const openAIRoutes = Object.values(compatibility.providers.openai.taskRouting);
   assert.equal(
     openAIRoutes.every((modelKey) => currentOpenAIKeys.has(modelKey)),
