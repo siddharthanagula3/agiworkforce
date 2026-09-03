@@ -1,6 +1,15 @@
+import { REGISTRY_DECLARED_PROVIDER_HOSTS } from '@agiworkforce/types';
+
 const DEFAULT_INSECURE_HOSTS: readonly string[] = ['localhost', '127.0.0.1'];
 
-export const ALLOWED_MANAGED_PROVIDER_HOSTS: ReadonlySet<string> = new Set([
+/**
+ * Hosts the closed allowlist admits on its own, before the registry speaks.
+ *
+ * A gateway that is only a protocol plus a base URL has no adapter package to
+ * own its host, so `hostPolicy: 'registry_declared'` on its harness is what
+ * admits it — see `ALLOWED_MANAGED_PROVIDER_HOSTS` below.
+ */
+const STATIC_ALLOWED_MANAGED_PROVIDER_HOSTS: readonly string[] = [
   'api.openai.com',
   'api.anthropic.com',
   'generativelanguage.googleapis.com',
@@ -25,6 +34,11 @@ export const ALLOWED_MANAGED_PROVIDER_HOSTS: ReadonlySet<string> = new Set([
   'ai-gateway.vercel.sh',
   'localhost',
   '127.0.0.1',
+];
+
+export const ALLOWED_MANAGED_PROVIDER_HOSTS: ReadonlySet<string> = new Set([
+  ...STATIC_ALLOWED_MANAGED_PROVIDER_HOSTS,
+  ...REGISTRY_DECLARED_PROVIDER_HOSTS,
 ]);
 
 export interface ValidateBaseUrlOptions {

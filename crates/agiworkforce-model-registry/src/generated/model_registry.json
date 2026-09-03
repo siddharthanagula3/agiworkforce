@@ -2395,21 +2395,27 @@
       "apiFamily": "managed_gateway",
       "adapter": "apps/web/app/api/llm",
       "trustModes": ["managed_cloud"],
-      "features": { "webSearch": { "providerSupport": "agi", "implementation": "implemented" } }
+      "features": { "webSearch": { "providerSupport": "agi", "implementation": "implemented" } },
+      "protocol": "provider_native",
+      "hostPolicy": "allowlist_only"
     },
     "ollama/chat": {
       "provider": "ollama",
       "apiFamily": "ollama_chat",
       "adapter": "@agiworkforce/providers-ollama",
       "trustModes": ["local"],
-      "features": {}
+      "features": {},
+      "protocol": "provider_native",
+      "hostPolicy": "allowlist_only"
     },
     "lmstudio/chat-completions": {
       "provider": "lmstudio",
       "apiFamily": "chat_completions",
       "adapter": "@agiworkforce/providers-lmstudio",
       "trustModes": ["local"],
-      "features": {}
+      "features": {},
+      "protocol": "provider_native",
+      "hostPolicy": "allowlist_only"
     },
     "openai/responses": {
       "provider": "openai",
@@ -2429,21 +2435,27 @@
         "memory": { "providerSupport": "agi", "implementation": "unwired" },
         "codeExecution": { "providerSupport": "native", "implementation": "unwired" },
         "imageGeneration": { "providerSupport": "native", "implementation": "unwired" }
-      }
+      },
+      "protocol": "provider_native",
+      "hostPolicy": "allowlist_only"
     },
     "openai/chat-completions": {
       "provider": "openai",
       "apiFamily": "chat_completions",
       "adapter": "@agiworkforce/providers-openai",
       "trustModes": ["managed_cloud", "byok"],
-      "features": {}
+      "features": {},
+      "protocol": "provider_native",
+      "hostPolicy": "allowlist_only"
     },
     "openai/media": {
       "provider": "openai",
       "apiFamily": "media",
       "adapter": "@agiworkforce/providers-openai",
       "trustModes": ["managed_cloud", "byok"],
-      "features": {}
+      "features": {},
+      "protocol": "provider_native",
+      "hostPolicy": "allowlist_only"
     },
     "anthropic/messages": {
       "provider": "anthropic",
@@ -2453,7 +2465,9 @@
       "features": {
         "webSearch": { "providerSupport": "native", "implementation": "implemented" },
         "webSearchInjection": { "providerSupport": "native", "implementation": "implemented" }
-      }
+      },
+      "protocol": "provider_native",
+      "hostPolicy": "allowlist_only"
     },
     "google/generate-content": {
       "provider": "google",
@@ -2463,42 +2477,54 @@
       "features": {
         "webSearch": { "providerSupport": "native", "implementation": "implemented" },
         "webSearchInjection": { "providerSupport": "native", "implementation": "implemented" }
-      }
+      },
+      "protocol": "provider_native",
+      "hostPolicy": "allowlist_only"
     },
     "google/media": {
       "provider": "google",
       "apiFamily": "media",
       "adapter": "@agiworkforce/providers-google",
       "trustModes": ["managed_cloud", "byok"],
-      "features": {}
+      "features": {},
+      "protocol": "provider_native",
+      "hostPolicy": "allowlist_only"
     },
     "google/embeddings": {
       "provider": "google",
       "apiFamily": "embed_content",
       "adapter": "apps/web/app/api/llm/v1/embeddings",
       "trustModes": ["managed_cloud", "byok"],
-      "features": {}
+      "features": {},
+      "protocol": "provider_native",
+      "hostPolicy": "allowlist_only"
     },
     "xai/chat-completions": {
       "provider": "xai",
       "apiFamily": "chat_completions",
       "adapter": "@agiworkforce/providers-xai",
       "trustModes": ["managed_cloud", "byok"],
-      "features": {}
+      "features": {},
+      "protocol": "provider_native",
+      "hostPolicy": "allowlist_only"
     },
     "deepseek/chat-completions": {
       "provider": "deepseek",
       "apiFamily": "chat_completions",
       "adapter": "@agiworkforce/providers-deepseek",
       "trustModes": ["managed_cloud", "byok"],
-      "features": {}
+      "features": {},
+      "protocol": "provider_native",
+      "hostPolicy": "allowlist_only"
     },
     "minimax/chat-completions": {
       "provider": "minimax",
       "apiFamily": "chat_completions",
       "adapter": "@agiworkforce/providers-minimax",
       "trustModes": ["managed_cloud", "byok"],
-      "features": {}
+      "features": {},
+      "protocol": "provider_native",
+      "hostPolicy": "allowlist_only"
     },
     "qwen/chat-completions": {
       "provider": "qwen",
@@ -2508,77 +2534,99 @@
       "features": {
         "webSearch": { "providerSupport": "native", "implementation": "unwired" },
         "codeExecution": { "providerSupport": "native", "implementation": "unwired" }
-      }
+      },
+      "protocol": "provider_native",
+      "hostPolicy": "allowlist_only"
     },
     "moonshot/chat-completions": {
       "provider": "moonshot",
       "apiFamily": "chat_completions",
       "adapter": "@agiworkforce/providers-moonshot",
       "trustModes": ["managed_cloud", "byok"],
-      "features": {}
+      "features": {},
+      "protocol": "provider_native",
+      "hostPolicy": "allowlist_only"
     },
     "mistral/chat-completions": {
       "provider": "mistral",
       "apiFamily": "chat_completions",
       "adapter": "@agiworkforce/providers-mistral",
       "trustModes": ["managed_cloud", "byok"],
-      "features": {}
+      "features": {},
+      "protocol": "provider_native",
+      "hostPolicy": "allowlist_only"
     },
     "zhipu/chat-completions": {
       "provider": "zhipu",
       "apiFamily": "chat_completions",
       "adapter": "@agiworkforce/providers-zhipu",
       "trustModes": ["managed_cloud", "byok"],
-      "features": {}
+      "features": {},
+      "protocol": "provider_native",
+      "hostPolicy": "allowlist_only"
     },
     "perplexity/chat-completions": {
       "provider": "perplexity",
       "apiFamily": "chat_completions",
       "adapter": "@agiworkforce/providers-perplexity",
       "trustModes": ["managed_cloud", "byok"],
-      "features": { "webSearch": { "providerSupport": "native", "implementation": "implemented" } }
+      "features": { "webSearch": { "providerSupport": "native", "implementation": "implemented" } },
+      "protocol": "provider_native",
+      "hostPolicy": "allowlist_only"
     },
     "groq/chat-completions": {
       "provider": "groq",
       "apiFamily": "chat_completions",
       "adapter": "@agiworkforce/providers-groq",
       "trustModes": ["managed_cloud", "byok"],
-      "features": {}
+      "features": {},
+      "protocol": "provider_native",
+      "hostPolicy": "allowlist_only"
     },
     "open-router/chat-completions": {
       "provider": "open_router",
       "apiFamily": "chat_completions",
       "adapter": "@agiworkforce/providers-openrouter",
       "trustModes": ["byok"],
-      "features": {}
+      "features": {},
+      "protocol": "provider_native",
+      "hostPolicy": "allowlist_only"
     },
     "open_router/media": {
       "provider": "open_router",
       "apiFamily": "media",
       "adapter": "managed-media",
       "trustModes": ["managed_cloud"],
-      "features": {}
+      "features": {},
+      "protocol": "provider_native",
+      "hostPolicy": "allowlist_only"
     },
     "vercel_gateway/chat-completions": {
       "provider": "vercel_gateway",
       "apiFamily": "chat_completions",
       "adapter": "@agiworkforce/providers-vercel-gateway",
       "trustModes": ["byok"],
-      "features": {}
+      "features": {},
+      "protocol": "provider_native",
+      "hostPolicy": "allowlist_only"
     },
     "nvidia-nim/chat-completions": {
       "provider": "nvidia_nim",
       "apiFamily": "chat_completions",
       "adapter": "desktop-direct-api",
       "trustModes": ["byok"],
-      "features": {}
+      "features": {},
+      "protocol": "provider_native",
+      "hostPolicy": "allowlist_only"
     },
     "runway/media": {
       "provider": "runway",
       "apiFamily": "media",
       "adapter": "managed-media",
       "trustModes": ["managed_cloud"],
-      "features": {}
+      "features": {},
+      "protocol": "provider_native",
+      "hostPolicy": "allowlist_only"
     }
   },
   "runtimeProfiles": {
