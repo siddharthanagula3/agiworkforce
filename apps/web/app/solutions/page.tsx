@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import { buildMetadata } from '@/lib/seo/metadata';
 import { Header } from '@shared/components/layout/Header';
 import { MarketingFooter } from '@/features/marketing/components/MarketingFooter';
@@ -5,11 +6,11 @@ import {
   Button,
   ButtonRow,
   Eyebrow,
+  ProductFrame,
   Prose,
   Section,
   Stack,
 } from '@/features/marketing/components/system';
-import { FactGrid, PageHero } from '@/features/marketing/components/pages/surfaces/shared';
 
 export const metadata = buildMetadata({
   title: 'Solutions: AI workflows for teams, developers, and operators',
@@ -18,11 +19,17 @@ export const metadata = buildMetadata({
   path: '/solutions',
 });
 
+const IDS = {
+  hero: 'agi-solutions-title',
+  map: 'agi-solutions-map-title',
+  close: 'agi-solutions-close-title',
+} as const;
+
 const ROUTES = [
   {
     meta: 'You write code',
     title: 'AGI Code',
-    body: 'The agi binary and the VS Code extension that spawns it over stdio: ranked review findings on a working diff, a session diff landed as a git patch, and commands run under the OS sandbox.',
+    body: 'The agi binary and the VS Code extension that spawns it over stdio: ranked review findings, a session diff landed as a git patch, and commands run under the OS sandbox.',
     href: '/agi-code',
   },
   {
@@ -45,68 +52,118 @@ const ROUTES = [
   },
 ] as const;
 
+const MAP_FACTS = [
+  'the same chat',
+  'the same projects',
+  'the same connectors',
+  'the same approval prompts',
+] as const;
+
 export default function SolutionsPage() {
   return (
     <div data-design="agi" className="agi-ds-page">
       <Header />
       <main id="main-content">
-        <PageHero
-          id="agi-solutions-title"
-          eyebrow="Solutions"
-          title="Every page below is a different way into the same workspace."
-          lede="This page is an index and argues nothing on its own. Each card names the job its page was written for, and behind all of them sits one workspace: the same chat, the same projects, the same connectors, and the same approval prompts."
-          ctas={[{ href: '/download', label: "See what's live" }]}
-        />
+        <section className="agi-lp-hero" aria-labelledby={IDS.hero}>
+          <div className="agi-ds-container agi-lp-hero-grid">
+            <div className="agi-lp-hero-copy">
+              <p className="agi-lp-eyebrow">Solutions</p>
+              <h1 className="agi-lp-h1" id={IDS.hero}>
+                <span className="agi-lp-line">Every page below</span>
+                <em className="agi-lp-accent">is a different way into the same workspace.</em>
+              </h1>
+              <p className="agi-lp-lede">
+                This page is an index and argues nothing on its own. Each entry names the job its
+                page was written for, and behind all of them sits one workspace.
+              </p>
+              <ButtonRow>
+                <Button href="/download">See what&rsquo;s live</Button>
+              </ButtonRow>
+            </div>
+            <div className="agi-lp-hero-stage">
+              <div className="agi-lp-browser">
+                <div className="agi-lp-browser-bar" aria-hidden="true">
+                  <span className="agi-lp-browser-dots">
+                    <i />
+                    <i />
+                    <i />
+                  </span>
+                  <span>agiworkforce.com/chat</span>
+                </div>
+                <ProductFrame
+                  src="/product/hero-thread-dark.png"
+                  srcLight="/product/hero-thread-light.png"
+                  alt="A working AGI chat thread in the browser"
+                  width={2392}
+                  height={1244}
+                  priority
+                />
+              </div>
+            </div>
+          </div>
+        </section>
 
-        <Section id="solutions-map" labelledBy="agi-solutions-map-title" rule>
+        <Section id="solutions-map" labelledBy={IDS.map} rule>
           <Stack gap="loose">
             <div>
               <Eyebrow>Where to start</Eyebrow>
-              <h2 className="agi-ds-h2" id="agi-solutions-map-title">
+              <h2 className="agi-ds-h2" id={IDS.map}>
                 Each of these pages was written for someone doing a different job.
               </h2>
             </div>
-            <FactGrid
-              items={ROUTES.map((route) => ({
-                meta: route.meta,
-                title: route.title,
-                body: (
-                  <>
-                    {route.body}{' '}
-                    <a href={route.href} className="agi-ds-link">
-                      Read more
-                    </a>
-                  </>
-                ),
-              }))}
-            />
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              {ROUTES.map((route) => (
+                <div
+                  key={route.title}
+                  className="flex flex-col gap-3 rounded-xl border border-[var(--agi-rule)] bg-[var(--agi-ground-2)] p-6"
+                >
+                  <Eyebrow>{route.meta}</Eyebrow>
+                  <h3 className="agi-ds-h3">{route.title}</h3>
+                  <Prose size="sm">{route.body}</Prose>
+                  <Link href={route.href} className="agi-ds-link">
+                    Read more
+                  </Link>
+                </div>
+              ))}
+            </div>
           </Stack>
         </Section>
 
-        <Section id="solutions-close" labelledBy="agi-solutions-close-title" rule ground="2">
-          <Stack gap="loose">
-            <div>
-              <Eyebrow>Before you pick</Eyebrow>
-              <h2 className="agi-ds-h2" id="agi-solutions-close-title">
-                Cost and privacy are each argued once, on the page that owns the claim.
+        <div className="agi-lp-factline">
+          <div className="agi-ds-container">
+            <p className="agi-lp-eyebrow" style={{ marginBottom: '0.75rem' }}>
+              Before you pick
+            </p>
+            <ul className="agi-lp-factline-list">
+              {MAP_FACTS.map((fact) => (
+                <li key={fact}>{fact}</li>
+              ))}
+            </ul>
+          </div>
+        </div>
+
+        <section className="agi-lp-close" aria-labelledby={IDS.close}>
+          <div className="agi-ds-container">
+            <div className="agi-lp-close-inner">
+              <h2 className="agi-lp-h2" id={IDS.close}>
+                Cost and privacy are each argued once,{' '}
+                <em className="agi-lp-accent">on the page that owns the claim.</em>
               </h2>
-              <Prose>
+              <p className="agi-lp-lede">
                 The map sorts pages by the person doing the work, and stops there. What a route
                 costs, and what a Local session is allowed to do, are settled in one place each.
-                Follow the links to read them where they are argued.
-              </Prose>
+              </p>
+              <ButtonRow>
+                <Button href="/pricing">See what each route costs</Button>
+                <Button href="/local" variant="secondary">
+                  Read how Local mode works
+                </Button>
+              </ButtonRow>
             </div>
-            <ButtonRow>
-              <Button href="/pricing">See what each route costs</Button>
-              <Button href="/local" variant="secondary">
-                Read how Local mode works
-              </Button>
-            </ButtonRow>
-          </Stack>
-        </Section>
-
-        <MarketingFooter />
+          </div>
+        </section>
       </main>
+      <MarketingFooter />
     </div>
   );
 }
