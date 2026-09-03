@@ -1,5 +1,6 @@
 import { buildMetadata } from '@/lib/seo/metadata';
-import { Eyebrow, Prose, Section, Stack } from '@/features/marketing/components/system';
+import type { CSSProperties } from 'react';
+import { Eyebrow, Prose, Section } from '@/features/marketing/components/system';
 import { OfflineHeading, OfflineStatus } from './OfflineStatus';
 
 export const metadata = buildMetadata({
@@ -9,12 +10,24 @@ export const metadata = buildMetadata({
   robots: { index: false, follow: false },
 });
 
+const STATEMENT_MAX_WIDTH = '30rem';
+
+const statementStyle: CSSProperties = {
+  display: 'flex',
+  flexDirection: 'column',
+  alignItems: 'center',
+  textAlign: 'center',
+  gap: 'var(--agi-space-5)',
+  maxWidth: STATEMENT_MAX_WIDTH,
+  marginInline: 'auto',
+};
+
 export default function OfflinePage() {
   return (
     <div data-design="agi" className="agi-ds-page">
       <main id="main-content">
         <Section size="sm">
-          <Stack gap="loose">
+          <div style={statementStyle}>
             <div>
               <Eyebrow>Connection</Eyebrow>
               <OfflineHeading />
@@ -24,18 +37,12 @@ export default function OfflinePage() {
               messages stay in the composer.
             </Prose>
             <OfflineStatus />
-          </Stack>
-        </Section>
-
-        <Section size="sm" rule>
-          <Stack gap="loose">
-            <h2 className="agi-ds-h2">If the connection looks fine.</h2>
-            <Prose>
+            <Prose size="sm">
               A captive portal (hotel, airport, or office Wi-Fi that wants a sign-in first) looks
               identical to being offline. Open any other site to see whether it redirects you to a
-              login page. A VPN or corporate proxy that blocks our domains produces the same result.
+              login page; a VPN or corporate proxy that blocks our domains produces the same result.
             </Prose>
-          </Stack>
+          </div>
         </Section>
       </main>
     </div>
