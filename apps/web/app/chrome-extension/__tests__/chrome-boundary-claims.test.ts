@@ -2,23 +2,6 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 
-/**
- * Claim guard for /chrome-extension, the page that describes where extension
- * traffic goes.
- *
- * The page sold a single boundary — capture in the browser, execute on
- * Desktop, nothing else leaves — while
- * apps/extension/src/features/computer-use/cloudAgentClient.ts posts the whole
- * conversation, screenshots included, to the Managed Cloud gateway under the
- * user's account token. The absolutes are banned as patterns rather than as
- * quoted copy so they trip on the words a future writer types, and the honest
- * exception is required in each of the four places the old claim lived: hero,
- * destinations grid, capabilities, and the boundary ledger.
- *
- * Cross-page rules keep the wording consistent with /agent-permissions, which
- * is where the residual screenshot risk is written out in full.
- */
-
 const CHROME_PAGE = path.join(path.resolve(__dirname, '..'), 'page.tsx');
 const PERMISSIONS_PAGE = path.join(
   path.resolve(__dirname, '..', '..'),
@@ -65,7 +48,7 @@ const BANNED_ABSOLUTES: ReadonlyArray<readonly [string, RegExp]> = [
   ['keys never leave desktop', /keys never leave (your )?desktop/iu],
 ];
 
-describe('/chrome-extension — transmission claims', () => {
+describe('/chrome-extension, transmission claims', () => {
   it('makes none of the absolute boundary claims the extension breaks', () => {
     const source = collapsed();
     for (const [label, pattern] of BANNED_ABSOLUTES) {
@@ -122,7 +105,7 @@ describe('/chrome-extension — transmission claims', () => {
   });
 });
 
-describe('/chrome-extension — consistency with /agent-permissions', () => {
+describe('/chrome-extension, consistency with /agent-permissions', () => {
   it('agrees with the permissions page on where computer-use inference happens', () => {
     const permissions = rendered(PERMISSIONS_PAGE).replace(/\s+/gu, ' ');
     expect(permissions).toMatch(/Managed Cloud gateway/u);

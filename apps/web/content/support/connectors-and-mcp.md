@@ -10,7 +10,7 @@ scope: public
 
 ## What connectors do
 
-Connectors let AGI call an external system on your behalf — reading a repository,
+Connectors let AGI call an external system on your behalf, reading a repository,
 querying a service, or running a tool exposed over MCP (Model Context Protocol).
 Every connector is scoped to your own account.
 

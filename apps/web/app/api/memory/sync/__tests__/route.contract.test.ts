@@ -1,6 +1,8 @@
-
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { MemorySyncPullResponseSchema, MemorySyncPushResponseSchema } from '@agiworkforce/cloud-contracts';
+import {
+  MemorySyncPullResponseSchema,
+  MemorySyncPushResponseSchema,
+} from '@agiworkforce/cloud-contracts';
 
 vi.mock('server-only', () => ({}));
 
@@ -41,7 +43,7 @@ const memoryRow = {
   server_version: '7',
 };
 
-describe('GET /api/memory/sync?since= — shared cloud contract', () => {
+describe('GET /api/memory/sync?since=, shared cloud contract', () => {
   beforeEach(() => vi.clearAllMocks());
 
   it('pull page (incl. tombstone + null source) parses', async () => {
@@ -87,7 +89,7 @@ describe('GET /api/memory/sync?since= — shared cloud contract', () => {
   });
 });
 
-describe('POST /api/memory/sync { memories } — shared cloud contract', () => {
+describe('POST /api/memory/sync { memories }, shared cloud contract', () => {
   beforeEach(() => vi.clearAllMocks());
 
   it('push ack parses against MemorySyncPushResponseSchema', async () => {

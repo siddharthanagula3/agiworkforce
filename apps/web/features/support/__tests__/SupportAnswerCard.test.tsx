@@ -50,7 +50,7 @@ describe('an answer renders as an answer, with real links', () => {
 });
 
 describe('the SAME payload without citations renders as an abstention', () => {
-  it('swaps structure, heading and data attribute — and shows no answer body', () => {
+  it('swaps structure, heading and data attribute, and shows no answer body', () => {
     const { container } = renderReply({ ...RAW_ANSWER, citations: [] });
 
     expect(container.querySelector('[data-support-message="abstention"]')).not.toBeNull();
@@ -68,7 +68,7 @@ describe('the SAME payload without citations renders as an abstention', () => {
       authoritativeLinks: [{ title: 'Refund policy', url: '/refund-policy' }],
     });
 
-    expect(screen.getByText(/Billing — a person handles this/i)).toBeInTheDocument();
+    expect(screen.getByText(/Billing, a person handles this/i)).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Refund policy' })).toHaveAttribute(
       'href',
       '/refund-policy',

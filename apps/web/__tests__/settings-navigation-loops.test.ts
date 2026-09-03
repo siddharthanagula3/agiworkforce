@@ -139,10 +139,6 @@ describe('CRIT-008 route graph', () => {
     const integrations = readFileSync(join(APP_DIR, 'integrations', 'page.tsx'), 'utf8');
     expect(integrations).toContain("href: '/apps'");
 
-    // /apps no longer forces navigation at all: it renders an explanation with
-    // a sign-in link, so it contributes no redirect edge. The loop this guards
-    // against is a forced one, so the graph stays redirect-only — the offer is
-    // asserted directly instead.
     const appsTargets = edges.get('/apps') ?? new Set<string>();
     expect([...appsTargets]).not.toContain('/integrations');
 
@@ -215,15 +211,6 @@ describe('CRIT-008 settings modal entry points', () => {
   });
 
   it('does not navigate between sections from inside the modal', () => {
-    // This used to assert that /settings/help had no route, using that absence
-    // as proof the modal could not navigate there. The absence was incidental:
-    // every section now resolves through app/settings/[section], which is what
-    // makes a shared or bookmarked settings link work.
-    //
-    // The invariant CRIT-008 actually protects is that section switching inside
-    // the modal does not go through the router — those routes redirect back to
-    // /chat, so navigating to one from inside the modal is the loop. Asserted
-    // directly now, which is stronger than the old proxy.
     const modal = readFileSync(
       join(WEB_DIR, 'features', 'settings', 'components', 'WebSettingsModal.tsx'),
       'utf8',

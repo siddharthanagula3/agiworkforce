@@ -47,22 +47,18 @@ describe('InlinePaywallCard', () => {
   // -------------------------------------------------------------------------
 
   describe('headline copy', () => {
-    // G11: the headline now discloses the required tier's published monthly
-    // price (Gemini benchmark: "Get 5x more usage with AI Ultra —
-    // $99.99/month"), read via the same getBillingPlanPricing/getPlanPriceUsd
-    // call the component already made for the tier label.
     const cases: Array<[PaywallFeature, RequiredTier, string]> = [
-      ['web_search', 'basic', 'Upgrade to Basic — $7/mo for web search'],
-      ['video_generation', 'max_15x', 'Upgrade to Max 15x — $200/mo for video generation'],
-      ['opus_5', 'max', 'Upgrade to Max 5x — $100/mo for Opus 5 access'],
-      ['computer_use', 'pro', 'Upgrade to Pro — $20/mo for computer use'],
-      ['deep_research', 'max', 'Upgrade to Max 5x — $100/mo for deep research'],
-      ['image_quota', 'pro', 'Upgrade to Pro — $20/mo for more image generation'],
+      ['web_search', 'basic', 'Upgrade to Basic, $7/mo for web search'],
+      ['video_generation', 'max_15x', 'Upgrade to Max 15x, $200/mo for video generation'],
+      ['opus_5', 'max', 'Upgrade to Max 5x, $100/mo for Opus 5 access'],
+      ['computer_use', 'pro', 'Upgrade to Pro, $20/mo for computer use'],
+      ['deep_research', 'max', 'Upgrade to Max 5x, $100/mo for deep research'],
+      ['image_quota', 'pro', 'Upgrade to Pro, $20/mo for more image generation'],
       // "usage", not "token": Desktop Cloud said "higher usage limits" for the
       // same refusal, and usage is what every meter in the product is labelled.
       // Both cards now read PAYWALL_FEATURE_COPY.
-      ['token_cap', 'basic', 'Upgrade to Basic — $7/mo for higher usage limits'],
-      ['mcp', 'basic', 'Upgrade to Basic — $7/mo for MCP server support'],
+      ['token_cap', 'basic', 'Upgrade to Basic, $7/mo for higher usage limits'],
+      ['mcp', 'basic', 'Upgrade to Basic, $7/mo for MCP server support'],
     ];
 
     it.each(cases)(
@@ -143,10 +139,10 @@ describe('InlinePaywallCard', () => {
       );
 
       expect(
-        screen.getByText('Subscribe to Max 15x — $200/mo for video generation', { exact: false }),
+        screen.getByText('Subscribe to Max 15x, $200/mo for video generation', { exact: false }),
       ).toBeInTheDocument();
       expect(
-        screen.getByRole('button', { name: 'Subscribe to Max 15x — $200/mo' }),
+        screen.getByRole('button', { name: 'Subscribe to Max 15x, $200/mo' }),
       ).toBeInTheDocument();
     });
 
@@ -187,9 +183,6 @@ describe('InlinePaywallCard', () => {
       expect(screen.queryByText('Upgrade to Max 15x', { exact: false })).toBeNull();
     });
 
-    // QA-037: a Max 15x subscriber whose credit account had no allocation read
-    // as "budget exhausted", and the card answered with "Upgrade to Basic —
-    // $7/mo". The card is handed the current tier; it must use it.
     it('never offers a tier the subscriber already holds', () => {
       render(
         <InlinePaywallCard

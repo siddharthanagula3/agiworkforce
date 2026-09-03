@@ -118,7 +118,7 @@ beforeEach(() => {
   log.length = 0;
 });
 
-describe('POST /api/chat/conversations/[id]/messages/bulk — sibling writes', () => {
+describe('POST /api/chat/conversations/[id]/messages/bulk, sibling writes', () => {
   it('converts, then chains the batch through itself from the branch point', async () => {
     givenDatabase([
       {

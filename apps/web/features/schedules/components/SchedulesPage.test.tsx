@@ -495,8 +495,6 @@ describe('SchedulesPage', () => {
     render(<SchedulesPage api={api} />);
     await screen.findByRole('heading', { name: 'Morning brief' });
 
-    // No schedule-level 'running' status exists (sched-gap-07) — the row
-    // learns this only by polling that schedule's own run history.
     await waitFor(() =>
       expect(listRuns).toHaveBeenCalledWith(
         dueSchedule.id,

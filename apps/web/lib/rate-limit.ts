@@ -17,7 +17,7 @@ const isProductionRuntime =
 
 if (isProductionRuntime && !hasRedisEnv) {
   throw new Error(
-    'SEV-WEB-13: Redis REST credentials are required in production — set ' +
+    'SEV-WEB-13: Redis REST credentials are required in production, set ' +
       'UPSTASH_REDIS_REST_URL + UPSTASH_REDIS_REST_TOKEN (or the Vercel KV ' +
       'integration names KV_REST_API_URL + KV_REST_API_TOKEN). In-memory rate ' +
       'limiting is ineffective across function instances. Set them on the ' +
@@ -130,17 +130,17 @@ export const rateLimitConfigs = {
   },
   'web-push': {
     limit: 10,
-    window: '1 m', // 10 browser registrations per minute — one browser only ever needs a few
+    window: '1 m',
     failClosed: true, // Writes a row keyed on an attacker-suppliable endpoint
   },
   'mobile-feedback': {
     limit: 10,
-    window: '1 h', // 10 feedback submissions per hour — generous for real use, blocks spam
+    window: '1 h',
     failClosed: false, // Don't block a user's feedback submission if Redis fails
   },
   'mobile-content-report': {
     limit: 20,
-    window: '1 h', // 20 GenAI content reports per hour — generous for real triage use, blocks spam
+    window: '1 h',
     failClosed: false, // Don't block a trust-and-safety report if Redis fails
   },
   'mobile-iap-catalog': {
@@ -727,14 +727,6 @@ function getRateLimiter(key: RateLimitKey, limit: number): Ratelimit {
   const rateLimiter = new Ratelimit({
     redis,
     limiter: Ratelimit.slidingWindow(limit, config.window),
-    // Off deliberately. Nothing in this repo reads the analytics tables, and
-    // ingest is a second Redis command per check that ZINCRBYs one member per
-    // distinct identifier per hour bucket with no EXPIRE and no trim anywhere
-    // in the path — the `retention` option is read-side only. That is unbounded
-    // storage growth keyed on cumulative distinct users (crawler IPs included
-    // for the IP-bucketed keys), and when the database reaches its size ceiling
-    // the writes fail, `checkRateLimit` throws, and the fail-closed keys 429
-    // every user on their first request of the day.
     analytics: false,
     prefix: `agi-rl:${key}`,
   });
@@ -1036,20 +1028,6 @@ export async function withRateLimit(
   return null;
 }
 
-/**
- * The age-out for a slot whose owner never released it.
- *
- * This is a backstop, not a budget: the slot is normally released by the stream
- * pipe's `finally`. What runs no `finally` is the platform killing the function
- * at its `maxDuration`, an OOM, or an instance eviction — and at the previous
- * fifteen minutes, a free user (`maxConcurrentTurns: 1`) whose tab closed
- * mid-stream was refused a brand-new conversation for fifteen minutes, with
- * retrying making it worse and only waiting making it better.
- *
- * Sized just above the chat route's own `maxDuration` of 300s, which is the
- * longest a slot's holder can legally live: nothing can still be running at
- * 360s, so ageing out then cannot release a slot that is genuinely in use.
- */
 const MANAGED_TURN_SLOT_TTL_SECONDS = 360;
 
 export interface ManagedTurnSlot {

@@ -80,7 +80,7 @@ async function drain(gen: AsyncGenerator<Uint8Array>): Promise<string> {
   return out;
 }
 
-describe('runToolLoop end-to-end — user connector tool execution', () => {
+describe('runToolLoop end-to-end, user connector tool execution', () => {
   beforeEach(() => {
     mockBuildToolLoopStream.mockReset();
     mockGetE2BExecutor.mockReset();

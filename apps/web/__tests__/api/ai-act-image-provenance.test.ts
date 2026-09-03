@@ -135,7 +135,7 @@ function authedRequest(
   });
 }
 
-describe('Article 50(2) — generated image provenance', () => {
+describe('Article 50(2), generated image provenance', () => {
   let queuedProviderResponses: unknown[] = [];
 
   beforeEach(() => {
@@ -392,7 +392,7 @@ describe('Article 50(2) — generated image provenance', () => {
   });
 });
 
-describe('Article 50(2) — the mark survives to the download', () => {
+describe('Article 50(2), the mark survives to the download', () => {
   const ASSET_ID = '11111111-1111-4111-8111-111111111111';
 
   beforeEach(() => {

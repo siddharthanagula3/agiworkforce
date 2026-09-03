@@ -74,7 +74,7 @@ function streamErrorFrom(output: string): { message: string; code?: string; retr
   return JSON.parse(line!.replace(/^data: /, '')).choices[0].delta.x_stream_error;
 }
 
-describe('runToolLoop — a provider rejection reaches the user as product copy', () => {
+describe('runToolLoop, a provider rejection reaches the user as product copy', () => {
   beforeEach(() => {
     mockBuildToolLoopStream.mockReset();
   });

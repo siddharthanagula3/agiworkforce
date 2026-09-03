@@ -76,7 +76,7 @@ describe('formatAdminPolicy, requireMfa and monthlySpendCapCents', () => {
   });
 });
 
-describe('formatAdminPolicy — zeroDataRetentionOnly', () => {
+describe('formatAdminPolicy, zeroDataRetentionOnly', () => {
   it('defaults to false when metadata carries no explicit value', () => {
     expect(formatAdminPolicy(policyRow()).zeroDataRetentionOnly).toBe(false);
   });
@@ -89,7 +89,7 @@ describe('formatAdminPolicy — zeroDataRetentionOnly', () => {
   });
 });
 
-describe('formatAdminPolicy — ipAllowList', () => {
+describe('formatAdminPolicy, ipAllowList', () => {
   it('defaults to an empty array when metadata carries no explicit value', () => {
     expect(formatAdminPolicy(policyRow()).ipAllowList).toEqual([]);
   });
@@ -206,7 +206,7 @@ describe('upsertOrganizationPolicy, requireMfa and monthlySpendCapCents', () => 
   });
 });
 
-describe('upsertOrganizationPolicy — zeroDataRetentionOnly', () => {
+describe('upsertOrganizationPolicy, zeroDataRetentionOnly', () => {
   let query: ReturnType<typeof vi.fn>;
   let db: DatabaseAdapter;
 
@@ -230,7 +230,7 @@ describe('upsertOrganizationPolicy — zeroDataRetentionOnly', () => {
   });
 });
 
-describe('upsertOrganizationPolicy — ipAllowList', () => {
+describe('upsertOrganizationPolicy, ipAllowList', () => {
   let query: ReturnType<typeof vi.fn>;
   let db: DatabaseAdapter;
 

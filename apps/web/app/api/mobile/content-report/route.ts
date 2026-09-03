@@ -1,22 +1,3 @@
-/**
- * Mobile GenAI Content-Report Intake API
- *
- * POST /api/mobile/content-report — accepts trust-and-safety reports of
- * harmful / inaccurate AI-generated content from the mobile app's report sheet
- * (apps/mobile/services/contentReport.ts).
- *
- * Before this route existed the mobile report sheet had no server sink: reports
- * were stored on-device and, at most, handed to the device mail client
- * (MOBILE-CONTENT-REPORT-NO-INTAKE-ENDPOINT-01). This route is the durable
- * intake, writing into public.content_reports (db/neon/0093_content_reports.sql).
- * The mobile client keeps its on-device copy as an OFFLINE fallback only.
- *
- * user_id is intentionally optional: reporting is reachable from both Local and
- * Cloud mode, and a Local-only user with no Cloud account must still be able to
- * file a report — the table's user_id column is nullable for this reason. This
- * mirrors the /api/mobile/feedback convention exactly.
- */
-
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
 import { z } from 'zod';

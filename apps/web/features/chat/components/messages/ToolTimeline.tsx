@@ -450,7 +450,7 @@ function TimelineStepRow({
         </div>
       )}
       {/* Per-tool permission quick-pick: only for a connector call awaiting
-          approval (Claude parity — allow/ask/block with a persisted decision). */}
+          approval (Claude parity, allow/ask/block with a persisted decision). */}
       {showPermissionPicker && mcpTool && (
         <div className="pl-7 mt-1">
           <ToolPermissionQuickPicker
@@ -634,7 +634,7 @@ function ToolTimeline({
 
   return (
     <div className={cn('', className)} aria-busy={hasRunning || hasAwaiting}>
-      {/* AUDIT-FIX GOV-29: the timeline's only live region — off-screen,
+      {/* AUDIT-FIX GOV-29: the timeline's only live region, off-screen,
           atomic, one phrase per state change. */}
       <span className="sr-only" aria-live="polite" aria-atomic="true">
         {announcement}
@@ -643,7 +643,7 @@ function ToolTimeline({
       {/* Compact collapse button · shown when user has expanded from compact mode */}
       {isCompact && compactExpanded && (
         <div className="mb-1">
-          {/* Header row handled below — the collapse affordance is just clicking the header */}
+          {/* Header row handled below, the collapse affordance is just clicking the header */}
         </div>
       )}
 

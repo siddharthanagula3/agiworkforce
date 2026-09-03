@@ -53,7 +53,6 @@ function format(row: ModelPolicyRow): OrganizationModelPolicy {
   };
 }
 
-/** `null` means ungoverned — no row, not an empty policy. The two differ. */
 export async function readModelPolicy(
   db: DatabaseAdapter,
   organizationId: string,
@@ -68,15 +67,6 @@ export async function readModelPolicy(
   return row ? format(row) : null;
 }
 
-/**
- * Writes the whole policy, never a partial patch.
- *
- * A partial write on four interdependent lists is how a workspace ends up
- * blocking a provider it meant to allow: an admin editing the model allowlist
- * would silently carry forward, or silently drop, whatever the other three
- * lists held. The route merges onto the current row and hands a complete object
- * here — the same rule 0076's admin policy follows.
- */
 export async function upsertModelPolicy(
   db: DatabaseAdapter,
   organizationId: string,

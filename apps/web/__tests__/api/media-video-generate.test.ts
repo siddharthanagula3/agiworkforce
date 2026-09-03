@@ -437,7 +437,7 @@ describe('POST /api/media/video/generate', () => {
     delete process.env[MANAGED_COMPUTE_PRIVATE_BETA_ENV];
   });
 
-  describe('Success — OpenRouter video provider', () => {
+  describe('Success, OpenRouter video provider', () => {
     it('submits the exact catalog tuple and reserves the catalog formula cost', async () => {
       const { calculateCatalogVideoCostCents, getModels, resolveVideoGenerationOutputSize } =
         await import('@agiworkforce/types');
@@ -1340,7 +1340,7 @@ describe('POST /api/media/video/generate', () => {
     });
   });
 
-  describe('Success — Runway provider', () => {
+  describe('Success, Runway provider', () => {
     it('fails closed in the release policy before reservation or provider egress', async () => {
       videoReleasePolicyMocks.runwayEnabled = false;
 
@@ -1424,7 +1424,7 @@ describe('POST /api/media/video/generate', () => {
     });
   });
 
-  describe('Success — Google Veo provider', () => {
+  describe('Success, Google Veo provider', () => {
     beforeEach(() => {
       delete process.env['RUNWAY_API_KEY'];
       process.env['GOOGLE_API_KEY'] = 'test-google-key';

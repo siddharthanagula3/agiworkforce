@@ -68,8 +68,6 @@ describe('the stylesheet answers the attribute', () => {
   });
 
   it('does not point at the CDN the CSP blocks', () => {
-    // Scoped to actual url(...) declarations, not the comment recording why
-    // the CDN version was removed — that comment names the old URL on purpose.
     const urls = css.match(/url\([^)]*\)/g) ?? [];
     for (const url of urls) {
       expect(url).not.toMatch(/jsdelivr/);

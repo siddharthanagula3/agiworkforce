@@ -37,7 +37,7 @@ beforeEach(() => {
   scheduleArtifactIndexing.mockReset();
 });
 
-describe('POST /api/chat/sync — artifact indexing', () => {
+describe('POST /api/chat/sync, artifact indexing', () => {
   it('indexes an applied assistant message pushed from another surface', async () => {
     queryMock.mockImplementation(async (sql: string) =>
       String(sql).includes('insert into web_messages')

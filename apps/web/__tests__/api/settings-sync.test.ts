@@ -31,7 +31,7 @@ function postReq(body: unknown) {
   });
 }
 
-describe('filterCloudSafeSettings — leak guards', () => {
+describe('filterCloudSafeSettings, leak guards', () => {
   it('drops every forbidden namespace (allowlist is fail-closed)', () => {
     const dirty: Record<string, unknown> = {
       appearance: { theme: 'dark' },
@@ -92,7 +92,7 @@ describe('scrubSecrets', () => {
   });
 });
 
-describe('POST /api/settings/sync — push', () => {
+describe('POST /api/settings/sync, push', () => {
   it('merges only cloud-safe namespaces when baseVersion matches, forcing user_id', async () => {
     const res = await POST(
       postReq({
@@ -141,7 +141,7 @@ describe('POST /api/settings/sync — push', () => {
   });
 });
 
-describe('GET /api/settings/sync — pull', () => {
+describe('GET /api/settings/sync, pull', () => {
   it('returns only cloud-safe namespaces and never emits secrets', async () => {
     queryMock.mockResolvedValueOnce([
       {

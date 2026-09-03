@@ -73,7 +73,7 @@ async function main() {
     console.error(`\nE2B verification FAILED (${failures} op(s)). The binding may need a fix.`);
     process.exit(1);
   }
-  console.log('\nE2B verification PASSED — the live binding works end to end.');
+  console.log('\nE2B verification PASSED, the live binding works end to end.');
 }
 
 main().catch((err) => {

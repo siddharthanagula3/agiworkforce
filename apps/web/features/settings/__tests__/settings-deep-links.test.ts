@@ -80,9 +80,6 @@ describe('every settings section can be deep-linked', () => {
   });
 
   it('has every section actually linked in the product point at a real key', () => {
-    // SettingsSectionLink renders /settings/<section>. A typo here is a 404 for
-    // whoever clicks it, and nothing else would catch it — the string is not
-    // typed at the call site.
     const used = execFileSync(
       'grep',
       ['-rhoE', 'section="[a-z-]+"', '--include=*.tsx', 'features', 'app', 'shared'],

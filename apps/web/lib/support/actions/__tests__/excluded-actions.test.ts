@@ -1,4 +1,3 @@
-
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { createFakeNeonDb } from './helpers/fake-neon-db';
@@ -33,7 +32,7 @@ import { SUPPORT_ACTIONS } from '../registry';
 import { listAvailableSupportActions, proposeSupportAction } from '../service';
 import { SUPPORT_ACTION_IDS } from '../types';
 
-describe('support actions — the exclusion list', () => {
+describe('support actions, the exclusion list', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.db = createFakeNeonDb();

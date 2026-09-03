@@ -58,24 +58,8 @@ const STATUS_FILTERS: Array<{ id: ScheduleStatusFilter; label: string }> = [
   { id: 'expired', label: 'Expired' },
 ];
 
-/**
- * How often to re-check whether a "due" schedule is actually mid-run.
- *
- * There is no push channel and no schedule-level 'running' status (the
- * enum only has active/paused/completed/failed/expired — see
- * ManagedCloudScheduleTaskSchema), so this polls the one signal that does
- * carry it: the schedule's own run history.
- */
 const RUNNING_POLL_INTERVAL_MS = 6_000;
 
-/**
- * How long a schedule stays a polling candidate after its `nextExecutionAt`
- * passes. Bounds the cost of `RUNNING_POLL_INTERVAL_MS` polling to schedules
- * that could plausibly be executing right now, instead of re-checking every
- * enabled schedule on the page every tick — `nextExecutionAt` does not
- * change again until the next full schedule-list refresh, so without this
- * bound a stale due time would poll forever.
- */
 const RUNNING_DUE_WINDOW_MS = 2 * 60_000;
 
 const EMPTY_HISTORY: ScheduleHistoryState = {
@@ -200,10 +184,6 @@ export function SchedulesPage({
     return () => window.removeEventListener('beforeunload', warn);
   }, [draftDirty]);
 
-  // Transient "running now" indicator for schedule rows (sched-gap-07). Only
-  // schedules whose next execution is due — recently passed and still inside
-  // RUNNING_DUE_WINDOW_MS — are checked, so an idle list with nothing due
-  // issues no requests at all.
   useEffect(() => {
     const computeDueSchedules = () => {
       const now = Date.now();
@@ -585,7 +565,7 @@ export function SchedulesPage({
               Starting from a blank prompt is the reason most people never make
               a second schedule. Each card opens the SAME create dialog with the
               draft pre-filled, so it is a starting point the user still reviews
-              and edits — never a schedule created behind their back.
+              and edits, never a schedule created behind their back.
             */}
             <div className="mt-10 text-left">
               <h3 className="text-center text-xs font-semibold uppercase tracking-wider text-muted-foreground">

@@ -1,4 +1,3 @@
-
 import { createRequire } from 'module';
 import { writeFileSync, mkdirSync } from 'fs';
 import { fileURLToPath } from 'url';
@@ -49,7 +48,7 @@ for (const provider of PROVIDERS) {
   if (provider.siKey) {
     const icon = si[provider.siKey];
     if (!icon) {
-      console.error(`simple-icons key ${provider.siKey} not found — skipping ${provider.id}`);
+      console.error(`simple-icons key ${provider.siKey} not found, skipping ${provider.id}`);
       continue;
     }
     svg = buildIconSvg(icon, provider.fill ?? null);
@@ -63,4 +62,4 @@ for (const provider of PROVIDERS) {
   written++;
 }
 
-console.log(`\nDone — ${written} SVG files written to public/providers/`);
+console.log(`\nDone, ${written} SVG files written to public/providers/`);

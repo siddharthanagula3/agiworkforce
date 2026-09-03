@@ -227,13 +227,6 @@ export function scheduleToDraft(task: ScheduleTask): ScheduleDraft {
 
 const DERIVED_NAME_MAX_LENGTH = 60;
 
-/**
- * sched-gap-08: `name` was a required free-text field with nothing to fall back
- * on, so every schedule started with a chore that has one obvious answer. The
- * task's own instructions are the content to derive from — the same first-line
- * truncation the conversation titler uses as its stage-1 title, kept on the
- * client because a schedule is created before any model runs.
- */
 export function deriveScheduleName(prompt: string): string {
   const firstLine = prompt.split('\n').find((line) => line.trim()) ?? '';
   const collapsed = firstLine.trim().replace(/\s+/g, ' ');
@@ -338,8 +331,6 @@ export function validateAndBuildScheduleRequest(
       (intervalMs < SWEEP_INTERVAL_MS && !unchangedLegacyInterval) ||
       intervalMs > MAX_INTERVAL_MS
     ) {
-      // Lower bound is the deployed sweep, not a fixed "1 day" — the message is
-      // derived so it cannot keep naming a floor the platform no longer enforces.
       addError(
         errors,
         'intervalValue',

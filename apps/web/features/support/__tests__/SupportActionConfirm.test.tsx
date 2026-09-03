@@ -102,7 +102,7 @@ describe('an action never runs without an explicit confirmation click', () => {
     installFetch();
   });
 
-  it('offers, then describes, then executes — one user click per step', async () => {
+  it('offers, then describes, then executes, one user click per step', async () => {
     const user = userEvent.setup();
     render(<Harness />);
 

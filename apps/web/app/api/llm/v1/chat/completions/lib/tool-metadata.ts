@@ -1,46 +1,3 @@
-/**
- * @file Server-owned tool metadata model (finding CON-10).
- *
- * WHY THIS EXISTS: destructiveness used to be a five-substring guess
- * (`name.includes('delete') || includes('write') || includes('create') ||
- * includes('update') || includes('remove')`) duplicated in
- * `apps/desktop/src/features/connectors/ConnectorGallery.tsx` and
- * `apps/desktop/src-tauri/src/core/llm/tool_executor/mod.rs`. That guess
- * classifies `send_email`, `post_message`, `post_issue_comment`,
- * `share_document`, `publish`, `deploy`, `revoke` and `invite` as
- * NON-destructive — including two of the three shipped GitHub connector tools.
- * A published comment cannot be un-published, so treating it as harmless is a
- * real safety defect, not a cosmetic one.
- *
- * This module replaces the guess with an explicit, declared model. Every tool
- * the platform ships declares four properties:
- *
- *   - `actionClass`  — what the call DOES:
- *       'read'           observes state, changes nothing
- *       'write'          creates or mutates state inside our trust boundary
- *       'delete'         destroys state
- *       'execute'        runs caller-supplied code
- *       'external_send'  emits something into a third-party system where other
- *                        people can see it (comments, reviews, messages, mail)
- *   - `reversible`   — whether the caller can undo the effect from inside the
- *                      product afterwards. A sandbox folder is reversible; a
- *                      posted GitHub comment is not (it fires notifications and
- *                      may be mirrored to email before any deletion).
- *   - `acceptsUntrustedContent` — whether the tool RETURNS content authored by
- *                      someone other than the user (web pages, search results,
- *                      pull-request diffs). Such content lands in the model
- *                      context and is a prompt-injection carrier.
- *   - `createsEgressPath` — whether calling the tool can move bytes out of the
- *                      trust boundary in an attacker-influenceable way (a URL,
- *                      a query string, a comment body, arbitrary sandbox
- *                      network access).
- *
- * NOT `server-only`: this is a pure lookup table with no I/O, imported by the
- * agentic tool loop AND by `/api/connectors/permissions` (which derives the
- * persisted `destructive` column from it — finding CON-9 — instead of trusting
- * a client-supplied boolean the live web client never even sends).
- */
-
 import { parseQualifiedToolName } from '@/lib/mcp-tool-executor';
 import type { WebMcpToolDef } from '@/lib/mcp-tool-executor';
 
@@ -208,12 +165,6 @@ export function isDestructiveConnectorTool(connectorId: string, toolName: string
   return isDestructiveToolMetadata(resolveConnectorToolMetadata(connectorId, toolName));
 }
 
-/**
- * Parallel-safety (finding SYS-25). Only DECLARED read-class tools may run
- * concurrently: they observe state and cannot race each other. Everything else
- * — writes, deletes, executions, external sends, and every undeclared MCP tool
- * — serializes, preserving the loop's "mutating tools are serial" guarantee.
- */
 export function isParallelSafeTool(name: string): boolean {
   const metadata = resolveToolMetadata(name);
   return metadata.declared && metadata.actionClass === 'read';

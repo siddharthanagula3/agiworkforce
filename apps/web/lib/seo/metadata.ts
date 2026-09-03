@@ -14,18 +14,6 @@ export interface BuildMetadataOptions {
   robots?: Metadata['robots'];
 }
 
-/**
- * Build page-specific metadata with a complete Open Graph + Twitter card.
- *
- * Why this exists: Next.js does NOT derive `og:title`/`og:description` from a
- * page's `title`/`description`, and it does NOT deep-merge a child page's
- * `openGraph` into the root layout's. A public page that sets only `title` and
- * `alternates.canonical` therefore inherits the layout's ENTIRE Open Graph
- * object — the home share card — so every such page unfurls as the homepage on
- * social and in AI answer engines. `buildMetadata` emits a full, self-contained
- * `openGraph` and `twitter` block (image dimensions included, sourced from
- * {@link OG_IMAGE}) plus a page-specific canonical, closing that gap in one place.
- */
 export function buildMetadata(options: BuildMetadataOptions): Metadata {
   const {
     title,

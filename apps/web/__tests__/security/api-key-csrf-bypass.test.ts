@@ -1,4 +1,3 @@
-
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 vi.mock('@/lib/csrf', async (importOriginal) => importOriginal());
@@ -48,7 +47,7 @@ describe('WEB-APIKEY-CSRF-BLOCK-01: API-key CSRF bypass', () => {
   });
 
   describe('THE ATTACK: garbage sk_-shaped bearer + valid session cookie', () => {
-    it('does NOT bypass CSRF — requireCsrfToken still 403s with no x-csrf-token', async () => {
+    it('does NOT bypass CSRF, requireCsrfToken still 403s with no x-csrf-token', async () => {
       mockAuth.mockResolvedValue({ userId: 'victim-user' });
       mockVerifyKey.mockResolvedValue(null);
 
@@ -121,7 +120,7 @@ describe('WEB-APIKEY-CSRF-BLOCK-01: API-key CSRF bypass', () => {
       expect(await requireCsrfToken(req)).toBeNull();
     });
 
-    it('GET requests never touch ApiKeyService — CSRF is method-gated first', async () => {
+    it('GET requests never touch ApiKeyService, CSRF is method-gated first', async () => {
       const req = makeRequest('GET', { bearerToken: REAL_SK_LIVE_KEY });
       expect(await requireCsrfToken(req)).toBeNull();
       expect(mockVerifyKey).not.toHaveBeenCalled();

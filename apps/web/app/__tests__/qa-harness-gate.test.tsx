@@ -29,7 +29,7 @@ const PRODUCTION_GUARD = /process\.env(\.NODE_ENV|\[['"]NODE_ENV['"]\])\s*===\s*
 
 const PUBLIC_HARNESS_ROUTES = new Set(['dev/landing-preview']);
 
-describe('SIX-24 — /dev harness segment layout', () => {
+describe('SIX-24, /dev harness segment layout', () => {
   afterEach(() => {
     vi.unstubAllEnvs();
   });
@@ -53,7 +53,7 @@ describe('SIX-24 — /dev harness segment layout', () => {
   });
 });
 
-describe('SIX-24 — every harness route segment carries a production guard', () => {
+describe('SIX-24, every harness route segment carries a production guard', () => {
   const segments = harnessSegments();
 
   it('finds at least the /dev segment (guards the sweep itself)', () => {
@@ -82,7 +82,7 @@ describe('SIX-24 — every harness route segment carries a production guard', ()
         const source = readFileSync(pagePath, 'utf8');
         expect(
           source,
-          `${route}/page.tsx is missing a production guard — the segment layout does not gate it`,
+          `${route}/page.tsx is missing a production guard, the segment layout does not gate it`,
         ).toMatch(PRODUCTION_GUARD);
         expect(source).toMatch(/notFound\(\)/);
       }
@@ -90,7 +90,7 @@ describe('SIX-24 — every harness route segment carries a production guard', ()
   );
 });
 
-describe('SIX-24 — harness paths are not crawlable', () => {
+describe('SIX-24, harness paths are not crawlable', () => {
   const result = robots();
   const rules = Array.isArray(result.rules) ? result.rules : [result.rules];
   const ALLOWED_BOTS = ['*', 'GPTBot', 'ClaudeBot', 'PerplexityBot', 'Googlebot', 'bingbot'];

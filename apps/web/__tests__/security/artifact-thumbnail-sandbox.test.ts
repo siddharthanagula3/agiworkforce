@@ -2,15 +2,6 @@ import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-/**
- * A srcdoc document inherits the embedding page's CSP, and this app's
- * script-src is 'self' plus a per-request nonce the frame cannot carry — so a
- * thumbnail that allows scripts logs a violation for every HTML artifact and
- * runs untrusted markup for no benefit. Thumbnails are aria-hidden, scaled
- * down and pointer-events-none; the interactive viewer is where execution is
- * the point.
- */
-
 const WEB_ROOT = join(__dirname, '..', '..');
 
 const THUMBNAIL_SOURCES = [

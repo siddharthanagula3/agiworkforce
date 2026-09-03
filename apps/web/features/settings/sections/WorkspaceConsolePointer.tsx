@@ -36,7 +36,7 @@ export function WorkspaceConsolePointer() {
         </span>
         <span style={{ fontSize: 12, lineHeight: 1.6, color: 'var(--text-3)' }}>
           Security posture, identity and SSO, directory provisioning, workspace policy, sharing, and
-          the audit trail — with what is enforced kept separate from what is merely recorded.
+          the audit trail, with what is enforced kept separate from what is merely recorded.
         </span>
       </span>
       <ArrowRight

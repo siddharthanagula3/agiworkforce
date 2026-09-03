@@ -44,7 +44,7 @@ const ROUTING_PRIORITY_CLAIMS = [
   /routage\s+prioritaire/iu,
 ];
 
-describe('pricing locale bundles — plan feature claims', () => {
+describe('pricing locale bundles, plan feature claims', () => {
   it('ships at least the English bundle, so an empty glob cannot pass this suite', () => {
     const bundles = pricingBundles();
     expect(bundles.length).toBeGreaterThan(0);

@@ -6,24 +6,6 @@ import { logger } from '@/lib/logger';
 import { unshareConnector } from '@/lib/services/org-shared-connector-service';
 import { evictOrgSharedConnectorCaches } from '@/lib/user-connector-tools';
 
-/**
- * Cuts off a member's live access when they leave a workspace.
- *
- * Removing the `organization_members` row stops the next request from
- * resolving that workspace. It does NOT stop the requests already in flight
- * from a signed-in browser, a paired desktop, a mobile app, or a developer key
- * — those hold credentials that outlive the membership row, and the gap between
- * "removed at the IdP" and "actually cut off" is the offboarding hole a security
- * review is looking for.
- *
- * WHAT THIS IS NOT: a way to lock someone out of the product. A member removed
- * from one workspace keeps their personal account, and their sessions are
- * revoked rather than their identity deleted — they sign in again and land in
- * personal scope with no access to what the workspace owns. Deleting the account
- * would be a different, far more destructive act, and is not what an
- * administrator asked for when they removed a member.
- */
-
 export interface DeprovisionResult {
   userId: string;
   organizationId: string;
@@ -157,21 +139,6 @@ export async function deprovisionMember(
     );
   }
 
-  // A connector the leaver shared into this workspace is the one credential the
-  // steps above cannot reach: the bearer token lives encrypted on the leaver's
-  // own `user_custom_connectors` row, and every member of the organization
-  // invokes it through the share row. Revoking sessions and keys does nothing
-  // to it — the org keeps calling the tool with the departed member's token
-  // until someone notices. Unlike `organization_project_access`, the share row
-  // has no FK to `organization_members`, so dropping the membership does not
-  // cascade it away either.
-  //
-  // Scoped to (this organization, connectors this member OWNS): shares they
-  // hold in other workspaces they are still a member of stay live, and another
-  // member's connector stays shared even if it reached this org through them.
-  // Unsharing is the whole remedy — the token itself is personal property that
-  // survives the offboarding exactly as their account does, and after the row
-  // is gone every execution path re-reads the share row and fails closed.
   let sharedConnectorsUnshared = 0;
   try {
     const shares = await db.query<{ connector_row_id: string }>(

@@ -33,7 +33,7 @@ beforeEach(() => {
   preferences({});
 });
 
-describe('notifyAgentRunEvent — consent', () => {
+describe('notifyAgentRunEvent, consent', () => {
   it('sends when the account has expressed no preference', async () => {
     await expect(notifyAgentRunEvent(notice)).resolves.toEqual({ pushed: true });
     expect(mocks.sendPush).toHaveBeenCalledOnce();
@@ -60,7 +60,7 @@ describe('notifyAgentRunEvent — consent', () => {
   });
 });
 
-describe('notifyAgentRunEvent — payload the mobile client can route', () => {
+describe('notifyAgentRunEvent, payload the mobile client can route', () => {
   const cases: Array<[AgentRunNotificationEvent, string, string]> = [
     ['approval_required', 'agent_approval_needed', 'high'],
     ['input_required', 'agent_paused', 'high'],
@@ -121,7 +121,7 @@ describe('notifyAgentRunEvent — payload the mobile client can route', () => {
   });
 });
 
-describe('notifyAgentRunEvent — never throws', () => {
+describe('notifyAgentRunEvent, never throws', () => {
   it('sends anyway when the preference lookup fails', async () => {
     mocks.query.mockRejectedValue(new Error('neon down'));
 

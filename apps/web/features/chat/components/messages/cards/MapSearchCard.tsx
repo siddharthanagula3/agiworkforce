@@ -204,7 +204,7 @@ function MapTiles({
                 title={place.label}
               >
                 {/* Numbered so a pin can be matched to its row in the list
-                    beside the map — two identical pins leave the reader
+                    beside the map, two identical pins leave the reader
                     guessing which end of a route is which. */}
                 <span className="relative grid size-6 place-items-center rounded-full bg-primary text-[12px] font-semibold text-primary-foreground shadow-md ring-2 ring-background">
                   {index + 1}
@@ -287,7 +287,7 @@ export function MapSearchCard({ body, ctx }: MapSearchCardProps) {
     >
       {view ? (
         <MapTiles view={view} places={places}>
-          {/* Title as a chip over the map rather than a header bar above it —
+          {/* Title as a chip over the map rather than a header bar above it.
               the map gets the full card, which is what makes the result read
               as a map rather than as a form with a picture in it. */}
           <div className="pointer-events-none absolute left-3 top-3 max-w-[60%]">
@@ -336,7 +336,7 @@ export function MapSearchCard({ body, ctx }: MapSearchCardProps) {
                       </span>
                       {place.confident === false && (
                         <span className="mt-0.5 block text-xs text-warning-text">
-                          Far from the other places in this request — check this is the one you
+                          Far from the other places in this request, check this is the one you
                           meant.
                         </span>
                       )}

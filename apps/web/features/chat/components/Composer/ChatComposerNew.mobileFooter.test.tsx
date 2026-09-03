@@ -75,10 +75,6 @@ function mobileVisibleEntryKeys(container: HTMLElement): string[] {
     .map((entry) => entry.dataset['testid']?.slice(FOOTER_ENTRY_TESTID_PREFIX.length) ?? '');
 }
 
-// M11. Measured 2026-08-30: this footer ran to three rows at 390px and made the
-// resting composer 136px against ChatGPT's 87px. jsdom does not evaluate media
-// queries, so what is asserted here is the responsive CLASS contract — which is
-// the layer the defect lived in. The pixel outcome belongs to a browser run.
 describe('composer footer collapses at the mobile breakpoint (M11)', () => {
   beforeEach(() => {
     useBillingStore.setState({

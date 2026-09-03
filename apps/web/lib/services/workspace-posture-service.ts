@@ -4,17 +4,6 @@ import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 
 import { getEffectiveOrganizationPolicy } from '@/lib/services/organization-policy-service';
 
-/**
- * Whether a signal's value actually binds at runtime.
- *
- * The distinction is the whole point of this surface. A buyer's security team
- * reads a posture dashboard as a list of controls, so a row that is merely
- * recorded must not sit next to a row that denies requests wearing the same
- * styling. `retentionDays`, for instance, is stored and swept by nothing
- * (ORGPOLICY-03), and per-surface sync resolves from a client-supplied header
- * (ORGPOLICY-02) — both are positions this workspace has taken, not boundaries
- * an attacker meets.
- */
 export type PostureEnforcement = 'enforced' | 'stated' | 'unconfigured';
 
 export type PostureState = 'ok' | 'attention' | 'off';
@@ -121,13 +110,6 @@ function plural(n: number, one: string, many: string): string {
   return `${n} ${n === 1 ? one : many}`;
 }
 
-/**
- * Reads what is actually true of one workspace, from the tables that hold it.
- *
- * Every query is bound to `organizationId`. Callers must have already proven the
- * caller's membership and admin role — this function does not re-authorize, and
- * is only ever reached through a route that does.
- */
 export async function readWorkspacePosture(
   db: DatabaseAdapter,
   organizationId: string,
@@ -403,7 +385,7 @@ export async function readWorkspacePosture(
           state: 'ok',
           enforcement: 'enforced',
           detail:
-            'Removing a member — by hand or from your IdP — revokes their live sessions, device refresh tokens, and API keys, not just their membership row. Anything that could not be reached is recorded on the event rather than swallowed. Their personal account survives; only its credentials are cut.',
+            'Removing a member, by hand or from your IdP, revokes their live sessions, device refresh tokens, and API keys, not just their membership row. Anything that could not be reached is recorded on the event rather than swallowed. Their personal account survives; only its credentials are cut.',
           href: '/workspace/people',
         },
       ],
@@ -492,7 +474,7 @@ export async function readWorkspacePosture(
           enforcement: modelRules === 0 ? 'unconfigured' : 'enforced',
           detail:
             modelRules === 0
-              ? 'No model or provider restriction is saved, so members may use any model in the catalog. A saved row with empty lists would also mean unrestricted — restriction is something an administrator states.'
+              ? 'No model or provider restriction is saved, so members may use any model in the catalog. A saved row with empty lists would also mean unrestricted, restriction is something an administrator states.'
               : 'Checked server-side after auto-routing resolves, so a blocked model cannot be reached by asking for Auto. A named model outranks a blocked provider, which is how "no Provider X except this one model" is expressed.',
           href: '/workspace/models',
         },
@@ -507,7 +489,7 @@ export async function readWorkspacePosture(
           enforcement: connectorRules === 0 ? 'unconfigured' : 'enforced',
           detail:
             connectorRules === 0
-              ? 'No connector restriction is saved, so members may use any integration. Custom connectors — arbitrary member-supplied MCP endpoints — are allowed too.'
+              ? 'No connector restriction is saved, so members may use any integration. Custom connectors, arbitrary member-supplied MCP endpoints, are allowed too.'
               : 'Applied where the tool catalog is assembled, which is the one path chat, scheduled tasks, and cloud agent runs all share. A blocked connector is never offered to the model, so it cannot be called from any of them.',
           href: '/workspace/connectors',
         },
@@ -518,7 +500,7 @@ export async function readWorkspacePosture(
           state: 'ok',
           enforcement: 'stated',
           detail:
-            'Resolved from a client-supplied surface hint, so this governs the clients your organization deploys — it is not a boundary an attacker meets. Managed compute and privacy modes are the controls that bind regardless of client.',
+            'Resolved from a client-supplied surface hint, so this governs the clients your organization deploys, it is not a boundary an attacker meets. Managed compute and privacy modes are the controls that bind regardless of client.',
           href: '/workspace/policy',
         },
       ],
@@ -545,7 +527,7 @@ export async function readWorkspacePosture(
           enforcement: 'enforced',
           detail: effectivePolicy.externalSharingEnabled
             ? 'Members may publish a chat or an artifact to an anonymous public link. Both paths check this before minting one.'
-            : 'New public links are refused on both the chat-share and artifact-publish paths. Links already published stay reachable — revoking those is a separate action.',
+            : 'New public links are refused on both the chat-share and artifact-publish paths. Links already published stay reachable, revoking those is a separate action.',
           href: '/workspace/policy',
         },
         {
@@ -587,7 +569,7 @@ export async function readWorkspacePosture(
           state: 'ok',
           enforcement: 'enforced',
           detail:
-            'Managed cloud spend by member, model, and provider. Volume and cost only — this surface never carries what anyone asked the model.',
+            'Managed cloud spend by member, model, and provider. Volume and cost only, this surface never carries what anyone asked the model.',
           href: '/workspace/usage',
         },
         {
@@ -656,7 +638,7 @@ export async function readWorkspacePosture(
           detail:
             auditDestination === null
               ? 'No endpoint is configured. Pull the JSONL export on a schedule, or point us at an HTTPS endpoint and events will be delivered signed.'
-              : 'Events are POSTed with an HMAC-SHA256 signature over the timestamp and body, drained on a schedule rather than written during the audited action — an unreachable endpoint must never stop the thing it records. A failed delivery holds the cursor, so events are retried rather than dropped.',
+              : 'Events are POSTed with an HMAC-SHA256 signature over the timestamp and body, drained on a schedule rather than written during the audited action, an unreachable endpoint must never stop the thing it records. A failed delivery holds the cursor, so events are retried rather than dropped.',
           href: '/workspace/audit',
         },
       ],
@@ -725,7 +707,7 @@ function buildRecommendations(input: {
     out.push({
       id: 'configure-scim',
       title: 'Set up SCIM provisioning',
-      body: 'Without it, removing someone from your directory does not remove their access here — an offboarding gap auditors look for.',
+      body: 'Without it, removing someone from your directory does not remove their access here, an offboarding gap auditors look for.',
       href: '/workspace/identity',
       cta: 'Set up SCIM',
     });

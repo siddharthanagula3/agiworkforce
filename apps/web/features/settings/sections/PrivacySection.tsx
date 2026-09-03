@@ -21,16 +21,6 @@ import { toUserMessage } from '@/lib/user-error-message';
 
 const NAMESPACE = 'privacy';
 
-// 'locationMetadata' and 'improveModelTraining' are intentionally absent from
-// TOGGLES: both persisted correctly but had zero consumers anywhere (no
-// location collection exists to gate; no training-data pipeline exists to
-// gate) — a switch that saves but changes nothing is a dead control. Re-add
-// once the underlying feature ships. 'rememberChats' is also absent: it
-// currently promises the opposite of what happens (off does NOT stop
-// cloud-saving; the conversation-save path never reads this preference).
-// Fixing that means gating the save path itself, not this settings screen —
-// do not re-add the switch until that read is wired, or it goes back to
-// actively lying to privacy-conscious users.
 type ToggleKey = 'shareTelemetry';
 
 interface ToggleSpec {
@@ -124,21 +114,6 @@ export function PrivacySection() {
   const setNewChatsTemporary = useSettingsStore((state) => state.setNewChatsTemporary);
 
   const router = useRouter();
-  /**
-   * Destructive-action confirmation (shell-nav-ia-gap-01 remainder).
-   *
-   * Archive-all and delete-all-chats used native `window.confirm()` — an OS
-   * alert with browser chrome, not the product's own dialog — for the two
-   * highest-stakes bulk actions on this page (delete-all is the single
-   * highest-stakes action in the app: every active AND archived conversation,
-   * irreversibly). `useConfirm` is the shared promise-based wrapper around
-   * the styled AlertDialog primitive (packages/ui/ui/src/primitives/
-   * ConfirmDialog.tsx) already wired into WebChatPage/WebAppShell/
-   * MessageBubble for the same class of action. Same await-a-boolean shape as
-   * `window.confirm`, so the guards below read the same, but the user sees a
-   * dialog with a red confirm and copy naming the exact, specific
-   * consequence instead of a generic browser prompt.
-   */
   const { confirm: confirmDestructive, dialog: destructiveConfirmDialog } = useConfirm();
   const subscription = useBillingStore((s) => s.subscription);
   const hasHostedCloud = subscription?.status === 'active' && subscription.tier !== 'free';
@@ -188,11 +163,6 @@ export function PrivacySection() {
       const next = { ...prev, [key]: !prev[key] };
       setSavingPreferences(true);
       setPreferenceError(null);
-      // Mirror immediately, matching the optimistic setState above (this
-      // component doesn't roll UI state back on save failure, it only shows
-      // an error banner — so the cache must track what the switch displays,
-      // not server-confirmed state, or the switch and the actual gate could
-      // silently disagree).
       setTelemetryConsentCache(next.shareTelemetry);
       savePreferenceNamespace(NAMESPACE, next)
         .catch((error) => {
@@ -229,7 +199,7 @@ export function PrivacySection() {
     const confirmed = await confirmDestructive({
       title: 'Archive every chat?',
       description:
-        'Every chat will move out of the sidebar. You can restore them from Archived chats at any time — this does not delete anything.',
+        'Every chat will move out of the sidebar. You can restore them from Archived chats at any time, this does not delete anything.',
       confirmText: 'Archive all',
       variant: 'default',
     });
@@ -365,7 +335,7 @@ export function PrivacySection() {
               Named by surface deliberately. Read on a WEB settings screen, the
               unqualified version implied this browser could keep a conversation
               on-device or route it with your own key. Hosted Web offers
-              neither — app/settings/byok says so in as many words — and the
+              neither, app/settings/byok says so in as many words, and the
               three trust boundaries are the one thing that must not blur.
             */}
             On Desktop, CLI and VS Code, Local Mode conversations stay on your device and are never
@@ -378,7 +348,7 @@ export function PrivacySection() {
             data, and we do not train AGI-owned models on your prompts, responses or files. There is
             no training opt-in, because that data path does not exist. Managed Cloud requests are
             routed to the hosted provider serving the model you selected, and provider-side handling
-            is governed by that provider&rsquo;s terms &mdash; the current list is at{' '}
+            is governed by that provider&rsquo;s terms, the current list is at{' '}
             <SettingsPageLink
               href="/subprocessors"
               style={{ color: 'var(--text-1)', textDecoration: 'underline' }}
@@ -686,7 +656,7 @@ export function PrivacySection() {
 
           Distinct from the 'rememberChats' switch noted at the top of this
           file, which was removed for lying: nothing read it. This one is
-          honoured by machinery that already works — useConversations sends
+          honoured by machinery that already works, useConversations sends
           isTemporary AT CREATION and the save path already skips a temporary
           conversation, so the first message is never persisted either. It
           changes the default for NEW chats only; existing ones keep whatever
@@ -746,8 +716,8 @@ export function PrivacySection() {
         </div>
 
         {/*
-          The rights surface at /privacy/requests — consent ledger and a
-          rights-request form — was built and reachable only by typing the URL.
+          The rights surface at /privacy/requests, consent ledger and a
+          rights-request form, was built and reachable only by typing the URL.
           A DPDP/GDPR rights path the data subject cannot find from their own
           privacy settings is not a rights path.
         */}
@@ -790,8 +760,8 @@ export function PrivacySection() {
         {/*
           Uploaded files.
 
-          The Library at /chat/library has always listed these — uploads and
-          generated media, with soft delete and permanent delete — but Privacy
+          The Library at /chat/library has always listed these, uploads and
+          generated media, with soft delete and permanent delete, but Privacy
           never pointed at it, so the one screen a privacy-minded user opens did
           not mention the files they had uploaded. claude.ai lists exactly this
           beside its other Manage entries.
@@ -907,9 +877,9 @@ export function PrivacySection() {
         </div>
       </section>
 
-      {/* Delete account — cross-link only. This used to be a second, independent
+      {/* Delete account, cross-link only. This used to be a second, independent
           delete-account implementation (its own fetch, its own hardcoded
-          "within 24 hours" string, and — unlike Account settings — no sign-out
+          "within 24 hours" string, and, unlike Account settings, no sign-out
           afterward, which left a live client session against an account
           scheduled for erasure). Deletion now has exactly one implementation,
           on Account settings, via useDeleteAccount. Same pattern as

@@ -1,4 +1,3 @@
-
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import {
   ProjectsSyncPullResponseSchema,
@@ -55,7 +54,7 @@ const projectRow = {
   server_version: '3',
 };
 
-describe('GET /api/projects/sync — shared cloud contract', () => {
+describe('GET /api/projects/sync, shared cloud contract', () => {
   beforeEach(() => vi.clearAllMocks());
 
   it('pull page (incl. tombstone) parses', async () => {
@@ -103,7 +102,7 @@ describe('GET /api/projects/sync — shared cloud contract', () => {
   });
 });
 
-describe('POST /api/projects/sync — shared cloud contract', () => {
+describe('POST /api/projects/sync, shared cloud contract', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockGetSubscription.mockResolvedValue({ plan_tier: 'free' });

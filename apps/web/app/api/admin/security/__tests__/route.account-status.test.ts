@@ -99,7 +99,7 @@ afterEach(() => {
   }
 });
 
-describe('GET /api/admin/security — suspended admin', () => {
+describe('GET /api/admin/security, suspended admin', () => {
   it('reads account status for the id proved by the token', async () => {
     await GET(adminRequest('https://app.test/api/admin/security', 'GET'));
     expect(mockAssertAccountActive).toHaveBeenCalledWith(ADMIN_ID);
@@ -128,7 +128,7 @@ describe('GET /api/admin/security — suspended admin', () => {
   });
 });
 
-describe('POST /api/admin/security — suspended admin cannot act on other accounts', () => {
+describe('POST /api/admin/security, suspended admin cannot act on other accounts', () => {
   it.each(['suspend-user', 'ban-user', 'reactivate-user'])(
     'refuses %s and writes no account_status row',
     async (action) => {
@@ -149,7 +149,7 @@ describe('POST /api/admin/security — suspended admin cannot act on other accou
   );
 });
 
-describe('POST /api/admin/security — an active admin is unaffected', () => {
+describe('POST /api/admin/security, an active admin is unaffected', () => {
   it('still bans a target account and records the audit event', async () => {
     const response = await POST(
       adminRequest('https://app.test/api/admin/security?action=ban-user', 'POST', {

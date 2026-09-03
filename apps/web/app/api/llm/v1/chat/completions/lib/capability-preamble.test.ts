@@ -26,7 +26,7 @@ describe('capability preamble', () => {
   ])('describes automatic search for %s hosted-tool requests', (_provider, tool) => {
     const preamble = buildCapabilityPreamble({ tools: [tool] });
 
-    expect(preamble).toContain('- web_search — search the live web and cite what you find');
+    expect(preamble).toContain('- web_search, search the live web and cite what you find');
     expect(preamble).toContain('Web search is already enabled.');
     expect(preamble).not.toContain('No tools are available on this turn');
   });
@@ -140,7 +140,7 @@ describe('capability preamble', () => {
 
       expect(extractToolNames([tool])).toEqual([expectedName]);
       expect(preamble).not.toContain('No tools are available on this turn');
-      expect(preamble).toContain(`- ${expectedName} — run code in a hosted sandbox`);
+      expect(preamble).toContain(`- ${expectedName}, run code in a hosted sandbox`);
       expect(preamble).toContain('Code execution is already enabled.');
     },
   );

@@ -118,7 +118,7 @@ export function UpgradeWelcome({
               </h1>
               <p className="mt-4 max-w-sm text-sm text-muted-foreground" aria-live="polite">
                 {timedOut
-                  ? `Your ${planLabel} plan is taking longer than usual to activate. Check Billing before trying another purchase — you have not been charged twice.`
+                  ? `Your ${planLabel} plan is taking longer than usual to activate. Check Billing before trying another purchase, you have not been charged twice.`
                   : `Activating your ${planLabel} plan…`}
               </p>
             </>
@@ -156,7 +156,7 @@ export function UpgradeWelcome({
         <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
           {/*
             `border-transparent` on the filled button so it matches the outlined
-            one's box exactly — without it the border makes the pair 2px
+            one's box exactly, without it the border makes the pair 2px
             different in height side by side. `py-3` keeps both at a 44px touch
             target when they stack on a phone, narrowing to 2.5 once they don't.
           */}

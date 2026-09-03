@@ -80,7 +80,7 @@ describe('every connectMcpServer call site carries the SSRF egress policy', () =
   it.each(REQUIRED_CONNECT_SITES)('%s still routes through connectMcpServer', (file) => {
     expect(
       connectSites.map((site) => site.file),
-      `${file} no longer calls ${CONNECT_CALL} — either it stopped connecting MCP servers, or it ` +
+      `${file} no longer calls ${CONNECT_CALL}, either it stopped connecting MCP servers, or it ` +
         `now reaches one by a path this guard does not police. Remove it from ` +
         `REQUIRED_CONNECT_SITES only when the former is true.`,
     ).toContain(file);

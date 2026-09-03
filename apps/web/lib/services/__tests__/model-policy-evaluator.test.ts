@@ -29,9 +29,6 @@ describe('evaluateModelAccess', () => {
   });
 
   it('AN EMPTY ALLOWLIST DOES NOT DENY EVERYTHING', () => {
-    // A row that arrives empty — a fresh insert, a UI saved before anything was
-    // chosen — must not lock every member out of every model. Denial is
-    // something an administrator says, not something a blank field implies.
     const decision = evaluateModelAccess(policy(), { provider: 'openai', modelId: MODEL });
     expect(decision.allowed).toBe(true);
   });

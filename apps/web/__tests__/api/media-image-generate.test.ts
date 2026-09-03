@@ -795,7 +795,7 @@ describe('POST /api/media/image/generate', () => {
     });
   });
 
-  describe('Success — OpenAI provider', () => {
+  describe('Success, OpenAI provider', () => {
     it('persists with the admitted organization after an async workspace switch', async () => {
       const admittedOrganizationId = '11111111-1111-4111-8111-111111111111';
       const laterOrganizationId = '22222222-2222-4222-8222-222222222222';
@@ -928,7 +928,7 @@ describe('POST /api/media/image/generate', () => {
     });
   });
 
-  describe('Success — Google Imagen provider', () => {
+  describe('Success, Google Imagen provider', () => {
     beforeEach(() => {
       process.env['GOOGLE_API_KEY'] = 'test-google-key';
       delete process.env['OPENAI_API_KEY'];

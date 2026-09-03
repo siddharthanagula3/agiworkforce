@@ -2,13 +2,6 @@ import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
-/**
- * Resolves the app root by looking for a marker, not from `process.cwd()`.
- *
- * A coverage guard that resolves from the working directory fails with a wall
- * of unreadable-file errors the moment vitest is invoked from the repo root
- * instead of the app — noise that says nothing about the thing being guarded.
- */
 function appRoot(): string {
   const direct = process.cwd();
   if (existsSync(join(direct, 'db/neon'))) return direct;
@@ -19,18 +12,6 @@ function appRoot(): string {
 
 const APP_ROOT = appRoot();
 
-/**
- * Every managed-compute route must ask the workspace policy.
- *
- * This is the oldest of the workspace controls and the one a buyer is told
- * binds "regardless of which client sent the request". A route that meters
- * managed compute without asking makes that false on exactly one surface, which
- * is how a policy becomes a suggestion.
- *
- * Deliberately NOT derived by grepping for the call — that would pass
- * vacuously the day the list is empty. The routes are named, and a new
- * managed-compute route has to be added here consciously.
- */
 const MANAGED_ROUTES = [
   'app/api/llm/v1/chat/completions/route.ts',
   'app/api/llm/v1/chat/completions/approve/route.ts',
@@ -65,9 +46,6 @@ describe('the workspace policy covers every managed-compute route', () => {
   });
 
   it('names every route that reaches the gate, so the list cannot rot silently', () => {
-    // If a route starts calling the gate without being listed here, this test
-    // says so — which is the point. Adding it is a one-line change; noticing it
-    // is not.
     const callers = MANAGED_ROUTES.filter((r) =>
       source(r).includes('buildOrganizationPolicyGateResponse'),
     );

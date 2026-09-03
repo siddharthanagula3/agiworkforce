@@ -102,7 +102,7 @@ async function sendAndReadMessages(): Promise<Array<{ role: string; content: unk
   return body.messages;
 }
 
-describe('useChatStream — settled interactive card answers reach the next turn', () => {
+describe('useChatStream, settled interactive card answers reach the next turn', () => {
   beforeEach(() => {
     useChatStore.getState().reset();
     useFreeTrialStore.getState().clearLimitReached();

@@ -98,7 +98,7 @@ function videoJob(status: 'processing' | 'completed') {
   };
 }
 
-describe('Article 50(2) — generated video provenance', () => {
+describe('Article 50(2), generated video provenance', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockGetClerkAuthUser.mockResolvedValue(TEST_USER);

@@ -31,7 +31,7 @@ function postReq(body: unknown) {
   });
 }
 
-describe('POST /api/chat/sync — revision CAS', () => {
+describe('POST /api/chat/sync, revision CAS', () => {
   it('uses server revisions/clocks and preserves fields omitted by Desktop', async () => {
     const res = await POST(
       postReq({

@@ -1,4 +1,3 @@
-
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { NextRequest } from 'next/server';
 import { BYOK_PROVIDERS } from '@/lib/byok-providers';
@@ -38,7 +37,7 @@ function makeGetRequest(searchParams?: string): NextRequest {
 
 const TEST_KEY_VALUE = 'sk-test-anthropic-key-1234567890abcdef';
 
-describe('GET /api/byok/env-key-status — key leak prevention', () => {
+describe('GET /api/byok/env-key-status, key leak prevention', () => {
   let originalEnv: NodeJS.ProcessEnv;
 
   beforeEach(() => {
@@ -142,7 +141,7 @@ describe('GET /api/byok/env-key-status — key leak prevention', () => {
       expect(body).not.toContain('aaaaaaaaaaaa');
     });
 
-    it('Unicode in key value — isSet true, no value leaked', async () => {
+    it('Unicode in key value, isSet true, no value leaked', async () => {
       const unicodeKey = '日本語キー-abc123';
       process.env['ANTHROPIC_API_KEY'] = unicodeKey;
 
@@ -156,7 +155,7 @@ describe('GET /api/byok/env-key-status — key leak prevention', () => {
       expect(body).not.toContain(unicodeKey);
     });
 
-    it('all keys absent — all providers have isSet: false, no error', async () => {
+    it('all keys absent, all providers have isSet: false, no error', async () => {
       const response = await GET(makeGetRequest());
       const data = (await response.json()) as { providers: { id: string; isSet: boolean }[] };
 
@@ -180,7 +179,7 @@ describe('GET /api/byok/env-key-status — key leak prevention', () => {
     });
   });
 
-  describe('response headers — no key-leaking headers', () => {
+  describe('response headers, no key-leaking headers', () => {
     it('no header contains the key value', async () => {
       process.env['ANTHROPIC_API_KEY'] = TEST_KEY_VALUE;
 
@@ -264,7 +263,6 @@ describe('GET /api/byok/env-key-status — key leak prevention', () => {
     });
   });
 
-  // ─── (d) Method coverage — only GET exported ──────────────────────────────
   describe('only GET is exported (no other verb handler)', () => {
     it('GET is exported from the route module', async () => {
       const routeModule = await import('@/app/api/byok/env-key-status/route');
@@ -283,7 +281,7 @@ describe('GET /api/byok/env-key-status — key leak prevention', () => {
     });
   });
 
-  describe('error path — missing keys', () => {
+  describe('error path, missing keys', () => {
     it('returns 200 with isSet: false when key missing, not an error response', async () => {
       const response = await GET(makeGetRequest());
       expect(response.status).toBe(200);

@@ -202,7 +202,7 @@ export default function SecurityOperationsPanel() {
                       {securityEvent.user_id ?? 'anonymous'}
                     </td>
                     <td className="px-4 py-3 font-mono text-xs text-muted-foreground">
-                      {securityEvent.endpoint ?? '—'}
+                      {securityEvent.endpoint ?? ', '}
                     </td>
                   </tr>
                 ))}

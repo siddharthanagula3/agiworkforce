@@ -8,7 +8,7 @@ import {
 
 const ALL_SYNTHETIC_KINDS: readonly SyntheticContentKind[] = ['text', 'audio', 'image', 'video'];
 
-describe('EU AI Act Article 50 — declared web scope', () => {
+describe('EU AI Act Article 50, declared web scope', () => {
   it('classifies every synthetic kind the shared contract knows about', () => {
     for (const kind of ALL_SYNTHETIC_KINDS) {
       const entry = ARTICLE_50_2_WEB_SCOPE[kind];

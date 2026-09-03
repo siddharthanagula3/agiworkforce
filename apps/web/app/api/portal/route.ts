@@ -26,9 +26,7 @@ if (!STRIPE_SECRET_KEY) {
   );
 }
 
-const stripe = STRIPE_SECRET_KEY
-  ? new Stripe(STRIPE_SECRET_KEY, STRIPE_CLIENT_OPTIONS)
-  : null;
+const stripe = STRIPE_SECRET_KEY ? new Stripe(STRIPE_SECRET_KEY, STRIPE_CLIENT_OPTIONS) : null;
 
 function getValidatedOrigin(request: Request): string {
   const allowedOriginsEnv =
@@ -107,12 +105,6 @@ function resolveReturnPath(value: unknown): string {
   return value;
 }
 
-/**
- * Whether to drop the user straight into the portal's cancellation flow rather
- * than its landing page. Stripe rejects this with an invalid_request_error when
- * the portal configuration has cancellation switched off, which is the only way
- * to learn that from the API — the configuration itself is a dashboard setting.
- */
 function resolveFlow(value: unknown): 'cancel' | null {
   return value === 'cancel' ? 'cancel' : null;
 }

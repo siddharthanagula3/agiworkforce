@@ -150,14 +150,14 @@ function undisclaimed(source: string, phrases: readonly string[], label: string)
     let index = lower.indexOf(phrase);
     while (index !== -1) {
       const sentence = sentenceAround(source, index);
-      if (!NEGATION.test(sentence)) offenders.push(`${label} — "${phrase}" in: ${sentence.trim()}`);
+      if (!NEGATION.test(sentence)) offenders.push(`${label}, "${phrase}" in: ${sentence.trim()}`);
       index = lower.indexOf(phrase, index + phrase.length);
     }
   }
   return offenders;
 }
 
-describe('DOC-024 — every route page, certification honesty', () => {
+describe('DOC-024, every route page, certification honesty', () => {
   it('scans the pages that actually carry compliance copy', () => {
     const routes = new Set(PAGES.map(routeOf));
     for (const route of [
@@ -185,7 +185,7 @@ describe('DOC-024 — every route page, certification honesty', () => {
       for (const term of CERTIFICATION_TERMS) {
         for (const context of occurrencesInContext(source, term)) {
           if (!NEGATION.test(context))
-            offenders.push(`${routeOf(file)} — ${term}: ${context.trim()}`);
+            offenders.push(`${routeOf(file)}, ${term}: ${context.trim()}`);
         }
       }
     }
@@ -197,7 +197,7 @@ describe('DOC-024 — every route page, certification honesty', () => {
     for (const file of PAGES) {
       const lower = rendered(file).toLowerCase();
       for (const phrase of FORBIDDEN_PHRASES) {
-        if (lower.includes(phrase)) offenders.push(`${routeOf(file)} — ${phrase}`);
+        if (lower.includes(phrase)) offenders.push(`${routeOf(file)}, ${phrase}`);
       }
     }
     expect(offenders).toEqual([]);
@@ -218,7 +218,7 @@ describe('DOC-024 — every route page, certification honesty', () => {
   });
 });
 
-describe('DOC-024 — the org-policy schema is still unenforced', () => {
+describe('DOC-024, the org-policy schema is still unenforced', () => {
   it('still declares itself schema-only, so the pages must not promise enforcement', () => {
     const contract = readFileSync(
       path.resolve(
@@ -238,7 +238,7 @@ describe('DOC-024 — the org-policy schema is still unenforced', () => {
   });
 });
 
-describe('DOC-024 — /enterprise agrees with the dated ledger', () => {
+describe('DOC-024, /enterprise agrees with the dated ledger', () => {
   const ENTERPRISE = path.join(APP_DIR, 'enterprise', 'page.tsx');
 
   it('states SOC 2 as not held, in the same terms /trust uses', () => {

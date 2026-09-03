@@ -22,7 +22,7 @@ function expectNoForbiddenLanguage(text: string): void {
   }
 }
 
-describe('AdminConsolePage — managed compute status honesty', () => {
+describe('AdminConsolePage, managed compute status honesty', () => {
   it('includes the live security operations surface', () => {
     render(<AdminConsolePage />);
     expect(screen.getByTestId('security-operations-panel')).toBeInTheDocument();
@@ -40,7 +40,7 @@ describe('AdminConsolePage — managed compute status honesty', () => {
   });
 
   it.each([['0'], ['false'], ['off']])(
-    'renders "temporarily disabled (incident kill-switch)" — never waitlist/private-beta language — when the kill-switch is engaged (env=%s)',
+    'renders "temporarily disabled (incident kill-switch)", never waitlist/private-beta language, when the kill-switch is engaged (env=%s)',
     (envValue) => {
       vi.stubEnv('AGI_MANAGED_COMPUTE_PRIVATE_BETA', envValue);
       const { container } = render(<AdminConsolePage />);

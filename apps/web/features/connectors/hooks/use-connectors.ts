@@ -49,13 +49,6 @@ const CONNECTORS_CACHE_TTL_MS = 5000;
 let connectorsInFlight: Promise<ConnectorsResponse> | null = null;
 let connectorsCache: { data: ConnectorsResponse; fetchedAt: number } | null = null;
 
-/**
- * Force the next useConnectors() fetch (in any mounted component) to hit the
- * network. Exported so callers that mutate connector state OUTSIDE this
- * hook's own connect()/disconnect() — e.g. saving a custom connector via
- * /api/connectors/custom — can make the shared cache reflect it immediately
- * instead of waiting out the 5s TTL.
- */
 export function invalidateConnectorsCache() {
   connectorsCache = null;
   connectorsInFlight = null;

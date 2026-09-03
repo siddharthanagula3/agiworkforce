@@ -26,7 +26,7 @@ function readPublishedCopy(...segments: string[]): string {
     .join('\n');
 }
 
-describe('legal policy set — one canonical page per policy', () => {
+describe('legal policy set, one canonical page per policy', () => {
   it('has a page for every canonical policy route', () => {
     for (const route of Object.values(CANONICAL_POLICY_ROUTES)) {
       const pagePath = path.join(APP_DIR, route.replace(/^\//, ''), 'page.tsx');
@@ -71,7 +71,7 @@ describe('legal policy set — one canonical page per policy', () => {
   });
 });
 
-describe('legal policy set — discoverability', () => {
+describe('legal policy set, discoverability', () => {
   it('links the core policies plus the legal index from the marketing footer', () => {
     const footer =
       readFileSync(
@@ -92,11 +92,11 @@ describe('legal policy set — discoverability', () => {
   });
 });
 
-describe('legal policy set — prohibited claims', () => {
+describe('legal policy set, prohibited claims', () => {
   const BANNED: { pattern: RegExp; why: string; files: string[] }[] = [
     {
       pattern: /announced via email|notify customers[^.]*30 days in advance/i,
-      why: 'No mailing path can reach an arbitrary list of customers, so a promise of emailed notice cannot be performed. (The product CAN send support-escalation and scheduled-task email — see the Resend guard below — but neither can do a broadcast.)',
+      why: 'No mailing path can reach an arbitrary list of customers, so a promise of emailed notice cannot be performed. (The product CAN send support-escalation and scheduled-task email, see the Resend guard below, but neither can do a broadcast.)',
       files: ['privacy/page.tsx', 'terms/page.tsx', 'subprocessors/page.tsx', 'dpa/page.tsx'],
     },
     {
@@ -216,7 +216,7 @@ describe('legal policy set — prohibited claims', () => {
   });
 });
 
-describe('legal policy set — entity facts come from one place', () => {
+describe('legal policy set, entity facts come from one place', () => {
   const PAGES = [
     'terms/page.tsx',
     'privacy/page.tsx',

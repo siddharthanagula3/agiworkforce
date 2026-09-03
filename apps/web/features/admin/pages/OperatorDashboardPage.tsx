@@ -13,7 +13,7 @@ import { toUserMessage } from '@/lib/user-error-message';
 type Tab = 'overview' | 'feedback' | 'users';
 
 function formatCents(cents: number | null): string {
-  if (cents === null) return '—';
+  if (cents === null) return ', ';
   return `$${(cents / 100).toFixed(2)}`;
 }
 
@@ -120,13 +120,6 @@ export function OperatorDashboardPage() {
     return parsed;
   }
 
-  /**
-   * Fleet-wide reset is previewed first and then confirmed by typing the
-   * phrase, because it rewrites billing state for every active account and
-   * re-running it does not undo it. The preview is what makes the typed
-   * confirmation meaningful — the operator sees the real number before
-   * committing to it.
-   */
   async function resetEveryone() {
     setBulkBusy(true);
     setNotice(null);
@@ -374,7 +367,7 @@ export function OperatorDashboardPage() {
                 {users.map((user) => (
                   <tr key={user.id} className="border-t border-border">
                     <td className="p-3">
-                      <div>{user.email ?? '—'}</div>
+                      <div>{user.email ?? ', '}</div>
                       <div className="text-xs text-muted-foreground">
                         {user.displayName ?? user.id}
                       </div>

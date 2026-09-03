@@ -14,7 +14,7 @@ describe('wantsJsonObject', () => {
   });
 });
 
-describe('extractJsonObject — accepts', () => {
+describe('extractJsonObject, accepts', () => {
   it('a bare object', () => {
     const result = extractJsonObject('{"a":1}');
 
@@ -51,7 +51,7 @@ describe('extractJsonObject — accepts', () => {
   });
 });
 
-describe('extractJsonObject — rejects', () => {
+describe('extractJsonObject, rejects', () => {
   it('prose with no JSON at all', () => {
     const result = extractJsonObject('I cannot do that.');
 

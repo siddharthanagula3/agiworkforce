@@ -199,7 +199,7 @@ describe('formatProjectSystemPrompt', () => {
     expect(prompt).toContain('project "Launch Plan"');
     expect(prompt).toContain('Q3 launch planning');
     expect(prompt).toContain('Always answer in bullet points.');
-    expect(prompt).toContain('- pricing.md — Tier table');
+    expect(prompt).toContain('- pricing.md, Tier table');
     expect(prompt).toContain('- roadmap.pdf');
     expect(prompt).toContain('Pro costs $20 per month.');
     expect(prompt).toContain('untrusted reference data');
@@ -249,7 +249,7 @@ describe('formatProjectSystemPrompt', () => {
       }),
     );
     expect(prompt).toContain('Relevant chats in this project');
-    expect(prompt).toContain('- "Pricing model" — How should we price the Pro tier?');
+    expect(prompt).toContain('- "Pricing model", How should we price the Pro tier?');
     expect(prompt).toContain('- "Launch checklist"');
     expect(prompt).toContain('untrusted reference data');
   });

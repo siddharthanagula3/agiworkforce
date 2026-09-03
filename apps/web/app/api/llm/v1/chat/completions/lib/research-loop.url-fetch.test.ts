@@ -190,7 +190,7 @@ describe('research loop url_fetch integration', () => {
         messages: Array<{ role: string; content: string }>;
       };
       const directive = synthesis.messages[synthesis.messages.length - 1];
-      expect(directive?.content).toContain('[1] Example Domain — https://example.com/');
+      expect(directive?.content).toContain('[1] Example Domain, https://example.com/');
     } finally {
       vi.unstubAllGlobals();
     }

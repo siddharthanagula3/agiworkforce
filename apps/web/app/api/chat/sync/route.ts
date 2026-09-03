@@ -282,21 +282,6 @@ const PUSH_MESSAGES_SQL = `
 
 type ThreadParent = { id: string; parentId: string | null };
 
-/**
- * Applies one push batch of messages, giving the new rows of any conversation
- * that has been branched a place in its tree.
- *
- * A conversation with no active leaf is still linear, and stays that way: the
- * batch runs exactly as it always has, with an empty thread table leaving every
- * parent null. Only a branched conversation pays for the row lock, and it pays
- * once for the whole batch rather than once per message.
- *
- * The scope carried into the lock is the conversation's own workspace, not the
- * request's. A push writes any row its owner owns — the insert below asks only
- * for `user_id` — so scoping the thread by the active workspace instead would
- * leave a device syncing a conversation from another one writing rows with no
- * parent, which is the defect this exists to close.
- */
 async function pushMessages(
   db: Awaited<ReturnType<typeof getUserScopedDb>>['db'],
   userId: string,
@@ -559,11 +544,6 @@ async function handlePush(request: NextRequest) {
       const rows = await pushMessages(db, userId, messages);
       collectBatchRows(rows, applied.messages, conflicts.messages);
 
-      // Device sync (desktop/mobile) is another real path that writes
-      // assistant-authored web_messages rows — index the same way the live
-      // chat turn does, so the web gallery can discover artifacts from
-      // conversations synced in from another surface. Fire-and-forget: a
-      // discovery aid, never allowed to fail or slow the sync response.
       const pushedById = new Map(messages.map((item) => [item.id, item]));
       for (const row of applied.messages) {
         const pushed = pushedById.get(row.id);
@@ -747,22 +727,6 @@ function withIsoTimestamps<T>(rows: T[]): T[] {
   });
 }
 
-/**
- * Compute the SAFE next pull cursor.
- *
- * `conversations` and `messages` are paginated INDEPENDENTLY (separate LIMITs) but
- * share one `server_version` sequence, and a row's version is reassigned on every
- * update (so a conversation can be re-versioned ABOVE its own older messages). If we
- * advanced the cursor to the global max, the lagging table's rows whose version
- * falls in the gap would be `> since` no longer and never returned again — silent
- * loss. So when a table saturates its page, the cursor must not pass the LOWEST
- * saturated frontier (the last/highest version that table delivered); the next page
- * re-requests the overlap, which the client UPSERTs idempotently. When nothing
- * saturates, every row `> since` was delivered, so advance to the global max.
- *
- * Inputs are ordered `by server_version asc`, so the last element is each table's
- * frontier. Exported for direct unit testing.
- */
 export function computePullCursor(
   since: string,
   conversations: Array<{ server_version: string }>,

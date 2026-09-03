@@ -1,11 +1,10 @@
-
 export class TauriUnavailableError extends Error {
   readonly code = 'TAURI_UNAVAILABLE';
 
   constructor(readonly command: string) {
     super(
       `Tauri command '${command}' is not available in the web environment. ` +
-        `It requires the Tauri desktop runtime — guard this call site with isTauri.`,
+        `It requires the Tauri desktop runtime, guard this call site with isTauri.`,
     );
     this.name = 'TauriUnavailableError';
   }

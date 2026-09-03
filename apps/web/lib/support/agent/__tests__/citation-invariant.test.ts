@@ -1,4 +1,3 @@
-
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('@agiworkforce/routing', async (importOriginal) => {
@@ -76,7 +75,7 @@ describe('citation invariant', () => {
 
   it('abstains when the model writes a plausible URL but cites nothing', async () => {
     queueModelJson({
-      answer: 'Add your key at https://agiworkforce.com/byok — see the BYOK guide.',
+      answer: 'Add your key at https://agiworkforce.com/byok, see the BYOK guide.',
       citedChunkIds: [],
       abstain: false,
       abstainReason: '',

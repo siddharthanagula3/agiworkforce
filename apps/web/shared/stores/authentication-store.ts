@@ -120,19 +120,6 @@ function purgeAppOwnedStorage(area: Storage | undefined): number {
   return removed;
 }
 
-/**
- * Central cleanup on sign-out. Resets every user-scoped store's in-memory
- * state AND clears its persisted payload, then sweeps any remaining app-owned
- * storage keys. Exported so BOTH sign-out paths (`useAuthStore.logout()` and
- * `useBillingStore.signOut()`) run the exact same cleanup — the two used to
- * carry "keep this in sync" comments and had already drifted apart.
- *
- * Every step is independent and runs through `Promise.allSettled`: this
- * function's whole purpose is preventing cross-user data leaks, so one module
- * failing to load (a stale chunk hash right after a deploy, a transient
- * network blip) must never skip the rest. A partial failure is strictly better
- * than an all-or-nothing one.
- */
 export async function cleanupAllStores(): Promise<void> {
   const results = await Promise.allSettled(
     USER_SCOPED_STORE_MODULES.map(async ({ label, load }) => {

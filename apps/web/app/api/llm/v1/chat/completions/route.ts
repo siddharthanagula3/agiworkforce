@@ -95,43 +95,6 @@ import { settleFreeTrialRequest } from '@/lib/services/free-trial-service';
 /** Current Vercel Hobby maximum for the request-scoped managed agent stream. */
 export const maxDuration = 300;
 
-/**
- * OpenAI-compatible Chat Completions API
- * Endpoint: POST /v1/chat/completions (via api.agiworkforce.com)
- *
- * Routes to 10+ LLM providers based on model. Auth: Clerk JWT. Billing: cloud credits.
- * Service modules: auth-gate | request-processor | stream-transform | response-builder
- *
- * Agentic extension: every AGI Work stream enters the managed tool-loop driver,
- * including turns that begin without an explicit tool. Normal chat enters that
- * loop only when MCP/platform tools are present. Run state and canonical events
- * are journaled durably either way.
- *
- * Transport: a turn that holds a managed-usage reservation starts on the Vercel
- * Workflow transport unless the `AGI_DURABLE_INITIAL_TURNS` kill-switch is
- * engaged, so the run outlives the request that started it — the client can
- * disconnect and later reattach through the run journal, and its approvals stay
- * claimable from any surface. Free-trial turns, an engaged kill-switch, and a
- * workflow that fails to start use the request-scoped inline stream, which
- * emits the identical SSE wire.
- * The approval_mode query parameter controls gating: ?approval_mode=auto skips
- * the per-tool prompt; the default 'manual' persists a signed checkpoint before
- * emitting x_tool_approval_request events.
- *
- * Provider dispatch, for the standard (non-agentic) paths below (restructure
- * Wave 2, task #34): Anthropic, Google, OpenAI, and the 8 openai-compat
- * providers (minimax, moonshot, zhipu, qwen, openrouter, deepseek,
- * xai, perplexity) go through `packages/ai/providers/*` adapters
- * (`ADAPTER_PROVIDERS`, ./lib/adapter-providers.ts) -- that is every provider
- * `processed.provider` (request-processor.ts's catalog lookup + heuristic
- * fallback chain) can resolve to, so there is no longer a `LLMProviderFactory`
- * (apps/web/lib/llm-providers, retired) dispatch fallback below; an unlisted
- * provider id is treated as an explicit unsupported-provider failure instead.
- * The agentic tool-loop path (MCP/E2B, `runToolLoop`) shares the SAME
- * `ADAPTER_PROVIDERS` table via its own table-driven per-step dispatch, see
- * tool-loop-anthropic.ts.
- */
-
 async function refundFailedReservation(
   userId: string,
   processed: ProcessedRequest,
@@ -260,12 +223,6 @@ function addAgentRunHeaders(headers: Record<string, string>, run: CloudAgentRun)
     `/api/llm/v1/chat/completions/runs/${encodeURIComponent(run.id)}`;
 }
 
-/**
- * GOV-3 — the request-scoped turn body, entered only once a concurrency slot
- * has been admitted by `handleChatCompletions` below. Split out so the slot's
- * acquire/release can wrap EVERY exit (return, throw, client abort) in one
- * place instead of being repeated at each of this function's ~10 returns.
- */
 async function dispatchChatCompletions(
   request: NextRequest,
   authResult: AuthGateSuccess,
@@ -502,23 +459,6 @@ async function dispatchChatCompletions(
       return new NextResponse(withSseHeartbeat(researchStream), { headers: researchHeaders });
     }
 
-    // Agentic path: load MCP tools (fast -- catalog is cached for 60s).
-    // If no tools are configured, mcpTools is empty and we fall through to
-    // the standard single-turn streaming path unchanged.
-    //
-    // Additive per-user connector tools (fixes WEB-CONNECTORS-NO-RUNTIME-EFFECT-01):
-    // a signed-in user's CONNECTED connectors (github built-in / operator-mapped
-    // remote MCP connectors) contribute tools alongside the operator MCP catalog.
-    // Fully server-side and degrades to [] on any failure, so the SSE wire shape
-    // is unchanged (no new event types) and an unconfigured/empty environment
-    // behaves exactly as before.
-    // Per-model tools gate (WEB-TOOLS-MODEL-CAP-GATE-01): a model whose registry
-    // capability `tools` is false (for example, a search-native model) cannot
-    // do function calling. Shipping MCP / connector tool definitions to it makes the
-    // provider reject the whole request. Skip tool loading for such models so they
-    // fall through to the standard single-turn path — search-native models still
-    // answer; connectors/MCP are simply not offered. The office-creation, skill, and
-    // E2B paths already 4xx for tools:false; this closes the same gap for connectors/MCP.
     const modelSupportsTools =
       getModelMetadataById(processed.chatRequest.model)?.capabilities?.tools ?? true;
     // AUDIT-FIX CON-1/CON-2: load the user's saved allow/ask/deny verdicts BEFORE
@@ -543,10 +483,6 @@ async function dispatchChatCompletions(
       connectorPermissions,
       new Set(processed.chatRequest.disabled_connector_ids),
     );
-    // GOV-7: the connector-tool ceiling is now the caller's PLAN ceiling, not a
-    // flat 32 for everybody, and the truncation it causes is reported back
-    // rather than only logged — a "Connected" connector whose tools were
-    // silently dropped is indistinguishable from a broken one.
     const [operatorTools, connectorCatalog] = modelSupportsTools
       ? await Promise.all([
           loadMcpToolDefs(),
@@ -581,17 +517,6 @@ async function dispatchChatCompletions(
           ...getSecurityHeaders(),
         };
         addAgentRunHeaders(headers, run);
-        // The model that ACTUALLY answered, after routing and any fallback.
-        //
-        // The client labels each assistant message with what it REQUESTED, so
-        // an Auto-routed turn was labelled `auto` — not a catalog id — and the
-        // transcript rendered "Unavailable model" under every reply. Same class
-        // of wrongness when a credit fallback silently swaps the model: the
-        // footer named a model that never ran. Report the resolved id and let
-        // the client show the truth.
-        // `chatRequest.model` is the routed value — routing and fallback both
-        // mutate it in place, whereas `requestedModel`/`originalModel` keep the
-        // caller's pre-routing string.
         if (processed.chatRequest.model) {
           headers['X-AGI-Resolved-Model'] = processed.chatRequest.model;
         }
@@ -613,42 +538,6 @@ async function dispatchChatCompletions(
         return headers;
       };
 
-      // DURABLE INITIAL TURNS: a paid managed turn runs on the Workflow
-      // transport, so closing the laptop no longer kills work the user is being
-      // charged for — the run continues server-side, its approval is claimable
-      // from any surface, and the client reattaches through the run journal.
-      //
-      // The module docstring above used to say the Workflow transport was
-      // deliberately kept off this path because a poisoned `start()` could hang
-      // before returning and strand the client at startup. That is handled by
-      // ordering rather than avoidance: nothing has been generated, streamed, or
-      // consumed at this point, so a `start()` that THROWS falls through to the
-      // inline path below with no double execution possible
-      // (`startCloudAgentWorkflowExecution` cancels the run it started if the
-      // durable attach fails). `approve/route.ts` has awaited the same call on a
-      // request path since durable resumes shipped.
-      //
-      // AGI-126: this used to read `processed.managedUsage && ...`, so the DEFAULT
-      // tier was the one tier that was never durable. A free-trial turn still got
-      // a `cloud_agent_runs` row — listed by the runs API, claimable by the
-      // approval APIs — so it LOOKED durable, then died with the client
-      // connection; and once such a turn paused on an approval it could never be
-      // resumed, because the resume routes could not rebuild a workflow input
-      // without a managed reservation.
-      //
-      // The tier no longer decides the transport. `CloudAgentWorkflowBilling`
-      // carries either reservation across the invocation boundary, and the
-      // workflow rehydrates it onto the matching side of `ProcessedRequest`, so a
-      // durable free turn is metered by exactly the free-tier budget an inline
-      // one is. A turn that carries neither reservation raises
-      // `CloudAgentWorkflowBillingUnavailableError` from the builder and lands in
-      // the same degrade below.
-      //
-      // A `start()` that THROWS is safe here: nothing has been generated,
-      // streamed, or consumed at this point, so falling through to the inline
-      // path cannot double-execute
-      // (`startCloudAgentWorkflowExecution` cancels the run it started if the
-      // durable attach fails).
       if (areDurableInitialTurnsEnabled() && !isDurableTransportCoolingDown()) {
         try {
           const workflow = await startCloudAgentWorkflowExecution({
@@ -690,18 +579,6 @@ async function dispatchChatCompletions(
         }
       }
 
-      // Approval mode:
-      //   - Built-in platform tools only: 'auto' — E2B tools run in an isolated sandbox,
-      //     url_fetch is read-only + SSRF-guarded, and web_search uses the configured
-      //     server-owned search backend. These tools fail closed with an explicit result
-      //     if their backend is unavailable, so the model can recover inside the loop.
-      //   - MCP tools present (with or without E2B/url_fetch): 'manual' — keep the existing
-      //     fail-closed approval gate. If both MCP + E2B tools are present, MCP's manual
-      //     gate takes precedence; E2B tool calls in that mix stall on approval (acceptable;
-      //     mixed MCP+E2B is an edge case and the operator can enable the resume endpoint).
-      // Build the agentic SSE stream from the tool-loop generator. The connector
-      // executor is bound to the authenticated userId (only meaningful when the
-      // user actually connected connectors; a no-op otherwise).
       const connectorExecutor =
         connectorTools.length > 0
           ? makeUserConnectorExecutor(userId, processed.organizationId)
@@ -754,11 +631,6 @@ async function dispatchChatCompletions(
           });
           approvalCheckpointSaved = true;
         },
-        // An MCP `input_required` pause is a NON-TERMINAL exit: the loop parks the
-        // run in `awaiting_input`, streams [DONE], and returns. Without this write
-        // it parked with nothing recorded — `resume-input/` had no checkpoint to
-        // claim, so the run was unresumable and the work already done was lost.
-        // The durable transport has always written it; the inline one now does too.
         onInputCheckpoint: async (checkpoint) => {
           await saveCloudAgentInputCheckpoint(runDb, {
             userId,
@@ -814,13 +686,6 @@ async function dispatchChatCompletions(
       // See buildAdapterStreamResponse's docstring.
       const streamStartedAt = Date.now();
 
-      // Managed failover (AUTO-ROUTER-MIGRATION-01, web twin): the rotation
-      // point is startProviderStream's first-chunk peek — a rotated attempt
-      // has BY CONSTRUCTION delivered nothing to the client (the peek either
-      // throws before any chunk is consumable, or the attempt is committed
-      // and later failures keep today's mid-stream behavior). One managed-
-      // usage reservation spans all attempts; the attempt view swaps the
-      // serving model so attribution and settlement follow it.
       const failover = createFailoverPlan(processed, {
         signal: request.signal,
         isProviderDispatchable: (candidate) => Boolean(ADAPTER_PROVIDERS[candidate]),
@@ -972,12 +837,6 @@ async function dispatchChatCompletions(
   );
 }
 
-/**
- * GOV-3 — the plan's concurrent-turn ceiling is already occupied.
- *
- * Actionable rather than generic: the user's own other turns are the cause and
- * stopping one is the immediate fix, so say that and name the ceiling.
- */
 function managedTurnSlotExhaustedResponse(slot: ManagedTurnSlotResult): NextResponse {
   const limit = slot.limit ?? 0;
   const headers: Record<string, string> = { ...getSecurityHeaders() };
@@ -1015,23 +874,6 @@ function managedTurnSlotExhaustedResponse(slot: ManagedTurnSlotResult): NextResp
   );
 }
 
-/**
- * GOV-3 — hand slot ownership to a streaming response.
- *
- * A streaming turn OUTLIVES this handler: the route returns as soon as the SSE
- * body exists, while the provider keeps producing for minutes afterwards.
- * Releasing in the handler's `finally` would therefore free the slot while the
- * turn is still running and make the ceiling meaningless. Instead the body is
- * passed through an identity `TransformStream` whose completion, error, and
- * cancel all land in the same `finally` — which is exactly when the underlying
- * stream's own terminal/`cancel()` hooks settle billing, because cancelling the
- * branch propagates upstream and triggers them.
- *
- * One choke point for all three streaming shapes (research loop, agentic tool
- * loop, single-turn adapter), so no dispatch path can leak a slot. Release is
- * idempotent, and unreleased slots additionally age out of the Redis set, so
- * the worst case of a missed edge is a bounded, self-healing over-count.
- */
 function attachTurnSlotToStream(
   response: NextResponse | Response,
   release: () => Promise<void>,
@@ -1062,19 +904,6 @@ function isEventStreamResponse(response: NextResponse | Response): boolean {
   return (response.headers.get('content-type') ?? '').includes('text/event-stream');
 }
 
-/**
- * GOV-3 — bound CONCURRENT managed turns per plan.
- *
- * `maxConcurrentTurns` existed in the billing catalog but nothing enforced it:
- * the only limits on this route were requests-per-minute (`llm-completion`) and
- * spend. Neither bounds concurrency — 30 simultaneous 10-minute streams pass a
- * per-minute limiter cleanly — so this was the single control standing between
- * a plan's advertised ceiling and unbounded parallel provider spend.
- *
- * Acquired after the auth gate (the first point with a userId AND a plan tier)
- * and released on EVERY exit: non-streaming returns and thrown errors via the
- * `finally` here, streaming responses via `attachTurnSlotToStream` above.
- */
 async function handleChatCompletions(request: NextRequest): Promise<NextResponse | Response> {
   // 1. Auth + rate-limit + CSRF + subscription gate
   const authResult = await runAuthGate(request);

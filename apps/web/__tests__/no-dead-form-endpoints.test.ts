@@ -1,4 +1,3 @@
-
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'fs';
 import { resolve } from 'path';
@@ -9,7 +8,7 @@ function readPage(relPath: string): string {
   return readFileSync(resolve(ROOT, relPath), 'utf8');
 }
 
-describe('no dead form endpoints — guard', () => {
+describe('no dead form endpoints, guard', () => {
   it('/contact page does not fetch /api/contact (route does not exist)', () => {
     const src = readPage('app/contact/page.tsx');
     expect(src).not.toMatch(/fetch\s*\(\s*['"`]\/api\/contact['"`]/);

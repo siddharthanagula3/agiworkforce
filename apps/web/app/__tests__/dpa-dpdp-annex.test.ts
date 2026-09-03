@@ -29,7 +29,7 @@ function sectionBody(id: string): string {
   return after.slice(0, end === -1 ? undefined : end).replace(/\s+/gu, ' ');
 }
 
-describe('DPA — DPDP Act coverage', () => {
+describe('DPA, DPDP Act coverage', () => {
   it('names the DPDP Act in the applicable-law definition', () => {
     const definitions = sectionBody('s-02');
     expect(definitions).toMatch(/Applicable Data Protection Law/);

@@ -32,18 +32,10 @@ export function setTelemetryConsentCache(value: boolean): void {
   try {
     window.localStorage.setItem(TELEMETRY_CONSENT_STORAGE_KEY, value ? 'true' : 'false');
   } catch {
-    // Private-browsing / storage-disabled — the toggle still saves server-side via
-    // savePreferenceNamespace; only the synchronous local gate is unavailable.
+    // noop
   }
 }
 
-// Root layout renders the account's real, server-stored consent onto <html> on
-// every full page load (WEB-TELEMETRY-CONSENT-NOT-CROSS-DEVICE-01), so a
-// brand-new device's first paint reads the authoritative answer instead of a
-// localStorage mirror it has never written. It is a one-shot signal read at
-// module load, before hydration — nothing keeps it live after that, so later
-// consent changes in this tab are still tracked through the localStorage
-// mirror above, not this attribute.
 export const TELEMETRY_CONSENT_DOCUMENT_ATTRIBUTE = 'data-telemetry-consent';
 
 export function readDocumentTelemetryConsent(): boolean | null {
@@ -54,15 +46,6 @@ export function readDocumentTelemetryConsent(): boolean | null {
   return null;
 }
 
-/**
- * The pre-mount Sentry init gate, called once from instrumentation-client.ts.
- * Prefers the server-rendered document signal (always present and accurate,
- * including on a brand-new device) over the localStorage mirror, and syncs
- * the mirror to match so every hasTelemetryConsent() read this session — not
- * just this decision — agrees with it before TelemetryConsentSync's fetch
- * resolves. Falls back to the mirror only when the document carries no signal
- * at all, which real pages never do; it exists for non-SSR call sites.
- */
 export function shouldInitializeSentry(): boolean {
   if (!isSentryConfigured()) return false;
   const documentConsent = readDocumentTelemetryConsent();

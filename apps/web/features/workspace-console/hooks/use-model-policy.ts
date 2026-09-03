@@ -47,7 +47,6 @@ async function readApiError(res: Response): Promise<string> {
   }
 }
 
-/** `null` means the caller is not entitled or not a member — a 403, not an error. */
 export function useModelPolicy(): UseQueryResult<ModelPolicyResult | null, Error> {
   return useQuery<ModelPolicyResult | null, Error>({
     queryKey: MODEL_POLICY_QUERY_KEY,

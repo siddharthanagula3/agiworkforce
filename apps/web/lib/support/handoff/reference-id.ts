@@ -1,18 +1,3 @@
-/**
- * @file reference-id.ts
- *
- * Human-quotable escalation reference: `AGI-YYYYMMDD-XXXXXXXX`.
- *
- * Returned in EVERY handoff mode — including the fully degraded one where no
- * email could be sent — because the database row exists either way and a human
- * sweeping the table must be able to find what the user is quoting. A support
- * channel where the user has nothing to reference is the same failure as a
- * chat that never connects.
- *
- * The random half uses Crockford base32 (no I/L/O/U), so a reference read aloud
- * or retyped from a screenshot cannot be corrupted by 1/I or 0/O confusion.
- */
-
 import { randomBytes } from 'node:crypto';
 
 const ALPHABET = '0123456789ABCDEFGHJKMNPQRSTVWXYZ';

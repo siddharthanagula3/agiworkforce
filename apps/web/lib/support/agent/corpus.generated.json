@@ -149,7 +149,7 @@
           "ordinal": 0,
           "heading": "What connectors do",
           "headingPath": "Connectors and MCP › What connectors do",
-          "text": "Connectors let AGI call an external system on your behalf — reading a repository,\nquerying a service, or running a tool exposed over MCP (Model Context Protocol).\nEvery connector is scoped to your own account."
+          "text": "Connectors let AGI call an external system on your behalf, reading a repository,\nquerying a service, or running a tool exposed over MCP (Model Context Protocol).\nEvery connector is scoped to your own account."
         },
         {
           "id": "connectors-and-mcp#1",

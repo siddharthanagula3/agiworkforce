@@ -77,7 +77,7 @@ function buildReadinessRows(managedComputeOpen: boolean): ReadinessRow[] {
     },
     {
       area: 'Identity',
-      status: 'Implemented — entitlement-gated',
+      status: 'Implemented, entitlement-gated',
       tone: 'ok',
       source: 'attested',
       owner: 'Enterprise',

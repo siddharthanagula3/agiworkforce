@@ -1,4 +1,3 @@
-
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
@@ -66,7 +65,7 @@ describe('GET /api/support/handoff/availability', () => {
     expect(payload.reason).toBe('live');
   });
 
-  it('is never cached by a CDN — presence goes stale on a ~90s heartbeat', async () => {
+  it('is never cached by a CDN, presence goes stale on a ~90s heartbeat', async () => {
     const response = await GET(req());
     expect(response.headers.get('cache-control')).toBe('no-store');
   });

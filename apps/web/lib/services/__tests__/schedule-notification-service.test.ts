@@ -35,7 +35,7 @@ beforeEach(() => {
   preferences({ [SCHEDULE_PUSH_PREFERENCE_KEY]: true });
 });
 
-describe('notifyScheduleCompleted — consent', () => {
+describe('notifyScheduleCompleted, consent', () => {
   it('sends when the user enabled it', async () => {
     const result = await notifyScheduleCompleted(notice);
 
@@ -93,7 +93,7 @@ describe('notifyScheduleCompleted — consent', () => {
   });
 });
 
-describe('notifyScheduleCompleted — content', () => {
+describe('notifyScheduleCompleted, content', () => {
   it('names failure as failure', async () => {
     await notifyScheduleCompleted({ ...notice, status: 'failed' });
 
@@ -132,7 +132,7 @@ describe('notifyScheduleCompleted — content', () => {
   });
 });
 
-describe('notifyScheduleCompleted — never throws', () => {
+describe('notifyScheduleCompleted, never throws', () => {
   it('swallows a push failure', async () => {
     mocks.sendPush.mockRejectedValue(new Error('expo down'));
 

@@ -1,4 +1,3 @@
-
 import { describe, it, expect } from 'vitest';
 import DOMPurify from 'dompurify';
 import {
@@ -27,7 +26,7 @@ function hasMetaRefresh(html: string): boolean {
   return /<meta[^>]*http-equiv\s*=\s*['"]?refresh['"]?/i.test(html);
 }
 
-describe('sanitizeHTML — strict path (no scripts, no handlers)', () => {
+describe('sanitizeHTML, strict path (no scripts, no handlers)', () => {
   it('strips <script> tags', () => {
     const input = '<p>Hello</p><script>alert(1)</script>';
     const result = sanitizeHTML(input);
@@ -54,7 +53,7 @@ describe('sanitizeHTML — strict path (no scripts, no handlers)', () => {
   });
 });
 
-describe('sanitizeArtifact — html type strips scripts', () => {
+describe('sanitizeArtifact, html type strips scripts', () => {
   it('strips script tag from html artifact', () => {
     const input =
       '<div id="counter">0</div><script>document.getElementById("counter").textContent=42;</script>';
@@ -70,7 +69,7 @@ describe('sanitizeArtifact — html type strips scripts', () => {
   });
 });
 
-describe('sanitizeHtmlForSandbox — preserves scripts and handlers', () => {
+describe('sanitizeHtmlForSandbox, preserves scripts and handlers', () => {
   it('preserves inline <script>', () => {
     const input =
       '<div id="count">0</div><script>document.getElementById("count").textContent=1;</script>';
@@ -128,7 +127,7 @@ describe('sanitizeHtmlForSandbox — preserves scripts and handlers', () => {
   });
 });
 
-describe('sanitizeHtmlForSandbox — strips sandbox-escape vectors', () => {
+describe('sanitizeHtmlForSandbox, strips sandbox-escape vectors', () => {
   it('strips <base href> (URL hijacking)', () => {
     const input = '<base href="https://evil.com/"><p>Hello</p>';
     const result = sanitizeHtmlForSandbox(input);
@@ -285,7 +284,7 @@ describe('isHtmlDocument', () => {
   });
 });
 
-describe('buildSandboxSrcDoc — full document input (no double-wrap)', () => {
+describe('buildSandboxSrcDoc, full document input (no double-wrap)', () => {
   const FULL_DOC_COUNTER = `<!DOCTYPE html>
 <html>
 <head>
@@ -352,7 +351,7 @@ describe('buildSandboxSrcDoc — full document input (no double-wrap)', () => {
   });
 });
 
-describe('buildSandboxSrcDoc — fragment input (wraps in shell, no double html)', () => {
+describe('buildSandboxSrcDoc, fragment input (wraps in shell, no double html)', () => {
   const FRAGMENT_COUNTER = `<div id="count">0</div>
 <button onclick="increment()">+</button>
 <script>
@@ -402,7 +401,7 @@ describe('buildSandboxSrcDoc — fragment input (wraps in shell, no double html)
   });
 });
 
-describe('buildSandboxSrcDoc — addEventListener (slider) pattern', () => {
+describe('buildSandboxSrcDoc, addEventListener (slider) pattern', () => {
   it('preserves addEventListener in fragment', () => {
     const frag = `<input type="range" id="s" min="0" max="100">
 <p id="val">50</p>
@@ -438,7 +437,7 @@ describe('buildSandboxSrcDoc — addEventListener (slider) pattern', () => {
 
 import { JSDOM } from 'jsdom';
 
-describe('buildSandboxSrcDoc — SCRIPT EXECUTION (side-effect verification)', () => {
+describe('buildSandboxSrcDoc, SCRIPT EXECUTION (side-effect verification)', () => {
   it('onclick counter (full doc): button.click() increments the DOM counter', () => {
     const counterDoc = `<!DOCTYPE html>
 <html>
@@ -587,9 +586,7 @@ describe('buildSandboxSrcDoc — SCRIPT EXECUTION (side-effect verification)', (
   });
 });
 
-// SSR safety — regression for "DOMPurify.addHook is not a function".
-
-describe('buildSandboxSrcDoc — SSR safety (DOMPurify hooks API unavailable)', () => {
+describe('buildSandboxSrcDoc, SSR safety (DOMPurify hooks API unavailable)', () => {
   it('does not throw and returns a string when DOMPurify.addHook is missing', () => {
     const originalAddHook = DOMPurify.addHook;
     try {

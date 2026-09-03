@@ -118,7 +118,7 @@ function messageWrites(captured: CapturedRequest[]): Array<Record<string, unknow
   return captured.filter((call) => call.url.includes('/messages')).map((call) => call.body);
 }
 
-describe('useChatStream — variant-aware context assembly', () => {
+describe('useChatStream, variant-aware context assembly', () => {
   beforeEach(() => {
     useChatStore.getState().reset();
     useThinkingStore.getState().setEnabled(false);

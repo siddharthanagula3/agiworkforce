@@ -49,30 +49,6 @@ interface StreamBillingUsage {
   providerReportedCostUsd?: number;
 }
 
-/**
- * Which outcome the managed ledger is settled under.
- *
- * A client abort is not a provider failure, and must not be billed like one.
- * The tokens were generated, the provider has already charged us for them, and
- * the cancel path deliberately keeps the partial answer
- * (`persistAssistantTurnSnapshot(true)`), so the user keeps what they received.
- *
- * Settling that as `failed` zeroes the charge — `finalizeManagedUsageRequest`
- * forces `actualCostCents` to 0 on failure regardless of what is passed — which
- * turned "ask for something long, press Stop at 95%" into unlimited free
- * inference on the managed path. It was unbounded rather than merely cheap: a
- * zero settle records no cost, so neither the monthly allowance nor the rolling
- * 5h/weekly caps could observe it, and it repeated indefinitely on any tier.
- *
- * Only an attempt that produced NO tokens is still refunded in full — the
- * genuine-failure case the zeroing rule exists for. A provider error before any
- * output, or an unsupported provider, refunds via `refundFailedReservation` in
- * route.ts and never reaches here carrying tokens.
- *
- * Exported for direct testing: the abort path runs inside a ReadableStream
- * `cancel()` behind an SSE heartbeat wrapper and a Response body, which a unit
- * test cannot reliably drive, so the decision itself is guarded here instead.
- */
 export function resolveBilledOutcome(input: {
   outcome?: 'completed' | 'failed';
   cancelled?: boolean;

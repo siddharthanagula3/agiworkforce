@@ -36,7 +36,7 @@ export const useCoworkFolderStore = create<CoworkFolderStore>()((set) => ({
       const handle = await window.showDirectoryPicker!({ mode: 'read' });
       set({ handle, folderName: handle.name });
     } catch {
-      // User cancelled — non-fatal; keep current state.
+      // noop
     }
   },
 

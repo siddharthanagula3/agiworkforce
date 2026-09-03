@@ -105,13 +105,6 @@ vi.mock('../byok/WaitlistForm', () => ({ WaitlistForm: () => <div /> }));
 
 import PricingPage from './page';
 
-/**
- * Team and Enterprise moved behind an audience tab on 2026-08-08 so the page
- * shows four cards at a time instead of nine. The panel keeps `hidden` while
- * inactive, which drops it out of the accessibility tree — text queries still
- * match, but every `getByRole` for a Team control needs the tab activated
- * first. This is that click.
- */
 async function showTeamAndEnterprise() {
   fireEvent.click(await screen.findByRole('button', { name: 'audienceBusiness' }));
 }
@@ -527,7 +520,6 @@ describe('PricingPage', () => {
     let polls = 0;
     billingMocks.refetch.mockImplementation(async () => {
       polls += 1;
-      // Still `pro` on the first read — the webhook has not landed yet.
       if (polls > 1) {
         testState.billing = { plan: 'team', status: 'active' };
         testState.billingVersion += 1;
@@ -591,10 +583,6 @@ describe('PricingPage', () => {
 
     expect(screen.getByRole('button', { name: 'Current plan' })).toBeDisabled();
 
-    // Opens the Stripe portal rather than linking to /billing. The old href
-    // closed a loop with no exit — /billing redirects to /settings/billing,
-    // whose "Adjust plan" button is what sends the user to /pricing — so a
-    // subscriber could never reach a control that actually changes the plan.
     const manageBilling = screen.getByRole('button', { name: 'Manage billing' });
     expect(manageBilling).not.toHaveAttribute('href');
     fireEvent.click(manageBilling);
@@ -620,9 +608,6 @@ describe('PricingPage', () => {
 
     render(<PricingPage />);
 
-    // Individual plans must NOT read as upgrades from an org plan — converting a
-    // Team subscription into a personal one would strand the other seats. These
-    // assertions belong on the individual tab, which is the default.
     await waitFor(() =>
       expect(screen.getAllByRole('button', { name: 'Manage billing' }).length).toBeGreaterThan(0),
     );

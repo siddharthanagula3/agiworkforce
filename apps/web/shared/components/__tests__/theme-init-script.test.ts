@@ -17,10 +17,6 @@ function renderWithPersistedTheme(theme: string) {
 }
 
 describe('theme-init.js', () => {
-  // The layout inlines THEME_INIT_SCRIPT into <head>; /cookies discloses
-  // public/theme-init.js as the source of the only pre-consent storage read.
-  // If those two ever diverge, the published disclosure stops describing what
-  // actually runs — so they are pinned to each other here.
   it('ships byte-identical to the constant the layout inlines', () => {
     expect(THEME_INIT_SCRIPT).toBe(script);
   });

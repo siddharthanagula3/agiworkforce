@@ -166,7 +166,7 @@ function ShareConversationDialogImpl({
                     confirm({
                       title: 'Revoke this share link?',
                       description:
-                        'Anyone holding the link loses access immediately. A new link can be created, but it will be a different URL — the old one stays dead.',
+                        'Anyone holding the link loses access immediately. A new link can be created, but it will be a different URL, the old one stays dead.',
                       confirmLabel: 'Revoke link',
                       onConfirm: () => revoke(),
                     })

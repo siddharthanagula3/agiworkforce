@@ -1,4 +1,3 @@
-
 import fs from 'node:fs';
 import path from 'node:path';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -167,7 +166,7 @@ describe('resolveSupportAccountContext', () => {
       expect(context.email.verified).toBe('unverified');
     });
 
-    it('reports unknown — not unverified — when the lookup fails', async () => {
+    it('reports unknown, not unverified, when the lookup fails', async () => {
       mocks.getUser.mockRejectedValue(new Error('clerk getUser timeout'));
       const context = await resolveSupportAccountContext(USER);
       expect(context.email.verified).toBe('unknown');

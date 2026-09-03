@@ -236,7 +236,7 @@ export function TimeFocusReminder({
           </AlertDialogTitle>
           <AlertDialogDescription>
             {isQuietHours
-              ? 'You set this time aside. You can continue whenever you choose—this is a reminder, not a lock.'
+              ? 'You set this time aside. You can continue whenever you choose, this is a reminder, not a lock.'
               : `You have spent about ${preferences?.breakReminderMinutes ?? 0} minutes in AGI today. Step away if that would help.`}
           </AlertDialogDescription>
         </AlertDialogHeader>

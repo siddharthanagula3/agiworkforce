@@ -1,4 +1,3 @@
-
 import { describe, it, expect } from 'vitest';
 import { readFileSync, readdirSync, statSync } from 'fs';
 import { resolve, join, basename, dirname } from 'path';
@@ -187,7 +186,7 @@ function assertDynamicVerbIsReal(store: PreferenceStore, verb: string): void {
   );
 }
 
-describe.each(PREFERENCE_STORES)('PP-24 — $file has no member without a consumer', (store) => {
+describe.each(PREFERENCE_STORES)('PP-24, $file has no member without a consumer', (store) => {
   const storeSource = readFileSync(resolve(ROOT, store.file), 'utf8');
   const storeAbsolute = resolve(ROOT, store.file);
   const members = store.interfaces.flatMap((name) => declaredMembers(storeSource, name));
@@ -213,7 +212,7 @@ describe.each(PREFERENCE_STORES)('PP-24 — $file has no member without a consum
     expect(
       orphans,
       `These ${store.hook} members have no production consumer. Wire them to a real ` +
-        `control and a real reader, or delete them — a stored preference nothing reads ` +
+        `control and a real reader, or delete them, a stored preference nothing reads ` +
         `is a control that lies. Orphans: ${orphans.join(', ')}`,
     ).toEqual([]);
   });
@@ -228,7 +227,7 @@ describe.each(PREFERENCE_STORES)('PP-24 — $file has no member without a consum
     expect(
       [...stranded],
       `These files are the ONLY thing consuming a ${store.hook} member, and no other ` +
-        `module imports them — so the member reads as "consumed" while the UI behind it ` +
+        `module imports them, so the member reads as "consumed" while the UI behind it ` +
         `is unreachable. This is how CustomCommandsSettings hid: a complete editor with ` +
         `no mount site. Mount them or delete them.`,
     ).toEqual([]);
@@ -264,7 +263,7 @@ describe.each(PREFERENCE_STORES)('PP-24 — $file has no member without a consum
   });
 });
 
-describe('PP-24 — the custom-command editor is reachable', () => {
+describe('PP-24, the custom-command editor is reachable', () => {
   const generalSection = readFileSync(
     resolve(ROOT, 'features/settings/sections/GeneralSection.tsx'),
     'utf8',
@@ -311,12 +310,6 @@ describe('PP-24 — the custom-command editor is reachable', () => {
   });
 
   it('persists a chatFont only because something now renders it', () => {
-    // This asserted chatFont was ABSENT, because an earlier version persisted a
-    // font preference nothing read — the same "control that lies" this file
-    // exists to catch. The control is real as of 2026-08-21, so the guard now
-    // asserts the whole chain instead of the absence: a control, an attribute
-    // stamped on the document, and a stylesheet rule that answers it. Any link
-    // removed and this fails, which is what the absence check was reaching for.
     expect(generalSection).toContain('chatFont');
 
     const appearance = readFileSync(

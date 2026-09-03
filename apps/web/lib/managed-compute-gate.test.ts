@@ -15,7 +15,7 @@ describe('web managed compute gate', () => {
     delete process.env[MANAGED_COMPUTE_PRIVATE_BETA_ENV];
   });
 
-  it('is open by default (public alpha — no private-beta gate)', () => {
+  it('is open by default (public alpha, no private-beta gate)', () => {
     const response = buildManagedComputeGateResponse(request(), {
       provider: 'openai',
       model: 'fixture-model',

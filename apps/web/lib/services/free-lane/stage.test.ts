@@ -217,9 +217,6 @@ describe('strict', () => {
     expect((await outcome(FREE_LANE_MODES.strict, null)).kind).toBe('stranded');
   });
 
-  // A request outside the lane's population must reach here as `off`, never as
-  // `strict` with nothing to rank — a paid tier admits no free route, so passing
-  // the configured mode straight through would strand every paying customer.
   it('is inert, not stranding, for a request the lane does not cover', async () => {
     expect(await outcome(FREE_LANE_MODES.off, null)).toEqual({ kind: 'inactive' });
   });

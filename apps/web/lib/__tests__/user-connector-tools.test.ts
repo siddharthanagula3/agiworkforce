@@ -74,7 +74,7 @@ beforeEach(() => {
   mockAssertResolvedPublicHostname.mockResolvedValue(undefined);
 });
 
-describe('loadUserConnectorToolDefs — github built-in gate', () => {
+describe('loadUserConnectorToolDefs, github built-in gate', () => {
   it('offers github tools only when the user has a usable installation', async () => {
     stubDb({ installations: [{ installation_id: 42, account_login: 'acme' }] });
     const defs = await loadUserConnectorToolDefs('user-1');
@@ -139,7 +139,7 @@ describe('loadUserConnectorToolDefs — github built-in gate', () => {
   });
 });
 
-describe('loadUserConnectorToolDefs — remote connector gate', () => {
+describe('loadUserConnectorToolDefs, remote connector gate', () => {
   it('offers a remote connector namespaced only when the user has it active', async () => {
     process.env['CONNECTOR_MCP_SERVERS_JSON'] = JSON.stringify({
       connectors: [{ connectorId: 'notion', url: 'https://mcp.notion.example/mcp' }],
@@ -204,7 +204,7 @@ describe('loadUserConnectorToolDefs — remote connector gate', () => {
   });
 });
 
-describe('loadUserConnectorToolDefs — custom remote MCP plan limit', () => {
+describe('loadUserConnectorToolDefs, custom remote MCP plan limit', () => {
   it('offers only one custom remote MCP when the caller applies the free-plan limit', async () => {
     mockIsGitHubAppConfigured.mockReturnValue(false);
     const rows = [

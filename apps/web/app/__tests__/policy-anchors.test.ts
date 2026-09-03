@@ -44,24 +44,13 @@ function renderedIds(source: string): string[] {
   return [...source.matchAll(/<Section\s+id="(s-[^"]+)"/g)].map((m) => m[1] as string);
 }
 
-/**
- * The two sides of this comparison are written differently and render the same.
- *
- * A contents entry is a plain JS string, so React escapes it — 73f8bf27e had to
- * change those arrays from '&middot;' to a literal separator because the entity
- * was reaching the page as text. An eyebrow is JSX text, where the entity IS
- * decoded, so '&middot;' there is correct and renders identically.
- *
- * Comparing raw source therefore reports a mismatch between two spellings of
- * the same rendered character. Decoding first compares what the user sees.
- */
 const HTML_ENTITIES: Readonly<Record<string, string>> = {
   '&middot;': '\u00b7',
   '&rsquo;': '\u2019',
   '&lsquo;': '\u2018',
   '&ldquo;': '\u201c',
   '&rdquo;': '\u201d',
-  '&mdash;': '\u2014',
+  ', ': '\u2014',
   '&ndash;': '\u2013',
   '&amp;': '&',
 };

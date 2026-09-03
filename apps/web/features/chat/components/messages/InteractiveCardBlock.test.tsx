@@ -211,9 +211,9 @@ describe('InteractiveCardBlock', () => {
     const literal = clone(envelope) as Record<string, unknown>;
     literal['kind'] = 'weather.v1';
     (literal['fallback'] as Record<string, unknown>)['text'] =
-      '*8:30* Ferry Building — _not italic_';
+      '*8:30* Ferry Building, _not italic_';
     render(<InteractiveCardBlock cards={[decodeDelta(literal)]} />);
-    expect(screen.getByText('*8:30* Ferry Building — _not italic_')).toBeInTheDocument();
+    expect(screen.getByText('*8:30* Ferry Building, _not italic_')).toBeInTheDocument();
     expect(document.querySelector('em')).toBeNull();
     expect(document.querySelector('strong')).toBeNull();
   });

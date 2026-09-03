@@ -114,7 +114,7 @@ describe('organization limit conversion', () => {
         const src = stripComments(raw);
         for (const { why, re } of patterns) {
           if (re.test(src)) {
-            offenders.push(`${rel} — ${why}`);
+            offenders.push(`${rel}, ${why}`);
             break;
           }
         }

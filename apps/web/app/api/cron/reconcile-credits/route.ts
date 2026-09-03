@@ -20,21 +20,6 @@ import {
 import { getHandoffConfig } from '@/lib/support/handoff/config';
 import { sendSupportEmail } from '@/lib/support/handoff/resend-client';
 
-/**
- * The SQL ceiling, not the default of 100.
- *
- * This drain is the only caller of `recover_stale_managed_usage_requests`, so
- * its batch size is the platform's entire refund rate for reservations leaked
- * by a killed turn — and this route runs once a day. At 100 the backlog grows
- * monotonically past roughly a thousand daily-active users, and the visible
- * symptom is a user who sent three messages being told their rolling limit is
- * reached. `process_credit_settlement_queue` clamps to 500 itself; asking for
- * more would be silently ignored.
- *
- * The cadence is the other half and it is not settable from here:
- * `vercel.json` schedules this at `30 0 * * *`, and the function's own comment
- * in migration 0056 claims it runs every minute. It should be sub-hourly.
- */
 const SETTLEMENT_DRAIN_BATCH = 500;
 
 interface ReconcileSummary {

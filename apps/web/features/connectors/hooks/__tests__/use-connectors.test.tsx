@@ -67,7 +67,7 @@ function jsonResponse(status: number, body: unknown) {
 
 const originalLocation = Object.getOwnPropertyDescriptor(window, 'location');
 
-describe('useConnectors — OAuth grants', () => {
+describe('useConnectors, OAuth grants', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     clerkUserState.isLoaded = true;

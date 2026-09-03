@@ -21,9 +21,6 @@ export const metadata = buildMetadata({
   path: '/founder',
 });
 
-// Only what can be checked. No headcount, funding, or advisory-board theatre —
-// the press page already refuses to claim those, and this page would be the
-// obvious place for them to creep back in.
 const FACTS: { label: string; value: string }[] = [
   { label: 'Name', value: FOUNDER_NAME },
   { label: 'Role', value: `${FOUNDER_ROLE}, ${LEGAL_ENTITY}` },

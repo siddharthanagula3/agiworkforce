@@ -126,10 +126,6 @@ describe('BillingSection', () => {
       ),
     ).toBeTruthy();
 
-    // No Stripe round-trips for an account with no Stripe customer — but the
-    // credit ledger still applies to it (usage debits happen regardless of
-    // who bills the subscription), so credit-history is the one call an
-    // Apple-billed account does make.
     expect(fetchMock).not.toHaveBeenCalledWith('/api/billing/payment-methods', expect.anything());
     expect(fetchMock).not.toHaveBeenCalledWith('/api/billing/invoices', expect.anything());
     expect(fetchMock).not.toHaveBeenCalledWith('/api/billing/overage', expect.anything());
@@ -154,12 +150,6 @@ describe('BillingSection', () => {
     ).toBeTruthy();
   });
 
-  // BIZ-020: the Price row reads `subscription.tier` at runtime, so a negotiated
-  // Enterprise entitlement lands here. The catalog holds no amount for it, and
-  // the previous `monthlyPriceUsd > 0` guard silently dropped the row rather
-  // than saying why — leaving a paying contract customer with no price state at
-  // all. It must name the contract, and it must never print a dollar figure the
-  // catalog does not have.
   it('states contract pricing for an Enterprise plan instead of an amount', () => {
     mockSubscription = {
       tier: 'enterprise',
@@ -173,7 +163,7 @@ describe('BillingSection', () => {
     render(<BillingSection />);
 
     expect(screen.getByText('Price')).toBeTruthy();
-    expect(screen.getByText('Custom — set by your contract')).toBeTruthy();
+    expect(screen.getByText('Custom, set by your contract')).toBeTruthy();
     expect(screen.queryByText('$0/mo')).toBeNull();
     expect(screen.queryByText('Free')).toBeNull();
   });

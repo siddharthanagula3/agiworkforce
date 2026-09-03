@@ -215,7 +215,7 @@ function processedRequest() {
   };
 }
 
-describe('POST /api/llm/v1/chat/completions/approve — durable checkpoint boundary', () => {
+describe('POST /api/llm/v1/chat/completions/approve, durable checkpoint boundary', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     gateMocks.managedCompute.mockReturnValue(null);

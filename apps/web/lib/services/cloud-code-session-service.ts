@@ -37,27 +37,6 @@ const REPOSITORY_WORKSPACE_PATH = '/home/user/project';
 const REQUEST_ID_RE = /^[A-Za-z0-9_-]{8,128}$/;
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
-/**
- * How long a run may hold a Code session before another run may take it over.
- *
- * A session is single-writer: a run flips it to `running` and flips it back in
- * a `finally`. That `finally` does not run when the platform kills the function
- * mid-turn, so without an expiry one killed turn wedges the session at
- * `running` forever and every later turn 409s on advice ("wait and try again")
- * that never comes true.
- *
- * The TTL must exceed the longest a legitimate turn can possibly hold the
- * session, or two runs could drive one sandbox. The agent route declares
- * `maxDuration = 300`, which is the platform's hard kill for a turn, and the
- * command route's work is bounded far lower by CLOUD_CODE_COMMAND_DEADLINE_MS
- * (60 s). The lease clock starts at the claim's `now()`, which is strictly
- * *after* the request started, so lease expiry always lands at least 120 s past
- * the point the platform has already killed the holder. That margin also
- * absorbs skew between the database clock and the function's own.
- *
- * Downward, 420 s is the worst case a user waits after a killed turn before
- * their session is usable again — bounded, instead of permanent.
- */
 export const CLOUD_CODE_RUN_LEASE_SECONDS = 420;
 
 export interface CloudCodeRunClaim {
@@ -113,16 +92,6 @@ export class CloudCodeUnavailableError extends Error {
   }
 }
 
-/**
- * Postgres codes that mean "this deployment has not run the migrations yet":
- * 42P01 is an absent table, 42703 an absent column.
- *
- * The column case is the one a real deployment hits — a table added long ago
- * and a column added since. Matching only the table left a half-migrated
- * deployment answering "An unexpected error occurred", which tells the reader
- * nothing and the operator less. Reproduced against a live database with
- * `runtime_id` not yet added.
- */
 const SCHEMA_NOT_MIGRATED_CODES = new Set(['42P01', '42703']);
 
 export function isCloudCodeSchemaUnavailable(error: unknown): boolean {
@@ -712,21 +681,6 @@ export async function createCloudCodeSession(
   }
 }
 
-/**
- * Take the session for one run, under a lease that expires on its own.
- *
- * A claim succeeds when the session is `ready`, and also when it is `running`
- * on a lease that has already expired — the signature of a turn the platform
- * killed before its release could run. Reclaiming is safe because the new
- * holder's token replaces the old one in the same statement: if the previous
- * run somehow survives, every write it still attempts (release, or its failure
- * handler) is fenced on its own now-stale token and becomes a no-op. It cannot
- * mark the new run's session `ready` mid-turn, and it cannot mark it `failed`.
- *
- * The sandbox behind the session is addressed deterministically by
- * (user, session), so a reclaiming run attaches to the same sandbox the dead
- * run left rather than provisioning a second one.
- */
 export async function claimCloudCodeSessionForRun(
   db: DatabaseAdapter,
   owner: CloudCodeOwner,

@@ -22,12 +22,12 @@ export function isDataRightsRequestType(value: unknown): value is DataRightsRequ
 }
 
 export const DATA_RIGHTS_REQUEST_LABELS: Readonly<Record<DataRightsRequestType, string>> = {
-  access: 'Access — send me a summary of the personal data you hold about me',
-  correction: 'Correction — something you hold about me is wrong or incomplete',
-  erasure: 'Erasure — delete personal data you hold about me',
-  withdrawal: 'Withdraw consent — stop processing that depends on my consent',
-  nomination: 'Nomination — record someone who may act for me if I cannot',
-  grievance: 'Grievance — I am dissatisfied with how my data has been handled',
+  access: 'Access, send me a summary of the personal data you hold about me',
+  correction: 'Correction, something you hold about me is wrong or incomplete',
+  erasure: 'Erasure, delete personal data you hold about me',
+  withdrawal: 'Withdraw consent, stop processing that depends on my consent',
+  nomination: 'Nomination, record someone who may act for me if I cannot',
+  grievance: 'Grievance, I am dissatisfied with how my data has been handled',
 };
 
 export const MAX_REQUEST_DETAILS_LENGTH = 4000;

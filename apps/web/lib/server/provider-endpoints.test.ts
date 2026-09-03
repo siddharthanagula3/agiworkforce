@@ -141,7 +141,7 @@ describe('ANTHROPIC_BASE_URL is version-agnostic (both repo conventions resolve 
     );
   });
 
-  it('leaves OPENAI_BASE_URL alone — both OpenAI SDKs agree the root carries /v1', () => {
+  it('leaves OPENAI_BASE_URL alone, both OpenAI SDKs agree the root carries /v1', () => {
     process.env['OPENAI_BASE_URL'] = 'https://gateway.ai.cloudflare.com/v1/acct/gw/openai';
     expect(providerApiUrl('openai', 'audio/transcriptions')).toBe(
       'https://gateway.ai.cloudflare.com/v1/acct/gw/openai/audio/transcriptions',

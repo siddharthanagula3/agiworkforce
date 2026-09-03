@@ -57,7 +57,7 @@ async function main() {
     ok(`PutObjectCommand -> ${key}`);
   } catch (err) {
     fail('PutObjectCommand', err);
-    console.error('\nR2 verification FAILED — cannot upload. Check credentials/bucket name.');
+    console.error('\nR2 verification FAILED, cannot upload. Check credentials/bucket name.');
     process.exit(1);
   }
 
@@ -101,7 +101,7 @@ async function main() {
     console.error(`\nR2 verification FAILED (${failures} op(s)). The binding may need a fix.`);
     process.exit(1);
   }
-  console.log('\nR2 verification PASSED — upload, public serve, and delete all work end to end.');
+  console.log('\nR2 verification PASSED, upload, public serve, and delete all work end to end.');
 }
 
 main().catch((err) => {

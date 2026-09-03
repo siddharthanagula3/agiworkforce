@@ -68,7 +68,7 @@ function toSeed(connector: Connector) {
   return seed;
 }
 
-describe('CRIT-001 guard — one recorded resolution per connector', () => {
+describe('CRIT-001 guard, one recorded resolution per connector', () => {
   it('gives every catalog entry a canonical capability record', () => {
     const unregistered = CONNECTORS.filter((c) => !isKnownConnectorId(c.id)).map((c) => c.id);
     expect(unregistered).toEqual([]);
@@ -123,7 +123,7 @@ describe('CRIT-001 guard — one recorded resolution per connector', () => {
   });
 });
 
-describe('CRIT-001 guard — present-tense copy requires a shipped adapter', () => {
+describe('CRIT-001 guard, present-tense copy requires a shipped adapter', () => {
   it('rejects a present-tense capability claim for anything unbuilt', () => {
     const offenders = CONNECTORS.filter(
       (c) => !allowsPresentTenseCopy(c.id) && PRESENT_TENSE_OPENERS.has(firstWord(c.description)),
@@ -155,7 +155,7 @@ describe('CRIT-001 guard — present-tense copy requires a shipped adapter', () 
   it('names the owning surface before the capability for a device-local connector', () => {
     const terminal = CONNECTORS.find((c) => c.id === 'terminal');
     expect(terminal?.description).toBe(
-      'Desktop Local only — command execution, scripts, and process management.',
+      'Desktop Local only, command execution, scripts, and process management.',
     );
   });
 
@@ -177,7 +177,7 @@ describe('CRIT-001 guard — present-tense copy requires a shipped adapter', () 
   });
 });
 
-describe('CRIT-001 guard — availability and health fail closed', () => {
+describe('CRIT-001 guard, availability and health fail closed', () => {
   const gmail = CONNECTORS.find((c) => c.id === 'gmail')!;
 
   it('does not call a connector ready without a server answer', () => {
@@ -225,7 +225,7 @@ describe('CRIT-001 guard — availability and health fail closed', () => {
   });
 });
 
-describe('CRIT-001 guard — an absent action list is attributed, not read as "none"', () => {
+describe('CRIT-001 guard, an absent action list is attributed, not read as "none"', () => {
   it("records where every connector's actions come from", () => {
     const tally = Object.values(CONNECTOR_CAPABILITIES).reduce<Record<string, string[]>>(
       (acc, record) => {
@@ -271,7 +271,7 @@ describe('CRIT-001 guard — an absent action list is attributed, not read as "n
   });
 });
 
-describe('CRIT-001 guard — pre-consent copy promises nothing the tool loop skips', () => {
+describe('CRIT-001 guard, pre-consent copy promises nothing the tool loop skips', () => {
   // `tool-loop.ts` resolveToolCallGate returns `auto_approval_mode` allow for any
   // connector tool with no saved permission row, and every scheduled agent run
   // uses `approvalMode: 'auto'` (scheduled-agent-executor.ts). No catalog string

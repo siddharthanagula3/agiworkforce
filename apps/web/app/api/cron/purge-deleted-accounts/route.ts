@@ -64,20 +64,6 @@ const DUE_ACCOUNTS_BY_SCHEDULE = `
    limit ${MAX_ACCOUNTS_PER_RUN}
 `;
 
-/**
- * Least-recently-attempted account first.
- *
- * A failed erasure leaves `deletion_scheduled_for` where it was — deliberately,
- * because moving it would re-open the user's cancellation window on an account
- * whose data is already partly gone. Ordered by that column alone, a handful of
- * accounts that cannot be erased (a legal hold, a Clerk identity that will not
- * delete) held the head of the queue permanently and nobody else's deletion
- * ever ran. `erasure_tombstones.last_swept_at` is stamped by
- * `openErasureTombstone` on every attempt, succeeded or not — its own schema
- * calls it "the round-robin cursor" — so it rotates the queue without touching
- * the user-facing schedule. Never-attempted accounts have no tombstone and sort
- * first.
- */
 const DUE_ACCOUNTS_BY_ATTEMPT = `
   select profile.id
     from public.profiles as profile

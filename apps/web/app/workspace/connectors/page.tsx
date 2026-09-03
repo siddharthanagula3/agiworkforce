@@ -11,7 +11,7 @@ export default function WorkspaceConnectorsPage() {
   return (
     <ConsolePage
       title="Connectors"
-      description="Which integrations members may use. Applied where the tool catalog is assembled, so a blocked connector is never offered to the model — from chat, a scheduled task, or an agent run."
+      description="Which integrations members may use. Applied where the tool catalog is assembled, so a blocked connector is never offered to the model, from chat, a scheduled task, or an agent run."
     >
       <WorkspaceConnectorPolicy />
     </ConsolePage>

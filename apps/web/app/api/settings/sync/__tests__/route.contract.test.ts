@@ -1,4 +1,3 @@
-
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import {
   SettingsSyncPullResponseSchema,
@@ -30,7 +29,7 @@ vi.mock('@/lib/server/rls-db', () => ({
 
 import { GET, POST } from '../route';
 
-describe('GET /api/settings/sync — shared cloud contract', () => {
+describe('GET /api/settings/sync, shared cloud contract', () => {
   beforeEach(() => vi.clearAllMocks());
 
   it('changed settings document parses', async () => {
@@ -75,7 +74,7 @@ describe('GET /api/settings/sync — shared cloud contract', () => {
   });
 });
 
-describe('POST /api/settings/sync — shared cloud contract', () => {
+describe('POST /api/settings/sync, shared cloud contract', () => {
   beforeEach(() => vi.clearAllMocks());
 
   it('merged push ack parses', async () => {

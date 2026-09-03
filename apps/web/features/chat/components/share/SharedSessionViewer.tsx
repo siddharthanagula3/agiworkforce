@@ -106,7 +106,7 @@ export function SharedSessionViewer({ session, token }: { session: SharedSession
                       key={ai}
                       className="rounded bg-background/60 px-2 py-1 text-xs italic text-muted-foreground"
                     >
-                      {attachment.name} — [attachment omitted from shared snapshot]
+                      {attachment.name}, [attachment omitted from shared snapshot]
                     </div>
                   ))}
                 </div>

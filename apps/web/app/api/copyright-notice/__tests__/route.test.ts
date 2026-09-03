@@ -160,7 +160,7 @@ describe('POST /api/copyright-notice', () => {
     await expect(response.json()).resolves.toMatchObject({ kind: 'published-artifact' });
   });
 
-  it('never unpublishes anything itself — removal stays admin-gated', async () => {
+  it('never unpublishes anything itself, removal stays admin-gated', async () => {
     await POST(request(NOTICE));
 
     const queries = (db.current as { query: { mock: { calls: unknown[][] } } }).query.mock.calls;

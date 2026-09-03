@@ -22,30 +22,6 @@ interface WorkspaceScopedRequest {
   headers: { get(name: string): string | null };
 }
 
-/**
- * Resolves the caller's active workspace and asks the model evaluator.
- *
- * Answers `ungoverned` — which allows — in three cases: the caller is in
- * personal scope and has no workspace to be governed by, the workspace has no
- * policy row, or the policy could not be read. The third is the one worth
- * stating: a database fault is an infrastructure problem, not an
- * administrator's decision, and turning it into a denial would make every
- * member's chat stop working the moment the policy table is briefly
- * unreachable. That is the same trade the managed-compute gate already makes.
- *
- * The opposite choice is defensible for a hard security boundary, but model
- * governance is a deployment control over which approved tool staff use, not a
- * containment barrier — the tenancy layer is what stops cross-workspace access,
- * and it fails closed.
- */
-/**
- * The form for a caller that has ALREADY resolved the active workspace.
- *
- * The chat path resolves it once for the scoped database handle, including the
- * `x-agi-organization-id` override, and re-resolving here would add a second
- * round trip to the hot path for an answer already in hand. `null` means
- * personal scope, which is ungoverned.
- */
 export async function evaluateModelAccessForOrganization(
   db: DatabaseAdapter,
   organizationId: string | null,

@@ -46,7 +46,7 @@ describe('computeProjectsPullCursor', () => {
   });
 });
 
-describe('POST /api/projects/sync — push', () => {
+describe('POST /api/projects/sync, push', () => {
   it('compare-and-swaps by server revision, forces user_id, carries the tombstone', async () => {
     const res = await POST(
       postReq({
@@ -102,7 +102,7 @@ describe('POST /api/projects/sync — push', () => {
   });
 });
 
-describe('GET /api/projects/sync — pull', () => {
+describe('GET /api/projects/sync, pull', () => {
   it('delivers tombstones (does not filter deleted_at) and returns the cursor', async () => {
     queryMock.mockResolvedValueOnce([
       {

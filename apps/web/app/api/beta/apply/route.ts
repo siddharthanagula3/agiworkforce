@@ -68,16 +68,13 @@ async function handleApply(request: NextRequest) {
       source: request.headers.get('referer'),
     }));
   } catch (error) {
-    // Migration 0131 creates this table. Telling someone their application was
-    // received when nothing was stored is worse than telling them the intake
-    // is not open — they would wait for a reply that can never come.
     if (!isIntakeTableMissing(error)) throw error;
     logger.error({ error }, 'Beta intake is not migrated; application was NOT stored');
     return NextResponse.json(
       {
         error: 'intake_unavailable',
         message:
-          'Applications are not open yet, so nothing was stored. Nothing about you was saved — try again later.',
+          'Applications are not open yet, so nothing was stored. Nothing about you was saved, try again later.',
       },
       { status: 503 },
     );

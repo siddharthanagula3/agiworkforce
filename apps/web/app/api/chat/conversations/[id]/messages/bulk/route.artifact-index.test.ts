@@ -68,7 +68,7 @@ beforeEach(() => {
   mockQuery.mockResolvedValueOnce([{ id: CONVERSATION_ID }]); // ownership check
 });
 
-describe('POST /api/chat/conversations/[id]/messages/bulk — artifact indexing', () => {
+describe('POST /api/chat/conversations/[id]/messages/bulk, artifact indexing', () => {
   it('indexes a bulk-saved assistant message', async () => {
     const messageId = '22222222-2222-4222-8222-222222222222';
     mockSavedRow(messageId, 'assistant', 'assistant reply');

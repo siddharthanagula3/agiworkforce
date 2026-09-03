@@ -8,15 +8,6 @@ export const DEVICE_SIGNIN_SETTING_KEY = 'deviceCodeSignInEnabled';
 
 const PG_UNDEFINED_TABLE = '42P01';
 
-/**
- * Whether this account allows headless device-code sign-in.
- *
- * Default TRUE: the flow predates the switch, and defaulting to off would sign
- * every existing CLI and desktop install out at deploy. A read failure also
- * returns true — refusing approvals because a settings query blipped would lock
- * users out of their own devices, and the flow still requires an authenticated
- * human to approve a code they were shown.
- */
 export async function isDeviceCodeSignInEnabled(userId: string): Promise<boolean> {
   try {
     const rows = await getNeonDb().query<{ settings: Record<string, unknown> | null }>(

@@ -41,7 +41,7 @@ describe('mobile availability copy tracks the release-state registry', () => {
         if (source.includes(phrase)) {
           expect(
             source,
-            `${file} states "${phrase}" — it must be guarded by the release-state registry`,
+            `${file} states "${phrase}", it must be guarded by the release-state registry`,
           ).toContain('SURFACE_STATUS.mobile');
         }
       }

@@ -32,8 +32,6 @@ describe('route loading screens announce themselves', () => {
     const silent = spinners.filter((file) => {
       const source = readFileSync(file, 'utf8');
       if (!source.includes('role="status"')) return true;
-      // Either a visually hidden label or visible text inside the region will
-      // do — the root screen shows "Loading…" on screen, which is not worse.
       return !source.includes('sr-only') && !/>\s*Loading/.test(source);
     });
     expect(silent.map(shortName)).toEqual([]);

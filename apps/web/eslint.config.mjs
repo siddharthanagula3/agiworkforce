@@ -106,7 +106,7 @@ const eslintConfig = defineConfig([
           selector:
             "CallExpression[callee.property.name='getSession'][callee.object.property.name='auth']",
           message:
-            'Page/layout auth gates must use auth.getUser() (re-validates the JWT) not auth.getSession() (only reads cookies) — WEB-18.',
+            'Page/layout auth gates must use auth.getUser() (re-validates the JWT) not auth.getSession() (only reads cookies), WEB-18.',
         },
       ],
     },
@@ -126,7 +126,7 @@ const eslintConfig = defineConfig([
         {
           selector: "CallExpression[callee.object.name='Math'][callee.property.name='random']",
           message:
-            'Use secureToken() / secureRandomFloat() / secureFilenameSegment() from @/lib/secure-random — Math.random is not cryptographically secure (WEB-13).',
+            'Use secureToken() / secureRandomFloat() / secureFilenameSegment() from @/lib/secure-random, Math.random is not cryptographically secure (WEB-13).',
         },
       ],
     },

@@ -112,7 +112,7 @@ for (const { routeId, match } of pending) {
       ? `provider \`${providerOf(routeId)}\` exists but the route does not`
       : `neither route nor provider \`${providerOf(routeId)}\` exists`;
   console.warn(
-    `${CHECK_LABEL} pending: \`${routeId}\` — ${detail}. ` +
+    `${CHECK_LABEL} pending: \`${routeId}\`, ${detail}. ` +
       'The entry is unverified, so it cannot route traffic and this is not fatal. ' +
       'Adding the registry slot is a prerequisite for setting verifiedAtMs.',
   );
@@ -132,7 +132,7 @@ const unpooledFreeRoutes = [...routeIds].filter(
 for (const routeId of unpooledFreeRoutes) {
   console.warn(
     `${CHECK_LABEL} terms trap: \`${routeId}\` is a selectable registry route that reads as free ` +
-      'but is absent from the free pool. A $0 price is not eligibility — the provider terms decide, ' +
+      'but is absent from the free pool. A $0 price is not eligibility, the provider terms decide, ' +
       'and these exclude it from the company free lane. Absence is the deliberate state: ' +
       'add an entry only if a terms review says the lane may carry it.',
   );

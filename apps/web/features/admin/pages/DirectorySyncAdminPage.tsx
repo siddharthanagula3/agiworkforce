@@ -414,13 +414,13 @@ export default function DirectorySyncAdminPage({
           <h2 className="text-base font-medium text-foreground">SCIM tokens</h2>
           <p className="mt-2 text-sm text-muted-foreground">
             A token is shown once, when it is minted. Only its hash is stored, so it cannot be
-            recovered — mint a new one and revoke the old.
+            recovered, mint a new one and revoke the old.
           </p>
 
           {freshToken ? (
             <div className="mt-4 rounded border border-emerald-500/40 bg-emerald-500/10 p-3">
               <p className="text-xs uppercase tracking-wide text-emerald-700 dark:text-emerald-300">
-                Copy this now — it will not be shown again
+                Copy this now, it will not be shown again
               </p>
               <code className="mt-2 block break-all text-sm text-emerald-900 dark:text-emerald-100">
                 {freshToken}
@@ -455,7 +455,7 @@ export default function DirectorySyncAdminPage({
                         confirm({
                           title: 'Revoke this SCIM token?',
                           description:
-                            'Any identity provider still using this token stops syncing immediately and will start failing its requests. This cannot be undone — issue a new token instead.',
+                            'Any identity provider still using this token stops syncing immediately and will start failing its requests. This cannot be undone, issue a new token instead.',
                           confirmLabel: 'Revoke token',
                           onConfirm: () => revokeToken(token.id),
                         })

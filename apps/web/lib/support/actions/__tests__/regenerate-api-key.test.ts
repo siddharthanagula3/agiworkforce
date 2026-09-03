@@ -1,4 +1,3 @@
-
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { createFakeNeonDb } from './helpers/fake-neon-db';
@@ -39,7 +38,7 @@ import { confirmSupportAction, proposeSupportAction } from '../service';
 const USER = 'user_a';
 const KEY_ID = '66666666-6666-4666-8666-666666666666';
 
-describe('support actions — regenerate_api_key', () => {
+describe('support actions, regenerate_api_key', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.db = createFakeNeonDb({

@@ -45,9 +45,6 @@ test.describe('chat surface layout', () => {
     await signIn(page);
   });
 
-  // The message column carried its gutter on the row while the composer carried
-  // it inside the same max-width, so every bubble hung 16px past the composer —
-  // 47px once the sidebar was collapsed and the composer widened to max-w-4xl.
   test('the composer and the message column share one set of edges', async ({ page }) => {
     await page.goto('/chat');
     const composer = page.getByRole('textbox').first();
@@ -102,8 +99,6 @@ test.describe('chat surface layout', () => {
     await expect(page.getByRole('textbox', { name: 'Search models' })).toBeInViewport();
   });
 
-  // The sidebar's fixed header, nav and footer left the `flex-1` conversation
-  // list a 20px window on a 1280x600 laptop — too short for its own heading.
   test('the sidebar conversation list stays usable on a short viewport', async ({ page }) => {
     await page.setViewportSize({ width: 1280, height: 600 });
     await page.goto('/chat');

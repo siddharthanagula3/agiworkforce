@@ -46,7 +46,7 @@ function loadWebMcpConfig(): WebMcpEntry[] {
 
   const rawConfig = process.env['WEB_MCP_SERVERS_JSON'];
   if (!rawConfig) {
-    logger.info({}, '[web-mcp] WEB_MCP_SERVERS_JSON is unset — no MCP tools available');
+    logger.info({}, '[web-mcp] WEB_MCP_SERVERS_JSON is unset, no MCP tools available');
     _configCache = [];
     return _configCache;
   }
@@ -57,7 +57,7 @@ function loadWebMcpConfig(): WebMcpEntry[] {
     _configCache = parsed.servers.filter((s) => s.enabled);
     logger.info({ count: _configCache.length }, '[web-mcp] loaded MCP server configuration');
   } catch (err) {
-    logger.error({ error: err }, '[web-mcp] failed to parse MCP config — using empty list');
+    logger.error({ error: err }, '[web-mcp] failed to parse MCP config, using empty list');
     _configCache = [];
   }
   return _configCache;

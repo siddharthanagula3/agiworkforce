@@ -8,7 +8,10 @@ vi.mock('@/lib/observability/spans', async (importOriginal) => {
   try {
     return await importOriginal();
   } catch {
-    return { withSpan: async (_n: string, _o: unknown, fn: (s: unknown) => unknown) => fn({ setAttributes: () => {} }) };
+    return {
+      withSpan: async (_n: string, _o: unknown, fn: (s: unknown) => unknown) =>
+        fn({ setAttributes: () => {} }),
+    };
   }
 });
 
@@ -91,12 +94,13 @@ describe('memory scoping', () => {
 describe('reading a project memory posture', () => {
   it('defaults to global when the conversation has no project', async () => {
     const d = db();
-    await expect(loadProjectMemoryScope(d as never, { userId: 'u1', projectId: null })).resolves
-      .toEqual(GLOBAL_MEMORY_SCOPE);
+    await expect(
+      loadProjectMemoryScope(d as never, { userId: 'u1', projectId: null }),
+    ).resolves.toEqual(GLOBAL_MEMORY_SCOPE);
     expect(d.calls).not.toHaveBeenCalled();
   });
 
-  it('falls back to global — not to the project — when the project cannot be read', async () => {
+  it('falls back to global, not to the project, when the project cannot be read', async () => {
     const d = db([]);
     const scope = await loadProjectMemoryScope(d as never, { userId: 'u1', projectId: PROJECT });
 

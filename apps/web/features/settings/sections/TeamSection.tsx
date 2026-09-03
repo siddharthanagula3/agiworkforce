@@ -553,19 +553,19 @@ export function TeamSection() {
           <div>
             <div style={{ color: 'var(--text-3)', fontSize: 12 }}>Licensed</div>
             <div style={{ color: 'var(--text-1)', fontSize: 20, fontWeight: 650 }}>
-              {licensedSeats ?? '—'}
+              {licensedSeats ?? ', '}
             </div>
           </div>
           <div>
             <div style={{ color: 'var(--text-3)', fontSize: 12 }}>In use</div>
             <div style={{ color: 'var(--text-1)', fontSize: 20, fontWeight: 650 }}>
-              {seatsConsumed ?? '—'}
+              {seatsConsumed ?? ', '}
             </div>
           </div>
           <div>
             <div style={{ color: 'var(--text-3)', fontSize: 12 }}>Available</div>
             <div style={{ color: 'var(--text-1)', fontSize: 20, fontWeight: 650 }}>
-              {seatsAvailable ?? '—'}
+              {seatsAvailable ?? ', '}
             </div>
           </div>
           <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'end', gap: 8 }}>

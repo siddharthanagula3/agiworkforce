@@ -66,7 +66,7 @@ describe('ArtifactPreview · PDF viewer', () => {
   it('shows an honest fallback (no fake preview) when content is model text, not PDF bytes', () => {
     render(
       <ArtifactPreview
-        artifact={pdfArtifact({ content: '# Trip plan\n\nOption A — The Grand Tour...' })}
+        artifact={pdfArtifact({ content: '# Trip plan\n\nOption A, The Grand Tour...' })}
       />,
     );
     expect(screen.getByTestId('artifact-pdf-fallback')).toBeTruthy();

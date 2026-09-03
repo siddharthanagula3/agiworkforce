@@ -78,7 +78,7 @@ describe('saveMessageToDb durability (P1 silent-data-loss regression)', () => {
     expect(fetchMock).toHaveBeenCalledTimes(3);
   });
 
-  it('THROWS immediately on a non-retryable 4xx (e.g. 404) — no retry', async () => {
+  it('THROWS immediately on a non-retryable 4xx (e.g. 404), no retry', async () => {
     const fetchMock = vi.fn().mockResolvedValue(jsonResponse(404, { error: 'not found' }));
     vi.stubGlobal('fetch', fetchMock);
 

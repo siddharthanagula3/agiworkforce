@@ -1,4 +1,3 @@
-
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { createFakeNeonDb } from './helpers/fake-neon-db';
@@ -37,7 +36,7 @@ import { SupportActionRefusal } from '../types';
 const USER_A = 'user_a';
 const USER_B = 'user_b';
 
-describe('support actions — cross-account refusal', () => {
+describe('support actions, cross-account refusal', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.db = createFakeNeonDb();

@@ -7,16 +7,16 @@
 /* Shared workspace component packages consumed from source. Tailwind v4 does
    not auto-scan sibling workspace packages, so utilities used ONLY inside these
    packages (e.g. arbitrary classes like `bg-[var(--chat-user-bubble-bg)]` in
-   unified-chat) are never generated — silently dropping their theming on pages
+   unified-chat) are never generated, silently dropping their theming on pages
    that render these components directly (projects, artifacts). Scan explicitly. */
 @source "../../../packages/ui/unified-chat/src/**/*.{js,ts,jsx,tsx}";
 @source "../../../packages/ui/ui/src/**/*.{js,ts,jsx,tsx}";
-/* OpenDyslexic font for accessibility — self-hosted 2026-08-24.
+/* OpenDyslexic font for accessibility, self-hosted 2026-08-24.
  *
  * The previous @font-face declarations pointed at
  * https://cdn.jsdelivr.net/npm/open-dyslexic@1.0.3/woff/*.woff, which the
  * production CSP at apps/web/proxy.ts blocks (font-src is 'self' +
- * fonts.gstatic.com + js.stripe.com only — third-party CDNs are
+ * fonts.gstatic.com + js.stripe.com only, third-party CDNs are
  * intentionally excluded), so the font never loaded and the "Dyslexic
  * Friendly" chat font option fell silently back to system-ui.
  *
@@ -24,7 +24,7 @@
  * https://github.com/antijingoist/opendyslexic (SIL OFL 1.1; full license
  * text at public/fonts/opendyslexic/OFL.txt, entry in
  * THIRD_PARTY_LICENSES.md) under public/fonts/opendyslexic/. These URLs are
- * same-origin, so the existing font-src 'self' already covers them — no CSP
+ * same-origin, so the existing font-src 'self' already covers them, no CSP
  * change needed.
  */
 @font-face {
@@ -123,7 +123,7 @@
      face every unscoped element inherits (chat shell, app chrome), sourced
      from the same chat.css tokens the chat surfaces themselves render with
      so the two can never drift apart. --font-serif is the explicit editorial
-     face — Settings section headings opt into it through --serif below, and
+     face, Settings section headings opt into it through --serif below, and
      marketing copy that wants it opts in with the font-serif utility. Nothing
      unscoped may inherit serif by default. */
   --font-sans: var(--chat-font-sans);
@@ -137,21 +137,21 @@
   /* Line height */
   --line-height-chat: 1.6;
 
-  /* Editorial palette — terminal/CLI retheme 2026-05-06.
+  /* Editorial palette, terminal/CLI retheme 2026-05-06.
      Paper now reads as near-black; graphite is the deepest tier.
      Phosphor mint replaces amber as the rule/accent color.
      Channel-only tokens (*-rgb) feed alpha variants via rgb(var() / α). */
 
-  /* On dark, fg-* and fg-paper-* converge — both surfaces are dark. */
+  /* On dark, fg-* and fg-paper-* converge, both surfaces are dark. */
 
   /* Brand: phosphor mint as RULE color (structural rule lines, drop-caps, carets). */
 
   /* Aliases retained for backwards-compatibility with existing call sites
      that still reference the old amber-named tokens. */
 
-  /* Status stamps — oxblood for "coming soon", phosphor for "ok". */
+  /* Status stamps, oxblood for "coming soon", phosphor for "ok". */
 
-  /* Motion tokens — operator-broadsheet redesign 2026-05-05.
+  /* Motion tokens, operator-broadsheet redesign 2026-05-05.
      Rule: enter at --dur-base, exit at ~70% of enter (~220ms) with --ease-in.
      All scroll reveals: opacity 0→1 + translateY(8→0). Drop the 1000ms / 32px
      pattern that signals dated AI-tool aesthetic. */
@@ -555,7 +555,7 @@
     transform: translateY(0);
   }
 } /* =====================================================
-   Editorial primitive kit — operator-broadsheet c4/11
+   Editorial primitive kit, operator-broadsheet c4/11
    ===================================================== */
 
 @keyframes caret-blink {
@@ -592,7 +592,7 @@
        has to clear it (see GlobalSearchDialog, which puts a Select inside a
        DialogContent). Each value equals the inline fallback the corresponding
        primitive in packages/ui/ui/src/primitives ships, so declaring them here
-       changes nothing today — they exist so the layers can be retuned from one
+       changes nothing today, they exist so the layers can be retuned from one
        place instead of editing every primitive. Only rungs referenced by CSS
        this app renders are declared; do not add speculative ones.
        apps/desktop/src/styles/globals.css declares its own set; every layer
@@ -1002,7 +1002,7 @@
      ===================================================== */
 
   /* Message row container · vertical rhythm only. ChatGPT/Claude-style flat feed:
-     no per-row striping or separators — the asymmetry lives in the user bubble. */
+     no per-row striping or separators, the asymmetry lives in the user bubble. */
   .message-row {
     @apply relative py-3;
   }
@@ -1111,8 +1111,8 @@
      Driven by data attributes stamped on <html> by
      `shared/components/AppearancePreferences.tsx`. Kept in CSS rather than
      threaded through the renderer so it reaches every prose body and fenced
-     block — including those inside artifacts and the shared markdown
-     component — without touching them.
+     block, including those inside artifacts and the shared markdown
+     component, without touching them.
 
      'default' sets NO attribute, so the rules above stand unmodified. */
 
@@ -1125,7 +1125,7 @@
 
   /*
    * Chat font. Mirrors the data-chat-text-size scoping directly above, and
-   * offers only families layout.tsx actually loads — the previous control
+   * offers only families layout.tsx actually loads, the previous control
    * pointed at a CDN font the CSP blocked, so it fell back silently and looked
    * like it did nothing.
    *
@@ -1491,8 +1491,8 @@ html[data-contrast='more'] *:focus-visible {
    `viewport.viewportFit = 'cover'` (app/layout.tsx) extends the page under the
    iOS home indicator, so any element pinned to the bottom edge must add
    `env(safe-area-inset-bottom)` or it renders underneath it. Repo-wide the only
-   existing use of this env var was on a marketing drawer; the chat composer —
-   a `position: sticky; bottom: 0` element on phones — had none, which put the
+   existing use of this env var was on a marketing drawer; the chat composer.
+   a `position: sticky; bottom: 0` element on phones, had none, which put the
    send button under the home indicator.
 
    `.safe-area-bottom` pads an element's own bottom edge;
@@ -1537,7 +1537,7 @@ html[data-contrast='more'] *:focus-visible {
   }
 }
 /* ──────────────────────────────────────────────────────────────────────
- * AGI marketing theme — applied to elements with [data-design="agi"].
+ * AGI marketing theme: applied to elements with [data-design="agi"].
  * Scoped so this does not bleed into the /chat product UI.
  * ────────────────────────────────────────────────────────────────────── */
 
@@ -1719,7 +1719,7 @@ html[data-contrast='more'] *:focus-visible {
 [data-design='agi'] ::selection {
   background: var(--agi-selection-bg);
   color: var(--agi-selection-text);
-} /* chrome band — full-bleed wrapper for header and footer rows */
+} /* chrome band, full-bleed wrapper for header and footer rows */
 [data-design='agi'] .agi-chrome-band {
   width: 100%;
   background: var(--agi-bg);
@@ -1727,9 +1727,9 @@ html[data-contrast='more'] *:focus-visible {
 } /* shell */ /* breakpoint: collapse the desktop nav into the drawer, keeping the primary CTA
    outside the hamburger so a narrow-viewport visitor never has to open the menu
    to reach sign-in */ /* product landing hero */ /* The class was written for links. The consent centre and the data-rights form
-   need the same affordance on a real <button> — withdrawing consent performs an
-   action, it does not navigate — so strip the default button chrome that would
-   otherwise render a grey box around link-styled text. */ /* page hero (subroutes) — editorial-terminal voice, mirrors .agi-fl-hero */ /* campaign landing system */ /* generic section — editorial-terminal voice, mirrors .agi-fl-section */ /* Second of the two section-label classes; same reasoning as .agi-fl-eyebrow. */
+   need the same affordance on a real <button>, withdrawing consent performs an
+   action, it does not navigate, so strip the default button chrome that would
+   otherwise render a grey box around link-styled text. */ /* page hero (subroutes), editorial-terminal voice, mirrors .agi-fl-hero */ /* campaign landing system */ /* generic section, editorial-terminal voice, mirrors .agi-fl-section */ /* Second of the two section-label classes; same reasoning as .agi-fl-eyebrow. */
 [data-design='agi'] #pricing-team-title {
   scroll-margin-top: 6rem;
 } /* providers grid */ /* steps (BYOK, mobile) */ /* callout */ /* ledger */ /* terminal */ /* reasons */ /* colophon */ /* ── about · principles + founder ───────────────────────────────────── */
@@ -1868,7 +1868,7 @@ html[data-contrast='more'] *:focus-visible {
   }
 }
 /* ──────────────────────────────────────────────────────────────────────
- * Waitlist modal — marketing surface, portal-mounted.
+ * Waitlist modal: marketing surface, portal-mounted.
  * Carries data-design="agi" + .agi-modal-scope on the dialog content so
  * the marketing tokens apply inside the Radix portal (which mounts at
  * <body>, outside any themed page subtree). Token-only colors: works in
@@ -2045,19 +2045,19 @@ html[data-contrast='more'] *:focus-visible {
  * Under reduced motion the scale is dropped - a transform is the part worth
  * removing - and the press is carried by a brightness shift instead, so the
  * feedback survives in a form with no vestibular cost. */ /* ── reveal (IntersectionObserver adds .is-revealed) ────────────────── */ /* ══════════════════════════════════════════════════════════════════════
-   DEVICE MOCKUPS (agi-dev) — the one exact-size system for every
+   DEVICE MOCKUPS (agi-dev), the one exact-size system for every
    illustrated device on marketing/product pages. ProductFrame,
    HeroAppWindow, and SurfaceMockups all render into it.
 
    Geometry contract: each device type declares its canonical design-space
    size via --dev-w/--dev-h (inline style from DEVICE_GEOMETRY in
-   DeviceMockups.tsx — the single source of truth). The root is a size
+   DeviceMockups.tsx, the single source of truth). The root is a size
    container and --u is one design pixel (container width / --dev-w);
    every internal dimension is authored in --u, so a device scales ONLY
-   proportionally — identical shape at every container width — and renders
+   proportionally, identical shape at every container width, and renders
    at exactly its design size in slots wider than --dev-w. Hairline
    borders stay a constant 1px at every scale for crispness.
-   ══════════════════════════════════════════════════════════════════════ */ /* ── shared window bar — one chrome DNA for every windowed device ──── */ /* ── shared primitives: typed placeholder, caret, send, composer ───── */
+   ══════════════════════════════════════════════════════════════════════ */ /* ── shared window bar, one chrome DNA for every windowed device ──── */ /* ── shared primitives: typed placeholder, caret, send, composer ───── */
 
 /* ── shared side-panel pieces (Chrome panel + panel card) ──────────── */ /* ── desktop app window (720 × 480) ────────────────────────────────── */ /* ── browser window · AGI Web (720 × 450) ──────────────────────────── */
 
@@ -2066,13 +2066,13 @@ html[data-contrast='more'] *:focus-visible {
    lands under the 12px floor this repository already enforces everywhere else.
    Browser furniture - tab labels, mode chips - stays small because it is small
    in a real browser and carries no story. The narrative does have to be read:
-   the conversation, the page being acted on, and what is typed into it. */ /* ── standalone side-panel card (400 × 520) ────────────────────────── */ /* ── VS Code window with @agi panel (720 × 450) ────────────────────── */ /* ── terminal window (640 × 400) ───────────────────────────────────── */ /* ── phone (270 × 585) ─────────────────────────────────────────────── */ /* ── motion opt-out ─────────────────────────────────────────────────── */ /* web-interface-guidelines compliance — modal scroll containment + numerals */ /* ── auth shell (login / signup) ────────────────────────────────────── */ /* Two columns: the brand story takes the flexible left column, the card
+   the conversation, the page being acted on, and what is typed into it. */ /* ── standalone side-panel card (400 × 520) ────────────────────────── */ /* ── VS Code window with @agi panel (720 × 450) ────────────────────── */ /* ── terminal window (640 × 400) ───────────────────────────────────── */ /* ── phone (270 × 585) ─────────────────────────────────────────────── */ /* ── motion opt-out ─────────────────────────────────────────────────── */ /* web-interface-guidelines compliance, modal scroll containment + numerals */ /* ── auth shell (login / signup) ────────────────────────────────────── */ /* Two columns: the brand story takes the flexible left column, the card
    column hugs the Clerk card (max-w-28.5rem + breathing room) instead of
    leaving dead margins around it. Top-aligned so the brand block anchors
    to the card's top edge rather than floating in the vertical center of a
    viewport-height band. The card renders first in the DOM (focus order +
    mobile stacking); grid placement puts the brand panel on the left. */ /* Single column: the sign-in card leads (auth is the page's job), the
-   brand story condenses below it. The panel logo is hidden — the header
+   brand story condenses below it. The panel logo is hidden, the header
    wordmark directly above already brands the page, and the duplicate ate
    the first mobile viewport. */ /* ── inline anonymous waitlist form (/waitlist page) ────────────────── */ /* ── per-purpose consent checkboxes (DPDP s.6) ──────────────────────────
    Shared by the inline waitlist form and the waitlist modal, so the block
@@ -2083,7 +2083,7 @@ html[data-contrast='more'] *:focus-visible {
 [data-design='agi'] section[id^='s-'] {
   scroll-margin-top: 88px;
 } /* ── data-rights request form (/privacy/requests) ───────────────────── */ /* ══════════════════════════════════════════════════════════════════════
-   FULL-BLEED BANDS — 2026-06-11 landing review fix.
+   FULL-BLEED BANDS, 2026-06-11 landing review fix.
    Sections live inside the centered .agi-shell (max-width 1180px), so
    their backgrounds, glows, and rule lines stopped at the column edge and
    the page read as a card floating on dead margins. These rules stretch
@@ -2101,16 +2101,16 @@ html[data-contrast='more'] *:focus-visible {
   flex: 0 0 auto;
   color: var(--agi-ink-2);
 } /* ══════════════════════════════════════════════════════════════════════
-   ROUTE FLOW (agi-rf) — animated provider → router → surface diagram.
+   ROUTE FLOW (agi-rf), animated provider → router → surface diagram.
    ══════════════════════════════════════════════════════════════════════ */ /* The hub was a pulsing amber halo - the glowing-orb idiom this design set out
    to avoid, and a four-second loop running forever on a page nobody is
    interacting with. The router earns its weight from precise geometry and real
    provider names, not from throb. A still ring reads as an instrument. */ /* ══════════════════════════════════════════════════════════════════════
-   SHOWCASE SCENES — diff window (agi-dw) + approval panel (agi-ap).
+   SHOWCASE SCENES, diff window (agi-dw) + approval panel (agi-ap).
    ══════════════════════════════════════════════════════════════════════ */
 
 /* ══════════════════════════════════════════════════════════════════
-   MOBILE RESPONSIVENESS — 640px and 480px breakpoints
+   MOBILE RESPONSIVENESS, 640px and 480px breakpoints
    ══════════════════════════════════════════════════════════════════ */
 @media (max-width: 640px) {
   /* Shell padding */ /* Hero text */ /* Section padding */ /* CTA row: stack buttons on very small screens */ /* Mode ribbon: wrap pills */ /* Trust grid: single column already at 860px but keep gap small */ /* Cap grid: 2 columns at 640px */
@@ -2158,8 +2158,8 @@ html[data-contrast='more'] *:focus-visible {
   }
 } /* ─── Print ─────────────────────────────────────────────────────────────────
  *
- * Printing a conversation produced the app chrome — sidebar, composer, floating
- * controls — and a virtualized transcript that only contained the handful of
+ * Printing a conversation produced the app chrome, sidebar, composer, floating
+ * controls, and a virtualized transcript that only contained the handful of
  * rows currently in the DOM. There was no print action and no print stylesheet.
  *
  * `data-print-scope="transcript"` is set on <html> for the duration of the
@@ -2214,7 +2214,7 @@ html[data-contrast='more'] *:focus-visible {
  * answers the Motion control in General settings, for someone who wants calm
  * here without changing their whole machine. It is one blanket rule rather than
  * eleven duplicated blocks so a new animation cannot be added and silently
- * escape the toggle — the failure mode that makes a motion switch decorative.
+ * escape the toggle, the failure mode that makes a motion switch decorative.
  *
  * `scroll-behavior` is included because a smooth-scrolled jump is motion too.
  */
@@ -2235,7 +2235,7 @@ html[data-contrast='more'] *:focus-visible {
   }
 }
 /* ──────────────────────────────────────────────────────────────────────
- * Ledger design system — the parts the root layout needs.
+ * Ledger design system: the parts the root layout needs.
  * The button primitive and the cookie consent panel live here rather than
  * in features/marketing/.../system.css because the consent banner mounts in
  * app/layout.tsx, outside the marketing bundle, and both must resolve to one

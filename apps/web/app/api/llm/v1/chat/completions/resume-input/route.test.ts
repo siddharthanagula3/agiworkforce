@@ -199,7 +199,7 @@ function processedRequest() {
   };
 }
 
-describe('POST /api/llm/v1/chat/completions/resume-input — durable MRTR boundary', () => {
+describe('POST /api/llm/v1/chat/completions/resume-input, durable MRTR boundary', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     gateMocks.managedCompute.mockReturnValue(null);

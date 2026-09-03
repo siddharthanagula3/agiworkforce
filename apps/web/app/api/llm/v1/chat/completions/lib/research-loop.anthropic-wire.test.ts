@@ -1,23 +1,3 @@
-/**
- * NON-mocked-pipeline integration test for the Deep Research loop against the
- * REAL Anthropic translation pipeline.
- *
- * route.ts used to exclude Anthropic from `runResearchLoop` entirely
- * (`processed.provider.toLowerCase() !== 'anthropic'`), on the belief that the
- * loop consumed raw provider SSE. It does not: it dispatches only through
- * `buildToolLoopStream`, so the exclusion silently downgraded the DEFAULT
- * provider to the single-turn research fallback — the Deep Research badge lit
- * up, real citations came back, but there was no plan card, no process
- * narration, and no persisted report. This test is the evidence the exclusion
- * was unnecessary; it feeds the loop through:
- *
- *   Anthropic SDK MessageStreamEvents -> real translateAnthropicStream
- *     -> real chunksToOpenAiSse (legacy-web wireMode, real OpenAIWireAssembler)
- *     -> runResearchLoop's collector.
- *
- * Only the network call itself is replaced; every translation layer between
- * provider events and the research loop is real.
- */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 vi.mock('@/lib/logger', () => ({
@@ -277,7 +257,6 @@ describe('research loop over the REAL Anthropic wire', () => {
     expect(streamMock).toHaveBeenCalledTimes(3);
     expect(streamMock.mock.calls[0]?.[0]).toBe('anthropic');
 
-    // 1. THE PLAN CARD — the surface the excluded Anthropic cohort never got.
     const planSteps = run.events
       .map((e) => (delta(e)['x_research_plan'] as { steps?: unknown[] } | undefined)?.steps)
       .filter((steps): steps is unknown[] => Array.isArray(steps));
@@ -289,7 +268,6 @@ describe('research loop over the REAL Anthropic wire', () => {
     expect(lastPlan.some((step) => step['status'] === 'completed')).toBe(true);
     expect(lastPlan.some((step) => step['type'] === 'synthesize')).toBe(true);
 
-    // 2. PROCESS NARRATION — the research phases the badge implies.
     const phases = run.events
       .map((e) => (delta(e)['x_research_status'] as Record<string, unknown> | undefined)?.['phase'])
       .filter(Boolean);
@@ -317,14 +295,8 @@ describe('research loop over the REAL Anthropic wire', () => {
       .filter((c): c is string => typeof c === 'string')
       .join('');
     expect(content).toContain(REPORT_TEXT);
-    // The client-facing wire keeps Anthropic's inline reasoning tags (the web
-    // client splits them into the "Thought for Ns" chip) — so the stripping
-    // asserted below is real work, not a no-op on a tag-free stream.
     expect(content).toContain('<thinking>');
 
-    // 5. The report is PERSISTED, with citations numbered to match the inline
-    //    `[n]` markers — and with the wire's inline `<thinking>` markers
-    //    stripped out of the stored body.
     expect(persisted).toHaveLength(1);
     const report = persisted[0]!;
     expect(report.status).toBe('completed');

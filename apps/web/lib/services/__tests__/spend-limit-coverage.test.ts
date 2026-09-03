@@ -2,13 +2,6 @@ import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
-/**
- * Resolves the app root by looking for a marker, not from `process.cwd()`.
- *
- * A coverage guard that resolves from the working directory fails with a wall
- * of unreadable-file errors the moment vitest is invoked from the repo root
- * instead of the app — noise that says nothing about the thing being guarded.
- */
 function appRoot(): string {
   const direct = process.cwd();
   if (existsSync(join(direct, 'db/neon'))) return direct;
@@ -19,13 +12,6 @@ function appRoot(): string {
 
 const APP_ROOT = appRoot();
 
-/**
- * Every metered route must ask the workspace budget.
- *
- * A cap that binds on chat but not on image generation is not a cap — a
- * workspace would blow through it on the surface nobody wired. This reads the
- * sources so a new metered route cannot ship without the check.
- */
 const METERED_ROUTES = [
   'app/api/llm/v1/chat/completions/route.ts',
   'app/api/llm/v1/chat/completions/approve/route.ts',

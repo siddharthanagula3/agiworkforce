@@ -1,4 +1,3 @@
-
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import React from 'react';
@@ -44,7 +43,7 @@ function renderWithCode(code: string | null) {
   return render(React.createElement(VerifyPage));
 }
 
-describe('/verify page — device-code branch', () => {
+describe('/verify page, device-code branch', () => {
   beforeEach(() => {
     mockGet.mockReset();
     mockGet.mockReturnValue(null);

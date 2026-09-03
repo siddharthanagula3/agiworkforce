@@ -56,7 +56,7 @@ describe('getPushTokensForUser', () => {
   });
 });
 
-describe('sendPushToUser — delivery', () => {
+describe('sendPushToUser, delivery', () => {
   it('sends one message per registered device', async () => {
     mocks.query.mockResolvedValue([{ push_token: TOKEN_A }, { push_token: TOKEN_B }]);
     expoReturns([{ status: 'ok' }, { status: 'ok' }]);
@@ -78,7 +78,7 @@ describe('sendPushToUser — delivery', () => {
   });
 });
 
-describe('sendPushToUser — dead tokens', () => {
+describe('sendPushToUser, dead tokens', () => {
   it('clears a token Expo reports as unregistered', async () => {
     mocks.query.mockResolvedValue([{ push_token: TOKEN_A }, { push_token: TOKEN_B }]);
     expoReturns([{ status: 'ok' }, { status: 'error', details: { error: 'DeviceNotRegistered' } }]);
@@ -110,7 +110,7 @@ describe('sendPushToUser — dead tokens', () => {
   });
 });
 
-describe('sendPushToUser — never throws', () => {
+describe('sendPushToUser, never throws', () => {
   it('survives a provider outage', async () => {
     mocks.fetch.mockRejectedValue(new Error('network down'));
 
@@ -145,7 +145,7 @@ describe('sendPushToUser — never throws', () => {
   });
 });
 
-describe('sendPushToUser — every transport the account registered', () => {
+describe('sendPushToUser, every transport the account registered', () => {
   const EXPO_ENDPOINT = 'https://exp.host/--/api/v2/push/send';
   const WEB_ENDPOINT = 'https://push.example.test/push/abc';
 

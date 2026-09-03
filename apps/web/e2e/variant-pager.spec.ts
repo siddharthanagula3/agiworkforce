@@ -96,11 +96,6 @@ async function dismissConsent(page: Page): Promise<void> {
     .catch(() => undefined);
 }
 
-/**
- * The gate reads localStorage before the first paint, and the first send
- * navigates away from whatever query string the test opened — so the stored
- * override is the only one that survives the whole run.
- */
 async function openChat(page: Page, mode = MESSAGE_VARIANTS_ON): Promise<SseChatMock> {
   const mock = await installSseChatMock(page);
   await page.addInitScript(
@@ -402,10 +397,6 @@ test.describe('in-thread response variants', () => {
     expect(transcript).toContain(FOLLOW_UP_ANSWER);
   });
 
-  /**
-   * With the gate off, Regenerate is still the destructive replace it was — the
-   * flag has to be able to take the whole feature back out.
-   */
   test('regenerate replaces in place when the gate is off', async ({ page }) => {
     const mock = await openChat(page, MESSAGE_VARIANTS_OFF);
     await runTurn(page, mock, FIRST_PROMPT, FIRST_ANSWER);

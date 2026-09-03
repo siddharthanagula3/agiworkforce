@@ -58,7 +58,7 @@ beforeEach(() => {
   vi.clearAllMocks();
 });
 
-describe('ProjectSettingsDialog — delete fires a real server request', () => {
+describe('ProjectSettingsDialog, delete fires a real server request', () => {
   it('does not expose the deferred emoji picker as an enabled no-op button', () => {
     renderDialog();
 

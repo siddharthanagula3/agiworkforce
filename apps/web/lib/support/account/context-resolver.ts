@@ -1,4 +1,3 @@
-
 import 'server-only';
 
 import { effectivePlanTier } from '@/lib/entitlement';
@@ -210,22 +209,22 @@ export function buildSupportAccountCitations(
   context: SupportAccountContext,
 ): SupportAccountCitation[] {
   const citations: SupportAccountCitation[] = [
-    { id: 'account:plan', label: 'Your account — Plan', href: '/settings/billing' },
+    { id: 'account:plan', label: 'Your account, Plan', href: '/settings/billing' },
   ];
   if (context.usage) {
-    citations.push({ id: 'account:usage', label: 'Your account — Usage', href: '/settings/usage' });
+    citations.push({ id: 'account:usage', label: 'Your account, Usage', href: '/settings/usage' });
   }
   if (context.connectors.length > 0) {
     citations.push({
       id: 'account:connectors',
-      label: 'Your account — Connectors',
+      label: 'Your account, Connectors',
       href: '/settings/connections',
     });
   }
   if (context.apiKeys.activeCount > 0) {
     citations.push({
       id: 'account:api-keys',
-      label: 'Your account — API keys',
+      label: 'Your account, API keys',
       href: '/settings/account',
     });
   }

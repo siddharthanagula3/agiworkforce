@@ -19,7 +19,7 @@ function claimFromSidecar(payload: string): unknown {
   return JSON.parse(sidecar);
 }
 
-describe('EU AI Act Article 50 marker — cross-surface contract', () => {
+describe('EU AI Act Article 50 marker, cross-surface contract', () => {
   it('accepts the sidecar a mobile transcript export actually emits', () => {
     const exported = wrapTextExportWithMarker({
       text: '[2026-05-17 00:00] AGI: hello',

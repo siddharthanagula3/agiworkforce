@@ -31,7 +31,7 @@ describe('detectCardType', () => {
   it('leaves ordinary prose alone', () => {
     expect(
       detectCardType(
-        'Sure — I can help with that. There are a few approaches worth considering here, ' +
+        'Sure, I can help with that. There are a few approaches worth considering here, ' +
           'and the right one depends on how much traffic you expect.',
       ),
     ).toBeNull();

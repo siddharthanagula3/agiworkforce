@@ -76,7 +76,7 @@ describe('AccountSection · delete account (useDeleteAccount, real hook)', () =>
     mockSignOut.mockResolvedValue(undefined);
   });
 
-  it('signs the user out only after Continue, and surfaces the real scheduledFor date — not a hardcoded duration', async () => {
+  it('signs the user out only after Continue, and surfaces the real scheduledFor date, not a hardcoded duration', async () => {
     vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
       const url = String(input);
       if (url === '/api/settings/sessions' && init?.method === 'GET') {
@@ -153,8 +153,6 @@ describe('AccountSection · delete account (useDeleteAccount, real hook)', () =>
     fireEvent.click(screen.getByTestId('delete-account-success-continue'));
 
     await waitFor(() => expect(mockLogout).toHaveBeenCalledOnce());
-    // Even though logout() rejected, navigation still happens — the account
-    // is already deleted server-side, so the user cannot be left stranded.
     await waitFor(() => expect(mockRouterReplace).toHaveBeenCalledWith('/'));
   });
 

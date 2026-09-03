@@ -31,7 +31,7 @@ const linearRows = () => [
   message('a2', { minute: 3, role: 'assistant' }),
 ];
 
-describe('web chat store — message thread', () => {
+describe('web chat store, message thread', () => {
   beforeEach(() => {
     useChatStore.getState().reset();
   });
@@ -281,7 +281,7 @@ describe('web chat store — message thread', () => {
   });
 });
 
-describe('web chat store — deleting a message from the tree', () => {
+describe('web chat store, deleting a message from the tree', () => {
   const branched = () => [
     message('u1', { parentId: null, minute: 0 }),
     message('a1', { parentId: 'u1', minute: 1, role: 'assistant' }),

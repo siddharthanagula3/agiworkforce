@@ -147,7 +147,7 @@ export function WorkspaceConnectorPolicy() {
           <p className="max-w-2xl text-xs leading-relaxed" style={{ color: 'var(--text-3)' }}>
             A custom connector is an arbitrary MCP endpoint a member supplies, which is a different
             risk from a catalog integration this product ships. Switching this off blocks all of
-            them — naming one on the approved list below will not override it.
+            them, naming one on the approved list below will not override it.
           </p>
           <input
             type="checkbox"
@@ -174,7 +174,7 @@ export function WorkspaceConnectorPolicy() {
           </h2>
           <p className="mt-1 text-xs leading-relaxed" style={{ color: 'var(--text-3)' }}>
             The badge shows what a member will actually get after every rule resolves. Approving
-            none leaves them all available — restriction is something you state.
+            none leaves them all available, restriction is something you state.
           </p>
         </div>
 
@@ -269,7 +269,7 @@ export function WorkspaceConnectorPolicy() {
         >
           <p className="max-w-xl text-xs leading-relaxed" style={{ color: 'var(--text-3)' }}>
             {restricted
-              ? 'Applied where the tool catalog is assembled — the one path chat, scheduled tasks, and cloud agent runs all share. A blocked connector is never offered to the model, so it cannot be called from any of them.'
+              ? 'Applied where the tool catalog is assembled, the one path chat, scheduled tasks, and cloud agent runs all share. A blocked connector is never offered to the model, so it cannot be called from any of them.'
               : 'No restriction is in force. Members may use any integration, including custom endpoints.'}
           </p>
           <div className="flex items-center gap-3">

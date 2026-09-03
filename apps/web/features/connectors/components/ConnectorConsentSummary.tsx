@@ -5,7 +5,7 @@ import { ShieldAlert } from 'lucide-react';
 const POINTS: { title: string; body: string }[] = [
   {
     title: 'Connector tools ask before they act',
-    body: 'When a connector tool is available in a conversation, every tool call in that turn waits for your approval — not once at connect time, every time.',
+    body: 'When a connector tool is available in a conversation, every tool call in that turn waits for your approval, not once at connect time, every time.',
   },
   {
     title: 'A Block is absolute',
