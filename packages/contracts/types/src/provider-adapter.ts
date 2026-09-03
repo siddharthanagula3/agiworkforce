@@ -271,14 +271,6 @@ export interface StreamChunkUsage {
   reasoningTokens?: number;
   costUsd?: number;
   cacheDiscountUsd?: number;
-  /**
-   * The exact charge a gateway or aggregator reported for this call, when it
-   * reports one (OpenRouter's `usage.cost`, mapped through `costUsd` above;
-   * Perplexity's `usage.cost.total_cost` is not wired yet -- see
-   * packages/ai/providers/perplexity). Callers should prefer this over a
-   * catalog-price estimate for the actual charge, keeping any retail-price
-   * comparison on the estimate.
-   */
   providerReportedCostUsd?: number;
 }
 
