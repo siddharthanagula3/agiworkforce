@@ -11,6 +11,7 @@ import {
   Stack,
 } from '@/features/marketing/components/system';
 import { FactGrid, PageHero } from '@/features/marketing/components/pages/surfaces/shared';
+import { POLICY_LAST_UPDATED } from '@/lib/legal-constants';
 
 export const metadata = buildMetadata({
   title: 'Agent permissions',
@@ -118,7 +119,7 @@ export default function AgentPermissionsPage() {
               <a href="/acceptable-use" className="agi-ds-link">
                 /acceptable-use
               </a>
-              .
+              . Last updated: {POLICY_LAST_UPDATED.agentPermissions}.
             </>
           }
           ctas={[]}

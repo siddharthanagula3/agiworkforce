@@ -5,6 +5,7 @@ import { Button, ButtonRow, Prose, Section, Stack } from '@/features/marketing/c
 import { PageHero } from '@/features/marketing/components/pages/surfaces/shared';
 import { NoteList } from '@/features/marketing/components/pages/company/shared';
 import { Ledger, type LedgerRow } from '@/features/marketing/components/system';
+import { POLICY_LAST_UPDATED } from '@/lib/legal-constants';
 import { ScanScope } from './ScanScope';
 
 export const metadata = buildMetadata({
@@ -75,7 +76,14 @@ export default function AccessibilityPage() {
           id="agi-accessibility-title"
           eyebrow="Legal"
           title="Accessibility."
-          lede="We aim for WCAG 2.1 AA across the web app and the marketing site. Below is what we've done, what is in flight, and the known gaps. If you hit a barrier, email contact@agiworkforce.com, and we treat it as a P0."
+          lede={
+            <>
+              We aim for WCAG 2.1 AA across the web app and the marketing site. Below is what
+              we&rsquo;ve done, what is in flight, and the known gaps. If you hit a barrier, email
+              contact@agiworkforce.com, and we treat it as a P0. Last updated:{' '}
+              {POLICY_LAST_UPDATED.accessibility}.
+            </>
+          }
           ctas={[]}
         />
 

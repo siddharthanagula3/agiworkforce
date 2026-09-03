@@ -86,6 +86,7 @@ const routes: RouteConfig[] = [
   { path: '/privacy', priority: 0.7, changeFrequency: 'yearly' },
   { path: '/terms', priority: 0.7, changeFrequency: 'yearly' },
   { path: '/acceptable-use', priority: 0.7, changeFrequency: 'yearly' },
+  { path: '/disclaimer', priority: 0.7, changeFrequency: 'monthly' },
   { path: '/agent-permissions', priority: 0.7, changeFrequency: 'monthly' },
   { path: '/dpa', priority: 0.6, changeFrequency: 'yearly' },
   { path: '/sla', priority: 0.6, changeFrequency: 'yearly' },
