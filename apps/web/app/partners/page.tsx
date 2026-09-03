@@ -10,7 +10,11 @@ import {
   Section,
   Stack,
 } from '@/features/marketing/components/system';
-import { FactGrid, PageHero } from '@/features/marketing/components/pages/surfaces/shared';
+import {
+  FactGrid,
+  FactLine,
+  PageHero,
+} from '@/features/marketing/components/pages/surfaces/shared';
 import { CONTACT_EMAIL, contactMailto } from '@/lib/legal-constants';
 
 export const metadata = buildMetadata({
@@ -38,6 +42,10 @@ const OPPORTUNITIES = [
   },
 ] as const;
 
+const OPPORTUNITY_FACTS = OPPORTUNITIES.map(
+  (opportunity) => `${opportunity.meta}: ${opportunity.title}`,
+);
+
 export default function PartnersPage() {
   return (
     <div data-design="agi" className="agi-ds-page">
@@ -53,6 +61,8 @@ export default function PartnersPage() {
             { href: '/apps', label: 'See tools & connectors', variant: 'secondary' },
           ]}
         />
+
+        <FactLine facts={OPPORTUNITY_FACTS} />
 
         <Section id="opportunities" labelledBy="agi-partners-opps-title" rule>
           <Stack gap="loose">
