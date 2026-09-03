@@ -141,7 +141,7 @@ const POSTURE: { label: string; value: string }[] = [
   {
     label: 'Database row-level isolation',
     value:
-      'Partial: 39 of 154 database-backed hosted API route files. Counted against the 154 route files that reach the database; the other 102 hosted routes touch no database at all and are excluded from both sides rather than used to flatter the ratio. A route that reaches for the owner connection at all is counted against us, even where it also reads under policy. Where bound, queries run under a role that cannot bypass policy with the caller identity set per transaction, and both reads and writes are constrained. The remaining 115 connect as the database owner, which bypasses row-level security by design, and enforce ownership in application code only. The rules those routes must satisfy instead are on /security. As of 2026-09-02.',
+      'Partial: 66 of 161 database-backed hosted API route files. Counted against the 161 route files that reach the database; the other 98 hosted routes touch no database at all and are excluded from both sides rather than used to flatter the ratio. A route that reaches for the owner connection at all is counted against us, even where it also reads under policy. Where bound, queries run under a role that cannot bypass policy with the caller identity set per transaction, and both reads and writes are constrained. The remaining 95 connect as the database owner, which bypasses row-level security by design, and enforce ownership in application code only. The rules those routes must satisfy instead are on /security. As of 2026-09-03.',
   },
   {
     label: 'Authentication and CSRF',
@@ -299,6 +299,11 @@ export default function TrustPage() {
             <Ledger
               caption="Change record"
               rows={[
+                {
+                  label: '2026-09-03',
+                  value:
+                    'Migrated roughly 30 route handlers off the owner connection onto policy-scoped RLS clients, raising the row-level-isolation count from 39 of 154 database-backed routes to 66 of 161. The database-backed total moved too, since other routes shipped the same day; the count of routes touching no database is now 98.',
+                },
                 {
                   label: '2026-09-02',
                   value:
