@@ -127,9 +127,6 @@ impl ContextSummarizer for CliContextSummarizer<'_> {
     }
 }
 
-/// Build a short, single-line summary of a tool call for the TUI tool cell
-/// (e.g. the command for `run_command`, the path for file tools). Carries no
-/// full output — capped to one line of <=80 chars.
 fn tool_event_summary(name: &str, args: &serde_json::Value) -> String {
     let pick = |k: &str| args.get(k).and_then(|v| v.as_str()).map(str::to_string);
     let raw = match name {
@@ -373,26 +370,6 @@ impl AgentSession {
         self.cost_ledger.record_completions(completions);
     }
 
-    /// Send a user message and run the full agentic loop.
-    ///
-    /// This is the thin orchestrator (Wave 5e1): consent + privacy boundary,
-    /// context compaction, plan-mode prefixing, the user-message push, and the
-    /// pre-/post-turn hooks stay here (CLI-local, trust-boundary and
-    /// presentation concerns). The turn-loop MECHANICS — model-stream driving,
-    /// tool scheduling, runaway/iteration/budget guards, and event cadence —
-    /// live in `agiworkforce_agent_core::run_turn`, driven through the
-    /// `TurnHostAdapter` below. The public signature and the emitted event
-    /// cadence are byte-for-byte unchanged.
-    /// Re-resolve the Auto route for an interactive turn
-    /// (AUTO-ROUTER-MIGRATION-01, CLI clause). The pre-fix interactive path
-    /// resolved Auto once at launch with a hardcoded Coding task; now every
-    /// turn classifies through the canonical taxonomy and re-resolves with
-    /// previous-route continuity, mirroring the app-server host's typed-turn
-    /// path (`resolve_auto_thread_model`). Sessions without Auto state are
-    /// untouched.
-    ///
-    /// Best-effort: a resolver failure or stale trust state keeps the current
-    /// model — a turn must never fail because routing policy is unavailable.
     pub(crate) fn re_resolve_auto_route_for_turn(&mut self, user_input: &str) {
         let Some(previous) = self.managed_auto_routing().cloned() else {
             return;
@@ -717,10 +694,6 @@ message -- revise and call `update_plan` again.\n\n",
             );
         }
 
-        // `default.max_tokens` is one number for every model — `--max-tokens`
-        // and the `--effort` presets both write it — so trim it to what the
-        // session's model can actually emit. Asking a 128k-output model for
-        // 200k is a provider 400, not a longer answer.
         let max_tokens = config.effective_max_tokens(&self.model);
 
         let tool_defs = self.effective_tool_definitions();
@@ -951,7 +924,6 @@ message -- revise and call `update_plan` again.\n\n",
         })
     }
 
-    /// Send a side query (/btw) — runs in a temporary fork, doesn't affect main history.
     #[allow(dead_code)]
     pub async fn send_btw(
         &self,
@@ -959,8 +931,6 @@ message -- revise and call `update_plan` again.\n\n",
         question: &str,
         on_chunk: StreamCallback,
     ) -> Result<String> {
-        // Trust boundary: a /btw side-query must honor the same Local→cloud guard
-        // as send() — a Local session must never silently egress to cloud here.
         self.validate_privacy_boundary()?;
 
         let mut fork_messages = Vec::new();
@@ -988,15 +958,6 @@ message -- revise and call `update_plan` again.\n\n",
     }
 }
 
-/// Turn-scoped adapter binding the CLI session to the shared turn engine.
-///
-/// Holds the mutable session plus the turn context the engine's `TurnHost`
-/// callbacks need (config, tool definitions, scheduling name-sets, the caller's
-/// first-turn stream callback, and the sequential-path `additional_context`
-/// accrual). Each trait method holds the CLI-local work moved verbatim out of
-/// the old `Session::send` loop — hooks, plan-mode gating, tool-filters, MCP/
-/// team/subagent dispatch, approval prompts, and the json/TUI/stderr routing —
-/// so the emitted cadence is byte-for-byte preserved.
 struct TurnHostAdapter<'a> {
     session: &'a mut AgentSession,
     config: &'a CliConfig,
@@ -1112,11 +1073,6 @@ impl TurnHostAdapter<'_> {
                             for fallback_model in chain.tail() {
                                 let prev_model = self.session.model.clone();
                                 let prev_provider = self.session.provider.clone();
-                                // Privacy-boundary guard: mutate provider/model and then
-                                // validate the boundary BEFORE calling stream_completion.
-                                // If the session is Local and the fallback is a cloud provider,
-                                // restore state and break fail-closed — never egress Local
-                                // session history to the network silently.
                                 let Some(fallback_provider) =
                                     crate::models::try_detect_provider(fallback_model)
                                 else {
@@ -1148,7 +1104,7 @@ impl TurnHostAdapter<'_> {
                                 }
                                 let fallback_call = if self.session.demo_mode {
                                     let demo_text = format!(
-                                        "[DEMO MODE] Synthesized response from `{}` — no real \
+                                        "[DEMO MODE] Synthesized response from `{}`, no real \
                                          API call was made. The fallback chain is exercised but \
                                          the upstream provider was not contacted.",
                                         fallback_model
@@ -1210,10 +1166,6 @@ impl TurnHostAdapter<'_> {
         Ok(completion_from_result(result))
     }
 
-    /// Continuation completion after a tool batch: retry-only recovery (no
-    /// fallback rotation) with the privacy-boundary re-validated first — the
-    /// provider may have been mutated by the first call's fallback loop, and a
-    /// Local session must never stream its history to a cloud provider.
     async fn complete_continuation(&mut self) -> Result<Completion> {
         self.session.validate_privacy_boundary()?;
         let continuation = match models::stream_completion(
@@ -2510,9 +2462,6 @@ mod tests {
             .model_key
             .clone();
 
-        // An untyped creative turn must re-classify — NOT stay on the Coding
-        // hardcode — and the model must be exactly what the canonical resolver
-        // returns for that task with the same continuity inputs.
         session.re_resolve_auto_route_for_turn("write a poem about the sea");
 
         let state = session
@@ -2699,10 +2648,6 @@ mod tests {
         assert_eq!(session.turn_count, 1);
     }
 
-    /// Simulates the pre-fix fallback-loop provider mutation (setting self.provider
-    /// to Anthropic on a Local session) and asserts that validate_privacy_boundary
-    /// returns an error — proving the guard prevents stream_completion from being
-    /// reached with cloud credentials on a Local session.
     #[test]
     fn local_session_cloud_fallback_blocked_by_privacy_boundary() {
         let mut session = make_local_session();
@@ -2722,14 +2667,13 @@ mod tests {
         assert_eq!(
             crate::models::provider_name(&cloud_provider),
             "anthropic",
-            "fixture model must resolve to the anthropic cloud provider — if it leaves \
+            "fixture model must resolve to the anthropic cloud provider, if it leaves \
              the catalog, detect_provider silently falls back to OpenAI and this test \
              stops exercising the intended cloud provider"
         );
         session.model = cloud_model.clone();
         session.provider = cloud_provider;
 
-        // The guard must catch this — stream_completion must never be reached.
         let boundary_result = session.validate_privacy_boundary();
         assert!(
             boundary_result.is_err(),
@@ -2748,8 +2692,6 @@ mod tests {
         );
     }
 
-    /// Inverse: a Local session whose provider is mutated to another local Ollama
-    /// model must NOT be blocked — local-to-local fallback is always allowed.
     #[test]
     fn local_session_local_fallback_not_blocked() {
         let mut session = make_local_session();
@@ -2911,19 +2853,6 @@ mod tests {
         assert_eq!(session.messages.last().unwrap().text_content(), "done");
     }
 
-    // -----------------------------------------------------------------------
-    // Live-turn coverage of the real `TurnHostAdapter`
-    //
-    // The engine's own fixtures (`crates/agiworkforce-agent-core/tests/
-    // turn_loop.rs`) script a stand-in host, and the CLI's JSONL byte-identity
-    // gate only walks the demo/fallback ladder — neither ever reaches the
-    // adapter's classification, hook, plan-gate, subagent or MCP branches.
-    // `LiveTurnHost` runs the real engine over a real session-backed adapter,
-    // substituting only `complete`, the one method that would contact a
-    // provider. Everything downstream of it — partitioning, pre-dispatch
-    // checks, `sh`-backed hooks, real tool execution, history mutation — is
-    // production code.
-    // -----------------------------------------------------------------------
 
     struct LiveTurnHost<'a> {
         adapter: TurnHostAdapter<'a>,

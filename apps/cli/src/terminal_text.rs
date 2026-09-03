@@ -310,7 +310,7 @@ mod tests {
 
     #[test]
     fn preserves_unicode_and_markdown_punctuation() {
-        let input = "**bold** `code` [x](https://e.co) — ünïcødé ✅";
+        let input = "**bold** `code` [x](https://e.co), ünïcødé ✅";
         assert_eq!(sanitize_terminal_text(input), input);
     }
 }

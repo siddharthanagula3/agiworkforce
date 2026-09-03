@@ -1,6 +1,3 @@
-//! `TerminalTitleSetupView` — multi-checkbox overlay for terminal title content.
-//!
-//! Items: session-id, model, cwd, branch. Space toggles; Enter saves; Esc cancels.
 
 #![allow(dead_code)]
 

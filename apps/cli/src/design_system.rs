@@ -1,12 +1,4 @@
-//! Mirror of `packages/contracts/types/src/design-system/`.
-//!
-//! This file is a manual Rust mirror of the TypeScript design-system contracts.
-//! The TypeScript side is the single source of truth — update both when the TS
-//! contract changes.  Surfaces: provider-display.ts, effort.ts.
 
-// ---------------------------------------------------------------------------
-// ProviderId — mirrors ProviderId union in provider-display.ts
-// ---------------------------------------------------------------------------
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum ProviderId {
@@ -68,13 +60,6 @@ impl ProviderId {
         }
     }
 
-    /// Which access mode / trust boundary this provider belongs to.
-    ///
-    /// This is purely a *presentation* grouping for pickers and status — it
-    /// never changes routing or mixes trust boundaries. Local = on-device or a
-    /// user-controlled endpoint (data stays with the user); Cloud = the
-    /// AGI-managed subscription; everything else is BYOK (the user supplies the
-    /// provider key and pays the provider directly).
     pub fn access_mode(self) -> AccessMode {
         match self {
             ProviderId::Ollama | ProviderId::LMStudio | ProviderId::CustomOpenAICompatible => {
@@ -86,9 +71,6 @@ impl ProviderId {
     }
 }
 
-// ---------------------------------------------------------------------------
-// AccessMode — the three trust boundaries AGI exposes to users
-// ---------------------------------------------------------------------------
 
 /// The access mode a model is reached through. Surfaced as the top-level
 /// grouping in the model picker so a new user immediately sees the AGI value
@@ -130,9 +112,6 @@ impl AccessMode {
     }
 }
 
-// ---------------------------------------------------------------------------
-// ProviderDisplay — mirrors ProviderDisplay interface in provider-display.ts
-// ---------------------------------------------------------------------------
 
 pub struct ProviderDisplay {
     #[allow(dead_code)] // retained for completeness of the TS contract mirror
@@ -254,9 +233,6 @@ pub fn provider_display(id: ProviderId) -> ProviderDisplay {
     }
 }
 
-// ---------------------------------------------------------------------------
-// CapabilityTier — mirrors CapabilityTier in provider-display.ts
-// ---------------------------------------------------------------------------
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CapabilityTier {
@@ -285,13 +261,6 @@ impl From<&str> for CapabilityTier {
     }
 }
 
-/// Map a model ID to its capability tier for the picker sub-label.
-///
-/// Looks up the `qualityTier` field from the bundled models.json catalog via
-/// `model_catalog::quality_tier_for_model()`.  Unknown model IDs (Ollama local
-/// models, user-defined BYO endpoints) default to `Balanced`.
-///
-/// This replaces the former 30-arm hard-coded match — no model ID literals live here.
 pub fn capability_for_model(model_id: &str) -> CapabilityTier {
     crate::model_catalog::quality_tier_for_model(model_id)
         .as_deref()
@@ -299,9 +268,6 @@ pub fn capability_for_model(model_id: &str) -> CapabilityTier {
         .unwrap_or(CapabilityTier::Balanced)
 }
 
-// ---------------------------------------------------------------------------
-// Effort — mirrors Effort union in effort.ts
-// ---------------------------------------------------------------------------
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum Effort {

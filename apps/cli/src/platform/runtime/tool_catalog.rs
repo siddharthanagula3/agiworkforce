@@ -67,10 +67,6 @@ impl ToolDefinitionCatalogExt for ToolDefinition {
         self
     }
 
-    /// Phase E (W2-W6): mark this tool as deferred — excluded from the
-    /// model's initial schema list. The model loads it on demand via
-    /// `tool_search`. Always read-only too (deferred tools are niche and
-    /// never need mutation permissions before they're loaded).
     fn deferred(mut self) -> Self {
         self.should_defer = true;
         self
@@ -381,7 +377,7 @@ pub fn built_in_tool_definitions() -> Vec<ToolDefinition> {
             "Spawn a subagent to handle a focused task in parallel. \
              The subagent inherits the current session's tool restrictions and \
              runs concurrently. Use this to parallelize \
-             independent work items — e.g., fixing multiple files, running \
+             independent work items, e.g., fixing multiple files, running \
              separate investigations, or implementing independent features. \
              Each task runs to completion and returns its result.",
             serde_json::json!({
@@ -413,9 +409,6 @@ pub fn built_in_tool_definitions() -> Vec<ToolDefinition> {
             "Search for a regex pattern across files using ripgrep. Supports glob filtering.",
             serde_json::json!({"type":"object","properties":{"pattern":{"type":"string","description":"Regex pattern"},"path":{"type":"string","description":"Directory (default .)"},"include":{"type":"string","description":"Glob filter e.g. *.rs"}},"required":["pattern"]}),
         ).read_only().with_size_cap(50_000),
-        // Phase E: tool_search is always-loaded — it is the on-demand schema
-        // loader. The model calls this to get the JSON schema for any deferred
-        // tool before using it.
         def(
             "tool_search",
             "Search available tools by keyword or load specific tool schemas on demand. \
@@ -507,9 +500,6 @@ pub fn built_in_tool_definitions() -> Vec<ToolDefinition> {
             "Read multiple files at once. Returns concatenated contents with file boundaries.",
             serde_json::json!({"type":"object","properties":{"paths":{"type":"array","description":"Array of absolute file paths to read","items":{"type":"string"}}},"required":["paths"]}),
         ).read_only().with_size_cap(200_000).deferred(),
-        // -----------------------------------------------------------------------
-        // M18: Team management tools — create/delete named agent teams.
-        // -----------------------------------------------------------------------
         def(
             "team_create",
             "Register a named team of agents. Records the team name and optional member list \
@@ -576,10 +566,6 @@ pub fn built_in_tool_definitions() -> Vec<ToolDefinition> {
                 "required": []
             }),
         ).read_only().with_size_cap(10_000).deferred(),
-        // -----------------------------------------------------------------------
-        // M24: Advisor tool — consult a higher-tier model for a side question
-        // without polluting the main session context.
-        // -----------------------------------------------------------------------
         def(
             "advisor",
             "Consult a higher-tier model for a side question without affecting session context. \
@@ -594,9 +580,6 @@ pub fn built_in_tool_definitions() -> Vec<ToolDefinition> {
             }),
         ).read_only().with_size_cap(10_000).deferred(),
 
-        // -----------------------------------------------------------------------
-        // M35: git worktree wrappers — short-lived isolated checkouts for refactors.
-        // -----------------------------------------------------------------------
         def(
             "enter_worktree",
             "Create a git worktree at <target_dir> on a new <branch> based on <base> (default HEAD). \

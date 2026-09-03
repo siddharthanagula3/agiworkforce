@@ -17,9 +17,6 @@ pub(crate) mod ndjson;
 pub(crate) mod protocol;
 pub(crate) mod stdin_reader;
 
-// Re-exports for callers under `crate::sdk_io::*`. The names that aren't yet
-// referenced from main.rs / agent.rs are gated with `allow(unused_imports)` —
-// they're the public surface the next session will wire through.
 pub(crate) use ndjson::{write_event_stdout, NdjsonWriter};
 pub(crate) use protocol::{
     AssistantMessageEvent, ErrorEvent, SdkEvent, StatusUpdateEvent, StatusUpdateReason,

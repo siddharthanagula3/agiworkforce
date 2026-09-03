@@ -195,7 +195,6 @@ pub fn detect_project_type(cwd: &str) -> Option<String> {
     for (files, label) in markers {
         for file in *files {
             if file.contains('*') {
-                // Glob pattern — check with `glob` crate.
                 let pattern = dir.join(file).display().to_string();
                 if let Ok(mut paths) = glob::glob(&pattern) {
                     if paths.next().is_some() {
@@ -245,7 +244,6 @@ pub fn detect_project_language(cwd: &str) -> Option<String> {
         }
     }
 
-    // Node ecosystem — distinguish TS vs JS.
     if dir.join("package.json").exists() {
         if dir.join("tsconfig.json").exists() {
             return Some("TypeScript".to_string());
@@ -465,9 +463,6 @@ mod tests {
         (dir, path)
     }
 
-    // -----------------------------------------------------------------------
-    // gather_system_context (integration-ish — runs real git)
-    // -----------------------------------------------------------------------
 
     #[test]
     fn test_gather_system_context_runs() {

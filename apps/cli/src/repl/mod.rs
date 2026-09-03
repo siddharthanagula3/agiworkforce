@@ -134,20 +134,6 @@ pub async fn run_repl(
         session.set_managed_auto_routing(Some(seed.state));
     }
 
-    // P0-1 fix: do NOT block REPL startup on MCP server connection or OAuth.
-    // Spawn the full connect (including any browser-OAuth dance) on a background
-    // task.  The resulting McpManager is injected into the session just before
-    // the first prompt turn is sent, so the REPL prompt appears immediately.
-    //
-    // Servers that have a cached OAuth token connect in the background without
-    // user interaction.  Servers that require a fresh browser OAuth flow will
-    // open the browser after the user types their first message (the drain
-    // point), not before the prompt appears.  Output from connect_all (the
-    // "MCP server '…': N tools discovered" lines) may interleave with the
-    // rustyline prompt in that window — this is accepted and noted.
-    //
-    // NOTE: tui_app.rs:2661 has the same (true,true) blocking call and is a
-    // known sibling — it is out of scope for this fix.
     let mut mcp_attach_join: Option<tokio::task::JoinHandle<Option<crate::mcp::McpManager>>> = {
         let opts = mcp_config_options.clone();
         let privacy_mode = session.privacy_mode;
@@ -408,7 +394,7 @@ pub async fn run_repl(
                                     output::print_assistant_end();
                                     eprintln!(
                                         "{}",
-                                        "  (side query — not added to conversation)".dimmed()
+                                        "  (side query, not added to conversation)".dimmed()
                                     );
                                 }
                                 Err(e) => {
@@ -426,7 +412,7 @@ pub async fn run_repl(
                                     eprintln!("{}", sanitize_terminal_text(&text));
                                     eprintln!(
                                         "{}",
-                                        "  (advisor side query — not added to conversation)"
+                                        "  (advisor side query, not added to conversation)"
                                             .dimmed()
                                     );
                                 }

@@ -65,8 +65,6 @@ pub enum OverlayResult {
     SkillsDisabled(Vec<String>),
     /// Memory settings chosen in `MemoriesSettingsView`.
     Memory(crate::tui::widgets::memories_settings::MemorySettings),
-    /// Paths APPROVED in `DiffReviewView` — the host stages them (`git add`).
-    /// Reject/Skip are intentionally NOT acted on (never auto-discard changes).
     DiffApproved(Vec<std::path::PathBuf>),
 }
 

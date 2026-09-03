@@ -97,7 +97,7 @@ pub(super) fn handle_setup(config: &mut CliConfig) {
     match key_result {
         Ok(key) => {
             if key.trim().is_empty() {
-                output::print_warn("Empty key — skipping.");
+                output::print_warn("Empty key, skipping.");
                 return;
             }
 

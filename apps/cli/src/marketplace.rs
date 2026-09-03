@@ -1,21 +1,3 @@
-//! Plugin marketplace registry — search, install, uninstall, and update plugins.
-//!
-//! The remote registry at `registry.agiworkforce.com` is future-proofed;
-//! `search()` degrades gracefully to an empty list when the registry is
-//! unreachable.  Primary install methods are local path and git URL.
-//!
-//! Installed plugins are tracked in `~/.agiworkforce/plugins/installed.json`.
-//!
-//! `agi plugin install`/`agi plugin list` (see `crate::plugins::PluginsManager`)
-//! manage the *same* `~/.agiworkforce/plugins/` directory but historically did
-//! not write `installed.json` — they discover plugins by scanning the
-//! directory tree for manifests instead. To keep both command families
-//! interoperating over one source of truth, [`InstalledPlugins::load`]
-//! reconciles the registry against the plugins directory on every load: any
-//! subdirectory with a recognized plugin manifest that isn't yet tracked is
-//! adopted into the registry (and the reconciled registry is persisted back
-//! to disk). This makes a plugin installed via either `agi plugin install`
-//! or `agi marketplace install` visible and manageable via both.
 
 use anyhow::{bail, Context, Result};
 use chrono::Utc;
@@ -23,9 +5,6 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
-// ---------------------------------------------------------------------------
-// Installed plugin tracking — shared source of truth with `crate::plugins`
-// ---------------------------------------------------------------------------
 
 /// A single installed plugin entry in `installed.json`.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -111,7 +90,6 @@ fn reconcile_with_disk(plugins_dir: &Path, registry: &mut InstalledPlugins) -> b
             continue;
         }
         if crate::plugins::load_manifest_for(&path).is_none() {
-            // No recognized manifest — not a plugin directory we can adopt.
             continue;
         }
         registry.plugins.insert(
@@ -133,7 +111,6 @@ fn reconcile_with_disk(plugins_dir: &Path, registry: &mut InstalledPlugins) -> b
 // ---------------------------------------------------------------------------
 
 const DEFAULT_REGISTRY_URL: &str = "https://registry.agiworkforce.com/plugins/v1";
-/// Placeholder URL used by `Marketplace::default()` — matches the v1.2.1 spec.
 const MARKETPLACE_PLACEHOLDER_URL: &str = "https://marketplace.agiworkforce.com";
 const CACHE_DIR: &str = "cache";
 
@@ -375,7 +352,7 @@ impl Marketplace {
             .arg(url)
             .arg(&cache_target)
             .output()
-            .context("failed to run git clone — is git installed?")?;
+            .context("failed to run git clone, is git installed?")?;
 
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);
@@ -407,7 +384,7 @@ impl Marketplace {
         ensure_within(plugins_dir, &target)?;
         if target.exists() {
             bail!(
-                "target directory already exists: {} — remove it first",
+                "target directory already exists: {}, remove it first",
                 target.display()
             );
         }
@@ -520,12 +497,12 @@ impl Marketplace {
                     let stdout = String::from_utf8_lossy(&o.stdout);
                     if stdout.contains("Already up to date") {
                         eprintln!(
-                            "  {} — already up to date",
+                            "  {}, already up to date",
                             crate::terminal_text::sanitize_terminal_text(name)
                         );
                     } else {
                         eprintln!(
-                            "  {} — updated",
+                            "  {}, updated",
                             crate::terminal_text::sanitize_terminal_text(name)
                         );
                     }
@@ -540,14 +517,14 @@ impl Marketplace {
                 Ok(o) => {
                     let stderr = String::from_utf8_lossy(&o.stderr);
                     eprintln!(
-                        "  {} — update failed: {}",
+                        "  {}, update failed: {}",
                         crate::terminal_text::sanitize_terminal_text(name),
                         crate::terminal_text::sanitize_terminal_text(stderr.trim())
                     );
                 }
                 Err(e) => {
                     eprintln!(
-                        "  {} — git error: {}",
+                        "  {}, git error: {}",
                         crate::terminal_text::sanitize_terminal_text(name),
                         crate::terminal_text::sanitize_terminal_text(&e.to_string())
                     );
@@ -684,17 +661,6 @@ fn ensure_within(root: &Path, target: &Path) -> Result<()> {
     Ok(())
 }
 
-/// Validate a clone source before it is handed to `git clone`.
-///
-/// Rejects argument-injection (`-`-prefixed sources or hosts git would treat as
-/// an option), confines the source to an allowlist of safe transports
-/// (`https://`, `http://`, `git://`, `ssh://`, and `git@host:path` SSH
-/// shorthand), and rejects credentials embedded in the authority, which would
-/// otherwise be readable in the process table for the length of the clone.
-/// Local-path transports git understands implicitly — `file://`, plain
-/// filesystem paths, and the `ext::`/`fd::` helper transports that can run
-/// arbitrary commands — are not accepted here; local plugins install via
-/// [`install_from_path`](Marketplace::install_from_path) instead.
 pub(crate) fn validate_git_clone_url(url: &str) -> Result<()> {
     const ALLOWED: &str = "only https://, http://, git://, ssh://, and git@host:path are allowed";
     if url.starts_with('-') {
@@ -717,9 +683,6 @@ pub(crate) fn validate_git_clone_url(url: &str) -> Result<()> {
     }
     let host = match authority.rsplit_once('@') {
         Some((userinfo, host)) => {
-            // An ssh userinfo is a login name, but a password there — or any
-            // userinfo on an http(s)/git:// URL — is a secret that would land
-            // in `ps` output and shell history.
             if scheme != "ssh" || userinfo.contains([':', '@']) {
                 bail!("refusing git source with credentials embedded in the URL; use a git credential helper or ssh key instead");
             }

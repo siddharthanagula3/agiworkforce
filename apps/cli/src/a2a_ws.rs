@@ -1,18 +1,3 @@
-//! a2a WebSocket transport. v1.4.0 of the a2a protocol — adds persistent
-//! streaming JSON-RPC over WebSocket, on top of the v1.3.0 HTTP transport.
-//!
-//! Architecture:
-//! - `WsServer::serve(addr)` binds a TcpListener and upgrades each connection
-//!   to WS using `tokio-tungstenite`.
-//! - Each text-frame message is parsed as `A2aRequest` (JSON-RPC 2.0),
-//!   dispatched through `crate::a2a::jsonrpc::handle_request`, and the
-//!   `A2aResponse` is sent back as a text frame.
-//! - Binary frames are rejected with a JSON-RPC error.
-//! - Connection-level state: each WS connection owns a clone of the
-//!   `PeerRegistry` (read-only via Arc) and an immutable `self_card`.
-//! - v1.5.0: `WsServer::new` accepts an optional `auth_token`. When set, the
-//!   WS handshake callback rejects connections without a matching
-//!   `Authorization: Bearer <token>` header with HTTP 401.
 
 // dead_code allow declared at lib.rs module gate
 

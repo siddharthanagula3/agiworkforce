@@ -1063,8 +1063,6 @@ async fn execute_trigger(
             e
         );
     }
-    // Restrict log file to owner-only (0o600) — log entries may contain
-    // prompt text or partial API responses. Mirrors auth.rs set_file_permissions.
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;

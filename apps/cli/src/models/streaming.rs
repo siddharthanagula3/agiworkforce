@@ -1,21 +1,3 @@
-//! Signature-preserving facade over the shared `agiworkforce-llm` provider
-//! engine (Wave 5c1, `docs/plans/rust-engine-extraction-2026-07-09.md`).
-//!
-//! The provider MECHANICS — dialect request building, SSE/NDJSON decoding,
-//! UTF-8 chunk reassembly, tool-call delta assembly, idle watchdog, and error
-//! classification — live in `crates/agiworkforce-llm`. This module keeps the
-//! CLI-side POLICY exactly where it was:
-//!
-//! - `stream_completion(...)` keeps its historical signature, so the agent
-//!   loop, TUI, subagents, and memory pipeline are untouched by construction;
-//! - provider selection + key resolution (`provider_dispatch`) and
-//!   subscription auth (Copilot / ChatGPT) stay here — the crate receives
-//!   opaque credentials via `ProviderSpec`;
-//! - Ollama-local preflight (model availability, tool-support probing, the
-//!   "running without tools" TUI notice) stays here — the crate has no TUI;
-//! - crate `LlmError`s are mapped back onto `CliError` / the historical
-//!   anyhow messages so retry/fallback matching in `agent/chat.rs` and all
-//!   user-facing error text are byte-identical.
 
 use anyhow::Result;
 use reqwest::Client;
@@ -35,22 +17,8 @@ use super::{
     STREAM_IDLE_TIMEOUT,
 };
 
-/// Deadline for establishing a provider connection.
-///
-/// The engine's idle watchdog is constructed only after `send()` returns
-/// headers, so before this bound existed a host that blackholes SYNs — a
-/// captive portal, a dropped VPN, a firewalled egress — left the turn on the
-/// spinner for the OS connect timeout with no diagnostic.
 const PROVIDER_CONNECT_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(10);
 
-/// The one client every provider request goes through.
-///
-/// Built once: `stream_completion` used to construct a fresh `Client` per call,
-/// which discards connection pooling and TLS session reuse on every tool-loop
-/// continuation. The read deadline mirrors the engine's idle watchdog rather
-/// than introducing a second bound, and there is deliberately no overall
-/// request timeout — a streaming turn's total duration is legitimately
-/// unbounded, so `.timeout()` here would cut long answers off mid-stream.
 fn provider_client() -> &'static Client {
     static CLIENT: std::sync::OnceLock<Client> = std::sync::OnceLock::new();
     CLIENT.get_or_init(|| {
@@ -137,8 +105,6 @@ fn map_llm_error(err: LlmError) -> anyhow::Error {
             required_tier,
             reason,
         } => CliError::paywall(feature, required_tier, reason).into(),
-        // "Streaming timed out: no data received for 5 minutes" for the CLI's
-        // 300s window — same text as the historical `bail!`.
         err @ LlmError::IdleTimeout { .. } => anyhow::anyhow!("{err}"),
         // Historical shape: reqwest read error wrapped with this context.
         LlmError::Read { message } => anyhow::anyhow!(message).context("Error reading stream"),
@@ -281,17 +247,6 @@ fn subscription_spec(
     }
 }
 
-/// Temperature to actually put in the request body for `model`.
-///
-/// `stream_completion` forwards `config.default.temperature` (set by
-/// `--temperature` or `[default] temperature` in the config file) untouched, and
-/// `agiworkforce-llm` serializes it verbatim for the Anthropic, OpenAI, Gemini
-/// and Ollama dialects (`crates/agiworkforce-llm/src/stream.rs:342,725,988,1397`).
-/// Models whose provider rejects sampling parameters therefore 400 on any
-/// configured temperature. The set is declared once, in models.json
-/// (`reasoning.rejectsSamplingParameters`) — never as an ID list at a call
-/// site. This is the CLI's copy of the boundary the desktop request builder
-/// already applies in `core/llm/provider_adapter.rs`.
 fn effective_temperature(model: &str, requested: Option<f32>) -> Option<f32> {
     if crate::model_catalog::model_rejects_sampling_parameters(model) {
         return None;
@@ -476,9 +431,6 @@ pub async fn stream_completion(
                             None
                         }
                         Err(error) => {
-                            // A transient probe failure (Ollama busy/loading) must not
-                            // strip tools the model is known to support — fall back to
-                            // the last successful capability check.
                             match cached_ollama_tool_support(model) {
                                 Some(true) => Some(tool_defs),
                                 _ => {
@@ -608,8 +560,6 @@ mod tests {
         );
         assert_eq!(effective_temperature(&rejects_sampling.id, Some(0.3)), None);
 
-        // Everything else keeps the caller's value — the guard is a per-model
-        // exclusion read from the catalog, not a blanket strip.
         for accepts_sampling in crate::model_catalog::catalog()
             .all()
             .iter()
@@ -799,8 +749,6 @@ mod tests {
         let err = map_llm_error(LlmError::IdleTimeout {
             after: STREAM_IDLE_TIMEOUT,
         });
-        // The historical `bail!` produced a plain anyhow error — NOT a
-        // CliError — so retry/fallback logic must not see a CliError here.
         assert!(err.downcast_ref::<CliError>().is_none());
         assert_eq!(
             err.to_string(),

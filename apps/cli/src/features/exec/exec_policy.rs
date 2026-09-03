@@ -1,17 +1,3 @@
-//! Execution-policy gate (C3) — wires `agiworkforce-execpolicy` into the agent
-//! loop so every shell command the agent runs is evaluated against a policy
-//! *before* it executes.
-//!
-//! The policy engine (ported from codex-rs, Apache-2.0) returns one of three
-//! decisions per command: `Allow` (run), `Prompt` (ask the user), or
-//! `Forbidden` (never run, even with confirmation). This module:
-//!   1. builds the default policy — a small set of catastrophic, irrecoverable
-//!      command prefixes that are `Forbidden` outright; and
-//!   2. bridges the CLI's existing `classify_command` heuristics in as the
-//!      fallback decision when no explicit rule matches, so current behavior is
-//!      preserved while the policy layer can override toward stricter blocking.
-//!
-//! The bash tool calls [`evaluate`] and hard-blocks any `Forbidden` command.
 
 use agiworkforce_execpolicy::{blocking_append_allow_prefix_rule, Decision, Policy, PolicyParser};
 use anyhow::{Context, Result};
@@ -19,10 +5,6 @@ use std::path::{Path, PathBuf};
 
 use crate::safety::{classify_command, CommandSafety};
 
-/// Catastrophic command prefixes that must never run, even with explicit user
-/// confirmation. Kept deliberately small and literal — broad heuristics live in
-/// `classify_command` (the [`evaluate`] fallback); this list is for the
-/// "no human should be able to approve this in an agent loop" cases.
 const FORBIDDEN_PREFIXES: &[&[&str]] = &[
     &["rm", "-rf", "/"],
     &["rm", "-rf", "/*"],

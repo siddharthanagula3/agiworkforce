@@ -152,11 +152,11 @@ fn capture_redirect(listener: TcpListener, expected_state: &str) -> Result<Strin
             _ => {}
         }
     }
-    let html = "HTTP/1.1 200 OK\r\nContent-Type: text/html\r\nContent-Length: 76\r\n\r\n<!doctype html><h1>AGI — login complete</h1><p>You can close this tab.</p>";
+    let html = "HTTP/1.1 200 OK\r\nContent-Type: text/html\r\nContent-Length: 76\r\n\r\n<!doctype html><h1>AGI, login complete</h1><p>You can close this tab.</p>";
     let _ = stream.write_all(html.as_bytes());
     let state = state.ok_or_else(|| anyhow!("redirect missing state"))?;
     if state != expected_state {
-        anyhow::bail!("OAuth state mismatch — possible CSRF; refusing to continue");
+        anyhow::bail!("OAuth state mismatch, possible CSRF; refusing to continue");
     }
     code.ok_or_else(|| anyhow!("redirect missing code"))
 }

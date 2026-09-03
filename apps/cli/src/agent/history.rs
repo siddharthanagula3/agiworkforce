@@ -66,7 +66,7 @@ impl AgentSession {
                 "user",
                 vec![ContentBlock::ToolResult {
                     tool_use_id: orphan_id,
-                    content: "[Tool call was aborted — no output produced]".to_string(),
+                    content: "[Tool call was aborted, no output produced]".to_string(),
                     is_error: true,
                 }],
             ));

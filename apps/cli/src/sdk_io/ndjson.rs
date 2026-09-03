@@ -1,15 +1,3 @@
-//! NDJSON-safe writer.
-//!
-//! `serde_json::to_string` emits raw U+2028 (LINE SEPARATOR) and U+2029
-//! (PARAGRAPH SEPARATOR) bytes when those characters appear inside a string.
-//! Most NDJSON consumers split on '\n' and assume one JSON document per line,
-//! but JavaScript's historical handling of `JSON.parse` permits U+2028/U+2029
-//! inside source — and several streaming parsers (and a few terminal layers)
-//! treat them as line breaks too. The result is silent corruption: a single
-//! event splits across two lines and breaks the parser on the receiving side.
-//!
-//! We escape both to their `\uXXXX` form before writing. Same trick Claude
-//! Code's `cli/ndjsonSafeStringify.ts` uses; trivial to re-implement.
 
 use std::io::{self, Write};
 

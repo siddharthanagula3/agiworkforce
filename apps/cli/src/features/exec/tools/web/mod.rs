@@ -73,10 +73,6 @@ pub(super) fn is_private_or_internal_ip(ip: &std::net::IpAddr) -> bool {
     }
 }
 
-/// Extract the IPv4 address carried by a v4-mapped (`::ffff:0:0/96`) or NAT64
-/// (`64:ff9b::/96`) address so the v4 rules above apply to it — otherwise a
-/// redirect to `http://[64:ff9b::169.254.169.254]/` is classified public and
-/// reaches IMDS through a NAT64 gateway.
 fn embedded_ipv4(segments: &[u16; 8]) -> Option<std::net::Ipv4Addr> {
     let is_v4_mapped = segments[0..5] == [0, 0, 0, 0, 0] && segments[5] == 0xffff;
     let is_nat64 = segments[0] == 0x0064 && segments[1] == 0xff9b && segments[2..6] == [0, 0, 0, 0];
@@ -376,7 +372,6 @@ pub(super) async fn execute_web_fetch(args: &HashMap<String, String>) -> Result<
         Ok(body) => {
             let text = strip_html_tags(&body);
             let truncated = truncate_output_with_save("web_fetch", text);
-            // AUDIT-FIX: H-8 — flag network-sourced content so the model does not treat it as trusted instructions.
             let safe_url = url
                 .replace('"', "%22")
                 .replace('<', "%3C")

@@ -59,7 +59,7 @@ agi auth-status  # confirm
 ### Runtime requirement: sandbox backend
 
 Sandboxed command execution shells out to an OS sandbox binary, and there is no
-in-process fallback — the `linux-seccomp` Cargo feature is not compiled into
+in-process fallback, the `linux-seccomp` Cargo feature is not compiled into
 release builds and installs no filter on any exec path.
 
 | Platform | Required binary           | Install                                                                                                            |
@@ -91,7 +91,7 @@ api_key_env = "GROQ_API_KEY"
 Custom names that collide with a pre-registered provider (`anthropic`,
 `openai`, `google`, `ollama`, `xai`, `deepseek`, `perplexity`, `qwen`,
 `moonshot`, `zhipu`, `lmstudio`, `mistral`, `openrouter`, `nvidia`) are
-ignored — the native handler always wins.
+ignored, the native handler always wins.
 
 ## The four differentiators
 
@@ -99,7 +99,7 @@ ignored — the native handler always wins.
 
 Top-right of the TUI shows running tokens-in / out / cache / `$` and context %.
 Color-shifts grey → orange (≥70 % ctx) → red (≥90 % ctx). Pricing comes from
-the shared `models.json` catalog — never hardcoded.
+the shared `models.json` catalog, never hardcoded.
 
 ```bash
 agi        # interactive TUI; HUD lives top-right
@@ -107,7 +107,7 @@ agi        # interactive TUI; HUD lives top-right
 
 ### 2. Typed JSON event stream
 
-Every lifecycle event becomes one JSONL object on stdout — `Spawning`,
+Every lifecycle event becomes one JSONL object on stdout, `Spawning`,
 `ReadyForPrompt`, `RunningTool`, `ToolResult`, `MessageDelta`, `TurnUsage`,
 `FallbackTriggered`, `Finished`, `Error`. Every error carries a stable
 machine-readable `kind` (`api_rate_limit`, `auth_expired`, `network`, …) and
@@ -120,7 +120,7 @@ agi exec --json-events "explain main.rs" | jq '.[]'
 ### 3. Multi-model fallback chain
 
 Pass a comma-separated `-m` to wire a fallback. If the primary returns 429,
-network, 5xx, or stream-disconnect, the next model takes over — provider
+network, 5xx, or stream-disconnect, the next model takes over, provider
 auto-switched, banner flashed, JSON event emitted.
 
 ```bash
@@ -287,13 +287,13 @@ agi doctor --json
 
 ## Roadmap
 
-- **Phase 0 (Sprint A, complete)** — Decommissioned dead modules, shipped real
+- **Phase 0 (Sprint A, complete)**, Decommissioned dead modules, shipped real
   `init`.
-- **Phase 1 (Sprint B, complete)** — MCP SSE + HTTP + OAuth, plugin manifest
+- **Phase 1 (Sprint B, complete)**, MCP SSE + HTTP + OAuth, plugin manifest
   discovery (`.agiworkforce-plugin/`, `.claude-plugin/`, `.codex-plugin/`),
   hook event vocabulary canonicalized (now 32 events), provider adapter
   support, and user-defined custom endpoints.
-- **Phase 2 (next)** — Routing strategy resurrection (the differentiator),
+- **Phase 2 (next)**, Routing strategy resurrection (the differentiator),
   hot reload, `--from-pr`, OS keychain (sprint1-vault-rewire), Linux Landlock +
   Windows sandbox, OpenTelemetry minimal.
 

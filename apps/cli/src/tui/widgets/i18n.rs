@@ -1,18 +1,3 @@
-//! Locale catalogs for the TUI overlays.
-//!
-//! Overlay chrome used to live in the render functions as English literals cut
-//! to fixed box-drawing widths, so a translated build could not exist without
-//! breaking the borders. Catalogs live in `apps/cli/locales/<code>.json` and
-//! are embedded at build time: the CLI ships as a single relocatable binary and
-//! must not look for data files beside itself.
-//!
-//! Scope, precisely: the chrome of the slash-command popup and the agent
-//! picker. Identifiers echoed straight from agent frontmatter (`model:`,
-//! `tools:`, `max_turns:`) and their config values stay in English because they
-//! name text the user types into a file. Everything else still bakes English —
-//! every other widget in this directory, and the `[global]`/`[user]`/`[project]`
-//! scope badge the agent list gets from `crate::agents::agent_scope_label`.
-//! This module is the mechanism; the migration is partial.
 
 use std::collections::HashMap;
 use std::sync::OnceLock;
@@ -21,10 +6,6 @@ use std::sync::OnceLock;
 /// authored in.
 pub const DEFAULT_LOCALE: &str = "en";
 
-/// Embedded catalogs, one per language in `packages/ui/i18n`'s
-/// `SUPPORTED_LANGUAGES` at the time of writing. Nothing mechanically ties the
-/// two lists — a Rust crate cannot read that TypeScript contract, and no check
-/// compares them — so a language added upstream has to be added here by hand.
 const CATALOGS: &[(&str, &str)] = &[
     ("ar", include_str!("../../../locales/ar.json")),
     ("de", include_str!("../../../locales/de.json")),
@@ -45,11 +26,6 @@ const CATALOGS: &[(&str, &str)] = &[
 /// re-pointing the locale their shell tools already depend on.
 const LOCALE_ENV_VARS: [&str; 4] = ["AGI_WORKFORCE_LANG", "LC_ALL", "LC_MESSAGES", "LANG"];
 
-/// A catalog key. The inner string is private to this module, so the only keys
-/// a widget can pass to [`t`] are the constants in [`keys`]: a mistyped key is a
-/// name that does not exist and fails to compile. Before this type, `t` took a
-/// bare `&'static str` and a typo shipped green — rendering the raw key into the
-/// overlay in *every* locale, English included.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Key(&'static str);
 
@@ -169,13 +145,6 @@ pub fn with_locale<T>(locale: &'static str, body: impl FnOnce() -> T) -> T {
     result
 }
 
-/// Translated string for `key`.
-///
-/// The lookup is fallible, so it needs an else-arm: a missing translation falls
-/// back to English and then to the key text. Neither arm should fire in a
-/// shipped build — the catalogs are embedded at compile time and the parity
-/// tests below hold all twelve of them complete against `keys::ALL` — so they
-/// are the total-function tail, not a coverage story.
 pub fn t(key: Key) -> &'static str {
     let all = catalogs();
     all.get(active_locale())

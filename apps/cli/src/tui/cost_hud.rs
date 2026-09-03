@@ -199,7 +199,6 @@ mod tests {
             .iter()
             .map(|s| s.content.as_ref())
             .collect::<String>();
-        // "in N" present — plain input count
         assert!(text.contains("in "), "missing 'in' field: {text}");
         // "out N" present
         assert!(text.contains("out "), "missing 'out' field: {text}");

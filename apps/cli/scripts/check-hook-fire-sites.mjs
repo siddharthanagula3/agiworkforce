@@ -120,7 +120,7 @@ function main() {
   }
 
   if (variants.length === 0) {
-    console.error('ERROR: No HookEvent variants found — parser may be broken.');
+    console.error('ERROR: No HookEvent variants found, parser may be broken.');
     process.exit(1);
   }
 

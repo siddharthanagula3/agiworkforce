@@ -1,6 +1,3 @@
-//! `StatusLineSetupView` — multi-checkbox overlay for configuring statusline items.
-//!
-//! Items: model, tokens, cost, branch, mode. Space toggles; Enter saves; Esc cancels.
 
 #![allow(dead_code)]
 

@@ -141,8 +141,8 @@ mod tests {
     #[test]
     fn style_helpers_keep_ordinary_text_intact() {
         assert_eq!(
-            &*accent("plain — ünïcødé ✅\n\tindented"),
-            "plain — ünïcødé ✅\n\tindented"
+            &*accent("plain, ünïcødé ✅\n\tindented"),
+            "plain, ünïcødé ✅\n\tindented"
         );
     }
 }

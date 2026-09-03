@@ -927,7 +927,7 @@ mod tests {
             .position(|f| matches!(f.kind, FieldKind::Enum { .. }))
             .unwrap();
         s.focus = Focus::Field(enum_idx);
-        s.handle_key(KeyAction::Left); // already at 0 — should not underflow
+        s.handle_key(KeyAction::Left);
         if let FieldKind::Enum { selected, .. } = &s.fields[enum_idx].kind {
             assert_eq!(*selected, 0);
         }
