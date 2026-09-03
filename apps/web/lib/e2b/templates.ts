@@ -159,6 +159,43 @@ const CODING_HARNESSES: readonly CloudCodeRuntime[] = [
   },
 ];
 
+export interface HarnessCredentialSpec {
+  readonly envVar: string;
+  readonly providerId: string;
+}
+
+/**
+ * Which sandbox env var each harness CLI reads for its credential, and which
+ * of `buildServerProviderAdapter`'s provider ids resolves the value it gets.
+ * `opencode` auto-detects among several, so it lists every candidate the
+ * caller may have configured rather than one.
+ */
+const HARNESS_CREDENTIAL_SPECS: Readonly<Record<string, readonly HarnessCredentialSpec[]>> = {
+  claude: [{ envVar: 'ANTHROPIC_API_KEY', providerId: 'anthropic' }],
+  codex: [{ envVar: 'CODEX_API_KEY', providerId: 'openai' }],
+  droid: [{ envVar: 'FACTORY_API_KEY', providerId: 'factory' }],
+  grok: [{ envVar: 'XAI_API_KEY', providerId: 'xai' }],
+  amp: [{ envVar: 'AMP_API_KEY', providerId: 'amp' }],
+  opencode: [
+    { envVar: 'ANTHROPIC_API_KEY', providerId: 'anthropic' },
+    { envVar: 'OPENAI_API_KEY', providerId: 'openai' },
+    { envVar: 'GEMINI_API_KEY', providerId: 'google' },
+  ],
+};
+
+export function harnessCredentialSpecs(harnessId: string): readonly HarnessCredentialSpec[] {
+  return HARNESS_CREDENTIAL_SPECS[harnessId] ?? [];
+}
+
+export function knownHarnessCommandIds(): ReadonlySet<string> {
+  return new Set(
+    CODING_HARNESSES.filter(
+      (harness): harness is CloudCodeRuntime & { agentCommand: string } =>
+        harness.kind === 'harness' && typeof harness.agentCommand === 'string',
+    ).map((harness) => harness.agentCommand),
+  );
+}
+
 function apiBaseUrl(): string {
   const explicit = process.env[E2B_API_URL_ENV]?.trim();
   if (explicit) return explicit.replace(/\/+$/, '');
