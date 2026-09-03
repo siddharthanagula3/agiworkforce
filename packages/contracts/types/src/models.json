@@ -2049,7 +2049,14 @@
       "bestFor": ["Real-time Info", "Video Input", "Long Context (1M)", "Reasoning"],
       "released": "July 2026",
       "deprecation_date": null,
-      "inputTokenPricingTiers": [{ "thresholdTokens": 200000, "inputCost": 4, "outputCost": 12 }],
+      "inputTokenPricingTiers": [
+        {
+          "thresholdTokens": 200000,
+          "thresholdBoundary": "inclusive",
+          "inputCost": 4,
+          "outputCost": 12
+        }
+      ],
       "pricingNote": "Base rate (<200,000 prompt tokens) is $2.00/M input, $6.00/M output, matching the synced models.dev baseline. xAI's own docs publish a higher tier at or above 200,000 prompt tokens: $4.00/M input, $12.00/M output. capabilitiesOverride.caching is false for this model, so no cache-read price is recorded at either tier. contextWindow is confirmed at 500,000 tokens by xAI directly; the \"Long Context (1M)\" bestFor label is inaccurate but is descriptive copy, not a pricing field, and is left for whoever owns that copy. Verified against docs.x.ai/docs/models, retrieved 2026-09-03.",
       "openWeight": false,
       "license": "proprietary",
