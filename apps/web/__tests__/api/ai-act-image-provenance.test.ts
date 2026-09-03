@@ -89,6 +89,21 @@ vi.mock('@/lib/services/managed-usage-request-service', async (importOriginal) =
 const mockFetch = vi.fn();
 global.fetch = mockFetch;
 
+const PROVIDER_HOSTS = ['api.openai.com', 'generativelanguage.googleapis.com'];
+
+function isProviderCall(call: unknown[]): boolean {
+  const target = String(call[0]);
+  return PROVIDER_HOSTS.some((host) => target.includes(host));
+}
+
+function providerCalls(): unknown[][] {
+  return mockFetch.mock.calls.filter(isProviderCall);
+}
+
+function databaseResponse() {
+  return { ok: true, json: async () => ({ command: 'SELECT', rowCount: 0, rows: [], fields: [] }) };
+}
+
 import { POST } from '@/app/api/media/image/generate/route';
 import { GET as GET_FILE } from '@/app/api/files/[id]/route';
 import {
@@ -121,6 +136,8 @@ function authedRequest(
 }
 
 describe('Article 50(2) — generated image provenance', () => {
+  let queuedProviderResponses: unknown[] = [];
+
   beforeEach(() => {
     vi.clearAllMocks();
     mockGetClerkAuthUser.mockResolvedValue(TEST_USER);
@@ -142,9 +159,15 @@ describe('Article 50(2) — generated image provenance', () => {
     process.env['OPENAI_API_KEY'] = 'sk-test-openai-key';
     delete process.env['GOOGLE_API_KEY'];
 
-    mockFetch.mockResolvedValue({
-      ok: true,
-      json: async () => ({ data: [{ b64_json: PNG_B64 }] }),
+    queuedProviderResponses = [];
+    mockFetch.mockImplementation(async (input: RequestInfo | URL) => {
+      if (!isProviderCall([input])) return databaseResponse();
+      return (
+        queuedProviderResponses.shift() ?? {
+          ok: true,
+          json: async () => ({ data: [{ b64_json: PNG_B64 }] }),
+        }
+      );
     });
   });
 
@@ -168,7 +191,7 @@ describe('Article 50(2) — generated image provenance', () => {
     expect(managedUsageMocks.providerStarted).not.toHaveBeenCalled();
     expect(managedUsageMocks.finalize).not.toHaveBeenCalled();
     expect(rlsMocks.getUserScopedDb).not.toHaveBeenCalled();
-    expect(mockFetch).not.toHaveBeenCalled();
+    expect(providerCalls()).toEqual([]);
   });
 
   it('returns a machine-readable claim for every generated image', async () => {
@@ -240,8 +263,8 @@ describe('Article 50(2) — generated image provenance', () => {
     expect(response.status).toBe(200);
     expect(assetMocks.byId).toHaveBeenCalledWith(TEST_USER.userId, sourceAssetId);
     expect(storageMocks.read).toHaveBeenCalledWith(sourcePathname);
-    expect(mockFetch).toHaveBeenCalledTimes(1);
-    expect(String(mockFetch.mock.calls[0]?.[0])).toContain('api.openai.com');
+    expect(providerCalls()).toHaveLength(1);
+    expect(String(providerCalls()[0]?.[0])).toContain('api.openai.com');
   });
 
   it('rejects a non-image asset before reading private bytes or calling the provider', async () => {
@@ -269,11 +292,11 @@ describe('Article 50(2) — generated image provenance', () => {
 
     expect(response.status).toBe(422);
     expect(storageMocks.read).not.toHaveBeenCalled();
-    expect(mockFetch).not.toHaveBeenCalled();
+    expect(providerCalls()).toEqual([]);
   });
 
   it('removes every staged sibling and refunds when a multi-image batch cannot persist', async () => {
-    mockFetch.mockResolvedValueOnce({
+    queuedProviderResponses.push({
       ok: true,
       json: async () => ({ data: [{ b64_json: PNG_B64 }, { b64_json: PNG_B64 }] }),
     });
@@ -294,7 +317,7 @@ describe('Article 50(2) — generated image provenance', () => {
   });
 
   it('rolls back all staged objects when the atomic media catalog transaction fails', async () => {
-    mockFetch.mockResolvedValueOnce({
+    queuedProviderResponses.push({
       ok: true,
       json: async () => ({ data: [{ b64_json: PNG_B64 }, { b64_json: PNG_B64 }] }),
     });
