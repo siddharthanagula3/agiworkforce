@@ -230,3 +230,34 @@ export function zodErrorsToFormErrors(error: z.ZodError): Record<string, { messa
 
   return formErrors;
 }
+
+const IPV4_OCTET = '(25[0-5]|2[0-4]\\d|1\\d\\d|[1-9]?\\d)';
+const IPV4_ADDRESS_PATTERN = new RegExp(
+  `^${IPV4_OCTET}\\.${IPV4_OCTET}\\.${IPV4_OCTET}\\.${IPV4_OCTET}$`,
+);
+const IPV6_ADDRESS_PATTERN =
+  /^(([0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,7}:|([0-9a-fA-F]{1,4}:){1,6}:[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,5}(:[0-9a-fA-F]{1,4}){1,2}|([0-9a-fA-F]{1,4}:){1,4}(:[0-9a-fA-F]{1,4}){1,3}|([0-9a-fA-F]{1,4}:){1,3}(:[0-9a-fA-F]{1,4}){1,4}|([0-9a-fA-F]{1,4}:){1,2}(:[0-9a-fA-F]{1,4}){1,5}|[0-9a-fA-F]{1,4}:((:[0-9a-fA-F]{1,4}){1,6})|:((:[0-9a-fA-F]{1,4}){1,7}|:)|::(ffff(:0{1,4})?:)?((25[0-5]|2[0-4]\d|1?\d?\d)\.){3}(25[0-5]|2[0-4]\d|1?\d?\d)|([0-9a-fA-F]{1,4}:){1,4}:((25[0-5]|2[0-4]\d|1?\d?\d)\.){3}(25[0-5]|2[0-4]\d|1?\d?\d))$/;
+const MAX_CIDR_PREFIX: Readonly<Record<'v4' | 'v6', number>> = Object.freeze({ v4: 32, v6: 128 });
+
+/**
+ * Format check for one IP allow list entry, mirroring the server's
+ * `isValidCidr` (`@/lib/services/ip-allow-list`) without importing
+ * `node:net` into a client bundle. The server remains the authority: this
+ * only gives the admin inline feedback before they save.
+ */
+export function isValidIpOrCidr(value: string): boolean {
+  const segments = value.split('/');
+  if (segments.length > 2) return false;
+  const [address, prefixRaw] = segments;
+  if (!address) return false;
+  const family = IPV4_ADDRESS_PATTERN.test(address)
+    ? 'v4'
+    : IPV6_ADDRESS_PATTERN.test(address)
+      ? 'v6'
+      : null;
+  if (!family) return false;
+  if (prefixRaw === undefined) return true;
+  if (!/^\d+$/.test(prefixRaw)) return false;
+  const prefix = Number(prefixRaw);
+  return prefix >= 0 && prefix <= MAX_CIDR_PREFIX[family];
+}

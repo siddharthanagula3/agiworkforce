@@ -2,12 +2,13 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { ShieldCheck } from 'lucide-react';
-import type { PrivacyMode, SyncedAppSurface } from '@agiworkforce/types';
+import type { PrivacyMode, SecretHandlingMode, SyncedAppSurface } from '@agiworkforce/types';
 import {
   useUpdateWorkspacePolicy,
   useWorkspacePolicy,
   type WorkspaceAdminPolicy,
 } from '../hooks/use-settings-queries';
+import { isValidIpOrCidr } from '../schemas/settings-validation';
 
 type PolicyDraft = Omit<WorkspaceAdminPolicy, 'organizationId' | 'updatedAt'>;
 
@@ -43,6 +44,19 @@ const buttonStyle = {
   cursor: 'pointer',
 } as const;
 
+const fieldInputStyle = {
+  minHeight: 30,
+  border: '1px solid var(--settings-border)',
+  borderRadius: 'var(--radius-md)',
+  background: 'var(--bg-base)',
+  color: 'var(--text-1)',
+  fontSize: 12,
+  padding: '4px 8px',
+} as const;
+
+const MAX_MONTHLY_SPEND_CAP_CENTS = 100_000_000;
+const MAX_IP_ALLOW_LIST_ENTRIES = 100;
+
 const PRIVACY_MODES: { value: PrivacyMode; label: string; hint: string }[] = [
   { value: 'local', label: 'Local', hint: 'On-device models. Nothing leaves the machine.' },
   {
@@ -69,6 +83,24 @@ const DEVELOPER_SURFACES: { key: keyof PolicyDraft; label: string }[] = [
   { key: 'allowChromeCloudSync', label: 'Chrome extension' },
 ];
 
+const SECRET_HANDLING_MODES: { value: SecretHandlingMode; label: string; hint: string }[] = [
+  {
+    value: 'warn',
+    label: 'Warn',
+    hint: 'The member sees a warning and can still send the message as written.',
+  },
+  {
+    value: 'redact',
+    label: 'Redact',
+    hint: 'The secret is removed from the message before it is sent, and the member is told how many were removed.',
+  },
+  {
+    value: 'block',
+    label: 'Block',
+    hint: 'The message is not sent until the member removes the secret.',
+  },
+];
+
 function toDraft(policy: WorkspaceAdminPolicy): PolicyDraft {
   return {
     defaultPrivacyMode: policy.defaultPrivacyMode,
@@ -87,7 +119,7 @@ function toDraft(policy: WorkspaceAdminPolicy): PolicyDraft {
     requireMfa: policy.requireMfa,
     monthlySpendCapCents: policy.monthlySpendCapCents,
     zeroDataRetentionOnly: policy.zeroDataRetentionOnly,
-    ipAllowList: policy.ipAllowList,
+    ipAllowList: [...policy.ipAllowList],
   };
 }
 
@@ -141,6 +173,7 @@ export function WorkspacePolicySection() {
   const overview = query.data ?? null;
 
   const [draft, setDraft] = useState<PolicyDraft | null>(null);
+  const [ipAllowListInput, setIpAllowListInput] = useState('');
 
   useEffect(() => {
     if (overview) setDraft(toDraft(overview.policy));
@@ -212,6 +245,28 @@ export function WorkspacePolicySection() {
       ? [...new Set([...draft.chatSyncSurfaces, surface])]
       : draft.chatSyncSurfaces.filter((value) => value !== surface);
     patch({ chatSyncSurfaces: next });
+  }
+
+  const trimmedIpAllowListInput = ipAllowListInput.trim();
+  const ipAllowListInputError =
+    trimmedIpAllowListInput && !isValidIpOrCidr(trimmedIpAllowListInput)
+      ? 'Enter an IP address or CIDR block, such as 203.0.113.0/24.'
+      : null;
+  const ipAllowListFull = draft.ipAllowList.length >= MAX_IP_ALLOW_LIST_ENTRIES;
+
+  function addIpAllowListEntry() {
+    if (!draft || !trimmedIpAllowListInput || ipAllowListInputError || ipAllowListFull) return;
+    if (draft.ipAllowList.includes(trimmedIpAllowListInput)) {
+      setIpAllowListInput('');
+      return;
+    }
+    patch({ ipAllowList: [...draft.ipAllowList, trimmedIpAllowListInput] });
+    setIpAllowListInput('');
+  }
+
+  function removeIpAllowListEntry(entry: string) {
+    if (!draft) return;
+    patch({ ipAllowList: draft.ipAllowList.filter((value) => value !== entry) });
   }
 
   return (
@@ -393,16 +448,7 @@ export function WorkspacePolicySection() {
               const next = Number.parseInt(event.target.value, 10);
               if (Number.isFinite(next)) setDraft({ ...draft, retentionDays: next });
             }}
-            style={{
-              width: 84,
-              minHeight: 30,
-              border: '1px solid var(--settings-border)',
-              borderRadius: 'var(--radius-md)',
-              background: 'var(--bg-base)',
-              color: 'var(--text-1)',
-              fontSize: 12,
-              padding: '4px 8px',
-            }}
+            style={{ width: 84, ...fieldInputStyle }}
           />
         }
       />
@@ -448,6 +494,174 @@ export function WorkspacePolicySection() {
           records are subject to one.
         </div>
       ) : null}
+
+      <Row
+        title="Secrets typed into chat"
+        description={
+          SECRET_HANDLING_MODES.find((mode) => mode.value === draft.secretHandling)?.hint ?? ''
+        }
+        control={
+          <select
+            aria-label="Secret handling"
+            value={draft.secretHandling}
+            disabled={!canEdit}
+            onChange={(event) =>
+              patch({ secretHandling: event.target.value as SecretHandlingMode })
+            }
+            style={buttonStyle}
+          >
+            {SECRET_HANDLING_MODES.map((mode) => (
+              <option key={mode.value} value={mode.value}>
+                {mode.label}
+              </option>
+            ))}
+          </select>
+        }
+      />
+
+      <Row
+        title="Require multi-factor authentication"
+        description="Members must have multi-factor authentication enabled on their account to sign in to this workspace."
+        control={
+          <Toggle
+            checked={draft.requireMfa}
+            disabled={!canEdit}
+            label="Require multi-factor authentication"
+            onChange={(next) => patch({ requireMfa: next })}
+          />
+        }
+      />
+
+      <Row
+        title="Monthly spend cap"
+        description={
+          draft.monthlySpendCapCents === null
+            ? 'No cap. AGI-managed compute usage is unrestricted for this workspace.'
+            : `AGI-managed compute stops once this workspace's usage passes $${(
+                draft.monthlySpendCapCents / 100
+              ).toFixed(2)} for the month.`
+        }
+        control={
+          <input
+            type="number"
+            min={0.01}
+            max={MAX_MONTHLY_SPEND_CAP_CENTS / 100}
+            step={0.01}
+            value={draft.monthlySpendCapCents === null ? '' : draft.monthlySpendCapCents / 100}
+            disabled={!canEdit}
+            aria-label="Monthly spend cap in dollars"
+            placeholder="No cap"
+            onChange={(event) => {
+              const raw = event.target.value;
+              if (raw.trim() === '') {
+                patch({ monthlySpendCapCents: null });
+                return;
+              }
+              const dollars = Number.parseFloat(raw);
+              if (!Number.isFinite(dollars) || dollars <= 0) return;
+              const cents = Math.min(Math.round(dollars * 100), MAX_MONTHLY_SPEND_CAP_CENTS);
+              patch({ monthlySpendCapCents: cents });
+            }}
+            style={{ width: 100, ...fieldInputStyle }}
+          />
+        }
+      />
+
+      <Row
+        title="Zero data retention only"
+        description="Route every AGI-managed request through providers that commit to zero data retention. A request that cannot be routed that way fails instead of falling back to a provider without that guarantee."
+        control={
+          <Toggle
+            checked={draft.zeroDataRetentionOnly}
+            disabled={!canEdit}
+            label="Require zero data retention providers"
+            onChange={(next) => patch({ zeroDataRetentionOnly: next })}
+          />
+        }
+      />
+
+      <div style={{ ...rowStyle, display: 'block' }}>
+        <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-1)' }}>IP allow list</div>
+        <div style={{ fontSize: 12, color: 'var(--text-3)', margin: '2px 0 10px' }}>
+          {draft.ipAllowList.length === 0
+            ? 'Empty. Members may sign in to this workspace from any address.'
+            : 'Members may only sign in to this workspace from one of these addresses or blocks.'}
+        </div>
+        {draft.ipAllowList.length > 0 ? (
+          <ul
+            style={{ listStyle: 'none', margin: '0 0 10px', padding: 0, display: 'grid', gap: 6 }}
+          >
+            {draft.ipAllowList.map((entry) => (
+              <li
+                key={entry}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  gap: 8,
+                  fontSize: 12,
+                }}
+              >
+                <span style={{ color: 'var(--text-1)', fontFamily: 'monospace' }}>{entry}</span>
+                <button
+                  type="button"
+                  disabled={!canEdit}
+                  onClick={() => removeIpAllowListEntry(entry)}
+                  aria-label={`Remove ${entry} from the allow list`}
+                  style={{ ...buttonStyle, padding: '2px 8px' }}
+                >
+                  Remove
+                </button>
+              </li>
+            ))}
+          </ul>
+        ) : null}
+        <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
+          <div>
+            <input
+              type="text"
+              value={ipAllowListInput}
+              disabled={!canEdit || ipAllowListFull}
+              aria-label="Add an IP address or CIDR block"
+              placeholder="203.0.113.0/24"
+              onChange={(event) => setIpAllowListInput(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter') {
+                  event.preventDefault();
+                  addIpAllowListEntry();
+                }
+              }}
+              style={{ width: 200, ...fieldInputStyle }}
+            />
+            {ipAllowListInputError ? (
+              <div
+                role="alert"
+                style={{ fontSize: 11, color: 'var(--settings-destructive-text)', marginTop: 4 }}
+              >
+                {ipAllowListInputError}
+              </div>
+            ) : null}
+            {!ipAllowListInputError && ipAllowListFull ? (
+              <div style={{ fontSize: 11, color: 'var(--text-3)', marginTop: 4 }}>
+                The allow list holds at most {MAX_IP_ALLOW_LIST_ENTRIES} entries.
+              </div>
+            ) : null}
+          </div>
+          <button
+            type="button"
+            disabled={
+              !canEdit ||
+              !trimmedIpAllowListInput ||
+              Boolean(ipAllowListInputError) ||
+              ipAllowListFull
+            }
+            onClick={addIpAllowListEntry}
+            style={buttonStyle}
+          >
+            Add
+          </button>
+        </div>
+      </div>
 
       <div
         style={{
