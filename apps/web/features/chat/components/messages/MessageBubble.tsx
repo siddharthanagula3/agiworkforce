@@ -1383,15 +1383,6 @@ const MessageBubbleComponent = function MessageBubble({
     const deduped = dedupeResearchSources(collected);
     const dedupedByUrl = new Map(deduped.map((s) => [s.url, s]));
 
-    // A provider's per-claim citation annotations (OpenAI's url_citation) are
-    // numbered by the model itself, in the order it wrote them - that
-    // numbering is what a `[n]` marker in that model's own text refers to.
-    // It has no reliable relationship to `collected`'s order above, an
-    // aggregate pool built server-side across every search call the turn
-    // made, which the model never sees. Annotation citations are the source
-    // of truth for marker resolution whenever the provider supplied them;
-    // `collected`'s positional order is only a fallback for a provider that
-    // never sends per-citation annotations.
     const citationsByMarker =
       annotationCitations.length > 0
         ? annotationCitations.map((c, i) => ({

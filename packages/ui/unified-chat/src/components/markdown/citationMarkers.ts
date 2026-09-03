@@ -37,16 +37,6 @@ function registrableDomain(url: string): string | null {
   }
 }
 
-/**
- * True only for a link with no meaningful path or query of its own
- * (`blog.google`, `https://snaplogic.com/`) - the shape the model writes
- * when it names a source by domain rather than linking the article. A full
- * article URL that merely fails the exact match above (because the page
- * never made it into this turn's retrieved pool) is NOT this shape, and
- * must not fall through to domain matching below: on a domain with several
- * retrieved pages, that swaps in some other page on the same site as if it
- * were the one the model actually cited.
- */
 function isBareDomainHref(url: string): boolean {
   try {
     const parsed = new URL(url);
@@ -67,12 +57,9 @@ function isBareDomainHref(url: string): boolean {
  * A model that writes a bare domain link (`blog.google`, `snaplogic.com`)
  * instead of the article URL never clears that exact match, so a bare-domain
  * href falls back to the registrable domain, and then to the href being a
- * URL-boundary prefix of a source's URL — each only when it identifies
+ * URL-boundary prefix of a source's URL, each only when it identifies
  * exactly one source; two sources sharing a domain leave the link unmatched
- * rather than guess. A href that already carries a path skips the domain
- * fallback entirely and goes straight to the prefix check, so a real but
- * unretrieved article never gets silently swapped for an unrelated page on
- * the same host.
+ * rather than guess.
  */
 export function findCitationIndexForUrl(
   href: string,
