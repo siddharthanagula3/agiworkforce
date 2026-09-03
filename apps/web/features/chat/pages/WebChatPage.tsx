@@ -1600,6 +1600,12 @@ export default function WebChatPage() {
       // back — this is a suppressed duplicate, not a lost message.
       if (sendingConversationsRef.current.has(sendGuardKey)) return true;
       sendingConversationsRef.current.add(sendGuardKey);
+      let sendGuardReleased = false;
+      const releaseSendGuard = () => {
+        if (sendGuardReleased) return;
+        sendGuardReleased = true;
+        sendingConversationsRef.current.delete(sendGuardKey);
+      };
 
       // Hold the send window for the entire flow (claimed BEFORE
       // createConversation, which is the first thing to mutate the store's
@@ -1700,13 +1706,11 @@ export default function WebChatPage() {
             assistantMessageId: options.assistantMessageId,
             conversationId: convId,
             ensureConversationId,
-            onTurnCommitted:
-              replacementTurnCommitted || options.onTurnCommitted
-                ? () => {
-                    replacementTurnCommitted?.();
-                    options.onTurnCommitted?.();
-                  }
-                : undefined,
+            onTurnCommitted: () => {
+              replacementTurnCommitted?.();
+              options.onTurnCommitted?.();
+              releaseSendGuard();
+            },
             attachments: resolvedAttachments,
             webSearch: options.meta?.webSearchEnabled,
             // Search implies fetch (ChatGPT/Claude parity): with Search on, the model
@@ -1756,7 +1760,7 @@ export default function WebChatPage() {
         // Release the guard once the send has fully settled (or bailed). By now
         // `bareChatSessionId`/`urlConversationId` reflect the real conversation,
         // so the reconciler reads a consistent displayed id and never misfires.
-        sendingConversationsRef.current.delete(sendGuardKey);
+        releaseSendGuard();
         releaseSendWindow();
       }
     },
