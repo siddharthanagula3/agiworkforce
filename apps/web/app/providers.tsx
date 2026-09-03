@@ -1,7 +1,6 @@
 'use client';
 
 import { I18nextProvider } from 'react-i18next';
-import { useEffect } from 'react';
 import { Toaster } from 'sonner';
 import i18n from './i18n';
 import { QueryProvider } from '@shared/stores/query-client';
@@ -16,7 +15,6 @@ import { TelemetryConsentSync } from '@shared/components/TelemetryConsentSync';
 import { SessionTimeoutGuard } from '@shared/components/SessionTimeoutGuard';
 import { SupportWidgetMount } from '@/features/support/components/SupportWidgetMount';
 import { ConnectorOutcomeAnnouncer } from '@/features/connectors/components/ConnectorOutcomeAnnouncer';
-import { seoService } from '@/lib/seo/seo-optimizer';
 
 export default function Providers({
   children,
@@ -25,12 +23,6 @@ export default function Providers({
   children: React.ReactNode;
   nonce?: string;
 }) {
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      seoService.initialize();
-    }
-  }, []);
-
   return (
     <ThemeProvider nonce={nonce}>
       <CapabilityProvider platform="web">
