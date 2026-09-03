@@ -37,7 +37,14 @@ function makeSnapshot() {
         badge: 'first-party',
         iconUrl: null,
         monogram: 'N',
-        docsUrl: null,
+        documentationUrl: null,
+        iconSource: 'brand',
+        brandSlug: 'notion',
+        authorName: 'Notion',
+        authorUrl: null,
+        websiteUrl: null,
+        supportUrl: null,
+        privacyPolicyUrl: null,
       },
       {
         id: 'io.github.someone/tool',
@@ -48,14 +55,21 @@ function makeSnapshot() {
         remotes: [{ url: 'https://tool.example.com/mcp', transport: 'streamable-http' }],
         authMode: 'unknown',
         connectable: 'needs-setup',
-        toolNames: [],
+        toolNames: ['send_invoice', 'get_invoice'],
         repositoryUrl: 'https://github.com/someone/tool',
         version: '1.0.0',
         sourceRegistry: 'mcp-registry',
         badge: 'community',
         iconUrl: 'https://cdn.example.com/tool.png',
         monogram: 'ST',
-        docsUrl: 'https://example.com/docs',
+        documentationUrl: 'https://example.com/docs',
+        iconSource: 'registry',
+        brandSlug: null,
+        authorName: 'someone',
+        authorUrl: 'https://github.com/someone',
+        websiteUrl: 'https://example.com',
+        supportUrl: null,
+        privacyPolicyUrl: null,
       },
     ],
   };
@@ -138,8 +152,29 @@ describe('GET /api/connectors/directory', () => {
       badge: 'community',
       iconUrl: 'https://cdn.example.com/tool.png',
       monogram: 'ST',
-      docsUrl: 'https://example.com/docs',
+      documentationUrl: 'https://example.com/docs',
+      iconSource: 'registry',
+      authorName: 'someone',
+      authorUrl: 'https://github.com/someone',
+      websiteUrl: 'https://example.com',
     });
+  });
+
+  it('carries a computed tool count and connector url for each entry', async () => {
+    mocks.readDirectorySnapshot.mockResolvedValueOnce(makeSnapshot());
+
+    const response = await GET(request());
+    const body = await response.json();
+
+    const tool = body.entries.find(
+      (entry: { id: string }) => entry.id === 'io.github.someone/tool',
+    );
+    expect(tool.toolCount).toBe(2);
+    expect(tool.connectorUrl).toBe('https://tool.example.com/mcp');
+
+    const notion = body.entries.find((entry: { id: string }) => entry.id === 'notion');
+    expect(notion.toolCount).toBe(0);
+    expect(notion.connectorUrl).toBe('https://mcp.notion.com/mcp');
   });
 
   it('returns an empty directory rather than failing when no snapshot has been ingested yet', async () => {
