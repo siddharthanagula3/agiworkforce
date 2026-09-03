@@ -8,7 +8,7 @@ deleted once its phases landed; the mechanical restructure it described is
 complete (see the phase note below) and `docs/architecture/overview.md`
 now carries the package/crate ownership it defined.
 
-> **Phase note (2026-07-26).** The mechanical restructure below is complete —
+> **Phase note (2026-07-26).** The mechanical restructure below is complete.
 > every wave is landed and the repository is structurally coherent (baseline:
 > 10,272 passing tests, 27 green operability guardrails). The active phase is now
 > **surface production quality**: Desktop Cloud and Mobile Cloud to the standard
