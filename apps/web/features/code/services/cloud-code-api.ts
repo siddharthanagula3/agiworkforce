@@ -81,6 +81,16 @@ const sessionDetailSchema = z.object({
 const sessionOnlySchema = z.object({ session: sessionSchema });
 const commandSchema = z.object({ session: sessionSchema, terminalEntry: terminalEntrySchema });
 
+const commitResultSchema = z.object({
+  session: sessionSchema,
+  push: z.object({
+    ok: z.boolean(),
+    output: z.string(),
+    error: z.string().optional(),
+    exitCode: z.number().int(),
+  }),
+});
+
 // Mirrors `CloudCodeAgentStopReason` in lib/services/cloud-code-agent-loop.ts. That
 // module is `server-only`, so the browser bundle cannot import the union and this
 // list is the wire contract instead.
@@ -128,6 +138,7 @@ export type CloudCodeAgentStopReason = (typeof AGENT_STOP_REASONS)[number];
 export type CloudCodeAgentTurn = z.infer<typeof agentTurnSchema>;
 export type CloudCodeAgentApproval = z.infer<typeof agentApprovalsSchema>['approvals'][number];
 export type CloudCodeApprovalDecision = 'approve' | 'reject';
+export type CloudCodeCommitResult = z.infer<typeof commitResultSchema>;
 
 export interface StartCloudCodeAgentTurnRequest {
   goal: string;
@@ -163,6 +174,7 @@ export interface CloudCodeApi {
     signal?: AbortSignal,
   ): Promise<RunCloudCodeCommandResponse>;
   close(sessionId: string, signal?: AbortSignal): Promise<CloudCodeSession>;
+  commit(sessionId: string, message: string, signal?: AbortSignal): Promise<CloudCodeCommitResult>;
   startAgentTurn(
     sessionId: string,
     input: StartCloudCodeAgentTurnRequest,
@@ -279,6 +291,18 @@ export function createCloudCodeApi(dependencies: CloudCodeApiDependencies = {}):
         sessionOnlySchema,
       );
       return body.session;
+    },
+    async commit(sessionId, message, signal) {
+      return request(
+        `/api/code/sessions/${encodeURIComponent(sessionId)}/commit`,
+        {
+          method: 'POST',
+          headers: await mutationHeaders(),
+          body: JSON.stringify({ message }),
+          signal,
+        },
+        commitResultSchema,
+      );
     },
     async startAgentTurn(sessionId, input, signal) {
       return request(
