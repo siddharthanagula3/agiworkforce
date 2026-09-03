@@ -444,6 +444,20 @@ describe('Connectors pane (table)', () => {
     expect(await screen.findByText('OAuth flow failed.')).toBeTruthy();
   });
 
+  it('renders the surface-supplied per-scope permission list in the connector detail view', () => {
+    renderModal({
+      renderConnectorScopes: (connectorId) => <div>Scopes for {connectorId}</div>,
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'GitHub' }));
+    expect(screen.getByText('Scopes for github')).toBeTruthy();
+  });
+
+  it('renders no scope list when the surface supplies none', () => {
+    renderModal();
+    fireEvent.click(screen.getByRole('button', { name: 'GitHub' }));
+    expect(screen.queryByText(/Scopes for/)).toBeNull();
+  });
+
   it('Add dropdown offers Browse connectors and Add custom connector', () => {
     renderModal();
     fireEvent.click(screen.getByRole('button', { name: /^Add$/ }));
