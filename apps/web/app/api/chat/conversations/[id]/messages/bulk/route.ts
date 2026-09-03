@@ -9,12 +9,8 @@ import { requireCsrfToken } from '@/lib/csrf';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { withIsoTimestamps } from '@/lib/server/iso-timestamps';
-import {
-  getNeonChatDb,
-  requireCurrentUserId,
-  normalizeMessageMetadata,
-  type ChatMessageRow,
-} from '@/lib/server/neon-chat';
+import { normalizeMessageMetadata, type ChatMessageRow } from '@/lib/server/neon-chat';
+import { getUserScopedDb } from '@/lib/server/rls-db';
 import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
 import { resolveActiveOrganizationId } from '@/lib/services/active-workspace-service';
 import { scheduleArtifactIndexing } from '../lib/index-artifacts';
@@ -46,7 +42,7 @@ const BulkSaveSchema = z.object({
 });
 
 async function handleBulkSave(request: NextRequest, context: RouteContext) {
-  const userId = await requireCurrentUserId(request);
+  const { db, userId } = await getUserScopedDb(request);
 
   const csrfError = await requireCsrfToken(request);
   if (csrfError) return csrfError as NextResponse;
@@ -68,7 +64,6 @@ async function handleBulkSave(request: NextRequest, context: RouteContext) {
 
   const { messages } = parsed.data;
 
-  const db = getNeonChatDb();
   const organizationId = await resolveActiveOrganizationId(db, userId);
 
   const [conv] = await db.query<{ id: string; active_leaf_message_id: string | null }>(
