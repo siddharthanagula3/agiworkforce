@@ -62,16 +62,16 @@ export function parseAgiCommand(commentBody: string): ParsedCommand {
 export const HELP_TEXT = `## AGI Guardian
 
 Available commands:
-- \`/agi help\` — show this help
-- \`/agi review\` — run a full Guardian review of this PR
-- \`/agi security\` — run the security and trust-boundary reviewers
-- \`/agi debt\` — run the technical-debt analysis
-- \`/agi slop\` — run the AI-slop and completeness rules
-- \`/agi tests\` — run the test-quality reviewer
-- \`/agi architecture\` — run the architecture and parity reviewer
-- \`/agi explain\` — summarize the changes in this PR
-- \`/agi rescan\` — re-run the last review against the current head
-- \`/agi full-audit\` — run the full repository audit (subject to plan limits)
-- \`/agi suppress <finding-id> --reason "..."\` — suppress a finding (owner + expiry recorded)
-- \`/agi unsuppress <finding-id>\` — reopen a suppressed finding
-- \`/agi fix <finding-id>\` — request a fix (approval-gated; disabled until write-phase rollout)`;
+- \`/agi help\`, show this help
+- \`/agi review\`, run a full Guardian review of this PR
+- \`/agi security\`, run the security and trust-boundary reviewers
+- \`/agi debt\`, run the technical-debt analysis
+- \`/agi slop\`, run the AI-slop and completeness rules
+- \`/agi tests\`, run the test-quality reviewer
+- \`/agi architecture\`, run the architecture and parity reviewer
+- \`/agi explain\`, summarize the changes in this PR
+- \`/agi rescan\`, re-run the last review against the current head
+- \`/agi full-audit\`, run the full repository audit (subject to plan limits)
+- \`/agi suppress <finding-id> --reason "..."\`, suppress a finding (owner + expiry recorded)
+- \`/agi unsuppress <finding-id>\`, reopen a suppressed finding
+- \`/agi fix <finding-id>\`, request a fix (approval-gated; disabled until write-phase rollout)`;
