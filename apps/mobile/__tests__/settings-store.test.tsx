@@ -1,5 +1,3 @@
-
-
 jest.mock('../lib/mmkv', () => ({
   whenMmkvReady: jest.fn((cb) => cb()),
   rehydrateWhenMmkvReady: jest.fn((store, _name) => {
@@ -186,7 +184,7 @@ describe('settingsStore (device-global)', () => {
     });
   });
 
-  describe('migratePersistedSettings — dead TTS provider (MOBILE-TTS-CLOUD-DEADSTATE-01)', () => {
+  describe('migratePersistedSettings, dead TTS provider (MOBILE-TTS-CLOUD-DEADSTATE-01)', () => {
     it("migrates a persisted 'cloud' ttsProvider to 'system'", () => {
       const migrated = migratePersistedSettings({ ttsProvider: 'cloud', speechRate: 1.5 }, 0);
       expect(migrated.ttsProvider).toBe('system');
@@ -212,7 +210,7 @@ describe('settingsStore (device-global)', () => {
   });
 });
 
-describe('localSettingsStore (mode-specific — never synced)', () => {
+describe('localSettingsStore (mode-specific, never synced)', () => {
   beforeEach(resetLocalStore);
 
   describe('personalization defaults', () => {
@@ -300,7 +298,7 @@ describe('localSettingsStore (mode-specific — never synced)', () => {
   });
 });
 
-describe('cloudSettingsStore (mode-specific — synced to cloud)', () => {
+describe('cloudSettingsStore (mode-specific, synced to cloud)', () => {
   beforeEach(resetCloudStore);
 
   it('starts with settingsUpdatedAt = null (never edited)', () => {

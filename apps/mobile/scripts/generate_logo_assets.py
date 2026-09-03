@@ -8,9 +8,6 @@ from PIL import Image, ImageDraw, ImageFont
 # apps/web/app/globals.css, so the mark is the same colour on every surface.
 BRAND_AMBER = (240, 168, 74, 255)
 
-# Foreground ink per theme. These are `textPrimary` from
-# apps/mobile/src/ui/theme/tokens.ts — the launch lockup must be the same ink
-# the first in-app frame draws the wordmark in, or the handoff visibly shifts.
 INK_LIGHT = (17, 17, 17, 255)
 INK_DARK = (244, 244, 244, 255)
 
@@ -93,11 +90,6 @@ def generate_agi_logo(width, height, is_opaque, output_path):
     final_img.save(output_path, 'PNG')
     print(f"Generated logo asset: {output_path} ({width}x{height})")
 
-# Launch-lockup geometry mirrors the in-app brand lockup on the chat empty
-# state (app/(app)/(tabs)/chat.tsx): a 30pt mark, a 10pt gap, then "AGI" set at
-# 26pt in Newsreader SemiBold with 0.5pt letterspacing. The bare mark is a
-# twelve-spoke starburst and, shown alone and static, reads as a stalled
-# loading spinner — the wordmark is what disambiguates it.
 LOCKUP_MARK_UNITS = 30.0
 LOCKUP_GAP_UNITS = 10.0
 LOCKUP_FONT_UNITS = 26.0
@@ -180,9 +172,6 @@ def generate_lockups():
     generate_agi_lockup(880, INK_DARK, 'apps/mobile/assets/splash-lockup-dark.png')
 
 
-# Run from the repository root. Pass `icons` or `lockups` to regenerate one
-# family only — regenerating the icons rewrites shipped store artwork, so the
-# default is deliberately not "everything".
 TARGETS = {
     'icons': generate_icons,
     'lockups': generate_lockups,

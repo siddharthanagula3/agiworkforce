@@ -109,7 +109,7 @@ export function DesktopSetupChecklistView({ onContinue }: DesktopSetupChecklistV
           </Text>
         </View>
 
-        {/* Steps sit ABOVE the CTA — the whole point of this screen. */}
+        {/* Steps sit ABOVE the CTA, the whole point of this screen. */}
         <PairingChecklist
           className="mb-8"
           steps={[
@@ -122,7 +122,7 @@ export function DesktopSetupChecklistView({ onContinue }: DesktopSetupChecklistV
         />
 
         <Button
-          title="Done — continue to pairing"
+          title="Done, continue to pairing"
           variant="primary"
           size="lg"
           onPress={handleContinue}

@@ -130,7 +130,7 @@ import { VoiceInputButton } from '@/src/features/voice/components/VoiceInputButt
 import * as VoiceService from '@/src/features/voice/services/voice';
 import { VoiceCaptureError } from '@/src/features/voice/services/voiceInput';
 
-describe('Composer — voice scaffolding snapshots', () => {
+describe('Composer, voice scaffolding snapshots', () => {
   describe('RecordingOverlay', () => {
     it('renders nothing in idle state (visible=false)', () => {
       const { toJSON } = render(

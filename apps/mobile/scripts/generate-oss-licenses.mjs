@@ -1,22 +1,4 @@
 #!/usr/bin/env node
-/**
- * Generates the in-app open-source attribution list.
- *
- *   node apps/mobile/scripts/generate-oss-licenses.mjs
- *
- * Walks the mobile app's production dependency graph (its own `dependencies`,
- * then each resolved package's `dependencies`, skipping devDependencies and
- * first-party workspace packages), reads each package's license id and license
- * file, and writes `src/features/legal/licenses.generated.ts`.
- *
- * License bodies are deduplicated: most MIT/ISC packages ship byte-identical
- * text apart from the copyright line, so the copyright line is kept per package
- * and the shared body is stored once. That keeps the attribution complete while
- * keeping the bundled module a fraction of the raw ~600 KB of license files.
- *
- * Run it after changing dependencies and commit the result — the app reads the
- * generated module directly, so a stale file is a stale attribution notice.
- */
 import { createHash } from 'node:crypto';
 import { createRequire } from 'node:module';
 import fs from 'node:fs';
@@ -92,15 +74,6 @@ function readLicenseText(dir) {
   return null;
 }
 
-/**
- * Copyright lines belong to the package; the rest of the text is shared.
- *
- * A line only counts as an attribution when it *also* carries a year or a
- * (c)/© mark. Matching "copyright" alone would eat license text — ISC's
- * "copyright notice and this permission notice appear in all copies" and the
- * MIT wrap "COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM" both start that way,
- * and dropping them would publish a mangled license.
- */
 function isCopyrightLine(line) {
   if (!/^\s*(?:copyright\b|\(c\)|©)/i.test(line)) return false;
   return /(?:\b(?:19|20)\d{2}\b|©|\(c\))/i.test(line);
@@ -179,7 +152,7 @@ function build() {
 
   const source = [
     '/**',
-    ' * GENERATED FILE — do not edit by hand.',
+    ' * GENERATED FILE, do not edit by hand.',
     ' *',
     ' * Regenerate with: node apps/mobile/scripts/generate-oss-licenses.mjs',
     ' *',

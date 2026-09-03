@@ -324,9 +324,7 @@ export function ChatInput({
           setText((current) => (current === sentText ? '' : current));
           setAttachments((current) => current.filter((a) => !sentAttachmentIds.has(a.id)));
         })
-        .catch(() => {
-          // Send failed before acceptance — keep the draft.
-        })
+        .catch(() => {})
         .finally(() => {
           sendPendingRef.current = false;
         });
@@ -492,7 +490,7 @@ export function ChatInput({
           }
         }
       } catch {
-        // Transcription failed or was aborted — the composer keeps what it had.
+        // noop
       } finally {
         if (transcriptionRunRef.current === run) {
           setIsTranscribing(false);
@@ -608,7 +606,7 @@ export function ChatInput({
   const placeholder = isStreaming
     ? `Reply to ${modelName}...`
     : !isOnline
-      ? `Offline — message will send on reconnect${queueLabel}`
+      ? `Offline, message will send on reconnect${queueLabel}`
       : mediaMode === 'image'
         ? 'Describe the image to create'
         : mediaMode === 'video'
@@ -622,7 +620,7 @@ export function ChatInput({
       className="px-4 pt-2"
       style={{ paddingBottom: keyboardVisible ? 8 : Math.max(insets.bottom + 6, 16) }}
     >
-      {/* "What will be sent" disclosure — the destination stays visible above
+      {/* "What will be sent" disclosure, the destination stays visible above
           the composer before every send, and expands to the full payload
           explanation on demand. Mirrors the web composer's compact SendPreview
           (ChatComposerNew.tsx). Hidden during voice capture, where the row
@@ -632,7 +630,7 @@ export function ChatInput({
       ) : null}
 
       {/* Media mode is a MODEL swap, so it needs a standing indicator and an
-          explicit exit — otherwise the next text question silently goes to an
+          explicit exit, otherwise the next text question silently goes to an
           image/video model. Hidden during capture for the same reason as the
           disclosure above. */}
       {mediaMode !== 'text' && !isRecording && !isTranscribing ? (
@@ -855,7 +853,7 @@ export function ChatInput({
         >
           {/* Expand to a full-screen editor. Pinned inside the card's top-right
               corner and shown only while stacked, matching the reference's
-              appearance threshold (IMG_0672) — a one-line pill has nothing to
+              appearance threshold (IMG_0672), a one-line pill has nothing to
               expand. The stacked TextInput reserves room for it on the right so
               the first line never runs underneath the glyph. */}
           {stacked ? (
@@ -884,7 +882,7 @@ export function ChatInput({
           {/* [+] sits INSIDE the pill on the left, matching ChatGPT
               (IMG_0674, references-2/voice-03). It previously sat outside as a
               separate 40pt circle, which is Claude's arrangement, not
-              ChatGPT's — and the founder chose ChatGPT style. Hidden while the
+              ChatGPT's, and the founder chose ChatGPT style. Hidden while the
               pill is showing recording/transcribing state, and while stacked,
               where the plus moves to the controls row beneath the text. */}
           {!stacked && !isRecording && !isTranscribing ? (
@@ -909,7 +907,7 @@ export function ChatInput({
 
           {/* Dictation state, in place of the input: one live waveform that
               FREEZES while the recognizer resolves the transcript. It replaces
-              the old spinner-plus-timer pair — the reference row carries
+              the old spinner-plus-timer pair, the reference row carries
               neither a clock nor a second moving indicator (IMG_0686/0687), and
               the frozen bars already say capture has ended. The label stays for
               a truthful "still working" signal, muted and text-only. */}
@@ -1018,12 +1016,12 @@ export function ChatInput({
                   <Plus size={18} color={themeColors.textMuted} />
                 </Pressable>
                 {/* The model answering this chat, on the control row beside [+]
-                    — Claude's arrangement (IMG_0730); ChatGPT puts the same
+                    - Claude's arrangement (IMG_0730); ChatGPT puts the same
                     text-only label next to the mic (IMG_0689). It lives here
                     rather than in a chip row above the composer, which the
                     founder rejected on 2026-07-29, and rather than in the
                     compact pill, where it would eat the single-line input's
-                    width — the exact complaint the restack fixed. */}
+                    width, the exact complaint the restack fixed. */}
                 {/* Hidden in a media mode: the model is fixed by the registry
                     slot for that output kind, so a picker here would imply a
                     choice that does not apply to this turn. The MediaModeChip
@@ -1074,7 +1072,7 @@ export function ChatInput({
               accessibilityRole="button"
             >
               {/* A stop square, not a send arrow. This control ends capture and
-                  drops the transcript into the composer for review — it does not
+                  drops the transcript into the composer for review, it does not
                   send. Drawn as an up-arrow it read as "send", so the row looked
                   like it offered only cancel-or-send and users could not find a
                   way to stop. ChatGPT shows a stop square in the same slot. */}

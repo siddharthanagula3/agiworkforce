@@ -1,10 +1,4 @@
 #!/usr/bin/env bash
-# Wave 0 smoke-test prep — iOS
-# Verifies toolchain, builds a dev client via EAS, and prints install instructions.
-# Re-runnable: safe to run more than once (EAS skips builds that are already queued).
-#
-# Usage: bash apps/mobile/scripts/wave0-smoke/ios-smoke.sh
-#        Or from the mobile dir: bash scripts/wave0-smoke/ios-smoke.sh
 
 set -euo pipefail
 
@@ -26,7 +20,7 @@ die()      { printf '\033[1;31m[fail]\033[0m %s\n' "$*" >&2; exit 1; }
 # Helpers
 # ---------------------------------------------------------------------------
 require_cmd() {
-  command -v "$1" >/dev/null 2>&1 || die "Missing required command: $1 — install it and re-run."
+  command -v "$1" >/dev/null 2>&1 || die "Missing required command: $1, install it and re-run."
 }
 
 require_min_version() {
@@ -105,13 +99,13 @@ EAS_JSON="${MOBILE_DIR}/eas.json"
 if jq -e '.build.preview' "${EAS_JSON}" >/dev/null 2>&1; then
   ok "preview profile found in eas.json"
 else
-  die "preview profile missing from eas.json — cannot build for real device"
+  die "preview profile missing from eas.json, cannot build for real device"
 fi
 
 # ---------------------------------------------------------------------------
 # 5. Trigger EAS build
 # ---------------------------------------------------------------------------
-smoke "=== Step 5: EAS build (iOS preview — real device) ==="
+smoke "=== Step 5: EAS build (iOS preview, real device) ==="
 smoke "This will queue a build on EAS cloud. First build takes ~15 min."
 smoke "Subsequent builds with the same cache key are faster (~5-8 min)."
 smoke ""
@@ -129,7 +123,7 @@ printf '\n'
 
 # If EAS_AUTO_BUILD is set to 1, actually run the build.
 if [[ "${EAS_AUTO_BUILD:-0}" == "1" ]]; then
-  smoke "EAS_AUTO_BUILD=1 — starting build now..."
+  smoke "EAS_AUTO_BUILD=1, starting build now..."
   (cd "${MOBILE_DIR}" && eas build --platform ios --profile preview --non-interactive) || \
     die "EAS build failed. Check the output above."
 fi
@@ -141,16 +135,16 @@ smoke "=== Step 6: Install on device ==="
 smoke ""
 smoke "After the build completes, install using one of these methods:"
 smoke ""
-smoke "  Option A — QR code (easiest):"
+smoke "  Option A, QR code (easiest):"
 smoke "    1. Open the EAS build URL printed above in a browser"
 smoke "    2. Scan the QR code with your iPhone camera"
 smoke "    3. Tap 'Install' in Safari"
 smoke ""
-smoke "  Option B — devicectl (Xcode 15+):"
+smoke "  Option B, devicectl (Xcode 15+):"
 smoke "    xcrun devicectl device install app --device <UDID> <path/to/AGIWorkforce.ipa>"
 smoke "    (Get UDID: xcrun devicectl list devices)"
 smoke ""
-smoke "  Option C — Expo Go fallback (simulator only):"
+smoke "  Option C, Expo Go fallback (simulator only):"
 smoke "    npx expo start --ios"
 smoke ""
 

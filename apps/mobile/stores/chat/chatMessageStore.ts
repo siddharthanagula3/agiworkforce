@@ -208,7 +208,7 @@ export const useChatMessageStore = create<MessageState>()(
               );
           }
         } catch {
-          // Keep existing conversations on failure — offline resilience
+          // noop
         } finally {
           set({ isLoadingConversations: false });
         }
@@ -1207,7 +1207,7 @@ function captureArtifactsForLoadedMessages(
       );
     if (artifacts.length > 0) useArtifactStore.getState().addArtifacts(artifacts);
   } catch {
-    // Non-fatal — artifact capture must never block opening a conversation.
+    // noop
   }
 }
 

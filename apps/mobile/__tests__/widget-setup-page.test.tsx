@@ -1,4 +1,3 @@
-
 /* eslint-disable @typescript-eslint/no-require-imports */
 import React from 'react';
 import { Platform } from 'react-native';
@@ -48,7 +47,7 @@ afterEach(() => {
   Object.defineProperty(Platform, 'OS', { get: () => originalOS, configurable: true });
 });
 
-describe('Quick Access screen — describes only real integrations', () => {
+describe('Quick Access screen, describes only real integrations', () => {
   it('iOS: lists the real Siri App Shortcuts and native share-extension review flow', () => {
     setPlatform('ios');
     const { getAllByText, getByText, queryByText } = render(<WidgetSetupScreen />);

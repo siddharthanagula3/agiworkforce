@@ -303,7 +303,7 @@ export function QRScanner({ onScan, onClose }: QRScannerProps) {
           accessibilityLabel="Enter code manually"
           accessibilityRole="button"
         >
-          {/* Also on the camera feed — overlay palette, not the accent token. */}
+          {/* Also on the camera feed, overlay palette, not the accent token. */}
           <Keyboard size={16} color={colors.cameraOverlayText} />
           <Text className="text-sm font-medium" style={{ color: colors.cameraOverlayText }}>
             Enter code manually

@@ -1,4 +1,3 @@
-
 import {
   parseChatGPTExport,
   parseClaudeExport,
@@ -49,7 +48,7 @@ describe('parseChatGPTExport', () => {
     expect(fact.length).toBeLessThanOrEqual(MAX_FACT_CHARS + 1);
   });
 
-  it('returns empty ImportResult for malformed JSON — never throws', () => {
+  it('returns empty ImportResult for malformed JSON, never throws', () => {
     expect(() => {
       const result = parseChatGPTExport('not valid json {{{');
       expect(result.facts).toEqual([]);
@@ -107,7 +106,7 @@ describe('parseClaudeExport', () => {
       conversations: [
         {
           chat_messages: [
-            { role: 'user', content: 'Unstarred — should be ignored.', starred: false },
+            { role: 'user', content: 'Unstarred, should be ignored.', starred: false },
           ],
         },
       ],
@@ -118,7 +117,7 @@ describe('parseClaudeExport', () => {
 
   it('caps facts at MAX_FACTS (500)', () => {
     const convs = repeat(501, (i) => ({
-      system_prompt: `System instruction number ${i} — this is a valid long fact.`,
+      system_prompt: `System instruction number ${i}, this is a valid long fact.`,
     }));
     const json = JSON.stringify({ conversations: convs });
     const result = parseClaudeExport(json);
@@ -126,7 +125,7 @@ describe('parseClaudeExport', () => {
     expect(result.skipped).toBeGreaterThanOrEqual(1);
   });
 
-  it('returns empty ImportResult for malformed JSON — never throws', () => {
+  it('returns empty ImportResult for malformed JSON, never throws', () => {
     expect(() => {
       const result = parseClaudeExport('{incomplete json');
       expect(result.facts).toEqual([]);
@@ -212,7 +211,7 @@ describe('parseGeminiExport', () => {
     expect(result.skipped).toBeGreaterThanOrEqual(1);
   });
 
-  it('returns empty ImportResult for malformed JSON — never throws', () => {
+  it('returns empty ImportResult for malformed JSON, never throws', () => {
     expect(() => {
       const result = parseGeminiExport('[[invalid json');
       expect(result.facts).toEqual([]);

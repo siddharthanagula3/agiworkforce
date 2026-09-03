@@ -235,7 +235,7 @@ export function LibraryScreen({ initialImageId }: { initialImageId?: string }) {
 
       {/* Horizontally scrollable, not a fixed row. The four labels already
           total ~316pt plus gutters against a 375pt screen, so at any
-          accessibility text size — or with a fifth filter — "Artifacts" was
+          accessibility text size, or with a fifth filter, "Artifacts" was
           pushed off-screen with no way to reach it. The 16pt content padding
           keeps the same gutter as the search field below, and the 16pt bottom
           padding keeps the standard vertical rhythm between the two controls
@@ -287,7 +287,7 @@ export function LibraryScreen({ initialImageId }: { initialImageId?: string }) {
 
       {/* Bottom-anchored, not between the chips and the grid. Both references
           float search as a pill under the thumb (IMG_0690, IMG_0753) and the
-          chats list already shipped that treatment — sitting at the top here
+          chats list already shipped that treatment, sitting at the top here
           cost ~56pt of first-screen grid and made two sibling list screens
           contradict each other. */}
       <BottomSearchBar

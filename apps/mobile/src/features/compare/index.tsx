@@ -393,7 +393,7 @@ export default function CompareScreen() {
                 </View>
               )}
 
-              {/* Response columns — stacked on narrow screens */}
+              {/* Response columns, stacked on narrow screens */}
               {(lastPrompt ||
                 stateA.isStreaming ||
                 stateB.isStreaming ||

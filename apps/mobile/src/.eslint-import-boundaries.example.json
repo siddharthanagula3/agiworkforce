@@ -1,6 +1,6 @@
 {
-  "_comment_purpose": "Reference scaffolding for the import-boundary rules that will enforce the layer-map in apps/mobile/src/. NOT auto-loaded — root eslint.config.mjs is the canonical config. Folded into root config in a later phase once the legacy paths are migrated and the rules can switch from 'warn' to 'error'.",
-  "_comment_layer_map": "entry / core / features / platform / integrations / storage / ui — see ./README.md",
+  "_comment_purpose": "Reference scaffolding for the import-boundary rules that will enforce the layer-map in apps/mobile/src/. NOT auto-loaded, root eslint.config.mjs is the canonical config. Folded into root config in a later phase once the legacy paths are migrated and the rules can switch from 'warn' to 'error'.",
+  "_comment_layer_map": "entry / core / features / platform / integrations / storage / ui, see ./README.md",
   "rules": {
     "no-restricted-imports": [
       "warn",
@@ -19,7 +19,7 @@
       }
     ],
     "_planned_layer_boundary_rule": {
-      "_comment": "Future: enforce that apps/mobile/src/entry/** does not import from features/*/internal, and that storage/** does not import from features/**, etc. Requires eslint-plugin-boundaries or similar — to be added in the lint-hard phase."
+      "_comment": "Future: enforce that apps/mobile/src/entry/** does not import from features/*/internal, and that storage/** does not import from features/**, etc. Requires eslint-plugin-boundaries or similar, to be added in the lint-hard phase."
     }
   },
   "_status": "scaffolding (soft warning baseline). Not wired into root eslint.config.mjs yet. See ./README.md migration plan."

@@ -1,9 +1,6 @@
 import AppIntents
 import Foundation
 
-// "Set reminder via AGI" — opens the containing app's explicit review screen.
-// Reminders.app is written only after the user confirms there; the shortcut
-// itself never creates an item silently.
 @available(iOS 16.0, *)
 struct SetReminderIntent: AppIntent {
   static var title: LocalizedStringResource = "Set Reminder via AGI"

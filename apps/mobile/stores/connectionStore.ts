@@ -207,12 +207,6 @@ interface RTCSessionDescriptionInit {
 
 let dataChannel: RTCDataChannelType | null = null;
 
-/**
- * The out-of-band pairing secret for the code we are paired with, held only in
- * memory. Reconnects call `connect(pairingCode)` with the bare code, so the
- * secret scanned from the QR has to survive between attempts — but it must
- * never be persisted alongside the relay-visible pairing code.
- */
 let rememberedPairing: { code: string; secret: string } | null = null;
 
 function forgetPairingSecret(): void {
@@ -739,9 +733,7 @@ function setupPeerConnection(): void {
     }
   };
 
-  (pc as unknown as Record<string, unknown>).onconnectionstatechange = () => {
-    // Connection state change handled silently — reconnection logic in signaling layer
-  };
+  (pc as unknown as Record<string, unknown>).onconnectionstatechange = () => {};
 }
 
 function setupDataChannel(channel: RTCDataChannelType): void {
@@ -756,7 +748,7 @@ function setupDataChannel(channel: RTCDataChannelType): void {
       const parsed = JSON.parse(String(event.data));
       handleControlMessage(parsed);
     } catch {
-      // Malformed DataChannel message — ignore
+      // noop
     }
   };
 
@@ -801,7 +793,7 @@ async function handleSignalingMessage(kind: SignalKind, payload: unknown): Promi
         break;
     }
   } catch {
-    // WebRTC signaling error — falls back to relay
+    // noop
   }
 }
 
@@ -1053,9 +1045,7 @@ export const useConnectionStore = create<ConnectionState>()(
                   if (event.kind === 'control') {
                     handleControlMessage(event.payload);
                   } else {
-                    handleSignalingMessage(event.kind, event.payload).catch(() => {
-                      // Signaling message handling failed — ignore
-                    });
+                    handleSignalingMessage(event.kind, event.payload).catch(() => {});
                   }
                   break;
 

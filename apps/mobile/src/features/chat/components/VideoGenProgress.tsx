@@ -95,7 +95,7 @@ export function VideoGenProgress({
         {isError ? (errorMessage ?? 'Something went wrong.') : prompt}
       </Text>
 
-      {/* Determinate bar only when the provider actually reported a number —
+      {/* Determinate bar only when the provider actually reported a number.
           a fake moving bar would misrepresent an unknown wait. */}
       {progress !== undefined && !isError ? (
         <View

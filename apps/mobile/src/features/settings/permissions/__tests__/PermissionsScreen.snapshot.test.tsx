@@ -183,14 +183,14 @@ beforeEach(() => {
   jest.clearAllMocks();
 });
 
-describe('PermissionsScreen — index', () => {
+describe('PermissionsScreen, index', () => {
   it('locks the native-backed permission list card', () => {
     const { toJSON } = render(<PermissionsScreen />);
     expect(toJSON()).toMatchSnapshot();
   });
 });
 
-describe('PermissionDetailScreen — camera', () => {
+describe('PermissionDetailScreen, camera', () => {
   it('locks the camera detail with native-backed levels', () => {
     const { toJSON } = render(<PermissionDetailScreen />);
     expect(toJSON()).toMatchSnapshot();

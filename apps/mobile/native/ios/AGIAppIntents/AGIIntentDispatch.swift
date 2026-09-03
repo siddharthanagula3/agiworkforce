@@ -2,15 +2,6 @@ import Foundation
 import AppIntents
 import UIKit
 
-// Central deep-link dispatcher for all AGI App Intents.
-// Each Intent calls `AGIIntentDispatch.open(_:)` with a pre-built URL;
-// the RN runtime picks it up via expo-linking in the root _layout.tsx handler.
-//
-// URL format: agiworkforce://intent/<verb>?<params>
-// Verbs: chat, ask, summarize, analyze_image, transcribe, translate, scan, remind
-//
-// Works offline — no network call is made here. The RN side handles the intent
-// params once the app is foregrounded.
 
 enum AGIIntentDispatch {
     static let scheme = "agiworkforce"

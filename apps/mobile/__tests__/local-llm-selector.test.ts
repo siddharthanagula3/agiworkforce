@@ -1,4 +1,3 @@
-
 const mockIosModule = {
   getCapabilities: jest.fn(),
   isThermallyThrottled: jest.fn(),
@@ -139,7 +138,7 @@ describe('local-llm: catalog', () => {
   });
 });
 
-describe('local-llm: capabilities — iOS Foundation Models', () => {
+describe('local-llm: capabilities, iOS Foundation Models', () => {
   beforeEach(() => {
     jest.clearAllMocks();
   });

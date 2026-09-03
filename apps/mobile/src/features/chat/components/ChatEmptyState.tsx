@@ -116,7 +116,7 @@ export function ChatEmptyState({ showPairingBanner, onPairDesktop }: ChatEmptySt
         </Text>
       </Animated.View>
 
-      {/* Subtitle — only shown when no display name, otherwise headline is already personal */}
+      {/* Subtitle, only shown when no display name, otherwise headline is already personal */}
       {!displayName && (
         <Animated.View entering={reducedMotion ? undefined : FadeIn.duration(500).delay(150)}>
           <Text

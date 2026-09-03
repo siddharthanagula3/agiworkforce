@@ -1,7 +1,5 @@
 import AppIntents
 
-// "Analyze this image with AGI" — Visual Intelligence / camera roll image intent.
-// Integrates with Apple's Visual Intelligence onscreen entry point (iOS 18+).
 @available(iOS 16.0, *)
 struct AnalyzeImageIntent: AppIntent {
     static var title: LocalizedStringResource = "Analyze Image with AGI"
@@ -19,7 +17,7 @@ struct AnalyzeImageIntent: AppIntent {
 
     static var parameterSummary: some ParameterSummary {
         When(\.$question, .hasAnyValue) {
-            Summary("Analyze \(\.$image) — \(\.$question) — with AGI")
+            Summary("Analyze \(\.$image), \(\.$question), with AGI")
         } otherwise: {
             Summary("Analyze \(\.$image) with AGI")
         }
@@ -30,8 +28,6 @@ struct AnalyzeImageIntent: AppIntent {
         if let q = question, !q.isEmpty {
             params["question"] = q
         }
-        // Encode image as a file path reference — the RN share-preview screen
-        // reads the file from the temp URL the system stages for us.
         if let url = image.fileURL {
             params["imageUri"] = url.absoluteString
         }

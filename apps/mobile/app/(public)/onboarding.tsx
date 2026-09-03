@@ -271,7 +271,6 @@ export default function OnboardingScreen() {
 
   const handleDisclosureDecline = useCallback(() => {
     setDisclosureVisible(false);
-    // Stay on hero — user can try again; app is fully usable on re-tap
   }, []);
 
   const handleStartDownload = useCallback(
@@ -415,7 +414,7 @@ export default function OnboardingScreen() {
         />
       )}
 
-      {/* Model picker sheet — overlays the full screen, only shown when user
+      {/* Model picker sheet, overlays the full screen, only shown when user
           taps "Pick a different model" on the device-tier screen. */}
       <ModelPickerSheet sheetRef={modelPickerRef} modelScope="local" onSelect={handleSelectModel} />
     </SafeAreaView>
@@ -460,7 +459,7 @@ function HeroScreen({
         Chat, write, code, research, and organize projects in one place.
       </Text>
 
-      {/* Primary CTA — full-width pill */}
+      {/* Primary CTA, full-width pill */}
       <Pressable
         testID="hero-start-chatting-btn"
         onPress={onStartChatting}
@@ -622,7 +621,7 @@ function DeviceTierScreen({
         </Text>
       </Pressable>
 
-      {/* Cloud path — reach catalog-selected hosted models + cloud tools/web
+      {/* Cloud path, reach catalog-selected hosted models + cloud tools/web
           search without downloading a local model. Sign-in is the entitlement. */}
       <Pressable
         testID="device-tier-cloud-btn"

@@ -12,7 +12,7 @@ function toggleLabel(summary: string, collapsed: boolean) {
   return `${summary}${collapsed ? ', collapsed' : ', expanded'}`;
 }
 
-describe('ToolCallTimeline — recycling state reset', () => {
+describe('ToolCallTimeline, recycling state reset', () => {
   it('resets collapsed state when the SAME component instance is recycled onto a different message', () => {
     const summary = 'Read 5 files';
     const { getByLabelText, rerender } = render(

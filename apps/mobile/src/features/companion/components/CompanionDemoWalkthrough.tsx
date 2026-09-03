@@ -39,7 +39,7 @@ function demoSteps(colors: ReturnType<typeof useThemeColors>): DemoStep[] {
       title: 'Pair with Desktop',
       description:
         'Sign in on Desktop, switch to Managed Cloud, then open Settings > Connections. Generate a short-lived QR or pairing code and scan it from this screen.',
-      hint: 'The code authorizes this phone. Account identities are not compared, and the devices only need to be online — they do not need the same Wi-Fi.',
+      hint: 'The code authorizes this phone. Account identities are not compared, and the devices only need to be online, they do not need the same Wi-Fi.',
     },
     {
       id: 'monitor',
@@ -254,7 +254,7 @@ export function CompanionDemoWalkthrough({ visible, onDone }: CompanionDemoWalkt
 
           {/* Navigation */}
           <View className="flex-row items-center gap-3">
-            {/* Prev button — only shown after first step */}
+            {/* Prev button, only shown after first step */}
             {currentStep > 0 ? (
               <Pressable
                 onPress={handlePrev}

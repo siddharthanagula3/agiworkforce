@@ -1,4 +1,3 @@
-
 jest.mock('../lib/mmkv', () => ({
   whenMmkvReady: jest.fn((cb) => cb()),
   rehydrateWhenMmkvReady: jest.fn((store, _name) => {
@@ -26,7 +25,7 @@ import { useWaitlistStore } from '../src/features/waitlist/store';
 
 const INVITE_WAITLIST_FRAMING = /invite|waitlist|private[ -]?beta/i;
 
-describe('PA-2 cloud gate — public-alpha copy', () => {
+describe('PA-2 cloud gate, public-alpha copy', () => {
   it('the sign-in message is the public-alpha CTA, not invite/waitlist framing', () => {
     expect(MOBILE_REMOTE_CHAT_SIGNIN_REQUIRED_MESSAGE).toBe(
       'Sign in to use AGI Cloud chat. Local Mode stays available on this device.',
@@ -51,15 +50,15 @@ describe('PA-2 cloud gate — public-alpha copy', () => {
   });
 });
 
-describe('PA-2 cloud gate — entitlement, not invite', () => {
-  it('allows a signed-in user (open by default — invite flag is a no-op)', () => {
+describe('PA-2 cloud gate, entitlement, not invite', () => {
+  it('allows a signed-in user (open by default, invite flag is a no-op)', () => {
     expect(getRemoteChatDisabledReason(FEATURES, { cloudUnlocked: false })).toBeNull();
     expect(getRemoteChatDisabledReason(FEATURES, { cloudUnlocked: true })).toBeNull();
     expect(() => assertRemoteChatAllowed(FEATURES, { cloudUnlocked: true })).not.toThrow();
   });
 });
 
-describe('PA-2 cloud gate — Local stays fail-closed', () => {
+describe('PA-2 cloud gate, Local stays fail-closed', () => {
   it('blocks remote chat when Cloud chat is disabled (kill-switch / local-only build)', () => {
     const disabledBuild = { v1LocalOnly: true, cloudChat: false, byokKeys: false };
     expect(getRemoteChatDisabledReason(disabledBuild, { cloudUnlocked: true })).toBe(
@@ -78,7 +77,7 @@ describe('PA-2 cloud gate — Local stays fail-closed', () => {
   });
 });
 
-describe('PA-2 entitlement wiring — sign-in unlocks cloud access', () => {
+describe('PA-2 entitlement wiring, sign-in unlocks cloud access', () => {
   beforeEach(() => {
     useWaitlistStore.getState().clear();
   });

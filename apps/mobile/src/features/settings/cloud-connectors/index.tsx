@@ -1,4 +1,3 @@
-
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { View, Image, Pressable, Alert, ActivityIndicator, ScrollView } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
@@ -436,7 +435,7 @@ function ConnectorCard({
         : 'Coming soon';
   const actionable = !busy && (connected || available);
   const connectedLabel = needsReauthorization
-    ? 'Authorization expired — reconnect'
+    ? 'Authorization expired, reconnect'
     : connectedAt
       ? `Connected ${new Date(connectedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`
       : 'Connected';
@@ -548,7 +547,7 @@ function WaitlistPlaceholder() {
       <Text
         style={{ color: colors.textPrimary, fontSize: 15, fontWeight: '600', textAlign: 'center' }}
       >
-        Connectors — AGI Cloud
+        Connectors, AGI Cloud
       </Text>
       <Text style={{ color: colors.textMuted, fontSize: 13, lineHeight: 18, textAlign: 'center' }}>
         Connect Gmail, GitHub, Notion, Slack, and 80+ services to AGI Cloud. Available with cloud
@@ -689,7 +688,7 @@ export default function CloudConnectorsScreen({
           try {
             await WebBrowser.openBrowserAsync(getGitHubInstallWebUrl());
           } catch {
-            // Browser could not open — nothing was connected; leave state as-is.
+            // noop
           }
           if (isConnectorActionCurrent(account)) void load();
         })();
@@ -888,11 +887,11 @@ export default function CloudConnectorsScreen({
 
         {directoryVisible && (
           <>
-            {/* Search moved to the bottom-anchored pill below — it used to sit
+            {/* Search moved to the bottom-anchored pill below, it used to sit
               inside this ScrollView and scrolled away on a long directory. */}
 
             {/* Add a user-owned custom remote-MCP connector (works today; no OAuth
-              app registration needed — server validates the HTTPS URL). */}
+              app registration needed, server validates the HTTPS URL). */}
             <Pressable
               onPress={() => setAddCustomVisible(true)}
               accessibilityRole="button"

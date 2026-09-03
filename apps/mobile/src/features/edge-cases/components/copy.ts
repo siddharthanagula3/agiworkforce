@@ -1,4 +1,3 @@
-
 export const EDGE_COPY = {
   fileTooLarge: {
     title: 'File too large',
@@ -44,7 +43,7 @@ export const EDGE_COPY = {
 
   modelLoadingFirstRun: {
     title: 'Loading model…',
-    subtitle: 'First load is slow — subsequent loads will be instant.',
+    subtitle: 'First load is slow, subsequent loads will be instant.',
     etaPrefix: 'About',
     etaSuffix: 'remaining',
   },

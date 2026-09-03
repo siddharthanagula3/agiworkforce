@@ -1,7 +1,6 @@
-
 import { device, element, by, waitFor } from 'detox';
 
-describe('Voice record and send — on-device STT', () => {
+describe('Voice record and send, on-device STT', () => {
   beforeAll(async () => {
     await device.launchApp({
       newInstance: true,

@@ -436,7 +436,7 @@ export default function ProjectsTabScreen() {
 
       {/* Bottom-anchored search + floating create pill, the same pair the
           chats list uses (PAR-M30/M31). Both are hidden while there is nothing
-          to search — the empty state above carries its own create action, so
+          to search, the empty state above carries its own create action, so
           the screen never shows two competing create affordances. */}
       {projects.length > 0 ? (
         <>

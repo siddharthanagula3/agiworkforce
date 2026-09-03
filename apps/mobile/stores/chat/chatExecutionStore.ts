@@ -419,19 +419,6 @@ function stripPartialLocalReasoningTag(raw: string): string {
   return raw.replace(PARTIAL_LOCAL_REASONING_TAG_RE, '');
 }
 
-/**
- * Split inline `<thinking>`/`<think>`/`<reasoning>` tag markers out of a raw
- * assistant string into display content plus reasoning.
- *
- * Exported because parsing at STREAM time is not sufficient. The server emits
- * these markers as literal content chunks (a `legacy-web` wire rendering of
- * thinking-deltas), so any message that did not arrive through this device's
- * live stream — pulled by cloud sync, produced by an agent run, or persisted
- * before the streaming parser existed — is stored with the tags still inside
- * `content`. Those rendered as raw `</thinking><thinking>` tag soup in the
- * transcript (founder 2026-08-13). The renderer therefore parses on read as
- * well, which covers every source rather than just the one path.
- */
 export function parseAssistantThinking(raw: string): ParsedLocalThinking {
   return parseLocalThinking(raw);
 }
@@ -782,7 +769,7 @@ export function captureArtifactsFromMessage(
       useArtifactStore.getState().addArtifacts(mobileArtifacts);
     }
   } catch {
-    // Non-fatal — artifact capture must never block the chat flow.
+    // noop
   }
 }
 

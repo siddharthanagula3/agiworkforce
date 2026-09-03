@@ -1,12 +1,12 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <!--
-  AGI (mobile) — Apple Privacy Manifest
+  AGI (mobile), Apple Privacy Manifest
   ====================================================================
 
   Canonical source consumed by Xcode at build time:
     apps/mobile/ios/<AppName>/PrivacyInfo.xcprivacy
-  That path is generated output — the tracked ios/ tree was deleted
+  That path is generated output, the tracked ios/ tree was deleted
   2026-07-16 and `expo prebuild` recreates it from
   `ios.privacyManifests` in apps/mobile/app.config.js.
 
@@ -22,7 +22,7 @@
   AGI Cloud (public alpha, open to any signed-in user, no invite gate)
   collects email address, optional name, the account identifier, the
   conversation content and attachments the user sends, and a device
-  identifier for push delivery — all for app-functionality purposes.
+  identifier for push delivery, all for app-functionality purposes.
   NSPrivacyTracking is false. AGI does not include the AdSupport /
   IDFA APIs.
 
@@ -40,8 +40,8 @@
           configuration (selected provider, last-used model id,
           consent timestamp). All writes are exclusive to AGI's
           container; no shared-app-group reads or writes.
-            CA92.1 — app-container-exclusive read/write (MMKV / AsyncStorage).
-            C56D.1 — UserDefaults access from a bundled SDK (GoogleUtilities /
+            CA92.1, app-container-exclusive read/write (MMKV / AsyncStorage).
+            C56D.1, UserDefaults access from a bundled SDK (GoogleUtilities /
                      Google Sign-In). Apple pairs C56D.1 with UserDefaults.
         -->
         <dict>
@@ -74,8 +74,8 @@
           (a) tell the user how much free space remains before
           download and (b) check there is enough space immediately
           before write. Both reasons are required for the same flow.
-            85F4.1 — display to user on-device
-            E174.1 — check before writing to verify enough free space
+            85F4.1, display to user on-device
+            E174.1, check before writing to verify enough free space
         -->
         <dict>
             <key>NSPrivacyAccessedAPIType</key>
@@ -89,13 +89,13 @@
 
         <!--
           FileTimestamp: three distinct use cases.
-            C617.1 — access timestamps on files inside the app's own
+            C617.1, access timestamps on files inside the app's own
                      container (SQLCipher / MMKV / model cache mtimes
                      used for cache eviction).
-            3B52.1 — access timestamps on files the user provided to
+            3B52.1, access timestamps on files the user provided to
                      the app (image attachments selected from photo
                      library, document picker results).
-            0A2A.1 — third-party SDK wrapper (ExpoFileSystem file
+            0A2A.1, third-party SDK wrapper (ExpoFileSystem file
                      operations that read file timestamps).
         -->
         <dict>
@@ -197,7 +197,7 @@
           kept in the keychain, device-only) plus the push token are
           registered against the account at /api/mobile/push-token so
           notifications reach the right install. Not an advertising
-          identifier — AGI links no IDFA and ships no AdSupport.
+          identifier, AGI links no IDFA and ships no AdSupport.
         -->
         <dict>
             <key>NSPrivacyCollectedDataType</key>

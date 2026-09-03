@@ -1,4 +1,3 @@
-
 jest.mock('expo-crypto', () => ({
   getRandomBytesAsync: jest.fn(),
   randomUUID: jest.fn(() => {
@@ -33,7 +32,7 @@ beforeEach(() => {
   jest.clearAllMocks();
 });
 
-describe('generateMmkvEncryptionKey — output format', () => {
+describe('generateMmkvEncryptionKey, output format', () => {
   it('returns exactly 64 lowercase hex chars', async () => {
     const bytes = new Uint8Array(32);
     for (let i = 0; i < 32; i++) bytes[i] = i;
@@ -69,7 +68,7 @@ describe('generateMmkvEncryptionKey — output format', () => {
   });
 });
 
-describe('generateMmkvEncryptionKey — source of randomness', () => {
+describe('generateMmkvEncryptionKey, source of randomness', () => {
   it('calls Crypto.getRandomBytesAsync with 32 bytes', async () => {
     getRandomBytesAsync.mockResolvedValueOnce(new Uint8Array(32));
     await generateMmkvEncryptionKey();
@@ -83,7 +82,7 @@ describe('generateMmkvEncryptionKey — source of randomness', () => {
   });
 });
 
-describe('generateMmkvEncryptionKey — entropy contract', () => {
+describe('generateMmkvEncryptionKey, entropy contract', () => {
   it('produces distinct keys when given distinct CSPRNG output (sanity)', async () => {
     const bytesA = new Uint8Array(32);
     const bytesB = new Uint8Array(32);

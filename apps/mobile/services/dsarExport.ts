@@ -1,4 +1,3 @@
-
 import {
   cacheDirectory,
   documentDirectory,
@@ -43,7 +42,7 @@ try {
   // eslint-disable-next-line @typescript-eslint/no-require-imports
   _compliance = require('@agiworkforce/compliance') as ComplianceModule;
 } catch {
-  // Package not yet available — degrade gracefully
+  // noop
 }
 
 export function buildMarkedTranscript(

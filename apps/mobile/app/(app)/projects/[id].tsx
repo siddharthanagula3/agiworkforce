@@ -312,7 +312,7 @@ export default function ProjectDetailScreen() {
           {/* Project header card */}
           {renderHeader()}
 
-          {/* Tab bar — always visible */}
+          {/* Tab bar, always visible */}
           <TabBar activeTab={activeTab} onTabChange={setActiveTab} colors={colors} />
 
           {/* Tab content */}

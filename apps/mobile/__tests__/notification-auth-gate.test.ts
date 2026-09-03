@@ -99,7 +99,7 @@ function fireNotification(
   });
 }
 
-describe('handleNotificationResponse — auth gate', () => {
+describe('handleNotificationResponse, auth gate', () => {
   it('routes to /(auth)/login when no session is set', () => {
     setCurrentSession(null);
     fireNotification({ type: 'task_completed', route: '/(app)/companion' });
@@ -197,7 +197,7 @@ describe('handleNotificationResponse — auth gate', () => {
   });
 });
 
-describe('handleNotificationResponse — no dead-end deep links', () => {
+describe('handleNotificationResponse, no dead-end deep links', () => {
   function signIn(): void {
     setCurrentSession({
       access_token: 't',

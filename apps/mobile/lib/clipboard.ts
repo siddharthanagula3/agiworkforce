@@ -1,4 +1,3 @@
-
 let clipboardModule: { setStringAsync: (text: string) => Promise<void> } | null = null;
 
 try {
@@ -13,7 +12,7 @@ try {
 
 export async function copyToClipboard(text: string): Promise<boolean> {
   if (!clipboardModule?.setStringAsync) {
-    console.warn('[clipboard] expo-clipboard is unavailable — clipboard write skipped.');
+    console.warn('[clipboard] expo-clipboard is unavailable, clipboard write skipped.');
     return false;
   }
 

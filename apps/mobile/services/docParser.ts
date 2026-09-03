@@ -262,7 +262,7 @@ function extractTextFromPdfBuffer(base64: string): { text: string; pages: number
   try {
     raw = atob(base64);
   } catch {
-    throw new DocParseError('PDF decode failed — file may be corrupt', 'CORRUPT_FILE');
+    throw new DocParseError('PDF decode failed, file may be corrupt', 'CORRUPT_FILE');
   }
 
   if (!raw.startsWith('%PDF')) {
@@ -271,7 +271,7 @@ function extractTextFromPdfBuffer(base64: string): { text: string; pages: number
 
   if (raw.includes('/Encrypt')) {
     throw new DocParseError(
-      'PDF is encrypted — password-protected PDFs are not supported in Wave 0',
+      'PDF is encrypted, password-protected PDFs are not supported in Wave 0',
       'ENCRYPTED_PDF',
     );
   }
@@ -370,7 +370,7 @@ export async function parseDocument(uri: string, mimeType?: string): Promise<Par
       const { text, pages } = extractTextFromPdfBuffer(base64);
       if (!text.trim()) {
         throw new DocParseError(
-          'No text layer found in PDF — image-only PDFs require Wave 1 vision support',
+          'No text layer found in PDF, image-only PDFs require Wave 1 vision support',
           'EMPTY_DOCUMENT',
         );
       }

@@ -1,4 +1,3 @@
-
 import {
   startCaptureSession,
   stopCapture,
@@ -55,17 +54,7 @@ export async function startRecording(onMetering?: MeteringCallback): Promise<voi
         _activeCapturePromise = null;
       }
     })
-    .catch(() => {
-      // `.finally()` is transparent to rejection — it re-throws into the
-      // promise it returns. cancelRecording()/a real recognition-error
-      // reject `session.result` (and thus `capturePromise`) on every
-      // long-press handoff and overlay cancel, not just rare failures; the
-      // rejection itself is already handled by stopRecording/cancelRecording's
-      // own awaits (or surfaced via transcribe's fallback). Swallow it here
-      // too, matching the original `.catch()`-only guard this replaced —
-      // otherwise this void'd, unawaited chain becomes an unhandled
-      // promise rejection on every one of those paths.
-    });
+    .catch(() => {});
 }
 
 export async function stopRecording(): Promise<string> {
@@ -88,7 +77,7 @@ export async function cancelRecording(): Promise<void> {
   try {
     await _activeCapturePromise;
   } catch {
-    // expected — cancelCapture rejects the inner promise
+    // noop
   }
   _activeCapturePromise = null;
   _lastResult = null;
@@ -105,4 +94,3 @@ export async function transcribe(_uri: string): Promise<TranscriptionResult> {
   }
   return { text: getLatestPartial() };
 }
-

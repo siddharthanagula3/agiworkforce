@@ -57,7 +57,7 @@ type TierNum = 1 | 2 | 3;
 
 function tier1FetchingNote(caps: DeviceCapabilities): string | null {
   if (caps.tier1Status === 'downloadable' || caps.tier1Status === 'downloading') {
-    return 'AICore is fetching its on-device model in the background — this device will move to Tier 1 automatically once it finishes.';
+    return 'AICore is fetching its on-device model in the background, this device will move to Tier 1 automatically once it finishes.';
   }
   return null;
 }
@@ -74,8 +74,8 @@ function tierLabel(caps: DeviceCapabilities): {
       label: 'Tier 1',
       description:
         caps.tier1Runtime === 'foundation_models'
-          ? 'Apple Foundation Models — OS-resident, fastest, lowest energy'
-          : 'Google on-device AI — AICore, current generation is Gemma-based',
+          ? 'Apple Foundation Models, OS-resident, fastest, lowest energy'
+          : 'Google on-device AI, AICore, current generation is Gemma-based',
       fetchingNote: null,
     };
   }
@@ -83,14 +83,14 @@ function tierLabel(caps: DeviceCapabilities): {
     return {
       tier: 2,
       label: 'Tier 2',
-      description: 'ExecuTorch — hardware-accelerated, needs ≥3.5 GB RAM',
+      description: 'ExecuTorch, hardware-accelerated, needs ≥3.5 GB RAM',
       fetchingNote: tier1FetchingNote(caps),
     };
   }
   return {
     tier: 3,
     label: 'Tier 3',
-    description: 'llama.rn — universal fallback, CPU-only inference',
+    description: 'llama.rn, universal fallback, CPU-only inference',
     fetchingNote: tier1FetchingNote(caps),
   };
 }
@@ -564,7 +564,7 @@ export default function PerformanceScreen() {
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
                   <Text style={{ fontSize: 13, color: c.textMuted }}>Thermal</Text>
                   <Text style={{ fontSize: 13, color: tIndicator.dot }}>
-                    {tIndicator.label} — {tIndicator.text}
+                    {tIndicator.label}, {tIndicator.text}
                   </Text>
                 </View>
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
@@ -701,7 +701,7 @@ export default function PerformanceScreen() {
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12 }}>
               <BarChart2 size={16} color={c.teal} />
               <Text style={{ fontSize: 15, fontWeight: '600', color: c.textPrimary }}>
-                Tok/s — Last 7 Days
+                Tok/s, Last 7 Days
               </Text>
               <Text style={{ fontSize: 12, color: c.textMuted, marginLeft: 'auto' }}>
                 {toksData.length} events
@@ -733,7 +733,7 @@ export default function PerformanceScreen() {
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12 }}>
               <Timer size={16} color={c.terraCotta} />
               <Text style={{ fontSize: 15, fontWeight: '600', color: c.textPrimary }}>
-                First-Token Latency — Last 7 Days
+                First-Token Latency, Last 7 Days
               </Text>
             </View>
 

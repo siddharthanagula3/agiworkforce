@@ -28,7 +28,7 @@ const lockedKeys = new Set(
   [...manifestBody.matchAll(/<key>([^<]+)<\/key>/g)].map((m) => m[1]!.trim()),
 );
 
-describe('iOS privacy manifest — generated config matches the reviewed copy', () => {
+describe('iOS privacy manifest, generated config matches the reviewed copy', () => {
   it('declares every top-level key the reviewed manifest declares', () => {
     for (const topLevel of [
       'NSPrivacyAccessedAPITypes',

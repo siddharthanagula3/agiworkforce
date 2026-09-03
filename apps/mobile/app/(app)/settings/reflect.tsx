@@ -27,14 +27,14 @@ type LoadState =
   | { kind: 'error'; message: string };
 
 function formatDate(dateKey: string | null): string {
-  if (!dateKey) return '—';
+  if (!dateKey) return ', ';
   const date = new Date(`${dateKey}T12:00:00`);
   if (!Number.isFinite(date.getTime())) return dateKey;
   return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
 }
 
 function formatHour(hour: number | null): string {
-  if (hour === null) return '—';
+  if (hour === null) return ', ';
   return new Date(2026, 0, 1, hour).toLocaleTimeString(undefined, { hour: 'numeric' });
 }
 
@@ -339,7 +339,7 @@ export default function ReflectScreen() {
               ))}
             </View>
 
-            {/* Daily activity — the same trailing 60 active days web charts. */}
+            {/* Daily activity, the same trailing 60 active days web charts. */}
             {recap.dailyActivity.length > 0 && (
               <View style={{ marginTop: 18 }}>
                 <Text
@@ -444,7 +444,7 @@ export default function ReflectScreen() {
                   Expanding your skills
                 </Text>
                 <Text style={{ fontSize: 11, color: c.textMuted, marginTop: 2, marginBottom: 8 }}>
-                  Observations and optional next steps — not a performance score.
+                  Observations and optional next steps, not a performance score.
                 </Text>
                 {recap.insights.map((insight) => (
                   <Card key={insight.dimension}>
@@ -486,7 +486,7 @@ export default function ReflectScreen() {
 
         <Text style={{ fontSize: 11, lineHeight: 16, color: c.textMuted, marginTop: 18 }}>
           Temporary Chats and AGI Work runs are excluded. Reflect returns activity statistics and
-          broad topic labels — not message text — and viewing it does not use model quota.
+          broad topic labels, not message text, and viewing it does not use model quota.
         </Text>
       </ScrollView>
     </SafeAreaView>

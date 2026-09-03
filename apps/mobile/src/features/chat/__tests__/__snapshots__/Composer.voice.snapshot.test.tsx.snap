@@ -1,6 +1,6 @@
 // Jest Snapshot v1, https://goo.gl/fbAQLP
 
-exports[`Composer — voice scaffolding snapshots RecordingOverlay locks recording overlay tree when visible=true at 3.2s 1`] = `
+exports[`Composer, voice scaffolding snapshots RecordingOverlay locks recording overlay tree when visible=true at 3.2s 1`] = `
 <View
   accessibilityLabel="Recording in progress"
   accessibilityRole="alert"
@@ -161,7 +161,7 @@ exports[`Composer — voice scaffolding snapshots RecordingOverlay locks recordi
 </View>
 `;
 
-exports[`Composer — voice scaffolding snapshots VoiceInputButton locks disabled mic button tree (during streaming) 1`] = `
+exports[`Composer, voice scaffolding snapshots VoiceInputButton locks disabled mic button tree (during streaming) 1`] = `
 <View
   className="relative items-center justify-center"
 >
@@ -221,7 +221,7 @@ exports[`Composer — voice scaffolding snapshots VoiceInputButton locks disable
 </View>
 `;
 
-exports[`Composer — voice scaffolding snapshots VoiceInputButton locks idle mic button tree 1`] = `
+exports[`Composer, voice scaffolding snapshots VoiceInputButton locks idle mic button tree 1`] = `
 <View
   className="relative items-center justify-center"
 >

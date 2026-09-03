@@ -24,7 +24,7 @@ export const DEVICES: DeviceClass[] = [
     simulator: 'iPhone 17 Pro Max',
     width: 1320,
     height: 2868,
-    storeSlot: 'App Store Connect — iPhone 6.9" (required)',
+    storeSlot: 'App Store Connect, iPhone 6.9" (required)',
   },
   {
     platform: 'ios',
@@ -32,7 +32,7 @@ export const DEVICES: DeviceClass[] = [
     simulator: 'iPad Pro 13-inch (M5)',
     width: 2048,
     height: 2732,
-    storeSlot: 'App Store Connect — iPad 13" (required while ios.supportsTablet is true)',
+    storeSlot: 'App Store Connect, iPad 13" (required while ios.supportsTablet is true)',
   },
   {
     platform: 'android',
@@ -40,7 +40,7 @@ export const DEVICES: DeviceClass[] = [
     simulator: 'pixel_8_api_34',
     width: 1080,
     height: 1920,
-    storeSlot: 'Play Console — phone screenshots (required)',
+    storeSlot: 'Play Console, phone screenshots (required)',
   },
   {
     platform: 'ios',
@@ -64,7 +64,7 @@ export const DEVICES: DeviceClass[] = [
     simulator: 'pixel_tablet_api_34',
     width: 1440,
     height: 2560,
-    storeSlot: 'Play Console — 10" tablet (optional; needed for the large-screen listing)',
+    storeSlot: 'Play Console, 10" tablet (optional; needed for the large-screen listing)',
   },
 ];
 

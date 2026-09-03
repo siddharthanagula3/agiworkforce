@@ -393,7 +393,7 @@ afterEach(() => {
   jest.useRealTimers();
 });
 
-describe('QR Pairing — isValidPairingCode', () => {
+describe('QR Pairing, isValidPairingCode', () => {
   it('rejects a prefixed code without the QR role token', () => {
     expect(isValidPairingCode('agiw:ABC123')).toBe(false);
   });
@@ -471,7 +471,7 @@ describe('QR Pairing — isValidPairingCode', () => {
   });
 });
 
-describe('QR Pairing — extractPairingCode', () => {
+describe('QR Pairing, extractPairingCode', () => {
   it('strips the agiw: prefix and returns the raw code', () => {
     expect(extractPairingCode('agiw:ABC123')).toBe('ABC123');
   });
@@ -512,7 +512,7 @@ describe('QR Pairing — extractPairingCode', () => {
   });
 });
 
-describe('Connection Store — sendControl delegation', () => {
+describe('Connection Store, sendControl delegation', () => {
   it('sendApprovalResponse calls sendControl with approval_response action when connected', async () => {
     setConnectionStatus('connected');
     await sendApprovalResponse('req-001', true);
@@ -710,7 +710,7 @@ describe('Connection Store — sendControl delegation', () => {
   });
 });
 
-describe('Connection Store — manualReconnect', () => {
+describe('Connection Store, manualReconnect', () => {
   it('calls connect() with stored pairingCode', () => {
     setConnectionStatus('reconnecting');
     setConnectionPairingCode('MYCODE8');
@@ -725,7 +725,7 @@ describe('Connection Store — manualReconnect', () => {
   });
 });
 
-describe('Execution Streaming — Agent Store mutations', () => {
+describe('Execution Streaming, Agent Store mutations', () => {
   const { useAgentStore } = require('@/stores/agentStore') as {
     useAgentStore: { getState: jest.Mock };
   };
@@ -772,7 +772,7 @@ describe('Execution Streaming — Agent Store mutations', () => {
   });
 });
 
-describe('Agent Store — state mutations (real logic)', () => {
+describe('Agent Store, state mutations (real logic)', () => {
   function makeRealState() {
     const ctx = {
       state: {
@@ -923,7 +923,7 @@ describe('Agent Store — state mutations (real logic)', () => {
   });
 });
 
-describe('Companion Notifications — pub-sub listener bus', () => {
+describe('Companion Notifications, pub-sub listener bus', () => {
   const { addCompanionMessageListener: realAddListener, notifyCompanionMessage: realNotify } =
     jest.requireActual(
       '../services/companionNotifications',
@@ -963,7 +963,7 @@ describe('Companion Notifications — pub-sub listener bus', () => {
   });
 });
 
-describe('Companion Notifications — dispatchCompanionNotification', () => {
+describe('Companion Notifications, dispatchCompanionNotification', () => {
   const { dispatchCompanionNotification: realDispatch } = jest.requireActual(
     '../services/companionNotifications',
   ) as typeof import('../services/companionNotifications');
@@ -1077,7 +1077,7 @@ describe('Companion Notifications — dispatchCompanionNotification', () => {
   });
 });
 
-describe('Companion Notifications — setupCompanionNotifications', () => {
+describe('Companion Notifications, setupCompanionNotifications', () => {
   const {
     setupCompanionNotifications: realSetup,
     addCompanionMessageListener: realAddListener,
@@ -1104,7 +1104,7 @@ describe('Companion Notifications — setupCompanionNotifications', () => {
   });
 });
 
-describe('AgentDashboard — getTimeElapsed', () => {
+describe('AgentDashboard, getTimeElapsed', () => {
   it('returns seconds for durations under 60s', () => {
     const start = new Date(Date.now() - 30_000).toISOString();
     expect(getTimeElapsed(start)).toBe('30s');
@@ -1146,7 +1146,7 @@ describe('AgentDashboard — getTimeElapsed', () => {
   });
 });
 
-describe('AgentDashboard — estimateTimeRemaining', () => {
+describe('AgentDashboard, estimateTimeRemaining', () => {
   it('returns null when progress is 0', () => {
     const start = new Date(Date.now() - 10_000).toISOString();
     expect(estimateTimeRemaining(start, 0)).toBeNull();
@@ -1399,7 +1399,7 @@ describe('getCategoryForType', () => {
   });
 });
 
-describe('NotificationPrefsStore — shouldNotify real logic', () => {
+describe('NotificationPrefsStore, shouldNotify real logic', () => {
   const { shouldNotifyWithPreferences } = jest.requireActual(
     '../stores/notificationPrefsStore',
   ) as typeof import('../stores/notificationPrefsStore');
@@ -1528,7 +1528,7 @@ describe('startHealthChecks / stopHealthChecks', () => {
   });
 });
 
-describe('Cross-device thread persistence — queueControl', () => {
+describe('Cross-device thread persistence, queueControl', () => {
   it('queueControl adds messages to the pending queue', () => {
     const mockQueueControl = connectionMod.__mocks.queueControl;
     const { useConnectionStore } = require('@/stores/connectionStore') as {
@@ -1566,8 +1566,8 @@ describe('Cross-device thread persistence — queueControl', () => {
   });
 });
 
-describe('QR Pairing — edge cases and boundary conditions', () => {
-  it('extractPairingCode handles multiple agiw: occurrences — only strips first prefix', () => {
+describe('QR Pairing, edge cases and boundary conditions', () => {
+  it('extractPairingCode handles multiple agiw: occurrences, only strips first prefix', () => {
     const result = extractPairingCode('agiw:ABC123');
     expect(result).toBe('ABC123');
     expect(result).not.toContain('agiw:');
@@ -1589,7 +1589,7 @@ describe('QR Pairing — edge cases and boundary conditions', () => {
     expect(isValidPairingCode('ABC\t123')).toBe(false);
   });
 
-  it('isValidPairingCode rejects the string "null" (only 4 chars — too short)', () => {
+  it('isValidPairingCode rejects the string "null" (only 4 chars, too short)', () => {
     expect(isValidPairingCode('null')).toBe(false);
   });
 
@@ -1602,7 +1602,7 @@ describe('QR Pairing — edge cases and boundary conditions', () => {
   });
 });
 
-describe('Stream interruption — stale + reconnect flow', () => {
+describe('Stream interruption, stale + reconnect flow', () => {
   it('markStale increments missedHeartbeats in real store logic', () => {
     const storeState = {
       status: 'connected' as string,
@@ -1752,7 +1752,7 @@ describe('Stream interruption — stale + reconnect flow', () => {
   });
 });
 
-describe('Connection Store — friendly error messages', () => {
+describe('Connection Store, friendly error messages', () => {
   function friendlyErrorMessage(raw: string): string {
     switch (raw) {
       case 'connection_error':

@@ -114,7 +114,7 @@ function grant(overrides: Record<string, unknown> = {}) {
   };
 }
 
-describe('Connector detail — OAuth reauthorization', () => {
+describe('Connector detail, OAuth reauthorization', () => {
   let alertSpy: jest.SpyInstance;
 
   beforeEach(() => {

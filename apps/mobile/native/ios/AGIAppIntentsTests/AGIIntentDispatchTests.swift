@@ -1,8 +1,6 @@
 import XCTest
 @testable import AGIAppIntents
 
-// Tests for AGIIntentDispatch URL construction.
-// These run without a simulator — no UIApplication.shared calls are made.
 final class AGIIntentDispatchTests: XCTestCase {
 
     func testURLSchemeAndHost() {

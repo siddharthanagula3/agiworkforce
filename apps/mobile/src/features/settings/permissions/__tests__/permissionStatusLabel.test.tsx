@@ -149,7 +149,7 @@ beforeEach(() => {
   setAllStatuses('undetermined');
 });
 
-describe('permissionStatusLabel — OS status → granted level', () => {
+describe('permissionStatusLabel, OS status → granted level', () => {
   const grantedCases: Array<[string, string]> = [
     ['microphone', 'While using'],
     ['camera', 'While using'],

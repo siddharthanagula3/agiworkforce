@@ -1,4 +1,3 @@
-
 let mockConsent: boolean | undefined = false;
 jest.mock('@/lib/mmkv', () => ({
   storage: {
@@ -31,7 +30,7 @@ beforeEach(() => {
   mockAppMode = 'local';
 });
 
-describe('isTelemetryAllowed — fail-closed consent + mode gate', () => {
+describe('isTelemetryAllowed, fail-closed consent + mode gate', () => {
   it('false when not consented (even in cloud mode)', () => {
     mockConsent = false;
     mockAppMode = 'cloud';
@@ -63,7 +62,7 @@ describe('isTelemetryAllowed — fail-closed consent + mode gate', () => {
   });
 });
 
-describe('enqueueTelemetryEvent — drops unless allowed', () => {
+describe('enqueueTelemetryEvent, drops unless allowed', () => {
   it('does NOT enqueue when the user has not consented', async () => {
     mockConsent = false;
     mockAppMode = 'cloud';

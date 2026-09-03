@@ -36,7 +36,7 @@ afterEach(() => {
   jest.restoreAllMocks();
 });
 
-describe('openInAppBrowser — first-party URLs', () => {
+describe('openInAppBrowser, first-party URLs', () => {
   it('presents an allowlisted URL as a page sheet and never backgrounds the app', async () => {
     const ok = await openInAppBrowser('https://agiworkforce.com/help');
 
@@ -79,7 +79,7 @@ describe('openInAppBrowser — first-party URLs', () => {
   });
 });
 
-describe('openUntrustedUrlInAppBrowser — assistant links and citations', () => {
+describe('openUntrustedUrlInAppBrowser, assistant links and citations', () => {
   it('opens an arbitrary https host in the sheet (the model may cite any site)', async () => {
     const ok = await openUntrustedUrlInAppBrowser('https://docs.example.com/page');
 

@@ -710,7 +710,7 @@ export default function ChatTabScreen() {
           <DrawerButton onPress={handleOpenDrawer} />
           {/* The header owns ONLY the execution-mode toggle (Local | Cloud).
               Model selection lives on the composer's control row, in the model
-              chip beside the attach and voice controls (ChatInput) — the old
+              chip beside the attach and voice controls (ChatInput), the old
               model pill here duplicated it and confusingly read "AGI Cloud"
               like the toggle's Cloud segment. */}
           <ModeToggle
@@ -751,7 +751,7 @@ export default function ChatTabScreen() {
           accessibilityLabel={activeMode === 'cloud' ? 'New AGI Cloud chat' : 'New local chat'}
         >
           {/* Brand LOCKUP, not the bare mark. The mark is a twelve-spoke
-              starburst, which is indistinguishable from a loading spinner —
+              starburst, which is indistinguishable from a loading spinner.
               shown alone and static above a greeting it reads as a stalled
               loader ("users are thinking its still loading"). The wordmark
               disambiguates it instantly. The bare mark stays reserved for
@@ -878,7 +878,7 @@ export default function ChatTabScreen() {
       />
 
       {/* Inline voice: the thread stays visible, only the composer changes.
-          This is the only voice presentation — every entry point lands here. */}
+          This is the only voice presentation, every entry point lands here. */}
       <VoiceInlineBar
         visible={voiceInlineVisible}
         phase={inlineVoicePhase}
@@ -944,7 +944,7 @@ function DownloadModelBanner({ onPress }: DownloadModelBannerProps) {
           Download a model to chat
         </Text>
         <Text style={{ fontSize: 11, color: c.textMuted, marginTop: 2 }}>
-          Run AI privately on this device — no account needed.
+          Run AI privately on this device, no account needed.
         </Text>
       </View>
     </Pressable>

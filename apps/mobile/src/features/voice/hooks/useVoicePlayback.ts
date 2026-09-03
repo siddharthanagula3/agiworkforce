@@ -2,23 +2,6 @@ import { useCallback, useRef } from 'react';
 import * as Speech from 'expo-speech';
 import { useSettingsStore } from '@/stores/settingsStore';
 
-/**
- * useVoicePlayback — lightweight hook for TTS playback of assistant messages.
- *
- * Uses expo-speech (system TTS engine) which is already a project dependency.
- * Voice identity and speech rate are read from the settings store so the user
- * can configure them in the Voice selector without restarting the app.
- *
- * @example
- *   const { speak, stop } = useVoicePlayback();
- *
- *   // Speak a completed assistant message
- *   useEffect(() => {
- *     if (lastMessage?.role === 'assistant' && !lastMessage.isStreaming) {
- *       speak(lastMessage.content);
- *     }
- *   }, [lastMessage?.id]);
- */
 export function useVoicePlayback() {
   const isSpeaking = useRef(false);
   const selectedVoiceId = useSettingsStore((s) => s.selectedVoiceId);

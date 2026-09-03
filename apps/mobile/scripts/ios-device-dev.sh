@@ -47,11 +47,6 @@ if [[ "${SKIP_IOS_PREBUILD:-0}" != "1" ]]; then
   pnpm exec expo prebuild --platform ios --clean
 fi
 
-# React Native codegen writes its headers into the regenerated ios/ tree, but
-# Xcode keys its build inputs off DerivedData. A DerivedData snapshot taken
-# before a prebuild still points at the previous codegen output, and the build
-# fails resolving inputs that no longer exist. The reset must run AFTER prebuild
-# regenerates ios/ and BEFORE run:ios starts Xcode — that order is the fix.
 derived_data_dir="${AGI_IOS_DERIVED_DATA_DIR:-$HOME/Library/Developer/Xcode/DerivedData}"
 if [[ "${AGI_IOS_SKIP_DERIVED_DATA_RESET:-0}" != "1" && -d "$derived_data_dir" ]]; then
   rm -rf "$derived_data_dir"/AGIWorkforce-*

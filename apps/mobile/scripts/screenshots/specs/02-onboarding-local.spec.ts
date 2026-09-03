@@ -2,7 +2,7 @@ import { device, element, by, waitFor } from 'detox';
 
 jest.setTimeout(540000);
 
-describe('Onboarding — local setup with cloud invite gate', () => {
+describe('Onboarding, local setup with cloud invite gate', () => {
   beforeAll(async () => {
     await device.launchApp({
       newInstance: true,
@@ -14,9 +14,6 @@ describe('Onboarding — local setup with cloud invite gate', () => {
     await device.terminateApp();
   });
 
-  // The age gate guards Cloud sign-in rather than first launch — see the
-  // routing effect in app/_layout.tsx. A first run in Local Mode goes straight
-  // to the hero, so there is nothing to pass here.
   it('shows the hero screen on first launch', async () => {
     await waitFor(element(by.id('onboarding-hero-screen')))
       .toBeVisible()
@@ -92,7 +89,7 @@ describe('Onboarding — local setup with cloud invite gate', () => {
       try {
         await element(by.id('download-skip-btn')).tap();
       } catch {
-        // Not present — Tier-1 path or download already finished.
+        // noop
       }
       try {
         await waitFor(element(by.id('chat.composer.input')))
@@ -100,7 +97,7 @@ describe('Onboarding — local setup with cloud invite gate', () => {
           .withTimeout(3000);
         reachedChat = true;
       } catch {
-        // Still on the download screen — loop and retry the tap.
+        // noop
       }
     }
 

@@ -1,6 +1,5 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
 /**
- * Performance settings page — unit tests
  *
  * Tests:
  *   performanceMonitor service:

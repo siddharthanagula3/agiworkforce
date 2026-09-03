@@ -1,4 +1,3 @@
-
 import fs from 'fs';
 import path from 'path';
 
@@ -12,7 +11,7 @@ function pairingEffectSource(): string {
   return rootLayoutSource.slice(start, end + 'isInitialized, router]);'.length);
 }
 
-describe('pairing deep-link handler — reachability', () => {
+describe('pairing deep-link handler, reachability', () => {
   it('gates on the real Clerk sign-in signal, not the always-null legacy session', () => {
     const effect = pairingEffectSource();
     expect(effect).toContain('if (!url || !isClerkSignedIn || !isInitialized) return;');

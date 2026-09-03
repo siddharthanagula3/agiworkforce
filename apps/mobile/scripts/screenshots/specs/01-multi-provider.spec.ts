@@ -1,7 +1,7 @@
 /* eslint-disable no-console -- Detox spec progress log goes to test runner stdout */
 
 import { device, element, by, waitFor } from 'detox';
-describe('Screenshot 01 — local demo chat', () => {
+describe('Screenshot 01, local demo chat', () => {
   const capturePath = process.env.DETOX_CAPTURE_PATH ?? '/tmp/01.png';
 
   beforeAll(async () => {

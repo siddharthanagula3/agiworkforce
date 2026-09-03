@@ -11,13 +11,6 @@ function releaseLaunchSplash(): void {
   void SplashScreen.hideAsync().catch(() => undefined);
 }
 
-/**
- * Hide the native launch screen once the app is ready to be looked at, or once
- * {@link LAUNCH_SPLASH_MAX_HOLD_MS} has elapsed — whichever comes first.
- *
- * Releasing is one-way: once hidden we never re-show, so a later `isReady`
- * change cannot flash the launch image back over live UI.
- */
 export function useLaunchSplashRelease(isReady: boolean): void {
   const releasedRef = useRef(false);
 

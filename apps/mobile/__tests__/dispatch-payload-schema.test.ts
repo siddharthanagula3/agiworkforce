@@ -1,4 +1,3 @@
-
 import {
   parseAgent,
   MAX_AGENT_NAME_LEN,
@@ -49,7 +48,7 @@ function validatePayload(payload: AgentsUpdatePayload): {
   return { accepted, droppedCount };
 }
 
-describe('dispatch payload — happy path validates against schema', () => {
+describe('dispatch payload, happy path validates against schema', () => {
   it('accepts a well-formed agents_update with one agent', () => {
     const payload = makeAgentsUpdatePayload([makeValidAgent()]);
     const { accepted, droppedCount } = validatePayload(payload);
@@ -91,7 +90,7 @@ describe('dispatch payload — happy path validates against schema', () => {
   });
 });
 
-describe('dispatch payload — invalid: missing required field', () => {
+describe('dispatch payload, invalid: missing required field', () => {
   it('drops an agent whose required `name` field is missing', () => {
     const malformed = makeValidAgent();
     delete (malformed as Record<string, unknown>)['name'];
@@ -119,11 +118,9 @@ describe('dispatch payload — invalid: missing required field', () => {
   });
 });
 
-describe('dispatch payload — invalid: wrong type', () => {
+describe('dispatch payload, invalid: wrong type', () => {
   it('drops an agent whose `progress` is a string instead of number', () => {
-    const payload = makeAgentsUpdatePayload([
-      makeValidAgent({ progress: '50' }), // wrong type — schema requires number
-    ]);
+    const payload = makeAgentsUpdatePayload([makeValidAgent({ progress: '50' })]);
     const { accepted, droppedCount } = validatePayload(payload);
 
     expect(accepted).toHaveLength(0);
@@ -151,7 +148,7 @@ describe('dispatch payload — invalid: wrong type', () => {
   });
 });
 
-describe('dispatch payload — invalid: oversize fields', () => {
+describe('dispatch payload, invalid: oversize fields', () => {
   it('drops an agent whose `name` exceeds MAX_AGENT_NAME_LEN (UI hijack defense)', () => {
     const payload = makeAgentsUpdatePayload([
       makeValidAgent({ name: 'A'.repeat(MAX_AGENT_NAME_LEN + 1) }),

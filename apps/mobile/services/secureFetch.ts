@@ -36,7 +36,7 @@ function refusalDetail(reason: PinningRefusalReason, url: string): string {
       `nothing verifies the certificate presented by "${url}". SPKI hashes in lib/pinning.ts → PINS_BY_HOST ` +
       `are inert until a build compiles them in: './native/withAGITlsPinning.cjs' is registered in app.config.js ` +
       `but emits the iOS NSPinnedDomains and Android network_security_config only once PINNING_ROLLOUT says ` +
-      `'enforced', so this artifact was built before that flip. Cut a native build (expo prebuild, then EAS) — ` +
+      `'enforced', so this artifact was built before that flip. Cut a native build (expo prebuild, then EAS), ` +
       `an over-the-air update cannot add pins to a binary that compiled none.`
     );
   }
@@ -50,8 +50,8 @@ function refusalDetail(reason: PinningRefusalReason, url: string): string {
   if (reason === 'redirected-off-pinned-host') {
     return (
       `the request left the pinned host and landed on "${url}", which this build does not pin. ` +
-      `Only the first hop was verified, so following the redirect would hand the response — and any ` +
-      `credential the platform replays — to a certificate nothing checked.`
+      `Only the first hop was verified, so following the redirect would hand the response, and any ` +
+      `credential the platform replays, to a certificate nothing checked.`
     );
   }
   return (
@@ -148,23 +148,6 @@ export type PinTransportVerdict =
 
 export type PinTransportAllowance = Extract<PinTransportVerdict, { allow: string }>;
 
-/**
- * The whole pinning decision, as data, with every outcome named — including the
- * ones that let a request through untouched. Four independent facts drive it:
- * which host the request really reaches (`hostHasPins`/`hostIsCanonical`), what
- * the pin table declares (`pinsProvisioned`), what the build really compiled in
- * (`nativelyPinned`/`buildShipsNativePins`), and how far the rollout has been
- * taken (`stage`). A build that compiled a native pin config and left a
- * credential-bearing host out of it is refused at every stage: the halves
- * disagree, and that is a shipping mistake rather than a rollout step.
- *
- * `unverified-accepted` is the one state where a pinned host still reaches the
- * network with nothing checking its certificate: the table is all placeholders
- * and the build compiled no pin config, which is today's shipped build. It is a
- * verdict rather than a fall-through so callers must handle it, and secureFetch
- * answers it with a warning instead of silence. It is tracked as
- * BLOCKED_BY_HUMAN in docs/work/founder-assistance.md.
- */
 export function pinTransportVerdict(facts: PinTransportFacts): PinTransportVerdict {
   if (facts.hostHasPins && !facts.isHttps) return { refuse: 'insecure-scheme' };
   if (facts.hostHasPins && !facts.hostIsCanonical) return { refuse: 'ambiguous-host' };
@@ -186,13 +169,6 @@ export function pinTransportVerdict(facts: PinTransportFacts): PinTransportVerdi
   return { allow: 'unverified-accepted' };
 }
 
-/**
- * What the same request would have met at the end of the rollout. A provisioned
- * build that has not been flipped to 'enforced' yet reports these instead of
- * refusing, so the hosts enforcement would cut off — every localhost, LAN
- * dispatch target and BYOK base URL the pin table has no entry for — surface
- * from a shipped build before the flip rather than after it.
- */
 export function stagedRefusal(facts: PinTransportFacts): PinningRefusalReason | undefined {
   if (facts.stage !== 'report-only') return undefined;
   const verdict = pinTransportVerdict({ ...facts, stage: 'enforced' });
@@ -224,13 +200,6 @@ const warnedUnverifiedHosts = new Set<string>();
 const warnedStagedHosts = new Set<string>();
 const warnedUnobservableHosts = new Set<string>();
 
-/**
- * The accepted gap is announced once per host rather than passed through in
- * silence: a release build that reaches a credential-bearing host with nothing
- * verifying its certificate is a tracked exception, and it has to be visible in
- * device logs and crash breadcrumbs to stay one. Only the host is logged — the
- * path and query of these requests carry tokens.
- */
 function warnUnverifiedTransport(host: string): void {
   if (warnedUnverifiedHosts.has(host)) return;
   warnedUnverifiedHosts.add(host);
@@ -256,10 +225,6 @@ function warnUnobservableFinalUrl(host: string): void {
   );
 }
 
-/**
- * The rollout's dry run, once per host and reason. Only the host is logged — the
- * path and query of these requests carry tokens.
- */
 function warnStagedRefusal(host: string, reason: PinningRefusalReason): void {
   const key = `${host}|${reason}`;
   if (warnedStagedHosts.has(key)) return;
@@ -273,15 +238,6 @@ function warnStagedRefusal(host: string, reason: PinningRefusalReason): void {
 
 export type RedirectVerdict = 'same-host' | 'stayed-pinned' | 'unobservable' | 'left-pinned-host';
 
-/**
- * A redirect is a second connection the one-shot gate above never saw. When the
- * first hop was really pinned, the hop that leaves it must be pinned too, or the
- * response — and whatever the platform replays with it — comes from a
- * certificate nothing checked. A transport that does not report where the
- * response came from cannot answer that question at all, so it reads as
- * `unobservable` rather than as a same-host answer: treating silence as "no
- * redirect happened" is what let an unpinned hop through.
- */
 export function redirectVerdict(requestUrl: string, finalUrl: unknown): RedirectVerdict {
   if (typeof finalUrl !== 'string' || finalUrl.trim() === '') return 'unobservable';
   const to = canonicalHostOf(finalUrl);
@@ -293,14 +249,6 @@ export function redirectVerdict(requestUrl: string, finalUrl: unknown): Redirect
     : 'left-pinned-host';
 }
 
-/**
- * Only a verified request is held to this, and only after the response is in
- * hand: React Native follows redirects in the platform layer, so a credential it
- * replayed on the second hop is already on the wire by the time this runs.
- * Refusing the response still denies the attacker the answer and surfaces the
- * hop, but the token is burned and must be rotated — recorded as a residual of
- * the 'enforced' stage in docs/work/founder-assistance.md.
- */
 function assertResponseCameFromPinnedHost(requestUrl: string, finalUrl: unknown): void {
   const verdict = redirectVerdict(requestUrl, finalUrl);
   if (verdict === 'same-host' || verdict === 'stayed-pinned') return;
@@ -308,13 +256,6 @@ function assertResponseCameFromPinnedHost(requestUrl: string, finalUrl: unknown)
   throw new PinningError(String(finalUrl), 'redirected-off-pinned-host');
 }
 
-/**
- * The report-only stage cannot rehearse the check above — no hop is verified
- * before the flip, so it never runs — and whether this transport reports a
- * response's URL is what decides, afterwards, between allowing that response and
- * refusing it. A provisioned build says so from the stage before, so the answer
- * is known when the flip is reviewed rather than discovered on installed apps.
- */
 export function reportsUnobservableFinalUrl(
   facts: PinTransportFacts,
   requestUrl: string,

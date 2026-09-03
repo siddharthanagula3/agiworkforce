@@ -61,7 +61,7 @@ function buildProject(overrides: Partial<ProjectRecord> = {}): ProjectRecord {
   };
 }
 
-describe('ProjectDetailScreen — unit snapshots', () => {
+describe('ProjectDetailScreen, unit snapshots', () => {
   it('locks ProjectHeader tree for a sky-accent local project with last-used label', () => {
     const presentation = summarizeProjectHeader({
       project: buildProject(),
@@ -88,7 +88,7 @@ describe('ProjectDetailScreen — unit snapshots', () => {
     const { toJSON } = render(
       <View testID="project-detail-local-fallback">
         <Text>proj_detail_test</Text>
-        <Text>local_only — project details sync when you join Cloud.</Text>
+        <Text>local_only, project details sync when you join Cloud.</Text>
       </View>,
     );
     expect(toJSON()).toMatchSnapshot();

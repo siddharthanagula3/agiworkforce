@@ -668,7 +668,7 @@ export const MessageBubble = memo(function MessageBubble({
               </View>
             ) : null}
 
-            {/* Tool calls — unified connected timeline (Claude-style inline tool use) */}
+            {/* Tool calls, unified connected timeline (Claude-style inline tool use) */}
             {isAssistant &&
             !canonicalActivity &&
             message.toolCalls &&
@@ -840,8 +840,8 @@ export const MessageBubble = memo(function MessageBubble({
                 x_stream_error delta) OR the retroactive metadata.finishReason
                 ==='error' case (legacy-web has passed that literal through for
                 a while, so historical turns can carry it with no marker at
-                all — see hasMessageStreamError's doc comment) is the ONLY
-                signal that this turn's answer may be cut off — the server
+                all, see hasMessageStreamError's doc comment) is the ONLY
+                signal that this turn's answer may be cut off, the server
                 still ends the stream cleanly, so without this the partial
                 content renders as an ordinary completion with zero
                 indication anything went wrong. The partial content itself is
@@ -895,11 +895,11 @@ export const MessageBubble = memo(function MessageBubble({
               <ProvenanceFooter provider={provenance.provider} model={provenance.model} />
             )}
 
-            {/* Performance chip — on-device inference metadata.
+            {/* Performance chip, on-device inference metadata.
                 Regression: this previously also required message.runtimeTier,
                 a field chatExecutionStore never sets (only tokensPerSecond is
-                populated on local completions), so the chip — and the "Show
-                performance chip in chat" settings toggle that promises it —
+                populated on local completions), so the chip, and the "Show
+                performance chip in chat" settings toggle that promises it.
                 was permanently dead. PerformanceChip itself only reads
                 tokensPerSecond and no-ops when it's absent, so runtimeTier
                 was never actually required. */}
@@ -915,7 +915,7 @@ export const MessageBubble = memo(function MessageBubble({
                 />
               )}
 
-            {/* Report/flag — Google Play GenAI policy: required on every assistant turn */}
+            {/* Report/flag, Google Play GenAI policy: required on every assistant turn */}
             {isAssistant && !message.isStreaming && message.content.trim() && (
               <ReportFlagButton
                 messageId={message.id}
@@ -944,7 +944,7 @@ export const MessageBubble = memo(function MessageBubble({
             onPress={() => copyToClipboard(message.content)}
             color={themeColors.textMuted}
           />
-          {/* Read aloud — reuses the on-device TTS service the voice companion
+          {/* Read aloud, reuses the on-device TTS service the voice companion
               already uses. Toggles, so a long answer can be stopped without
               waiting it out. */}
           <MessageActionButton
@@ -953,7 +953,7 @@ export const MessageBubble = memo(function MessageBubble({
             onPress={handleToggleReadAloud}
             color={isSpeaking ? themeColors.teal : themeColors.textMuted}
           />
-          {/* Share/export — the same sheet the long-press menu opens, surfaced
+          {/* Share/export, the same sheet the long-press menu opens, surfaced
               inline to match the reference apps. */}
           <MessageActionButton
             label="Share message"
