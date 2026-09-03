@@ -879,6 +879,13 @@ interface ConsumeStreamContext {
   onRunHandle?: (handle: ManagedCloudAgentRunHandle | null) => void;
 }
 
+const EMPTY_RESPONSE_STREAM_ERROR_CODE = 'empty_response';
+const BLOCKED_STREAM_ERROR_CODES: ReadonlySet<string> = new Set([
+  'content_blocked',
+  'content_filter',
+]);
+const MAX_TOKENS_FINISH_REASONS: ReadonlySet<string> = new Set(['length', 'max_tokens']);
+
 /**
  * A finished assistant turn that produced nothing: no text, no tool call, no
  * error. Mirrors the render-time "no visible output" check in MessageBubble
@@ -886,7 +893,10 @@ interface ConsumeStreamContext {
  * retry this drives also comes back empty -- so both use the same definition
  * of empty and the retry never fires on a turn the UI wouldn't otherwise flag.
  */
-function isEmptyAssistantTurn(message: Message | undefined | null): boolean {
+function isEmptyAssistantTurn(
+  message: Message | undefined | null,
+  requestedModel: string,
+): boolean {
   if (!message || message.role !== 'assistant') return false;
   if (message.isStreaming || message.error) return false;
   const content = message.content.replace(/[\u200B\uFEFF]/g, '').trim();
@@ -894,9 +904,17 @@ function isEmptyAssistantTurn(message: Message | undefined | null): boolean {
   if ((message.attachments?.length ?? 0) > 0) return false;
   const meta = message.metadata;
   if (!meta) return true;
-  if (meta.finishReason === 'error') return false;
-  if (meta.streamError) return false;
-  if (meta.agentActivity?.status === 'failed' || meta.agentActivity?.status === 'partial') {
+  const streamErrorCode = meta.streamError?.code;
+  if (streamErrorCode && BLOCKED_STREAM_ERROR_CODES.has(streamErrorCode)) return false;
+  if (meta.finishReason && MAX_TOKENS_FINISH_REASONS.has(meta.finishReason)) {
+    if (message.model !== requestedModel) return false;
+  } else if (meta.streamError && streamErrorCode !== EMPTY_RESPONSE_STREAM_ERROR_CODE) {
+    return false;
+  }
+  if (
+    !meta.streamError &&
+    (meta.agentActivity?.status === 'failed' || meta.agentActivity?.status === 'partial')
+  ) {
     return false;
   }
   if ((meta.tools?.length ?? 0) > 0) return false;
@@ -2823,7 +2841,7 @@ export function useChatStream(): UseChatStreamReturn {
           // finished without returning a response" card.
           if (
             !retriedEmptyTurn &&
-            isEmptyAssistantTurn(findConversationMessage(conversationId, assistantMessageId))
+            isEmptyAssistantTurn(findConversationMessage(conversationId, assistantMessageId), model)
           ) {
             retriedEmptyTurn = true;
             beginEmptyTurnRetry(
