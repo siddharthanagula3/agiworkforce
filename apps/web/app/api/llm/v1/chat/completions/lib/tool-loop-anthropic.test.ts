@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 vi.mock('server-only', () => ({}));
 
@@ -49,7 +49,9 @@ vi.mock('@/lib/e2b/runtime', () => ({
 }));
 
 import { runToolLoop } from './tool-loop';
+import { buildServingRouteId } from './tool-loop-anthropic';
 import { createObservedProviderUsage } from '@/lib/services/managed-usage-accounting-service';
+import { setRouteRegistryPricingLookup } from '@/lib/services/llm-cost-calculator';
 import { requireProviderDefaultModel } from '@agiworkforce/types';
 import type { ProcessedRequest } from './request-processor';
 
@@ -106,6 +108,10 @@ describe('runToolLoop Anthropic dispatch (mocked adapter)', () => {
     mockExecuteWebMcpTool.mockReset();
     mockGetE2BExecutor.mockReset();
     mockPauseE2BSession.mockReset();
+  });
+
+  afterEach(() => {
+    setRouteRegistryPricingLookup(null);
   });
 
   it('extracts and executes two vendor-indexed tool calls from a single Anthropic step', async () => {
@@ -360,6 +366,20 @@ describe('runToolLoop Anthropic dispatch (mocked adapter)', () => {
   });
 
   it('prefers a gateway-reported cost over the calculator estimate for the actual charge', async () => {
+    setRouteRegistryPricingLookup({
+      getRoutePricing: (routeId) =>
+        routeId === buildServingRouteId('anthropic', ANTHROPIC_MODEL)
+          ? {
+              provider: 'anthropic',
+              isDefault: true,
+              inputPerMillion: 20,
+              outputPerMillion: 20,
+              cacheReadPerMillion: null,
+              cacheWritePerMillion: null,
+              cacheWrite1hPerMillion: null,
+            }
+          : null,
+    });
     mockAnthropicStream.mockImplementationOnce(
       fakeAdapterStream([
         { type: 'text-delta', delta: 'Hi there.' },

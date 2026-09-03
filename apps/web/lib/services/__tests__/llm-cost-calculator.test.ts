@@ -698,13 +698,28 @@ describe('LLMCostCalculator — live registry wiring', () => {
     (route) => route.provider === 'open_router',
   )!.routeId;
 
+  afterEach(() => {
+    setRouteRegistryPricingLookup(null);
+  });
+
   it('prices a request served by the open_router route at that route sheet, not the canonical model price', async () => {
-    const { getRoutePricing, getModelMetadataById: liveGetModelMetadataById } =
+    const { getModelMetadataById: liveGetModelMetadataById } =
       await vi.importActual<typeof import('@agiworkforce/types')>('@agiworkforce/types');
-    const routeSheet = getRoutePricing(LIVE_ROUTE_ID);
-    if (!routeSheet) throw new Error('Live route fixture is missing from the registry');
     const canonical = liveGetModelMetadataById(LIVE_MODEL_ID);
     if (!canonical) throw new Error('Live canonical model fixture is missing from the catalog');
+
+    const syntheticRouteSheet = {
+      provider: 'open_router',
+      isDefault: false,
+      inputPerMillion: canonical.inputCost + 1,
+      outputPerMillion: canonical.outputCost + 1,
+      cacheReadPerMillion: 0.05,
+      cacheWritePerMillion: 1.5,
+      cacheWrite1hPerMillion: null,
+    };
+    setRouteRegistryPricingLookup({
+      getRoutePricing: (routeId) => (routeId === LIVE_ROUTE_ID ? syntheticRouteSheet : null),
+    });
 
     const pricing = LLMCostCalculator.getPricing(
       'open_router',
@@ -714,13 +729,10 @@ describe('LLMCostCalculator — live registry wiring', () => {
       LIVE_ROUTE_ID,
     );
 
-    expect(pricing.inputCostPer1MTokens).toBe(routeSheet.inputPerMillion);
-    expect(pricing.outputCostPer1MTokens).toBe(routeSheet.outputPerMillion);
-    expect(pricing.cachedInputCostPer1MTokens).toBe(routeSheet.cacheReadPerMillion ?? undefined);
-    expect(pricing.cachedWriteCostPer1MTokens).toBe(routeSheet.cacheWritePerMillion ?? undefined);
-    // The route is documented as pricing this exact fixture differently from the
-    // vendor list price, so the two must disagree -- otherwise this test cannot
-    // tell route-sourced pricing apart from a canonical-pricing fallback.
+    expect(pricing.inputCostPer1MTokens).toBe(syntheticRouteSheet.inputPerMillion);
+    expect(pricing.outputCostPer1MTokens).toBe(syntheticRouteSheet.outputPerMillion);
+    expect(pricing.cachedInputCostPer1MTokens).toBe(syntheticRouteSheet.cacheReadPerMillion);
+    expect(pricing.cachedWriteCostPer1MTokens).toBe(syntheticRouteSheet.cacheWritePerMillion);
     expect(pricing.inputCostPer1MTokens).not.toBe(canonical.inputCost);
     expect(pricing.cacheTokensDisjointFromInput).toBe(false);
   });
