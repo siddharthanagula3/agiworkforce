@@ -5,7 +5,7 @@ members = [
   "crates/*",
 ]
 # 2026-07-08 restructure P0: dead crates removed (agiworkforce-apply-patch,
-# agiworkforce-plugin-runtime, agiworkforce-task-runtime — zero dependents).
+# agiworkforce-plugin-runtime, agiworkforce-task-runtime, zero dependents).
 # Both binaries now path-depend on the shared harness crates (agent-core, llm,
 # mcp, model-registry, protocol, sandbox-policy, execpolicy); the CLI adds
 # app-server, command-registry and utils-image. What remains unconverged is the
