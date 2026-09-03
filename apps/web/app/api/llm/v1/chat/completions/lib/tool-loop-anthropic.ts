@@ -1,6 +1,11 @@
 import 'server-only';
 
-import { normalizeModelId, type StreamChunk, type ThinkingBlock } from '@agiworkforce/types';
+import {
+  normalizeModelId,
+  type ChatRequest,
+  type StreamChunk,
+  type ThinkingBlock,
+} from '@agiworkforce/types';
 import { OpenAIWireAssembler } from '@agiworkforce/provider-protocol';
 import {
   accumulateObservedProviderUsage,
@@ -19,6 +24,36 @@ import type { ProcessedRequest } from './request-processor';
  */
 export function buildServingRouteId(provider: string, model: string): string {
   return `${normalizeProviderId(provider) ?? provider}/${normalizeModelId(model) ?? model}`;
+}
+
+const OPENROUTER_DISPATCH_PROVIDER_ID = 'openrouter';
+const OPENROUTER_METADATA_ROUTING_KEY = 'openRouterProviderRouting';
+
+/**
+ * Pin the OpenRouter gateway to the upstream provider that already holds this
+ * conversation's warm cache, when this attempt is dispatching to exactly the
+ * route the affinity names.
+ *
+ * Without this, OpenRouter's own load balancer is free to bounce the same
+ * route across its upstream providers (DigitalOcean, DeepInfra, Bedrock, ...)
+ * turn to turn, which never lets the gateway's own cache warm up regardless
+ * of how consistently this app re-selects the route.
+ */
+function applyWarmRouteProviderPinning(
+  chatRequest: ChatRequest,
+  provider: string,
+  routeId: string,
+  affinity: ProcessedRequest['routeAffinity'],
+): void {
+  if (provider !== OPENROUTER_DISPATCH_PROVIDER_ID) return;
+  if (!affinity || !affinity.upstreamProvider || affinity.routeId !== routeId) return;
+  chatRequest.metadata = {
+    ...chatRequest.metadata,
+    [OPENROUTER_METADATA_ROUTING_KEY]: {
+      order: [affinity.upstreamProvider],
+      allowFallbacks: true,
+    },
+  };
 }
 
 export interface ToolLoopStepSink {
@@ -42,6 +77,8 @@ export async function buildToolLoopStream(
   const stepProcessed: ProcessedRequest = { ...processed, llmRequest: stepRequest };
   const adapter = adapterProvider.buildAdapter(stepProcessed);
   const chatRequest = adapterProvider.buildChatRequest(stepProcessed);
+  const routeId = buildServingRouteId(provider, stepRequest.model);
+  applyWarmRouteProviderPinning(chatRequest, provider, routeId, processed.routeAffinity);
   const chunks = await startProviderStream(
     adapter,
     chatRequest,
@@ -51,7 +88,7 @@ export async function buildToolLoopStream(
   return chunksToOpenAiSse(chunks, responseModel, adapterProvider.wireMode, sink, {
     provider,
     model: stepRequest.model,
-    routeId: buildServingRouteId(provider, stepRequest.model),
+    routeId,
   });
 }
 

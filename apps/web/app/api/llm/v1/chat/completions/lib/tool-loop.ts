@@ -57,9 +57,20 @@ import type {
 } from '@agiworkforce/types/protocol';
 import type { InteractiveCard, ThinkingBlock } from '@agiworkforce/types';
 import type { McpInputRequiredState } from '@agiworkforce/mcp';
+import { getRoutePricing } from '@agiworkforce/model-registry';
+import type { RouteOutcomeClass } from '@agiworkforce/routing';
+import {
+  recordRouteOutcome,
+  recordServedRouteAffinity,
+  routeAffinityTtlMs,
+} from '@/lib/services/free-lane/runtime-state-service';
 import { mapClassifiedUpstreamError } from './upstream-error-copy';
 import type { FailoverStepContext } from './managed-failover';
-import { buildToolLoopStream, type ToolLoopStepSink } from './tool-loop-anthropic';
+import {
+  buildServingRouteId,
+  buildToolLoopStream,
+  type ToolLoopStepSink,
+} from './tool-loop-anthropic';
 import {
   getWebMcpCatalog,
   executeWebMcpTool,
@@ -1671,6 +1682,113 @@ function createLiveLineQueue<T>(): {
   return { push, close, drain };
 }
 
+const STREAM_CORRUPTION_ERROR_NAME = 'EmptyStreamError';
+
+/**
+ * `classifyError`'s taxonomy, mapped onto the coarser `RouteOutcomeClass` the
+ * route health store tracks. A category absent here records nothing: it says
+ * something about the request (a safety refusal, an oversized attachment) or
+ * the account (billing, auth), never about whether THIS route can serve the
+ * next request, and recording it would bias health data with noise the route
+ * had no part in.
+ */
+const ROUTE_OUTCOME_CLASS_BY_ERROR_CATEGORY: Readonly<
+  Partial<Record<ClassifiedError['category'], RouteOutcomeClass>>
+> = {
+  rate_limit: 'rate_limit',
+  quota_exhausted: 'rate_limit',
+  api_timeout: 'timeout',
+  server_overload: 'server_error',
+  server_error: 'server_error',
+  connection: 'server_error',
+  capacity_off_switch: 'server_error',
+  tool_validation: 'unsupported_capability',
+  invalid_model: 'unsupported_capability',
+};
+
+function routeOutcomeClassForError(
+  err: unknown,
+  classified: ClassifiedError,
+): RouteOutcomeClass | undefined {
+  if (err instanceof Error && err.name === STREAM_CORRUPTION_ERROR_NAME) return 'stream_corruption';
+  return ROUTE_OUTCOME_CLASS_BY_ERROR_CATEGORY[classified.category];
+}
+
+function providerStepRouteId(
+  processed: ProcessedRequest,
+  request: ProcessedRequest['llmRequest'],
+): string {
+  return buildServingRouteId(processed.provider, request.model);
+}
+
+/**
+ * Both callers wrap their whole body in a synchronous try/catch: this is a
+ * telemetry side channel off the response path, so a route id that fails to
+ * build (an unexpected mock in a test, a malformed processed request) must
+ * never surface as the turn's own error. `recordRouteOutcome` and
+ * `recordServedRouteAffinity` are themselves fire-and-forget and already
+ * fail open internally once their promise settles.
+ */
+function recordProviderStepSuccess(input: {
+  processed: ProcessedRequest;
+  attemptProcessed: ProcessedRequest;
+  attemptRequest: ProcessedRequest['llmRequest'];
+  result: ToolLoopProviderStepResult;
+  attemptStartedAtMs: number;
+  firstProviderLineAtMs: number | undefined;
+  nowMs: number;
+}): void {
+  try {
+    const observations = input.result.usage.providerCallObservations;
+    const lastObservation = observations?.[observations.length - 1];
+    const routeId =
+      lastObservation?.routeId ?? providerStepRouteId(input.attemptProcessed, input.attemptRequest);
+    void recordRouteOutcome(
+      routeId,
+      {
+        class: 'success',
+        ...(input.firstProviderLineAtMs !== undefined
+          ? { ttftMs: input.firstProviderLineAtMs - input.attemptStartedAtMs }
+          : {}),
+        durationMs: input.nowMs - input.attemptStartedAtMs,
+        outputTokens: input.result.usage.outputTokens,
+      },
+      input.nowMs,
+    );
+    if (!input.processed.conversationId) return;
+    void recordServedRouteAffinity({
+      conversationId: input.processed.conversationId,
+      routeId,
+      ttlMs: routeAffinityTtlMs(getRoutePricing(routeId)?.cacheClass),
+      ...(lastObservation?.upstreamProvider
+        ? { upstreamProvider: lastObservation.upstreamProvider }
+        : {}),
+    });
+  } catch (error) {
+    logger.warn({ error }, '[tool-loop] route outcome / affinity was not recorded');
+  }
+}
+
+function recordProviderStepFailure(input: {
+  attemptProcessed: ProcessedRequest;
+  attemptRequest: ProcessedRequest['llmRequest'];
+  err: unknown;
+  classified: ClassifiedError;
+  nowMs: number;
+}): void {
+  try {
+    const outcomeClass = routeOutcomeClassForError(input.err, input.classified);
+    if (!outcomeClass) return;
+    void recordRouteOutcome(
+      providerStepRouteId(input.attemptProcessed, input.attemptRequest),
+      { class: outcomeClass },
+      input.nowMs,
+    );
+  } catch (error) {
+    logger.warn({ error }, '[tool-loop] route outcome was not recorded');
+  }
+}
+
 export async function* runToolLoop(
   processed: ProcessedRequest,
   options: ToolLoopOptions = {},
@@ -1852,6 +1970,8 @@ export async function* runToolLoop(
         effort: attemptProcessed.llmRequest.effort,
         thinking: attemptProcessed.llmRequest.thinking,
       };
+      const attemptStartedAtMs = now();
+      let firstProviderLineAtMs: number | undefined;
       const executeProviderStep = async (): Promise<ToolLoopProviderStepResult> => {
         const stepUsage = createObservedProviderUsage();
         const stepSink: ToolLoopStepSink = {
@@ -1869,15 +1989,11 @@ export async function* runToolLoop(
               stepSink,
               signal,
             );
-            return collectProviderStream(
-              providerStream,
-              onLine
-                ? (entry) => {
-                    liveLinesReachedClient = true;
-                    onLine(entry);
-                  }
-                : undefined,
-            );
+            return collectProviderStream(providerStream, (entry) => {
+              if (firstProviderLineAtMs === undefined) firstProviderLineAtMs = now();
+              liveLinesReachedClient = true;
+              onLine?.(entry);
+            });
           },
           nestedDeadlineMs(PROVIDER_STREAM_DEADLINE_MS, maxDurationMs, now() - startedAt),
           options.signal,
@@ -1890,7 +2006,7 @@ export async function* runToolLoop(
         };
       };
       try {
-        return options.providerExecutor
+        const result = options.providerExecutor
           ? await options.providerExecutor({
               operationKey: `provider:${step}`,
               step,
@@ -1898,11 +2014,28 @@ export async function* runToolLoop(
               execute: executeProviderStep,
             })
           : await executeProviderStep();
+        recordProviderStepSuccess({
+          processed,
+          attemptProcessed,
+          attemptRequest,
+          result,
+          attemptStartedAtMs,
+          firstProviderLineAtMs,
+          nowMs: now(),
+        });
+        return result;
       } catch (err) {
         if (options.shouldPropagateExecutionError?.(err)) throw err;
         if (err instanceof ProviderStreamDeadlineError) throw err;
         if (liveLinesReachedClient) throw err;
         const classified = classifyError(err);
+        recordProviderStepFailure({
+          attemptProcessed,
+          attemptRequest,
+          err,
+          classified,
+          nowMs: now(),
+        });
         if (!rootQuotaExhaustedError && classified.category === 'quota_exhausted') {
           rootQuotaExhaustedError = err;
         }
