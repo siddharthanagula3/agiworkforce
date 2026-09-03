@@ -3,6 +3,7 @@ import 'server-only';
 import { getNeonDb } from '@/lib/server/neon-db';
 import { logger } from '@/lib/logger';
 import type { ProfileRow } from '@/lib/server/neon-types';
+import { normalizeDisplayName } from '@agiworkforce/utils/display-name';
 
 export const USER_IDENTITY_SETTINGS_NAMESPACE = 'general';
 
@@ -32,28 +33,6 @@ function normalizeText(value: unknown, maxLength: number): string | null {
   const trimmed = value.trim();
   if (!trimmed) return null;
   return trimmed.slice(0, maxLength);
-}
-
-const SHOUTING_INITIALISM_MAX_LENGTH = 4;
-const CASED_WORD_BOUNDARY_PATTERN = /(^|[\s'-])([a-z])/g;
-
-function isShoutingCase(value: string): boolean {
-  if (value !== value.toUpperCase() || value === value.toLowerCase()) return false;
-  const isSingleWord = !/\s/.test(value);
-  return !isSingleWord || value.length > SHOUTING_INITIALISM_MAX_LENGTH;
-}
-
-function toTitleCase(value: string): string {
-  return value
-    .toLowerCase()
-    .replace(
-      CASED_WORD_BOUNDARY_PATTERN,
-      (_match, boundary: string, letter: string) => boundary + letter.toUpperCase(),
-    );
-}
-
-function humanizeDisplayCasing(value: string): string {
-  return isShoutingCase(value) ? toTitleCase(value) : value;
 }
 
 async function readSettingsNamespace(
@@ -218,7 +197,7 @@ export function formatPersonalizationBlock(input: PersonalizationInput): string 
 
   if (preferredName || workDescription) {
     lines.push('<user_profile>');
-    if (preferredName) lines.push(`Address the user as: ${humanizeDisplayCasing(preferredName)}`);
+    if (preferredName) lines.push(`Address the user as: ${normalizeDisplayName(preferredName)}`);
     if (workDescription) lines.push(`The user describes their work as: ${workDescription}`);
     lines.push('</user_profile>');
   }
