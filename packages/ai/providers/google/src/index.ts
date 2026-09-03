@@ -34,6 +34,7 @@ import { translateChatRequest } from './translate';
 import { parseGeminiStream, translateGeminiStream } from './stream';
 
 const DEFAULT_BASE_URL = 'https://generativelanguage.googleapis.com';
+const GEMINI_API_VERSION_SEGMENT = 'v1beta';
 
 const HEADERS_TIMEOUT_MS = 30_000;
 const GROUNDED_HEADERS_TIMEOUT_MS = 120_000;
@@ -52,6 +53,22 @@ export interface GoogleAdapterConfig extends ProviderAdapterConfig {
   skipDiscovery?: boolean;
 }
 
+/**
+ * `baseUrl` reaches this adapter from two conventions in the wild: a bare
+ * host (`https://generativelanguage.googleapis.com`) and a host that already
+ * carries the API version (`.../v1beta`, matching the installed Google SDK
+ * convention some gateway overrides use). Both must land on the same wire
+ * request, so the version segment is stripped once here and re-appended by
+ * every call site instead of assumed away.
+ */
+function normalizeGoogleBaseUrl(url: string): string {
+  const trimmed = url.replace(/\/+$/, '');
+  const suffix = `/${GEMINI_API_VERSION_SEGMENT}`;
+  return trimmed.toLowerCase().endsWith(suffix.toLowerCase())
+    ? trimmed.slice(0, trimmed.length - suffix.length)
+    : trimmed;
+}
+
 export function createGoogleAdapter(config: GoogleAdapterConfig = {}): ProviderAdapter {
   if (
     (config as { authMethod?: string }).authMethod === 'gcp-adc' ||
@@ -63,7 +80,7 @@ export function createGoogleAdapter(config: GoogleAdapterConfig = {}): ProviderA
         'or switch to another configured adapter.',
     );
   }
-  const baseUrl = config.baseUrl ?? DEFAULT_BASE_URL;
+  const baseUrl = normalizeGoogleBaseUrl(config.baseUrl ?? DEFAULT_BASE_URL);
   const fetchFn = config.fetch ?? fetch;
 
   return {
@@ -78,7 +95,7 @@ export function createGoogleAdapter(config: GoogleAdapterConfig = {}): ProviderA
       }
       return fetchGoogleCatalog({
         apiKey: config.apiKey,
-        baseUrl: ctx?.baseUrl ?? baseUrl,
+        baseUrl: ctx?.baseUrl ? normalizeGoogleBaseUrl(ctx.baseUrl) : baseUrl,
         fetch: ctx?.fetch ?? fetchFn,
         ...(ctx?.signal ? { signal: ctx.signal } : {}),
       });
@@ -95,10 +112,7 @@ export function createGoogleAdapter(config: GoogleAdapterConfig = {}): ProviderA
       }
 
       const body = translateChatRequest(req);
-      const url = `${baseUrl.replace(
-        /\/{1,32}$/,
-        '',
-      )}/v1beta/models/${encodeURIComponent(req.model)}:streamGenerateContent?alt=sse`;
+      const url = `${baseUrl}/${GEMINI_API_VERSION_SEGMENT}/models/${encodeURIComponent(req.model)}:streamGenerateContent?alt=sse`;
 
       const hasServerSideTools = (req.rawVendorTools?.length ?? 0) > 0;
       const headersTimeoutMs = hasServerSideTools
