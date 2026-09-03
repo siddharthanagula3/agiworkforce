@@ -103,6 +103,18 @@ async function collect(gen: AsyncGenerator<Uint8Array>): Promise<string> {
   return out;
 }
 
+function toolResultEventContents(output: string): string[] {
+  return output
+    .split('\n')
+    .filter((line) => line.startsWith('data: ') && line !== 'data: [DONE]')
+    .map((line) => JSON.parse(line.slice('data: '.length)) as Record<string, unknown>)
+    .flatMap((event) => {
+      const choices = event['choices'] as Array<{ delta?: Record<string, unknown> }> | undefined;
+      const toolResult = choices?.[0]?.delta?.['x_tool_result'] as { content?: string } | undefined;
+      return toolResult?.content !== undefined ? [toolResult.content] : [];
+    });
+}
+
 function secondRequestMessages(): Array<{ role: string; content: string; tool_call_id?: string }> {
   const request = mocks.streamRequest.mock.calls[1]?.[2] as {
     messages: Array<{ role: string; content: string; tool_call_id?: string }>;
@@ -228,12 +240,14 @@ describe('runToolLoop — secret handling policy applied to tool results before 
     const toolMsg = secondRequestMessages().find((m) => m.role === 'tool');
     expect(toolMsg?.content).not.toContain(STRIPE_KEY);
     expect(toolMsg?.content).toContain('[REDACTED]');
-    // The live stream event predates the push and is unaffected by this gate.
-    expect(output).toContain(STRIPE_KEY);
+    // The x_tool_result SSE event carries the same redacted content as the
+    // provider-bound message: the client transcript never sees the secret.
+    expect(output).not.toContain(STRIPE_KEY);
+    expect(output).toContain('[REDACTED]');
     expect(mocks.recordAuditEvent).toHaveBeenCalledTimes(1);
   });
 
-  it('drops a connector secret entirely under block mode, replacing it with a plain tool error', async () => {
+  it('drops a connector secret entirely under block mode, replacing it with a plain tool error in both the SSE event and the provider message', async () => {
     mocks.resolvePolicy.mockResolvedValue({ mode: 'block', organizationId: ORGANIZATION_ID });
     mocks.streamRequest
       .mockResolvedValueOnce(toolCallStream(CONNECTOR_TOOL))
@@ -245,7 +259,7 @@ describe('runToolLoop — secret handling policy applied to tool results before 
       isError: false,
     }));
 
-    await collect(
+    const output = await collect(
       runToolLoop(makeProcessed(), {
         approvalMode: 'auto',
         userId: 'user-1',
@@ -257,15 +271,18 @@ describe('runToolLoop — secret handling policy applied to tool results before 
     const toolMsg = secondRequestMessages().find((m) => m.role === 'tool');
     expect(toolMsg?.content).not.toContain(STRIPE_KEY);
     expect(toolMsg?.content).toContain(CONNECTOR_TOOL);
+    expect(output).not.toContain(STRIPE_KEY);
+    expect(output).toContain(CONNECTOR_TOOL);
     const event = mocks.recordAuditEvent.mock.calls[0]![0] as {
       outcome: string;
       detail: Record<string, unknown>;
     };
     expect(event.outcome).toBe('denied');
     expect(event.detail['resourceId']).toBe(CONNECTOR_TOOL);
+    expect(mocks.recordAuditEvent).toHaveBeenCalledTimes(1);
   });
 
-  it('leaves the provider-bound content alone under warn mode but still records the audit trail', async () => {
+  it('leaves both the SSE event and the provider-bound content alone under warn mode but still records the audit trail', async () => {
     mocks.resolvePolicy.mockResolvedValue({ mode: 'warn', organizationId: ORGANIZATION_ID });
     mocks.streamRequest
       .mockResolvedValueOnce(toolCallStream(CONNECTOR_TOOL))
@@ -277,7 +294,7 @@ describe('runToolLoop — secret handling policy applied to tool results before 
       isError: false,
     }));
 
-    await collect(
+    const output = await collect(
       runToolLoop(makeProcessed(), {
         approvalMode: 'auto',
         userId: 'user-1',
@@ -288,6 +305,7 @@ describe('runToolLoop — secret handling policy applied to tool results before 
 
     const toolMsg = secondRequestMessages().find((m) => m.role === 'tool');
     expect(toolMsg?.content).toContain(STRIPE_KEY);
+    expect(output).toContain(STRIPE_KEY);
     expect(mocks.recordAuditEvent).toHaveBeenCalledTimes(1);
   });
 
@@ -316,6 +334,10 @@ describe('runToolLoop — secret handling policy applied to tool results before 
     );
 
     expect(output).toContain('x_tool_result');
+    const toolResultContents = toolResultEventContents(output);
+    expect(toolResultContents).toHaveLength(1);
+    expect(toolResultContents[0]).not.toContain(STRIPE_KEY);
+    expect(toolResultContents[0]).toContain('[REDACTED]');
     const toolMsg = secondRequestMessages().find((m) => m.role === 'tool');
     expect(toolMsg?.content).not.toContain(STRIPE_KEY);
     expect(toolMsg?.content).toContain('[REDACTED]');
