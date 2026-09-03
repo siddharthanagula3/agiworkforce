@@ -1480,129 +1480,149 @@ const ChatMessageListComponent = ({
     ],
   );
 
-  const transcriptFooter = (
-    <>
-      {showContinue && lastMessage && (
-        <div className="px-4 pt-1 md:px-12 lg:px-20">
-          <button
-            type="button"
-            onClick={() => onContinue?.(lastMessage.id)}
-            className="flex items-center gap-1.5 rounded-lg border border-border/60 bg-muted/40 px-3 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-muted"
-            aria-label="Continue generating this response"
-          >
-            <ArrowRight className="h-3.5 w-3.5" aria-hidden="true" />
-            Continue generating
-          </button>
-        </div>
-      )}
-
-      {showStoppedNotice && lastMessage && (
-        <div className="px-4 pt-1 md:px-12 lg:px-20">
-          <TranscriptNotice
-            tone="neutral"
-            icon={Square}
-            message="Response stopped."
-            action={{
-              label: 'Try again',
-              ariaLabel: 'Regenerate this response',
-              icon: RefreshCw,
-              onClick: () => onRegenerate?.(lastMessage.id),
-            }}
-          />
-        </div>
-      )}
-
-      {showStreamErrorNotice && lastMessage && (
-        <div className="px-4 pt-1 md:px-12 lg:px-20">
-          <TranscriptNotice
-            tone="danger"
-            icon={CircleAlert}
-            message={streamErrorNoticeMessage(lastMessage)}
-            action={{
-              label: 'Retry',
-              ariaLabel: 'Regenerate this response',
-              icon: RefreshCw,
-              onClick: () => onRegenerate?.(lastMessage.id),
-            }}
-          />
-        </div>
-      )}
-
-      {showRefusalNotice && lastMessage && (
-        <div className="px-4 pt-1 md:px-12 lg:px-20">
-          <TranscriptNotice
-            icon={ShieldAlert}
-            message="The model declined to finish this response for safety reasons."
-            actionSlot={
-              <ComposerFeedbackDialog
-                variant="safety-appeal"
-                conversationId={conversationId}
-                messageId={lastMessage.id}
-                finishReason={
-                  (
-                    lastMessage.metadata as
-                      | { finishReason?: 'refusal' | 'content_filter' }
-                      | undefined
-                  )?.finishReason
-                }
-              />
-            }
-            action={
-              onRegenerate
-                ? {
-                    label: 'Retry',
-                    ariaLabel: 'Regenerate this response',
-                    icon: RefreshCw,
-                    onClick: () => onRegenerate(lastMessage.id),
-                  }
-                : undefined
-            }
-          />
-        </div>
-      )}
-
-      {showIncompleteTurnNotice && lastMessage && (
-        <div className="px-4 pt-1 md:px-12 lg:px-20">
-          <TranscriptNotice
-            tone="danger"
-            icon={CircleAlert}
-            message="This turn didn't complete. No response was received."
-            action={{
-              label: 'Retry',
-              ariaLabel: 'Retry this turn',
-              icon: RefreshCw,
-              onClick: () => onRegenerate?.(lastMessage.id),
-            }}
-          />
-        </div>
-      )}
-
-      <AnimatePresence>
-        {showTypingIndicator && (
-          <motion.div
-            key="typing-indicator"
-            initial={prefersReducedMotion ? false : { opacity: 0, y: 4 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={prefersReducedMotion ? { opacity: 1, y: 0 } : { opacity: 0, y: 4 }}
-            transition={{ duration: prefersReducedMotion ? 0 : 0.15 }}
-          >
-            <TypingIndicator />
-          </motion.div>
+  const transcriptFooter = useMemo(
+    () => (
+      <>
+        {showContinue && lastMessage && (
+          <div className="px-4 pt-1 md:px-12 lg:px-20">
+            <button
+              type="button"
+              onClick={() => onContinue?.(lastMessage.id)}
+              className="flex items-center gap-1.5 rounded-lg border border-border/60 bg-muted/40 px-3 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-muted"
+              aria-label="Continue generating this response"
+            >
+              <ArrowRight className="h-3.5 w-3.5" aria-hidden="true" />
+              Continue generating
+            </button>
+          </div>
         )}
-      </AnimatePresence>
 
-      {showFollowUps && lastMessage && (
-        <div className="mx-auto w-full max-w-3xl px-4" data-testid="follow-up-suggestions-shell">
-          <FollowUpSuggestions
-            lastAssistantContent={lastMessage.content}
-            onSelect={onSendMessage!}
-            isGenerating={isLoading}
-            isUserTyping={isUserTyping}
-            messageCount={messages.length}
-          />
-        </div>
-      )}
-    </>
+        {showStoppedNotice && lastMessage && (
+          <div className="px-4 pt-1 md:px-12 lg:px-20">
+            <TranscriptNotice
+              tone="neutral"
+              icon={Square}
+              message="Response stopped."
+              action={{
+                label: 'Try again',
+                ariaLabel: 'Regenerate this response',
+                icon: RefreshCw,
+                onClick: () => onRegenerate?.(lastMessage.id),
+              }}
+            />
+          </div>
+        )}
+
+        {showStreamErrorNotice && lastMessage && (
+          <div className="px-4 pt-1 md:px-12 lg:px-20">
+            <TranscriptNotice
+              tone="danger"
+              icon={CircleAlert}
+              message={streamErrorNoticeMessage(lastMessage)}
+              action={{
+                label: 'Retry',
+                ariaLabel: 'Regenerate this response',
+                icon: RefreshCw,
+                onClick: () => onRegenerate?.(lastMessage.id),
+              }}
+            />
+          </div>
+        )}
+
+        {showRefusalNotice && lastMessage && (
+          <div className="px-4 pt-1 md:px-12 lg:px-20">
+            <TranscriptNotice
+              icon={ShieldAlert}
+              message="The model declined to finish this response for safety reasons."
+              actionSlot={
+                <ComposerFeedbackDialog
+                  variant="safety-appeal"
+                  conversationId={conversationId}
+                  messageId={lastMessage.id}
+                  finishReason={
+                    (
+                      lastMessage.metadata as
+                        | { finishReason?: 'refusal' | 'content_filter' }
+                        | undefined
+                    )?.finishReason
+                  }
+                />
+              }
+              action={
+                onRegenerate
+                  ? {
+                      label: 'Retry',
+                      ariaLabel: 'Regenerate this response',
+                      icon: RefreshCw,
+                      onClick: () => onRegenerate(lastMessage.id),
+                    }
+                  : undefined
+              }
+            />
+          </div>
+        )}
+
+        {showIncompleteTurnNotice && lastMessage && (
+          <div className="px-4 pt-1 md:px-12 lg:px-20">
+            <TranscriptNotice
+              tone="danger"
+              icon={CircleAlert}
+              message="This turn didn't complete. No response was received."
+              action={{
+                label: 'Retry',
+                ariaLabel: 'Retry this turn',
+                icon: RefreshCw,
+                onClick: () => onRegenerate?.(lastMessage.id),
+              }}
+            />
+          </div>
+        )}
+
+        <AnimatePresence>
+          {showTypingIndicator && (
+            <motion.div
+              key="typing-indicator"
+              initial={prefersReducedMotion ? false : { opacity: 0, y: 4 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={prefersReducedMotion ? { opacity: 1, y: 0 } : { opacity: 0, y: 4 }}
+              transition={{ duration: prefersReducedMotion ? 0 : 0.15 }}
+            >
+              <TypingIndicator />
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {showFollowUps && lastMessage && (
+          <div className="mx-auto w-full max-w-3xl px-4" data-testid="follow-up-suggestions-shell">
+            <FollowUpSuggestions
+              lastAssistantContent={lastMessage.content}
+              onSelect={onSendMessage!}
+              isGenerating={isLoading}
+              isUserTyping={isUserTyping}
+              messageCount={messages.length}
+            />
+          </div>
+        )}
+      </>
+    ),
+    [
+      showContinue,
+      lastMessage,
+      onContinue,
+      showStoppedNotice,
+      onRegenerate,
+      showStreamErrorNotice,
+      showRefusalNotice,
+      conversationId,
+      showIncompleteTurnNotice,
+      prefersReducedMotion,
+      showTypingIndicator,
+      showFollowUps,
+      onSendMessage,
+      isLoading,
+      isUserTyping,
+      messages.length,
+    ],
   );
 
   const rowProps = useMemo<VirtualizedTranscriptRowData>(
