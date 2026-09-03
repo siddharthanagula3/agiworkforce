@@ -10,12 +10,14 @@ vi.mock('@/lib/server/neon-db', () => ({
 
 import {
   getServedRouteIdFromCostEventMetadata,
+  getValueMultiplierFromCostEvent,
   importStripeCogsAdjustments,
   recordCogsAdjustment,
   recordProviderCostEvent,
   recordSettledProviderCost,
   resolveCogsCapability,
   resolveCogsUnits,
+  resolveRetailCostCents,
   summarizeCogs,
 } from '@/lib/services/cogs-ledger-service';
 
@@ -142,7 +144,7 @@ describe('cogs ledger · writes', () => {
 
     const [, params] = db.execute.mock.calls[0] as unknown as [string, unknown[]];
     const metadata = JSON.parse(String(params[9]));
-    expect(metadata).toEqual({
+    expect(metadata).toMatchObject({
       inputTokens: 10,
       outputTokens: 5,
       servedRouteId: 'open_router/served-model',
@@ -172,6 +174,63 @@ describe('cogs ledger · writes', () => {
     expect(getServedRouteIdFromCostEventMetadata({})).toBeNull();
     expect(getServedRouteIdFromCostEventMetadata(null)).toBeNull();
     expect(getServedRouteIdFromCostEventMetadata(undefined)).toBeNull();
+  });
+});
+
+describe('cogs ledger · retail-equivalent cost and value multiplier', () => {
+  it('prices token-capability usage at the canonical creator-direct rate', () => {
+    expect(
+      resolveRetailCostCents({
+        capability: 'chat',
+        provider: 'openai',
+        model: 'not-a-real-catalog-model',
+        usage: { inputTokens: 1_000_000, outputTokens: 1_000_000 },
+      }),
+    ).toBe(200);
+  });
+
+  it('is null for non-token capabilities and for an unknown model', () => {
+    expect(
+      resolveRetailCostCents({
+        capability: 'image',
+        provider: 'openai',
+        model: 'not-a-real-catalog-model',
+        usage: { operation: 'image', outputCount: 2 },
+      }),
+    ).toBeNull();
+    expect(
+      resolveRetailCostCents({
+        capability: 'chat',
+        provider: 'openai',
+        model: null,
+        usage: { inputTokens: 10, outputTokens: 5 },
+      }),
+    ).toBeNull();
+  });
+
+  it('stores retail cost in the ledger metadata and reports the value multiplier', async () => {
+    const db = fakeDb();
+    await recordSettledProviderCost({
+      userId: 'user-1',
+      provider: 'openai',
+      model: 'not-a-real-catalog-model',
+      actualCostCents: 100,
+      sourceRef: 'managed_usage:user-1:key:retail',
+      usage: { inputTokens: 1_000_000, outputTokens: 1_000_000 },
+      db: db as never,
+    });
+
+    const [, params] = db.execute.mock.calls[0] as unknown as [string, unknown[]];
+    const metadata = JSON.parse(String(params[9]));
+    expect(metadata.retailCostCents).toBe(200);
+    expect(getValueMultiplierFromCostEvent({ metadata, actualCostCents: 100 })).toBe(2);
+  });
+
+  it('returns null for a value multiplier with no retail figure or zero actual cost', () => {
+    expect(getValueMultiplierFromCostEvent({ metadata: {}, actualCostCents: 100 })).toBeNull();
+    expect(
+      getValueMultiplierFromCostEvent({ metadata: { retailCostCents: 200 }, actualCostCents: 0 }),
+    ).toBeNull();
   });
 });
 
