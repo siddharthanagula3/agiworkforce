@@ -768,7 +768,7 @@ export default function PrivacyPage() {
           ctas={[]}
         />
 
-        <Container className="my-10">
+        <Container className="mb-10">
           <PolicyContents
             sections={SECTIONS}
             intro="Start with section 00: which mode you run changes almost every answer below it."
