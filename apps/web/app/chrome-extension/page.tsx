@@ -1,17 +1,17 @@
 import { buildMetadata } from '@/lib/seo/metadata';
 import { Header } from '@shared/components/layout/Header';
-import { MarketingFooter } from '@/features/marketing/components/MarketingFooter';
 import {
   Button,
   ButtonRow,
   Eyebrow,
   Ledger,
+  MarketingFooter,
   Prose,
   Section,
   Stack,
   SurfaceStatus,
 } from '@/features/marketing/components/system';
-import { FactGrid, PageHero } from '@/features/marketing/components/pages/surfaces/shared';
+import { PageHero } from '@/features/marketing/components/pages/surfaces/shared';
 
 export const metadata = buildMetadata({
   title: 'AGI in Chrome: a side panel that answers about the tab you are reading',
@@ -34,23 +34,42 @@ export default function ChromeExtensionPage() {
             { href: '/download', label: 'Get notified' },
             { href: '/agent-permissions', label: 'Read the permission list', variant: 'secondary' },
           ]}
+          visual={
+            <div className="agi-lp-console" aria-label="AGI in Chrome destinations">
+              <div className="agi-lp-console-bar">
+                <span>AGI in Chrome &middot; destinations</span>
+              </div>
+              <div className="agi-lp-console-body">
+                <Ledger
+                  caption="Where the extension can send data"
+                  rows={[
+                    { label: 'Chat', value: 'api.agiworkforce.com' },
+                    { label: 'Desktop bridge', value: 'localhost:8787, optional' },
+                    { label: 'Computer use', value: 'Managed Cloud gateway, with screenshots' },
+                  ]}
+                />
+              </div>
+            </div>
+          }
         />
 
-        <Section id="chrome-status" labelledBy="agi-chrome-status-title" rule>
-          <Stack>
+        <section className="agi-lp-section" aria-labelledby="agi-chrome-status-title">
+          <div className="agi-ds-container">
             <h2 className="agi-ds-h2" id="agi-chrome-status-title">
               Where the build stands.
             </h2>
-            <SurfaceStatus
-              state="absent"
-              name="AGI in Chrome"
-              detail="No listing on the Chrome Web Store. The manifest, side panel, and bridge described below are already built into the extension."
-            />
-          </Stack>
-        </Section>
+            <div style={{ marginTop: '2rem' }}>
+              <SurfaceStatus
+                state="absent"
+                name="AGI in Chrome"
+                detail="No listing on the Chrome Web Store. The manifest, side panel, and bridge described below are already built into the extension."
+              />
+            </div>
+          </div>
+        </section>
 
-        <Section id="chrome-build" labelledBy="agi-chrome-build-title" rule ground="2">
-          <Stack>
+        <section className="agi-lp-section" aria-labelledby="agi-chrome-build-title">
+          <div className="agi-ds-container">
             <h2 className="agi-ds-h2" id="agi-chrome-build-title">
               What the build is.
             </h2>
@@ -71,8 +90,8 @@ export default function ChromeExtensionPage() {
                 },
               ]}
             />
-          </Stack>
-        </Section>
+          </div>
+        </section>
 
         <Section id="chrome-destinations" labelledBy="agi-chrome-destinations-title" rule>
           <Stack gap="loose">
@@ -120,12 +139,12 @@ export default function ChromeExtensionPage() {
           </Stack>
         </Section>
 
-        <Section id="chrome-screenshots" labelledBy="agi-chrome-screenshots-title" rule ground="2">
-          <Stack>
+        <section className="agi-lp-section" aria-labelledby="agi-chrome-screenshots-title">
+          <div className="agi-ds-container">
             <h2 className="agi-ds-h2" id="agi-chrome-screenshots-title">
               Screenshots travel with the conversation.
             </h2>
-            <Prose>
+            <Prose size="lg">
               A computer-use step calls the Managed Cloud gateway directly from the extension, and
               it carries the conversation together with every screenshot the run has taken of your
               tab. Those images are not redacted and cannot be. Whatever your signed-in page was
@@ -137,8 +156,8 @@ export default function ChromeExtensionPage() {
               </a>{' '}
               page.
             </Prose>
-          </Stack>
-        </Section>
+          </div>
+        </section>
 
         <Section id="chrome-capabilities" labelledBy="agi-chrome-capabilities-title" rule>
           <Stack gap="loose">
@@ -148,8 +167,8 @@ export default function ChromeExtensionPage() {
                 Each of these runs in your browser, and each one names a destination.
               </h2>
             </div>
-            <FactGrid
-              items={[
+            <div className="agi-ds-grid-2">
+              {[
                 {
                   meta: 'Panel',
                   title: 'A side panel beside the tab',
@@ -190,8 +209,14 @@ export default function ChromeExtensionPage() {
                   title: 'Recurring work on Chrome alarms',
                   body: 'Up to fifty saved tasks fire through Chrome’s own alarms and live in extension storage. A task carrying a prompt belongs to the Managed Cloud account that made it.',
                 },
-              ]}
-            />
+              ].map((item) => (
+                <div className="agi-ds-card" style={{ padding: '1.5rem' }} key={item.title}>
+                  <Eyebrow>{item.meta}</Eyebrow>
+                  <h3 className="agi-ds-h3">{item.title}</h3>
+                  <Prose size="sm">{item.body}</Prose>
+                </div>
+              ))}
+            </div>
           </Stack>
         </Section>
 
@@ -241,23 +266,27 @@ export default function ChromeExtensionPage() {
           </Stack>
         </Section>
 
-        <Section id="chrome-close" labelledBy="agi-chrome-close-title" rule>
-          <Stack gap="loose">
-            <h2 className="agi-ds-h2" id="agi-chrome-close-title">
-              AGI Desktop is the half of this that runs on your machine.
-            </h2>
-            <Prose>
-              The extension is a browser client. Local models, encrypted provider keys, and the
-              tools the panel borrows over the bridge all live in the desktop app, so that is where
-              to start.
-            </Prose>
-            <ButtonRow>
-              <Button href="/desktop" variant="secondary">
-                See AGI Desktop
-              </Button>
-            </ButtonRow>
-          </Stack>
-        </Section>
+        <section className="agi-lp-close" aria-labelledby="agi-chrome-close-title">
+          <div className="agi-ds-container">
+            <div className="agi-lp-close-inner">
+              <h2 className="agi-ds-h2" id="agi-chrome-close-title">
+                AGI Desktop is the half of this{' '}
+                <em className="agi-ds-accent">that runs on your machine.</em>
+              </h2>
+              <Prose size="lg">
+                The extension is a browser client. Local models, encrypted provider keys, and the
+                tools the panel borrows over the bridge all live in the desktop app, so that is
+                where to start.
+              </Prose>
+              <ButtonRow>
+                <Button href="/download">Get notified</Button>
+                <Button href="/desktop" variant="secondary">
+                  See AGI Desktop
+                </Button>
+              </ButtonRow>
+            </div>
+          </div>
+        </section>
       </main>
       <MarketingFooter />
     </div>
