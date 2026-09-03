@@ -1,4 +1,3 @@
-
 import * as vscode from 'vscode';
 
 let _patchOutputChannel: vscode.OutputChannel | undefined;
@@ -97,7 +96,7 @@ export function applyPatch(document: vscode.TextDocument, patch: PatchBlock): Pa
   );
 
   if (patch.search === '') {
-    logPatch(`  -> Insert at beginning (empty search) — confidence: medium`);
+    logPatch(`  -> Insert at beginning (empty search), confidence: medium`);
     return {
       success: true,
       range: new vscode.Range(0, 0, 0, 0),

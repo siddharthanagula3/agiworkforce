@@ -1,9 +1,3 @@
-/**
- * contextUsage.webview.test.ts — composer context-window readout.
- *
- * @vitest-environment jsdom
- */
-
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { getWebviewContent } from '../features/sidebar-webview/webviewContent';
 

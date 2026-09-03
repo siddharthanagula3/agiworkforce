@@ -17,7 +17,7 @@ describe('cloud utility recovery actions', () => {
     );
 
     expect(vscode.window.showErrorMessage).toHaveBeenCalledWith(
-      'AGI Workforce: Request failed — Session expired.',
+      'AGI Workforce: Request failed, Session expired.',
       'Sign in',
     );
     expect(vscode.commands.executeCommand).toHaveBeenCalledWith('agi-workforce.signIn');
@@ -32,7 +32,7 @@ describe('cloud utility recovery actions', () => {
     );
 
     expect(vscode.window.showErrorMessage).toHaveBeenCalledWith(
-      'AGI Workforce: Request failed — Invalid key.',
+      'AGI Workforce: Request failed, Invalid key.',
       'Set API Key',
     );
     expect(vscode.commands.executeCommand).toHaveBeenCalledWith('agi-workforce.setApiKey');
@@ -45,7 +45,7 @@ describe('cloud utility recovery actions', () => {
     await showCloudUtilityErrorActions(error, { title: 'AGI Workforce: Request failed' });
 
     expect(vscode.window.showWarningMessage).toHaveBeenCalledWith(
-      'AGI Workforce: Request failed — IDE access requires Pro.',
+      'AGI Workforce: Request failed, IDE access requires Pro.',
       'Upgrade',
       'Manage billing',
     );
@@ -68,7 +68,7 @@ describe('cloud utility recovery actions', () => {
     await showCloudUtilityErrorActions(error, { title: 'AGI Workforce: Request failed' });
 
     expect(vscode.window.showWarningMessage).toHaveBeenCalledWith(
-      'AGI Workforce: Request failed — Update billing.',
+      'AGI Workforce: Request failed, Update billing.',
       'Manage billing',
     );
     expect(vscode.env.openExternal).toHaveBeenCalledWith(
@@ -86,7 +86,7 @@ describe('cloud utility recovery actions', () => {
     );
 
     expect(vscode.window.showErrorMessage).toHaveBeenCalledWith(
-      'AGI Workforce: Request failed — Please wait.',
+      'AGI Workforce: Request failed, Please wait.',
       'Retry',
     );
     expect(retry).toHaveBeenCalledOnce();

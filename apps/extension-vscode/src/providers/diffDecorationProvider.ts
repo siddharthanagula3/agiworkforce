@@ -311,7 +311,7 @@ export class DiffDecorationProvider implements vscode.Disposable {
       this._removeSession(sessionId);
     } else {
       vscode.window.showWarningMessage(
-        'AGI Workforce: Could not apply diff — document may have changed.',
+        'AGI Workforce: Could not apply diff, document may have changed.',
       );
     }
     return applied;

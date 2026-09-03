@@ -1,20 +1,3 @@
-/**
- * runtimePill.webview.test.ts — the header trust-boundary pill.
- *
- * VSCX-06: the pill was hardcoded in the HTML as a teal dot labelled
- * "Local host" with title "Workspace-local runtime". It never consulted any
- * state, so it made that claim on BYOK and on Managed Cloud too — the one
- * indicator a user would check to see whether their prompts leave the machine
- * asserted "local" no matter where they actually went.
- *
- * Local, BYOK and Managed Cloud are separate trust boundaries. Account usage
- * is not routing authority, so these tests assert that the pill stays neutral
- * until the CLI's session boundary arrives and cannot be overwritten by a
- * later account refresh.
- *
- * @vitest-environment jsdom
- */
-
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { getWebviewContent } from '../features/sidebar-webview/webviewContent';
 

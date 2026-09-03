@@ -1,17 +1,3 @@
-/**
- * usageBuckets.webview.test.ts — BILL-50.
- *
- * `/api/usage` publishes four independent limits (rolling session, rolling
- * week, the flagship share of that week, and the billing period), each with its
- * own reset time. The VS Code meter read only `usage_percentage` /
- * `usage_reset_at`, so a developer one percent from a session cut-off saw a
- * healthy billing-period bar and a reset day that had nothing to do with the
- * limit about to stop them. These tests pin the whole chain: raw summary JSON →
- * schema → meter → webview payload → rendered rows.
- *
- * @vitest-environment jsdom
- */
-
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type * as vscode from 'vscode';
 import { managedUsageBucketLabel } from '@agiworkforce/types';

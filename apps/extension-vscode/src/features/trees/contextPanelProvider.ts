@@ -1,4 +1,3 @@
-
 import * as vscode from 'vscode';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -60,7 +59,7 @@ export class ContextItem extends vscode.TreeItem {
     this.contextValue = isPinned ? 'pinnedFile' : 'autoFile';
     this.iconPath = new vscode.ThemeIcon(isPinned ? 'pinned' : isActive ? 'circle-filled' : 'file');
     this.accessibilityInformation = {
-      label: `${path.basename(filePath)} — ${isPinned ? 'pinned' : isActive ? 'active' : 'context'} file`,
+      label: `${path.basename(filePath)}, ${isPinned ? 'pinned' : isActive ? 'active' : 'context'} file`,
       role: 'treeitem',
     };
     this.command = {
@@ -109,7 +108,7 @@ class InstructionContextItem extends vscode.TreeItem {
     this.contextValue = 'instructionContext';
     this.iconPath = new vscode.ThemeIcon(icon);
     this.accessibilityInformation = {
-      label: `${label} — ${description}`,
+      label: `${label}, ${description}`,
       role: 'treeitem',
     };
   }

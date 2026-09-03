@@ -1,5 +1,5 @@
 <!--
-  This file is the VS Code Marketplace "Details" page — it ships byte-identical
+  This file is the VS Code Marketplace "Details" page, it ships byte-identical
   inside the VSIX. Keep it user-facing; every claim here must be true of the
   packaged extension. Contributor and architecture notes live in AGENTS.md,
   which .vscodeignore excludes from the VSIX.
@@ -21,7 +21,7 @@ driven by the AGI CLI running on your own machine.
 ## Requirements
 
 - VS Code 1.100 or newer.
-- **AGI CLI 1.7.1 or newer** available as `agi` on your `PATH` — chat, agent runs, and
+- **AGI CLI 1.7.1 or newer** available as `agi` on your `PATH`, chat, agent runs, and
   session history all run through the local `agi app-server` process. If the
   binary lives elsewhere, point `agiWorkforce.cliPath` at it.
 - A trusted workspace. In a restricted workspace, agent file writes are
@@ -56,7 +56,7 @@ before anything is sent, and the current editor selection can be included as
 context.
 
 **Reviewable edits, never surprise writes.** Proposed changes open in VS
-Code's native diff view. Accept or reject per hunk, per file, or globally —
+Code's native diff view. Accept or reject per hunk, per file, or globally.
 `Ctrl/Cmd+Shift+A` accepts and `Ctrl/Cmd+Shift+R` rejects the diff under the
 cursor. `agiWorkforce.autoApplyFixes` is off by default.
 
@@ -92,17 +92,17 @@ The most used ones:
 | Command                              | Default keybinding                     |
 | ------------------------------------ | -------------------------------------- |
 | AGI Workforce: Open Chat             | `Ctrl+Shift+A` / `Cmd+Shift+A`         |
-| AGI Workforce: Open Chat in Editor   | —                                      |
+| AGI Workforce: Open Chat in Editor   | ,                                      |
 | AGI Workforce: New Conversation      | `Ctrl+Shift+Alt+N` / `Cmd+Shift+Alt+N` |
 | AGI Workforce: Explain Selection     | `Ctrl+Shift+Alt+E` / `Cmd+Shift+Alt+E` |
 | AGI Workforce: Ask About Code        | `Ctrl+Shift+Alt+A` / `Cmd+Shift+Alt+A` |
 | AGI Workforce: Explain Error         | `Ctrl+Shift+Alt+X` / `Cmd+Shift+Alt+X` |
 | AGI Workforce: Agent Mode            | `Ctrl+Shift+Alt+G` / `Cmd+Shift+Alt+G` |
 | AGI Workforce: Run Terminal Command  | `Ctrl+Shift+Alt+T` / `Cmd+Shift+Alt+T` |
-| AGI Workforce: Select Model          | —                                      |
-| AGI Workforce: Restart Local Runtime | —                                      |
-| AGI Workforce: Account & Usage       | —                                      |
-| AGI Workforce: Send Feedback         | —                                      |
+| AGI Workforce: Select Model          | ,                                      |
+| AGI Workforce: Restart Local Runtime | ,                                      |
+| AGI Workforce: Account & Usage       | ,                                      |
+| AGI Workforce: Send Feedback         | ,                                      |
 
 ## Settings
 
@@ -144,8 +144,8 @@ explanations.
   `.pem`, `.ssh/`, credentials, `secrets.json`, and similar) are excluded.
 - Credentials from browser sign-in are stored in VS Code `SecretStorage` and
   can be revoked with **AGI: Sign out of AGI Cloud**.
-- The chat header always names the boundary in use — Local, BYOK, or Managed
-  Cloud — and switching a live session across a provider boundary starts a new
+- The chat header always names the boundary in use, Local, BYOK, or Managed
+  Cloud, and switching a live session across a provider boundary starts a new
   thread instead of forwarding the earlier transcript.
 
 ## Support

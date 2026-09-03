@@ -124,7 +124,7 @@ async function waitForPersistedTurn(
   throw new Error(`managed session ${threadId} did not persist the completed response`);
 }
 
-suite('AGI Workforce extension — smoke', () => {
+suite('AGI Workforce extension, smoke', () => {
   test('extension activates and is found by id', async () => {
     const ext = vscode.extensions.getExtension('agiworkforce.agi-workforce');
     assert.ok(ext, 'extension agiworkforce.agi-workforce not found');

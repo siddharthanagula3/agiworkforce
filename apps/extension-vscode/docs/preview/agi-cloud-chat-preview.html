@@ -3,9 +3,9 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>AGI for VS Code — Cloud Chat Preview (superseded)</title>
+    <title>AGI for VS Code, Cloud Chat Preview (superseded)</title>
     <!--
-      SUPERSEDED DESIGN EXPLORATION — NOT the shipped extension.
+      SUPERSEDED DESIGN EXPLORATION, NOT the shipped extension.
 
       Status: Superseded
       Owner: Extension lead
@@ -15,7 +15,7 @@
       (commit 7c75c22e2, 2026-06-13). The extension that ships is local-first:
       chat, agent runs and session history are hosted by the local `agi
       app-server`, sign-in is optional and only unlocks the cloud-backed extras,
-      and the chat header names the active boundary — Local, BYOK, or Managed
+      and the chat header names the active boundary, Local, BYOK, or Managed
       Cloud. See ../../README.md and docs/architecture/trust-boundaries.md.
       Kept only as a visual reference for the palette and layout; every
       capability statement inside it is stale.
@@ -895,7 +895,7 @@
               setActive('t-in');
             "
           >
-            Signed in — chat
+            Signed in, chat
           </button>
           <button
             id="t-out"
@@ -904,7 +904,7 @@
               setActive('t-out');
             "
           >
-            Signed out — sign in
+            Signed out, sign in
           </button>
         </div>
       </div>
@@ -912,7 +912,7 @@
       <div class="vscode">
         <div class="titlebar">
           <span class="dot r"></span><span class="dot y"></span><span class="dot g"></span>
-          <span class="title">api.ts — agiworkforce</span>
+          <span class="title">api.ts, agiworkforce</span>
           <span class="editor-tag">VS Code · Cursor · Windsurf · Antigravity</span>
         </div>
         <div class="body">
@@ -1095,7 +1095,7 @@ if (!res.ok) throw new ChatError(res.status);</pre
             <div class="composer">
               <div class="box">
                 <div class="ta">
-                  <span class="ph">Ask AGI anything — or describe a change…</span>
+                  <span class="ph">Ask AGI anything, or describe a change…</span>
                 </div>
                 <div class="row">
                   <span class="mpill"
@@ -1137,7 +1137,7 @@ if (!res.ok) throw new ChatError(res.status);</pre
               ></span>
               <h2>Sign in to AGI</h2>
               <p>
-                Your AGI Cloud workspace — chat, projects, memory and usage, shared across every
+                Your AGI Cloud workspace, chat, projects, memory and usage, shared across every
                 device.
               </p>
               <button class="btn">Sign in to AGI Cloud</button>
@@ -1155,15 +1155,15 @@ if (!res.ok) throw new ChatError(res.status);</pre
       </div>
 
       <p class="caption">
-        <b>Superseded — visual reference only.</b> This mock was drawn for a cloud-only rebrand of
+        <b>Superseded, visual reference only.</b> This mock was drawn for a cloud-only rebrand of
         the extension that was not kept. The shipped extension is local-first: chat, agent runs and
         session history are hosted by the local <code>agi app-server</code>, sign-in is optional and
-        only unlocks the cloud-backed extras, and the chat header names the active boundary — Local,
+        only unlocks the cloud-backed extras, and the chat header names the active boundary, Local,
         BYOK, or Managed Cloud. Read no capability claim off this page.
       </p>
       <p class="caption">
-        <b>Preview v2 — website palette.</b> Cool near-black <b>#09090b</b>, grey surfaces,
-        off-white ink, with the Linear <b>indigo #5e6ad2</b> as the single accent — and the real
+        <b>Preview v2, website palette.</b> Cool near-black <b>#09090b</b>, grey surfaces, off-white
+        ink, with the Linear <b>indigo #5e6ad2</b> as the single accent, and the real
         <b>12-spoke AGI mark</b>, rendered mono. Toggle to see the signed-in chat and the “Sign in
         to AGI” states.
       </p>

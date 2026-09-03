@@ -1,4 +1,3 @@
-
 import * as vscode from 'vscode';
 import * as path from 'path';
 
@@ -31,11 +30,11 @@ export async function loadProjectInstructionSources(): Promise<ProjectInstructio
       const truncated = raw.length > MAX_FILE_BYTES;
       const content = truncated
         ? raw.slice(0, MAX_FILE_BYTES) +
-          `\n\n[...truncated — file is ${raw.length} chars, showing first ${MAX_FILE_BYTES}]`
+          `\n\n[...truncated, file is ${raw.length} chars, showing first ${MAX_FILE_BYTES}]`
         : raw;
       sources.push({ fileName, uri, content, truncated });
     } catch {
-      // File does not exist or is unreadable — skip silently.
+      // noop
     }
   }
 

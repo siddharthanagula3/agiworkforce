@@ -1,4 +1,3 @@
-
 import * as vscode from 'vscode';
 import { chatCompletion, type LlmChatMessage } from '../utils/api';
 import { applyLlmEdit } from '../platform/applyEdit';
@@ -123,7 +122,7 @@ async function explainErrorCommand(context: vscode.ExtensionContext): Promise<vo
 
 async function askAboutCodeCommand(context: vscode.ExtensionContext): Promise<void> {
   const question = await vscode.window.showInputBox({
-    title: 'AGI Workforce — Ask About Code',
+    title: 'AGI Workforce, Ask About Code',
     prompt: 'Ask anything about your code…',
     placeHolder: 'e.g. "Why does this function return undefined?"',
     ignoreFocusOut: true,
@@ -177,7 +176,7 @@ async function askAboutCodeCommand(context: vscode.ExtensionContext): Promise<vo
         progress.report({ increment: 100 });
 
         const doc = await vscode.workspace.openTextDocument({
-          content: `# AGI Workforce — Answer\n\n**Q:** ${question.trim()}\n\n---\n\n${result}`,
+          content: `# AGI Workforce, Answer\n\n**Q:** ${question.trim()}\n\n---\n\n${result}`,
           language: 'markdown',
         });
         await vscode.window.showTextDocument(doc, {

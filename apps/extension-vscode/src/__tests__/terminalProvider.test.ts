@@ -47,7 +47,7 @@ function offerSuggestions(response: string, choose: (items: SuggestionItem[]) =>
   vi.mocked(vscode.window.showWarningMessage).mockResolvedValue('Run Command' as never);
 }
 
-describe('F19 (CWE-88) — AI-suggested commands may not smuggle code past the allowlist', () => {
+describe('F19 (CWE-88), AI-suggested commands may not smuggle code past the allowlist', () => {
   // Every command here passes the old gate (allowlisted first token, none of
   // $ ` ; | & < >, no destructive pattern) and still reaches a shell.
   const BYPASSES = [
@@ -216,7 +216,7 @@ describe('F19 (CWE-88) — AI-suggested commands may not smuggle code past the a
   });
 });
 
-describe('F19 — the gate is wired to terminal.sendText, not just exported', () => {
+describe('F19, the gate is wired to terminal.sendText, not just exported', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vscode.window.terminals = [];

@@ -71,13 +71,13 @@ function run() {
   const totalFiles = files.length;
   const totalFindings = allFindings.reduce((s, r) => s + r.findings.length, 0);
 
-  let md = `# a11y Audit — VS Code Extension\n\n`;
+  let md = `# a11y Audit, VS Code Extension\n\n`;
   md += `Date: ${date}  \n`;
   md += `Files scanned: ${totalFiles}  \n`;
   md += `Findings: ${totalFindings}\n\n`;
 
   if (totalFindings === 0) {
-    md += `## Result\n\nNo findings — all detected icon-buttons and TreeItem icon sites have an accessible label nearby.\n`;
+    md += `## Result\n\nNo findings, all detected icon-buttons and TreeItem icon sites have an accessible label nearby.\n`;
   } else {
     md += `## Findings\n\n`;
     md += `These sites use icon-only buttons or icon-bearing TreeItems without a detectable \`aria-label\` or \`accessibilityInformation\` within ±5 lines. Review each manually.\n\n`;

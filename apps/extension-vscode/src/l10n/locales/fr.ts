@@ -3,9 +3,9 @@ const fr = {
   'applyEdit.applyInline': 'Appliquer sur place',
   'applyEdit.viewInNewTab': 'Ouvrir dans un nouvel onglet',
   'applyEdit.autoApplyFailed':
-    "AGI Workforce : impossible d'appliquer automatiquement la modification — le document a peut-être changé.",
+    "AGI Workforce : impossible d'appliquer automatiquement la modification, le document a peut-être changé.",
   'applyEdit.applyFailed':
-    "AGI Workforce : impossible d'appliquer la modification — le document a peut-être changé.",
+    "AGI Workforce : impossible d'appliquer la modification, le document a peut-être changé.",
   'advancedFeatures.inlineNeedsCredential':
     "Les complétions en ligne d'AGI Workforce nécessitent une connexion AGI Cloud ou une clé d'API AGI.",
   'advancedFeatures.openAccount': 'Ouvrir le compte',
@@ -13,7 +13,7 @@ const fr = {
   'subsystemHealth.oneUnavailable': 'AGI : {subsystem} indisponible',
   'subsystemHealth.manyUnavailable': 'AGI : {count} sous-systèmes indisponibles',
   'subsystemHealth.detailsTooltip': 'Cliquez pour voir les détails',
-  'subsystemHealth.failuresTitle': 'AGI Workforce — Défaillances des sous-systèmes',
+  'subsystemHealth.failuresTitle': 'AGI Workforce, Défaillances des sous-systèmes',
   'subsystemHealth.failuresPlaceholder': 'Défaillances enregistrées durant cette session',
 };
 

@@ -1,4 +1,3 @@
-
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
@@ -343,7 +342,7 @@ export class DesktopBridge implements vscode.Disposable {
   private _wsSend(message: BridgeOutbound): boolean {
     if (!this._authOk && message.type !== 'Authenticate') {
       console.warn(
-        `[AGI Workforce Bridge] dropping outbound '${message.type}' — auth not complete.`,
+        `[AGI Workforce Bridge] dropping outbound '${message.type}', auth not complete.`,
       );
       return false;
     }

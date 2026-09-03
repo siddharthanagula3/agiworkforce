@@ -358,13 +358,6 @@ function formatResetsIn(resetsAt: string | null): string | null {
   return days === 0 ? 'resets today' : `resets in ${days}d`;
 }
 
-/**
- * Project a resolved {@link UsageMeter} into the webview payload.
- *
- * Every label comes from the resolved meter — no branch invents a quota, and
- * the non-managed branches reuse the shared trust-mode vocabulary so the banner
- * and the header pill cannot disagree about the boundary.
- */
 const USAGE_BUCKETS_EMPTY_LABEL = 'Per-limit breakdown unavailable';
 
 function buildUsageMeterBuckets(meter: ExtensionUsageMeter, nowMs: number): UsageMeterBucketRow[] {
@@ -1353,14 +1346,6 @@ export class ChatStateManager {
     });
   }
 
-  /**
-   * Push the usage meter for the model the next turn will actually dispatch.
-   *
-   * `source` doubles as the header trust-boundary pill (Local / BYOK / Cloud),
-   * so it is derived from {@link _providerBoundaryForModel} — the same
-   * classification that decides when a thread must be restarted on a boundary
-   * change — and never from a fixed literal.
-   */
   async pushUsageMeter(shouldPost: () => boolean = () => true): Promise<void> {
     const modelId = this._activeModel;
     const boundary = this._providerBoundaryForModel(modelId);

@@ -1,4 +1,3 @@
-
 import * as vscode from 'vscode';
 
 export class AgiHoverProvider implements vscode.HoverProvider {
@@ -18,7 +17,7 @@ export class AgiHoverProvider implements vscode.HoverProvider {
     }
 
     const md = new vscode.MarkdownString(
-      '**AGI Workforce** — ' +
+      '**AGI Workforce**, ' +
         '[$(info) Explain](command:agi-workforce.explain "Explain this code") · ' +
         '[$(wrench) Fix](command:agi-workforce.fix "Fix issues in selection") · ' +
         '[$(beaker) Tests](command:agi-workforce.generateTests "Generate tests")',

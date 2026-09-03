@@ -1,4 +1,3 @@
-
 import { getCoreManualModelOptions } from '@agiworkforce/types';
 import { describe, it, expect } from 'vitest';
 import { extractProvider, guardProviderSwitch } from '../integrations/providerSwitchGuard';
@@ -36,7 +35,7 @@ describe('extractProvider', () => {
   });
 });
 
-describe('guardProviderSwitch — same-provider switches are always allowed', () => {
+describe('guardProviderSwitch, same-provider switches are always allowed', () => {
   const TIERS = [
     'local',
     'byok',
@@ -60,7 +59,7 @@ describe('guardProviderSwitch — same-provider switches are always allowed', ()
   }
 });
 
-describe('guardProviderSwitch — auto-mode switches are always allowed', () => {
+describe('guardProviderSwitch, auto-mode switches are always allowed', () => {
   const TIERS = [
     'local',
     'byok',
@@ -84,7 +83,7 @@ describe('guardProviderSwitch — auto-mode switches are always allowed', () => 
   }
 });
 
-describe('guardProviderSwitch — cross-provider switch gating', () => {
+describe('guardProviderSwitch, cross-provider switch gating', () => {
   const BLOCKED_TIERS = ['local', 'byok', 'free', 'basic', 'pro', 'team'] as const;
   const ALLOWED_TIERS = ['max', 'max_15x', 'enterprise'] as const;
 
@@ -113,7 +112,7 @@ describe('guardProviderSwitch — cross-provider switch gating', () => {
   }
 });
 
-describe('guardProviderSwitch — unknown provider does not trigger gate', () => {
+describe('guardProviderSwitch, unknown provider does not trigger gate', () => {
   it('allows unknown→catalog model (unknown side is never gated)', () => {
     expect(guardProviderSwitch(SYNTHETIC_LOCAL_MODEL_ID, ANTHROPIC_PRIMARY, 'byok')).toBe('allow');
   });
