@@ -30,6 +30,14 @@ vi.mock('../VoiceInputButton', () => ({
   VoiceInputButton: () => <button type="button">Voice</button>,
 }));
 
+vi.mock('@features/connectors/hooks/use-connectors', () => ({
+  useConnectors: () => ({
+    connectedIds: new Set<string>(),
+    sources: {} as Record<string, string>,
+    customNames: {} as Record<string, string>,
+  }),
+}));
+
 describe('composer accuracy caveat', () => {
   it('renders unconditionally in the composer every chat entry point mounts', () => {
     render(<ChatComposerNew onSend={vi.fn()} />);

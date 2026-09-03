@@ -24,6 +24,14 @@ vi.mock('@features/chat/hooks/use-media-model-availability', () => ({
   }),
 }));
 
+vi.mock('@features/connectors/hooks/use-connectors', () => ({
+  useConnectors: () => ({
+    connectedIds: new Set<string>(),
+    sources: {} as Record<string, string>,
+    customNames: {} as Record<string, string>,
+  }),
+}));
+
 async function queue(text: string) {
   const textarea = screen.getByRole('textbox', { name: /message input/i });
   await userEvent.type(textarea, text);
