@@ -78,7 +78,7 @@ describe('createFrameCoalescedAppender', () => {
     runPendingFrames();
 
     expect(writes.length).toBeGreaterThan(0);
-    expect(writes[0].text.length).toBeLessThan(burst.length);
+    expect(writes[0]!.text.length).toBeLessThan(burst.length);
 
     const FRAME_STEP_MS = 16;
     let elapsedMs = 0;
