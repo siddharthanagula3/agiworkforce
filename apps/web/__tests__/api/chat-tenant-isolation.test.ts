@@ -1,4 +1,3 @@
-
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { NextRequest } from 'next/server';
 
@@ -24,12 +23,14 @@ vi.mock('next/headers', () => ({
 
 const mockQuery = vi.fn();
 const mockExecute = vi.fn();
-const mockRequireCurrentUserId = vi.fn();
+const mockGetUserScopedDb = vi.fn();
 
 vi.mock('@/lib/server/neon-chat', () => ({
-  getNeonChatDb: () => ({ query: mockQuery, execute: mockExecute }),
-  requireCurrentUserId: (...args: unknown[]) => mockRequireCurrentUserId(...args),
   normalizeMessageMetadata: (v: unknown) => v,
+}));
+
+vi.mock('@/lib/server/rls-db', () => ({
+  getUserScopedDb: (...args: unknown[]) => mockGetUserScopedDb(...args),
 }));
 
 vi.mock('@/lib/services/active-workspace-service', () => ({
@@ -53,7 +54,11 @@ function makeJsonRequest(url: string, body: unknown): NextRequest {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  mockRequireCurrentUserId.mockResolvedValue(ATTACKER);
+  mockGetUserScopedDb.mockResolvedValue({
+    db: { query: mockQuery, execute: mockExecute },
+    userId: ATTACKER,
+    organizationId: null,
+  });
 });
 
 describe('POST /api/chat/conversations/[id]/messages/bulk — IDOR guard (#17)', () => {

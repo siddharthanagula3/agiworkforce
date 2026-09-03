@@ -4,7 +4,7 @@ import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { requireCsrfToken } from '@/lib/csrf';
 import { createError } from '@/lib/errors';
-import { getNeonChatDb, requireCurrentUserId } from '@/lib/server/neon-chat';
+import { getUserScopedDb } from '@/lib/server/rls-db';
 import { failUnboundVideoGenerationTranscript } from '@/lib/server/video-generation-transcript';
 import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
 import { resolveActiveOrganizationId } from '@/lib/services/active-workspace-service';
@@ -30,7 +30,7 @@ const PatchMessageSchema = z.union([
 ]);
 
 async function handlePatchMessage(request: NextRequest, context: RouteContext) {
-  const userId = await requireCurrentUserId(request);
+  const { db, userId } = await getUserScopedDb(request);
 
   const csrfError = await requireCsrfToken(request);
   if (csrfError) return csrfError as NextResponse;
@@ -53,7 +53,6 @@ async function handlePatchMessage(request: NextRequest, context: RouteContext) {
   }
   const patch = result.data;
 
-  const db = getNeonChatDb();
   const organizationId = await resolveActiveOrganizationId(db, userId, request);
   const [conv] = await db.query<{ id: string }>(
     `select id
@@ -112,7 +111,7 @@ async function handlePatchMessage(request: NextRequest, context: RouteContext) {
 }
 
 async function handleDeleteMessage(request: NextRequest, context: RouteContext) {
-  const userId = await requireCurrentUserId(request);
+  const { db, userId } = await getUserScopedDb(request);
 
   const csrfError = await requireCsrfToken(request);
   if (csrfError) return csrfError as NextResponse;
@@ -122,7 +121,6 @@ async function handleDeleteMessage(request: NextRequest, context: RouteContext) 
 
   const { id: conversationId, messageId } = await context.params;
 
-  const db = getNeonChatDb();
   const organizationId = await resolveActiveOrganizationId(db, userId, request);
 
   const [conv] = await db.query<{ id: string }>(
