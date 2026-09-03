@@ -23,6 +23,14 @@ vi.mock('@features/chat/hooks/use-media-model-availability', () => ({
   }),
 }));
 
+vi.mock('@features/connectors/hooks/use-connectors', () => ({
+  useConnectors: () => ({
+    connectedIds: new Set<string>(),
+    sources: {} as Record<string, string>,
+    customNames: {} as Record<string, string>,
+  }),
+}));
+
 /**
  * M11. The resting composer measured ~130px at 390px against ChatGPT's ~87px,
  * and every contributing value was a single unconditional class: `p-2`/`py-3`

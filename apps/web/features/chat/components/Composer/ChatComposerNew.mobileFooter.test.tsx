@@ -26,6 +26,14 @@ vi.mock('@features/chat/hooks/use-media-model-availability', () => ({
   }),
 }));
 
+vi.mock('@features/connectors/hooks/use-connectors', () => ({
+  useConnectors: () => ({
+    connectedIds: new Set<string>(),
+    sources: {} as Record<string, string>,
+    customNames: {} as Record<string, string>,
+  }),
+}));
+
 /** Both shells gate their narrow layout on this query; `md:` is its complement. */
 const MOBILE_MEDIA_QUERY = '(max-width: 768px)';
 const FOOTER_ENTRY_SELECTOR = '[data-testid^="composer-footer-entry-"]';
