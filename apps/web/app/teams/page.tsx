@@ -7,6 +7,7 @@ import {
   ButtonRow,
   Eyebrow,
   Ledger,
+  ProductFrame,
   Prose,
   Section,
   Stack,
@@ -19,6 +20,32 @@ export const metadata = buildMetadata({
     'How team membership works in AGI: seats held by members and pending invitations, the owner, admin, member and viewer roles, invitations as expiring private links, shared projects and connectors, and the workspace console that sets approved models and integrations on managed cloud.',
   path: '/teams',
 });
+
+const BROWSER_DOTS = 3;
+
+const APPROVALS_SHOT = {
+  dark: '/product/agents-tool-approvals-dark.png',
+  light: '/product/agents-tool-approvals-light.png',
+  alt: 'The tool approvals screen, where the default answer for connector, plugin and tool actions is chosen',
+  width: 1132,
+  height: 584,
+  caption: ['Settings', 'Tool approvals'],
+} as const;
+
+const CONTROL_STATES = [
+  {
+    label: 'Enforced',
+    value: 'A server-side check refuses the request, whichever client it came from.',
+  },
+  {
+    label: 'Stated position',
+    value: 'Recorded for this workspace, with nothing acting on it at runtime yet.',
+  },
+  {
+    label: 'Not configured',
+    value: 'No row has been saved here, so the shipped default applies.',
+  },
+] as const;
 
 export default function TeamsPage() {
   return (
@@ -34,6 +61,26 @@ export default function TeamsPage() {
             { href: '/pricing#pricing-team-title', label: 'Choose Team seats' },
             { href: '/contact-sales', label: 'Enterprise sales', variant: 'secondary' },
           ]}
+          visual={
+            <div className="agi-lp-browser" style={{ alignSelf: 'start' }}>
+              <div className="agi-lp-browser-bar" aria-hidden="true">
+                <span className="agi-lp-browser-dots">
+                  {Array.from({ length: BROWSER_DOTS }, (_, position) => (
+                    <i key={position} />
+                  ))}
+                </span>
+              </div>
+              <ProductFrame
+                src={APPROVALS_SHOT.dark}
+                srcLight={APPROVALS_SHOT.light}
+                alt={APPROVALS_SHOT.alt}
+                width={APPROVALS_SHOT.width}
+                height={APPROVALS_SHOT.height}
+                caption={APPROVALS_SHOT.caption}
+                priority
+              />
+            </div>
+          }
         />
 
         <Section id="team-basics" labelledBy="agi-teams-basics-title" rule>
@@ -94,34 +141,13 @@ export default function TeamsPage() {
               <h2 className="agi-ds-h2" id="agi-teams-console-title">
                 Every control has a page, and the page says whether it binds.
               </h2>
-              <Prose>
-                The three states above describe what a control on this console can be in: a
-                server-side check refuses requests that violate it, the setting is recorded but
-                nothing acts on it yet, or no row has been saved and the shipped default applies.
-                Read each row below for which one currently holds: a recorded position is never
-                described the same way as an enforced one, which is the difference a security
-                reviewer is there to find.
-              </Prose>
             </div>
-            <FactGrid
-              items={[
-                {
-                  meta: 'Enforced',
-                  title: 'A server check refuses the request',
-                  body: 'It holds whichever client the request came from.',
-                },
-                {
-                  meta: 'Stated position',
-                  title: 'Recorded for this workspace',
-                  body: 'Nothing acts on it at runtime yet, and the console says so.',
-                },
-                {
-                  meta: 'Not configured',
-                  title: 'No row saved here',
-                  body: 'The shipped default applies until an owner saves one.',
-                },
-              ]}
-            />
+            <Ledger caption="What each control state means" rows={CONTROL_STATES} />
+            <Prose>
+              Read each row below for which of those three currently holds: a recorded position is
+              never described the same way as an enforced one, which is the difference a security
+              reviewer is there to find.
+            </Prose>
             <Ledger
               caption="What the workspace console governs"
               rows={[
