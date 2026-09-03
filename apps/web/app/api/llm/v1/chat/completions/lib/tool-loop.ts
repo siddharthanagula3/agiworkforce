@@ -47,7 +47,11 @@
 import 'server-only';
 
 import { logger } from '@/lib/logger';
-import { classifyError, type ClassifiedError } from '@agiworkforce/provider-runtime';
+import {
+  classifyError,
+  EmptyProviderResponseError,
+  type ClassifiedError,
+} from '@agiworkforce/provider-runtime';
 import { toolStatusPhrase } from '@agiworkforce/provider-protocol';
 import type {
   AgentEventEnvelope,
@@ -56,7 +60,7 @@ import type {
   AgentTaskState,
 } from '@agiworkforce/types/protocol';
 import type { InteractiveCard, ThinkingBlock } from '@agiworkforce/types';
-import { SECRET_HANDLING_MODE_DEFAULT } from '@agiworkforce/types';
+import { SECRET_HANDLING_MODE_DEFAULT, isAutoModeModelId } from '@agiworkforce/types';
 import { getNeonDb } from '@/lib/server/neon-db';
 import { recordAuditEvent } from '@/lib/security-audit';
 import { resolveSecretHandlingPolicy } from '@/lib/services/organization-policy-gate';
@@ -572,11 +576,31 @@ function offeredServerLabel(toolName: string, offeredTools: WebMcpToolDef[]): st
 }
 
 function canonicalStopReason(finishReason: string | null): AgentEventStopReason {
-  if (finishReason === 'length') return 'max-tokens';
+  if (finishReason === 'length' || finishReason === 'max_tokens') return 'max-tokens';
   if (finishReason === 'content_filter' || finishReason === 'refusal') return 'refusal';
   if (finishReason === 'cancelled' || finishReason === 'cancel') return 'cancelled';
   if (finishReason === 'error') return 'error';
   return 'end-turn';
+}
+
+const BLOCKED_FINISH_REASONS: ReadonlySet<string> = new Set(['refusal', 'content_filter']);
+const CANCELLED_FINISH_REASONS: ReadonlySet<string> = new Set(['cancelled', 'cancel']);
+
+function isBlockedFinishReason(finishReason: string | null): boolean {
+  return finishReason !== null && BLOCKED_FINISH_REASONS.has(finishReason);
+}
+
+function isCancelledFinishReason(finishReason: string | null): boolean {
+  return finishReason !== null && CANCELLED_FINISH_REASONS.has(finishReason);
+}
+
+function isEmptyProviderStep(result: ToolLoopProviderStepResult): boolean {
+  return (
+    result.pendingToolCalls.length === 0 &&
+    result.textContent.trim().length === 0 &&
+    result.publicTextTail.trim().length === 0 &&
+    result.generatedFileRefs.length === 0
+  );
 }
 
 function validCanonicalSources(sources: FetchedSource[]): FetchedSource[] {
@@ -2021,6 +2045,7 @@ export async function* runToolLoop(
   }
 
   let servingProcessed: ProcessedRequest = processed;
+  let emptyResponseRotationUsed = false;
 
   async function runProviderStepWithFailover(
     step: number,
@@ -2081,6 +2106,31 @@ export async function* runToolLoop(
               execute: executeProviderStep,
             })
           : await executeProviderStep();
+        // Unlike the exception path below, this does not gate on
+        // `liveLinesReachedClient`: every step's raw provider frames stream
+        // live regardless of finish reason (the same mechanism a normal
+        // multi-step tool call already relies on), so that flag is true by
+        // the time any step completes. `isEmptyProviderStep` is the correct
+        // safety check here -- it verifies directly that nothing visible
+        // (text, a tool call, an artifact) reached the client this step.
+        if (
+          !emptyResponseRotationUsed &&
+          options.failover &&
+          isAutoModeModelId(processed.requestedModel) &&
+          isEmptyProviderStep(result) &&
+          !isCancelledFinishReason(result.finishReason) &&
+          !isBlockedFinishReason(result.finishReason)
+        ) {
+          const rotated = options.failover.next(
+            new EmptyProviderResponseError(result.finishReason),
+            { step },
+          );
+          if (rotated) {
+            emptyResponseRotationUsed = true;
+            servingProcessed = rotated.processed;
+            continue;
+          }
+        }
         recordProviderStepSuccess({
           processed,
           attemptProcessed,
@@ -3097,6 +3147,18 @@ export async function* runToolLoop(
         for (const ref of providerStep.generatedFileRefs ?? []) {
           if (ref.fileId) providerGeneratedFileRefs.set(`${ref.provider}:${ref.fileId}`, ref);
         }
+        logger.info(
+          {
+            provider: servingProcessed.provider,
+            model: servingProcessed.llmRequest.model,
+            step,
+            finishReason: providerStep.finishReason,
+            outputTokens: providerStep.usage.outputTokens,
+            thoughtTokens: providerStep.usage.reasoningTokens,
+            maxOutputTokensRequested: stepRequest.max_tokens,
+          },
+          '[tool-loop] provider step finished',
+        );
       } catch (err) {
         if (options.shouldPropagateExecutionError?.(err)) throw err;
         const msg = err instanceof Error ? err.message : String(err);
@@ -3173,6 +3235,49 @@ export async function* runToolLoop(
       }
 
       if (finishReason !== 'tool_calls' || pendingToolCalls.length === 0) {
+        if (isEmptyProviderStep(providerStep) && !isCancelledFinishReason(finishReason)) {
+          const blocked = isBlockedFinishReason(finishReason);
+          const classified: ClassifiedError = blocked
+            ? {
+                category: 'content_blocked',
+                code: 'content_blocked',
+                retryable: false,
+                fallbackable: true,
+                message: 'The model blocked this response before returning any content.',
+              }
+            : {
+                category: 'empty_response',
+                code: 'empty_response',
+                retryable: false,
+                fallbackable: true,
+                message: 'The model finished without returning a response.',
+              };
+          logger.warn(
+            {
+              provider: servingProcessed.provider,
+              model: servingProcessed.llmRequest.model,
+              step,
+              finishReason,
+              code: classified.code,
+            },
+            '[tool-loop] provider step ended with no assistant text, tool call, or artifact',
+          );
+          const mappedUpstream = mapClassifiedUpstreamError(classified, servingProcessed.provider);
+          const streamError = {
+            message: mappedUpstream.message,
+            code: mappedUpstream.code,
+            retryable: classified.retryable,
+          };
+          yield encoder.encode(eventStream.emit({ type: 'error', ...streamError }));
+          yield encoder.encode(
+            sseData({
+              choices: [{ delta: { x_stream_error: streamError }, index: 0 }],
+              model: responseModel,
+            }),
+          );
+          yield* flushTerminal(blocked ? 'refusal' : 'error');
+          return;
+        }
         yield* flushTerminal(canonicalStopReason(finishReason));
         return;
       }
