@@ -56,6 +56,12 @@ import type {
   AgentTaskState,
 } from '@agiworkforce/types/protocol';
 import type { InteractiveCard, ThinkingBlock } from '@agiworkforce/types';
+import { SECRET_HANDLING_MODE_DEFAULT } from '@agiworkforce/types';
+import { getNeonDb } from '@/lib/server/neon-db';
+import { recordAuditEvent } from '@/lib/security-audit';
+import { resolveSecretHandlingPolicy } from '@/lib/services/organization-policy-gate';
+import { redactSecrets, scanForSecrets } from '@/lib/security/secrets-audit';
+import { isHighConfidenceSecretName } from '@/lib/security/secret-patterns';
 import type { McpInputRequiredState } from '@agiworkforce/mcp';
 import { getRoutePricing } from '@agiworkforce/model-registry';
 import type { RouteOutcomeClass } from '@agiworkforce/routing';
@@ -1789,6 +1795,81 @@ function recordProviderStepFailure(input: {
   }
 }
 
+function toolResultSecretBlockedMessage(toolName: string): string {
+  return `The result from "${toolName}" was blocked because it contained a secret. This organization's policy blocks sensitive values before they reach the model.`;
+}
+
+/**
+ * Applies the same organization secret-handling policy that
+ * `applySecretHandlingToRequest` (secret-handling-gate.ts) enforces on the
+ * inbound user turn, but to a tool RESULT before it is appended to the
+ * conversation and re-sent to the provider. A fetched URL, a connector
+ * response or a code-execution stdout is exactly as capable of carrying a
+ * live credential as anything a user typed, and none of it passed through
+ * the request-level gate.
+ *
+ * Exported for unit tests; every `messages.push({ role: 'tool', ... })` site
+ * in `runToolLoop` routes its content through this first.
+ */
+export async function applyToolResultSecretPolicy(
+  userId: string | undefined,
+  toolName: string,
+  content: string,
+): Promise<string> {
+  const detections = scanForSecrets(content);
+  if (detections.length === 0) return content;
+
+  const highConfidence = detections.filter((detection) =>
+    isHighConfidenceSecretName(detection.name),
+  );
+  const lowConfidence = detections.filter(
+    (detection) => !isHighConfidenceSecretName(detection.name),
+  );
+  const hasHighConfidence = highConfidence.length > 0;
+
+  const { mode, organizationId } = userId
+    ? await resolveSecretHandlingPolicy(getNeonDb(), userId)
+    : { mode: SECRET_HANDLING_MODE_DEFAULT.personal, organizationId: null as string | null };
+
+  const action: 'warned' | 'redacted' | 'blocked' = !hasHighConfidence
+    ? 'warned'
+    : mode === 'block'
+      ? 'blocked'
+      : mode === 'redact'
+        ? 'redacted'
+        : 'warned';
+
+  const relevantDetections = hasHighConfidence ? highConfidence : lowConfidence;
+  const patternNames = [...new Set(relevantDetections.map((detection) => detection.name))];
+
+  let nextContent = content;
+  if (action === 'redacted') {
+    const highConfidenceNames = new Set(highConfidence.map((detection) => detection.name));
+    nextContent = redactSecrets(content, highConfidenceNames);
+  } else if (action === 'blocked') {
+    nextContent = toolResultSecretBlockedMessage(toolName);
+  }
+
+  await recordAuditEvent({
+    userId,
+    organizationId,
+    eventType: 'secret_detected',
+    outcome: action === 'blocked' ? 'denied' : 'success',
+    severity: action === 'blocked' ? 'warning' : 'info',
+    detail: {
+      resourceType: 'tool_result',
+      resourceId: toolName,
+      source: patternNames.join(','),
+      count: relevantDetections.length,
+      status: action,
+    },
+  }).catch((error) => {
+    logger.error({ error, userId }, '[tool-loop] secret audit event could not be recorded');
+  });
+
+  return nextContent;
+}
+
 export async function* runToolLoop(
   processed: ProcessedRequest,
   options: ToolLoopOptions = {},
@@ -2416,7 +2497,11 @@ export async function* runToolLoop(
             elapsedMs: Math.max(0, Date.now() - (toolStartedAt.get(tc.id) ?? Date.now())),
           }),
         );
-        messages.push({ role: 'tool', content: failText, tool_call_id: tc.id });
+        messages.push({
+          role: 'tool',
+          content: await applyToolResultSecretPolicy(options.userId, tc.qualifiedName, failText),
+          tool_call_id: tc.id,
+        });
         continue;
       }
       if (!isError && toolAcceptsUntrustedContent(tc.qualifiedName)) {
@@ -2501,7 +2586,7 @@ export async function* runToolLoop(
 
       messages.push({
         role: 'tool',
-        content,
+        content: await applyToolResultSecretPolicy(options.userId, tc.qualifiedName, content),
         tool_call_id: tc.id,
       });
       if (!isError && interactiveCard && isMapSearchTool(tc.qualifiedName)) {
@@ -2747,7 +2832,11 @@ export async function* runToolLoop(
             yield encoder.encode(
               toolResultEvent(p.id, p.qualifiedName, content, true, responseModel),
             );
-            messages.push({ role: 'tool', content, tool_call_id: p.id });
+            messages.push({
+              role: 'tool',
+              content: await applyToolResultSecretPolicy(options.userId, p.qualifiedName, content),
+              tool_call_id: p.id,
+            });
           } else if (isToolOffered(p.qualifiedName, mcpTools, availableTools)) {
             toRun.push(p);
           } else {
@@ -2755,7 +2844,11 @@ export async function* runToolLoop(
             yield encoder.encode(
               toolResultEvent(p.id, p.qualifiedName, content, true, responseModel),
             );
-            messages.push({ role: 'tool', content, tool_call_id: p.id });
+            messages.push({
+              role: 'tool',
+              content: await applyToolResultSecretPolicy(options.userId, p.qualifiedName, content),
+              tool_call_id: p.id,
+            });
           }
           continue;
         }
@@ -2778,7 +2871,11 @@ export async function* runToolLoop(
           yield encoder.encode(
             toolResultEvent(p.id, p.qualifiedName, content, true, responseModel),
           );
-          messages.push({ role: 'tool', content, tool_call_id: p.id });
+          messages.push({
+            role: 'tool',
+            content: await applyToolResultSecretPolicy(options.userId, p.qualifiedName, content),
+            tool_call_id: p.id,
+          });
         } else if (
           decision === 'approved' &&
           isToolOffered(p.qualifiedName, mcpTools, availableTools)
@@ -2789,12 +2886,24 @@ export async function* runToolLoop(
           yield encoder.encode(
             toolResultEvent(p.id, p.qualifiedName, content, true, responseModel),
           );
-          messages.push({ role: 'tool', content, tool_call_id: p.id });
+          messages.push({
+            role: 'tool',
+            content: await applyToolResultSecretPolicy(options.userId, p.qualifiedName, content),
+            tool_call_id: p.id,
+          });
         } else {
           yield encoder.encode(
             toolResultEvent(p.id, p.qualifiedName, TOOL_DENIED_MESSAGE, false, responseModel),
           );
-          messages.push({ role: 'tool', content: TOOL_DENIED_MESSAGE, tool_call_id: p.id });
+          messages.push({
+            role: 'tool',
+            content: await applyToolResultSecretPolicy(
+              options.userId,
+              p.qualifiedName,
+              TOOL_DENIED_MESSAGE,
+            ),
+            tool_call_id: p.id,
+          });
         }
       }
 
@@ -3130,7 +3239,11 @@ export async function* runToolLoop(
             elapsedMs: 0,
           }),
         );
-        messages.push({ role: 'tool', content, tool_call_id: tc.id });
+        messages.push({
+          role: 'tool',
+          content: await applyToolResultSecretPolicy(options.userId, tc.qualifiedName, content),
+          tool_call_id: tc.id,
+        });
       }
 
       if (autoRunCalls.length > 0) {
