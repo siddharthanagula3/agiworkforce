@@ -12,6 +12,7 @@ import type { OpenAICompletionsCompatDefaults } from '@agiworkforce/provider-pro
 import {
   normalizeOpenAIStrictToolParameters,
   resolveOpenAIReasoningEffortForModel,
+  stripSystemPromptCacheBoundary,
 } from '@agiworkforce/provider-protocol';
 
 import type {
@@ -124,12 +125,13 @@ function extractInstructions(
   explicit?: ChatRequest['system'],
 ): string | undefined {
   if (explicit !== undefined) {
-    if (typeof explicit === 'string') return explicit;
-    return explicit.map((b: TextBlock) => b.text).join('\n\n');
+    const joined =
+      typeof explicit === 'string' ? explicit : explicit.map((b: TextBlock) => b.text).join('\n\n');
+    return stripSystemPromptCacheBoundary(joined);
   }
   const systems = messages.filter((m) => m.role === 'system');
   if (systems.length === 0) return undefined;
-  return systems
+  const joined = systems
     .map((m) => {
       if (typeof m.content === 'string') return m.content;
       return m.content
@@ -138,6 +140,7 @@ function extractInstructions(
         .join('\n\n');
     })
     .join('\n\n');
+  return stripSystemPromptCacheBoundary(joined);
 }
 
 function translateTool(tool: ToolDef, strict: boolean): ResponsesFunctionTool {

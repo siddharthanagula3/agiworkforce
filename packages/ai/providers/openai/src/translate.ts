@@ -12,6 +12,8 @@ import type { OpenAICompletionsCompatDefaults } from '@agiworkforce/provider-pro
 import {
   normalizeOpenAIStrictToolParameters,
   resolveOpenAIReasoningEffortForModel,
+  splitSystemPromptCacheBoundary,
+  stripSystemPromptCacheBoundary,
 } from '@agiworkforce/provider-protocol';
 
 import type {
@@ -145,8 +147,9 @@ function prependExplicitSystem(
   systemRole: 'system' | 'developer',
 ): OpenAIChatMessageParam[] {
   if (system === undefined) return messages;
-  const text =
+  const joined =
     typeof system === 'string' ? system : system.map((b: TextBlock) => b.text).join('\n\n');
+  const text = stripSystemPromptCacheBoundary(joined);
   if (messages[0]?.role === 'system' || messages[0]?.role === 'developer') {
     return [{ role: systemRole, content: text }, ...messages.slice(1)];
   }
@@ -209,15 +212,16 @@ function collectLeadingSystemMessageText(messages: ProviderMessage[]): string[] 
 
 export function derivePromptCacheKey(req: ChatRequest): string | undefined {
   const explicit = req.system;
-  const prefixText =
+  const joinedText =
     explicit !== undefined
       ? typeof explicit === 'string'
         ? explicit
         : explicit.map((b: TextBlock) => b.text).join('\n\n')
       : collectLeadingSystemMessageText(req.messages).join('\n\n');
-  if (!prefixText) return undefined;
+  const stablePrefixText = splitSystemPromptCacheBoundary(joinedText)?.stablePrefix ?? joinedText;
+  if (!stablePrefixText) return undefined;
   const digest = createHash('sha256')
-    .update(prefixText)
+    .update(stablePrefixText)
     .digest('hex')
     .slice(0, PROMPT_CACHE_KEY_DIGEST_LENGTH);
   return `${PROMPT_CACHE_KEY_PREFIX}_${digest}`;

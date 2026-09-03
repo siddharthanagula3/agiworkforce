@@ -1,4 +1,3 @@
-
 import type {
   ChatRequest,
   ContentBlock,
@@ -7,6 +6,7 @@ import type {
   TextBlock,
   ToolDef,
 } from '@agiworkforce/types';
+import { stripSystemPromptCacheBoundary } from '@agiworkforce/provider-protocol';
 
 import type { OllamaChatMessage, OllamaChatRequest, OllamaTool } from './types';
 
@@ -82,11 +82,8 @@ export function translateChatRequest(req: ChatRequest): OllamaChatRequest {
   const messages: OllamaChatMessage[] = [];
 
   if (req.system !== undefined) {
-    if (typeof req.system === 'string') {
-      messages.push({ role: 'system', content: req.system });
-    } else {
-      messages.push({ role: 'system', content: collapseTextBlocks(req.system) });
-    }
+    const text = typeof req.system === 'string' ? req.system : collapseTextBlocks(req.system);
+    messages.push({ role: 'system', content: stripSystemPromptCacheBoundary(text) });
   }
 
   for (const msg of req.messages) {
