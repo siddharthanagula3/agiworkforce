@@ -36,10 +36,35 @@ const STATUS_AS_OF = '23 August 2026';
  */
 const AUDIT_EXPORT_FILENAME = 'agi-audit-<workspace-id>-2026-08-23.jsonl';
 
-const AUDIT_EXPORT_SAMPLE = [
+const AUDIT_EXPORT_LINE_BREAK = '\n\n';
+
+const AUDIT_EXPORT_EVENTS = [
   '{"id":"1f8a4d6c-7b52-4a19-9e30-2c6d84b1f077","organizationId":"7d2c9b41-53e8-4f60-a1b7-9c0e5d8a3f24","actorUserId":"user_31Kk8fQpZ2mXvR7d","surface":"web","action":"data_exported","resourceType":"enterprise_audit_events","resourceId":"7d2c9b41-53e8-4f60-a1b7-9c0e5d8a3f24","outcome":"denied","severity":"warning","metadata":{"resourceType":"enterprise_audit_events","resourceId":"7d2c9b41-53e8-4f60-a1b7-9c0e5d8a3f24","reason":"audit_export_disabled"},"createdAt":"2026-08-23T16:41:07.402Z"}',
   '{"id":"0b73e5aa-1c94-4d28-8f57-3ae0629b4d11","organizationId":"7d2c9b41-53e8-4f60-a1b7-9c0e5d8a3f24","actorUserId":"user_31Kk8fQpZ2mXvR7d","surface":"web","action":"admin_policy_changed","resourceType":"organization_admin_policy","resourceId":"7d2c9b41-53e8-4f60-a1b7-9c0e5d8a3f24","outcome":"success","severity":"warning","metadata":{"resourceType":"organization_admin_policy","resourceId":"7d2c9b41-53e8-4f60-a1b7-9c0e5d8a3f24","role":"owner","status":"updated","changedKeys":["auditExportEnabled"]},"createdAt":"2026-08-23T09:02:44.517Z"}',
-].join('\n\n');
+];
+
+const AUDIT_EXPORT_SAMPLE = AUDIT_EXPORT_EVENTS.join(AUDIT_EXPORT_LINE_BREAK);
+
+const AUDIT_EXPORT_GLOB = 'agi-audit-*.jsonl';
+
+const AUDIT_EXPORT_HERO_FIELDS = ['action', 'outcome'] as const;
+
+const AUDIT_EXPORT_HERO_LINES = [
+  { kind: 'dim', text: '# two rows out of the JSONL your admin downloads' },
+  {
+    kind: 'cmd',
+    text: `jq -c '{${AUDIT_EXPORT_HERO_FIELDS.join(', ')}}' ${AUDIT_EXPORT_GLOB}`,
+  },
+  ...AUDIT_EXPORT_EVENTS.map((event) => {
+    const record = JSON.parse(event) as Record<string, string>;
+    return {
+      kind: 'out',
+      text: JSON.stringify(
+        Object.fromEntries(AUDIT_EXPORT_HERO_FIELDS.map((field) => [field, record[field]])),
+      ),
+    };
+  }),
+];
 
 export default function EnterprisePage() {
   return (
@@ -55,6 +80,19 @@ export default function EnterprisePage() {
             { href: '/contact-sales', label: 'Contact sales' },
             { href: '/trust', label: 'Read the dated trust ledger', variant: 'secondary' },
           ]}
+          visual={
+            <pre
+              className="agi-lp-terminal"
+              aria-label="Two rows read out of a downloaded audit export"
+              style={{ alignSelf: 'start' }}
+            >
+              {AUDIT_EXPORT_HERO_LINES.map((line) => (
+                <span className="agi-lp-terminal-line" data-kind={line.kind} key={line.text}>
+                  {line.text}
+                </span>
+              ))}
+            </pre>
+          }
         />
 
         {/*
