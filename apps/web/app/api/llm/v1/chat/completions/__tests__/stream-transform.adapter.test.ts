@@ -102,6 +102,42 @@ beforeEach(() => {
   mockCalculateCost.mockReturnValue(4);
 });
 
+describe('buildAdapterStreamResponse · secret redaction header', () => {
+  it('carries the secret redaction count when the prompt was redacted', async () => {
+    const response = await buildAdapterStreamResponse(
+      makeRequest() as any,
+      chunksOf([
+        { type: 'text-delta', delta: 'Hello' },
+        { type: 'stop', reason: 'end_turn' },
+      ]),
+      makeProcessed({ secretRedactionCount: 1 }),
+      'user-redacted',
+      'token-redacted',
+      1_700_000_000_000,
+      'legacy-web',
+    );
+    await readAllText(response as any);
+    expect(response.headers.get('X-AGI-Secret-Redaction-Count')).toBe('1');
+  });
+
+  it('omits the secret redaction header when nothing was redacted', async () => {
+    const response = await buildAdapterStreamResponse(
+      makeRequest() as any,
+      chunksOf([
+        { type: 'text-delta', delta: 'Hello' },
+        { type: 'stop', reason: 'end_turn' },
+      ]),
+      makeProcessed(),
+      'user-clean',
+      'token-clean',
+      1_700_000_000_000,
+      'legacy-web',
+    );
+    await readAllText(response as any);
+    expect(response.headers.has('X-AGI-Secret-Redaction-Count')).toBe(false);
+  });
+});
+
 describe('buildAdapterStreamResponse · wire bytes', () => {
   it('runs the successful-turn owner only after a clean provider stream', async () => {
     const onSuccessfulTurn = vi.fn(async () => undefined);

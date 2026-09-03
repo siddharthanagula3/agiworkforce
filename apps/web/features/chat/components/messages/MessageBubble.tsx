@@ -72,6 +72,7 @@ import {
   type GeneratedFile,
 } from '@agiworkforce/types';
 import { describeFallbackReason } from '@/lib/chat-fallback-reason';
+import { describeSecretRedactionNotice } from '@/lib/chat-secret-redaction-notice';
 import { isFreeRouteLane } from '@/features/chat/lib/routeLane';
 import { TranscriptNotice } from './TranscriptNotice';
 import {
@@ -364,6 +365,7 @@ interface Message {
     fallbackReason?: string;
     /** `X-AGI-Route-Lane` value naming the lane that served this turn. */
     routeLane?: string;
+    secretRedactionCount?: number;
     provider?: string;
     cost?: number;
     reasoningTokens?: number;
@@ -592,6 +594,10 @@ const MessageBubbleComponent = function MessageBubble({
   const fallbackNotice = describeFallbackReason(
     message.metadata?.fallbackReason,
     getModelMetadataById(message.model ?? message.metadata?.model)?.name,
+  );
+  const [secretRedactionNoticeDismissed, setSecretRedactionNoticeDismissed] = useState(false);
+  const secretRedactionNotice = describeSecretRedactionNotice(
+    message.metadata?.secretRedactionCount,
   );
   const [showThinking, setShowThinking] = useState(false);
   const [showContributions, setShowContributions] = useState(false);
@@ -2249,6 +2255,28 @@ const MessageBubbleComponent = function MessageBubble({
               </button>
             </div>
           )}
+
+          {!isUser &&
+            !message.isStreaming &&
+            !secretRedactionNoticeDismissed &&
+            secretRedactionNotice && (
+              <div
+                role="status"
+                data-testid="secret-redaction-notice"
+                className="mt-1.5 flex items-start gap-2 rounded-md border border-border/60 bg-muted/40 px-2 py-1.5 text-[12px] text-[var(--chat-text-muted)]"
+              >
+                <CircleAlert className="mt-[1px] h-3 w-3 shrink-0" aria-hidden="true" />
+                <span className="flex-1">{secretRedactionNotice}</span>
+                <button
+                  type="button"
+                  onClick={() => setSecretRedactionNoticeDismissed(true)}
+                  aria-label="Dismiss secret redaction notice"
+                  className="shrink-0 rounded underline-offset-2 hover:underline"
+                >
+                  Dismiss
+                </button>
+              </div>
+            )}
 
           {!isUser && !message.isStreaming && searchSources.length > 0 && (
             <div className="mt-2 flex justify-end">

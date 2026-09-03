@@ -1,4 +1,3 @@
-
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 vi.mock('server-only', () => ({}));
@@ -201,6 +200,49 @@ describe('buildNonStreamResponse golden fixture', () => {
     });
     expect(json.x_agi_workforce).not.toHaveProperty('cost_cents');
     expect(json.x_agi_workforce.cache).not.toHaveProperty('cost_saved_cents');
+  });
+
+  it('reports how many secrets were redacted from the prompt before it was sent', async () => {
+    const response = await buildNonStreamResponse(
+      makeRequest() as any,
+      {
+        model: 'fixture-model',
+        content: 'Hello there',
+        finishReason: 'stop',
+        promptTokens: 100,
+        completionTokens: 20,
+        totalTokens: 120,
+      },
+      makeProcessed({ secretRedactionCount: 2 }),
+      'user-001',
+      'token-001',
+    );
+
+    const json = await (response as any).json();
+    expect(json.x_agi_workforce.secret_redaction).toEqual({
+      count: 2,
+      message: '2 secrets were removed from this message before it was sent.',
+    });
+  });
+
+  it('omits secret_redaction when nothing was redacted', async () => {
+    const response = await buildNonStreamResponse(
+      makeRequest() as any,
+      {
+        model: 'fixture-model',
+        content: 'Hello there',
+        finishReason: 'stop',
+        promptTokens: 100,
+        completionTokens: 20,
+        totalTokens: 120,
+      },
+      makeProcessed(),
+      'user-001',
+      'token-001',
+    );
+
+    const json = await (response as any).json();
+    expect(json.x_agi_workforce).not.toHaveProperty('secret_redaction');
   });
 
   it('settles actual free-tier usage without publishing a numeric budget', async () => {

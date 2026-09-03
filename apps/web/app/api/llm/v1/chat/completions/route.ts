@@ -10,6 +10,7 @@ import {
   withCorsRoute,
 } from '@/lib/cors';
 import { addFallbackReasonHeader } from '@/lib/chat-fallback-reason';
+import { addSecretRedactionNoticeHeader } from '@/lib/chat-secret-redaction-notice';
 import { addRouteLaneHeader } from '@/lib/services/free-lane/plan';
 import { observeFreeLaneAttemptFailure } from '@/lib/services/free-lane/runtime-state-service';
 import {
@@ -329,6 +330,9 @@ async function dispatchChatCompletions(
       { status: 400, headers: getSecurityHeaders() },
     );
   }
+  if (secretHandling.action === 'redacted') {
+    processed.secretRedactionCount = secretHandling.matchCount;
+  }
 
   // Persist the external-side-effect boundary before any provider/tool loop
   // starts. A crash after this point is recovered customer-favorably by 0056;
@@ -486,6 +490,7 @@ async function dispatchChatCompletions(
         researchHeaders['X-Quota-Warning'] = processed.quotaWarningHeader;
       }
       addFallbackReasonHeader(researchHeaders, processed);
+      addSecretRedactionNoticeHeader(researchHeaders, processed);
       addRouteLaneHeader(researchHeaders, processed);
 
       // AUDIT-FIX BUG-8: the idle heartbeat was applied inside
@@ -585,6 +590,7 @@ async function dispatchChatCompletions(
           headers['X-Quota-Warning'] = processed.quotaWarningHeader;
         }
         addFallbackReasonHeader(headers, processed);
+        addSecretRedactionNoticeHeader(headers, processed);
         addRouteLaneHeader(headers, processed);
         // GOV-7: name the connectors whose tools did not fit under this plan's
         // ceiling so the client can surface it. Header-encoded because this is

@@ -13,6 +13,7 @@ import { extractJsonObject, wantsJsonObject } from './json-object-mode';
 import { mapClassifiedUpstreamError, type UpstreamErrorShape } from './upstream-error-copy';
 import { compactionUsageFields } from './context-window';
 import { addRouteLaneHeader } from '@/lib/services/free-lane/plan';
+import { describeSecretRedactionNotice } from '@/lib/chat-secret-redaction-notice';
 import {
   observeFreeLaneSettlement,
   recordRouteOutcome,
@@ -65,6 +66,7 @@ export async function buildNonStreamResponse(
     resolvedSlot,
     indicResult,
     freeTrial,
+    secretRedactionCount,
   } = processed;
 
   const actualCostCents = freeTrial
@@ -319,6 +321,12 @@ export async function buildNonStreamResponse(
         ...(freeTrial && {
           trial: {
             type: freeTrial.kind,
+          },
+        }),
+        ...(secretRedactionCount && {
+          secret_redaction: {
+            count: secretRedactionCount,
+            message: describeSecretRedactionNotice(secretRedactionCount),
           },
         }),
         cache: {
