@@ -253,14 +253,6 @@ const NEW_CHAT_TITLE = 'New Chat';
 const IMAGE_GENERATION_TITLE = 'Image generation';
 const VIDEO_GENERATION_TITLE = 'Video generation';
 
-/**
- * MEDIA-TITLE-03: titles the auto-titler is allowed to replace.
- *
- * These are the three literals the app itself assigns at creation time — never
- * something a user typed — so overwriting one with the first prompt is a repair,
- * not a surprise. Anything else (a rename, or a title this effect already set)
- * is left alone.
- */
 const AUTO_TITLE_PLACEHOLDERS: ReadonlySet<string> = new Set([
   NEW_CHAT_TITLE,
   IMAGE_GENERATION_TITLE,
@@ -404,13 +396,6 @@ export function resolveChatAccountDisplay(
 
   const settledDisplayName = displayName || 'User';
 
-  // An absent tier is NOT Free. `user` resolves from Clerk the moment the
-  // session hydrates (see resolveChatAccountUser), but `subscription` has no
-  // such fallback, so this ran with a real name beside an unknown plan and
-  // filled the gap with 'free'. A Basic subscriber was then shown "Free plan"
-  // with an Upgrade button that starts Stripe CHECKOUT — which the server
-  // refuses, correctly, because a second subscription alongside the existing
-  // one is a double charge. Render no tier until one is actually known.
   if (subscriptionTier == null) {
     return {
       displayName: settledDisplayName,
@@ -432,23 +417,7 @@ export function resolveChatAccountDisplay(
 
 export function toChatMessage(m: Message, conversationId: string): ChatMessage {
   const thinkingContent = m.metadata?.thinkingContent;
-  // MessageBubble renders `thinkingContent` as a ThinkingBlock above the
-  // message AND (separately) a "Thinking process" collapsible from
-  // `thinkingSteps`. Previously this derived thinkingSteps=[thinkingContent]
-  // whenever thinkingContent was set, so the same reasoning text rendered
-  // twice. Only pass through thinkingSteps when it's the model's own
-  // distinct multi-step breakdown (no thinkingContent present) — when
-  // thinkingContent exists, ThinkingBlock already owns showing it.
   const thinkingSteps = thinkingContent ? undefined : m.metadata?.thinkingSteps;
-  // Per-message usage. `messages.input_tokens` / `output_tokens` are written by
-  // the server's assistant-turn persistence and returned by the load path, but
-  // nothing lifted them into metadata — so `tokensUsed` had no producer and
-  // every per-message cost surface rendered empty.
-  //
-  // Sourced from the PERSISTED row rather than a stream frame on purpose: these
-  // are the settled numbers, they survive a reload, and adding a frame to the
-  // stream would break the byte-parity contract between the two response
-  // builders (see stream-transform.byte-parity.test.ts).
   const inputTokens = typeof m.inputTokens === 'number' ? m.inputTokens : undefined;
   const outputTokens = typeof m.outputTokens === 'number' ? m.outputTokens : undefined;
   const tokensUsed =
@@ -597,13 +566,6 @@ async function deleteConversationMessage(params: {
   return body.activeLeafMessageId ?? null;
 }
 
-/**
- * Records which variant the reader is on, so opening the chat again — here or on
- * another device — restores the answer they chose rather than the newest one.
- * Null returns the conversation to its linear reading, which is the state a
- * conversation is in before it has ever branched and the one it goes back to
- * once the path a leaf named is deleted.
- */
 async function putActiveLeafMessageId(params: {
   conversationId: string;
   activeLeafMessageId: string | null;
@@ -624,13 +586,6 @@ async function putActiveLeafMessageId(params: {
   }
 }
 
-/**
- * The two overrides the variants gate reads are client-only, so a server render
- * that honoured them would hand the browser an action row with a different
- * number of controls in it. `getServerSnapshot` pins the first client render to
- * the build default and React re-renders once hydration is done — the same
- * idiom ComposerInput uses for the composer editor gate.
- */
 const subscribeToMessageVariantsMode = () => () => {};
 
 function useMessageVariantsEnabled(): boolean {
@@ -777,18 +732,6 @@ function findHighlightableMessageElement(messageId: string): HTMLElement | null 
 export default function WebChatPage() {
   useArtifactCloudSync();
 
-  /**
-   * Destructive-action confirmation (shell-nav-ia-gap-01).
-   *
-   * Delete-conversation and delete-project used to call native `window.confirm()`
-   * from this page while the SAME project delete, reached from
-   * ProjectSettingsDialog, showed the styled AlertDialog with a red confirm.
-   * `useConfirm` is the shared promise-based wrapper around that exact
-   * AlertDialog primitive (packages/ui/ui/src/primitives/ConfirmDialog.tsx) — it
-   * existed with zero call sites in the whole repo. Same await-a-boolean shape
-   * as `window.confirm`, so the guards below read the same but the user sees the
-   * product's own dialog with a red confirm and specific consequence copy.
-   */
   const { confirm: confirmDestructive, dialog: destructiveConfirmDialog } = useConfirm();
 
   // Only a handful of strings on this surface are translated. Display language
@@ -819,11 +762,6 @@ export default function WebChatPage() {
     mql.addEventListener('change', update);
     return () => mql.removeEventListener('change', update);
   }, []);
-  // Compact viewports render the sidebar in the shared Sheet drawer instead of
-  // an in-flow rail; this tracks whether that drawer is open. The Radix dialog
-  // behind Sheet owns the modal contract — focus trap, Escape, scroll lock —
-  // so this page holds nothing but the open flag and the trigger it restores
-  // focus to.
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const mobileNavTriggerRef = useRef<HTMLButtonElement>(null);
   const [workSessionPanelOpen, setWorkSessionPanelOpen] = useState(false);
@@ -869,13 +807,6 @@ export default function WebChatPage() {
   const [composerPrefill, setComposerPrefill] = useState<string | undefined>(undefined);
   const handleComposerPrefillConsumed = useCallback(() => setComposerPrefill(undefined), []);
 
-  // Pending message edit (DATA-LOSS FIX). Clicking "Edit" on a user message
-  // prefills the composer; the destructive rollback (delete that message + all
-  // later messages) is DEFERRED to the actual resubmission via sendContent — and the
-  // delete itself is deferred to AFTER the resubmission commits (see
-  // sendReplacingMessages), so neither abandoning the edit nor a send that bails
-  // pre-commit can lose the original. `sendReplacingMessagesRef` bridges that helper to
-  // sendContent, which is declared long before it.
   const pendingEditRollbackRef = useRef<PendingEditRollback | null>(null);
   const sendReplacingMessagesRef = useRef<
     | ((
@@ -888,25 +819,6 @@ export default function WebChatPage() {
     | null
   >(null);
 
-  // First-message send guard (DEMO-BLOCKER FIX). A brand-new-chat send runs
-  // `createConversation` (which sets the store's `activeConversationId` +
-  // clears messages) and only THEN commits `bareChatSessionId` and appends the
-  // user/streaming-assistant messages. Between those two steps there is a render
-  // where the store is active but `displayedConversationId` is still null and
-  // neither `isStreaming` nor `isLoading` is set — which the stale-active
-  // reconciler (below) misreads as a stale homepage and nulls
-  // `activeConversationId`. That desync then makes the post-navigation
-  // `loadConversation` refetch fire and clobber the in-flight streaming
-  // assistant message (it never renders until a manual reload). This ref stays
-  // true for the whole `sendContent` lifetime so the reconciler never clears an
-  // active conversation mid-send. It is a ref (not state) so flipping it never
-  // triggers a render; the reconciler reads it at effect-run time.
-  //
-  // AUDIT-FIX STR-6/STR-26: a COUNT, not a boolean. Three call sites claim this
-  // window (sendContent, handleGenerateImage, handleConfirmHandoff) and they can
-  // overlap; a shared boolean let whichever finished first clear a window still
-  // owned by another, re-opening the exact race this guards. `claimSendWindow`
-  // hands each owner an idempotent release so the count can only be balanced.
   const activeSendCountRef = useRef(0);
   const claimSendWindow = useCallback(() => {
     activeSendCountRef.current += 1;
@@ -981,8 +893,6 @@ export default function WebChatPage() {
     (state) => state.isMutationInFlight,
   );
 
-  // Dialog state — lifted from ChatSidebar so they live at the page level and
-  // work with the shared <Sidebar> component (which has no dialog state).
   const [searchDialogOpen, setSearchDialogOpen] = useState(false);
   const [keyboardShortcutsOpen, setKeyboardShortcutsOpen] = useState(false);
 
@@ -1015,7 +925,6 @@ export default function WebChatPage() {
   // Skills, Plugins, and Connectors live in the Settings modal (single home).
   const { openSettings } = useSettingsModal();
 
-  // Project store — same data source already used by the filter dropdown in <Sidebar>
   const {
     projects: storeProjects,
     isReady: projectsReady,
@@ -1032,15 +941,6 @@ export default function WebChatPage() {
   const activeProjectId = useProjectStore((s) => s.activeProjectId);
   const setActiveProject = useProjectStore((s) => s.setActiveProject);
 
-  // Seed the active project from the URL. `?projectId=` is the ONE canonical
-  // entry param (sidebar project row "New chat" and the project-detail
-  // composer both emit it). Until this wiring nothing consumed it, so those
-  // entries silently dropped the project scope. The composer flips itself
-  // into AGI Work mode when it sees a preselected project.
-  // `projectsReady` is a dependency on purpose: the managed-cloud hydrate
-  // RESETS the store's activeProjectId to null when it lands (account-scope
-  // safety in project-store.ts), which would clobber a seed that ran on
-  // mount — re-seeding when readiness flips keeps the URL's intent.
   const urlProjectId = searchParams?.get('projectId') ?? null;
   useEffect(() => {
     if (urlProjectId) setActiveProject(urlProjectId);
@@ -1136,18 +1036,6 @@ export default function WebChatPage() {
     [handleOpenUpgradeDialog, openSettings],
   );
 
-  /**
-   * GOV-19 — the shared `Sidebar` has always exposed `showUsageWidget` /
-   * `budgetPercent` and rendered a threshold bar for them, but no call site in
-   * `apps/` or `packages/` passed either, so remaining quota was invisible in
-   * the chat surface. Turning the widget on without this wiring would have
-   * rendered a confident, permanent "0%", so the widget stays hidden until the
-   * first successful fetch resolves and `budgetPercent` is a real number.
-   *
-   * The percentage is the WORST of the billing-period, rolling 5-hour, rolling
-   * weekly and flagship-weekly windows — the one that will actually stop the
-   * next turn.
-   */
   const { usage: managedUsageSummary } = useManagedUsageSummary();
   /*
    * The one limit worth warning about, named in prose above the composer.
@@ -1226,7 +1114,6 @@ export default function WebChatPage() {
       modelLabel: selectedModel?.name ?? undefined,
       modelId: activeModelId,
       toolNames: sendPreviewToolNames,
-      // User-facing label only — never leak the internal gateway hostname.
       destinationHost: 'AGI managed cloud',
     });
   }, [activeModelId, selectedModel, sendPreviewToolNames]);
@@ -1320,16 +1207,6 @@ export default function WebChatPage() {
   );
   const activeLeafId = useChatStore(selectActiveLeafId(displayedConversationId));
   const allConversationRows = useChatStore(selectConversationAllRows(displayedConversationId));
-  /**
-   * Pager state for the transcript, held at a stable identity for as long as its
-   * content is unchanged.
-   *
-   * `allConversationRows` gets a new array on every streamed frame while saying
-   * nothing new about the tree. Recomputing is cheap; handing every MessageRow a
-   * new object 60 times a second is not — their comparators check this by
-   * reference, and a fresh identity per frame would re-render the whole
-   * transcript for the duration of every answer.
-   */
   const variantInfoRef = useRef<VariantInfoByMessageId>(EMPTY_VARIANT_INFO);
   const variantInfoByMessageId = useMemo(() => {
     const next = variantsEnabled
@@ -1412,9 +1289,6 @@ export default function WebChatPage() {
   // a disclosure/expiry dialog, and only the dialog's explicit confirmation
   // creates a public snapshot.
   const activeConversationTitle = displayedConversation?.title;
-  // Tab title follows the open conversation. Reuses the title already derived
-  // above rather than re-selecting it, so the two can never disagree — the
-  // Share dialog and the browser tab always name the same chat.
   useDocumentTitleSync(activeConversationId, activeConversationTitle);
   const [shareDialogOpen, setShareDialogOpen] = useState(false);
   const [exportDialogOpen, setExportDialogOpen] = useState(false);
@@ -1484,13 +1358,6 @@ export default function WebChatPage() {
     setShowNotifBanner(false);
   }, []);
 
-  /*
-   * A refused turn already states itself in the transcript as an
-   * InlinePaywallCard with its own recovery buttons. The generic error banner
-   * printed the identical sentence a second time at the top of the surface, in
-   * destructive red beside the card's warning amber — one condition, two
-   * severities, two copies.
-   */
   const showsInlinePaywall = useMemo(
     () =>
       displayedMessages.some(
@@ -1499,11 +1366,6 @@ export default function WebChatPage() {
     [displayedMessages],
   );
 
-  // "Reply ready" browser notification: fires once per completed stream while
-  // the tab is backgrounded. Previously the permission banner above only
-  // ever called Notification.requestPermission() — nothing consumed the
-  // grant, so no notification ever fired. Respects the user's saved
-  // "browserReplyReady" preference from Settings > Notifications.
   const wasStreamingRef = useRef(false);
   const browserReplyReady = useBrowserReplyReadyPreference();
 
@@ -1542,21 +1404,12 @@ export default function WebChatPage() {
   // the empty new-chat surface and create persistence only when the user sends.
   const routeInitializedRef = useRef(false);
   useEffect(() => {
-    // Wait for Clerk auth to resolve before loading a conversation by URL. While the
-    // session is still loading, loadConversation()'s getAuthHeaders throws and returns
-    // false — without this guard a valid conversation opened by direct or fast navigation
-    // gets wrongly redirected to /chat (losing it). Re-runs once authLoaded flips true.
     if (!authLoaded) return;
     if (routeInitializedRef.current && !urlConversationId) return;
     routeInitializedRef.current = true;
 
     if (urlConversationId) {
       if (urlConversationId !== activeConversationId) {
-        // A conversation this tab just created (or is actively streaming into)
-        // is already known locally — fetching it here races the write that
-        // made it and can 404 on read-after-write lag alone, even though the
-        // conversation is real and the turn is succeeding. Only fetch ids this
-        // tab doesn't already have a transcript for.
         const localState = useChatStore.getState();
         const knownLocally =
           localState.streamingConversationIds.includes(urlConversationId) ||
@@ -1598,9 +1451,6 @@ export default function WebChatPage() {
     urlConversationId,
   ]);
 
-  // The load-failure toast above carries a stable per-conversation id so a
-  // later success for the SAME resource can find and clear it — otherwise it
-  // sits on screen well past the point the conversation is confirmed good.
   useEffect(() => {
     if (!urlConversationId || activeConversationId !== urlConversationId) return;
     toast.dismiss(`conversation-unavailable-${urlConversationId}`);
@@ -1634,26 +1484,13 @@ export default function WebChatPage() {
         options.conversationId || urlConversationId || bareChatSessionId || NEW_CHAT_SEND_GUARD_KEY;
       const sendFingerprint = buildSendFingerprint(content, options.attachments);
       if (sendingConversationsRef.current.has(sendGuardKey)) {
-        // The in-flight call owns this exact content, so the composer must not
-        // take it back — this is a suppressed duplicate, not a lost message.
         if (inFlightSendFingerprintsRef.current.get(sendGuardKey) === sendFingerprint) return true;
-        // A DIFFERENT payload landed on a key a still-unsettled send already
-        // claimed — most often: attach a file, press Enter, then type and send
-        // again before the upload finishes. Restoring it into the composer
-        // right now would just be lost again: the winning call still has to
-        // run `ensureConversationId`, which RENAMES this placeholder to its
-        // real server id, and ChatComposerNew's own conversationId-keyed
-        // draft effect treats every rename as a conversation switch -- it
-        // unconditionally overwrites whatever is in the box with that new
-        // id's (empty) draft. Queue the restore for `releaseSendGuard` below
-        // instead, which the winning call only reaches once its own turn is
-        // durable, i.e. once the rename has already happened.
         pendingSendRestoresRef.current.set(sendGuardKey, () => {
           setComposerPrefill(content);
           if (options.attachments?.length) setRestoredAttachments(options.attachments);
         });
         toast.error(
-          'Your last message is still starting. This one was saved here — send it again in a moment.',
+          'Your last message is still starting. This one was saved here, send it again in a moment.',
         );
         return false;
       }
@@ -1752,10 +1589,6 @@ export default function WebChatPage() {
               const c = await createConversation(NEW_CHAT_TITLE, activeModelId, sendProjectId);
               if (!c) return null;
               resolvedFreshConvId = c.id;
-              // The composer's toggles live under the pending key until this
-              // conversation exists. Move them now, before the send reads them
-              // and before the route swaps — otherwise a chat started in Video
-              // or Image mode reverts to text the moment it gets an id.
               adoptPendingComposerToggles(c.id);
               if (!urlConversationId) setBareChatSessionId(c.id);
               // Navigate to the canonical /chat/[id] URL after the first message
@@ -1790,9 +1623,6 @@ export default function WebChatPage() {
             },
             attachments: resolvedAttachments,
             webSearch: options.meta?.webSearchEnabled,
-            // Search implies fetch (ChatGPT/Claude parity): with Search on, the model
-            // can also open URLs — Anthropic via its native web_fetch server tool,
-            // other providers via the platform url_fetch tool in the agentic loop.
             webFetch: options.meta?.webSearchEnabled,
             thinkingEnabled: options.meta?.thinkingEnabled,
             codeExecution: options.meta?.codeExecutionEnabled,
@@ -1806,11 +1636,6 @@ export default function WebChatPage() {
             mcpContext: options.meta?.mcpContext,
           });
 
-        // Deferred edit rollback: if this send is the resubmission of an edited
-        // message, replace the original message + everything after it. The delete is
-        // deferred to send time (not edit-click, so abandoning the edit loses nothing)
-        // AND to AFTER the resubmission commits (so a send that bails pre-commit does
-        // not lose the original) — see sendReplacingMessages.
         const pendingEdit = consumePendingEdit(pendingEditRollbackRef.current, convId);
         const replace = sendReplacingMessagesRef.current;
         if (pendingEdit && replace) {
@@ -1913,11 +1738,6 @@ export default function WebChatPage() {
   // and lets the server select the deployment's configured default.
   // ---------------------------------------------------------------------------
 
-  /**
-   * PER-29/PER-30 — the message's CURRENT metadata, so a failure patch can be
-   * built against it instead of replacing it. `updateMessage` shallow-merges
-   * the MESSAGE, so a `metadata` key overwrites the whole metadata object.
-   */
   const readMessageMetadata = useCallback(
     (conversationId: string | null, messageId: string): MessageMetadata | undefined => {
       if (!conversationId) return undefined;
@@ -1951,11 +1771,6 @@ export default function WebChatPage() {
           })
         : null;
       const content = paywall ? '' : `Image generation failed: ${raw}`;
-      // PER-30: `metadata: undefined` used to REPLACE the metadata object on
-      // the non-paywall branch (and the paywall branch replaced it with a
-      // paywall-only object), discarding imageGenPrompt / imageGenAspect /
-      // imageGenModel — exactly the fields Retry needs. Merge onto the current
-      // metadata instead so a failed image can still be retried.
       const metadata = imageGenerationFailureMetadata(readMessageMetadata(conversationId, msgId), {
         ...(paywall ? { paywall } : {}),
         ...(apiError?.resetAt ? { retryAt: apiError.resetAt } : {}),
@@ -2271,15 +2086,6 @@ export default function WebChatPage() {
         ownerConversationId,
       );
 
-      // PER-29: the pending state used to clear `metadata.imageUrl` and set
-      // `isStreaming: true` BEFORE awaiting the provider, with no try/catch
-      // around the await. Any failure therefore left a card spinning forever,
-      // with the original image already erased and nothing persisted — an
-      // unrecoverable state reachable by a single provider hiccup. The pending
-      // metadata now KEEPS `imageUrl` (so the previous image stays visible and
-      // is restorable), the await is wrapped, failure restores the retry
-      // parameters, and `isStreaming` is cleared in a `finally` that runs on
-      // every exit.
       const previousMetadata = readMessageMetadata(ownerConversationId, messageId);
       if (!tryAcquireImageTranscriptMutation([messageId])) {
         throw new Error(
@@ -3055,13 +2861,6 @@ export default function WebChatPage() {
         }
       }
 
-      // Local → BYOK trust boundary. `routeLocalToByokSend` owns the branch:
-      // when the active on-device conversation is about to continue onto a
-      // direct BYOK provider it opens the consent ceremony and `send` is never
-      // reached. There is deliberately no feature flag here — a literal that
-      // skips the ceremony would send on-device context to a third-party
-      // provider with no context selection, secret scan, payload preview or
-      // provider label, which the locked critical rule forbids.
       const decision = routeLocalToByokSend({
         sourceConversationId: displayedConversationId,
         conversation: displayedConversation,
@@ -3086,9 +2885,6 @@ export default function WebChatPage() {
         },
       });
 
-      // `false` keeps the composer's draft intact while the ceremony is open —
-      // the outgoing prompt is part of the context the user is reviewing, and
-      // cancelling must not lose it.
       if (decision === 'ceremony') return false;
     },
     [
@@ -3315,11 +3111,6 @@ export default function WebChatPage() {
 
   const handleDeleteSession = useCallback(
     async (id: string) => {
-      // Confirm before deleting so a stray click in the ... menu can never
-      // silently drop a conversation — matching the sibling project-delete
-      // guard (handleProjectDelete) and the mobile confirm. The shared-Sidebar
-      // migration dropped this confirmation that the prior ConversationListItem
-      // had; restore it for parity.
       const conversation = conversations.find((c) => c.id === id);
       const confirmed = await confirmDestructive(conversationDeleteConfirm(conversation?.title));
       if (!confirmed) return;
@@ -3431,22 +3222,9 @@ export default function WebChatPage() {
     setCreateProjectOpen(true);
   }, []);
 
-  /**
-   * Delete project from the store AND the server after an explicit
-   * confirmation so a stray click in the ... menu can never silently drop a
-   * project. Previously this only mutated the local Zustand store — the
-   * project (a server-side user_projects row) was never actually deleted,
-   * so it reappeared on the next reload once the mount-time server hydrate
-   * effect re-merged it back in. DELETE /api/projects/[id] already exists
-   * and soft-deletes the row; wire it here instead of only touching the
-   * client cache.
-   */
   const handleProjectDelete = useCallback(
     async (projectId: string) => {
       const project = storeProjects.find((p) => p.id === projectId);
-      // Same dialog the project-detail Settings pane already used for this exact
-      // action — the sidebar three-dot menu was the one route that still fell
-      // back to a native browser confirm.
       const confirmed = await confirmDestructive(projectDeleteConfirm(project?.name));
       if (!confirmed) return;
       // Optimistic remove, with rollback on server failure so the sidebar
@@ -3499,23 +3277,6 @@ export default function WebChatPage() {
     [storeProjects, activeProjectId, setActiveProject, handleComposerCreateProject],
   );
 
-  // Auto-title: when the second message arrives (first assistant reply), replace one
-  // of the app's own placeholder titles ('New Chat' / 'Image generation' / 'Video
-  // generation' — never a title a human typed) with a real one.
-  //
-  // WEB-85: this used to compute its own 60-char truncation of the first user message
-  // and PUT it. That write raced the server's two-stage titler (the messages route
-  // commits a truncation synchronously and an LLM-written title in the background) and
-  // re-truncated the generated title, which forced the server to whitelist this
-  // effect's exact output as safe-to-replace just to win its own race. The server is
-  // the only titler now: this effect READS the authoritative title and adopts it into
-  // the local store, so nothing here can clobber the generated one.
-  //
-  // The local truncation survives only as the fallback for conversations the server
-  // never titles — a temporary chat, whose messages are deliberately never persisted.
-  //
-  // Intentionally only re-runs on messages.length, not the full messages array, to
-  // avoid re-running on every streaming chunk.
   useEffect(() => {
     if (!displayedConversationId || displayedMessages.length !== 2) return;
     const conversationId = displayedConversationId;
@@ -3664,10 +3425,6 @@ export default function WebChatPage() {
     ],
   );
 
-  // Server-only delete (best-effort). Used by the data-loss-safe replace flow to drop
-  // the OLD turn's durable rows AFTER the replacement turn has committed. A stale or
-  // duplicate server row is strictly better than losing the exchange, so failures here
-  // are swallowed — the local transcript is already correct.
   const deleteServerMessages = useCallback(
     async (conversationId: string, ids: string[]): Promise<void> => {
       if (ids.length === 0) return;
@@ -3676,23 +3433,14 @@ export default function WebChatPage() {
       for (const messageId of ids) {
         try {
           await deleteConversationMessage({ conversationId, messageId, authToken });
-        } catch {
-          // best-effort — see above.
+        } catch (error) {
+          void error;
         }
       }
     },
     [getToken],
   );
 
-  // Data-loss-safe replace, shared by edit-resubmit and regenerate (DATA-LOSS FIX).
-  // Both used to delete the rolled-back turn (server + local) BEFORE the replacement
-  // send committed, so a send that bailed pre-commit (expired token, no conversation)
-  // lost the exchange permanently. Instead: snapshot the transcript, remove the old
-  // turn from the LOCAL store immediately (clean UI, no duplicate flash while the
-  // replacement streams), run the send, and only once it reports commit delete the old
-  // turn's durable SERVER rows. If the send never commits, restore the exact snapshot —
-  // the server rows were never touched, so nothing is lost. Worst case degrades from
-  // data-loss to at-most-a-duplicate-row-on-reload (reconciled by the server delete).
   const sendReplacingMessages = useCallback(
     async (
       rollbackIds: string[],
@@ -3758,11 +3506,6 @@ export default function WebChatPage() {
     [deletePersistedMessages],
   );
 
-  /**
-   * How many rows go with a response if it is deleted — everything descended
-   * from it, which is what the subtree mode takes. The confirm names this
-   * number, so it is walked at click time rather than per render.
-   */
   const countVariantFollowers = useCallback(
     (messageId: string) => {
       const conversationId = displayedConversationId;
@@ -3773,19 +3516,6 @@ export default function WebChatPage() {
     [displayedConversationId],
   );
 
-  /**
-   * Delete one answer among several, with the exchange that continued from it.
-   *
-   * The route's own leaf is applied rather than a locally resolved one: this
-   * client may hold a single page of the conversation, so the sibling the server
-   * descends into can be a row it has never loaded. Temporary conversations have
-   * no durable rows to delete, so they take the local removal alone — and with
-   * no server answer, the surviving sibling is resolved here.
-   *
-   * The whole branch is held against the image-transcript lock, not just the
-   * response the reader clicked: an image turn part-way through its save can sit
-   * anywhere under it, and deleting around it is the race that lock exists for.
-   */
   const handleDeleteVariant = useCallback(
     (messageId: string) => {
       const conversationId = displayedConversationId;
@@ -3904,15 +3634,6 @@ export default function WebChatPage() {
     [displayedConversationId, router],
   );
 
-  /**
-   * Every guard an edit of `id` has to clear, resolved against the CURRENT
-   * transcript. Returns the message plus its rollback plan, or null having
-   * already told the user why (toast / upgrade dialog).
-   *
-   * Shared by the three entry points below so opening the editor and saving from
-   * it can never disagree about whether the edit is allowed — the transcript can
-   * change while the editor is open.
-   */
   const planMessageEdit = useCallback(
     (id: string): { message: Message; plan: PendingEditRollback } | null => {
       if (!displayedConversationId || isStreaming) return null;
@@ -3985,9 +3706,6 @@ export default function WebChatPage() {
         setChatError(boundaryRefusal, conversationId);
         return;
       }
-      // Replay the options the ORIGINAL turn recorded (search / thinking /
-      // code / work mode / style), exactly as Regenerate does — the composer's
-      // current toggles are not what this message was sent with.
       const editedIndex = displayedMessages.findIndex((m) => m.id === id);
       const followingAssistant =
         editedIndex >= 0
@@ -4003,12 +3721,6 @@ export default function WebChatPage() {
       }
       const replayOptions = replayToSendOptions(replayDecision.replay);
 
-      // The revision becomes a sibling of the message it revises, and the
-      // original keeps the exchange it produced — reachable through the pager on
-      // either message. Local parents have to be stamped BEFORE the edited row's
-      // own parent is read: on a conversation that has never branched there is
-      // no parent to read yet, and the value decides whether this write branches
-      // or continues.
       if (variantsEnabled) {
         useChatStore.getState().ensureLocalThreadParents(conversationId);
         const editedRow = selectConversationAllRows(conversationId)(useChatStore.getState()).find(
@@ -4072,9 +3784,6 @@ export default function WebChatPage() {
         if (!planned) return;
         const conversationId = displayedConversationId;
         if (!conversationId) return;
-        // Nothing is destroyed once an edit branches — the original message and
-        // its reply stay behind the pager — so there is nothing to confirm. The
-        // dialog below belongs to the replacing path, which still deletes.
         const discarded = variantsEnabled ? 0 : planned.plan.rollbackIds.length - 1;
         if (discarded > 0) {
           void (async () => {
@@ -4100,13 +3809,6 @@ export default function WebChatPage() {
     [confirmDestructive, displayedConversationId, planMessageEdit, runSubmitEdit, variantsEnabled],
   );
 
-  /**
-   * Stable context identity. The handlers above close over `displayedMessages`,
-   * so they get a new identity on every streaming chunk — publishing THAT
-   * straight to the provider would re-render every MessageBubble in the
-   * transcript per chunk and defeat the list's memoization (see BUG-27/BUG-28).
-   * Same ref-bridge idiom as `sendReplacingMessagesRef` above.
-   */
   const messageInlineEditHandlersRef = useRef(messageInlineEditHandlers);
   messageInlineEditHandlersRef.current = messageInlineEditHandlers;
   const messageInlineEdit = useMemo<MessageInlineEditController>(
@@ -4240,13 +3942,6 @@ export default function WebChatPage() {
         return;
       }
 
-      // Replace the regenerated turn data-loss-safely: the old rows are deleted only
-      // AFTER the resend commits, and the transcript is restored if it bails pre-commit
-      // (shared with the edit path — see sendReplacingMessages).
-      // AUDIT-FIX STR-22: forward the early-commit hook so the regenerated
-      // turn's old server rows are dropped the moment the replacement user turn
-      // is durable, not at stream end (which left a reload mid-regeneration
-      // showing a duplicated user message beside the stale answer).
       await sendReplacingMessages(plan.rollbackIds, (onTurnCommitted) =>
         sendMessage(userMsg.content, {
           model: activeModelId,
@@ -4312,16 +4007,6 @@ export default function WebChatPage() {
     onRegenerateLastMessage: handleRegenerateLastMessage,
   });
 
-  /**
-   * Retry a Deep Research run that errored or was interrupted (CAP-045 slice 4).
-   *
-   * Goes through the SAME send path as any other turn — reservation, metering,
-   * quota gates, and the managed-usage lifecycle all apply exactly as they do
-   * to a first attempt. There is no client-side loop and no re-use of the
-   * original run's reservation: this is a new, separately billed request that
-   * merely starts with the previous attempt's material so it does not pay to
-   * repeat searches that already succeeded.
-   */
   const [retryingResearchMessageId, setRetryingResearchMessageId] = useState<string | null>(null);
   const handleRetryResearch = useCallback(
     async (id: string) => {
@@ -4397,14 +4082,6 @@ export default function WebChatPage() {
     [handleSend],
   );
 
-  /**
-   * Answer a Deep Research run the server paused for plan approval.
-   *
-   * Start re-sends the same question through the normal send path with the
-   * approved steps attached, so the searches that run are exactly the ones the
-   * user read. Cancel keeps the plan on screen but ends the turn — nothing was
-   * searched, and nothing pretends it was.
-   */
   const handleResearchPlanDecision = useCallback(
     async (id: string, decision: ResearchPlanDecision) => {
       if (!displayedConversationId || isStreaming) return;
@@ -4637,15 +4314,6 @@ export default function WebChatPage() {
     return count;
   }, [chatMessages]);
 
-  // Map web Conversation[] → SidebarSession[] for @agiworkforce/ui <Sidebar>.
-  // Web uses isPinned/isStarred/isArchived; shared sidebar uses pinned/starred/archived.
-  // shell-04 / agentic-modes-gap-03: the recents list said nothing about a
-  // conversation with a turn in flight, so a user who navigated away from a
-  // running chat had no way back to it except by remembering which one it was.
-  // The two id sets the store already maintains per conversation are the
-  // source — a background stream keeps its own row lit while another chat is on
-  // screen. Managed runs a DIFFERENT device started are not observable here and
-  // are deliberately not claimed as idle: `runState` is simply omitted.
   const loadingConversationIds = useChatStore((s) => s.loadingConversationIds);
   const streamingConversationIds = useChatStore((s) => s.streamingConversationIds);
   const runningConversationIds = useMemo(
@@ -4696,25 +4364,6 @@ export default function WebChatPage() {
     await clerkSignOut({ redirectUrl: '/login' });
   }, [clerkSignOut, logout]);
 
-  /**
-   * `?? 'free'` alone is not safe here. `/api/me` answering 401 clears
-   * `subscription` to null while setting `initialized` and recording no error,
-   * so the fallback renders a confident "Free" for whoever is actually signed
-   * in. Observed in the running app: a Max 15x subscriber opened Upgrade and
-   * saw Free marked "Your current plan" beside an "Upgrade to Basic — $7/month"
-   * button — a downgrade presented as an upgrade.
-   *
-   * There is no Free fallback at all, because there is nothing to fall back
-   * from: when /api/me succeeds the store always writes a subscription, and a
-   * genuinely free account carries tier 'free' from the server. So a null
-   * subscription never means "free" — it means "not known yet", and gating that
-   * on `billingPolicyReady` was not enough, since that returns true whenever
-   * /api/me settled without an error even though it leaves `subscription` null
-   * on the paths that do not populate it. Observed again on 2026-08-17: Basic
-   * and Max 15x accounts both rendered "Free plan" with an Upgrade button that
-   * starts Stripe checkout, which the server then refused with "Use the in-app
-   * upgrade flow" because a real subscription existed.
-   */
   const currentTier = subscription?.tier;
   const {
     displayName,
@@ -4778,9 +4427,6 @@ export default function WebChatPage() {
     </div>
   );
 
-  // collapsedFooterSlot: the icon rail has no room for the full account row,
-  // but still needs a way into Settings — without it, collapsing the sidebar
-  // hid Settings/help/logout entirely with no other entry point.
   const sidebarCollapsedFooterSlot = (
     <TooltipProvider>
       <DropdownMenu>
@@ -4820,7 +4466,6 @@ export default function WebChatPage() {
   }, [handleOpenSearch]);
   const handleSidebarOpenUsage = useCallback(() => {
     setMobileNavOpen(false);
-    // CRIT-008: open in place — /settings/usage only bounces to /chat.
     openSettings('usage');
   }, [openSettings]);
   const handleSidebarSelect = useCallback(
@@ -4890,9 +4535,6 @@ export default function WebChatPage() {
         shortcuts={KEYBOARD_SHORTCUT_DOCS}
       />
 
-      {/* Sidebar — @agiworkforce/ui shared component. Compact viewports move it
-          into the shared Sheet drawer (same primitive WebAppShell uses) instead
-          of an in-flow rail, so the conversation column gets the full width. */}
       {!isNarrowViewport && <Sidebar {...sharedSidebarProps} collapsed={sidebarCollapsed} />}
 
       {isNarrowViewport && (
@@ -4922,14 +4564,6 @@ export default function WebChatPage() {
         aria-hidden={isNarrowViewport && mobileNavOpen ? true : undefined}
         inert={isNarrowViewport && mobileNavOpen ? true : undefined}
       >
-        {/*
-         * sm:min-w-[360px] is a floor, not a preference. The three right-hand
-         * panels (Artifacts 480px, Work session 380px, Research 360px) were each
-         * sm:shrink-0, so opening two of them on a 1024px laptop consumed the
-         * entire row and this column — transcript AND composer — collapsed to
-         * zero width and disappeared. The panels now shrink to a 280px floor and
-         * this column holds 360px, so the conversation is always reachable.
-         */}
         <div className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden sm:min-w-[360px]">
           <div
             className={cn(
@@ -5178,10 +4812,6 @@ export default function WebChatPage() {
                 {/* Provide the manual tool-approval resolver to per-message
                     approval cards (MessageBubble consumes it via context). */}
                 <ToolApprovalProvider value={resolveToolApproval}>
-                  {/* CLR-05: lets a user message turn itself into an editor in
-                      place. Same context idiom as ToolApprovalProvider — the
-                      page owns the guards and the replacing resend; the bubble
-                      only owns whether its own editor is open. */}
                   <MessageInlineEditProvider value={messageInlineEdit}>
                     <InteractiveCardResumeProvider value={resumeInteractiveCardTurn}>
                       <ChatMessageList
@@ -5225,18 +4855,6 @@ export default function WebChatPage() {
                 </ToolApprovalProvider>
               </div>
 
-              {/* Composer + compact Send Preview disclosure. The disclosure is
-                  inside the composer footer so it cannot overlap suggestions or
-                  message content and no longer consumes a banner row.
-
-                  AUDIT-FIX CMP-1: `projectPicker` used to be passed ONLY to the
-                  empty-state composer in the other branch of this ternary, so
-                  sending the first message unmounted that instance, mounted this
-                  one, and the Chat | AGI Work toggle vanished — the conversation
-                  silently continued as plain chat from message 2 and
-                  `applyWorkMode` server-side only ever applied to turn 1. Both
-                  instances receive it now, and the mode itself lives in the chat
-                  store keyed by conversation so it survives the swap. */}
               <div className="shrink-0 pb-4">
                 <div className="mx-auto w-full max-w-3xl px-4">
                   {usageBanner}
@@ -5303,7 +4921,6 @@ export default function WebChatPage() {
         session={exportSession}
         messages={exportMessages}
       />
-      {/* Project settings dialog — opened from the sidebar project row context menu */}
       {projectForSettings && (
         <ProjectSettingsDialog
           open={Boolean(projectSettingsId)}
