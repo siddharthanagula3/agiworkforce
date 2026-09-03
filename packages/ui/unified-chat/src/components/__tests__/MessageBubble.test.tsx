@@ -161,6 +161,47 @@ describe('MessageBubble canonical agent activity', () => {
     expect(html).not.toContain('Legacy duplicate');
   });
 
+  it('keeps a distinct provider-authored completion summary instead of the generic constant', () => {
+    const html = renderToStaticMarkup(
+      <MessageBubble
+        message={{
+          id: 'assistant-provider-summary',
+          role: 'assistant',
+          content: 'Finished.',
+          metadata: {
+            agentActivity: {
+              schemaVersion: 1,
+              sessionId: 'session-2',
+              turnId: 'turn-2',
+              status: 'completed',
+              startedAtMs: 1_000,
+              updatedAtMs: 2_000,
+              completedAtMs: 2_000,
+              lastSequence: 2,
+              usage: {},
+              entries: [
+                {
+                  id: 'tool:canonical-tool-2',
+                  kind: 'tool',
+                  toolCallId: 'canonical-tool-2',
+                  name: 'web_search',
+                  category: 'web-search',
+                  summary: 'Found three matching changelog entries',
+                  status: 'completed',
+                  startedAtMs: 1_100,
+                  completedAtMs: 1_900,
+                },
+              ],
+            },
+          },
+        }}
+      />,
+    );
+
+    expect(html).toContain('Found three matching changelog entries');
+    expect(html).not.toContain('Searched the web');
+  });
+
   it('renders fallback tool activity when a completed canonical envelope has no tool entries', () => {
     const html = renderToStaticMarkup(
       <MessageBubble
