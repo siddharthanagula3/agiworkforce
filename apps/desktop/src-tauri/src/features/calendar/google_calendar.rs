@@ -16,8 +16,6 @@ const CALENDAR_READONLY_SCOPE: &str = "https://www.googleapis.com/auth/calendar.
 
 const CALENDAR_EVENTS_SCOPE: &str = "https://www.googleapis.com/auth/calendar.events";
 
-const CALENDAR_SCOPE: &str = "https://www.googleapis.com/auth/calendar";
-
 #[derive(Clone)]
 pub struct GoogleCalendarClient {
     client: Client,
@@ -34,7 +32,6 @@ impl GoogleCalendarClient {
             token_url: GOOGLE_TOKEN_URL.to_string(),
             redirect_uri,
             scopes: vec![
-                CALENDAR_SCOPE.to_string(),
                 CALENDAR_READONLY_SCOPE.to_string(),
                 CALENDAR_EVENTS_SCOPE.to_string(),
             ],
@@ -522,4 +519,26 @@ struct GoogleEventCreate {
     start: GoogleDateTime,
     end: GoogleDateTime,
     attendees: Option<Vec<GoogleAttendee>>,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn get_authorization_url_excludes_the_unrestricted_calendar_scope() {
+        let client = GoogleCalendarClient::new(
+            "test_client_id".to_string(),
+            "test_client_secret".to_string(),
+            "http://localhost:3000/callback".to_string(),
+        )
+        .expect("Failed to create client");
+
+        let (auth_url, pkce) = client.get_authorization_url("test_state");
+
+        assert!(auth_url.contains("calendar.readonly"));
+        assert!(auth_url.contains("calendar.events"));
+        assert_eq!(auth_url.matches("auth%2Fcalendar").count(), 2);
+        assert!(!pkce.code_verifier.is_empty());
+    }
 }

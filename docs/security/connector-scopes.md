@@ -149,15 +149,31 @@ Connector ids not in this table have no reviewed ceiling and are not filtered.
 That includes every `api-key`, `pat`, `connection-string`, and `device-local`
 entry in the catalog, none of which use an OAuth scope parameter at all.
 
-## Known gap this file does not fix
+## Desktop native scopes
 
-`apps/desktop` requests real, hardcoded OAuth scopes and two of them are wider
-than the advertised capability: `gmail.modify` in
-`apps/desktop/src-tauri/src/features/communications/gmail_oauth.rs` and the
-unrestricted `auth/calendar` in
-`apps/desktop/src-tauri/src/features/calendar/google_calendar.rs`. Section 3 and
-gap 2 of `docs/security/agent-authority-and-connector-scopes.md` already record
-both with line citations. The ceilings above are the web enforcement point and
-have no effect on the desktop client, which uses the user's own OAuth client.
-Narrowing the desktop scopes is a behaviour change in Rust code and is tracked
-separately.
+`apps/desktop` requests real, hardcoded OAuth scopes against Google directly,
+using the user's own OAuth client. The ceilings above are the web enforcement
+point and have no effect on the desktop client, so this table is a second,
+separate record of what the desktop app actually requests.
+
+| Connector       | File                                                                                 | Scopes requested                                                     |
+| --------------- | ------------------------------------------------------------------------------------ | -------------------------------------------------------------------- |
+| Gmail           | `apps/desktop/src-tauri/src/features/communications/gmail_oauth.rs` L46-49, L122-127 | `gmail.readonly`, `gmail.send`, `userinfo.email`, `userinfo.profile` |
+| Google Calendar | `apps/desktop/src-tauri/src/features/calendar/google_calendar.rs` L15-17, L34-37     | `calendar.readonly`, `calendar.events`                               |
+
+As of 2026-09-03 this replaced a wider request. The Gmail client had also
+requested `gmail.modify`, which permits deleting and relabeling mail, but the
+desktop code only ever calls `users.getProfile`, `users.watch`,
+`users.history.list` and `users.stop`, all of which `gmail.readonly` alone
+authorizes. The calendar client had also requested the unrestricted
+`auth/calendar` scope, but the desktop code only ever calls `calendarList.list`
+and the events endpoints, which `calendar.readonly` plus `calendar.events`
+together authorize without granting calendar deletion or sharing changes.
+Neither client makes a message-send or event-delete call through any other
+scope; sending mail goes through a separate IMAP/SMTP path in
+`apps/desktop/src-tauri/src/sys/commands/email.rs` that does not use Google
+OAuth at all.
+
+`docs/security/agent-authority-and-connector-scopes.md` section 3 and gap 2
+still describe the old, wider request as current. That file was out of scope
+for this change and needs a follow-up edit to match.
