@@ -1,4 +1,3 @@
-
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { NextRequest } from 'next/server';
 
@@ -15,26 +14,10 @@ vi.mock('@/lib/logger', () => ({
   },
 }));
 
-const mockClerkAuth = vi.fn(() => Promise.resolve({ userId: 'user-123' }));
-vi.mock('@clerk/nextjs/server', () => ({
-  auth: () => mockClerkAuth(),
-}));
-
 const mockQuery = vi.fn();
 
-vi.mock('@/lib/server/neon-db', () => ({
-  getNeonDb: vi.fn(() => ({
-    query: (sql: string, params: unknown[]) => {
-      if (typeof sql === 'string' && sql.includes('account_status')) {
-        return Promise.resolve([]);
-      }
-      return mockQuery(sql, params);
-    },
-    execute: vi.fn().mockResolvedValue(1),
-    transaction: vi.fn((fn: (db: unknown) => unknown) => fn({})),
-    withUser: vi.fn(() => ({})),
-    dispose: vi.fn(),
-  })),
+vi.mock('@/lib/server/rls-db', () => ({
+  getUserScopedDb: vi.fn(),
 }));
 
 const mockMemoryRow = {
@@ -46,18 +29,24 @@ const mockMemoryRow = {
   updated_at: '2024-03-15T12:00:00Z',
 };
 
+import { createError } from '@/lib/errors';
+import { getUserScopedDb } from '@/lib/server/rls-db';
 import { GET } from '@/app/api/memory/search/route';
 
 describe('Memory Search API', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockClerkAuth.mockResolvedValue({ userId: 'user-123' });
+    vi.mocked(getUserScopedDb).mockResolvedValue({
+      db: { query: mockQuery } as unknown as Awaited<ReturnType<typeof getUserScopedDb>>['db'],
+      userId: 'user-123',
+      organizationId: null,
+    });
     mockQuery.mockResolvedValue([mockMemoryRow]);
   });
 
   describe('Authentication', () => {
     it('should return 401 when no session', async () => {
-      mockClerkAuth.mockResolvedValueOnce({ userId: null as unknown as string });
+      vi.mocked(getUserScopedDb).mockRejectedValueOnce(createError.unauthorized());
 
       const request = new NextRequest('http://localhost/api/memory/search?q=dark+mode', {
         method: 'GET',
@@ -68,7 +57,7 @@ describe('Memory Search API', () => {
     });
 
     it('should return 401 when userId is null', async () => {
-      mockClerkAuth.mockResolvedValueOnce({ userId: null as unknown as string });
+      vi.mocked(getUserScopedDb).mockRejectedValueOnce(createError.unauthorized());
 
       const request = new NextRequest('http://localhost/api/memory/search?q=dark+mode', {
         method: 'GET',
