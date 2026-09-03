@@ -71,6 +71,10 @@
     {
       "path": "/api/cron/page-security-anomalies",
       "schedule": "*/10 * * * *"
+    },
+    {
+      "path": "/api/cron/refresh-connector-directory",
+      "schedule": "*/15 * * * *"
     }
   ]
 }
