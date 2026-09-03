@@ -1,4 +1,3 @@
-
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 vi.mock('server-only', () => ({}));
@@ -31,6 +30,11 @@ vi.mock('@/lib/csrf', () => ({
 const mockGetClerkAuthUser = vi.fn();
 vi.mock('@/lib/api-auth', () => ({
   getClerkAuthUser: (...args: unknown[]) => mockGetClerkAuthUser(...args),
+}));
+
+const mockGetUserScopedDb = vi.fn();
+vi.mock('@/lib/server/rls-db', () => ({
+  getUserScopedDb: (...args: unknown[]) => mockGetUserScopedDb(...args),
 }));
 
 const mockCreateApiKey = vi.fn();
@@ -78,6 +82,18 @@ beforeEach(() => {
   vi.clearAllMocks();
   mockExecute.mockResolvedValue(1);
   mockQuery.mockResolvedValue([]);
+  mockGetUserScopedDb.mockImplementation(async () => {
+    const authUser = await mockGetClerkAuthUser();
+    return {
+      db: {
+        query: mockQuery,
+        execute: mockExecute,
+        transaction: vi.fn((fn: (db: unknown) => unknown) => fn({})),
+      },
+      userId: authUser?.userId,
+      organizationId: null,
+    };
+  });
 });
 
 describe('sanitizeAuditDetail — key allowlist', () => {
