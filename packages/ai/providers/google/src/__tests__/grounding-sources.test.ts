@@ -46,4 +46,34 @@ describe('Gemini grounding chunk titles', () => {
       { type: 'web_search_result', url: 'https://example.com/untitled', title: '', position: 2 },
     ]);
   });
+
+  it('emits a citation-delta per grounding chunk, falling back to the hostname when Google sends no title', async () => {
+    const sse =
+      'data: {"candidates":[{"content":{"parts":[{"text":"See the source."}],"role":"model"},' +
+      '"groundingMetadata":{"groundingChunks":[' +
+      '{"web":{"uri":"https://example.com/titled","title":"A Real Title"}},' +
+      '{"web":{"uri":"https://example.com/untitled"}}' +
+      ']},"finishReason":"STOP","index":0}]}\n\n';
+
+    const chunks = await collect(sse);
+    const citations = chunks.filter(
+      (c): c is Extract<StreamChunk, { type: 'citation-delta' }> => c.type === 'citation-delta',
+    );
+    expect(citations).toEqual([
+      {
+        type: 'citation-delta',
+        blockIndex: 0,
+        payload: { type: 'url_citation', url: 'https://example.com/titled', title: 'A Real Title' },
+      },
+      {
+        type: 'citation-delta',
+        blockIndex: 0,
+        payload: {
+          type: 'url_citation',
+          url: 'https://example.com/untitled',
+          title: 'example.com',
+        },
+      },
+    ]);
+  });
 });
