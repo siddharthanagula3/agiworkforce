@@ -6,6 +6,7 @@ import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { mapProjectRow } from '@/lib/projects';
 import { parseProjectRequest } from '@/lib/project-request-validation';
+import { getNeonDb } from '@/lib/server/neon-db';
 import { getUserScopedDb } from '@/lib/server/rls-db';
 import { SubscriptionService } from '@/lib/services/subscription-service';
 import {
@@ -42,7 +43,7 @@ async function handleGetProjects(request: NextRequest) {
 
   let data: Record<string, unknown>[];
   try {
-    data = await db.query<Record<string, unknown>>(
+    data = await getNeonDb().query<Record<string, unknown>>(
       `select p.*,
               (p.user_id <> $1) as is_org_shared,
               (select count(*)::int
