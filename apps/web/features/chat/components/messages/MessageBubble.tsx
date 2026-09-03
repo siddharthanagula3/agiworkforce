@@ -132,7 +132,10 @@ import { useComparisonStore } from '../../stores/comparison-store';
 import { SourcesControl } from '../research/ResearchPanel';
 import { useResearchPanelStore, type ResearchSource } from '../../stores/research-panel-store';
 import { ResearchActivity, type ResearchPlanDecision } from '../research/ResearchActivity';
-import { stripTrailingSourceList } from '../../lib/researchReportSources';
+import {
+  stripTrailingSourceList,
+  stripTrailingCitationOnlyBlock,
+} from '../../lib/researchReportSources';
 import type { MessageResearchState } from '@shared/stores/web-chat-store';
 import { dedupeResearchSources, orderSourcesByCitation } from '../../utils/research-sources';
 import { ImageGenerationCard } from '../ImageGenerationCard';
@@ -1216,10 +1219,13 @@ const MessageBubbleComponent = function MessageBubble({
     const withoutDuplicateSources = message.metadata?.research
       ? stripTrailingSourceList(stripped)
       : stripped;
+    const withoutCitationTail = isUser
+      ? withoutDuplicateSources
+      : stripTrailingCitationOnlyBlock(withoutDuplicateSources);
     // AUDIT-FIX BUG-31: non-artifact languages get the same "don't hand the
     // renderer a half-open fence" treatment the artifact path already gets.
-    return closeUnterminatedFence(withoutDuplicateSources);
-  }, [message.content, artifacts, streamingBlock, message.metadata?.research]);
+    return closeUnterminatedFence(withoutCitationTail);
+  }, [message.content, artifacts, streamingBlock, message.metadata?.research, isUser]);
 
   /**
    * Rich format cards (recipe / comparison / steps / calculation) for assistant
@@ -2206,6 +2212,17 @@ const MessageBubbleComponent = function MessageBubble({
             </div>
           )}
 
+          {!isUser && !message.isStreaming && searchSources.length > 0 && (
+            <div className="mt-2 flex justify-end">
+              <SourcesControl
+                messageId={message.id}
+                cited={citedSources}
+                more={moreSources}
+                query={searchQuery}
+              />
+            </div>
+          )}
+
           {/* Model name · shown under completed assistant messages, hidden while streaming.
               Read from top-level message.model first (set by useChatStream), then fall
               back to message.metadata.model (set on messages loaded from DB). */}
@@ -2257,14 +2274,6 @@ const MessageBubbleComponent = function MessageBubble({
                       minute: '2-digit',
                     })}
                   </time>
-                  {!isUser && searchSources.length > 0 && (
-                    <SourcesControl
-                      messageId={message.id}
-                      cited={citedSources}
-                      more={moreSources}
-                      query={searchQuery}
-                    />
-                  )}
                   <TooltipProvider delayDuration={300}>
                     <Tooltip>
                       <TooltipTrigger asChild>

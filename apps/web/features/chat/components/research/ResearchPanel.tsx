@@ -470,16 +470,16 @@ function SourceFavicon({ source }: { source: ResearchSource }) {
         src={favicon}
         alt=""
         aria-hidden="true"
-        width={16}
-        height={16}
-        className="h-4 w-4 shrink-0 rounded-full bg-card object-contain ring-2 ring-background"
+        width={20}
+        height={20}
+        className="h-5 w-5 shrink-0 rounded-full bg-card object-contain ring-2 ring-background"
         onError={() => setImgError(true)}
       />
     );
   }
   return (
-    <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-muted ring-2 ring-background">
-      <Globe className="h-2.5 w-2.5 text-muted-foreground" aria-hidden="true" />
+    <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-muted ring-2 ring-background">
+      <Globe className="h-3 w-3 text-muted-foreground" aria-hidden="true" />
     </span>
   );
 }
@@ -504,10 +504,10 @@ export function SourcesControl({ messageId, cited, more, query }: SourcesControl
     <button
       type="button"
       onClick={() => openPanel(activeConversationId, messageId, cited, more, query)}
-      className="inline-flex items-center gap-1.5 rounded-full border border-border/30 bg-muted/20 py-1 pl-1 pr-2.5 text-[12px] text-muted-foreground transition-colors hover:border-border/60 hover:bg-muted/50 hover:text-foreground"
+      className="inline-flex items-center gap-2 rounded-full border border-border/30 bg-muted/20 py-1.5 pl-1.5 pr-3 text-[13px] text-muted-foreground transition-colors hover:border-border/60 hover:bg-muted/50 hover:text-foreground"
       aria-label={`View ${total} ${total === 1 ? 'source' : 'sources'}`}
     >
-      <span className="flex items-center -space-x-1.5">
+      <span className="flex items-center -space-x-2">
         {preview.map((source, index) => (
           <SourceFavicon key={`${source.url}-${index}`} source={source} />
         ))}
