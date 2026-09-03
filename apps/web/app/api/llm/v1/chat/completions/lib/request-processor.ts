@@ -157,6 +157,7 @@ import {
 } from '@/lib/services/managed-office-file-service';
 import {
   createMapSearchToolDefinition,
+  hasMapSearchIntent,
   MAP_SEARCH_TOOL_NAME,
 } from '@/lib/services/map-search-tool-service';
 import { ChatAttachmentHydrationError, hydrateChatAttachments } from './chat-attachment-hydration';
@@ -578,9 +579,7 @@ export function applyMapSearchCardCapability(
     (params.surface !== 'web' && params.surface !== 'mobile' && params.surface !== 'chrome') ||
     !params.toolsCapable ||
     !request.stream ||
-    !/\b(map|maps|mapped|nearby|near me|where is|where are|route|routes|directions|drive from|driving from|road ?trip|itinerary|how far)\b/i.test(
-      params.userMessage,
-    ) ||
+    !hasMapSearchIntent(params.userMessage) ||
     !request.x_interactive_cards?.supported.includes('map-search.v1')
   ) {
     return;
