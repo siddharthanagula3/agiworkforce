@@ -1,4 +1,4 @@
-# AGI Guardian — automated repository review (Phase 1: shadow mode).
+# AGI Guardian, automated repository review (Phase 1: shadow mode).
 #
 # Runs the Guardian deterministic scan on every push to main and on every
 # pull-request update, publishes per-category Check Runs on the exact reviewed
