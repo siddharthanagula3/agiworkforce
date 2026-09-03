@@ -165,29 +165,19 @@ interface ExtractedChatTokens {
   promptTokens: number;
   completionTokens: number;
   cacheReadTokens: number;
-  cacheWriteTokens: number;
-  cacheWrite1hTokens: number;
+  cacheWriteTotalTokens: number;
+  cacheWrite1hSubsetTokens: number;
 }
 
-/**
- * `cacheWriteTokens` (or its legacy alias `cacheCreationInputTokens`) is
- * already the combined 5-minute-plus-1-hour cache-write total — that is
- * what every producer of this field writes it as (see, e.g., the Anthropic
- * adapter's `cache_creation_input_tokens`) — and `cacheWrite1hTokens` is the
- * 1-hour-tier SUBSET already included within it, not a sibling counter to
- * add on top. `LLMCostCalculator.calculateCostDollars` reads exactly that
- * pair (total, 1h-subset) and derives the 5-minute-tier remainder itself.
- * Adding the two here double-counted the 1h-tier tokens.
- */
 function extractChatTokens(usage: Record<string, unknown>): ExtractedChatTokens {
   return {
     promptTokens: numeric(usage['inputTokens']) ?? numeric(usage['promptTokens']) ?? 0,
     completionTokens: numeric(usage['outputTokens']) ?? numeric(usage['completionTokens']) ?? 0,
     cacheReadTokens:
       numeric(usage['cacheReadTokens']) ?? numeric(usage['cacheReadInputTokens']) ?? 0,
-    cacheWriteTokens:
+    cacheWriteTotalTokens:
       numeric(usage['cacheWriteTokens']) ?? numeric(usage['cacheCreationInputTokens']) ?? 0,
-    cacheWrite1hTokens:
+    cacheWrite1hSubsetTokens:
       numeric(usage['cacheWrite1hTokens']) ?? numeric(usage['cacheCreation1hInputTokens']) ?? 0,
   };
 }
@@ -205,8 +195,8 @@ function chatTokenUsageInput(tokens: ExtractedChatTokens): {
     completionTokens: tokens.completionTokens,
     totalTokens: tokens.promptTokens + tokens.completionTokens,
     cacheReadInputTokens: tokens.cacheReadTokens,
-    cacheCreationInputTokens: tokens.cacheWriteTokens,
-    cacheCreation1hInputTokens: tokens.cacheWrite1hTokens,
+    cacheCreationInputTokens: tokens.cacheWriteTotalTokens,
+    cacheCreation1hInputTokens: tokens.cacheWrite1hSubsetTokens,
   };
 }
 
@@ -222,7 +212,7 @@ export function resolveTokenClassDimensions(input: {
   const {
     promptTokens: inputTokens,
     cacheReadTokens: cacheReadUnits,
-    cacheWriteTokens: cacheWriteUnits,
+    cacheWriteTotalTokens: cacheWriteUnits,
   } = extractChatTokens(input.usage);
   const compactionSavedUnits = numeric(input.usage['compactionSavedTokens']) ?? 0;
 
@@ -256,22 +246,12 @@ export function resolveTokenClassDimensions(input: {
   };
 }
 
-/**
- * Retail priced per call and summed in dollars before one ledger-cent floor,
- * mirroring {@link calculateObservedProviderUsageCostDollars} exactly.
- * Pricing on the top-level aggregate instead (one `calculateCost` call,
- * itself already cent-floored) used to let floating-point summation drift
- * a cent off actual's per-call sum, and priced every call at the SETTLED
- * route's model even when a mid-turn rotation meant earlier calls used a
- * different one. `null` when nothing in `observations` carried usage, so
- * the caller falls back to the aggregate-token path below.
- */
 function sumRetailCostCentsFromObservations(
   observations: readonly unknown[],
   fallback: { provider: string; model: string },
   pricedAt: Date,
 ): number | null {
-  let dollars = 0;
+  let summedDollars = 0;
   let pricedCalls = 0;
   for (const raw of observations) {
     if (!raw || typeof raw !== 'object') continue;
@@ -279,7 +259,7 @@ function sumRetailCostCentsFromObservations(
     const tokens = extractChatTokens(observation);
     if (tokens.promptTokens === 0 && tokens.completionTokens === 0) continue;
     pricedCalls += 1;
-    dollars += LLMCostCalculator.calculateCostDollars(
+    summedDollars += LLMCostCalculator.calculateCostDollars(
       text(observation['provider']) ?? fallback.provider,
       text(observation['model']) ?? fallback.model,
       chatTokenUsageInput(tokens),
@@ -287,16 +267,10 @@ function sumRetailCostCentsFromObservations(
     );
   }
   if (pricedCalls === 0) return null;
-  const cents = dollars * 100;
-  return cents > 0 ? Math.max(1, Math.ceil(cents)) : 0;
+  const summedCents = summedDollars * 100;
+  return summedCents > 0 ? Math.max(1, Math.ceil(summedCents)) : 0;
 }
 
-/**
- * The creator-direct list price for the same token mix, ignoring whatever
- * discounted route actually served the request — the canonical-model tier of
- * {@link LLMCostCalculator.getPricing}, ungated by a routeId. `null` for
- * non-token capabilities or an unknown model, where "retail" has no meaning.
- */
 export function resolveRetailCostCents(input: {
   capability: CogsCapability;
   provider: string;
@@ -327,11 +301,6 @@ export function resolveRetailCostCents(input: {
   );
 }
 
-/**
- * Reads the retail-equivalent cost a settled COGS row's metadata carries and
- * divides it by what the route actually cost. `null` when either figure is
- * unavailable or the actual cost is zero, where a multiplier is meaningless.
- */
 export function getValueMultiplierFromCostEvent(input: {
   metadata: Record<string, unknown> | null | undefined;
   actualCostCents: number;
@@ -558,12 +527,6 @@ export async function importStripeCogsAdjustments(input: {
   };
 }
 
-/**
- * Reads the route id a settled COGS row served under back out of its
- * `metadata`. Present only when {@link recordSettledProviderCost} was called
- * with a `routeId` — the `provider`/`model` the route resolved to are the
- * row's own columns, already the served values, not duplicated here.
- */
 export function getServedRouteIdFromCostEventMetadata(
   metadata: Record<string, unknown> | null | undefined,
 ): string | null {

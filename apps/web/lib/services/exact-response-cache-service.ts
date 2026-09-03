@@ -61,14 +61,7 @@ export interface ExactResponseCacheLookupResult {
   entry?: ExactResponseCacheEntry;
 }
 
-/**
- * Same commit-identifying env chain `apps/web/app/api/version/route.ts`
- * resolves, read directly rather than through that route's un-exported
- * function. Included in every cache key so a deploy that changes prompt
- * wording, sanitisation, or model routing can never serve a stale entry
- * written by the previous release.
- */
-function resolveApplicationVersion(): string {
+function resolveReleaseShaForCacheInvalidation(): string {
   const candidates = [
     process.env['AGI_RELEASE_SHA'],
     process.env['VERCEL_GIT_COMMIT_SHA'],
@@ -80,14 +73,6 @@ function resolveApplicationVersion(): string {
   return sha ?? 'unknown';
 }
 
-/**
- * Kill switch, off (cache enabled) unless explicitly disabled.
- *
- * A cache miss is always a safe outcome for a caller — this only ever removes
- * the fast path, never the correctness path — so the switch defaults open and
- * an operator flips it to shed Redis load or roll back the mechanism without a
- * deploy.
- */
 export function isExactResponseCacheEnabled(): boolean {
   const configured = getOptionalEnv(EXACT_RESPONSE_CACHE_ENABLED_ENV)?.trim().toLowerCase();
   if (!configured) return true;
@@ -107,7 +92,7 @@ function cacheKey(fields: ExactResponseCacheKeyFields): string {
       tools: fields.tools ?? null,
       temperature: fields.temperature,
       responseFormat: fields.responseFormat ?? null,
-      appVersion: resolveApplicationVersion(),
+      appVersion: resolveReleaseShaForCacheInvalidation(),
     }),
   );
   return [REDIS_KEY_PREFIX, fields.callType, fields.tenantId, hash.digest('hex')].join(':');
@@ -124,16 +109,6 @@ function isStoredCacheRecord(value: unknown): value is StoredCacheRecord {
   );
 }
 
-/**
- * Looks up an exact-match cached completion.
- *
- * `bypass` short-circuits to `'bypassed'` without touching Redis — the caller
- * decides this per privacy mode (a temporary chat, a memory-off user) and this
- * function never guesses. A missing or unreachable Redis client is a `'miss'`,
- * never a thrown error: this cache is a latency and cost optimisation, and a
- * caller falling through to the real provider call must never be blocked or
- * broken by it.
- */
 export async function lookupExactResponseCache(
   fields: ExactResponseCacheKeyFields,
   options: { bypass: boolean },
@@ -157,11 +132,6 @@ export async function lookupExactResponseCache(
   }
 }
 
-/**
- * Stores a completion for future exact-match reuse. Never throws: a failed
- * write only forfeits a future cache hit, and must not fail the caller's own
- * successful response.
- */
 export async function storeExactResponseCache(
   fields: ExactResponseCacheKeyFields,
   entry: ExactResponseCacheEntry,
