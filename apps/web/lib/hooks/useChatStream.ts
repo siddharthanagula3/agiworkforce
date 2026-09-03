@@ -35,6 +35,7 @@ import { logger } from '@shared/lib/logger';
 import {
   getModelMetadataById,
   resolveModelEffort,
+  WEB_SEARCH_CITATION_DELTA_KEY,
   type CloudWorkMode,
   type Effort,
 } from '@agiworkforce/types';
@@ -1005,6 +1006,9 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
   const webSearchRequestedForTurn = liveMessageMetadata?.webSearchRequested === true;
   const interactiveCardsResumed = seedMetadata?.interactiveCardsResumed;
   let currentSearchResults: MessageMetadata['searchResults'] = seedMetadata?.searchResults;
+  const currentAnnotationCitations: NonNullable<MessageMetadata['citations']> = [
+    ...(seedMetadata?.citations ?? []),
+  ];
   let currentCodeExecutionResult: MessageMetadata['codeExecutionResult'] =
     seedMetadata?.codeExecutionResult;
   let currentResearch: MessageResearchState | undefined = seedMetadata?.research
@@ -1046,6 +1050,19 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
     currentSearchResults = merged;
     setSearchResults(assistantMessageId, merged, conversationId);
     return merged;
+  };
+
+  // The Nth distinct annotation url a provider cites, in the order the model
+  // wrote it, is exactly what a `[n]` marker in that model's own text refers
+  // to (see the capability preamble's "in the order those sources first
+  // appear" instruction). That numbering has no reliable relationship to the
+  // aggregate cross-search `searchResults` pool above, which the model never
+  // sees, so this is tracked and persisted separately.
+  const applyCitationDelta = (url: string, title: string) => {
+    if (!url || !title) return;
+    if (currentAnnotationCitations.some((c) => c.url === url)) return;
+    currentAnnotationCitations.push({ type: 'url_citation', url, title });
+    patchMessageMeta({ citations: [...currentAnnotationCitations] });
   };
 
   const applySourceListEvent = (event: AgentEventEnvelope['event']) => {
@@ -1419,6 +1436,9 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
     }
     if (hasWebSearchSources(currentSearchResults)) {
       metadata.searchResults = currentSearchResults;
+    }
+    if (currentAnnotationCitations.length > 0) {
+      metadata.citations = currentAnnotationCitations;
     }
     if (webSearchRequestedForTurn) {
       metadata.webSearchRequested = true;
@@ -2057,6 +2077,13 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
               );
               finishTool('code_execution', 'completed');
             }
+          }
+
+          const citationBlock = parsed.choices?.[0]?.delta?.[WEB_SEARCH_CITATION_DELTA_KEY] as
+            | { url?: unknown; title?: unknown }
+            | undefined;
+          if (typeof citationBlock?.url === 'string' && typeof citationBlock.title === 'string') {
+            applyCitationDelta(citationBlock.url, citationBlock.title);
           }
 
           const searchResultsBlock = parsed.choices?.[0]?.delta?.x_search_results;

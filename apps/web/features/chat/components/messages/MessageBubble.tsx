@@ -1362,36 +1362,47 @@ const MessageBubbleComponent = function MessageBubble({
       }
     }
 
-    const citations = message.metadata?.citations;
-    if (citations && citations.length > 0 && collected.length === 0) {
-      citations
-        .filter(
-          (c): c is { url: string; title: string; cited_text?: string; type?: string } =>
-            !!(c.url && c.title),
-        )
-        .forEach((c, i) => {
-          collected.push({
-            url: c.url,
-            title: c.title,
-            snippet: c.cited_text,
-            citationIndex: i + 1,
-          });
+    const annotationCitations = (message.metadata?.citations ?? []).filter(
+      (c): c is { url: string; title: string; cited_text?: string; type?: string } =>
+        !!(c.url && c.title),
+    );
+    if (annotationCitations.length > 0 && collected.length === 0) {
+      annotationCitations.forEach((c, i) => {
+        collected.push({
+          url: c.url,
+          title: c.title,
+          snippet: c.cited_text,
+          citationIndex: i + 1,
         });
+      });
     }
 
     // De-dupe by URL and assign stable 1-based citation numbers (claude.ai
     // parity: a source cited twice keeps one number). Sources missing a usable
     // URL are dropped here rather than rendered as dead links.
     const deduped = dedupeResearchSources(collected);
-
-    // The inline [n] markers the model writes index into `collected`, not the
-    // deduped list — so a repeated source keeps its dedupe-assigned number
-    // here too, and a marker whose source got dropped resolves to nothing
-    // rather than pointing at the wrong entry.
     const dedupedByUrl = new Map(deduped.map((s) => [s.url, s]));
-    const citationsByMarker = collected.map(
-      (source, i) => dedupedByUrl.get(source.url) ?? { ...source, citationIndex: i + 1 },
-    );
+
+    // A provider's per-claim citation annotations (OpenAI's url_citation) are
+    // numbered by the model itself, in the order it wrote them - that
+    // numbering is what a `[n]` marker in that model's own text refers to.
+    // It has no reliable relationship to `collected`'s order above, an
+    // aggregate pool built server-side across every search call the turn
+    // made, which the model never sees. Annotation citations are the source
+    // of truth for marker resolution whenever the provider supplied them;
+    // `collected`'s positional order is only a fallback for a provider that
+    // never sends per-citation annotations.
+    const citationsByMarker =
+      annotationCitations.length > 0
+        ? annotationCitations.map((c, i) => ({
+            url: c.url,
+            title: c.title,
+            snippet: c.cited_text,
+            citationIndex: i + 1,
+          }))
+        : collected.map(
+            (source, i) => dedupedByUrl.get(source.url) ?? { ...source, citationIndex: i + 1 },
+          );
 
     return { searchSources: deduped, searchQuery: query, citationsByMarker };
   }, [isUser, message.metadata?.searchResults, message.metadata?.citations]);
