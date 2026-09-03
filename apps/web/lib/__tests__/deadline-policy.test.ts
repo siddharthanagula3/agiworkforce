@@ -6,6 +6,8 @@ import {
   CHAT_COMPLETIONS_FUNCTION_LIMIT_MS,
   CHAT_TOOL_LOOP_BUDGET_MS,
   CLOUD_CODE_COMMAND_DEADLINE_MS,
+  CLOUD_CODE_HARNESS_COMMAND_DEADLINE_MS,
+  CLOUD_CODE_HARNESS_COMMAND_FUNCTION_LIMIT_MS,
   CLOUD_CODE_TURN_BUDGET_MS,
   DEADLINE_HIERARCHY,
   FUNCTION_TEARDOWN_RESERVE_MS,
@@ -13,6 +15,7 @@ import {
   MIN_CHILD_DEADLINE_MS,
   TOOL_CALL_DEADLINE_MS,
   nestedDeadlineMs,
+  resolveCloudCodeCommandDeadlineMs,
 } from '../deadline-policy';
 
 describe('deadline hierarchy', () => {
@@ -39,6 +42,16 @@ describe('deadline hierarchy', () => {
     const declared = /export const maxDuration = (\d+)/.exec(routeSource);
     expect(declared, 'route.ts must declare maxDuration').not.toBeNull();
     expect(Number(declared![1]) * 1000).toBe(CHAT_COMPLETIONS_FUNCTION_LIMIT_MS);
+  });
+
+  it("matches the cloud code commands route's declared maxDuration", () => {
+    const routeSource = readFileSync(
+      join(__dirname, '../../app/api/code/sessions/[sessionId]/commands/route.ts'),
+      'utf8',
+    );
+    const declared = /export const maxDuration = (\d+)/.exec(routeSource);
+    expect(declared, 'route.ts must declare maxDuration').not.toBeNull();
+    expect(Number(declared![1]) * 1000).toBe(CLOUD_CODE_HARNESS_COMMAND_FUNCTION_LIMIT_MS);
   });
 
   it("matches the image generation route's declared maxDuration", () => {
@@ -93,6 +106,40 @@ describe('nestedDeadlineMs', () => {
   it('treats a negative elapsed reading as zero rather than widening the child', () => {
     expect(nestedDeadlineMs(TOOL_CALL_DEADLINE_MS, CHAT_TOOL_LOOP_BUDGET_MS, -50_000)).toBe(
       TOOL_CALL_DEADLINE_MS,
+    );
+  });
+});
+
+describe('resolveCloudCodeCommandDeadlineMs', () => {
+  const HARNESS_IDS = new Set(['claude', 'codex', 'droid', 'amp', 'opencode', 'grok']);
+
+  it('grants the harness budget when the command invokes a known harness binary', () => {
+    expect(resolveCloudCodeCommandDeadlineMs('claude -p "fix the bug"', HARNESS_IDS)).toBe(
+      CLOUD_CODE_HARNESS_COMMAND_DEADLINE_MS,
+    );
+    expect(resolveCloudCodeCommandDeadlineMs('codex exec --full-auto "go"', HARNESS_IDS)).toBe(
+      CLOUD_CODE_HARNESS_COMMAND_DEADLINE_MS,
+    );
+  });
+
+  it('keeps the plain command budget for anything else', () => {
+    expect(resolveCloudCodeCommandDeadlineMs('ls -la', HARNESS_IDS)).toBe(
+      CLOUD_CODE_COMMAND_DEADLINE_MS,
+    );
+    expect(resolveCloudCodeCommandDeadlineMs('git clone https://x', HARNESS_IDS)).toBe(
+      CLOUD_CODE_COMMAND_DEADLINE_MS,
+    );
+  });
+
+  it('only matches the first token, not a harness name appearing later', () => {
+    expect(resolveCloudCodeCommandDeadlineMs('echo claude', HARNESS_IDS)).toBe(
+      CLOUD_CODE_COMMAND_DEADLINE_MS,
+    );
+  });
+
+  it('tolerates leading whitespace before the binary name', () => {
+    expect(resolveCloudCodeCommandDeadlineMs('   claude -p "hi"', HARNESS_IDS)).toBe(
+      CLOUD_CODE_HARNESS_COMMAND_DEADLINE_MS,
     );
   });
 });

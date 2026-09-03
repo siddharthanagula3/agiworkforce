@@ -18,6 +18,13 @@ vi.mock('@/lib/services/subscription-service', () => ({
   SubscriptionService: { getSubscription: vi.fn(async () => ({ plan_tier: 'pro' })) },
 }));
 
+const buildServerProviderAdapter = vi.fn((providerId: string): { config: { apiKey?: string } } => {
+  throw new Error(`no managed key configured for ${providerId}`);
+});
+vi.mock('@/lib/services/provider-adapter-service', () => ({
+  buildServerProviderAdapter: (providerId: string) => buildServerProviderAdapter(providerId),
+}));
+
 interface TestScope {
   tenantId: string;
   userId: string;
@@ -25,6 +32,8 @@ interface TestScope {
   resource?: { kind: 'code_session'; id: string };
   networkAccess?: 'none' | 'trusted' | 'full';
   planTier?: string;
+  templateId?: string | null;
+  explicitCredential?: { envVar: string; value: string } | null;
 }
 
 function scope(conversationId: string, userId = 'user-1', planTier = 'pro'): TestScope {
@@ -41,6 +50,7 @@ function scopeKey(value: TestScope): string {
 function codeScope(
   codeSessionId: string,
   networkAccess: 'none' | 'trusted' | 'full' = 'none',
+  extra: Partial<Pick<TestScope, 'templateId' | 'explicitCredential'>> = {},
 ): TestScope {
   return {
     tenantId: 'managed-cloud',
@@ -48,6 +58,7 @@ function codeScope(
     resource: { kind: 'code_session', id: codeSessionId },
     networkAccess,
     planTier: 'pro',
+    ...extra,
   };
 }
 
@@ -121,6 +132,12 @@ function makeSandboxInstance(sandboxId: string) {
         stderr: '',
         exitCode: 0,
       })),
+    },
+    git: {
+      clone: vi.fn(async () => ({ stdout: 'cloned', stderr: '', exitCode: 0 })),
+      add: vi.fn(async () => ({ stdout: '', stderr: '', exitCode: 0 })),
+      commit: vi.fn(async () => ({ stdout: 'committed', stderr: '', exitCode: 0 })),
+      push: vi.fn(async () => ({ stdout: 'pushed', stderr: '', exitCode: 0 })),
     },
     updateNetwork: vi.fn(async () => undefined),
     kill: vi.fn(async () => true),
@@ -366,6 +383,209 @@ describe('getE2BExecutor — managed Code session', () => {
     const { getE2BExecutor } = await import('../runtime');
     await expect(getE2BExecutor(codeScope('code-2', 'none'))).resolves.toBeNull();
     expect(staticPause).toHaveBeenCalledWith('sbx-network-error');
+  });
+});
+
+describe('getE2BExecutor — harness credentials', () => {
+  beforeEach(() => {
+    sessions.clear();
+    vi.clearAllMocks();
+    sandboxCounter = 0;
+    listedSandboxes = [];
+    buildServerProviderAdapter.mockImplementation((providerId: string) => {
+      throw new Error(`no managed key configured for ${providerId}`);
+    });
+  });
+
+  it('seeds the sandbox with the managed provider key for the selected harness', async () => {
+    buildServerProviderAdapter.mockImplementation((providerId: string) => {
+      if (providerId === 'anthropic') return { config: { apiKey: 'sk-managed-anthropic' } };
+      throw new Error(`no managed key configured for ${providerId}`);
+    });
+
+    const { getE2BExecutor } = await import('../runtime');
+    await getE2BExecutor(codeScope('code-claude', 'trusted', { templateId: 'claude' }));
+
+    const createOptions = (create.mock.calls[0] as unknown[])[1] as {
+      envs?: Record<string, string>;
+    };
+    expect(createOptions.envs).toEqual({ ANTHROPIC_API_KEY: 'sk-managed-anthropic' });
+  });
+
+  it('omits the credential entirely when no managed key resolves for the harness', async () => {
+    const { getE2BExecutor } = await import('../runtime');
+    await getE2BExecutor(codeScope('code-nokey', 'trusted', { templateId: 'droid' }));
+
+    const createOptions = (create.mock.calls[0] as unknown[])[1] as {
+      envs?: Record<string, string>;
+    };
+    expect(createOptions.envs).toBeUndefined();
+  });
+
+  it('never grants a harness key to a plan without managed sandbox entitlement', async () => {
+    buildServerProviderAdapter.mockImplementation(() => ({
+      config: { apiKey: 'sk-should-not-be-used' },
+    }));
+
+    const { getE2BExecutor } = await import('../runtime');
+    const executor = await getE2BExecutor({
+      tenantId: 'managed-cloud',
+      userId: 'user-free',
+      resource: { kind: 'code_session', id: 'code-free' },
+      networkAccess: 'trusted',
+      planTier: 'free',
+      templateId: 'claude',
+    });
+
+    expect(executor).toBeNull();
+    expect(create).not.toHaveBeenCalled();
+    expect(buildServerProviderAdapter).not.toHaveBeenCalled();
+  });
+
+  it('lets an explicit credential on the scope win over managed resolution', async () => {
+    buildServerProviderAdapter.mockImplementation(() => ({
+      config: { apiKey: 'sk-managed-should-be-ignored' },
+    }));
+
+    const { getE2BExecutor } = await import('../runtime');
+    await getE2BExecutor(
+      codeScope('code-explicit', 'trusted', {
+        templateId: 'claude',
+        explicitCredential: { envVar: 'ANTHROPIC_API_KEY', value: 'sk-explicit' },
+      }),
+    );
+
+    const createOptions = (create.mock.calls[0] as unknown[])[1] as {
+      envs?: Record<string, string>;
+    };
+    expect(createOptions.envs).toEqual({ ANTHROPIC_API_KEY: 'sk-explicit' });
+  });
+
+  it('lists every provider opencode can auto-detect, keeping only the ones that resolve', async () => {
+    buildServerProviderAdapter.mockImplementation((providerId: string) => {
+      if (providerId === 'openai') return { config: { apiKey: 'sk-openai' } };
+      throw new Error(`no managed key configured for ${providerId}`);
+    });
+
+    const { getE2BExecutor } = await import('../runtime');
+    await getE2BExecutor(codeScope('code-opencode', 'trusted', { templateId: 'opencode' }));
+
+    const createOptions = (create.mock.calls[0] as unknown[])[1] as {
+      envs?: Record<string, string>;
+    };
+    expect(createOptions.envs).toEqual({ OPENAI_API_KEY: 'sk-openai' });
+  });
+
+  it('carries the resolved credential into every sandbox command, including a resumed one', async () => {
+    buildServerProviderAdapter.mockImplementation((providerId: string) => {
+      if (providerId === 'anthropic') return { config: { apiKey: 'sk-managed-anthropic' } };
+      throw new Error(`no managed key configured for ${providerId}`);
+    });
+
+    const { getE2BExecutor } = await import('../runtime');
+    const executor = await getE2BExecutor(
+      codeScope('code-cmd', 'trusted', { templateId: 'claude' }),
+    );
+    await executor!.runCommand?.({ command: 'claude -p "hi"' });
+
+    const instance = await create.mock.results[0]!.value;
+    expect(instance.commands.run).toHaveBeenCalledWith(
+      'claude -p "hi"',
+      expect.objectContaining({ envs: { ANTHROPIC_API_KEY: 'sk-managed-anthropic' } }),
+    );
+  });
+
+  it('forwards the caller signal to the sandbox command so an abort can kill it', async () => {
+    const { getE2BExecutor } = await import('../runtime');
+    const executor = await getE2BExecutor(codeScope('code-signal', 'trusted'));
+    const controller = new AbortController();
+    await executor!.runCommand?.({ command: 'ls', signal: controller.signal });
+
+    const instance = await create.mock.results[0]!.value;
+    expect(instance.commands.run).toHaveBeenCalledWith(
+      'ls',
+      expect.objectContaining({ signal: controller.signal }),
+    );
+  });
+});
+
+describe('getE2BExecutor — git operations', () => {
+  beforeEach(() => {
+    sessions.clear();
+    vi.clearAllMocks();
+    sandboxCounter = 0;
+    listedSandboxes = [];
+  });
+
+  it('clones through the SDK git client with the given credential', async () => {
+    const { getE2BExecutor } = await import('../runtime');
+    const executor = await getE2BExecutor(codeScope('code-git', 'trusted'));
+    const result = await executor!.git!.clone({
+      url: 'https://github.com/acme/widgets.git',
+      path: '/home/user/project',
+      depth: 1,
+      username: 'x-access-token',
+      password: 'installation-token',
+    });
+
+    const instance = await create.mock.results[0]!.value;
+    expect(instance.git.clone).toHaveBeenCalledWith(
+      'https://github.com/acme/widgets.git',
+      expect.objectContaining({
+        path: '/home/user/project',
+        depth: 1,
+        username: 'x-access-token',
+        password: 'installation-token',
+      }),
+    );
+    expect(result).toMatchObject({ ok: true, stdout: 'cloned' });
+  });
+
+  it('stages, commits and pushes through the git client', async () => {
+    const { getE2BExecutor } = await import('../runtime');
+    const executor = await getE2BExecutor(codeScope('code-push', 'trusted'));
+
+    await executor!.git!.add({ path: '/home/user/project', all: true });
+    await executor!.git!.commit({ path: '/home/user/project', message: 'fix things' });
+    const push = await executor!.git!.push({
+      path: '/home/user/project',
+      username: 'x-access-token',
+      password: 'installation-token',
+    });
+
+    const instance = await create.mock.results[0]!.value;
+    expect(instance.git.add).toHaveBeenCalledWith(
+      '/home/user/project',
+      expect.objectContaining({ all: true }),
+    );
+    expect(instance.git.commit).toHaveBeenCalledWith(
+      '/home/user/project',
+      'fix things',
+      expect.any(Object),
+    );
+    expect(instance.git.push).toHaveBeenCalledWith(
+      '/home/user/project',
+      expect.objectContaining({ username: 'x-access-token', password: 'installation-token' }),
+    );
+    expect(push).toMatchObject({ ok: true, stdout: 'pushed' });
+  });
+
+  it('reports a failed clone as a normal command failure rather than throwing', async () => {
+    const broken = makeSandboxInstance('sbx-git-error');
+    broken.git.clone.mockRejectedValueOnce(
+      Object.assign(new Error('auth failed'), { exitCode: 128, stderr: 'auth failed' }),
+    );
+    create.mockResolvedValueOnce(broken);
+
+    const { getE2BExecutor } = await import('../runtime');
+    const executor = await getE2BExecutor(codeScope('code-git-error', 'trusted'));
+    const result = await executor!.git!.clone({
+      url: 'https://github.com/acme/private.git',
+      path: '/home/user/project',
+    });
+
+    expect(result.ok).toBe(false);
+    expect(result.exitCode).toBe(128);
   });
 });
 

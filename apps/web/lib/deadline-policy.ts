@@ -13,6 +13,21 @@ export const CLOUD_CODE_TURN_BUDGET_MS = 10 * 60_000;
 
 export const CLOUD_CODE_COMMAND_DEADLINE_MS = 60_000;
 
+export const CLOUD_CODE_HARNESS_COMMAND_FUNCTION_LIMIT_MS = 10 * 60_000;
+
+export const CLOUD_CODE_HARNESS_COMMAND_DEADLINE_MS =
+  CLOUD_CODE_HARNESS_COMMAND_FUNCTION_LIMIT_MS - FUNCTION_TEARDOWN_RESERVE_MS;
+
+export function resolveCloudCodeCommandDeadlineMs(
+  command: string,
+  harnessCommandIds: ReadonlySet<string>,
+): number {
+  const firstToken = command.trim().split(/\s+/, 1)[0];
+  return firstToken && harnessCommandIds.has(firstToken)
+    ? CLOUD_CODE_HARNESS_COMMAND_DEADLINE_MS
+    : CLOUD_CODE_COMMAND_DEADLINE_MS;
+}
+
 export const IMAGE_GENERATION_FUNCTION_LIMIT_MS = 60_000;
 
 export const IMAGE_GENERATION_PROVIDER_DEADLINE_MS = 55_000;
@@ -62,6 +77,12 @@ export const DEADLINE_HIERARCHY = [
     parentMs: CLOUD_CODE_TURN_BUDGET_MS,
     child: 'cloud code sandbox command',
     childMs: CLOUD_CODE_COMMAND_DEADLINE_MS,
+  },
+  {
+    parent: 'cloud code harness command function limit',
+    parentMs: CLOUD_CODE_HARNESS_COMMAND_FUNCTION_LIMIT_MS,
+    child: 'cloud code harness command deadline',
+    childMs: CLOUD_CODE_HARNESS_COMMAND_DEADLINE_MS,
   },
   {
     parent: 'image generation function limit',
