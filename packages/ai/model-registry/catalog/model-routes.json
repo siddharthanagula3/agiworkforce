@@ -10,12 +10,594 @@
           "cacheClass": "gateway_prompt_cache",
           "commercialStatus": "authorized_marketplace",
           "pricing": {
+            "inputPerMillion": 2,
+            "outputPerMillion": 10,
+            "cacheReadPerMillion": 0.2,
+            "cacheWritePerMillion": 2.5
+          }
+        },
+        {
+          "provider": "vercel_gateway",
+          "harnessId": "vercel_gateway/chat-completions",
+          "upstreamModelId": "anthropic/claude-sonnet-5",
+          "cacheClass": "gateway_prompt_cache",
+          "commercialStatus": "experimental_only",
+          "pricing": {
+            "inputPerMillion": 2,
+            "outputPerMillion": 10,
+            "cacheReadPerMillion": 0.2,
+            "cacheWritePerMillion": 2.5
+          }
+        }
+      ]
+    },
+    "gpt-5.6-sol": {
+      "additionalRoutes": [
+        {
+          "provider": "open_router",
+          "harnessId": "open-router/chat-completions",
+          "upstreamModelId": "openai/gpt-5.6-sol",
+          "cacheClass": "provider_implicit_prompt_cache",
+          "commercialStatus": "authorized_marketplace",
+          "pricing": {
+            "inputPerMillion": 2,
+            "outputPerMillion": 10,
+            "cacheReadPerMillion": 0.2,
+            "cacheWritePerMillion": 2.5
+          }
+        },
+        {
+          "provider": "vercel_gateway",
+          "harnessId": "vercel_gateway/chat-completions",
+          "upstreamModelId": "openai/gpt-5.6-sol",
+          "cacheClass": "provider_implicit_prompt_cache",
+          "commercialStatus": "experimental_only",
+          "pricing": {
+            "inputPerMillion": 2,
+            "outputPerMillion": 10,
+            "cacheReadPerMillion": 0.2,
+            "cacheWritePerMillion": 2.5
+          }
+        }
+      ]
+    },
+    "gpt-5.6-terra": {
+      "additionalRoutes": [
+        {
+          "provider": "open_router",
+          "harnessId": "open-router/chat-completions",
+          "upstreamModelId": "openai/gpt-5.6-terra",
+          "cacheClass": "provider_implicit_prompt_cache",
+          "commercialStatus": "authorized_marketplace",
+          "pricing": {
+            "inputPerMillion": 2,
+            "outputPerMillion": 12,
+            "cacheReadPerMillion": 0.2,
+            "cacheWritePerMillion": 2.5
+          }
+        },
+        {
+          "provider": "vercel_gateway",
+          "harnessId": "vercel_gateway/chat-completions",
+          "upstreamModelId": "openai/gpt-5.6-terra",
+          "cacheClass": "provider_implicit_prompt_cache",
+          "commercialStatus": "experimental_only",
+          "pricing": {
+            "inputPerMillion": 2,
+            "outputPerMillion": 12,
+            "cacheReadPerMillion": 0.2,
+            "cacheWritePerMillion": 2.5
+          }
+        }
+      ]
+    },
+    "gpt-5.6-luna": {
+      "additionalRoutes": [
+        {
+          "provider": "open_router",
+          "harnessId": "open-router/chat-completions",
+          "upstreamModelId": "openai/gpt-5.6-luna",
+          "cacheClass": "provider_implicit_prompt_cache",
+          "commercialStatus": "authorized_marketplace",
+          "pricing": {
+            "inputPerMillion": 0.2,
+            "outputPerMillion": 1.2,
+            "cacheReadPerMillion": 0.02,
+            "cacheWritePerMillion": 0.25
+          }
+        },
+        {
+          "provider": "vercel_gateway",
+          "harnessId": "vercel_gateway/chat-completions",
+          "upstreamModelId": "openai/gpt-5.6-luna",
+          "cacheClass": "provider_implicit_prompt_cache",
+          "commercialStatus": "experimental_only",
+          "pricing": {
+            "inputPerMillion": 0.2,
+            "outputPerMillion": 1.2,
+            "cacheReadPerMillion": 0.02,
+            "cacheWritePerMillion": 0.25
+          }
+        }
+      ]
+    },
+    "claude-fable-5": {
+      "additionalRoutes": [
+        {
+          "provider": "open_router",
+          "harnessId": "open-router/chat-completions",
+          "upstreamModelId": "anthropic/claude-fable-5",
+          "cacheClass": "gateway_prompt_cache",
+          "commercialStatus": "authorized_marketplace",
+          "pricing": {
+            "inputPerMillion": 10,
+            "outputPerMillion": 50,
+            "cacheReadPerMillion": 1,
+            "cacheWritePerMillion": 12.5
+          }
+        },
+        {
+          "provider": "vercel_gateway",
+          "harnessId": "vercel_gateway/chat-completions",
+          "upstreamModelId": "anthropic/claude-fable-5",
+          "cacheClass": "gateway_prompt_cache",
+          "commercialStatus": "experimental_only",
+          "pricing": {
+            "inputPerMillion": 10,
+            "outputPerMillion": 50,
+            "cacheReadPerMillion": 1,
+            "cacheWritePerMillion": 12.5
+          }
+        }
+      ]
+    },
+    "claude-opus-5": {
+      "additionalRoutes": [
+        {
+          "provider": "open_router",
+          "harnessId": "open-router/chat-completions",
+          "upstreamModelId": "anthropic/claude-opus-5",
+          "cacheClass": "gateway_prompt_cache",
+          "commercialStatus": "authorized_marketplace",
+          "pricing": {
+            "inputPerMillion": 5,
+            "outputPerMillion": 25,
+            "cacheReadPerMillion": 0.5,
+            "cacheWritePerMillion": 6.25
+          }
+        },
+        {
+          "provider": "vercel_gateway",
+          "harnessId": "vercel_gateway/chat-completions",
+          "upstreamModelId": "anthropic/claude-opus-5",
+          "cacheClass": "gateway_prompt_cache",
+          "commercialStatus": "experimental_only",
+          "pricing": {
+            "inputPerMillion": 5,
+            "outputPerMillion": 25,
+            "cacheReadPerMillion": 0.5,
+            "cacheWritePerMillion": 6.25
+          }
+        }
+      ]
+    },
+    "gemini-3.1-pro-preview": {
+      "additionalRoutes": [
+        {
+          "provider": "open_router",
+          "harnessId": "open-router/chat-completions",
+          "upstreamModelId": "google/gemini-3.1-pro-preview",
+          "cacheClass": "provider_implicit_prompt_cache",
+          "commercialStatus": "authorized_marketplace",
+          "pricing": {
+            "inputPerMillion": 2,
+            "outputPerMillion": 12,
+            "cacheReadPerMillion": 0.2,
+            "cacheWritePerMillion": 0.375
+          }
+        },
+        {
+          "provider": "vercel_gateway",
+          "harnessId": "vercel_gateway/chat-completions",
+          "upstreamModelId": "google/gemini-3.1-pro-preview",
+          "cacheClass": "provider_implicit_prompt_cache",
+          "commercialStatus": "experimental_only",
+          "pricing": {
+            "inputPerMillion": 2,
+            "outputPerMillion": 12,
+            "cacheReadPerMillion": 0.2,
+            "cacheWritePerMillion": 0
+          }
+        }
+      ]
+    },
+    "gemini-3.5-flash-lite": {
+      "additionalRoutes": [
+        {
+          "provider": "open_router",
+          "harnessId": "open-router/chat-completions",
+          "upstreamModelId": "google/gemini-3.5-flash-lite",
+          "cacheClass": "provider_implicit_prompt_cache",
+          "commercialStatus": "authorized_marketplace",
+          "pricing": {
+            "inputPerMillion": 0.3,
+            "outputPerMillion": 2.5,
+            "cacheReadPerMillion": 0.03,
+            "cacheWritePerMillion": 0.0833
+          }
+        },
+        {
+          "provider": "vercel_gateway",
+          "harnessId": "vercel_gateway/chat-completions",
+          "upstreamModelId": "google/gemini-3.5-flash-lite",
+          "cacheClass": "provider_implicit_prompt_cache",
+          "commercialStatus": "experimental_only",
+          "pricing": {
+            "inputPerMillion": 0.3,
+            "outputPerMillion": 2.5,
+            "cacheReadPerMillion": 0.03,
+            "cacheWritePerMillion": 0
+          }
+        }
+      ]
+    },
+    "gemini-3.8-flash": {
+      "additionalRoutes": [
+        {
+          "provider": "open_router",
+          "harnessId": "open-router/chat-completions",
+          "upstreamModelId": "google/gemini-3.8-flash",
+          "cacheClass": "provider_implicit_prompt_cache",
+          "commercialStatus": "authorized_marketplace",
+          "pricing": {
+            "inputPerMillion": 0.75,
+            "outputPerMillion": 3.75,
+            "cacheReadPerMillion": 0.075,
+            "cacheWritePerMillion": 0.0417
+          }
+        },
+        {
+          "provider": "vercel_gateway",
+          "harnessId": "vercel_gateway/chat-completions",
+          "upstreamModelId": "google/gemini-3.8-flash",
+          "cacheClass": "provider_implicit_prompt_cache",
+          "commercialStatus": "experimental_only",
+          "pricing": {
+            "inputPerMillion": 0.75,
+            "outputPerMillion": 3.75,
+            "cacheReadPerMillion": 0.075,
+            "cacheWritePerMillion": 0
+          }
+        }
+      ]
+    },
+    "deepseek-v4-flash": {
+      "additionalRoutes": [
+        {
+          "provider": "open_router",
+          "harnessId": "open-router/chat-completions",
+          "upstreamModelId": "deepseek/deepseek-v4-flash",
+          "cacheClass": "provider_implicit_prompt_cache",
+          "commercialStatus": "authorized_marketplace",
+          "pricing": {
+            "inputPerMillion": 0.0886,
+            "outputPerMillion": 0.1772,
+            "cacheReadPerMillion": 0.0177,
+            "cacheWritePerMillion": 0.0886
+          }
+        },
+        {
+          "provider": "vercel_gateway",
+          "harnessId": "vercel_gateway/chat-completions",
+          "upstreamModelId": "deepseek/deepseek-v4-flash",
+          "cacheClass": "provider_implicit_prompt_cache",
+          "commercialStatus": "experimental_only",
+          "pricing": {
+            "inputPerMillion": 0.13,
+            "outputPerMillion": 0.26,
+            "cacheReadPerMillion": 0.028,
+            "cacheWritePerMillion": 0
+          }
+        }
+      ]
+    },
+    "deepseek-v4-pro": {
+      "additionalRoutes": [
+        {
+          "provider": "open_router",
+          "harnessId": "open-router/chat-completions",
+          "upstreamModelId": "deepseek/deepseek-v4-pro",
+          "cacheClass": "provider_implicit_prompt_cache",
+          "commercialStatus": "authorized_marketplace",
+          "pricing": {
+            "inputPerMillion": 1.0423,
+            "outputPerMillion": 2.0845,
+            "cacheReadPerMillion": 0.0869,
+            "cacheWritePerMillion": 1.0423
+          }
+        },
+        {
+          "provider": "vercel_gateway",
+          "harnessId": "vercel_gateway/chat-completions",
+          "upstreamModelId": "deepseek/deepseek-v4-pro",
+          "cacheClass": "provider_implicit_prompt_cache",
+          "commercialStatus": "experimental_only",
+          "pricing": {
+            "inputPerMillion": 0.66,
+            "outputPerMillion": 1.98,
+            "cacheReadPerMillion": 0.022,
+            "cacheWritePerMillion": 0
+          }
+        }
+      ]
+    },
+    "qwen-3.5-flash": {
+      "additionalRoutes": [
+        {
+          "provider": "open_router",
+          "harnessId": "open-router/chat-completions",
+          "upstreamModelId": "qwen/qwen3.5-flash-02-23",
+          "cacheClass": "no_provider_cache",
+          "commercialStatus": "authorized_marketplace",
+          "pricing": {
+            "inputPerMillion": 0.065,
+            "outputPerMillion": 0.26,
+            "cacheReadPerMillion": 0,
+            "cacheWritePerMillion": 0
+          }
+        },
+        {
+          "provider": "vercel_gateway",
+          "harnessId": "vercel_gateway/chat-completions",
+          "upstreamModelId": "alibaba/qwen3.5-flash",
+          "cacheClass": "provider_implicit_prompt_cache",
+          "commercialStatus": "experimental_only",
+          "pricing": {
+            "inputPerMillion": 0.1,
+            "outputPerMillion": 0.4,
+            "cacheReadPerMillion": 0.001,
+            "cacheWritePerMillion": 0.125
+          }
+        }
+      ]
+    },
+    "qwen-3.7-plus": {
+      "additionalRoutes": [
+        {
+          "provider": "open_router",
+          "harnessId": "open-router/chat-completions",
+          "upstreamModelId": "qwen/qwen3.7-plus",
+          "cacheClass": "provider_implicit_prompt_cache",
+          "commercialStatus": "authorized_marketplace",
+          "pricing": {
+            "inputPerMillion": 0.32,
+            "outputPerMillion": 1.28,
+            "cacheReadPerMillion": 0.064,
+            "cacheWritePerMillion": 0.4
+          }
+        },
+        {
+          "provider": "vercel_gateway",
+          "harnessId": "vercel_gateway/chat-completions",
+          "upstreamModelId": "alibaba/qwen3.7-plus",
+          "cacheClass": "provider_implicit_prompt_cache",
+          "commercialStatus": "experimental_only",
+          "pricing": {
+            "inputPerMillion": 0.4,
+            "outputPerMillion": 1.6,
+            "cacheReadPerMillion": 0.08,
+            "cacheWritePerMillion": 0.5
+          }
+        }
+      ]
+    },
+    "glm-5.3": {
+      "additionalRoutes": [
+        {
+          "provider": "open_router",
+          "harnessId": "open-router/chat-completions",
+          "upstreamModelId": "z-ai/glm-5.3",
+          "cacheClass": "provider_implicit_prompt_cache",
+          "commercialStatus": "authorized_marketplace",
+          "pricing": {
+            "inputPerMillion": 1.4,
+            "outputPerMillion": 4.4,
+            "cacheReadPerMillion": 0.26,
+            "cacheWritePerMillion": 0
+          }
+        },
+        {
+          "provider": "vercel_gateway",
+          "harnessId": "vercel_gateway/chat-completions",
+          "upstreamModelId": "zai/glm-5.3",
+          "cacheClass": "provider_implicit_prompt_cache",
+          "commercialStatus": "experimental_only",
+          "pricing": {
+            "inputPerMillion": 0.7,
+            "outputPerMillion": 2.2,
+            "cacheReadPerMillion": 0.13,
+            "cacheWritePerMillion": 0
+          }
+        }
+      ]
+    },
+    "glm-5.3-flash": {
+      "additionalRoutes": [
+        {
+          "provider": "open_router",
+          "harnessId": "open-router/chat-completions",
+          "upstreamModelId": "z-ai/glm-5.3-flash",
+          "cacheClass": "provider_implicit_prompt_cache",
+          "commercialStatus": "authorized_marketplace",
+          "pricing": {
+            "inputPerMillion": 0.075,
+            "outputPerMillion": 0.25,
+            "cacheReadPerMillion": 0.015,
+            "cacheWritePerMillion": 0
+          }
+        },
+        {
+          "provider": "vercel_gateway",
+          "harnessId": "vercel_gateway/chat-completions",
+          "upstreamModelId": "zai/glm-5.3-flash",
+          "cacheClass": "provider_implicit_prompt_cache",
+          "commercialStatus": "experimental_only",
+          "pricing": {
+            "inputPerMillion": 0.15,
+            "outputPerMillion": 0.5,
+            "cacheReadPerMillion": 0.03,
+            "cacheWritePerMillion": 0
+          }
+        }
+      ]
+    },
+    "kimi-k3": {
+      "additionalRoutes": [
+        {
+          "provider": "open_router",
+          "harnessId": "open-router/chat-completions",
+          "upstreamModelId": "moonshotai/kimi-k3",
+          "cacheClass": "provider_implicit_prompt_cache",
+          "commercialStatus": "authorized_marketplace",
+          "pricing": {
             "inputPerMillion": 3,
             "outputPerMillion": 15,
             "cacheReadPerMillion": 0.3,
-            "cacheWritePerMillion": 3.75
-          },
-          "pricingNote": "OpenRouter publishes no price table inside this repository, so these are Anthropic's official list prices for Claude Sonnet 5 recorded as the route price. OpenRouter serves the same weights through anthropic/claude-sonnet-5 and forwards cache_control, which is why the route carries a gateway prompt cache class rather than the provider-native one. Replace these four numbers with OpenRouter's own published rates once a fetched price table lands in the repository."
+            "cacheWritePerMillion": 0
+          }
+        },
+        {
+          "provider": "vercel_gateway",
+          "harnessId": "vercel_gateway/chat-completions",
+          "upstreamModelId": "moonshotai/kimi-k3",
+          "cacheClass": "provider_implicit_prompt_cache",
+          "commercialStatus": "experimental_only",
+          "pricing": {
+            "inputPerMillion": 3,
+            "outputPerMillion": 15,
+            "cacheReadPerMillion": 0.3,
+            "cacheWritePerMillion": 0
+          }
+        }
+      ]
+    },
+    "grok-4.5": {
+      "additionalRoutes": [
+        {
+          "provider": "open_router",
+          "harnessId": "open-router/chat-completions",
+          "upstreamModelId": "x-ai/grok-4.5",
+          "cacheClass": "provider_implicit_prompt_cache",
+          "commercialStatus": "authorized_marketplace",
+          "pricing": {
+            "inputPerMillion": 2,
+            "outputPerMillion": 6,
+            "cacheReadPerMillion": 0.3,
+            "cacheWritePerMillion": 0
+          }
+        },
+        {
+          "provider": "vercel_gateway",
+          "harnessId": "vercel_gateway/chat-completions",
+          "upstreamModelId": "spacexai/grok-4.5",
+          "cacheClass": "provider_implicit_prompt_cache",
+          "commercialStatus": "experimental_only",
+          "pricing": {
+            "inputPerMillion": 2,
+            "outputPerMillion": 6,
+            "cacheReadPerMillion": 0.3,
+            "cacheWritePerMillion": 0
+          }
+        }
+      ]
+    },
+    "minimax-m3": {
+      "additionalRoutes": [
+        {
+          "provider": "open_router",
+          "harnessId": "open-router/chat-completions",
+          "upstreamModelId": "minimax/minimax-m3",
+          "cacheClass": "provider_implicit_prompt_cache",
+          "commercialStatus": "authorized_marketplace",
+          "pricing": {
+            "inputPerMillion": 0.3,
+            "outputPerMillion": 1.2,
+            "cacheReadPerMillion": 0.06,
+            "cacheWritePerMillion": 0
+          }
+        },
+        {
+          "provider": "vercel_gateway",
+          "harnessId": "vercel_gateway/chat-completions",
+          "upstreamModelId": "minimax/minimax-m3",
+          "cacheClass": "provider_implicit_prompt_cache",
+          "commercialStatus": "experimental_only",
+          "pricing": {
+            "inputPerMillion": 0.3,
+            "outputPerMillion": 1.2,
+            "cacheReadPerMillion": 0.06,
+            "cacheWritePerMillion": 0
+          }
+        }
+      ]
+    },
+    "gpt-oss-120b": {
+      "additionalRoutes": [
+        {
+          "provider": "open_router",
+          "harnessId": "open-router/chat-completions",
+          "upstreamModelId": "openai/gpt-oss-120b",
+          "cacheClass": "no_provider_cache",
+          "commercialStatus": "authorized_marketplace",
+          "pricing": {
+            "inputPerMillion": 0.037,
+            "outputPerMillion": 0.17,
+            "cacheReadPerMillion": 0,
+            "cacheWritePerMillion": 0
+          }
+        },
+        {
+          "provider": "vercel_gateway",
+          "harnessId": "vercel_gateway/chat-completions",
+          "upstreamModelId": "openai/gpt-oss-120b",
+          "cacheClass": "no_provider_cache",
+          "commercialStatus": "experimental_only",
+          "pricing": {
+            "inputPerMillion": 0.1,
+            "outputPerMillion": 0.5,
+            "cacheReadPerMillion": 0,
+            "cacheWritePerMillion": 0
+          }
+        }
+      ]
+    },
+    "gpt-oss-20b": {
+      "additionalRoutes": [
+        {
+          "provider": "open_router",
+          "harnessId": "open-router/chat-completions",
+          "upstreamModelId": "openai/gpt-oss-20b",
+          "cacheClass": "provider_implicit_prompt_cache",
+          "commercialStatus": "authorized_marketplace",
+          "pricing": {
+            "inputPerMillion": 0.03,
+            "outputPerMillion": 0.13,
+            "cacheReadPerMillion": 0.03,
+            "cacheWritePerMillion": 0
+          }
+        },
+        {
+          "provider": "vercel_gateway",
+          "harnessId": "vercel_gateway/chat-completions",
+          "upstreamModelId": "openai/gpt-oss-20b",
+          "cacheClass": "no_provider_cache",
+          "commercialStatus": "experimental_only",
+          "pricing": {
+            "inputPerMillion": 0.05,
+            "outputPerMillion": 0.2,
+            "cacheReadPerMillion": 0,
+            "cacheWritePerMillion": 0
+          }
         }
       ]
     }
