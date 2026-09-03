@@ -210,7 +210,11 @@ describe('useChatStream', () => {
           calls.push('provider');
           const stream = new ReadableStream({
             start(controller) {
-              controller.enqueue(new TextEncoder().encode('data: [DONE]\n\n'));
+              controller.enqueue(
+                new TextEncoder().encode(
+                  `data: ${JSON.stringify({ choices: [{ delta: { content: 'Admitted.' }, finish_reason: 'stop' }] })}\n\ndata: [DONE]\n\n`,
+                ),
+              );
               controller.close();
             },
           });
@@ -610,6 +614,10 @@ describe('useChatStream', () => {
             resolveResponse = resolve;
           }),
       );
+      // The first response below is a content-free completion, so it trips the
+      // silent empty-turn retry (see useChatStream's isEmptyAssistantTurn) --
+      // this default covers that second, retried provider call.
+      vi.mocked(fetch).mockResolvedValue(new Response('data: [DONE]\n\n', { status: 200 }));
 
       const { result } = renderHook(() => useChatStream());
       let send: Promise<boolean> | undefined;
