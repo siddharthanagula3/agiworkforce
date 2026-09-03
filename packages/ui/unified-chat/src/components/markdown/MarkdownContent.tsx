@@ -13,13 +13,14 @@ import { HighlightedCode } from './HighlightedCode';
 import { REMARK_PLUGINS } from './remarkPlugins';
 import { StreamTailContext, useIsStreamTail } from './streamTailContext';
 import {
+  CITATION_GROUP_HREF_PATTERN,
   CITATION_HREF_PATTERN,
   findCitationIndexForUrl,
   linkifyCitationMarkers,
   stripTrackingParams,
 } from './citationMarkers';
 import { CitationChip, CitationsContext, useMarkdownCitations } from './CitationChip';
-import type { MarkdownCitation } from './CitationChip';
+import type { CitationItem, MarkdownCitation } from './CitationChip';
 import type { Components } from 'react-markdown';
 import { Button } from '@agiworkforce/ui';
 import { Copy, Check, ImageOff } from 'lucide-react';
@@ -182,6 +183,18 @@ const MarkdownImage = ({ src, alt, title }: { src?: string; alt?: string; title?
 const PROTOCOL_RELATIVE_PREFIX = '//';
 const FRAGMENT_PREFIX = '#';
 
+function citationItemsForIndices(
+  indices: readonly number[],
+  citations: readonly MarkdownCitation[],
+): CitationItem[] {
+  const items: CitationItem[] = [];
+  for (const index of indices) {
+    const citation = citations[index - 1];
+    if (citation) items.push({ index, citation });
+  }
+  return items;
+}
+
 const MarkdownLink = ({ href, children }: { href?: string; children?: React.ReactNode }) => {
   const citations = useMarkdownCitations();
   // The sanitizer strips an href it refuses (javascript:, data:) but leaves
@@ -190,16 +203,23 @@ const MarkdownLink = ({ href, children }: { href?: string; children?: React.Reac
   if (typeof href !== 'string' || href.startsWith(PROTOCOL_RELATIVE_PREFIX)) {
     return <>{children}</>;
   }
-  const citationMatch = CITATION_HREF_PATTERN.exec(href);
-  if (citationMatch) {
-    const index = Number(citationMatch[1]);
-    const citation = citations[index - 1];
-    if (citation) return <CitationChip index={index} citation={citation} />;
+  const groupMatch = CITATION_GROUP_HREF_PATTERN.exec(href);
+  if (groupMatch) {
+    const indices = (groupMatch[1] ?? '').split(',').map(Number);
+    const items = citationItemsForIndices(indices, citations);
+    if (items.length > 0) return <CitationChip items={items} />;
   } else {
-    const inlineIndex = findCitationIndexForUrl(href, citations);
-    if (inlineIndex !== undefined) {
-      const citation = citations[inlineIndex - 1];
-      if (citation) return <CitationChip index={inlineIndex} citation={citation} />;
+    const citationMatch = CITATION_HREF_PATTERN.exec(href);
+    if (citationMatch) {
+      const index = Number(citationMatch[1]);
+      const citation = citations[index - 1];
+      if (citation) return <CitationChip items={[{ index, citation }]} />;
+    } else {
+      const inlineIndex = findCitationIndexForUrl(href, citations);
+      if (inlineIndex !== undefined) {
+        const citation = citations[inlineIndex - 1];
+        if (citation) return <CitationChip items={[{ index: inlineIndex, citation }]} />;
+      }
     }
   }
   const cleanHref = stripTrackingParams(href);
