@@ -6,6 +6,22 @@
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
+const dnsMocks = vi.hoisted(() => ({ lookup: vi.fn() }));
+vi.mock('undici', async (importOriginal) => {
+  // pinnedPublicFetch (used by title enrichment) calls undici's own fetch;
+  // route it back to the global fetch these tests drive with vi.stubGlobal.
+  const actual = await importOriginal<typeof import('undici')>();
+  return {
+    ...actual,
+    fetch: (...args: unknown[]) =>
+      (globalThis.fetch as unknown as (...a: unknown[]) => unknown)(...args),
+  };
+});
+vi.mock('node:dns/promises', () => ({
+  default: { lookup: dnsMocks.lookup },
+  lookup: dnsMocks.lookup,
+}));
+
 vi.mock('@/lib/logger', () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
@@ -196,6 +212,7 @@ const BILLING = { userId: 'user-1', token: 'tok' };
 
 beforeEach(() => {
   vi.clearAllMocks();
+  dnsMocks.lookup.mockResolvedValue([{ address: '93.184.216.34', family: 4 }]);
 });
 
 // ─── SourceAggregator ─────────────────────────────────────────────────────────
@@ -228,6 +245,75 @@ describe('SourceAggregator', () => {
       agg.add({ url: 'https://example.com/report?utm_source=x', title: 'Different query' }),
     ).toBe(true);
     expect(agg.size).toBe(2);
+  });
+});
+
+// ─── Title enrichment on gathering rounds ─────────────────────────────────────
+
+describe('title enrichment on gathering rounds', () => {
+  it('enriches a search result missing a title with the page headline before the round-end source event', async () => {
+    streamRequestMock
+      .mockResolvedValueOnce(planStream())
+      .mockResolvedValueOnce(
+        sseStream([
+          contentEvent(`notes\n${READY_MARKER}`),
+          searchResultsEvent([{ url: 'https://notitle.example.com/article', title: '' }]),
+          finishEvent(),
+        ]),
+      )
+      .mockResolvedValueOnce(sseStream([contentEvent('Final report [1]'), finishEvent()]));
+
+    const fetchMock = vi.fn(
+      async () =>
+        new Response('<html><head><title>Real Headline</title></head><body /></html>', {
+          status: 200,
+          headers: { 'content-type': 'text/html; charset=utf-8' },
+        }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    try {
+      const run = await collectRun(runResearchLoop(makeProcessed(), BILLING));
+      const sources = lastSearchResults(run);
+      expect(sources?.[0]).toMatchObject({
+        url: 'https://notitle.example.com/article',
+        title: 'Real Headline',
+      });
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      expect((fetchMock.mock.calls[0] as unknown[] | undefined)?.[0]).toBe(
+        'https://notitle.example.com/article',
+      );
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it('never fetches a search result that already has a title', async () => {
+    streamRequestMock
+      .mockResolvedValueOnce(planStream())
+      .mockResolvedValueOnce(
+        sseStream([
+          contentEvent(`notes\n${READY_MARKER}`),
+          searchResultsEvent([{ url: 'https://titled.example.com/', title: 'Already Titled' }]),
+          finishEvent(),
+        ]),
+      )
+      .mockResolvedValueOnce(sseStream([contentEvent('Final report [1]'), finishEvent()]));
+
+    const fetchMock = vi.fn(async () => new Response('unused', { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    try {
+      const run = await collectRun(runResearchLoop(makeProcessed(), BILLING));
+      const sources = lastSearchResults(run);
+      expect(sources?.[0]).toMatchObject({
+        url: 'https://titled.example.com/',
+        title: 'Already Titled',
+      });
+      expect(fetchMock).not.toHaveBeenCalled();
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 });
 
