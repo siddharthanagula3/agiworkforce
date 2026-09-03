@@ -20,6 +20,14 @@ vi.mock('@clerk/nextjs/server', () => ({
   clerkClient: vi.fn(async () => ({ users: { getUser: mockClerkGetUser } })),
 }));
 
+function authSession(userId: string | null): {
+  userId: string | null;
+  getToken: () => Promise<string>;
+} {
+  const token = userId ? jwt.sign({ sub: userId }, TEST_DEVELOPER_JWT_SECRET) : '';
+  return { userId, getToken: vi.fn(async () => token) };
+}
+
 const mockVerifyToken = vi.fn();
 vi.mock('@clerk/backend', () => ({
   verifyToken: (...args: unknown[]) => mockVerifyToken(...args),
@@ -39,6 +47,19 @@ vi.mock('@/lib/server/neon-db', () => ({
     dispose: vi.fn(),
   })),
 }));
+
+vi.mock('@agiworkforce/data-layer', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@agiworkforce/data-layer')>();
+  const rlsCapableAdapter: unknown = {
+    query: (...args: unknown[]) => mockNeonQuery(...args),
+    execute: (...args: unknown[]) => mockNeonExecute(...args),
+    transaction: (fn: (db: unknown) => unknown) => fn(rlsCapableAdapter),
+    withUser: () => rlsCapableAdapter,
+    withOrg: () => rlsCapableAdapter,
+    dispose: vi.fn(),
+  };
+  return { ...actual, createDatabaseClient: vi.fn(() => rlsCapableAdapter) };
+});
 
 type FakeRow = Record<string, unknown>;
 
@@ -187,7 +208,7 @@ describe('getClerkAuthUser · API-key issue/verify unification', () => {
   it('issue → authenticate round trip: a key from the real POST route authenticates via the real Bearer path', async () => {
     makeFakeDb();
 
-    mockAuth.mockResolvedValueOnce({ userId: 'user-round-trip' });
+    mockAuth.mockResolvedValueOnce(authSession('user-round-trip'));
     const createRes = await createApiKeyRoute(makeCreateRequest());
     expect(createRes.status).toBe(201);
     const created = (await createRes.json()) as {
@@ -197,7 +218,7 @@ describe('getClerkAuthUser · API-key issue/verify unification', () => {
     expect(created.full_key).toMatch(/^sk_live_[0-9a-f]{16}_[0-9a-f]{48}$/);
     expect(created.api_key.scopes).toEqual(['models:read', 'inference:write']);
 
-    mockAuth.mockResolvedValueOnce({ userId: null });
+    mockAuth.mockResolvedValueOnce(authSession(null));
     const authResult = await getClerkAuthUser(makeBearerRequest(created.full_key), {
       apiKeyScope: 'inference:write',
     });
@@ -209,7 +230,7 @@ describe('getClerkAuthUser · API-key issue/verify unification', () => {
   it('enforces the selected scope and denies API keys on routes without an API-key contract', async () => {
     makeFakeDb();
 
-    mockAuth.mockResolvedValueOnce({ userId: 'scoped-user' });
+    mockAuth.mockResolvedValueOnce(authSession('scoped-user'));
     const createRes = await createApiKeyRoute(makeCreateRequest('models only', ['models:read']));
     const created = (await createRes.json()) as { full_key: string };
 
@@ -254,7 +275,7 @@ describe('getClerkAuthUser · API-key issue/verify unification', () => {
 
   it('rejects new key issuance without at least one scope', async () => {
     makeFakeDb();
-    mockAuth.mockResolvedValueOnce({ userId: 'scope-required-user' });
+    mockAuth.mockResolvedValueOnce(authSession('scope-required-user'));
 
     const response = await createApiKeyRoute(makeCreateRequest('scope-less', []));
 
@@ -264,16 +285,16 @@ describe('getClerkAuthUser · API-key issue/verify unification', () => {
   it('rejects a key after it is revoked through the real DELETE route', async () => {
     makeFakeDb();
 
-    mockAuth.mockResolvedValueOnce({ userId: 'user-revoke-me' });
+    mockAuth.mockResolvedValueOnce(authSession('user-revoke-me'));
     const createRes = await createApiKeyRoute(makeCreateRequest());
     const created = (await createRes.json()) as { api_key: { id: string }; full_key: string };
 
-    mockAuth.mockResolvedValueOnce({ userId: 'user-revoke-me' });
+    mockAuth.mockResolvedValueOnce(authSession('user-revoke-me'));
     const { req, ctx } = makeRevokeRequest(created.api_key.id);
     const revokeRes = await revokeApiKeyRoute(req, ctx);
     expect(revokeRes.status).toBe(200);
 
-    mockAuth.mockResolvedValueOnce({ userId: null });
+    mockAuth.mockResolvedValueOnce(authSession(null));
     await expect(
       getClerkAuthUser(makeBearerRequest(created.full_key), {
         apiKeyScope: 'inference:write',
@@ -284,7 +305,7 @@ describe('getClerkAuthUser · API-key issue/verify unification', () => {
   it('rejects a malformed sk_live_-shaped key without a matching DB row', async () => {
     makeFakeDb();
 
-    mockAuth.mockResolvedValueOnce({ userId: null });
+    mockAuth.mockResolvedValueOnce(authSession(null));
     await expect(
       getClerkAuthUser(makeBearerRequest('sk_live_0000000000000000_not_a_real_secret_at_all'), {
         apiKeyScope: 'inference:write',
@@ -297,7 +318,7 @@ describe('getClerkAuthUser · API-key issue/verify unification', () => {
   it('rejects a too-short sk_live_ token before any DB lookup (parse-time rejection)', async () => {
     makeFakeDb();
 
-    mockAuth.mockResolvedValueOnce({ userId: null });
+    mockAuth.mockResolvedValueOnce(authSession(null));
     await expect(
       getClerkAuthUser(makeBearerRequest('sk_live_tooshort'), {
         apiKeyScope: 'inference:write',
@@ -309,7 +330,7 @@ describe('getClerkAuthUser · API-key issue/verify unification', () => {
   describe('WEB-AUTH-BEARER-COOKIE-PRINCIPAL-DIVERGENCE-01: bearer precedence over cookie', () => {
     it('a bearer that fails verification is rejected even with a valid session cookie riding along', async () => {
       makeFakeDb();
-      mockAuth.mockResolvedValueOnce({ userId: 'clerk-session-user' });
+      mockAuth.mockResolvedValueOnce(authSession('clerk-session-user'));
       mockVerifyToken.mockRejectedValueOnce(new Error('invalid token'));
 
       await expect(
@@ -321,7 +342,7 @@ describe('getClerkAuthUser · API-key issue/verify unification', () => {
 
     it('an Authorization header of exactly "Bearer " (empty token) normalizes away and is treated as no bearer at all', async () => {
       makeFakeDb();
-      mockAuth.mockResolvedValueOnce({ userId: 'clerk-session-user' });
+      mockAuth.mockResolvedValueOnce(authSession('clerk-session-user'));
 
       const req = new NextRequest('http://localhost/api/some-route', {
         headers: { authorization: 'Bearer ' },
@@ -341,7 +362,7 @@ describe('getClerkAuthUser · API-key issue/verify unification', () => {
         'inference:write',
       ]);
 
-      mockAuth.mockResolvedValueOnce({ userId: 'user-b-cookie' });
+      mockAuth.mockResolvedValueOnce(authSession('user-b-cookie'));
 
       const result = await getClerkAuthUser(makeBearerRequest(rawKey), {
         apiKeyScope: 'inference:write',
@@ -359,7 +380,7 @@ describe('getClerkAuthUser · API-key issue/verify unification', () => {
         'inference:write',
       ]);
 
-      mockAuth.mockResolvedValueOnce({ userId: 'same-user' });
+      mockAuth.mockResolvedValueOnce(authSession('same-user'));
 
       const result = await getClerkAuthUser(makeBearerRequest(rawKey), {
         apiKeyScope: 'inference:write',
@@ -373,7 +394,7 @@ describe('getClerkAuthUser · API-key issue/verify unification', () => {
   describe('unchanged: cookie-only and bearer-only (no cookie) paths', () => {
     it('cookie-only request (no Authorization header at all) still resolves via Path 1', async () => {
       makeFakeDb();
-      mockAuth.mockResolvedValueOnce({ userId: 'clerk-session-user' });
+      mockAuth.mockResolvedValueOnce(authSession('clerk-session-user'));
 
       const req = new NextRequest('http://localhost/api/some-route');
       const result = await getClerkAuthUser(req);
@@ -384,7 +405,7 @@ describe('getClerkAuthUser · API-key issue/verify unification', () => {
 
     it('Path 2b (Clerk Bearer JWT) still authenticates via verifyToken when there is no cookie session', async () => {
       makeFakeDb();
-      mockAuth.mockResolvedValueOnce({ userId: null });
+      mockAuth.mockResolvedValueOnce(authSession(null));
       mockVerifyToken.mockResolvedValueOnce({ sub: 'clerk-jwt-user', email: 'user@example.com' });
       process.env['CLERK_SECRET_KEY'] = 'test-clerk-secret-key';
 
@@ -447,7 +468,7 @@ describe('getClerkAuthUser · API-key issue/verify unification', () => {
 
     it('rejects a garbage Bearer token when there is no cookie session either', async () => {
       makeFakeDb();
-      mockAuth.mockResolvedValueOnce({ userId: null });
+      mockAuth.mockResolvedValueOnce(authSession(null));
       mockVerifyToken.mockRejectedValueOnce(new Error('invalid token'));
 
       await expect(
@@ -457,7 +478,7 @@ describe('getClerkAuthUser · API-key issue/verify unification', () => {
 
     it('rejects when there is no Authorization header and no Clerk session at all', async () => {
       makeFakeDb();
-      mockAuth.mockResolvedValueOnce({ userId: null });
+      mockAuth.mockResolvedValueOnce(authSession(null));
 
       const req = new NextRequest('http://localhost/api/some-route');
       await expect(getClerkAuthUser(req)).rejects.toMatchObject({ statusCode: 401 });
@@ -467,7 +488,7 @@ describe('getClerkAuthUser · API-key issue/verify unification', () => {
   describe('tenant scope propagation onto the active trace context', () => {
     it('stamps the resolved user id onto the ambient trace context for a cookie session', async () => {
       makeFakeDb();
-      mockAuth.mockResolvedValueOnce({ userId: 'clerk-session-user' });
+      mockAuth.mockResolvedValueOnce(authSession('clerk-session-user'));
 
       const context = { traceId: newTraceId(), spanId: newSpanId(), sampled: true };
       await runWithTraceContext(context, async () => {
@@ -478,7 +499,7 @@ describe('getClerkAuthUser · API-key issue/verify unification', () => {
 
     it('stamps the resolved user id for a verified API-key bearer', async () => {
       makeFakeDb();
-      mockAuth.mockResolvedValueOnce({ userId: 'scoped-user' });
+      mockAuth.mockResolvedValueOnce(authSession('scoped-user'));
       const createRes = await createApiKeyRoute(makeCreateRequest('scoped', ['models:read']));
       const created = (await createRes.json()) as { full_key: string };
 
@@ -493,7 +514,7 @@ describe('getClerkAuthUser · API-key issue/verify unification', () => {
 
     it('leaves no tenant scope stamped when authentication is rejected', async () => {
       makeFakeDb();
-      mockAuth.mockResolvedValueOnce({ userId: null });
+      mockAuth.mockResolvedValueOnce(authSession(null));
 
       const context = { traceId: newTraceId(), spanId: newSpanId(), sampled: true };
       await runWithTraceContext(context, async () => {
@@ -543,7 +564,7 @@ describe('getClerkAuthUser · API-key issue/verify unification', () => {
 
     it('lets a cookie session through when its organization does not require mfa', async () => {
       bindOrgPolicy(ORGANIZATION_ID, false);
-      mockAuth.mockResolvedValueOnce({ userId: 'clerk-session-user' });
+      mockAuth.mockResolvedValueOnce(authSession('clerk-session-user'));
 
       await expect(
         getClerkAuthUser(new NextRequest('http://localhost/api/some-route')),
@@ -553,7 +574,7 @@ describe('getClerkAuthUser · API-key issue/verify unification', () => {
 
     it('blocks a cookie session with a plain mfa_required error when the organization requires it and the user is unenrolled', async () => {
       bindOrgPolicy(ORGANIZATION_ID, true);
-      mockAuth.mockResolvedValueOnce({ userId: 'clerk-session-user' });
+      mockAuth.mockResolvedValueOnce(authSession('clerk-session-user'));
       mockClerkGetUser.mockResolvedValueOnce({ twoFactorEnabled: false });
 
       await expect(
@@ -563,7 +584,7 @@ describe('getClerkAuthUser · API-key issue/verify unification', () => {
 
     it('lets an enrolled caller through when the organization requires mfa', async () => {
       bindOrgPolicy(ORGANIZATION_ID, true);
-      mockAuth.mockResolvedValueOnce({ userId: 'clerk-session-user' });
+      mockAuth.mockResolvedValueOnce(authSession('clerk-session-user'));
       mockClerkGetUser.mockResolvedValueOnce({ twoFactorEnabled: true });
 
       await expect(
@@ -616,7 +637,7 @@ describe('getClerkAuthUser · API-key issue/verify unification', () => {
 
     it('lets a cookie session through when the organization has no allow list configured', async () => {
       bindOrgIpPolicy(ORGANIZATION_ID, []);
-      mockAuth.mockResolvedValueOnce({ userId: 'clerk-session-user' });
+      mockAuth.mockResolvedValueOnce(authSession('clerk-session-user'));
 
       await expect(getClerkAuthUser(requestFromIp('198.51.100.9'))).resolves.toEqual({
         userId: 'clerk-session-user',
@@ -625,7 +646,7 @@ describe('getClerkAuthUser · API-key issue/verify unification', () => {
 
     it('lets a cookie session through when the caller ip is inside the allowed subnet', async () => {
       bindOrgIpPolicy(ORGANIZATION_ID, ['203.0.113.0/24']);
-      mockAuth.mockResolvedValueOnce({ userId: 'clerk-session-user' });
+      mockAuth.mockResolvedValueOnce(authSession('clerk-session-user'));
 
       await expect(getClerkAuthUser(requestFromIp('203.0.113.5'))).resolves.toEqual({
         userId: 'clerk-session-user',
@@ -634,7 +655,7 @@ describe('getClerkAuthUser · API-key issue/verify unification', () => {
 
     it('blocks a cookie session with a plain ip_not_allowed error when the caller ip is outside every allowed subnet', async () => {
       bindOrgIpPolicy(ORGANIZATION_ID, ['203.0.113.0/24']);
-      mockAuth.mockResolvedValueOnce({ userId: 'clerk-session-user' });
+      mockAuth.mockResolvedValueOnce(authSession('clerk-session-user'));
 
       await expect(getClerkAuthUser(requestFromIp('198.51.100.9'))).rejects.toSatisfy(
         (error: unknown) => isIpNotAllowedError(error),
@@ -643,7 +664,7 @@ describe('getClerkAuthUser · API-key issue/verify unification', () => {
 
     it('is not fooled by a spoofed leading x-forwarded-for entry', async () => {
       bindOrgIpPolicy(ORGANIZATION_ID, ['203.0.113.0/24']);
-      mockAuth.mockResolvedValueOnce({ userId: 'clerk-session-user' });
+      mockAuth.mockResolvedValueOnce(authSession('clerk-session-user'));
 
       await expect(getClerkAuthUser(requestFromIp('203.0.113.5, 198.51.100.9'))).rejects.toSatisfy(
         (error: unknown) => isIpNotAllowedError(error),
