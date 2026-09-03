@@ -1,4 +1,3 @@
-
 export interface FakeRow {
   [column: string]: unknown;
 }
@@ -29,6 +28,7 @@ export interface FakeScimDbState {
   scim_group_members: FakeRow[];
   directory_sync_events: FakeRow[];
   directory_sync_connections: FakeRow[];
+  sso_connections: FakeRow[];
   organization_members: FakeRow[];
   profiles: FakeRow[];
   subscriptions: FakeRow[];
@@ -42,6 +42,7 @@ export function createFakeScimDb(seed: Partial<FakeScimDbState> = {}) {
     scim_group_members: [],
     directory_sync_events: [],
     directory_sync_connections: [],
+    sso_connections: [],
     organization_members: [],
     profiles: [],
     subscriptions: [],
@@ -278,6 +279,12 @@ export function createFakeScimDb(seed: Partial<FakeScimDbState> = {}) {
       );
       return new Array(before - state.directory_sync_connections.length).fill({}) as FakeRow[];
     }
+    if (q.includes('from sso_connections') && q.includes('domain_verified_at is not null')) {
+      return state.sso_connections
+        .filter((row) => row['organization_id'] === p[0] && row['domain_verified_at'] != null)
+        .map((row) => ({ domain: String(row['domain'] ?? '').toLowerCase() }));
+    }
+
     if (q.startsWith('update directory_sync_connections set last_sync_at')) {
       const row = state.directory_sync_connections.find(
         (entry) => entry['id'] === p[0] && entry['organization_id'] === p[1],
