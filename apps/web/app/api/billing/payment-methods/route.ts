@@ -7,6 +7,9 @@ import { withRateLimit } from '@/lib/rate-limit';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { getUserScopedDb } from '@/lib/server/rls-db';
+import { unauthorizedResponseFor } from '@/lib/api-auth-response';
+import { isMfaRequiredError } from '@/lib/mfa-policy-gate';
+import { isIpNotAllowedError } from '@/lib/ip-allow-list-gate';
 import type { SubscriptionRow } from '@/lib/server/neon-types';
 import { handleCorsPreflightRequest } from '@/lib/cors';
 import { STRIPE_CLIENT_OPTIONS } from '@/lib/stripe-config';
@@ -23,7 +26,10 @@ async function handleGetPaymentMethods(request: NextRequest) {
   let userId: string;
   try {
     ({ db, userId } = await getUserScopedDb(request));
-  } catch {
+  } catch (authError) {
+    if (isMfaRequiredError(authError) || isIpNotAllowedError(authError)) {
+      return unauthorizedResponseFor(authError);
+    }
     throw createError.unauthorized('Authentication required');
   }
 

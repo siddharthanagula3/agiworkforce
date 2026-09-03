@@ -3,6 +3,9 @@ import 'server-only';
 import { parseManagedUsageSummaryResponse } from '@agiworkforce/types';
 import { NextRequest, NextResponse } from 'next/server';
 import { getClerkAuthUser } from '@/lib/api-auth';
+import { unauthorizedResponseFor } from '@/lib/api-auth-response';
+import { isMfaRequiredError } from '@/lib/mfa-policy-gate';
+import { isIpNotAllowedError } from '@/lib/ip-allow-list-gate';
 import { handleCorsPreflightRequest } from '@/lib/cors';
 import { withErrorHandler } from '@/lib/error-handler';
 import { createError } from '@/lib/errors';
@@ -17,7 +20,10 @@ async function handleGetProviderUsage(request: NextRequest) {
   let userId: string;
   try {
     userId = (await getClerkAuthUser(request)).userId;
-  } catch {
+  } catch (authError) {
+    if (isMfaRequiredError(authError) || isIpNotAllowedError(authError)) {
+      return unauthorizedResponseFor(authError);
+    }
     throw createError.unauthorized('Authentication required');
   }
 

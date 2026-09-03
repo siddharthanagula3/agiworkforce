@@ -10,6 +10,9 @@ import { logger } from '@/lib/logger';
 import { handleCorsPreflightRequest } from '@/lib/cors';
 import { requireCsrfToken } from '@/lib/csrf';
 import { getClerkAuthUser } from '@/lib/api-auth';
+import { unauthorizedResponseFor } from '@/lib/api-auth-response';
+import { isMfaRequiredError } from '@/lib/mfa-policy-gate';
+import { isIpNotAllowedError } from '@/lib/ip-allow-list-gate';
 import { getNeonDb } from '@/lib/server/neon-db';
 
 async function handleDeviceLink(request: NextRequest) {
@@ -24,7 +27,10 @@ async function handleDeviceLink(request: NextRequest) {
   let authUser: { userId: string; email?: string };
   try {
     authUser = await getClerkAuthUser(request);
-  } catch {
+  } catch (authError) {
+    if (isMfaRequiredError(authError) || isIpNotAllowedError(authError)) {
+      return unauthorizedResponseFor(authError);
+    }
     logger.warn({}, 'Unauthenticated device link attempt rejected');
     return NextResponse.json(
       { error: 'Authentication required to link a device' },

@@ -4,6 +4,9 @@ import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
 import { canUseBillingPlanCapability, type BillingPlanTier } from '@agiworkforce/types';
 import { getClerkAuthUser } from '@/lib/api-auth';
+import { unauthorizedResponseFor } from '@/lib/api-auth-response';
+import { isMfaRequiredError } from '@/lib/mfa-policy-gate';
+import { isIpNotAllowedError } from '@/lib/ip-allow-list-gate';
 import { getNeonDb } from '@/lib/server/neon-db';
 import { resolveEntitlementPlan } from '@/lib/server/scim/scim-auth';
 import type { OrganizationMemberRow } from '@/lib/server/neon-types';
@@ -44,7 +47,10 @@ export async function requireDirectorySyncAdmin(
   let userId: string;
   try {
     ({ userId } = await getClerkAuthUser(request));
-  } catch {
+  } catch (authError) {
+    if (isMfaRequiredError(authError) || isIpNotAllowedError(authError)) {
+      return { response: unauthorizedResponseFor(authError) };
+    }
     return failure(401, 'Unauthorized');
   }
 

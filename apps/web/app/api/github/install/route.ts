@@ -5,6 +5,9 @@ import { cookies } from 'next/headers';
 import { logger } from '@/lib/logger';
 import { withRateLimit } from '@/lib/rate-limit';
 import { getClerkAuthUser } from '@/lib/api-auth';
+import { unauthorizedResponseFor } from '@/lib/api-auth-response';
+import { isMfaRequiredError } from '@/lib/mfa-policy-gate';
+import { isIpNotAllowedError } from '@/lib/ip-allow-list-gate';
 import {
   generateGitHubInstallState,
   getGitHubUserAuthorizationUrl,
@@ -44,7 +47,10 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
 
   try {
     await getClerkAuthUser(request);
-  } catch {
+  } catch (authError) {
+    if (isMfaRequiredError(authError) || isIpNotAllowedError(authError)) {
+      return unauthorizedResponseFor(authError);
+    }
     const loginUrl = new URL('/login', request.url);
     loginUrl.searchParams.set('redirectTo', '/connectors');
     return NextResponse.redirect(loginUrl);
