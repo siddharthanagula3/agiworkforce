@@ -1,6 +1,6 @@
 # agiworkforce UI/UX gap tracker
 
-<!-- ui-gaps-csv-sha256: 5500b349fdaa24a44293448ae13b54e2f667534f6fef375e30273b71b85f0948 -->
+<!-- ui-gaps-csv-sha256: 3d166ff43a8e5896e6c2356d4ab7ad56023a763a158cb80dcbfd26b28b8799b2 -->
 
 > Canonical comparison tracker normalized from the ChatGPT, Codex, and Claude UI/UX audit.
 > `audit/ui-gaps.csv` is the source of truth; this document is generated with
@@ -42,7 +42,7 @@ record through `mergedFrom`, combined evidence, and both reference screenshots.
 
 ## P0
 
-### GAP-001 — Mobile exposes a supported Managed Cloud Skills catalog
+### GAP-001, Mobile exposes a supported Managed Cloud Skills catalog
 
 - **Status:** Done
 - **Owner:** Mobile
@@ -65,7 +65,7 @@ Completed for the supported read-only Managed Cloud catalog. Keep Mobile install
 
 - `chatgpt_reference/072-chatgpt-ios-skills-empty-state-search-bar-no-skills.png`
 
-### GAP-002 — Desktop requires task-scoped consent before local tools access new folders
+### GAP-002, Desktop requires task-scoped consent before local tools access new folders
 
 - **Status:** Done
 - **Owner:** Desktop
@@ -88,12 +88,12 @@ Completed. Keep every new local path-bearing tool on this native authorization b
 
 - `claude_reference/102-claude-desktop-cowork-agent-task-view-folder-access-modal.png`
 
-### GAP-003 — Desktop keeps workflow capture controls visible in a detached recorder HUD
+### GAP-003, Desktop keeps workflow capture controls visible in a detached recorder HUD
 
 - **Status:** Done
 - **Owner:** Desktop
 - **Surface/type:** desktop · missing-screen
-- **Reference:** Claude · macOS desktop · Cowork skill recording — active capture HUD
+- **Reference:** Claude · macOS desktop · Cowork skill recording, active capture HUD
 
 **Gap**
 
@@ -111,7 +111,7 @@ Completed. Keep native recorder state authoritative, fail capture closed if the 
 
 - `references-2/claude-desktop-cowork-record-skill-04-active-capture-zero-steps.png`
 
-### GAP-004 — Desktop Connections exposes the supported mobile-control pairing workflow
+### GAP-004, Desktop Connections exposes the supported mobile-control pairing workflow
 
 - **Status:** Done
 - **Owner:** Desktop
@@ -121,7 +121,7 @@ Completed. Keep native recorder state authoritative, fail capture closed if the 
 
 **Gap**
 
-The reference dedicates a Connections settings page to remote-control management. agiworkforce now has a canonical, searchable Connections destination in the mounted Desktop Settings panel. It exposes the product's supported contract—pairing the mobile app to monitor this Mac and respond to agent approvals—without presenting unimplemented outbound-device or SSH controls.
+The reference dedicates a Connections settings page to remote-control management. agiworkforce now has a canonical, searchable Connections destination in the mounted Desktop Settings panel. It exposes the product's supported contract, pairing the mobile app to monitor this Mac and respond to agent approvals, without presenting unimplemented outbound-device or SSH controls.
 
 **Evidence**
 
@@ -140,7 +140,7 @@ Independent duplicate recommendation (GAP-005): Duplicate disposition complete; 
 - `chatgpt_reference/053-codex-macos-settings-connections-control-this-mac-devices.png`
 - `chatgpt_reference/032-codex-macos-settings-connections-control-this-mac-allow-toggle.png`
 
-### GAP-006 — Cowork Dispatch has an authenticated task lifecycle and authoritative settings
+### GAP-006, Cowork Dispatch has an authenticated task lifecycle and authoritative settings
 
 - **Status:** Done
 - **Owner:** Desktop
@@ -163,12 +163,12 @@ Completed for paired-device local Desktop execution. Keep Dispatch default-off a
 
 - `claude_reference/153-claude-desktop-settings-cowork-dispatch-files.png`
 
-### GAP-007 — Archived chats are recoverable from the mounted Desktop sidebar
+### GAP-007, Archived chats are recoverable from the mounted Desktop sidebar
 
 - **Status:** Done
 - **Owner:** Desktop
 - **Surface/type:** desktop · missing-screen
-- **Reference:** ChatGPT · macOS desktop · Settings > General — Archived chats nav
+- **Reference:** ChatGPT · macOS desktop · Settings > General, Archived chats nav
 
 **Gap**
 
@@ -186,12 +186,12 @@ Completed. Keep archive, restore, and permanent deletion on the existing chat-st
 
 - `chatgpt_reference/091-chatgpt-macos-settings-general-permissions-full-access-defaults.png`
 
-### GAP-008 — Full-access sandbox selection requires confirmation and complete risk disclosure
+### GAP-008, Full-access sandbox selection requires confirmation and complete risk disclosure
 
 - **Status:** Done
 - **Owner:** Desktop
 - **Surface/type:** desktop · missing-copy
-- **Reference:** ChatGPT · macOS desktop · Settings > General — Permissions
+- **Reference:** ChatGPT · macOS desktop · Settings > General, Permissions
 
 **Gap**
 
@@ -209,12 +209,12 @@ Completed. Keep every future path to unsandboxed terminal execution behind this 
 
 - `chatgpt_reference/091-chatgpt-macos-settings-general-permissions-full-access-defaults.png`
 
-### GAP-009 — Desktop memory controls enforce one Local and Managed Cloud privacy policy
+### GAP-009, Desktop memory controls enforce one Local and Managed Cloud privacy policy
 
 - **Status:** Done
 - **Owner:** Desktop
 - **Surface/type:** desktop · missing-control
-- **Reference:** Codex · macOS desktop · Settings > Personalization — Memory
+- **Reference:** Codex · macOS desktop · Settings > Personalization, Memory
 
 **Gap**
 
@@ -232,7 +232,7 @@ Completed. Keep automatic retrieval and every generation entry point behind the 
 
 - `chatgpt_reference/098-codex-macos-settings-personalization-personality-instructions-memory.png`
 
-### GAP-010 — Web exposes authenticated, durable managed Code sessions
+### GAP-010, Web exposes authenticated, durable managed Code sessions
 
 - **Status:** Done
 - **Owner:** Web
@@ -255,7 +255,7 @@ Completed for bounded managed terminal sessions. Apply migration 0075 and provis
 
 - `claude_reference/173-claude-web-code-onboarding-wizard-create-cloud-environment.png`
 
-### GAP-011 — 'Bypass permissions' mode is enabled with no consent modal or risk copy
+### GAP-011, 'Bypass permissions' mode is enabled with no consent modal or risk copy
 
 - **Status:** Done
 - **Owner:** VS Code
@@ -278,12 +278,12 @@ Completed. Keep all future agent-mode mutation paths on setAgentModeWithConsent,
 
 - `chatgpt_reference/009-codex-vscode-ext-permission-confirm-modal-turn-on-full-access-warning.png`
 
-### GAP-012 — VS Code exposes a branded, complete settings editor
+### GAP-012, VS Code exposes a branded, complete settings editor
 
 - **Status:** Done
 - **Owner:** VS Code
 - **Surface/type:** extension-vscode · missing-screen
-- **Reference:** Codex · VS Code extension · Settings editor tab — General
+- **Reference:** Codex · VS Code extension · Settings editor tab, General
 
 **Gap**
 
@@ -303,7 +303,7 @@ Completed. Keep SETTINGS_PANEL_SETTING_KEYS in parity with every non-deprecated 
 
 ## P1
 
-### GAP-013 — Mobile exposes an actionable and account-safe change-email handoff
+### GAP-013, Mobile exposes an actionable and account-safe change-email handoff
 
 - **Status:** Done
 - **Owner:** Mobile
@@ -326,7 +326,7 @@ Completed. Keep the captured-account revalidation on the handoff and replace the
 
 - `chatgpt_reference/069-chatgpt-ios-settings-account-modal-change-email-confirm.png`
 
-### GAP-014 — Restore purchases reports every terminal outcome and offers retry
+### GAP-014, Restore purchases reports every terminal outcome and offers retry
 
 - **Status:** Done
 - **Owner:** Mobile
@@ -349,7 +349,7 @@ Completed. Keep server verification authoritative before reporting restoration s
 
 - `chatgpt_reference/071-chatgpt-ios-settings-billing-modal-restore-purchases-ok-only.png`
 
-### GAP-015 — Mobile prevents cross-platform duplicate subscription purchases
+### GAP-015, Mobile prevents cross-platform duplicate subscription purchases
 
 - **Status:** Done
 - **Owner:** Mobile
@@ -372,7 +372,7 @@ Completed. Keep the source server-authoritative, fail unknown entitled ownership
 
 - `chatgpt_reference/070-chatgpt-ios-settings-billing-modal-subscription-external-platform.png`
 
-### GAP-016 — Mobile exposes a dedicated, filterable full Chats history
+### GAP-016, Mobile exposes a dedicated, filterable full Chats history
 
 - **Status:** Done
 - **Owner:** Mobile
@@ -395,7 +395,7 @@ Completed. Keep the drawer preview compact while preserving the unbounded Chats 
 
 - `claude_reference/117-claude-ios-chats-list-greeting-and-two-older-chats.png`
 
-### GAP-017 — Mobile explains cross-device continuity when an account first enters Managed Cloud
+### GAP-017, Mobile explains cross-device continuity when an account first enters Managed Cloud
 
 - **Status:** Done
 - **Owner:** Mobile
@@ -418,7 +418,7 @@ Completed. Keep acknowledgement owner-scoped, keep automatic presentation gated 
 
 - `references-2/claude-ios-cowork-01-cross-device-continuity-onboarding.png`
 
-### GAP-018 — Mobile global search covers chats, projects, files, Library images, and artifacts
+### GAP-018, Mobile global search covers chats, projects, files, Library images, and artifacts
 
 - **Status:** Done
 - **Owner:** Mobile
@@ -441,7 +441,7 @@ Completed. Keep Local search on device, keep Cloud message search behind the exi
 
 - `chatgpt_reference/078-chatgpt-ios-search-overlay-empty-prompt-state.png`
 
-### GAP-019 — Inline Mobile approval-policy picker is declined because Mobile is not the policy authority
+### GAP-019, Inline Mobile approval-policy picker is declined because Mobile is not the policy authority
 
 - **Status:** Not Planned
 - **Owner:** Mobile
@@ -464,7 +464,7 @@ Not planned for the current trust contract. Keep the inline Desktop-authority di
 
 - `references-2/IMG_0627.PNG`
 
-### GAP-020 — Mobile Library exposes mode-scoped Documents and attachment reuse
+### GAP-020, Mobile Library exposes mode-scoped Documents and attachment reuse
 
 - **Status:** Done
 - **Owner:** Mobile
@@ -487,7 +487,7 @@ Completed. Keep attachment discovery derived from the physically separated trans
 
 - `chatgpt_reference/044-chatgpt-ios-library-upload-promo-upload-once-use-anytime.png`
 
-### GAP-021 — Mobile Library has local search across images documents and artifacts
+### GAP-021, Mobile Library has local search across images documents and artifacts
 
 - **Status:** Done
 - **Owner:** Mobile
@@ -510,7 +510,7 @@ Completed. Keep Library search local over the authorized projection; introduce i
 
 - `chatgpt_reference/045-chatgpt-ios-library-grid-thumbnails-uploaded-screenshots-gallery.png`
 
-### GAP-022 — Manual companion pairing accepts the exact code shown by Desktop
+### GAP-022, Manual companion pairing accepts the exact code shown by Desktop
 
 - **Status:** Done
 - **Owner:** Mobile
@@ -533,7 +533,7 @@ Completed. Keep manual codes five-minute high-entropy bearer secrets, never log 
 
 - `chatgpt_reference/030-codex-ios-remote-setup-manual-pairing-code-modal-keyboard.png`
 
-### GAP-023 — Family account linking is not planned for the current device-only age-settings scope
+### GAP-023, Family account linking is not planned for the current device-only age-settings scope
 
 - **Status:** Open
 - **Owner:** account-and-session-service
@@ -556,7 +556,7 @@ Not planned for the current v1 device-local trust model. Keep the explicit bound
 
 - `chatgpt_reference/143-chatgpt-web-settings-parental-controls-add-family-member-link-accounts.png`
 
-### GAP-024 — Interactive Mobile plugin installation is declined until an account-bound marketplace lifecycle exists
+### GAP-024, Interactive Mobile plugin installation is declined until an account-bound marketplace lifecycle exists
 
 - **Status:** Open
 - **Owner:** plugin-registry-hosting
@@ -579,7 +579,7 @@ Not planned for the current marketplace contract. Keep the supported Managed Clo
 
 - `chatgpt_reference/050-chatgpt-ios-plugins-marketplace-list-installed-featured-productivity.png`
 
-### GAP-025 — Mobile code-session diffstat card is declined because the cited session surface was removed
+### GAP-025, Mobile code-session diffstat card is declined because the cited session surface was removed
 
 - **Status:** Open
 - **Owner:** run-file-change-contract
@@ -602,7 +602,7 @@ Not planned on the current Mobile execution contracts. Keep generated files as h
 
 - `references-2/IMG_0622.PNG`
 
-### GAP-026 — Pairing intro states the real Desktop mode and short-lived-code requirements
+### GAP-026, Pairing intro states the real Desktop mode and short-lived-code requirements
 
 - **Status:** Done
 - **Owner:** Mobile
@@ -625,12 +625,12 @@ Completed as a deliberate capability-honest divergence. Do not add a same-accoun
 
 - `chatgpt_reference/027-codex-ios-remote-setup-intro-signin-instructions.png`
 
-### GAP-027 — Mobile states that paired Desktop folders remain Desktop-controlled
+### GAP-027, Mobile states that paired Desktop folders remain Desktop-controlled
 
 - **Status:** Open
 - **Owner:** companion-workspace-handles
 - **Surface/type:** mobile · missing-screen
-- **Reference:** Codex · iOS · Remote — projects on the paired computer
+- **Reference:** Codex · iOS · Remote, projects on the paired computer
 
 **Gap**
 
@@ -648,7 +648,7 @@ Not planned until the signed companion protocol has a Desktop-authorized request
 
 - `chatgpt_reference/038-codex-ios-remote-project-list-projects-sidebar-macbook.png`
 
-### GAP-028 — Mobile scheduled tasks teach first-run automation with bounded templates
+### GAP-028, Mobile scheduled tasks teach first-run automation with bounded templates
 
 - **Status:** Done
 - **Owner:** Mobile
@@ -671,7 +671,7 @@ Completed. Keep route payloads limited to stable allowlisted IDs, keep every sug
 
 - `chatgpt_reference/048-chatgpt-ios-scheduled-tasks-suggestions-daily-brief-email-monitor.png`
 
-### GAP-029 — Scheduled tasks explicitly disclose prompt-only context
+### GAP-029, Scheduled tasks explicitly disclose prompt-only context
 
 - **Status:** Open
 - **Owner:** schedule-attachment-lifecycle
@@ -694,7 +694,7 @@ Not planned until Managed Cloud schedules own tenant-scoped durable asset IDs, u
 
 - `chatgpt_reference/049-chatgpt-ios-scheduled-tasks-attachment-picker-camera-photos-files-plugins.png`
 
-### GAP-030 — Mobile Capabilities exposes authoritative inline Cloud preferences
+### GAP-030, Mobile Capabilities exposes authoritative inline Cloud preferences
 
 - **Status:** Done
 - **Owner:** Mobile
@@ -717,7 +717,7 @@ Completed. Add future inline switches only when a persisted value is consumed by
 
 - `claude_reference/127-claude-ios-settings-capabilities-artifacts-code-exec-web-search-toggles.png`
 
-### GAP-031 — Mobile memory controls gate past-chat context and automatic learning
+### GAP-031, Mobile memory controls gate past-chat context and automatic learning
 
 - **Status:** Done
 - **Owner:** Mobile
@@ -740,7 +740,7 @@ Completed for Mobile and the shared Managed Cloud generation policy. Keep Local 
 
 - `claude_reference/128-claude-ios-settings-capabilities-memory-and-tool-access-radio.png`
 
-### GAP-032 — Model-training opt-in is declined because customer-content training is always off
+### GAP-032, Model-training opt-in is declined because customer-content training is always off
 
 - **Status:** Not Planned
 - **Owner:** Mobile
@@ -763,7 +763,7 @@ Not planned while the product policy and architecture prohibit customer-content 
 
 - `chatgpt_reference/055-chatgpt-ios-settings-data-controls-model-training-location-services.png`
 
-### GAP-033 — Mobile exports complete account Cloud data before deletion
+### GAP-033, Mobile exports complete account Cloud data before deletion
 
 - **Status:** Done
 - **Owner:** Mobile
@@ -786,7 +786,7 @@ Completed. Keep every added Cloud content collection on an explicit user-facing 
 
 - `chatgpt_reference/056-chatgpt-ios-settings-data-controls-export-delete-account.png`
 
-### GAP-034 — Mobile General exposes a persisted searchable App language selector
+### GAP-034, Mobile General exposes a persisted searchable App language selector
 
 - **Status:** Done
 - **Owner:** Mobile
@@ -809,7 +809,7 @@ Completed for the shared language runtime and selector. Continue migrating Mobil
 
 - `chatgpt_reference/066-chatgpt-ios-settings-general-app-language-toggles.png`
 
-### GAP-035 — Notification categories drill into the real Push channel while Email is explicitly unavailable
+### GAP-035, Notification categories drill into the real Push channel while Email is explicitly unavailable
 
 - **Status:** Done
 - **Owner:** Mobile
@@ -832,7 +832,7 @@ Completed for channels the product can actually deliver. Keep Email non-interact
 
 - `chatgpt_reference/065-chatgpt-ios-settings-notifications-codex-chats-projects-usage.png`
 
-### GAP-036 — Unsupported project usage and marketing notification categories are declined until delivery producers exist
+### GAP-036, Unsupported project usage and marketing notification categories are declined until delivery producers exist
 
 - **Status:** Open
 - **Owner:** web-push-delivery
@@ -849,13 +849,13 @@ apps/mobile/services/notifications.ts defines the supported event vocabulary but
 
 **Suggested fix**
 
-Not planned for categories with no delivery producer. Keep the honest grouped Work Updates control. Add separate Responses, Projects, Schedules, Usage, Tips, or Marketing categories only alongside typed events, a real sender/trigger, deep-link handling, default and migration policy, delivery tests, and—for marketing—explicit opt-in, unsubscribe, and account-level consent enforcement.
+Not planned for categories with no delivery producer. Keep the honest grouped Work Updates control. Add separate Responses, Projects, Schedules, Usage, Tips, or Marketing categories only alongside typed events, a real sender/trigger, deep-link handling, default and migration policy, delivery tests, and, for marketing, explicit opt-in, unsubscribe, and account-level consent enforcement.
 
 **Reference screenshot(s)**
 
 - `chatgpt_reference/065-chatgpt-ios-settings-notifications-codex-chats-projects-usage.png`
 
-### GAP-037 — Parental Controls explicitly limits itself to device age review
+### GAP-037, Parental Controls explicitly limits itself to device age review
 
 - **Status:** Done
 - **Owner:** Mobile
@@ -878,7 +878,7 @@ Completed for the current scope by using the audit's prescribed honest interim s
 
 - `chatgpt_reference/063-chatgpt-ios-settings-parental-controls-add-family-member.png`
 
-### GAP-038 — Permissions consolidates real Calendar and iOS Reminders access while leaving Health absent
+### GAP-038, Permissions consolidates real Calendar and iOS Reminders access while leaving Health absent
 
 - **Status:** Done
 - **Owner:** Mobile
@@ -901,7 +901,7 @@ Completed for native capabilities the product can truthfully expose. Keep Remind
 
 - `claude_reference/130-claude-ios-settings-permissions-location-calendar-reminders-health.png`
 
-### GAP-039 — Connected services open an account-scoped detail screen with enforceable tool policies
+### GAP-039, Connected services open an account-scoped detail screen with enforceable tool policies
 
 - **Status:** Done
 - **Owner:** Mobile
@@ -924,7 +924,7 @@ Completed with runtime-derived policy honesty. Keep complete tool discovery out 
 
 - `chatgpt_reference/051-chatgpt-ios-settings-plugins-permissions-list-added-allow-low-risk.png`
 
-### GAP-040 — Reusable multi-Desktop pairing is declined while companion authority is single-session and ephemeral
+### GAP-040, Reusable multi-Desktop pairing is declined while companion authority is single-session and ephemeral
 
 - **Status:** Open
 - **Owner:** multi-device-companion-session
@@ -947,7 +947,7 @@ Not planned on the current ephemeral protocol. Add multi-Desktop management only
 
 - `chatgpt_reference/058-codex-ios-settings-remote-control-desktop-connection-composer-faceid.png`
 
-### GAP-041 — Mobile Safety exposes a persisted Reduce sensitive content control
+### GAP-041, Mobile Safety exposes a persisted Reduce sensitive content control
 
 - **Status:** Done
 - **Owner:** Mobile
@@ -970,7 +970,7 @@ Completed. Keep this client-side preflight as the shared minimum for both execut
 
 - `chatgpt_reference/061-chatgpt-ios-settings-safety-reduce-sensitive-content-toggle.png`
 
-### GAP-042 — Mobile Account Security exposes authoritative authenticator and current-session state
+### GAP-042, Mobile Account Security exposes authoritative authenticator and current-session state
 
 - **Status:** Done
 - **Owner:** Mobile
@@ -993,7 +993,7 @@ Completed for the account security state the product can verify today. Keep pass
 
 - `chatgpt_reference/059-chatgpt-ios-settings-security-login-keys-mfa-sessions-lockdown-codex.png`
 
-### GAP-043 — Account storage quota totals are declined until the Cloud publishes an enforceable byte policy
+### GAP-043, Account storage quota totals are declined until the Cloud publishes an enforceable byte policy
 
 - **Status:** Open
 - **Owner:** storage-quota-service
@@ -1016,7 +1016,7 @@ Not planned until the backend owns a storage entitlement and canonical inventory
 
 - `chatgpt_reference/054-chatgpt-ios-settings-storage-documents-images-usage.png`
 
-### GAP-044 — Trusted-contact enrolment and automatic escalation are declined without a verified consent and safety service
+### GAP-044, Trusted-contact enrolment and automatic escalation are declined without a verified consent and safety service
 
 - **Status:** Not Planned
 - **Owner:** Mobile
@@ -1039,7 +1039,7 @@ Not planned until a dedicated, reviewed safety service exists. Do not add enrolm
 
 - `chatgpt_reference/062-chatgpt-ios-settings-trusted-contact-crisis-support-get-started.png`
 
-### GAP-045 — Background voice is declined; Mobile now enforces and explains foreground-only capture
+### GAP-045, Background voice is declined; Mobile now enforces and explains foreground-only capture
 
 - **Status:** Not Planned
 - **Owner:** Mobile
@@ -1062,12 +1062,12 @@ Not planned for the current foreground recognizer. Keep the privacy-safe stop be
 
 - `chatgpt_reference/064-chatgpt-ios-settings-voice-spruce-model-intelligence-language.png`
 
-### GAP-046 — Shared Links and Device Integrations are reachable from Settings
+### GAP-046, Shared Links and Device Integrations are reachable from Settings
 
 - **Status:** Done
 - **Owner:** Mobile
 - **Surface/type:** mobile · missing-ia
-- **Reference:** Claude · iOS · Settings root — Account group
+- **Reference:** Claude · iOS · Settings root, Account group
 
 **Gap**
 
@@ -1085,7 +1085,7 @@ Completed. Keep Shared Links account-authenticated and keep device Calendar/Cont
 
 - `chatgpt_reference/025-other-ios-settings-legal-links-claude-app-version-popover.png`
 
-### GAP-047 — A Mobile Plugins drawer destination is declined while the marketplace remains preview-only
+### GAP-047, A Mobile Plugins drawer destination is declined while the marketplace remains preview-only
 
 - **Status:** Open
 - **Owner:** plugin-registry-hosting
@@ -1094,7 +1094,7 @@ Completed. Keep Shared Links account-authenticated and keep device Calendar/Cont
 
 **Gap**
 
-The reference links to a working plugin product, whereas agiworkforce's Web /plugins route is a public preview with installation deliberately disabled and no account-bound runtime behind it. A top-level Mobile drawer item would therefore lead to either duplicated marketing content or dead install controls. Mobile instead exposes Skills—the real authenticated Cloud catalog the product can currently enumerate—as a first-class Cloud-tagged drawer destination.
+The reference links to a working plugin product, whereas agiworkforce's Web /plugins route is a public preview with installation deliberately disabled and no account-bound runtime behind it. A top-level Mobile drawer item would therefore lead to either duplicated marketing content or dead install controls. Mobile instead exposes Skills, the real authenticated Cloud catalog the product can currently enumerate, as a first-class Cloud-tagged drawer destination.
 
 **Evidence**
 
@@ -1108,7 +1108,7 @@ Not planned until Plugins is an operable account product rather than a marketing
 
 - `chatgpt_reference/077-chatgpt-ios-sidebar-nav-recents-chat-history-fab.png`
 
-### GAP-048 — Background connector scanning for suggested tasks is declined under the request-scoped source policy
+### GAP-048, Background connector scanning for suggested tasks is declined under the request-scoped source policy
 
 - **Status:** Not Planned
 - **Owner:** Mobile
@@ -1131,7 +1131,7 @@ Not planned under the current request-scoped connector authorization. Reconsider
 
 - `chatgpt_reference/076-chatgpt-ios-work-mode-task-list-github-suggested-tasks.png`
 
-### GAP-049 — Post-pairing setup toggles are declined for the current ephemeral companion session
+### GAP-049, Post-pairing setup toggles are declined for the current ephemeral companion session
 
 - **Status:** Open
 - **Owner:** account-and-session-service
@@ -1154,7 +1154,7 @@ Not planned for the current companion contract. Add a post-pairing setup flow on
 
 - `chatgpt_reference/052-codex-macos-settings-connections-search-remote-control-connected-modal.png`
 
-### GAP-050 — Desktop exposes the real multi-session terminal in a persistent bottom dock
+### GAP-050, Desktop exposes the real multi-session terminal in a persistent bottom dock
 
 - **Status:** Done
 - **Owner:** Desktop
@@ -1177,7 +1177,7 @@ Completed for the supported Local terminal runtime. Keep the dock Local-only and
 
 - `chatgpt_reference/081-codex-macos-terminal-panel-shell-prompt.png`
 
-### GAP-051 — Desktop empty chat exposes capability-aware quick actions
+### GAP-051, Desktop empty chat exposes capability-aware quick actions
 
 - **Status:** Done
 - **Owner:** Desktop
@@ -1200,7 +1200,7 @@ Closed as a stale component-level finding. Keep quick actions in the shared comp
 
 - `chatgpt_reference/079-codex-macos-chat-empty-state-agiworkforce-quick-actions.png`
 
-### GAP-052 — Reference-specific AGI Code transcript and session toggles are declined without runtime consumers
+### GAP-052, Reference-specific AGI Code transcript and session toggles are declined without runtime consumers
 
 - **Status:** Open
 - **Owner:** agi-code-session-settings
@@ -1223,7 +1223,7 @@ Not planned until a mounted coding-session runtime defines typed, native-enforce
 
 - `claude_reference/149-claude-desktop-settings-claude-code-appearance-transcript.png`
 
-### GAP-053 — Per-device coding authorization-token management is declined without an account token API
+### GAP-053, Per-device coding authorization-token management is declined without an account token API
 
 - **Status:** Done
 - **Owner:** Desktop
@@ -1246,7 +1246,7 @@ Not planned until the account service publishes authenticated token inventory, s
 
 - `claude_reference/152-claude-desktop-settings-claude-code-auth-tokens.png`
 
-### GAP-054 — Separate AGI Code diff themes and font are declined without a consuming diff renderer
+### GAP-054, Separate AGI Code diff themes and font are declined without a consuming diff renderer
 
 - **Status:** Open
 - **Owner:** code-appearance-preference
@@ -1269,7 +1269,7 @@ Not planned until a distinct coding transcript/diff renderer owns these preferen
 
 - `claude_reference/148-claude-desktop-settings-claude-code-general-code-theme.png`
 
-### GAP-055 — AGI Code worktree and browser-tool settings are declined without session ownership
+### GAP-055, AGI Code worktree and browser-tool settings are declined without session ownership
 
 - **Status:** Open
 - **Owner:** browser-runtime-owner
@@ -1292,7 +1292,7 @@ Not planned until a coding-session service defines worktree lifecycle and a brow
 
 - `claude_reference/150-claude-desktop-settings-claude-code-worktree-browser-tools.png`
 
-### GAP-056 — Composer shows the native terminal access policy at send time
+### GAP-056, Composer shows the native terminal access policy at send time
 
 - **Status:** Done
 - **Owner:** Desktop
@@ -1315,7 +1315,7 @@ Completed. Keep the chip derived from the native-synchronised settings store and
 
 - `chatgpt_reference/079-codex-macos-chat-empty-state-agiworkforce-quick-actions.png`
 
-### GAP-057 — Composer shows workspace, environment, and verified git-branch context
+### GAP-057, Composer shows workspace, environment, and verified git-branch context
 
 - **Status:** Done
 - **Owner:** Desktop
@@ -1338,7 +1338,7 @@ Completed. Keep these labels sourced from the same folder-scoping, privacy-mode,
 
 - `chatgpt_reference/079-codex-macos-chat-empty-state-agiworkforce-quick-actions.png`
 
-### GAP-058 — Automatic tool approval remains visibly warned at the composer
+### GAP-058, Automatic tool approval remains visibly warned at the composer
 
 - **Status:** Done
 - **Owner:** Desktop
@@ -1361,7 +1361,7 @@ Completed for the supported global approval contract. Keep the warning persisten
 
 - `claude_reference/098-claude-desktop-cowork-agent-task-view-tool-call-timeline.png`
 
-### GAP-059 — Per-conversation approval mode is declined while native approval policy is global
+### GAP-059, Per-conversation approval mode is declined while native approval policy is global
 
 - **Status:** Open
 - **Owner:** conversation-scoped-approval-policy
@@ -1384,12 +1384,12 @@ Not planned under the current native contract. Add a selector only after the exe
 
 - `references-2/claude-desktop-cowork-record-skill-05-processing-zero-steps.png`
 
-### GAP-060 — Recorder provides consent-first narration with a live level meter
+### GAP-060, Recorder provides consent-first narration with a live level meter
 
 - **Status:** Done
 - **Owner:** Desktop
 - **Surface/type:** desktop · missing-control
-- **Reference:** Claude · macOS desktop · Cowork skill recording — active capture HUD
+- **Reference:** Claude · macOS desktop · Cowork skill recording, active capture HUD
 
 **Gap**
 
@@ -1407,12 +1407,12 @@ Completed for local, opt-in narration. Keep microphone capture off by default, v
 
 - `references-2/claude-desktop-cowork-record-skill-04-active-capture-zero-steps.png`
 
-### GAP-061 — A unified Progress, Outputs, and Context rail is declined without a durable run journal
+### GAP-061, A unified Progress, Outputs, and Context rail is declined without a durable run journal
 
 - **Status:** Open
 - **Owner:** durable-run-journal
 - **Surface/type:** desktop · missing-ia
-- **Reference:** Claude · macOS desktop · Cowork task rail — Progress / Outputs / Context
+- **Reference:** Claude · macOS desktop · Cowork task rail, Progress / Outputs / Context
 
 **Gap**
 
@@ -1430,12 +1430,12 @@ Not planned until the executor emits a durable task-bound run journal with typed
 
 - `references-2/claude-desktop-cowork-record-skill-06-task-progress-outputs-context.png`
 
-### GAP-062 — Conversation recording attachments are declined without a persisted recording entity
+### GAP-062, Conversation recording attachments are declined without a persisted recording entity
 
 - **Status:** Open
 - **Owner:** recording-timeline-asset
 - **Surface/type:** desktop · missing-ia
-- **Reference:** Claude · macOS desktop · Cowork task — recording attached to the conversation
+- **Reference:** Claude · macOS desktop · Cowork task, recording attached to the conversation
 
 **Gap**
 
@@ -1453,7 +1453,7 @@ Not planned until a versioned recording entity defines storage, message attachme
 
 - `references-2/claude-desktop-cowork-record-skill-06-task-progress-outputs-context.png`
 
-### GAP-063 — Computer-off cross-device pickup claims are declined without a durable remote worker
+### GAP-063, Computer-off cross-device pickup claims are declined without a durable remote worker
 
 - **Status:** Open
 - **Owner:** local-to-cloud-task-handoff
@@ -1476,12 +1476,12 @@ Not planned until a durable task handoff contract can prove ownership transfer, 
 
 - `references-2/claude-desktop-cowork-record-skill-01-cross-device-onboarding.png`
 
-### GAP-064 — Desktop composer exposes the shared Chat and AGI Work scope switch
+### GAP-064, Desktop composer exposes the shared Chat and AGI Work scope switch
 
 - **Status:** Done
 - **Owner:** Desktop
 - **Surface/type:** desktop · missing-screen
-- **Reference:** Claude · macOS desktop · Home launcher composer — Chat/Cowork mode toggle
+- **Reference:** Claude · macOS desktop · Home launcher composer, Chat/Cowork mode toggle
 
 **Gap**
 
@@ -1499,7 +1499,7 @@ Closed as stale. Retain the shared composer as the single interaction owner and 
 
 - `claude_reference/137-claude-desktop-home-launcher-cowork-mode-recents-list.png`
 
-### GAP-065 — Interactive plugin catalog installation is declined while marketplace state is preview-only
+### GAP-065, Interactive plugin catalog installation is declined while marketplace state is preview-only
 
 - **Status:** Open
 - **Owner:** plugin-registry-hosting
@@ -1522,12 +1522,12 @@ Not planned until a server-owned catalog and install/uninstall API, permissions,
 
 - `chatgpt_reference/087-codex-macos-plugins-marketplace-installed-featured.png`
 
-### GAP-066 — Plugin and connector Finish setup state is declined without an authoritative setup lifecycle
+### GAP-066, Plugin and connector Finish setup state is declined without an authoritative setup lifecycle
 
 - **Status:** Open
 - **Owner:** integration-setup-lifecycle
 - **Surface/type:** desktop · missing-state
-- **Reference:** Codex · macOS desktop · Plugins marketplace — Imported plugins
+- **Reference:** Codex · macOS desktop · Plugins marketplace, Imported plugins
 
 **Gap**
 
@@ -1545,7 +1545,7 @@ Not planned until each integration publishes authoritative installed, setup-requ
 
 - `chatgpt_reference/087-codex-macos-plugins-marketplace-installed-featured.png`
 
-### GAP-067 — A Desktop pull-request inbox is declined without remote review ownership
+### GAP-067, A Desktop pull-request inbox is declined without remote review ownership
 
 - **Status:** Open
 - **Owner:** remote-pr-provider
@@ -1568,12 +1568,12 @@ Not planned until a remote provider layer owns repository identity, authenticate
 
 - `chatgpt_reference/084-codex-macos-pull-requests-list-empty-error-state.png`
 
-### GAP-068 — A fabricated recording Processing state is declined for synchronous local capture
+### GAP-068, A fabricated recording Processing state is declined for synchronous local capture
 
 - **Status:** Not Planned
 - **Owner:** Desktop
 - **Surface/type:** desktop · missing-state
-- **Reference:** Claude · macOS desktop · Recorder HUD — Processing state
+- **Reference:** Claude · macOS desktop · Recorder HUD, Processing state
 
 **Gap**
 
@@ -1591,12 +1591,12 @@ Not planned while processing is synchronous. Add a real state only if a future m
 
 - `references-2/claude-desktop-cowork-record-skill-05-processing-zero-steps.png`
 
-### GAP-069 — In-thread recording playback is declined without a durable timeline asset
+### GAP-069, In-thread recording playback is declined without a durable timeline asset
 
 - **Status:** Open
 - **Owner:** recording-timeline-asset
 - **Surface/type:** desktop · missing-screen
-- **Reference:** Claude · macOS desktop · Recording playback — expanded event timeline
+- **Reference:** Claude · macOS desktop · Recording playback, expanded event timeline
 
 **Gap**
 
@@ -1614,12 +1614,12 @@ Not planned until the recording-attachment contract described in GAP-062 exists 
 
 - `references-2/claude-desktop-cowork-record-skill-07-recording-playback-events-a.png`
 
-### GAP-070 — Per-step recorder screenshots are declined without consented frame capture and storage
+### GAP-070, Per-step recorder screenshots are declined without consented frame capture and storage
 
 - **Status:** Open
 - **Owner:** recording-timeline-asset
 - **Surface/type:** desktop · missing-control
-- **Reference:** Claude · macOS desktop · Recording playback — screenshot frames per event
+- **Reference:** Claude · macOS desktop · Recording playback, screenshot frames per event
 
 **Gap**
 
@@ -1637,7 +1637,7 @@ Not planned until native capture explicitly authorizes frames and defines redact
 
 - `references-2/claude-desktop-cowork-record-skill-08-recording-playback-events-b.png`
 
-### GAP-071 — A single Review, Terminal, Browser, and Files right rail is declined; terminal uses its real dock
+### GAP-071, A single Review, Terminal, Browser, and Files right rail is declined; terminal uses its real dock
 
 - **Status:** Not Planned
 - **Owner:** Desktop
@@ -1660,12 +1660,12 @@ Not planned as a monolithic rail. Keep terminal in the bottom dock and mount eac
 
 - `chatgpt_reference/080-codex-macos-right-panel-shortcuts-review-terminal-browser-files.png`
 
-### GAP-072 — Scheduler starter templates are declined until Local and Cloud share a typed template contract
+### GAP-072, Scheduler starter templates are declined until Local and Cloud share a typed template contract
 
 - **Status:** Open
 - **Owner:** schedule-template-catalog
 - **Surface/type:** desktop · missing-control
-- **Reference:** Codex · macOS desktop · Scheduled tasks — Suggestions
+- **Reference:** Codex · macOS desktop · Scheduled tasks, Suggestions
 
 **Gap**
 
@@ -1683,7 +1683,7 @@ Not planned until a template contract declares supported target runtime, prompt,
 
 - `chatgpt_reference/086-codex-macos-scheduled-tasks-daily-weekly-followup-suggestions.png`
 
-### GAP-073 — Organization ID, in-app account deletion, and logout-all are declined without account APIs
+### GAP-073, Organization ID, in-app account deletion, and logout-all are declined without account APIs
 
 - **Status:** Done
 - **Owner:** Desktop
@@ -1706,12 +1706,12 @@ Not planned until the account service owns organization identity, destructive de
 
 - `claude_reference/140-claude-desktop-settings-account-org-id-trusted-devices.png`
 
-### GAP-074 — Cross-surface Active Sessions is declined without a session inventory service
+### GAP-074, Cross-surface Active Sessions is declined without a session inventory service
 
 - **Status:** Done
 - **Owner:** Desktop
 - **Surface/type:** desktop · missing-control
-- **Reference:** Claude · macOS desktop · Settings > Account — Active sessions table
+- **Reference:** Claude · macOS desktop · Settings > Account, Active sessions table
 
 **Gap**
 
@@ -1729,12 +1729,12 @@ Not planned until an owner-scoped session API provides normalized device/locatio
 
 - `claude_reference/141-claude-desktop-settings-account-active-sessions-device-list.png`
 
-### GAP-075 — Desktop UI scale is user-selectable and persisted
+### GAP-075, Desktop UI scale is user-selectable and persisted
 
 - **Status:** Done
 - **Owner:** Desktop
 - **Surface/type:** desktop · missing-control
-- **Reference:** Codex · macOS desktop · Settings > Appearance — Preferences
+- **Reference:** Codex · macOS desktop · Settings > Appearance, Preferences
 
 **Gap**
 
@@ -1752,12 +1752,12 @@ Completed. Keep scale values bounded and migrated, and apply them once at the ap
 
 - `chatgpt_reference/095-codex-macos-settings-appearance-dark-theme-preferences.png`
 
-### GAP-076 — Desktop provides a persisted Reduce motion override
+### GAP-076, Desktop provides a persisted Reduce motion override
 
 - **Status:** Done
 - **Owner:** Desktop
 - **Surface/type:** desktop · missing-control
-- **Reference:** Codex · macOS desktop · Settings > Appearance — Preferences
+- **Reference:** Codex · macOS desktop · Settings > Appearance, Preferences
 
 **Gap**
 
@@ -1775,12 +1775,12 @@ Completed. Continue respecting the OS media query while treating this switch as 
 
 - `chatgpt_reference/095-codex-macos-settings-appearance-dark-theme-preferences.png`
 
-### GAP-077 — Desktop exposes the supported memory policy controls without fabricated imports
+### GAP-077, Desktop exposes the supported memory policy controls without fabricated imports
 
 - **Status:** Done
 - **Owner:** Desktop
 - **Surface/type:** desktop · missing-control
-- **Reference:** Claude · macOS desktop · Settings > Capabilities — Memory + General
+- **Reference:** Claude · macOS desktop · Settings > Capabilities, Memory + General
 
 **Gap**
 
@@ -1798,7 +1798,7 @@ Closed for the supported scope. Keep real memory policy controls available; add 
 
 - `claude_reference/146-claude-desktop-settings-capabilities-memory-tools.png`
 
-### GAP-078 — Desktop Chrome enablement and site-policy controls are declined because the extension owns enforcement
+### GAP-078, Desktop Chrome enablement and site-policy controls are declined because the extension owns enforcement
 
 - **Status:** Open
 - **Owner:** extension-policy-bridge
@@ -1821,12 +1821,12 @@ Not planned until a versioned authenticated bridge supports read, update, acknow
 
 - `claude_reference/154-claude-desktop-settings-claude-in-chrome-permissions.png`
 
-### GAP-079 — Local tool-runtime self-repair is declined without typed health and reinstall commands
+### GAP-079, Local tool-runtime self-repair is declined without typed health and reinstall commands
 
 - **Status:** Open
 - **Owner:** native-desktop-lifecycle
 - **Surface/type:** desktop · missing-control
-- **Reference:** Codex · macOS desktop · Settings > Configuration — Workspace Dependencies
+- **Reference:** Codex · macOS desktop · Settings > Configuration, Workspace Dependencies
 
 **Gap**
 
@@ -1844,7 +1844,7 @@ Not planned until native owns structured diagnostics and a platform-specific rep
 
 - `chatgpt_reference/097-codex-macos-settings-configuration-approval-sandbox-model-features.png`
 
-### GAP-080 — Trusted multi-device history is declined for single-session ephemeral pairing
+### GAP-080, Trusted multi-device history is declined for single-session ephemeral pairing
 
 - **Status:** Open
 - **Owner:** account-and-session-service
@@ -1867,7 +1867,7 @@ Not planned until a device authorization service provides independently revocabl
 
 - `chatgpt_reference/053-codex-macos-settings-connections-control-this-mac-devices.png`
 
-### GAP-081 — A remote-control master switch is declined while no durable listener exists
+### GAP-081, A remote-control master switch is declined while no durable listener exists
 
 - **Status:** Open
 - **Owner:** durable-device-authorization
@@ -1890,7 +1890,7 @@ Not planned for ephemeral pairing. Add a kill switch only with a durable inbound
 
 - `chatgpt_reference/032-codex-macos-settings-connections-control-this-mac-allow-toggle.png`
 
-### GAP-082 — Startup, global voice, menu-bar, and keep-awake toggles are declined without native lifecycle owners
+### GAP-082, Startup, global voice, menu-bar, and keep-awake toggles are declined without native lifecycle owners
 
 - **Status:** Open
 - **Owner:** native-desktop-lifecycle
@@ -1913,7 +1913,7 @@ Not planned until native implements each capability with support detection, perm
 
 - `claude_reference/155-claude-desktop-settings-desktop-general-shortcuts.png`
 
-### GAP-083 — Desktop Connections exposes the live local MCP workspace and server configuration
+### GAP-083, Desktop Connections exposes the live local MCP workspace and server configuration
 
 - **Status:** Done
 - **Owner:** Desktop
@@ -1936,7 +1936,7 @@ Closed as stale. Keep MCP server lifecycle inside MCPWorkspace and avoid duplica
 
 - `claude_reference/158-claude-web-settings-developer-mcp-filesystem-server-detail.png`
 
-### GAP-084 — Prevent-sleep is declined until native power assertions are implemented
+### GAP-084, Prevent-sleep is declined until native power assertions are implemented
 
 - **Status:** Open
 - **Owner:** native-desktop-lifecycle
@@ -1959,7 +1959,7 @@ Not planned until native owns task-bound acquire/release, crash and quit cleanup
 
 - `chatgpt_reference/091-chatgpt-macos-settings-general-permissions-full-access-defaults.png`
 
-### GAP-085 — Menu-bar persistence is declined until tray and close semantics are native-backed
+### GAP-085, Menu-bar persistence is declined until tray and close semantics are native-backed
 
 - **Status:** Done
 - **Owner:** Desktop
@@ -1982,12 +1982,12 @@ Not planned until native implements tray creation/removal, close-versus-quit sem
 
 - `chatgpt_reference/091-chatgpt-macos-settings-general-permissions-full-access-defaults.png`
 
-### GAP-086 — Desktop send behavior is configurable and persisted
+### GAP-086, Desktop send behavior is configurable and persisted
 
 - **Status:** Done
 - **Owner:** Desktop
 - **Surface/type:** desktop · missing-control
-- **Reference:** Codex · macOS desktop · Settings > General — Composer
+- **Reference:** Codex · macOS desktop · Settings > General, Composer
 
 **Gap**
 
@@ -2005,12 +2005,12 @@ Completed. Keep keyboard behavior and accessible send labels driven from the sam
 
 - `chatgpt_reference/092-codex-macos-settings-general-composer-notifications-popout.png`
 
-### GAP-087 — Queue versus Steer follow-ups are declined without executor semantics
+### GAP-087, Queue versus Steer follow-ups are declined without executor semantics
 
 - **Status:** Open
 - **Owner:** run-queue-and-steer
 - **Surface/type:** desktop · missing-interaction
-- **Reference:** Codex · macOS desktop · Settings > General — Composer
+- **Reference:** Codex · macOS desktop · Settings > General, Composer
 
 **Gap**
 
@@ -2028,12 +2028,12 @@ Not planned until the executor defines both operations, acknowledgement, orderin
 
 - `chatgpt_reference/092-codex-macos-settings-general-composer-notifications-popout.png`
 
-### GAP-088 — Desktop notification settings expose native completion, attention, permission, and reminder scopes
+### GAP-088, Desktop notification settings expose native completion, attention, permission, and reminder scopes
 
 - **Status:** Done
 - **Owner:** Desktop
 - **Surface/type:** desktop · missing-control
-- **Reference:** Codex · macOS desktop · Settings > General — Notifications
+- **Reference:** Codex · macOS desktop · Settings > General, Notifications
 
 **Gap**
 
@@ -2051,7 +2051,7 @@ Completed for the native event vocabulary. Add future categories only when a pro
 
 - `chatgpt_reference/092-codex-macos-settings-general-composer-notifications-popout.png`
 
-### GAP-089 — Unbinding shortcuts is declined until shortcut ownership is reconciled
+### GAP-089, Unbinding shortcuts is declined until shortcut ownership is reconciled
 
 - **Status:** Open
 - **Owner:** shortcut-dispatch-contract
@@ -2074,7 +2074,7 @@ Not planned as a cosmetic clear action. First unify action IDs, owner, defaults,
 
 - `chatgpt_reference/101-codex-macos-settings-keyboard-shortcuts-chat-navigation-basics.png`
 
-### GAP-090 — Keyboard-shortcut conflict guidance matches enforced behavior
+### GAP-090, Keyboard-shortcut conflict guidance matches enforced behavior
 
 - **Status:** Done
 - **Owner:** Desktop
@@ -2097,12 +2097,12 @@ Completed. Keep instructional copy pinned to the actual conflict resolver if sho
 
 - `chatgpt_reference/101-codex-macos-settings-keyboard-shortcuts-chat-navigation-basics.png`
 
-### GAP-091 — Direct chat-switch shortcuts are declined without a canonical runtime dispatcher
+### GAP-091, Direct chat-switch shortcuts are declined without a canonical runtime dispatcher
 
 - **Status:** Open
 - **Owner:** conversation-order-contract
 - **Surface/type:** desktop · missing-interaction
-- **Reference:** Codex · macOS desktop · Settings > Keyboard shortcuts — chat switching
+- **Reference:** Codex · macOS desktop · Settings > Keyboard shortcuts, chat switching
 
 **Gap**
 
@@ -2120,7 +2120,7 @@ Not planned until shortcut ownership is unified and Sidebar publishes a determin
 
 - `chatgpt_reference/102-codex-macos-settings-keyboard-shortcuts-tab-chat-switching.png`
 
-### GAP-092 — Model-training and location toggles are declined because neither data use exists
+### GAP-092, Model-training and location toggles are declined because neither data use exists
 
 - **Status:** Not Planned
 - **Owner:** Desktop
@@ -2143,12 +2143,12 @@ Not planned while both purposes are absent. Keep privacy text explicit that mode
 
 - `claude_reference/142-claude-desktop-settings-privacy-data-controls-export-sharing.png`
 
-### GAP-093 — A dictation dictionary is declined until transcription providers support a shared bias contract
+### GAP-093, A dictation dictionary is declined until transcription providers support a shared bias contract
 
 - **Status:** Open
 - **Owner:** transcription-bias-contract
 - **Surface/type:** desktop · missing-control
-- **Reference:** Codex · macOS desktop · Settings > Voice — Dictation dictionary
+- **Reference:** Codex · macOS desktop · Settings > Voice, Dictation dictionary
 
 **Gap**
 
@@ -2166,7 +2166,7 @@ Not planned until a typed vocabulary contract defines normalization, limits, per
 
 - `chatgpt_reference/096-codex-macos-settings-voice-dictation-hotkeys-dictionary.png`
 
-### GAP-094 — A broad Desktop Browser settings page is declined without one browser runtime owner
+### GAP-094, A broad Desktop Browser settings page is declined without one browser runtime owner
 
 - **Status:** Open
 - **Owner:** browser-runtime-owner
@@ -2189,7 +2189,7 @@ Not planned until a dedicated browser service owns session isolation, storage, c
 
 - `chatgpt_reference/113-codex-macos-settings-browser-general-autofill-downloads.png`
 
-### GAP-095 — Desktop per-site browser policy is declined until origin enforcement is shared
+### GAP-095, Desktop per-site browser policy is declined until origin enforcement is shared
 
 - **Status:** Open
 - **Owner:** browser-runtime-owner
@@ -2212,7 +2212,7 @@ Not planned until a shared authority defines origin normalization, ask/allow/blo
 
 - `chatgpt_reference/114-codex-macos-settings-browser-permissions-developer-mode-cdp.png`
 
-### GAP-096 — Connections remains intentionally limited to supported inbound ephemeral pairing
+### GAP-096, Connections remains intentionally limited to supported inbound ephemeral pairing
 
 - **Status:** Not Planned
 - **Owner:** Desktop
@@ -2235,7 +2235,7 @@ Not planned beyond the supported inbound flow. Add tabs only alongside implement
 
 - `chatgpt_reference/117-codex-macos-settings-connections-control-this-mac-iphone.png`
 
-### GAP-097 — Connections master allow is declined for the same ephemeral pairing boundary
+### GAP-097, Connections master allow is declined for the same ephemeral pairing boundary
 
 - **Status:** Open
 - **Owner:** durable-device-authorization
@@ -2258,7 +2258,7 @@ Not planned until durable inbound access exists. If introduced, the master switc
 
 - `chatgpt_reference/117-codex-macos-settings-connections-control-this-mac-iphone.png`
 
-### GAP-098 — Agent Git policy settings are declined until push and PR consumers are authoritative
+### GAP-098, Agent Git policy settings are declined until push and PR consumers are authoritative
 
 - **Status:** Open
 - **Owner:** agent-git-policy-service
@@ -2281,7 +2281,7 @@ Not planned until an agent git service owns branch creation, guarded force-with-
 
 - `chatgpt_reference/118-codex-macos-settings-git-branch-prefix-pr-instructions.png`
 
-### GAP-099 — Lifecycle hooks are declined until a sandboxed hook runtime exists
+### GAP-099, Lifecycle hooks are declined until a sandboxed hook runtime exists
 
 - **Status:** Open
 - **Owner:** hook-and-mcp-reach
@@ -2304,7 +2304,7 @@ Not planned until a reviewed hook runtime defines events, precedence, project tr
 
 - `chatgpt_reference/116-codex-macos-settings-hooks-empty-state-no-hooks.png`
 
-### GAP-100 — Shortcut Unassigned state is declined until renderer and native shortcut stores converge
+### GAP-100, Shortcut Unassigned state is declined until renderer and native shortcut stores converge
 
 - **Status:** Open
 - **Owner:** shortcut-ownership-contract
@@ -2327,7 +2327,7 @@ Not planned independently. Resolve GAP-089's shortcut ownership and then impleme
 
 - `chatgpt_reference/105-codex-macos-settings-keyboard-shortcuts-undo-redo-approve-close-tab.png`
 
-### GAP-101 — Live native tool approvals support Return to approve and Escape to deny
+### GAP-101, Live native tool approvals support Return to approve and Escape to deny
 
 - **Status:** Done
 - **Owner:** Desktop
@@ -2350,7 +2350,7 @@ Completed for the authoritative live MCP approval surface. Reuse the same modal-
 
 - `chatgpt_reference/105-codex-macos-settings-keyboard-shortcuts-undo-redo-approve-close-tab.png`
 
-### GAP-102 — Plugin disable switches are declined without authoritative installed-plugin state
+### GAP-102, Plugin disable switches are declined without authoritative installed-plugin state
 
 - **Status:** Open
 - **Owner:** plugin-enablement-enforcement
@@ -2373,7 +2373,7 @@ Not planned until the plugin lifecycle owns installed identity, scope, enabled s
 
 - `chatgpt_reference/112-codex-macos-settings-plugins-plugin-list-toggles-on.png`
 
-### GAP-103 — Credits purchase and auto-reload are declined without billing product contracts
+### GAP-103, Credits purchase and auto-reload are declined without billing product contracts
 
 - **Status:** Done
 - **Owner:** Desktop
@@ -2396,7 +2396,7 @@ Not planned until Billing owns price and entitlement definitions, checkout, webh
 
 - `chatgpt_reference/109-codex-macos-settings-billing-plan-credits-usage-limits.png`
 
-### GAP-104 — Desktop deliberately keeps project membership in Projects and navigation in flat Recents
+### GAP-104, Desktop deliberately keeps project membership in Projects and navigation in flat Recents
 
 - **Status:** Not Planned
 - **Owner:** Desktop
@@ -2419,7 +2419,7 @@ Not planned for the current IA. Keep project membership in the Projects workspac
 
 - `chatgpt_reference/083-codex-macos-sidebar-nav-projects-recent-chats.png`
 
-### GAP-105 — An MFA gate is declined until the account service publishes verified MFA state
+### GAP-105, An MFA gate is declined until the account service publishes verified MFA state
 
 - **Status:** Open
 - **Owner:** account-and-session-service
@@ -2442,7 +2442,7 @@ Not planned until the account service implements enrollment, recovery, verified 
 
 - `chatgpt_reference/033-codex-macos-settings-connections-mfa-required-modal.png`
 
-### GAP-106 — Empty recorder captures provide diagnosis and immediate recovery
+### GAP-106, Empty recorder captures provide diagnosis and immediate recovery
 
 - **Status:** Done
 - **Owner:** Desktop
@@ -2465,12 +2465,12 @@ Completed for the signals the current recorder can truthfully observe. Extend di
 
 - `references-2/claude-desktop-cowork-record-skill-09-black-capture-failure-response.png`
 
-### GAP-107 — Composer exposes the native-backed access scope at point of use
+### GAP-107, Composer exposes the native-backed access scope at point of use
 
 - **Status:** Done
 - **Owner:** Desktop
 - **Surface/type:** desktop · missing-control
-- **Reference:** ChatGPT · macOS desktop · Work mode empty state — composer permission chip
+- **Reference:** ChatGPT · macOS desktop · Work mode empty state, composer permission chip
 
 **Gap**
 
@@ -2488,7 +2488,7 @@ Completed. Preserve a single native-backed access-policy projection so duplicate
 
 - `chatgpt_reference/088-chatgpt-macos-work-mode-empty-state-quick-actions.png`
 
-### GAP-108 — Hosted cloud-browser settings are declined without a browser runtime
+### GAP-108, Hosted cloud-browser settings are declined without a browser runtime
 
 - **Status:** Open
 - **Owner:** browser-runtime-owner
@@ -2511,7 +2511,7 @@ Not planned until a tenant-owned hosted browser service defines isolated cookie 
 
 - `chatgpt_reference/137-chatgpt-web-settings-cloud-browser-default-permissions-site-cookies.png`
 
-### GAP-109 — Web Tasks provides persistent per-task Outputs/Progress/Context details
+### GAP-109, Web Tasks provides persistent per-task Outputs/Progress/Context details
 
 - **Status:** Done
 - **Owner:** Web
@@ -2534,12 +2534,12 @@ Completed. Keep the durable journal and shared activity projector authoritative,
 
 - `claude_reference/183-claude-web-cowork-task-outputs-benchmark-spec-files.png`
 
-### GAP-110 — Web Data Controls provides owner-scoped bulk chat and link management
+### GAP-110, Web Data Controls provides owner-scoped bulk chat and link management
 
 - **Status:** Done
 - **Owner:** Web
 - **Surface/type:** web · missing-control
-- **Reference:** ChatGPT · web · Data controls — bulk chat management
+- **Reference:** ChatGPT · web · Data controls, bulk chat management
 
 **Gap**
 
@@ -2557,7 +2557,7 @@ Completed. Keep new conversation-wide mutations atomic and owner-scoped, keep de
 
 - `chatgpt_reference/136-chatgpt-web-settings-data-controls-archive-delete-export-chats.png`
 
-### GAP-111 — Device-auth consent shows the signed-in account and authoritative requesting client
+### GAP-111, Device-auth consent shows the signed-in account and authoritative requesting client
 
 - **Status:** Done
 - **Owner:** Web
@@ -2580,7 +2580,7 @@ Completed. Preserve the signed-in lookup, fixed client catalog, runtime response
 
 - `chatgpt_reference/037-codex-ios-oauth-consent-webview-confirm-account-codex-remote.png`
 
-### GAP-112 — Chats and Tasks remain separate because their lifecycle and actions differ
+### GAP-112, Chats and Tasks remain separate because their lifecycle and actions differ
 
 - **Status:** Not Planned
 - **Owner:** Web
@@ -2603,7 +2603,7 @@ Not planned on the current contracts. Reconsider a unified activity index only a
 
 - `claude_reference/165-claude-web-home-chats-and-tasks-recents-list-with-tasks.png`
 
-### GAP-113 — A unified Directory is declined while catalogs have different authority and lifecycle
+### GAP-113, A unified Directory is declined while catalogs have different authority and lifecycle
 
 - **Status:** Open
 - **Owner:** unified-directory-contract
@@ -2626,7 +2626,7 @@ Not planned until a server-owned directory contract provides typed entries, sour
 
 - `claude_reference/162-claude-web-plugin-directory-browse-anthropic-category-cards-grid.png`
 
-### GAP-114 — Web and Mobile enforce Reduce sensitive content before model dispatch
+### GAP-114, Web and Mobile enforce Reduce sensitive content before model dispatch
 
 - **Status:** Done
 - **Owner:** Web
@@ -2649,7 +2649,7 @@ Completed. Keep the shared deterministic policy as the single pattern owner, enf
 
 - `chatgpt_reference/139-chatgpt-web-settings-safety-reduce-sensitive-content-toggle.png`
 
-### GAP-115 — Passkey and multi-device controls are explicitly unavailable pending account contracts
+### GAP-115, Passkey and multi-device controls are explicitly unavailable pending account contracts
 
 - **Status:** Open
 - **Owner:** account-and-session-service
@@ -2672,7 +2672,7 @@ Not planned until account-owned APIs support credential identifiers, WebAuthn ch
 
 - `chatgpt_reference/140-chatgpt-web-settings-security-login-password-passkeys-mfa-sessions.png`
 
-### GAP-116 — Coding-session preferences are declined without a mounted Web code-session product
+### GAP-116, Coding-session preferences are declined without a mounted Web code-session product
 
 - **Status:** Open
 - **Owner:** cloud-code-session-preferences
@@ -2695,7 +2695,7 @@ Not planned until a Web coding-session product owns repository/worktree state, r
 
 - `claude_reference/177-claude-web-settings-panel-claude-code-appearance-prefs.png`
 
-### GAP-117 — Plugin installation remains explicitly closed until an account-owned marketplace exists
+### GAP-117, Plugin installation remains explicitly closed until an account-owned marketplace exists
 
 - **Status:** Done
 - **Owner:** Web
@@ -2718,7 +2718,7 @@ Not planned for the current marketplace. Keep the preview explicit and installat
 
 - `claude_reference/161-claude-web-settings-plugins-empty-state-browse-cta.png`
 
-### GAP-118 — Archived Web conversations have a reachable restore and delete manager
+### GAP-118, Archived Web conversations have a reachable restore and delete manager
 
 - **Status:** Done
 - **Owner:** Web
@@ -2741,7 +2741,7 @@ Completed for Web. Keep the archived-only query paginated and owner-scoped, and 
 
 - `chatgpt_reference/121-codex-macos-settings-archived-chats-empty.png`
 
-### GAP-119 — Web Notifications exposes only the channel with a real sender
+### GAP-119, Web Notifications exposes only the channel with a real sender
 
 - **Status:** Open
 - **Owner:** web-push-delivery
@@ -2764,7 +2764,7 @@ Not planned until each channel has an authenticated sender, delivery target life
 
 - `chatgpt_reference/123-chatgpt-web-settings-notifications-codex-groupchats-marketing-top.png`
 
-### GAP-120 — Trusted-contact escalation is declined without a verified consent and safety service
+### GAP-120, Trusted-contact escalation is declined without a verified consent and safety service
 
 - **Status:** Not Planned
 - **Owner:** Web
@@ -2787,7 +2787,7 @@ Not planned until a dedicated reviewed safety service provides mutual verified c
 
 - `chatgpt_reference/144-chatgpt-web-settings-trusted-contact-add-contact-safety.png`
 
-### GAP-121 — Web Voice separates working dictation from unavailable managed voice
+### GAP-121, Web Voice separates working dictation from unavailable managed voice
 
 - **Status:** Done
 - **Owner:** Web
@@ -2810,7 +2810,7 @@ Completed for the current voice runtime. Add persona, Model, Intelligence, Langu
 
 - `chatgpt_reference/131-chatgpt-web-settings-voice-spruce-voice-model-picker.png`
 
-### GAP-122 — Chrome keeps the attach menu image-only until file and agent-mode contracts exist
+### GAP-122, Chrome keeps the attach menu image-only until file and agent-mode contracts exist
 
 - **Status:** Open
 - **Owner:** extension-attachment-upload
@@ -2833,7 +2833,7 @@ Not planned on the current Chrome contract. Add generic files only with typed up
 
 - `chatgpt_reference/152-chatgpt-web-extension-attach-menu-files-goal-plugins.png`
 
-### GAP-123 — Chrome uses approved sites and per-action approval instead of inert category or full-CDP controls
+### GAP-123, Chrome uses approved sites and per-action approval instead of inert category or full-CDP controls
 
 - **Status:** Not Planned
 - **Owner:** Extension
@@ -2856,7 +2856,7 @@ Not planned as reference-shaped category or developer-mode controls while those 
 
 - `chatgpt_reference/155-codex-macos-settings-computer-use-chrome-permissions-cdp.png`
 
-### GAP-124 — Max reasoning plus Bypass Permissions requires compound-risk consent
+### GAP-124, Max reasoning plus Bypass Permissions requires compound-risk consent
 
 - **Status:** Done
 - **Owner:** VS Code
@@ -2879,7 +2879,7 @@ Completed. Keep agent.mode and agent.effort writes centralized in the two consen
 
 - `chatgpt_reference/012-codex-vscode-ext-permission-confirm-modal-ultra-full-access-warning.png`
 
-### GAP-125 — Account menu and trust-boundary tooltips identify the signed-in plan owner
+### GAP-125, Account menu and trust-boundary tooltips identify the signed-in plan owner
 
 - **Status:** Done
 - **Owner:** VS Code
@@ -2902,7 +2902,7 @@ Completed. Keep device-token identity separate from API-key/BYOK ownership, reta
 
 - `chatgpt_reference/013-codex-vscode-ext-account-menu-profile-dropdown-settings-logout.png`
 
-### GAP-126 — Browse the web is a first-class one-turn context source
+### GAP-126, Browse the web is a first-class one-turn context source
 
 - **Status:** Done
 - **Owner:** VS Code
@@ -2925,7 +2925,7 @@ Completed. Keep browsing one-turn and explicit, preserve the visible original pr
 
 - `claude_reference/134-claude-code-vscode-ext-extension-attach-menu-upload-context-browse-web.png`
 
-### GAP-127 — Autonomy, fallibility, and active account/data boundaries are disclosed before first use
+### GAP-127, Autonomy, fallibility, and active account/data boundaries are disclosed before first use
 
 - **Status:** Done
 - **Owner:** VS Code
@@ -2948,7 +2948,7 @@ Completed. Keep Local, BYOK, and Managed Cloud ownership distinct; retain explic
 
 - `chatgpt_reference/007-codex-vscode-ext-onboarding-intro-autonomy-mistakes-chatgpt-account-step4.png`
 
-### GAP-128 — VS Code keeps developer sessions local and hands hosted background tasks to Web
+### GAP-128, VS Code keeps developer sessions local and hands hosted background tasks to Web
 
 - **Status:** Open
 - **Owner:** cloud-run-list-client
@@ -2971,12 +2971,12 @@ Not planned until an explicit handoff contract provides a redacted payload previ
 
 - `chatgpt_reference/005-codex-vscode-ext-onboarding-intro-cloud-handoff-tasks-step2.png`
 
-### GAP-129 — VS Code opens the branded AGI Settings editor instead of raw settings
+### GAP-129, VS Code opens the branded AGI Settings editor instead of raw settings
 
 - **Status:** Done
 - **Owner:** VS Code
 - **Surface/type:** extension-vscode · missing-screen
-- **Reference:** Codex · VS Code extension · Codex Settings editor tab — Plugins
+- **Reference:** Codex · VS Code extension · Codex Settings editor tab, Plugins
 
 **Gap**
 
@@ -2994,7 +2994,7 @@ Completed. Keep normal settings entry points on agi-workforce.openSettings and t
 
 - `chatgpt_reference/024-codex-vscode-ext-settings-plugins-open-external-site-confirm-modal.png`
 
-### GAP-130 — VS Code sidebar provides a persisted four-step first-run onboarding flow
+### GAP-130, VS Code sidebar provides a persisted four-step first-run onboarding flow
 
 - **Status:** Done
 - **Owner:** VS Code
@@ -3017,12 +3017,12 @@ Completed. Preserve the honest unavailable-here copy for hosted background tasks
 
 - `chatgpt_reference/004-codex-vscode-ext-onboarding-intro-ask-codex-anything-step1.png`
 
-### GAP-131 — VS Code declines sandbox controls that the local runtime cannot read or enforce
+### GAP-131, VS Code declines sandbox controls that the local runtime cannot read or enforce
 
 - **Status:** Open
 - **Owner:** app-server-policy-contract
 - **Surface/type:** extension-vscode · missing-control
-- **Reference:** Codex · VS Code extension · Settings — Configuration (approval policy and sandbox)
+- **Reference:** Codex · VS Code extension · Settings, Configuration (approval policy and sandbox)
 
 **Gap**
 
@@ -3040,12 +3040,12 @@ Not planned until the CLI app-server publishes a versioned read/write policy con
 
 - `chatgpt_reference/015-codex-vscode-ext-settings-configuration-config-toml-reasoning-efforts.png`
 
-### GAP-132 — Agent configuration is discoverable and safely opened from VS Code
+### GAP-132, Agent configuration is discoverable and safely opened from VS Code
 
 - **Status:** Done
 - **Owner:** VS Code
 - **Surface/type:** extension-vscode · missing-control
-- **Reference:** Codex · VS Code extension · Settings — Configuration (config.toml card)
+- **Reference:** Codex · VS Code extension · Settings, Configuration (config.toml card)
 
 **Gap**
 
@@ -3063,12 +3063,12 @@ Completed. Keep the path relative to the active extension host, preserve non-tru
 
 - `chatgpt_reference/015-codex-vscode-ext-settings-configuration-config-toml-reasoning-efforts.png`
 
-### GAP-133 — VS Code keeps Hooks capability-honest until the runtime exposes inventory and mutation
+### GAP-133, VS Code keeps Hooks capability-honest until the runtime exposes inventory and mutation
 
 - **Status:** Open
 - **Owner:** hook-and-mcp-reach
 - **Surface/type:** extension-vscode · missing-screen
-- **Reference:** Codex · VS Code extension · Settings — Hooks (empty state)
+- **Reference:** Codex · VS Code extension · Settings, Hooks (empty state)
 
 **Gap**
 
@@ -3086,12 +3086,12 @@ Not planned until a versioned app-server capability returns hook identity, event
 
 - `chatgpt_reference/020-codex-vscode-ext-settings-hooks-empty-state-no-hooks-found.png`
 
-### GAP-134 — VS Code declines per-server MCP controls without a runtime inventory contract
+### GAP-134, VS Code declines per-server MCP controls without a runtime inventory contract
 
 - **Status:** Open
 - **Owner:** hook-and-mcp-reach
 - **Surface/type:** extension-vscode · missing-screen
-- **Reference:** Codex · VS Code extension · Settings — MCP servers
+- **Reference:** Codex · VS Code extension · Settings, MCP servers
 
 **Gap**
 
@@ -3109,12 +3109,12 @@ Not planned until the app-server publishes a typed per-server inventory and muta
 
 - `chatgpt_reference/018-codex-vscode-ext-settings-mcp-servers-server-toggle-list.png`
 
-### GAP-135 — MCP provenance groups are declined until user and plugin servers have authoritative identities
+### GAP-135, MCP provenance groups are declined until user and plugin servers have authoritative identities
 
 - **Status:** Open
 - **Owner:** hook-and-mcp-reach
 - **Surface/type:** extension-vscode · missing-ia
-- **Reference:** Codex · VS Code extension · Settings — MCP servers, 'From plugins' section
+- **Reference:** Codex · VS Code extension · Settings, MCP servers, 'From plugins' section
 
 **Gap**
 
@@ -3132,12 +3132,12 @@ Not planned until the runtime assigns stable server IDs and returns source kind,
 
 - `chatgpt_reference/019-codex-vscode-ext-settings-mcp-servers-from-plugins-scrolled.png`
 
-### GAP-136 — VS Code supports auditable host and workspace custom instructions
+### GAP-136, VS Code supports auditable host and workspace custom instructions
 
 - **Status:** Done
 - **Owner:** VS Code
 - **Surface/type:** extension-vscode · missing-control
-- **Reference:** Codex · VS Code extension · Settings — Personalization, Custom instructions
+- **Reference:** Codex · VS Code extension · Settings, Personalization, Custom instructions
 
 **Gap**
 
@@ -3155,12 +3155,12 @@ Completed. Keep custom instructions private to VS Code Memento storage, preserve
 
 - `chatgpt_reference/016-codex-vscode-ext-settings-personalization-personality-memory-instructions.png`
 
-### GAP-137 — VS Code keeps Plugins as an availability boundary until a local registry exists
+### GAP-137, VS Code keeps Plugins as an availability boundary until a local registry exists
 
 - **Status:** Open
 - **Owner:** local-plugin-registry-contract
 - **Surface/type:** extension-vscode · missing-screen
-- **Reference:** Codex · VS Code extension · Settings — Plugins list
+- **Reference:** Codex · VS Code extension · Settings, Plugins list
 
 **Gap**
 
@@ -3178,12 +3178,12 @@ Not planned until a local runtime registry publishes stable capability and plugi
 
 - `chatgpt_reference/021-codex-vscode-ext-settings-plugins-documents-pdf-sites-chrome-list.png`
 
-### GAP-138 — VS Code keeps surface-bound capabilities visible with honest availability
+### GAP-138, VS Code keeps surface-bound capabilities visible with honest availability
 
 - **Status:** Done
 - **Owner:** VS Code
 - **Surface/type:** extension-vscode · missing-state
-- **Reference:** Codex · VS Code extension · Settings — Plugins, 'Unavailable in this context'
+- **Reference:** Codex · VS Code extension · Settings, Plugins, 'Unavailable in this context'
 
 **Gap**
 
@@ -3203,7 +3203,7 @@ Completed. Add future surface-bound capabilities to the shared descriptor and re
 
 ## P2
 
-### GAP-139 — Account header avatar and display name are not editable
+### GAP-139, Account header avatar and display name are not editable
 
 - **Status:** Open
 - **Owner:** Unassigned
@@ -3212,11 +3212,11 @@ Completed. Add future surface-bound capabilities to the shared descriptor and re
 
 **Gap**
 
-The reference puts a pencil badge on the avatar in the account header so a user can change their picture, with the display name directly beneath. agiworkforce renders the same header (avatar + name + email) but purely as decoration — there is no edit affordance for the avatar or the name on mobile.
+The reference puts a pencil badge on the avatar in the account header so a user can change their picture, with the display name directly beneath. agiworkforce renders the same header (avatar + name + email) but purely as decoration, there is no edit affordance for the avatar or the name on mobile.
 
 **Evidence**
 
-apps/mobile/src/features/settings/cloud-account/index.tsx:180-214 (Image accessibilityLabel='Profile picture', no Pressable); grep 'setProfileImage|change photo|edit avatar' across apps/mobile/src — no match
+apps/mobile/src/features/settings/cloud-account/index.tsx:180-214 (Image accessibilityLabel='Profile picture', no Pressable); grep 'setProfileImage|change photo|edit avatar' across apps/mobile/src, no match
 
 **Suggested fix**
 
@@ -3226,20 +3226,20 @@ Wrap the avatar in a Pressable with a pencil badge that opens the existing photo
 
 - `chatgpt_reference/069-chatgpt-ios-settings-account-modal-change-email-confirm.png`
 
-### GAP-140 — No medical conditions / health profile feature (conditions, medications, family history)
+### GAP-140, No medical conditions / health profile feature (conditions, medications, family history)
 
 - **Status:** Open
 - **Owner:** Unassigned
 - **Surface/type:** mobile · missing-screen
-- **Reference:** ChatGPT · iOS · Add new condition — searchable medical-condition catalog with add buttons
+- **Reference:** ChatGPT · iOS · Add new condition, searchable medical-condition catalog with add buttons
 
 **Gap**
 
-ChatGPT lets users build a structured health profile: search and add medical conditions from a standardized catalog (ICD-style terms like 'Hypertensive disorder', 'Type 2 diabetes mellitus'), add medications via search, and add family history, either manually or by importing from medical records via a connected provider. agiworkforce has none of this — no conditions/medications/family-history data model, screen, or route.
+ChatGPT lets users build a structured health profile: search and add medical conditions from a standardized catalog (ICD-style terms like 'Hypertensive disorder', 'Type 2 diabetes mellitus'), add medications via search, and add family history, either manually or by importing from medical records via a connected provider. agiworkforce has none of this, no conditions/medications/family-history data model, screen, or route.
 
 **Evidence**
 
-grepped apps/mobile source for 'condition', 'medication', 'family history', 'medical record' — no feature files found (only unrelated 'MessageBubble' handling and generic connector code)
+grepped apps/mobile source for 'condition', 'medication', 'family history', 'medical record', no feature files found (only unrelated 'MessageBubble' handling and generic connector code)
 
 **Suggested fix**
 
@@ -3249,7 +3249,7 @@ Not recommended unless agiworkforce is entering the health-assistant vertical; i
 
 - `references-2/chatgpt-ios-health-09-add-condition-list-a.png`
 
-### GAP-141 — Empty chat offers no capability quick actions above the composer
+### GAP-141, Empty chat offers no capability quick actions above the composer
 
 - **Status:** Open
 - **Owner:** Unassigned
@@ -3266,13 +3266,13 @@ apps/mobile/app/(app)/(tabs)/chat.tsx:617-621 (comment 'Still NO suggestion card
 
 **Suggested fix**
 
-Ship the lightweight variant rather than cards: three icon+verb rows (image, write/edit, look up) directly above the composer that prefill the composer instead of sending, hidden as soon as the thread has messages — and delete or wire up ConversationStarters so no dead component remains.
+Ship the lightweight variant rather than cards: three icon+verb rows (image, write/edit, look up) directly above the composer that prefill the composer instead of sending, hidden as soon as the thread has messages, and delete or wire up ConversationStarters so no dead component remains.
 
 **Reference screenshot(s)**
 
 - `chatgpt_reference/075-chatgpt-ios-chat-empty-state-quick-actions-keyboard-open.png`
 
-### GAP-142 — Reasoning effort is a slider, not a tappable tier list with the current value checked
+### GAP-142, Reasoning effort is a slider, not a tappable tier list with the current value checked
 
 - **Status:** Open
 - **Owner:** Unassigned
@@ -3295,12 +3295,12 @@ Replace the slider with a radio list of the model's supportedEfforts (label + on
 
 - `chatgpt_reference/073-chatgpt-ios-chat-model-picker-intelligence-tier-popover.png`
 
-### GAP-143 — Code screen lacks a 'Devices' section showing recently connected devices
+### GAP-143, Code screen lacks a 'Devices' section showing recently connected devices
 
 - **Status:** Open
 - **Owner:** Unassigned
 - **Surface/type:** mobile · missing-ia
-- **Reference:** Claude · iOS · Code sessions — Devices section
+- **Reference:** Claude · iOS · Code sessions, Devices section
 
 **Gap**
 
@@ -3318,7 +3318,7 @@ Add a 'Devices' section above the session list, sourced from the same connection
 
 - `claude_reference/114-claude-ios-code-sessions-empty-no-devices-no-sessions-found.png`
 
-### GAP-144 — No Dispatch intro/marketing screen offering QR pairing vs. email-link pairing
+### GAP-144, No Dispatch intro/marketing screen offering QR pairing vs. email-link pairing
 
 - **Status:** Done
 - **Owner:** Unassigned
@@ -3327,7 +3327,7 @@ Add a 'Devices' section above the session list, sourced from the same connection
 
 **Gap**
 
-Reference shows a first-run explainer ('Reach your desktop from your pocket') with two pairing paths — 'Email desktop app link' and 'Pair with your desktop' — plus a security disclaimer with a 'Learn how to use this safely' link. agiworkforce's Dispatch/Companion flow goes directly to a QR-scan prompt with a single pairing method and no safety disclaimer or email-link alternative.
+Reference shows a first-run explainer ('Reach your desktop from your pocket') with two pairing paths, 'Email desktop app link' and 'Pair with your desktop', plus a security disclaimer with a 'Learn how to use this safely' link. agiworkforce's Dispatch/Companion flow goes directly to a QR-scan prompt with a single pairing method and no safety disclaimer or email-link alternative.
 
 **Evidence**
 
@@ -3341,7 +3341,7 @@ Add an intro screen before first pairing that explains the value prop, offers bo
 
 - `claude_reference/110-claude-ios-dispatch-intro-reach-desktop-from-pocket.png`
 
-### GAP-145 — No Apple Health / HealthKit integration anywhere in agiworkforce mobile
+### GAP-145, No Apple Health / HealthKit integration anywhere in agiworkforce mobile
 
 - **Status:** Open
 - **Owner:** Unassigned
@@ -3354,7 +3354,7 @@ ChatGPT iOS has a dedicated onboarding flow to enable Apple Health, request gran
 
 **Evidence**
 
-searched 'health', 'HealthKit', 'Apple Health', 'AFib', 'blood glucose' across apps/mobile — only matches are removal comments in apps/mobile/src/features/integrations/store.ts:120-121, apps/mobile/src/features/integrations/components/DeviceIntegrationStatus.tsx:53-54, and apps/mobile/app/(app)/settings/integrations.tsx:457-458 ('the Health Data card was removed with the health-context service... a route that has [never existed]')
+searched 'health', 'HealthKit', 'Apple Health', 'AFib', 'blood glucose' across apps/mobile, only matches are removal comments in apps/mobile/src/features/integrations/store.ts:120-121, apps/mobile/src/features/integrations/components/DeviceIntegrationStatus.tsx:53-54, and apps/mobile/app/(app)/settings/integrations.tsx:457-458 ('the Health Data card was removed with the health-context service... a route that has [never existed]')
 
 **Suggested fix**
 
@@ -3364,7 +3364,7 @@ If health personalization is in scope for agiworkforce, add a HealthKit entitlem
 
 - `references-2/chatgpt-ios-health-01-enable-apple-health.png`
 
-### GAP-146 — Agent activity trace has no dedicated pull-up detail sheet, only inline expand
+### GAP-146, Agent activity trace has no dedicated pull-up detail sheet, only inline expand
 
 - **Status:** Open
 - **Owner:** Unassigned
@@ -3387,7 +3387,7 @@ Add an optional 'View full activity' affordance on long/complex agent runs that 
 
 - `references-2/chatgpt-ios-work-01-expanded-agent-activity.png`
 
-### GAP-147 — No post-sign-in prompt offering to enable App Lock / Face ID
+### GAP-147, No post-sign-in prompt offering to enable App Lock / Face ID
 
 - **Status:** Open
 - **Owner:** Unassigned
@@ -3410,7 +3410,7 @@ After a successful Clerk sign-in, if hasHardwareAsync && isEnrolledAsync && !bio
 
 - `chatgpt_reference/031-chatgpt-ios-auth-biometric-prompt-faceid-faster-login-continue-skip.png`
 
-### GAP-148 — No in-app feature-announcement sheet to introduce new capabilities
+### GAP-148, No in-app feature-announcement sheet to introduce new capabilities
 
 - **Status:** Open
 - **Owner:** Unassigned
@@ -3419,7 +3419,7 @@ After a successful Clerk sign-in, if hasHardwareAsync && isEnrolledAsync && !bio
 
 **Gap**
 
-The reference dismissibly announces a major new capability with hero art, title, one-line benefit and a 'Get started' CTA that drops the user directly into setup. agiworkforce has onboarding (first run) and a companion walkthrough (post-pairing) but nothing that surfaces a newly shipped capability to existing users — so features like the desktop companion, schedules or artifacts rely on the user browsing the drawer.
+The reference dismissibly announces a major new capability with hero art, title, one-line benefit and a 'Get started' CTA that drops the user directly into setup. agiworkforce has onboarding (first run) and a companion walkthrough (post-pairing) but nothing that surfaces a newly shipped capability to existing users, so features like the desktop companion, schedules or artifacts rely on the user browsing the drawer.
 
 **Evidence**
 
@@ -3433,12 +3433,12 @@ Add src/features/announcements with a bottom-sheet component driven by a small m
 
 - `chatgpt_reference/026-chatgpt-ios-promo-bottom-sheet-introducing-codex-mobile.png`
 
-### GAP-149 — No reusable full-screen 'new feature announcement' pattern for capability rollouts
+### GAP-149, No reusable full-screen 'new feature announcement' pattern for capability rollouts
 
 - **Status:** Open
 - **Owner:** Unassigned
 - **Surface/type:** mobile · missing-screen
-- **Reference:** Claude · iOS · Feature announcement — Memory
+- **Reference:** Claude · iOS · Feature announcement, Memory
 
 **Gap**
 
@@ -3446,17 +3446,17 @@ Claude uses a consistent announcement-card pattern (blurred chat-preview backdro
 
 **Evidence**
 
-grep for 'has memory', 'Use memory', 'feature announcement', "What's new", 'AnnouncementModal' across apps/mobile — no matches. apps/mobile/app/(public)/onboarding.tsx is scoped to first-run model download only.
+grep for 'has memory', 'Use memory', 'feature announcement', "What's new", 'AnnouncementModal' across apps/mobile, no matches. apps/mobile/app/(public)/onboarding.tsx is scoped to first-run model download only.
 
 **Suggested fix**
 
-Build a reusable FeatureAnnouncementScreen (or bottom-sheet) component — badge, headline, body, optional CTA pair — that can be triggered post-login the first time a user encounters a newly shipped capability (memory, Cowork, etc.), tracked via a per-feature 'seen' flag in local storage.
+Build a reusable FeatureAnnouncementScreen (or bottom-sheet) component, badge, headline, body, optional CTA pair, that can be triggered post-login the first time a user encounters a newly shipped capability (memory, Cowork, etc.), tracked via a per-feature 'seen' flag in local storage.
 
 **Reference screenshot(s)**
 
 - `claude_reference/103-claude-ios-onboarding-memory-announcement-quarter-review-example.png`
 
-### GAP-150 — No dedicated search overlay and no pre-typing guidance state
+### GAP-150, No dedicated search overlay and no pre-typing guidance state
 
 - **Status:** Open
 - **Owner:** Unassigned
@@ -3479,7 +3479,7 @@ Add a full-screen search route opened from the drawer's search affordance with a
 
 - `chatgpt_reference/078-chatgpt-ios-search-overlay-empty-prompt-state.png`
 
-### GAP-151 — Library header has no overflow menu (select, sort, delete)
+### GAP-151, Library header has no overflow menu (select, sort, delete)
 
 - **Status:** Open
 - **Owner:** Unassigned
@@ -3502,7 +3502,7 @@ Add a trailing header button opening an action sheet with Sort (newest/oldest/ty
 
 - `chatgpt_reference/044-chatgpt-ios-library-upload-promo-upload-once-use-anytime.png`
 
-### GAP-152 — No dismissible feature-education sheet pattern for new capabilities
+### GAP-152, No dismissible feature-education sheet pattern for new capabilities
 
 - **Status:** Open
 - **Owner:** Unassigned
@@ -3515,7 +3515,7 @@ Reference uses a one-time bottom sheet (illustration, headline 'Upload once, use
 
 **Evidence**
 
-grep 'whatsNew|WhatsNew|Learn more|announcement|PromoSheet' across apps/mobile/src — no match; only apps/mobile/src/features/chat/components/PaywallBottomSheet.tsx exists
+grep 'whatsNew|WhatsNew|Learn more|announcement|PromoSheet' across apps/mobile/src, no match; only apps/mobile/src/features/chat/components/PaywallBottomSheet.tsx exists
 
 **Suggested fix**
 
@@ -3525,7 +3525,7 @@ Add a `FeaturePromoSheet` component (icon row, title, body, primary CTA, dismiss
 
 - `chatgpt_reference/044-chatgpt-ios-library-upload-promo-upload-once-use-anytime.png`
 
-### GAP-153 — Voice mode hides the chat transcript instead of overlaying it
+### GAP-153, Voice mode hides the chat transcript instead of overlaying it
 
 - **Status:** Open
 - **Owner:** Unassigned
@@ -3534,7 +3534,7 @@ Add a `FeaturePromoSheet` component (icon row, title, body, primary CTA, dismiss
 
 **Gap**
 
-In ChatGPT, voice mode is a translucent dark overlay on top of the existing chat screen — the full streamed response text, previous messages, and message action icons (copy/thumbs/share) remain visible/scrollable behind the mic controls. agiworkforce's VoiceConversationScreen is an opaque full-screen gradient takeover (colors.voiceConversationBgEnd background) that shows only a phase label and a 3-line max transcriptPreview, discarding the surrounding conversation context.
+In ChatGPT, voice mode is a translucent dark overlay on top of the existing chat screen, the full streamed response text, previous messages, and message action icons (copy/thumbs/share) remain visible/scrollable behind the mic controls. agiworkforce's VoiceConversationScreen is an opaque full-screen gradient takeover (colors.voiceConversationBgEnd background) that shows only a phase label and a 3-line max transcriptPreview, discarding the surrounding conversation context.
 
 **Evidence**
 
@@ -3548,7 +3548,7 @@ Consider rendering VoiceConversationScreen as a semi-transparent overlay above t
 
 - `references-2/chatgpt-ios-voice-03-live-conversation.png`
 
-### GAP-154 — Dispatch and code-session composers have no model or reasoning-effort selector
+### GAP-154, Dispatch and code-session composers have no model or reasoning-effort selector
 
 - **Status:** Open
 - **Owner:** Unassigned
@@ -3571,7 +3571,7 @@ Surface a model/effort chip in DispatchTaskComposer.tsx (apps/mobile/src/feature
 
 - `references-2/IMG_0628.PNG`
 
-### GAP-155 — Drawer has no nav entry for Code or Dispatch, though both screens exist
+### GAP-155, Drawer has no nav entry for Code or Dispatch, though both screens exist
 
 - **Status:** Open
 - **Owner:** Unassigned
@@ -3594,7 +3594,7 @@ Add 'Code' and 'Dispatch' rows to PRIMARY_ITEMS in DrawerContent.tsx, routed to 
 
 - `claude_reference/118-claude-ios-nav-drawer-chats-recents-new-chat-button.png`
 
-### GAP-156 — New Project has no icon/emoji picker for project identity
+### GAP-156, New Project has no icon/emoji picker for project identity
 
 - **Status:** Open
 - **Owner:** Unassigned
@@ -3617,7 +3617,7 @@ Add an optional `emoji` field to the project model, a leading emoji button in th
 
 - `chatgpt_reference/047-chatgpt-ios-projects-create-modal-name-input-category-pills.png`
 
-### GAP-157 — No starter category pills to seed a project's instructions
+### GAP-157, No starter category pills to seed a project's instructions
 
 - **Status:** Open
 - **Owner:** Unassigned
@@ -3630,7 +3630,7 @@ Reference offers a horizontally scrolling pill row (Homework, Writing, Health, T
 
 **Evidence**
 
-apps/mobile/app/(app)/(tabs)/projects.tsx create modal; grep -i 'template|category' in apps/mobile/src/features/projects and apps/web/features/projects/components — only an unrelated CSS gridTemplateColumns hit
+apps/mobile/app/(app)/(tabs)/projects.tsx create modal; grep -i 'template|category' in apps/mobile/src/features/projects and apps/web/features/projects/components, only an unrelated CSS gridTemplateColumns hit
 
 **Suggested fix**
 
@@ -3640,7 +3640,7 @@ Ship a small PROJECT_TEMPLATES constant (label, icon, seed instructions) rendere
 
 - `chatgpt_reference/047-chatgpt-ios-projects-create-modal-name-input-category-pills.png`
 
-### GAP-158 — Notifications settings has no 'Product updates' (marketing) opt-in toggle
+### GAP-158, Notifications settings has no 'Product updates' (marketing) opt-in toggle
 
 - **Status:** Open
 - **Owner:** Unassigned
@@ -3653,7 +3653,7 @@ Reference includes a 'Product updates' toggle ('Get notified about new features,
 
 **Evidence**
 
-apps/mobile/src/features/settings/notifications/index.tsx getCategories() (lines 57-88) lists only approvals/task_updates/errors/status. Searched for 'Product updates' and 'promotions' in the file — no match.
+apps/mobile/src/features/settings/notifications/index.tsx getCategories() (lines 57-88) lists only approvals/task_updates/errors/status. Searched for 'Product updates' and 'promotions' in the file, no match.
 
 **Suggested fix**
 
@@ -3663,7 +3663,7 @@ Add a 'Product updates' notification category (with its own preference key) so u
 
 - `claude_reference/124-claude-ios-settings-notifications-six-toggles-all-off.png`
 
-### GAP-159 — Pairing failure screen shows one generic error line, not a troubleshooting checklist
+### GAP-159, Pairing failure screen shows one generic error line, not a troubleshooting checklist
 
 - **Status:** Done
 - **Owner:** Unassigned
@@ -3686,20 +3686,20 @@ Extend ErrorView to render a numbered checklist component (reusing the StepRow p
 
 - `claude_reference/113-claude-ios-dispatch-pairing-failed-troubleshooting-checklist-try-again.png`
 
-### GAP-160 — No user-facing toggle to opt in/out of using chats to train AI models
+### GAP-160, No user-facing toggle to opt in/out of using chats to train AI models
 
 - **Status:** Open
 - **Owner:** Unassigned
 - **Surface/type:** mobile · missing-control
-- **Reference:** Claude · iOS · Privacy — Help improve our AI models toggle
+- **Reference:** Claude · iOS · Privacy, Help improve our AI models toggle
 
 **Gap**
 
-Reference gives users an explicit switch ('Help improve our AI models — Allow the use of your chats and coding sessions to train and improve Anthropic AI models') with a Learn More link, defaulting off. agiworkforce's Cloud Privacy screen instead shows a static, non-interactive card stating conversations are 'never used for training', with no consent control surfaced to the user at all.
+Reference gives users an explicit switch ('Help improve our AI models, Allow the use of your chats and coding sessions to train and improve Anthropic AI models') with a Learn More link, defaulting off. agiworkforce's Cloud Privacy screen instead shows a static, non-interactive card stating conversations are 'never used for training', with no consent control surfaced to the user at all.
 
 **Evidence**
 
-apps/mobile/src/features/settings/cloud-privacy/index.tsx — PRIVACY_ITEMS is static text (no-training/telemetry/retention), no Switch component present; searched for 'Switch' and 'train' in the file — only descriptive text, no toggle.
+apps/mobile/src/features/settings/cloud-privacy/index.tsx, PRIVACY_ITEMS is static text (no-training/telemetry/retention), no Switch component present; searched for 'Switch' and 'train' in the file, only descriptive text, no toggle.
 
 **Suggested fix**
 
@@ -3709,7 +3709,7 @@ If model-training consent is or becomes a real backend capability, surface it as
 
 - `claude_reference/125-claude-ios-settings-privacy-data-privacy-train-models-toggle.png`
 
-### GAP-161 — Projects tab has no search field
+### GAP-161, Projects tab has no search field
 
 - **Status:** Open
 - **Owner:** Unassigned
@@ -3732,7 +3732,7 @@ Add a bottom-anchored search pill filtering name + description client-side, matc
 
 - `chatgpt_reference/046-chatgpt-ios-projects-list-empty-state-single-project.png`
 
-### GAP-162 — No ownership filters (All / Created by you / Shared with you) on projects
+### GAP-162, No ownership filters (All / Created by you / Shared with you) on projects
 
 - **Status:** Open
 - **Owner:** Unassigned
@@ -3741,11 +3741,11 @@ Add a bottom-anchored search pill filtering name + description client-side, matc
 
 **Gap**
 
-Reference segments projects by ownership, which is the entry point for shared/collaborative projects. agiworkforce mobile has no notion of a project being shared with the user — cloud projects are filtered only by `deletedAt`/`isArchived`, and no sharing field or filter exists.
+Reference segments projects by ownership, which is the entry point for shared/collaborative projects. agiworkforce mobile has no notion of a project being shared with the user, cloud projects are filtered only by `deletedAt`/`isArchived`, and no sharing field or filter exists.
 
 **Evidence**
 
-apps/mobile/app/(app)/(tabs)/projects.tsx lines filtering cloudProjectsRaw; grep 'Shared with you|sharedWithMe|shared_with' across apps/mobile and apps/web/features/projects — no match
+apps/mobile/app/(app)/(tabs)/projects.tsx lines filtering cloudProjectsRaw; grep 'Shared with you|sharedWithMe|shared_with' across apps/mobile and apps/web/features/projects, no match
 
 **Suggested fix**
 
@@ -3755,7 +3755,7 @@ If project sharing is on the roadmap, add an `ownership` field to the cloud proj
 
 - `chatgpt_reference/046-chatgpt-ios-projects-list-empty-state-single-project.png`
 
-### GAP-163 — Mobile companion/pairing feature cannot browse the paired desktop's project folders
+### GAP-163, Mobile companion/pairing feature cannot browse the paired desktop's project folders
 
 - **Status:** Open
 - **Owner:** Unassigned
@@ -3778,12 +3778,12 @@ Extend the companion/pairing screen with a 'Projects' section listing folders ex
 
 - `references-2/IMG_0620.PNG`
 
-### GAP-164 — Conversation/task list has no organize control (by project / chronological / chats first)
+### GAP-164, Conversation/task list has no organize control (by project / chronological / chats first)
 
 - **Status:** Open
 - **Owner:** Unassigned
 - **Surface/type:** mobile · missing-control
-- **Reference:** Codex · iOS · Remote overflow menu — Organize
+- **Reference:** Codex · iOS · Remote overflow menu, Organize
 
 **Gap**
 
@@ -3801,7 +3801,7 @@ Add a persisted listArrangement preference ('project' | 'chronological' | 'chats
 
 - `chatgpt_reference/039-codex-ios-remote-project-list-overflow-menu-organize-manage.png`
 
-### GAP-165 — No 'email me a download link' path when the desktop app is not installed
+### GAP-165, No 'email me a download link' path when the desktop app is not installed
 
 - **Status:** Done
 - **Owner:** Unassigned
@@ -3824,12 +3824,12 @@ Add a secondary button on the pairing intro that posts to an email-download-link
 
 - `chatgpt_reference/027-codex-ios-remote-setup-intro-signin-instructions.png`
 
-### GAP-166 — Pairing setup is a single static screen, not a back-navigable stepped wizard
+### GAP-166, Pairing setup is a single static screen, not a back-navigable stepped wizard
 
 - **Status:** Open
 - **Owner:** Unassigned
 - **Surface/type:** mobile · missing-ia
-- **Reference:** Codex · iOS · Remote setup step 2 — Get pairing code
+- **Reference:** Codex · iOS · Remote setup step 2, Get pairing code
 
 **Gap**
 
@@ -3847,7 +3847,7 @@ Narrow scope: add a way to re-open the one-time setup checklist from Disconnecte
 
 - `chatgpt_reference/028-codex-ios-remote-setup-get-pairing-code-step.png`
 
-### GAP-167 — No filter/sort control on the scheduled tasks list
+### GAP-167, No filter/sort control on the scheduled tasks list
 
 - **Status:** Open
 - **Owner:** Unassigned
@@ -3870,7 +3870,7 @@ Add a header filter button opening a sheet with Active/Paused/All and sort by Ne
 
 - `chatgpt_reference/048-chatgpt-ios-scheduled-tasks-suggestions-daily-brief-email-monitor.png`
 
-### GAP-168 — Scheduled tasks cannot be bound to plugins/connectors
+### GAP-168, Scheduled tasks cannot be bound to plugins/connectors
 
 - **Status:** Open
 - **Owner:** Unassigned
@@ -3883,7 +3883,7 @@ Reference lists 'Plugins' alongside the attachment sources, letting a recurring 
 
 **Evidence**
 
-grep -i 'connector|plugin|tool' across apps/mobile/src/features/schedules — no match; connectors live only in apps/mobile/src/features/settings/cloud-connectors/index.tsx
+grep -i 'connector|plugin|tool' across apps/mobile/src/features/schedules, no match; connectors live only in apps/mobile/src/features/settings/cloud-connectors/index.tsx
 
 **Suggested fix**
 
@@ -3893,7 +3893,7 @@ Add a connectors/tools multi-select to ScheduleForm sourced from the connector d
 
 - `chatgpt_reference/049-chatgpt-ios-scheduled-tasks-attachment-picker-camera-photos-files-plugins.png`
 
-### GAP-169 — Schedule creation has no persistent composer with voice dictation
+### GAP-169, Schedule creation has no persistent composer with voice dictation
 
 - **Status:** Open
 - **Owner:** Unassigned
@@ -3916,7 +3916,7 @@ Promote QuickSchedule to a pinned bottom composer reusing the chat ChatInput she
 
 - `chatgpt_reference/048-chatgpt-ios-scheduled-tasks-suggestions-daily-brief-email-monitor.png`
 
-### GAP-170 — Approval-mode switch is only reachable via a deep Settings screen, no inline modal
+### GAP-170, Approval-mode switch is only reachable via a deep Settings screen, no inline modal
 
 - **Status:** Open
 - **Owner:** Unassigned
@@ -3925,11 +3925,11 @@ Promote QuickSchedule to a pinned bottom composer reusing the chat ChatInput she
 
 **Gap**
 
-Claude lets the user switch between 'Ask before acting' and 'Act without asking' via a lightweight bottom-sheet modal opened directly from the task/chat view. AGIW's equivalent (and more granular — 3 tiers) control lives at Settings > Action approvals (apps/mobile/app/(app)/settings/auto-approve.tsx), three navigation levels away from the task view, with no quick-switch affordance in the chat/task screen itself.
+Claude lets the user switch between 'Ask before acting' and 'Act without asking' via a lightweight bottom-sheet modal opened directly from the task/chat view. AGIW's equivalent (and more granular, 3 tiers) control lives at Settings > Action approvals (apps/mobile/app/(app)/settings/auto-approve.tsx), three navigation levels away from the task view, with no quick-switch affordance in the chat/task screen itself.
 
 **Evidence**
 
-grep for 'Select mode', 'auto-approve', 'ask before acting' in apps/mobile/app/(app)/agents — no matches; the only implementation is the standalone settings/auto-approve.tsx screen.
+grep for 'Select mode', 'auto-approve', 'ask before acting' in apps/mobile/app/(app)/agents, no matches; the only implementation is the standalone settings/auto-approve.tsx screen.
 
 **Suggested fix**
 
@@ -3939,7 +3939,7 @@ Add a mode-indicator chip in the task/chat header or composer that opens a botto
 
 - `claude_reference/106-claude-ios-cowork-select-mode-modal-ask-before-acting-selected.png`
 
-### GAP-171 — Code session menu lacks Pin, and has no dedicated Changes/Files entries
+### GAP-171, Code session menu lacks Pin, and has no dedicated Changes/Files entries
 
 - **Status:** Open
 - **Owner:** Unassigned
@@ -3962,7 +3962,7 @@ Add a Pin toggle to CodeSessionMoreMenu (persisted per-session, sessions list so
 
 - `references-2/IMG_0625.PNG`
 
-### GAP-172 — No 'switch models when a message is flagged' safety fallback setting
+### GAP-172, No 'switch models when a message is flagged' safety fallback setting
 
 - **Status:** Open
 - **Owner:** Unassigned
@@ -3975,7 +3975,7 @@ Claude lets users choose whether a flagged message auto-switches to a fallback m
 
 **Evidence**
 
-searched 'flagged', 'switch model' across apps/mobile, apps/web, apps/desktop — no safety-triggered model-switch preference found
+searched 'flagged', 'switch model' across apps/mobile, apps/web, apps/desktop, no safety-triggered model-switch preference found
 
 **Suggested fix**
 
@@ -3985,7 +3985,7 @@ Add a toggle in Capabilities (mobile) and Capabilities settings tab (desktop/web
 
 - `claude_reference/127-claude-ios-settings-capabilities-artifacts-code-exec-web-search-toggles.png`
 
-### GAP-173 — No Auto / On-demand / Always-available tool-loading strategy setting
+### GAP-173, No Auto / On-demand / Always-available tool-loading strategy setting
 
 - **Status:** Open
 - **Owner:** Unassigned
@@ -3998,7 +3998,7 @@ Claude lets users trade off message budget vs. tool accuracy by choosing how con
 
 **Evidence**
 
-searched 'on demand', 'always available', 'tool access' across apps/mobile, apps/web, apps/desktop — no tool-loading-strategy setting found
+searched 'on demand', 'always available', 'tool access' across apps/mobile, apps/web, apps/desktop, no tool-loading-strategy setting found
 
 **Suggested fix**
 
@@ -4008,7 +4008,7 @@ Add a 3-option tool-loading strategy control near the connectors/capabilities se
 
 - `claude_reference/128-claude-ios-settings-capabilities-memory-and-tool-access-radio.png`
 
-### GAP-174 — No cloud/agent browser settings on mobile (site approval default, cookie clearing)
+### GAP-174, No cloud/agent browser settings on mobile (site approval default, cookie clearing)
 
 - **Status:** Open
 - **Owner:** Unassigned
@@ -4021,7 +4021,7 @@ Reference gives the agent's cloud browser its own settings screen: a Default per
 
 **Evidence**
 
-grep -i 'cloud browser|add site|allowlist' across apps/mobile src+app — no matches beyond unrelated openBrowserAsync/WebBrowser usage; nearest concept is apps/desktop/src/features/settings/AgentExecutionSettings.tsx 'Allowed network domains'
+grep -i 'cloud browser|add site|allowlist' across apps/mobile src+app, no matches beyond unrelated openBrowserAsync/WebBrowser usage; nearest concept is apps/desktop/src/features/settings/AgentExecutionSettings.tsx 'Allowed network domains'
 
 **Suggested fix**
 
@@ -4031,7 +4031,7 @@ If cloud browsing ships on mobile, add /(app)/settings/cloud-browser with a Defa
 
 - `chatgpt_reference/057-chatgpt-ios-settings-cloud-browser-default-permissions-clear-cookies.png`
 
-### GAP-175 — No 'Connector discovery' auto-suggest toggle
+### GAP-175, No 'Connector discovery' auto-suggest toggle
 
 - **Status:** Open
 - **Owner:** Unassigned
@@ -4044,7 +4044,7 @@ Claude iOS has a 'Connector discovery' toggle letting Claude proactively suggest
 
 **Evidence**
 
-apps/mobile/src/features/settings/cloud-connectors/index.tsx — no 'discovery' string or toggle present
+apps/mobile/src/features/settings/cloud-connectors/index.tsx, no 'discovery' string or toggle present
 
 **Suggested fix**
 
@@ -4054,7 +4054,7 @@ Add a 'Connector discovery' toggle at the top of the connectors screen that, whe
 
 - `claude_reference/129-claude-ios-settings-connectors-connector-discovery-toggle.png`
 
-### GAP-176 — No separate consent for voice/audio recordings
+### GAP-176, No separate consent for voice/audio recordings
 
 - **Status:** Open
 - **Owner:** Unassigned
@@ -4063,11 +4063,11 @@ Add a 'Connector discovery' toggle at the top of the connectors screen that, whe
 
 **Gap**
 
-Reference splits audio out of the general training consent ('Include audio recordings — Share audio from voice chats to train our models'), defaulted off. agiworkforce has a voice feature and voice-language settings but no audio-specific data control, so voice data is governed by nothing the user can see.
+Reference splits audio out of the general training consent ('Include audio recordings, Share audio from voice chats to train our models'), defaulted off. agiworkforce has a voice feature and voice-language settings but no audio-specific data control, so voice data is governed by nothing the user can see.
 
 **Evidence**
 
-apps/mobile/src/features/settings/data-controls/index.tsx; grep -i 'audio recording|voice data|train' across apps/mobile/src/features/settings — only the cloud-privacy prose
+apps/mobile/src/features/settings/data-controls/index.tsx; grep -i 'audio recording|voice data|train' across apps/mobile/src/features/settings, only the cloud-privacy prose
 
 **Suggested fix**
 
@@ -4077,7 +4077,7 @@ Add a second, independently persisted toggle 'Include audio recordings' nested u
 
 - `chatgpt_reference/055-chatgpt-ios-settings-data-controls-model-training-location-services.png`
 
-### GAP-177 — No chat-history controls: archive, archive all, or delete all chats
+### GAP-177, No chat-history controls: archive, archive all, or delete all chats
 
 - **Status:** Open
 - **Owner:** Unassigned
@@ -4086,11 +4086,11 @@ Add a second, independently persisted toggle 'Include audio recordings' nested u
 
 **Gap**
 
-Reference groups 'Chat history' with Archived chats >, Archive all chats, and Delete all chats. agiworkforce mobile has no archive concept at all — a conversation menu item for it was removed because nothing was wired — and the only bulk destructive action is the Storage screen's full device wipe, which also deletes memory, settings and models.
+Reference groups 'Chat history' with Archived chats >, Archive all chats, and Delete all chats. agiworkforce mobile has no archive concept at all, a conversation menu item for it was removed because nothing was wired, and the only bulk destructive action is the Storage screen's full device wipe, which also deletes memory, settings and models.
 
 **Evidence**
 
-apps/mobile/src/features/sidebar/components/ConversationItem.tsx lines 96-98 ('No "Archive" entry here: it rendered unconditionally with no wired action … conversations have no archived field'); grep -i 'delete all chats|deleteAllConversations' across apps/mobile/src — no match
+apps/mobile/src/features/sidebar/components/ConversationItem.tsx lines 96-98 ('No "Archive" entry here: it rendered unconditionally with no wired action … conversations have no archived field'); grep -i 'delete all chats|deleteAllConversations' across apps/mobile/src, no match
 
 **Suggested fix**
 
@@ -4100,7 +4100,7 @@ Add an `archivedAt` field to local and cloud conversations, an Archived chats sc
 
 - `chatgpt_reference/055-chatgpt-ios-settings-data-controls-model-training-location-services.png`
 
-### GAP-178 — No user control over automatic web search ('Automatically use' group)
+### GAP-178, No user control over automatic web search ('Automatically use' group)
 
 - **Status:** Open
 - **Owner:** Unassigned
@@ -4123,7 +4123,7 @@ Add an 'Automatically use → Web search' switch in General (or make the Capabil
 
 - `chatgpt_reference/066-chatgpt-ios-settings-general-app-language-toggles.png`
 
-### GAP-179 — No global default intelligence level; effort is per-conversation only
+### GAP-179, No global default intelligence level; effort is per-conversation only
 
 - **Status:** Open
 - **Owner:** Unassigned
@@ -4146,7 +4146,7 @@ Add an 'Intelligence' row in General bound to the existing agentControlStore '**
 
 - `chatgpt_reference/066-chatgpt-ios-settings-general-app-language-toggles.png`
 
-### GAP-180 — Approval policy is not surfaced where plugins/connectors are managed
+### GAP-180, Approval policy is not surfaced where plugins/connectors are managed
 
 - **Status:** Open
 - **Owner:** Unassigned
@@ -4155,7 +4155,7 @@ Add an 'Intelligence' row in General bound to the existing agentControlStore '**
 
 **Gap**
 
-Reference puts 'Permissions — Allow low-risk >' as the first row of the Plugins screen with the explainer 'Choose when ChatGPT should ask for permission when using plugins', so the policy is visible exactly where tools are enabled. agiworkforce has the equivalent policy (Ask every time / Low-risk actions / Approve all actions) but only on a separate Action approvals screen, so a user connecting a tool never sees the governing rule.
+Reference puts 'Permissions, Allow low-risk >' as the first row of the Plugins screen with the explainer 'Choose when ChatGPT should ask for permission when using plugins', so the policy is visible exactly where tools are enabled. agiworkforce has the equivalent policy (Ask every time / Low-risk actions / Approve all actions) but only on a separate Action approvals screen, so a user connecting a tool never sees the governing rule.
 
 **Evidence**
 
@@ -4169,7 +4169,7 @@ Add a first-row summary at the top of the connectors screen showing the current 
 
 - `chatgpt_reference/051-chatgpt-ios-settings-plugins-permissions-list-added-allow-low-risk.png`
 
-### GAP-181 — Remote control/companion is not in the Settings information architecture
+### GAP-181, Remote control/companion is not in the Settings information architecture
 
 - **Status:** Open
 - **Owner:** Unassigned
@@ -4182,7 +4182,7 @@ Reference places Remote control inside Settings, grouping Profile, Connections, 
 
 **Evidence**
 
-grep -n 'companion|Companion|Desktop' in apps/mobile/src/features/settings/index.tsx — no match; apps/mobile/src/features/drawer/components/DrawerContent.tsx line 451 renders DesktopCompanionWidget
+grep -n 'companion|Companion|Desktop' in apps/mobile/src/features/settings/index.tsx, no match; apps/mobile/src/features/drawer/components/DrawerContent.tsx line 451 renders DesktopCompanionWidget
 
 **Suggested fix**
 
@@ -4192,7 +4192,7 @@ Add a 'Desktop & remote control' row to the Settings index that opens /(app)/com
 
 - `chatgpt_reference/058-codex-ios-settings-remote-control-desktop-connection-composer-faceid.png`
 
-### GAP-182 — No 'Start app with Voice' launch preference
+### GAP-182, No 'Start app with Voice' launch preference
 
 - **Status:** Open
 - **Owner:** Unassigned
@@ -4205,7 +4205,7 @@ The reference lets users make voice the default launch surface ('Start ChatGPT w
 
 **Evidence**
 
-apps/mobile/src/features/settings/voice/index.tsx; apps/mobile/app/(app)/(tabs)/chat.tsx (voice overlay opened only via handleOpenVoiceMode); grep 'start with voice|launch.\*voice' — no match
+apps/mobile/src/features/settings/voice/index.tsx; apps/mobile/app/(app)/(tabs)/chat.tsx (voice overlay opened only via handleOpenVoiceMode); grep 'start with voice|launch.\*voice', no match
 
 **Suggested fix**
 
@@ -4215,7 +4215,7 @@ Add a persisted 'Start AGI with Voice' switch in Voice settings; when on, the (a
 
 - `chatgpt_reference/064-chatgpt-ios-settings-voice-spruce-model-intelligence-language.png`
 
-### GAP-183 — Voice settings lacks a Language row; speech language is only editable mid-session
+### GAP-183, Voice settings lacks a Language row; speech language is only editable mid-session
 
 - **Status:** Open
 - **Owner:** Unassigned
@@ -4224,7 +4224,7 @@ Add a persisted 'Start AGI with Voice' switch in Voice settings; when on, the (a
 
 **Gap**
 
-The reference puts 'Language: Auto' directly in Voice settings. In agiworkforce the Voice settings screen reads speechLanguage but never lets the user change it — the only setter lives in the in-session VoiceSelector component, so a user in Settings cannot change recognition/speech language.
+The reference puts 'Language: Auto' directly in Voice settings. In agiworkforce the Voice settings screen reads speechLanguage but never lets the user change it, the only setter lives in the in-session VoiceSelector component, so a user in Settings cannot change recognition/speech language.
 
 **Evidence**
 
@@ -4238,7 +4238,7 @@ Add a 'Language' SettingsRow (value = current language or 'Auto') to Settings > 
 
 - `chatgpt_reference/064-chatgpt-ios-settings-voice-spruce-model-intelligence-language.png`
 
-### GAP-184 — No voice model / voice intelligence tier selection in Voice settings
+### GAP-184, No voice model / voice intelligence tier selection in Voice settings
 
 - **Status:** Open
 - **Owner:** Unassigned
@@ -4251,7 +4251,7 @@ The reference exposes 'Model: Live' and 'Intelligence: Instant' so users pick th
 
 **Evidence**
 
-apps/mobile/src/features/settings/voice/index.tsx (ProviderOption system/cloud only); grep 'realtime|voice model' across apps/mobile/src — only cloud sync realtime, no voice model picker
+apps/mobile/src/features/settings/voice/index.tsx (ProviderOption system/cloud only); grep 'realtime|voice model' across apps/mobile/src, only cloud sync realtime, no voice model picker
 
 **Suggested fix**
 
@@ -4261,7 +4261,7 @@ Add Model and Intelligence rows to Voice settings that read the voice-capable en
 
 - `chatgpt_reference/064-chatgpt-ios-settings-voice-spruce-model-intelligence-language.png`
 
-### GAP-185 — No phone-number identity row in account settings
+### GAP-185, No phone-number identity row in account settings
 
 - **Status:** Open
 - **Owner:** Unassigned
@@ -4274,7 +4274,7 @@ The reference's Account group shows Email, Phone number (with the verified numbe
 
 **Evidence**
 
-apps/mobile/src/features/settings/index.tsx:300-330 (Account rows: email, subscription, restore); apps/mobile/src/features/settings/cloud-account/index.tsx (no phone); grep 'phone number|phoneNumber' across apps/mobile/src — only messaging setup and contacts import
+apps/mobile/src/features/settings/index.tsx:300-330 (Account rows: email, subscription, restore); apps/mobile/src/features/settings/cloud-account/index.tsx (no phone); grep 'phone number|phoneNumber' across apps/mobile/src, only messaging setup and contacts import
 
 **Suggested fix**
 
@@ -4284,12 +4284,12 @@ Surface Clerk's phone-number identity as a row in the Account group with add/ver
 
 - `chatgpt_reference/068-chatgpt-ios-settings-appearance-mode-system-light-dark-picker.png`
 
-### GAP-186 — Settings root Billing row shows a generic 'Cloud'/'Sign in' tag, not the actual plan
+### GAP-186, Settings root Billing row shows a generic 'Cloud'/'Sign in' tag, not the actual plan
 
 - **Status:** Done
 - **Owner:** Unassigned
 - **Surface/type:** mobile · missing-control
-- **Reference:** Claude · iOS · Settings root — Billing row plan value
+- **Reference:** Claude · iOS · Settings root, Billing row plan value
 
 **Gap**
 
@@ -4307,7 +4307,7 @@ Pass the resolved plan/tier label (already available via useTierStore, used else
 
 - `claude_reference/119-claude-ios-settings-root-account-app-sections-top.png`
 
-### GAP-187 — 'Shared links' settings screen exists but has no entry point from Settings
+### GAP-187, 'Shared links' settings screen exists but has no entry point from Settings
 
 - **Status:** Done
 - **Owner:** Unassigned
@@ -4316,7 +4316,7 @@ Pass the resolved plan/tier label (already available via useTierStore, used else
 
 **Gap**
 
-The reference exposes 'Shared links' as a top-level row in Settings → Account. agiworkforce has a fully built screen at apps/mobile/app/(app)/settings/shared-links.tsx with the same empty-state copy, but no code anywhere navigates to it — it isn't listed in the settings sections array, so users can never reach it in the shipped app.
+The reference exposes 'Shared links' as a top-level row in Settings → Account. agiworkforce has a fully built screen at apps/mobile/app/(app)/settings/shared-links.tsx with the same empty-state copy, but no code anywhere navigates to it, it isn't listed in the settings sections array, so users can never reach it in the shipped app.
 
 **Evidence**
 
@@ -4330,12 +4330,12 @@ Add a 'Shared links' row to the Account section of the settings list (apps/mobil
 
 - `claude_reference/126-claude-ios-settings-shared-links-empty-state-no-shared-links.png`
 
-### GAP-188 — No phone-number identity row and no avatar edit affordance on mobile
+### GAP-188, No phone-number identity row and no avatar edit affordance on mobile
 
 - **Status:** Open
 - **Owner:** Unassigned
 - **Surface/type:** mobile · missing-control
-- **Reference:** ChatGPT · iOS · Settings — Account group
+- **Reference:** ChatGPT · iOS · Settings, Account group
 
 **Gap**
 
@@ -4353,12 +4353,12 @@ Add a Phone number row bound to Clerk's phone identity (with add/verify) and wir
 
 - `chatgpt_reference/041-chatgpt-ios-settings-account-profile-identity-email-phone-theme.png`
 
-### GAP-189 — App settings missing Remote control, Trusted contact, Cloud browser; Storage buried
+### GAP-189, App settings missing Remote control, Trusted contact, Cloud browser; Storage buried
 
 - **Status:** Open
 - **Owner:** Unassigned
 - **Surface/type:** mobile · missing-ia
-- **Reference:** ChatGPT · iOS · Settings — App settings list
+- **Reference:** ChatGPT · iOS · Settings, App settings list
 
 **Gap**
 
@@ -4366,7 +4366,7 @@ The reference App settings group is General, Notifications, Voice, Parental cont
 
 **Evidence**
 
-apps/mobile/src/features/settings/index.tsx lines 348-397; apps/mobile/app/(app)/settings/storage.tsx linked only from settings/data-controls/index.tsx:117 and settings/general/index.tsx:67; grep -i 'trusted contact|crisis|cloud browser' across apps/mobile, apps/web/app and apps/desktop/src — no matches
+apps/mobile/src/features/settings/index.tsx lines 348-397; apps/mobile/app/(app)/settings/storage.tsx linked only from settings/data-controls/index.tsx:117 and settings/general/index.tsx:67; grep -i 'trusted contact|crisis|cloud browser' across apps/mobile, apps/web/app and apps/desktop/src, no matches
 
 **Suggested fix**
 
@@ -4376,7 +4376,7 @@ Promote Storage to the Device group, add a 'Remote control' row routing to /(app
 
 - `chatgpt_reference/042-chatgpt-ios-settings-account-app-list-general-notifications-security.png`
 
-### GAP-190 — Mobile has no Plugins/Skills surface, so the drawer and settings both omit it
+### GAP-190, Mobile has no Plugins/Skills surface, so the drawer and settings both omit it
 
 - **Status:** Open
 - **Owner:** Unassigned
@@ -4399,7 +4399,7 @@ Skills nav gap is resolved; do not rebuild it. Remaining work is a mobile plugin
 
 - `chatgpt_reference/040-chatgpt-ios-sidebar-nav-menu-recents-projects-peek.png`
 
-### GAP-191 — Recents are capped at 8 with no path to full chat history
+### GAP-191, Recents are capped at 8 with no path to full chat history
 
 - **Status:** Open
 - **Owner:** Unassigned
@@ -4422,7 +4422,7 @@ Either paginate the drawer list on scroll or add a 'See all chats' row beneath R
 
 - `chatgpt_reference/077-chatgpt-ios-sidebar-nav-recents-chat-history-fab.png`
 
-### GAP-192 — Voice conversation screen has no text-input fallback to type instead of speaking
+### GAP-192, Voice conversation screen has no text-input fallback to type instead of speaking
 
 - **Status:** Open
 - **Owner:** Unassigned
@@ -4431,7 +4431,7 @@ Either paginate the drawer list on scroll or add a 'See all chats' row beneath R
 
 **Gap**
 
-ChatGPT's voice overlay keeps a real composer (text field + mic + X) pinned at the bottom, letting the user type a message mid-conversation without leaving voice mode. agiworkforce's VoiceConversationScreen forces Keyboard.dismiss() on entry and renders no TextInput at all — the only way to communicate is the orb (tap-to-talk or push-to-talk).
+ChatGPT's voice overlay keeps a real composer (text field + mic + X) pinned at the bottom, letting the user type a message mid-conversation without leaving voice mode. agiworkforce's VoiceConversationScreen forces Keyboard.dismiss() on entry and renders no TextInput at all, the only way to communicate is the orb (tap-to-talk or push-to-talk).
 
 **Evidence**
 
@@ -4445,7 +4445,7 @@ Add a slim always-visible text composer at the bottom of VoiceConversationScreen
 
 - `references-2/chatgpt-ios-voice-05-reasoning-status.png`
 
-### GAP-193 — No persistent Hands-free vs Push-to-talk voice mode preference
+### GAP-193, No persistent Hands-free vs Push-to-talk voice mode preference
 
 - **Status:** Open
 - **Owner:** Unassigned
@@ -4468,7 +4468,7 @@ Add a persisted 'Mode' setting (Hands free / Push to talk) to the Voice settings
 
 - `claude_reference/131-claude-ios-voice-settings-buttery-hands-free-mode.png`
 
-### GAP-194 — Work mode is hidden inside the '+' sheet instead of a header surface switcher
+### GAP-194, Work mode is hidden inside the '+' sheet instead of a header surface switcher
 
 - **Status:** Open
 - **Owner:** Unassigned
@@ -4491,7 +4491,7 @@ Promote workMode to a header dropdown showing the active surface name (Chat / Wo
 
 - `chatgpt_reference/076-chatgpt-ios-work-mode-task-list-github-suggested-tasks.png`
 
-### GAP-195 — Empty chat names the active workspace and reopens its picker
+### GAP-195, Empty chat names the active workspace and reopens its picker
 
 - **Status:** Done
 - **Owner:** Desktop
@@ -4514,7 +4514,7 @@ Completed. Keep the headline sourced from the same folder-selection contract use
 
 - `chatgpt_reference/079-codex-macos-chat-empty-state-agiworkforce-quick-actions.png`
 
-### GAP-196 — No 'classify session states' or 'switch models on flagged message' toggles for AGI Code
+### GAP-196, No 'classify session states' or 'switch models on flagged message' toggles for AGI Code
 
 - **Status:** Open
 - **Owner:** Unassigned
@@ -4527,7 +4527,7 @@ Reference has toggles to auto-classify sessions (blocked/ready-for-review/done) 
 
 **Evidence**
 
-grep -i 'classify session' across apps/ — no match; AgiCodeTab only wires InstructionFilesSettings
+grep -i 'classify session' across apps/, no match; AgiCodeTab only wires InstructionFilesSettings
 
 **Suggested fix**
 
@@ -4537,7 +4537,7 @@ Add session-state auto-classification and model-switch-on-flag toggles to the Ag
 
 - `claude_reference/148-claude-desktop-settings-claude-code-general-code-theme.png`
 
-### GAP-197 — No iOS Simulator integration or pull-request automation settings for AGI Code
+### GAP-197, No iOS Simulator integration or pull-request automation settings for AGI Code
 
 - **Status:** Open
 - **Owner:** Unassigned
@@ -4560,7 +4560,7 @@ Add Mobile simulators and Pull requests sections to AgiCode settings with the fo
 
 - `claude_reference/151-claude-desktop-settings-claude-code-ios-simulator-pull-requests.png`
 
-### GAP-198 — Usage dashboard has no streaks, active-days, peak-hour, favorite-model stats, or activity heatmap
+### GAP-198, Usage dashboard has no streaks, active-days, peak-hour, favorite-model stats, or activity heatmap
 
 - **Status:** Open
 - **Owner:** Unassigned
@@ -4583,12 +4583,12 @@ Call the existing MANAGED_CLOUD_REFLECT_PATH endpoint (@agiworkforce/cloud-contr
 
 - `claude_reference/136-claude-desktop-code-usage-dashboard-sessions-tokens-streaks-heatmap.png`
 
-### GAP-199 — 'Record a skill' composer action disabled/hidden outside local privacy mode
+### GAP-199, 'Record a skill' composer action disabled/hidden outside local privacy mode
 
 - **Status:** Open
 - **Owner:** Unassigned
 - **Surface/type:** desktop · missing-control
-- **Reference:** Claude · macOS desktop · Composer add menu — Record a skill entry
+- **Reference:** Claude · macOS desktop · Composer add menu, Record a skill entry
 
 **Gap**
 
@@ -4606,7 +4606,7 @@ Either support skill recording in Managed/Cloud privacy mode too (with appropria
 
 - `references-2/claude-desktop-cowork-record-skill-02-composer-add-menu.png`
 
-### GAP-200 — Desktop home has no 'Pinned or active' task list with a 'Clear active' action
+### GAP-200, Desktop home has no 'Pinned or active' task list with a 'Clear active' action
 
 - **Status:** Open
 - **Owner:** Unassigned
@@ -4615,11 +4615,11 @@ Either support skill recording in Managed/Cloud privacy mode too (with appropria
 
 **Gap**
 
-Below the reference composer sits a 'Pinned or active' group with a 'Clear active' text action and rows showing a task-state icon, blue activity dot, title and relative timestamp — a launcher for in-flight work without opening the sidebar. agiworkforce's desktop empty state renders only the branded greeting; pinning exists but only as a sidebar conversation group with no home surfacing and no bulk clear.
+Below the reference composer sits a 'Pinned or active' group with a 'Clear active' text action and rows showing a task-state icon, blue activity dot, title and relative timestamp, a launcher for in-flight work without opening the sidebar. agiworkforce's desktop empty state renders only the branded greeting; pinning exists but only as a sidebar conversation group with no home surfacing and no bulk clear.
 
 **Evidence**
 
-apps/desktop/src/features/v3/EmptyChat.tsx (renders BrandedGreeting only); apps/desktop/src/features/v3/Sidebar.tsx:68-92 (pinned group lives in the sidebar); searched 'Pinned or active'/'Clear active' across apps — only an unrelated mobile 'Clear active project' label
+apps/desktop/src/features/v3/EmptyChat.tsx (renders BrandedGreeting only); apps/desktop/src/features/v3/Sidebar.tsx:68-92 (pinned group lives in the sidebar); searched 'Pinned or active'/'Clear active' across apps, only an unrelated mobile 'Clear active project' label
 
 **Suggested fix**
 
@@ -4629,12 +4629,12 @@ Extend EmptyChat with a 'Pinned or active' section fed by pinned conversations p
 
 - `references-2/claude-desktop-cowork-record-skill-05-processing-zero-steps.png`
 
-### GAP-201 — No ambient screen-edge indicator while desktop capture is active
+### GAP-201, No ambient screen-edge indicator while desktop capture is active
 
 - **Status:** Open
 - **Owner:** Unassigned
 - **Surface/type:** desktop · missing-state
-- **Reference:** Claude · macOS desktop · Cowork skill recording — active capture HUD
+- **Reference:** Claude · macOS desktop · Cowork skill recording, active capture HUD
 
 **Gap**
 
@@ -4652,12 +4652,12 @@ Add a full-screen, click-through, transparent Tauri overlay window per display t
 
 - `references-2/claude-desktop-cowork-record-skill-04-active-capture-zero-steps.png`
 
-### GAP-202 — No Context empty state explaining tracked tools and referenced files
+### GAP-202, No Context empty state explaining tracked tools and referenced files
 
 - **Status:** Open
 - **Owner:** Unassigned
 - **Surface/type:** desktop · missing-copy
-- **Reference:** Claude · macOS desktop · Cowork task rail — Context empty state
+- **Reference:** Claude · macOS desktop · Cowork task rail, Context empty state
 
 **Gap**
 
@@ -4669,13 +4669,13 @@ Re-verified 2026-08-21: grepped 'Track tools'/'referenced files' across the whol
 
 **Suggested fix**
 
-Ship the Context section with an empty state carrying that explainer line plus two icon buttons in the section header — 'Add files to context' (reuses CloudFolderAttachSheet/file picker) and 'Attach this device' (local folder grant) — and fill it at runtime with tool names and file paths emitted by the agent loop.
+Ship the Context section with an empty state carrying that explainer line plus two icon buttons in the section header, 'Add files to context' (reuses CloudFolderAttachSheet/file picker) and 'Attach this device' (local folder grant), and fill it at runtime with tool names and file paths emitted by the agent loop.
 
 **Reference screenshot(s)**
 
 - `references-2/claude-desktop-cowork-record-skill-06-task-progress-outputs-context.png`
 
-### GAP-203 — No compact right-rail Progress checklist / Outputs gallery distinct from the full artifacts editor
+### GAP-203, No compact right-rail Progress checklist / Outputs gallery distinct from the full artifacts editor
 
 - **Status:** Open
 - **Owner:** Unassigned
@@ -4698,12 +4698,12 @@ Port apps/web/features/chat/components/work-session/WorkSessionPanel.tsx (or ext
 
 - `claude_reference/101-claude-desktop-cowork-agent-task-view-progress-outputs-expanded.png`
 
-### GAP-204 — Home composer lacks in-line usage-limit banner, project/folder picker, and permission-mode ('Skip') selector
+### GAP-204, Home composer lacks in-line usage-limit banner, project/folder picker, and permission-mode ('Skip') selector
 
 - **Status:** Open
 - **Owner:** Unassigned
 - **Surface/type:** desktop · missing-control
-- **Reference:** Claude · macOS desktop · Home launcher composer — usage banner, project picker, permission-mode picker
+- **Reference:** Claude · macOS desktop · Home launcher composer, usage banner, project picker, permission-mode picker
 
 **Gap**
 
@@ -4711,7 +4711,7 @@ Claude's home composer shows a 'You've used 75% of your weekly limit' banner dir
 
 **Evidence**
 
-apps/desktop/src/features/v3/EmptyChat.tsx, apps/desktop/src/features/chat/BrandedGreeting.tsx — composer-adjacent controls not present in these files; no home-level usage banner found
+apps/desktop/src/features/v3/EmptyChat.tsx, apps/desktop/src/features/chat/BrandedGreeting.tsx, composer-adjacent controls not present in these files; no home-level usage banner found
 
 **Suggested fix**
 
@@ -4721,12 +4721,12 @@ Surface the existing budget/usage store (used in UsageDashboard.tsx) as a compac
 
 - `claude_reference/137-claude-desktop-home-launcher-cowork-mode-recents-list.png`
 
-### GAP-205 — Capability-aware quick-start chips seed the empty composer
+### GAP-205, Capability-aware quick-start chips seed the empty composer
 
 - **Status:** Done
 - **Owner:** Desktop
 - **Surface/type:** desktop · missing-control
-- **Reference:** Claude · macOS desktop · Home launcher — quick-action category chips
+- **Reference:** Claude · macOS desktop · Home launcher, quick-action category chips
 
 **Gap**
 
@@ -4744,16 +4744,16 @@ Completed. Keep these chips runtime-capability-aware and editable; add categorie
 
 - `claude_reference/138-claude-desktop-home-launcher-chat-mode-quick-actions.png`
 
-### GAP-206 — Desktop empty chat has no starter actions, unlike web greeting chips
+### GAP-206, Desktop empty chat has no starter actions, unlike web greeting chips
 
 - **Status:** Open
 - **Owner:** Unassigned
 - **Surface/type:** desktop · missing-ia
-- **Reference:** ChatGPT · macOS desktop · Model picker — Intelligence levels
+- **Reference:** ChatGPT · macOS desktop · Model picker, Intelligence levels
 
 **Gap**
 
-The reference dropdown leads with an 'Intelligence' group — Instant 5.5 / Medium / High / Extra High / Pro — and demotes the model family to a single submenu row ('current flagship OpenAI model >'). That matches how people choose ('how hard should it think?') rather than how vendors ship. agiworkforce inverts it: a recommended/more model roster is primary and effort lives in a nested flyout, and the effort marks use provider vocabulary (none/minimal/low/medium/high/xhigh/max) rather than human labels.
+The reference dropdown leads with an 'Intelligence' group, Instant 5.5 / Medium / High / Extra High / Pro, and demotes the model family to a single submenu row ('current flagship OpenAI model >'). That matches how people choose ('how hard should it think?') rather than how vendors ship. agiworkforce inverts it: a recommended/more model roster is primary and effort lives in a nested flyout, and the effort marks use provider vocabulary (none/minimal/low/medium/high/xhigh/max) rather than human labels.
 
 **Evidence**
 
@@ -4767,20 +4767,20 @@ Keep the catalog-driven correctness (supportedEfforts, clamping, always_on handl
 
 - `chatgpt_reference/090-chatgpt-macos-model-picker-dropdown-intelligence-levels.png`
 
-### GAP-207 — No risk-tiered default permission preset ('Allow low-risk actions') for plugin/connector actions
+### GAP-207, No risk-tiered default permission preset ('Allow low-risk actions') for plugin/connector actions
 
 - **Status:** Open
 - **Owner:** Unassigned
 - **Surface/type:** desktop · missing-control
-- **Reference:** ChatGPT · web · Plugins — Permissions preset
+- **Reference:** ChatGPT · web · Plugins, Permissions preset
 
 **Gap**
 
-Reference has a single global 'Permissions' setting — 'Choose when ChatGPT should ask for permission when using plugins' — with presets like 'Allow low-risk actions'. agiworkforce has a related but distinct control (AgentExecutionSettings' approval-timeout policy: auto-deny/auto-approve/pause on timeout), which governs what happens when an approval prompt is not answered in time, not a standing risk-tiered default for whether to prompt at all.
+Reference has a single global 'Permissions' setting, 'Choose when ChatGPT should ask for permission when using plugins', with presets like 'Allow low-risk actions'. agiworkforce has a related but distinct control (AgentExecutionSettings' approval-timeout policy: auto-deny/auto-approve/pause on timeout), which governs what happens when an approval prompt is not answered in time, not a standing risk-tiered default for whether to prompt at all.
 
 **Evidence**
 
-apps/desktop/src/features/settings/AgentExecutionSettings.tsx lines ~197-225 (Timeout policy: auto-deny/auto-approve/pause — a different control than a standing risk-tier default)
+apps/desktop/src/features/settings/AgentExecutionSettings.tsx lines ~197-225 (Timeout policy: auto-deny/auto-approve/pause, a different control than a standing risk-tier default)
 
 **Suggested fix**
 
@@ -4790,7 +4790,7 @@ Add a 'Default permissions' preset selector (e.g. Always ask / Allow low-risk ac
 
 - `chatgpt_reference/128-chatgpt-web-settings-plugins-permissions-and-apps-top.png`
 
-### GAP-208 — Adopt the partial-failure + empty + unselected triple-state pattern for list panels
+### GAP-208, Adopt the partial-failure + empty + unselected triple-state pattern for list panels
 
 - **Status:** Open
 - **Owner:** Unassigned
@@ -4813,7 +4813,7 @@ In AgiWorkProjects.tsx, decouple the error banner from the list: render the part
 
 - `chatgpt_reference/084-codex-macos-pull-requests-list-empty-error-state.png`
 
-### GAP-209 — Skill recorder captures no voice narration and has no microphone device picker
+### GAP-209, Skill recorder captures no voice narration and has no microphone device picker
 
 - **Status:** Open
 - **Owner:** Unassigned
@@ -4822,7 +4822,7 @@ In AgiWorkProjects.tsx, decouple the error banner from the list: render the part
 
 **Gap**
 
-The reference consent dialog states 'Your screen, clicks, typing, and voice are recorded, then sent to Claude and turned into a repeatable skill' and includes a microphone icon with a chevron for choosing the input device. agiworkforce's ActionRecorder consent copy says only 'AGI captures mouse clicks and typing across your desktop' — voice narration is never mentioned or implemented, and there is no audio-input device selector anywhere in the component.
+The reference consent dialog states 'Your screen, clicks, typing, and voice are recorded, then sent to Claude and turned into a repeatable skill' and includes a microphone icon with a chevron for choosing the input device. agiworkforce's ActionRecorder consent copy says only 'AGI captures mouse clicks and typing across your desktop', voice narration is never mentioned or implemented, and there is no audio-input device selector anywhere in the component.
 
 **Evidence**
 
@@ -4836,12 +4836,12 @@ Add optional voice narration capture during recording (so users can explain what
 
 - `references-2/claude-desktop-cowork-record-skill-03-privacy-consent.png`
 
-### GAP-210 — Pairing instructions omit where to enter the code on the receiving device
+### GAP-210, Pairing instructions omit where to enter the code on the receiving device
 
 - **Status:** Done
 - **Owner:** Desktop
 - **Surface/type:** desktop · missing-copy
-- **Reference:** Codex · macOS desktop · Remote pairing modal — Computer tab
+- **Reference:** Codex · macOS desktop · Remote pairing modal, Computer tab
 
 **Gap**
 
@@ -4859,12 +4859,12 @@ Completed. Keep Desktop instructions synchronized with the mounted Mobile route 
 
 - `chatgpt_reference/035-codex-macos-settings-connections-remote-pairing-computer-tab-pairing-code.png`
 
-### GAP-211 — Pairing card has no Phone/Computer tabs, no enlarge-QR, and no copy-code button
+### GAP-211, Pairing card has no Phone/Computer tabs, no enlarge-QR, and no copy-code button
 
 - **Status:** Not Planned
 - **Owner:** Desktop
 - **Surface/type:** desktop · missing-control
-- **Reference:** Codex · macOS desktop · Remote pairing modal — Phone tab
+- **Reference:** Codex · macOS desktop · Remote pairing modal, Phone tab
 
 **Gap**
 
@@ -4882,7 +4882,7 @@ Supported phone affordances are complete. Reconsider a Computer tab only after t
 
 - `chatgpt_reference/034-codex-macos-settings-connections-remote-pairing-phone-tab-qr-code.png`
 
-### GAP-212 — No keyboard shortcuts for the tool panels, and shortcuts are not shown on the launcher
+### GAP-212, No keyboard shortcuts for the tool panels, and shortcuts are not shown on the launcher
 
 - **Status:** Open
 - **Owner:** Unassigned
@@ -4905,7 +4905,7 @@ Register terminal/browser/files/review toggle shortcuts in constants/shortcuts.t
 
 - `chatgpt_reference/080-codex-macos-right-panel-shortcuts-review-terminal-browser-files.png`
 
-### GAP-213 — List destinations lack the in-list search field the reference gives every one of them
+### GAP-213, List destinations lack the in-list search field the reference gives every one of them
 
 - **Status:** Open
 - **Owner:** Unassigned
@@ -4928,12 +4928,12 @@ Add a shared ListHeader component (title, subtitle, search input, primary action
 
 - `chatgpt_reference/086-codex-macos-scheduled-tasks-daily-weekly-followup-suggestions.png`
 
-### GAP-214 — No contrast slider on themes — no way to strengthen legibility without a custom theme
+### GAP-214, No contrast slider on themes, no way to strengthen legibility without a custom theme
 
 - **Status:** Open
 - **Owner:** Unassigned
 - **Surface/type:** desktop · missing-control
-- **Reference:** Codex · macOS desktop · Settings > Appearance — theme tokens
+- **Reference:** Codex · macOS desktop · Settings > Appearance, theme tokens
 
 **Gap**
 
@@ -4941,7 +4941,7 @@ Both reference theme cards end with a Contrast slider (light 45, dark 60) that a
 
 **Evidence**
 
-apps/desktop/src/features/settings/ThemeSettings.tsx:660-692 (Accessibility section = Dyslexic Friendly Font only); grepped 'contrast' in ThemeSettings.tsx and ThemeEditorDialog.tsx — no match; ThemeEditorDialog exposes raw per-token HSL pickers only
+apps/desktop/src/features/settings/ThemeSettings.tsx:660-692 (Accessibility section = Dyslexic Friendly Font only); grepped 'contrast' in ThemeSettings.tsx and ThemeEditorDialog.tsx, no match; ThemeEditorDialog exposes raw per-token HSL pickers only
 
 **Suggested fix**
 
@@ -4951,7 +4951,7 @@ Add a `contrast` scalar per theme mode that post-processes resolved theme tokens
 
 - `chatgpt_reference/094-codex-macos-settings-appearance-theme-picker-light-colors.png`
 
-### GAP-215 — No in-app invoice history, payment-method display, or cancel-plan control
+### GAP-215, No in-app invoice history, payment-method display, or cancel-plan control
 
 - **Status:** Open
 - **Owner:** Unassigned
@@ -4960,11 +4960,11 @@ Add a `contrast` scalar per theme mode that post-processes resolved theme tokens
 
 **Gap**
 
-Claude's Billing settings render an in-app invoice table (Date/Total/Status/View), a masked payment card with an Update button, and a red Cancel-plan button — all without leaving the app. agiworkforce's BillingSettings.tsx shows only Plan/Subscription/Renews text rows plus a single 'Manage billing' button that opens the external Stripe customer portal for everything else.
+Claude's Billing settings render an in-app invoice table (Date/Total/Status/View), a masked payment card with an Update button, and a red Cancel-plan button, all without leaving the app. agiworkforce's BillingSettings.tsx shows only Plan/Subscription/Renews text rows plus a single 'Manage billing' button that opens the external Stripe customer portal for everything else.
 
 **Evidence**
 
-apps/desktop/src/features/settings/BillingSettings.tsx (full file reviewed — dl rows + one 'Manage billing' button; no invoice table, no card display, no cancel button)
+apps/desktop/src/features/settings/BillingSettings.tsx (full file reviewed, dl rows + one 'Manage billing' button; no invoice table, no card display, no cancel button)
 
 **Suggested fix**
 
@@ -4974,7 +4974,7 @@ If product strategy allows, pull invoice history and payment-method summary from
 
 - `claude_reference/144-claude-desktop-settings-billing-max-plan.png`
 
-### GAP-216 — Desktop agent browsing has no per-site permission policy or cookie reset
+### GAP-216, Desktop agent browsing has no per-site permission policy or cookie reset
 
 - **Status:** Open
 - **Owner:** Unassigned
@@ -4983,11 +4983,11 @@ If product strategy allows, pull invoice history and payment-method summary from
 
 **Gap**
 
-Reference models browsing permission as a default ('Always ask') plus per-site overrides, and offers cookie clearing. agiworkforce desktop has a browser/computer-use feature stack but its only network gate is a comma-separated 'Allowed network domains' text field for the terminal sandbox — free-text, unvalidated, with no per-site ask/allow semantics and no way to clear the agent browser's cookies.
+Reference models browsing permission as a default ('Always ask') plus per-site overrides, and offers cookie clearing. agiworkforce desktop has a browser/computer-use feature stack but its only network gate is a comma-separated 'Allowed network domains' text field for the terminal sandbox, free-text, unvalidated, with no per-site ask/allow semantics and no way to clear the agent browser's cookies.
 
 **Evidence**
 
-apps/desktop/src/features/settings/AgentExecutionSettings.tsx lines 336-346; apps/desktop/src/features/browser/\* (BrowserViewer, BrowserActionLog) has no permission UI; grep -i 'always ask|per-site|cookies' across those dirs — no match
+apps/desktop/src/features/settings/AgentExecutionSettings.tsx lines 336-346; apps/desktop/src/features/browser/\* (BrowserViewer, BrowserActionLog) has no permission UI; grep -i 'always ask|per-site|cookies' across those dirs, no match
 
 **Suggested fix**
 
@@ -4997,12 +4997,12 @@ Replace the comma-separated field with a policy row (Always ask / Allow listed /
 
 - `chatgpt_reference/057-chatgpt-ios-settings-cloud-browser-default-permissions-clear-cookies.png`
 
-### GAP-217 — No reasoning-effort availability allow-list to trim the model picker
+### GAP-217, No reasoning-effort availability allow-list to trim the model picker
 
 - **Status:** Open
 - **Owner:** Unassigned
 - **Surface/type:** desktop · missing-control
-- **Reference:** Codex · macOS desktop · Settings > Configuration — Model features
+- **Reference:** Codex · macOS desktop · Settings > Configuration, Model features
 
 **Gap**
 
@@ -5020,12 +5020,12 @@ Before adding an allow-list preference, desktop needs an actual effort-selection
 
 - `chatgpt_reference/097-codex-macos-settings-configuration-approval-sandbox-model-features.png`
 
-### GAP-218 — No scope selector or open-file link for the underlying agent config
+### GAP-218, No scope selector or open-file link for the underlying agent config
 
 - **Status:** Open
 - **Owner:** Unassigned
 - **Surface/type:** desktop · missing-control
-- **Reference:** Codex · macOS desktop · Settings > Configuration — config.toml
+- **Reference:** Codex · macOS desktop · Settings > Configuration, config.toml
 
 **Gap**
 
@@ -5043,7 +5043,7 @@ Narrow scope: only a 'User config ⌄' scope selector remains to build; the open
 
 - `chatgpt_reference/097-codex-macos-settings-configuration-approval-sandbox-model-features.png`
 
-### GAP-219 — No paired-device list, empty state, or refresh for devices allowed to control this machine
+### GAP-219, No paired-device list, empty state, or refresh for devices allowed to control this machine
 
 - **Status:** Open
 - **Owner:** Unassigned
@@ -5066,7 +5066,7 @@ Persist paired devices (name, platform, last-seen, pairing time) and render them
 
 - `chatgpt_reference/032-codex-macos-settings-connections-control-this-mac-allow-toggle.png`
 
-### GAP-220 — No 'keep this machine awake' option for remote sessions
+### GAP-220, No 'keep this machine awake' option for remote sessions
 
 - **Status:** Open
 - **Owner:** Unassigned
@@ -5089,7 +5089,7 @@ Do not build new sleep-inhibition logic. Wrap the existing SleepPrevention::enab
 
 - `chatgpt_reference/053-codex-macos-settings-connections-control-this-mac-devices.png`
 
-### GAP-221 — No 'keep this computer awake while remote access is enabled' setting
+### GAP-221, No 'keep this computer awake while remote access is enabled' setting
 
 - **Status:** Open
 - **Owner:** Unassigned
@@ -5112,7 +5112,7 @@ Do not build new sleep-inhibition logic. Wrap the existing SleepPrevention::enab
 
 - `chatgpt_reference/032-codex-macos-settings-connections-control-this-mac-allow-toggle.png`
 
-### GAP-222 — Desktop extension manager lacks Configure/Browse/Advanced-settings/drag-install affordances
+### GAP-222, Desktop extension manager lacks Configure/Browse/Advanced-settings/drag-install affordances
 
 - **Status:** Open
 - **Owner:** Unassigned
@@ -5121,11 +5121,11 @@ Do not build new sleep-inhibition logic. Wrap the existing SleepPrevention::enab
 
 **Gap**
 
-Reference's Extensions list shows each installed extension with a 'Configure' button plus an overflow (...) menu, a top-level 'Browse extensions' CTA linking to the marketplace, an 'Advanced settings' link, and a 'Drag .MCPB or .DXT files here to install' dropzone. agiworkforce's ExtensionsSettings.tsx only has Install/Enable-Disable/Uninstall/Refresh buttons — no Configure action, no Browse-extensions link, no Advanced settings, no drag-and-drop install.
+Reference's Extensions list shows each installed extension with a 'Configure' button plus an overflow (...) menu, a top-level 'Browse extensions' CTA linking to the marketplace, an 'Advanced settings' link, and a 'Drag .MCPB or .DXT files here to install' dropzone. agiworkforce's ExtensionsSettings.tsx only has Install/Enable-Disable/Uninstall/Refresh buttons, no Configure action, no Browse-extensions link, no Advanced settings, no drag-and-drop install.
 
 **Evidence**
 
-apps/desktop/src/features/settings/ExtensionsSettings.tsx — grep for 'drag', '.mcpb', '.dxt', 'browse extension', 'advanced settings', 'Configure' all return no matches
+apps/desktop/src/features/settings/ExtensionsSettings.tsx, grep for 'drag', '.mcpb', '.dxt', 'browse extension', 'advanced settings', 'Configure' all return no matches
 
 **Suggested fix**
 
@@ -5135,12 +5135,12 @@ Add a per-extension Configure action (opens extension-specific settings), a Brow
 
 - `claude_reference/157-claude-web-settings-extensions-desktop-installed-list.png`
 
-### GAP-223 — No open-source licenses / third-party notices view in the desktop app
+### GAP-223, No open-source licenses / third-party notices view in the desktop app
 
 - **Status:** Open
 - **Owner:** Unassigned
 - **Surface/type:** desktop · missing-screen
-- **Reference:** Codex · macOS desktop · Settings > General — Open source licenses
+- **Reference:** Codex · macOS desktop · Settings > General, Open source licenses
 
 **Gap**
 
@@ -5158,12 +5158,12 @@ Generate a NOTICE/licenses bundle at build time (license-checker + cargo-about) 
 
 - `chatgpt_reference/092-codex-macos-settings-general-composer-notifications-popout.png`
 
-### GAP-224 — Quick-query overlay hotkey is hardcoded and absent from settings
+### GAP-224, Quick-query overlay hotkey is hardcoded and absent from settings
 
 - **Status:** Not Planned
 - **Owner:** Unassigned
 - **Surface/type:** desktop · missing-control
-- **Reference:** Codex · macOS desktop · Settings > General — Popout Window
+- **Reference:** Codex · macOS desktop · Settings > General, Popout Window
 
 **Gap**
 
@@ -5181,12 +5181,12 @@ None -- already fully wired. If anything, the 'Global Hotkey' label in tabs/Gene
 
 - `chatgpt_reference/092-codex-macos-settings-general-composer-notifications-popout.png`
 
-### GAP-225 — Asset paths shown as inert text with no Open folder action
+### GAP-225, Asset paths shown as inert text with no Open folder action
 
 - **Status:** Open
 - **Owner:** Unassigned
 - **Surface/type:** desktop · missing-interaction
-- **Reference:** Codex · macOS desktop · Settings > Keyboard shortcuts — app actions
+- **Reference:** Codex · macOS desktop · Settings > Keyboard shortcuts, app actions
 
 **Gap**
 
@@ -5204,16 +5204,16 @@ Extend ShortcutDefinition with 'git' and 'application' categories and register c
 
 - `chatgpt_reference/104-codex-macos-settings-keyboard-shortcuts-git-commands-app-actions.png`
 
-### GAP-226 — No user-assignable shortcut slots for custom commands or workflows
+### GAP-226, No user-assignable shortcut slots for custom commands or workflows
 
 - **Status:** Open
 - **Owner:** Unassigned
 - **Surface/type:** desktop · missing-interaction
-- **Reference:** Codex · macOS desktop · Settings > Keyboard shortcuts — environment action slots
+- **Reference:** Codex · macOS desktop · Settings > Keyboard shortcuts, environment action slots
 
 **Gap**
 
-The reference reserves nine generic 'Environment action 1-9' rows ('Run the environment action in this shortcut slot') so power users can bind their own project actions to keys without the app predefining them. agiworkforce has custom commands (CustomCommandsSettings) and a workflow builder but no way to bind either to a key — the shortcut catalogue is a fixed compile-time list.
+The reference reserves nine generic 'Environment action 1-9' rows ('Run the environment action in this shortcut slot') so power users can bind their own project actions to keys without the app predefining them. agiworkforce has custom commands (CustomCommandsSettings) and a workflow builder but no way to bind either to a key, the shortcut catalogue is a fixed compile-time list.
 
 **Evidence**
 
@@ -5227,16 +5227,16 @@ Add N (5-9) reserved slot definitions whose action target is a user-chosen custo
 
 - `chatgpt_reference/103-codex-macos-settings-keyboard-shortcuts-panels-environment-actions.png`
 
-### GAP-227 — Terminal, artifact and review panels have no toggle shortcuts
+### GAP-227, Terminal, artifact and review panels have no toggle shortcuts
 
 - **Status:** Open
 - **Owner:** Unassigned
 - **Surface/type:** desktop · missing-interaction
-- **Reference:** Codex · macOS desktop · Settings > Keyboard shortcuts — panels
+- **Reference:** Codex · macOS desktop · Settings > Keyboard shortcuts, panels
 
 **Gap**
 
-The reference binds Open terminal (^`), Toggle bottom panel (⌘J), Toggle browser panel (⇧⌘B), Toggle Review panel (⌥⌘B) and Toggle sidebar (⌘B). agiworkforce binds only toggle-sidebar; the terminal, artifact panel and browser panel — all of which exist as features — can be reached only by mouse.
+The reference binds Open terminal (^`), Toggle bottom panel (⌘J), Toggle browser panel (⇧⌘B), Toggle Review panel (⌥⌘B) and Toggle sidebar (⌘B). agiworkforce binds only toggle-sidebar; the terminal, artifact panel and browser panel, all of which exist as features, can be reached only by mouse.
 
 **Evidence**
 
@@ -5250,20 +5250,20 @@ Add toggle-terminal, toggle-artifact-panel and toggle-browser-panel shortcut def
 
 - `chatgpt_reference/103-codex-macos-settings-keyboard-shortcuts-panels-environment-actions.png`
 
-### GAP-228 — No warning that personality/response-style settings are ignored by some models
+### GAP-228, No warning that personality/response-style settings are ignored by some models
 
 - **Status:** Open
 - **Owner:** Unassigned
 - **Surface/type:** desktop · missing-copy
-- **Reference:** Codex · macOS desktop · Settings > Personalization — capability warning
+- **Reference:** Codex · macOS desktop · Settings > Personalization, capability warning
 
 **Gap**
 
-The reference leads Personalization with an amber banner: 'Personality settings are not supported by every model. Codex's tone can be customized in Custom instructions.' — telling the user up front when the control will do nothing and where to go instead. agiworkforce's PersonalizationSettings (Response Style, Emoji Usage, About You) is applied via personalizationToPrompt with no capability caveat, so on models that ignore or override system-level tone the control looks broken. The repo's own rules forbid dead or misleading controls.
+The reference leads Personalization with an amber banner: 'Personality settings are not supported by every model. Codex's tone can be customized in Custom instructions.', telling the user up front when the control will do nothing and where to go instead. agiworkforce's PersonalizationSettings (Response Style, Emoji Usage, About You) is applied via personalizationToPrompt with no capability caveat, so on models that ignore or override system-level tone the control looks broken. The repo's own rules forbid dead or misleading controls.
 
 **Evidence**
 
-apps/desktop/src/features/settings/PersonalizationSettings.tsx (About You / Custom Instructions / Emoji Usage / Response Style, no capability banner); apps/desktop/src/features/chat/personalizationToPrompt.ts; grepped 'not supported by every model' across apps — no match
+apps/desktop/src/features/settings/PersonalizationSettings.tsx (About You / Custom Instructions / Emoji Usage / Response Style, no capability banner); apps/desktop/src/features/chat/personalizationToPrompt.ts; grepped 'not supported by every model' across apps, no match
 
 **Suggested fix**
 
@@ -5273,12 +5273,12 @@ Derive support from the model catalog's capability metadata and render a banner 
 
 - `chatgpt_reference/098-codex-macos-settings-personalization-personality-instructions-memory.png`
 
-### GAP-229 — On-disk asset paths are shown as inert text with no Open folder action
+### GAP-229, On-disk asset paths are shown as inert text with no Open folder action
 
 - **Status:** Open
 - **Owner:** Unassigned
 - **Surface/type:** desktop · missing-control
-- **Reference:** Codex · macOS desktop · Settings > Pets — Custom pets folder
+- **Reference:** Codex · macOS desktop · Settings > Pets, Custom pets folder
 
 **Gap**
 
@@ -5296,12 +5296,12 @@ Add the same OpenFolderButton/fileOpenWithDefaultApp pattern already used for th
 
 - `chatgpt_reference/100-codex-macos-settings-pets-avatar-picker-size-slider.png`
 
-### GAP-230 — No 'Shared chats' / 'Shared artifacts' management rows in Privacy settings
+### GAP-230, No 'Shared chats' / 'Shared artifacts' management rows in Privacy settings
 
 - **Status:** Open
 - **Owner:** Unassigned
 - **Surface/type:** desktop · missing-control
-- **Reference:** Claude · macOS desktop · Settings > Privacy — Your data section
+- **Reference:** Claude · macOS desktop · Settings > Privacy, Your data section
 
 **Gap**
 
@@ -5309,7 +5309,7 @@ Claude's Privacy tab has 'Your data' rows for Export data, Shared chats (Manage)
 
 **Evidence**
 
-apps/desktop/src/features/settings/tabs/Privacy/index.tsx — no 'Shared chats'/'Shared artifacts' rows found; apps/mobile/app/(app)/settings/shared-links.tsx exists on mobile only
+apps/desktop/src/features/settings/tabs/Privacy/index.tsx, no 'Shared chats'/'Shared artifacts' rows found; apps/mobile/app/(app)/settings/shared-links.tsx exists on mobile only
 
 **Suggested fix**
 
@@ -5319,7 +5319,7 @@ Add 'Shared chats' and 'Shared artifacts' rows to the desktop Privacy tab linkin
 
 - `claude_reference/142-claude-desktop-settings-privacy-data-controls-export-sharing.png`
 
-### GAP-231 — Desktop has no Profile page — identity, usage stats and activity heatmap are absent
+### GAP-231, Desktop has no Profile page, identity, usage stats and activity heatmap are absent
 
 - **Status:** Open
 - **Owner:** Unassigned
@@ -5332,7 +5332,7 @@ The reference Profile page combines identity (avatar, name, @handle, plan badge)
 
 **Evidence**
 
-apps/desktop/src/features/settings/tabs/ (Account, Usage, Billing — no Profile); apps/web/features/settings/sections/ReflectSection.tsx:214-243 (conversations, active days, most active day, peak start time, per-day activity strip); grepped 'streak|heatmap|Lifetime tokens|Longest chat' across apps — no product matches
+apps/desktop/src/features/settings/tabs/ (Account, Usage, Billing, no Profile); apps/web/features/settings/sections/ReflectSection.tsx:214-243 (conversations, active days, most active day, peak start time, per-day activity strip); grepped 'streak|heatmap|Lifetime tokens|Longest chat' across apps, no product matches
 
 **Suggested fix**
 
@@ -5342,12 +5342,12 @@ Add a Profile tab to desktop settings reusing the Reflect recap endpoint: identi
 
 - `chatgpt_reference/093-codex-macos-settings-profile-stats-activity-plugins.png`
 
-### GAP-232 — No user-assignable shortcut slots for custom commands or workflows
+### GAP-232, No user-assignable shortcut slots for custom commands or workflows
 
 - **Status:** Open
 - **Owner:** Unassigned
 - **Surface/type:** desktop · missing-control
-- **Reference:** Codex · macOS desktop · Settings > Voice — Dictation hotkeys
+- **Reference:** Codex · macOS desktop · Settings > Voice, Dictation hotkeys
 
 **Gap**
 
@@ -5365,7 +5365,7 @@ Split the setting into holdToDictateHotkey and toggleDictationHotkey (both unass
 
 - `chatgpt_reference/096-codex-macos-settings-voice-dictation-hotkeys-dictionary.png`
 
-### GAP-233 — Settings search matches section names only, never the setting that matched
+### GAP-233, Settings search matches section names only, never the setting that matched
 
 - **Status:** Done
 - **Owner:** Desktop
@@ -5388,7 +5388,7 @@ Completed for the mounted Desktop settings owner. Keep index entries tied to rea
 
 - `chatgpt_reference/052-codex-macos-settings-connections-search-remote-control-connected-modal.png`
 
-### GAP-234 — Desktop settings search matches only section names, not individual settings
+### GAP-234, Desktop settings search matches only section names, not individual settings
 
 - **Status:** Done
 - **Owner:** Desktop
@@ -5411,12 +5411,12 @@ Completed. Preserve description and keyword matching for discoverability, keep f
 
 - `chatgpt_reference/034-codex-macos-settings-connections-remote-pairing-phone-tab-qr-code.png`
 
-### GAP-235 — Desktop plugin list has no enable/disable toggle, only update and remove
+### GAP-235, Desktop plugin list has no enable/disable toggle, only update and remove
 
 - **Status:** Open
 - **Owner:** Unassigned
 - **Surface/type:** desktop · missing-control
-- **Reference:** Codex · VS Code extension · Settings — Plugins, per-plugin enable toggle
+- **Reference:** Codex · VS Code extension · Settings, Plugins, per-plugin enable toggle
 
 **Gap**
 
@@ -5434,7 +5434,7 @@ Add a per-plugin enabled flag persisted alongside the resolved plugin list, rend
 
 - `chatgpt_reference/021-codex-vscode-ext-settings-plugins-documents-pdf-sites-chrome-list.png`
 
-### GAP-236 — No screen-capture settings (hotkey, destination, sound, offscreen-text notice)
+### GAP-236, No screen-capture settings (hotkey, destination, sound, offscreen-text notice)
 
 - **Status:** Open
 - **Owner:** Unassigned
@@ -5457,7 +5457,7 @@ Add a Capture section (General or its own tab) with a rebindable global capture 
 
 - `chatgpt_reference/111-codex-macos-settings-appshots-hotkey-destination-preview.png`
 
-### GAP-237 — Desktop can archive projects but not conversations, and has no archived view
+### GAP-237, Desktop can archive projects but not conversations, and has no archived view
 
 - **Status:** Open
 - **Owner:** Unassigned
@@ -5480,7 +5480,7 @@ Add an Archive action to the conversation row/overflow menu that sets the existi
 
 - `chatgpt_reference/121-codex-macos-settings-archived-chats-empty.png`
 
-### GAP-238 — No preference to hide the computer-use activity overlay during a task
+### GAP-238, No preference to hide the computer-use activity overlay during a task
 
 - **Status:** Open
 - **Owner:** Unassigned
@@ -5489,11 +5489,11 @@ Add an Archive action to the conversation row/overflow menu that sets the existi
 
 **Gap**
 
-Reference has a 'Picture in picture' group with 'Always hide picture in picture — prevent showing computer use activity in picture in picture', so a user presenting or recording can suppress the floating activity window. agiworkforce renders a ComputerUseOverlay during runs with no visibility preference.
+Reference has a 'Picture in picture' group with 'Always hide picture in picture, prevent showing computer use activity in picture in picture', so a user presenting or recording can suppress the floating activity window. agiworkforce renders a ComputerUseOverlay during runs with no visibility preference.
 
 **Evidence**
 
-apps/desktop/src/features/execution-sidecar/ComputerUseOverlay.tsx and features/overlay/ActionOverlay.tsx exist; searched 'picture in picture', 'pip' and 'hide.\*overlay' across apps/desktop/src — no setting found; ComputerUseSettings.tsx only offers 'Hide Apps During Task' (line 450)
+apps/desktop/src/features/execution-sidecar/ComputerUseOverlay.tsx and features/overlay/ActionOverlay.tsx exist; searched 'picture in picture', 'pip' and 'hide.\*overlay' across apps/desktop/src, no setting found; ComputerUseSettings.tsx only offers 'Hide Apps During Task' (line 450)
 
 **Suggested fix**
 
@@ -5503,7 +5503,7 @@ Add an 'Always hide activity overlay' switch to ComputerUseSettings persisted in
 
 - `chatgpt_reference/115-codex-macos-settings-computer-use-control-apps-chrome-excel.png`
 
-### GAP-239 — Per-integration rows (Chrome bridge, Office add-in) missing from Computer use
+### GAP-239, Per-integration rows (Chrome bridge, Office add-in) missing from Computer use
 
 - **Status:** Open
 - **Owner:** Unassigned
@@ -5512,7 +5512,7 @@ Add an 'Always hide activity overlay' switch to ComputerUseSettings persisted in
 
 **Gap**
 
-Reference lists each deeper-control integration as its own row inside Computer use — 'Google Chrome · Connected to browser extension for additional control' with Manage, and 'Microsoft Excel · add-in' — each with its own toggle. agiworkforce hides the equivalent Chrome bridge in a separate 'AGI in Chrome' tab and free-text app names in Allowed Apps, so users cannot see which apps have enhanced control or its connection state from the computer-use screen.
+Reference lists each deeper-control integration as its own row inside Computer use, 'Google Chrome · Connected to browser extension for additional control' with Manage, and 'Microsoft Excel · add-in', each with its own toggle. agiworkforce hides the equivalent Chrome bridge in a separate 'AGI in Chrome' tab and free-text app names in Allowed Apps, so users cannot see which apps have enhanced control or its connection state from the computer-use screen.
 
 **Evidence**
 
@@ -5526,7 +5526,7 @@ Render a 'Control' group at the top of ComputerUseSettings with an 'Any app' mas
 
 - `chatgpt_reference/115-codex-macos-settings-computer-use-control-apps-chrome-excel.png`
 
-### GAP-240 — No 'keep this computer awake while remote access is enabled' power setting
+### GAP-240, No 'keep this computer awake while remote access is enabled' power setting
 
 - **Status:** Open
 - **Owner:** Unassigned
@@ -5549,7 +5549,7 @@ Do not build new sleep-inhibition logic. Wrap the existing SleepPrevention::enab
 
 - `chatgpt_reference/117-codex-macos-settings-connections-control-this-mac-iphone.png`
 
-### GAP-241 — No per-project Environments screen describing how to set a project up
+### GAP-241, No per-project Environments screen describing how to set a project up
 
 - **Status:** Open
 - **Owner:** Unassigned
@@ -5562,7 +5562,7 @@ Reference lists each known project (name + owner) with an add affordance and the
 
 **Evidence**
 
-apps/desktop/src/features/settings/AllowedDirectoriesSettings.tsx (path whitelist only), apps/desktop/src/features/settings/TeamAccountSettings.tsx:313 (project list is read-only); searched 'environment setup', 'setup script', 'devcontainer' across apps/desktop/src — no match
+apps/desktop/src/features/settings/AllowedDirectoriesSettings.tsx (path whitelist only), apps/desktop/src/features/settings/TeamAccountSettings.tsx:313 (project list is read-only); searched 'environment setup', 'setup script', 'devcontainer' across apps/desktop/src, no match
 
 **Suggested fix**
 
@@ -5572,7 +5572,7 @@ Add an Environments tab listing projects from the project store with an 'Add pro
 
 - `chatgpt_reference/119-codex-macos-settings-environments-project-list.png`
 
-### GAP-242 — Undo/redo last app action missing from shortcut catalog despite a live undo API
+### GAP-242, Undo/redo last app action missing from shortcut catalog despite a live undo API
 
 - **Status:** Open
 - **Owner:** Unassigned
@@ -5595,7 +5595,7 @@ Add 'app.undoLast' (Cmd+Z) and 'app.redoLast' (Cmd+Shift+Z) shortcuts wired to u
 
 - `chatgpt_reference/105-codex-macos-settings-keyboard-shortcuts-undo-redo-approve-close-tab.png`
 
-### GAP-243 — No ⌘1–⌘9 'Go to chat N' slot shortcuts for switching conversations
+### GAP-243, No ⌘1–⌘9 'Go to chat N' slot shortcuts for switching conversations
 
 - **Status:** Open
 - **Owner:** Unassigned
@@ -5618,7 +5618,7 @@ Add nine 'chat.gotoSlot{N}' shortcuts (Cmd+1..9) that resolve to the Nth visible
 
 - `chatgpt_reference/108-codex-macos-settings-keyboard-shortcuts-chat-slots-file-tree-trace.png`
 
-### GAP-244 — No composer-scoped shortcuts for project picker, send message or start dictation
+### GAP-244, No composer-scoped shortcuts for project picker, send message or start dictation
 
 - **Status:** Not Planned
 - **Owner:** Unassigned
@@ -5641,7 +5641,7 @@ Residual is vestigial Rust only: remove the voice_input entry from with_defaults
 
 - `chatgpt_reference/106-codex-macos-settings-keyboard-shortcuts-composer-model-picker-copy-actions.png`
 
-### GAP-245 — No copy-deeplink / copy-session-id / copy-chat-as-Markdown actions for a conversation
+### GAP-245, No copy-deeplink / copy-session-id / copy-chat-as-Markdown actions for a conversation
 
 - **Status:** Open
 - **Owner:** Unassigned
@@ -5654,7 +5654,7 @@ Reference offers five copy actions on the current chat (Markdown, conversation p
 
 **Evidence**
 
-apps/desktop/src/hooks/useDeepLink.ts:81-142 (parseDeepLink/handleDeepLink are inbound-only), searched 'copy as markdown', 'deeplink' and 'session id' across apps/desktop/src — no copy action found
+apps/desktop/src/hooks/useDeepLink.ts:81-142 (parseDeepLink/handleDeepLink are inbound-only), searched 'copy as markdown', 'deeplink' and 'session id' across apps/desktop/src, no copy action found
 
 **Suggested fix**
 
@@ -5664,7 +5664,7 @@ Add a conversation overflow-menu group + shortcut actions that copy (a) the chat
 
 - `chatgpt_reference/106-codex-macos-settings-keyboard-shortcuts-composer-model-picker-copy-actions.png`
 
-### GAP-246 — Dictation hotkey is hold-only and picked from a fixed list — no toggle-dictation mode
+### GAP-246, Dictation hotkey is hold-only and picked from a fixed list, no toggle-dictation mode
 
 - **Status:** Open
 - **Owner:** Unassigned
@@ -5687,7 +5687,7 @@ Add a 'Dictation mode' segmented control (Hold / Toggle) plus a second rebindabl
 
 - `chatgpt_reference/107-codex-macos-settings-keyboard-shortcuts-browser-nav-dictation-window.png`
 
-### GAP-247 — Only one key binding per action — reference supports several (⌘K and ⇧⌘P)
+### GAP-247, Only one key binding per action, reference supports several (⌘K and ⇧⌘P)
 
 - **Status:** Open
 - **Owner:** Unassigned
@@ -5710,7 +5710,7 @@ Change customKeybindings to Record<string, string[]>, render one chip row per bi
 
 - `chatgpt_reference/107-codex-macos-settings-keyboard-shortcuts-browser-nav-dictation-window.png`
 
-### GAP-248 — No unified Plugins/Apps/MCPs/Skills tab strip with counts and no plugin search
+### GAP-248, No unified Plugins/Apps/MCPs/Skills tab strip with counts and no plugin search
 
 - **Status:** Open
 - **Owner:** Unassigned
@@ -5733,7 +5733,7 @@ Give the Plugins tab a counted segmented control over Plugins / Apps / MCP serve
 
 - `chatgpt_reference/112-codex-macos-settings-plugins-plugin-list-toggles-on.png`
 
-### GAP-249 — No cancel-plan section or 'cancels on <date>' state in desktop Billing
+### GAP-249, No cancel-plan section or 'cancels on <date>' state in desktop Billing
 
 - **Status:** Open
 - **Owner:** Unassigned
@@ -5742,7 +5742,7 @@ Give the Plugins tab a counted segmented control over Plugins / Apps / MCP serve
 
 **Gap**
 
-Reference has a 'Cancel plan' section stating where cancellation happens and linking there. agiworkforce's desktop Billing never mentions cancellation, and although cancel_at_period_end is modelled it is never rendered — a cancelled subscription still shows the ambiguous label 'Renews / ends'.
+Reference has a 'Cancel plan' section stating where cancellation happens and linking there. agiworkforce's desktop Billing never mentions cancellation, and although cancel_at_period_end is modelled it is never rendered, a cancelled subscription still shows the ambiguous label 'Renews / ends'.
 
 **Evidence**
 
@@ -5756,7 +5756,7 @@ Branch the period label on cancel_at_period_end ('Cancels on <date>' vs 'Renews 
 
 - `chatgpt_reference/110-codex-macos-settings-billing-usage-limits-cancel-plan.png`
 
-### GAP-250 — No worktree management (root, auto-delete, list) despite a declared capability
+### GAP-250, No worktree management (root, auto-delete, list) despite a declared capability
 
 - **Status:** Open
 - **Owner:** Unassigned
@@ -5769,7 +5769,7 @@ Reference lets users set the worktree root, auto-delete old worktrees, cap how m
 
 **Evidence**
 
-apps/extension-vscode/src/integrations/localRuntimeClient.ts:54 (worktrees: z.boolean() capability flag); searched 'worktree' across apps/desktop/src and apps/web — no UI match
+apps/extension-vscode/src/integrations/localRuntimeClient.ts:54 (worktrees: z.boolean() capability flag); searched 'worktree' across apps/desktop/src and apps/web, no UI match
 
 **Suggested fix**
 
@@ -5779,7 +5779,7 @@ Add a Worktrees settings tab with worktree root input (blank = default), an auto
 
 - `chatgpt_reference/120-codex-macos-settings-worktrees-root-and-autodelete.png`
 
-### GAP-251 — Sidebar lacks Pull requests, Sites and Plugins destinations
+### GAP-251, Sidebar lacks Pull requests, Sites and Plugins destinations
 
 - **Status:** Open
 - **Owner:** Unassigned
@@ -5802,7 +5802,7 @@ Add sidebar entries for Plugins (routing to the existing marketplace panel) and,
 
 - `chatgpt_reference/082-codex-macos-sidebar-nav-toggle-tooltip-projects-chats.png`
 
-### GAP-252 — No ⌘1–⌘9 accelerators to jump to pinned and project chats
+### GAP-252, No ⌘1–⌘9 accelerators to jump to pinned and project chats
 
 - **Status:** Open
 - **Owner:** Unassigned
@@ -5825,12 +5825,12 @@ Register jump-to-conversation-1..9 shortcuts that map onto the currently visible
 
 - `chatgpt_reference/083-codex-macos-sidebar-nav-projects-recent-chats.png`
 
-### GAP-253 — No Sites surface — artifacts cannot be published as live, shareable websites
+### GAP-253, No Sites surface, artifacts cannot be published as live, shareable websites
 
 - **Status:** Open
 - **Owner:** Unassigned
 - **Surface/type:** desktop · missing-screen
-- **Reference:** Codex · macOS desktop · Sites — empty state
+- **Reference:** Codex · macOS desktop · Sites, empty state
 
 **Gap**
 
@@ -5838,7 +5838,7 @@ The reference has a first-class Sites destination ('Turn your ideas into live we
 
 **Evidence**
 
-apps/desktop/src/features/artifacts/publishAdapter.ts:14-17 ('This adapter only handles the local path. Cloud publish is gated until the managed artifact publishing path is proven.'); grepped 'Sites|No sites yet|Create new site|live website' across apps — only unrelated 'call sites' comments and the extension's allowlist strings; Sidebar.navItemsForMode has no sites entry
+apps/desktop/src/features/artifacts/publishAdapter.ts:14-17 ('This adapter only handles the local path. Cloud publish is gated until the managed artifact publishing path is proven.'); grepped 'Sites|No sites yet|Create new site|live website' across apps, only unrelated 'call sites' comments and the extension's allowlist strings; Sidebar.navItemsForMode has no sites entry
 
 **Suggested fix**
 
@@ -5848,7 +5848,7 @@ Once managed publishing is proven, add a Sites destination listing published art
 
 - `chatgpt_reference/085-codex-macos-sites-empty-state-create-new-site.png`
 
-### GAP-254 — Recorder preflight never checks macOS Screen Recording permission (the black-frame cause)
+### GAP-254, Recorder preflight never checks macOS Screen Recording permission (the black-frame cause)
 
 - **Status:** Open
 - **Owner:** Unassigned
@@ -5871,12 +5871,12 @@ Add screen_recording to the AutomationPermissions preflight, block Start recordi
 
 - `references-2/claude-desktop-cowork-record-skill-09-black-capture-failure-response.png`
 
-### GAP-255 — Desktop empty chat exposes capability-shaped starter actions
+### GAP-255, Desktop empty chat exposes capability-shaped starter actions
 
 - **Status:** Done
 - **Owner:** Desktop
 - **Surface/type:** desktop · missing-copy
-- **Reference:** ChatGPT · macOS desktop · Work mode empty state — quick actions
+- **Reference:** ChatGPT · macOS desktop · Work mode empty state, quick actions
 
 **Gap**
 
@@ -5894,16 +5894,16 @@ Completed. Keep starters attached to executable Desktop owners, preserve the use
 
 - `chatgpt_reference/088-chatgpt-macos-work-mode-empty-state-quick-actions.png`
 
-### GAP-256 — Payment methods and plan cancellation are Stripe-portal redirects, not inline controls
+### GAP-256, Payment methods and plan cancellation are Stripe-portal redirects, not inline controls
 
 - **Status:** Not Planned
 - **Owner:** Unassigned
 - **Surface/type:** web · missing-control
-- **Reference:** ChatGPT · web · Billing — Payment methods + Cancel plan
+- **Reference:** ChatGPT · web · Billing, Payment methods + Cancel plan
 
 **Gap**
 
-Closed 2026-08-21 as a deliberate architecture choice, with the real half shipped. Inline card management means handling card entry in our own UI; the Stripe Customer Portal keeps card data out of this application entirely. The genuinely missing half — no cancel path at all — shipped today: Billing has a Cancel plan button deep-linking into the portal cancellation flow scoped to the stored subscription, answering 409 with the routes that still work when a portal has cancellation disabled.
+Closed 2026-08-21 as a deliberate architecture choice, with the real half shipped. Inline card management means handling card entry in our own UI; the Stripe Customer Portal keeps card data out of this application entirely. The genuinely missing half, no cancel path at all, shipped today: Billing has a Cancel plan button deep-linking into the portal cancellation flow scoped to the stored subscription, answering 409 with the routes that still work when a portal has cancellation disabled.
 
 **Evidence**
 
@@ -5911,13 +5911,13 @@ apps/web/features/settings/sections/BillingSection.tsx (Payment section renders 
 
 **Suggested fix**
 
-Either build inline payment-method list + cancel-plan UI using Stripe's Payment Methods API and Subscription cancel API, or — if staying with portal redirects — add a local 'Cancel plan' row with the same reassurance copy that deep-links into the portal's cancel flow, so cancellation isn't buried.
+Either build inline payment-method list + cancel-plan UI using Stripe's Payment Methods API and Subscription cancel API, or, if staying with portal redirects, add a local 'Cancel plan' row with the same reassurance copy that deep-links into the portal's cancel flow, so cancellation isn't buried.
 
 **Reference screenshot(s)**
 
 - `chatgpt_reference/133-chatgpt-web-settings-billing-payment-methods-cancel-plan.png`
 
-### GAP-257 — Connector catalog has no New/Community/Trending badges, popularity ranking, or verified indicator
+### GAP-257, Connector catalog has no New/Community/Trending badges, popularity ranking, or verified indicator
 
 - **Status:** Not Planned
 - **Owner:** Unassigned
@@ -5930,7 +5930,7 @@ Closed 2026-08-21 on the rule the connectors panel already states in its own hea
 
 **Evidence**
 
-grep -i 'badge|New|Community|Trending|popular|verified' apps/web/features/connectors/data/connectors.ts — only one unrelated string match ('community' inside Discord description)
+grep -i 'badge|New|Community|Trending|popular|verified' apps/web/features/connectors/data/connectors.ts, only one unrelated string match ('community' inside Discord description)
 
 **Suggested fix**
 
@@ -5940,7 +5940,7 @@ Add badge/rank/verified fields to the Connector type and data, and render them o
 
 - `claude_reference/163-claude-web-connector-directory-browse-popular-and-community-cards.png`
 
-### GAP-258 — Sidebar nav items cannot be shown/hidden by the user
+### GAP-258, Sidebar nav items cannot be shown/hidden by the user
 
 - **Status:** Done
 - **Owner:** Unassigned
@@ -5953,7 +5953,7 @@ Closed 2026-08-21. The rail carries nine destinations, so this matters more here
 
 **Evidence**
 
-grep for 'Customize sidebar', 'Choose which items appear' in apps/web/features/chat/v3/WebSidebar.tsx — no match; the 'customize' id maps to route '/chat/customize' per WebShellV3.tsx line 34 area, which is a settings/instructions page, not a nav-visibility modal.
+grep for 'Customize sidebar', 'Choose which items appear' in apps/web/features/chat/v3/WebSidebar.tsx, no match; the 'customize' id maps to route '/chat/customize' per WebShellV3.tsx line 34 area, which is a settings/instructions page, not a nav-visibility modal.
 
 **Suggested fix**
 
@@ -5963,16 +5963,16 @@ Add a 'Customize sidebar' modal (checkbox list of optional nav items: Artifacts,
 
 - `claude_reference/176-claude-web-sidebar-customize-modal-artifacts-routines-dispatch.png`
 
-### GAP-259 — 'Improve the model for everyone' and 'Location' toggles intentionally removed as dead controls
+### GAP-259, 'Improve the model for everyone' and 'Location' toggles intentionally removed as dead controls
 
 - **Status:** Not Planned
 - **Owner:** Unassigned
 - **Surface/type:** web · missing-control
-- **Reference:** ChatGPT · web · Data controls — Improve the model / Location
+- **Reference:** ChatGPT · web · Data controls, Improve the model / Location
 
 **Gap**
 
-Already resolved correctly; re-adding would reverse it. PrivacySection states in place that locationMetadata and improveModelTraining "persisted correctly but had zero consumers anywhere — a switch that saves but changes nothing is a dead control", and to restore them only once a consumer ships. Verified 2026-08-21.
+Already resolved correctly; re-adding would reverse it. PrivacySection states in place that locationMetadata and improveModelTraining "persisted correctly but had zero consumers anywhere, a switch that saves but changes nothing is a dead control", and to restore them only once a consumer ships. Verified 2026-08-21.
 
 **Evidence**
 
@@ -5980,13 +5980,13 @@ apps/web/features/settings/sections/PrivacySection.tsx lines 16-24 ('locationMet
 
 **Suggested fix**
 
-Build the underlying location-context and training-opt-in pipelines, then re-add the toggles per the existing code comment's guidance — do not re-add the UI before the backend exists.
+Build the underlying location-context and training-opt-in pipelines, then re-add the toggles per the existing code comment's guidance, do not re-add the UI before the backend exists.
 
 **Reference screenshot(s)**
 
 - `chatgpt_reference/135-chatgpt-web-settings-data-controls-location-work-network-reset.png`
 
-### GAP-260 — New accounts get no pre-seeded 'How to use AGI' example project in Projects
+### GAP-260, New accounts get no pre-seeded 'How to use AGI' example project in Projects
 
 - **Status:** Open
 - **Owner:** Unassigned
@@ -5995,11 +5995,11 @@ Build the underlying location-context and training-opt-in pipelines, then re-add
 
 **Gap**
 
-Needs a founder decision, 2026-08-21. Buildable — projects, instructions and knowledge files all exist — but it means creating a row in a real account at signup the user did not ask for, and writes to production per signup. Recorded in docs/work/founder-assistance.md rather than shipped unilaterally.
+Needs a founder decision, 2026-08-21. Buildable, projects, instructions and knowledge files all exist, but it means creating a row in a real account at signup the user did not ask for, and writes to production per signup. Recorded in docs/work/founder-assistance.md rather than shipped unilaterally.
 
 **Evidence**
 
-grep -i 'onboarding.*project|seed.*project|default project|starter project|example project' across apps/web — no seeding logic found (only an unrelated URL-based project-id seed in WebChatPage.tsx)
+grep -i 'onboarding.*project|seed.*project|default project|starter project|example project' across apps/web, no seeding logic found (only an unrelated URL-based project-id seed in WebChatPage.tsx)
 
 **Suggested fix**
 
@@ -6009,16 +6009,16 @@ On first account creation, seed a 'How to use AGI' example project (with a proje
 
 - `claude_reference/166-claude-web-home-projects-how-to-use-claude-example.png`
 
-### GAP-261 — Web Personalization lacks style/tone + characteristics controls that mobile already has
+### GAP-261, Web Personalization lacks style/tone + characteristics controls that mobile already has
 
 - **Status:** Done
 - **Owner:** Unassigned
 - **Surface/type:** web · missing-control
-- **Reference:** ChatGPT · web · Personalization — Base style/tone + Characteristics
+- **Reference:** ChatGPT · web · Personalization, Base style/tone + Characteristics
 
 **Gap**
 
-INVERTED then closed 2026-08-21. Chasing this found the real defect: mobile ships the style preset and four sliders, they sync under the "personalization" namespace, and NOTHING on the server read that namespace — every slider a mobile user moved was stored and discarded. Read path wired first (buildCustomInstructionsPreamble now emits a <response_style> block); web then gained the same controls, writing the SAME namespace, so the surfaces cannot diverge.
+INVERTED then closed 2026-08-21. Chasing this found the real defect: mobile ships the style preset and four sliders, they sync under the "personalization" namespace, and NOTHING on the server read that namespace, every slider a mobile user moved was stored and discarded. Read path wired first (buildCustomInstructionsPreamble now emits a <response_style> block); web then gained the same controls, writing the SAME namespace, so the surfaces cannot diverge.
 
 **Evidence**
 
@@ -6032,20 +6032,20 @@ Port the mobile StylePresetSelector and the four characteristic sliders (or equi
 
 - `chatgpt_reference/125-chatgpt-web-settings-personalization-style-tone-characteristics.png`
 
-### GAP-262 — No 'Fast answers' or 'Suggested prompts' toggles on any surface
+### GAP-262, No 'Fast answers' or 'Suggested prompts' toggles on any surface
 
 - **Status:** Not Planned
 - **Owner:** Unassigned
 - **Surface/type:** web · missing-control
-- **Reference:** ChatGPT · web · Personalization — Fast answers / Suggested prompts
+- **Reference:** ChatGPT · web · Personalization, Fast answers / Suggested prompts
 
 **Gap**
 
-Resolved 2026-08-21 against an existing founder decision. Suggestion chips were REMOVED from every surface on 2026-08-06 by founder direction — GreetingBanner records it — so re-adding them would reverse a deliberate product call. "Fast answers" has no server-side counterpart either. One real find while checking: GreetingBanner still declared an onSendMessage prop it stopped reading, and TWO callers threaded a handler into it; prop and both pass-throughs removed.
+Resolved 2026-08-21 against an existing founder decision. Suggestion chips were REMOVED from every surface on 2026-08-06 by founder direction, GreetingBanner records it, so re-adding them would reverse a deliberate product call. "Fast answers" has no server-side counterpart either. One real find while checking: GreetingBanner still declared an onSendMessage prop it stopped reading, and TWO callers threaded a handler into it; prop and both pass-throughs removed.
 
 **Evidence**
 
-searched 'fastAnswers'/'Fast answers' and 'suggestedPrompts'/'Suggested prompts' across apps/web, apps/desktop, apps/mobile — zero matches
+searched 'fastAnswers'/'Fast answers' and 'suggestedPrompts'/'Suggested prompts' across apps/web, apps/desktop, apps/mobile, zero matches
 
 **Suggested fix**
 
@@ -6055,20 +6055,20 @@ Add two toggles to Personalization settings: one to allow low-latency non-person
 
 - `chatgpt_reference/125-chatgpt-web-settings-personalization-style-tone-characteristics.png`
 
-### GAP-263 — No 'Record mode' / recording-transcript memory reference feature
+### GAP-263, No 'Record mode' / recording-transcript memory reference feature
 
 - **Status:** Open
 - **Owner:** Unassigned
 - **Surface/type:** web · missing-feature
-- **Reference:** ChatGPT · web · Personalization — Record mode
+- **Reference:** ChatGPT · web · Personalization, Record mode
 
 **Gap**
 
-Reference has a 'Record mode' section with a 'Reference record history' toggle letting the assistant reference all previous recording transcripts and notes when responding — implying a meeting/voice-recording feature with persistent transcript memory. No equivalent recording-to-memory feature exists in agiworkforce.
+Reference has a 'Record mode' section with a 'Reference record history' toggle letting the assistant reference all previous recording transcripts and notes when responding, implying a meeting/voice-recording feature with persistent transcript memory. No equivalent recording-to-memory feature exists in agiworkforce.
 
 **Evidence**
 
-searched 'record mode', 'recording transcript', 'meeting record' across apps/web, apps/desktop, apps/mobile — zero matches
+searched 'record mode', 'recording transcript', 'meeting record' across apps/web, apps/desktop, apps/mobile, zero matches
 
 **Suggested fix**
 
@@ -6078,7 +6078,7 @@ If/when a recording feature ships, add a 'Record mode' subsection under Memory w
 
 - `chatgpt_reference/127-chatgpt-web-settings-personalization-memory-record-mode.png`
 
-### GAP-264 — Scheduled tasks empty state has no suggested-template gallery to drive adoption
+### GAP-264, Scheduled tasks empty state has no suggested-template gallery to drive adoption
 
 - **Status:** Done
 - **Owner:** Unassigned
@@ -6087,7 +6087,7 @@ If/when a recording feature ships, add a 'Record mode' subsection under Memory w
 
 **Gap**
 
-Closed 2026-08-21. The empty Schedules page now offers six template cards, each with a description and a plain-English cadence. A card opens the SAME create dialog with the draft pre-filled — it seeds the form, it does not create a schedule. Tests pin that every template sets only keys the draft has, never inherits the one-shot default, and that the one placeholder prompt is visibly marked.
+Closed 2026-08-21. The empty Schedules page now offers six template cards, each with a description and a plain-English cadence. A card opens the SAME create dialog with the draft pre-filled, it seeds the form, it does not create a schedule. Tests pin that every template sets only keys the draft has, never inherits the one-shot default, and that the one placeholder prompt is visibly marked.
 
 **Evidence**
 
@@ -6101,12 +6101,12 @@ Add a 2-column grid of 4-6 suggested schedule templates (with icon, title, one-l
 
 - `claude_reference/168-claude-web-home-scheduled-tasks-empty-state-suggested-templates.png`
 
-### GAP-265 — No Advanced account security enrollment or Developer mode toggles on web
+### GAP-265, No Advanced account security enrollment or Developer mode toggles on web
 
 - **Status:** Open
 - **Owner:** Unassigned
 - **Surface/type:** web · missing-control
-- **Reference:** ChatGPT · web · Security and login — Advanced security / Lockdown mode / Developer mode
+- **Reference:** ChatGPT · web · Security and login, Advanced security / Lockdown mode / Developer mode
 
 **Gap**
 
@@ -6114,7 +6114,7 @@ Lockdown mode SHIPPED 2026-08-31: Settings > Capabilities carries a toggle that 
 
 **Evidence**
 
-searched 'lockdown mode', 'advanced account security', 'developer mode', 'elevated risk' across apps/web — zero UI matches (prompt-injection matches were backend-only, e.g. apps/web/app/api/llm/v1/chat/completions/lib/tool-loop.ts)
+searched 'lockdown mode', 'advanced account security', 'developer mode', 'elevated risk' across apps/web, zero UI matches (prompt-injection matches were backend-only, e.g. apps/web/app/api/llm/v1/chat/completions/lib/tool-loop.ts)
 
 **Suggested fix**
 
@@ -6124,7 +6124,7 @@ Add a Developer Mode toggle gating unverified/custom MCP connector installation 
 
 - `chatgpt_reference/141-chatgpt-web-settings-security-login-advanced-security-lockdown-developer-mode.png`
 
-### GAP-266 — No public @username/handle field anywhere in account settings
+### GAP-266, No public @username/handle field anywhere in account settings
 
 - **Status:** Not Planned
 - **Owner:** Unassigned
@@ -6147,7 +6147,7 @@ Add a Username field to AccountSection (or GeneralSection/Profile) with availabi
 
 - `chatgpt_reference/145-chatgpt-web-settings-account-name-username-email-delete.png`
 
-### GAP-267 — No public creator/builder profile screen for shared Skills/Plugins
+### GAP-267, No public creator/builder profile screen for shared Skills/Plugins
 
 - **Status:** Not Planned
 - **Owner:** Unassigned
@@ -6156,11 +6156,11 @@ Add a Username field to AccountSection (or GeneralSection/Profile) with availabi
 
 **Gap**
 
-Closed 2026-08-21: same as GAP-266 — no public creator surface exists. Building a creator profile would stand up a public-exposure surface ahead of any need for one.
+Closed 2026-08-21: same as GAP-266, no public creator surface exists. Building a creator profile would stand up a public-exposure surface ahead of any need for one.
 
 **Evidence**
 
-grep for 'builder profile', 'GPT builder', 'publicProfile', 'public profile' across apps — no matches. features/settings/sections list (general/account/team/security/privacy/billing/usage/capabilities/memory/notifications/reflect/time-focus/connectors/skills/plugins) has no 'creator profile' entry.
+grep for 'builder profile', 'GPT builder', 'publicProfile', 'public profile' across apps, no matches. features/settings/sections list (general/account/team/security/privacy/billing/usage/capabilities/memory/notifications/reflect/time-focus/connectors/skills/plugins) has no 'creator profile' entry.
 
 **Suggested fix**
 
@@ -6170,7 +6170,7 @@ Add a 'Creator profile' section under Settings > Skills (or a new top-level sect
 
 - `chatgpt_reference/146-chatgpt-web-settings-gpt-builder-profile-links.png`
 
-### GAP-268 — No web Settings page to manage the Chrome extension's enable state and site permissions
+### GAP-268, No web Settings page to manage the Chrome extension's enable state and site permissions
 
 - **Status:** Open
 - **Owner:** Unassigned
@@ -6179,11 +6179,11 @@ Add a 'Creator profile' section under Settings > Skills (or a new top-level sect
 
 **Gap**
 
-Blocked on a sync channel, verified 2026-08-21. The extension already has working site permissions (site-allowlist.ts, site-permission-policy.ts) but they live in chrome.storage, and cloud-bridge syncs conversations only. A web page written today would set values the extension never reads — a page that claims to block a site and does not is worse than no page.
+Blocked on a sync channel, verified 2026-08-21. The extension already has working site permissions (site-allowlist.ts, site-permission-policy.ts) but they live in chrome.storage, and cloud-bridge syncs conversations only. A web page written today would set values the extension never reads, a page that claims to block a site and does not is worse than no page.
 
 **Evidence**
 
-Searched apps/web for 'Enable Claude in Chrome', 'site permission', 'default policy' style copy — no matches; settings nav list has no 'Chrome'/extension entry (see apps/web/app/settings/\* directory listing).
+Searched apps/web for 'Enable Claude in Chrome', 'site permission', 'default policy' style copy, no matches; settings nav list has no 'Chrome'/extension entry (see apps/web/app/settings/\* directory listing).
 
 **Suggested fix**
 
@@ -6193,7 +6193,7 @@ Add a Settings > Browser Extension page in apps/web that surfaces an enable/disa
 
 - `claude_reference/179-claude-web-settings-panel-claude-in-chrome-permissions.png`
 
-### GAP-269 — Connectors settings lacks a 'Popular' quick-connect row and a Type (Desktop/Web) column
+### GAP-269, Connectors settings lacks a 'Popular' quick-connect row and a Type (Desktop/Web) column
 
 - **Status:** Done
 - **Owner:** Unassigned
@@ -6202,11 +6202,11 @@ Add a Settings > Browser Extension page in apps/web that surfaces an enable/disa
 
 **Gap**
 
-Partly stale, now closed 2026-08-21. The Connector | Type | Status table and the filter already existed, and custom MCP servers already surface as Type "Custom". The missing quick-connect row now sits above the directory, sourced from the work description General settings collects. Labelled "Suggested", never "Popular" — there are no install counts and an invented ranking would be a fake metric.
+Partly stale, now closed 2026-08-21. The Connector | Type | Status table and the filter already existed, and custom MCP servers already surface as Type "Custom". The missing quick-connect row now sits above the directory, sourced from the work description General settings collects. Labelled "Suggested", never "Popular", there are no install counts and an invented ranking would be a fake metric.
 
 **Evidence**
 
-apps/web/features/connectors/pages/ConnectorsPage.tsx — grep for 'Popular' and 'Type' column rendering returns no matches
+apps/web/features/connectors/pages/ConnectorsPage.tsx, grep for 'Popular' and 'Type' column rendering returns no matches
 
 **Suggested fix**
 
@@ -6216,7 +6216,7 @@ Add a Popular quick-connect card row above the connector list and a Type column 
 
 - `claude_reference/160-claude-web-settings-connectors-desktop-connectors-status-list.png`
 
-### GAP-270 — Web settings has no view of extensions installed on the paired desktop app
+### GAP-270, Web settings has no view of extensions installed on the paired desktop app
 
 - **Status:** Open
 - **Owner:** Unassigned
@@ -6229,7 +6229,7 @@ The reference screenshot is captured on claude.ai (web) yet shows the exact list
 
 **Evidence**
 
-grep -i 'installed on your computer|desktop.\*extension' under apps/web — no relevant settings-page match (only marketing copy pages)
+grep -i 'installed on your computer|desktop.\*extension' under apps/web, no relevant settings-page match (only marketing copy pages)
 
 **Suggested fix**
 
@@ -6239,7 +6239,7 @@ Sync installed-extension state from desktop to the account backend and render a 
 
 - `claude_reference/157-claude-web-settings-extensions-desktop-installed-list.png`
 
-### GAP-271 — Keyboard shortcuts are read-only — no per-shortcut toggle, remap, or Restore defaults
+### GAP-271, Keyboard shortcuts are read-only, no per-shortcut toggle, remap, or Restore defaults
 
 - **Status:** Done
 - **Owner:** Unassigned
@@ -6262,7 +6262,7 @@ Add a Keyboard section to the settings modal nav that reuses the shortcut regist
 
 - `chatgpt_reference/147-chatgpt-web-settings-keyboard-shortcuts-composer.png`
 
-### GAP-272 — Skills settings data model lacks 'last updated' and 'author' metadata, and no Browse/Add actions
+### GAP-272, Skills settings data model lacks 'last updated' and 'author' metadata, and no Browse/Add actions
 
 - **Status:** Done
 - **Owner:** Unassigned
@@ -6271,11 +6271,11 @@ Add a Keyboard section to the settings modal nav that reuses the shortcut regist
 
 **Gap**
 
-Closed 2026-08-21 with one deliberate substitution. Browse already existed and an Author column already rendered. The reference third column is "Last updated" — the skills source exposes no modified time and a date from load time would be fiction. Every bundled SKILL.md carries a real frontmatter version (all 9 do), so a Version column ships instead, optional the whole way, rendering an em dash when a bundle declares none.
+Closed 2026-08-21 with one deliberate substitution. Browse already existed and an Author column already rendered. The reference third column is "Last updated", the skills source exposes no modified time and a date from load time would be fiction. Every bundled SKILL.md carries a real frontmatter version (all 9 do), so a Version column ships instead, optional the whole way, rendering an em dash when a bundle declares none.
 
 **Evidence**
 
-apps/web/features/settings/components/WebSettingsModal.tsx lines ~420-433 (skill mapping omits lastUpdated/author); grep for 'Browse' / 'Add Skill' near the skills wiring — no handler found
+apps/web/features/settings/components/WebSettingsModal.tsx lines ~420-433 (skill mapping omits lastUpdated/author); grep for 'Browse' / 'Add Skill' near the skills wiring, no handler found
 
 **Suggested fix**
 
@@ -6285,7 +6285,7 @@ Extend the /api/skills response and the SettingsSkill mapping to include lastUpd
 
 - `claude_reference/159-claude-web-settings-skills-morning-skill-creator-installed.png`
 
-### GAP-273 — Web settings nav is missing Storage, Safety and Parental controls that mobile ships
+### GAP-273, Web settings nav is missing Storage, Safety and Parental controls that mobile ships
 
 - **Status:** Not Planned
 - **Owner:** Unassigned
@@ -6294,7 +6294,7 @@ Extend the /api/skills response and the SettingsSkill mapping to include lastUpd
 
 **Gap**
 
-Resolved 2026-08-21 by checking all three claims. SAFETY is stale — SafetySection ships and is in the nav. STORAGE: the only quota-enforced storage is project knowledge and its meter shipped today. PARENTAL CONTROLS should not be ported: mobile’s screen is informational and reports device-local isMinorMode()/ageGate state that exists nowhere in apps/web; a web screen describing that mechanism would be a claim about a protection the web surface does not have.
+Resolved 2026-08-21 by checking all three claims. SAFETY is stale, SafetySection ships and is in the nav. STORAGE: the only quota-enforced storage is project knowledge and its meter shipped today. PARENTAL CONTROLS should not be ported: mobile’s screen is informational and reports device-local isMinorMode()/ageGate state that exists nowhere in apps/web; a web screen describing that mechanism would be a claim about a protection the web surface does not have.
 
 **Evidence**
 
@@ -6308,20 +6308,20 @@ Add web settings sections for Storage (per-type usage + clear), Safety and Paren
 
 - `chatgpt_reference/122-chatgpt-web-settings-general-appearance-intelligence-dictation.png`
 
-### GAP-274 — Plugin catalogue is a 4-entry preview that installs nothing
+### GAP-274, Plugin catalogue is a 4-entry preview that installs nothing
 
 - **Status:** Not Planned
 - **Owner:** Unassigned
 - **Surface/type:** web · missing-screen
-- **Reference:** Codex · VS Code extension · Settings — Plugins list, framework/template entries
+- **Reference:** Codex · VS Code extension · Settings, Plugins list, framework/template entries
 
 **Gap**
 
-CODE CLAIM IS STALE — verified against production 2026-08-21. Installing works and matters: installWebPlugin runs and listEnabledPluginIdsForUser gates real skill availability in the request-processor, tool-loop and /api/skills; production holds 1 real installation. What is true is that plugin_registry_entries has only 4 rows, so the catalogue LOOKS like a dead preview. Content gap, not engineering — recorded in docs/work/founder-assistance.md.
+CODE CLAIM IS STALE, verified against production 2026-08-21. Installing works and matters: installWebPlugin runs and listEnabledPluginIdsForUser gates real skill availability in the request-processor, tool-loop and /api/skills; production holds 1 real installation. What is true is that plugin_registry_entries has only 4 rows, so the catalogue LOOKS like a dead preview. Content gap, not engineering, recorded in docs/work/founder-assistance.md.
 
 **Evidence**
 
-apps/web/features/plugins/data/plugins.ts:1-8 ('Demo-ready plugin catalogue', 4 entries) and apps/web/app/plugins/page.tsx:34 / :64-65 ('This is a preview of the catalogue shape — hosted marketplace installation is not open', 'Nothing here installs yet').
+apps/web/features/plugins/data/plugins.ts:1-8 ('Demo-ready plugin catalogue', 4 entries) and apps/web/app/plugins/page.tsx:34 / :64-65 ('This is a preview of the catalogue shape, hosted marketplace installation is not open', 'Nothing here installs yet').
 
 **Suggested fix**
 
@@ -6331,7 +6331,7 @@ Prioritise an installable first-party set (documents/PDF/spreadsheets/presentati
 
 - `chatgpt_reference/023-codex-vscode-ext-settings-plugins-expo-default-templates-scrolled.png`
 
-### GAP-275 — Web General lacks contrast and accent-color controls that mobile already ships
+### GAP-275, Web General lacks contrast and accent-color controls that mobile already ships
 
 - **Status:** Done
 - **Owner:** Unassigned
@@ -6340,11 +6340,11 @@ Prioritise an installable first-party set (documents/PDF/spreadsheets/presentati
 
 **Gap**
 
-STALE — verified 2026-08-21: GeneralSection renders both AccentColorRow and HighContrastRow, and AppearancePreferences stamps data-accent and data-contrast. Web has had these controls; the record predates them.
+STALE, verified 2026-08-21: GeneralSection renders both AccentColorRow and HighContrastRow, and AppearancePreferences stamps data-accent and data-contrast. Web has had these controls; the record predates them.
 
 **Evidence**
 
-apps/web/features/settings/sections/GeneralSection.tsx:410-437 (Appearance + Display Language only), apps/web/shared/components/accessibility/AccessibilitySettings.tsx:63-67 (High contrast mode — grep shows no importer), apps/mobile/app/(app)/settings/accent-color.tsx
+apps/web/features/settings/sections/GeneralSection.tsx:410-437 (Appearance + Display Language only), apps/web/shared/components/accessibility/AccessibilitySettings.tsx:63-67 (High contrast mode, grep shows no importer), apps/mobile/app/(app)/settings/accent-color.tsx
 
 **Suggested fix**
 
@@ -6354,7 +6354,7 @@ Add Contrast (System / More contrast) and Accent color rows to GeneralSection, w
 
 - `chatgpt_reference/122-chatgpt-web-settings-general-appearance-intelligence-dictation.png`
 
-### GAP-276 — No account-level intelligence/effort defaults with usage-cost warning copy
+### GAP-276, No account-level intelligence/effort defaults with usage-cost warning copy
 
 - **Status:** Done
 - **Owner:** Unassigned
@@ -6363,11 +6363,11 @@ Add Contrast (System / More contrast) and Accent color rows to GeneralSection, w
 
 **Gap**
 
-Closed 2026-08-21 for the parts that are real. An account-level default effort already persists and now splits by entitlement. The missing half was cost copy: effort raises ANTHROPIC_THINKING_BUDGET from 4096 to 65536, a real 16x ceiling, and nothing said so. The row now states it as a CEILING — "think up to 16x longer" — not a spend. Auto-escalation and parallel-agent mode are NOT built: neither exists server-side.
+Closed 2026-08-21 for the parts that are real. An account-level default effort already persists and now splits by entitlement. The missing half was cost copy: effort raises ANTHROPIC_THINKING_BUDGET from 4096 to 65536, a real 16x ceiling, and nothing said so. The row now states it as a CEILING, "think up to 16x longer", not a spend. Auto-escalation and parallel-agent mode are NOT built: neither exists server-side.
 
 **Evidence**
 
-apps/web/features/chat/components/Composer/**tests**/ComposerFooter.reasoning-flyout.test.tsx (per-message effort only), apps/web/features/settings/sections/GeneralSection.tsx (no effort/intelligence rows); searched 'higher intelligence', 'auto model', 'smart routing' in apps/web/features/settings — no match
+apps/web/features/chat/components/Composer/**tests**/ComposerFooter.reasoning-flyout.test.tsx (per-message effort only), apps/web/features/settings/sections/GeneralSection.tsx (no effort/intelligence rows); searched 'higher intelligence', 'auto model', 'smart routing' in apps/web/features/settings, no match
 
 **Suggested fix**
 
@@ -6377,7 +6377,7 @@ Add General rows for default reasoning effort / auto-escalation and an optional 
 
 - `chatgpt_reference/122-chatgpt-web-settings-general-appearance-intelligence-dictation.png`
 
-### GAP-277 — Notification preferences are grouped by channel instead of by event with a channel picker
+### GAP-277, Notification preferences are grouped by channel instead of by event with a channel picker
 
 - **Status:** Done
 - **Owner:** Unassigned
@@ -6386,7 +6386,7 @@ Add General rows for default reasoning effort / auto-escalation and an optional 
 
 **Gap**
 
-STALE — verified 2026-08-21. NotificationsSection is already event-first: an EVENTS array of one entry per event, each with its own channels array rendered as per-channel switches. Every key also has a real consumer, so no switch is decorative.
+STALE, verified 2026-08-21. NotificationsSection is already event-first: an EVENTS array of one entry per event, each with its own channels array rendered as per-channel switches. Every key also has a real consumer, so no switch is decorative.
 
 **Evidence**
 
@@ -6400,7 +6400,7 @@ Restructure the section as event-first rows with a multi-select channel control 
 
 - `chatgpt_reference/123-chatgpt-web-settings-notifications-codex-groupchats-marketing-top.png`
 
-### GAP-278 — No usage-limit-reset notification category and no inline 'Manage tasks' deep link
+### GAP-278, No usage-limit-reset notification category and no inline 'Manage tasks' deep link
 
 - **Status:** Open
 - **Owner:** Unassigned
@@ -6409,7 +6409,7 @@ Restructure the section as event-first rows with a multi-select channel control 
 
 **Gap**
 
-Blocked on a delivery path, verified 2026-08-21. Every notification key that ships has a real consumer; a usage-limit-reset category would have none — nothing watches the rolling windows and fires on reset. Shipping the switch first would be a preference nothing reads.
+Blocked on a delivery path, verified 2026-08-21. Every notification key that ships has a real consumer; a usage-limit-reset category would have none, nothing watches the rolling windows and fires on reset. Shipping the switch first would be a preference nothing reads.
 
 **Evidence**
 
@@ -6423,12 +6423,12 @@ Add 'Tasks & schedules' and 'Usage limits' notification rows, each with an inlin
 
 - `chatgpt_reference/124-chatgpt-web-settings-notifications-tasks-usage-bottom.png`
 
-### GAP-279 — No account-level cloud storage quota screen (Files/Images breakdown)
+### GAP-279, No account-level cloud storage quota screen (Files/Images breakdown)
 
 - **Status:** Done
 - **Owner:** Unassigned
 - **Surface/type:** web · missing-screen
-- **Reference:** ChatGPT · web · Storage — account quota by Files/Images
+- **Reference:** ChatGPT · web · Storage, account quota by Files/Images
 
 **Gap**
 
@@ -6436,7 +6436,7 @@ Closed 2026-08-21 for the storage that is actually capped. Project knowledge has
 
 **Evidence**
 
-apps/mobile/app/(app)/settings/storage.tsx (models + cache only); searched 'storage used', 'of 100 GB', 'quota' in apps/web/features/settings, apps/desktop/src/features/settings — zero matches
+apps/mobile/app/(app)/settings/storage.tsx (models + cache only); searched 'storage used', 'of 100 GB', 'quota' in apps/web/features/settings, apps/desktop/src/features/settings, zero matches
 
 **Suggested fix**
 
@@ -6446,16 +6446,16 @@ Add a Settings > Storage page (web) showing total uploaded-attachment storage vs
 
 - `chatgpt_reference/138-chatgpt-web-settings-storage-files-images-storage-used.png`
 
-### GAP-280 — No self-serve credit purchase / automatic recharge flow
+### GAP-280, No self-serve credit purchase / automatic recharge flow
 
 - **Status:** Open
 - **Owner:** Unassigned
 - **Surface/type:** web · missing-control
-- **Reference:** ChatGPT · web · Usage — Credits + Automatic recharge
+- **Reference:** ChatGPT · web · Usage, Credits + Automatic recharge
 
 **Gap**
 
-Premise is STALE, verified 2026-08-21. The CreditAlertModal this cites, and its "no credit top-ups, ever" text, no longer exist. Self-serve purchase SHIPS via startTopUpCheckout. What remains is AUTOMATIC RECHARGE, which has no server-side counterpart — recorded in docs/work/founder-assistance.md as needing a decision, because it is a standing authorisation to charge a saved card while the user is absent.
+Premise is STALE, verified 2026-08-21. The CreditAlertModal this cites, and its "no credit top-ups, ever" text, no longer exist. Self-serve purchase SHIPS via startTopUpCheckout. What remains is AUTOMATIC RECHARGE, which has no server-side counterpart, recorded in docs/work/founder-assistance.md as needing a decision, because it is a standing authorisation to charge a saved card while the user is absent.
 
 **Evidence**
 
@@ -6463,13 +6463,13 @@ apps/web/shared/components/modals/CreditAlertModal.tsx line ~41 ('No top-up purc
 
 **Suggested fix**
 
-If the product decision changes, add a 'Buy credits' button + amount picker and an 'Automatic recharge' toggle to UsageSection.tsx, wired to the existing credit-topup Stripe webhook path. If the no-top-ups rule stands, this is working as intended — no action needed beyond documenting the decision.
+If the product decision changes, add a 'Buy credits' button + amount picker and an 'Automatic recharge' toggle to UsageSection.tsx, wired to the existing credit-topup Stripe webhook path. If the no-top-ups rule stands, this is working as intended, no action needed beyond documenting the decision.
 
 **Reference screenshot(s)**
 
 - `chatgpt_reference/134-chatgpt-web-settings-usage-usage-limits-credits-recharge.png`
 
-### GAP-281 — No reasoning-effort/speed slider exposed in the extension composer
+### GAP-281, No reasoning-effort/speed slider exposed in the extension composer
 
 - **Status:** Done
 - **Owner:** Unassigned
@@ -6492,7 +6492,7 @@ Add an 'Advanced' popover to the composer bar (next to the autonomy chip) with a
 
 - `chatgpt_reference/153-chatgpt-web-extension-advanced-settings-effort-slider.png`
 
-### GAP-282 — Full DevTools-Protocol browser control has no elevated-risk gate or disclosure
+### GAP-282, Full DevTools-Protocol browser control has no elevated-risk gate or disclosure
 
 - **Status:** Open
 - **Owner:** Unassigned
@@ -6515,7 +6515,7 @@ Narrow scope: disclosure copy and a site-scoped access gate already exist. What 
 
 - `chatgpt_reference/114-codex-macos-settings-browser-permissions-developer-mode-cdp.png`
 
-### GAP-283 — Conversation history is two clicks deep with no search, vs. one-click searchable dropdown
+### GAP-283, Conversation history is two clicks deep with no search, vs. one-click searchable dropdown
 
 - **Status:** Open
 - **Owner:** Unassigned
@@ -6538,7 +6538,7 @@ Narrow scope: search/filter is done. What remains is purely structural -- surfac
 
 - `chatgpt_reference/150-chatgpt-web-extension-task-history-recent-tasks.png`
 
-### GAP-284 — 'Rewind' action exists but is permanently disabled/stubbed
+### GAP-284, 'Rewind' action exists but is permanently disabled/stubbed
 
 - **Status:** Open
 - **Owner:** Unassigned
@@ -6561,12 +6561,12 @@ Either wire rewindLast() to actual turn-rollback support in the local runtime, o
 
 - `claude_reference/133-claude-code-vscode-ext-extension-command-menu-context-model-effort-thinking.png`
 
-### GAP-285 — 'Thinking' and 'Switch models when a message is flagged' not exposed in the actions menu
+### GAP-285, 'Thinking' and 'Switch models when a message is flagged' not exposed in the actions menu
 
 - **Status:** Open
 - **Owner:** Unassigned
 - **Surface/type:** extension-vscode · missing-control
-- **Reference:** Claude · VS Code extension · Actions/command menu — Thinking / flagged-switch toggles
+- **Reference:** Claude · VS Code extension · Actions/command menu, Thinking / flagged-switch toggles
 
 **Gap**
 
@@ -6584,7 +6584,7 @@ Narrow scope: only the flagged-message model-switch setting remains to build. Do
 
 - `claude_reference/133-claude-code-vscode-ext-extension-command-menu-context-model-effort-thinking.png`
 
-### GAP-286 — Session history lives in a separate TreeView, not in the chat panel
+### GAP-286, Session history lives in a separate TreeView, not in the chat panel
 
 - **Status:** Open
 - **Owner:** Unassigned
@@ -6593,7 +6593,7 @@ Narrow scope: only the flagged-message model-switch setting remains to build. Do
 
 **Gap**
 
-Reference keeps a 'Chats' list at the top of the same panel — three most recent threads with relative timestamps and a 'View all (50)' overflow — so switching threads never leaves the panel. agiworkforce's history button posts openHistory, which runs a command that opens a separate view/QuickPick; the webview itself renders no thread list.
+Reference keeps a 'Chats' list at the top of the same panel, three most recent threads with relative timestamps and a 'View all (50)' overflow, so switching threads never leaves the panel. agiworkforce's history button posts openHistory, which runs a command that opens a separate view/QuickPick; the webview itself renders no thread list.
 
 **Evidence**
 
@@ -6607,12 +6607,12 @@ Render the top 3 threads inline at the head of the webview using the existing Th
 
 - `chatgpt_reference/008-codex-vscode-ext-model-upsell-modal-gpt%2D5%2D6%2Dsol%2Dannouncement.png`
 
-### GAP-287 — No dedicated session-browser sidebar (Local/Web tabs, search, New session)
+### GAP-287, No dedicated session-browser sidebar (Local/Web tabs, search, New session)
 
 - **Status:** Open
 - **Owner:** Unassigned
 - **Surface/type:** extension-vscode · missing-ia
-- **Reference:** Claude · VS Code extension · Claude Code panel — session list sidebar
+- **Reference:** Claude · VS Code extension · Claude Code panel, session list sidebar
 
 **Gap**
 
@@ -6630,7 +6630,7 @@ Either enrich the TreeView with search/filter and a visible 'New session' action
 
 - `claude_reference/132-claude-code-vscode-ext-extension-empty-state-antigravity-fable-5-banner.png`
 
-### GAP-288 — Composer + menu exposes no plugins/skills, only three static items
+### GAP-288, Composer + menu exposes no plugins/skills, only three static items
 
 - **Status:** Open
 - **Owner:** Unassigned
@@ -6653,16 +6653,16 @@ Extend the plus menu with a 'Plugins' group populated from the same resolved-plu
 
 - `chatgpt_reference/010-codex-vscode-ext-plugins-menu-add-files-goal-plan-mode-plugins-list.png`
 
-### GAP-289 — No persistent 'Goal' the agent keeps pursuing across turns
+### GAP-289, No persistent 'Goal' the agent keeps pursuing across turns
 
 - **Status:** Open
 - **Owner:** Unassigned
 - **Surface/type:** extension-vscode · missing-control
-- **Reference:** Codex · VS Code extension · Composer + menu — Goal
+- **Reference:** Codex · VS Code extension · Composer + menu, Goal
 
 **Gap**
 
-Reference offers 'Goal — Set a goal to keep pursuing' alongside Plan mode, giving a turn-independent objective that survives multiple messages. agiworkforce has plan mode and per-turn prompts but no persistent objective; the only 'goal' references in the extension are unrelated comments about the /goal sync contract.
+Reference offers 'Goal, Set a goal to keep pursuing' alongside Plan mode, giving a turn-independent objective that survives multiple messages. agiworkforce has plan mode and per-turn prompts but no persistent objective; the only 'goal' references in the extension are unrelated comments about the /goal sync contract.
 
 **Evidence**
 
@@ -6676,12 +6676,12 @@ Add a 'Goal' item to the plus menu that stores a workspace-scoped objective (alo
 
 - `chatgpt_reference/010-codex-vscode-ext-plugins-menu-add-files-goal-plan-mode-plugins-list.png`
 
-### GAP-290 — No 'Use Terminal' setting to launch the extension in the integrated terminal
+### GAP-290, No 'Use Terminal' setting to launch the extension in the integrated terminal
 
 - **Status:** Open
 - **Owner:** Unassigned
 - **Surface/type:** extension-vscode · missing-control
-- **Reference:** Claude · VS Code extension · Native VS Code Settings — claudeCode.useTerminal
+- **Reference:** Claude · VS Code extension · Native VS Code Settings, claudeCode.useTerminal
 
 **Gap**
 
@@ -6699,7 +6699,7 @@ Add an 'agiWorkforce.useTerminal' boolean setting (contributed via package.json 
 
 - `claude_reference/135-claude-code-vscode-ext-extension-settings-use-terminal-setting-search.png`
 
-### GAP-291 — No in-product new-model announcement / try-it card
+### GAP-291, No in-product new-model announcement / try-it card
 
 - **Status:** Open
 - **Owner:** Unassigned
@@ -6708,7 +6708,7 @@ Add an 'agiWorkforce.useTerminal' boolean setting (contributed via package.json 
 
 **Gap**
 
-Reference surfaces a dismissible hero card announcing a new model with guidance on how to use it ('highly capable at lower reasoning efforts — start lower, turn it up') and two CTAs: 'Continue with current model' and 'Try <model> now', which switches the composer model. agiworkforce has no announcement surface in any client; the only release-notes UI is the desktop app-update dialog.
+Reference surfaces a dismissible hero card announcing a new model with guidance on how to use it ('highly capable at lower reasoning efforts, start lower, turn it up') and two CTAs: 'Continue with current model' and 'Try <model> now', which switches the composer model. agiworkforce has no announcement surface in any client; the only release-notes UI is the desktop app-update dialog.
 
 **Evidence**
 
@@ -6722,7 +6722,7 @@ Drive an announcement card from the model catalogue metadata (packages/contracts
 
 - `chatgpt_reference/008-codex-vscode-ext-model-upsell-modal-gpt%2D5%2D6%2Dsol%2Dannouncement.png`
 
-### GAP-292 — Effort picker leaves the webview and shows no selected-state checkmark
+### GAP-292, Effort picker leaves the webview and shows no selected-state checkmark
 
 - **Status:** Open
 - **Owner:** Unassigned
@@ -6745,12 +6745,12 @@ Reuse the existing model-popover component for mode and effort: render the four 
 
 - `chatgpt_reference/011-codex-vscode-ext-reasoning-effort-menu-light-medium-high-ultra-options.png`
 
-### GAP-293 — No queue-vs-steer choice for messages sent while a turn is running
+### GAP-293, No queue-vs-steer choice for messages sent while a turn is running
 
 - **Status:** Done
 - **Owner:** Unassigned
 - **Surface/type:** extension-vscode · missing-control
-- **Reference:** Codex · VS Code extension · Settings — Composer, Follow-up behavior
+- **Reference:** Codex · VS Code extension · Settings, Composer, Follow-up behavior
 
 **Gap**
 
@@ -6768,12 +6768,12 @@ None needed -- already shipped end to end. If a dedicated in-composer indicator 
 
 - `chatgpt_reference/014-codex-vscode-ext-settings-general-language-speed-composer.png`
 
-### GAP-294 — Send shortcut is hardcoded to Enter with no preference
+### GAP-294, Send shortcut is hardcoded to Enter with no preference
 
 - **Status:** Open
 - **Owner:** Unassigned
 - **Surface/type:** extension-vscode · missing-control
-- **Reference:** Codex · VS Code extension · Settings — Composer, Send shortcut
+- **Reference:** Codex · VS Code extension · Settings, Composer, Send shortcut
 
 **Gap**
 
@@ -6791,12 +6791,12 @@ Add an agiWorkforce.composer.sendShortcut setting ('enter' | 'modEnter') to conf
 
 - `chatgpt_reference/014-codex-vscode-ext-settings-general-language-speed-composer.png`
 
-### GAP-295 — Context-window usage is computed but never shown in the composer, and cannot be toggled
+### GAP-295, Context-window usage is computed but never shown in the composer, and cannot be toggled
 
 - **Status:** Open
 - **Owner:** Unassigned
 - **Surface/type:** extension-vscode · missing-control
-- **Reference:** Codex · VS Code extension · Settings — Composer, Show context window usage
+- **Reference:** Codex · VS Code extension · Settings, Composer, Show context window usage
 
 **Gap**
 
@@ -6814,16 +6814,16 @@ Render remaining context as a small percentage chip in the composer bottom row f
 
 - `chatgpt_reference/014-codex-vscode-ext-settings-general-language-speed-composer.png`
 
-### GAP-296 — Memory has no enable/disable, tool-assisted toggle, or in-settings reset
+### GAP-296, Memory has no enable/disable, tool-assisted toggle, or in-settings reset
 
 - **Status:** Open
 - **Owner:** Unassigned
 - **Surface/type:** extension-vscode · missing-control
-- **Reference:** Codex · VS Code extension · Settings — Personalization, Memory
+- **Reference:** Codex · VS Code extension · Settings, Personalization, Memory
 
 **Gap**
 
-Reference exposes three memory controls: 'Enable memories' (generate new memories from chats), 'Allow memory generation from tool-assisted chats' (chats that used MCP tools or web search), and 'Reset memories' with a destructive Reset button. agiworkforce's extension stores memory facts and injects them into turns with only add/edit/delete affordances — a user cannot stop memory generation, cannot exclude tool-assisted sessions, and reaches delete-all through a QuickPick rather than a settings page.
+Reference exposes three memory controls: 'Enable memories' (generate new memories from chats), 'Allow memory generation from tool-assisted chats' (chats that used MCP tools or web search), and 'Reset memories' with a destructive Reset button. agiworkforce's extension stores memory facts and injects them into turns with only add/edit/delete affordances, a user cannot stop memory generation, cannot exclude tool-assisted sessions, and reaches delete-all through a QuickPick rather than a settings page.
 
 **Evidence**
 
@@ -6837,12 +6837,12 @@ Add agiWorkforce.memory.enabled and agiWorkforce.memory.fromToolAssisted setting
 
 - `chatgpt_reference/016-codex-vscode-ext-settings-personalization-personality-memory-instructions.png`
 
-### GAP-297 — Credits balance and top-up are absent from the IDE where credits are spent
+### GAP-297, Credits balance and top-up are absent from the IDE where credits are spent
 
 - **Status:** Open
 - **Owner:** Unassigned
 - **Surface/type:** extension-vscode · missing-ia
-- **Reference:** Codex · VS Code extension · Settings — Usage & billing, Credits balance
+- **Reference:** Codex · VS Code extension · Settings, Usage & billing, Credits balance
 
 **Gap**
 
@@ -6860,12 +6860,12 @@ Narrow scope: only a dedicated top-up affordance remains. The balance display, A
 
 - `chatgpt_reference/017-codex-vscode-ext-settings-billing-pro-plan-credits-usage-limits.png`
 
-### GAP-298 — Usage is a single aggregate bar — no per-model limits, reset schedule or empty state
+### GAP-298, Usage is a single aggregate bar, no per-model limits, reset schedule or empty state
 
 - **Status:** Open
 - **Owner:** Unassigned
 - **Surface/type:** extension-vscode · missing-ia
-- **Reference:** Codex · VS Code extension · Settings — Usage & billing, per-model limits and resets
+- **Reference:** Codex · VS Code extension · Settings, Usage & billing, per-model limits and resets
 
 **Gap**
 
@@ -6883,7 +6883,7 @@ Narrow scope: the bar+reset+empty-state structure this row asked for is built. I
 
 - `chatgpt_reference/017-codex-vscode-ext-settings-billing-pro-plan-credits-usage-limits.png`
 
-### GAP-299 — CodeLens skips comments, so TODO/FIXME cannot become a task
+### GAP-299, CodeLens skips comments, so TODO/FIXME cannot become a task
 
 - **Status:** Done
 - **Owner:** Unassigned
@@ -6908,7 +6908,7 @@ Add a second lens pass that matches TODO/FIXME/HACK/XXX comment markers and emit
 
 ## P3
 
-### GAP-300 — Effort levels use engineering labels with no explanation of the trade-off
+### GAP-300, Effort levels use engineering labels with no explanation of the trade-off
 
 - **Status:** Open
 - **Owner:** Unassigned
@@ -6925,18 +6925,18 @@ apps/mobile/src/features/model-picker/components/ModelPickerSheet.tsx:54-62 (REA
 
 **Suggested fix**
 
-Keep the wire values but map them to product labels with a one-line subtitle each (e.g. 'Instant — fastest replies, light reasoning'), defined once in the shared design-system effort module so web/desktop/mobile stay consistent.
+Keep the wire values but map them to product labels with a one-line subtitle each (e.g. 'Instant, fastest replies, light reasoning'), defined once in the shared design-system effort module so web/desktop/mobile stay consistent.
 
 **Reference screenshot(s)**
 
 - `chatgpt_reference/073-chatgpt-ios-chat-model-picker-intelligence-tier-popover.png`
 
-### GAP-301 — Connectors screen has no multi-step onboarding wizard pattern or +row add affordance
+### GAP-301, Connectors screen has no multi-step onboarding wizard pattern or +row add affordance
 
 - **Status:** Open
 - **Owner:** Unassigned
 - **Surface/type:** mobile · missing-ia
-- **Reference:** ChatGPT · iOS · Connect accounts — healthcare-provider directory with search, +add row affordance, and 4-step onboarding wizard (progress dots)
+- **Reference:** ChatGPT · iOS · Connect accounts, healthcare-provider directory with search, +add row affordance, and 4-step onboarding wizard (progress dots)
 
 **Gap**
 
@@ -6944,7 +6944,7 @@ ChatGPT's connect-accounts step is part of a 4-step wizard (dots at top), uses a
 
 **Evidence**
 
-apps/mobile/src/features/settings/cloud-connectors/index.tsx:973-994 (search field), :157-333 (connector catalog incl. Notion, GitHub, Slack, Teams, Gmail, Drive, Dropbox) — no healthcare category, no progress-dot wizard pattern found anywhere in apps/mobile/app or src
+apps/mobile/src/features/settings/cloud-connectors/index.tsx:973-994 (search field), :157-333 (connector catalog incl. Notion, GitHub, Slack, Teams, Gmail, Drive, Dropbox), no healthcare category, no progress-dot wizard pattern found anywhere in apps/mobile/app or src
 
 **Suggested fix**
 
@@ -6954,7 +6954,7 @@ If a guided first-run onboarding wizard is desired for connectors generally, add
 
 - `references-2/chatgpt-ios-health-07-connect-provider-accounts.png`
 
-### GAP-302 — Onboarding hero uses a bare brand glyph rather than layered device art showing the payoff
+### GAP-302, Onboarding hero uses a bare brand glyph rather than layered device art showing the payoff
 
 - **Status:** Open
 - **Owner:** Unassigned
@@ -6963,11 +6963,11 @@ If a guided first-run onboarding wizard is desired for connectors generally, add
 
 **Gap**
 
-The reference hero is a full-bleed warm-gradient collage of the actual payoff — a phone push notification ('Your daily brief task — Packed schedule today…') layered over a browser window at claude.com/cowork — with a floating circular close chip over the artwork, so the value is legible before any copy is read. agiworkforce's mobile onboarding renders a hand-built SVG brand mark on a plain background, showing the brand rather than the outcome.
+The reference hero is a full-bleed warm-gradient collage of the actual payoff, a phone push notification ('Your daily brief task, Packed schedule today…') layered over a browser window at claude.com/cowork, with a floating circular close chip over the artwork, so the value is legible before any copy is read. agiworkforce's mobile onboarding renders a hand-built SVG brand mark on a plain background, showing the brand rather than the outcome.
 
 **Evidence**
 
-apps/mobile/app/(public)/onboarding.tsx:52-67 (AgiMark spoke geometry drawn with react-native-svg) — no screenshot/device-mockup asset in the flow; web has device mockups only for marketing (apps/web/features/marketing/components/DeviceMockups.tsx)
+apps/mobile/app/(public)/onboarding.tsx:52-67 (AgiMark spoke geometry drawn with react-native-svg), no screenshot/device-mockup asset in the flow; web has device mockups only for marketing (apps/web/features/marketing/components/DeviceMockups.tsx)
 
 **Suggested fix**
 
@@ -6977,7 +6977,7 @@ Add a hero image slot to the onboarding and continuity sheets: a gradient backdr
 
 - `references-2/claude-ios-cowork-01-cross-device-continuity-onboarding.png`
 
-### GAP-303 — Mobile agent-run list lacks date grouping and a floating 'New task' action
+### GAP-303, Mobile agent-run list lacks date grouping and a floating 'New task' action
 
 - **Status:** Open
 - **Owner:** Unassigned
@@ -6990,7 +6990,7 @@ Claude's Cowork list groups tasks under date headers ('Today') and keeps a persi
 
 **Evidence**
 
-apps/mobile/app/(app)/agents/index.tsx — FILTERS array renders as tabs (line ~45), no groupBy/section-header logic or floating-action-button pattern found (grep for 'Today', 'New task' in the file returned no matches).
+apps/mobile/app/(app)/agents/index.tsx, FILTERS array renders as tabs (line ~45), no groupBy/section-header logic or floating-action-button pattern found (grep for 'Today', 'New task' in the file returned no matches).
 
 **Suggested fix**
 
@@ -7000,12 +7000,12 @@ Add date-based section headers (Today/Yesterday/Earlier) to the agent-run FlatLi
 
 - `claude_reference/105-claude-ios-cowork-task-list-llm-reference-doc-task-card.png`
 
-### GAP-304 — No Cowork-specific mobile announcement screen (start/steer/background-continue bullets)
+### GAP-304, No Cowork-specific mobile announcement screen (start/steer/background-continue bullets)
 
 - **Status:** Open
 - **Owner:** Unassigned
 - **Surface/type:** mobile · missing-screen
-- **Reference:** Claude · iOS · Feature announcement — Cowork
+- **Reference:** Claude · iOS · Feature announcement, Cowork
 
 **Gap**
 
@@ -7013,7 +7013,7 @@ Claude's Cowork announcement uses 3 iconed bullets (phone, laptop, lightning) to
 
 **Evidence**
 
-Same search as 103 — no announcement/whats-new component found in apps/mobile.
+Same search as 103, no announcement/whats-new component found in apps/mobile.
 
 **Suggested fix**
 
@@ -7023,7 +7023,7 @@ Once the reusable FeatureAnnouncementScreen exists (see 103 fix), add a Cowork-s
 
 - `claude_reference/104-claude-ios-onboarding-cowork-announcement-mobile-check-in.png`
 
-### GAP-305 — No top-level 'Remote' entry point in mobile primary navigation
+### GAP-305, No top-level 'Remote' entry point in mobile primary navigation
 
 - **Status:** Open
 - **Owner:** Unassigned
@@ -7046,7 +7046,7 @@ Add a 'Remote' item to the mobile app's primary sidebar/tab navigation that deep
 
 - `references-2/IMG_0618.PNG`
 
-### GAP-306 — New Project modal never explains what a project is for
+### GAP-306, New Project modal never explains what a project is for
 
 - **Status:** Open
 - **Owner:** Unassigned
@@ -7069,7 +7069,7 @@ Add a one-line subtitle under the modal title describing shared context across c
 
 - `chatgpt_reference/047-chatgpt-ios-projects-create-modal-name-input-category-pills.png`
 
-### GAP-307 — Manual pairing submit has no disabled state and no paste affordance
+### GAP-307, Manual pairing submit has no disabled state and no paste affordance
 
 - **Status:** Open
 - **Owner:** Unassigned
@@ -7092,16 +7092,16 @@ Disable the Connect button while the trimmed input is empty and add a 'Paste' ac
 
 - `chatgpt_reference/030-codex-ios-remote-setup-manual-pairing-code-modal-keyboard.png`
 
-### GAP-308 — Remaining usage is not surfaced in any nav or menu, only on a dedicated screen
+### GAP-308, Remaining usage is not surfaced in any nav or menu, only on a dedicated screen
 
 - **Status:** Open
 - **Owner:** Unassigned
 - **Surface/type:** mobile · missing-ia
-- **Reference:** Codex · iOS · Remote overflow menu — Usage remaining
+- **Reference:** Codex · iOS · Remote overflow menu, Usage remaining
 
 **Gap**
 
-The reference prints 'Usage remaining — Week 100%' at the bottom of the overflow menu so quota is visible without leaving the current task. agiworkforce only exposes usage via Settings > Cloud > Usage, and the drawer contains no usage indicator.
+The reference prints 'Usage remaining, Week 100%' at the bottom of the overflow menu so quota is visible without leaving the current task. agiworkforce only exposes usage via Settings > Cloud > Usage, and the drawer contains no usage indicator.
 
 **Evidence**
 
@@ -7115,7 +7115,7 @@ Render a compact 'Usage remaining' line in the drawer footer (or an overflow men
 
 - `chatgpt_reference/039-codex-ios-remote-project-list-overflow-menu-organize-manage.png`
 
-### GAP-309 — Accent and appearance pickers push a screen instead of opening an in-place popover
+### GAP-309, Accent and appearance pickers push a screen instead of opening an in-place popover
 
 - **Status:** Open
 - **Owner:** Unassigned
@@ -7138,7 +7138,7 @@ Render short enumerations (accent, appearance) as an anchored popover/action she
 
 - `chatgpt_reference/067-chatgpt-ios-settings-accent-color-swatch-picker-popover.png`
 
-### GAP-310 — Location has no status row or benefit explanation in Data controls
+### GAP-310, Location has no status row or benefit explanation in Data controls
 
 - **Status:** Open
 - **Owner:** Unassigned
@@ -7147,7 +7147,7 @@ Render short enumerations (accent, appearance) as an anchored popover/action she
 
 **Gap**
 
-Reference shows 'Location services — Off' with an 'Allow location access' action and copy explaining what location buys the user (local recommendations, news, weather). agiworkforce's permission registry lists Location with the bare line 'Not used by Local Mode.', which tells the user nothing about Cloud mode and offers no reason to grant it.
+Reference shows 'Location services, Off' with an 'Allow location access' action and copy explaining what location buys the user (local recommendations, news, weather). agiworkforce's permission registry lists Location with the bare line 'Not used by Local Mode.', which tells the user nothing about Cloud mode and offers no reason to grant it.
 
 **Evidence**
 
@@ -7161,7 +7161,7 @@ Surface a Location row in Data Controls showing the live OS permission status wi
 
 - `chatgpt_reference/055-chatgpt-ios-settings-data-controls-model-training-location-services.png`
 
-### GAP-311 — Export and account deletion live on two unrelated settings screens
+### GAP-311, Export and account deletion live on two unrelated settings screens
 
 - **Status:** Open
 - **Owner:** Unassigned
@@ -7184,7 +7184,7 @@ Mirror a 'Delete account' row into Data Controls (navigating to the existing clo
 
 - `chatgpt_reference/056-chatgpt-ios-settings-data-controls-export-delete-account.png`
 
-### GAP-312 — No composer text-behaviour or suggestion toggles (auto-correct, autocomplete, trending)
+### GAP-312, No composer text-behaviour or suggestion toggles (auto-correct, autocomplete, trending)
 
 - **Status:** Open
 - **Owner:** Unassigned
@@ -7197,7 +7197,7 @@ The reference groups 'Auto-correct spelling' with the app-level toggles and a 'S
 
 **Evidence**
 
-apps/mobile/src/features/settings/general/index.tsx; grep 'autocorrect|spellCheck' — only per-field autoCorrect={false} literals (e.g. ScheduleForm.tsx:277, DrawerContent.tsx:227); grep 'trending|autocomplete' — no suggestion feature
+apps/mobile/src/features/settings/general/index.tsx; grep 'autocorrect|spellCheck', only per-field autoCorrect={false} literals (e.g. ScheduleForm.tsx:277, DrawerContent.tsx:227); grep 'trending|autocomplete', no suggestion feature
 
 **Suggested fix**
 
@@ -7207,7 +7207,7 @@ Add an 'Auto-correct spelling' switch wired to the ChatInput TextInput's autoCor
 
 - `chatgpt_reference/066-chatgpt-ios-settings-general-app-language-toggles.png`
 
-### GAP-313 — No composer preferences: context-window usage display or follow-up behavior
+### GAP-313, No composer preferences: context-window usage display or follow-up behavior
 
 - **Status:** Open
 - **Owner:** Unassigned
@@ -7216,11 +7216,11 @@ Add an 'Auto-correct spelling' switch wired to the ChatInput TextInput's autoCor
 
 **Gap**
 
-Reference exposes 'Show context window usage' (toggle) and 'Follow-up behavior — Queue' (picker), letting the user decide whether context pressure is visible and what happens when they send while a turn is running. agiworkforce shows a ContextWarningChip on its own terms and queues offline sends implicitly, with no user preference for either.
+Reference exposes 'Show context window usage' (toggle) and 'Follow-up behavior, Queue' (picker), letting the user decide whether context pressure is visible and what happens when they send while a turn is running. agiworkforce shows a ContextWarningChip on its own terms and queues offline sends implicitly, with no user preference for either.
 
 **Evidence**
 
-apps/mobile/src/features/chat/components/ContextWarningChip.tsx (unconditional heuristic); apps/mobile/src/features/chat/components/ChatInput.tsx queueSize handling; grep -i 'context window usage|follow-up behavior' across apps/mobile — no match
+apps/mobile/src/features/chat/components/ContextWarningChip.tsx (unconditional heuristic); apps/mobile/src/features/chat/components/ChatInput.tsx queueSize handling; grep -i 'context window usage|follow-up behavior' across apps/mobile, no match
 
 **Suggested fix**
 
@@ -7230,7 +7230,7 @@ Add two settings backed by settingsStore: 'Show context window usage' (always/ne
 
 - `chatgpt_reference/058-codex-ios-settings-remote-control-desktop-connection-composer-faceid.png`
 
-### GAP-314 — Voice persona picking is a text list on a sub-screen, not a swipeable persona carousel
+### GAP-314, Voice persona picking is a text list on a sub-screen, not a swipeable persona carousel
 
 - **Status:** Open
 - **Owner:** Unassigned
@@ -7253,12 +7253,12 @@ Render VOICE_PRESETS as a horizontally paged carousel at the top of Settings > V
 
 - `chatgpt_reference/064-chatgpt-ios-settings-voice-spruce-model-intelligence-language.png`
 
-### GAP-315 — Log Out is nested in the Cloud group instead of a standalone bottom destructive row
+### GAP-315, Log Out is nested in the Cloud group instead of a standalone bottom destructive row
 
 - **Status:** Open
 - **Owner:** Unassigned
 - **Surface/type:** mobile · visual-polish
-- **Reference:** ChatGPT · iOS · Settings footer — Log out
+- **Reference:** ChatGPT · iOS · Settings footer, Log out
 
 **Gap**
 
@@ -7276,12 +7276,12 @@ Move the logout row out of the Cloud section into its own single-row SectionCard
 
 - `chatgpt_reference/043-chatgpt-ios-settings-account-help-logout-help-center-about.png`
 
-### GAP-316 — Theme picker uses plain list rows instead of visual Light/Dark/System preview swatches
+### GAP-316, Theme picker uses plain list rows instead of visual Light/Dark/System preview swatches
 
 - **Status:** Open
 - **Owner:** Unassigned
 - **Surface/type:** mobile · visual-polish
-- **Reference:** Claude · iOS · Settings root — Appearance theme picker
+- **Reference:** Claude · iOS · Settings root, Appearance theme picker
 
 **Gap**
 
@@ -7289,7 +7289,7 @@ Reference renders three tappable mini-mockup preview cards (Light/Dark/System) s
 
 **Evidence**
 
-apps/mobile/src/features/settings/appearance/index.tsx lines 12-14 define THEME_OPTIONS with icon/label/description only; searched for 'swatch'/'preview'/'Image' — no match.
+apps/mobile/src/features/settings/appearance/index.tsx lines 12-14 define THEME_OPTIONS with icon/label/description only; searched for 'swatch'/'preview'/'Image', no match.
 
 **Suggested fix**
 
@@ -7299,20 +7299,20 @@ Replace the plain rows with small preview thumbnails (mimicking a chat bubble on
 
 - `claude_reference/120-claude-ios-settings-root-appearance-theme-picker-logout.png`
 
-### GAP-317 — Log Out is buried inside the 'Cloud' section instead of a standalone bottom action
+### GAP-317, Log Out is buried inside the 'Cloud' section instead of a standalone bottom action
 
 - **Status:** Open
 - **Owner:** Unassigned
 - **Surface/type:** mobile · missing-ia
-- **Reference:** Claude · iOS · Settings root — Log out placement
+- **Reference:** Claude · iOS · Settings root, Log out placement
 
 **Gap**
 
-Reference places 'Log out' as a prominent, standalone red row at the very bottom of the Settings root, below Appearance. agiworkforce nests the Log Out row inside the 'Cloud' settings section (after Connectors), conditional on `clerkUser` — much less discoverable and inconsistent with the reference's persistent sign-out affordance.
+Reference places 'Log out' as a prominent, standalone red row at the very bottom of the Settings root, below Appearance. agiworkforce nests the Log Out row inside the 'Cloud' settings section (after Connectors), conditional on `clerkUser`, much less discoverable and inconsistent with the reference's persistent sign-out affordance.
 
 **Evidence**
 
-apps/mobile/src/features/settings/index.tsx lines 493-503 — 'logout' row is the last item of the 'Cloud' section array, not a separate top-level section.
+apps/mobile/src/features/settings/index.tsx lines 493-503, 'logout' row is the last item of the 'Cloud' section array, not a separate top-level section.
 
 **Suggested fix**
 
@@ -7322,7 +7322,7 @@ Move Log Out to its own section at the very end of the settings list (after Supp
 
 - `claude_reference/120-claude-ios-settings-root-appearance-theme-picker-logout.png`
 
-### GAP-318 — Connector OAuth uses openBrowserAsync, so there is no domain-consent dialog or callback
+### GAP-318, Connector OAuth uses openBrowserAsync, so there is no domain-consent dialog or callback
 
 - **Status:** Open
 - **Owner:** Unassigned
@@ -7335,7 +7335,7 @@ The reference's web-based sign-in runs through ASWebAuthenticationSession, which
 
 **Evidence**
 
-apps/mobile/src/features/settings/cloud-connectors/index.tsx lines 790-801; grep 'openAuthSessionAsync' across apps/mobile — no matches
+apps/mobile/src/features/settings/cloud-connectors/index.tsx lines 790-801; grep 'openAuthSessionAsync' across apps/mobile, no matches
 
 **Suggested fix**
 
@@ -7345,7 +7345,7 @@ Switch connector OAuth launches to WebBrowser.openAuthSessionAsync with the app'
 
 - `chatgpt_reference/036-os-ios-system-auth-consent-dialog-chatgpt-auth-openai-signin.png`
 
-### GAP-319 — No Acceptable Use Policy link and no version-anchored legal popover
+### GAP-319, No Acceptable Use Policy link and no version-anchored legal popover
 
 - **Status:** Open
 - **Owner:** Unassigned
@@ -7368,7 +7368,7 @@ Publish an /acceptable-use page on web, add the link to the About Resources card
 
 - `chatgpt_reference/025-other-ios-settings-legal-links-claude-app-version-popover.png`
 
-### GAP-320 — No 'Thought for Ns' reasoning-status label during voice thinking phase
+### GAP-320, No 'Thought for Ns' reasoning-status label during voice thinking phase
 
 - **Status:** Open
 - **Owner:** Unassigned
@@ -7377,7 +7377,7 @@ Publish an /acceptable-use page on web, add the link to the About Resources card
 
 **Gap**
 
-ChatGPT shows a dedicated 'Thought for 2s' / 'Thought for 4s' line above the streamed response when the model reasons before answering in voice mode. agiworkforce's PHASE_CONFIG for the 'thinking' phase only exposes a static 'Thinking...' label with sublabel 'Processing your message' — no elapsed reasoning duration is surfaced.
+ChatGPT shows a dedicated 'Thought for 2s' / 'Thought for 4s' line above the streamed response when the model reasons before answering in voice mode. agiworkforce's PHASE_CONFIG for the 'thinking' phase only exposes a static 'Thinking...' label with sublabel 'Processing your message', no elapsed reasoning duration is surfaced.
 
 **Evidence**
 
@@ -7391,12 +7391,12 @@ Track elapsed time in the 'thinking' phase and render 'Thought for Ns' once reas
 
 - `references-2/chatgpt-ios-voice-05-reasoning-status.png`
 
-### GAP-321 — No dismissible contextual tip strip above the composer with an 'Add to message' action
+### GAP-321, No dismissible contextual tip strip above the composer with an 'Add to message' action
 
 - **Status:** Open
 - **Owner:** Unassigned
 - **Surface/type:** desktop · missing-copy
-- **Reference:** Claude · macOS desktop · Cowork task composer — tip banner
+- **Reference:** Claude · macOS desktop · Cowork task composer, tip banner
 
 **Gap**
 
@@ -7414,7 +7414,7 @@ Add a ComposerTipStrip rendered above the composer, driven by a small rotating r
 
 - `references-2/claude-desktop-cowork-record-skill-06-task-progress-outputs-context.png`
 
-### GAP-322 — Record-skill consent shown as full panel takeover instead of compact floating dialog
+### GAP-322, Record-skill consent shown as full panel takeover instead of compact floating dialog
 
 - **Status:** Open
 - **Owner:** Unassigned
@@ -7437,12 +7437,12 @@ Render the initial consent step as a centered Dialog overlay (reusing the existi
 
 - `references-2/claude-desktop-cowork-record-skill-03-privacy-consent.png`
 
-### GAP-323 — No diff-marker style setting (Color vs +/-) for colour-blind users
+### GAP-323, No diff-marker style setting (Color vs +/-) for colour-blind users
 
 - **Status:** Open
 - **Owner:** Unassigned
 - **Surface/type:** desktop · missing-control
-- **Reference:** Codex · macOS desktop · Settings > Appearance — Preferences
+- **Reference:** Codex · macOS desktop · Settings > Appearance, Preferences
 
 **Gap**
 
@@ -7450,7 +7450,7 @@ The reference offers 'Diff markers · Show changes using colors or +/− markers
 
 **Evidence**
 
-apps/desktop/src/features/code/DiffViewer.tsx and features/git/GitDiffViewer.tsx (colour-based rendering); grepped 'diff marker|diffMarker' across apps — no match; ThemeSettings Accessibility section has only Dyslexic Friendly Font
+apps/desktop/src/features/code/DiffViewer.tsx and features/git/GitDiffViewer.tsx (colour-based rendering); grepped 'diff marker|diffMarker' across apps, no match; ThemeSettings Accessibility section has only Dyslexic Friendly Font
 
 **Suggested fix**
 
@@ -7460,12 +7460,12 @@ Add a `diffMarkerStyle: 'color' | 'symbols'` preference in the Accessibility sec
 
 - `chatgpt_reference/095-codex-macos-settings-appearance-dark-theme-preferences.png`
 
-### GAP-324 — Theme preview trapped in dialog; no translucency or per-theme font
+### GAP-324, Theme preview trapped in dialog; no translucency or per-theme font
 
 - **Status:** Open
 - **Owner:** Unassigned
 - **Surface/type:** desktop · visual-polish
-- **Reference:** Codex · macOS desktop · Settings > Appearance — theme card
+- **Reference:** Codex · macOS desktop · Settings > Appearance, theme card
 
 **Gap**
 
@@ -7473,7 +7473,7 @@ The reference keeps a persistent live preview on the Appearance page (a rendered
 
 **Evidence**
 
-apps/desktop/src/features/settings/ThemeEditorDialog.tsx:175-246 (MiniPreview, dialog-scoped); apps/desktop/src/features/settings/ThemeSettings.tsx (swatch grids, no page-level preview); grepped 'translucen' across apps/desktop — no match; FontSelector sets --chat-font-family globally, not per theme
+apps/desktop/src/features/settings/ThemeEditorDialog.tsx:175-246 (MiniPreview, dialog-scoped); apps/desktop/src/features/settings/ThemeSettings.tsx (swatch grids, no page-level preview); grepped 'translucen' across apps/desktop, no match; FontSelector sets --chat-font-family globally, not per theme
 
 **Suggested fix**
 
@@ -7483,7 +7483,7 @@ Promote MiniPreview to a sticky preview panel on the Appearance page reflecting 
 
 - `chatgpt_reference/094-codex-macos-settings-appearance-theme-picker-light-colors.png`
 
-### GAP-325 — Language selector has no Auto-detect option
+### GAP-325, Language selector has no Auto-detect option
 
 - **Status:** Open
 - **Owner:** Unassigned
@@ -7496,7 +7496,7 @@ The reference Language row defaults to 'Auto detect' with the sub-line 'Language
 
 **Evidence**
 
-apps/desktop/src/features/settings/GeneralSettings.tsx:116-132 (Select over SUPPORTED_LANGUAGES only) versus :100-114 (Theme Select includes a 'system' item); grepped 'auto.detect|autoDetect' in stores/settingsStore.ts — no match
+apps/desktop/src/features/settings/GeneralSettings.tsx:116-132 (Select over SUPPORTED_LANGUAGES only) versus :100-114 (Theme Select includes a 'system' item); grepped 'auto.detect|autoDetect' in stores/settingsStore.ts, no match
 
 **Suggested fix**
 
@@ -7506,7 +7506,7 @@ Add a 'System' entry to the language Select that resolves via navigator.language
 
 - `chatgpt_reference/091-chatgpt-macos-settings-general-permissions-full-access-defaults.png`
 
-### GAP-326 — One binding per action, no alternate combos and no mouse-button bindings
+### GAP-326, One binding per action, no alternate combos and no mouse-button bindings
 
 - **Status:** Open
 - **Owner:** Unassigned
@@ -7515,7 +7515,7 @@ Add a 'System' entry to the language Select that resolves via navigator.language
 
 **Gap**
 
-The reference stacks multiple bindings per action (New chat = ⌘N and ⇧⌘O; Next tab = ^Tab, ⇧⌘] and ⌥⌘Right) and accepts mouse buttons as bindings (Back = ⌘[ and 'Mouse Back'). agiworkforce stores customKeybindings as Record<string, string> — exactly one combo per shortcut id — and captureCombo reads only KeyboardEvent, so muscle memory carried over from another tool cannot be added alongside the default.
+The reference stacks multiple bindings per action (New chat = ⌘N and ⇧⌘O; Next tab = ^Tab, ⇧⌘] and ⌥⌘Right) and accepts mouse buttons as bindings (Back = ⌘[ and 'Mouse Back'). agiworkforce stores customKeybindings as Record<string, string>, exactly one combo per shortcut id, and captureCombo reads only KeyboardEvent, so muscle memory carried over from another tool cannot be added alongside the default.
 
 **Evidence**
 
@@ -7529,7 +7529,7 @@ Widen customKeybindings values to string[] (migrating existing single values), r
 
 - `chatgpt_reference/101-codex-macos-settings-keyboard-shortcuts-chat-navigation-basics.png`
 
-### GAP-327 — No visual assistant identity — persona selection exists for voice only
+### GAP-327, No visual assistant identity, persona selection exists for voice only
 
 - **Status:** Open
 - **Owner:** Unassigned
@@ -7538,11 +7538,11 @@ Widen customKeybindings values to string[] (migrating existing single values), r
 
 **Gap**
 
-The reference gives the assistant a selectable visual identity with a purpose ('Pets manage threads and surface what needs attention'), an avatar list with name + one-line character description + Select/Selected states, header Create and Wake actions, and a size slider. agiworkforce's closest analogue is VoicePersonaSelector, which uses the same row shape (name, description, sample) but only changes TTS voice — the assistant has no visual persona beyond the static AgiMark glyph in BrandedGreeting.
+The reference gives the assistant a selectable visual identity with a purpose ('Pets manage threads and surface what needs attention'), an avatar list with name + one-line character description + Select/Selected states, header Create and Wake actions, and a size slider. agiworkforce's closest analogue is VoicePersonaSelector, which uses the same row shape (name, description, sample) but only changes TTS voice, the assistant has no visual persona beyond the static AgiMark glyph in BrandedGreeting.
 
 **Evidence**
 
-apps/desktop/src/features/settings/VoicePersonaSelector.tsx:20-60 (professional/friendly/calm/energetic/storyteller/technical, each with description + samplePhrase, TTS only); apps/desktop/src/features/chat/BrandedGreeting.tsx (single AgiMark glyph); grepped 'avatar picker|companion|mascot' across apps/desktop features — no assistant-avatar surface
+apps/desktop/src/features/settings/VoicePersonaSelector.tsx:20-60 (professional/friendly/calm/energetic/storyteller/technical, each with description + samplePhrase, TTS only); apps/desktop/src/features/chat/BrandedGreeting.tsx (single AgiMark glyph); grepped 'avatar picker|companion|mascot' across apps/desktop features, no assistant-avatar surface
 
 **Suggested fix**
 
@@ -7552,16 +7552,16 @@ If the product wants an assistant identity, extend VoicePersonaSelector into a s
 
 - `chatgpt_reference/099-codex-macos-settings-pets-avatar-picker-list-top.png`
 
-### GAP-328 — Plugin rows use generic monochrome icons and one affordance class
+### GAP-328, Plugin rows use generic monochrome icons and one affordance class
 
 - **Status:** Open
 - **Owner:** Unassigned
 - **Surface/type:** desktop · visual-polish
-- **Reference:** Codex · VS Code extension · Settings — Plugins, mixed toggle/checkmark rows
+- **Reference:** Codex · VS Code extension · Settings, Plugins, mixed toggle/checkmark rows
 
 **Gap**
 
-Reference distinguishes two classes of entry in the same list — capability plugins with a real toggle versus installed catalogue/connector entries with a plain checkmark — and gives every row its own brand icon (GitHub, Google Drive, Vercel, Expo), which makes a 22-item list scannable. agiworkforce renders every plugin, command, skill and agent row with the same generic lucide glyph and the same affordance, so provenance and type are only readable from the section header.
+Reference distinguishes two classes of entry in the same list, capability plugins with a real toggle versus installed catalogue/connector entries with a plain checkmark, and gives every row its own brand icon (GitHub, Google Drive, Vercel, Expo), which makes a 22-item list scannable. agiworkforce renders every plugin, command, skill and agent row with the same generic lucide glyph and the same affordance, so provenance and type are only readable from the section header.
 
 **Evidence**
 
@@ -7575,7 +7575,7 @@ Carry an icon reference (or connector logo, reusing apps/web/features/connectors
 
 - `chatgpt_reference/022-codex-vscode-ext-settings-plugins-github-vercel-build-apps-checkmarks.png`
 
-### GAP-329 — Shortcut rows lack a secondary description line explaining what the action does
+### GAP-329, Shortcut rows lack a secondary description line explaining what the action does
 
 - **Status:** Open
 - **Owner:** Unassigned
@@ -7598,7 +7598,7 @@ Add an optional `detail` field to ShortcutDefinition, fill it for every entry, a
 
 - `chatgpt_reference/105-codex-macos-settings-keyboard-shortcuts-undo-redo-approve-close-tab.png`
 
-### GAP-330 — Global hotkeys are scattered across General and Voice instead of the shortcuts list
+### GAP-330, Global hotkeys are scattered across General and Voice instead of the shortcuts list
 
 - **Status:** Open
 - **Owner:** Unassigned
@@ -7621,7 +7621,7 @@ Surface the global hotkey and dictation hotkeys as rows in KeybindingsSettings u
 
 - `chatgpt_reference/107-codex-macos-settings-keyboard-shortcuts-browser-nav-dictation-window.png`
 
-### GAP-331 — No start/stop trace recording action for capturing a diagnostic bundle
+### GAP-331, No start/stop trace recording action for capturing a diagnostic bundle
 
 - **Status:** Open
 - **Owner:** Unassigned
@@ -7634,7 +7634,7 @@ Reference binds ⇧⌘S to 'Start Trace Recording' so a user can capture a repro
 
 **Evidence**
 
-searched 'trace recording', 'startTrace' and 'profiling' across apps/desktop/src — no match; nearest surfaces are apps/desktop/src/features/resource-monitor and features/analytics
+searched 'trace recording', 'startTrace' and 'profiling' across apps/desktop/src, no match; nearest surfaces are apps/desktop/src/features/resource-monitor and features/analytics
 
 **Suggested fix**
 
@@ -7644,7 +7644,7 @@ Add a Developer-tab 'Start trace recording' toggle plus a bindable shortcut that
 
 - `chatgpt_reference/108-codex-macos-settings-keyboard-shortcuts-chat-slots-file-tree-trace.png`
 
-### GAP-332 — No 'Usage limit resets' section with a 'No resets available' empty state
+### GAP-332, No 'Usage limit resets' section with a 'No resets available' empty state
 
 - **Status:** Open
 - **Owner:** Unassigned
@@ -7667,7 +7667,7 @@ Add a 'Usage limit resets' block under the usage bars listing each limit with it
 
 - `chatgpt_reference/109-codex-macos-settings-billing-plan-credits-usage-limits.png`
 
-### GAP-333 — Sidebar footer has no help entry point
+### GAP-333, Sidebar footer has no help entry point
 
 - **Status:** Open
 - **Owner:** Unassigned
@@ -7690,7 +7690,7 @@ Add a '?' button beside settings opening a help menu (docs, keyboard shortcuts o
 
 - `chatgpt_reference/083-codex-macos-sidebar-nav-projects-recent-chats.png`
 
-### GAP-334 — Sidebar toggle tooltip omits its keyboard shortcut
+### GAP-334, Sidebar toggle tooltip omits its keyboard shortcut
 
 - **Status:** Open
 - **Owner:** Unassigned
@@ -7713,7 +7713,7 @@ Use the Tooltip primitive with 'Toggle sidebar' plus the currently bound combo r
 
 - `chatgpt_reference/082-codex-macos-sidebar-nav-toggle-tooltip-projects-chats.png`
 
-### GAP-335 — No back/forward history navigation in the desktop title bar
+### GAP-335, No back/forward history navigation in the desktop title bar
 
 - **Status:** Open
 - **Owner:** Unassigned
@@ -7736,12 +7736,12 @@ Maintain a panel/conversation history stack in the shell and add back/forward bu
 
 - `chatgpt_reference/079-codex-macos-chat-empty-state-agiworkforce-quick-actions.png`
 
-### GAP-336 — No virtual 'Pet' companion personalization feature
+### GAP-336, No virtual 'Pet' companion personalization feature
 
 - **Status:** Not Planned
 - **Owner:** Unassigned
 - **Surface/type:** web · missing-screen
-- **Reference:** ChatGPT · web · Personalization — Pet companion
+- **Reference:** ChatGPT · web · Personalization, Pet companion
 
 **Gap**
 
@@ -7749,30 +7749,30 @@ Closed 2026-08-21. A virtual pet companion is a novelty with nothing load-bearin
 
 **Evidence**
 
-apps/mobile/src/features/companion/\* is a desktop-mobile device-pairing feature, not a virtual pet; searched '\bpet\b', 'Select pet', 'virtual pet' across apps/web, apps/mobile, apps/desktop — zero relevant matches
+apps/mobile/src/features/companion/\* is a desktop-mobile device-pairing feature, not a virtual pet; searched '\bpet\b', 'Select pet', 'virtual pet' across apps/web, apps/mobile, apps/desktop, zero relevant matches
 
 **Suggested fix**
 
-Low priority novelty feature — consider only if competitive engagement metrics justify it; not core to product parity.
+Low priority novelty feature, consider only if competitive engagement metrics justify it; not core to product parity.
 
 **Reference screenshot(s)**
 
 - `chatgpt_reference/126-chatgpt-web-settings-personalization-pet-about-you-fields.png`
 
-### GAP-337 — No connected-CLI device management or device-code auth (CLI itself is 'coming soon')
+### GAP-337, No connected-CLI device management or device-code auth (CLI itself is 'coming soon')
 
 - **Status:** Done
 - **Owner:** Unassigned
 - **Surface/type:** web · missing-feature
-- **Reference:** ChatGPT · web · Security and login — Secure sign in with ChatGPT (CLI connection)
+- **Reference:** ChatGPT · web · Security and login, Secure sign in with ChatGPT (CLI connection)
 
 **Gap**
 
-Closed 2026-08-21. Device-code auth already worked end to end and connected-device management shipped today as Linked devices. The remaining security TOGGLE now ships in Settings > Security, enforced in api/auth/device/approve — approval is the enforceable point because starting the flow is unauthenticated, and no approval means no token.
+Closed 2026-08-21. Device-code auth already worked end to end and connected-device management shipped today as Linked devices. The remaining security TOGGLE now ships in Settings > Security, enforced in api/auth/device/approve, approval is the enforceable point because starting the flow is unauthenticated, and no approval means no token.
 
 **Evidence**
 
-apps/web/app/cli/page.tsx ('AGI CLI · coming soon'); searched 'Disconnect', 'device code' in apps/web/features/settings — no security-page matches
+apps/web/app/cli/page.tsx ('AGI CLI · coming soon'); searched 'Disconnect', 'device code' in apps/web/features/settings, no security-page matches
 
 **Suggested fix**
 
@@ -7782,16 +7782,16 @@ Once the AGI CLI ships, add a 'Secure sign in with AGI' section to Settings > Se
 
 - `chatgpt_reference/142-chatgpt-web-settings-security-login-codex-cli-connection-device-code-auth.png`
 
-### GAP-338 — Active sessions / log-out-all-devices lives under Account, not Security and login
+### GAP-338, Active sessions / log-out-all-devices lives under Account, not Security and login
 
 - **Status:** Not Planned
 - **Owner:** Unassigned
 - **Surface/type:** web · missing-ia
-- **Reference:** ChatGPT · web · Security and login — Sessions IA placement
+- **Reference:** ChatGPT · web · Security and login, Sessions IA placement
 
 **Gap**
 
-Reference conflict, resolved 2026-08-21 in favour of the other reference. ChatGPT groups Active sessions under "Security and login"; claude.ai puts Trusted devices and Active sessions under ACCOUNT, where ours already lives — confirmed from a live capture. Moving it would trade parity with one reference for parity with the other and churn a working surface.
+Reference conflict, resolved 2026-08-21 in favour of the other reference. ChatGPT groups Active sessions under "Security and login"; claude.ai puts Trusted devices and Active sessions under ACCOUNT, where ours already lives, confirmed from a live capture. Moving it would trade parity with one reference for parity with the other and churn a working surface.
 
 **Evidence**
 
@@ -7805,12 +7805,12 @@ Move (or cross-link) the Active Sessions table into the Security and login secti
 
 - `chatgpt_reference/140-chatgpt-web-settings-security-login-password-passkeys-mfa-sessions.png`
 
-### GAP-339 — No keyboard-shortcuts entry point from the extension UI
+### GAP-339, No keyboard-shortcuts entry point from the extension UI
 
 - **Status:** Open
 - **Owner:** Unassigned
 - **Surface/type:** extension-vscode · missing-control
-- **Reference:** Codex · VS Code extension · Account dropdown — Keyboard shortcuts
+- **Reference:** Codex · VS Code extension · Account dropdown, Keyboard shortcuts
 
 **Gap**
 
@@ -7828,12 +7828,12 @@ Add a 'Keyboard shortcuts' row to the account QuickPick that runs workbench.acti
 
 - `chatgpt_reference/013-codex-vscode-ext-account-menu-profile-dropdown-settings-logout.png`
 
-### GAP-340 — No inline hint to switch to a terminal-based experience
+### GAP-340, No inline hint to switch to a terminal-based experience
 
 - **Status:** Open
 - **Owner:** Unassigned
 - **Surface/type:** extension-vscode · missing-copy
-- **Reference:** Claude · VS Code extension · Claude Code panel — 'Prefer the Terminal experience?' banner
+- **Reference:** Claude · VS Code extension · Claude Code panel, 'Prefer the Terminal experience?' banner
 
 **Gap**
 
@@ -7851,16 +7851,16 @@ Once a terminal/native UI toggle is added (see the useTerminal gap), surface a m
 
 - `claude_reference/132-claude-code-vscode-ext-extension-empty-state-antigravity-fable-5-banner.png`
 
-### GAP-341 — No UI language control in the IDE surface
+### GAP-341, No UI language control in the IDE surface
 
 - **Status:** Open
 - **Owner:** Unassigned
 - **Surface/type:** extension-vscode · missing-control
-- **Reference:** Codex · VS Code extension · Settings — General, Language
+- **Reference:** Codex · VS Code extension · Settings, General, Language
 
 **Gap**
 
-Reference offers 'Language — Language for the app UI' with an Auto detect default. agiworkforce has a language selector on web and voice-language on mobile, but the VS Code extension has no language concept and hardcodes English strings in the webview.
+Reference offers 'Language, Language for the app UI' with an Auto detect default. agiworkforce has a language selector on web and voice-language on mobile, but the VS Code extension has no language concept and hardcodes English strings in the webview.
 
 **Evidence**
 
@@ -7874,16 +7874,16 @@ Honour vscode.env.language for extension-authored strings (or an agiWorkforce.la
 
 - `chatgpt_reference/014-codex-vscode-ext-settings-general-language-speed-composer.png`
 
-### GAP-342 — No response personality/tone preset on any surface
+### GAP-342, No response personality/tone preset on any surface
 
 - **Status:** Open
 - **Owner:** Unassigned
 - **Surface/type:** extension-vscode · missing-control
-- **Reference:** Codex · VS Code extension · Settings — Personalization, Personality
+- **Reference:** Codex · VS Code extension · Settings, Personalization, Personality
 
 **Gap**
 
-Reference offers a named tone preset ('Pragmatic') with an honest caveat banner that personality is not supported by every model and that tone can also be set in custom instructions. agiworkforce has no personality concept anywhere — tone can only be described in free-text custom instructions on desktop/web.
+Reference offers a named tone preset ('Pragmatic') with an honest caveat banner that personality is not supported by every model and that tone can also be set in custom instructions. agiworkforce has no personality concept anywhere, tone can only be described in free-text custom instructions on desktop/web.
 
 **Evidence**
 
