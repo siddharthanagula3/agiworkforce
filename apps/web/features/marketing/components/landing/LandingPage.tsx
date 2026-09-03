@@ -1,197 +1,310 @@
+import Link from 'next/link';
+import type { CSSProperties } from 'react';
 import {
   Button,
   ButtonRow,
-  HeroHeadline,
-  Ledger,
   MarketingFooter,
   MarketingHeader,
   MotionReveal,
   ProductFrame,
-  Prose,
-  Section,
-  Stack,
-  StickyLedger,
-  SurfaceStatus,
-  WEB_ENTRY_HREF,
 } from '../system';
-import { RouteReceipt } from './RouteReceipt';
+import { HeroConsole } from './HeroConsole';
+import { RouterBoard } from './RouterBoard';
 import {
-  CAPABILITIES,
-  ENTERPRISE_ROWS,
-  HERO_QUESTION,
-  HERO_ROUTES,
-  LANE_PANELS,
+  CLI_TRANSCRIPT,
+  CLOSE,
+  FACTS,
+  HERO,
+  LANES,
+  LANE_MARKS,
+  MOBILE_SHOT,
+  MOMENTS,
+  PLANS,
+  ROUTER,
   SURFACES,
-  TIERS,
+  SURFACES_SECTION,
+  WEB_SHOT,
 } from './landing-content';
+import './landing.css';
 
-const HERO_TITLE_ID = 'agi-landing-hero-title';
-const CLI_HREF = '/download';
-const PRICING_HREF = '/pricing';
-const ENTERPRISE_HREF = '/enterprise';
+const IDS = {
+  hero: 'agi-landing-hero-title',
+  router: 'agi-landing-router-title',
+  lanes: 'agi-landing-lanes-title',
+  surfaces: 'agi-landing-surfaces-title',
+  moments: 'agi-landing-moments-title',
+  plans: 'agi-landing-plans-title',
+  close: 'agi-landing-close-title',
+} as const;
+
+const stagger = (position: number) => ({ '--i': position }) as CSSProperties;
+const BROWSER_DOTS = 3;
+
+function Heading({
+  id,
+  eyebrow,
+  title,
+  accent,
+}: {
+  id: string;
+  eyebrow: string;
+  title: string;
+  accent: string;
+}) {
+  return (
+    <div className="agi-lp-heading">
+      <p className="agi-lp-eyebrow">{eyebrow}</p>
+      <h2 className="agi-lp-h2" id={id}>
+        {title} <em className="agi-lp-accent">{accent}</em>
+      </h2>
+    </div>
+  );
+}
 
 export function LandingPage() {
   return (
     <div data-design="agi" className="agi-ds-page agi-landing">
       <MarketingHeader />
       <main id="main-content">
-        <section className="agi-ds-section agi-ds-hero" aria-labelledby={HERO_TITLE_ID}>
-          <div className="agi-ds-container">
-            <Stack gap="loose" className="agi-ds-hero-stack">
-              <HeroHeadline id={HERO_TITLE_ID} text={HERO_QUESTION} />
-              <div className="agi-ds-receipt-row">
-                {HERO_ROUTES.map((route) => (
-                  <RouteReceipt
-                    lane={route.lane}
-                    detail={route.detail}
-                    note={route.note}
-                    key={route.lane}
-                  />
+        <section className="agi-lp-hero" aria-labelledby={IDS.hero}>
+          <div className="agi-ds-container agi-lp-hero-grid">
+            <div className="agi-lp-hero-copy">
+              <p className="agi-lp-eyebrow" style={stagger(0)}>
+                {HERO.eyebrow}
+              </p>
+              <h1 className="agi-lp-h1" id={IDS.hero} style={stagger(1)}>
+                {HERO.lines.map((line) => (
+                  <span className="agi-lp-line" key={line}>
+                    {line}
+                  </span>
                 ))}
+                <em className="agi-lp-accent">{HERO.accent}</em>
+              </h1>
+              <p className="agi-lp-lede" style={stagger(2)}>
+                {HERO.lede}
+              </p>
+              <div style={stagger(3)}>
+                <ButtonRow>
+                  <Button href={HERO.primary.href}>{HERO.primary.label}</Button>
+                  <Button href={HERO.secondary.href} variant="secondary">
+                    {HERO.secondary.label}
+                  </Button>
+                </ButtonRow>
               </div>
-              <ButtonRow>
-                <Button href={WEB_ENTRY_HREF}>Try AGI Web</Button>
-                <Button href={CLI_HREF} variant="secondary">
-                  Get the CLI
-                </Button>
-              </ButtonRow>
-            </Stack>
+            </div>
+            <div className="agi-lp-hero-stage">
+              <HeroConsole />
+            </div>
           </div>
         </section>
 
-        <Section id="where-it-runs" labelledBy="agi-landing-lanes-title" rule size="lg">
-          <StickyLedger
-            heading={
-              <h2 className="agi-ds-h2" id="agi-landing-lanes-title">
-                One account. Three places the work can run.
-              </h2>
-            }
-            panels={LANE_PANELS.map((panel) => ({
-              lane: panel.lane,
-              title: panel.title,
-              body: (
-                <Stack>
-                  <h3 className="agi-ds-h3">{panel.title}</h3>
-                  <Prose size="sm">{panel.summary}</Prose>
-                  <Ledger rows={panel.rows} caption={panel.title} />
-                </Stack>
-              ),
-            }))}
-          />
-        </Section>
+        <div className="agi-lp-factline">
+          <ul className="agi-ds-container agi-lp-factline-list">
+            {FACTS.map((fact) => (
+              <li key={fact}>{fact}</li>
+            ))}
+          </ul>
+        </div>
 
-        <Section id="surfaces" labelledBy="agi-landing-surfaces-title" rule ground="2">
-          <div className="agi-ds-split">
-            <Stack>
-              <h2 className="agi-ds-h2" id="agi-landing-surfaces-title">
-                What you can install today.
-              </h2>
-              <Prose size="sm">
-                Every line states its own release state. The download page is the source, and it
-                reads the published release rather than a claim typed on this page.
-              </Prose>
-            </Stack>
-            <div className="agi-ds-full">
-              {SURFACES.map((surface) => (
-                <SurfaceStatus key={surface.name} {...surface} />
-              ))}
-            </div>
-          </div>
-        </Section>
-
-        <Section id="capabilities" labelledBy="agi-landing-capabilities-title" rule size="lg">
-          <Stack gap="loose">
-            <h2 className="agi-ds-h2" id="agi-landing-capabilities-title">
-              Screens from the running product.
-            </h2>
-            <div className="agi-ds-grid-2">
-              {CAPABILITIES.map((capability, index) => (
-                <MotionReveal key={capability.title} delay={index % 2 === 0 ? 0 : 0.08}>
-                  <Stack>
-                    <h3 className="agi-ds-h3">{capability.title}</h3>
-                    <Prose size="sm">{capability.body}</Prose>
-                    <ProductFrame
-                      light={capability.image.light}
-                      dark={capability.image.dark}
-                      alt={capability.image.alt}
-                      width={capability.image.width}
-                      height={capability.image.height}
-                      caption={capability.caption}
-                    />
-                  </Stack>
-                </MotionReveal>
-              ))}
-            </div>
-          </Stack>
-        </Section>
-
-        <Section id="pricing" labelledBy="agi-landing-pricing-title" rule ground="2">
-          <Stack gap="loose">
-            <h2 className="agi-ds-h2" id="agi-landing-pricing-title">
-              Pay only for the cloud lane.
-            </h2>
-            <Prose>
-              Local costs nothing and your own key is billed by your own provider. These plans buy
-              capacity on ours.
-            </Prose>
-            <div className="agi-ds-tier-grid">
-              {TIERS.map((tier) => (
-                <div
-                  className="agi-ds-tier"
-                  data-recommended={tier.recommended ? 'true' : 'false'}
-                  key={tier.name}
-                >
-                  <div className="agi-ds-tier-head">
-                    <span className="agi-ds-tier-name">{tier.name}</span>
-                    {tier.recommended ? (
-                      <span className="agi-ds-tier-mark">Recommended</span>
-                    ) : null}
+        <section className="agi-lp-section" aria-labelledby={IDS.router}>
+          <div className="agi-ds-container agi-lp-router-grid">
+            <div className="agi-lp-router-copy">
+              <Heading
+                id={IDS.router}
+                eyebrow={ROUTER.eyebrow}
+                title={ROUTER.title}
+                accent={ROUTER.accent}
+              />
+              <dl className="agi-lp-policies">
+                {ROUTER.policies.map((policy) => (
+                  <div key={policy.label}>
+                    <dt>{policy.label}</dt>
+                    <dd>{policy.body}</dd>
                   </div>
-                  <span className="agi-ds-tier-price">{tier.price}</span>
-                  <Prose size="sm">{tier.cadence}</Prose>
-                  <Prose size="sm" tone="ink">
-                    {tier.detail}
-                  </Prose>
-                </div>
+                ))}
+              </dl>
+            </div>
+            <RouterBoard />
+          </div>
+        </section>
+
+        <section className="agi-lp-section" aria-labelledby={IDS.lanes}>
+          <div className="agi-ds-container">
+            <Heading
+              id={IDS.lanes}
+              eyebrow={LANES.eyebrow}
+              title={LANES.title}
+              accent={LANES.accent}
+            />
+            <div className="agi-lp-lane-grid">
+              {LANES.columns.map((column, columnIndex) => (
+                <article className="agi-lp-lane-col" key={column.lane} data-lane={column.lane}>
+                  <header className="agi-lp-lane-head">
+                    <p className="agi-lp-lane-name">
+                      <span className="agi-lp-receipt-mark" aria-hidden="true">
+                        {LANE_MARKS[column.lane]}
+                      </span>
+                      {column.lane}
+                    </p>
+                    <h3 className="agi-lp-lane-title">{column.title}</h3>
+                  </header>
+                  {LANES.rows.map((row) => (
+                    <dl className="agi-lp-fact" key={row.label}>
+                      <dt>{row.label}</dt>
+                      <dd>{row.values[columnIndex]}</dd>
+                    </dl>
+                  ))}
+                  <Link href={column.cta.href} className="agi-lp-lane-link">
+                    {column.cta.label}
+                  </Link>
+                </article>
               ))}
             </div>
-            <Button href={PRICING_HREF} variant="secondary">
-              See the full matrix
-            </Button>
-          </Stack>
-        </Section>
-
-        <Section id="enterprise" labelledBy="agi-landing-enterprise-title" rule>
-          <div className="agi-ds-split">
-            <Stack>
-              <h2 className="agi-ds-h2" id="agi-landing-enterprise-title">
-                What we hold, and what we do not.
-              </h2>
-              <Button href={ENTERPRISE_HREF} variant="secondary">
-                Read the enterprise page
-              </Button>
-            </Stack>
-            <Ledger rows={ENTERPRISE_ROWS} caption="Enterprise posture" />
           </div>
-        </Section>
+        </section>
 
-        <Section id="start" labelledBy="agi-landing-cta-title" rule size="lg" ground="2">
-          <Stack gap="loose">
-            <h2 className="agi-ds-h2" id="agi-landing-cta-title">
-              Start on the web, then move a session anywhere.
-            </h2>
-            <Prose>
-              AGI Web needs no install. The CLI is signed and downloadable now. Whichever you open,
-              the answer says which computer produced it.
-            </Prose>
-            <ButtonRow>
-              <Button href={WEB_ENTRY_HREF}>Try AGI Web</Button>
-              <Button href={CLI_HREF} variant="secondary">
-                Get the CLI
-              </Button>
-            </ButtonRow>
-          </Stack>
-        </Section>
+        <section className="agi-lp-section" aria-labelledby={IDS.surfaces}>
+          <div className="agi-ds-container">
+            <div className="agi-lp-heading-split">
+              <Heading
+                id={IDS.surfaces}
+                eyebrow={SURFACES_SECTION.eyebrow}
+                title={SURFACES_SECTION.title}
+                accent={SURFACES_SECTION.accent}
+              />
+              <p className="agi-lp-lede">{SURFACES_SECTION.lede}</p>
+            </div>
+            <MotionReveal>
+              <div className="agi-lp-browser">
+                <div className="agi-lp-browser-bar" aria-hidden="true">
+                  <span className="agi-lp-browser-dots">
+                    {Array.from({ length: BROWSER_DOTS }, (_, position) => (
+                      <i key={position} />
+                    ))}
+                  </span>
+                  <span>{WEB_SHOT.url}</span>
+                </div>
+                <ProductFrame
+                  light={WEB_SHOT.light}
+                  dark={WEB_SHOT.dark}
+                  alt={WEB_SHOT.alt}
+                  width={WEB_SHOT.width}
+                  height={WEB_SHOT.height}
+                />
+              </div>
+            </MotionReveal>
+            <div className="agi-lp-surface-row">
+              <MotionReveal>
+                <pre className="agi-lp-terminal" aria-label="A real AGI CLI session">
+                  {CLI_TRANSCRIPT.map((line) => (
+                    <span className="agi-lp-terminal-line" data-kind={line.kind} key={line.text}>
+                      {line.text}
+                    </span>
+                  ))}
+                </pre>
+              </MotionReveal>
+              <MotionReveal delay={0.1}>
+                <div className="agi-lp-phone">
+                  <ProductFrame
+                    light={MOBILE_SHOT.light}
+                    dark={MOBILE_SHOT.dark}
+                    alt={MOBILE_SHOT.alt}
+                    width={MOBILE_SHOT.width}
+                    height={MOBILE_SHOT.height}
+                  />
+                </div>
+              </MotionReveal>
+            </div>
+            <ul className="agi-lp-release">
+              {SURFACES.map((surface) => (
+                <li key={surface.name} data-live={surface.live}>
+                  <div>
+                    <Link href={surface.href} className="agi-lp-release-name">
+                      {surface.name}
+                    </Link>
+                    <span className="agi-lp-release-kind">{surface.kind}</span>
+                  </div>
+                  <p className="agi-lp-release-blurb">{surface.blurb}</p>
+                  <span className="agi-lp-release-status">{surface.status}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        </section>
+
+        <section className="agi-lp-section" aria-labelledby={IDS.moments}>
+          <div className="agi-ds-container">
+            <Heading
+              id={IDS.moments}
+              eyebrow={MOMENTS.eyebrow}
+              title={MOMENTS.title}
+              accent={MOMENTS.accent}
+            />
+            <div className="agi-lp-moments">
+              {MOMENTS.items.map((moment) => (
+                <article className="agi-lp-moment" key={moment.title}>
+                  <div className="agi-lp-moment-copy">
+                    <h3 className="agi-lp-moment-title">{moment.title}</h3>
+                    <p className="agi-lp-moment-body">{moment.body}</p>
+                  </div>
+                  <MotionReveal>
+                    <ProductFrame
+                      light={moment.image.light}
+                      dark={moment.image.dark}
+                      alt={moment.image.alt}
+                      width={moment.image.width}
+                      height={moment.image.height}
+                      caption={moment.caption}
+                    />
+                  </MotionReveal>
+                </article>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        <section className="agi-lp-section agi-lp-plans" aria-labelledby={IDS.plans}>
+          <div className="agi-ds-container agi-lp-plans-grid">
+            <div className="agi-lp-plans-copy">
+              <h2 className="agi-lp-h3" id={IDS.plans}>
+                {PLANS.title}
+              </h2>
+              <p className="agi-lp-moment-body">{PLANS.body}</p>
+              <Link href={PLANS.cta.href} className="agi-lp-lane-link">
+                {PLANS.cta.label}
+              </Link>
+            </div>
+            <ul className="agi-lp-tiers">
+              {PLANS.tiers.map((tier) => (
+                <li className="agi-lp-tier" key={tier.name}>
+                  <span className="agi-lp-tier-name">{tier.name}</span>
+                  <span className="agi-lp-tier-price">{tier.price}</span>
+                  <span className="agi-lp-tier-cadence">{tier.cadence}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        </section>
+
+        <section className="agi-lp-close" aria-labelledby={IDS.close}>
+          <div className="agi-ds-container">
+            <div className="agi-lp-close-inner">
+              <h2 className="agi-lp-h2" id={IDS.close}>
+                {CLOSE.title} <em className="agi-lp-accent">{CLOSE.accent}</em>
+              </h2>
+              <p className="agi-lp-lede">{CLOSE.body}</p>
+              <ButtonRow>
+                <Button href={HERO.primary.href}>{HERO.primary.label}</Button>
+                <Button href={HERO.secondary.href} variant="secondary">
+                  {HERO.secondary.label}
+                </Button>
+              </ButtonRow>
+            </div>
+            <span className="agi-lp-watermark" aria-hidden="true">
+              AGI
+            </span>
+          </div>
+        </section>
       </main>
       <MarketingFooter />
     </div>
