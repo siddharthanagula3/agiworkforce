@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { requireProviderDefaultModel } from '@agiworkforce/types';
 import {
   effectiveRouteHealth,
   emptyRuntimeState,
@@ -6,8 +7,8 @@ import {
   type RouteHealthSnapshot,
 } from '../runtime-state';
 
-const ROUTE_ID = 'anthropic/claude-sonnet-5';
 const PROVIDER_ID = 'anthropic';
+const ROUTE_ID = `${PROVIDER_ID}/${requireProviderDefaultModel(PROVIDER_ID)}`;
 
 function snapshot(overrides: Partial<RouteHealthSnapshot> = {}): RouteHealthSnapshot {
   return {
