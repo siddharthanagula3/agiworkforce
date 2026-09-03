@@ -51,8 +51,6 @@ if [[ "$MODE" == "all" || "$MODE" == "fast" || "$MODE" == "desktop" ]]; then
   step "desktop:typecheck" pnpm --filter @agiworkforce/desktop typecheck
   step "desktop:test"      pnpm --filter @agiworkforce/desktop test
   if [[ "$MODE" == "all" ]]; then
-    # Skip Tauri bundle build by default — it requires Rust + native deps and
-    # takes minutes. Caller can opt-in with MODE=desktop-build.
     :
   fi
 fi
@@ -73,7 +71,6 @@ fi
 if [[ "$MODE" == "all" || "$MODE" == "fast" || "$MODE" == "mobile" ]]; then
   step "mobile:typecheck"  pnpm --filter @agiworkforce/mobile typecheck
   step "mobile:test"       pnpm --filter @agiworkforce/mobile test
-  # iOS/Android binary builds need Xcode/Android Studio — never run from this script.
 fi
 
 # --- Chrome extension (MV3) ---

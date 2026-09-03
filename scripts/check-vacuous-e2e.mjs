@@ -49,7 +49,7 @@ const errors = [];
 for (const { rel, tests, skips } of vacuous) {
   if (rel in KNOWN) continue;
   errors.push(
-    `${rel}: ${tests} test(s), ${skips} conditional skip(s) — every test can skip itself, so ` +
+    `${rel}: ${tests} test(s), ${skips} conditional skip(s), every test can skip itself, so ` +
       `this suite reports green while asserting nothing.`,
   );
 }
@@ -59,7 +59,7 @@ for (const rel of Object.keys(KNOWN)) {
   if (!found.has(rel)) {
     errors.push(
       `${rel}: listed as a known vacuous suite but no longer matches. If it was repaired, delete ` +
-        `the entry — this list only shrinks.`,
+        `the entry, this list only shrinks.`,
     );
   }
 }

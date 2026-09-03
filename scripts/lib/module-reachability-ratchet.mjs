@@ -7,7 +7,7 @@ export function checkBaselineCeiling({ label, knownUnreachable, ceiling }) {
   if (size > ceiling) {
     return [
       `${label}: unreachable baseline grew from ${ceiling} to ${size}. ` +
-        'Route the module from an entry point or delete it — the baseline only ratchets down.',
+        'Route the module from an entry point or delete it, the baseline only ratchets down.',
     ];
   }
   if (size < ceiling) {

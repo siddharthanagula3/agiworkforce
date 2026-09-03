@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "reason": "Inventory of skipped or ignored tests that carry no justification at the call site. A skip is self-justifying when it is a Rust #[ignore = \"reason\"] or when an llm-guardrail-allow: comment sits within two lines of it; everything else must be declared here with a reason and an owning register row. check:llm-failures counts the whole tree on every run, fails on any undeclared skip, and fails on any entry whose declared count exceeds what still reproduces — so this list only ratchets down.",
+  "reason": "Inventory of skipped or ignored tests that carry no justification at the call site. A skip is self-justifying when it is a Rust #[ignore = \"reason\"] or when an llm-guardrail-allow: comment sits within two lines of it; everything else must be declared here with a reason and an owning register row. check:llm-failures counts the whole tree on every run, fails on any undeclared skip, and fails on any entry whose declared count exceeds what still reproduces, so this list only ratchets down.",
   "debt": [
     {
       "path": "apps/desktop/e2e/settings.spec.ts",

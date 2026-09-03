@@ -66,7 +66,7 @@ function main() {
   const tracked = TRACKED_STALE.filter(existsSync);
   const caches = CACHE_STALE.filter(existsSync);
 
-  console.log('# Tracked stale (git rm -r — recoverable from history)');
+  console.log('# Tracked stale (git rm -r, recoverable from history)');
   for (const p of tracked) {
     guard(p);
     console.log(`  ${apply ? 'removing' : 'git rm -r'} ${p}  (${countFiles(p)} files)`);
@@ -87,7 +87,7 @@ function main() {
     console.log(
       `\n${total} path(s) planned. Re-run with --apply in a git env, then commit.\n` +
         `Protected (never touched): ${KEEP.join(', ')}.\n` +
-        `Note: review other docs/ subfolders (plans, research, launch, etc.) manually — not auto-removed.`,
+        `Note: review other docs/ subfolders (plans, research, launch, etc.) manually, not auto-removed.`,
     );
   }
 }

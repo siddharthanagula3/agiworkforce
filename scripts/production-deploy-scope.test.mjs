@@ -112,9 +112,6 @@ test('the sandbox origin has a CI deploy path gated on the CI-verified commit', 
   // Same pinned CLI as the web promotion; an unpinned global dies at packaging.
   assert.match(workflow, /npm install --global vercel@58\.4\.0/);
 
-  // The deploy target is read from a TRACKED file in the repo, never inherited
-  // from the web environment's VERCEL_PROJECT_ID — a sandbox deploy carrying
-  // that one publishes these files into the web project.
   const link = JSON.parse(fs.readFileSync('infrastructure/sandbox/deploy-target.json', 'utf8'));
   assert.equal(link.projectName, 'agiworkforce-sandbox');
   assert.match(link.projectId, /^prj_/);
@@ -128,11 +125,6 @@ test('the sandbox origin has a CI deploy path gated on the CI-verified commit', 
 });
 
 test('no CI-executed path reads the git-ignored Vercel link directory', () => {
-  // .gitignore matches `.vercel`, so that directory exists only in the working
-  // tree of whoever last ran `vercel link`. A fresh CI checkout ENOENTs on it —
-  // and because this very file is the `scope` job's self-test, and deploy-web
-  // declares `needs: scope`, such a read takes the WEB promotion down with it.
-  // Split so this assertion cannot match itself.
   const ignoredLinkDir = `.${'vercel'}/`;
 
   for (const path of [

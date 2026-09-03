@@ -1,14 +1,4 @@
 #!/usr/bin/env bash
-# scripts/publish-cli.sh — Publish @agiworkforce/cli + 6 platform binaries to npm.
-#
-# Prerequisites:
-#   - NPM_TOKEN env var (or `npm login` already done)
-#   - Built binaries at target/{platform}/release/agi and target/{platform}/release/agiworkforce
-#   - You're on a clean git tree at a tagged commit (e.g. v-cli-1.0.0)
-#
-# Usage:
-#   ./scripts/publish-cli.sh         # package dry-run, then interactive confirm
-#   ./scripts/publish-cli.sh --yes   # package dry-run, then skip confirm
 
 set -euo pipefail
 
@@ -51,7 +41,7 @@ PLATFORMS=(
 for platform in "${PLATFORMS[@]}"; do
   bin_dir="dist/cli/$platform"
   if [ ! -d "$bin_dir" ]; then
-    echo "ERROR: missing $bin_dir/ — build platform binaries first via release-cli.yml CI"
+    echo "ERROR: missing $bin_dir/, build platform binaries first via release-cli.yml CI"
     echo "       or scripts/build-cli-binaries.sh"
     exit 1
   fi
@@ -67,7 +57,7 @@ for platform in "${PLATFORMS[@]}"; do
 {
   "name": "$pkg_name",
   "version": "$VERSION",
-  "description": "AGI Workforce CLI — native binary for $platform",
+  "description": "AGI Workforce CLI, native binary for $platform",
   "license": "Proprietary",
   "os": ["${platform%-*}"],
   "cpu": ["${platform##*-}"],

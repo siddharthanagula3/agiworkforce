@@ -75,7 +75,7 @@ const blockedLiveDirs = [
 
 for (const dir of blockedLiveDirs) {
   if (exists(dir) && hasFiles(dir)) {
-    errors.push(`${dir} is historical evidence; delete it — git history is the archive`);
+    errors.push(`${dir} is historical evidence; delete it, git history is the archive`);
   }
 }
 
@@ -88,13 +88,13 @@ const blockedLiveFiles = [
 
 for (const file of blockedLiveFiles) {
   if (exists(file)) {
-    errors.push(`${file} is historical evidence; delete it — git history is the archive`);
+    errors.push(`${file} is historical evidence; delete it, git history is the archive`);
   }
 }
 
 for (const file of listFilesRecursive('tasks/team-status')) {
   if (file.endsWith('.txt')) {
-    errors.push(`${file} is raw historical output; delete it — git history is the archive`);
+    errors.push(`${file} is raw historical output; delete it, git history is the archive`);
   }
 }
 

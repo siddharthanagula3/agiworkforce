@@ -116,7 +116,6 @@ def process_cargo_toml(cargo_path: Path, ws_deps: dict):
         m = re.match(r'^(\s*)([\w-]+)\s*=\s*\{\s*workspace\s*=\s*true(.*)\}', line)
         if m:
             indent, dep_name, extras = m.group(1), m.group(2), m.group(3).strip()
-            # extras may be ", features = [...]" etc — strip leading comma
             extras = re.sub(r'^,\s*', '', extras)
             if extras:
                 extras = ", " + extras

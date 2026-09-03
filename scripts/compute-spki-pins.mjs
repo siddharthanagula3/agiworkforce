@@ -115,7 +115,7 @@ function selectPins(chain, depth) {
 }
 
 function printPinsByHostBlock(results, depth) {
-  console.log('// apps/mobile/lib/pinning.ts — replace the PINS_BY_HOST literal with:');
+  console.log('// apps/mobile/lib/pinning.ts, replace the PINS_BY_HOST literal with:');
   console.log('export const PINS_BY_HOST: PinTable = Object.freeze({');
   for (const { host, chain } of results) {
     console.log(`  '${host}': [`);
@@ -131,7 +131,7 @@ function printNativeBlocks(results, depth) {
   );
   const pins = pinConfig.provisionedPins(table);
 
-  console.log('\n// ios Info.plist — NSAppTransportSecurity, as the plugin would emit it:');
+  console.log('\n// ios Info.plist, NSAppTransportSecurity, as the plugin would emit it:');
   console.log(JSON.stringify({ NSPinnedDomains: pinConfig.iosPinnedDomains(pins) }, null, 2));
 
   console.log('\n<!-- android/app/src/main/res/xml/network_security_config.xml -->');
@@ -139,7 +139,7 @@ function printNativeBlocks(results, depth) {
 
   console.log(
     '\n// Neither block is written by hand. Both are generated at prebuild once\n' +
-      "// './native/withAGITlsPinning.cjs' is in the plugins array of apps/mobile/app.config.js —\n" +
+      "// './native/withAGITlsPinning.cjs' is in the plugins array of apps/mobile/app.config.js, \n" +
       '// register it BEFORE pasting the table below (with placeholders it emits nothing, so\n' +
       '// registering it changes no build output). Without it the pins are inert: nothing in the\n' +
       '// built app compares a certificate to anything. They are printed here for review only.',

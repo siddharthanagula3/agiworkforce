@@ -6,14 +6,14 @@
     "dismissal lives here, and every dismissal names an owner, an expiry and a reason.",
     "A finding with no entry fails CI. An entry past its expiry fails CI even though the",
     "finding still matches, so an acceptance cannot outlive the triage that justified it.",
-    "An entry that matches nothing fails CI as stale — an acceptance nobody can point at",
+    "An entry that matches nothing fails CI as stale, an acceptance nobody can point at",
     "reads as reviewed when it is not.",
     "",
     "Omit \"paths\" to accept a rule repository-wide. A \"paths\" entry matches an exact",
     "repository-relative file, or a directory when the value ends in \"/\".",
     "",
     "Triaged on 2026-08-17 against semgrep 1.172.0 with p/security-audit, p/typescript",
-    "and p/owasp-top-ten — the exact configuration the CI step runs."
+    "and p/owasp-top-ten, the exact configuration the CI step runs."
   ],
   "entries": [
     {
@@ -41,7 +41,7 @@
       ],
       "owner": "@siddhartha",
       "expires": "2027-02-28",
-      "reason": "Test fixtures only. The values are synthetic and authenticate nothing; scripts/check-secrets.mjs is the blocking gate for real credential shapes. Scoped by path on purpose — the same rule firing in production code must fail."
+      "reason": "Test fixtures only. The values are synthetic and authenticate nothing; scripts/check-secrets.mjs is the blocking gate for real credential shapes. Scoped by path on purpose, the same rule firing in production code must fail."
     },
     {
       "rule": "typescript.react.security.audit.react-dangerouslysetinnerhtml.react-dangerouslysetinnerhtml",
@@ -86,7 +86,7 @@
       "paths": ["pnpm-workspace.yaml", "apps/web/pnpm-workspace.yaml"],
       "owner": "@siddhartha",
       "expires": "2026-11-30",
-      "reason": "Same supply-chain hardening track. Blocking git/tarball sub-dependencies needs the resolved graph audited first — the Rust side already denies non-crates.io sources in deny.toml."
+      "reason": "Same supply-chain hardening track. Blocking git/tarball sub-dependencies needs the resolved graph audited first, the Rust side already denies non-crates.io sources in deny.toml."
     },
     {
       "rule": "package_managers.uv.uv-missing-dependency-cooldown.uv-missing-dependency-cooldown",

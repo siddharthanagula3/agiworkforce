@@ -109,7 +109,7 @@ export function formatAttributionReport({ baseline, headSha, report }) {
       entry.verdict === 'regression'
         ? `introduced by \`${entry.introducedBy}\``
         : entry.verdict === 'pre-existing'
-          ? `pre-existing at ${baseline.commit}${entry.evidence ? ` — ${entry.evidence}` : ''}`
+          ? `pre-existing at ${baseline.commit}${entry.evidence ? `, ${entry.evidence}` : ''}`
           : entry.reason;
     lines.push(`| ${entry.gate} | ${entry.verdict} | ${attribution} |`);
   }
@@ -118,7 +118,7 @@ export function formatAttributionReport({ baseline, headSha, report }) {
   if (undeclared.length > 0) {
     lines.push(
       '',
-      `Undeclared pre-existing gates — add them to \`${BASELINE_FILE}\` with evidence: ${undeclared
+      `Undeclared pre-existing gates, add them to \`${BASELINE_FILE}\` with evidence: ${undeclared
         .map((entry) => entry.gate)
         .join(', ')}.`,
     );
@@ -128,7 +128,7 @@ export function formatAttributionReport({ baseline, headSha, report }) {
   if (overclaimed.length > 0) {
     lines.push(
       '',
-      `Declared pre-existing but green at the baseline — these are regressions: ${overclaimed
+      `Declared pre-existing but green at the baseline, these are regressions: ${overclaimed
         .map((entry) => entry.gate)
         .join(', ')}.`,
     );

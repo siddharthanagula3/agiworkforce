@@ -519,7 +519,7 @@ function formatViolationSummary(violations, details) {
         .sort(([left], [right]) => left.localeCompare(right))
         .map(([id, count]) => `${id} x${count}`)
         .join(', ');
-      lines.push(`- ${file}: ${summary.count} occurrence(s) — ${counts}`);
+      lines.push(`- ${file}: ${summary.count} occurrence(s), ${counts}`);
     }
     lines.push('', 'Run with --details for exact line and column locations.');
   }

@@ -199,7 +199,7 @@ export function renderUiGapsMarkdown(records, csv) {
     lines.push(`## ${severity}`, '');
     for (const record of records.filter((candidate) => candidate.severity === severity)) {
       lines.push(
-        `### ${record.id} — ${inline(record.title)}`,
+        `### ${record.id}, ${inline(record.title)}`,
         '',
         `- **Status:** ${record.status}`,
         `- **Owner:** ${ownerLabel(record.owner)}`,

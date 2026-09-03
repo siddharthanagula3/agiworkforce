@@ -325,7 +325,7 @@ export function diffSkipRatchet(actual, debt, { detectStale = true } = {}) {
     const allowed = declared.get(file) ?? 0;
     if (count > allowed) {
       violations.push(
-        `${file} has ${count} undeclared skipped/ignored test(s) (${allowed} declared in ${SKIP_RATCHET_PATH}) — give each an inline reason, an llm-guardrail-allow: annotation, or declare it as tracked debt`,
+        `${file} has ${count} undeclared skipped/ignored test(s) (${allowed} declared in ${SKIP_RATCHET_PATH}), give each an inline reason, an llm-guardrail-allow: annotation, or declare it as tracked debt`,
       );
     }
   }
@@ -335,7 +335,7 @@ export function diffSkipRatchet(actual, debt, { detectStale = true } = {}) {
     const count = actual.get(file) ?? 0;
     if (count < allowed) {
       violations.push(
-        `${SKIP_RATCHET_PATH} declares ${allowed} unjustified skip(s) for ${file} but ${count} reproduce — lower the count, this list only ratchets down`,
+        `${SKIP_RATCHET_PATH} declares ${allowed} unjustified skip(s) for ${file} but ${count} reproduce, lower the count, this list only ratchets down`,
       );
     }
   }
@@ -488,7 +488,7 @@ export function main(argv = process.argv.slice(2)) {
   }
 
   console.log(
-    `skip census (${wholeTree ? 'whole tree' : 'changed files'}): ${tally.total} skipped/ignored test site(s) — ` +
+    `skip census (${wholeTree ? 'whole tree' : 'changed files'}): ${tally.total} skipped/ignored test site(s), ` +
       `${tally.reason} with an inline reason, ${tally.annotated} annotated, ${tally.unjustified} unjustified`,
   );
 

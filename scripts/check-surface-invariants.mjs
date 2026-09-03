@@ -663,13 +663,13 @@ export function main(argv = process.argv.slice(2)) {
 
     if (undeclared.length > 0) {
       failures.push(
-        `${invariant.label} — ${undeclared.length} undeclared violation(s):\n` +
+        `${invariant.label}, ${undeclared.length} undeclared violation(s):\n` +
           undeclared.map((violation) => `    - ${violation.detail}`).join('\n'),
       );
     }
     if (stale.length > 0) {
       failures.push(
-        `${invariant.label} — ${stale.length} stale allowlist entr(ies); remove them from ${ALLOWLIST_PATH}:\n` +
+        `${invariant.label}, ${stale.length} stale allowlist entr(ies); remove them from ${ALLOWLIST_PATH}:\n` +
           stale.map((id) => `    - ${id}`).join('\n'),
       );
     }

@@ -8,9 +8,6 @@ import { checkEgressBoundary } from './lib/rust-egress-boundary.mjs';
 const root = process.cwd();
 const sourceRoot = path.join(root, 'apps/desktop/src-tauri/src');
 
-// The one file that is allowed to build a reqwest client is the boundary
-// itself; every other entry is a transport that predates the boundary and must
-// migrate onto PublicHttpClient. The list only shrinks — see the stale check.
 const ALLOWLIST = [
   'apps/desktop/src-tauri/src/automation/browser/playwright_bridge.rs',
   'apps/desktop/src-tauri/src/automation/browser/tab_manager.rs',
