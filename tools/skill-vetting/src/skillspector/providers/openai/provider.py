@@ -13,7 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""OpenAI provider — stock api.openai.com (or any OpenAI-compatible endpoint).
+"""OpenAI provider, stock api.openai.com (or any OpenAI-compatible endpoint).
 
 Reads ``OPENAI_API_KEY`` for credentials and honors ``OPENAI_BASE_URL`` as
 an explicit endpoint override.  When the base URL is unset, returns
@@ -30,7 +30,6 @@ from langchain_core.language_models.chat_models import BaseChatModel
 from skillspector.providers import registry
 from skillspector.providers.chat_models import create_openai_compatible_chat_model
 
-# Documented for completeness — ChatOpenAI defaults here when base_url=None.
 OPENAI_DEFAULT_BASE_URL = "https://api.openai.com/v1"
 
 REGISTRY_PATH = str(Path(__file__).with_name("model_registry.yaml"))

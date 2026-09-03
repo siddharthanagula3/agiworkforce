@@ -13,7 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""MCP least-privilege analyzer node (B.3.1) — LP1 through LP4."""
+"""MCP least-privilege analyzer node (B.3.1), LP1 through LP4."""
 
 from __future__ import annotations
 

@@ -112,8 +112,6 @@ def _build_query(name: str, version: str | None, ecosystem: str) -> dict:
 
 _CVSS_VECTOR_RE = re.compile(r"CVSS:[34][.\d]*/(.+)")
 
-# Worst-case metric values used to estimate severity from a CVSS vector.
-# Not a full CVSS calculator — intentionally coarse for triage purposes.
 _CVSS_HIGH_METRICS = {
     # v3 base metrics
     "AV:N",
@@ -164,9 +162,9 @@ def _severity_from_vuln(vuln: dict) -> str:
     """Extract the highest severity string from an OSV vulnerability object.
 
     Priority order:
-    1. database_specific.severity — GHSA sets this reliably (e.g. "HIGH").
-    2. affected[].ecosystem_specific.severity — set by some ecosystems.
-    3. severity[].score CVSS vector — parsed to estimate severity band.
+    1. database_specific.severity, GHSA sets this reliably (e.g. "HIGH").
+    2. affected[].ecosystem_specific.severity, set by some ecosystems.
+    3. severity[].score CVSS vector, parsed to estimate severity band.
     4. Default to "HIGH" when no severity info is available.
     """
     db_specific = vuln.get("database_specific", {})
@@ -239,7 +237,7 @@ def query_batch(
         A list parallel to *packages* where each element is a
         (possibly empty) list of :class:`VulnResult`.
 
-    Raises nothing — on network/API failure returns empty lists for all
+    Raises nothing, on network/API failure returns empty lists for all
     packages (caller should fall back to static data).
     """
     global _last_query_ok

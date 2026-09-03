@@ -23,7 +23,7 @@ from langchain_core.language_models.chat_models import BaseChatModel
 
 
 class ModelMetadataProvider(Protocol):
-    """Provider-side knowledge about models — token budgets and defaults.
+    """Provider-side knowledge about models, token budgets and defaults.
 
     ``get_context_length`` / ``get_max_output_tokens`` return ``None`` to
     signal "I don't know" so callers fall back to defaults.

@@ -16,7 +16,7 @@
 """Central logging configuration for the skillspector package.
 
 Reads ``SKILLSPECTOR_LOG_LEVEL`` directly from the environment (default
-``WARNING``) so this module stays cycle-free — it must be importable from
+``WARNING``) so this module stays cycle-free, it must be importable from
 the providers package, which ``constants`` itself depends on.
 
 Use get_logger(__name__) in modules; use Rich console.print() for user-facing output.

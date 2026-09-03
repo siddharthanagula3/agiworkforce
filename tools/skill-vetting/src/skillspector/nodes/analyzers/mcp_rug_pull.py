@@ -13,7 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""MCP rug-pull analyzer node (B.3.3) — RP1 through RP3."""
+"""MCP rug-pull analyzer node (B.3.3), RP1 through RP3."""
 
 from __future__ import annotations
 

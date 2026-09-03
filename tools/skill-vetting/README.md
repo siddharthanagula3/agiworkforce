@@ -4,7 +4,7 @@ Status: Adopted (Phase-0 machinery, INC-0.5)
 Owner: Platform + security
 Kind: service
 Criticality: high
-Donor: **SkillSpector** by NVIDIA — Apache-2.0
+Donor: **SkillSpector** by NVIDIA, Apache-2.0
 
 ## Purpose
 
@@ -34,7 +34,7 @@ this README; `model_registry.yaml` rewritten to AGI catalog model IDs (below).
 
 The vetting **gate runs with `--no-llm`**, so no model is required for the
 blocking path. The optional LLM analyzer reads `model_registry.yaml`, which has
-been rewritten to carry only AGI catalog model IDs — the single source of truth
+been rewritten to carry only AGI catalog model IDs, the single source of truth
 is `packages/contracts/types/src/models.json`. Do not hand-add model IDs here; mirror
 `models.json`.
 

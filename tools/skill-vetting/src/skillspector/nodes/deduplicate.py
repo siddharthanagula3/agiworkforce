@@ -16,7 +16,7 @@
 """Cross-analyzer finding deduplication.
 
 Merges findings that represent the same conceptual issue observed multiple
-times — either within the same file or across files with identical patterns.
+times, either within the same file or across files with identical patterns.
 
 Deduplication strategy:
 1. Same-file dedup: Same rule_id + same file + same matched_text

@@ -16,10 +16,10 @@
 """Static patterns: supply chain (SC1–SC6) and trigger analysis (TR1–TR3).
 
 SC1–SC3: regex-based pattern matching (original implementation).
-SC4: Known vulnerable dependencies — live OSV.dev lookup with static fallback.
-SC5: Abandoned dependencies — flags known-abandoned or archived packages.
-SC6: Typosquatting — flags package names similar to popular packages.
-TR1–TR3: Trigger analysis — flags overly broad, shadowing, or baiting triggers.
+SC4: Known vulnerable dependencies, live OSV.dev lookup with static fallback.
+SC5: Abandoned dependencies, flags known-abandoned or archived packages.
+SC6: Typosquatting, flags package names similar to popular packages.
+TR1–TR3: Trigger analysis, flags overly broad, shadowing, or baiting triggers.
 
 Node and analyze() in one module.
 """
@@ -181,9 +181,6 @@ _ABANDONED_PACKAGES: set[str] = {
     "npm-conf",
 }
 
-# ---------------------------------------------------------------------------
-# SC6: Typosquatting — popular packages and edit-distance check
-# ---------------------------------------------------------------------------
 
 _POPULAR_PYPI: set[str] = {
     "requests",
@@ -493,9 +490,6 @@ def _version_lt(v1: str, v2: str) -> bool:
         return False
 
 
-# ---------------------------------------------------------------------------
-# Main analyze() — SC1–SC3 regex patterns
-# ---------------------------------------------------------------------------
 
 
 def analyze(content: str, file_path: str, file_type: str) -> list[AnalyzerFinding]:
@@ -691,7 +685,7 @@ def _sc4_from_osv(
                 rule_id="SC4",
                 message=(
                     f"Known Vulnerable Dependency: {pkg_name}{version_str}"
-                    f" — {len(vulns)} advisory(ies): {vuln_desc}"
+                    f", {len(vulns)} advisory(ies): {vuln_desc}"
                 ),
                 severity=severity,
                 location=Location(file=file_path, start_line=line_num),
@@ -787,7 +781,6 @@ def _analyze_dependencies(
             "SC4: using static fallback for %d uncovered packages", len(uncovered_packages)
         )
     elif uncovered_packages and not osv_findings and not was_osv_reachable():
-        # OSV.dev was unreachable and fallback found nothing — surface the gap
         findings.append(
             AnalyzerFinding(
                 rule_id="SC4",

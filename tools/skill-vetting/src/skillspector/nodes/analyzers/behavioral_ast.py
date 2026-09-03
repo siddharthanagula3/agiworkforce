@@ -36,14 +36,6 @@ logger = get_logger(__name__)
 
 _DANGEROUS_BUILTINS = frozenset({"exec", "eval", "compile", "__import__"})
 
-# Names that turn ``getattr(obj, "<name>")`` into a reflective handle on a code- or
-# command-execution sink. ``getattr(os, "system")(cmd)`` and
-# ``getattr(builtins, "exec")(src)`` are functionally identical to ``os.system(cmd)``
-# / ``exec(src)`` but evade AST1/AST5: the inner ``getattr`` has a *constant* second
-# argument (so AST7 is intentionally skipped), and the outer call's ``func`` is an
-# ``ast.Call`` whose name does not resolve, so AST1/AST5 never fire. The set is kept
-# deliberately small — only names with essentially no legitimate ``getattr`` use — so
-# benign reflection such as ``getattr(obj, "name")`` stays unflagged.
 _DANGEROUS_GETATTR_NAMES = frozenset({"exec", "eval", "system", "popen", "__import__"})
 
 _SUBPROCESS_CALLS = frozenset(
@@ -123,7 +115,7 @@ _TAG = "Dangerous Code Execution"
 
 
 def _is_chain_sink(node: ast.Call, aliases: dict[str, str] | None = None) -> bool:
-    """True if this call is exec(), eval(), or compile() — the outer dangerous call."""
+    """True if this call is exec(), eval(), or compile(), the outer dangerous call."""
     name = resolve_call_name(node, aliases)
     return name in ("exec", "eval", "compile")
 

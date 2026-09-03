@@ -13,7 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Anthropic proxy provider — Claude models via Vertex-style raw-predict endpoints.
+"""Anthropic proxy provider, Claude models via Vertex-style raw-predict endpoints.
 
 Supports corporate API gateways, GCP Vertex AI, and self-hosted proxies
 that expose Anthropic models through a raw-predict interface rather than

@@ -226,11 +226,6 @@ def resolve_call_name_typed(
     plain = resolve_dotted_name(node.func)
     if plain is None:
         return None
-    # Normalize the locally written spelling first. ``type_map`` values are already
-    # canonical (``build_type_map`` resolves import aliases when recording them), so
-    # aliasing must run before — not after — the type-map lookup to avoid re-expanding
-    # an already-resolved name (e.g. ``from socket import socket`` would otherwise turn
-    # ``socket.socket.recv`` into ``socket.socket.socket.recv``).
     if aliases:
         plain = apply_import_aliases(plain, aliases)
     if type_map is not None and "." in plain:

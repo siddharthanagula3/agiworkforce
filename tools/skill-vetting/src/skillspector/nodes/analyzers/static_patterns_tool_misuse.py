@@ -40,12 +40,10 @@ ANALYZER_ID = "static_patterns_tool_misuse"
 
 _SQL_WRITE_VERBS = r"(?:DROP|DELETE|UPDATE|INSERT|ALTER|TRUNCATE)"
 
-# TM1: Tool Parameter Abuse — dangerous parameter values
 TM1_PATTERNS = [
     # shell=True is a classic command injection vector
     (r"subprocess\.\w+\s*\([^)]*shell\s*=\s*True", 0.8),
     (r"Popen\s*\([^)]*shell\s*=\s*True", 0.8),
-    # Dangerous flags — \b prevents matching rm/del inside words like firmware, format
     (r"\b(?:rm|del|erase)\s+[^|]*-(?:r|rf|fr)\s+[/~]", 0.9),
     (r"--force\s+(?:delete|remove|push|reset|clean)", 0.7),
     (r"--no-?(?:verify|check|validate|confirm|protect|safe)", 0.75),
@@ -84,7 +82,6 @@ TM1_PATTERNS = [
     ),
 ]
 
-# TM2: Chaining Abuse — chained commands to bypass safety
 TM2_PATTERNS = [
     # Shell command chaining with dangerous commands (\b prevents substring matches)
     (r"(?:&&|;)\s*\b(?:rm|del|erase)\s+-", 0.75),
@@ -116,7 +113,6 @@ TM2_PATTERNS = [
     ),
 ]
 
-# TM3: Unsafe Defaults — overly permissive default settings
 TM3_PATTERNS = [
     # TLS/SSL verification disabled
     (r"verify\s*=\s*False", 0.75),

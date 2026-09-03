@@ -35,7 +35,7 @@ logger = get_logger(__name__)
 ANALYZER_PROMPT = """\
 You are a quality and safety auditor for AI agent skills.  Your job is to
 review a single skill file and report findings that fall into the categories
-below.  Each category specifies which file types it applies to — you MUST
+below.  Each category specifies which file types it applies to, you MUST
 skip categories that do not apply to the file you are reviewing.
 
 IMPORTANT: The file is identified by its path and extension in the heading
@@ -62,7 +62,7 @@ Look for activation conditions, trigger phrases, or invocation descriptions
 that are ambiguous or overly broad and could cause unintended skill
 invocations.  Flag any of the following:
 - Overly broad trigger phrase that overlaps with common everyday speech (e.g. "help me", "do this")
-- Ambiguous activation condition — unclear when the skill activates vs. does not
+- Ambiguous activation condition, unclear when the skill activates vs. does not
 - Missing specificity on trigger scope or constraints (no explicit list of trigger phrases, or no negative examples)
 
 Do NOT flag if:
@@ -80,7 +80,7 @@ Use rule ID **SQP-1** for all vague-trigger findings.
 **Applies to: code files (.py, .sh, .js, .ts, .go, .rs, .rb, .pl, etc.) AND markdown files (.md), but with different criteria per type.**
 
 **For code files:** flag safety-critical operations that lack ANY form of user
-disclosure — no confirmation prompt, no logging/print statement, no docstring
+disclosure, no confirmation prompt, no logging/print statement, no docstring
 or comment explaining the action, and no mention in the skill's README/SKILL.md.
 Operations to check:
 - File writes or deletions

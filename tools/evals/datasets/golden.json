@@ -60,7 +60,7 @@
         { "kind": "excludesAll", "values": ["yellow"] },
         { "kind": "maxWords", "limit": 5 }
       ],
-      "notes": "Additive primaries, not the subtractive set — a model that answers red/yellow/blue answered a different question."
+      "notes": "Additive primaries, not the subtractive set, a model that answers red/yellow/blue answered a different question."
     },
     {
       "id": "golden/sql-count",
@@ -127,7 +127,7 @@
       "family": "classification",
       "risk": "low",
       "expected": "answer",
-      "prompt": "Classify the sentiment of this review as exactly one word — positive, negative, or neutral: \"The battery dies in an hour and support never replied.\"",
+      "prompt": "Classify the sentiment of this review as exactly one word, positive, negative, or neutral: \"The battery dies in an hour and support never replied.\"",
       "checks": [
         { "kind": "matches", "pattern": "^\\W*negative\\b" },
         { "kind": "maxWords", "limit": 3 }

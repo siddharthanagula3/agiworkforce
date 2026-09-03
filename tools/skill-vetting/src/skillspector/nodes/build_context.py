@@ -219,7 +219,7 @@ def _unread_manifest_finding(file_name: str, message: str) -> Finding:
         explanation=(
             "A skill loader reads the whole manifest, while the analyzers here only see what "
             "this node parsed. Padding a manifest past these caps therefore hides later "
-            "fields — including any hidden instruction — from every metadata check."
+            "fields, including any hidden instruction, from every metadata check."
         ),
         remediation=(
             "Keep SKILL.md frontmatter and its fields small enough to analyze, and close the "
