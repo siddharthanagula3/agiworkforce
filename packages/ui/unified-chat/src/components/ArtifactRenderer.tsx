@@ -164,14 +164,6 @@ const SVG_ALLOWED_ATTRS = new Set([
 // instead of a triangle.
 const SVG_ALLOWED_ATTR_KEYS = new Set([...SVG_ALLOWED_ATTRS].map((attr) => attr.toLowerCase()));
 
-/**
- * Safely sanitize an SVG string by stripping disallowed tags/attributes.
- *
- * AUDIT-FIX ART-17: exported so `ArtifactPanel` can run the SAME allowlist
- * before it renders an SVG artifact. The panel used to embed unsanitized SVG
- * bytes directly while this sibling renderer sanitized them — one package, two
- * different answers to "is this SVG safe?".
- */
 export function sanitizeSvg(raw: string): string {
   try {
     const parser = new DOMParser();
@@ -586,7 +578,7 @@ export function ArtifactRenderer({
           )}
         </div>
         <div className="flex items-center gap-1">
-          {/* Apply to file — delegate to host */}
+          {/* Apply to file, delegate to host */}
           {artifact.type === 'code' && onApplyCode && (
             <button
               type="button"

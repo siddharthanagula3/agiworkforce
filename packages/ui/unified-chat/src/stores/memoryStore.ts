@@ -5,11 +5,6 @@ export interface MemoryFact {
   id: string;
   text: string;
   sourceConversationId?: string;
-  /**
-   * Project this fact is confined to, if any (migration 0135). Absent means
-   * global — used in every conversation. Shown in the editor so a confined
-   * fact is not mistaken for one that applies everywhere.
-   */
   projectId?: string | null;
   projectName?: string | null;
   createdAt: string;

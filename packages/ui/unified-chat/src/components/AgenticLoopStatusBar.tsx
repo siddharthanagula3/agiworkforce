@@ -21,7 +21,7 @@ export const AgenticLoopStatusBar: React.FC = () => {
       <Loader2 className="h-3.5 w-3.5 text-violet-500 animate-spin shrink-0" aria-hidden="true" />
       <span>
         Agent working ({stepLabel}){' '}
-        <span className="text-violet-400/70">— type to queue a follow-up</span>
+        <span className="text-violet-400/70">, type to queue a follow-up</span>
       </span>
     </div>
   );

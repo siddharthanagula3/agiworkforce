@@ -209,7 +209,7 @@
   "list": {
     "continueGenerating": "生成を続ける",
     "continueGeneratingAria": "前の応答の生成を続ける",
-    "incomplete": "この応答は不完全な可能性があります — モデルとの接続が中断されました。",
+    "incomplete": "この応答は不完全な可能性があります, モデルとの接続が中断されました。",
     "incompleteWithReason": "応答が不完全な可能性があります: {{reason}}",
     "regenerateAria": "この応答を再生成",
     "scrollToLatest": "最新までスクロール",

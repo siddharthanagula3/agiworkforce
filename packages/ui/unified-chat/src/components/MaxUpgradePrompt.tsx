@@ -38,7 +38,7 @@ export function MaxUpgradePrompt({
           <span className="font-semibold">{REQUIRED_PLAN_LABEL} unlocks multi-provider chat.</span>{' '}
           Switching from <span className="font-medium">{currentProvider}</span> to{' '}
           <span className="font-medium">{attemptedProvider}</span> mid-thread keeps your context
-          across providers — available on {REQUIRED_PLAN_LABEL} and above.
+          across providers, available on {REQUIRED_PLAN_LABEL} and above.
         </p>
         <button
           type="button"

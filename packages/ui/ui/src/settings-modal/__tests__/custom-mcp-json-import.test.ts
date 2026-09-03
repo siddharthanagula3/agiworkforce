@@ -121,7 +121,7 @@ describe('parseCustomMcpJsonConfig', () => {
     expect(result.error.kind).toBe('invalid_shape');
   });
 
-  it('never executes the payload — a config carrying script-like strings is treated as inert data', () => {
+  it('never executes the payload, a config carrying script-like strings is treated as inert data', () => {
     const result = parseCustomMcpJsonConfig(
       JSON.stringify({ url: 'https://mcp.example.com/mcp', name: '<script>alert(1)</script>' }),
     );

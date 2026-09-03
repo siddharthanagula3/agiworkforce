@@ -209,7 +209,7 @@
   "list": {
     "continueGenerating": "Continua a generare",
     "continueGeneratingAria": "Continua a generare la risposta precedente",
-    "incomplete": "Questa risposta potrebbe essere incompleta — la connessione al modello è stata interrotta.",
+    "incomplete": "Questa risposta potrebbe essere incompleta, la connessione al modello è stata interrotta.",
     "incompleteWithReason": "La risposta potrebbe essere incompleta: {{reason}}",
     "regenerateAria": "Rigenera questa risposta",
     "scrollToLatest": "Scorri fino agli ultimi",

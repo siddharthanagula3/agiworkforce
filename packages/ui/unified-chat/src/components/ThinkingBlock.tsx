@@ -182,7 +182,7 @@ export function ThinkingBlock({ block, compact: compactProp }: ThinkingBlockProp
           A bare status line, not a filled pill. This rendered as a bordered,
           surface-filled chip, so a turn that interleaved reasoning and tool
           steps alternated grey slabs with the plain "Searched the web ›" rows
-          the tool timeline draws — two visual languages for the same idea.
+          the tool timeline draws, two visual languages for the same idea.
           It now matches the expanded header below and the tool rows: muted
           text, a chevron, nothing else.
         */}
@@ -251,7 +251,7 @@ export function ThinkingBlock({ block, compact: compactProp }: ThinkingBlockProp
         </div>
       </button>
 
-      {/* Timeline — shown if: (a) normal expand is open, OR (b) user expanded from compact pill */}
+      {/* Timeline, shown if: (a) normal expand is open, OR (b) user expanded from compact pill */}
       {(useCompact ? compactExpanded : expanded) &&
         (isReasoningOnly && reasoningStep ? (
           <div className="ml-2 mt-2 border-l border-[var(--chat-thinking-line)] py-1 pl-5 text-[var(--chat-thinking-text)]">

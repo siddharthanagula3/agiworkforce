@@ -209,7 +209,7 @@
   "list": {
     "continueGenerating": "계속 생성",
     "continueGeneratingAria": "이전 응답 계속 생성",
-    "incomplete": "이 응답은 불완전할 수 있습니다 — 모델과의 연결이 중단되었습니다.",
+    "incomplete": "이 응답은 불완전할 수 있습니다, 모델과의 연결이 중단되었습니다.",
     "incompleteWithReason": "응답이 불완전할 수 있습니다: {{reason}}",
     "regenerateAria": "이 응답 재생성",
     "scrollToLatest": "최신으로 스크롤",

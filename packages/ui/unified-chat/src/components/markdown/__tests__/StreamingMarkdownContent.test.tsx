@@ -120,7 +120,7 @@ beforeEach(() => {
   clearMermaidSvgCache();
 });
 
-describe('StreamingMarkdownContent — streamed markup equals one full parse', () => {
+describe('StreamingMarkdownContent, streamed markup equals one full parse', () => {
   it.each(MARKDOWN_STREAM_CORPUS)('$name', ({ name, source }) => {
     const canonical = renderedOnce(source);
 
@@ -132,7 +132,7 @@ describe('StreamingMarkdownContent — streamed markup equals one full parse', (
   });
 });
 
-describe('StreamingMarkdownContent — document-scoped definitions', () => {
+describe('StreamingMarkdownContent, document-scoped definitions', () => {
   const REFERENCE_DOC = lines(
     'Claim with a [reference link][spec].',
     '',
@@ -186,7 +186,7 @@ describe('StreamingMarkdownContent — document-scoped definitions', () => {
   });
 });
 
-describe('StreamingMarkdownContent — mermaid never flashes its failure state', () => {
+describe('StreamingMarkdownContent, mermaid never flashes its failure state', () => {
   function assertNoFailure(container: HTMLElement, label: string) {
     expect(container.querySelector('[data-mermaid="failed"]'), label).toBeNull();
     expect(container.textContent, label).not.toContain('could not be drawn');
@@ -277,7 +277,7 @@ describe('StreamingMarkdownContent — mermaid never flashes its failure state',
   });
 });
 
-describe('MarkdownContent — the streaming gate reaches the diagram', () => {
+describe('MarkdownContent, the streaming gate reaches the diagram', () => {
   it('does not compile a partial diagram when the caller says it is streaming', async () => {
     const view = mountClient(<MarkdownContent content={MERMAID_PARTIAL} isStreaming />);
     await act(async () => {
@@ -305,7 +305,7 @@ describe('MarkdownContent — the streaming gate reaches the diagram', () => {
   });
 });
 
-describe('MarkdownContent — the streaming gate reaches the highlighter', () => {
+describe('MarkdownContent, the streaming gate reaches the highlighter', () => {
   const FENCE = lines('```ts', 'const answer = 41 + 1;', '```');
   const FENCE_BODY = 'const answer = 41 + 1;';
 
@@ -333,7 +333,7 @@ describe('MarkdownContent — the streaming gate reaches the highlighter', () =>
   });
 });
 
-describe('StreamingMarkdownContent — per-token cost stays off the highlighter', () => {
+describe('StreamingMarkdownContent, per-token cost stays off the highlighter', () => {
   const SETTLED_BODY = 'const first = 1;';
   const OPEN_BODY = 'const second = 2;';
   const TWO_FENCES = lines(

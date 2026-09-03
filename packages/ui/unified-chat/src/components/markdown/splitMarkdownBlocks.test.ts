@@ -43,7 +43,7 @@ function decompose(split: MarkdownBlockSplit): string[] {
   return [...split.settled.flatMap((block) => segment(block.source)), ...segment(split.tail)];
 }
 
-describe('splitMarkdownBlocks — universal equivalence property', () => {
+describe('splitMarkdownBlocks, universal equivalence property', () => {
   it.each(CORPUS)(
     '$name keeps concat and segmentation intact at every chunk size',
     ({ name, source }) => {
@@ -89,7 +89,7 @@ describe('splitMarkdownBlocks — universal equivalence property', () => {
   );
 });
 
-describe('splitMarkdownBlocks — invariants', () => {
+describe('splitMarkdownBlocks, invariants', () => {
   it('keeps the last two top-level nodes in the tail', () => {
     for (const { name, source } of CORPUS) {
       const splitter = createMarkdownBlockSplitter();
@@ -163,7 +163,7 @@ describe('splitMarkdownBlocks — invariants', () => {
   });
 });
 
-describe('splitMarkdownBlocks — prefix-stability guard', () => {
+describe('splitMarkdownBlocks, prefix-stability guard', () => {
   const RESET_FIXTURES: ReadonlyArray<{
     readonly name: string;
     readonly before: string;
@@ -238,7 +238,7 @@ describe('splitMarkdownBlocks — prefix-stability guard', () => {
   });
 });
 
-describe('splitMarkdownBlocks — boundary safety', () => {
+describe('splitMarkdownBlocks, boundary safety', () => {
   function settleFully(source: string): MarkdownBlockSplit {
     const splitter = createMarkdownBlockSplitter();
     let streamed = '';

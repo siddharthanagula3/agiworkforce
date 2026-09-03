@@ -82,7 +82,7 @@ describe('ConnectorConnectCard · unconfigured provider (the honest default toda
     expect(screen.getByText(/no Linear authorization app configured/)).toBeTruthy();
   });
 
-  it('offers no Retry either — re-running cannot fix missing configuration', () => {
+  it('offers no Retry either, re-running cannot fix missing configuration', () => {
     render(<ConnectorConnectCard request={unavailable} onRetryTurn={vi.fn()} />);
     expect(screen.queryByTestId('connector-connect-retry')).toBeNull();
   });

@@ -52,15 +52,6 @@ interface TaskJournalSnapshot extends CloudAgentRunSnapshotPage {
 const TASK_JOURNAL_PAGE_SIZE = 500;
 const TASK_JOURNAL_MAX_PAGES = 8;
 
-/**
- * How long to wait before re-reading the journal of a run that is still live.
- *
- * The runs API is a plain paged read with no push channel, so an open detail
- * panel used to freeze at whatever the run had done the moment it was opened —
- * a running task looked stalled. Polling only happens while the selected run is
- * in a state that can still emit events ({@link isLiveTaskState}) and stops the
- * moment it is terminal, so an idle Tasks tab issues no traffic at all.
- */
 export const TASK_JOURNAL_POLL_INTERVAL_MS = 4_000;
 
 export async function readTaskJournal(
@@ -331,7 +322,7 @@ export function TasksPage({ transport }: { transport: TasksTransport }) {
       <header className="mb-4 flex flex-wrap items-center gap-2">
         <ListChecks className="h-5 w-5 text-primary" />
         <h1 className="font-[var(--chat-font-serif)] text-[28px] font-medium">Tasks</h1>
-        <span className="text-sm text-muted-foreground">— your Cloud work runs</span>
+        <span className="text-sm text-muted-foreground">, your Cloud work runs</span>
       </header>
 
       <div className="mb-4 flex items-center gap-2">

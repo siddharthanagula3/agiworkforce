@@ -192,7 +192,7 @@ function CodeView({ content }: { content: string }) {
           role="status"
           className="absolute top-10 right-2 z-10 rounded border border-[var(--chat-border)] bg-[var(--chat-surface-elevated)] px-2 py-1 text-[12px] text-[var(--chat-destructive-text)]"
         >
-          Copy failed — clipboard unavailable
+          Copy failed, clipboard unavailable
         </div>
       )}
 
@@ -588,7 +588,7 @@ export function ArtifactPanel({
           )}
         </div>
 
-        {/* Version stepper — only when host supplies a version history */}
+        {/* Version stepper, only when host supplies a version history */}
         {sortedVersions.length > 1 && artifact ? (
           <div
             className="flex items-center gap-0.5 shrink-0 rounded-md border border-[var(--chat-border)] bg-[var(--chat-surface-overlay)] px-1"
@@ -796,7 +796,7 @@ export function ArtifactPanel({
               </Button>
             </div>
             {/* DES-C15: markup and CSS still render, but the embedder CSP this
-                srcdoc inherits forbids inline scripts — so an interactive page
+                srcdoc inherits forbids inline scripts, so an interactive page
                 looks finished and does nothing. Say it out loud; a silently
                 inert preview reads as a broken app.
 
@@ -825,8 +825,8 @@ export function ArtifactPanel({
                 {htmlPreviewError}
               </p>
             )}
-            {/* AUDIT-FIX ART-16: three distinct states — build failure, running,
-                paused — instead of collapsing the first into the third. */}
+            {/* AUDIT-FIX ART-16: three distinct states, build failure, running,
+                paused, instead of collapsing the first into the third. */}
             {htmlPreview.error ? (
               <div
                 className="flex flex-1 flex-col items-center justify-center gap-2 px-6 text-center"
@@ -874,7 +874,7 @@ export function ArtifactPanel({
         )}
       </div>
 
-      {/* Publish / clipboard notification bar — shown after an action resolves */}
+      {/* Publish / clipboard notification bar, shown after an action resolves */}
       {(isPublishing || publishResult || publishError || copyError) && (
         <div
           className={cn(
@@ -916,7 +916,7 @@ export function ArtifactPanel({
               an incident kill-switch and was never what gated this bar. What is
               actually true when we land here is narrower and duller: THIS host
               injected no cloud publisher, so there is nothing to publish to.
-              Say that, and say what the user can do instead — Download works. */}
+              Say that, and say what the user can do instead, Download works. */}
           {!isPublishing && publishResult?.kind === 'unavailable' && (
             <>
               <Globe size={11} className="shrink-0 text-[var(--chat-text-muted)]" />

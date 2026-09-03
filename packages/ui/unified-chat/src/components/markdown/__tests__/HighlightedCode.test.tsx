@@ -62,7 +62,7 @@ beforeEach(() => {
   hoisted.highlightToLines.mockResolvedValue(null);
 });
 
-describe('HighlightedCode — the disabled path never reaches the highlighter', () => {
+describe('HighlightedCode, the disabled path never reaches the highlighter', () => {
   it('renders plain text and calls nothing when highlighting is disabled', async () => {
     const view = mountClient(
       <HighlightedCode code={CODE} language={LANGUAGE} enabled={false} className={CLASS_NAME} />,
@@ -101,7 +101,7 @@ describe('HighlightedCode — the disabled path never reaches the highlighter', 
   });
 });
 
-describe('HighlightedCode — enhancing after first paint', () => {
+describe('HighlightedCode, enhancing after first paint', () => {
   it('paints the unhighlighted code before the highlighter resolves', () => {
     hoisted.highlightToLines.mockReturnValue(new Promise(() => undefined));
 
@@ -163,7 +163,7 @@ describe('HighlightedCode — enhancing after first paint', () => {
   });
 });
 
-describe('HighlightedCode — one tokenise per distinct block', () => {
+describe('HighlightedCode, one tokenise per distinct block', () => {
   it('does not tokenise again when re-rendered with the same code', async () => {
     hoisted.highlightToLines.mockResolvedValue(TOKENS);
 

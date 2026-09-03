@@ -13,12 +13,6 @@ export interface SidebarSession {
   incognito?: boolean;
   messageCount?: number;
   hasCustomInstructions?: boolean;
-  /**
-   * Set while this conversation has a turn in flight, so the recents list can
-   * say so (shell-04 / agentic-modes-gap-03). Undefined means "nothing known",
-   * not "idle" — a host that cannot observe run state simply omits it rather
-   * than asserting a conversation is idle when it may not be.
-   */
   runState?: 'running';
 }
 

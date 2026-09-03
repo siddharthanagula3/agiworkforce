@@ -1,4 +1,3 @@
-
 import { describe, it, expect, beforeEach } from 'vitest';
 import { useChatStore } from '../chatStore';
 import type { Conversation, ChatMessage } from '../../lib/types';
@@ -41,7 +40,7 @@ function resetStore() {
   });
 }
 
-describe('useChatStore — conversations', () => {
+describe('useChatStore, conversations', () => {
   beforeEach(resetStore);
 
   it('starts with an empty conversations array', () => {
@@ -136,7 +135,7 @@ describe('useChatStore — conversations', () => {
   });
 });
 
-describe('useChatStore — messages', () => {
+describe('useChatStore, messages', () => {
   beforeEach(resetStore);
 
   it('addMessage creates a new array for an unseen conversationId', () => {
@@ -182,7 +181,7 @@ describe('useChatStore — messages', () => {
   });
 });
 
-describe('useChatStore — streaming', () => {
+describe('useChatStore, streaming', () => {
   beforeEach(resetStore);
 
   it('startStreaming sets isStreaming to true and clears previous content', () => {
@@ -233,7 +232,7 @@ describe('useChatStore — streaming', () => {
   });
 });
 
-describe('useChatStore — pin and archive', () => {
+describe('useChatStore, pin and archive', () => {
   beforeEach(resetStore);
 
   it('pinConversation sets pinned to true', () => {
@@ -261,7 +260,7 @@ describe('useChatStore — pin and archive', () => {
   });
 });
 
-describe('useChatStore — getGroupedConversations', () => {
+describe('useChatStore, getGroupedConversations', () => {
   beforeEach(resetStore);
 
   it('returns an empty object when there are no conversations', () => {
@@ -336,7 +335,7 @@ describe('useChatStore — getGroupedConversations', () => {
   });
 });
 
-describe('useChatStore — misc state actions', () => {
+describe('useChatStore, misc state actions', () => {
   beforeEach(resetStore);
 
   it('setActiveConversation stores the provided id', () => {
@@ -403,7 +402,7 @@ describe('useChatStore — misc state actions', () => {
   });
 });
 
-describe('useChatStore — persist v1 -> v2 migration', () => {
+describe('useChatStore, persist v1 -> v2 migration', () => {
   function loadMigrate() {
     return (persistedState: unknown, version: number) => {
       const state = persistedState as Record<string, unknown>;

@@ -15,13 +15,6 @@ function renderMenu() {
   );
 }
 
-/**
- * Escape under an open row menu used to tear the whole sidebar drawer down,
- * because Radix's dismissable layer listens on `document` in the capture phase
- * and mounts before this menu does — an ordering jsdom cannot reproduce, so
- * these cover the decision the drawer makes rather than the browser's dispatch.
- * The drawer behaviour itself is proved by the e2e drawer spec.
- */
 describe('Menu escape signal for a hosting drawer', () => {
   it('reports no open panel before the menu is opened', () => {
     renderMenu();

@@ -142,7 +142,7 @@ function ConnectorConnectCardImpl({ request, onRetryTurn, className }: Connector
           {href !== null ? (
             <p className="text-[12px] text-muted-foreground">
               Connecting opens {request.connectorName} in this tab and brings you back here. It does
-              not resume this turn — use Retry after you return to re-run it from your last message.
+              not resume this turn, use Retry after you return to re-run it from your last message.
             </p>
           ) : null}
         </div>

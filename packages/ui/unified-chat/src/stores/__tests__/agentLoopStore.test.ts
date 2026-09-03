@@ -45,7 +45,7 @@ function makeEntry(overrides?: Partial<ActionLogEntry>): ActionLogEntry {
   };
 }
 
-describe('agentLoopStore — setAgentLoop / selectAgentLoop', () => {
+describe('agentLoopStore, setAgentLoop / selectAgentLoop', () => {
   beforeEach(resetStore);
 
   it('starts null', () => {
@@ -68,7 +68,7 @@ describe('agentLoopStore — setAgentLoop / selectAgentLoop', () => {
   });
 });
 
-describe('agentLoopStore — setActiveGoal / selectActiveGoal', () => {
+describe('agentLoopStore, setActiveGoal / selectActiveGoal', () => {
   beforeEach(resetStore);
 
   it('starts null', () => {
@@ -92,7 +92,7 @@ describe('agentLoopStore — setActiveGoal / selectActiveGoal', () => {
   });
 });
 
-describe('agentLoopStore — action log', () => {
+describe('agentLoopStore, action log', () => {
   beforeEach(resetStore);
 
   it('returns empty array for unknown messageId', () => {

@@ -150,7 +150,7 @@ describe('BranchNavigator', () => {
   });
 });
 
-describe('RewindTimeline — Slice 3 conversationId enrichment', () => {
+describe('RewindTimeline, Slice 3 conversationId enrichment', () => {
   beforeEach(resetStores);
 
   it('SSR: renders loading state on initial render without crashing', () => {

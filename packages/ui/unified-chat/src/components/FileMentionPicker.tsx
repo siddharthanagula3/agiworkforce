@@ -139,7 +139,6 @@ export const FileMentionPicker: React.FC<FileMentionPickerProps> = ({
       if (!entry.isDir) {
         onSelect(entry);
       }
-      // Directory click: no-op here — host can extend if needed
     },
     [onSelect],
   );
@@ -199,7 +198,7 @@ export const FileMentionPicker: React.FC<FileMentionPickerProps> = ({
               Files matching &quot;{cleanQuery}&quot;
             </>
           ) : (
-            'Files — type to search'
+            'Files, type to search'
           )}
         </span>
       </div>

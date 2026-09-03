@@ -1,22 +1,5 @@
 'use client';
 
-/**
- * SettingsModal — shared modal shell for AGI Web (and AGI Desktop via activeKeys).
- *
- * BOUNDARY: pure presentation + navigation. No fetch, no store, no
- * next/navigation, no @tauri-apps. All data and per-section content is
- * injected via props (sectionContent map for rendered sections, adapter for
- * connectors/skills/plugins data).
- *
- * Layout (matches Claude.ai reference 403-416):
- *   Left column (~220px): "Settings" title + search + flat nav list (no group headers)
- *   Right column: section pane rendered from sectionContent or built-in panels
- *
- * Nav items: General, Account, Security, Privacy, Billing, Usage,
- *            Capabilities, Connectors, Skills, Plugins, Memory, Notifications
- *            (surface trims via activeKeys)
- */
-
 import React, { useMemo, useState, useCallback, useEffect } from 'react';
 import { toUserMessage } from '../lib/network-error';
 import {
@@ -106,21 +89,12 @@ const REMOVE_SKILL_CONFIRM = {
   variant: 'destructive',
 } as const;
 
-// ---------------------------------------------------------------------------
-// Nav config — flat list, no group headers (matches Claude reference)
-// ---------------------------------------------------------------------------
-
 interface NavEntry {
   key: string;
   label: string;
   icon: LucideIcon;
 }
 
-/**
- * AUDIT-FIX PAR-16: nav search matched the visible label only, so the aliases
- * the repo already authored on SETTINGS_NAV.keywords never applied — searching
- * the obvious term ("theme", "shortcuts", "invoice") returned no results.
- */
 function matchesNavFilter(
   entry: { key: string; label: string; keywords?: string[] },
   filter: string,
@@ -144,21 +118,6 @@ const ALL_NAV_ENTRIES: NavEntry[] = [
   { key: 'memory', label: 'Memory', icon: Brain },
   { key: 'notifications', label: 'Notifications', icon: Bell },
 ];
-
-// ---------------------------------------------------------------------------
-// ConnectorsPanel — table view matching the claude.ai Directory references
-// (251-256): filter tabs All | Connected | Not connected, columns
-// Connector / Type / Status, search, and an in-place detail view.
-//
-// HONESTY RULES (docs/agent-context/known-flaws.md WEB-CONNECTORS row):
-//   - Statuses come ONLY from the adapter's real connection state.
-//   - A Connect button renders ONLY when the surface says the connect flow can
-//     actually complete (connector.canConnect + adapter.connectConnector);
-//     otherwise the row shows the surface-supplied statusLabel. No dead
-//     Connect buttons, no fabricated availability.
-//   - Amber warning states render only when the adapter supplies a real
-//     status === 'warning' signal; there is no synthetic health data.
-// ---------------------------------------------------------------------------
 
 type ConnectorTab = 'all' | 'connected' | 'not-connected';
 
@@ -411,12 +370,6 @@ function ConnectorDetail({
   );
 }
 
-// ---------------------------------------------------------------------------
-// useConnectorMutations — shared connect/disconnect runner with per-id
-// in-flight state and honest per-id error surfacing (failures render inline,
-// never as silent optimistic rollbacks).
-// ---------------------------------------------------------------------------
-
 function useConnectorMutations(adapter?: SettingsDataAdapter) {
   const [mutatingIds, setMutatingIds] = useState<Set<string>>(new Set());
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -458,13 +411,6 @@ function useConnectorMutations(adapter?: SettingsDataAdapter) {
 
   return { mutatingIds, errors, connect, disconnect };
 }
-
-// ---------------------------------------------------------------------------
-// skillAuthorLabel — honest projection of the real Skill.source field.
-// Personal/project/workspace layers are authored by the user; bundled skills
-// ship with the product. No other author metadata exists, so nothing else is
-// shown (no invented vendor names).
-// ---------------------------------------------------------------------------
 
 function skillAuthorLabel(source: string): string {
   switch (source) {
@@ -513,15 +459,6 @@ function SkillDownloadAction({
   );
 }
 
-// ---------------------------------------------------------------------------
-// DirectoryBrowse — the shared Directory-style browse view (claude.ai refs
-// 251-256) reached from the Connectors "Add > Browse connectors" item and the
-// Skills "Browse" button. Tabs render ONLY real content: the connector
-// catalog and the loaded skill list (a Plugins tab appears only when the
-// adapter actually has plugins). Deliberately NO download counts, popularity
-// ranks, or partner cards — we have no such metrics (honesty rule).
-// ---------------------------------------------------------------------------
-
 type BrowseTab = 'connectors' | 'skills' | 'plugins';
 type PluginSort = 'name' | 'updated' | 'popular';
 
@@ -543,10 +480,6 @@ function DirectoryBrowse({
   const [category, setCategory] = useState('All');
   const [pluginSort, setPluginSort] = useState<PluginSort>('name');
   const { confirm, dialog: confirmDialog } = useConfirm();
-  // WEB-31: a pack can gate real skill access (skillsRequireInstall) or just
-  // bundle skills a user already has, and it always reuses the connectors it
-  // declares — the actual effect has to be shown accurately and accepted
-  // before the install call is made, never on the way back from it.
   const [confirmingInstallPlugin, setConfirmingInstallPlugin] = useState<SettingsPlugin | null>(
     null,
   );
@@ -1251,13 +1184,6 @@ function DirectoryBrowse({
   );
 }
 
-// ---------------------------------------------------------------------------
-// AddCustomConnectorForm — "Add custom connector" (BETA) form for a remote
-// MCP server. Submission goes through adapter.addCustomConnector; surfaces
-// without real persistence throw an honest "not yet supported" error which
-// renders inline — the form NEVER fakes a success.
-// ---------------------------------------------------------------------------
-
 function AddCustomConnectorForm({
   adapter,
   onBack,
@@ -1271,11 +1197,6 @@ function AddCustomConnectorForm({
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Paste a raw MCP server config (Claude Desktop / Cursor / VS Code style,
-  // or a bare {"url": "..."} object) instead of typing the fields by hand.
-  // This is validation, not a second submit path: parsing only prefills
-  // name/url/authToken above — the user still reviews them and submits
-  // through the SAME handleSubmit -> adapter.addCustomConnector flow.
   const [jsonConfigText, setJsonConfigText] = useState('');
   const [jsonImportError, setJsonImportError] = useState<string | null>(null);
   const [jsonImportNote, setJsonImportNote] = useState<string | null>(null);
@@ -2036,18 +1957,6 @@ function ConnectorsPanel({
   );
 }
 
-// ---------------------------------------------------------------------------
-// SkillsPanel — table view (columns Skill | Author) + Browse into the shared
-// directory. "New skill", per-row Edit and per-row Delete render only when
-// the adapter supplies the matching capability (onCreateSkill / editSkill /
-// removeSkill on a skill.editable row) — the same optional-capability shape
-// PluginsPanel's Add dropdown uses, so a consumer that never wires them (the
-// Desktop app, which authors skills through its own recorder) renders exactly
-// as before.
-//   - No "Last updated" column: the skill loader exposes no timestamps.
-//   - No download counts / popularity numbers anywhere (no real metrics).
-// ---------------------------------------------------------------------------
-
 function SkillsPanel({ adapter }: { adapter?: SettingsDataAdapter }) {
   const [search, setSearch] = useState('');
   const [view, setView] = useState<'table' | 'browse'>('table');
@@ -2231,7 +2140,7 @@ function SkillsPanel({ adapter }: { adapter?: SettingsDataAdapter }) {
                     {skillAuthorLabel(skill.source)}
                   </td>
                   <td className="hidden px-3 py-2.5 text-xs tabular-nums text-muted-foreground sm:table-cell">
-                    {skill.version ?? '—'}
+                    {skill.version ?? ', '}
                   </td>
                   <td className="px-3 py-2.5 text-xs text-muted-foreground">
                     <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
@@ -2293,16 +2202,6 @@ function SkillsPanel({ adapter }: { adapter?: SettingsDataAdapter }) {
     </div>
   );
 }
-
-// ---------------------------------------------------------------------------
-// PluginsPanel — table view (columns Plugin | Author | Skills | Last updated,
-// optional columns rendering only when at least one plugin supplies real
-// data) + Browse into the shared directory. The Add dropdown renders ONLY the
-// items whose adapter capability exists (onAddPluginMarketplace /
-// onUploadPlugin); with neither, the dropdown is omitted entirely. There is
-// deliberately NO "Create with AGI" item anywhere yet — no real
-// plugin-creation flow exists to back it.
-// ---------------------------------------------------------------------------
 
 function PluginsPanel({ adapter }: { adapter?: SettingsDataAdapter }) {
   const [search, setSearch] = useState('');
@@ -2591,11 +2490,6 @@ function PluginsPanel({ adapter }: { adapter?: SettingsDataAdapter }) {
 // SettingsModal props + component
 // ---------------------------------------------------------------------------
 
-// ---------------------------------------------------------------------------
-// NavButton — a single nav row (filled pill when active), shared by the grouped
-// and legacy flat renderers.
-// ---------------------------------------------------------------------------
-
 const NAV_SCROLL_EDGE_EPSILON_PX = 1;
 
 interface NavScrollEdges {
@@ -2701,7 +2595,6 @@ function NavButton({
 export interface SettingsNavBadge {
   /** Rendered as-is up to 9, then "9+". Zero renders nothing. */
   count: number;
-  /** Full sentence for assistive tech and the tooltip — the count alone is meaningless. */
   description: string;
 }
 
@@ -2717,12 +2610,6 @@ export interface SettingsModalProps {
   sectionContent: Partial<Record<string, React.ReactNode>>;
   /** Subset of nav keys to show (omit to show all). Ignored when navGroups is set. */
   activeKeys?: string[];
-  /**
-   * Grouped nav to render (group headings + icon'd items). When provided, this
-   * replaces the flat built-in list — the single source is
-   * `SETTINGS_NAV_GROUPS_WEB` from `../settings-nav`. Omit for the legacy flat
-   * list.
-   */
   navGroups?: SettingsNavGroupResolved[];
   /** Data for built-in Connectors/Skills/Plugins panels. */
   adapter?: SettingsDataAdapter;
@@ -2750,10 +2637,6 @@ export interface SettingsModalProps {
    * as `connectorDisclosure`: the scope ceiling data belongs to the surface.
    */
   renderConnectorScopes?: (connectorId: string) => React.ReactNode;
-  /**
-   * Per-section attention badges, keyed by nav key. A section with no entry —
-   * or a zero count — renders exactly as before.
-   */
   navBadges?: Partial<Record<string, SettingsNavBadge>>;
   /** Modal title (default: "Settings") */
   title?: string;

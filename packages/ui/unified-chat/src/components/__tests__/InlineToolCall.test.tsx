@@ -14,7 +14,7 @@ afterEach(() => {
   cleanup();
 });
 
-describe('InlineToolCall — collapsed/expanded toggle', () => {
+describe('InlineToolCall, collapsed/expanded toggle', () => {
   it('starts collapsed by default and reveals body on click', () => {
     render(
       <InlineToolCall
@@ -55,7 +55,7 @@ describe('InlineToolCall — collapsed/expanded toggle', () => {
   });
 });
 
-describe('InlineToolCall — status states', () => {
+describe('InlineToolCall, status states', () => {
   it('pending renders ellipsis suffix and muted color', () => {
     const { container } = render(
       <InlineToolCall id="s1" label="bash" status="pending" body={<span />} />,
@@ -96,15 +96,15 @@ describe('InlineToolCall — status states', () => {
     expect(suffix?.className).toMatch(/chat-destructive-text/);
   });
 
-  it('partial renders "Partial — see body" suffix', () => {
+  it('partial renders "Partial, see body" suffix', () => {
     const { container } = render(
       <InlineToolCall id="s5" label="fs-list" status="partial" body={<span />} />,
     );
-    expect(within(container).queryByText(/Partial — see body/)).not.toBeNull();
+    expect(within(container).queryByText(/Partial, see body/)).not.toBeNull();
   });
 });
 
-describe('InlineToolCall — icon mapping', () => {
+describe('InlineToolCall, icon mapping', () => {
   it('inferKindFromLabel maps common tool names to canonical kinds', () => {
     expect(inferKindFromLabel('bash')).toBe('bash');
     expect(inferKindFromLabel('Terminal')).toBe('bash');
@@ -142,7 +142,7 @@ describe('InlineToolCall — icon mapping', () => {
   });
 });
 
-describe('InlineToolCall — arg summary', () => {
+describe('InlineToolCall, arg summary', () => {
   it('renders arg summary text with truncation classes + title for tooltip', () => {
     const arg = '/Users/foo/bar/baz/extremely/long/path/that/should/truncate.json';
     const { container } = render(
@@ -183,7 +183,7 @@ describe('InlineToolCallStack', () => {
   });
 });
 
-describe('InlineToolCall — keyboard activation', () => {
+describe('InlineToolCall, keyboard activation', () => {
   it('toggles open state on Enter', () => {
     render(
       <InlineToolCall id="k1" label="bash" status="success" body={<pre data-testid="b">x</pre>} />,
@@ -217,7 +217,7 @@ describe('InlineToolCall — keyboard activation', () => {
   });
 });
 
-describe('InlineToolCall — controlled mode', () => {
+describe('InlineToolCall, controlled mode', () => {
   it('respects controlled `open` and fires `onOpenChange` on click', () => {
     const onOpenChange = vi.fn();
     const { rerender } = render(
@@ -252,7 +252,7 @@ describe('InlineToolCall — controlled mode', () => {
   });
 });
 
-describe('InlineToolCall — badge icon mode', () => {
+describe('InlineToolCall, badge icon mode', () => {
   it('renders data-icon-style="badge" on the root when iconStyle is badge', () => {
     const { container } = render(
       <InlineToolCall id="b1" label="Read" status="success" iconStyle="badge" />,

@@ -30,14 +30,6 @@ export function isMenuPanelOpen(): boolean {
   return document.querySelector(`[${MENU_PANEL_ATTRIBUTE}]`) !== null;
 }
 
-/**
- * Radix's dismissable layer listens for Escape on `document` in the CAPTURE
- * phase, and the drawer's layer mounts before this menu's own capture listener.
- * Same node, same phase, earlier registration — so the menu cannot suppress it
- * from its own handler, and Escape tore the whole drawer down under an open row
- * menu. Declining the dismissal here leaves the menu's later listener to close
- * just the menu; the next Escape finds no panel and closes the drawer.
- */
 export function keepOpenForMenuEscape(event: Pick<KeyboardEvent, 'preventDefault'>): void {
   if (isMenuPanelOpen()) event.preventDefault();
 }
@@ -271,12 +263,6 @@ export function Menu({
       className={cn(
         portalled
           ? // pointer-events-auto is load-bearing inside a modal Radix dialog.
-            // The sidebar renders in a Sheet at narrow viewports, and Radix's
-            // dismissable layer sets `pointer-events: none` on <body> while it
-            // is open. This panel is portalled straight to <body>, outside that
-            // layer, so without saying so it inherits `none` and every row
-            // action — rename, delete, pin, move to project — renders and
-            // ignores the tap.
             'pointer-events-auto fixed z-[9999]'
           : cn(
               'absolute z-50 mt-1 max-h-[min(24rem,60vh)]',

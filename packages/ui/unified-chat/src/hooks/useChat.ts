@@ -1148,7 +1148,6 @@ export function useChat(runtime: ChatRuntime | null, options?: UseChatOptions) {
           );
         })
         .finally(() => {
-          // Safety net — stop streaming if onStream 'done' wasn't received
           if (useChatStore.getState().streamingConversationIds[convId]) {
             useChatStore.getState().stopStreaming(convId);
           }

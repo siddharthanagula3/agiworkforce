@@ -86,12 +86,6 @@ export interface SettingsDataAdapter {
   connectors?: SettingsConnector[];
   connectorsLoading?: boolean;
   connectorsError?: string | null;
-  /**
-   * A scoped, non-blocking notice for the connectors panel — e.g. one data
-   * source behind the connector list (GitHub App installations) failed to
-   * load while the rest loaded fine. Unlike `connectorsError`, this never
-   * replaces the connector table; it renders alongside it.
-   */
   connectorsNotice?: string | null;
   retryConnectors?: () => Promise<void> | void;
   connectedConnectors?: ConnectedConnector[];

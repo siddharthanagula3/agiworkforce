@@ -22,8 +22,6 @@ export interface ChartArtifactProps {
   isDark?: boolean;
 }
 
-/** `useReducedMotion` in this package calls `window.matchMedia` unguarded, which
- *  throws wherever the API is absent — an artifact renderer has to survive that. */
 function matchMediaSafe(query: string): MediaQueryList | undefined {
   if (typeof window === 'undefined') return undefined;
   return window.matchMedia?.(query);

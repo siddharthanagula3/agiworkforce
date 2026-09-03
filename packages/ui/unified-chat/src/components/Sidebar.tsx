@@ -176,10 +176,10 @@ export function Sidebar() {
       }}
       className="flex h-full flex-col bg-[var(--chat-surface-base)] border-r border-[var(--chat-border)] overflow-hidden"
     >
-      {/* Top padding — 12px per spec */}
+      {/* Top padding, 12px per spec */}
       <div className="pt-3" />
 
-      {/* Nav items — 32×32 icon buttons, 8px gap, 6px hover background per spec §6.1 */}
+      {/* Nav items, 32×32 icon buttons, 8px gap, 6px hover background per spec §6.1 */}
       <nav className="shrink-0 px-2 pb-2 flex flex-col gap-0.5" aria-label="Main navigation">
         {navItems.map((item) => {
           const isActive = item.id === activeNavId;
@@ -261,7 +261,7 @@ export function Sidebar() {
         </div>
       </ScrollArea>
 
-      {/* Free-plan upgrade pill — bottom of expanded sidebar per spec §6.4 */}
+      {/* Free-plan upgrade pill, bottom of expanded sidebar per spec §6.4 */}
       {isExpanded && showUpgradePill && (
         <div className="shrink-0 px-3 pb-2">
           <div className="flex items-center gap-1.5 rounded-full border border-[var(--chat-border)] bg-[var(--chat-surface-hover)] px-3 py-1 text-xs text-[var(--chat-text-secondary)]">
@@ -284,7 +284,7 @@ export function Sidebar() {
         </div>
       )}
 
-      {/* User Profile — pinned to bottom */}
+      {/* User Profile, pinned to bottom */}
       <div className="shrink-0 border-t border-[var(--chat-border)] px-2 py-2">
         <UserProfile collapsed={!isExpanded} />
       </div>

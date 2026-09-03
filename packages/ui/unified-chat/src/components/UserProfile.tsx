@@ -84,7 +84,7 @@ function UsageMeterRow({ meter, tier, onUpgradeClick }: UsageMeterRowProps) {
     return (
       <div className="flex items-center gap-1.5 px-3 py-2 text-[12px] text-[var(--chat-text-muted)]">
         <Home size={11} className="shrink-0" />
-        <span>Local model — no quota</span>
+        <span>Local model, no quota</span>
       </div>
     );
   }
@@ -325,7 +325,7 @@ export function UserProfile({ collapsed }: UserProfileProps) {
 
             <div className="my-1 h-px bg-[var(--chat-border)]" />
 
-            {/* View all plans (always visible — neutral discovery, no upsell language for byok/local) */}
+            {/* View all plans (always visible, neutral discovery, no upsell language for byok/local) */}
             <MenuButton
               icon={<CreditCard size={13} />}
               label="View all plans"

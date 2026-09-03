@@ -210,7 +210,7 @@ export function ProjectGallery({
         </div>
       )}
 
-      {/* Toolbar — search + new */}
+      {/* Toolbar, search + new */}
       <div className="flex items-center gap-2">
         <div className="relative flex-1">
           <Search
@@ -241,7 +241,7 @@ export function ProjectGallery({
         </button>
       </div>
 
-      {/* Inline create form — emoji picker + name input + presets */}
+      {/* Inline create form, emoji picker + name input + presets */}
       {creating && (
         <form
           onSubmit={handleCreate}

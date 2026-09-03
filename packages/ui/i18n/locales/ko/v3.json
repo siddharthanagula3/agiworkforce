@@ -137,7 +137,7 @@
   },
   "capModal": {
     "title": "You've hit your message limit",
-    "subtitle": "Pick how you want to keep going — switch to a smaller model or wait until your usage resets.",
+    "subtitle": "Pick how you want to keep going, switch to a smaller model or wait until your usage resets.",
     "dismiss": "Dismiss until next reset",
     "switchModel": "Switch to a smaller model",
     "waitReset": "Wait until reset"
@@ -160,7 +160,7 @@
     "shareTitle": "Share this artifact",
     "shareSubtitle": "Anyone with the link can view, but not run code. Conversation stays private.",
     "provenance": "Provenance is preserved",
-    "provenanceDesc": "Recipients see which model generated this — no spoofing.",
+    "provenanceDesc": "Recipients see which model generated this, no spoofing.",
     "htmlPreview": "HTML preview",
     "fileCount_one": "{{count}} file",
     "fileCount_other": "{{count}} files",
@@ -284,7 +284,7 @@
   },
   "plugins": {
     "installed": "Installed plugins",
-    "installedDesc": "Server-side tools AGI can call mid-response. Different from connectors — plugins do not need an account.",
+    "installedDesc": "Server-side tools AGI can call mid-response. Different from connectors, plugins do not need an account.",
     "featured": "Featured in the directory",
     "browseAll": "Browse all plugins",
     "loading": "Loading...",
@@ -319,7 +319,7 @@
         "startTitle": "Start your first task",
         "startDesc": "Describe a recurring work job above and let your AI team handle it.",
         "connectTitle": "Connect a project",
-        "connectDesc": "Link a project to give tasks context — emails, docs, CRM, repo.",
+        "connectDesc": "Link a project to give tasks context, emails, docs, CRM, repo.",
         "scheduleTitle": "Schedule a recurring task",
         "scheduleDesc": "Run tasks automatically on a cron schedule, even while you sleep.",
         "phoneTitle": "Send a task from your phone",

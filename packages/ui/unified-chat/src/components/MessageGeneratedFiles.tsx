@@ -127,17 +127,6 @@ export interface GeneratedFileOriginSignals {
   model?: string | null;
 }
 
-/**
- * SECURITY-FIX F3 (CWE-863): every generated-file descriptor used to claim
- * `managed`/`ManagedGateway`, so a file produced on a Local or BYOK turn showed
- * a "Managed" privacy chip — the label a user reads to know where the bytes
- * went. Only a cross-boundary handoff writes `privacyMode`, so an ordinary
- * Local or BYOK turn carries none and has to be classified from the labels and
- * the provider/model it does carry. The most restrictive observed signal wins,
- * so an unlabeled turn served by a local model can never read as managed, and
- * the returned pair stays internally consistent so a stale providerMode cannot
- * contradict the privacy mode.
- */
 export function generatedFileTrustBoundary(
   signals: GeneratedFileOriginSignals,
 ): GeneratedFileTrustBoundary {

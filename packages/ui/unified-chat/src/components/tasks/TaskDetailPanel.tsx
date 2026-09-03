@@ -46,11 +46,6 @@ import {
   workModeLabel,
 } from './task-display';
 
-// Below `lg` the list and this panel can no longer sit side by side, so
-// selecting a task switches it from a sticky sidebar to a `fixed inset-0`
-// takeover of the whole screen. Only the takeover form is actually a dialog —
-// on a wide viewport the run list beside it stays live and must not be
-// treated as inert.
 const MOBILE_TAKEOVER_QUERY = '(max-width: 1023.98px)';
 
 function useIsNarrowViewport(query: string): boolean {
@@ -74,24 +69,12 @@ function focusableWithin(root: HTMLElement): HTMLElement[] {
   ).filter((element) => element.offsetParent !== null);
 }
 
-/**
- * Contain focus inside the panel while it is covering the screen, close it on
- * Escape, and hand focus back to whatever opened it — without this, a
- * keyboard or screen-reader user opening a task on a phone could tab past the
- * (visually hidden but still-present) run list underneath, and Escape did
- * nothing.
- */
 function useMobileTakeoverDialog(
   panelRef: RefObject<HTMLElement | null>,
   active: boolean,
   onDismiss: () => void,
 ): void {
   const restoreFocusRef = useRef<HTMLElement | null>(null);
-  // `onDismiss` is `() => setSelectedRunId(null)` at the call site — a fresh
-  // closure every render, not memoized. A live task re-renders its caller
-  // every poll tick (TASK_JOURNAL_POLL_INTERVAL_MS), so depending on the
-  // callback directly would tear the listener down and steal focus back to
-  // the panel's first control every few seconds instead of only on open.
   const onDismissRef = useRef(onDismiss);
   onDismissRef.current = onDismiss;
 
@@ -547,7 +530,7 @@ export function TaskDetailPanel({
                     <span className="mt-0.5 block text-[12px] text-muted-foreground">
                       {failure.code ? failure.code : null}
                       {failure.code && failure.retryable ? ' · ' : null}
-                      {failure.retryable ? 'Temporary — safe to run again' : null}
+                      {failure.retryable ? 'Temporary, safe to run again' : null}
                     </span>
                   ) : null}
                 </li>

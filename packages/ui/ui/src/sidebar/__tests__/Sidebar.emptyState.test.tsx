@@ -23,9 +23,6 @@ function renderSidebar(overrides: Partial<SidebarSession>[] = []) {
   );
 }
 
-// The empty state was keyed off the count of RENDERED rows, so collapsing the
-// temporal groups made the rail claim the account had no chats — directly under
-// a group header still reporting how many it held.
 describe('Sidebar empty state', () => {
   it('keeps the conversation count and hides the empty state when a group is collapsed', async () => {
     renderSidebar();
@@ -54,9 +51,6 @@ describe('Sidebar empty state', () => {
     expect(screen.getByText('No conversations yet')).not.toBeNull();
   });
 
-  // WCAG 2.2 SC 2.5.8 wants 24x24. The live target-size sweep cannot see this
-  // control because it only renders when the account has no conversations, and
-  // the QA account has plenty — the interaction crawl reached it by filtering.
   it('gives the empty-state call to action a 24px target', () => {
     // renderSidebar([]) falls back to the populated list, so render directly.
     render(

@@ -39,7 +39,7 @@ function makeBranch(overrides?: Partial<Branch>): Branch {
 const CONV_A = 'conv-a';
 const CONV_B = 'conv-b';
 
-describe('checkpointStore — initial state', () => {
+describe('checkpointStore, initial state', () => {
   beforeEach(resetStore);
 
   it('selectCheckpoints returns [] for unknown conversation', () => {
@@ -55,7 +55,7 @@ describe('checkpointStore — initial state', () => {
   });
 });
 
-describe('checkpointStore — setCheckpoints', () => {
+describe('checkpointStore, setCheckpoints', () => {
   beforeEach(resetStore);
 
   it('stores and retrieves checkpoints for a conversation', () => {
@@ -84,7 +84,7 @@ describe('checkpointStore — setCheckpoints', () => {
   });
 });
 
-describe('checkpointStore — addCheckpoint', () => {
+describe('checkpointStore, addCheckpoint', () => {
   beforeEach(resetStore);
 
   it('creates bucket and prepends checkpoint if list is absent', () => {
@@ -104,7 +104,7 @@ describe('checkpointStore — addCheckpoint', () => {
   });
 });
 
-describe('checkpointStore — removeCheckpoint', () => {
+describe('checkpointStore, removeCheckpoint', () => {
   beforeEach(resetStore);
 
   it('removes a checkpoint by id', () => {
@@ -130,7 +130,7 @@ describe('checkpointStore — removeCheckpoint', () => {
   });
 });
 
-describe('checkpointStore — branches', () => {
+describe('checkpointStore, branches', () => {
   beforeEach(resetStore);
 
   it('setBranches stores branch list for a conversation', () => {
@@ -155,7 +155,7 @@ describe('checkpointStore — branches', () => {
   });
 });
 
-describe('checkpointStore — forkAtCheckpoint', () => {
+describe('checkpointStore, forkAtCheckpoint', () => {
   beforeEach(resetStore);
 
   it('creates a new branch and sets it as active', () => {
@@ -192,7 +192,7 @@ describe('checkpointStore — forkAtCheckpoint', () => {
   });
 });
 
-describe('checkpointStore — clearConversation', () => {
+describe('checkpointStore, clearConversation', () => {
   beforeEach(resetStore);
 
   it('removes all state for a conversation', () => {
