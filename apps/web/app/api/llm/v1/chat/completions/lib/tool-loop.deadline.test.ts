@@ -10,10 +10,15 @@ vi.mock('@/lib/e2b/runtime', () => ({
   pauseE2BSession: vi.fn(),
 }));
 
-vi.mock('@/lib/services/managed-usage-request-service', () => ({
-  reserveManagedUsageProviderStep: vi.fn(),
-  ManagedUsageRequestError: class ManagedUsageRequestError extends Error {},
-}));
+vi.mock('@/lib/services/managed-usage-request-service', async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import('@/lib/services/managed-usage-request-service')>();
+  return {
+    ...actual,
+    reserveManagedUsageProviderStep: vi.fn(),
+    ManagedUsageRequestError: class ManagedUsageRequestError extends Error {},
+  };
+});
 
 import { runToolLoop, withProviderStreamDeadline } from './tool-loop';
 import { CHAT_TOOL_LOOP_BUDGET_MS, TOOL_CALL_DEADLINE_MS } from '@/lib/deadline-policy';
