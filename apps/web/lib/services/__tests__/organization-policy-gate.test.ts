@@ -5,6 +5,7 @@ vi.mock('server-only', () => ({}));
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import {
   evaluateActiveWorkspacePolicy,
+  resolveMfaPolicy,
   resolveSecretHandlingPolicy,
 } from '../organization-policy-gate';
 
@@ -205,5 +206,50 @@ describe('resolveSecretHandlingPolicy', () => {
     const result = await resolveSecretHandlingPolicy(h.db, 'user-1');
 
     expect(result).toEqual({ mode: 'warn', organizationId: null });
+  });
+});
+
+describe('resolveMfaPolicy', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it('returns no policy for a personal-scope request', async () => {
+    const h = harness();
+    h.query.mockResolvedValueOnce([]);
+
+    const result = await resolveMfaPolicy(h.db, 'user-1');
+
+    expect(result).toEqual({ policy: null, organizationId: null });
+  });
+
+  it('returns no policy for an organization that has never saved one', async () => {
+    const h = harness();
+    h.query.mockResolvedValueOnce([{ organization_id: ORGANIZATION_ID }]).mockResolvedValueOnce([]);
+
+    const result = await resolveMfaPolicy(h.db, 'user-1');
+
+    expect(result).toEqual({ policy: null, organizationId: ORGANIZATION_ID });
+  });
+
+  it('returns the saved policy, including requireMfa, for a governed organization', async () => {
+    const h = harness();
+    h.query
+      .mockResolvedValueOnce([{ organization_id: ORGANIZATION_ID }])
+      .mockResolvedValueOnce([policyRow({ metadata: { requireMfa: true } })]);
+
+    const result = await resolveMfaPolicy(h.db, 'user-1');
+
+    expect(result.organizationId).toBe(ORGANIZATION_ID);
+    expect(result.policy?.requireMfa).toBe(true);
+  });
+
+  it('treats a policy read failure as ungoverned', async () => {
+    const h = harness();
+    h.query
+      .mockResolvedValueOnce([{ organization_id: ORGANIZATION_ID }])
+      .mockRejectedValueOnce(new Error('connection reset'));
+
+    const result = await resolveMfaPolicy(h.db, 'user-1');
+
+    expect(result).toEqual({ policy: null, organizationId: ORGANIZATION_ID });
   });
 });

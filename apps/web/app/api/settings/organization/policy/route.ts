@@ -47,6 +47,8 @@ const PolicyPatchSchema = z
     retentionEnforced: z.boolean(),
     externalSharingEnabled: z.boolean(),
     secretHandling: SecretHandlingSchema,
+    requireMfa: z.boolean(),
+    monthlySpendCapCents: z.number().int().positive().nullable(),
   })
   .partial()
   .refine((value) => Object.keys(value).length > 0, {
@@ -148,6 +150,11 @@ async function handlePatch(request: NextRequest): Promise<NextResponse | Respons
     externalSharingEnabled:
       parsed.data.externalSharingEnabled ?? current.policy.externalSharingEnabled,
     secretHandling: parsed.data.secretHandling ?? current.policy.secretHandling,
+    requireMfa: parsed.data.requireMfa ?? current.policy.requireMfa,
+    monthlySpendCapCents:
+      parsed.data.monthlySpendCapCents !== undefined
+        ? parsed.data.monthlySpendCapCents
+        : current.policy.monthlySpendCapCents,
     metadata: current.policy.metadata ?? {},
   };
 

@@ -84,6 +84,8 @@ function toDraft(policy: WorkspaceAdminPolicy): PolicyDraft {
     retentionEnforced: policy.retentionEnforced,
     externalSharingEnabled: policy.externalSharingEnabled,
     secretHandling: policy.secretHandling,
+    requireMfa: policy.requireMfa,
+    monthlySpendCapCents: policy.monthlySpendCapCents,
   };
 }
 

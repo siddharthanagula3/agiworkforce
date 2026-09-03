@@ -7,7 +7,9 @@ export type PolicyAsk =
   | { resource: 'chat_sync'; surface: PolicySurface }
   | { resource: 'privacy_mode'; mode: PrivacyMode }
   | { resource: 'audit_export' }
-  | { resource: 'external_sharing' };
+  | { resource: 'external_sharing' }
+  | { resource: 'mfa'; mfaEnrolled: boolean }
+  | { resource: 'spend_cap'; monthToDateSpendCents: number };
 
 export type PolicyDecisionCode =
   | 'allowed'
@@ -16,7 +18,9 @@ export type PolicyDecisionCode =
   | 'privacy_mode_not_allowed'
   | 'surface_sync_disabled'
   | 'audit_export_disabled'
-  | 'external_sharing_disabled';
+  | 'external_sharing_disabled'
+  | 'mfa_required'
+  | 'spend_cap_exceeded';
 
 export interface PolicyObligation {
   type: 'local_to_byok_preview' | 'retention_days';
@@ -190,6 +194,45 @@ export function evaluateOrganizationPolicy(policy: AdminPolicy, ask: PolicyAsk):
           code: 'external_sharing_disabled',
           reason:
             'Your workspace administrator has turned off public sharing. Links already created are unaffected.',
+          obligations,
+        };
+      }
+      return {
+        allowed: true,
+        code: 'allowed',
+        reason: 'Allowed by workspace policy.',
+        obligations,
+      };
+    }
+
+    case 'mfa': {
+      if (policy.requireMfa && !ask.mfaEnrolled) {
+        return {
+          allowed: false,
+          code: 'mfa_required',
+          reason:
+            'Your workspace requires two-factor authentication. Turn it on in Settings, then try again.',
+          obligations,
+        };
+      }
+      return {
+        allowed: true,
+        code: 'allowed',
+        reason: 'Allowed by workspace policy.',
+        obligations,
+      };
+    }
+
+    case 'spend_cap': {
+      if (
+        policy.monthlySpendCapCents !== null &&
+        ask.monthToDateSpendCents >= policy.monthlySpendCapCents
+      ) {
+        return {
+          allowed: false,
+          code: 'spend_cap_exceeded',
+          reason:
+            'Your workspace has reached its monthly spend cap for AGI-managed compute. Ask an administrator to raise the cap, or wait for it to reset next month.',
           obligations,
         };
       }

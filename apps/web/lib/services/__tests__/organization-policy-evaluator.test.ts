@@ -164,6 +164,66 @@ describe('evaluateOrganizationPolicy — privacy mode and audit export', () => {
   });
 });
 
+describe('evaluateOrganizationPolicy — mfa', () => {
+  it('denies an unenrolled caller when the administrator requires mfa', () => {
+    const decision = evaluateOrganizationPolicy(policy({ requireMfa: true }), {
+      resource: 'mfa',
+      mfaEnrolled: false,
+    });
+
+    expect(decision.allowed).toBe(false);
+    expect(decision.code).toBe('mfa_required');
+  });
+
+  it('allows an enrolled caller when the administrator requires mfa', () => {
+    const decision = evaluateOrganizationPolicy(policy({ requireMfa: true }), {
+      resource: 'mfa',
+      mfaEnrolled: true,
+    });
+
+    expect(decision.allowed).toBe(true);
+  });
+
+  it('allows an unenrolled caller when the administrator does not require mfa', () => {
+    const decision = evaluateOrganizationPolicy(policy({ requireMfa: false }), {
+      resource: 'mfa',
+      mfaEnrolled: false,
+    });
+
+    expect(decision.allowed).toBe(true);
+  });
+});
+
+describe('evaluateOrganizationPolicy — spend cap', () => {
+  it('denies once month-to-date spend reaches the cap', () => {
+    const decision = evaluateOrganizationPolicy(policy({ monthlySpendCapCents: 10_000 }), {
+      resource: 'spend_cap',
+      monthToDateSpendCents: 10_000,
+    });
+
+    expect(decision.allowed).toBe(false);
+    expect(decision.code).toBe('spend_cap_exceeded');
+  });
+
+  it('allows spend under the cap', () => {
+    const decision = evaluateOrganizationPolicy(policy({ monthlySpendCapCents: 10_000 }), {
+      resource: 'spend_cap',
+      monthToDateSpendCents: 9_999,
+    });
+
+    expect(decision.allowed).toBe(true);
+  });
+
+  it('allows any spend when no cap is configured', () => {
+    const decision = evaluateOrganizationPolicy(policy({ monthlySpendCapCents: null }), {
+      resource: 'spend_cap',
+      monthToDateSpendCents: 1_000_000,
+    });
+
+    expect(decision.allowed).toBe(true);
+  });
+});
+
 describe('evaluateOrganizationPolicy — obligations', () => {
   it('carries the preview requirement and retention window on every decision', () => {
     const subject = policy({ requireLocalToByokPreview: true, retentionDays: 30 });
