@@ -36,8 +36,10 @@ import {
   getModelMetadataById,
   resolveModelEffort,
   WEB_SEARCH_CITATION_DELTA_KEY,
+  WEB_SEARCH_CITATION_KIND,
   type CloudWorkMode,
   type Effort,
+  type WebSearchCitationDeltaWire,
 } from '@agiworkforce/types';
 import { createManagedChatIdempotencyKey } from '@agiworkforce/utils/managed-chat-idempotency';
 import {
@@ -112,6 +114,7 @@ import {
 } from '@/features/chat/lib/agent-activity-notice';
 import {
   hasCanonicalToolActivity,
+  normalizeCitationUrl,
   repairContinuationSeam,
   SEAM_INSPECTION_WINDOW,
 } from '@agiworkforce/unified-chat';
@@ -1060,8 +1063,11 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
   // sees, so this is tracked and persisted separately.
   const applyCitationDelta = (url: string, title: string) => {
     if (!url || !title) return;
-    if (currentAnnotationCitations.some((c) => c.url === url)) return;
-    currentAnnotationCitations.push({ type: 'url_citation', url, title });
+    const dedupeKey = normalizeCitationUrl(url) ?? url;
+    const existingKey = (existingUrl: string | undefined) =>
+      existingUrl ? (normalizeCitationUrl(existingUrl) ?? existingUrl) : existingUrl;
+    if (currentAnnotationCitations.some((c) => existingKey(c.url) === dedupeKey)) return;
+    currentAnnotationCitations.push({ type: WEB_SEARCH_CITATION_KIND, url, title });
     patchMessageMeta({ citations: [...currentAnnotationCitations] });
   };
 
@@ -2080,7 +2086,7 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
           }
 
           const citationBlock = parsed.choices?.[0]?.delta?.[WEB_SEARCH_CITATION_DELTA_KEY] as
-            | { url?: unknown; title?: unknown }
+            | Partial<WebSearchCitationDeltaWire>
             | undefined;
           if (typeof citationBlock?.url === 'string' && typeof citationBlock.title === 'string') {
             applyCitationDelta(citationBlock.url, citationBlock.title);

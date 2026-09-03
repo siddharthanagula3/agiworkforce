@@ -145,6 +145,7 @@ export {
 } from './components/markdown/MermaidDiagram';
 export { preprocessMath } from './components/markdown/preprocessMath';
 export { CitationChip, type MarkdownCitation } from './components/markdown/CitationChip';
+export { normalizeCitationUrl } from './components/markdown/citationMarkers';
 
 export {
   LocalByokHandoffDialog,
