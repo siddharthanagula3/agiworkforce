@@ -786,7 +786,7 @@ mod tests {
         ] {
             assert!(
                 commands.iter().any(|command| command.name == name),
-                "/{name} must be registered (M11 — 2026-05-14 — for Claude Code parity)"
+                "/{name} must be registered (M11 to 2026-05-14, for Claude Code parity)"
             );
         }
     }

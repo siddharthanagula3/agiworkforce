@@ -169,9 +169,6 @@ sys.stdin.readline()  # block until shutdown
 
 #[tokio::test]
 async fn stdio_elicitation_reply_unblocks_response() {
-    // The server sends `elicitation/create` before answering tools/list. The
-    // AutoDecline handler must reply so the sim proceeds — if the reply were
-    // never written, tools/list would never arrive and this would hang/time out.
     let timeouts = McpTimeouts {
         initialize: Duration::from_secs(3),
         list_tools: Duration::from_secs(3),

@@ -48,8 +48,6 @@ struct ScriptedHost {
     content_loop: LoopControl,
     /// Fixed per-turn cost reported to the budget guard.
     cost: f64,
-    /// When `Some(n)`, `is_cancelled()` reports `true` once `n` tool batches have
-    /// been committed — used to characterize mid-turn cancellation.
     cancel_after_commits: Option<usize>,
 
     // ---- recording ----
@@ -612,9 +610,6 @@ async fn budget_cap_reports_no_tool_first_completion() {
 
 #[tokio::test]
 async fn mid_turn_stream_error_propagates() {
-    // The continuation completion errors; run_turn surfaces it (the CLI caller
-    // then applies finalize_cancelled_turn semantics — app-local, not the
-    // engine's concern).
     let mut err_continuation = completion("", vec![]);
     err_continuation.error = Some("stream disconnected".to_string());
     let mut host = ScriptedHost::new(vec![
@@ -734,7 +729,6 @@ async fn cancellation_mid_turn_stops_after_committed_batch() {
 
     // Exactly one dispatch batch ran before the stop was observed.
     assert_eq!(host.committed.len(), 1);
-    // Only the first completion was consumed — no continuation round-trip.
     assert_eq!(host.assistant_texts, vec!["i0"]);
     // The turn still finalizes cleanly (TurnComplete emitted, partial response).
     assert_eq!(outcome.response, "i0");

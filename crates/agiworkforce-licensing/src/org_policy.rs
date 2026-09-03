@@ -51,8 +51,6 @@ pub struct OrgPolicyAuditExport {
     pub path: Option<String>,
 }
 
-/// `OrgPolicy` — the exact schema from design §2.2. `deny_unknown_fields`
-/// mirrors the TS zod `.strict()`. Values are validated for SHAPE only.
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct OrgPolicy {
@@ -91,12 +89,6 @@ impl OrgPolicy {
 // Monotonic tightening
 // ---------------------------------------------------------------------------
 
-/// The permission fields that participate in the monotonic-tightening lattice.
-/// Non-permission metadata (`policyId`, `orgId`, `version`, `issuedAt`,
-/// `updateChannel`, `auditExport.path`) is excluded — it grants no capability.
-///
-/// Deserializable so the fixture manifest's inline `baseline` (a prior policy's
-/// permissions) can be replayed directly.
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PolicyPermissions {
@@ -110,13 +102,6 @@ pub struct PolicyPermissions {
     pub audit_export: OrgPolicyAuditExport,
 }
 
-/// The product-default baseline every first policy tightens against — the
-/// maximally-permissive point of the lattice (all providers/models, BYOK
-/// allowed, managed-cloud egress allowed, unbounded retention, audit not
-/// required). A first policy can only pare this down; pass a prior policy's
-/// permissions instead to enforce version-to-version monotonicity.
-///
-/// A function rather than a `const` because the fields own heap-allocated `Vec`s.
 pub fn default_policy_baseline() -> PolicyPermissions {
     PolicyPermissions {
         allowed_providers: vec!["*".to_string()],
@@ -326,19 +311,6 @@ fn err(code: OrgPolicyErrorCode, message: &str) -> OrgPolicyVerifyResult {
     })
 }
 
-/// Verify a signed org-policy file offline. Pure, no I/O, never panics.
-///
-/// Precondition: `license_claims` MUST already be verified via `verify_license`
-/// — this function trusts `license_claims.policy_keys` as the authorized signer
-/// set and `license_claims.org_id` as the binding org.
-///
-/// # Arguments
-/// * `file_bytes` — raw bytes of the signed policy file.
-/// * `license_claims` — the verified license claims (root of trust).
-/// * `now_ms` — local clock in Unix epoch milliseconds.
-/// * `baseline` — the baseline the policy must tighten against. `None` uses
-///   [`default_policy_baseline`]. Pass a prior policy's permissions to enforce
-///   version-to-version monotonicity.
 pub fn verify_org_policy(
     file_bytes: &[u8],
     license_claims: &LicenseClaims,
