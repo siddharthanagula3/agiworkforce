@@ -8,18 +8,6 @@
  * `endpointClass: 'openrouter'` (see provider-attribution.ts), which sets
  * `thinkingFormat: 'openrouter'` for reasoning-model routes.
  *
- * Four quirks ported from `apps/web/lib/llm-providers/openrouter.ts`
- * (source of truth for this port — see the per-module docstrings):
- *   1. Required attribution headers (`HTTP-Referer` / `X-Title`) per
- *      OpenRouter ToS — configurable via `siteUrl` / `appTitle`, no hard
- *      Next.js env dependency (see below).
- *   2. `cache_control` passthrough on the system message for `anthropic/*`
- *      and `google/*` routes. See `./cache-control.ts`.
- *   3. Usage normalization for the non-standard cache-token, cost and
- *      provider-attribution shapes OpenRouter emits. See `./usage.ts`.
- *   4. Provider routing preferences (order / fallback / data collection)
- *      sourced from adapter config or per-request metadata. See `./provider-routing.ts`.
- *
  * @packageDocumentation
  */
 
