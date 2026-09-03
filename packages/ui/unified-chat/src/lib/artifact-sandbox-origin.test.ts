@@ -1,19 +1,3 @@
-/**
- * artifact-sandbox-origin.test.ts — DES-C15, the origin half.
- *
- * The whole point of the artifact origin is that the preview document does NOT
- * inherit the app's Content-Security-Policy. That only holds if:
- *   - we resolve the right origin per platform (Tauri maps a custom scheme
- *     differently on Windows than on macOS/Linux),
- *   - we refuse origins that could not be an isolated renderer,
- *   - we authenticate the frame's messages before trusting them, and
- *   - we address the payload to that frame and nothing else.
- *
- * Each of those is asserted here against the real module, not a double.
- *
- * @vitest-environment jsdom
- */
-
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import {

@@ -51,7 +51,7 @@ describe('readConnectorConnectRequest · accepts the server envelope', () => {
     expect(read(serverPayload({ reason }))?.reason).toBe(reason);
   });
 
-  it('accepts connectUrl null — the deployment has no OAuth app for the connector', () => {
+  it('accepts connectUrl null, the deployment has no OAuth app for the connector', () => {
     const request = read(serverPayload({ connectUrl: null, scopes: [] }));
     expect(request).not.toBeNull();
     expect(request?.connectUrl).toBeNull();

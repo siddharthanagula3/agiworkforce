@@ -1,21 +1,3 @@
-/**
- * GeneratedFileCard — surface-agnostic card for a `GeneratedFile` from a
- * compute session (PDF / DOCX / XLSX / image / archive / etc.).
- *
- * Closes the shared-package half of the suite-transformation TODO:
- *   "Add Web/Mobile/Desktop generated-file request, status, preview,
- *    download, share, source session, and privacy-label UI."
- *
- * The component is presentation-only — host apps build a
- * `GeneratedFilePresentation` via `summarizeGeneratedFileBundle` (from
- * `@agiworkforce/types`) and pass it in, plus action callbacks for
- * download / share / source-session navigation. Surfaces in Local mode
- * can omit `onShare` to hide the share affordance; Cloud Managed surfaces
- * can omit `onDownload` while a transfer approval is pending.
- *
- * Round-7 autonomous suite-transformation slice, 2026-05-21.
- */
-
 import { useEffect, useState, type ReactElement } from 'react';
 import {
   AlertTriangle,

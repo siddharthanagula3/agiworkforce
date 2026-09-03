@@ -32,7 +32,7 @@ export function EmptyState({
 
   return (
     <div className="flex h-full flex-col items-center justify-center gap-4 px-6 text-center">
-      {/* Plan badge — free-tier only. Hosts opt into any cloud/billing CTA. */}
+      {/* Plan badge, free-tier only. Hosts opt into any cloud/billing CTA. */}
       {showBadge && (
         <div
           className="inline-flex items-center gap-1.5 rounded-full border border-[var(--chat-border)] bg-[var(--chat-surface-base)] px-3 py-1 text-xs"
@@ -57,7 +57,7 @@ export function EmptyState({
         </div>
       )}
 
-      {/* Display headline — single line, serif display per spec §8.1 + §2 */}
+      {/* Display headline, single line, serif display per spec §8.1 + §2 */}
       <h1
         className="text-[28px] leading-[36px] font-normal tracking-tight"
         style={{

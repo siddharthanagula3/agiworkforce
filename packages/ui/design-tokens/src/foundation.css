@@ -1,4 +1,4 @@
-/* Foundation tokens — the canonical owner of every shared design value.
+/* Foundation tokens, the canonical owner of every shared design value.
  *
  * Three layers, and components only ever touch the third:
  *   1. primitives  --n-*, --hue-*   the only place a colour literal may exist
@@ -73,7 +73,7 @@
 
     --rule-subtle: var(--n-100);
     --rule: var(--n-200);
-    --rule-strong: #8a919e; /* 3.07 on surface-page — carries state, so 1.4.11 applies */
+    --rule-strong: #8a919e; /* 3.07 on surface-page, carries state, so 1.4.11 applies */
 
     --surface-hover: var(--n-100);
     --surface-active: var(--n-200);

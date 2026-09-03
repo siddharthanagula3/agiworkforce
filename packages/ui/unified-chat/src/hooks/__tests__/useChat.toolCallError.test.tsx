@@ -57,7 +57,7 @@ function lastAssistantMessage() {
     .messagesByConversation[convId]?.find((m) => m.role === 'assistant');
 }
 
-describe('useChat — tool call left stuck at running on a transport-level error', () => {
+describe('useChat, tool call left stuck at running on a transport-level error', () => {
   beforeEach(() => {
     useChatStore.setState({
       activeConversationId: 'conv-1',
@@ -108,7 +108,7 @@ describe('useChat — tool call left stuck at running on a transport-level error
   });
 });
 
-describe('useChat — addMsg forwards the real fields on message creation', () => {
+describe('useChat, addMsg forwards the real fields on message creation', () => {
   beforeEach(() => {
     useChatStore.setState({
       activeConversationId: 'conv-1',
@@ -218,7 +218,7 @@ describe('useChat — addMsg forwards the real fields on message creation', () =
   });
 });
 
-describe('useChat — writing style request contract', () => {
+describe('useChat, writing style request contract', () => {
   beforeEach(() => {
     useChatStore.setState({
       activeConversationId: 'conv-style',
@@ -295,7 +295,7 @@ describe('useChat — writing style request contract', () => {
   });
 });
 
-describe('useChat — stream events stay pinned to their origin conversation across a mid-turn switch', () => {
+describe('useChat, stream events stay pinned to their origin conversation across a mid-turn switch', () => {
   beforeEach(() => {
     useChatStore.setState({
       activeConversationId: 'conv-a',
@@ -473,7 +473,7 @@ describe('useChat — stream events stay pinned to their origin conversation acr
   });
 });
 
-describe('useChat — execution-boundary model admission', () => {
+describe('useChat, execution-boundary model admission', () => {
   const byokModel: ModelInfo = {
     id: 'fixture-direct-model',
     name: 'Direct Provider Fixture',
@@ -544,7 +544,7 @@ describe('useChat — execution-boundary model admission', () => {
   });
 });
 
-describe('useChat — registry-backed Auto routing', () => {
+describe('useChat, registry-backed Auto routing', () => {
   const codingPrompt = 'Implement a function and unit tests';
   const explanationPrompt = 'Explain this function';
   const codingTaskType = classifyTaskLocally(codingPrompt, []).type;

@@ -34,7 +34,7 @@ function assistantMessages() {
   );
 }
 
-describe('useChat — deep research status arriving before any content', () => {
+describe('useChat, deep research status arriving before any content', () => {
   beforeEach(() => {
     useChatStore.setState({
       activeConversationId: 'conv-1',

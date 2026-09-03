@@ -150,7 +150,7 @@ function makeNativeDesktopRuntime(sendMessage: ChatRuntime['sendMessage']): Chat
   };
 }
 
-describe('useChat — automatic Web search request clamp', () => {
+describe('useChat, automatic Web search request clamp', () => {
   beforeEach(() => {
     useSettingsStore.setState({ genericWebSearchDeploymentEnabled: false });
   });

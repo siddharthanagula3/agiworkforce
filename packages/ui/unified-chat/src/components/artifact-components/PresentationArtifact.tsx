@@ -88,7 +88,7 @@ export function PresentationArtifact({ artifact, className }: PresentationArtifa
         void el.requestFullscreen().catch(() => {});
       }
     } catch {
-      /* fullscreen unsupported — non-fatal */
+      // noop
     }
   }, []);
 

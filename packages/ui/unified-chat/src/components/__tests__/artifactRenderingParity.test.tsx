@@ -1,4 +1,3 @@
-
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent, act, within } from '@testing-library/react';
 import {
@@ -303,7 +302,7 @@ describe('parseEmail', () => {
     expect(parsed.body).toBe('Hi team,\n\nNumbers below.');
   });
 
-  it('treats content without headers entirely as body — nothing dropped', () => {
+  it('treats content without headers entirely as body, nothing dropped', () => {
     const parsed = parseEmail('Hi team,\n\nSubject changed since last time.');
     expect(parsed.headers).toEqual({});
     expect(parsed.body).toBe('Hi team,\n\nSubject changed since last time.');

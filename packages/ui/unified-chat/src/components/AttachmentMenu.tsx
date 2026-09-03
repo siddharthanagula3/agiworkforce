@@ -39,8 +39,6 @@ export interface AttachmentMenuProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onAddFiles: () => void;
-  /** Host sink for any image captured from inside the menu — screen capture and
-      webcam photo both deliver through it, so a host that wires it gets both. */
   onScreenshot?: (file: File) => void;
   onSelectFolder?: () => void;
   onRecordSkill?: () => void;
@@ -353,7 +351,7 @@ export function AttachmentMenu({
       }, 'image/png');
       onOpenChange(false);
     } catch {
-      // User cancelled or permission denied — silently ignore
+      // noop
     } finally {
       setScreenshotting(false);
     }
@@ -534,7 +532,7 @@ export function AttachmentMenu({
                 />
               ))}
             {/* Omitted entirely when the host has no code-execution transport
-              at all (e.g. a local/Tauri runtime) — disabled-but-visible when
+              at all (e.g. a local/Tauri runtime), disabled-but-visible when
               present but unavailable for the current model/provider/
               deployment, so it's never rendered as a control the server
               would silently ignore. */}
@@ -555,7 +553,7 @@ export function AttachmentMenu({
 
             <Divider />
 
-            {/* Group 5: Style — inline expandable submenu */}
+            {/* Group 5: Style, inline expandable submenu */}
             <MenuItem
               icon={<Paintbrush size={15} />}
               label={

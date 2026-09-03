@@ -20,7 +20,7 @@ export function ActionBar({ messageId, content, onRetry, onFeedback }: ActionBar
       setCopied(true);
       setTimeout(() => setCopied(false), 1500);
     } catch {
-      // clipboard write failed silently — no toast here as ActionBar is a shared package
+      // noop
     }
   }
 
@@ -51,7 +51,7 @@ export function ActionBar({ messageId, content, onRetry, onFeedback }: ActionBar
         <Copy size={14} />
       </Button>
 
-      {/* Thumbs feedback is only rendered when the host wires `onFeedback` —
+      {/* Thumbs feedback is only rendered when the host wires `onFeedback`.
           otherwise a rating would be a purely local toggle that vanishes on
           reload (a misleading dead control), so it is omitted. Desktop does not
           yet persist message reactions; this is a tracked delta. */}
@@ -85,7 +85,7 @@ export function ActionBar({ messageId, content, onRetry, onFeedback }: ActionBar
         </>
       )}
 
-      {/* Retry only renders when a regenerate handler is wired — an unwired
+      {/* Retry only renders when a regenerate handler is wired, an unwired
           button that does nothing is a dead control. Desktop does not yet wire
           regenerate through the runtime; tracked delta. */}
       {onRetry && (

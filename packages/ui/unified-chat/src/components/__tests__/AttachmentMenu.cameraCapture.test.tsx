@@ -46,7 +46,7 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-describe('AttachmentMenu — webcam capture', () => {
+describe('AttachmentMenu, webcam capture', () => {
   it('offers "Take a photo" alongside screen capture when the host wires a capture sink', () => {
     renderMenu(vi.fn());
 

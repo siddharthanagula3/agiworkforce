@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 
 import { useAgentControlStore } from '../agentControlStore';
 
-describe('agentControlStore — safe default (UI-AGENTMODE-DEFAULT-01)', () => {
+describe('agentControlStore, safe default (UI-AGENTMODE-DEFAULT-01)', () => {
   beforeEach(() => {
     useAgentControlStore.setState({ byConversation: {}, byProject: {} });
   });

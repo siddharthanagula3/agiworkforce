@@ -2,7 +2,6 @@ import { describe, it, expect } from 'vitest';
 import { preprocessMath } from './preprocessMath';
 
 describe('preprocessMath', () => {
-
   it('converts \\( ... \\) to $ ... $', () => {
     expect(preprocessMath('The value is \\(x^2\\) here.')).toBe('The value is $x^2$ here.');
   });
@@ -71,7 +70,7 @@ describe('preprocessMath', () => {
   });
 });
 
-describe('preprocessMath — scanner parity with the expression it replaced', () => {
+describe('preprocessMath, scanner parity with the expression it replaced', () => {
   const LEGACY_RE = /(```[\s\S]*?```|`[^`\n]*`)|\\\[([\s\S]+?)\\\]|\\\(([\s\S]+?)\\\)/g;
   function legacy(content: string): string {
     return content.replace(

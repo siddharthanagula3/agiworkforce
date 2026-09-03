@@ -1,4 +1,3 @@
-
 import { describe, expect, it, beforeEach, vi } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -9,7 +8,7 @@ beforeEach(() => {
   useProjectStore.setState({ projects: [], activeProjectId: null });
 });
 
-describe('ProjectGallery — enhanced create UX', () => {
+describe('ProjectGallery, enhanced create UX', () => {
   it('opens the create form when New is clicked', async () => {
     render(<ProjectGallery />);
     await userEvent.click(screen.getByRole('button', { name: /new/i }));

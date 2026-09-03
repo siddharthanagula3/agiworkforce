@@ -1,23 +1,3 @@
-/**
- * CheckpointManager
- *
- * UI to list, restore, delete, and fork from prior message snapshots.
- *
- * Ported from apps/desktop/src/components/UnifiedAgenticChat/CheckpointManager.tsx
- *
- * Breaking changes vs source:
- *  - `chat.checkpointList/Create/Restore/Delete` (@agiworkforce/desktop-command-client) removed.
- *    Hosts pass `onLoad`, `onCreate`, `onRestore`, `onDelete` callbacks so the
- *    component has zero backend coupling.
- *  - Restore/delete confirmation routes through `useConfirmAction` from
- *    `@agiworkforce/ui`. `Dialog/Input/Textarea` from desktop UI remain
- *    inline Tailwind implementations for the create-checkpoint form.
- *  - `toast` (sonner) removed — hosts show toasts via `onError`/`onSuccess`
- *    optional callbacks, or use the returned Promise rejection to handle errors.
- *  - `Checkpoint` type is re-exported as `ManagerCheckpoint` (camelCase, no
- *    snake_case DB fields) to match the store type.
- */
-
 import { useCallback, useEffect, useState } from 'react';
 import {
   AlertCircle,

@@ -2,7 +2,6 @@ import { Brain, EyeOff, Hand, Zap, BookOpen } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { usePlanModeStore, selectPlanMode } from '../stores/planModeStore';
 
-// Re-exported primitive types (host-app Button / Tooltip — hosts supply their own
 interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: 'default' | 'ghost' | 'outline';
   size?: 'sm' | 'icon';

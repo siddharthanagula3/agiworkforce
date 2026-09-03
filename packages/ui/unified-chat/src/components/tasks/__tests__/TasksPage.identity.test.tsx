@@ -30,8 +30,6 @@ function client(runs: CloudAgentRun[], overrides: Partial<ManagedCloudAgentRunCl
   return {
     listRuns: vi.fn(async () => ({ runs, nextCursor: null })),
     getRun: vi.fn(async () => ({
-      // The journal read does NOT carry conversationTitle — only the list
-      // endpoint joins it. This is the shape that used to blank the headline.
       run: { ...runs[0]!, conversationTitle: undefined },
       events: [],
       nextAfterSequence: 0,
@@ -56,7 +54,6 @@ describe('Tasks run identity', () => {
     renderTasks(client(runs));
 
     expect(await screen.findByText('Orchard Calculator and CSV Generator')).toBeTruthy();
-    // the mode is not lost — it moves to the metadata line
     expect(screen.getByText('AGI Work')).toBeTruthy();
     expect(
       screen.getByRole('button', {

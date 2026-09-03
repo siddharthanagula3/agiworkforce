@@ -209,7 +209,7 @@
   "list": {
     "continueGenerating": "Continue generating",
     "continueGeneratingAria": "Continue generating the previous response",
-    "incomplete": "This response may be incomplete — the connection to the model was interrupted.",
+    "incomplete": "This response may be incomplete, the connection to the model was interrupted.",
     "incompleteWithReason": "Response may be incomplete: {{reason}}",
     "regenerateAria": "Regenerate this response",
     "scrollToLatest": "Scroll to latest",

@@ -249,7 +249,7 @@ export function MessageList({
                     })
                   : t(
                       'list.incomplete',
-                      'This response may be incomplete — the connection to the model was interrupted.',
+                      'This response may be incomplete, the connection to the model was interrupted.',
                     )}
               </span>
               {onRegenerateMessage && (

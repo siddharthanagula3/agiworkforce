@@ -286,20 +286,6 @@ export interface ChatInterfaceProps {
    */
   conversationActions?: ConversationHeaderProps;
   onSubmitGoal?: (goal: string) => void | Promise<void>;
-  /**
-   * Host capability that derives renderable artifacts from an assistant
-   * message's markdown (see {@link DeriveMessageArtifacts}).
-   *
-   * Wire it and a model answer containing a fenced ```html / ```jsx / ```svg /
-   * ```mermaid block becomes a real artifact card in the transcript, a
-   * conversation-scoped entry in the artifact store, and an openable panel —
-   * the behaviour web has had since `extractArtifacts` landed in its
-   * `MessageBubble`. Omit it and nothing changes: only artifacts the runtime
-   * pre-attached to `message.artifacts` render.
-   *
-   * MUST be referentially stable — it is a `useMemo` dependency for the whole
-   * transcript.
-   */
   deriveMessageArtifacts?: DeriveMessageArtifacts;
   showProvenanceFooter?: boolean;
 }
@@ -630,8 +616,6 @@ export function ChatInterface({
           savedContent = result.content;
         } catch (err) {
           console.error('[ChatInterface] Failed to persist artifact edit:', err);
-          // Fall through — still reflect the edit locally so the user's
-          // draft isn't silently discarded.
         }
       }
 
@@ -655,7 +639,7 @@ export function ChatInterface({
             const versions = await runtime.getArtifactVersions(updated);
             setActiveArtifactVersions(versions.length > 0 ? versions : [updated]);
           } catch {
-            // Non-fatal — the stepper just won't refresh with the new version.
+            // noop
           }
         }
       }
@@ -712,7 +696,7 @@ export function ChatInterface({
 
     return (
       <div className={cn('relative flex h-full flex-col', !hasMessages && 'justify-center')}>
-        {/* Header — only rendered when a conversation with messages is active */}
+        {/* Header, only rendered when a conversation with messages is active */}
         {hasMessages && activeConversationId && (
           <ConversationHeader
             {...conversationActions}
@@ -733,7 +717,7 @@ export function ChatInterface({
           <GoalHandoffChip messages={messages} onSubmitGoal={onSubmitGoal} />
         ) : null}
 
-        {/* Content area — grows to fill remaining vertical space, hides overflow for
+        {/* Content area, grows to fill remaining vertical space, hides overflow for
             MessageList's own internal scroll container */}
         <div className={hasMessages ? 'flex-1 overflow-hidden' : 'shrink-0'}>
           {messageLoadState.status === 'loading' && activeConversationId ? (
@@ -781,7 +765,7 @@ export function ChatInterface({
           )}
         </div>
 
-        {/* Input area — ALWAYS at bottom in natural document flow.
+        {/* Input area, ALWAYS at bottom in natural document flow.
             Never position:fixed. Never teleported. */}
         <div className="shrink-0 px-4 pb-2">
           {/*
@@ -841,7 +825,7 @@ export function ChatInterface({
                 slashCommandHost={slashCommandHost}
               />
               {/* The sample-prompt mode chips that used to sit here were removed
-                  on every surface (founder 2026-08-06) — web, desktop, and
+                  on every surface (founder 2026-08-06), web, desktop, and
                   mobile. The empty state is the branded greeting in
                   `emptyStateSlot` and nothing else. */}
               <Disclaimer variant={disclaimerVariant} />
@@ -898,7 +882,7 @@ export function ChatInterface({
           {/* Left: collapsible sidebar */}
           {sidebarSlot !== undefined ? sidebarSlot : <Sidebar />}
 
-          {/* Center: main content — wrapped in ErrorBoundary to catch render errors.
+          {/* Center: main content, wrapped in ErrorBoundary to catch render errors.
               Hidden when an artifact is open in fullscreen mode. */}
           {!(artifactOpen && artifactMode === 'fullscreen') && (
             <main className="flex flex-1 min-w-0 flex-col overflow-hidden">
@@ -906,7 +890,7 @@ export function ChatInterface({
             </main>
           )}
 
-          {/* Right: artifact panel — only mounted when open (Phase 3).
+          {/* Right: artifact panel, only mounted when open (Phase 3).
               In fullscreen mode the panel fills the remaining width. */}
           {artifactOpen && (
             <div
@@ -929,12 +913,12 @@ export function ChatInterface({
           )}
         </div>
 
-        {/* Search overlay — fallback only. Desktop mounts its own Cmd+K modal. */}
+        {/* Search overlay, fallback only. Desktop mounts its own Cmd+K modal. */}
         {enableSearchOverlay && (
           <SearchOverlay open={searchModalOpen} onClose={toggleSearchModal} />
         )}
 
-        {/* Settings modal — shared across desktop & web */}
+        {/* Settings modal, shared across desktop & web */}
         <SettingsModal />
       </HostBridgeContext.Provider>
     </RuntimeContext.Provider>

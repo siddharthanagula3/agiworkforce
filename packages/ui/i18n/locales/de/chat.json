@@ -209,7 +209,7 @@
   "list": {
     "continueGenerating": "Generierung fortsetzen",
     "continueGeneratingAria": "Generierung der vorherigen Antwort fortsetzen",
-    "incomplete": "Diese Antwort ist möglicherweise unvollständig — die Verbindung zum Modell wurde unterbrochen.",
+    "incomplete": "Diese Antwort ist möglicherweise unvollständig, die Verbindung zum Modell wurde unterbrochen.",
     "incompleteWithReason": "Antwort möglicherweise unvollständig: {{reason}}",
     "regenerateAria": "Diese Antwort neu generieren",
     "scrollToLatest": "Zum neuesten scrollen",
@@ -242,7 +242,7 @@
     "noneReported": "Der Anbieter hat für diese Unterhaltung keine Token-Zahlen gemeldet.",
     "outputTokens": "Ausgabe-Token",
     "panelLabel": "Token-Nutzung der Unterhaltung",
-    "partialCoverage": "{{reported}} von {{total}} Antworten haben die Nutzung gemeldet. Der Rest stammt aus der Zeit vor der Nutzungserfassung oder von einem Anbieter, der keine Daten meldet — dieser Gesamtwert ist also eine Untergrenze.",
+    "partialCoverage": "{{reported}} von {{total}} Antworten haben die Nutzung gemeldet. Der Rest stammt aus der Zeit vor der Nutzungserfassung oder von einem Anbieter, der keine Daten meldet, dieser Gesamtwert ist also eine Untergrenze.",
     "reasoningTokens": "Denk-Token"
   },
   "stream": {

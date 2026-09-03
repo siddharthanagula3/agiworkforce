@@ -11,7 +11,7 @@
 
        The literal name after each var() is load-bearing, not belt-and-braces.
        next/font attaches its --font-* variables to <body>, and a var() inside a
-       custom property is substituted on the element that DECLARES it — here
+       custom property is substituted on the element that DECLARES it, here
        :root, one level above <body>, where those variables do not exist. A
        bare var(--font-newsreader) would therefore make this token
        invalid-at-computed-value-time and every font-family reading it would
@@ -154,7 +154,7 @@
 }
 
 /* ───────────────────────────────────────────────────────────────────────────
-   ChatGPT-style "cool" palette — OPT-IN via [data-chat-theme='cool'] on the
+   ChatGPT-style "cool" palette, OPT-IN via [data-chat-theme='cool'] on the
    chat root (or <html>). The default (warm / Claude-leaning) palette above is
    left untouched; only the palette-bearing vars are overridden here so radii,
    fonts and state colors continue to inherit from :root / .dark.
@@ -166,7 +166,7 @@
   /* Cool · light (ChatGPT light).
      Anchored to `html:not(.dark)`, not bare `:not(.dark)`: the theme class
      lives on <html> while the attribute sits on a nested div, and bare
-     `:not(.dark)` matches <body> as an ancestor — so the light palette painted
+     `:not(.dark)` matches <body> as an ancestor, so the light palette painted
      straight over dark mode. Verified in the running app: /chat rendered a
      white shell and a #f9f9f9 sidebar while every other route was black. */
   html:not(.dark) [data-chat-theme='cool'],
@@ -188,12 +188,12 @@
     --chat-code-copy-hover-fg: #0d0d0d;
     --chat-text-primary: #0d0d0d;
     /* AUDIT-FIX GOV-34: one #8e8e8e served as both muted and placeholder and
-       measured 3.28:1 on #ffffff — below AA at the 11-12px sizes in use.
+       measured 3.28:1 on #ffffff, below AA at the 11-12px sizes in use.
          secondary        #5d5d5d  6.58:1 on #ffffff (unchanged)
          muted/placeholder #6a6a6a 5.41:1 on #ffffff, 5.14:1 on the
                                    #f9f9f9 sidebar, 5.05:1 on the #f7f7f8 code
                                    surface and 4.75:1 on the #f0f0f0 hover
-                                   surface — AA on every surface this theme
+                                   surface, AA on every surface this theme
                                    paints it against, not just the page bg. */
     --chat-text-secondary: #5d5d5d;
     --chat-text-muted: #6a6a6a;

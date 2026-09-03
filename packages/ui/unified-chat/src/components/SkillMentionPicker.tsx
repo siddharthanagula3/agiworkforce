@@ -88,7 +88,7 @@ export const SkillMentionPicker: React.FC<SkillMentionPickerProps> = ({
     >
       <div className="px-3 py-2 border-b border-[hsl(var(--border))]">
         <span className="text-[12px] font-semibold uppercase tracking-wide text-[hsl(var(--muted-foreground))]">
-          AI Skills — type to filter
+          AI Skills, type to filter
         </span>
       </div>
       {filtered.map((skill, i) => (

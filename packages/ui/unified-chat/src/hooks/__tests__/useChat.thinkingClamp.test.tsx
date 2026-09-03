@@ -85,7 +85,7 @@ function makeCloudRuntime(sendMessage: ChatRuntime['sendMessage']): ChatRuntime 
   };
 }
 
-describe('useChat — extended-thinking send clamp (DES-C03)', () => {
+describe('useChat, extended-thinking send clamp (DES-C03)', () => {
   beforeEach(() => {
     useSettingsStore.setState({ codeExecutionEnabled: false });
     useModelStore.setState({ thinkingEnabled: false });

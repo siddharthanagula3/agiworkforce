@@ -1,4 +1,3 @@
-
 import { AlertTriangle, Maximize2, Minimize2, RefreshCw } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { cn } from '../../lib/utils';
@@ -314,7 +313,7 @@ export function ReactPreview({
         data-testid="react-preview-frame"
       >
         {/* DES-C15: mounting the iframe here would render a permanently blank
-            frame — every script it needs is blocked by the CSP this srcdoc
+            frame, every script it needs is blocked by the CSP this srcdoc
             inherits from the embedder, so `react-preview-ready` never arrives.
             Explain it and point at the source instead of faking a load. */}
         {scriptsBlocked ? (

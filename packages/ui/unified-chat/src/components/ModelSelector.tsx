@@ -319,7 +319,7 @@ function BestAutoRow({ isSelected, onSelect, disabled = false }: BestAutoRowProp
               auto
             </span>
           </div>
-          {/* Routing decision badge — shown after first auto-routed message */}
+          {/* Routing decision badge, shown after first auto-routed message */}
           {isSelected && routedModel ? (
             <div className="mt-0.5 flex items-center gap-1">
               <Sparkles size={9} className="shrink-0 text-[var(--chat-accent-primary-text)]" />
@@ -592,7 +592,7 @@ export function ModelSelector({
             'border border-[var(--chat-border)] bg-[var(--chat-surface-elevated)]',
           )}
         >
-          {/* Provider count badge — surfaces differentiator */}
+          {/* Provider count badge, surfaces differentiator */}
           <div className="flex items-center justify-between border-b border-[var(--chat-border)] px-3 py-2">
             <span className="text-[12px] font-semibold uppercase tracking-wider text-[var(--chat-text-muted)]">
               {t('selector.model', 'Model')}
@@ -747,7 +747,7 @@ export function ModelSelector({
 
               return (
                 <div key={providerKey} className="mb-0.5">
-                  {/* Provider group header — collapsible */}
+                  {/* Provider group header, collapsible */}
                   <button
                     type="button"
                     onClick={() => toggleGroup(providerKey)}
@@ -767,7 +767,7 @@ export function ModelSelector({
                     />
                   </button>
 
-                  {/* Model rows — hidden when collapsed */}
+                  {/* Model rows, hidden when collapsed */}
                   {!isCollapsed &&
                     provModels.map((m) => {
                       const isSelected = m.id === selectedModelId;
@@ -898,7 +898,7 @@ export function ModelSelector({
             })}
           </div>
 
-          {/* Footer — manage API keys */}
+          {/* Footer, manage API keys */}
           {onSettingsClick && !usingFallback && displayModels.length > 0 && (
             <div className="border-t border-[var(--chat-border)] p-1">
               <Popover.Close asChild>

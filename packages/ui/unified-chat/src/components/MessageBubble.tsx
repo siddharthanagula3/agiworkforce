@@ -675,7 +675,7 @@ export function MessageBubble({
       setCopied(true);
       setTimeout(() => setCopied(false), 1500);
     } catch {
-      // clipboard write failed silently — shared package renders no toast
+      // noop
     }
   }
 
@@ -778,12 +778,12 @@ export function MessageBubble({
         </div>
       )}
 
-      {/* Thinking block — rendered above text content */}
+      {/* Thinking block, rendered above text content */}
       {!canonicalActivity && message.thinkingBlock && (
         <ThinkingBlock block={message.thinkingBlock} />
       )}
 
-      {/* Web search results — rendered above text content */}
+      {/* Web search results, rendered above text content */}
       {!canonicalActivity &&
         message.webSearchResults?.map((search) => (
           <LegacyWebSearchCard key={search.id} search={search} />
@@ -799,7 +799,7 @@ export function MessageBubble({
         )}
       </div>
 
-      {/* Citations — rendered below text content */}
+      {/* Citations, rendered below text content */}
       {message.citations && message.citations.length > 0 && (
         <div className="flex flex-wrap gap-1.5 mt-1">
           {message.citations.map((citation, idx) => (
@@ -848,7 +848,7 @@ export function MessageBubble({
         </div>
       )}
 
-      {/* Managed-cloud sandbox files (x_generated_files) — shared cards with
+      {/* Managed-cloud sandbox files (x_generated_files), shared cards with
           an authed Download action. Never present on Local-mode messages.
           Also renders while an E2B execution tool is still running so the
           user sees an honest "Running code…" strip before any file exists. */}
@@ -858,7 +858,7 @@ export function MessageBubble({
       )}
 
       {/* Action row (web parity): assistant actions sit below EVERY completed
-          message, always visible — not only the last turn. ActionBar renders
+          message, always visible, not only the last turn. ActionBar renders
           Copy (self-contained); retry/feedback appear only when their handlers
           are wired (honest omission on desktop today). `isLast` no longer gates
           the row. */}
@@ -880,7 +880,7 @@ export function MessageBubble({
         </p>
       )}
 
-      {/* Managed quota / rate-limit refusal — the reason, the reset time the
+      {/* Managed quota / rate-limit refusal, the reason, the reset time the
           server actually reported, and (only when the host exposes checkout)
           the upgrade that lifts it. Replaces a vanishing toast over an empty
           bubble. */}
@@ -894,7 +894,7 @@ export function MessageBubble({
         />
       )}
 
-      {/* Failed turn — render the failure IN the transcript next to a Retry
+      {/* Failed turn, render the failure IN the transcript next to a Retry
           instead of leaving a blank bubble whose only signal was a toast that
           has already disappeared. */}
       {failureMessage && (
