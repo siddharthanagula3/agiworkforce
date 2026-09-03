@@ -1,5 +1,3 @@
-
-
 export interface ResponsesInputTextContent {
   type: 'input_text';
   text: string;
@@ -86,6 +84,7 @@ export interface ResponsesCreateParams {
   stream_options?: { include_obfuscation?: boolean };
   metadata?: Record<string, string>;
   include?: Array<'web_search_call.action.sources'>;
+  prompt_cache_key?: string;
 }
 
 interface BaseEvent {
