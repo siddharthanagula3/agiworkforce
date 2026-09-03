@@ -59,15 +59,6 @@ const PROVIDER_API_KEY_ENV_KEYS: Readonly<Record<string, readonly string[]>> = {
   ],
 };
 
-/**
- * Providers the registry describes as a protocol plus a base URL and a key env
- * var, rather than as an adapter package.
- *
- * One provider id speaks one protocol: the chat route dispatches on the
- * provider, so two dialects behind the same id would be unresolvable. The
- * registry compiler admits the shape; this map is where the ambiguity would
- * surface, so it refuses it here.
- */
 const PROTOCOL_ROUTE_HARNESSES: ReadonlyMap<string, ProtocolHarness> = (() => {
   const byProvider = new Map<string, ProtocolHarness>();
   for (const route of listProtocolRoutes()) {
@@ -222,13 +213,6 @@ export function getProtocolRouteHarness(providerId: string): ProtocolHarness | n
   return PROTOCOL_ROUTE_HARNESSES.get(providerId) ?? null;
 }
 
-/**
- * Construct the adapter for a route the registry describes by protocol.
- *
- * Nothing here is provider-specific: the wire dialect, the endpoint and the
- * credential all come from the harness, so a new reseller or a second dialect
- * on an existing vendor is catalog data rather than a package.
- */
 export function buildProtocolRouteAdapter(
   providerId: string,
   options: ServerProviderAdapterOptions = {},
