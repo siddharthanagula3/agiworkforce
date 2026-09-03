@@ -18,6 +18,8 @@ export interface ObservabilityMetricsRow {
   cacheHitRate: number;
   actualCostCents: number;
   retailCostCents: number;
+  /** Fraction of `requests` that carry a retail price, in [0,1]. */
+  retailCoverage: number;
   valueMultiplier: number | null;
   fallbackCount: number;
   latencyP50Ms: number | null;
@@ -97,6 +99,7 @@ interface ObservabilityRow {
   actual_cost_cents: SqlScalar;
   retail_cost_cents: SqlScalar;
   retail_priced_requests: SqlScalar;
+  retail_priced_actual_cost_cents: SqlScalar;
   fallback_count: SqlScalar;
   latency_p50_ms: SqlScalar;
   latency_p95_ms: SqlScalar;
@@ -108,6 +111,7 @@ function toMetricsRow(row: ObservabilityRow): ObservabilityMetricsRow {
   const actualCostCents = toNumber(row.actual_cost_cents);
   const retailCostCents = toNumber(row.retail_cost_cents);
   const retailPricedRequests = toNumber(row.retail_priced_requests);
+  const retailPricedActualCostCents = toNumber(row.retail_priced_actual_cost_cents);
 
   return {
     key: row.key ?? 'unknown',
@@ -118,8 +122,12 @@ function toMetricsRow(row: ObservabilityRow): ObservabilityMetricsRow {
     cacheHitRate: requests > 0 ? cacheHitRequests / requests : 0,
     actualCostCents,
     retailCostCents,
+    retailCoverage: requests > 0 ? retailPricedRequests / requests : 0,
+    // Both figures scoped to the same retail-priced subset -- summing retail
+    // cost (already 0 on an unpriced row) against actual cost over EVERY row
+    // dilutes the multiplier by however few rows happen to carry a price.
     valueMultiplier:
-      retailPricedRequests > 0 && actualCostCents > 0 ? retailCostCents / actualCostCents : null,
+      retailPricedActualCostCents > 0 ? retailCostCents / retailPricedActualCostCents : null,
     fallbackCount: toNumber(row.fallback_count),
     latencyP50Ms: toNullableNumber(row.latency_p50_ms),
     latencyP95Ms: toNullableNumber(row.latency_p95_ms),
@@ -146,6 +154,8 @@ export async function getObservabilityBreakdown(
        sum(pce.provider_cost_cents)::bigint as actual_cost_cents,
        sum(coalesce(${RETAIL_COST_EXPRESSION}, 0))::bigint as retail_cost_cents,
        count(*) filter (where ${RETAIL_COST_EXPRESSION} is not null)::bigint as retail_priced_requests,
+       sum(pce.provider_cost_cents) filter (where ${RETAIL_COST_EXPRESSION} is not null)::bigint
+         as retail_priced_actual_cost_cents,
        count(*) filter (where ${FALLBACK_EXPRESSION})::bigint as fallback_count,
        percentile_cont(0.5) within group (order by ${LATENCY_EXPRESSION}) as latency_p50_ms,
        percentile_cont(0.95) within group (order by ${LATENCY_EXPRESSION}) as latency_p95_ms
