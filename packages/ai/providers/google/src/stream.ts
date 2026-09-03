@@ -1,4 +1,3 @@
-
 import type { StreamChunk } from '@agiworkforce/types';
 
 import type { GeminiStreamChunk } from './types';
@@ -167,7 +166,7 @@ export async function* translateGeminiStream(
         .map((web, idx) => ({
           type: 'web_search_result' as const,
           url: web.uri,
-          title: web.title || web.uri,
+          title: web.title || '',
           position: idx + 1,
         }));
       if (results.length > 0) {

@@ -195,7 +195,7 @@ export async function executeWebSearch(
     for (const r of rawResults) {
       if (results.length >= maxResults) break;
       if (typeof r?.url !== 'string' || !isHttpUrl(r.url)) continue;
-      const title = typeof r.title === 'string' && r.title.length > 0 ? r.title : r.url;
+      const title = typeof r.title === 'string' ? r.title : '';
       const rawSnippet = typeof r.snippet === 'string' ? r.snippet : '';
       const snippet =
         rawSnippet.length > MAX_SNIPPET_LENGTH
@@ -225,7 +225,7 @@ export function formatWebSearchResultForModel(outcome: WebSearchOutcome): string
   const lines = outcome.results.map((r, i) => {
     const datePart = r.date ? ` (${r.date})` : '';
     const snippetPart = r.snippet ? `\n   ${r.snippet}` : '';
-    return `${i + 1}. ${r.title}${datePart}\n   ${r.url}${snippetPart}`;
+    return `${i + 1}. ${r.title || r.url}${datePart}\n   ${r.url}${snippetPart}`;
   });
   return (
     `Search results for "${outcome.query}"${truncationNote}\n\n` +

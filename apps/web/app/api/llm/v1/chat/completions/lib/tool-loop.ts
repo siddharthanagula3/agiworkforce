@@ -1046,7 +1046,7 @@ export function serverToolResultSources(content: unknown[]): FetchedSource[] {
     if (obj['type'] !== 'web_search_result') continue;
     const url = obj['url'];
     if (typeof url !== 'string') continue;
-    const title = typeof obj['title'] === 'string' && obj['title'] ? obj['title'] : url;
+    const title = typeof obj['title'] === 'string' ? obj['title'] : '';
     const snippet = obj['encrypted_content'];
     sources.push(typeof snippet === 'string' && snippet ? { url, title, snippet } : { url, title });
   }
