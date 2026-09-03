@@ -117,9 +117,35 @@ describe('map search card capability', () => {
       { surface: 'web' as const, toolsCapable: true, userMessage: 'Explain compound interest.' },
       {},
     ],
+    [
+      'a bare data-structure mention of the word map',
+      {
+        surface: 'web' as const,
+        toolsCapable: true,
+        userMessage: 'Explain what a hash map is.',
+      },
+      {},
+    ],
   ])('does not offer the tool for %s', (_label, params, overrides) => {
     const parsed = request(overrides);
     applyMapSearchCardCapability(parsed, params);
     expect(parsed.tools).toBeUndefined();
+  });
+
+  it('still offers the tool for a nearby-place search naming a proper noun', () => {
+    const parsed = request();
+
+    applyMapSearchCardCapability(parsed, {
+      surface: 'web',
+      toolsCapable: true,
+      userMessage: 'find coffee shops near Union Square',
+    });
+
+    expect(parsed.tools).toHaveLength(1);
+    expect(parsed.tools?.[0]?.function.name).toBe('search_maps');
+    expect(parsed.tool_choice).toEqual({
+      type: 'function',
+      function: { name: 'search_maps' },
+    });
   });
 });
