@@ -18,7 +18,6 @@ export interface ObservabilityMetricsRow {
   cacheHitRate: number;
   actualCostCents: number;
   retailCostCents: number;
-  /** Fraction of `requests` that carry a retail price, in [0,1]. */
   retailCoverage: number;
   valueMultiplier: number | null;
   fallbackCount: number;
@@ -123,9 +122,6 @@ function toMetricsRow(row: ObservabilityRow): ObservabilityMetricsRow {
     actualCostCents,
     retailCostCents,
     retailCoverage: requests > 0 ? retailPricedRequests / requests : 0,
-    // Both figures scoped to the same retail-priced subset -- summing retail
-    // cost (already 0 on an unpriced row) against actual cost over EVERY row
-    // dilutes the multiplier by however few rows happen to carry a price.
     valueMultiplier:
       retailPricedActualCostCents > 0 ? retailCostCents / retailPricedActualCostCents : null,
     fallbackCount: toNumber(row.fallback_count),

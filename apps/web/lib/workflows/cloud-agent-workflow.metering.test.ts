@@ -127,7 +127,6 @@ function toolLoopOptions(): Record<string, unknown> {
   return mocks.runToolLoop.mock.calls[0]![1] as Record<string, unknown>;
 }
 
-/** What the tool loop returns for one provider step, and what a ledger row written before today still holds. */
 function providerStepResult(): Record<string, unknown> {
   return {
     lines: [{ line: 'data: {}\n' }],

@@ -942,14 +942,6 @@ const EXTENDED_PROMPT_CACHE_TTL_MS = 60 * 60 * MS_PER_SECOND;
 const RESPONSE_CACHE_TTL_MS = 5 * 60 * MS_PER_SECOND;
 const NO_CACHE_AFFINITY_TTL_MS = 0;
 
-/**
- * How long a served route stays worth pinning a conversation to, by the cache
- * mechanism its class implies. The ceiling for each class, not an average: a
- * shorter affinity window only gives up cache hits early, while a longer one
- * on a route with no cache to keep warm just steers traffic without benefit,
- * which `no_provider_cache`'s zero TTL prevents by recording no affinity at
- * all for it.
- */
 const ROUTE_CACHE_CLASS_AFFINITY_TTL_MS: Readonly<Record<RouteCacheClass, number>> = {
   provider_implicit_prompt_cache: PROVIDER_PROMPT_CACHE_TTL_MS,
   provider_explicit_prompt_cache: EXTENDED_PROMPT_CACHE_TTL_MS,
@@ -971,16 +963,6 @@ export interface ServedRouteAffinity {
   upstreamProvider?: string;
 }
 
-/**
- * Pin a conversation to the route that just served it, for a duration bounded
- * by how long that route's own cache mechanism stays warm.
- *
- * Fire-and-forget with the same fail-open contract as every other write in
- * this module: a lost affinity write costs the next turn a cache hit, never
- * correctness. `ttlMs <= 0` (an unknown route, or one with no cache to keep
- * warm) records nothing — pinning without a cache benefit only narrows
- * routing for no reason.
- */
 export async function recordServedRouteAffinity(input: {
   conversationId: string;
   routeId: string;
