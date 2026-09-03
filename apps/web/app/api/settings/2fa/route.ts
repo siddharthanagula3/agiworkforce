@@ -9,11 +9,8 @@ import { getNeonDb } from '@/lib/server/neon-db';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { claimTotpStep } from '@/lib/server/two-factor-replay';
-import {
-  verifyTOTPStep,
-  verifyBackupCode,
-  decryptTOTPSecret,
-} from '@/features/settings/services/user-preferences';
+import { verifyTOTPStep, verifyBackupCode } from '@/features/settings/services/user-preferences';
+import { openTotpSecret } from '@/lib/crypto/totp-envelope';
 import { readJsonBody } from '@/lib/read-json-body';
 import { recordAuditEvent } from '@/lib/security-audit';
 
@@ -76,7 +73,7 @@ async function handleDisable2FA(request: NextRequest) {
     return NextResponse.json({ success: true, message: '2FA was not enabled' });
   }
 
-  const secret = await decryptTOTPSecret(row.totp_secret_enc);
+  const secret = openTotpSecret(row.totp_secret_enc);
   const step = await verifyTOTPStep(secret, code);
   let backupCodeIndex = -1;
 

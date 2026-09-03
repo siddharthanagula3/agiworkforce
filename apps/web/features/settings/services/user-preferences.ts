@@ -20,130 +20,6 @@ const TOTP_CONFIG = {
 
 const BASE32_ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
 
-const TOTP_ENCRYPTION_UNAVAILABLE_MESSAGE =
-  'TOTP secret encryption is not configured. Set TOTP_ENCRYPTION_KEY before enabling 2FA setup.';
-
-const TOTP_KEY_BYTES = 32;
-const MIN_TOTP_KEYSOURCE_BYTES = 64;
-const HEX_32_BYTE = /^[0-9a-fA-F]{64}$/;
-const PLAINTEXT_BASE32_SECRET = /^[A-Z2-7]+$/;
-
-function assertHighEntropyTOTPKeysource(value: string): void {
-  if (HEX_32_BYTE.test(value)) return;
-  if (new TextEncoder().encode(value).length < MIN_TOTP_KEYSOURCE_BYTES) {
-    throw new Error(
-      'TOTP_ENCRYPTION_KEY too short: the first 32 characters are used verbatim as the AES-256 key, ' +
-        `so it must be 64 hex characters or at least ${MIN_TOTP_KEYSOURCE_BYTES} UTF-8 bytes. ` +
-        "Generate with: node -e \"console.log(require('crypto').randomBytes(32).toString('hex'))\"",
-    );
-  }
-  if (/^([\x20-\x7e])\1+$/.test(value)) {
-    throw new Error('TOTP_ENCRYPTION_KEY appears to be a single repeated character');
-  }
-}
-
-function getConfiguredTOTPKeyMaterial(): Uint8Array | null {
-  const envKey = typeof process !== 'undefined' ? process.env['TOTP_ENCRYPTION_KEY'] : undefined;
-
-  if (!envKey) {
-    return null;
-  }
-
-  assertHighEntropyTOTPKeysource(envKey);
-
-  // The rotation key ring derives the same bytes the same way
-  // (`Buffer.from(raw.slice(0, 32), 'utf8')`); changing this orphans stored secrets.
-  const material = new TextEncoder().encode(envKey.slice(0, TOTP_KEY_BYTES));
-  if (material.length !== TOTP_KEY_BYTES) {
-    throw new Error(
-      'TOTP_ENCRYPTION_KEY must start with 32 single-byte characters; a multi-byte character ' +
-        'yields the wrong AES-256 key length. Use a 64-character hex key.',
-    );
-  }
-
-  return material;
-}
-
-async function importTOTPEncryptionKey(keyMaterial: Uint8Array): Promise<CryptoKey> {
-  return crypto.subtle.importKey(
-    'raw',
-    keyMaterial as unknown as ArrayBuffer,
-    { name: 'AES-GCM', length: 256 },
-    false,
-    ['encrypt', 'decrypt'],
-  );
-}
-
-async function getLegacyTOTPEncryptionKey(): Promise<CryptoKey | null> {
-  return null;
-}
-
-async function getTOTPEncryptionKey(): Promise<CryptoKey> {
-  const keyMaterial = getConfiguredTOTPKeyMaterial();
-  if (!keyMaterial) {
-    throw new Error(TOTP_ENCRYPTION_UNAVAILABLE_MESSAGE);
-  }
-
-  return importTOTPEncryptionKey(keyMaterial);
-}
-
-async function encryptTOTPSecret(secret: string): Promise<string> {
-  const key = await getTOTPEncryptionKey();
-  const encoder = new TextEncoder();
-  const data = encoder.encode(secret);
-
-  const iv = crypto.getRandomValues(new Uint8Array(12));
-
-  const encrypted = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, data);
-
-  const combined = new Uint8Array(iv.length + encrypted.byteLength);
-  combined.set(iv);
-  combined.set(new Uint8Array(encrypted), iv.length);
-
-  return btoa(String.fromCharCode(...combined));
-}
-
-async function decryptTOTPSecret(encryptedSecret: string): Promise<string> {
-  if (PLAINTEXT_BASE32_SECRET.test(encryptedSecret)) {
-    throw new Error(
-      'Stored TOTP secret is not encrypted. Refusing to accept a plaintext second-factor secret; ' +
-        're-enroll the account in two-factor authentication.',
-    );
-  }
-
-  const combined = Uint8Array.from(atob(encryptedSecret), (c) => c.charCodeAt(0));
-
-  const iv = combined.slice(0, 12);
-  const encryptedData = combined.slice(12);
-
-  const configuredKey = getConfiguredTOTPKeyMaterial();
-  const candidateKeys: CryptoKey[] = [];
-
-  if (configuredKey) {
-    candidateKeys.push(await importTOTPEncryptionKey(configuredKey));
-  }
-
-  const legacyKey = await getLegacyTOTPEncryptionKey();
-  if (legacyKey) {
-    candidateKeys.push(legacyKey);
-  }
-
-  if (candidateKeys.length === 0) {
-    throw new Error(TOTP_ENCRYPTION_UNAVAILABLE_MESSAGE);
-  }
-
-  for (const key of candidateKeys) {
-    try {
-      const decrypted = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, key, encryptedData);
-      return new TextDecoder().decode(decrypted);
-    } catch {
-      // Try the next candidate key so legacy secrets remain recoverable.
-    }
-  }
-
-  throw new Error('Unable to decrypt stored TOTP secret with the configured key material.');
-}
-
 export interface TOTPSetupResult {
   secret: string;
   otpauthUrl: string;
@@ -1091,7 +967,6 @@ const settingsService = new SettingsService();
 export default settingsService;
 export { settingsService };
 
-// encryptTOTPSecret / decryptTOTPSecret are also exported for the pending
 export {
   generateTOTPSecret,
   generateOTPAuthURL,
@@ -1101,7 +976,5 @@ export {
   generateBackupCodes,
   hashBackupCode,
   verifyBackupCode,
-  encryptTOTPSecret,
-  decryptTOTPSecret,
   TOTP_CONFIG,
 };

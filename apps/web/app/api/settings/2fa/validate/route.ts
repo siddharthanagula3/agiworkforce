@@ -8,11 +8,8 @@ import { getClerkAuthUser } from '@/lib/api-auth';
 import { getNeonDb } from '@/lib/server/neon-db';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
-import {
-  verifyTOTPStep,
-  verifyBackupCode,
-  decryptTOTPSecret,
-} from '@/features/settings/services/user-preferences';
+import { verifyTOTPStep, verifyBackupCode } from '@/features/settings/services/user-preferences';
+import { openTotpSecret } from '@/lib/crypto/totp-envelope';
 import { readJsonBody } from '@/lib/read-json-body';
 import { claimTotpStep } from '@/lib/server/two-factor-replay';
 
@@ -48,7 +45,7 @@ async function handleValidateTOTP(request: NextRequest) {
     throw createError.badRequest('2FA is not enabled on this account');
   }
 
-  const secret = await decryptTOTPSecret(row.totp_secret_enc);
+  const secret = openTotpSecret(row.totp_secret_enc);
   const step = await verifyTOTPStep(secret, code);
 
   if (step !== null) {

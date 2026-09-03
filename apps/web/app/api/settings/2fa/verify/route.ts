@@ -1,4 +1,3 @@
-
 import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -9,7 +8,8 @@ import { getClerkAuthUser } from '@/lib/api-auth';
 import { getNeonDb } from '@/lib/server/neon-db';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
-import { verifyTOTPCode, decryptTOTPSecret } from '@/features/settings/services/user-preferences';
+import { verifyTOTPCode } from '@/features/settings/services/user-preferences';
+import { openTotpSecret } from '@/lib/crypto/totp-envelope';
 import { readJsonBody } from '@/lib/read-json-body';
 
 interface TwoFactorRow {
@@ -48,7 +48,7 @@ async function handleVerify2FA(request: NextRequest) {
     return NextResponse.json({ success: true, message: '2FA is already enabled' });
   }
 
-  const secret = await decryptTOTPSecret(row.totp_secret_enc);
+  const secret = openTotpSecret(row.totp_secret_enc);
   const valid = await verifyTOTPCode(secret, code);
 
   if (!valid) {
