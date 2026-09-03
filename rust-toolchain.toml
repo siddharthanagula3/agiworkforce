@@ -4,7 +4,7 @@
 # build-windows-release.yml, release-cli.yml, release-desktop.yml) pins
 # `1.94.0` via actions-rust-lang/setup-rust-toolchain or the `RUST_VERSION`
 # env var. No Cargo.toml in this workspace declares a `rust-version` key, so
-# this file is the only pin — keep it in lockstep with CI when that changes.
+# this file is the only pin, keep it in lockstep with CI when that changes.
 [toolchain]
 channel = "1.94.0"
 components = ["clippy", "rustfmt"]
