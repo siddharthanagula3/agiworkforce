@@ -9,7 +9,14 @@
 
 import * as Sentry from '@sentry/nextjs';
 
-import { commonInitOptions, isSentryConfigured } from './lib/sentry-shared';
+import { commonInitOptions, isSentryConfigured, type TenantTaggedEvent } from './lib/sentry-shared';
+import { getTenantScope } from './lib/observability/trace-context';
+
+function tagRequestOrganization(event: TenantTaggedEvent): void {
+  const { organizationId } = getTenantScope();
+  if (!organizationId) return;
+  event.tags = { ...event.tags, organization_id: organizationId };
+}
 
 export async function register() {
   if (process.env['NEXT_RUNTIME'] === 'nodejs') {
@@ -50,7 +57,7 @@ export async function register() {
     isSentryConfigured() &&
     (process.env['NEXT_RUNTIME'] === 'nodejs' || process.env['NEXT_RUNTIME'] === 'edge')
   ) {
-    Sentry.init(commonInitOptions());
+    Sentry.init(commonInitOptions({ tenantTagHook: tagRequestOrganization }));
   }
 }
 

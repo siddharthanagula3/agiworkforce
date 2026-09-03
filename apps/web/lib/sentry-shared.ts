@@ -285,15 +285,42 @@ export function scrubBreadcrumb(breadcrumb: Breadcrumb): Breadcrumb {
   return breadcrumb;
 }
 
-export function commonInitOptions() {
+export interface TenantTaggedEvent {
+  tags?: Record<string, unknown>;
+}
+
+export interface CommonInitOptions {
+  tenantTagHook?: (event: TenantTaggedEvent) => void;
+}
+
+function scrubAndTagEvent(hook: (event: TenantTaggedEvent) => void) {
+  return (event: ErrorEvent, hint?: EventHint): ErrorEvent | null => {
+    const scrubbed = scrubEvent(event, hint);
+    if (scrubbed) hook(scrubbed);
+    return scrubbed;
+  };
+}
+
+function scrubAndTagTransaction(hook: (event: TenantTaggedEvent) => void) {
+  return (event: TransactionEvent, hint?: EventHint): TransactionEvent | null => {
+    const scrubbed = scrubTransactionEvent(event, hint);
+    if (scrubbed) hook(scrubbed);
+    return scrubbed;
+  };
+}
+
+export function commonInitOptions(options: CommonInitOptions = {}) {
+  const { tenantTagHook } = options;
   return {
     dsn: getSentryDsn(),
     enabled: isSentryConfigured(),
     environment: process.env.NODE_ENV,
     sendDefaultPii: false,
     tracesSampleRate: 0.1,
-    beforeSend: scrubEvent,
-    beforeSendTransaction: scrubTransactionEvent,
+    beforeSend: tenantTagHook ? scrubAndTagEvent(tenantTagHook) : scrubEvent,
+    beforeSendTransaction: tenantTagHook
+      ? scrubAndTagTransaction(tenantTagHook)
+      : scrubTransactionEvent,
     beforeSendSpan: scrubSpan,
     beforeBreadcrumb: scrubBreadcrumb,
   };
