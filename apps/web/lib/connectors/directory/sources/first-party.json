@@ -1,0 +1,212 @@
+[
+  {
+    "connectorId": "google-drive",
+    "name": "Google Drive",
+    "description": "Search, read, and manage files in your Google Drive and Google Workspace.",
+    "url": "https://drivemcp.googleapis.com/mcp/v1",
+    "transport": "streamable-http",
+    "toolNames": [
+      "search_files",
+      "list_recent_files",
+      "get_file_metadata",
+      "get_file_permissions",
+      "read_file_content",
+      "download_file_content",
+      "create_file",
+      "copy_file"
+    ],
+    "docsUrl": "https://developers.google.com/workspace/drive/api/guides/configure-mcp-server",
+    "overridesInternalUrl": true,
+    "directoryOnly": false
+  },
+  {
+    "connectorId": "gmail",
+    "name": "Gmail",
+    "description": "Search, draft, and send email through Gmail.",
+    "url": "https://gmailmcp.googleapis.com/mcp/v1",
+    "transport": "streamable-http",
+    "toolNames": [
+      "search_threads",
+      "get_thread",
+      "get_message",
+      "list_drafts",
+      "create_draft",
+      "list_labels",
+      "label_message",
+      "unlabel_message",
+      "label_thread",
+      "unlabel_thread"
+    ],
+    "docsUrl": "https://developers.google.com/workspace/gmail/api/guides/configure-mcp-server",
+    "overridesInternalUrl": true,
+    "directoryOnly": false
+  },
+  {
+    "connectorId": "google-calendar",
+    "name": "Google Calendar",
+    "description": "Manage events and scheduling in Google Calendar.",
+    "url": "https://calendarmcp.googleapis.com/mcp/v1",
+    "transport": "streamable-http",
+    "toolNames": [
+      "list_calendars",
+      "list_events",
+      "get_event",
+      "search_events",
+      "suggest_time",
+      "create_event",
+      "update_event",
+      "delete_event",
+      "respond_to_event"
+    ],
+    "docsUrl": "https://developers.google.com/workspace/calendar/api/guides/configure-mcp-server",
+    "overridesInternalUrl": true,
+    "directoryOnly": false
+  },
+  {
+    "connectorId": "slack",
+    "name": "Slack",
+    "description": "Send messages and search Slack workspaces, channels, and files.",
+    "url": "https://mcp.slack.com/mcp",
+    "transport": "streamable-http",
+    "toolNames": [],
+    "docsUrl": "https://docs.slack.dev/ai/slack-mcp-server/",
+    "overridesInternalUrl": false,
+    "directoryOnly": false
+  },
+  {
+    "connectorId": "notion",
+    "name": "Notion",
+    "description": "Search, create, and update notes and pages in your Notion workspace.",
+    "url": "https://mcp.notion.com/mcp",
+    "transport": "streamable-http",
+    "toolNames": [
+      "notion-search",
+      "notion-ai-search",
+      "notion-fetch",
+      "notion-create-pages",
+      "notion-update-page",
+      "notion-create-database",
+      "notion-spawn-session",
+      "notion-list-agents"
+    ],
+    "docsUrl": "https://developers.notion.com/guides/mcp/mcp-supported-tools",
+    "overridesInternalUrl": false,
+    "directoryOnly": false
+  },
+  {
+    "connectorId": "figma",
+    "name": "Figma",
+    "description": "Access designs and generate code from Figma files.",
+    "url": "https://mcp.figma.com/mcp",
+    "transport": "streamable-http",
+    "toolNames": [
+      "get_design_context",
+      "get_screenshot",
+      "get_metadata",
+      "search_design_system",
+      "create_new_file",
+      "generate_figma_design",
+      "upload_assets",
+      "weave_run_tool",
+      "weave_list_tools"
+    ],
+    "docsUrl": "https://developers.figma.com/docs/figma-mcp-server/",
+    "overridesInternalUrl": false,
+    "directoryOnly": false
+  },
+  {
+    "connectorId": "jira",
+    "name": "Jira",
+    "description": "Search, create, and update issues in Jira for developers and project teams.",
+    "url": "https://mcp.atlassian.com/v2/mcp",
+    "transport": "streamable-http",
+    "toolNames": ["getJiraIssue", "createJiraIssue", "searchJiraIssuesUsingJql"],
+    "docsUrl": "https://support.atlassian.com/atlassian-rovo-mcp-server/docs/getting-started-with-the-atlassian-remote-mcp-server/",
+    "overridesInternalUrl": true,
+    "directoryOnly": false
+  },
+  {
+    "connectorId": "confluence",
+    "name": "Confluence",
+    "description": "Search and update pages and documentation in Confluence.",
+    "url": "https://mcp.atlassian.com/v2/mcp",
+    "transport": "streamable-http",
+    "toolNames": ["read_confluence", "write_confluence", "search_confluence"],
+    "docsUrl": "https://support.atlassian.com/atlassian-rovo-mcp-server/docs/getting-started-with-the-atlassian-remote-mcp-server/",
+    "overridesInternalUrl": true,
+    "directoryOnly": false
+  },
+  {
+    "connectorId": "hubspot",
+    "name": "HubSpot",
+    "description": "Search and manage CRM records, marketing, and sales data in HubSpot.",
+    "url": "https://mcp.hubspot.com",
+    "transport": "streamable-http",
+    "toolNames": [
+      "search_crm_objects",
+      "manage_crm_objects",
+      "query_crm_data",
+      "manage_marketing_email",
+      "get_marketing_email_analytics"
+    ],
+    "docsUrl": "https://developers.hubspot.com/mcp",
+    "overridesInternalUrl": false,
+    "directoryOnly": false
+  },
+  {
+    "connectorId": "asana",
+    "name": "Asana",
+    "description": "Search, create, and update tasks and projects in Asana.",
+    "url": "https://mcp.asana.com/v2/mcp",
+    "transport": "streamable-http",
+    "toolNames": [
+      "search_tasks",
+      "get_task",
+      "create_tasks",
+      "update_tasks",
+      "get_project",
+      "get_portfolio",
+      "add_comment"
+    ],
+    "docsUrl": "https://developers.asana.com/docs/mcp-server",
+    "overridesInternalUrl": true,
+    "directoryOnly": false
+  },
+  {
+    "connectorId": "linear",
+    "name": "Linear",
+    "description": "Search, create, and update issues and projects for developers in Linear.",
+    "url": "https://mcp.linear.app/mcp",
+    "transport": "streamable-http",
+    "toolNames": [],
+    "docsUrl": "https://linear.app/docs/mcp",
+    "overridesInternalUrl": false,
+    "directoryOnly": false
+  },
+  {
+    "connectorId": "canva",
+    "name": "Canva",
+    "description": "Create, edit, and export designs in Canva.",
+    "url": "https://mcp.canva.com/mcp",
+    "transport": "streamable-http",
+    "toolNames": ["read_design", "edit_design"],
+    "docsUrl": "https://www.canva.dev/docs/mcp/",
+    "overridesInternalUrl": false,
+    "directoryOnly": false
+  },
+  {
+    "connectorId": "microsoft-365",
+    "name": "Microsoft 365",
+    "description": "Query Microsoft Entra ID directory data: users, groups, devices, and admin reporting. Not general mail, calendar, or file access.",
+    "url": "https://mcp.svc.cloud.microsoft/enterprise",
+    "transport": "streamable-http",
+    "toolNames": [
+      "microsoft_graph_suggest_queries",
+      "microsoft_graph_get",
+      "microsoft_graph_list_properties"
+    ],
+    "docsUrl": "https://learn.microsoft.com/en-us/graph/mcp-server/overview",
+    "overridesInternalUrl": false,
+    "directoryOnly": true
+  }
+]
