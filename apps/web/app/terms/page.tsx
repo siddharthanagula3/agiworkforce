@@ -35,6 +35,7 @@ export const metadata = buildMetadata({
 });
 
 const SECTIONS = [
+  { label: 'Definitions', id: 's-definitions' },
   '01 · Who these terms are with',
   '02 · Eligibility and age',
   '03 · Licence',
@@ -186,6 +187,44 @@ const DATA_PROTECTION_LEDGER: readonly LedgerRow[] = [
   },
 ];
 
+const DEFINITIONS_LEDGER: readonly LedgerRow[] = [
+  {
+    label: 'AGI',
+    value: `The software and hosted service described in these terms, operated by ${LEGAL_ENTITY}.`,
+  },
+  {
+    label: 'You',
+    value:
+      'The person who accepts these terms, or the organisation on whose behalf they are accepted.',
+  },
+  {
+    label: 'Local',
+    value: 'Running AGI entirely on your own device. Nothing is sent to us in this mode.',
+  },
+  {
+    label: 'BYOK',
+    value:
+      'Bring your own key: using your own account and API key with a third-party model provider.',
+  },
+  {
+    label: 'Managed Cloud',
+    value: `The hosted, metered inference capacity ${LEGAL_ENTITY} operates. Currently in public alpha.`,
+  },
+  {
+    label: 'Content',
+    value: 'Prompts, files, and other material you submit to AGI.',
+  },
+  {
+    label: 'Output',
+    value: 'Material a model generates in response to your content.',
+  },
+  {
+    label: 'Provider',
+    value:
+      'A third-party AI company, such as Anthropic, OpenAI, or Google, whose model serves a Managed Cloud or BYOK request.',
+  },
+];
+
 export default function TermsPage() {
   return (
     <div data-design="agi" className="agi-ds-page">
@@ -214,6 +253,15 @@ export default function TermsPage() {
             intro="Sections 15 and 17 limit our liability and require arbitration. They are the ones to read before you accept, so they are named here rather than left to be found."
           />
         </Container>
+
+        <Section id="s-definitions" labelledBy="agi-terms-definitions-title" rule ground="2">
+          <Stack gap="loose">
+            <h2 className="agi-ds-h2" id="agi-terms-definitions-title">
+              Definitions
+            </h2>
+            <Ledger caption="Definitions" rows={DEFINITIONS_LEDGER} />
+          </Stack>
+        </Section>
 
         <Section id="s-01" labelledBy="agi-terms-s01-title" rule>
           <Stack gap="loose">
