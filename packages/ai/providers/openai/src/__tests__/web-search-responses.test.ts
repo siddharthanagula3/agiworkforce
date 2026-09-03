@@ -114,11 +114,87 @@ describe('translateOpenAIResponsesStream native web search', () => {
           {
             type: 'web_search_result',
             url: 'https://developers.openai.com/api/docs/guides/tools',
-            title: 'https://developers.openai.com/api/docs/guides/tools',
+            title: '',
           },
         ],
       },
     });
     expect(chunks.at(-1)).toEqual({ type: 'stop', reason: 'end_turn' });
+  });
+
+  it('merges a title that only appears in the final snapshot, never as a streamed annotation', async () => {
+    const events = [
+      {
+        type: 'response.output_item.added',
+        output_index: 0,
+        item: {
+          type: 'web_search_call',
+          id: 'ws_2',
+          status: 'in_progress',
+          action: {
+            type: 'search',
+            query: 'q',
+            sources: [{ type: 'url', url: 'https://example.com/late-title' }],
+          },
+        },
+      },
+      {
+        type: 'response.completed',
+        response: {
+          id: 'resp_2',
+          status: 'completed',
+          output: [
+            {
+              type: 'web_search_call',
+              id: 'ws_2',
+              status: 'completed',
+              action: {
+                type: 'search',
+                query: 'q',
+                sources: [{ type: 'url', url: 'https://example.com/late-title' }],
+              },
+            },
+            {
+              type: 'message',
+              id: 'msg_2',
+              role: 'assistant',
+              content: [
+                {
+                  type: 'output_text',
+                  text: 'See the source.',
+                  annotations: [
+                    {
+                      type: 'url_citation',
+                      url: 'https://example.com/late-title',
+                      title: 'The Late Title',
+                      start_index: 0,
+                      end_index: 3,
+                    },
+                  ],
+                },
+              ],
+            },
+          ],
+        },
+      },
+    ] as ResponsesStreamEvent[];
+
+    const chunks = await collect(translateOpenAIResponsesStream(fromArray(events)));
+
+    expect(chunks).toContainEqual({
+      type: 'server-tool-result',
+      toolUseId: 'ws_2',
+      payload: {
+        type: 'web_search_tool_result',
+        tool_use_id: 'ws_2',
+        content: [
+          {
+            type: 'web_search_result',
+            url: 'https://example.com/late-title',
+            title: 'The Late Title',
+          },
+        ],
+      },
+    });
   });
 });

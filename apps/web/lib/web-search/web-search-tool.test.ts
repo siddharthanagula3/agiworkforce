@@ -146,7 +146,7 @@ describe('executeWebSearch — happy path', () => {
         results: [
           { title: 'Good', url: 'https://example.com/good', snippet: 's' },
           { title: 'No URL' }, // malformed — dropped, not fatal
-          { url: 'https://example.com/no-title' }, // falls back title=url
+          { url: 'https://example.com/no-title' }, // no title on the wire — left empty
         ],
       }),
     );
@@ -157,7 +157,7 @@ describe('executeWebSearch — happy path', () => {
     expect(outcome.results).toHaveLength(2);
     expect(outcome.results[1]).toEqual({
       url: 'https://example.com/no-title',
-      title: 'https://example.com/no-title',
+      title: '',
       snippet: '',
     });
   });
@@ -227,6 +227,16 @@ describe('formatWebSearchResultForModel', () => {
     expect(text).toContain('https://example.com/a');
     expect(text).toContain('snip a');
     expect(text).toContain('2. B');
+  });
+
+  it('falls back to the url for the model-facing line when title is empty', () => {
+    const outcome: WebSearchOutcome = {
+      ok: true,
+      query: 'q',
+      results: [{ url: 'https://example.com/untitled', title: '', snippet: '' }],
+    };
+    const text = formatWebSearchResultForModel(outcome);
+    expect(text).toContain('1. https://example.com/untitled');
   });
 
   it('formats a no-results outcome honestly', () => {
