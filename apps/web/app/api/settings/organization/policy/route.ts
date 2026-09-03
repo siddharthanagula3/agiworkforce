@@ -8,7 +8,7 @@ import { withRateLimit } from '@/lib/rate-limit';
 import { handleCorsPreflightRequest } from '@/lib/cors';
 import { requireCsrfToken } from '@/lib/csrf';
 import { createError } from '@/lib/errors';
-import { recordAuditEvent } from '@/lib/security-audit';
+import { getClientIp, recordAuditEvent } from '@/lib/security-audit';
 import { getUserScopedDb } from '@/lib/server/rls-db';
 import { readJsonBody } from '@/lib/read-json-body';
 import {
@@ -25,7 +25,10 @@ import {
   type AdminPolicyInput,
 } from '@/lib/services/organization-policy-service';
 import type { AdminPolicy } from '@agiworkforce/types';
-import { isValidCidr } from '@/lib/services/ip-allow-list';
+import { isIpAllowed, isValidCidr } from '@/lib/services/ip-allow-list';
+import { resolveMfaEnrolled } from '@/lib/mfa-policy-gate';
+
+const MFA_GATE_EXEMPT_OWNER_OPTIONS = { mfaGateExemptForOwner: true } as const;
 
 export const runtime = 'nodejs';
 
@@ -74,6 +77,39 @@ function dedupe<T>(values: T[]): T[] {
 }
 
 /**
+ * Refuses a patch that would leave the requester unable to reach this route
+ * again. `requireMfa` and `ipAllowList` are enforced on every authenticated
+ * request once saved (see `assertMfaPolicy` / `assertIpAllowList`), so an
+ * admin who turns on either without accounting for their own session has no
+ * self-service way back in.
+ */
+async function assertPolicyChangeWontLockOutRequester(
+  policy: AdminPolicyInput,
+  userId: string,
+  request: NextRequest,
+): Promise<void> {
+  if (policy.requireMfa) {
+    const enrolled = await resolveMfaEnrolled(userId);
+    if (!enrolled) {
+      throw createError.validation(
+        'Enrol in two-factor authentication first, then require it for the workspace.',
+      );
+    }
+  }
+
+  if (policy.ipAllowList.length > 0) {
+    const clientIp = getClientIp(request);
+    if (!isIpAllowed(clientIp, policy.ipAllowList)) {
+      throw createError.validation(
+        clientIp
+          ? `This list would lock out your own connection at ${clientIp}. Add it to the allow list before saving.`
+          : 'Your current network address could not be determined, so this allow list cannot be saved safely.',
+      );
+    }
+  }
+}
+
+/**
  * The database enforces `default_privacy_mode = any (allowed_privacy_modes)`.
  * Checking it here first turns a constraint violation into an actionable
  * message, and keeps the two rules from drifting apart silently.
@@ -95,7 +131,7 @@ async function handleGet(request: NextRequest): Promise<NextResponse> {
   const rateLimitResponse = await withRateLimit(request, 'settings-org');
   if (rateLimitResponse) return rateLimitResponse;
 
-  const { db, userId } = await getUserScopedDb(request);
+  const { db, userId } = await getUserScopedDb(request, MFA_GATE_EXEMPT_OWNER_OPTIONS);
   const membership = requireOrgMember(await resolveOrgMembership(db, userId));
   await requireTeamAdminAccess(db, userId, membership.organizationId);
 
@@ -119,7 +155,7 @@ async function handlePatch(request: NextRequest): Promise<NextResponse | Respons
   const rateLimitResponse = await withRateLimit(request, 'settings-org-patch');
   if (rateLimitResponse) return rateLimitResponse;
 
-  const { db, userId } = await getUserScopedDb(request);
+  const { db, userId } = await getUserScopedDb(request, MFA_GATE_EXEMPT_OWNER_OPTIONS);
   const membership = requireOrgMember(await resolveOrgMembership(db, userId));
   await requireTeamAdminAccess(db, userId, membership.organizationId);
 
@@ -167,6 +203,7 @@ async function handlePatch(request: NextRequest): Promise<NextResponse | Respons
     metadata: current.policy.metadata ?? {},
   };
 
+  await assertPolicyChangeWontLockOutRequester(next, userId, request);
   assertPolicyCoherent(next);
 
   const policy = await upsertOrganizationPolicy(db, membership.organizationId, next);

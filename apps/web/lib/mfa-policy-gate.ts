@@ -34,7 +34,7 @@ export function isMfaRequiredError(error: unknown): error is MfaRequiredError {
   );
 }
 
-async function resolveMfaEnrolled(userId: string): Promise<boolean> {
+export async function resolveMfaEnrolled(userId: string): Promise<boolean> {
   const redis = getSharedRedisClient();
   const cacheKey = `${MFA_ENROLLMENT_CACHE_PREFIX}${userId}`;
 

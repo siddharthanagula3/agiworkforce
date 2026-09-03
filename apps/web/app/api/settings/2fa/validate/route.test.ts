@@ -27,6 +27,7 @@ vi.mock('@/lib/crypto/totp-envelope', () => ({
   openTotpSecret: vi.fn(() => 'SECRET'),
 }));
 
+import { getClerkAuthUser } from '@/lib/api-auth';
 import { POST } from './route';
 
 const ROW = {
@@ -113,5 +114,15 @@ describe('POST /api/settings/2fa/validate — backup codes', () => {
 
     expect(response.status).toBe(401);
     expect(mocks.query).toHaveBeenCalledOnce();
+  });
+
+  it('exempts an organization owner from the mfa gate so validation stays reachable', async () => {
+    mocks.query.mockResolvedValueOnce([ROW]);
+
+    await POST(request('000000'));
+
+    expect(getClerkAuthUser).toHaveBeenCalledWith(expect.anything(), {
+      mfaGateExemptForOwner: true,
+    });
   });
 });

@@ -2,13 +2,19 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('server-only', () => ({}));
 
-const { mockQuery, mockGetUserScopedDb, mockRecordAuditEvent, mockRequireTeamAdminAccess } =
-  vi.hoisted(() => ({
-    mockQuery: vi.fn(),
-    mockGetUserScopedDb: vi.fn(),
-    mockRecordAuditEvent: vi.fn(async (_event: unknown) => undefined),
-    mockRequireTeamAdminAccess: vi.fn(async () => ({ plan: 'team', canManageTeam: true })),
-  }));
+const {
+  mockQuery,
+  mockGetUserScopedDb,
+  mockRecordAuditEvent,
+  mockRequireTeamAdminAccess,
+  mockResolveMfaEnrolled,
+} = vi.hoisted(() => ({
+  mockQuery: vi.fn(),
+  mockGetUserScopedDb: vi.fn(),
+  mockRecordAuditEvent: vi.fn(async (_event: unknown) => undefined),
+  mockRequireTeamAdminAccess: vi.fn(async () => ({ plan: 'team', canManageTeam: true })),
+  mockResolveMfaEnrolled: vi.fn(async () => true),
+}));
 
 vi.mock('@/lib/rate-limit', () => ({ withRateLimit: vi.fn(async () => null) }));
 vi.mock('@/lib/csrf', () => ({ requireCsrfToken: vi.fn(async () => null) }));
@@ -16,7 +22,12 @@ vi.mock('@/lib/logger', () => ({
   logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() },
 }));
 vi.mock('@/lib/server/rls-db', () => ({ getUserScopedDb: mockGetUserScopedDb }));
-vi.mock('@/lib/security-audit', () => ({ recordAuditEvent: mockRecordAuditEvent }));
+vi.mock('@/lib/server/neon-db', () => ({ getNeonDb: vi.fn(() => ({})) }));
+vi.mock('@/lib/security-audit', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/lib/security-audit')>();
+  return { ...actual, recordAuditEvent: mockRecordAuditEvent };
+});
+vi.mock('@/lib/mfa-policy-gate', () => ({ resolveMfaEnrolled: mockResolveMfaEnrolled }));
 vi.mock('@/app/api/settings/team/team-admin-access', () => ({
   requireTeamAdminAccess: mockRequireTeamAdminAccess,
 }));
@@ -64,12 +75,15 @@ function bindCaller({ role = 'admin', policyRow = null, upsertResult }: Fixture 
   });
 }
 
-function request(body?: unknown): Request {
+function request(body?: unknown, extraHeaders: Record<string, string> = {}): Request {
   return new Request('https://app.test/api/settings/organization/policy', {
     method: body ? 'PATCH' : 'GET',
     ...(body
-      ? { body: JSON.stringify(body), headers: { 'Content-Type': 'application/json' } }
-      : {}),
+      ? {
+          body: JSON.stringify(body),
+          headers: { 'Content-Type': 'application/json', ...extraHeaders },
+        }
+      : { headers: extraHeaders }),
   });
 }
 
@@ -140,6 +154,16 @@ describe('GET /api/settings/organization/policy', () => {
 
     expect(body.canManagePolicy).toBe(false);
     expect(body.currentUserRole).toBe('member');
+  });
+
+  it('passes the mfa gate owner exemption through to getUserScopedDb', async () => {
+    bindCaller({ policyRow: SAVED_POLICY });
+
+    await GET(request() as never);
+
+    expect(mockGetUserScopedDb).toHaveBeenCalledWith(expect.anything(), {
+      mfaGateExemptForOwner: true,
+    });
   });
 });
 
@@ -305,11 +329,65 @@ describe('PATCH /api/settings/organization/policy', () => {
   it('stores an ipAllowList patch inside the metadata column', async () => {
     bindCaller({ policyRow: SAVED_POLICY });
 
-    await PATCH(request({ ipAllowList: ['203.0.113.0/24', '2001:db8::/32'] }) as never);
+    await PATCH(
+      request(
+        { ipAllowList: ['203.0.113.0/24', '2001:db8::/32'] },
+        { 'x-forwarded-for': '203.0.113.5' },
+      ) as never,
+    );
 
     const params = upsertParams();
     expect(JSON.parse(params[13] as string)).toMatchObject({
       ipAllowList: ['203.0.113.0/24', '2001:db8::/32'],
+    });
+  });
+
+  it("rejects an ipAllowList that would exclude the requester's own connection", async () => {
+    bindCaller({ policyRow: SAVED_POLICY });
+
+    const response = await PATCH(
+      request({ ipAllowList: ['203.0.113.0/24'] }, { 'x-forwarded-for': '198.51.100.9' }) as never,
+    );
+
+    expect(response.status).toBe(400);
+    expect(upsertParams()).toEqual([]);
+  });
+
+  it("rejects an ipAllowList when the requester's ip cannot be determined", async () => {
+    bindCaller({ policyRow: SAVED_POLICY });
+
+    const response = await PATCH(request({ ipAllowList: ['203.0.113.0/24'] }) as never);
+
+    expect(response.status).toBe(400);
+    expect(upsertParams()).toEqual([]);
+  });
+
+  it('rejects requireMfa=true when the requesting admin has no mfa enrolled', async () => {
+    bindCaller({ policyRow: SAVED_POLICY });
+    mockResolveMfaEnrolled.mockResolvedValueOnce(false);
+
+    const response = await PATCH(request({ requireMfa: true }) as never);
+
+    expect(response.status).toBe(400);
+    expect(upsertParams()).toEqual([]);
+  });
+
+  it('allows requireMfa=true when the requesting admin is mfa enrolled', async () => {
+    bindCaller({ policyRow: SAVED_POLICY });
+    mockResolveMfaEnrolled.mockResolvedValueOnce(true);
+
+    const response = await PATCH(request({ requireMfa: true }) as never);
+
+    expect(response.status).toBe(200);
+  });
+
+  it('passes the mfa gate owner exemption through to getUserScopedDb', async () => {
+    bindCaller({ policyRow: SAVED_POLICY });
+
+    await PATCH(request({ retentionDays: 45 }) as never);
+
+    expect(mockGetUserScopedDb).toHaveBeenCalledWith(expect.anything(), {
+      mfaGateExemptForOwner: true,
     });
   });
 

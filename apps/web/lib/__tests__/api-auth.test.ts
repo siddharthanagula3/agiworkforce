@@ -670,5 +670,102 @@ describe('getClerkAuthUser · API-key issue/verify unification', () => {
         (error: unknown) => isIpNotAllowedError(error),
       );
     });
+
+    it('stays enforced for an owner even when the caller opts into the mfa gate exemption', async () => {
+      bindOrgIpPolicy(ORGANIZATION_ID, ['203.0.113.0/24']);
+      mockAuth.mockResolvedValueOnce(authSession('clerk-session-user'));
+
+      await expect(
+        getClerkAuthUser(requestFromIp('198.51.100.9'), { mfaGateExemptForOwner: true }),
+      ).rejects.toSatisfy((error: unknown) => isIpNotAllowedError(error));
+    });
+  });
+
+  describe('mfa gate owner exemption', () => {
+    const ORGANIZATION_ID = '33333333-3333-4333-8333-333333333333';
+
+    function bindOrgWithMember(
+      organizationId: string,
+      requireMfa: boolean,
+      role: 'owner' | 'admin' | 'member' | 'viewer',
+    ) {
+      mockNeonQuery.mockImplementation(async (sql: string) => {
+        const s = sql.toLowerCase();
+        if (s.includes('from public.user_settings')) {
+          return [{ organization_id: organizationId }];
+        }
+        if (s.includes('from public.organization_members')) {
+          return [{ organization_id: organizationId, role }];
+        }
+        if (s.includes('from public.organization_admin_policies')) {
+          return [
+            {
+              organization_id: organizationId,
+              default_privacy_mode: 'byok',
+              allowed_privacy_modes: ['local', 'byok'],
+              allow_managed_compute: false,
+              require_local_to_byok_preview: true,
+              chat_sync_surfaces: ['web', 'desktop', 'mobile'],
+              allow_cli_cloud_sync: false,
+              allow_vscode_cloud_sync: false,
+              allow_chrome_cloud_sync: false,
+              audit_export_enabled: true,
+              retention_days: 365,
+              retention_enforced: false,
+              external_sharing_enabled: true,
+              metadata: { requireMfa },
+              updated_at: '2026-08-22T00:00:00.000Z',
+            },
+          ];
+        }
+        return [];
+      });
+    }
+
+    it('lets an unenrolled organization owner through when the caller opts into the exemption', async () => {
+      bindOrgWithMember(ORGANIZATION_ID, true, 'owner');
+      mockAuth.mockResolvedValueOnce(authSession('owner-user'));
+      mockClerkGetUser.mockResolvedValueOnce({ twoFactorEnabled: false });
+
+      await expect(
+        getClerkAuthUser(new NextRequest('http://localhost/api/settings/organization/policy'), {
+          mfaGateExemptForOwner: true,
+        }),
+      ).resolves.toEqual({ userId: 'owner-user' });
+    });
+
+    it('still blocks an unenrolled owner when the caller did not opt into the exemption', async () => {
+      bindOrgWithMember(ORGANIZATION_ID, true, 'owner');
+      mockAuth.mockResolvedValueOnce(authSession('owner-user'));
+      mockClerkGetUser.mockResolvedValueOnce({ twoFactorEnabled: false });
+
+      await expect(
+        getClerkAuthUser(new NextRequest('http://localhost/api/some-route')),
+      ).rejects.toSatisfy((error: unknown) => isMfaRequiredError(error));
+    });
+
+    it('does not exempt an unenrolled admin, only an owner', async () => {
+      bindOrgWithMember(ORGANIZATION_ID, true, 'admin');
+      mockAuth.mockResolvedValueOnce(authSession('admin-user'));
+      mockClerkGetUser.mockResolvedValueOnce({ twoFactorEnabled: false });
+
+      await expect(
+        getClerkAuthUser(new NextRequest('http://localhost/api/settings/organization/policy'), {
+          mfaGateExemptForOwner: true,
+        }),
+      ).rejects.toSatisfy((error: unknown) => isMfaRequiredError(error));
+    });
+
+    it('does not exempt an unenrolled member', async () => {
+      bindOrgWithMember(ORGANIZATION_ID, true, 'member');
+      mockAuth.mockResolvedValueOnce(authSession('member-user'));
+      mockClerkGetUser.mockResolvedValueOnce({ twoFactorEnabled: false });
+
+      await expect(
+        getClerkAuthUser(new NextRequest('http://localhost/api/settings/organization/policy'), {
+          mfaGateExemptForOwner: true,
+        }),
+      ).rejects.toSatisfy((error: unknown) => isMfaRequiredError(error));
+    });
   });
 });

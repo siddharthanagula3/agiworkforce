@@ -39,7 +39,7 @@ async function handleGet2FAStatus(request: NextRequest) {
   const rateLimitResponse = await withRateLimit(request, 'me');
   if (rateLimitResponse) return rateLimitResponse;
 
-  const { userId } = await getClerkAuthUser(request);
+  const { userId } = await getClerkAuthUser(request, { mfaGateExemptForOwner: true });
   const row = await getTwoFactorRow(userId);
 
   if (!row || !row.enabled) {
@@ -57,7 +57,7 @@ async function handleDisable2FA(request: NextRequest) {
   const csrfError = await requireCsrfToken(request);
   if (csrfError) return csrfError as NextResponse;
 
-  const { userId } = await getClerkAuthUser(request);
+  const { userId } = await getClerkAuthUser(request, { mfaGateExemptForOwner: true });
 
   const rateLimitResponse = await withRateLimit(request, '2fa-verify', `user:${userId}`);
   if (rateLimitResponse) return rateLimitResponse;
