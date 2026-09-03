@@ -129,12 +129,12 @@ import { ComparisonResponse } from './ComparisonResponse';
 import type { InteractiveCard } from '@agiworkforce/types';
 import { InteractiveCardBlock } from './InteractiveCardBlock';
 import { useComparisonStore } from '../../stores/comparison-store';
-import { InlineSourcesList } from '../research/ResearchPanel';
+import { SourcesControl } from '../research/ResearchPanel';
 import { useResearchPanelStore, type ResearchSource } from '../../stores/research-panel-store';
 import { ResearchActivity, type ResearchPlanDecision } from '../research/ResearchActivity';
 import { stripTrailingSourceList } from '../../lib/researchReportSources';
 import type { MessageResearchState } from '@shared/stores/web-chat-store';
-import { dedupeResearchSources } from '../../utils/research-sources';
+import { dedupeResearchSources, orderSourcesByCitation } from '../../utils/research-sources';
 import { ImageGenerationCard } from '../ImageGenerationCard';
 import { ImageLightbox } from '../ImageLightbox';
 import type { ImageAspectRatio } from '../Composer/ChatComposerNew';
@@ -1314,8 +1314,8 @@ const MessageBubbleComponent = function MessageBubble({
     !isUser && !canonicalOwnsToolActivity && message.metadata?.tools ? message.metadata.tools : [];
 
   // Collect web-search sources from metadata (searchResults and/or citations).
-  // These are passed INTO the ToolTimeline so they render inside the web-search step box
-  // (matching the Claude reference). A fallback renders them if there is no tool timeline.
+  // These feed the "Searched the web" step's result count and the compact
+  // Sources control at the end of the answer.
   const { searchSources, searchQuery, citationsByMarker } = useMemo(() => {
     if (isUser) {
       return {
@@ -1387,17 +1387,32 @@ const MessageBubbleComponent = function MessageBubble({
     return { searchSources: deduped, searchQuery: query, citationsByMarker };
   }, [isUser, message.metadata?.searchResults, message.metadata?.citations]);
 
-  // Mirror this message's web-search sources into the right-hand Sources panel
-  // (research-panel store) so the "Sources" view showcases them, not just the
-  // inline cards inside the tool box.
+  const { cited: citedSources, more: moreSources } = useMemo(
+    () => orderSourcesByCitation(cleanedContent, citationsByMarker, searchSources),
+    [cleanedContent, citationsByMarker, searchSources],
+  );
+
   const setResearchSources = useResearchPanelStore((s) => s.setSources);
   useEffect(() => {
     if (!isUser && searchSources.length > 0) {
-      // Scope the sources to this conversation so the Sources panel never shows
-      // a previous chat's sources in a chat that didn't run a web search.
-      setResearchSources(artifactConversationId ?? null, searchSources, searchQuery);
+      setResearchSources(
+        artifactConversationId ?? null,
+        message.id,
+        citedSources,
+        moreSources,
+        searchQuery,
+      );
     }
-  }, [isUser, searchSources, searchQuery, setResearchSources, artifactConversationId]);
+  }, [
+    isUser,
+    searchSources,
+    citedSources,
+    moreSources,
+    searchQuery,
+    setResearchSources,
+    artifactConversationId,
+    message.id,
+  ]);
 
   return (
     <motion.div
@@ -2066,17 +2081,6 @@ const MessageBubbleComponent = function MessageBubble({
               </div>
             )}
 
-          {/* Search sources fallback · shown ONLY when there is no tool timeline to host them.
-              When a tool timeline is present, sources render inside the web-search step
-              (via the searchSources prop). For non-tool paths (e.g. Perplexity answer-only
-              responses), this fallback ensures sources are never silently lost. */}
-          {!isUser &&
-            !canonicalActivity &&
-            searchSources.length > 0 &&
-            toolTimeline.length === 0 && (
-              <InlineSourcesList sources={searchSources} query={searchQuery} />
-            )}
-
           {/* Tool timeline rendered above prose (moved before message content section). */}
 
           {/* Thinking Steps (Collapsible) */}
@@ -2253,6 +2257,14 @@ const MessageBubbleComponent = function MessageBubble({
                       minute: '2-digit',
                     })}
                   </time>
+                  {!isUser && searchSources.length > 0 && (
+                    <SourcesControl
+                      messageId={message.id}
+                      cited={citedSources}
+                      more={moreSources}
+                      query={searchQuery}
+                    />
+                  )}
                   <TooltipProvider delayDuration={300}>
                     <Tooltip>
                       <TooltipTrigger asChild>

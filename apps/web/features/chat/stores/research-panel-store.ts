@@ -12,18 +12,34 @@ export interface ResearchSource {
 
 interface ResearchPanelState {
   panelOpen: boolean;
-  sources: ResearchSource[];
+  messageId: string | null;
+  cited: ResearchSource[];
+  more: ResearchSource[];
   query?: string;
   conversationId: string | null;
 }
 
 interface ResearchPanelActions {
-  openPanel: (conversationId: string | null, sources: ResearchSource[], query?: string) => void;
+  openPanel: (
+    conversationId: string | null,
+    messageId: string,
+    cited: ResearchSource[],
+    more: ResearchSource[],
+    query?: string,
+  ) => void;
   closePanel: () => void;
   togglePanel: () => void;
-  setSources: (conversationId: string | null, sources: ResearchSource[], query?: string) => void;
+  setSources: (
+    conversationId: string | null,
+    messageId: string,
+    cited: ResearchSource[],
+    more: ResearchSource[],
+    query?: string,
+  ) => void;
   sourcesFor: (conversationId: string | null | undefined) => {
-    sources: ResearchSource[];
+    messageId: string | null;
+    cited: ResearchSource[];
+    more: ResearchSource[];
     query?: string;
   };
 }
@@ -31,21 +47,29 @@ interface ResearchPanelActions {
 export const useResearchPanelStore = create<ResearchPanelState & ResearchPanelActions>()(
   (set, get) => ({
     panelOpen: false,
-    sources: [],
+    messageId: null,
+    cited: [],
+    more: [],
     query: undefined,
     conversationId: null,
 
-    openPanel: (conversationId, sources, query) =>
-      set({ panelOpen: true, sources, query, conversationId }),
+    openPanel: (conversationId, messageId, cited, more, query) =>
+      set({ panelOpen: true, messageId, cited, more, query, conversationId }),
     closePanel: () => set({ panelOpen: false }),
     togglePanel: () => set((state) => ({ panelOpen: !state.panelOpen })),
-    setSources: (conversationId, sources, query) => set({ sources, query, conversationId }),
+    setSources: (conversationId, messageId, cited, more, query) =>
+      set((state) => (state.panelOpen ? state : { cited, more, query, conversationId, messageId })),
     sourcesFor: (conversationId) => {
       const state = get();
       if (!conversationId || state.conversationId !== conversationId) {
-        return { sources: [], query: undefined };
+        return { messageId: null, cited: [], more: [], query: undefined };
       }
-      return { sources: state.sources, query: state.query };
+      return {
+        messageId: state.messageId,
+        cited: state.cited,
+        more: state.more,
+        query: state.query,
+      };
     },
   }),
 );
