@@ -1,25 +1,3 @@
-//! The `agilicense-v1` / `agipolicy-v1` signed-container format and its
-//! verification primitive — a direct port of `packages/contracts/licensing/src/container.ts`.
-//!
-//! A container is one UTF-8 JSON object:
-//!
-//! ```json
-//! {
-//!   "format": "agilicense-v1",
-//!   "payload": "<base64(standard) of the exact UTF-8 payload JSON bytes>",
-//!   "signature": "<base64(standard) of the 64-byte Ed25519 signature>"
-//! }
-//! ```
-//!
-//! The signature is computed over the **ASCII bytes of the `payload` base64
-//! string** (not the decoded JSON). Verifiers never re-serialize the payload:
-//! they verify the signature against `payload.as_bytes()`, then decode `payload`
-//! and hand the raw bytes to the caller's schema layer. This eliminates every
-//! cross-language serialization ambiguity, which is why the TS and Rust
-//! verifiers can share one fixture corpus.
-//!
-//! The top-level wrapper is parsed leniently (extra keys ignored) to match the
-//! TS manual field-extraction; strictness lives in the payload schema layer.
 
 use ed25519_dalek::{Signature, VerifyingKey};
 use serde_json::Value;
@@ -61,12 +39,6 @@ fn malformed(message: &str) -> VerifiedContainer {
     })
 }
 
-/// Verify a signed container's structure and signature. Pure, no I/O, never
-/// panics. Does NOT interpret the payload (the caller's schema concern).
-///
-/// The signature must verify against AT LEAST ONE of `authorized_public_keys_b64`
-/// (a rotatable list). A malformed configured key is skipped, never fatal — an
-/// app baking in one bad root key must not brick verification of a good one.
 pub fn verify_signed_container(
     file_bytes: &[u8],
     authorized_public_keys_b64: &[String],
@@ -139,10 +111,6 @@ pub fn verify_signed_container(
             // Non-canonical / small-order point: cannot authorize; try the next.
             continue;
         };
-        // `verify_strict` rejects signature malleability and weak keys — the
-        // conservative choice for a security primitive. It agrees with the TS
-        // side (`@noble/curves` `verify`) on this fixture corpus, which contains
-        // only honest signatures and simple byte-flip tampering.
         if verifying_key
             .verify_strict(signed_message, &signature)
             .is_ok()

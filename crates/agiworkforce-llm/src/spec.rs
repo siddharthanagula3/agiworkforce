@@ -51,13 +51,6 @@ pub enum Dialect {
     OpenAiCompat(OpenAiOpts),
 }
 
-/// How to authenticate a request. Key material is provided by the app (config,
-/// vault, subscription exchange) as an opaque string; this crate only places
-/// it on the wire.
-///
-/// SECURITY: `Debug` REDACTS all secret values so specs can be traced/logged
-/// safely. Never put secrets in [`ProviderSpec::extra_headers`] — those are
-/// logged verbatim.
 #[derive(Clone, PartialEq, Eq)]
 pub enum Auth {
     /// No auth header (local endpoints such as Ollama).
@@ -97,8 +90,6 @@ pub struct ProviderSpec {
     /// - OpenAiCompat: the full chat-completions URL
     pub base_url: String,
     pub auth: Auth,
-    /// Additional non-secret headers (subscription user-agents, intents,
-    /// account ids). NEVER place key material here — values are not redacted.
     pub extra_headers: Vec<(String, String)>,
 }
 

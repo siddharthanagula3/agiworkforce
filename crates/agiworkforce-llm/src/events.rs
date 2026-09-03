@@ -56,7 +56,6 @@ pub enum StreamEvent {
     ToolCallArgsDelta { index: usize, fragment: String },
     /// Usage snapshot as of this point in the stream (cumulative, not delta).
     Usage { usage: Usage },
-    /// SSE comment line or provider ping — connection is alive, no payload.
     Keepalive,
     /// Provider-specific event this crate does not interpret (e.g. Anthropic
     /// `message_stop`, managed-cloud billing frames). `event` is the vendor's

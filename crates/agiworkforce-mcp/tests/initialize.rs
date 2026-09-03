@@ -1,6 +1,3 @@
-//! Initialize handshake: protocol-version negotiation + host-supplied
-//! clientInfo (regression guard for the `env!("CARGO_PKG_VERSION")` trap — the
-//! version must be the host's, never this engine crate's).
 
 mod support;
 

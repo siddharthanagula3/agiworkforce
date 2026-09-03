@@ -1,8 +1,3 @@
-//! Chat wire types shared by every AGI Workforce Rust surface.
-//!
-//! Moved verbatim from `apps/cli/src/models/mod.rs` (stage c1). The serde
-//! shapes here are persisted in CLI session files — do not change field names,
-//! tags, or defaults without a migration plan.
 
 use serde::{Deserialize, Serialize};
 
@@ -19,8 +14,6 @@ pub enum ContentBlock {
     Image {
         /// MIME type, e.g. "image/png", "image/jpeg", "image/webp", "image/gif".
         mime: String,
-        /// Raw base64-encoded bytes (no `data:` prefix — that is added by the
-        /// serializer so each provider receives the format it expects).
         data_b64: String,
     },
     #[serde(rename = "tool_use")]
@@ -38,13 +31,6 @@ pub enum ContentBlock {
     },
 }
 
-/// A tool definition to send to the API.
-///
-/// Note: only `name`, `description`, and `input_schema` are forwarded to the
-/// model. The remaining fields are LOCAL metadata for the executor —
-/// concurrency hints and per-tool size caps. Each provider serializer
-/// explicitly picks the API-bound fields by name, so these extra fields stay
-/// client-side.
 #[derive(Debug, Clone, Serialize)]
 pub struct ToolDefinition {
     pub name: String,
@@ -67,12 +53,6 @@ pub struct ToolDefinition {
     #[serde(skip)]
     #[serde(default)]
     pub max_result_size_chars: Option<usize>,
-    /// When `true`, this tool's schema is NOT included in the model's initial
-    /// system-prompt tool list. Instead the model must call `tool_search` to
-    /// load the schema on demand. Defaults to `false` (always-loaded). Set
-    /// `true` for niche tools: Memory, Notebook, Computer, MCP extensions,
-    /// skills — keeping the initial payload small. The tool remains fully
-    /// executable once its schema is loaded.
     #[serde(skip)]
     #[serde(default)]
     pub should_defer: bool,
@@ -106,7 +86,6 @@ pub struct ToolCall {
     pub arguments: serde_json::Value,
 }
 
-/// Message content — either a simple string or structured content blocks.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum MessageContent {

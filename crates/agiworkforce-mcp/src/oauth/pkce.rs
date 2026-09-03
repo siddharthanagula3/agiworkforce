@@ -1,10 +1,3 @@
-//! PKCE (RFC 7636) primitives.
-//!
-//! Reimplemented in-crate rather than depending on the CLI's `crate::oauth` so
-//! the engine is self-contained. The algorithm is standard S256 with a
-//! uniform (rejection-sampled) verifier/state, ported byte-for-byte from the
-//! CLI generator — PKCE values are random per-flow, so any correct S256
-//! implementation is wire-equivalent.
 
 use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
 use sha2::{Digest, Sha256};

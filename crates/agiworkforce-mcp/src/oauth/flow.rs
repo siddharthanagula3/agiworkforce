@@ -1,20 +1,3 @@
-//! OAuth 2.0 + PKCE flow for MCP servers.
-//!
-//! Implements the happy paths of:
-//!
-//! * RFC 9728 — OAuth 2.0 Protected Resource Metadata (server tells us where
-//!   its authorization server lives, either via the `WWW-Authenticate: Bearer
-//!   resource_metadata="<url>"` challenge or via
-//!   `<server>/.well-known/oauth-protected-resource`).
-//! * RFC 8414 — OAuth 2.0 Authorization Server Metadata (discovers the
-//!   `authorization_endpoint`, `token_endpoint`, optional
-//!   `registration_endpoint`).
-//! * RFC 7591 — Dynamic Client Registration (only when the caller doesn't
-//!   supply a `client_id`).
-//! * RFC 6749 / RFC 7636 — Authorization-Code grant with PKCE.
-//!
-//! Browser launch is delegated to the host via [`BrowserAuthorizer`] so the
-//! CLI's user-action chokepoint stays authoritative.
 
 use anyhow::{Context, Result, anyhow, bail};
 use serde::{Deserialize, Serialize};
@@ -97,7 +80,7 @@ fn confidential_client_secret<'a>(
     let pinned = oauth_cfg.token_url.as_deref().ok_or_else(|| {
         anyhow!(
             "refusing to send the configured client_secret to the discovered token endpoint \
-             {token_url} — set [auth.token_url] so the secret only ever reaches an endpoint you named"
+             {token_url}, set [auth.token_url] so the secret only ever reaches an endpoint you named"
         )
     })?;
     security::enforce_same_origin(pinned, token_url, "token endpoint")
@@ -201,9 +184,6 @@ pub async fn discover_protected_resource(
     server_url: &str,
     www_authenticate: Option<&str>,
 ) -> Result<(String, ProtectedResourceMetadata)> {
-    // RFC 9728 §5.1: the challenge may only point at the resource server's own
-    // metadata. Without this the server chooses any URL it likes and this
-    // process fetches it — the SSRF primitive, loopback services included.
     let metadata_url = match parse_resource_metadata_url(www_authenticate) {
         Some(advertised) => {
             security::enforce_same_origin(server_url, &advertised, "protected-resource metadata")
@@ -232,7 +212,7 @@ pub async fn discover_protected_resource(
     if !resp.status().is_success() {
         let status = resp.status();
         let body = failure_detail(resp, "protected-resource metadata").await;
-        bail!("protected-resource metadata at {metadata_url} returned {status} — {body}");
+        bail!("protected-resource metadata at {metadata_url} returned {status}, {body}");
     }
 
     let body = security::read_body_capped(resp, "protected-resource metadata").await?;
@@ -270,7 +250,7 @@ pub async fn discover_authorization_server(as_url: &str, server_url: &str) -> Re
     if !resp.status().is_success() {
         let status = resp.status();
         let body = failure_detail(resp, "AS metadata").await;
-        bail!("AS metadata at {metadata_url} returned {status} — {body}");
+        bail!("AS metadata at {metadata_url} returned {status}, {body}");
     }
 
     let body = security::read_body_capped(resp, "AS metadata").await?;
@@ -332,7 +312,7 @@ pub async fn dynamic_register(
     if !resp.status().is_success() {
         let status = resp.status();
         let body = failure_detail(resp, "dynamic registration").await;
-        bail!("dynamic registration at {reg_endpoint} returned {status} — {body}");
+        bail!("dynamic registration at {reg_endpoint} returned {status}, {body}");
     }
 
     let body = security::read_body_capped(resp, "dynamic registration").await?;
@@ -344,14 +324,6 @@ pub async fn dynamic_register(
 // PKCE flow
 // ---------------------------------------------------------------------------
 
-/// Bind a loopback listener for the OAuth callback and derive the redirect URI
-/// that matches it.
-///
-/// Centralized so dynamic registration and the PKCE flow are both driven by the
-/// SAME (listener, redirect_uri) pair — eliminating the prior bug where
-/// `dynamic_register` used a port-less placeholder while `start_pkce_flow`
-/// bound a fresh random port, producing a `redirect_uri` mismatch on
-/// authorization servers that don't honour RFC 8252 §7.3.
 async fn prepare_loopback_callback(oauth_cfg: &OAuthConfig) -> Result<(TcpListener, String)> {
     if let Some(uri) = oauth_cfg.redirect_uri.as_deref() {
         let parsed = reqwest::Url::parse(uri)
@@ -372,8 +344,6 @@ async fn prepare_loopback_callback(oauth_cfg: &OAuthConfig) -> Result<(TcpListen
                     })?;
                 return Ok((listener, uri.to_string()));
             }
-            // Loopback with no port — placeholder pattern. Bind a real port and
-            // rewrite the URI so RFC-strict AS implementations are happy.
         }
         // Non-loopback redirect_uri: this binary can only receive the callback
         // on loopback. Refuse rather than burn the user's time.
@@ -444,15 +414,11 @@ pub async fn start_pkce_flow(
         &state,
     );
 
-    // Open browser through the host chokepoint; if it declines/fails, print the
-    // URL so the user can copy it. Only print the full URL (including `state`)
-    // in that fallback path — never on the success path — so a sibling process
-    // reading the terminal can't race the loopback callback.
     if browser.open_url(&authorize_url) {
         eprintln!("\n  [mcp oauth] opened browser for {server_url} (waiting for callback)\n");
     } else {
         eprintln!(
-            "\n  [mcp oauth] could not open browser for {server_url} — copy this URL manually:\n  {authorize_url}\n"
+            "\n  [mcp oauth] could not open browser for {server_url}, copy this URL manually:\n  {authorize_url}\n"
         );
     }
 
@@ -462,14 +428,14 @@ pub async fn start_pkce_flow(
             .await
             .map_err(|_| {
                 anyhow!(
-                    "OAuth flow timed out after {}s — re-run interactively or pre-auth via \
+                    "OAuth flow timed out after {}s, re-run interactively or pre-auth via \
              `agi mcp oauth login <server>`",
                     OAUTH_INTERACTIVE_TIMEOUT.as_secs()
                 )
             })??;
 
     if returned_state != state {
-        bail!("oauth state mismatch — possible CSRF, refusing to continue");
+        bail!("oauth state mismatch, possible CSRF, refusing to continue");
     }
 
     let token_resp = exchange_code_form(
@@ -554,7 +520,7 @@ pub async fn refresh_token(token: &OAuthToken, oauth_cfg: &OAuthConfig) -> Resul
     if !resp.status().is_success() {
         let status = resp.status();
         let body = failure_detail(resp, "token refresh").await;
-        bail!("token refresh at {token_url} returned {status} — {body}");
+        bail!("token refresh at {token_url} returned {status}, {body}");
     }
 
     let body = security::read_body_capped(resp, "token refresh").await?;
@@ -646,7 +612,7 @@ async fn exchange_code_form(
     if !resp.status().is_success() {
         let status = resp.status();
         let body = failure_detail(resp, "code exchange").await;
-        bail!("code exchange at {token_url} returned {status} — {body}");
+        bail!("code exchange at {token_url} returned {status}, {body}");
     }
 
     let body = security::read_body_capped(resp, "code exchange").await?;
@@ -745,7 +711,7 @@ fn parse_query_from_request_line(request_line: &str) -> Result<(String, String)>
         bail!(
             "authorization server returned error: {err}{}",
             error_description
-                .map(|d| format!(" — {d}"))
+                .map(|d| format!(", {d}"))
                 .unwrap_or_default()
         );
     }
@@ -868,7 +834,7 @@ pub async fn perform_full_oauth(
     } else {
         bail!(
             "MCP server requires OAuth but no client_id was supplied and the AS \
-             does not advertise a registration_endpoint — set [auth.client_id] \
+             does not advertise a registration_endpoint, set [auth.client_id] \
              in your config"
         );
     };
@@ -889,9 +855,6 @@ pub async fn perform_full_oauth(
     Ok(token)
 }
 
-// ---------------------------------------------------------------------------
-// Tests (parsing helpers only — flows hit real network/browser)
-// ---------------------------------------------------------------------------
 
 #[cfg(test)]
 mod tests {

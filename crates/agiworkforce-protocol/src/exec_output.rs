@@ -90,7 +90,7 @@ const WINDOWS_1252_PUNCT_BYTES: [u8; 8] = [
     0x94, // ” (right double quotation mark)
     0x95, // • (bullet)
     0x96, // – (en dash)
-    0x97, // — (em dash)
+    0x97,
     0x99, // ™ (trade mark sign)
 ];
 

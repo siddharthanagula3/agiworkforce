@@ -13,11 +13,6 @@ use serde::{Deserialize, Serialize};
 
 use crate::elicitation::SharedElicitationHandler;
 
-/// Client identity sent in the MCP `initialize` handshake's `clientInfo`.
-///
-/// Held here (not hardcoded) so each host reports its own name/version — the
-/// CLI must keep sending `agiworkforce-cli` + its own crate version, not this
-/// engine crate's version.
 #[derive(Debug, Clone)]
 pub struct ClientInfo {
     pub name: String,

@@ -1,15 +1,3 @@
-//! Shared sim harness for the MCP client integration tests.
-//!
-//! Provides:
-//!   * `spawn` — bind an axum app on a random loopback port.
-//!   * hooks builders (`decline_hooks`, `hooks_with`) + a fixed test `ClientInfo`.
-//!   * `http_basic` / `http_oauth` / `http_stale` / `http_oversized` — scripted
-//!     Streamable-HTTP MCP servers.
-//!   * `sse_sim` — a scripted SSE MCP server (endpoint hint + inline POST
-//!     responses) with a transient-failure counter for the reconnect case.
-//!
-//! These replay fixed transcripts so the tests are the frozen contract the
-//! desktop d2 swap must keep green.
 
 #![allow(dead_code)]
 
@@ -276,8 +264,6 @@ pub fn http_oauth() -> (Router, Arc<HttpRecord>) {
         }
     };
 
-    // Discovery + token endpoints. `authorization_endpoint` is never actually
-    // fetched — the driving browser shortcuts straight to the redirect_uri.
     let prm = get(|req: Request| async move {
         let host = host_of(&req);
         axum::Json(serde_json::json!({
@@ -453,8 +439,6 @@ pub fn sse_sim(fail_calls: usize) -> (Router, Arc<SseRecord>) {
                 "tools/call" => {
                     let n = rec.call_attempts.fetch_add(1, Ordering::SeqCst);
                     if n < fail_calls {
-                        // Transient failure — trips is_connection_error via
-                        // "SSE: POST '...' returned 503".
                         return json_response(
                             StatusCode::SERVICE_UNAVAILABLE,
                             None,

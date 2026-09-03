@@ -940,9 +940,6 @@ impl Op {
 #[serde(rename_all = "kebab-case")]
 #[strum(serialize_all = "kebab-case")]
 pub enum AskForApproval {
-    /// Under this policy, only "known safe" commands—as determined by
-    /// `is_safe_command()`—that **only read files** are auto‑approved.
-    /// Everything else will ask the user to approve.
     #[serde(rename = "untrusted")]
     #[strum(serialize = "untrusted")]
     UnlessTrusted,
@@ -1432,8 +1429,6 @@ pub enum EventMsg {
     #[serde(rename = "task_complete", alias = "turn_complete")]
     TurnComplete(TurnCompleteEvent),
 
-    /// Usage update for the current session, including totals and last turn.
-    /// Optional means unknown — UIs should not display when `None`.
     TokenCount(TokenCountEvent),
 
     /// Agent text output message

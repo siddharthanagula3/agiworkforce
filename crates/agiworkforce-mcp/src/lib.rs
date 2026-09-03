@@ -1,28 +1,3 @@
-//! Shared MCP (Model Context Protocol) client engine for AGI Workforce Rust
-//! surfaces.
-//!
-//! Extracted from `apps/cli/src/mcp/` (Wave 5, stage d1 of
-//! `docs/plans/rust-engine-extraction-2026-07-09.md`). Holds the transport
-//! MECHANICS only:
-//!
-//! - JSON-RPC framing, id correlation, per-operation timeouts, stale-request
-//!   handling, and connection-error detection + one-shot reconnect on tool
-//!   calls (verbatim behavior from the CLI client).
-//! - the three transports: `stdio` child process, long-lived `sse`, and
-//!   Streamable `http` (MCP 2025-06-18) with sticky `Mcp-Session-Id`.
-//! - the complete OAuth story: RFC 9728 protected-resource discovery,
-//!   RFC 8414 AS metadata, RFC 7591 dynamic registration, and the
-//!   authorization-code + PKCE (RFC 7636) grant with refresh.
-//! - MCP wire types are REUSED from [`agiworkforce_protocol::mcp`]
-//!   ([`agiworkforce_protocol::mcp::Tool`],
-//!   [`agiworkforce_protocol::mcp::CallToolResult`]) — never redefined here.
-//!
-//! POLICY / UI / persistence stay in the host apps and are injected via
-//! [`ClientHooks`]: token storage ([`TokenStore`]), the elicitation surface
-//! ([`ElicitationHandler`]), the browser-open + interactivity gate
-//! ([`BrowserAuthorizer`]), the client identity sent in `initialize`
-//! ([`ClientInfo`]), and an operational log sink. This crate reads no config,
-//! opens no browser on its own, and persists nothing on its own.
 
 // The transport read-loops and OAuth paths are ported line-for-line from the
 // CLI's `McpConnection` so behavior is provably unchanged. Several are nested

@@ -1,16 +1,3 @@
-//! AGI Workforce app-server transport layer.
-//!
-//! The primary developer-session protocol runs the full host-owned agent over
-//! typed JSONL stdio or authenticated WebSocket: threads, turns, streaming,
-//! interruption, MCP status, and approval round-trips share one contract.
-//!
-//! A legacy direct-tool JSON-RPC surface remains available to embedders through
-//! [`run_app_server`]. Tool dispatch is injected through [`ToolDispatch`], so
-//! this crate never depends on CLI tool implementations. Its methods are:
-//! - `initialize` — handshake, returns capabilities + server info.
-//! - `tools/list` — enumerated catalog from `ToolDispatch::list_tools`.
-//! - `tools/call` — dispatches via `ToolDispatch::call_tool` with `{name, arguments}` params.
-//! - `shutdown` — clean exit (stdio mode closes the loop).
 
 mod developer_sessions;
 

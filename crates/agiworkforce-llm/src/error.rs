@@ -1,11 +1,3 @@
-//! Structured provider errors and HTTP error-response classification.
-//!
-//! [`LlmError`] is the crate's app-neutral error type: apps map it onto their
-//! own error enums at the facade boundary (the CLI maps to `CliError`, the
-//! desktop will map to its IPC error contract in stage c2). The classification
-//! rules — including provider-specific message overrides, `Retry-After`
-//! parsing, managed-cloud paywall detection, and context-overflow sniffing —
-//! moved verbatim from `apps/cli/src/models/streaming.rs`.
 
 use std::time::Duration;
 
@@ -23,7 +15,7 @@ pub enum LlmError {
     #[error("[{provider}] Authentication failed: {message}")]
     Auth { provider: String, message: String },
     /// Rate limiting from the provider (`Retry-After` seconds when sent).
-    #[error("[{provider}] Rate limited{}", retry_after.map(|s| format!(" — retry after {s}s")).unwrap_or_default())]
+    #[error("[{provider}] Rate limited{}", retry_after.map(|s| format!(", retry after {s}s")).unwrap_or_default())]
     RateLimited {
         provider: String,
         retry_after: Option<u64>,
@@ -34,19 +26,12 @@ pub enum LlmError {
     /// Context window overflow detected from the provider's error body.
     #[error("Context overflow for model '{model}'")]
     ContextOverflow { model: String },
-    /// AGI Workforce managed-cloud paywall — the user's tier cap was reached.
-    /// HTTP 429 + `{"kind":"paywall", ...}`.
     #[error("Paywall: feature '{feature}' requires the {required_tier} plan: {reason}")]
     Paywall {
         feature: String,
         required_tier: String,
         reason: String,
     },
-    /// The stream produced no data within the idle window.
-    ///
-    /// The Display text intentionally reproduces the CLI's historical message
-    /// (for a 300s window: "Streaming timed out: no data received for 5
-    /// minutes") — the CLI facade surfaces it verbatim.
     #[error("Streaming timed out: no data received for {}", humanize_duration(*after))]
     IdleTimeout { after: Duration },
     /// Mid-stream read failure (connection dropped, TLS error, …).
@@ -159,12 +144,6 @@ pub fn looks_like_context_overflow(msg: &str) -> bool {
             || lower.contains("maximum"))
 }
 
-/// Infer provider name from a base URL for error reporting.
-///
-/// Best-effort fallback only — callers that know the provider should pass its
-/// name via [`crate::ProviderSpec::id`]. Local OpenAI-compatible servers
-/// (LM Studio, Ollama, …) can't be distinguished from each other by host
-/// alone, so a `localhost`/`127.0.0.1` URL is labeled the generic "local".
 pub fn provider_name_from_url(url: &str) -> &'static str {
     if url.contains("anthropic") {
         "anthropic"
@@ -189,17 +168,9 @@ pub fn provider_name_from_url(url: &str) -> &'static str {
     }
 }
 
-/// Extract the best human-readable message from a provider error body. Handles
-/// the common shapes — `{"error":{"message":"…"}}` (OpenAI/OpenRouter),
-/// `{"error":"…"}`, `{"message":"…"}`, `{"detail":"…"}` — plus OpenRouter's
-/// nested `{"error":{"metadata":{"raw":"{…}"}}}` where the real provider message
-/// is a JSON string buried inside `metadata.raw`. Returns `None` when nothing
-/// usable is found so callers can pick an appropriate fallback.
 pub fn humanize_error_body(body: &str) -> Option<String> {
     let v: serde_json::Value = serde_json::from_str(body.trim()).ok()?;
 
-    // OpenRouter wraps the upstream provider's error as a JSON *string* under
-    // error.metadata.raw — unwrap it for the most specific message.
     if let Some(raw) = v.pointer("/error/metadata/raw").and_then(|r| r.as_str())
         && let Ok(inner) = serde_json::from_str::<serde_json::Value>(raw)
     {

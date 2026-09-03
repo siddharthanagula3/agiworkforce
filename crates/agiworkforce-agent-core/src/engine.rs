@@ -1,13 +1,3 @@
-//! The turn-loop controller.
-//!
-//! [`run_turn`] mirrors the control flow of the CLI's historical
-//! `Session::send` agentic loop exactly — first completion, then iterate:
-//! runaway guard → partition (`task` → parallel read-only → sequential) →
-//! dispatch → commit → continuation → budget guard → content-loop guard — while
-//! delegating every app-local side-effect to [`TurnHost`]. Nothing here prints,
-//! prompts, resolves credentials, or mutates message history; it only decides
-//! *when* each host step runs and emits [`TurnEvent`]s at the CLI's mutation
-//! points.
 
 use futures_util::future::join_all;
 
@@ -115,7 +105,6 @@ pub async fn run_turn(
 
         let mut result_blocks: Vec<ResultBlock> = Vec::new();
 
-        // Subagent `task` batch — spawned/awaited/collected entirely host-side.
         if !task_calls.is_empty() {
             result_blocks.extend(host.run_task_batch(&task_calls).await);
         }

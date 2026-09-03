@@ -68,8 +68,6 @@ async fn persistent_failure_errors_after_single_reconnect() {
         .expect_err("persistent failure must surface as an error");
     assert!(format!("{err}").contains("503"), "got: {err}");
 
-    // The cap: exactly one reconnect (2 GET connections) and exactly two call
-    // attempts — no unbounded retry loop.
     assert_eq!(rec.call_attempts.load(Ordering::SeqCst), 2);
     assert_eq!(rec.get_hits.load(Ordering::SeqCst), 2);
 }
