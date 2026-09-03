@@ -4,6 +4,7 @@ vi.mock('server-only', () => ({}));
 
 import {
   fetchRegistryPage,
+  isDeletedEntry,
   isLatestActiveEntry,
   MCP_REGISTRY_BASE_URL,
   RegistryFetchError,
@@ -66,20 +67,22 @@ const RECORDED_REAL_PAGE: RegistryPage = {
 };
 
 describe('fetchRegistryPage', () => {
-  it('requests the v0 servers endpoint with a bounded page limit', async () => {
+  it('requests the v0 servers endpoint with a bounded page limit and the latest-version filter', async () => {
     const fetchImpl = vi.fn(
       async (..._args: unknown[]) =>
         new Response(JSON.stringify(RECORDED_REAL_PAGE), { status: 200 }),
     );
 
-    const page = await fetchRegistryPage(null, fetchImpl as unknown as typeof fetch);
+    const page = await fetchRegistryPage({}, fetchImpl as unknown as typeof fetch);
 
     expect(page).toEqual(RECORDED_REAL_PAGE);
     const requestedUrl = new URL(String(fetchImpl.mock.calls[0]?.[0]));
     expect(requestedUrl.origin).toBe(new URL(MCP_REGISTRY_BASE_URL).origin);
     expect(requestedUrl.pathname).toBe('/v0/servers');
     expect(requestedUrl.searchParams.get('limit')).toBe('100');
+    expect(requestedUrl.searchParams.get('version')).toBe('latest');
     expect(requestedUrl.searchParams.has('cursor')).toBe(false);
+    expect(requestedUrl.searchParams.has('updated_since')).toBe(false);
   });
 
   it('forwards a cursor for the next page', async () => {
@@ -89,12 +92,27 @@ describe('fetchRegistryPage', () => {
     );
 
     await fetchRegistryPage(
-      'ai.smithery/smithery-ai-slack:1.0.0',
+      { cursor: 'ai.smithery/smithery-ai-slack:1.0.0' },
       fetchImpl as unknown as typeof fetch,
     );
 
     const requestedUrl = new URL(String(fetchImpl.mock.calls[0]?.[0]));
     expect(requestedUrl.searchParams.get('cursor')).toBe('ai.smithery/smithery-ai-slack:1.0.0');
+  });
+
+  it('forwards updated_since for an incremental fetch', async () => {
+    const fetchImpl = vi.fn(
+      async (..._args: unknown[]) =>
+        new Response(JSON.stringify(RECORDED_REAL_PAGE), { status: 200 }),
+    );
+
+    await fetchRegistryPage(
+      { updatedSince: '2026-09-01T00:00:00.000Z' },
+      fetchImpl as unknown as typeof fetch,
+    );
+
+    const requestedUrl = new URL(String(fetchImpl.mock.calls[0]?.[0]));
+    expect(requestedUrl.searchParams.get('updated_since')).toBe('2026-09-01T00:00:00.000Z');
   });
 
   it('throws a typed error on a non-ok response', async () => {
@@ -103,7 +121,7 @@ describe('fetchRegistryPage', () => {
     );
 
     await expect(
-      fetchRegistryPage(null, fetchImpl as unknown as typeof fetch),
+      fetchRegistryPage({}, fetchImpl as unknown as typeof fetch),
     ).rejects.toBeInstanceOf(RegistryFetchError);
   });
 });
@@ -119,5 +137,22 @@ describe('isLatestActiveEntry', () => {
 
   it('rejects an entry with no official metadata at all', () => {
     expect(isLatestActiveEntry({ server: RECORDED_REAL_PAGE.servers[0]!.server })).toBe(false);
+  });
+});
+
+describe('isDeletedEntry', () => {
+  it('flags a status of deleted', () => {
+    expect(
+      isDeletedEntry({
+        server: RECORDED_REAL_PAGE.servers[0]!.server,
+        _meta: {
+          'io.modelcontextprotocol.registry/official': { status: 'deleted', isLatest: true },
+        },
+      }),
+    ).toBe(true);
+  });
+
+  it('does not flag an active entry as deleted', () => {
+    expect(isDeletedEntry(RECORDED_REAL_PAGE.servers[0]!)).toBe(false);
   });
 });
