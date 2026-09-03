@@ -83,18 +83,27 @@ function actionSources(action: ResponseWebSearchAction | undefined): string[] {
   return (action.sources ?? []).map((source) => stripOpenAITrackingParam(source.url));
 }
 
+function hostnameCitationTitle(url: string): string {
+  try {
+    const hostname = new URL(url).hostname.replace(/^www\./, '');
+    return hostname || url;
+  } catch {
+    return url;
+  }
+}
+
 function annotationTitle(raw: unknown): { url: string; title: string } | null {
   if (typeof raw !== 'object' || raw === null) return null;
   const annotation = raw as Record<string, unknown>;
-  if (
-    annotation['type'] !== 'url_citation' ||
-    typeof annotation['url'] !== 'string' ||
-    typeof annotation['title'] !== 'string' ||
-    !annotation['title']
-  ) {
+  if (annotation['type'] !== 'url_citation' || typeof annotation['url'] !== 'string') {
     return null;
   }
-  return { url: stripOpenAITrackingParam(annotation['url']), title: annotation['title'] };
+  const url = stripOpenAITrackingParam(annotation['url']);
+  const title =
+    typeof annotation['title'] === 'string' && annotation['title']
+      ? annotation['title']
+      : hostnameCitationTitle(url);
+  return { url, title };
 }
 
 function mapIncompleteReason(
@@ -447,14 +456,18 @@ export async function* translateOpenAIResponsesStream(
         if (
           annotation['type'] === 'url_citation' &&
           typeof annotation['url'] === 'string' &&
-          typeof annotation['title'] === 'string' &&
           typeof annotation['start_index'] === 'number' &&
           typeof annotation['end_index'] === 'number'
         ) {
+          const url = stripOpenAITrackingParam(annotation['url']);
+          const title =
+            typeof annotation['title'] === 'string' && annotation['title']
+              ? annotation['title']
+              : hostnameCitationTitle(url);
           const chunk = recordCitation(
             ev.output_index,
-            stripOpenAITrackingParam(annotation['url']),
-            annotation['title'],
+            url,
+            title,
             annotation['start_index'],
             annotation['end_index'],
           );
