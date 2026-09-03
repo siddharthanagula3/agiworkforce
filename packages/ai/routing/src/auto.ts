@@ -182,6 +182,7 @@ export interface AutoRoutingRequest {
    * ranks a route as healthy rather than parking it.
    */
   runtimeState?: RoutingRuntimeState | null;
+  availableProviderIds?: ReadonlySet<string>;
 }
 
 export interface AutoFallbackRoute {
@@ -534,6 +535,9 @@ function routeAdmissionRejections(
   }
   if (request.allowedHarnessIds && !request.allowedHarnessIds.includes(route.harnessId)) {
     reasons.push(`harness ${route.harnessId} is not executable on the calling runtime`);
+  }
+  if (request.availableProviderIds && !request.availableProviderIds.has(route.provider)) {
+    reasons.push(`provider ${route.provider} has no available credential for this request`);
   }
 
   const harness = registry.harnesses[route.harnessId];
