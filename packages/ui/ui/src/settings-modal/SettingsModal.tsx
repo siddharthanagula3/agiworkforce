@@ -1994,7 +1994,10 @@ function ConnectorsPanel({
 // not exist):
 //   - No "Add" dropdown: @agiworkforce/skills is a read-only loader and
 //     /api/skills is GET-only — there is no create-with-AI, manual-authoring,
-//     or upload capability to wire, so no Add items render.
+//     or upload capability to wire, so no Add items render. The description
+//     and empty state instead point at the two places authoring is real
+//     today: Desktop's Record a skill, and hand-writing a SKILL.md into
+//     .agiworkforce/skills for the CLI.
 //   - No "Last updated" column: the skill loader exposes no timestamps.
 //   - No download counts / popularity numbers anywhere (no real metrics).
 // ---------------------------------------------------------------------------
@@ -2028,8 +2031,9 @@ function SkillsPanel({ adapter }: { adapter?: SettingsDataAdapter }) {
       <div>
         <h2 className="text-base font-semibold text-foreground">Skills</h2>
         <p className="mt-1 text-sm text-muted-foreground">
-          Included, portable instruction bundles for focused workflows. Select one in chat with / or
-          @, or download its SKILL.md.
+          Bundled, portable instruction sets for focused workflows. Select one in chat with / or @,
+          or download its SKILL.md. The web app doesn&apos;t author skills — use Record a skill in
+          the Desktop app, or add a SKILL.md file to .agiworkforce/skills in the CLI.
         </p>
       </div>
 
@@ -2090,7 +2094,7 @@ function SkillsPanel({ adapter }: { adapter?: SettingsDataAdapter }) {
       ) : filtered.length === 0 ? (
         <p className="py-8 text-center text-sm text-muted-foreground">
           {skills.length === 0
-            ? 'No skills loaded in this environment.'
+            ? "No skills loaded in this environment. Skills ship bundled with AGI Workforce — the web app can't create one. Use Record a skill in the Desktop app, or add a SKILL.md file to .agiworkforce/skills in the CLI."
             : 'No skills match your search.'}
         </p>
       ) : (
