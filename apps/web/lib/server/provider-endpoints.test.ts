@@ -100,6 +100,26 @@ describe('provider API root resolution', () => {
   });
 });
 
+describe('GOOGLE_BASE_URL is version-agnostic (both repo conventions resolve alike)', () => {
+  const EXPECTED = 'https://gateway.ai.cloudflare.com/v1/acct/gw/google/v1beta/operations/task-1';
+
+  it('resolves the bare-host spelling by adding /v1beta', () => {
+    process.env['GOOGLE_BASE_URL'] = 'https://gateway.ai.cloudflare.com/v1/acct/gw/google';
+    expect(providerApiUrl('google', 'operations/task-1')).toBe(EXPECTED);
+  });
+
+  it('resolves the /v1beta-carrying spelling without doubling the segment', () => {
+    process.env['GOOGLE_BASE_URL'] = 'https://gateway.ai.cloudflare.com/v1/acct/gw/google/v1beta';
+    expect(providerApiUrl('google', 'operations/task-1')).toBe(EXPECTED);
+    expect(providerApiUrl('google', 'operations/task-1')).not.toContain('/v1beta/v1beta/');
+  });
+
+  it('classifies the bare-host override host the same as the /v1beta-carrying one', () => {
+    process.env['GOOGLE_BASE_URL'] = 'https://gateway.ai.cloudflare.com/v1/acct/gw/google';
+    expect(googleVideoOutputHostDisposition('gateway.ai.cloudflare.com')).toBe('api');
+  });
+});
+
 describe('ANTHROPIC_BASE_URL is version-agnostic (both repo conventions resolve alike)', () => {
   const EXPECTED = 'https://gateway.ai.cloudflare.com/v1/acct/gw/anthropic/v1/messages';
 

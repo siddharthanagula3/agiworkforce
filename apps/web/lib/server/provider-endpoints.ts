@@ -24,9 +24,9 @@ const PROVIDER_ENDPOINTS: Record<ManagedProviderId, ProviderEndpointConvention> 
     versionSegment: 'v1',
   },
   google: {
-    defaultRoot: 'https://generativelanguage.googleapis.com/v1beta',
+    defaultRoot: 'https://generativelanguage.googleapis.com',
     envKey: 'GOOGLE_BASE_URL',
-    versionSegment: '',
+    versionSegment: 'v1beta',
   },
   openrouter: {
     defaultRoot: 'https://openrouter.ai/api/v1',

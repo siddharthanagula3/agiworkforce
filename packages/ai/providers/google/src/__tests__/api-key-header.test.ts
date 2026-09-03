@@ -1,4 +1,3 @@
-
 import { describe, expect, it } from 'vitest';
 import type { ChatRequest } from '@agiworkforce/types';
 
@@ -96,6 +95,38 @@ describe('Google adapter API key transport', () => {
     expect(call.url).not.toContain(FAKE_KEY);
     expect(call.url).not.toMatch(/[?&]key=/);
     expect(new Headers(call.init?.headers).get('x-goog-api-key')).toBe(FAKE_KEY);
+  });
+
+  it('stream() builds the same request URL for a bare-host baseUrl and one already carrying /v1beta', async () => {
+    const bare = makeMockFetch(() => new Response(emptySseBody(), { status: 200 }));
+    const versioned = makeMockFetch(() => new Response(emptySseBody(), { status: 200 }));
+    const req: ChatRequest = {
+      model: GOOGLE_DEFAULT_MODEL_ID,
+      messages: [{ role: 'user', content: 'hi' }],
+    };
+
+    const bareAdapter = createGoogleAdapter({
+      apiKey: FAKE_KEY,
+      baseUrl: 'https://gateway.example.com/google',
+      fetch: bare.fetch,
+    });
+    for await (const _ of bareAdapter.stream(req, new AbortController().signal)) {
+      void _;
+    }
+
+    const versionedAdapter = createGoogleAdapter({
+      apiKey: FAKE_KEY,
+      baseUrl: 'https://gateway.example.com/google/v1beta',
+      fetch: versioned.fetch,
+    });
+    for await (const _ of versionedAdapter.stream(req, new AbortController().signal)) {
+      void _;
+    }
+
+    const expectedUrl = `https://gateway.example.com/google/v1beta/models/${GOOGLE_DEFAULT_MODEL_ID}:streamGenerateContent?alt=sse`;
+    expect(bare.calls[0]?.url).toBe(expectedUrl);
+    expect(versioned.calls[0]?.url).toBe(expectedUrl);
+    expect(versioned.calls[0]?.url).not.toContain('/v1beta/v1beta/');
   });
 
   it('fetchGoogleCatalog() sends the key in x-goog-api-key header, never in the URL', async () => {
