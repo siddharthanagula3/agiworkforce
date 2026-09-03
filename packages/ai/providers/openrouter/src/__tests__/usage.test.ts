@@ -116,7 +116,7 @@ describe('createOpenRouterUsageNormalizer — non-Anthropic-routed usage shape',
   });
 });
 
-describe('createOpenRouterUsageNormalizer — cost accounting', () => {
+describe('createOpenRouterUsageNormalizer, cost accounting', () => {
   it('reads usage.cost verbatim as costUsd without deriving it from token counts (avoids double counting against the token-based cost calculator)', async () => {
     const chunks: OpenAIChatCompletionChunk[] = [
       baseChunk({
@@ -190,7 +190,7 @@ describe('createOpenRouterUsageNormalizer — cost accounting', () => {
   });
 });
 
-describe('createOpenRouterUsageNormalizer — provider attribution', () => {
+describe('createOpenRouterUsageNormalizer, provider attribution', () => {
   it('attaches the response provider slug seen on an early chunk to the existing response-meta chunk', async () => {
     const chunks: OpenAIChatCompletionChunk[] = [
       { ...baseChunk({}), provider: 'Anthropic' } as never,

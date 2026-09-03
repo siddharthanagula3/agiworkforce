@@ -46,13 +46,6 @@ import { createXAIAdapter, type XAIAdapterConfig } from '@agiworkforce/providers
 import { createZhipuAdapter, type ZhipuAdapterConfig } from '@agiworkforce/providers-zhipu';
 import type { ModelInfo, Provider, ProviderAdapter } from '@agiworkforce/types';
 
-/**
- * A vendor described only by protocol plus configuration.
- *
- * The registry can name an OpenAI-shaped endpoint, its base URL and its key
- * env var without anyone writing an adapter package for it, so the identity
- * the compat adapter needs comes from the caller rather than from a module.
- */
 export interface OpenAICompatRouteConfig extends OpenAICompatAdapterConfig {
   providerId: string;
   label: string;

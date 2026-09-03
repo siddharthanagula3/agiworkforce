@@ -200,12 +200,6 @@ describe('translateOpenAIResponsesStream native web search', () => {
       },
     });
 
-    // A citation that OpenAI never streamed as its own
-    // `response.output_text.annotation.added` event - and only delivered
-    // folded into the final snapshot's message content - still has to reach
-    // the client as its own citation-delta. Without this, the client falls
-    // back to positional guessing against the aggregate search-results pool
-    // and can attach the wrong url to a claim.
     expect(chunks).toContainEqual({
       type: 'citation-delta',
       blockIndex: 1,
@@ -355,9 +349,6 @@ describe('translateOpenAIResponsesStream native web search', () => {
       title: 'Pixel Watch 5: Proactive assistance and advanced health tracking',
     });
 
-    // The uncited openai.com sibling on the same host never picks up the
-    // cited page's title or gets folded into it - each source keeps its own
-    // exact url.
     const searchResult = chunks.find(
       (c): c is Extract<StreamChunk, { type: 'server-tool-result' }> =>
         c.type === 'server-tool-result' && c.toolUseId === 'ws_openai',

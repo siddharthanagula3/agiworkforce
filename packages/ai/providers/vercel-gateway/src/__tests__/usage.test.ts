@@ -35,7 +35,7 @@ function findUsage(chunks: StreamChunk[]): Extract<StreamChunk, { type: 'usage' 
   return usage;
 }
 
-describe('createVercelGatewayUsageNormalizer — standard OpenAI-compat usage fields', () => {
+describe('createVercelGatewayUsageNormalizer, standard OpenAI-compat usage fields', () => {
   it('passes prompt_tokens_details.cached_tokens and completion_tokens_details.reasoning_tokens through unchanged (gateway already reports the standard shape)', async () => {
     const chunks: OpenAIChatCompletionChunk[] = [
       baseChunk({
@@ -59,7 +59,7 @@ describe('createVercelGatewayUsageNormalizer — standard OpenAI-compat usage fi
   });
 });
 
-describe('createVercelGatewayUsageNormalizer — cost and cache-write accounting', () => {
+describe('createVercelGatewayUsageNormalizer, cost and cache-write accounting', () => {
   it('reads a top-level usage.cost verbatim as costUsd when the gateway inlines it, without deriving it from token counts', async () => {
     const chunks: OpenAIChatCompletionChunk[] = [
       baseChunk({
@@ -109,7 +109,7 @@ describe('createVercelGatewayUsageNormalizer — cost and cache-write accounting
   });
 });
 
-describe('createVercelGatewayUsageNormalizer — provider attribution', () => {
+describe('createVercelGatewayUsageNormalizer, provider attribution', () => {
   it('attaches provider_metadata.gateway.provider to the existing response-meta chunk when seen on an early chunk', async () => {
     const chunks: OpenAIChatCompletionChunk[] = [
       { ...baseChunk({}), provider_metadata: { gateway: { provider: 'anthropic' } } } as never,
