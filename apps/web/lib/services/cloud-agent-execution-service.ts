@@ -14,6 +14,15 @@ const RetrySafetySchema = z.enum(['safe', 'unsafe']);
 const OperationStatusSchema = z.enum(['running', 'completed', 'failed', 'outcome_unknown']);
 const JsonObjectSchema = z.record(z.string(), z.unknown());
 
+const MIN_OPERATION_LEASE_SECONDS = 60;
+const MAX_OPERATION_LEASE_SECONDS = 300;
+const DEFAULT_OPERATION_LEASE_SECONDS = 240;
+const MAX_OPERATION_REPLAY_ATTEMPTS = 5;
+const OPERATION_REPLAY_LIMIT_ERROR = {
+  code: 'operation_replay_limit_exceeded',
+  message: 'The durable operation exceeded its maximum replay attempts.',
+} as const;
+
 export type CloudAgentOperationKind = z.infer<typeof OperationKindSchema>;
 export type CloudAgentRetrySafety = z.infer<typeof RetrySafetySchema>;
 export type CloudAgentExecutionStatus = z.infer<typeof OperationStatusSchema>;
@@ -180,7 +189,13 @@ export async function claimCloudAgentExecutionOperation(
     .regex(/^[0-9a-f]{64}$/)
     .parse(input.inputHash);
   const retrySafety = RetrySafetySchema.parse(input.retrySafety);
-  const leaseSeconds = Math.min(300, Math.max(60, Math.trunc(input.leaseSeconds ?? 240)));
+  const leaseSeconds = Math.min(
+    MAX_OPERATION_LEASE_SECONDS,
+    Math.max(
+      MIN_OPERATION_LEASE_SECONDS,
+      Math.trunc(input.leaseSeconds ?? DEFAULT_OPERATION_LEASE_SECONDS),
+    ),
+  );
   const now = input.now ?? new Date();
 
   return db.transaction(async (tx) => {
@@ -254,6 +269,27 @@ export async function claimCloudAgentExecutionOperation(
       );
       requireOperation(unknownRows);
       return { disposition: 'outcome_unknown' };
+    }
+
+    if (operation.attempt >= MAX_OPERATION_REPLAY_ATTEMPTS) {
+      const exhaustedRows = await tx.query<CloudAgentExecutionOperationRow>(
+        `update public.cloud_agent_execution_operations
+            set status = 'failed',
+                lease_token = null,
+                lease_expires_at = null,
+                error = jsonb_build_object('code', $3::text, 'message', $4::text),
+                completed_at = now(),
+                updated_at = now()
+          where id = $1 and user_id = $2 and status = 'running'
+          returning *`,
+        [
+          operation.id,
+          input.userId,
+          OPERATION_REPLAY_LIMIT_ERROR.code,
+          OPERATION_REPLAY_LIMIT_ERROR.message,
+        ],
+      );
+      return claimFromOperation(requireOperation(exhaustedRows));
     }
 
     const leaseToken = randomUUID();
