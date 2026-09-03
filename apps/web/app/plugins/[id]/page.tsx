@@ -2,9 +2,14 @@ import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import { buildMetadata } from '@/lib/seo/metadata';
 import { Header } from '@shared/components/layout/Header';
-import { MarketingFooter } from '@/features/marketing/components/MarketingFooter';
-import { Eyebrow, Ledger, Prose, Section, Stack } from '@/features/marketing/components/system';
-import { PageHero, type PageCta } from '@/features/marketing/components/pages/surfaces/shared';
+import {
+  Button,
+  ButtonRow,
+  Eyebrow,
+  Ledger,
+  MarketingFooter,
+  Prose,
+} from '@/features/marketing/components/system';
 import { loadPluginEntry } from '@/features/plugins/server/registry-source';
 import {
   isPluginEntryInstallable,
@@ -56,13 +61,23 @@ export default async function PluginDetailPage({ params }: Props) {
       <div data-design="agi" className="agi-ds-page">
         <Header />
         <main id="main-content">
-          <PageHero
-            id="agi-plugin-unavailable-title"
-            eyebrow="Plugins"
-            title="Registry unreachable."
-            lede="The plugin registry is temporarily unavailable, so this pack cannot be shown right now. Reload in a moment."
-            ctas={[{ href: '/plugins', label: 'Back to plugins', variant: 'secondary' }]}
-          />
+          <section className="agi-lp-hero" aria-labelledby="agi-plugin-unavailable-title">
+            <div className="agi-ds-container">
+              <Eyebrow>Plugins</Eyebrow>
+              <h1 className="agi-ds-h1" id="agi-plugin-unavailable-title">
+                Registry unreachable.
+              </h1>
+              <Prose size="lg">
+                The plugin registry is temporarily unavailable, so this pack cannot be shown right
+                now. Reload in a moment.
+              </Prose>
+              <ButtonRow>
+                <Button href="/plugins" variant="secondary">
+                  Back to plugins
+                </Button>
+              </ButtonRow>
+            </div>
+          </section>
         </main>
         <MarketingFooter />
       </div>
@@ -73,44 +88,76 @@ export default async function PluginDetailPage({ params }: Props) {
   const installable = isPluginEntryInstallable(entry);
   const webInstallable = isPluginEntryWebInstallable(entry);
 
-  const ctas: PageCta[] = [{ href: '/plugins', label: 'Back to plugins', variant: 'secondary' }];
-  if (webInstallable) {
-    ctas.unshift({ href: '/apps', label: 'Open Plugin settings' });
-  } else if (!installable) {
-    ctas.unshift({ href: '/plugins#request-access', label: 'Request marketplace access' });
-  }
-
   return (
     <div data-design="agi" className="agi-ds-page">
       <Header />
       <main id="main-content">
-        <PageHero
-          id="agi-plugin-title"
-          eyebrow="Plugins"
-          title={entry.name}
-          lede={
-            <>
-              {entry.description}{' '}
-              {webInstallable ? (
-                <strong>Managed in Website Settings.</strong>
-              ) : installable ? (
-                <strong>Published. Install it with the AGI CLI (see below).</strong>
-              ) : entry.status === 'deprecated' ? (
-                <strong>Deprecated. This pack should no longer be installed.</strong>
-              ) : (
-                <strong>
-                  Listed in the registry, with no published artifact yet. There is nothing to
-                  install so far.
-                </strong>
-              )}
-            </>
-          }
-          ctas={ctas}
-        />
+        <section className="agi-lp-hero" aria-labelledby="agi-plugin-title">
+          <div className="agi-ds-container agi-lp-hero-grid">
+            <div className="agi-lp-hero-copy">
+              <Eyebrow>Plugins</Eyebrow>
+              <h1 className="agi-ds-h1" id="agi-plugin-title">
+                {entry.name}
+              </h1>
+              <Prose size="lg">
+                {entry.description}{' '}
+                {webInstallable ? (
+                  <strong>Managed in Website Settings.</strong>
+                ) : installable ? (
+                  <strong>Published. Install it with the AGI CLI (see below).</strong>
+                ) : entry.status === 'deprecated' ? (
+                  <strong>Deprecated. This pack should no longer be installed.</strong>
+                ) : (
+                  <strong>
+                    Listed in the registry, with no published artifact yet. There is nothing to
+                    install so far.
+                  </strong>
+                )}
+              </Prose>
+              <ButtonRow>
+                {webInstallable ? (
+                  <Button href="/apps">Open Plugin settings</Button>
+                ) : !installable ? (
+                  <Button href="/plugins#request-access">Request marketplace access</Button>
+                ) : null}
+                <Button href="/plugins" variant="secondary">
+                  Back to plugins
+                </Button>
+              </ButtonRow>
+            </div>
+            <div className="agi-lp-hero-stage">
+              <div className="agi-lp-console" aria-label={`${entry.name} record`}>
+                <div className="agi-lp-console-bar">
+                  <span>{entry.id}</span>
+                </div>
+                <div className="agi-lp-console-body">
+                  <Ledger
+                    caption={`${entry.name} record preview`}
+                    rows={[
+                      {
+                        label: 'Publisher',
+                        value: `${entry.publisher.name}${entry.publisher.kind === 'first-party' ? ' (first-party)' : ' (third-party)'}`,
+                      },
+                      { label: 'Version', value: `v${entry.version}` },
+                      { label: 'Status', value: statusLabel(entry) },
+                    ]}
+                  />
+                </div>
+                <p className="agi-lp-receipt">
+                  <span className="agi-lp-receipt-part">{entry.category}</span>
+                  <span className="agi-lp-receipt-part">{sourceLabel(entry.source)}</span>
+                  <span className="agi-lp-receipt-part">
+                    {entry.integrity.sha256 ? 'checksum on file' : 'no checksum yet'}
+                  </span>
+                </p>
+              </div>
+            </div>
+          </div>
+        </section>
 
-        <Section id="the-record" labelledBy="agi-plugin-facts-title" rule>
-          <Stack gap="loose">
-            <div>
+        <section className="agi-lp-section" aria-labelledby="agi-plugin-facts-title">
+          <div className="agi-ds-container">
+            <div className="agi-lp-heading">
               <Eyebrow>The record</Eyebrow>
               <h2 className="agi-ds-h2" id="agi-plugin-facts-title">
                 The facts, plainly stated.
@@ -135,13 +182,13 @@ export default async function PluginDetailPage({ params }: Props) {
                 },
               ]}
             />
-          </Stack>
-        </Section>
+          </div>
+        </section>
 
         {installable && entry.distribution ? (
-          <Section id="install" labelledBy="agi-plugin-install-title" rule ground="2">
-            <Stack gap="loose">
-              <div>
+          <section className="agi-lp-section" aria-labelledby="agi-plugin-install-title">
+            <div className="agi-ds-container">
+              <div className="agi-lp-heading">
                 <Eyebrow>Install</Eyebrow>
                 <h2 className="agi-ds-h2" id="agi-plugin-install-title">
                   From the CLI, with the checksum pinned.
@@ -164,13 +211,13 @@ export default async function PluginDetailPage({ params }: Props) {
                   },
                 ]}
               />
-            </Stack>
-          </Section>
+            </div>
+          </section>
         ) : null}
 
-        <Section id="declared-skills" labelledBy="agi-plugin-skills-title" rule>
-          <Stack gap="loose">
-            <div>
+        <section className="agi-lp-section" aria-labelledby="agi-plugin-skills-title">
+          <div className="agi-ds-container">
+            <div className="agi-lp-heading">
               <Eyebrow>Declared skills</Eyebrow>
               <h2 className="agi-ds-h2" id="agi-plugin-skills-title">
                 What the pack teaches the agent.
@@ -189,23 +236,20 @@ export default async function PluginDetailPage({ params }: Props) {
               </p>
             )}
             {manifest === null ? (
-              <Prose size="sm">
-                These are the pack&apos;s declared contents. No manifest has been published yet, so
-                the exact commands, agents, and MCP servers are not final.
-              </Prose>
+              <div style={{ marginTop: '1rem' }}>
+                <Prose size="sm">
+                  These are the pack&apos;s declared contents. No manifest has been published yet,
+                  so the exact commands, agents, and MCP servers are not final.
+                </Prose>
+              </div>
             ) : null}
-          </Stack>
-        </Section>
+          </div>
+        </section>
 
         {entry.capabilities.length > 0 ? (
-          <Section
-            id="declared-capabilities"
-            labelledBy="agi-plugin-capabilities-title"
-            rule
-            ground="2"
-          >
-            <Stack gap="loose">
-              <div>
+          <section className="agi-lp-section" aria-labelledby="agi-plugin-capabilities-title">
+            <div className="agi-ds-container">
+              <div className="agi-lp-heading">
                 <Eyebrow>Declared capabilities</Eyebrow>
                 <h2 className="agi-ds-h2" id="agi-plugin-capabilities-title">
                   What the pack says it needs.
@@ -219,25 +263,27 @@ export default async function PluginDetailPage({ params }: Props) {
                   </span>
                 ))}
               </p>
-              <Prose size="sm">
-                These are declarations shown for review. They are not enforced by a sandbox today,
-                so treat them as what the author says the pack does, not as a guarantee.
-              </Prose>
-            </Stack>
-          </Section>
+              <div style={{ marginTop: '1rem' }}>
+                <Prose size="sm">
+                  These are declarations shown for review. They are not enforced by a sandbox today,
+                  so treat them as what the author says the pack does, not as a guarantee.
+                </Prose>
+              </div>
+            </div>
+          </section>
         ) : null}
 
-        <Section id="required-connectors" labelledBy="agi-plugin-connectors-title" rule>
-          <Stack gap="loose">
-            <div>
+        <section className="agi-lp-close" aria-labelledby="agi-plugin-connectors-title">
+          <div className="agi-ds-container">
+            <div className="agi-lp-close-inner">
               <Eyebrow>Required connectors</Eyebrow>
               <h2 className="agi-ds-h2" id="agi-plugin-connectors-title">
                 Connect once, use everywhere in the pack.
               </h2>
+              <ConnectorChecklist connectorIds={entry.requiredConnectors} />
             </div>
-            <ConnectorChecklist connectorIds={entry.requiredConnectors} />
-          </Stack>
-        </Section>
+          </div>
+        </section>
       </main>
       <MarketingFooter />
     </div>
