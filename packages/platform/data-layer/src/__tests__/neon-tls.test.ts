@@ -16,24 +16,54 @@ afterEach(() => {
 });
 
 describe('NeonDatabaseAdapter TLS enforcement', () => {
-  it('refuses a connection string with no sslmode', () => {
+  it('accepts a Neon connection string with no sslmode at all', () => {
+    const adapter = new NeonDatabaseAdapter({
+      connectionString: 'postgresql://u:p@ep-xxx.us-east-2.aws.neon.tech/db',
+    });
+    expect(adapter).toBeInstanceOf(NeonDatabaseAdapter);
+  });
+
+  it('accepts the bare neon.tech apex host with no sslmode', () => {
+    const adapter = new NeonDatabaseAdapter({ connectionString: 'postgresql://u:p@neon.tech/db' });
+    expect(adapter).toBeInstanceOf(NeonDatabaseAdapter);
+  });
+
+  it('refuses a Neon connection string with sslmode=disable', () => {
     expect(
-      () => new NeonDatabaseAdapter({ connectionString: 'postgresql://u:p@ep.neon.tech/db' }),
+      () =>
+        new NeonDatabaseAdapter({
+          connectionString: 'postgresql://u:p@ep.neon.tech/db?sslmode=disable',
+        }),
+    ).toThrow(/sslmode=disable/);
+  });
+
+  it('refuses a non-Neon connection string with no sslmode', () => {
+    expect(
+      () => new NeonDatabaseAdapter({ connectionString: 'postgresql://u:p@example.com/db' }),
     ).toThrow(DataLayerConfigError);
     expect(
-      () => new NeonDatabaseAdapter({ connectionString: 'postgresql://u:p@ep.neon.tech/db' }),
+      () => new NeonDatabaseAdapter({ connectionString: 'postgresql://u:p@example.com/db' }),
     ).toThrow(/sslmode=require/);
   });
 
-  it('refuses sslmode values that permit or default to a plaintext connection', () => {
+  it('refuses a non-Neon connection string with an sslmode that permits plaintext', () => {
     for (const sslmode of ['disable', 'allow', 'prefer']) {
       expect(
         () =>
           new NeonDatabaseAdapter({
-            connectionString: `postgresql://u:p@ep.neon.tech/db?sslmode=${sslmode}`,
+            connectionString: `postgresql://u:p@example.com/db?sslmode=${sslmode}`,
           }),
-      ).toThrow(/sslmode=require/);
+      ).toThrow(DataLayerConfigError);
     }
+  });
+
+  it('does not treat a host that merely contains neon.tech as a Neon endpoint', () => {
+    expect(
+      () =>
+        new NeonDatabaseAdapter({
+          connectionString: 'postgresql://u:p@neon.tech.attacker.example/db',
+        }),
+    ).toThrow(/sslmode=require/);
   });
 
   it('refuses a connection string that is not a valid URL', () => {
@@ -42,19 +72,22 @@ describe('NeonDatabaseAdapter TLS enforcement', () => {
     );
   });
 
-  it('accepts sslmode=require and constructs without opening a connection', async () => {
+  it('accepts a non-Neon host with sslmode=require', async () => {
     const adapter = new NeonDatabaseAdapter({
-      connectionString: 'postgresql://u:p@ep.neon.tech/db?sslmode=require',
+      connectionString: 'postgresql://u:p@example.com/db?sslmode=require',
     });
     await expect(adapter.dispose()).resolves.toBeUndefined();
   });
 
-  it.each(['verify-ca', 'verify-full'])('accepts sslmode=%s', async (sslmode) => {
-    const adapter = new NeonDatabaseAdapter({
-      connectionString: `postgresql://u:p@ep.neon.tech/db?sslmode=${sslmode}`,
-    });
-    await expect(adapter.dispose()).resolves.toBeUndefined();
-  });
+  it.each(['verify-ca', 'verify-full'])(
+    'accepts a non-Neon host with sslmode=%s',
+    async (sslmode) => {
+      const adapter = new NeonDatabaseAdapter({
+        connectionString: `postgresql://u:p@example.com/db?sslmode=${sslmode}`,
+      });
+      await expect(adapter.dispose()).resolves.toBeUndefined();
+    },
+  );
 
   it('skips the sslmode requirement when the loopback-only local proxy is configured', async () => {
     process.env[VAR] = '127.0.0.1:5433';
