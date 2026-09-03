@@ -578,12 +578,15 @@
     "inputTokenPricingTier": {
       "type": "object",
       "additionalProperties": false,
-      "description": "Provider-published rates used only when total input tokens are strictly above thresholdTokens.",
+      "description": "Provider-published rates admitted once total input tokens cross thresholdTokens; thresholdBoundary states whether the crossing point itself is included (defaults to exclusive, strictly above, when absent).",
       "required": ["thresholdTokens", "inputPerMillion", "outputPerMillion"],
       "properties": {
         "thresholdTokens": {
           "type": "integer",
           "minimum": 1
+        },
+        "thresholdBoundary": {
+          "enum": ["inclusive", "exclusive"]
         },
         "inputPerMillion": {
           "type": "number",

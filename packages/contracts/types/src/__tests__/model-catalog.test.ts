@@ -354,6 +354,21 @@ describe('resolveEffectiveModelPricing', () => {
     );
   });
 
+  it('matches the xAI-documented inclusive boundary at exactly 200,000 input tokens for grok-4.5', () => {
+    const model = getModelMetadataById('grok-4.5');
+    const tier = model?.inputTokenPricingTiers?.[0];
+    expect(tier?.thresholdTokens).toBe(200_000);
+    expect(tier?.thresholdBoundary).toBe('inclusive');
+    const asOf = new Date('2030-01-01T00:00:00Z');
+
+    expect(resolveEffectiveModelPricingForInputTokens(model!, asOf, 199_999).inputCost).toBe(
+      model!.inputCost,
+    );
+    expect(resolveEffectiveModelPricingForInputTokens(model!, asOf, 200_000).inputCost).toBe(
+      tier!.inputCost,
+    );
+  });
+
   it('keeps the legacy singleton as read compatibility only when no array exists', () => {
     const legacy = {
       longContext: { thresholdTokens: 10, inputCost: 2, outputCost: 6 },
