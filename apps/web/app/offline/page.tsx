@@ -1,6 +1,6 @@
 import { buildMetadata } from '@/lib/seo/metadata';
 import { Eyebrow, Prose, Section, Stack } from '@/features/marketing/components/system';
-import { OfflineStatus } from './OfflineStatus';
+import { OfflineHeading, OfflineStatus } from './OfflineStatus';
 
 export const metadata = buildMetadata({
   title: 'No connection',
@@ -17,7 +17,7 @@ export default function OfflinePage() {
           <Stack gap="loose">
             <div>
               <Eyebrow>Connection</Eyebrow>
-              <h1 className="agi-ds-h1">You&rsquo;re offline.</h1>
+              <OfflineHeading />
             </div>
             <Prose>
               AGI Workforce cannot reach the network. Nothing you had open was lost, and unsent

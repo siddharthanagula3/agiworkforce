@@ -9,7 +9,7 @@ import { ButtonRow } from '@/features/marketing/components/system';
  * come back, and a stale message sends them looking for a fault that is no
  * longer there.
  */
-export function OfflineStatus() {
+export function useOnlineStatus() {
   const [online, setOnline] = useState<boolean | null>(null);
 
   useEffect(() => {
@@ -22,6 +22,26 @@ export function OfflineStatus() {
       window.removeEventListener('offline', sync);
     };
   }, []);
+
+  return online;
+}
+
+export function OfflineHeading() {
+  const online = useOnlineStatus();
+
+  return (
+    <h1 className="agi-ds-h1">
+      {online === null
+        ? 'Checking your connection.'
+        : online
+          ? 'You’re back online.'
+          : 'You’re offline.'}
+    </h1>
+  );
+}
+
+export function OfflineStatus() {
+  const online = useOnlineStatus();
 
   return (
     <div className="agi-ds-stack" data-gap="tight" role="status" aria-live="polite">
