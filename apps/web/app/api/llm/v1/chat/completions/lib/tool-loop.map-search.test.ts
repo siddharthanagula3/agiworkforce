@@ -55,6 +55,40 @@ function mapToolCallStream() {
   ]);
 }
 
+function invalidMapToolCallStream() {
+  return stream([
+    {
+      choices: [
+        {
+          delta: {
+            tool_calls: [
+              {
+                index: 0,
+                id: 'fixture-map-call-invalid',
+                type: 'function',
+                function: {
+                  name: 'search_maps',
+                  arguments: JSON.stringify({ query: '' }),
+                },
+              },
+            ],
+          },
+          index: 0,
+        },
+      ],
+      model: 'fixture-model',
+    },
+    { choices: [{ delta: {}, finish_reason: 'tool_calls', index: 0 }], model: 'fixture-model' },
+  ]);
+}
+
+function finalAnswerStream(text: string) {
+  return stream([
+    { choices: [{ delta: { content: text }, index: 0 }], model: 'fixture-model' },
+    { choices: [{ delta: {}, finish_reason: 'stop', index: 0 }], model: 'fixture-model' },
+  ]);
+}
+
 function makeProcessed(): ProcessedRequest {
   return {
     chatSurface: 'web' as const,
@@ -123,6 +157,20 @@ describe('map search tool loop', () => {
       cardId: 'fixture-map-call',
     });
     expect(output).toContain('Preparing map');
+    expect(output).toContain('data: [DONE]');
+    expect(output).not.toContain('max_agent_steps_reached');
+  });
+
+  it('asks the model to answer after a map search tool call returns nothing useful', async () => {
+    const answer = 'A hash map handles collisions with chaining or open addressing.';
+    provider.stream
+      .mockResolvedValueOnce(invalidMapToolCallStream())
+      .mockResolvedValueOnce(finalAnswerStream(answer));
+
+    const output = await collect(runToolLoop(makeProcessed(), { approvalMode: 'auto' }));
+
+    expect(provider.stream).toHaveBeenCalledTimes(2);
+    expect(output).toContain(answer);
     expect(output).toContain('data: [DONE]');
     expect(output).not.toContain('max_agent_steps_reached');
   });
