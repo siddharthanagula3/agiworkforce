@@ -227,9 +227,6 @@ export function serializeScimUser(
       location: `${baseUrl}/Users/${row.id}`,
       version: `W/"${row.version}"`,
     },
-    // `linked` mirrors membershipGranted deliberately. Reporting that a profile
-    // exists independently of membership made this response an existence oracle
-    // for any email the caller cared to submit.
     'urn:agiworkforce:params:scim:schemas:extension:2.0:Provisioning': {
       linked: membershipGranted,
       membershipGranted,
@@ -364,8 +361,6 @@ function emailDomain(email: string): string | null {
   return email.slice(at + 1).toLowerCase();
 }
 
-// Whole-domain equality, never a suffix test: `endsWith('example.com')` would
-// hand evil-example.com every account in example.com.
 function ownsEmailDomain(email: string | null, domains: ReadonlySet<string>): boolean {
   if (!email) return false;
   const domain = emailDomain(email);

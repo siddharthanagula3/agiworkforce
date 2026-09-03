@@ -40,13 +40,6 @@ export interface ProvidedKeyRing extends KeyRing {
   provider: string;
 }
 
-/**
- * The seam between "where key bytes come from" and everything that seals or
- * opens an envelope with them. `envKeyProvider` below reads raw bytes out of
- * an env var, matching every deployment today. A KMS-backed or CMEK provider
- * implements the same shape and plugs in without touching the rest of this
- * file: sealEnvelope/openEnvelope only ever see the resulting `KeyRing`.
- */
 export interface KeyProvider {
   readonly name: string;
   resolveKeyRing(envName: string, options?: LoadKeyRingOptions): ProvidedKeyRing;
@@ -89,11 +82,6 @@ function assertUniqueKeyIds(envName: string, keys: EnvelopeKey[]): void {
   }
 }
 
-/**
- * Shared "<NAME>" / "<NAME>_ID" / "<NAME>_RETIRED" parsing for any provider.
- * `decodeMaterial` is the only part that differs between an env-backed ring
- * (raw bytes, hex or utf8) and a KMS-backed one (an unwrap call per entry).
- */
 function parseKeyRingEntries(
   envName: string,
   env: Record<string, string | undefined>,
@@ -136,7 +124,6 @@ function hkdfDeriveTenantKey(key: EnvelopeKey, organizationId: string): Envelope
   return { id: key.id, material: Buffer.from(derived) };
 }
 
-/** The default provider: reads key bytes straight out of an env var, same as every deployment today. */
 export const envKeyProvider: KeyProvider = {
   name: 'env',
   resolveKeyRing(envName, options = {}) {
@@ -152,15 +139,6 @@ export const envKeyProvider: KeyProvider = {
 
 export type KmsUnwrapFn = (wrappedKeyMaterial: string) => Buffer;
 
-/**
- * Stub seam for a KMS-backed provider: `<NAME>` and `<NAME>_RETIRED` hold
- * whatever a real vendor SDK needs to identify a wrapped data key (an ARN, a
- * key id, a ciphertext blob), and `unwrap` turns that reference into 32 raw
- * bytes. Plugging in a vendor SDK later means passing its unwrap call here,
- * not editing this file. `unwrap` is called synchronously, so an integrator
- * backed by an async SDK call must resolve it before constructing the
- * provider (for example by pre-fetching the data key at process start).
- */
 export function createKmsKeyProvider(unwrap: KmsUnwrapFn): KeyProvider {
   const decodeMaterial = (wrapped: string, label: string): Buffer => {
     const material = unwrap(wrapped);
@@ -180,12 +158,6 @@ export function createKmsKeyProvider(unwrap: KmsUnwrapFn): KeyProvider {
   };
 }
 
-/**
- * CMEK per organization, opt in. Nothing calls this on its own: a caller
- * that wants per-tenant keys asks the provider for them explicitly, and a
- * provider that has not implemented `deriveTenantKey` refuses rather than
- * silently handing back the shared ring.
- */
 export function resolveTenantKeyRing(
   provider: KeyProvider,
   envName: string,

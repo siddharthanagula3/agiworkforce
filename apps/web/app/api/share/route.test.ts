@@ -166,7 +166,7 @@ describe('POST /api/share — link lifetime', () => {
   });
 });
 
-describe('POST /api/share — secret redaction', () => {
+describe('POST /api/share, secret redaction', () => {
   const STRIPE_KEY = `sk_live_${'a'.repeat(30)}`;
 
   beforeEach(() => {

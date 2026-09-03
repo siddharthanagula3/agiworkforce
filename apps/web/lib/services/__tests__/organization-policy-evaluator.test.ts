@@ -164,7 +164,7 @@ describe('evaluateOrganizationPolicy — privacy mode and audit export', () => {
   });
 });
 
-describe('evaluateOrganizationPolicy — mfa', () => {
+describe('evaluateOrganizationPolicy, mfa', () => {
   it('denies an unenrolled caller when the administrator requires mfa', () => {
     const decision = evaluateOrganizationPolicy(policy({ requireMfa: true }), {
       resource: 'mfa',
@@ -194,7 +194,7 @@ describe('evaluateOrganizationPolicy — mfa', () => {
   });
 });
 
-describe('evaluateOrganizationPolicy — spend cap', () => {
+describe('evaluateOrganizationPolicy, spend cap', () => {
   it('denies once month-to-date spend reaches the cap', () => {
     const decision = evaluateOrganizationPolicy(policy({ monthlySpendCapCents: 10_000 }), {
       resource: 'spend_cap',

@@ -310,31 +310,10 @@ const SECURE_SSL_MODES = new Set(['require', 'verify-ca', 'verify-full']);
 const NEON_APEX_HOST = 'neon.tech';
 const NEON_HOST_SUFFIX = `.${NEON_APEX_HOST}`;
 
-/**
- * A Neon endpoint (`ep-xxx.us-east-2.aws.neon.tech`, and the bare apex
- * domain) is reached exclusively through `@neondatabase/serverless`'s
- * `Pool`, which always speaks TLS over WebSocket or HTTPS regardless of the
- * connection string's `sslmode` — that parameter is meaningful to a raw `pg`
- * driver, not to this one. So a Neon host needs no `sslmode` to be secure.
- */
 function isNeonHost(hostname: string): boolean {
   return hostname === NEON_APEX_HOST || hostname.endsWith(NEON_HOST_SUFFIX);
 }
 
-/**
- * Fails closed on a connection string that cannot be trusted to reach
- * Postgres over TLS. A Neon host is secure by construction (see
- * {@link isNeonHost}) unless `sslmode=disable` explicitly asks for
- * plaintext, which is refused everywhere as a configuration smell even
- * though the Neon driver ignores it. Any other host — reached through the
- * `postgres` adapter today or a future driver change tomorrow — must set
- * `sslmode=require` (or `verify-ca` / `verify-full`) itself, since nothing
- * here can vouch for its transport.
- * Skipped only for a connection string whose own host is the loopback-only
- * local WebSocket proxy's target ({@link isLocalWebSocketProxyTarget}); the
- * proxy's own loopback check ({@link applyLocalWebSocketProxy}) is the real
- * guard on the proxy address itself.
- */
 function assertSecureConnectionString(connectionString: string): void {
   let url: URL;
   try {

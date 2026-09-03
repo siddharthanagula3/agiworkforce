@@ -34,7 +34,7 @@ function policyRow(overrides: Record<string, unknown> = {}): AdminPolicyRow {
   } as AdminPolicyRow;
 }
 
-describe('formatAdminPolicy — secretHandling', () => {
+describe('formatAdminPolicy, secretHandling', () => {
   it('defaults to redact when metadata carries no explicit value', () => {
     const policy = formatAdminPolicy(policyRow());
     expect(policy.secretHandling).toBe('redact');
@@ -51,7 +51,7 @@ describe('formatAdminPolicy — secretHandling', () => {
   });
 });
 
-describe('formatAdminPolicy — requireMfa and monthlySpendCapCents', () => {
+describe('formatAdminPolicy, requireMfa and monthlySpendCapCents', () => {
   it('defaults requireMfa to false and the spend cap to unset', () => {
     const policy = formatAdminPolicy(policyRow());
     expect(policy.requireMfa).toBe(false);
@@ -76,6 +76,44 @@ describe('formatAdminPolicy — requireMfa and monthlySpendCapCents', () => {
   });
 });
 
+describe('formatAdminPolicy — zeroDataRetentionOnly', () => {
+  it('defaults to false when metadata carries no explicit value', () => {
+    expect(formatAdminPolicy(policyRow()).zeroDataRetentionOnly).toBe(false);
+  });
+
+  it('reads a saved zeroDataRetentionOnly value out of metadata', () => {
+    expect(
+      formatAdminPolicy(policyRow({ metadata: { zeroDataRetentionOnly: true } }))
+        .zeroDataRetentionOnly,
+    ).toBe(true);
+  });
+});
+
+describe('formatAdminPolicy — ipAllowList', () => {
+  it('defaults to an empty array when metadata carries no explicit value', () => {
+    expect(formatAdminPolicy(policyRow()).ipAllowList).toEqual([]);
+  });
+
+  it('reads a saved ipAllowList out of metadata', () => {
+    expect(
+      formatAdminPolicy(policyRow({ metadata: { ipAllowList: ['203.0.113.0/24'] } })).ipAllowList,
+    ).toEqual(['203.0.113.0/24']);
+  });
+
+  it('drops non-string entries rather than throwing', () => {
+    expect(
+      formatAdminPolicy(policyRow({ metadata: { ipAllowList: ['203.0.113.0/24', 5, null] } }))
+        .ipAllowList,
+    ).toEqual(['203.0.113.0/24']);
+  });
+
+  it('treats a non-array value as an empty list', () => {
+    expect(
+      formatAdminPolicy(policyRow({ metadata: { ipAllowList: 'not-an-array' } })).ipAllowList,
+    ).toEqual([]);
+  });
+});
+
 describe('defaultAdminPolicyFor', () => {
   it('defaults an unconfigured organization to redact', () => {
     expect(defaultAdminPolicyFor(ORGANIZATION_ID).secretHandling).toBe('redact');
@@ -86,9 +124,17 @@ describe('defaultAdminPolicyFor', () => {
     expect(policy.requireMfa).toBe(false);
     expect(policy.monthlySpendCapCents).toBeNull();
   });
+
+  it('defaults an unconfigured organization to zero data retention off', () => {
+    expect(defaultAdminPolicyFor(ORGANIZATION_ID).zeroDataRetentionOnly).toBe(false);
+  });
+
+  it('defaults an unconfigured organization to no ip restriction', () => {
+    expect(defaultAdminPolicyFor(ORGANIZATION_ID).ipAllowList).toEqual([]);
+  });
 });
 
-describe('upsertOrganizationPolicy — secretHandling', () => {
+describe('upsertOrganizationPolicy, secretHandling', () => {
   let query: ReturnType<typeof vi.fn>;
   let db: DatabaseAdapter;
 
@@ -116,7 +162,7 @@ describe('upsertOrganizationPolicy — secretHandling', () => {
   });
 });
 
-describe('upsertOrganizationPolicy — requireMfa and monthlySpendCapCents', () => {
+describe('upsertOrganizationPolicy, requireMfa and monthlySpendCapCents', () => {
   let query: ReturnType<typeof vi.fn>;
   let db: DatabaseAdapter;
 
@@ -157,5 +203,56 @@ describe('upsertOrganizationPolicy — requireMfa and monthlySpendCapCents', () 
     const params = query.mock.calls[0]?.[1] as unknown[];
     const writtenMetadata = JSON.parse(params[13] as string);
     expect(writtenMetadata['monthlySpendCapCents']).toBeNull();
+  });
+});
+
+describe('upsertOrganizationPolicy — zeroDataRetentionOnly', () => {
+  let query: ReturnType<typeof vi.fn>;
+  let db: DatabaseAdapter;
+
+  beforeEach(() => {
+    query = vi.fn();
+    db = { query } as unknown as DatabaseAdapter;
+  });
+
+  it('merges zeroDataRetentionOnly into the metadata jsonb column', async () => {
+    query.mockResolvedValueOnce([policyRow({ metadata: { zeroDataRetentionOnly: true } })]);
+
+    const input = { ...defaultAdminPolicyFor(ORGANIZATION_ID), zeroDataRetentionOnly: true };
+    delete (input as { organizationId?: string }).organizationId;
+    delete (input as { updatedAt?: string }).updatedAt;
+
+    await upsertOrganizationPolicy(db, ORGANIZATION_ID, input);
+
+    const params = query.mock.calls[0]?.[1] as unknown[];
+    const writtenMetadata = JSON.parse(params[13] as string);
+    expect(writtenMetadata).toMatchObject({ zeroDataRetentionOnly: true });
+  });
+});
+
+describe('upsertOrganizationPolicy — ipAllowList', () => {
+  let query: ReturnType<typeof vi.fn>;
+  let db: DatabaseAdapter;
+
+  beforeEach(() => {
+    query = vi.fn();
+    db = { query } as unknown as DatabaseAdapter;
+  });
+
+  it('merges ipAllowList into the metadata jsonb column', async () => {
+    query.mockResolvedValueOnce([policyRow({ metadata: { ipAllowList: ['203.0.113.0/24'] } })]);
+
+    const input = {
+      ...defaultAdminPolicyFor(ORGANIZATION_ID),
+      ipAllowList: ['203.0.113.0/24'],
+    };
+    delete (input as { organizationId?: string }).organizationId;
+    delete (input as { updatedAt?: string }).updatedAt;
+
+    await upsertOrganizationPolicy(db, ORGANIZATION_ID, input);
+
+    const params = query.mock.calls[0]?.[1] as unknown[];
+    const writtenMetadata = JSON.parse(params[13] as string);
+    expect(writtenMetadata).toMatchObject({ ipAllowList: ['203.0.113.0/24'] });
   });
 });

@@ -64,7 +64,7 @@ function baseInput(overrides: Record<string, unknown> = {}) {
   } as Parameters<typeof reserveManagedUsageRequest>[0];
 }
 
-describe('reserveManagedUsageRequest — organization spend cap', () => {
+describe('reserveManagedUsageRequest, organization spend cap', () => {
   beforeEach(() => vi.clearAllMocks());
 
   it('skips the spend cap check entirely for a personal-scope reservation', async () => {
