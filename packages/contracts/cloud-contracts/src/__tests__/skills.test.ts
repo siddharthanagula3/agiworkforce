@@ -61,6 +61,30 @@ describe('Managed Skills directory contract', () => {
     ).toThrow();
   });
 
+  it('accepts an editable personal skill and omits editable when unset', () => {
+    expect(
+      parseManagedSkillsResponse({
+        skills: [
+          {
+            name: 'fixture-personal',
+            description: 'Authored in the browser.',
+            source: 'personal',
+            lifecycle: 'included',
+            downloadable: false,
+            editable: true,
+          },
+        ],
+      }).skills[0],
+    ).toEqual({
+      name: 'fixture-personal',
+      description: 'Authored in the browser.',
+      source: 'personal',
+      lifecycle: 'included',
+      downloadable: false,
+      editable: true,
+    });
+  });
+
   it('rejects entries that omit lifecycle instead of guessing they are executable', () => {
     expect(() =>
       ManagedSkillsResponseSchema.parse({

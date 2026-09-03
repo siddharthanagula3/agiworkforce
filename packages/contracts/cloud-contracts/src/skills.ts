@@ -1,4 +1,3 @@
-
 import { z } from 'zod';
 
 export const MANAGED_SKILL_SOURCES = [
@@ -28,6 +27,12 @@ export const ManagedSkillSummarySchema = z
      * layer invented.
      */
     version: z.string().trim().max(40).optional(),
+    /**
+     * True only for a skill this account authored through the web editor.
+     * Absent (not false) for every other surface, so a consumer that never
+     * heard of editing renders exactly as before.
+     */
+    editable: z.boolean().optional(),
   })
   .superRefine((skill, context) => {
     if (skill.downloadable && (skill.source !== 'bundled' || skill.lifecycle !== 'included')) {

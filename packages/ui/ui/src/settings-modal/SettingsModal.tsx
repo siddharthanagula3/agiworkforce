@@ -98,6 +98,13 @@ const REMOVE_PLUGIN_CONFIRM = {
   variant: 'destructive',
 } as const;
 
+const REMOVE_SKILL_CONFIRM = {
+  title: 'Delete skill?',
+  description: 'This removes it from your account. Chats that already used it are not affected.',
+  confirmText: 'Delete',
+  variant: 'destructive',
+} as const;
+
 // ---------------------------------------------------------------------------
 // Nav config — flat list, no group headers (matches Claude reference)
 // ---------------------------------------------------------------------------
@@ -2006,14 +2013,12 @@ function ConnectorsPanel({
 
 // ---------------------------------------------------------------------------
 // SkillsPanel — table view (columns Skill | Author) + Browse into the shared
-// directory. HONEST OMISSIONS (spec allows skipping where data/backing does
-// not exist):
-//   - No "Add" dropdown: @agiworkforce/skills is a read-only loader and
-//     /api/skills is GET-only — there is no create-with-AI, manual-authoring,
-//     or upload capability to wire, so no Add items render. The description
-//     and empty state instead point at the two places authoring is real
-//     today: Desktop's Record a skill, and hand-writing a SKILL.md into
-//     .agiworkforce/skills for the CLI.
+// directory. "New skill", per-row Edit and per-row Delete render only when
+// the adapter supplies the matching capability (onCreateSkill / editSkill /
+// removeSkill on a skill.editable row) — the same optional-capability shape
+// PluginsPanel's Add dropdown uses, so a consumer that never wires them (the
+// Desktop app, which authors skills through its own recorder) renders exactly
+// as before.
 //   - No "Last updated" column: the skill loader exposes no timestamps.
 //   - No download counts / popularity numbers anywhere (no real metrics).
 // ---------------------------------------------------------------------------
@@ -2021,9 +2026,12 @@ function ConnectorsPanel({
 function SkillsPanel({ adapter }: { adapter?: SettingsDataAdapter }) {
   const [search, setSearch] = useState('');
   const [view, setView] = useState<'table' | 'browse'>('table');
+  const { confirm, dialog: confirmDialog } = useConfirm();
   const skills = useMemo(() => adapter?.skills ?? [], [adapter?.skills]);
   const loading = adapter?.skillsLoading ?? false;
   const loadError = adapter?.skillsError;
+  const canAuthor = Boolean(adapter?.onCreateSkill);
+  const hasActions = Boolean(adapter?.editSkill || adapter?.removeSkill);
 
   const filtered = useMemo(() => {
     if (!search) return skills;
@@ -2047,13 +2055,13 @@ function SkillsPanel({ adapter }: { adapter?: SettingsDataAdapter }) {
       <div>
         <h2 className="text-base font-semibold text-foreground">Skills</h2>
         <p className="mt-1 text-sm text-muted-foreground">
-          Bundled, portable instruction sets for focused workflows. Select one in chat with / or @,
-          or download its SKILL.md. The web app doesn&apos;t author skills. Use Record a skill in
-          the Desktop app, or add a SKILL.md file to .agiworkforce/skills in the CLI.
+          {canAuthor
+            ? 'Portable instruction sets for focused workflows. Select one in chat with / or @, write your own, or download a bundled SKILL.md.'
+            : "Bundled, portable instruction sets for focused workflows. Select one in chat with / or @, or download its SKILL.md. The web app doesn't author skills. Use Record a skill in the Desktop app, or add a SKILL.md file to .agiworkforce/skills in the CLI."}
         </p>
       </div>
 
-      {/* Toolbar: search + Browse */}
+      {/* Toolbar: search + Browse + New skill (capability-gated) */}
       <div className="flex items-center gap-1.5">
         <div className="relative min-w-0 flex-1">
           <Search
@@ -2082,6 +2090,18 @@ function SkillsPanel({ adapter }: { adapter?: SettingsDataAdapter }) {
         >
           Browse
         </button>
+        {canAuthor && (
+          <button
+            type="button"
+            onClick={() => adapter?.onCreateSkill?.()}
+            className={cn(
+              'h-8 shrink-0 rounded-lg bg-foreground px-3 text-xs font-medium text-background transition-colors hover:bg-foreground/90',
+              FOCUS_RING,
+            )}
+          >
+            New skill
+          </button>
+        )}
       </div>
 
       {loading ? (
@@ -2110,7 +2130,9 @@ function SkillsPanel({ adapter }: { adapter?: SettingsDataAdapter }) {
       ) : filtered.length === 0 ? (
         <p className="py-8 text-center text-sm text-muted-foreground">
           {skills.length === 0
-            ? "No skills loaded in this environment. Skills ship bundled with AGI Workforce. The web app can't create one. Use Record a skill in the Desktop app, or add a SKILL.md file to .agiworkforce/skills in the CLI."
+            ? canAuthor
+              ? 'No skills yet. Create one, or download a bundled SKILL.md from Browse.'
+              : "No skills loaded in this environment. Skills ship bundled with AGI Workforce. The web app can't create one. Use Record a skill in the Desktop app, or add a SKILL.md file to .agiworkforce/skills in the CLI."
             : 'No skills match your search.'}
         </p>
       ) : (
@@ -2118,7 +2140,13 @@ function SkillsPanel({ adapter }: { adapter?: SettingsDataAdapter }) {
           <table className="w-full table-fixed border-collapse text-left">
             <thead>
               <tr className="border-b border-border/60 text-[12px] uppercase tracking-wider text-muted-foreground">
-                <th scope="col" className="w-[64%] px-3 py-2 font-semibold sm:w-[54%]">
+                <th
+                  scope="col"
+                  className={cn(
+                    'px-3 py-2 font-semibold',
+                    hasActions ? 'w-[52%] sm:w-[38%]' : 'w-[64%] sm:w-[54%]',
+                  )}
+                >
                   Skill
                 </th>
                 <th scope="col" className="hidden w-[14%] px-3 py-2 font-semibold sm:table-cell">
@@ -2134,9 +2162,20 @@ function SkillsPanel({ adapter }: { adapter?: SettingsDataAdapter }) {
                 <th scope="col" className="hidden w-[12%] px-3 py-2 font-semibold sm:table-cell">
                   Version
                 </th>
-                <th scope="col" className="w-[36%] px-3 py-2 font-semibold sm:w-[20%]">
+                <th
+                  scope="col"
+                  className={cn(
+                    'px-3 py-2 font-semibold',
+                    hasActions ? 'w-[24%] sm:w-[16%]' : 'w-[36%] sm:w-[20%]',
+                  )}
+                >
                   Status
                 </th>
+                {hasActions && (
+                  <th scope="col" className="w-[24%] px-3 py-2 text-right font-semibold sm:w-[20%]">
+                    Actions
+                  </th>
+                )}
               </tr>
             </thead>
             <tbody className="divide-y divide-border/60">
@@ -2175,12 +2214,57 @@ function SkillsPanel({ adapter }: { adapter?: SettingsDataAdapter }) {
                       <SkillDownloadAction adapter={adapter} skill={skill} />
                     </div>
                   </td>
+                  {hasActions && (
+                    <td className="px-3 py-2.5">
+                      {skill.editable ? (
+                        <div className="flex flex-wrap justify-end gap-x-2 gap-y-1 text-xs">
+                          {adapter?.editSkill ? (
+                            <button
+                              type="button"
+                              disabled={skill.mutating}
+                              onClick={() => adapter.editSkill?.(skill)}
+                              className={cn(
+                                'inline-flex min-h-6 items-center font-medium text-foreground underline-offset-4 hover:underline disabled:opacity-50',
+                                FOCUS_RING,
+                              )}
+                            >
+                              Edit
+                            </button>
+                          ) : null}
+                          {adapter?.removeSkill ? (
+                            <button
+                              type="button"
+                              disabled={skill.mutating}
+                              onClick={() =>
+                                void confirm(REMOVE_SKILL_CONFIRM).then((confirmed) => {
+                                  if (confirmed) void adapter.removeSkill?.(skill.id);
+                                })
+                              }
+                              className={cn(
+                                'inline-flex min-h-6 items-center font-medium text-danger underline-offset-4 hover:underline disabled:opacity-50',
+                                FOCUS_RING,
+                              )}
+                            >
+                              Delete
+                            </button>
+                          ) : null}
+                        </div>
+                      ) : null}
+                      {skill.error ? (
+                        <p role="alert" className="mt-1 text-right text-[12px] text-danger">
+                          {skill.error}
+                        </p>
+                      ) : null}
+                    </td>
+                  )}
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
       )}
+
+      {confirmDialog}
     </div>
   );
 }
