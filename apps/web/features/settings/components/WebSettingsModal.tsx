@@ -32,7 +32,10 @@
  */
 
 import { Suspense, useCallback, useEffect, useMemo, useState } from 'react';
-import { loadSkillsCatalog } from '@features/skills/services/skills-catalog';
+import {
+  loadSkillsCatalog,
+  skillAuthoringCapability,
+} from '@features/skills/services/skills-catalog';
 import { usePathname } from 'next/navigation';
 import { useAuth } from '@clerk/nextjs';
 import { useBillingStore } from '@shared/stores/web-auth-store';
@@ -859,6 +862,7 @@ export function WebSettingsModal({
   const [skills, setSkills] = useState<SettingsSkill[]>([]);
   const [skillsLoading, setSkillsLoading] = useState(false);
   const [skillsError, setSkillsError] = useState<string | null>(null);
+  const [canAuthorSkills, setCanAuthorSkills] = useState(false);
   const [pluginCatalog, setPluginCatalog] = useState<SettingsPlugin[]>([]);
   const [pluginsLoading, setPluginsLoading] = useState(false);
   const [pluginsLoaded, setPluginsLoaded] = useState(false);
@@ -872,6 +876,7 @@ export function WebSettingsModal({
     try {
       const catalog = await loadSkillsCatalog();
       if (signal?.aborted) return;
+      setCanAuthorSkills(skillAuthoringCapability());
       setSkills(
         catalog.map((skill: ApiSkill) => ({
           id: skill.name,
@@ -1291,9 +1296,7 @@ export function WebSettingsModal({
     skillsLoading,
     skillsError,
     retrySkills: loadSkills,
-    onCreateSkill,
-    editSkill,
-    removeSkill,
+    ...(canAuthorSkills ? { onCreateSkill, editSkill, removeSkill } : {}),
     plugins: visiblePluginCatalog.filter((plugin) => plugin.installed),
     pluginsLoading,
     pluginsError,
