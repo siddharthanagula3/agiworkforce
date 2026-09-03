@@ -23,9 +23,6 @@ vi.mock('@/lib/services/llm-cost-calculator', () => ({
     getCacheWriteCostPerMtok: vi.fn(() => 300),
     getCacheReadCostPerMtok: vi.fn(() => 30),
   },
-  // `buildServingRouteId` (tool-loop-anthropic.ts, unmocked here since the
-  // real implementation is exactly what these assertions want to exercise)
-  // normalizes the provider id through this export.
   normalizeProviderId: (provider: string | null | undefined) =>
     typeof provider === 'string' ? provider.toLowerCase() : null,
 }));
@@ -109,7 +106,7 @@ beforeEach(() => {
   mockRecordServedRouteAffinity.mockClear();
 });
 
-describe('buildNonStreamResponse — route outcome recording', () => {
+describe('buildNonStreamResponse, route outcome recording', () => {
   it('records a success outcome for the serving route', async () => {
     await buildNonStreamResponse(
       makeRequest() as any,
@@ -178,7 +175,7 @@ describe('buildNonStreamResponse — route outcome recording', () => {
   });
 });
 
-describe('buildUpstreamErrorResponse — route outcome recording', () => {
+describe('buildUpstreamErrorResponse, route outcome recording', () => {
   it('maps a rate-limit rejection onto the rate_limit outcome class', () => {
     buildUpstreamErrorResponse(
       upstreamError('slow down', 429),

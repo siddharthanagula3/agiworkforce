@@ -1430,16 +1430,13 @@ async function runMcpTool(
       maxResults: executionContext?.webSearchMaxResults,
       ...(executionContext?.signal ? { signal: executionContext.signal } : {}),
     });
-    // Enrich AFTER the cap (executeWebSearch already bounds results to
-    // WEB_SEARCH_MAX_RESULTS) and BEFORE either consumer below, so the model's
-    // view and the client's sources panel both see the real headline in one pass.
-    const enriched = outcome.ok
+    const enrichedAfterCap = outcome.ok
       ? { ...outcome, results: await enrichWebSearchResultTitles(outcome.results) }
       : outcome;
     return {
-      content: formatWebSearchResultForModel(enriched),
-      isError: !enriched.ok,
-      sources: webSearchResultsToFetchedSources(enriched),
+      content: formatWebSearchResultForModel(enrichedAfterCap),
+      isError: !enrichedAfterCap.ok,
+      sources: webSearchResultsToFetchedSources(enrichedAfterCap),
     };
   }
 
@@ -1690,14 +1687,6 @@ function createLiveLineQueue<T>(): {
 
 const STREAM_CORRUPTION_ERROR_NAME = 'EmptyStreamError';
 
-/**
- * `classifyError`'s taxonomy, mapped onto the coarser `RouteOutcomeClass` the
- * route health store tracks. A category absent here records nothing: it says
- * something about the request (a safety refusal, an oversized attachment) or
- * the account (billing, auth), never about whether THIS route can serve the
- * next request, and recording it would bias health data with noise the route
- * had no part in.
- */
 const ROUTE_OUTCOME_CLASS_BY_ERROR_CATEGORY: Readonly<
   Partial<Record<ClassifiedError['category'], RouteOutcomeClass>>
 > = {
@@ -1727,14 +1716,6 @@ function providerStepRouteId(
   return buildServingRouteId(processed.provider, request.model);
 }
 
-/**
- * Both callers wrap their whole body in a synchronous try/catch: this is a
- * telemetry side channel off the response path, so a route id that fails to
- * build (an unexpected mock in a test, a malformed processed request) must
- * never surface as the turn's own error. `recordRouteOutcome` and
- * `recordServedRouteAffinity` are themselves fire-and-forget and already
- * fail open internally once their promise settles.
- */
 function recordProviderStepSuccess(input: {
   processed: ProcessedRequest;
   attemptProcessed: ProcessedRequest;
@@ -2022,13 +2003,6 @@ export async function* runToolLoop(
     stepRequest: ProcessedRequest['llmRequest'],
     onLine?: (entry: CollectedProviderLine) => void,
   ): Promise<ToolLoopProviderStepResult> {
-    // The first non-retryable quota/spending-cap failure in a rotation chain
-    // is the true reason this turn could not be served -- a later rescue
-    // attempt's OWN failure (an overloaded 503 from a different route, say)
-    // is a fact about the rescue, not about why the request failed, and
-    // showing that instead buries the one specific, actionable cause under a
-    // generic "overloaded" that does not match what the provider actually
-    // said.
     let rootQuotaExhaustedError: unknown | undefined;
     let liveLinesReachedClient = false;
     for (;;) {
@@ -2138,17 +2112,12 @@ export async function* runToolLoop(
       );
     }
     for (const result of entry.serverToolResults ?? []) {
-      // Anthropic/Gemini/OpenAI native search all normalize to this shape
-      // (serverToolResultSources), and the provider's own title, when it has
-      // one at all, is often just a citation label, not the headline. Enrich
-      // here, on the already-capped list, before either client-facing event
-      // goes out.
-      const sources = await enrichWebSearchResultTitles(result.sources);
+      const enrichedTitleSources = await enrichWebSearchResultTitles(result.sources);
       yield encoder.encode(
         eventStream.emit({
           type: 'source-list',
           toolCallId: result.toolCallId,
-          sources,
+          sources: enrichedTitleSources,
         }),
       );
       yield encoder.encode(
@@ -2156,7 +2125,7 @@ export async function* runToolLoop(
           type: 'tool-execution-end',
           toolCallId: result.toolCallId,
           name: result.name,
-          output: toAgentEventJson(sources),
+          output: toAgentEventJson(enrichedTitleSources),
           isError: false,
           elapsedMs: result.elapsedMs,
         }),
@@ -3107,9 +3076,6 @@ export async function* runToolLoop(
       } catch (err) {
         if (options.shouldPropagateExecutionError?.(err)) throw err;
         const msg = err instanceof Error ? err.message : String(err);
-        // The deadline error is raised by this file, not a provider SDK, so
-        // classifyError's message/name matchers cannot see it -- it must be
-        // classified explicitly rather than falling through the mapper.
         const classified: ClassifiedError =
           err instanceof ProviderStreamDeadlineError
             ? {
@@ -3123,10 +3089,6 @@ export async function* runToolLoop(
         const mappedUpstream = mapClassifiedUpstreamError(classified, servingProcessed.provider);
         const streamError = {
           message: mappedUpstream.message,
-          // The provider's own error family (e.g. provider_quota_exhausted,
-          // provider_overloaded), not the raw HTTP status -- the client needs
-          // this to tell a spent quota apart from a plain rate limit and offer
-          // the right recovery (switch model vs. wait out a retry-after).
           code: mappedUpstream.code,
           retryable: classified.retryable,
         };

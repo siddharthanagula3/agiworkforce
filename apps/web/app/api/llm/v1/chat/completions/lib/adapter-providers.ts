@@ -59,13 +59,6 @@ interface AdapterProviderEntry {
   wireMode: 'legacy-web' | 'openai-passthrough';
 }
 
-/**
- * What each wire protocol needs from this layer.
- *
- * The dialect decides how the canonical request is shaped and whether the
- * Anthropic prompt-cache configuration travels with it; nothing else about a
- * protocol route is provider-specific.
- */
 const PROTOCOL_WIRE: Readonly<
   Record<
     Exclude<HarnessProtocol, 'provider_native'>,
@@ -94,13 +87,6 @@ const PROTOCOL_WIRE: Readonly<
   },
 };
 
-/**
- * Dispatch entries for every route the registry describes by protocol.
- *
- * A gateway that speaks a dialect we already implement needs no adapter
- * package: the endpoint, the credential and the wire format all come from its
- * harness, and attribution stays keyed by the route's provider id.
- */
 function protocolRouteProviders(): Record<string, AdapterProviderEntry> {
   const entries: Record<string, AdapterProviderEntry> = {};
   for (const route of listProtocolRoutes()) {

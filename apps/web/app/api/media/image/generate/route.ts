@@ -1458,17 +1458,9 @@ async function handleImageGeneration(request: NextRequest): Promise<NextResponse
 
     const providerHttpError = error instanceof ImageProviderHttpError ? error : null;
     const errorMessage = error instanceof Error ? error.message : 'Image generation failed';
-    // classifyError reads .status/.message the same way it does for the chat
-    // provider adapters, so a Google spending-cap 429 here is recognized the
-    // same way it is on the chat path -- the same billing project backs both.
     const classified = error instanceof Error ? classifyError(error) : undefined;
     const providerLabel = provider === 'google' ? 'Google' : provider;
 
-    // A spent quota window will not clear on a schedule the reader can wait
-    // out, unlike a plain rate limit -- no countdown, and the copy names the
-    // real reason instead of implying transient capacity. `suppressRetryAfter`
-    // drops any retry_after_seconds/Retry-After the provider still sent, since
-    // showing a wait timer next to "pick another model" contradicts itself.
     let friendlyMessage = `Provider ${provider} failed: ${errorMessage}`;
     let suppressRetryAfter = false;
     if (classified?.category === 'quota_exhausted') {

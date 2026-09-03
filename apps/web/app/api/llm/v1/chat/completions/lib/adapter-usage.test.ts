@@ -9,7 +9,7 @@ function usageChunk(fields: Partial<StreamChunk>): StreamChunk {
   return { type: 'usage', ...fields } as StreamChunk;
 }
 
-describe('ingestUsageChunk — provider-reported cost', () => {
+describe('ingestUsageChunk, provider-reported cost', () => {
   it('carries a gateway-reported costUsd into providerReportedCostUsd', () => {
     const acc = createUsageAccumulator();
 
