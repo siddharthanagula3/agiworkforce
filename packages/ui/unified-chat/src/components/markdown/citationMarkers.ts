@@ -14,7 +14,7 @@ export function citationGroupHref(oneBasedIndices: readonly number[]): string {
 
 const TRACKING_PARAM_PATTERN = /^(utm_[a-z_]+|fbclid|gclid|mc_[ce]id)$/i;
 
-function normalizeCitationUrl(url: string): string | null {
+export function normalizeCitationUrl(url: string): string | null {
   try {
     const parsed = new URL(url);
     const host = parsed.hostname.toLowerCase().replace(/^www\./, '');
