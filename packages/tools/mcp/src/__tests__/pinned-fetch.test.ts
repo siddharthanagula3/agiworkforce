@@ -71,7 +71,7 @@ afterEach(() => {
   vi.resetModules();
 });
 
-describe('createPinnedFetch — one resolution, one destination', () => {
+describe('createPinnedFetch, one resolution, one destination', () => {
   it('resolves the hostname exactly once, so a rebind has no window to land in', async () => {
     dns.lookup
       .mockResolvedValueOnce([{ address: '127.0.0.1', family: 4 }])
@@ -129,7 +129,7 @@ describe('createPinnedFetch — one resolution, one destination', () => {
   });
 });
 
-describe('createPinnedFetch — https keeps the hostname for SNI while pinning the address', () => {
+describe('createPinnedFetch, https keeps the hostname for SNI while pinning the address', () => {
   it('passes the pinned lookup and the original hostname to the TLS request', async () => {
     dns.lookup.mockResolvedValue([{ address: PUBLIC_ADDRESS, family: 4 }]);
 
@@ -160,7 +160,7 @@ describe('createPinnedFetch — https keeps the hostname for SNI while pinning t
   });
 });
 
-describe('createPinnedFetch — private and reserved destinations', () => {
+describe('createPinnedFetch, private and reserved destinations', () => {
   it('refuses a hostname that resolves to the cloud metadata address', async () => {
     dns.lookup.mockResolvedValue([{ address: METADATA_ADDRESS, family: 4 }]);
 
@@ -222,7 +222,7 @@ describe('createPinnedFetch — private and reserved destinations', () => {
   });
 });
 
-describe('createPinnedFetch — request shape', () => {
+describe('createPinnedFetch, request shape', () => {
   beforeEach(() => {
     dns.lookup.mockResolvedValue([{ address: '127.0.0.1', family: 4 }]);
   });

@@ -110,19 +110,10 @@ function tokenize(text: string): Set<string> {
   return tokens;
 }
 
-/**
- * How much of the SKILL's vocabulary the prompt covers.
- *
- * This replaced Jaccard, which is symmetric and therefore put every prompt word
- * in the denominator: a longer, more specific request scored LOWER than a terse
- * one, and real questions landed under the threshold almost every time
- * ("which channel converted best?" against data-analysis scored 0.000).
- *
- * Relevance here is directional — the question is whether the prompt is about
- * what the skill covers, not whether the two texts are the same size. Dividing
- * by the skill's own token count answers that and leaves prompt length alone.
- */
-function skillCoverage(promptTokens: ReadonlySet<string>, skillTokens: ReadonlySet<string>): number {
+function skillCoverage(
+  promptTokens: ReadonlySet<string>,
+  skillTokens: ReadonlySet<string>,
+): number {
   if (skillTokens.size === 0) return 0;
   let matched = 0;
   for (const token of skillTokens) {

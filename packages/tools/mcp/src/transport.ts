@@ -109,7 +109,7 @@ const REDIRECT_STATUSES = new Set([301, 302, 303, 307, 308]);
 function assertFollowableUrl(url: URL): void {
   if (url.protocol !== 'http:' && url.protocol !== 'https:') {
     throw new MCPTransportError(
-      `MCP HTTP transport refused scheme "${url.protocol}" — only http/https are allowed.`,
+      `MCP HTTP transport refused scheme "${url.protocol}", only http/https are allowed.`,
     );
   }
   if (url.username !== '' || url.password !== '') {

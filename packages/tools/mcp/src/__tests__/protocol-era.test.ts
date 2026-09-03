@@ -52,7 +52,7 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-describe('MCP 2026-07-28 pivot — version negotiation', () => {
+describe('MCP 2026-07-28 pivot, version negotiation', () => {
   it("constructs the SDK v2 client with mode 'auto', not the SDK's legacy default", async () => {
     installEraMock({ discoverResult: undefined });
     const { connectMcpServer } = await import('../connect');
@@ -63,7 +63,7 @@ describe('MCP 2026-07-28 pivot — version negotiation', () => {
   });
 });
 
-describe('MCP 2026-07-28 pivot — protocol era on the handle', () => {
+describe('MCP 2026-07-28 pivot, protocol era on the handle', () => {
   it("reports 'modern' when the server answers the server/discover probe", async () => {
     installEraMock({
       discoverResult: { protocolVersions: ['2026-07-28'], serverInfo: { name: 'srv' } },
@@ -83,7 +83,7 @@ describe('MCP 2026-07-28 pivot — protocol era on the handle', () => {
   });
 });
 
-describe('MCP 2026-07-28 pivot — input_required results', () => {
+describe('MCP 2026-07-28 pivot, input_required results', () => {
   it('surfaces an input_required result as an explicit error, never as empty success', async () => {
     installEraMock({
       discoverResult: { protocolVersions: ['2026-07-28'] },

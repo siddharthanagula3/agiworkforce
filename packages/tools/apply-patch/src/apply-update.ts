@@ -1,4 +1,3 @@
-
 import type { UpdateFileChunk } from './types';
 
 export function applyUpdateHunkToContents(
@@ -150,7 +149,7 @@ function normalizePunctuation(value: string): string {
         case '‑':
         case '‒':
         case '–':
-        case '—':
+        case ', ':
         case '―':
         case '−':
           return '-';
