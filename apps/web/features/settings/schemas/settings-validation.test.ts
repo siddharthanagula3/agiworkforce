@@ -1,4 +1,3 @@
-
 import { describe, it, expect } from 'vitest';
 import {
   profileSettingsSchema,
@@ -8,6 +7,7 @@ import {
   systemSettingsSchema,
   createApiKeySchema,
   validateFormData,
+  isValidIpOrCidr,
 } from './settings-validation';
 
 function getErrorMessages(result: { success: boolean; error?: unknown; data?: unknown }): string[] {
@@ -480,5 +480,51 @@ describe('Settings Validation Schemas', () => {
         expect(Object.keys(result.errors).length).toBeGreaterThan(0);
       }
     });
+  });
+});
+
+describe('isValidIpOrCidr', () => {
+  it('accepts a bare IPv4 address', () => {
+    expect(isValidIpOrCidr('203.0.113.5')).toBe(true);
+  });
+
+  it('accepts an IPv4 block with a prefix', () => {
+    expect(isValidIpOrCidr('203.0.113.0/24')).toBe(true);
+  });
+
+  it('accepts a bare IPv6 address', () => {
+    expect(isValidIpOrCidr('2001:db8::1')).toBe(true);
+  });
+
+  it('accepts an IPv6 block with a prefix', () => {
+    expect(isValidIpOrCidr('2001:db8::/32')).toBe(true);
+  });
+
+  it('rejects an out-of-range IPv4 octet', () => {
+    expect(isValidIpOrCidr('300.0.113.5')).toBe(false);
+  });
+
+  it('rejects an IPv4 prefix beyond 32', () => {
+    expect(isValidIpOrCidr('203.0.113.0/33')).toBe(false);
+  });
+
+  it('rejects an IPv6 prefix beyond 128', () => {
+    expect(isValidIpOrCidr('2001:db8::/129')).toBe(false);
+  });
+
+  it('rejects a non-numeric prefix', () => {
+    expect(isValidIpOrCidr('203.0.113.0/abc')).toBe(false);
+  });
+
+  it('rejects more than one slash', () => {
+    expect(isValidIpOrCidr('203.0.113.0/24/extra')).toBe(false);
+  });
+
+  it('rejects plain text', () => {
+    expect(isValidIpOrCidr('not-an-ip')).toBe(false);
+  });
+
+  it('rejects an empty string', () => {
+    expect(isValidIpOrCidr('')).toBe(false);
   });
 });
