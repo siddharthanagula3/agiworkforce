@@ -260,27 +260,42 @@ function decodeJwtSub(jwt: string): string {
 }
 
 const SECURE_SSL_MODES = new Set(['require', 'verify-ca', 'verify-full']);
+const NEON_APEX_HOST = 'neon.tech';
+const NEON_HOST_SUFFIX = `.${NEON_APEX_HOST}`;
 
 function isLocalWebSocketProxyConfigured(): boolean {
   return Boolean(process.env['AGI_DATABASE_WS_PROXY']?.trim());
 }
 
 /**
- * Fails closed on a connection string that does not ask Postgres to require
- * TLS. The Neon serverless driver already tunnels over a secure WebSocket by
- * default, but that is a property of the driver, not of the connection
- * string an operator hands it; a plain-Postgres host reached through the
- * `postgres` adapter or a future driver change would otherwise carry
- * `AGI_DATABASE_URL`'s credentials in the clear with nothing here to notice.
+ * A Neon endpoint (`ep-xxx.us-east-2.aws.neon.tech`, and the bare apex
+ * domain) is reached exclusively through `@neondatabase/serverless`'s
+ * `Pool`, which always speaks TLS over WebSocket or HTTPS regardless of the
+ * connection string's `sslmode` — that parameter is meaningful to a raw `pg`
+ * driver, not to this one. So a Neon host needs no `sslmode` to be secure.
+ */
+function isNeonHost(hostname: string): boolean {
+  return hostname === NEON_APEX_HOST || hostname.endsWith(NEON_HOST_SUFFIX);
+}
+
+/**
+ * Fails closed on a connection string that cannot be trusted to reach
+ * Postgres over TLS. A Neon host is secure by construction (see
+ * {@link isNeonHost}) unless `sslmode=disable` explicitly asks for
+ * plaintext, which is refused everywhere as a configuration smell even
+ * though the Neon driver ignores it. Any other host — reached through the
+ * `postgres` adapter today or a future driver change tomorrow — must set
+ * `sslmode=require` (or `verify-ca` / `verify-full`) itself, since nothing
+ * here can vouch for its transport.
  * Skipped only for the loopback-only local WebSocket proxy, whose own
  * loopback check ({@link applyLocalWebSocketProxy}) is the real guard there.
  */
 function assertSecureConnectionString(connectionString: string): void {
   if (isLocalWebSocketProxyConfigured()) return;
 
-  let sslmode: string | null;
+  let url: URL;
   try {
-    sslmode = new URL(connectionString).searchParams.get('sslmode');
+    url = new URL(connectionString);
   } catch {
     throw new DataLayerConfigError(
       'AGI_DATABASE_URL (or DATABASE_URL) is not a valid connection string. Expected ' +
@@ -288,12 +303,23 @@ function assertSecureConnectionString(connectionString: string): void {
     );
   }
 
+  const sslmode = url.searchParams.get('sslmode');
+  if (sslmode === 'disable') {
+    throw new DataLayerConfigError(
+      'AGI_DATABASE_URL (or DATABASE_URL) sets sslmode=disable, which explicitly asks for ' +
+        'a plaintext connection. Remove sslmode=disable, or set AGI_DATABASE_WS_PROXY for a ' +
+        'loopback-only local Postgres during development.',
+    );
+  }
+
+  if (isNeonHost(url.hostname)) return;
+
   if (!sslmode || !SECURE_SSL_MODES.has(sslmode)) {
     throw new DataLayerConfigError(
       'AGI_DATABASE_URL (or DATABASE_URL) must set sslmode=require (or verify-ca / ' +
-        'verify-full) so traffic to Neon is never sent unencrypted. Add ' +
-        '?sslmode=require to the connection string, or set AGI_DATABASE_WS_PROXY for a ' +
-        'loopback-only local Postgres during development.',
+        'verify-full) so traffic is never sent unencrypted. Add ?sslmode=require to the ' +
+        'connection string, point it at a Neon host (*.neon.tech), or set ' +
+        'AGI_DATABASE_WS_PROXY for a loopback-only local Postgres during development.',
     );
   }
 }
