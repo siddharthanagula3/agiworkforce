@@ -11,7 +11,6 @@ import {
 } from '@agiworkforce/types';
 import { getOptionalEnv, requireEnv } from '@shared/utils/env';
 import { resolveCheckoutReturnOrigin } from '@/lib/server/checkout-return-origin';
-import { getClerkAuthUser } from '@/lib/api-auth';
 import { buildCheckoutTaxParams } from '@/lib/billing/tax-policy';
 import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
 import { requireCsrfToken } from '@/lib/csrf';
@@ -20,7 +19,7 @@ import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { withRateLimit } from '@/lib/rate-limit';
 import { recordAuditEvent } from '@/lib/security-audit';
-import { getNeonDb } from '@/lib/server/neon-db';
+import { getUserScopedDb } from '@/lib/server/rls-db';
 import type { SubscriptionRow } from '@/lib/server/neon-types';
 import { isStripeCustomerId, isStripeSubscriptionId } from '@/lib/server/stripe-resource-ids';
 import { STRIPE_CLIENT_OPTIONS } from '@/lib/stripe-config';
@@ -65,7 +64,7 @@ function checkoutIsEnabled(): boolean {
 }
 
 async function handleTopUp(request: NextRequest): Promise<NextResponse> {
-  const { userId } = await getClerkAuthUser(request);
+  const { db, userId } = await getUserScopedDb(request);
   const csrfError = await requireCsrfToken(request, userId);
   if (csrfError) return csrfError as NextResponse;
 
@@ -99,7 +98,6 @@ async function handleTopUp(request: NextRequest): Promise<NextResponse> {
     SubscriptionRow,
     'plan_tier' | 'status' | 'stripe_customer_id' | 'stripe_subscription_id'
   >;
-  const db = getNeonDb();
   const [storage] = await db.query<{ ready: boolean }>(
     `select (
        to_regprocedure('public.handle_top_up_refund(text,integer,text)') is not null
