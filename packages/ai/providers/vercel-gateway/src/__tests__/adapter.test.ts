@@ -51,4 +51,57 @@ describe('createVercelGatewayAdapter', () => {
       expect(m.provider).toBe('vercel_gateway');
     }
   });
+
+  it('sends no providerOptions field on the wire when providerOptions is unset (never forces caching or routing by default)', async () => {
+    let seenBody: Record<string, unknown> | undefined;
+    const adapter = createVercelGatewayAdapter({
+      apiKey: 'test-key',
+      fetch: async (_input, init) => {
+        seenBody = JSON.parse(String(init?.body));
+        return new Response('data: [DONE]\n\n', {
+          status: 200,
+          headers: { 'content-type': 'text/event-stream' },
+        });
+      },
+    });
+    for await (const _c of adapter.stream(
+      { model: 'anthropic/claude-opus-5', messages: [{ role: 'user', content: 'hi' }] },
+      new AbortController().signal,
+    )) {
+      void _c;
+    }
+    expect(seenBody?.providerOptions).toBeUndefined();
+  });
+
+  it('sends the configured providerOptions.gateway preferences on the wire, overridable by request metadata', async () => {
+    let seenBody: Record<string, unknown> | undefined;
+    const adapter = createVercelGatewayAdapter({
+      apiKey: 'test-key',
+      providerOptions: { caching: 'auto', order: ['anthropic'] },
+      fetch: async (_input, init) => {
+        seenBody = JSON.parse(String(init?.body));
+        return new Response('data: [DONE]\n\n', {
+          status: 200,
+          headers: { 'content-type': 'text/event-stream' },
+        });
+      },
+    });
+    for await (const _c of adapter.stream(
+      {
+        model: 'anthropic/claude-opus-5',
+        messages: [{ role: 'user', content: 'hi' }],
+        metadata: { vercelGatewayProviderOptions: { order: ['vertex'] } },
+      },
+      new AbortController().signal,
+    )) {
+      void _c;
+    }
+    expect(seenBody?.providerOptions).toEqual({ gateway: { caching: 'auto', order: ['vertex'] } });
+  });
+
+  it('does not throw when a baseUrl override points at a non-allowlisted host (falls back silently)', () => {
+    expect(() =>
+      createVercelGatewayAdapter({ apiKey: 'test-key', baseUrl: 'https://evil.attacker.com/v1' }),
+    ).not.toThrow();
+  });
 });

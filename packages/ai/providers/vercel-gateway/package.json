@@ -15,8 +15,11 @@
     "lint": "eslint src --cache --cache-strategy content --cache-location .cache/eslint --max-warnings=0"
   },
   "dependencies": {
+    "@agiworkforce/provider-protocol": "workspace:*",
+    "@agiworkforce/provider-runtime": "workspace:*",
     "@agiworkforce/providers-openai": "workspace:*",
-    "@agiworkforce/types": "workspace:*"
+    "@agiworkforce/types": "workspace:*",
+    "openai": "^6.38.0"
   },
   "devDependencies": {
     "vitest": "^4.1.8"
