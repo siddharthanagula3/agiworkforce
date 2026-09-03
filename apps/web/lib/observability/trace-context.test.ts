@@ -69,9 +69,6 @@ describe('tenant scope under a streaming producer', () => {
       });
     });
 
-    // The producing run() call has already exited by the time the caller
-    // reads from the stream, the way `withErrorHandler` returns a streaming
-    // Response before the client has read a single byte of it.
     expect(getTenantScope()).toEqual({ organizationId: undefined, userId: undefined });
 
     await stream.getReader().read();
