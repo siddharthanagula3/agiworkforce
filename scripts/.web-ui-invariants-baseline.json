@@ -1,5 +1,5 @@
 {
-  "_description": "Grandfathered web UI invariant violations, seeded at the start of the frontend redesign. New violations fail CI. This list only ever shrinks — every redesign phase should reduce it, and the redesign is not finished while it is non-empty. Do not add to it.",
+  "_description": "Grandfathered web UI invariant violations, seeded at the start of the frontend redesign. New violations fail CI. This list only ever shrinks, every redesign phase should reduce it, and the redesign is not finished while it is non-empty. Do not add to it.",
   "_counts": {
     "raw-palette": 1206,
     "raw-bw": 78,

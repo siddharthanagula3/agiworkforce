@@ -199,7 +199,7 @@ for (const file of CATALOG_INPUTS) {
 
 if (catalogViolations.length > 0) {
   console.error(
-    'Model-catalog integrity check FAILED — deprecated/removed IDs in selectable catalog structures:\n',
+    'Model-catalog integrity check FAILED, deprecated/removed IDs in selectable catalog structures:\n',
   );
   for (const v of catalogViolations) {
     console.error(`- ${v.file}  ${v.path}  [${v.id}]`);
@@ -252,7 +252,7 @@ for (const scanRoot of SCAN_ROOTS) {
 
 if (violations.length > 0) {
   console.error(
-    'Model-catalog integrity check FAILED — removed/ghost model references in guarded source files:',
+    'Model-catalog integrity check FAILED, removed/ghost model references in guarded source files:',
   );
   console.error(
     '(IDs must come from packages/contracts/types/src/models.json; retired GPT identifiers are detected without a static denylist.)\n',

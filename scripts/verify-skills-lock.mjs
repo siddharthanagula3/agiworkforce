@@ -12,7 +12,7 @@ const HASH_ALGORITHM = 'agiskill-sha256-v1';
 const LOCK_VERSION = 2;
 const DEFAULT_ROOTS = ['.agents/skills'];
 const DEFAULT_REFERENCE_TREES = ['packages/tools/skills/reference-bundles'];
-const UNDECLARED_SOURCE = 'UNKNOWN — declare the upstream repo or URL before merging';
+const UNDECLARED_SOURCE = 'UNKNOWN, declare the upstream repo or URL before merging';
 const KNOWN_SOURCE_TYPES = new Set(['github', 'url', 'first-party']);
 
 function sha256Hex(bytes) {
@@ -144,7 +144,7 @@ function verify() {
     const entry = locked[id];
     if (!entry) {
       failures.push(
-        `Unlocked skill "${id}" at ${skill.path}. Every skill under ${roots.join(', ')} must declare provenance in skills-lock.json — run --regenerate, then fill in source/sourceType.`,
+        `Unlocked skill "${id}" at ${skill.path}. Every skill under ${roots.join(', ')} must declare provenance in skills-lock.json, run --regenerate, then fill in source/sourceType.`,
       );
       continue;
     }
@@ -179,7 +179,7 @@ function verify() {
     const manifests = listSkillManifestsUnder(join(REPO_ROOT, tree));
     for (const manifest of manifests) {
       failures.push(
-        `${manifest} makes ${tree} loadable. That tree is declared non-loadable reference material — either move the package under a locked skill root or drop the SKILL.md.`,
+        `${manifest} makes ${tree} loadable. That tree is declared non-loadable reference material, either move the package under a locked skill root or drop the SKILL.md.`,
       );
     }
   }
@@ -287,7 +287,7 @@ if (args.has('--regenerate') || args.has('--write')) {
 
 const selfTestFailures = selfTest();
 if (selfTestFailures.length > 0) {
-  console.error('agiskill-sha256-v1 self-test failed — refusing to report a verification result:');
+  console.error('agiskill-sha256-v1 self-test failed, refusing to report a verification result:');
   for (const failure of selfTestFailures) console.error(`- ${failure}`);
   process.exit(1);
 }

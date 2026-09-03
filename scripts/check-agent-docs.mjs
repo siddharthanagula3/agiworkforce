@@ -60,9 +60,6 @@ if (fs.existsSync(path.join(root, CLAUDE))) {
   }
 }
 
-// Scoped agent files were deleted with the corpus. Any that return must be
-// deliberate, not accumulated — the failure mode last time was fifteen of them
-// drifting out of sync with a 482-line guard trying to mirror them.
 const KNOWN_SCOPED = new Set(['apps/web/AGENTS.md', 'apps/web/CLAUDE.md']);
 const scoped = execFileSync('git', ['ls-files', '*AGENTS.md', '*CLAUDE.md'], {
   cwd: root,

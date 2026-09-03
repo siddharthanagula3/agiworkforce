@@ -5,7 +5,7 @@ const client = new Client({ connectionString: process.env.AGI_DATABASE_URL });
 const results = [];
 function record(name, pass, detail = '') {
   results.push({ name, pass, detail });
-  console.log(`${pass ? 'PASS' : 'FAIL'}  ${name}${detail ? ` — ${detail}` : ''}`);
+  console.log(`${pass ? 'PASS' : 'FAIL'}  ${name}${detail ? `, ${detail}` : ''}`);
 }
 
 async function expectReject(name, sql, params = []) {

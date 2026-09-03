@@ -5,7 +5,7 @@
 # Tap repo lives at: https://github.com/siddharthanagula3/homebrew-tap
 
 class Agiworkforce < Formula
-  desc "Multi-model AI agent for your terminal — BYOK, 25 providers, MCP, computer-use"
+  desc "Multi-model AI agent for your terminal, BYOK, 25 providers, MCP, computer-use"
   homepage "https://agiworkforce.com"
   license "Proprietary"
   version "1.0.0"

@@ -33,20 +33,20 @@ test('the registry accounts for exactly the exclusions CI actually has', () => {
 test('a new continue-on-error step nobody registered fails the build', () => {
   const drifted = structuredClone(workflow);
   drifted.jobs.security.steps.push({
-    name: 'Dependency audit (JS) — quietly not blocking',
+    name: 'Dependency audit (JS), quietly not blocking',
     run: 'pnpm audit',
     'continue-on-error': true,
   });
   const failures = checkSecurityGates({ policy, workflow: drifted, denyToml });
   assert.deepEqual(failures, [
-    'security step "Dependency audit (JS) — quietly not blocking" is continue-on-error but is not registered in .github/security-gate-policy.json',
+    'security step "Dependency audit (JS), quietly not blocking" is continue-on-error but is not registered in .github/security-gate-policy.json',
   ]);
 });
 
 test('turning a documented blocking gate into a warning fails the build', () => {
   const drifted = structuredClone(workflow);
   const step = drifted.jobs.security.steps.find(
-    (candidate) => candidate.name === 'Dependency audit (JS) — high (blocking, FIX-043)',
+    (candidate) => candidate.name === 'Dependency audit (JS), high (blocking, FIX-043)',
   );
   step['continue-on-error'] = true;
   const failures = checkSecurityGates({ policy, workflow: drifted, denyToml });
@@ -61,7 +61,7 @@ test('an exclusion left behind after the step starts blocking is reported as sta
   const drifted = structuredClone(workflow);
   const step = drifted.jobs['rust-desktop-cli'].steps.find(
     (candidate) =>
-      candidate.name === 'Dependency advisories (Rust) — non-blocking warning-policy debt',
+      candidate.name === 'Dependency advisories (Rust), non-blocking warning-policy debt',
   );
   delete step['continue-on-error'];
   const failures = checkSecurityGates({ policy, workflow: drifted, denyToml });

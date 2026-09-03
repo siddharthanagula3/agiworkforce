@@ -22,7 +22,7 @@ function readLogoMap({ path, marker }) {
   const source = readFileSync(join(repoRoot, path), 'utf8');
   const markerIndex = source.indexOf(marker);
   if (markerIndex < 0) {
-    throw new Error(`${path}: could not find "${marker}" — has the map been renamed or moved?`);
+    throw new Error(`${path}: could not find "${marker}", has the map been renamed or moved?`);
   }
 
   const rest = source.slice(markerIndex);
@@ -46,7 +46,7 @@ function readLogoMap({ path, marker }) {
   for (const match of body.matchAll(/([A-Za-z0-9_.\-]+)\s*:\s*(?:\n\s*)?'([^']+)'/g)) {
     entries.set(match[1].toLowerCase(), match[2]);
   }
-  if (entries.size === 0) throw new Error(`${path}: parsed zero entries — the format changed`);
+  if (entries.size === 0) throw new Error(`${path}: parsed zero entries, the format changed`);
   return entries;
 }
 
@@ -87,7 +87,7 @@ for (const key of drifted) {
   console.error(`  ${mirror.label}\n    ${mirror.entries.get(key)}`);
 }
 console.error(
-  `\ncheck:connector-logos FAILED — ${drifted.length} key(s) disagree between the two maps.` +
+  `\ncheck:connector-logos FAILED, ${drifted.length} key(s) disagree between the two maps.` +
     ` Update both, or delete the duplicate if one surface no longer needs it.`,
 );
 process.exit(1);

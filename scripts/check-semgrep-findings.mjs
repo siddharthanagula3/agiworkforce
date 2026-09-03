@@ -110,14 +110,14 @@ if (!allowlistOnly) {
     const line = finding.start?.line ?? 0;
     const message = (finding.extra?.message ?? '').split('\n')[0];
     const severity = finding.extra?.severity ?? 'UNKNOWN';
-    fail(`unaccepted: ${finding.path}:${line} [${severity}] ${finding.check_id} — ${message}`);
+    fail(`unaccepted: ${finding.path}:${line} [${severity}] ${finding.check_id}, ${message}`);
   }
 
   if (report) {
     for (const entry of allowlist) {
       if (entry.matched === 0) {
         fail(
-          `stale: the allowlist entry for ${entry.rule} matched nothing. Delete it — an acceptance nobody can point at reads as reviewed when it is not.`,
+          `stale: the allowlist entry for ${entry.rule} matched nothing. Delete it, an acceptance nobody can point at reads as reviewed when it is not.`,
         );
       }
     }

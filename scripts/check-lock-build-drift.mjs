@@ -71,7 +71,7 @@ function extractModelRefs(text) {
 
 function main() {
   if (!existsSync(LOCKS_DIR)) {
-    console.log('AP-09: locks dir absent (expected in CI) — skip.');
+    console.log('AP-09: locks dir absent (expected in CI), skip.');
     process.exit(0);
   }
 
@@ -80,7 +80,7 @@ function main() {
 
   const lockFiles = readdirSync(LOCKS_DIR).filter((f) => f.endsWith('.md'));
   if (lockFiles.length === 0) {
-    console.log('AP-09: no lock files found — skip.');
+    console.log('AP-09: no lock files found, skip.');
     process.exit(0);
   }
 
@@ -104,7 +104,7 @@ function main() {
 
   if (driftItems.length === 0) {
     console.log(
-      `AP-09: aligned — all model refs in ${lockFiles.length} lock files match models.json.`,
+      `AP-09: aligned, all model refs in ${lockFiles.length} lock files match models.json.`,
     );
     if (cargoVersion) {
       console.log(`  Cargo.toml version: ${cargoVersion}`);
@@ -112,7 +112,7 @@ function main() {
     process.exit(0);
   }
 
-  console.warn('AP-09 WARN: lock-vs-build drift detected (non-blocking — informational only).');
+  console.warn('AP-09 WARN: lock-vs-build drift detected (non-blocking, informational only).');
   console.warn(
     'These model IDs appear in lock files but are not in packages/contracts/types/src/models.json:',
   );

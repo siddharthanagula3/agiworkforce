@@ -40,7 +40,7 @@ function isNonProductionFile(fileName) {
 const DECLARATION_PATH_RULES = [
   {
     test: (rel) => /^packages\/ai\/providers\/[^/]+\/src\//.test(rel),
-    why: 'provider adapter package — owns its provider default base URL and host allowlist',
+    why: 'provider adapter package, owns its provider default base URL and host allowlist',
   },
 ];
 
@@ -91,7 +91,7 @@ const BUDGETS = [
   {
     file: 'packages/ai/provider-runtime/src/base-url.ts',
     max: 15,
-    why: 'ALLOWED_MANAGED_PROVIDER_HOSTS — the canonical managed-provider SSRF allowlist.',
+    why: 'ALLOWED_MANAGED_PROVIDER_HOSTS, the canonical managed-provider SSRF allowlist.',
   },
   {
     file: 'apps/web/lib/server/provider-endpoints.ts',
@@ -101,7 +101,7 @@ const BUDGETS = [
   {
     file: 'apps/web/lib/egress-policy.ts',
     max: 1,
-    why: 'RETIRED_PROVIDER_HOSTS — the subtraction applied to the canonical allowlist.',
+    why: 'RETIRED_PROVIDER_HOSTS, the subtraction applied to the canonical allowlist.',
   },
   {
     file: 'apps/desktop/src/features/settings/CustomModelsSettings.tsx',
@@ -111,7 +111,7 @@ const BUDGETS = [
   {
     file: 'apps/mobile/lib/pinning.ts',
     max: 4,
-    why: 'Certificate-pinning host table — pins are declared per literal host by definition.',
+    why: 'Certificate-pinning host table, pins are declared per literal host by definition.',
   },
   {
     file: 'packages/ai/provider-protocol/src/anthropic-payload-policy.ts',
@@ -126,12 +126,12 @@ const BUDGETS = [
   {
     file: 'apps/desktop/src-tauri/src/core/llm/providers/direct_api_provider.rs',
     max: 14,
-    why: "Desktop's default_base_url() provider table plus RETIRED_PROVIDER_HOSTS — the canonical desktop declaration.",
+    why: "Desktop's default_base_url() provider table plus RETIRED_PROVIDER_HOSTS, the canonical desktop declaration.",
   },
   {
     file: 'apps/cli/src/models/mod.rs',
     max: 9,
-    why: "CLI's ModelConfig base_url table — the canonical CLI declaration.",
+    why: "CLI's ModelConfig base_url table, the canonical CLI declaration.",
   },
   {
     file: 'apps/cli/src/models/streaming.rs',
@@ -146,7 +146,7 @@ const BUDGETS = [
   {
     file: 'crates/agiworkforce-llm/src/speech.rs',
     max: 1,
-    why: 'Shared transcription contract — the single BYOK speech endpoint both Rust binaries read.',
+    why: 'Shared transcription contract, the single BYOK speech endpoint both Rust binaries read.',
   },
   {
     file: 'tools/evals/src/anthropic.ts',
@@ -158,79 +158,79 @@ const BUDGETS = [
     file: 'apps/desktop/src-tauri/src/features/speech/tts.rs',
     max: 1,
     residue: true,
-    why: 'HARD-004 — speech endpoints not yet moved into a shared provider contract.',
+    why: 'HARD-004, speech endpoints not yet moved into a shared provider contract.',
   },
   {
     file: 'apps/desktop/src-tauri/src/integrations/api_integrations/image_gen.rs',
     max: 3,
     residue: true,
-    why: 'HARD-002 — image endpoints not yet resolved through provider metadata.',
+    why: 'HARD-002, image endpoints not yet resolved through provider metadata.',
   },
   {
     file: 'apps/desktop/src-tauri/src/integrations/api_integrations/perplexity.rs',
     max: 1,
     residue: true,
-    why: 'HARD-002 — Perplexity host duplicated outside the provider metadata path.',
+    why: 'HARD-002, Perplexity host duplicated outside the provider metadata path.',
   },
   {
     file: 'apps/desktop/src-tauri/src/core/research/web_search_config.rs',
     max: 1,
     residue: true,
-    why: 'HARD-002 — Perplexity search host duplicated in the research search config.',
+    why: 'HARD-002, Perplexity search host duplicated in the research search config.',
   },
   {
     file: 'apps/desktop/src-tauri/src/integrations/api_integrations/veo3.rs',
     max: 1,
     residue: true,
-    why: 'HARD-002 — Veo host duplicated outside the provider metadata path.',
+    why: 'HARD-002, Veo host duplicated outside the provider metadata path.',
   },
   {
     file: 'apps/desktop/src-tauri/src/sys/commands/llm.rs',
     max: 1,
     residue: true,
-    why: 'HARD-001 — OpenRouter model-list fetch bypasses default_base_url().',
+    why: 'HARD-001, OpenRouter model-list fetch bypasses default_base_url().',
   },
   {
     file: 'apps/cli/src/config.rs',
     max: 1,
     residue: true,
-    why: 'HARD-003 — CLI config default duplicates the OpenRouter base URL.',
+    why: 'HARD-003, CLI config default duplicates the OpenRouter base URL.',
   },
   {
     file: 'apps/cli/src/models/openrouter_models.rs',
     max: 1,
     residue: true,
-    why: 'HARD-003 — OpenRouter model-list URL duplicated outside the ModelConfig table.',
+    why: 'HARD-003, OpenRouter model-list URL duplicated outside the ModelConfig table.',
   },
   {
     file: 'apps/web/app/api/llm/v1/embeddings/route.ts',
     max: 1,
     residue: true,
-    why: 'HARD-005 follow-up — Google embeddings needs a Google entry in provider-endpoints.ts.',
+    why: 'HARD-005 follow-up, Google embeddings needs a Google entry in provider-endpoints.ts.',
   },
   {
     file: 'apps/web/app/api/media/image/generate/route.ts',
     max: 3,
     residue: true,
-    why: 'HARD-005 follow-up — Google/Stability image hosts need declarations of their own.',
+    why: 'HARD-005 follow-up, Google/Stability image hosts need declarations of their own.',
   },
   {
     file: 'apps/web/app/api/media/video/status/route.ts',
     max: 1,
     residue: true,
-    why: 'HARD-005 follow-up — Google operations host needs a declaration of its own.',
+    why: 'HARD-005 follow-up, Google operations host needs a declaration of its own.',
   },
   {
     file: 'apps/web/app/api/control-plane/status/route.ts',
     max: 1,
     residue: true,
-    why: 'HARD-005 follow-up — status probe host duplicated from the provider registry.',
+    why: 'HARD-005 follow-up, status probe host duplicated from the provider registry.',
   },
   {
     file: 'apps/web/lib/web-search/web-search-tool.ts',
     max: 1,
     residue: true,
-    why: 'HARD-002 — Perplexity search host duplicated in the web-search tool.',
+    why: 'HARD-002, Perplexity search host duplicated in the web-search tool.',
   },
 ];
 
@@ -310,7 +310,7 @@ const stale = BUDGETS.filter((entry) => !counts.has(entry.file));
 if (violations.length > 0) {
   console.error('Hardcoded model-provider endpoints found outside approved declarations:\n');
   for (const violation of violations) {
-    console.error(`  ${violation.rel} — ${violation.message}`);
+    console.error(`  ${violation.rel}, ${violation.message}`);
     for (const hit of violation.hits.slice(0, 6)) {
       console.error(`    ${violation.rel}:${hit.line}  ${hit.text.slice(0, 120)}`);
     }
@@ -323,7 +323,7 @@ if (violations.length > 0) {
 }
 
 if (stale.length > 0) {
-  console.error('\nStale BUDGETS entries (no literals found — the file was cleaned up):');
+  console.error('\nStale BUDGETS entries (no literals found, the file was cleaned up):');
   for (const entry of stale) console.error(`  ${entry.file}`);
   console.error('Remove them so the budget list stays a true picture of the repo.');
 }

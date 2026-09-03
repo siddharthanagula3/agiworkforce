@@ -37,7 +37,7 @@ const MIN_DISTINCT = 4;
 const ALLOWLIST = new Map([
   [
     'apps/mobile/src/features/chat/components/ChatInput.tsx',
-    'mobile slash set (/image,/voice,/compare,/export) — adopt the now-shared @agiworkforce/unified-chat registry and package menu in the mobile composer.',
+    'mobile slash set (/image,/voice,/compare,/export), adopt the now-shared @agiworkforce/unified-chat registry and package menu in the mobile composer.',
   ],
 ]);
 

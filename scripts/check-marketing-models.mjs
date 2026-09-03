@@ -119,7 +119,7 @@ for (const file of targetFiles) {
           phantomCount++;
         } else if (!marketingSafeNormalized.has(norm)) {
           console.warn(
-            `  WARN     ${rel}:${lineNum}  "${raw}"  (in catalog but not a current default/preset — may be stale)`,
+            `  WARN     ${rel}:${lineNum}  "${raw}"  (in catalog but not a current default/preset, may be stale)`,
           );
           staleCount++;
         }

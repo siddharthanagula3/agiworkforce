@@ -94,7 +94,7 @@ function scanNotices(text) {
       violations.push(`"${name}": forbidden license ${spdx}`);
     } else if (verdict === 'unknown') {
       violations.push(
-        `"${name}": unrecognized license "${licenseMatch[1].trim()}" — classify it in scripts/check-licenses.mjs`,
+        `"${name}": unrecognized license "${licenseMatch[1].trim()}", classify it in scripts/check-licenses.mjs`,
       );
     } else if (verdict === 'review') {
       warnings.push(`"${name}": ${spdx} requires manual legal review`);

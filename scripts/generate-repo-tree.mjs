@@ -116,11 +116,11 @@ function main() {
     : 0;
 
   const md = [
-    '# agiworkforce — file tree',
+    '# agiworkforce, file tree',
     '',
     `Every tracked file, as \`git ls-files\` sees it on \`${branch}\` at \`${head}\` (${stamp}).`,
-    'Untracked and ignored paths — `node_modules/`, `target/`, build output, local',
-    'env files — are excluded.',
+    'Untracked and ignored paths, `node_modules/`, `target/`, build output, local',
+    'env files, are excluded.',
     '',
     'Regenerate with `pnpm generate:repo-tree`. This file is not committed and not',
     'drift-checked; it changes whenever any file is added or removed.',
@@ -133,7 +133,7 @@ function main() {
     '',
     '---',
     '',
-    '## Overview — depth 3',
+    '## Overview, depth 3',
     '',
     '```',
     'agiworkforce/',
@@ -142,8 +142,8 @@ function main() {
   renderFiles(tree.children, '', overview, 0, 3);
   md.push(...overview, '```', '', '---', '', '## Contents', '');
   for (const dir of dirs)
-    md.push(`- [\`${dir.name}/\`](#${anchor(dir.name)}) — ${fmt(dir.count)} files`);
-  md.push(`- [Root files](#root-files) — ${fmt(rootFiles.length)} files`, '', '---', '');
+    md.push(`- [\`${dir.name}/\`](#${anchor(dir.name)}), ${fmt(dir.count)} files`);
+  md.push(`- [Root files](#root-files), ${fmt(rootFiles.length)} files`, '', '---', '');
   for (const dir of dirs) {
     md.push(`## \`${dir.name}/\``, '', `*${fmt(dir.count)} files*`, '', '```', `${dir.name}/`);
     const body = [];
@@ -156,7 +156,7 @@ function main() {
   md.push(...rootBody, '```', '');
 
   const dirMd = [
-    '# agiworkforce — directory map',
+    '# agiworkforce, directory map',
     '',
     `Directories only, four levels deep, on \`${branch}\` at \`${head}\`. Counts are`,
     'recursive totals. Regenerate with `pnpm generate:repo-tree`.',
@@ -172,7 +172,7 @@ function main() {
   fs.writeFileSync(path.join(root, outDir, 'REPO-TREE.md'), `${md.join('\n')}\n`);
   fs.writeFileSync(path.join(root, outDir, 'REPO-DIRS.md'), `${dirMd.join('\n')}\n`);
   console.log(
-    `Wrote ${outDir}/REPO-TREE.md and ${outDir}/REPO-DIRS.md — ${fmt(total)} files, ${dirs.length} top-level directories.`,
+    `Wrote ${outDir}/REPO-TREE.md and ${outDir}/REPO-DIRS.md, ${fmt(total)} files, ${dirs.length} top-level directories.`,
   );
 }
 

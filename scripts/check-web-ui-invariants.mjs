@@ -84,19 +84,19 @@ const RULES = [
     id: 'opacity-diluted-text',
     regex: /\btext-[a-z-]*foreground\/\d{1,3}\b|\btext-(?:white|black)\/\d{1,3}\b/g,
     advice:
-      'a foreground token is already the de-emphasised value; dropping its opacity drops it under 4.5:1 — change size or weight instead',
+      'a foreground token is already the de-emphasised value; dropping its opacity drops it under 4.5:1, change size or weight instead',
   },
   {
     id: 'tiny-type',
     regex: /\btext-\[(\d+(?:\.\d+)?)px\]/g,
     predicate: (m) => Number(m[1]) < MIN_FONT_SIZE_PX,
-    advice: `below the ${MIN_FONT_SIZE_PX}px legibility floor — use the caption or metadata role`,
+    advice: `below the ${MIN_FONT_SIZE_PX}px legibility floor, use the caption or metadata role`,
   },
   {
     id: 'tiny-type-inline',
     regex: /\bfontSize:\s*(\d+(?:\.\d+)?)\b/g,
     predicate: (m) => Number(m[1]) < MIN_FONT_SIZE_PX,
-    advice: `below the ${MIN_FONT_SIZE_PX}px legibility floor — use the caption or metadata role`,
+    advice: `below the ${MIN_FONT_SIZE_PX}px legibility floor, use the caption or metadata role`,
   },
   {
     // The class-based rules above read TSX only, so 32 declarations sat in
@@ -109,7 +109,7 @@ const RULES = [
     extensions: new Set(['.css']),
     regex: /font-size:\s*(\d+(?:\.\d+)?)px/g,
     predicate: (m) => Number(m[1]) < MIN_FONT_SIZE_PX,
-    advice: `below the ${MIN_FONT_SIZE_PX}px legibility floor — raise it or use a role token`,
+    advice: `below the ${MIN_FONT_SIZE_PX}px legibility floor, raise it or use a role token`,
   },
   {
     id: 'hover-only-affordance',
@@ -118,7 +118,7 @@ const RULES = [
       /(?:group-)?(?:hover|focus|focus-visible|focus-within):opacity-(?:100|\d{2})\b/.test(line) &&
       !/motion-safe|animate|transition-opacity[^"']*data-\[state/.test(line),
     advice:
-      'an affordance that only appears on hover is unreachable on touch — keep it present and change its emphasis instead',
+      'an affordance that only appears on hover is unreachable on touch, keep it present and change its emphasis instead',
   },
 ];
 
@@ -204,7 +204,7 @@ function writeBaseline(violations) {
   const payload = {
     _description:
       'Grandfathered web UI invariant violations, seeded at the start of the frontend redesign. ' +
-      'New violations fail CI. This list only ever shrinks — every redesign phase should reduce ' +
+      'New violations fail CI. This list only ever shrinks, every redesign phase should reduce ' +
       'it, and the redesign is not finished while it is non-empty. Do not add to it.',
     _counts: byRule,
     violations: violations.map((v) => ({ ...v })),
@@ -239,7 +239,7 @@ if (SUMMARY) {
   const byRule = {};
   for (const v of allViolations) byRule[v.rule] = (byRule[v.rule] || 0) + 1;
   const baselineTotal = [...baseline.values()].reduce((a, b) => a + b, 0);
-  console.log(`web UI invariants — ${allViolations.length} live, ${baselineTotal} baselined`);
+  console.log(`web UI invariants, ${allViolations.length} live, ${baselineTotal} baselined`);
   for (const [rule, count] of Object.entries(byRule).sort((a, b) => b[1] - a[1])) {
     console.log(`  ${String(count).padStart(5)}  ${rule}`);
   }
@@ -247,11 +247,11 @@ if (SUMMARY) {
 
 if (added.length === 0) {
   const total = [...baseline.values()].reduce((a, b) => a + b, 0);
-  console.log(`check:web-ui-invariants PASS — no new violations (${total} still baselined).`);
+  console.log(`check:web-ui-invariants PASS, no new violations (${total} still baselined).`);
   process.exit(0);
 }
 
-console.error(`check:web-ui-invariants FAIL — ${added.length} new violation(s).\n`);
+console.error(`check:web-ui-invariants FAIL, ${added.length} new violation(s).\n`);
 const adviceFor = Object.fromEntries(RULES.map((r) => [r.id, r.advice]));
 for (const v of added.slice(0, 40)) {
   console.error(`  ${v.file}:${v.line}  [${v.rule}]  ${v.literal}`);
