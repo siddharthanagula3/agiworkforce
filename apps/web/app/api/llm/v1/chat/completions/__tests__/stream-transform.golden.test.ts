@@ -434,4 +434,28 @@ describe('buildStreamResponse golden fixture · response headers', () => {
     expect(response.headers.get('Cache-Control')).toBe('no-cache');
     expect(response.headers.get('Connection')).toBe('keep-alive');
   });
+
+  it('carries the secret redaction count when the prompt was redacted', async () => {
+    const upstream = rawSseStream(['data: [DONE]']);
+    const response = await buildStreamResponse(
+      makeRequest() as any,
+      upstream,
+      makeProcessed({ secretRedactionCount: 3 }),
+      'user-005',
+      'token-005',
+    );
+    expect(response.headers.get('X-AGI-Secret-Redaction-Count')).toBe('3');
+  });
+
+  it('omits the secret redaction header when nothing was redacted', async () => {
+    const upstream = rawSseStream(['data: [DONE]']);
+    const response = await buildStreamResponse(
+      makeRequest() as any,
+      upstream,
+      makeProcessed(),
+      'user-006',
+      'token-006',
+    );
+    expect(response.headers.has('X-AGI-Secret-Redaction-Count')).toBe(false);
+  });
 });

@@ -422,6 +422,7 @@ export interface Message {
    * to make" rather than "managed".
    */
   routeLane?: string;
+  secretRedactionCount?: number;
   /**
    * Per-turn usage as PERSISTED on the messages row (`input_tokens` /
    * `output_tokens`), written by the server's assistant-turn persistence and

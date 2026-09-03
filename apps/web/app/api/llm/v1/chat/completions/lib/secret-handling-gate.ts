@@ -8,6 +8,7 @@ import { getNeonDb } from '@/lib/server/neon-db';
 import { resolveSecretHandlingPolicy } from '@/lib/services/organization-policy-gate';
 import { redactSecrets, scanForSecrets, type SecretDetection } from '@/lib/security/secrets-audit';
 import { isHighConfidenceSecretName } from '@/lib/security/secret-patterns';
+import { describeSecretRedactionNotice } from '@/lib/chat-secret-redaction-notice';
 import type { ProcessedRequest } from './request-processor';
 
 type ChatMessage = ProcessedRequest['llmRequest']['messages'][number];
@@ -80,8 +81,7 @@ function actionForMode(mode: SecretHandlingMode): 'warned' | 'redacted' | 'block
 }
 
 export function buildSecretRedactionNotice(count: number): string {
-  const noun = count === 1 ? 'secret was' : 'secrets were';
-  return `${count} ${noun} removed from this message before it was sent.`;
+  return describeSecretRedactionNotice(count) ?? '';
 }
 
 function partitionByConfidence(detections: readonly SecretDetection[]): {
