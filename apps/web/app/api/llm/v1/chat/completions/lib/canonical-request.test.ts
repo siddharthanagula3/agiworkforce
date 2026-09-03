@@ -222,6 +222,43 @@ describe('toCanonicalChatRequest', () => {
     const chatRequest = toCanonicalChatRequest(processed);
     expect(chatRequest.model).toBe(UNCHANGED_API_MODEL.id);
   });
+
+  describe('zero data retention metadata', () => {
+    it('sends openrouter data_collection deny when the workspace requires zero data retention', () => {
+      const processed = {
+        ...makeProcessed({ messages: [{ role: 'user', content: 'hi' }] }, 'openrouter'),
+        zeroDataRetentionOnly: true,
+      };
+
+      const chatRequest = toCanonicalChatRequest(processed);
+
+      expect(chatRequest.metadata).toMatchObject({
+        openRouterProviderRouting: { dataCollection: 'deny' },
+      });
+    });
+
+    it('does not set the deny flag when the workspace does not require zero data retention', () => {
+      const processed = {
+        ...makeProcessed({ messages: [{ role: 'user', content: 'hi' }] }, 'openrouter'),
+        zeroDataRetentionOnly: false,
+      };
+
+      const chatRequest = toCanonicalChatRequest(processed);
+
+      expect(chatRequest.metadata).toBeUndefined();
+    });
+
+    it('does not set the deny flag for a non-openrouter provider even when zero data retention is required', () => {
+      const processed = {
+        ...makeProcessed({ messages: [{ role: 'user', content: 'hi' }] }, 'anthropic'),
+        zeroDataRetentionOnly: true,
+      };
+
+      const chatRequest = toCanonicalChatRequest(processed);
+
+      expect(chatRequest.metadata).toBeUndefined();
+    });
+  });
 });
 
 describe('toCanonicalThinking', () => {

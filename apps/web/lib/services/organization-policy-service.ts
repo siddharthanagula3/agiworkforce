@@ -72,6 +72,16 @@ function readMonthlySpendCapCents(metadata: Record<string, unknown> | null): num
   return typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : null;
 }
 
+function readZeroDataRetentionOnly(metadata: Record<string, unknown> | null): boolean {
+  return metadata?.['zeroDataRetentionOnly'] === true;
+}
+
+function readIpAllowList(metadata: Record<string, unknown> | null): readonly string[] {
+  const value = metadata?.['ipAllowList'];
+  if (!Array.isArray(value)) return [];
+  return value.filter((entry): entry is string => typeof entry === 'string');
+}
+
 export function formatAdminPolicy(row: AdminPolicyRow): AdminPolicy {
   return {
     organizationId: row.organization_id,
@@ -90,6 +100,8 @@ export function formatAdminPolicy(row: AdminPolicyRow): AdminPolicy {
     secretHandling: readSecretHandling(row.metadata),
     requireMfa: readRequireMfa(row.metadata),
     monthlySpendCapCents: readMonthlySpendCapCents(row.metadata),
+    zeroDataRetentionOnly: readZeroDataRetentionOnly(row.metadata),
+    ipAllowList: readIpAllowList(row.metadata),
     metadata: row.metadata ?? {},
     updatedAt: toIso(row.updated_at),
   };
@@ -187,6 +199,8 @@ export async function upsertOrganizationPolicy(
         secretHandling: input.secretHandling,
         requireMfa: input.requireMfa,
         monthlySpendCapCents: input.monthlySpendCapCents,
+        zeroDataRetentionOnly: input.zeroDataRetentionOnly,
+        ipAllowList: input.ipAllowList,
       }),
     ],
   );
@@ -218,6 +232,8 @@ export function diffAdminPolicy(
     'secretHandling',
     'requireMfa',
     'monthlySpendCapCents',
+    'zeroDataRetentionOnly',
+    'ipAllowList',
   ];
 
   for (const key of keys) {

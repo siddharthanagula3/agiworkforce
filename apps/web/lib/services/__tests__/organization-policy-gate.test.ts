@@ -5,8 +5,10 @@ vi.mock('server-only', () => ({}));
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import {
   evaluateActiveWorkspacePolicy,
+  resolveIpAllowListPolicy,
   resolveMfaPolicy,
   resolveSecretHandlingPolicy,
+  resolveZeroDataRetentionPolicy,
 } from '../organization-policy-gate';
 
 const ORGANIZATION_ID = '11111111-1111-4111-8111-111111111111';
@@ -251,5 +253,93 @@ describe('resolveMfaPolicy', () => {
     const result = await resolveMfaPolicy(h.db, 'user-1');
 
     expect(result).toEqual({ policy: null, organizationId: ORGANIZATION_ID });
+  });
+});
+
+describe('resolveZeroDataRetentionPolicy', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it('defaults a personal-scope request to unrequired', async () => {
+    const h = harness();
+    h.query.mockResolvedValueOnce([]);
+
+    const result = await resolveZeroDataRetentionPolicy(h.db, 'user-1');
+
+    expect(result).toEqual({ required: false, organizationId: null });
+  });
+
+  it('defaults an organization with no saved policy to unrequired', async () => {
+    const h = harness();
+    h.query.mockResolvedValueOnce([{ organization_id: ORGANIZATION_ID }]).mockResolvedValueOnce([]);
+
+    const result = await resolveZeroDataRetentionPolicy(h.db, 'user-1');
+
+    expect(result).toEqual({ required: false, organizationId: ORGANIZATION_ID });
+  });
+
+  it('binds an organization saved policy value', async () => {
+    const h = harness();
+    h.query
+      .mockResolvedValueOnce([{ organization_id: ORGANIZATION_ID }])
+      .mockResolvedValueOnce([policyRow({ metadata: { zeroDataRetentionOnly: true } })]);
+
+    const result = await resolveZeroDataRetentionPolicy(h.db, 'user-1');
+
+    expect(result).toEqual({ required: true, organizationId: ORGANIZATION_ID });
+  });
+
+  it('fails open (unrequired) when the policy read fails', async () => {
+    const h = harness();
+    h.query
+      .mockResolvedValueOnce([{ organization_id: ORGANIZATION_ID }])
+      .mockRejectedValueOnce(new Error('connection reset'));
+
+    const result = await resolveZeroDataRetentionPolicy(h.db, 'user-1');
+
+    expect(result).toEqual({ required: false, organizationId: ORGANIZATION_ID });
+  });
+});
+
+describe('resolveIpAllowListPolicy', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it('defaults a personal-scope request to an empty allow list', async () => {
+    const h = harness();
+    h.query.mockResolvedValueOnce([]);
+
+    const result = await resolveIpAllowListPolicy(h.db, 'user-1');
+
+    expect(result).toEqual({ cidrs: [], organizationId: null });
+  });
+
+  it('defaults an organization with no saved policy to an empty allow list', async () => {
+    const h = harness();
+    h.query.mockResolvedValueOnce([{ organization_id: ORGANIZATION_ID }]).mockResolvedValueOnce([]);
+
+    const result = await resolveIpAllowListPolicy(h.db, 'user-1');
+
+    expect(result).toEqual({ cidrs: [], organizationId: ORGANIZATION_ID });
+  });
+
+  it('binds an organization saved allow list', async () => {
+    const h = harness();
+    h.query
+      .mockResolvedValueOnce([{ organization_id: ORGANIZATION_ID }])
+      .mockResolvedValueOnce([policyRow({ metadata: { ipAllowList: ['203.0.113.0/24'] } })]);
+
+    const result = await resolveIpAllowListPolicy(h.db, 'user-1');
+
+    expect(result).toEqual({ cidrs: ['203.0.113.0/24'], organizationId: ORGANIZATION_ID });
+  });
+
+  it('fails open (empty allow list) when the policy read fails', async () => {
+    const h = harness();
+    h.query
+      .mockResolvedValueOnce([{ organization_id: ORGANIZATION_ID }])
+      .mockRejectedValueOnce(new Error('connection reset'));
+
+    const result = await resolveIpAllowListPolicy(h.db, 'user-1');
+
+    expect(result).toEqual({ cidrs: [], organizationId: ORGANIZATION_ID });
   });
 });

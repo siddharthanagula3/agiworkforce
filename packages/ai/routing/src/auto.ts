@@ -51,6 +51,8 @@ export type RouteCommercialStatus =
   | 'experimental_only'
   | 'blocked';
 
+export type RouteDataRetention = 'zero_retention' | 'provider_default';
+
 interface RegistryRoutePricing {
   currency: string;
   unit: string;
@@ -72,6 +74,7 @@ interface RegistryRoute {
   isDefault: boolean;
   cacheClass: RouteCacheClass;
   commercialStatus: RouteCommercialStatus;
+  dataRetention: RouteDataRetention;
   pricing: RegistryRoutePricing;
 }
 
@@ -144,6 +147,8 @@ export interface AutoRoutingRequest {
   allowedHarnessIds?: readonly string[];
   runtimeProfileId?: string;
   usOnly?: boolean;
+  zeroDataRetentionOnly?: boolean;
+  zeroDataRetentionProviders?: ReadonlySet<string>;
   capabilityDocument?: EffectiveCapabilityDocument | null;
   capabilityRequirements?: readonly CapabilityRequirement[];
   fallbackToAutoForCapabilityMismatch?: boolean;
@@ -448,6 +453,7 @@ const DEFAULT_AFFORDABILITY_OUTPUT_TOKENS = 1000;
 const MANAGED_TRUST_MODE: RoutingTrustMode = 'managed_cloud';
 const BLOCKED_COMMERCIAL_STATUS: RouteCommercialStatus = 'blocked';
 const EXPERIMENTAL_COMMERCIAL_STATUS: RouteCommercialStatus = 'experimental_only';
+const ZERO_RETENTION_DATA_RETENTION: RouteDataRetention = 'zero_retention';
 const TOKENS_PER_PRICED_MILLION = 1_000_000;
 const CENTS_PER_USD = 100;
 
@@ -538,6 +544,14 @@ function routeAdmissionRejections(
   }
   if (request.availableProviderIds && !request.availableProviderIds.has(route.provider)) {
     reasons.push(`provider ${route.provider} has no available credential for this request`);
+  }
+  if (request.zeroDataRetentionOnly) {
+    const isZeroRetention =
+      route.dataRetention === ZERO_RETENTION_DATA_RETENTION ||
+      (request.zeroDataRetentionProviders?.has(route.provider) ?? false);
+    if (!isZeroRetention) {
+      reasons.push(`route ${routeId} does not guarantee zero data retention`);
+    }
   }
 
   const harness = registry.harnesses[route.harnessId];

@@ -209,6 +209,7 @@
         "isDefault",
         "cacheClass",
         "commercialStatus",
+        "dataRetention",
         "pricing"
       ],
       "properties": {
@@ -248,6 +249,9 @@
         "commercialStatus": {
           "$ref": "#/definitions/routeCommercialStatus"
         },
+        "dataRetention": {
+          "$ref": "#/definitions/routeDataRetention"
+        },
         "pricing": {
           "$ref": "#/definitions/pricing"
         }
@@ -271,6 +275,9 @@
         "experimental_only",
         "blocked"
       ]
+    },
+    "routeDataRetention": {
+      "enum": ["zero_retention", "provider_default"]
     },
     "harnessProtocol": {
       "enum": [

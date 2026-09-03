@@ -25,12 +25,16 @@ import {
   type AdminPolicyInput,
 } from '@/lib/services/organization-policy-service';
 import type { AdminPolicy } from '@agiworkforce/types';
+import { isValidCidr } from '@/lib/services/ip-allow-list';
 
 export const runtime = 'nodejs';
 
 const PrivacyModeSchema = z.enum(['local', 'byok', 'managed']);
 const SyncSurfaceSchema = z.enum(['web', 'desktop', 'mobile']);
 const SecretHandlingSchema = z.enum(['warn', 'redact', 'block']);
+const MAX_IP_ALLOW_LIST_ENTRIES = 100;
+const CidrSchema = z.string().refine(isValidCidr, 'Invalid IP address or CIDR block');
+const IpAllowListSchema = z.array(CidrSchema).max(MAX_IP_ALLOW_LIST_ENTRIES);
 
 const PolicyPatchSchema = z
   .object({
@@ -49,6 +53,8 @@ const PolicyPatchSchema = z
     secretHandling: SecretHandlingSchema,
     requireMfa: z.boolean(),
     monthlySpendCapCents: z.number().int().positive().nullable(),
+    zeroDataRetentionOnly: z.boolean(),
+    ipAllowList: IpAllowListSchema,
   })
   .partial()
   .refine((value) => Object.keys(value).length > 0, {
@@ -155,6 +161,9 @@ async function handlePatch(request: NextRequest): Promise<NextResponse | Respons
       parsed.data.monthlySpendCapCents !== undefined
         ? parsed.data.monthlySpendCapCents
         : current.policy.monthlySpendCapCents,
+    zeroDataRetentionOnly:
+      parsed.data.zeroDataRetentionOnly ?? current.policy.zeroDataRetentionOnly,
+    ipAllowList: parsed.data.ipAllowList ?? current.policy.ipAllowList,
     metadata: current.policy.metadata ?? {},
   };
 

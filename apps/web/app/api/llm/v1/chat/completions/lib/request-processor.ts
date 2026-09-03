@@ -38,6 +38,8 @@ import {
 } from '@/lib/services/provider-adapter-service';
 import { evaluateModelAccessForOrganization } from '@/lib/services/model-policy-gate';
 import { readModelPolicy } from '@/lib/services/model-policy-service';
+import { resolveZeroDataRetentionPolicy } from '@/lib/services/organization-policy-gate';
+import { resolveZeroDataRetentionProviderOverrides } from '@/lib/services/zero-data-retention-provider-overrides';
 import {
   evaluateModelAccess,
   type ModelAccessAsk,
@@ -668,6 +670,7 @@ export type ProcessedRequest = {
    * scope, no policy row, or a read that deliberately failed open.
    */
   modelPolicy?: ModelAccessPolicy | null;
+  zeroDataRetentionOnly?: boolean;
   subscriptionTier?: string;
   /**
    * Set only when the free lane actually dispatched this request.
@@ -1340,6 +1343,8 @@ export function resolveWebCloudModelRoute(
     preferredRouteId?: string | null;
   },
   availableProviderIds?: ReadonlySet<string>,
+  zeroDataRetentionOnly?: boolean,
+  zeroDataRetentionProviders?: ReadonlySet<string>,
 ) {
   return resolveAutoRoute({
     selection: model,
@@ -1361,6 +1366,10 @@ export function resolveWebCloudModelRoute(
     ...(routeHealth?.runtimeState ? { runtimeState: routeHealth.runtimeState } : {}),
     ...(routeHealth?.preferredRouteId ? { preferredRouteId: routeHealth.preferredRouteId } : {}),
     ...(availableProviderIds && availableProviderIds.size > 0 ? { availableProviderIds } : {}),
+    ...(zeroDataRetentionOnly ? { zeroDataRetentionOnly } : {}),
+    ...(zeroDataRetentionProviders && zeroDataRetentionProviders.size > 0
+      ? { zeroDataRetentionProviders }
+      : {}),
   });
 }
 
@@ -2268,6 +2277,13 @@ export async function processRequest(
       : Promise.resolve(null),
   ]);
   const availableProviderIds = listAvailableManagedProviderIds();
+  const zdrScoped = await scopedDbPromise;
+  const { required: zeroDataRetentionOnly } = await resolveZeroDataRetentionPolicy(
+    zdrScoped.db,
+    userId,
+    request,
+  );
+  const zeroDataRetentionProviders = resolveZeroDataRetentionProviderOverrides();
 
   const baseRouteDecision = resolveWebCloudModelRoute(
     chatRequest.model,
@@ -2280,6 +2296,8 @@ export async function processRequest(
       ...(routeAffinity ? { preferredRouteId: routeAffinity.routeId } : {}),
     },
     availableProviderIds,
+    zeroDataRetentionOnly,
+    zeroDataRetentionProviders,
   );
 
   // The free lane is a stage OVER this resolver's output, so it re-runs the same
@@ -2309,6 +2327,8 @@ export async function processRequest(
           ),
         },
         availableProviderIds,
+        zeroDataRetentionOnly,
+        zeroDataRetentionProviders,
       )
     : null;
   const freeLaneNowMs = Date.now();
@@ -3236,6 +3256,7 @@ export async function processRequest(
     requestId,
     chatSurface,
     organizationId,
+    zeroDataRetentionOnly,
     managedUsage,
     chatRequest,
     conversationId: chatRequest.conversation_id,

@@ -151,3 +151,69 @@ export async function resolveMfaPolicy(
     return { policy: null, organizationId };
   }
 }
+
+export interface ZeroDataRetentionPolicyResult {
+  required: boolean;
+  organizationId: string | null;
+}
+
+export async function resolveZeroDataRetentionPolicy(
+  db: DatabaseAdapter,
+  userId: string,
+  request?: ScopedRequest,
+): Promise<ZeroDataRetentionPolicyResult> {
+  let organizationId: string | null = null;
+
+  try {
+    organizationId = await resolveActiveOrganizationId(db, userId, request);
+  } catch (error) {
+    logger.warn({ error, userId }, '[zero-data-retention] active workspace could not be resolved');
+    return { required: false, organizationId: null };
+  }
+
+  if (!organizationId) return { required: false, organizationId: null };
+
+  try {
+    const policy = await readOrganizationPolicy(db, organizationId);
+    return { required: policy?.zeroDataRetentionOnly ?? false, organizationId };
+  } catch (error) {
+    logger.error(
+      { error, userId, organizationId },
+      '[zero-data-retention] policy read failed; request treated as ungoverned',
+    );
+    return { required: false, organizationId };
+  }
+}
+
+export interface IpAllowListPolicyResult {
+  cidrs: readonly string[];
+  organizationId: string | null;
+}
+
+export async function resolveIpAllowListPolicy(
+  db: DatabaseAdapter,
+  userId: string,
+  request?: ScopedRequest,
+): Promise<IpAllowListPolicyResult> {
+  let organizationId: string | null = null;
+
+  try {
+    organizationId = await resolveActiveOrganizationId(db, userId, request);
+  } catch (error) {
+    logger.warn({ error, userId }, '[ip-allow-list] active workspace could not be resolved');
+    return { cidrs: [], organizationId: null };
+  }
+
+  if (!organizationId) return { cidrs: [], organizationId: null };
+
+  try {
+    const policy = await readOrganizationPolicy(db, organizationId);
+    return { cidrs: policy?.ipAllowList ?? [], organizationId };
+  } catch (error) {
+    logger.error(
+      { error, userId, organizationId },
+      '[ip-allow-list] policy read failed; request treated as ungoverned',
+    );
+    return { cidrs: [], organizationId };
+  }
+}
