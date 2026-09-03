@@ -135,7 +135,6 @@ _FILE_WRITE_SINKS = frozenset(
 
 _ALL_SINKS = _NETWORK_OUTPUT_SINKS | _EXEC_SINKS | _FILE_WRITE_SINKS
 
-# Pre-computed for _pick_rule — avoids rebuilding the union on every call.
 _EXTERNAL_INPUT_SOURCES = _NETWORK_INPUT_SOURCES | _USER_INPUT_SOURCES
 
 _RULE_SEVERITIES: dict[str, Severity] = {

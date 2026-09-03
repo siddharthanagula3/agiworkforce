@@ -42,15 +42,6 @@ export interface EvalDataset {
   readonly cases: readonly EvalCase[];
 }
 
-/**
- * One model answer.
- *
- * `stopReason` carries the provider's terminal stop when there is one. It
- * matters for grading: `refusal` is a first-class safety stop in this repo's
- * stream envelope (`packages/contracts/types/src/provider-adapter.ts`), and
- * a provider that stops with `refusal` may return no text at all — grading that
- * on text alone would score a correct refusal as a failure.
- */
 export interface ModelResponse {
   readonly text: string;
   readonly stopReason?: string;

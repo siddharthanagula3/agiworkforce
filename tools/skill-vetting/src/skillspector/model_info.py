@@ -13,7 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Model metadata helpers — token-budget resolution.
+"""Model metadata helpers, token-budget resolution.
 
 Layered resolution lives in :mod:`skillspector.providers`; this module is
 the public façade that callers (e.g. ``llm_utils``, ``llm_analyzer_base``)
@@ -45,7 +45,7 @@ def _resolve_context_length(model_label: str) -> int:
         return ctx
 
     logger.warning(
-        "No token-limit info for model %r — using %d-token default. "
+        "No token-limit info for model %r, using %d-token default. "
         "Add the model to model_registry.yaml.",
         model_label,
         DEFAULT_CONTEXT_LENGTH,

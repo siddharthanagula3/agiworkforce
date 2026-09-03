@@ -39,7 +39,6 @@ logger = get_logger(__name__)
 
 ANALYZER_ID = "static_patterns_rogue_agent"
 
-# RA1: Self-Modification — skill modifies its own code, config, or behavior
 RA1_PATTERNS = [
     # Python: writing to own file
     (r"open\s*\(\s*__file__\s*,\s*['\"]w", 0.95),
@@ -83,7 +82,6 @@ RA1_PATTERNS = [
     ),
 ]
 
-# RA2: Session Persistence — unauthorized persistence across boundaries
 RA2_PATTERNS = [
     # Cron jobs and scheduled tasks
     (r"crontab\s+(?:-[el]|.*?>>?\s*/)", 0.85),

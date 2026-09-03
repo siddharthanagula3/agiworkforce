@@ -22,7 +22,7 @@ their bundled YAML path; results are cached per path for the lifetime of
 the process.
 
 A user-supplied ``SKILLSPECTOR_MODEL_REGISTRY`` env var, when set,
-overrides the bundled path globally — useful for adding models without
+overrides the bundled path globally, useful for adding models without
 editing the package.
 """
 
@@ -59,7 +59,7 @@ def _load_document(yaml_path: str) -> dict[str, Any]:
 def _load(yaml_path: str) -> dict[str, dict[str, Any]]:
     """Read *yaml_path* and return its ``models`` map (cached).
 
-    Returns an empty dict if the path is empty, missing, or unreadable —
+    Returns an empty dict if the path is empty, missing, or unreadable.
     callers fall through to the default token-budget logic in that case.
     """
     models = _load_document(yaml_path).get("models") or {}

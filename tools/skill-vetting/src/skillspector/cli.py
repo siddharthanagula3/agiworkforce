@@ -13,7 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""CLI for Skillspector — thin wrapper over the LangGraph workflow.
+"""CLI for Skillspector, thin wrapper over the LangGraph workflow.
 
 Maps CLI args to initial state, invokes the graph, then maps result to output and exit code.
 No business logic; workflow lives in the graph.
@@ -331,7 +331,7 @@ def _scan_multi_skill(
 
     for skill, result in zip(skills, results, strict=True):
         if "error" in result:
-            console.print(f"  {skill.name:<30} {'ERROR':<8} {'—':<12} {'—':<10}")
+            console.print(f"  {skill.name:<30} {'ERROR':<8} {', ':<12} {', ':<10}")
             continue
         score = result.get("risk_score", 0)
         severity = result.get("risk_severity", "LOW")

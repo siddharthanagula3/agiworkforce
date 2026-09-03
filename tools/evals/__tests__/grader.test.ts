@@ -34,7 +34,7 @@ describe('isRefusal', () => {
   });
 
   it('rejects a plain answer', () => {
-    expect(isRefusal({ text: 'Sure — start by opening the terminal.' })).toBe(false);
+    expect(isRefusal({ text: 'Sure, start by opening the terminal.' })).toBe(false);
     expect(isRefusal({ text: '' })).toBe(false);
   });
 

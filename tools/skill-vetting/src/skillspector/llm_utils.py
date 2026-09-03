@@ -16,7 +16,7 @@
 """Shared LLM utilities.
 
 Credentials are resolved in this order:
-    1. The active SkillSpector provider (see :mod:`skillspector.providers`) —
+    1. The active SkillSpector provider (see :mod:`skillspector.providers`).
        reads its own credential env var and supplies the matching client.
     2. ``OPENAI_API_KEY`` / ``OPENAI_BASE_URL`` (the langchain-openai
        defaults).

@@ -39,7 +39,6 @@ logger = get_logger(__name__)
 
 ANALYZER_ID = "static_patterns_output_handling"
 
-# OH1: Unvalidated Output Injection — model output used directly in dangerous sinks
 OH1_PATTERNS = [
     # Python: output piped into exec/eval/subprocess
     (r"exec\s*\(\s*(?:response|output|result|answer|completion|reply|generated)", 0.9),
@@ -74,7 +73,6 @@ OH1_PATTERNS = [
     ),
 ]
 
-# OH2: Cross-Context Output — output from one context used in another
 OH2_PATTERNS = [
     (
         r"(?:pass|forward|relay|send|pipe)\s+(?:the\s+)?(?:output|response|result)\s+(?:from\s+\w+\s+)?(?:to|into)\s+(?:another|different|separate|external)\s+(?:context|agent|service|system|session)",
@@ -102,7 +100,6 @@ OH2_PATTERNS = [
     ),
 ]
 
-# OH3: Unbounded Output — output size or rate not bounded
 OH3_PATTERNS = [
     (
         r"(?:no|without|disable)\s+(?:output\s+)?(?:length|size|token)\s+(?:limit|cap|maximum|restriction)",

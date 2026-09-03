@@ -7,7 +7,7 @@
 rule php_webshell_generic
 {
     meta:
-        description = "Generic PHP webshell — eval/assert on user-controlled input"
+        description = "Generic PHP webshell, eval/assert on user-controlled input"
         category = "webshell"
         severity = "CRITICAL"
         confidence = "0.85"
@@ -27,7 +27,7 @@ rule php_webshell_generic
 rule php_webshell_obfuscated
 {
     meta:
-        description = "Obfuscated PHP webshell — eval(base64_decode/gzinflate/str_rot13)"
+        description = "Obfuscated PHP webshell, eval(base64_decode/gzinflate/str_rot13)"
         category = "webshell"
         severity = "CRITICAL"
         confidence = "0.8"
@@ -72,7 +72,7 @@ rule php_webshell_known
 rule python_webshell
 {
     meta:
-        description = "Python webshell — exec/eval/os.popen on request input"
+        description = "Python webshell, exec/eval/os.popen on request input"
         category = "webshell"
         severity = "HIGH"
         confidence = "0.75"
@@ -90,7 +90,7 @@ rule python_webshell
 rule jsp_webshell
 {
     meta:
-        description = "JSP webshell — Runtime.exec on request parameter"
+        description = "JSP webshell, Runtime.exec on request parameter"
         category = "webshell"
         severity = "HIGH"
         confidence = "0.8"
@@ -104,7 +104,7 @@ rule jsp_webshell
 rule aspx_webshell
 {
     meta:
-        description = "ASPX webshell — Process.Start on Request input"
+        description = "ASPX webshell, Process.Start on Request input"
         category = "webshell"
         severity = "HIGH"
         confidence = "0.8"

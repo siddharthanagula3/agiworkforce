@@ -13,7 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""MCP tool-poisoning analyzer node (B.3.2) — TP1 through TP4."""
+"""MCP tool-poisoning analyzer node (B.3.2), TP1 through TP4."""
 
 from __future__ import annotations
 
@@ -40,9 +40,6 @@ TP3_MAX_PARAM_DESC_LENGTH = 500
 
 _CATEGORY = "MCP Tool Poisoning"
 
-# ---------------------------------------------------------------------------
-# TP2: Confusables map — Cyrillic and Greek lookalikes → Latin equivalents
-# ---------------------------------------------------------------------------
 
 _CONFUSABLES: dict[str, str] = {
     # Cyrillic lowercase
@@ -125,15 +122,7 @@ _TP1_INSTRUCTION_KEYWORDS = re.compile(
     re.IGNORECASE,
 )
 
-# Comment detection is delimiter pairing, not a regex gap. A lazy `.*?` between
-# an opener and its closing delimiter rescans everything after each opener, so a
-# metadata field of repeated `<!--` with no `-->` costs O(n^2) and stalls the
-# scan on attacker-authored frontmatter. `_iter_delimited` pairs each opener
-# with the next closer in one forward pass, which stays linear and — unlike a
-# bounded `.{0,N}?` gap — still reports comments of any length.
-# Do not reintroduce a `.*?` gap here.
 
-# HTML comment openers — handle both <!-- and <\!-- (YAML-escaped variant)
 _HTML_COMMENT_OPEN_RE = re.compile(r"<\\?!--")
 _HTML_COMMENT_CLOSE = "-->"
 
@@ -187,7 +176,6 @@ def _iter_delimited(
 # Zero-width chars followed by visible text
 _ZERO_WIDTH_RE = re.compile(r"[\u200b\u200c\u200d]+\S")
 
-# Base64 blobs (>=50 chars) — checked AFTER data URI to avoid double-counting
 _BASE64_RE = re.compile(r"[A-Za-z0-9+/]{50,}={0,2}")
 
 # Data URI prefix. The subtype run is bounded: an unbounded `[^;]+` rescans to
@@ -325,7 +313,7 @@ def _check_tp1(text: str, source_field: str) -> list[Finding]:
             decoded = base64.b64decode(padded)
             decoded.decode("utf-8")
         except Exception:
-            continue  # not valid base64/UTF-8 — skip
+            continue
 
         findings.append(
             Finding(
@@ -496,7 +484,6 @@ def _check_tp2(text: str, source_field: str, is_identifier: bool) -> list[Findin
         scripts: set[str] = set()
         for char in text:
             if ord(char) < 128:
-                # ASCII — treat as LATIN
                 if char.isalpha():
                     scripts.add("LATIN")
             elif char.isalpha():
@@ -809,7 +796,6 @@ Respond in JSON matching this exact schema:
 
         response = chat_completion(prompt, model=model)
 
-        # Parse JSON — handle optional ```json code blocks
         json_text = response.strip()
         if json_text.startswith("```"):
             # Strip opening fence (```json or ```)
@@ -880,15 +866,12 @@ def node(state: SkillspectorState) -> AnalyzerNodeResponse:
     # Extract all metadata texts with (text, source_field, is_identifier) tuples
     metadata_texts = _extract_metadata_texts(manifest)
 
-    # TP1: Hidden instructions — check all metadata fields
     for text, source_field, _is_identifier in metadata_texts:
         findings.extend(_check_tp1(text, source_field))
 
-    # TP2: Unicode deception — check all metadata fields
     for text, source_field, is_identifier in metadata_texts:
         findings.extend(_check_tp2(text, source_field, is_identifier))
 
-    # TP3: Parameter description injection — check parameters
     params = manifest.get("parameters") or []
     if isinstance(params, list):
         findings.extend(_check_tp3(params))

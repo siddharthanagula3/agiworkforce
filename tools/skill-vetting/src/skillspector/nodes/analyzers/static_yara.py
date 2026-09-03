@@ -13,7 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""YARA analyzer node — runs curated and user-supplied YARA rules against skill artifacts.
+"""YARA analyzer node, runs curated and user-supplied YARA rules against skill artifacts.
 
 Built-in rules ship in ``src/skillspector/yara_rules/`` (webshells, crypto miners, malware,
 hack tools) based on industry open-source patterns. Users can supply additional rules via the
