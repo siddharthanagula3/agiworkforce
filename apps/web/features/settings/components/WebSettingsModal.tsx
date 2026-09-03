@@ -37,7 +37,7 @@ import { usePathname } from 'next/navigation';
 import { useAuth } from '@clerk/nextjs';
 import { useBillingStore } from '@shared/stores/web-auth-store';
 import { z } from 'zod';
-import { Mic } from 'lucide-react';
+import { Brain, Mic } from 'lucide-react';
 import { SettingsModal, SETTINGS_NAV_GROUPS_WEB } from '@agiworkforce/ui';
 import type {
   SettingsDataAdapter,
@@ -47,6 +47,7 @@ import type {
 } from '@agiworkforce/ui';
 import { CONNECTORS } from '@/features/connectors/data/connectors';
 import { ConnectorConsentSummary } from '@/features/connectors/components/ConnectorConsentSummary';
+import { ConnectorScopeList } from '@/features/connectors/components/ConnectorScopeList';
 import { ToolPermissionsPanel } from '@/features/connectors/components/ToolPermissionsPanel';
 import { ConnectorCapabilitiesPanel } from '@/features/connectors/components/ConnectorCapabilitiesPanel';
 import {
@@ -357,19 +358,31 @@ const SEGMENT_TO_SECTION: Record<string, string> = Object.fromEntries(
 const WEB_SETTINGS_NAV_GROUPS: SettingsNavGroupResolved[] = SETTINGS_NAV_GROUPS_WEB.map(
   (group) => ({
     ...group,
-    items: group.items.flatMap((item) =>
-      item.key === 'notifications'
-        ? [
-            item,
-            {
-              key: 'voice' as const,
-              label: 'Voice',
-              icon: Mic,
-              keywords: ['speech', 'tts', 'microphone', 'audio', 'dictation'],
-            },
-          ]
-        : [item],
-    ),
+    items: group.items.flatMap((item) => {
+      if (item.key === 'capabilities') {
+        return [
+          item,
+          {
+            key: 'memory' as const,
+            label: 'Memory',
+            icon: Brain,
+            keywords: ['facts', 'remember', 'personalization', 'manage memories'],
+          },
+        ];
+      }
+      if (item.key === 'notifications') {
+        return [
+          item,
+          {
+            key: 'voice' as const,
+            label: 'Voice',
+            icon: Mic,
+            keywords: ['speech', 'tts', 'microphone', 'audio', 'dictation'],
+          },
+        ];
+      }
+      return [item];
+    }),
   }),
 );
 
@@ -1199,6 +1212,7 @@ export function WebSettingsModal({
           navGroups={WEB_SETTINGS_NAV_GROUPS}
           adapter={adapter}
           connectorDisclosure={<ConnectorConsentSummary />}
+          renderConnectorScopes={(connectorId) => <ConnectorScopeList connectorId={connectorId} />}
           renderConnectorCapabilities={(connectorId) => (
             <ConnectorCapabilitiesPanel connectorRef={connectorId} connected />
           )}
