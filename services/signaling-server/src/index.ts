@@ -2,7 +2,7 @@ import 'dotenv/config';
 
 if (!process.env['NODE_ENV']) {
   process.stderr.write(
-    '[signaling-server] WARN: NODE_ENV is not set — defaulting to "development"\n',
+    '[signaling-server] WARN: NODE_ENV is not set, defaulting to "development"\n',
   );
   process.env['NODE_ENV'] = 'development';
 }
