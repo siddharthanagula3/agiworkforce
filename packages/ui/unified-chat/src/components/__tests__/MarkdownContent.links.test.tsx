@@ -58,3 +58,55 @@ describe('inline citation markers', () => {
     expect(screen.getByText(/Unverified claim \[9\]\./)).not.toBeNull();
   });
 });
+
+describe('parentheses around a citation', () => {
+  const sources = [
+    { url: 'https://www.anthropic.com/news/one', title: 'Anthropic ships a model' },
+    { url: 'https://blog.google/technology/two', title: 'Google announces a feature' },
+  ];
+
+  it('swallows parentheses that directly wrap a marker', () => {
+    const { container } = render(
+      <MarkdownContent content="Released today ([1])." citations={sources} />,
+    );
+    expect(container.textContent).toBe('Released today anthropic.com.');
+  });
+
+  it('swallows parentheses with inner whitespace around a marker', () => {
+    const { container } = render(
+      <MarkdownContent content="Released today ( [1] )." citations={sources} />,
+    );
+    expect(container.textContent).toBe('Released today anthropic.com.');
+  });
+
+  it('swallows parentheses around a grouped run of markers', () => {
+    const { container } = render(
+      <MarkdownContent content="Shipped the same week ([1][2])." citations={sources} />,
+    );
+    expect(container.textContent).toBe('Shipped the same week anthropic.com+1.');
+  });
+
+  it('swallows parentheses around a plain link matched by domain', () => {
+    const { container } = render(
+      <MarkdownContent
+        content="It shipped an update ([blog.google](https://blog.google))."
+        citations={sources}
+      />,
+    );
+    expect(container.textContent).toBe('It shipped an update blog.google.');
+  });
+
+  it('keeps a trailing character other than the closing paren', () => {
+    const { container } = render(
+      <MarkdownContent content="Confirmed here ([1]), reportedly." citations={sources} />,
+    );
+    expect(container.textContent).toBe('Confirmed here anthropic.com, reportedly.');
+  });
+
+  it('leaves parentheses alone when they do not touch the citation', () => {
+    const { container } = render(
+      <MarkdownContent content="(See details) claim [1]." citations={sources} />,
+    );
+    expect(container.textContent).toBe('(See details) claim anthropic.com.');
+  });
+});

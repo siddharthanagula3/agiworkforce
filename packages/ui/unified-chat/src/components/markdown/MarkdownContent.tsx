@@ -182,6 +182,8 @@ const MarkdownImage = ({ src, alt, title }: { src?: string; alt?: string; title?
 
 const PROTOCOL_RELATIVE_PREFIX = '//';
 const FRAGMENT_PREFIX = '#';
+const PAREN_OPEN_TAIL = /\(\s*$/;
+const PAREN_CLOSE_HEAD = /^\s*\)/;
 
 function citationItemsForIndices(
   indices: readonly number[],
@@ -193,6 +195,65 @@ function citationItemsForIndices(
     if (citation) items.push({ index, citation });
   }
   return items;
+}
+
+/**
+ * Mirrors the branching in `MarkdownLink` below - a child of `p`/`li`/`td` is
+ * still an unrendered `MarkdownLink` element at this point, not the
+ * `CitationChip` it may resolve to, so paren-stripping has to run the same
+ * three checks to know whether it will.
+ */
+function isCitationLinkElement(
+  node: React.ReactNode,
+  citations: readonly MarkdownCitation[],
+): boolean {
+  if (!React.isValidElement(node) || node.type !== MarkdownLink) return false;
+  const href = (node.props as { href?: unknown }).href;
+  if (typeof href !== 'string') return false;
+
+  const groupMatch = CITATION_GROUP_HREF_PATTERN.exec(href);
+  if (groupMatch) {
+    const indices = (groupMatch[1] ?? '').split(',').map(Number);
+    return citationItemsForIndices(indices, citations).length > 0;
+  }
+  const citationMatch = CITATION_HREF_PATTERN.exec(href);
+  if (citationMatch) {
+    return citations[Number(citationMatch[1]) - 1] !== undefined;
+  }
+  return findCitationIndexForUrl(href, citations) !== undefined;
+}
+
+/**
+ * The model wraps a citation in its own parentheses ("(openai.com)"); once
+ * that link becomes a pill the parentheses read as the model's punctuation
+ * around a sentence fragment that no longer exists. Strips only the "(" and
+ * ")" immediately touching a citation link - and only those, so "developed X
+ * (see openai.com)." keeps its parenthetical and "microsoft.com)." keeps its
+ * trailing period.
+ */
+function unwrapCitationParens(
+  children: React.ReactNode,
+  citations: readonly MarkdownCitation[],
+): React.ReactNode {
+  const nodes = React.Children.toArray(children);
+  const out: React.ReactNode[] = [];
+  for (let i = 0; i < nodes.length; i++) {
+    const node = nodes[i];
+    if (isCitationLinkElement(node, citations)) {
+      const prev = out[out.length - 1];
+      const next = nodes[i + 1];
+      if (typeof prev === 'string' && typeof next === 'string') {
+        const openMatch = PAREN_OPEN_TAIL.exec(prev);
+        const closeMatch = PAREN_CLOSE_HEAD.exec(next);
+        if (openMatch && closeMatch) {
+          out[out.length - 1] = prev.slice(0, prev.length - openMatch[0].length);
+          nodes[i + 1] = next.slice(closeMatch[0].length);
+        }
+      }
+    }
+    out.push(node);
+  }
+  return out;
 }
 
 const MarkdownLink = ({ href, children }: { href?: string; children?: React.ReactNode }) => {
@@ -238,16 +299,33 @@ const MarkdownLink = ({ href, children }: { href?: string; children?: React.Reac
   );
 };
 
+const MarkdownParagraph = ({ children }: { children?: React.ReactNode }) => {
+  const citations = useMarkdownCitations();
+  return <p className="mb-3 leading-relaxed">{unwrapCitationParens(children, citations)}</p>;
+};
+
+const MarkdownListItem = ({ children }: { children?: React.ReactNode }) => {
+  const citations = useMarkdownCitations();
+  return <li className="mb-1">{unwrapCitationParens(children, citations)}</li>;
+};
+
+const MarkdownTableCell = ({ children }: { children?: React.ReactNode }) => {
+  const citations = useMarkdownCitations();
+  return (
+    <td className="border border-border px-3 py-2">{unwrapCitationParens(children, citations)}</td>
+  );
+};
+
 const markdownComponents: Components = {
   code: CodeBlock as Components['code'],
   img: MarkdownImage as Components['img'],
   h1: ({ children }) => <h1 className="mb-4 mt-6 text-xl font-bold">{children}</h1>,
   h2: ({ children }) => <h2 className="mb-3 mt-5 text-lg font-semibold">{children}</h2>,
   h3: ({ children }) => <h3 className="mb-2 mt-4 text-base font-semibold">{children}</h3>,
-  p: ({ children }) => <p className="mb-3 leading-relaxed">{children}</p>,
+  p: MarkdownParagraph as Components['p'],
   ul: ({ children }) => <ul className="mb-3 list-disc pl-6">{children}</ul>,
   ol: ({ children }) => <ol className="mb-3 list-decimal pl-6">{children}</ol>,
-  li: ({ children }) => <li className="mb-1">{children}</li>,
+  li: MarkdownListItem as Components['li'],
   blockquote: ({ children }) => (
     <blockquote className="mb-3 border-l-2 border-border pl-4 text-muted-foreground [&>:last-child]:mb-0">
       {children}
@@ -261,7 +339,7 @@ const markdownComponents: Components = {
   th: ({ children }) => (
     <th className="border border-border bg-muted px-3 py-2 text-left font-semibold">{children}</th>
   ),
-  td: ({ children }) => <td className="border border-border px-3 py-2">{children}</td>,
+  td: MarkdownTableCell as Components['td'],
   a: MarkdownLink as Components['a'],
 };
 
