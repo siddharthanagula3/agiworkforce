@@ -10,6 +10,7 @@ vi.mock('@/lib/github-app', () => ({
 }));
 
 import { CONNECTORS } from '@/features/connectors/data/connectors';
+import { applyFirstPartyTargets } from '@/lib/connectors/directory/first-party';
 import {
   buildInternalDirectoryRecords,
   mergeDirectoryRecords,
@@ -30,6 +31,10 @@ function internalRecord(overrides: Partial<DirectoryRecord> = {}): DirectoryReco
     repositoryUrl: null,
     version: null,
     sourceRegistry: 'internal',
+    badge: 'first-party',
+    iconUrl: null,
+    monogram: 'N',
+    docsUrl: null,
     ...overrides,
   };
 }
@@ -48,6 +53,10 @@ function registryRecord(overrides: Partial<DirectoryRecord> = {}): DirectoryReco
     repositoryUrl: 'https://github.com/someone/notion-mirror',
     version: '1.0.0',
     sourceRegistry: 'mcp-registry',
+    badge: 'registry',
+    iconUrl: null,
+    monogram: 'NM',
+    docsUrl: null,
     ...overrides,
   };
 }
@@ -104,6 +113,81 @@ describe('mergeDirectoryRecords', () => {
 
     expect(merged).toHaveLength(1);
     expect(merged[0]?.sourceRegistry).toBe('internal');
+  });
+
+  it('keeps the richer of the two descriptions and unions categories', () => {
+    const merged = mergeDirectoryRecords(
+      [internalRecord({ description: 'Notion.', categories: ['Productivity'] })],
+      [
+        registryRecord({
+          description: 'A community mirror of the Notion MCP server.',
+          categories: ['Code'],
+        }),
+      ],
+    );
+
+    expect(merged[0]?.description).toBe('A community mirror of the Notion MCP server.');
+    expect(merged[0]?.categories).toEqual(['Productivity', 'Code']);
+  });
+
+  it('never lets a registry match downgrade the internal badge', () => {
+    const merged = mergeDirectoryRecords([internalRecord()], [registryRecord()]);
+
+    expect(merged[0]?.badge).toBe('first-party');
+  });
+
+  it('fills in a missing icon and docs url from the matched registry record', () => {
+    const merged = mergeDirectoryRecords(
+      [internalRecord({ iconUrl: null, docsUrl: null })],
+      [
+        registryRecord({
+          iconUrl: 'https://cdn.example.com/notion-mirror.png',
+          docsUrl: 'https://example.com/docs',
+        }),
+      ],
+    );
+
+    expect(merged[0]?.iconUrl).toBe('https://cdn.example.com/notion-mirror.png');
+    expect(merged[0]?.docsUrl).toBe('https://example.com/docs');
+  });
+});
+
+describe('applyFirstPartyTargets', () => {
+  it('overrides a stale internal remote for a provider the first-party file flags as superseded', () => {
+    const [jira] = applyFirstPartyTargets([
+      internalRecord({
+        id: 'jira',
+        remotes: [{ url: 'https://mcp.atlassian.com/v1/sse', transport: 'sse' }],
+      }),
+    ]);
+
+    expect(jira?.remotes).toEqual([
+      { url: 'https://mcp.atlassian.com/v2/mcp', transport: 'streamable-http' },
+    ]);
+    expect(jira?.toolNames).toContain('getJiraIssue');
+  });
+
+  it('keeps an already-correct internal remote when the first-party file does not flag it as stale', () => {
+    const [notion] = applyFirstPartyTargets([internalRecord({ id: 'notion' })]);
+
+    expect(notion?.remotes).toEqual([
+      { url: 'https://mcp.notion.com/mcp', transport: 'streamable-http' },
+    ]);
+    expect(notion?.docsUrl).toBe('https://developers.notion.com/guides/mcp/mcp-supported-tools');
+  });
+
+  it('fills in a real remote for a catalog entry that had none at all', () => {
+    const [gmail] = applyFirstPartyTargets([internalRecord({ id: 'gmail', remotes: [] })]);
+
+    expect(gmail?.remotes).toEqual([
+      { url: 'https://gmailmcp.googleapis.com/mcp/v1', transport: 'streamable-http' },
+    ]);
+  });
+
+  it('leaves records with no first-party target untouched', () => {
+    const [other] = applyFirstPartyTargets([internalRecord({ id: 'stripe' })]);
+
+    expect(other?.docsUrl).toBeNull();
   });
 });
 
