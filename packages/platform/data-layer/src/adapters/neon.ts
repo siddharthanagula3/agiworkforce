@@ -146,13 +146,6 @@ function localWebSocketProxyHost(): string | null {
   return proxy.split(':')[0] ?? '';
 }
 
-/**
- * Whether THIS connection's own host is the local proxy's target, so the
- * insecure websocket setting below is safe to apply to the pool built from
- * it. `AGI_DATABASE_WS_PROXY` being set somewhere in the process is not
- * enough — that would also flip a same-process pool built from a real
- * `neon.tech` connection string to plaintext (see {@link applyLocalWebSocketProxy}).
- */
 function isLocalWebSocketProxyTarget(hostname: string): boolean {
   const proxyHost = localWebSocketProxyHost();
   if (proxyHost === null) return false;
@@ -193,13 +186,6 @@ interface SecureWebSocketDefaults {
 
 let _secureWebSocketDefaults: SecureWebSocketDefaults | null = null;
 
-/**
- * Captures the driver's own (secure) websocket defaults the first time the
- * module loads, before {@link applyLocalWebSocketProxy} can have mutated
- * them, so a later pool built for a non-proxy host can be restored to them
- * rather than inheriting whatever an earlier loopback pool left behind on
- * this shared, process-wide `neonConfig` singleton.
- */
 function captureSecureWebSocketDefaults(neon: NeonModule): SecureWebSocketDefaults {
   if (!_secureWebSocketDefaults) {
     _secureWebSocketDefaults = {
@@ -248,14 +234,6 @@ async function importNeonModule(): Promise<NeonModule> {
   return _neonModule;
 }
 
-/**
- * Decides the websocket transport freshly for EVERY pool, keyed on that
- * pool's own connection host, rather than once at module load. `neonConfig`
- * is a singleton shared by every pool built from this driver module in the
- * process, so a one-time decision at load time cannot tell a loopback pool
- * from a same-process `neon.tech` pool built later — whichever host asked
- * last would decide the transport for everyone.
- */
 async function loadNeon(connectionHost: string): Promise<NeonModule> {
   const loaded = await importNeonModule();
   const defaults = captureSecureWebSocketDefaults(loaded);
