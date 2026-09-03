@@ -9,9 +9,14 @@ import {
   type ProviderAdapterConfigMap,
   type ProviderAdapterId,
 } from '@agiworkforce/providers-factory';
-import { detectProviderFromModelId } from '@agiworkforce/types';
+import { detectProviderFromModelId, listProtocolRoutes } from '@agiworkforce/types';
 import { isRoutedViaOpenRouter, openRouterSlugFor } from './aggregator-routing';
-import type { ProviderAdapter, StreamChunk } from '@agiworkforce/types';
+import type {
+  HarnessProtocol,
+  ProtocolHarness,
+  ProviderAdapter,
+  StreamChunk,
+} from '@agiworkforce/types';
 
 const SERVER_PROVIDER_CONFIG: Readonly<
   Record<string, { envPrefix: string; adapterId: ProviderAdapterId }>
@@ -49,6 +54,31 @@ const PROVIDER_API_KEY_ENV_KEYS: Readonly<Record<string, readonly string[]>> = {
   ],
 };
 
+/**
+ * Providers the registry describes as a protocol plus a base URL and a key env
+ * var, rather than as an adapter package.
+ *
+ * One provider id speaks one protocol: the chat route dispatches on the
+ * provider, so two dialects behind the same id would be unresolvable. The
+ * registry compiler admits the shape; this map is where the ambiguity would
+ * surface, so it refuses it here.
+ */
+const PROTOCOL_ROUTE_HARNESSES: ReadonlyMap<string, ProtocolHarness> = (() => {
+  const byProvider = new Map<string, ProtocolHarness>();
+  for (const route of listProtocolRoutes()) {
+    const existing = byProvider.get(route.provider);
+    if (existing && existing.harnessId !== route.harnessId) {
+      throw new Error(
+        `Provider "${route.provider}" declares two protocol harnesses (${existing.harnessId}, ${route.harnessId})`,
+      );
+    }
+    byProvider.set(route.provider, route);
+  }
+  return byProvider;
+})();
+
+export const PROTOCOL_ROUTE_PROVIDER_IDS: readonly string[] = [...PROTOCOL_ROUTE_HARNESSES.keys()];
+
 export interface ServerProviderAdapterOptions {
   anthropicCache?: Readonly<
     Pick<ProviderAdapterConfigMap['anthropic'], 'enableCacheControl' | 'cacheRetention'>
@@ -83,6 +113,81 @@ export function toGenericUpstreamError(
   const status = chunk.code ? Number(chunk.code) : undefined;
   const label = status !== undefined && Number.isFinite(status) ? `(${status})` : '(unknown)';
   return new Error(`${providerId} API error ${label}: ${chunk.message}`);
+}
+
+function resolveProtocolRouteBaseUrl(harness: ProtocolHarness): string {
+  const validated = validateBaseUrl(harness.baseUrl, {
+    allowedHosts: ALLOWED_MANAGED_PROVIDER_HOSTS,
+  });
+  if (!validated.ok) {
+    throw new Error(
+      `Harness "${harness.harnessId}" declares base URL host ${validated.hostname ?? harness.baseUrl}, which the managed egress allowlist refuses (${validated.reason}).`,
+    );
+  }
+  return validated.url;
+}
+
+const PROTOCOL_ROUTE_BUILDERS: Readonly<
+  Record<
+    Exclude<HarnessProtocol, 'provider_native'>,
+    (
+      harness: ProtocolHarness,
+      apiKey: string,
+      baseUrl: string,
+      options: ServerProviderAdapterOptions,
+    ) => ProviderAdapter
+  >
+> = {
+  openai_chat: (harness, apiKey, baseUrl) =>
+    createProviderAdapter('openai_compat', {
+      apiKey,
+      baseUrl,
+      providerId: harness.provider,
+      label: harness.provider,
+      apiKeyEnvVar: harness.apiKeyEnv,
+      skipDiscovery: true,
+    }),
+  openai_responses: (_harness, apiKey, baseUrl) =>
+    createProviderAdapter('openai', { apiKey, baseUrl }),
+  anthropic_messages: (_harness, apiKey, baseUrl, options) =>
+    createProviderAdapter('anthropic', { apiKey, baseUrl, ...options.anthropicCache }),
+  gemini_native: (_harness, apiKey, baseUrl) =>
+    createProviderAdapter('google', { apiKey, baseUrl }),
+};
+
+export function getProtocolRouteHarness(providerId: string): ProtocolHarness | null {
+  return PROTOCOL_ROUTE_HARNESSES.get(providerId) ?? null;
+}
+
+/**
+ * Construct the adapter for a route the registry describes by protocol.
+ *
+ * Nothing here is provider-specific: the wire dialect, the endpoint and the
+ * credential all come from the harness, so a new reseller or a second dialect
+ * on an existing vendor is catalog data rather than a package.
+ */
+export function buildProtocolRouteAdapter(
+  providerId: string,
+  options: ServerProviderAdapterOptions = {},
+): ProviderAdapter {
+  const harness = PROTOCOL_ROUTE_HARNESSES.get(providerId);
+  if (!harness) {
+    throw new Error(`Provider "${providerId}" declares no protocol route.`);
+  }
+  const apiKey = getOptionalEnv(harness.apiKeyEnv);
+  if (!apiKey) {
+    throw new Error(
+      `Provider "${providerId}" is not configured. ` +
+        `Please ensure the ${harness.apiKeyEnv} environment variable is set. ` +
+        'Check your .env.local file or deployment environment variables.',
+    );
+  }
+  return PROTOCOL_ROUTE_BUILDERS[harness.protocol](
+    harness,
+    apiKey,
+    resolveProtocolRouteBaseUrl(harness),
+    options,
+  );
 }
 
 export function buildServerProviderAdapter(
