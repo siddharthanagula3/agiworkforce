@@ -1,4 +1,3 @@
-
 import { NextRequest, NextResponse } from 'next/server';
 
 import { withErrorHandler } from '@/lib/error-handler';
@@ -7,18 +6,15 @@ import { requireCsrfToken } from '@/lib/csrf';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { withIsoTimestamps } from '@/lib/server/iso-timestamps';
-import {
-  getNeonChatDb,
-  requireCurrentUserId,
-  type ChatConversationRow,
-} from '@/lib/server/neon-chat';
+import { type ChatConversationRow } from '@/lib/server/neon-chat';
+import { getUserScopedDb } from '@/lib/server/rls-db';
 import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
 import { resolveActiveOrganizationId } from '@/lib/services/active-workspace-service';
 
 type RouteContext = { params: Promise<{ id: string }> };
 
 async function handleRestoreConversation(request: NextRequest, context: RouteContext) {
-  const userId = await requireCurrentUserId(request);
+  const { db, userId } = await getUserScopedDb(request);
 
   const csrfResponse = await requireCsrfToken(request);
   if (csrfResponse) return csrfResponse;
@@ -27,7 +23,6 @@ async function handleRestoreConversation(request: NextRequest, context: RouteCon
   if (rateLimitResponse) return rateLimitResponse;
 
   const { id } = await context.params;
-  const db = getNeonChatDb();
   const organizationId = await resolveActiveOrganizationId(db, userId);
 
   let restored: ChatConversationRow | undefined;

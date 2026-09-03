@@ -1,10 +1,8 @@
-
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 vi.mock('server-only', () => ({}));
 
-const { mockAuth, mockNeonQuery } = vi.hoisted(() => ({
-  mockAuth: vi.fn(),
+const { mockNeonQuery } = vi.hoisted(() => ({
   mockNeonQuery: vi.fn(),
 }));
 
@@ -24,13 +22,11 @@ vi.mock('@/lib/services/active-workspace-service', () => ({
   resolveActiveOrganizationId: vi.fn(async () => null),
 }));
 
-vi.mock('@clerk/nextjs/server', () => ({
-  auth: mockAuth,
-}));
-
-vi.mock('@/lib/server/neon-db', () => ({
-  getNeonDb: vi.fn(() => ({
-    query: (...args: unknown[]) => mockNeonQuery(...args),
+vi.mock('@/lib/server/rls-db', () => ({
+  getUserScopedDb: vi.fn(async () => ({
+    db: { query: (...args: unknown[]) => mockNeonQuery(...args) },
+    userId: 'user_label_1',
+    organizationId: null,
   })),
 }));
 
@@ -46,13 +42,10 @@ function makePostRequest(body: unknown) {
 describe('POST /api/chat/conversations — cloud_chat session labeling', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockAuth.mockResolvedValue({ userId: 'user_label_1' });
   });
 
   it('still returns 201 with the unchanged conversation response shape (additive)', async () => {
     mockNeonQuery
-      // assertAccountActive's account_status lookup
-      .mockResolvedValueOnce([{ account_status: 'active' }])
       // the insert...returning
       .mockResolvedValueOnce([
         {
@@ -78,23 +71,20 @@ describe('POST /api/chat/conversations — cloud_chat session labeling', () => {
   });
 
   it('does not throw the assertion for a project-scoped conversation either', async () => {
-    mockNeonQuery
-      .mockResolvedValueOnce([{ account_status: 'active' }])
-      .mockResolvedValueOnce([{ id: 'proj_9' }])
-      .mockResolvedValueOnce([
-        {
-          id: 'conv_label_2',
-          title: 'Project chat',
-          model: 'auto',
-          project_id: 'proj_9',
-          pinned: false,
-          starred: false,
-          archived: false,
-          is_temporary: false,
-          created_at: '2026-07-15T00:00:00.000Z',
-          updated_at: '2026-07-15T00:00:00.000Z',
-        },
-      ]);
+    mockNeonQuery.mockResolvedValueOnce([{ id: 'proj_9' }]).mockResolvedValueOnce([
+      {
+        id: 'conv_label_2',
+        title: 'Project chat',
+        model: 'auto',
+        project_id: 'proj_9',
+        pinned: false,
+        starred: false,
+        archived: false,
+        is_temporary: false,
+        created_at: '2026-07-15T00:00:00.000Z',
+        updated_at: '2026-07-15T00:00:00.000Z',
+      },
+    ]);
 
     const res = await POST(makePostRequest({ title: 'Project chat', projectId: 'proj_9' }));
     expect(res.status).toBe(201);

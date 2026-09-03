@@ -10,9 +10,12 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('server-only', () => ({}));
-vi.mock('@/lib/server/neon-chat', () => ({
-  requireCurrentUserId: (...args: unknown[]) => mocks.requireUser(...args),
-  getNeonChatDb: () => ({ query: (...args: unknown[]) => mocks.query(...args) }),
+vi.mock('@/lib/server/rls-db', () => ({
+  getUserScopedDb: async (...args: unknown[]) => ({
+    db: { query: (...queryArgs: unknown[]) => mocks.query(...queryArgs) },
+    userId: await mocks.requireUser(...args),
+    organizationId: null,
+  }),
 }));
 vi.mock('@/lib/services/active-workspace-service', () => ({
   resolveActiveOrganizationId: vi.fn(async () => null),

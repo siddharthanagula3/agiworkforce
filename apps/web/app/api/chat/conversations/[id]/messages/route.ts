@@ -13,12 +13,8 @@ import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { withIsoTimestamps } from '@/lib/server/iso-timestamps';
 import { CreateMessageSchema } from '@/lib/validations/chat';
-import {
-  getNeonChatDb,
-  normalizeMessageMetadata,
-  requireCurrentUserId,
-  type ChatMessageRow,
-} from '@/lib/server/neon-chat';
+import { normalizeMessageMetadata, type ChatMessageRow } from '@/lib/server/neon-chat';
+import { getUserScopedDb } from '@/lib/server/rls-db';
 import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
 import { resolveActiveOrganizationId } from '@/lib/services/active-workspace-service';
 import { scheduleConversationTitleGeneration } from './lib/generate-title';
@@ -37,7 +33,7 @@ import {
 type RouteContext = { params: Promise<{ id: string }> };
 
 async function handleSendMessage(request: NextRequest, context: RouteContext) {
-  const userId = await requireCurrentUserId(request);
+  const { db, userId } = await getUserScopedDb(request);
 
   // CSRF protection for state-changing POST endpoint
   const csrfError = await requireCsrfToken(request);
@@ -71,7 +67,6 @@ async function handleSendMessage(request: NextRequest, context: RouteContext) {
     parentId,
   } = validationResult.data;
 
-  const db = getNeonChatDb();
   const organizationId = await resolveActiveOrganizationId(db, userId, request);
   const [conversation] = await db.query<{
     id: string;
