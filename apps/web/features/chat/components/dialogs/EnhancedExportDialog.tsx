@@ -22,6 +22,7 @@ import {
   downloadAsPDF,
   downloadAsDOCX,
 } from '../../services/document-export-service';
+import { memoWhenClosed } from '@shared/lib/memo-when-closed';
 
 interface EnhancedExportDialogProps {
   open: boolean;
@@ -82,7 +83,7 @@ const EXPORT_FORMATS: Array<{
   },
 ];
 
-export function EnhancedExportDialog({
+function EnhancedExportDialogImpl({
   open,
   onOpenChange,
   session,
@@ -305,3 +306,5 @@ export function EnhancedExportDialog({
     </Dialog>
   );
 }
+
+export const EnhancedExportDialog = memoWhenClosed(EnhancedExportDialogImpl);

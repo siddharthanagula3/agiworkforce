@@ -46,13 +46,14 @@ import {
 import { useAuthStore } from '@shared/stores/authentication-store';
 import { format } from 'date-fns';
 import ErrorBoundary from '@shared/components/ErrorBoundary';
+import { memoWhenClosed } from '@shared/lib/memo-when-closed';
 
 interface GlobalSearchDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }
 
-export function GlobalSearchDialog({ open, onOpenChange }: GlobalSearchDialogProps) {
+function GlobalSearchDialogImpl({ open, onOpenChange }: GlobalSearchDialogProps) {
   // Radix hides a modal dialog's siblings, but which nodes that reaches depends
   // on where the Dialog root sits, and here it does not reach the app's main
   // region: measured with this dialog open, #main-content kept 90 focusable
@@ -695,3 +696,5 @@ export function GlobalSearchDialog({ open, onOpenChange }: GlobalSearchDialogPro
     </ErrorBoundary>
   );
 }
+
+export const GlobalSearchDialog = memoWhenClosed(GlobalSearchDialogImpl);

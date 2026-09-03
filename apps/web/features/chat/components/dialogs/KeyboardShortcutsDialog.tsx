@@ -13,6 +13,7 @@ import { Keyboard } from 'lucide-react';
 import { safePlatform } from '@shared/utils/browser-utils';
 import type { KeyboardShortcutDoc } from '../../hooks/use-keyboard-shortcuts';
 import { useSettingsStore } from '@shared/stores/web-settings-store';
+import { memoWhenClosed } from '@shared/lib/memo-when-closed';
 
 interface KeyboardShortcutsDialogProps {
   open: boolean;
@@ -20,7 +21,7 @@ interface KeyboardShortcutsDialogProps {
   shortcuts: readonly KeyboardShortcutDoc[];
 }
 
-export function KeyboardShortcutsDialog({
+function KeyboardShortcutsDialogImpl({
   open,
   onOpenChange,
   shortcuts,
@@ -166,3 +167,5 @@ export function KeyboardShortcutsDialog({
     </Dialog>
   );
 }
+
+export const KeyboardShortcutsDialog = memoWhenClosed(KeyboardShortcutsDialogImpl);
