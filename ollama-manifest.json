@@ -1,7 +1,7 @@
 {
   "name": "agiworkforce",
   "displayName": "AGI Workforce",
-  "description": "Multi-model AI agent — 24 providers, desktop automation, 150+ skills, BYOK",
+  "description": "Multi-model AI agent, 24 providers, desktop automation, 150+ skills, BYOK",
   "version": "0.1.0",
   "install": {
     "npm": "@agiworkforce/cli",
