@@ -83,6 +83,8 @@ export interface AdminPolicy {
    */
   externalSharingEnabled: boolean;
   secretHandling: SecretHandlingMode;
+  requireMfa: boolean;
+  monthlySpendCapCents: number | null;
   metadata?: Record<string, unknown>;
   updatedAt: string;
 }
@@ -385,6 +387,8 @@ export const DEFAULT_ENTERPRISE_ADMIN_POLICY: Omit<AdminPolicy, 'organizationId'
   retentionEnforced: false,
   externalSharingEnabled: true,
   secretHandling: SECRET_HANDLING_MODE_DEFAULT.organization,
+  requireMfa: false,
+  monthlySpendCapCents: null,
 };
 
 export const MANAGED_COMPUTE_MARGIN_POLICY = {

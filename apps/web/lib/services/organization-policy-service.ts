@@ -63,6 +63,15 @@ function readSecretHandling(metadata: Record<string, unknown> | null): SecretHan
     : SECRET_HANDLING_MODE_DEFAULT.organization;
 }
 
+function readRequireMfa(metadata: Record<string, unknown> | null): boolean {
+  return metadata?.['requireMfa'] === true;
+}
+
+function readMonthlySpendCapCents(metadata: Record<string, unknown> | null): number | null {
+  const value = metadata?.['monthlySpendCapCents'];
+  return typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : null;
+}
+
 export function formatAdminPolicy(row: AdminPolicyRow): AdminPolicy {
   return {
     organizationId: row.organization_id,
@@ -79,6 +88,8 @@ export function formatAdminPolicy(row: AdminPolicyRow): AdminPolicy {
     retentionEnforced: row.retention_enforced,
     externalSharingEnabled: row.external_sharing_enabled,
     secretHandling: readSecretHandling(row.metadata),
+    requireMfa: readRequireMfa(row.metadata),
+    monthlySpendCapCents: readMonthlySpendCapCents(row.metadata),
     metadata: row.metadata ?? {},
     updatedAt: toIso(row.updated_at),
   };
@@ -171,7 +182,12 @@ export async function upsertOrganizationPolicy(
       input.retentionDays,
       input.retentionEnforced,
       input.externalSharingEnabled,
-      JSON.stringify({ ...(input.metadata ?? {}), secretHandling: input.secretHandling }),
+      JSON.stringify({
+        ...(input.metadata ?? {}),
+        secretHandling: input.secretHandling,
+        requireMfa: input.requireMfa,
+        monthlySpendCapCents: input.monthlySpendCapCents,
+      }),
     ],
   );
 
@@ -200,6 +216,8 @@ export function diffAdminPolicy(
     'retentionEnforced',
     'externalSharingEnabled',
     'secretHandling',
+    'requireMfa',
+    'monthlySpendCapCents',
   ];
 
   for (const key of keys) {

@@ -245,6 +245,38 @@ describe('PATCH /api/settings/organization/policy', () => {
     expect(upsertParams()).toEqual([]);
   });
 
+  it('stores a requireMfa and monthlySpendCapCents patch inside the metadata column', async () => {
+    bindCaller({ policyRow: SAVED_POLICY });
+
+    await PATCH(request({ requireMfa: true, monthlySpendCapCents: 75_000 }) as never);
+
+    const params = upsertParams();
+    expect(JSON.parse(params[13] as string)).toMatchObject({
+      requireMfa: true,
+      monthlySpendCapCents: 75_000,
+    });
+  });
+
+  it('clears a saved spend cap when the administrator patches it to null', async () => {
+    bindCaller({
+      policyRow: { ...SAVED_POLICY, metadata: { monthlySpendCapCents: 50_000 } },
+    });
+
+    await PATCH(request({ monthlySpendCapCents: null }) as never);
+
+    const params = upsertParams();
+    expect(JSON.parse(params[13] as string)).toMatchObject({ monthlySpendCapCents: null });
+  });
+
+  it('rejects a zero or negative spend cap', async () => {
+    bindCaller({ policyRow: SAVED_POLICY });
+
+    const response = await PATCH(request({ monthlySpendCapCents: 0 }) as never);
+
+    expect(response.status).toBe(400);
+    expect(upsertParams()).toEqual([]);
+  });
+
   it('deduplicates repeated modes and surfaces before writing', async () => {
     bindCaller({ policyRow: SAVED_POLICY });
 
