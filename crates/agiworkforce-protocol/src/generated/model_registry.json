@@ -5738,7 +5738,8 @@
         "deepseek-v4-pro",
         "qwen-3.7-plus",
         "glm-5.3",
-        "kimi-k3"
+        "kimi-k3",
+        "minimax-m3"
       ],
       "flagship_additions": ["gpt-5.6-sol", "claude-fable-5", "claude-opus-5", "grok-4.5"]
     }

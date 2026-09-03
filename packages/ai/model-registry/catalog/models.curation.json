@@ -2682,7 +2682,8 @@
       "family:deepseek/deepseek-pro",
       "family:qwen/qwen-plus",
       "family:zhipu/glm",
-      "family:moonshot/kimi"
+      "family:moonshot/kimi",
+      "minimax-m3"
     ],
     "flagship_additions": [
       "family:openai/gpt-frontier",
