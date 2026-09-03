@@ -14,6 +14,7 @@ vi.mock('@/lib/csrf', () => ({ requireCsrfToken: mockCsrf }));
 
 import { POST } from '../route';
 import { PUT, DELETE } from '../[name]/route';
+import { USER_SKILL_AUTHORING_ENV_VAR } from '@/lib/services/user-skill-authoring';
 
 const DRAFT = {
   name: 'release-notes',
@@ -44,6 +45,7 @@ function deleteReq(name: string): NextRequest {
 describe('/api/skills create, edit, delete', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    process.env[USER_SKILL_AUTHORING_ENV_VAR] = '1';
     mockGetUserScopedDb.mockResolvedValue({
       db: { query: mockQuery, execute: mockExecute },
       userId: 'user-owner',
@@ -153,5 +155,41 @@ describe('/api/skills create, edit, delete', () => {
     });
     expect(res.status).toBe(403);
     expect(mockGetUserScopedDb).not.toHaveBeenCalled();
+  });
+});
+
+describe('/api/skills create, edit, delete when authoring is disabled', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    delete process.env[USER_SKILL_AUTHORING_ENV_VAR];
+    mockGetUserScopedDb.mockResolvedValue({
+      db: { query: mockQuery, execute: mockExecute },
+      userId: 'user-owner',
+    });
+    mockCsrf.mockResolvedValue(null);
+    mockQuery.mockResolvedValue([]);
+    mockExecute.mockResolvedValue(1);
+  });
+
+  it('POST answers 404 without touching the database', async () => {
+    const res = await POST(postReq(DRAFT));
+    expect(res.status).toBe(404);
+    expect(mockQuery).not.toHaveBeenCalled();
+  });
+
+  it('PUT answers 404 without touching the database', async () => {
+    const res = await PUT(putReq('old-name', DRAFT), {
+      params: Promise.resolve({ name: 'old-name' }),
+    });
+    expect(res.status).toBe(404);
+    expect(mockQuery).not.toHaveBeenCalled();
+  });
+
+  it('DELETE answers 404 without touching the database', async () => {
+    const res = await DELETE(deleteReq(DRAFT.name), {
+      params: Promise.resolve({ name: DRAFT.name }),
+    });
+    expect(res.status).toBe(404);
+    expect(mockExecute).not.toHaveBeenCalled();
   });
 });
