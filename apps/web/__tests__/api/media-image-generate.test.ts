@@ -155,6 +155,16 @@ vi.mock('@/lib/neon-db', () => ({
   getServiceClient: vi.fn(() => ({})),
 }));
 
+vi.mock('@/lib/server/neon-db', () => ({
+  getNeonDb: vi.fn(() => ({
+    query: vi.fn(async () => []),
+    execute: vi.fn(async () => undefined),
+    transaction: vi.fn(),
+    withUser: vi.fn(),
+    dispose: vi.fn(),
+  })),
+}));
+
 const mockGetSubscription = vi.fn();
 
 vi.mock('@/lib/services/subscription-service', () => ({
