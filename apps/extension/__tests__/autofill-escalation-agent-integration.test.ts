@@ -1,36 +1,3 @@
-/**
- * autofill-escalation-agent-integration.test.ts
- *
- * END-TO-END integration test for the autofill + escalation + agent loop spine.
- *
- * Chain under test:
- *   1. AGI_RUN_AUTOFILL content-script handler
- *      → detectJobApplication() (real, jsdom DOM)
- *      → autofillGreenhouse() (real)
- *      → makeEscalationDecision() (real)
- *      → returns escalation decision with shouldEscalate=true
- *
- *   2. AGI_START_COMPUTER_USE background handler
- *      → validates tabId origin against siteAllowlistCache
- *      → calls runAgentLoop() (real, with mocked chrome.debugger + network)
- *      → runAgentLoop fires onProgress → background sends AGI_CU_STEP
- *
- * Mocks:
- *   - chrome.debugger (attach/sendCommand/detach)
- *   - chrome.storage.local
- *   - chrome.tabs.get
- *   - chrome.runtime.sendMessage (to capture AGI_CU_STEP broadcasts)
- *   - global fetch (SSE responses for the cloud gateway)
- *
- * What is NOT mocked:
- *   - handleRunAutofill() logic in content.ts (exercised directly)
- *   - makeEscalationDecision() from escalationEngine.ts
- *   - runAgentLoop() from agentLoop.ts
- *   - cdpDriver.ts (screenshot, read_dom paths — via mocked chrome.debugger)
- *
- * @vitest-environment jsdom
- */
-
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const chromeMock = vi.hoisted(() => {
@@ -432,17 +399,13 @@ describe('AGI_START_COMPUTER_USE background handler → runAgentLoop', () => {
   it('runAgentLoop emits progress events and returns final message', async () => {
     const progressSteps: string[] = [];
 
-    const result = await runAgentLoop(
-      'Complete the Greenhouse job application form.',
-      99, // tab ID — matches chromeMock.tabs.get mock
-      {
-        maxSteps: 10,
-        onProgress: (step) => {
-          progressSteps.push(step.kind);
-          void chrome.runtime.sendMessage({ type: 'AGI_CU_STEP', step });
-        },
+    const result = await runAgentLoop('Complete the Greenhouse job application form.', 99, {
+      maxSteps: 10,
+      onProgress: (step) => {
+        progressSteps.push(step.kind);
+        void chrome.runtime.sendMessage({ type: 'AGI_CU_STEP', step });
       },
-    );
+    });
 
     expect(result.finalMessage).toContain('completed');
     expect(result.cappedAtMaxSteps).toBe(false);

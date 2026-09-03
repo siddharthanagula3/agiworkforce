@@ -359,7 +359,7 @@ export const COMPUTER_USE_PANEL_CSS = `
     margin-bottom: 8px;
     /* Same content shape as .sp-cu-step-detail (tool args and URLs), so it needs
        the same guards. Without word-break an approval prompt for a long URL
-       pushed its own Allow/Skip buttons out of the card — the user could read
+       pushed its own Allow/Skip buttons out of the card, the user could read
        what they were approving OR press the button, not both. Capped and
        scrollable rather than clipped: an approval must stay fully readable. */
     white-space: pre-wrap;
@@ -480,7 +480,7 @@ export type PanelNoticeKind = AutofillOutcome | 'run_stopped';
 const BANNER_PRESENTATION: Record<PanelNoticeKind, { title: string; icon: string; style: string }> =
   {
     escalation: {
-      title: 'Autofill stalled — switching to computer use',
+      title: 'Autofill stalled, switching to computer use',
       icon: '\u{26A1}', // lightning bolt
       style: 'escalation',
     },
@@ -555,7 +555,6 @@ export interface ComputerUsePanelAPI {
   refreshAuthChip(): void;
   setRunState(running: boolean, runId?: string, generation?: number): void;
   ownsRun(runId: unknown): boolean;
-  /** Rearms the eviction watchdog — call for every lifecycle event of an owned run. */
   noteRunActivity(): void;
 }
 
@@ -826,7 +825,7 @@ export function buildComputerUsePanel(): ComputerUsePanelAPI {
         if (token) {
           authChip.className = 'sp-cu-auth-chip authed';
           authLabel.textContent = 'Signed in';
-          authChip.title = 'Cloud token present — agent can run.';
+          authChip.title = 'Cloud token present, agent can run.';
         } else {
           authChip.className = 'sp-cu-auth-chip unauthed';
           authLabel.textContent = 'Sign in required';

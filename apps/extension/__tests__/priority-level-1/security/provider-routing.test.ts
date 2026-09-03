@@ -1,4 +1,3 @@
-
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -60,7 +59,7 @@ describe('L1 Security - No silent cloud routing (source scan)', () => {
         if (UNLOCK_GUARD_RE.test(line)) return;
         for (const { re, label } of CLOUD_IPC_PATTERNS) {
           re.lastIndex = 0;
-          if (re.test(line)) offenders.push(`${file}:${idx + 1} — ${label}`);
+          if (re.test(line)) offenders.push(`${file}:${idx + 1}, ${label}`);
         }
       });
     }

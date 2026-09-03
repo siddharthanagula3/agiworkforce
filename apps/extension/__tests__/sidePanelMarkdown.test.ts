@@ -1,8 +1,7 @@
-
 import { describe, expect, it } from 'vitest';
 import { renderMarkdown } from '../src/features/side-panel/markdown';
 
-describe('renderMarkdown — link XSS prevention', () => {
+describe('renderMarkdown, link XSS prevention', () => {
   it('replaces javascript: URLs with #', () => {
     const input = '[click me](javascript:alert(1))';
     const output = renderMarkdown(input);

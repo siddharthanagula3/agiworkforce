@@ -8,7 +8,7 @@ import {
   validateBridgeUrl,
 } from '../src/background/policy';
 
-describe('validateBridgeUrl — localhost URLs pass validation', () => {
+describe('validateBridgeUrl, localhost URLs pass validation', () => {
   it('accepts http://localhost', () => {
     expect(validateBridgeUrl('http://localhost')).toBe('http://localhost');
   });
@@ -22,7 +22,7 @@ describe('validateBridgeUrl — localhost URLs pass validation', () => {
   });
 });
 
-describe('validateBridgeUrl — 127.0.0.1 URLs pass validation', () => {
+describe('validateBridgeUrl, 127.0.0.1 URLs pass validation', () => {
   it('accepts http://127.0.0.1', () => {
     expect(validateBridgeUrl('http://127.0.0.1')).toBe('http://127.0.0.1');
   });
@@ -32,7 +32,7 @@ describe('validateBridgeUrl — 127.0.0.1 URLs pass validation', () => {
   });
 });
 
-describe('validateBridgeUrl — [::1] URLs pass validation (H-03)', () => {
+describe('validateBridgeUrl, [::1] URLs pass validation (H-03)', () => {
   it('accepts http://[::1]', () => {
     expect(validateBridgeUrl('http://[::1]')).toBe('http://[::1]');
   });
@@ -47,7 +47,7 @@ describe('validateBridgeUrl — [::1] URLs pass validation (H-03)', () => {
   });
 });
 
-describe('validateBridgeUrl — 0.0.0.0 is REJECTED', () => {
+describe('validateBridgeUrl, 0.0.0.0 is REJECTED', () => {
   it('rejects http://0.0.0.0 (Linux LAN-routes; defeats loopback contract)', () => {
     expect(validateBridgeUrl('http://0.0.0.0')).toBeNull();
   });
@@ -61,7 +61,7 @@ describe('validateBridgeUrl — 0.0.0.0 is REJECTED', () => {
   });
 });
 
-describe('validateBridgeUrl — remote URLs are rejected', () => {
+describe('validateBridgeUrl, remote URLs are rejected', () => {
   it('rejects evil.com', () => {
     expect(validateBridgeUrl('http://evil.com')).toBeNull();
   });
@@ -79,7 +79,7 @@ describe('validateBridgeUrl — remote URLs are rejected', () => {
   });
 });
 
-describe('validateBridgeUrl — ws/wss schemes are normalized to http/https', () => {
+describe('validateBridgeUrl, ws/wss schemes are normalized to http/https', () => {
   it('normalizes ws://localhost to http://localhost', () => {
     expect(validateBridgeUrl('ws://localhost:8787')).toBe('http://localhost:8787');
   });
@@ -97,7 +97,7 @@ describe('validateBridgeUrl — ws/wss schemes are normalized to http/https', ()
   });
 });
 
-describe('validateBridgeUrl — invalid URLs return null', () => {
+describe('validateBridgeUrl, invalid URLs return null', () => {
   it('rejects an empty string', () => {
     expect(validateBridgeUrl('')).toBeNull();
   });
@@ -115,7 +115,7 @@ describe('validateBridgeUrl — invalid URLs return null', () => {
   });
 });
 
-describe('validateBridgeUrl — URLs with paths are preserved', () => {
+describe('validateBridgeUrl, URLs with paths are preserved', () => {
   it('preserves /api/v1 path', () => {
     expect(validateBridgeUrl('http://localhost:8787/api/v1')).toBe('http://localhost:8787/api/v1');
   });
@@ -127,7 +127,7 @@ describe('validateBridgeUrl — URLs with paths are preserved', () => {
   });
 });
 
-describe('validateBridgeUrl — trailing slashes are stripped', () => {
+describe('validateBridgeUrl, trailing slashes are stripped', () => {
   it('strips trailing slash from http://localhost:8787/', () => {
     expect(validateBridgeUrl('http://localhost:8787/')).toBe('http://localhost:8787');
   });
@@ -141,7 +141,7 @@ describe('validateBridgeUrl — trailing slashes are stripped', () => {
   });
 });
 
-describe('validateBridgeUrl — non-http schemes are rejected', () => {
+describe('validateBridgeUrl, non-http schemes are rejected', () => {
   it('rejects ftp://localhost', () => {
     expect(validateBridgeUrl('ftp://localhost')).toBeNull();
   });
@@ -159,7 +159,7 @@ describe('validateBridgeUrl — non-http schemes are rejected', () => {
   });
 });
 
-describe('validateBridgeUrl — non-localhost IPs are rejected', () => {
+describe('validateBridgeUrl, non-localhost IPs are rejected', () => {
   it('rejects 192.168.1.1 (private network)', () => {
     expect(validateBridgeUrl('http://192.168.1.1:8787')).toBeNull();
   });

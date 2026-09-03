@@ -119,7 +119,6 @@ const chromeMock = vi.hoisted(() => {
           return Promise.resolve();
         }),
       },
-      // No session storage in jsdom — getAuthToken falls through to local
     },
   };
 
@@ -255,7 +254,7 @@ import { InjectionDetectedError, runAgentLoop } from '../src/features/computer-u
 import { COMPUTER_USE_MODEL } from '../src/features/computer-use/cloudAgentClient';
 import { getRoutingSlotModel } from '@agiworkforce/types';
 
-describe('computer-use agent loop — one round-trip', () => {
+describe('computer-use agent loop, one round-trip', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     chromeMock.runtime.lastError = null;
@@ -360,7 +359,7 @@ describe('computer-use agent loop — one round-trip', () => {
     expect(result.history.length).toBeGreaterThan(2);
   });
 
-  it('respects onBeforeAction — skips the tool if the callback returns false', async () => {
+  it('respects onBeforeAction, skips the tool if the callback returns false', async () => {
     const onBeforeAction = vi.fn().mockResolvedValue(false);
 
     const result = await runAgentLoop('Read the page', 42, {
@@ -461,7 +460,7 @@ describe('computer-use agent loop — one round-trip', () => {
   });
 });
 
-describe('computer-use agent loop — prompt-injection abort covers every page-content read', () => {
+describe('computer-use agent loop, prompt-injection abort covers every page-content read', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     chromeMock.runtime.lastError = null;
@@ -547,7 +546,7 @@ describe('computer-use agent loop — prompt-injection abort covers every page-c
   });
 });
 
-describe('COMPUTER_USE_MODEL — sourced from models.json catalog', () => {
+describe('COMPUTER_USE_MODEL, sourced from models.json catalog', () => {
   it('is a non-empty string (not hardcoded, read from catalog)', () => {
     expect(typeof COMPUTER_USE_MODEL).toBe('string');
     expect(COMPUTER_USE_MODEL.length).toBeGreaterThan(0);

@@ -8,7 +8,7 @@ export const BROWSER_CONTROL_CONSENT_BODY =
   'Approving browser control lets AGI attach the Chrome DevTools Protocol debugger to this origin ' +
   'and click, type, navigate, read the page DOM, and take screenshots inside your signed-in ' +
   'session there. Chrome shows a debugging banner while a run is attached. Chrome will ask you ' +
-  'to grant site access for this origin — that grant is what makes the control possible, and you ' +
+  'to grant site access for this origin, that grant is what makes the control possible, and you ' +
   'can withdraw it from chrome://extensions at any time. Grant this only on sites you trust with ' +
   'that session, and remove the site to revoke it.';
 
@@ -59,14 +59,6 @@ function chromePermissions(): BrowserControlPermissions {
   };
 }
 
-/**
- * Whether Chrome itself has granted this extension host access to `origin`.
- *
- * `chrome.debugger.attach` takes a bare tab id and needs no host permission, so
- * without this check the only thing standing between the DevTools Protocol and
- * an arbitrary origin is a record in the extension's own storage — invisible to
- * Chrome, to chrome://extensions, and to a Web Store reviewer. Fails closed.
- */
 export async function hasBrowserControlHostPermission(
   origin: string,
   permissions: BrowserControlPermissions = chromePermissions(),
@@ -80,11 +72,6 @@ export async function hasBrowserControlHostPermission(
   }
 }
 
-/**
- * Asks Chrome for host access to `origin`. Must be called from a foreground
- * extension page inside a user gesture, and must be the first await in that
- * handler — an earlier await spends the gesture and Chrome refuses.
- */
 export async function requestBrowserControlHostPermission(
   origin: string,
   permissions: BrowserControlPermissions = chromePermissions(),

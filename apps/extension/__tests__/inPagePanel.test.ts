@@ -1,15 +1,3 @@
-/**
- * Tests for the in-page chat overlay modules.
- *
- * Covers:
- *   - getPageActions(url) — YouTube, GitHub PR, generic
- *   - truncatePageText() — truncation + whitespace collapsing
- *   - launcher position persist (savePosition / loadPosition)
- *   - isPanelEnabled() — default true, toggled false
- *
- * @vitest-environment jsdom
- */
-
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 
 const mockStorageData: Record<string, unknown> = {};

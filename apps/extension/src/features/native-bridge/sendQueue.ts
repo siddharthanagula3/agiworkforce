@@ -1,4 +1,3 @@
-
 import { createMessageQueue, type MessageQueue } from '@agiworkforce/client-runtime';
 import type { QueuedCommand } from '@agiworkforce/client-runtime';
 
@@ -20,7 +19,7 @@ function bootstrapCache(): void {
       }
     });
   } catch {
-    // chrome.storage unavailable — operate purely in-memory.
+    /* noop */
   }
 }
 bootstrapCache();
@@ -37,7 +36,7 @@ export function getExtensionSendQueue(): MessageQueue {
         try {
           chrome.storage.local.set({ [STORAGE_KEY]: JSON.stringify(commands) });
         } catch {
-          // swallow — extension still works with volatile queue
+          /* noop */
         }
       },
     },

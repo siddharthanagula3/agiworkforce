@@ -199,7 +199,7 @@ export async function getAuthToken(forceRefresh = false): Promise<string | null>
         if (typeof token === 'string' && token.length > 0) return token;
       }
     } catch {
-      // unavailable in test environments — fall through
+      /* noop */
     }
   }
 
@@ -600,14 +600,6 @@ function parseSseData(dataPayload: string): ParsedSseFrame {
           'x_code_result',
           'x_agent_event',
         ];
-        // An `x_`-prefixed key is a vendor extension: newer server, older
-        // client. Treating an unknown one as a protocol error made every new
-        // server field a hard failure in every shipped extension — observed as
-        // "Malformed response from AGI Cloud." mid-run once the server began
-        // emitting x_agiwork_plan, x_research_plan, x_research_status,
-        // x_interactive_cards, x_tool_input_request, x_agi_workforce and
-        // x_stream_error, none of which this allowlist had. Unknown extension
-        // fields are recognized and ignored; only a MALFORMED frame is an error.
         recognized =
           consumedDeltaKeys.some((key) => key in deltaRecord) ||
           Object.keys(deltaRecord).some((key) => key.startsWith('x_'));

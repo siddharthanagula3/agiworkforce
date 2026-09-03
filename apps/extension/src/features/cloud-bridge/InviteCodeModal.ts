@@ -9,9 +9,9 @@ function friendlyInviteError(code?: InviteCodeError): string {
     case 'invalid_code':
       return "That code doesn't look right. Double-check and try again.";
     case 'expired':
-      return "That code has expired. You can still use AGI Cloud — just sign in; it's open in public alpha.";
+      return "That code has expired. You can still use AGI Cloud, just sign in; it's open in public alpha.";
     case 'fully_redeemed':
-      return "That code is fully redeemed. You can still use AGI Cloud — just sign in; it's open in public alpha.";
+      return "That code is fully redeemed. You can still use AGI Cloud, just sign in; it's open in public alpha.";
     case 'already_redeemed_by_user':
       return "You've already redeemed this code.";
     case 'anon_signin_failed':
@@ -296,7 +296,7 @@ function buildModalDOM(shadow: ShadowRoot): ModalElements {
   const desc = document.createElement('p');
   desc.className = 'agi-modal-desc';
   desc.textContent =
-    'AGI Cloud is in public alpha — sign in to start using it, no invite needed. Have a ' +
+    'AGI Cloud is in public alpha, sign in to start using it, no invite needed. Have a ' +
     'promo or invite code? Redeem it below for plan credits. You can also get product ' +
     'updates by email.';
 
@@ -402,7 +402,7 @@ function buildModalDOM(shadow: ShadowRoot): ModalElements {
   const inviteSwitchRow = document.createElement('p');
   inviteSwitchRow.className = 'agi-switch-link';
   inviteSwitchRow.appendChild(
-    document.createTextNode('No code needed for AGI Cloud — just sign in. '),
+    document.createTextNode('No code needed for AGI Cloud, just sign in. '),
   );
 
   const inviteSwitchBtn = document.createElement('button');
@@ -491,7 +491,7 @@ function buildModalDOM(shadow: ShadowRoot): ModalElements {
   const privacyNote = document.createElement('p');
   privacyNote.className = 'agi-switch-link';
   privacyNote.textContent =
-    'Optional — AGI Cloud is already open in public alpha. Email used only for product updates.';
+    'Optional, AGI Cloud is already open in public alpha. Email used only for product updates.';
 
   waitlistFormFields.appendChild(emailFormGroup);
   waitlistFormFields.appendChild(nameFormGroup);

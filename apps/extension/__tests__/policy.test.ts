@@ -19,7 +19,7 @@ import {
   validateShortcutActions,
 } from '../src/background/policy';
 
-describe('policy — WebMCP native metadata boundary', () => {
+describe('policy, WebMCP native metadata boundary', () => {
   it('returns a bounded clone and uses the sender tab as the URL authority', () => {
     const normalized = normalizeWebMCPToolsUpdate(
       [
@@ -87,7 +87,7 @@ describe('policy — WebMCP native metadata boundary', () => {
   });
 });
 
-describe('policy — EXTENSION_PAGE_ONLY_MESSAGE_TYPES', () => {
+describe('policy, EXTENSION_PAGE_ONLY_MESSAGE_TYPES', () => {
   it('includes all task and shortcut creation/mutation types', () => {
     for (const t of [
       'CREATE_SCHEDULED_TASK',
@@ -131,7 +131,7 @@ describe('policy — EXTENSION_PAGE_ONLY_MESSAGE_TYPES', () => {
   });
 });
 
-describe('policy — trusted extension page senders', () => {
+describe('policy, trusted extension page senders', () => {
   const extensionOrigin = 'chrome-extension://abcdefghijklmnopabcdefghijklmnop';
   const extensionId = 'abcdefghijklmnopabcdefghijklmnop';
 
@@ -233,7 +233,7 @@ describe('policy — trusted extension page senders', () => {
   });
 });
 
-describe('policy — DOM_MUTATION_MESSAGE_TYPES', () => {
+describe('policy, DOM_MUTATION_MESSAGE_TYPES', () => {
   it('contains every type a content-script handler writes the DOM for', () => {
     for (const t of [
       'TYPE',
@@ -257,13 +257,13 @@ describe('policy — DOM_MUTATION_MESSAGE_TYPES', () => {
   });
 });
 
-describe('policy — DISCOVERY_MESSAGE_TYPES (H-1)', () => {
-  it('is empty — no types bypass the allowlist gate', () => {
+describe('policy, DISCOVERY_MESSAGE_TYPES (H-1)', () => {
+  it('is empty, no types bypass the allowlist gate', () => {
     expect(DISCOVERY_MESSAGE_TYPES.size).toBe(0);
   });
 });
 
-describe('policy — validateBridgeUrl', () => {
+describe('policy, validateBridgeUrl', () => {
   it('accepts localhost variants', () => {
     expect(validateBridgeUrl('http://localhost:8787')).toBe('http://localhost:8787');
     expect(validateBridgeUrl('https://localhost')).toBe('https://localhost');
@@ -307,14 +307,14 @@ describe('policy — validateBridgeUrl', () => {
   });
 });
 
-describe('policy — DEFAULT_AGI_BRIDGE_URL', () => {
+describe('policy, DEFAULT_AGI_BRIDGE_URL', () => {
   it('is a localhost URL on the canonical port', () => {
     expect(DEFAULT_AGI_BRIDGE_URL).toBe('http://localhost:8787');
     expect(validateBridgeUrl(DEFAULT_AGI_BRIDGE_URL)).toBe(DEFAULT_AGI_BRIDGE_URL);
   });
 });
 
-describe('policy — validateShortcutActions', () => {
+describe('policy, validateShortcutActions', () => {
   it('accepts a simple click + type plan', () => {
     expect(
       validateShortcutActions([
@@ -380,7 +380,7 @@ describe('policy — validateShortcutActions', () => {
   });
 });
 
-describe('policy — generateRecordId (M-04)', () => {
+describe('policy, generateRecordId (M-04)', () => {
   it('returns a string with the given prefix', () => {
     expect(generateRecordId('task')).toMatch(/^task_\d+_[0-9a-f]{12}$/);
     expect(generateRecordId('sc')).toMatch(/^sc_\d+_[0-9a-f]{12}$/);
@@ -401,14 +401,14 @@ describe('policy — generateRecordId (M-04)', () => {
   });
 });
 
-describe('policy — ORIGIN_EXTENSION_PAGE sentinel', () => {
+describe('policy, ORIGIN_EXTENSION_PAGE sentinel', () => {
   it('is a non-URL string so it cannot collide with real origins', () => {
     expect(ORIGIN_EXTENSION_PAGE).toBe('__extension_page__');
     expect(() => new URL(ORIGIN_EXTENSION_PAGE)).toThrow();
   });
 });
 
-describe('policy — MESSAGE_POLICY matrix (Arch #1 audit 2026-05-19)', () => {
+describe('policy, MESSAGE_POLICY matrix (Arch #1 audit 2026-05-19)', () => {
   it('every extension-page-only type has a policy entry with the right senderClass', () => {
     for (const t of EXTENSION_PAGE_ONLY_MESSAGE_TYPES) {
       expect(MESSAGE_POLICY[t]?.senderClass).toBe('extension-page-only');

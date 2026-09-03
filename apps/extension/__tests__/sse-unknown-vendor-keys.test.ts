@@ -97,8 +97,6 @@ describe('unknown vendor delta keys are ignored, not fatal', () => {
   });
 
   it('still rejects a frame that is genuinely malformed', async () => {
-    // A delta carrying no recognisable key at all is not an extension field —
-    // it is a broken frame, and must stay an error.
     vi.stubGlobal(
       'fetch',
       vi.fn(async () =>

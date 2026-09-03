@@ -466,7 +466,7 @@ describe('clearAuthToken', () => {
   });
 });
 
-describe('streamFreeChat — network failure', () => {
+describe('streamFreeChat, network failure', () => {
   it('yields server_error on network exception', async () => {
     fetchMock.mockRejectedValueOnce(new Error('Failed to fetch'));
     const chunks = await collectChunks(streamFreeChat(SAMPLE_MESSAGES, 'token'));
@@ -487,7 +487,7 @@ describe('streamFreeChat — network failure', () => {
   });
 });
 
-describe('streamFreeChat — auth and quota errors', () => {
+describe('streamFreeChat, auth and quota errors', () => {
   it('yields auth_required on 401 without clearing ambient auth in the transport', async () => {
     chromeMock._sessionStore['agi_clerk_session_token'] = 'bad-token';
     fetchMock.mockResolvedValueOnce(makeErrorResponse(401, 'Unauthorized'));
@@ -546,7 +546,7 @@ describe('streamFreeChat — auth and quota errors', () => {
   });
 });
 
-describe('streamFreeChat — 5xx server error', () => {
+describe('streamFreeChat, 5xx server error', () => {
   it('yields server_error on 500 response', async () => {
     fetchMock.mockResolvedValueOnce(makeErrorResponse(500, 'Internal Server Error'));
     const chunks = await collectChunks(streamFreeChat(SAMPLE_MESSAGES, 'token'));
@@ -560,7 +560,7 @@ describe('streamFreeChat — 5xx server error', () => {
   });
 });
 
-describe('streamFreeChat — SSE happy path', () => {
+describe('streamFreeChat, SSE happy path', () => {
   it('yields text chunks and a done chunk on successful stream', async () => {
     const sseLines = [
       JSON.stringify({ choices: [{ delta: { content: 'Hello' }, finish_reason: null }] }),
@@ -844,7 +844,7 @@ describe('streamFreeChat — SSE happy path', () => {
   });
 });
 
-describe('streamFreeChat — input truncation', () => {
+describe('streamFreeChat, input truncation', () => {
   it('truncates message content exceeding MANAGED_CHAT_MAX_INPUT_CHARS', async () => {
     const longContent = 'x'.repeat(40_000);
     const messages: FreeTrialMessage[] = [{ role: 'user', content: longContent }];
@@ -930,7 +930,7 @@ describe('managed-cloud attachment payloads', () => {
   });
 });
 
-describe('streamFreeChat — inline stream error', () => {
+describe('streamFreeChat, inline stream error', () => {
   it('yields quota_exceeded on inline stream error with limit_reached code', async () => {
     const sseLines = [
       JSON.stringify({
@@ -1010,7 +1010,7 @@ describe('streamFreeChat — inline stream error', () => {
   });
 });
 
-describe('streamFreeChat — abort signal', () => {
+describe('streamFreeChat, abort signal', () => {
   it('yields cancelled without issuing a fetch when the signal is already aborted', async () => {
     const controller = new AbortController();
     controller.abort();
@@ -1084,7 +1084,7 @@ describe('streamFreeChat — abort signal', () => {
   });
 });
 
-describe('streamFreeChat — stream ends without finish_reason', () => {
+describe('streamFreeChat, stream ends without finish_reason', () => {
   it('fails closed and does not increment when a stream closes after partial text', async () => {
     const sseLines = [
       JSON.stringify({ choices: [{ delta: { content: 'hello' }, finish_reason: null }] }),
@@ -1111,7 +1111,7 @@ describe('streamFreeChat — stream ends without finish_reason', () => {
   });
 });
 
-describe('streamFreeChat — model routing', () => {
+describe('streamFreeChat, model routing', () => {
   it('sends the concrete routed model supplied by the caller', async () => {
     const sseLines = [
       JSON.stringify({ choices: [{ delta: { content: 'ok' }, finish_reason: 'stop' }] }),

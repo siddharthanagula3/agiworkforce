@@ -481,7 +481,7 @@
   },
 
   "spContextBtnAttached": {
-    "message": "Page context attached — click to detach",
+    "message": "Page context attached, click to detach",
     "description": "Composer page-context button tooltip while the page is attached"
   },
   "spContextBtnAttach": {
@@ -525,7 +525,7 @@
     "description": "First-run onboarding primary button on the final step"
   },
   "spOnboardingContinueAria": {
-    "message": "Continue — step $STEP$ of $TOTAL$",
+    "message": "Continue, step $STEP$ of $TOTAL$",
     "description": "First-run onboarding primary button accessible name on a non-final step",
     "placeholders": {
       "step": { "content": "$1", "example": "2" },

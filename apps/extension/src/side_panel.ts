@@ -1105,13 +1105,6 @@ function injectStyles(): void {
       border: 1px solid color-mix(in srgb, var(--agi-ext-accent) 30%, transparent);
       border-radius: 4px;
       padding: 1px 6px;
-      /*
-       * A Chrome side panel is ~320-500px and cannot be widened. Model ids run
-       * long (catalog model IDs, "mcp"-namespaced routes), and with only
-       * white-space:nowrap this badge held its full intrinsic width and pushed
-       * #sp-header-right — which is flex-shrink:0 — off the panel edge, taking
-       * the header icon buttons with it. Truncate here so the actions survive.
-       */
       white-space: nowrap;
       min-width: 0;
       max-width: 150px;
@@ -1156,7 +1149,6 @@ function injectStyles(): void {
     #sp-messages::-webkit-scrollbar-track { background: transparent; }
     #sp-messages::-webkit-scrollbar-thumb { background: var(--agi-ext-border); border-radius: 4px; }
 
-    /* ── Empty state — Claude-style calm centered ── */
     #sp-empty {
       display: flex;
       flex-direction: column;
@@ -1586,7 +1578,6 @@ function injectStyles(): void {
     .tool-call--error .tool-call__icon { color: var(--agi-ext-danger); }
     .tool-call--success .tool-call__icon { color: var(--agi-ext-success); }
 
-    /* Canonical engine activity — inline, collapsed by default, progressively expandable. */
     .sp-agent-activity {
       width: min(100%, 420px);
       color: var(--agi-ext-text-muted);
@@ -2142,15 +2133,6 @@ function injectStyles(): void {
       overflow: hidden;
     }
     .sp-context-chip {
-      /*
-       * inline-block, NOT inline-flex. The chip's text is written straight onto
-       * the element (contextBtn.textContent = hostname), and text-overflow does
-       * not apply to the anonymous text of a flex container — so a long hostname
-       * was hard-clipped mid-character instead of ellipsising. Nothing else is
-       * ever appended here, so there is no flex layout to preserve.
-       * flex-shrink lets it yield to the Quick toggle beside it rather than
-       * pushing that control off the panel.
-       */
       display: inline-block;
       vertical-align: middle;
       background: var(--agi-ext-overlay);
@@ -2190,7 +2172,7 @@ function injectStyles(): void {
     .sp-context-chip.loading { opacity: 0.6; cursor: wait; }
 
     /* Autonomy chip (EXT-11). Reads the same agi_cu_ask_before_acting pref the
-       background's authoritative gate reads — it reports that gate, it does not
+       background's authoritative gate reads, it reports that gate, it does not
        own it. Amber for the permissive state, matching how the reference
        products surface a permission mode: the risky setting is the one that
        gets the warning colour, not the safe one. */
@@ -2347,7 +2329,6 @@ function injectStyles(): void {
       line-height: 1.35;
     }
 
-    /* ── Settings bar (Phase 3: removed — bridge URL now in drawer) ── */
 
     /* ── Auth bar ── */
     #sp-auth-bar {
@@ -2467,7 +2448,6 @@ function injectStyles(): void {
     #sp-bridge-notice-reconnect:hover {
       background: color-mix(in srgb, var(--agi-ext-danger) 12%, transparent);
     }
-    /* Model picker dims when bridge is offline — selection is persisted but has no
        immediate effect until the desktop bridge is connected. */
     .sp-model-selector-wrap.bridge-offline #sp-model-selector-btn {
       opacity: 0.45;
@@ -2687,7 +2667,6 @@ function injectStyles(): void {
       white-space: nowrap;
     }
 
-    /* "Best (auto)" option — visually distinct row */
     .sp-model-option-auto {
       border-bottom: 1px solid var(--agi-ext-border);
       margin-bottom: 4px;
@@ -2991,7 +2970,7 @@ function injectStyles(): void {
     /* History sub-list inside the drawer.
        CSP note (style-src 'self'): these rules used to be applied via
        element.style.cssText at runtime, which Chrome blocks on extension
-       pages with a strict style-src — keep them here in the stylesheet. */
+       pages with a strict style-src, keep them here in the stylesheet. */
     #sp-drawer-history-list {
       margin-top: 6px;
       display: flex;
@@ -3318,7 +3297,7 @@ function injectStyles(): void {
       border-radius: 50%;
       background: #ffffff;
       /* Definition ring. The OFF track is --agi-ext-hover, which is #f0f0f0 in
-         the light theme — a plain white knob on it was ~1.05:1 and the OFF
+         the light theme, a plain white knob on it was ~1.05:1 and the OFF
          state read as an empty pill. An outset ring costs no layout and
          reads on both grounds. */
       box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.28), 0 1px 2px rgba(0, 0, 0, 0.28);
@@ -3582,7 +3561,6 @@ function injectStyles(): void {
       white-space: nowrap;
       cursor: pointer;
       transition: opacity 0.15s;
-      /* Now a <button> for keyboard access — reset the UA chrome so it still
          renders as a badge. */
       border: none;
       background: none;
@@ -4393,11 +4371,6 @@ function updateStreamingBubble(id: string, fullText: string, done: boolean): voi
 
 const PAGE_CONTEXT_MAX_CHARS = 5_000;
 
-/**
- * Why a capture failed, in words the user can act on. `chrome.scripting`
- * needs a host permission or a live activeTab grant, and the side panel
- * outlives tab switches — so denial is the ordinary case, not an edge one.
- */
 const PAGE_CONTEXT_DENIED_REASON =
   'Chrome would not let the extension read this page. Add this site under Approved sites in the ' +
   'extension options, reload the page, and try again.';
@@ -4488,7 +4461,7 @@ const SLASH_COMMANDS: Record<string, SlashCommandMeta> = {
     prompt:
       'Translate the main content of this page to English. If already in English, translate to Spanish.',
     captureContext: true,
-    hint: 'Translate the page — add a language to choose',
+    hint: 'Translate the page, add a language to choose',
   },
   '/extract': {
     display: '/extract',
@@ -5296,7 +5269,7 @@ function refreshPageHostname(): void {
       refreshTabGroupUI();
     });
   } catch {
-    // chrome.tabs unavailable in test/SSR environment — ignore
+    /* noop */
   }
 }
 
@@ -5373,7 +5346,7 @@ function buildOnboardingOverlay(onComplete: () => void): void {
     id: 'sp-onboarding-overlay',
     role: 'dialog',
     'aria-modal': 'true',
-    'aria-label': 'Welcome to AGI — first-time setup',
+    'aria-label': 'Welcome to AGI, first-time setup',
     'aria-hidden': 'true',
     inert: '',
   });
@@ -5578,7 +5551,7 @@ function buildOnboardingOverlay(onComplete: () => void): void {
   );
   const nextBtn = el(
     'button',
-    { class: 'sp-ob-btn-next', 'aria-label': 'Continue — step 1 of 5' },
+    { class: 'sp-ob-btn-next', 'aria-label': 'Continue, step 1 of 5' },
     'I understand',
   );
   navRow.appendChild(backBtn);
@@ -6298,7 +6271,7 @@ function buildUI(): void {
       return "AGI isn't running on this page yet. Reload the tab, then try again.";
     }
     if (/Cannot access|extension manifest|chrome:\/\/|blocked by the extension/i.test(message)) {
-      return "AGI can't run on this page. Chrome blocks extensions on its own pages and on the Web Store — open an ordinary site and try again.";
+      return "AGI can't run on this page. Chrome blocks extensions on its own pages and on the Web Store, open an ordinary site and try again.";
     }
     if (/The tab was closed|No tab with id/i.test(message)) {
       return 'That tab was closed before the action finished.';
@@ -7004,7 +6977,7 @@ function buildUI(): void {
       class: 'sp-drawer-allowlist-origin',
       id: 'sp-drawer-allowlist-origin',
     },
-    '—',
+    ', ',
   );
   const allowlistToggleBtn = el(
     'button',
@@ -7394,10 +7367,6 @@ function buildUI(): void {
 
   function drawerSaveBridgeUrl(): void {
     const raw = (drawerBridgeInput as HTMLInputElement).value.trim();
-    // What gets stored, broadcast and shown is the normalized form, never the
-    // raw text. Pairing hands this straight to fetch(), which cannot use a ws:
-    // scheme — so persisting what the user typed made the placeholder itself an
-    // unusable value.
     let persisted = '';
     if (!raw) {
       chrome.storage.local.remove('agi_bridge_url');
@@ -7590,7 +7559,7 @@ function buildUI(): void {
     id: 'sp-quota-badge',
     type: 'button',
     title: 'AGI Cloud plan',
-    'aria-label': 'AGI Cloud plan and usage — open menu',
+    'aria-label': 'AGI Cloud plan and usage, open menu',
   });
   quotaBadgeEl.addEventListener('click', () => {
     openDrawer(quotaBadgeEl);
@@ -7883,7 +7852,11 @@ function buildUI(): void {
 
   const aboutRow = el('div', { class: 'sp-drawer-about-row' });
   aboutRow.appendChild(el('span', {}, `v${chrome.runtime.getManifest().version}`));
-  const aboutUrlSpan = el('span', { class: 'sp-drawer-about-url', id: 'sp-drawer-about-url' }, '—');
+  const aboutUrlSpan = el(
+    'span',
+    { class: 'sp-drawer-about-url', id: 'sp-drawer-about-url' },
+    ', ',
+  );
   aboutRow.appendChild(aboutUrlSpan);
   drawerFooter.appendChild(aboutRow);
   drawer.appendChild(drawerFooter);
@@ -9196,7 +9169,7 @@ function buildUI(): void {
 
   const sendBtn = el('button', {
     id: 'sp-send-btn',
-    title: 'Send (Enter — Shift+Enter for a new line)',
+    title: 'Send (Enter, Shift+Enter for a new line)',
     'aria-label': 'Send message',
     'data-mode': 'send',
   });
@@ -9876,7 +9849,7 @@ function refreshShortcuts(): void {
             }
             const recActions = recResponse.actions ?? [];
             if (recActions.length === 0) {
-              setStatus('Nothing recorded yet — start a recording first.', 'error');
+              setStatus('Nothing recorded yet, start a recording first.', 'error');
               return;
             }
             chrome.runtime.sendMessage(

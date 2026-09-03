@@ -1,5 +1,5 @@
 /*
- * options.css — minimal static reset for the options page.
+ * options.css, minimal static reset for the options page.
  * Most styles are injected at runtime via Constructable Stylesheets
  * (options.ts:injectStyles) using getExtensionTokensCss from tokens.ts.
  */

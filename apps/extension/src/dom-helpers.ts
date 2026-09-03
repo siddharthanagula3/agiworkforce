@@ -1,4 +1,3 @@
-
 export function setText(el: Element, text: string): void {
   el.textContent = text;
 }
@@ -53,6 +52,6 @@ export function appendSvgString(parent: Element, svgString: string): void {
       parent.appendChild(document.importNode(root, true));
     }
   } catch {
-    // Malformed SVG — render nothing rather than fall back to innerHTML.
+    /* noop */
   }
 }

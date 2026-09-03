@@ -13,12 +13,6 @@ const EXTENSIONS = new Set(['.ts', '.tsx', '.html', '.css']);
 // recursion's result; a guard that can pass on nothing is worse than no guard.
 const MIN_SCANNED_FILES = 20;
 
-/**
- * Files that still carry raw colour literals, with the exact number each is
- * allowed. A new literal in a listed file, or any literal in an unlisted file,
- * fails. Removing one fails too, with the number to lower it to — so the debt
- * can only ever shrink.
- */
 const KNOWN_VIOLATIONS = {
   'src/content.ts': 6,
   'src/features/cloud-bridge/InviteCodeModal.ts': 4,
@@ -49,8 +43,6 @@ const EXEMPT_LINE_RE = [
   /<meta[^>]+content/, // any <meta> with content attribute (covers theme-color meta)
 ];
 
-// A literal used as the fallback arm of a design token — var(--token, #hex) —
-// is the token being used correctly, not a bypass of it.
 const TOKEN_FALLBACK_RE = /var\(\s*--[\w-]+\s*,[^)]*\)/g;
 
 function stripTokenFallbacks(line) {
@@ -93,7 +85,7 @@ for (const file of files) {
         foundPerFile.set(relPath, (foundPerFile.get(relPath) ?? 0) + 1);
         if (!Object.hasOwn(KNOWN_VIOLATIONS, relPath)) {
           failures.push(
-            `[AP-02] ${relPath}:${idx + 1} — ${label} literal \`${match}\` found. ` +
+            `[AP-02] ${relPath}:${idx + 1}, ${label} literal \`${match}\` found. ` +
               `Use a var(--agi-ext-*) design token instead.`,
           );
         }
@@ -105,7 +97,7 @@ for (const file of files) {
 if (files.length < MIN_SCANNED_FILES) {
   console.error(
     `[AP-02] scanned only ${files.length} file(s), expected at least ${MIN_SCANNED_FILES}. ` +
-      'The file walker is broken — this guard is not checking anything.',
+      'The file walker is broken, this guard is not checking anything.',
   );
   process.exit(1);
 }
@@ -114,12 +106,12 @@ for (const [relPath, allowed] of Object.entries(KNOWN_VIOLATIONS)) {
   const found = foundPerFile.get(relPath) ?? 0;
   if (found > allowed) {
     failures.push(
-      `[AP-02] ${relPath} — ${found} colour literal(s), ${allowed} allowed. ` +
+      `[AP-02] ${relPath}, ${found} colour literal(s), ${allowed} allowed. ` +
         'Use a var(--agi-ext-*) design token for the new one.',
     );
   } else if (found < allowed) {
     failures.push(
-      `[AP-02] ${relPath} — ${found} colour literal(s) remain but ${allowed} are allowed. ` +
+      `[AP-02] ${relPath}, ${found} colour literal(s) remain but ${allowed} are allowed. ` +
         `Lower KNOWN_VIOLATIONS['${relPath}'] to ${found} so the debt cannot grow back.`,
     );
   }

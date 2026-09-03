@@ -1,17 +1,3 @@
-/**
- * PA-4 regression: the extension's managed-cloud surface must present AGI Cloud
- * as PUBLIC ALPHA / open-by-default, not invite/waitlist-only or env-gated.
- *
- * Covers:
- *   (a) cloudAgentClient.callCloud — a 403 from the managed-compute gate no longer
- *       claims the operator must set AGI_MANAGED_COMPUTE_PRIVATE_BETA=1; it reflects
- *       the kill-switch / paid-tier truth.
- *   (b) InviteCodeModal — default copy no longer presents managed cloud as
- *       invite/waitlist-only; it is sign-in-centric public-alpha copy.
- *
- * @vitest-environment jsdom
- */
-
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const chromeMock = vi.hoisted(() => {

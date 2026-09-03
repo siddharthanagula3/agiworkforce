@@ -94,4 +94,4 @@ for (const { id, simpleId, color, letter, shape } of PROVIDER_ICONS) {
   }
 }
 
-console.log(`\nDone: ${copied} copied, ${generated} generated — ${PROVIDER_ICONS.length} total`);
+console.log(`\nDone: ${copied} copied, ${generated} generated, ${PROVIDER_ICONS.length} total`);
