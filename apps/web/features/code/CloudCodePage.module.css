@@ -394,6 +394,17 @@
   font-size: 12px;
 }
 
+.commitRow {
+  display: flex;
+  gap: 8px;
+  padding: 10px 15px;
+  border-bottom: 1px solid var(--chat-border);
+}
+
+.commitRow .input {
+  flex: 1;
+}
+
 .statusDot {
   display: inline-block;
   width: 7px;
