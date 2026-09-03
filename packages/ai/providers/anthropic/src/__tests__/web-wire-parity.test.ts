@@ -170,6 +170,16 @@ describe('web v1 wire parity · streaming', () => {
         model: ANTHROPIC_PREMIUM_MODEL_ID,
       },
       {
+        choices: [{ delta: {}, index: 0 }],
+        model: ANTHROPIC_PREMIUM_MODEL_ID,
+        usage: {
+          prompt_tokens: 500,
+          completion_tokens: 42,
+          total_tokens: 542,
+          prompt_tokens_details: { cached_tokens: 100 },
+        },
+      },
+      {
         choices: [{ delta: {}, finish_reason: 'tool_calls', index: 0 }],
         model: ANTHROPIC_PREMIUM_MODEL_ID,
       },
@@ -222,6 +232,11 @@ describe('web v1 wire parity · streaming', () => {
       {
         choices: [{ delta: { content: ' are mammals' }, index: 0 }],
         model: ANTHROPIC_PREMIUM_MODEL_ID,
+      },
+      {
+        choices: [{ delta: {}, index: 0 }],
+        model: ANTHROPIC_PREMIUM_MODEL_ID,
+        usage: { prompt_tokens: 0, completion_tokens: 5, total_tokens: 5 },
       },
       {
         choices: [{ delta: {}, finish_reason: 'stop', index: 0 }],
