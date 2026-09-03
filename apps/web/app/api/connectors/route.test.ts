@@ -1,6 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
-import { isSelfServiceConnector } from '@/lib/connectors/mcp-endpoints';
+import {
+  connectorIdsWithMcpEndpoint,
+  isSelfServiceConnector,
+} from '@/lib/connectors/mcp-endpoints';
 
 const mocks = vi.hoisted(() => ({
   query: vi.fn(),
@@ -188,6 +191,29 @@ describe('/api/connectors managed-cloud capability boundary', () => {
       connectorId: 'github',
       installStartPath: '/api/github/install/start',
     });
+  });
+
+  it('advertises every self-service MCP connector without any operator OAuth app', async () => {
+    const selfServiceIds = connectorIdsWithMcpEndpoint().filter((id) => isSelfServiceConnector(id));
+    expect(selfServiceIds.length).toBeGreaterThan(0);
+
+    const response = await GET(getRequest());
+    const body = (await response.json()) as { available: string[] };
+
+    for (const id of selfServiceIds) expect(body.available).toContain(id);
+  });
+
+  it('keeps a preregistered MCP connector unavailable until an operator configures its OAuth app', async () => {
+    mocks.operatorIds = new Set<string>();
+    const preregisteredIds = connectorIdsWithMcpEndpoint().filter(
+      (id) => !isSelfServiceConnector(id),
+    );
+    expect(preregisteredIds.length).toBeGreaterThan(0);
+
+    const response = await GET(getRequest());
+    const body = (await response.json()) as { available: string[] };
+
+    for (const id of preregisteredIds) expect(body.available).not.toContain(id);
   });
 
   it('advertises a provider as soon as an operator registers its OAuth app', async () => {
