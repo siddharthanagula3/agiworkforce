@@ -1,14 +1,3 @@
-/**
- * Cancelling a pending account deletion, end to end through the real
- * useAccountDeletionStatus / useCancelAccountDeletion hooks (not stubs) —
- * matching how AccountSection.delete.test.tsx exercises useDeleteAccount for
- * real. Pins: the pending state renders with its deadline, the cancel
- * control is wired to POST /api/user/delete-account/cancel behind the app's
- * confirm-dialog pattern, a successful cancel restores the normal
- * delete-account UI without a manual page refresh, and a failed cancel
- * surfaces an honest error while leaving the account still scheduled.
- */
-
 import { fireEvent, render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';

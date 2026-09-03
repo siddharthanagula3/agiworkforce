@@ -92,7 +92,7 @@ async function drain(gen: AsyncGenerator<Uint8Array>): Promise<string> {
   return out;
 }
 
-describe('runToolLoop — cancellation reaches connector tools', () => {
+describe('runToolLoop, cancellation reaches connector tools', () => {
   beforeEach(() => {
     // The executor options are asserted exactly, so pin the `input_required`
     // kill-switch to its default-off state instead of inheriting the ambient env.

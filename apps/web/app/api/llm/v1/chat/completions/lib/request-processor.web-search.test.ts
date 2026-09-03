@@ -232,7 +232,7 @@ describe('getWorkModeEntitlementError', () => {
   });
 });
 
-describe('free-trial capability gate — model-agnostic web search', () => {
+describe('free-trial capability gate, model-agnostic web search', () => {
   const freeSubscription = {
     id: 'sub-free',
     user_id: 'user-free',
@@ -385,7 +385,7 @@ describe('free-trial capability gate — model-agnostic web search', () => {
       );
       expect(
         supported.length,
-        `no Free model supports ${cap} — the composer offers a dead end`,
+        `no Free model supports ${cap}, the composer offers a dead end`,
       ).toBeGreaterThan(0);
     }
   });
@@ -445,7 +445,7 @@ describe('appendWebSearchTool', () => {
   });
 
   it.each(['xai', 'qwen', 'moonshot', 'deepseek', 'perplexity'])(
-    'does NOT inject a tool for %s (no native path on this route — WP4 generic tool covers it)',
+    'does NOT inject a tool for %s (no native path on this route, WP4 generic tool covers it)',
     (provider) => {
       const existing = [{ type: 'function', function: { name: 'x' } }];
       expect(appendWebSearchTool(provider, existing, caps)).toEqual(existing);
@@ -536,7 +536,7 @@ describe('shouldOfferGenericWebSearchTool', () => {
   );
 
   it.each(['anthropic', 'google', 'openai', 'perplexity', 'managed_cloud'])(
-    'is false for %s — native/resolved path already covers it, no fallback needed',
+    'is false for %s, native/resolved path already covers it, no fallback needed',
     (providerLower) => {
       expect(shouldOfferGenericWebSearchTool({ ...baseArgs, providerLower })).toBe(false);
     },
@@ -546,7 +546,7 @@ describe('shouldOfferGenericWebSearchTool', () => {
     expect(shouldOfferGenericWebSearchTool({ ...baseArgs, toolsCapable: false })).toBe(false);
   });
 
-  it('is false on a non-streaming request (offer ⊆ run — only streaming enters the tool loop)', () => {
+  it('is false on a non-streaming request (offer ⊆ run, only streaming enters the tool loop)', () => {
     expect(shouldOfferGenericWebSearchTool({ ...baseArgs, stream: false })).toBe(false);
     expect(shouldOfferGenericWebSearchTool({ ...baseArgs, stream: undefined })).toBe(false);
   });
@@ -557,7 +557,7 @@ describe('shouldOfferGenericWebSearchTool', () => {
     ).toBe(true);
   });
 
-  it('is false when no search backend is configured — never offer a tool the server cannot execute', () => {
+  it('is false when no search backend is configured, never offer a tool the server cannot execute', () => {
     expect(shouldOfferGenericWebSearchTool({ ...baseArgs, backendConfigured: false })).toBe(false);
   });
 });

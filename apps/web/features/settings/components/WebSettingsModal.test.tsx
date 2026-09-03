@@ -287,7 +287,7 @@ describe('WebSettingsModal connectors adapter (honest web semantics)', () => {
 
     expect(
       await screen.findByText(
-        'Connectors could not be loaded because the server returned an error. This is not a problem with your connection — retry, or contact support if it persists.',
+        'Connectors could not be loaded because the server returned an error. This is not a problem with your connection, retry, or contact support if it persists.',
       ),
     ).toBeTruthy();
 
@@ -297,16 +297,11 @@ describe('WebSettingsModal connectors adapter (honest web semantics)', () => {
     expect(await screen.findByText('Connect your first tool')).toBeTruthy();
     expect(
       screen.queryByText(
-        'Connectors could not be loaded because the server returned an error. This is not a problem with your connection — retry, or contact support if it persists.',
+        'Connectors could not be loaded because the server returned an error. This is not a problem with your connection, retry, or contact support if it persists.',
       ),
     ).toBeNull();
   });
 
-  // known-flaws WEB-CONNECTORS-PANEL-ALL-OR-NOTHING-01: production served
-  // /api/connectors and /api/connectors/custom 200 while
-  // /api/github/installations 500'd, and the panel showed nothing but the
-  // generic global error — even though the other 16 connectors had loaded
-  // fine. Installations must degrade on its own from here on.
   it('renders the full connector list plus a scoped GitHub notice when only installations 500s', async () => {
     stubFetch({
       connectors: [{ connectorId: 'notion', connectedAt: '2026-07-01T00:00:00Z' }],
@@ -321,9 +316,6 @@ describe('WebSettingsModal connectors adapter (honest web semantics)', () => {
     const notionRow = within(table).getByText('Notion').closest('tr') as HTMLElement;
     await waitFor(() => expect(within(notionRow).getByText('Connected')).toBeTruthy());
 
-    // GitHub itself never claims to be connected off stale/absent data — its
-    // row falls back to the ordinary Connect affordance, same as any other
-    // available-but-not-yet-connected connector.
     const githubRow = within(table).getByText('GitHub').closest('tr') as HTMLElement;
     expect(within(githubRow).getByRole('button', { name: /^Connect/ })).toBeTruthy();
 
@@ -334,7 +326,7 @@ describe('WebSettingsModal connectors adapter (honest web semantics)', () => {
     ).toBeTruthy();
     expect(
       screen.queryByText(
-        'Connectors could not be loaded because the server returned an error. This is not a problem with your connection — retry, or contact support if it persists.',
+        'Connectors could not be loaded because the server returned an error. This is not a problem with your connection, retry, or contact support if it persists.',
       ),
     ).toBeNull();
   });
@@ -360,7 +352,7 @@ describe('WebSettingsModal connectors adapter (honest web semantics)', () => {
     ).toBeTruthy();
     expect(
       screen.queryByText(
-        'Connectors could not be loaded because the server returned an error. This is not a problem with your connection — retry, or contact support if it persists.',
+        'Connectors could not be loaded because the server returned an error. This is not a problem with your connection, retry, or contact support if it persists.',
       ),
     ).toBeNull();
   });
@@ -392,7 +384,7 @@ describe('WebSettingsModal connectors adapter (honest web semantics)', () => {
 
     expect(
       await screen.findByText(
-        'Connectors could not be loaded because the server returned an error. This is not a problem with your connection — retry, or contact support if it persists.',
+        'Connectors could not be loaded because the server returned an error. This is not a problem with your connection, retry, or contact support if it persists.',
       ),
     ).toBeTruthy();
     expect(screen.queryByRole('table')).toBeNull();
@@ -502,8 +494,6 @@ describe('WebSettingsModal connectors adapter (honest web semantics)', () => {
 
     const dialog = await screen.findByRole('dialog');
     expect(within(dialog).getByText('GitHub - Tool Permissions')).toBeTruthy();
-    // Real catalog tools for this connector (lib/connectors/catalog.ts), not a
-    // placeholder — proves the panel is driven by the actual tool metadata.
     expect(within(dialog).getByText('get_pull_request_diff')).toBeTruthy();
     expect(within(dialog).getByText('post_issue_comment')).toBeTruthy();
     expect(within(dialog).getByText('post_pull_request_review')).toBeTruthy();
@@ -539,13 +529,11 @@ describe('WebSettingsModal connectors adapter (honest web semantics)', () => {
     ).toBeTruthy();
     expect(
       screen.queryByText(
-        'Connectors could not be loaded because the server returned an error. This is not a problem with your connection — retry, or contact support if it persists.',
+        'Connectors could not be loaded because the server returned an error. This is not a problem with your connection, retry, or contact support if it persists.',
       ),
     ).toBeNull();
   });
 
-  // All three sources are still requested every load — installations only
-  // stopped gating the panel's success/failure, it did not stop being fetched.
   it('sends the Clerk bearer token with the connector directory requests', async () => {
     const fetchMock = stubFetch({});
     render(<WebSettingsModal open onClose={vi.fn()} initialSection="connectors" />);
@@ -576,7 +564,7 @@ describe('WebSettingsModal connectors adapter (honest web semantics)', () => {
 
     expect(
       await screen.findByText(
-        'Skills could not be loaded because the server returned an error. This is not a problem with your connection — retry, or contact support if it persists.',
+        'Skills could not be loaded because the server returned an error. This is not a problem with your connection, retry, or contact support if it persists.',
       ),
     ).toBeTruthy();
 
@@ -586,7 +574,7 @@ describe('WebSettingsModal connectors adapter (honest web semantics)', () => {
     expect(await screen.findByText('fixture-reviewed-skill')).toBeTruthy();
     expect(
       screen.queryByText(
-        'Skills could not be loaded because the server returned an error. This is not a problem with your connection — retry, or contact support if it persists.',
+        'Skills could not be loaded because the server returned an error. This is not a problem with your connection, retry, or contact support if it persists.',
       ),
     ).toBeNull();
   });
@@ -631,7 +619,7 @@ describe('WebSettingsModal connectors adapter (honest web semantics)', () => {
 
     expect(
       await screen.findByText(
-        'Plugins could not be loaded because the server returned an error. This is not a problem with your connection — retry, or contact support if it persists.',
+        'Plugins could not be loaded because the server returned an error. This is not a problem with your connection, retry, or contact support if it persists.',
       ),
     ).toBeTruthy();
 
@@ -643,7 +631,7 @@ describe('WebSettingsModal connectors adapter (honest web semantics)', () => {
     expect(await screen.findByText('GitHub Automation')).toBeTruthy();
     expect(
       screen.queryByText(
-        'Plugins could not be loaded because the server returned an error. This is not a problem with your connection — retry, or contact support if it persists.',
+        'Plugins could not be loaded because the server returned an error. This is not a problem with your connection, retry, or contact support if it persists.',
       ),
     ).toBeNull();
     expect(screen.queryByRole('button', { name: /install/i })).toBeNull();

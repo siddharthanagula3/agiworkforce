@@ -94,7 +94,7 @@ async function drainWithFakeTimers(gen: AsyncGenerator<Uint8Array>): Promise<str
   return out;
 }
 
-describe('runToolLoop — per-tool deadline is clamped to the loop budget', () => {
+describe('runToolLoop, per-tool deadline is clamped to the loop budget', () => {
   beforeEach(() => {
     mockBuildToolLoopStream.mockReset();
     vi.useFakeTimers();
@@ -163,7 +163,7 @@ describe('runToolLoop — per-tool deadline is clamped to the loop budget', () =
   });
 });
 
-describe('runToolLoop — the provider stream is clamped to the loop budget too', () => {
+describe('runToolLoop, the provider stream is clamped to the loop budget too', () => {
   beforeEach(() => {
     mockBuildToolLoopStream.mockReset();
     vi.useFakeTimers();
@@ -255,7 +255,7 @@ describe('runToolLoop, a provider stream deadline maps to plain user copy', () =
   });
 });
 
-describe('withProviderStreamDeadline — the signal handed to the adapter', () => {
+describe('withProviderStreamDeadline, the signal handed to the adapter', () => {
   it('aborts the adapter signal on expiry, with the deadline error as the reason', async () => {
     let adapterSignal: AbortSignal | undefined;
     const pending = withProviderStreamDeadline((signal) => {

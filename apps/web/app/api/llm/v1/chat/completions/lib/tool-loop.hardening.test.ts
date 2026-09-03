@@ -65,7 +65,7 @@ function searchResultsChunk(content: unknown[], toolUseId?: string) {
   };
 }
 
-describe('isReadOnlyTool — driven by the declared tool metadata model', () => {
+describe('isReadOnlyTool, driven by the declared tool metadata model', () => {
   it('treats declared read-class platform and connector tools as parallel-safe', () => {
     for (const name of ['web_search', 'url_fetch', 'skill', 'mcp__github__get_pull_request_diff']) {
       expect(isReadOnlyTool(name)).toBe(true);
@@ -97,7 +97,7 @@ describe('isReadOnlyTool — driven by the declared tool metadata model', () => 
   });
 });
 
-describe('collectProviderStream — untrusted accumulation bounds', () => {
+describe('collectProviderStream, untrusted accumulation bounds', () => {
   it('collects provider-native generated-file references from normalized SSE events', async () => {
     const { generatedFileRefs } = await collectProviderStream(
       sseStream([
@@ -206,7 +206,7 @@ describe('collectProviderStream — untrusted accumulation bounds', () => {
   });
 });
 
-describe('withToolTimeout — per-tool-call wall-clock bound', () => {
+describe('withToolTimeout, per-tool-call wall-clock bound', () => {
   it('returns the tool result when it settles before the timeout', async () => {
     const r = await withToolTimeout(
       Promise.resolve({ content: 'ok', isError: false }),
@@ -240,7 +240,7 @@ describe('withToolTimeout — per-tool-call wall-clock bound', () => {
   });
 });
 
-describe('mapWithConcurrency — bounded parallel tool fan-out', () => {
+describe('mapWithConcurrency, bounded parallel tool fan-out', () => {
   it('never runs more than `limit` at once and preserves order', async () => {
     let active = 0;
     let peak = 0;
@@ -262,7 +262,7 @@ describe('mapWithConcurrency — bounded parallel tool fan-out', () => {
   });
 });
 
-describe('trimToolResultHistory — bound accumulated tool-result context', () => {
+describe('trimToolResultHistory, bound accumulated tool-result context', () => {
   interface TestMsg {
     role: string;
     content: unknown;

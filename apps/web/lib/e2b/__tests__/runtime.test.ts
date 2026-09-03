@@ -157,7 +157,7 @@ function liveSandboxesFor(
   }));
 }
 
-describe('getE2BExecutor — unpriced compute (GOV-5)', () => {
+describe('getE2BExecutor, unpriced compute (GOV-5)', () => {
   beforeEach(() => {
     sessions.clear();
     vi.clearAllMocks();
@@ -181,7 +181,7 @@ describe('getE2BExecutor — unpriced compute (GOV-5)', () => {
   });
 });
 
-describe('getE2BExecutor — ephemeral (no conversationId)', () => {
+describe('getE2BExecutor, ephemeral (no conversationId)', () => {
   beforeEach(() => {
     sessions.clear();
     vi.clearAllMocks();
@@ -201,7 +201,7 @@ describe('getE2BExecutor — ephemeral (no conversationId)', () => {
   });
 });
 
-describe('getE2BExecutor — conversation-scoped', () => {
+describe('getE2BExecutor, conversation-scoped', () => {
   beforeEach(() => {
     sessions.clear();
     vi.clearAllMocks();
@@ -333,7 +333,7 @@ describe('getE2BExecutor — conversation-scoped', () => {
   });
 });
 
-describe('getE2BExecutor — managed Code session', () => {
+describe('getE2BExecutor, managed Code session', () => {
   beforeEach(() => {
     sessions.clear();
     vi.clearAllMocks();
@@ -386,7 +386,7 @@ describe('getE2BExecutor — managed Code session', () => {
   });
 });
 
-describe('getE2BExecutor — harness credentials', () => {
+describe('getE2BExecutor, harness credentials', () => {
   beforeEach(() => {
     sessions.clear();
     vi.clearAllMocks();
@@ -509,7 +509,7 @@ describe('getE2BExecutor — harness credentials', () => {
   });
 });
 
-describe('getE2BExecutor — git operations', () => {
+describe('getE2BExecutor, git operations', () => {
   beforeEach(() => {
     sessions.clear();
     vi.clearAllMocks();
@@ -589,7 +589,7 @@ describe('getE2BExecutor — git operations', () => {
   });
 });
 
-describe('getE2BExecutor — per-user sandbox quota', () => {
+describe('getE2BExecutor, per-user sandbox quota', () => {
   beforeEach(() => {
     sessions.clear();
     vi.clearAllMocks();

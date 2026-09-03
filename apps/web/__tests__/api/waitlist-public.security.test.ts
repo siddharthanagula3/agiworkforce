@@ -22,7 +22,6 @@ vi.mock('@/lib/cors', () => ({
   handleCorsPreflightRequest: vi.fn().mockReturnValue(null),
 }));
 
-// ─── CSRF mock — exported so per-test overrides work ─────────────────────────
 const mockRequireCsrfToken = vi.fn();
 vi.mock('@/lib/csrf', () => ({
   requireCsrfToken: (...args: unknown[]) => mockRequireCsrfToken(...args),
@@ -121,7 +120,7 @@ function rateLimitExceededResponse(): NextResponse {
   );
 }
 
-describe('POST /api/waitlist/public — security tests', () => {
+describe('POST /api/waitlist/public, security tests', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockRequireCsrfToken.mockResolvedValue(null);

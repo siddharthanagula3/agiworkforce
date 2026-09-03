@@ -216,8 +216,8 @@ export function UsageSection() {
             Labels, remaining-phrasing and reset wording all come from the shared
             vocabulary in @agiworkforce/types. These four buckets are the same
             server-side numbers mobile, desktop and the Chrome panel render, and
-            each surface previously named them differently — "Rolling 5 hours"
-            here, "Current session" on mobile, "Token Budget Usage" on desktop —
+            each surface previously named them differently, "Rolling 5 hours"
+            here, "Current session" on mobile, "Token Budget Usage" on desktop.
             so the same limit was unrecognisable between surfaces.
           */}
           <UsageBar

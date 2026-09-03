@@ -320,8 +320,6 @@ export function sanitizeAuditDetail(detail: AuditEventDetail | undefined): Recor
         .filter((item): item is string => typeof item === 'string')
         .map(scrubString);
     }
-    // Objects, functions and everything else are dropped — nested structures are
-    // exactly how message content and token payloads leak into audit rows.
   }
 
   return safe;

@@ -14,7 +14,12 @@ import { NextRequest } from 'next/server';
 beforeEach(() => {
   queryMock.mockReset();
   queryMock.mockResolvedValue([
-    { kind: 'applied', id: '0190a000-0000-7000-8000-000000000abc', server_version: '7', current: null },
+    {
+      kind: 'applied',
+      id: '0190a000-0000-7000-8000-000000000abc',
+      server_version: '7',
+      current: null,
+    },
   ]);
 });
 
@@ -26,7 +31,7 @@ function postReq(body: unknown | undefined) {
   });
 }
 
-describe('POST /api/memory/sync — delta push', () => {
+describe('POST /api/memory/sync, delta push', () => {
   it('compare-and-swaps memories by server revision and forces user_id server-side', async () => {
     const res = await POST(
       postReq({
@@ -51,9 +56,7 @@ describe('POST /api/memory/sync — delta push', () => {
     expect(body.conflicts).toEqual([]);
     expect(body.cursor).toBe('7');
 
-    const call = queryMock.mock.calls.find((c) =>
-      String(c[0]).includes('update user_memories'),
-    );
+    const call = queryMock.mock.calls.find((c) => String(c[0]).includes('update user_memories'));
     expect(call).toBeDefined();
     const sql = String(call![0]);
     expect(sql).toContain('existing.server_version = incoming.base_version');
@@ -76,7 +79,7 @@ describe('POST /api/memory/sync — delta push', () => {
   });
 });
 
-describe('GET /api/memory/sync — back-compat status', () => {
+describe('GET /api/memory/sync, back-compat status', () => {
   it('returns the legacy status shape when no `since` cursor is provided', async () => {
     queryMock.mockResolvedValueOnce([
       { source: 'web', updated_at: '2026-06-22T00:00:00.000Z' },

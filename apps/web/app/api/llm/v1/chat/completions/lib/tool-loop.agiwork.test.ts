@@ -134,7 +134,7 @@ describe('runToolLoop AGI Work planning turn', () => {
     expect(progressSummaries.some((p) => p.progressId.startsWith('agiwork:plan:'))).toBe(true);
   });
 
-  it('is non-fatal when the plan turn yields no parseable steps — the run still completes', async () => {
+  it('is non-fatal when the plan turn yields no parseable steps, the run still completes', async () => {
     const planTurn = sseStreamFrom([chunk({ content: 'let me get started' }), chunk({}, 'stop')]);
     const workTurn = sseStreamFrom([chunk({ content: 'Done.' }), chunk({}, 'stop')]);
     mockBuildToolLoopStream.mockResolvedValueOnce(planTurn).mockResolvedValueOnce(workTurn);

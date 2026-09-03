@@ -93,7 +93,7 @@ beforeEach(() => {
   vi.clearAllMocks();
 });
 
-describe('persistAssistantTurn — threaded conversations', () => {
+describe('persistAssistantTurn, threaded conversations', () => {
   it('leaves an unbranched conversation on the single statement it has always used', async () => {
     givenDatabase([{ match: CONVERSATION_SELECT, rows: [{ active_leaf_message_id: null }] }]);
 

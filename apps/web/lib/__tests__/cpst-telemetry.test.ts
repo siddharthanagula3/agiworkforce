@@ -10,7 +10,7 @@ import {
 } from '@/lib/cpst-telemetry';
 
 describe('resolveCpstTaskOutcome', () => {
-  it('never reports success — billing success is not task success', () => {
+  it('never reports success, billing success is not task success', () => {
     expect(resolveCpstTaskOutcome({ billingOutcome: 'completed' })).toBe('unknown');
   });
 

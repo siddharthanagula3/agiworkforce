@@ -12,24 +12,6 @@ import {
 const MAX_FILE_COUNT = MAX_CHAT_ATTACHMENT_COUNT;
 const MAX_FILE_SIZE_BYTES = MAX_CHAT_ATTACHMENT_BYTES;
 
-/**
- * MIME allowlist for `addFiles`. Exported (with the helpers below) so the
- * composer that owns the `<input type="file">` element can build its
- * `accept` attribute and gating logic from this single source of truth
- * instead of hardcoding a separate, narrower list that drifts out of sync
- * with what this hook actually accepts.
- *
- * `ChatComposerNew.tsx` uses `getAcceptAttribute()` (this full allowlist) and
- * accepts every type listed here — the old `accept="image/*"` narrowing and the
- * "web chat accepts images only" message it described are both gone.
- *
- * AUDIT-FIX CMP-27: because the picker offers documents as well as images, the
- * composer's capability gate can no longer be an `image/*` test. Images and
- * PDFs travel as provider media/document blocks and need a multimodal model;
- * text and code files are inlined as text and any model can read them. The
- * composer classifies with `isChatImageMimeType` + `application/pdf` from the
- * same policy module this file imports, so the two cannot drift.
- */
 export const ALLOWED_MIME_TYPES = new Set<string>(CHAT_ATTACHMENT_MIME_TYPES);
 
 export function getAcceptAttribute(): string {

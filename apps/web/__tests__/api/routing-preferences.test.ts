@@ -197,7 +197,7 @@ describe('PUT /api/me/routing-preferences', () => {
     expect(response.status).toBe(400);
   });
 
-  it('rejects empty body with 400 (no preferences specified is technically valid {} — but malformed JSON is not)', async () => {
+  it('rejects empty body with 400 (no preferences specified is technically valid {}, but malformed JSON is not)', async () => {
     const response = await PUT(buildPutRequest({}));
     expect(response.status).toBe(200);
   });

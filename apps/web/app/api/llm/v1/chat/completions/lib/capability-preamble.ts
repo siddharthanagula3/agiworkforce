@@ -156,7 +156,7 @@ export function buildCapabilityPreamble(input: CapabilityPreambleInput): string 
   if (toolNames.length > 0) {
     const described = toolNames.map((name) => {
       const description = TOOL_DESCRIPTIONS[name];
-      return description ? `- ${name} — ${description}` : `- ${name}`;
+      return description ? `- ${name}, ${description}` : `- ${name}`;
     });
 
     sections.push(
@@ -165,7 +165,7 @@ export function buildCapabilityPreamble(input: CapabilityPreambleInput): string 
         'one of them covers, call it rather than describing what you would do. Never tell ' +
         'the user you lack web access, a sandbox, a file system, or the ability to run code ' +
         'when the corresponding tool is listed above. Do not claim a capability that is not ' +
-        'listed — if you cannot do something, say so plainly and say why.',
+        'listed, if you cannot do something, say so plainly and say why.',
     );
 
     if (hasSearch) {
@@ -220,7 +220,7 @@ export function buildCapabilityPreamble(input: CapabilityPreambleInput): string 
         'attached for the model handling it, so you cannot actually run anything. Tell the ' +
         'user that plainly before you answer, and name the limit: code execution is not ' +
         'available for the model this turn was routed to. Write code if it helps, but ' +
-        'present it as code you have not run — never report output, results, or timings as ' +
+        'present it as code you have not run, never report output, results, or timings as ' +
         'though you had executed it.',
     );
   }

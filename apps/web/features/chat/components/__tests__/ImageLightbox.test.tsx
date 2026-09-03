@@ -11,7 +11,7 @@ const IMAGES = [
 
 const shownSrc = () => screen.getByRole('img').getAttribute('src');
 
-describe('ImageLightbox — single image', () => {
+describe('ImageLightbox, single image', () => {
   it('renders the image without navigation chrome', () => {
     render(<ImageLightbox images={[IMAGES[0]!]} onClose={vi.fn()} />);
 
@@ -22,7 +22,7 @@ describe('ImageLightbox — single image', () => {
   });
 });
 
-describe('ImageLightbox — paging', () => {
+describe('ImageLightbox, paging', () => {
   it('opens on the clicked image, not the first one', () => {
     render(<ImageLightbox images={IMAGES} initialIndex={2} onClose={vi.fn()} />);
 
@@ -71,7 +71,7 @@ describe('ImageLightbox — paging', () => {
   });
 });
 
-describe('ImageLightbox — bad input', () => {
+describe('ImageLightbox, bad input', () => {
   it('clamps an out-of-range index instead of rendering nothing', () => {
     render(<ImageLightbox images={IMAGES} initialIndex={99} onClose={vi.fn()} />);
 
@@ -85,7 +85,7 @@ describe('ImageLightbox — bad input', () => {
   });
 });
 
-describe('ImageLightbox — close', () => {
+describe('ImageLightbox, close', () => {
   it('closes on Escape', () => {
     const onClose = vi.fn();
     render(<ImageLightbox images={IMAGES} onClose={onClose} />);

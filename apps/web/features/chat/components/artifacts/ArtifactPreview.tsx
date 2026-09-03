@@ -106,8 +106,6 @@ export interface ArtifactData {
     | 'mermaid'
     | 'code'
     | 'document'
-    // Shared-renderer types (spreadsheet/table/csv, presentation, email, chart)
-    // — rendered by @agiworkforce/unified-chat components, not the sandbox.
     | 'spreadsheet'
     | 'table'
     | 'csv'
@@ -132,25 +130,7 @@ interface ArtifactPreviewProps {
   variant?: 'card' | 'panel';
   /** Called when user clicks the Close button in panel variant toolbar. */
   onClose?: () => void;
-  /**
-   * Real edit history from the shared store's content-keyed auto-versioning
-   * (oldest → newest). When length > 1 the panel header shows a version chip
-   * (`v{n}/{total}`) with prev/next navigation. Navigation is view-only: it
-   * changes which version the viewer renders/copies/downloads without mutating
-   * the store, so no data is lost; the separate Restore button is the only
-   * writer. A single-entry array still shows `v1/1` with both arrows disabled —
-   * omit the prop entirely (inline cards do) to hide the chip.
-   */
   versionHistory?: SharedArtifact[];
-  /**
-   * CAP-015 slice 3: host-injected publish action.
-   *
-   * `ArtifactsPanel` supplies one backed by `@agiworkforce/artifacts`
-   * `publishArtifact()` + the web `CloudPublisher`, which is what turns the
-   * Publish menu item from a clipboard copy into a real public URL. Left
-   * undefined (inline cards, tests), no Publish item renders at all — an
-   * action that cannot work must not be offered.
-   */
   publishArtifact?: () => Promise<PublishResult>;
 }
 
@@ -241,15 +221,6 @@ export function ArtifactPreview({
   // fails to render it. Reset on refresh / artifact change.
   const [pdfError, setPdfError] = useState(false);
 
-  // Convert DOCX base64/blob content to HTML via mammoth (Fix 40)
-  //
-  // AUDIT-FIX ART-7: the conversion output is cleared at the TOP of this effect
-  // and the effect is keyed on the artifact id as well as its content. Before,
-  // nothing reset `docxHtml`/`docxError` on an artifact swap, so opening DOCX B
-  // rendered DOCX A's converted HTML under B's title until B finished (and a
-  // failed conversion's error message stuck to the next document forever).
-  // Resetting here rather than in the id-keyed reset effect below keeps the
-  // clear and the re-convert in one place — they can never fall out of step.
   useEffect(() => {
     setDocxHtml(null);
     setDocxError(null);
@@ -314,23 +285,6 @@ export function ArtifactPreview({
     artifact.computeSession || artifact.generatedFile || artifact.artifactManifest,
   );
 
-  // Resolve a SAFE, real PDF byte-source for the inline viewer.
-  //
-  // Provenance matters here: for a *generated* document artifact,
-  // `artifact.content` is the model's TEXT (markdown), NOT PDF bytes — feeding
-  // it to <iframe src> renders garbage. The real bytes, when they exist, live
-  // at `generatedFile.uri` (surfaced as `generatedFileSummary.primaryUri`). An
-  // *attachment* path can instead carry a `blob:`/`data:` URI directly in
-  // `artifact.content`.
-  //
-  // We only accept sources the browser can render locally WITHOUT an outbound
-  // fetch to an arbitrary origin (SSRF / egress-allowlist safety):
-  //   - `data:application/pdf...`  (inline bytes)
-  //   - `blob:...`                 (same-origin object URL)
-  //   - same-origin http(s) URL that is a PDF
-  // Anything else (off-origin https, an opaque compute-storage URI, or plain
-  // text) yields `null` → the viewer shows an honest "download instead" state
-  // rather than a fake/blank preview.
   const pdfSrc = useMemo<string | null>(() => {
     if (!isPdf) return null;
     const mime = (generatedFileSummary.mimeType ?? '').toLowerCase();
@@ -352,7 +306,7 @@ export function ArtifactPreview({
             return url.href;
           }
         } catch {
-          /* not a parseable URL — fall through */
+          // noop
         }
       }
       // Relative same-origin path.
@@ -368,16 +322,6 @@ export function ArtifactPreview({
     return null;
   }, [isPdf, artifact.content, generatedFileSummary.primaryUri, generatedFileSummary.mimeType]);
 
-  // The native PDF viewer (a browser-internal resource) is blocked inside ANY
-  // sandboxed iframe, so the viewer iframe below is intentionally NOT
-  // sandboxed. `pdfSrc` is therefore the trust boundary:
-  //   - `data:application/pdf` — the data: MIME forces PDF interpretation; it
-  //     can never be executed as HTML, so it is safe unsandboxed.
-  //   - same-origin http(s)/relative `.pdf` — our own origin's content.
-  //   - `blob:` — the object's stored type is NOT provable from the URL string
-  //     (an HTML blob would execute same-origin in an unsandboxed frame), so we
-  //     verify the blob's MIME is application/pdf before rendering it.
-  // `null` = pending verification, `false` = not a PDF (→ fallback), `true` = ok.
   const isBlobPdf = Boolean(pdfSrc?.startsWith('blob:'));
   const [pdfBlobOk, setPdfBlobOk] = useState<boolean | null>(null);
   useEffect(() => {
@@ -387,8 +331,6 @@ export function ArtifactPreview({
     }
     let cancelled = false;
     setPdfBlobOk(null);
-    // blob: URLs are same-origin object URLs — this fetch never leaves the
-    // browser, so it introduces no egress/SSRF surface.
     fetch(pdfSrc)
       .then((r) => r.blob())
       .then((b) => {
@@ -446,14 +388,6 @@ export function ArtifactPreview({
     [isImage, activeContent],
   );
 
-  // Reset version navigation + render error when the artifact identity changes
-  // or a new version lands (so we snap to the latest and clear stale errors).
-  //
-  // AUDIT-FIX ART-7: this used to reset ONLY viewedVersionIndex / renderError /
-  // pdfError, so `copied` survived an artifact swap and showed a "Copied" tick
-  // for the wrong artifact. The other two leaks are fixed at their source:
-  // `docxHtml`/`docxError` are cleared by the conversion effect above, and
-  // `securityWarning` is no longer latched state at all — see securityNotice.
   useEffect(() => {
     setViewedVersionIndex(null);
     setRenderError(null);
@@ -522,29 +456,6 @@ export function ArtifactPreview({
         return buildSandboxSrcDoc(content);
 
       case 'react': {
-        // AUDIT-FIX ART-1: React source must reach Babel AS SOURCE.
-        //
-        // This branch used to pass `content` through
-        // `sanitizeArtifact(content, 'react')`, which returns
-        // `<pre><code>${escapeHTML(content)}</code></pre>`. That escaped string
-        // was then dropped inside `<script type="text/babel">`, so Babel was
-        // handed `&lt;div&gt;` markup instead of JSX and threw on every single
-        // React artifact — the type could never render, in any configuration.
-        //
-        // The source is now embedded verbatim (only `</script` is neutralised,
-        // which the JS parser cannot distinguish from `</script`). Executing it
-        // is the whole point: the null-origin sandbox (allow-scripts WITHOUT
-        // allow-same-origin) plus the CSP below is the boundary, exactly as it
-        // is for `html`.
-        //
-        // AUDIT-FIX ART-14: the old CSP here was `default-src 'self'
-        // 'unsafe-inline' 'unsafe-eval' https:` — that permitted fetch/XHR to
-        // ANY https origin from inside the frame. The shared policy pins
-        // `connect-src 'none'` and allows scripts only from the CDN allowlist.
-        //
-        // The mount bootstrap mirrors infrastructure/sandbox/index.html's
-        // renderReact() so the same artifact behaves identically on the
-        // cross-origin sandbox path and on this fallback path.
         const reactSource = escapeForInlineScript(content);
         return `
 <!DOCTYPE html>
@@ -597,14 +508,6 @@ if (__AgiApp) {
       }
 
       case 'mermaid':
-        // AUDIT-FIX ART-6: `content` used to be interpolated RAW into the
-        // document — a diagram body containing `<img onerror=…>` executed in
-        // the frame while the banner told the user unsafe patterns had been
-        // "removed". Mermaid reads the element's text, so HTML-escaping the
-        // source is both safe and lossless (the parser un-escapes back to the
-        // original characters before mermaid ever sees them).
-        // AUDIT-FIX ART-14: this document had no CSP at all; it now carries
-        // the shared one (jsdelivr is in the script allowlist).
         return `
 <!DOCTYPE html>
 <html>
@@ -672,11 +575,6 @@ if (__AgiApp) {
           runScripts: true,
         };
       case 'react':
-        // AUDIT-FIX ART-1: the cross-origin sandbox puts `code` straight into a
-        // `text/babel` script element (see infrastructure/sandbox/index.html
-        // renderReact). Shipping `sanitizeArtifact(content, 'react')` meant
-        // shipping `<pre><code>&lt;div&gt;…` — Babel threw on every React
-        // artifact. Ship the source; the sandbox origin is the boundary.
         return { type: 'render', kind: 'react', code: content };
       case 'svg':
         return { type: 'render', kind: 'svg', svg: sanitizeSVG(content) };
@@ -700,20 +598,6 @@ if (__AgiApp) {
     setTimeout(() => setCopied(false), 2000);
   };
 
-  // ---------------------------------------------------------------------------
-  // CAP-015 slice 3: publish to a public URL.
-  //
-  // The result is the discriminated union from `@agiworkforce/artifacts`, and
-  // each arm is reported for what it is:
-  //   cloud       → a real hosted URL; copy it and say so.
-  //   local       → a file:// export (desktop host); state the path, do not
-  //                 pretend a link was shared.
-  //   unavailable → no publisher on this host; fall back to copying the SOURCE
-  //                 to the clipboard, which is the honest degradation the panel
-  //                 shipped before any publisher existed.
-  // A throw is surfaced verbatim — including "this type has no public
-  // renderer", which is a real answer, not a failure to hide.
-  // ---------------------------------------------------------------------------
   const handlePublish = useCallback(async () => {
     if (!publishArtifact || isPublishing) return;
     setIsPublishing(true);
@@ -755,16 +639,6 @@ if (__AgiApp) {
 
     switch (format) {
       case 'html':
-        // AUDIT-FIX ART-26: this shipped the sandbox scaffold under a `.html`
-        // name with a `text/plain` MIME — the OS/browser opened it as text, and
-        // for React artifacts the payload was ART-1's escaped `<pre><code>`
-        // dump rather than runnable source. With ART-1 + ART-6 fixed,
-        // getPreviewHTML() is a genuine standalone document for every type
-        // (correct DOCTYPE, the CSP envelope, real source). Keep the `.html`
-        // filename but force attachment semantics with an inert MIME. A
-        // `text/html` object URL can become an origin-XSS sink if the browser,
-        // an extension, or future code navigates to it instead of honoring the
-        // download attribute.
         blob = new Blob([getPreviewHTML()], { type: 'application/octet-stream' });
         filename = `${artifact.title || 'artifact'}.html`;
         break;
@@ -861,8 +735,6 @@ if (__AgiApp) {
       }
     }
 
-    // AUDIT-FIX ART-24: guarded — an unavailable clipboard used to reject
-    // unhandled and the user got no signal at all.
     if (!(await writeToClipboard(shareText))) {
       toast.error('Could not copy the share details to the clipboard');
     }
@@ -931,28 +803,13 @@ if (__AgiApp) {
         void document.exitFullscreen().catch(() => {});
       }
     } catch {
-      /* native fullscreen unsupported — the CSS-expanded layout still applies */
+      // noop
     }
   };
 
   const canPreview = ['html', 'react', 'svg'].includes(artifact.type);
   const isMermaid = artifact.type === 'mermaid';
 
-  /**
-   * A Markdown document has a rendered view, and it is the one the user
-   * expects. Before this, `.md` fell through to `type === 'document'` with no
-   * entry in any preview branch, so the panel could only ever show its source
-   * — a Markdown artifact opened as a wall of `#` and backticks.
-   *
-   * It renders in-app rather than in the sandbox iframe: the sandbox's
-   * `markdown` kind is an alias for `text` (it prints a `<pre>`), so routing
-   * there would reproduce the same raw output. `MarkdownContent` is the same
-   * sanitize→KaTeX→highlight chain that already renders untrusted model output
-   * in every chat message, so this adds no new trust boundary.
-   *
-   * PDF and DOCX are excluded by construction: both are `document` too, and
-   * both already own dedicated viewers below.
-   */
   const isMarkdownDoc =
     !isPdf &&
     !isDocx &&
@@ -960,9 +817,6 @@ if (__AgiApp) {
       ? ['md', 'mdx', 'markdown', undefined].includes(artifact.language?.toLowerCase())
       : false);
 
-  // Shared unified-chat renderers (spreadsheet/table/csv, presentation, email):
-  // rendered directly in the panel — no sandbox iframe, so the iframe-only
-  // controls (refresh / open-in-tab) stay hidden for these types.
   const isTabular = ['spreadsheet', 'table', 'csv'].includes(artifact.type);
   const isPresentation = artifact.type === 'presentation';
   const isEmail = artifact.type === 'email';
@@ -1069,8 +923,6 @@ if (__AgiApp) {
   // A blob source that is still being MIME-verified: show a brief loading state
   // rather than flashing the iframe or the fallback.
   const pdfBlobPending = isBlobPdf && pdfBlobOk === null;
-  // A source is renderable only when it exists, hasn't errored, and — for blob:
-  // sources — has been verified as an actual PDF.
   const canRenderPdf = Boolean(pdfSrc) && !pdfError && (!isBlobPdf || pdfBlobOk === true);
 
   const renderPdfPreview = (containerClassName: string) => (
@@ -1080,9 +932,6 @@ if (__AgiApp) {
           Loading PDF…
         </div>
       ) : canRenderPdf ? (
-        // Intentionally NOT sandboxed — the native PDF viewer is blocked in a
-        // sandboxed frame. `pdfSrc` (+ blob MIME verification) is the trust
-        // boundary; see the comment on the pdfSrc/pdfBlobOk block above.
         <iframe
           key={`pdf-${refreshKey}`}
           title={artifact.title || 'PDF Preview'}
@@ -1161,9 +1010,6 @@ if (__AgiApp) {
     </div>
   );
 
-  // ============================================================================
-  // PANEL VARIANT — single-toolbar, full-height flex-fill layout
-  // ============================================================================
   if (variant === 'panel') {
     // Whether to show the preview content (vs source code)
     const showPreview =
@@ -1193,7 +1039,7 @@ if (__AgiApp) {
         {/* Single reference toolbar */}
         {/* @container: this header sizes to the ARTIFACT PANEL, not the viewport.
             The panel is a fixed-width split pane, so viewport breakpoints (sm:)
-            told the labels below to render at a width the panel never has —
+            told the labels below to render at a width the panel never has.
             a 1600px window still leaves this bar ~400px wide. The result was
             the left group overflowing its 47px box by ~198px and painting on
             top of the button row. Sizing decisions here must be container-
@@ -1204,7 +1050,7 @@ if (__AgiApp) {
               guarantees this group can never paint over the controls on the
               right, whatever the panel width or title length. */}
           <div className="flex min-w-0 items-center gap-2 overflow-hidden">
-            {/* Eye/Code segmented toggle — for renderable artifacts (sandbox)
+            {/* Eye/Code segmented toggle, for renderable artifacts (sandbox)
                 and shared-renderer types (spreadsheet/presentation/email).
                 PDF/DOCX are single-view (their "source" is an opaque data URI),
                 so they get no toggle per the claude.ai artifact header. */}
@@ -1246,7 +1092,7 @@ if (__AgiApp) {
             {/* min-w-0 is what makes `truncate` actually engage on a flex child:
                 without it the span's min-content width wins and the text pushes
                 past the container instead of ellipsising. This is the element
-                that absorbs the shrink — everything else here is shrink-0. */}
+                that absorbs the shrink, everything else here is shrink-0. */}
             <span className="min-w-0 truncate text-sm font-semibold text-foreground">
               {artifact.title || 'Artifact'}
             </span>
@@ -1255,7 +1101,7 @@ if (__AgiApp) {
             <span className="hidden shrink-0 text-sm text-muted-foreground @[26rem]:inline">
               · {typeLabel}
             </span>
-            {/* Version chip — visible from the first generated version so the
+            {/* Version chip, visible from the first generated version so the
                 artifact panel always answers which revision is being shown.
                 Navigation remains disabled until real edit history exists. */}
             {versionCount > 0 && (
@@ -1340,11 +1186,11 @@ if (__AgiApp) {
               - renderable (html/react/svg): Copy · Download · Refresh · Open · Fullscreen · Close
               - mermaid: Copy · Download (+ SVG once rendered) · Open · Fullscreen · Close (no
                 Refresh: the client-side renderer has no frame to re-mount)
-              - binary doc (pdf/docx): Download · Refresh · Close  (no Copy — content is an opaque data URI)
+              - binary doc (pdf/docx): Download · Refresh · Close  (no Copy, content is an opaque data URI)
               - code / markdown doc: Copy · Download · Close
               External + Fullscreen collapse on narrow (375px) widths. */}
           <div className="flex shrink-0 items-center gap-1">
-            {/* Edit / Save · Cancel — only over the source view, and only for a
+            {/* Edit / Save · Cancel, only over the source view, and only for a
                 text artifact on its latest version (see canEditSource). */}
             {canEditSource &&
               !showPreview &&
@@ -1390,7 +1236,7 @@ if (__AgiApp) {
                 </>
               ))}
 
-            {/* Copy — not for binary docs (copying a data URI is useless). */}
+            {/* Copy, not for binary docs (copying a data URI is useless). */}
             {!isPdf && !isDocx && !isImage && (
               <Button
                 variant="ghost"
@@ -1414,7 +1260,7 @@ if (__AgiApp) {
               </Button>
             )}
 
-            {/* Download — binary docs save real bytes via a plain button;
+            {/* Download, binary docs save real bytes via a plain button;
                 everything else offers the format dropdown. */}
             {isPdf || isDocx || isImage ? (
               <Button
@@ -1474,7 +1320,7 @@ if (__AgiApp) {
               </DropdownMenu>
             )}
 
-            {/* Publish — only rendered when a host injected a real publisher
+            {/* Publish, only rendered when a host injected a real publisher
                 (CAP-015 slice 3). No publisher, no button: offering a Publish
                 action that can only copy to the clipboard is the behaviour
                 AUDIT-FIX ART-27 called out. */}
@@ -1495,7 +1341,7 @@ if (__AgiApp) {
               </Button>
             )}
 
-            {/* Refresh — renderable previews and PDFs (re-mounts the frame). */}
+            {/* Refresh, renderable previews and PDFs (re-mounts the frame). */}
             {(canPreview || isPdf || isImage) && (
               <Button
                 variant="ghost"
@@ -1509,7 +1355,7 @@ if (__AgiApp) {
               </Button>
             )}
 
-            {/* Open in new tab — renderable only; hidden on narrow widths. */}
+            {/* Open in new tab, renderable only; hidden on narrow widths. */}
             {(canPreview || isMermaid) && (
               <Button
                 variant="ghost"
@@ -1523,7 +1369,7 @@ if (__AgiApp) {
               </Button>
             )}
 
-            {/* Fullscreen — renderable only; hidden on narrow widths. */}
+            {/* Fullscreen, renderable only; hidden on narrow widths. */}
             {(canPreview || isMermaid) && (
               <Button
                 variant="ghost"
@@ -1537,7 +1383,7 @@ if (__AgiApp) {
               </Button>
             )}
 
-            {/* Close — panel-only */}
+            {/* Close, panel-only */}
             {onClose && (
               <Button
                 variant="ghost"
@@ -1553,7 +1399,7 @@ if (__AgiApp) {
         </div>
 
         {/* CAP-015: the live public link for this artifact. Shown only after a
-            publish actually returned a URL — never as an aspirational bar. */}
+            publish actually returned a URL, never as an aspirational bar. */}
         {publishedUrl && (
           <div
             className="flex shrink-0 items-center gap-2 border-b border-border/30 bg-muted/20 px-4 py-2"
@@ -1617,10 +1463,10 @@ if (__AgiApp) {
           </div>
         )}
 
-        {/* Content area — fills remaining height. min-h-0 prevents a flex-child
+        {/* Content area, fills remaining height. min-h-0 prevents a flex-child
             from refusing to shrink below its content height (iframe collapse). */}
         <div className="flex flex-1 min-h-0 flex-col overflow-hidden">
-          {/* Preview: HTML / React / SVG — with empty + error states. */}
+          {/* Preview: HTML / React / SVG, with empty + error states. */}
           {showPreview &&
             canPreview &&
             (activeContent.trim().length === 0 ? (
@@ -1715,7 +1561,7 @@ if (__AgiApp) {
             </>
           )}
 
-          {/* Source / Code — shown whenever not previewing (or for pure-code artifacts) */}
+          {/* Source / Code, shown whenever not previewing (or for pure-code artifacts) */}
           {!showPreview &&
             (sourceDraft !== null ? (
               <textarea
@@ -1740,9 +1586,6 @@ if (__AgiApp) {
     );
   }
 
-  // ============================================================================
-  // CARD VARIANT (default) — original behavior, byte-identical markup
-  // ============================================================================
   return (
     <div
       ref={containerRef}
@@ -1931,7 +1774,7 @@ if (__AgiApp) {
         </div>
       </div>
 
-      {/* AUDIT-FIX ART-6: see securityNotice — the copy now matches the
+      {/* AUDIT-FIX ART-6: see securityNotice, the copy now matches the
           mitigation the renderer actually performed. */}
       {securityNotice && (
         <Alert className="m-4 border-yellow-500 bg-yellow-50">

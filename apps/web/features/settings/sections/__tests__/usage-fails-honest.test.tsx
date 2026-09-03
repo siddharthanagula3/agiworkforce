@@ -26,11 +26,6 @@ beforeEach(() => {
   hookState.error = null;
 });
 
-/**
- * An absent percentage normalises to 0 used, so the bars rendered `100 - 0` and
- * told the user they had their entire allowance left — during an outage. A
- * quota meter must never fail optimistic.
- */
 describe('usage bars when the server figure cannot be read', () => {
   it('does not claim a full allowance when the fetch failed', () => {
     hookState.error = 'Could not load usage.';

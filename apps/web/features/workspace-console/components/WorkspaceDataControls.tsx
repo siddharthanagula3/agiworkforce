@@ -235,7 +235,7 @@ export function WorkspaceDataControls() {
               No legal holds
             </p>
             <p className="max-w-sm text-xs leading-relaxed" style={{ color: 'var(--text-3)' }}>
-              Place a hold when records must be preserved beyond your retention window — for
+              Place a hold when records must be preserved beyond your retention window, for
               litigation, an investigation, or a regulatory request.
             </p>
           </div>

@@ -49,7 +49,7 @@ const EVENTS: ReadonlyArray<EventSpec> = [
         id: 'emailScheduleDone',
         channel: 'Email',
         description:
-          'Sent to the address on your account. It says what finished and links to the run — it never contains the task output.',
+          'Sent to the address on your account. It says what finished and links to the run, it never contains the task output.',
         defaultValue: false,
       },
       {
@@ -64,7 +64,7 @@ const EVENTS: ReadonlyArray<EventSpec> = [
 
 const AGENT_RUN_HEADING = 'Agent run updates';
 const AGENT_RUN_SUBHEADING =
-  'An agent run finishes, fails, or needs your approval — including while the tab is closed.';
+  'An agent run finishes, fails, or needs your approval, including while the tab is closed.';
 const BROWSER_SCOPE_NOTE =
   'This switch registers the browser you are using right now, so it is not saved to your account: turn it on again on each browser you want notified.';
 
@@ -160,7 +160,7 @@ export function NotificationsSection() {
         </div>
         <p style={{ margin: 0, fontSize: 12, lineHeight: 1.5, color: 'var(--text-3)' }}>
           Browser replies and browser push for agent runs, plus scheduled-task results by email and
-          mobile push — the toggles below are the complete list. Project, usage, billing, security,
+          mobile push, the toggles below are the complete list. Project, usage, billing, security,
           connector, tips, and marketing channels are not available. AGI does not save controls for
           notification senders that are not running.
         </p>
@@ -216,7 +216,7 @@ export function NotificationsSection() {
                 </span>
               </div>
               <Switch
-                aria-label={`${event.heading} — ${spec.channel}`}
+                aria-label={`${event.heading}, ${spec.channel}`}
                 checked={state[spec.id]}
                 onCheckedChange={() => toggle(spec.id)}
                 style={{ marginTop: 2, flexShrink: 0 }}

@@ -320,7 +320,7 @@ describe('unpublishArtifactRecord', () => {
     expect(params).toEqual(['aaaaaaaaaaaaaaaaaaaaaaaa', 'user-1']);
   });
 
-  it('returns false — never a throw — when nothing matched', async () => {
+  it('returns false, never a throw, when nothing matched', async () => {
     const db = makeDb([]);
     expect(
       await unpublishArtifactRecord(db as never, {

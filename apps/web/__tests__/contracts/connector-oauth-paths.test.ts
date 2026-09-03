@@ -103,7 +103,7 @@ describe('connector OAuth broker paths have one declaration', () => {
       expect(
         fs.existsSync(routeFile),
         `${routePath} has no handler at ${path.relative(REPO_ROOT, routeFile)}. ` +
-          'Move the constant and the route together — the callback path is also the redirect ' +
+          'Move the constant and the route together, the callback path is also the redirect ' +
           'URI registered with every provider.',
       ).toBe(true);
       expect(fs.readFileSync(routeFile, 'utf8')).toMatch(

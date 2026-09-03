@@ -1,4 +1,3 @@
-
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { readFileSync } from 'fs';
 import { resolve } from 'path';
@@ -23,7 +22,7 @@ vi.mock('@/lib/server/neon-db', () => ({
 
 const MIGRATION_PATH = resolve(__dirname, '../../db/neon/0032_security_severity_superset.sql');
 
-describe('0032_security_severity_superset.sql — SQL shape', () => {
+describe('0032_security_severity_superset.sql, SQL shape', () => {
   const sql = readFileSync(MIGRATION_PATH, 'utf8');
 
   const ORIGINAL_TAXONOMY = ['info', 'warning', 'error', 'critical'];
@@ -47,7 +46,7 @@ describe('0032_security_severity_superset.sql — SQL shape', () => {
 
 import { logSecurityEvent } from '@/lib/security-audit';
 
-describe('logSecurityEvent — all app-taxonomy severities reach db.execute()', () => {
+describe('logSecurityEvent, all app-taxonomy severities reach db.execute()', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockExecute.mockResolvedValue(1);

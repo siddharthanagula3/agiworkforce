@@ -44,7 +44,7 @@ function readSurface(relativePath: string): string {
   if (!existsSync(absolute)) {
     throw new Error(
       `${relativePath} no longer exists. A surface listed in this contract was moved or ` +
-        'deleted — update SCHEDULE_PAGINATION_SITES/DEBOUNCE_SITES instead of leaving the ' +
+        'deleted, update SCHEDULE_PAGINATION_SITES/DEBOUNCE_SITES instead of leaving the ' +
         'list pointing at a missing file.',
     );
   }

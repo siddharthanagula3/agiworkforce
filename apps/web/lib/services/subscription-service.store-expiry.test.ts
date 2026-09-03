@@ -31,7 +31,7 @@ function baseRow(overrides: Record<string, unknown>) {
   };
 }
 
-describe('getSubscription — lapsed store subscriptions', () => {
+describe('getSubscription, lapsed store subscriptions', () => {
   it('expires an Apple subscription whose period ended beyond the grace window', async () => {
     const db = dbReturning(baseRow({ apple_original_transaction_id: 'apple-tx-1' }));
     const sub = await SubscriptionService.getSubscription(db, 'user-1');

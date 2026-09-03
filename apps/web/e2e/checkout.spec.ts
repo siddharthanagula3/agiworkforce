@@ -12,11 +12,6 @@ test.describe('signup gates the purchase', () => {
 
     await getPro.click();
 
-    // The button does a client-side router.push, not a hard redirect, so
-    // there is no document-typed navigation response to assert on — Next
-    // fetches the destination as an RSC payload instead. The real evidence
-    // that the CTA sent the visitor somewhere real is the URL and the
-    // rendered login page itself, same as public-auth-clean.spec.ts checks.
     await expect(page).toHaveURL(/\/login\?redirectTo=%2Fpricing/);
     await page.waitForLoadState('networkidle');
     await expect(page.locator('.agi-ds-auth-card').first()).toBeVisible();

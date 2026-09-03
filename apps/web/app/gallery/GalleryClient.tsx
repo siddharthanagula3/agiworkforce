@@ -473,11 +473,6 @@ function ArtifactCard({ title, language, subtitle, type, content, onClick }: Art
         >
           <iframe
             title={`${title} preview`}
-            // A 33%-scaled, aria-hidden, pointer-events-none thumbnail of the
-            // first 1200 characters. It has no reason to execute anything, and
-            // allowing scripts meant every HTML artifact logged a CSP violation
-            // from about:srcdoc — the srcdoc document inherits the page's
-            // script-src, which is 'self' plus a nonce this frame cannot carry.
             sandbox=""
             srcDoc={`<html><head><meta charset="UTF-8"><style>body{margin:0;padding:6px;font-size:8px;overflow:hidden;background:#f8f5ee;color:#39362e}*{max-width:100%}</style></head><body>${(content ?? '').slice(0, 1200)}</body></html>`}
             style={{
@@ -784,7 +779,7 @@ function CreationWizard({ category, onClose, onLaunch }: CreationWizardProps) {
                 letterSpacing: 0.5,
               }}
             >
-              Step {currentStep + 1} of {WIZARD_STEPS.length} &mdash; {category.label}
+              Step {currentStep + 1} of {WIZARD_STEPS.length}, {category.label}
             </p>
             <h2
               style={{
@@ -1072,12 +1067,6 @@ type OverlayState =
   | { kind: 'category' }
   | { kind: 'wizard'; category: ArtifactCategory };
 
-/**
- * One row in the gallery grid: either a locally-derived artifact (has `content`
- * and a `local` handle, so it can open in the preview panel) or an index-only
- * row from another device's conversation (metadata only — opens the source
- * conversation, which re-derives it).
- */
 interface GalleryArtifact {
   id: string;
   title: string;
@@ -1091,27 +1080,6 @@ interface GalleryArtifact {
 }
 
 export interface GalleryClientProps {
-  /**
-   * Which chrome this instance is mounted inside.
-   *
-   * `marketing` (default) is the public `/gallery` route: Header + MarketingFooter
-   * wrap it and the browser VIEWPORT is the scroll container, so a `100vh` floor
-   * is exactly right.
-   *
-   * `app` is `/chat/artifacts`, which mounts this SAME component inside
-   * `WebAppShell`. There the scroll container is the shell's content area — a
-   * `fixed inset-0` flex child, shorter than the viewport whenever the shell
-   * renders its narrow-viewport header — so a `100vh` floor overflows by the
-   * header's height and leaves a dead scrollable band under the content.
-   * Measured at 700x800: 800px of content in a 752px box.
-   *
-   * Two floors have to give way, not one. The inline `100vh` below is the
-   * obvious one; globals.css also applies
-   * `[data-design='agi']:not(.agi-chrome-band):not(.agi-modal-scope) { min-height: 100vh }`
-   * to this component's own root. Both switch to `100%`, which resolves against
-   * the shell's definite-height scroll box on the root (so `--agi-bg` still
-   * paints the full content area rather than stopping at the last card).
-   */
   chrome?: 'marketing' | 'app';
 }
 
@@ -1133,20 +1101,6 @@ export function GalleryClient({ chrome = 'marketing' }: GalleryClientProps) {
   const artifacts = useArtifactsStore((s) => s.artifacts);
   const { artifacts: indexedArtifacts, loaded: indexLoaded } = useArtifactIndex();
 
-  /**
-   * The gallery's set = locally-derived artifacts ⊕ the account-wide index.
-   *
-   * Web derives artifacts from message markdown at render time, so the local
-   * store only covers conversations THIS device has opened. The index
-   * (migration 0120) covers the account. They share the same deterministic ids,
-   * so merging is by identity — no reconciliation.
-   *
-   * Local wins on collision: it carries real `content`, which is what lets a
-   * card render a live thumbnail and open in the preview panel. An index-only
-   * row has no content by design (the index stores none), so it renders as a
-   * card without a thumbnail and opens its source conversation, where it is
-   * re-derived in full.
-   */
   const sortedArtifacts = useMemo(() => {
     const byId = new Map<string, GalleryArtifact>();
     for (const a of indexedArtifacts) {
@@ -1161,13 +1115,6 @@ export function GalleryClient({ chrome = 'marketing' }: GalleryClientProps) {
       });
     }
     for (const a of artifacts) {
-      // `genfile-<assetId>` rows are tool-generated FILES. The server already
-      // stored them in `media_assets` and classified them
-      // (`classifyGeneratedFile` -> surface: 'artifact' | 'file'), so Library
-      // lists them under `<assetId>`. Listing them here too put one file in two
-      // places under two ids that can never dedupe — deleting it in Library left
-      // this card behind, pointing at bytes that no longer exist. They still
-      // render inline in the conversation; only this second listing is gone.
       if (isGeneratedFileArtifactId(a.id)) continue;
       byId.set(a.id, {
         id: a.id,

@@ -51,7 +51,7 @@ beforeEach(() => {
   mocks.verifyBackup.mockResolvedValue(-1);
 });
 
-describe('POST /api/settings/2fa/validate — TOTP replay', () => {
+describe('POST /api/settings/2fa/validate, TOTP replay', () => {
   it('accepts a fresh code and claims its step', async () => {
     mocks.verifyStep.mockResolvedValue(58_000_000);
     mocks.query.mockResolvedValueOnce([ROW]).mockResolvedValueOnce([{ user_id: 'user-1' }]);
@@ -76,7 +76,7 @@ describe('POST /api/settings/2fa/validate — TOTP replay', () => {
   });
 });
 
-describe('POST /api/settings/2fa/validate — backup codes', () => {
+describe('POST /api/settings/2fa/validate, backup codes', () => {
   it('spends a backup code with a single guarded statement, not read-modify-write', async () => {
     mocks.verifyBackup.mockResolvedValue(1);
     mocks.query.mockResolvedValueOnce([ROW]).mockResolvedValueOnce([{ remaining: 1 }]);

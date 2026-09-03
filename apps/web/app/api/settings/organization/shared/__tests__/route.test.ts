@@ -129,7 +129,7 @@ describe('GET /api/settings/organization/shared', () => {
     expect(body).not.toContain('auth_header_enc');
   });
 
-  it('lets a plain member READ the shared surface — that is the point of sharing', async () => {
+  it('lets a plain member READ the shared surface, that is the point of sharing', async () => {
     respondFor('member');
 
     const response = await get();

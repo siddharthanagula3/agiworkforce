@@ -25,7 +25,7 @@ beforeEach(() => {
   createProject.mockResolvedValue({ id: 'project-1', name: 'Research' });
 });
 
-describe('CreateProjectDialog — templates', () => {
+describe('CreateProjectDialog, templates', () => {
   it('offers every template', async () => {
     open();
 

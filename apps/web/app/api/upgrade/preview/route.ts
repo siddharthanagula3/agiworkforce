@@ -41,25 +41,6 @@ function getStripe(): Stripe {
   return stripeClient;
 }
 
-/**
- * What Stripe will actually charge the moment the upgrade is confirmed.
- *
- * NOT `preview.amount_due`. `invoices.createPreview` defaults to
- * `preview_mode: 'next'`, so its total also carries the NEXT period's recurring
- * subscription line — a line that is not billed today. Quoting it overstated the
- * charge by one full period of the new plan: pro -> max mid-cycle read "$140.00
- * today" against a $40.00 invoice.
- *
- * `subscriptions.update` with `proration_behavior: 'always_invoice'` raises an
- * invoice containing the proration lines only. Confirmed against a real
- * Anthropic upgrade (Max 5x -> Max 20x, same day): the invoice held exactly
- * `$200.00` for the new plan over the remaining period and `-$99.89` unused time
- * on the old one, totalling `$100.11 + $6.61` tax = `$106.72`. No renewal line.
- *
- * Stripe's guidance is to select `parent.subscription_item_details.proration`,
- * and tax is summed per line because the figure shown must be the amount taken,
- * which for that invoice was the tax-inclusive $106.72 rather than $100.11.
- */
 export interface UpgradeChargeBreakdown {
   /** One row per proration line, in Stripe's order, for an itemized receipt. */
   lineItems: { description: string; amountCents: number }[];
@@ -67,11 +48,6 @@ export interface UpgradeChargeBreakdown {
   taxCents: number;
   /** Invoice total before the customer balance is applied. */
   totalCents: number;
-  /**
-   * Stripe's customer balance, signed as Stripe signs it: positive is owed and
-   * increases what is taken, negative is credit and reduces it. Separate from
-   * the total because it is not part of the invoice — it is settled against it.
-   */
   appliedBalanceCents: number;
   totalDueTodayCents: number;
   /** End of the period being started, so the UI can state the renewal date. */

@@ -246,7 +246,7 @@ function makeProSubscription() {
   };
 }
 
-describe('POST /api/llm/v1/chat/completions — canonical Pro-tier routing', () => {
+describe('POST /api/llm/v1/chat/completions, canonical Pro-tier routing', () => {
   beforeEach(() => {
     vi.clearAllMocks();
 

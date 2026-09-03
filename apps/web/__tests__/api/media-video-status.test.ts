@@ -377,7 +377,7 @@ describe('GET /api/media/video/status', () => {
     });
   });
 
-  describe('Success — Runway PENDING status', () => {
+  describe('Success, Runway PENDING status', () => {
     it('should return 200 with queued status when Runway task is PENDING', async () => {
       mockFetch.mockResolvedValueOnce({
         ok: true,
@@ -471,7 +471,7 @@ describe('GET /api/media/video/status', () => {
     });
   });
 
-  describe('Success — Google Veo status', () => {
+  describe('Success, Google Veo status', () => {
     it('should return 200 with queued status when Google operation is PENDING', async () => {
       mockFetch.mockResolvedValueOnce({
         ok: true,
@@ -600,7 +600,7 @@ describe('GET /api/media/video/status', () => {
     });
   });
 
-  describe('Provider errors — Runway', () => {
+  describe('Provider errors, Runway', () => {
     it('should return 404 when Runway returns 404', async () => {
       mockFetch.mockResolvedValueOnce({
         ok: false,
@@ -656,7 +656,7 @@ describe('GET /api/media/video/status', () => {
     });
   });
 
-  describe('Provider errors — Google Veo', () => {
+  describe('Provider errors, Google Veo', () => {
     it('should return 404 when Google Veo returns 404', async () => {
       mockFetch.mockResolvedValueOnce({
         ok: false,

@@ -21,17 +21,51 @@ export interface KeyboardShortcut {
 export type KeyboardShortcutDoc = Omit<KeyboardShortcut, 'action'> & { id: string };
 
 export const KEYBOARD_SHORTCUT_DOCS: readonly KeyboardShortcutDoc[] = [
-  { key: 'K', ctrl: true, meta: true, id: 'open-search', description: 'Open search', category: 'navigation' },
-  { key: '/', ctrl: true, meta: true, id: 'show-shortcuts', description: 'Show keyboard shortcuts', category: 'ui' },
-  { key: 'N', ctrl: true, meta: true, id: 'new-conversation', description: 'New conversation', category: 'conversation' },
-  { key: 'B', ctrl: true, meta: true, id: 'toggle-sidebar', description: 'Toggle sidebar', category: 'ui' },
-  { key: 'Escape', id: 'focus-composer', description: 'Focus message composer', category: 'navigation' },
+  {
+    key: 'K',
+    ctrl: true,
+    meta: true,
+    id: 'open-search',
+    description: 'Open search',
+    category: 'navigation',
+  },
+  {
+    key: '/',
+    ctrl: true,
+    meta: true,
+    id: 'show-shortcuts',
+    description: 'Show keyboard shortcuts',
+    category: 'ui',
+  },
+  {
+    key: 'N',
+    ctrl: true,
+    meta: true,
+    id: 'new-conversation',
+    description: 'New conversation',
+    category: 'conversation',
+  },
+  {
+    key: 'B',
+    ctrl: true,
+    meta: true,
+    id: 'toggle-sidebar',
+    description: 'Toggle sidebar',
+    category: 'ui',
+  },
+  {
+    key: 'Escape',
+    id: 'focus-composer',
+    description: 'Focus message composer',
+    category: 'navigation',
+  },
   {
     key: 'C',
     ctrl: true,
     meta: true,
     shift: true,
-    id: 'copy-last-message', description: 'Copy last message',
+    id: 'copy-last-message',
+    description: 'Copy last message',
     category: 'message',
   },
   {
@@ -39,7 +73,8 @@ export const KEYBOARD_SHORTCUT_DOCS: readonly KeyboardShortcutDoc[] = [
     ctrl: true,
     meta: true,
     shift: true,
-    id: 'regenerate-last-message', description: 'Regenerate last message',
+    id: 'regenerate-last-message',
+    description: 'Regenerate last message',
     category: 'message',
   },
   {
@@ -47,7 +82,8 @@ export const KEYBOARD_SHORTCUT_DOCS: readonly KeyboardShortcutDoc[] = [
     ctrl: true,
     meta: true,
     shift: true,
-    id: 'toggle-artifacts', description: 'Toggle artifacts panel',
+    id: 'toggle-artifacts',
+    description: 'Toggle artifacts panel',
     category: 'ui',
   },
 ];
@@ -93,11 +129,6 @@ export function useKeyboardShortcuts(options: UseKeyboardShortcutsOptions = {}) 
       // every Shift binding below has to compare against the unshifted letter.
       const key = event.key.length === 1 ? event.key.toLowerCase() : event.key;
 
-      // Driven by KEYBOARD_SHORTCUT_DOCS rather than a parallel hardcoded list.
-      // The two used to be separate, so the Settings list described bindings
-      // this matcher did not read — and a disable switch over that list would
-      // have been decorative. One source now decides both what is shown and
-      // what fires.
       const handlerFor: Record<string, (() => void) | undefined> = {
         'open-search': onSearch,
         'show-shortcuts': onShowShortcuts,
@@ -115,8 +146,7 @@ export function useKeyboardShortcuts(options: UseKeyboardShortcutsOptions = {}) 
           const modifierOk = wantsModifier ? modifierKey : !modifierKey;
           const shiftOk = Boolean(doc.shift) === event.shiftKey;
           const altOk = Boolean(doc.alt) === event.altKey;
-          const keyOk =
-            doc.key.length === 1 ? key === doc.key.toLowerCase() : key === doc.key;
+          const keyOk = doc.key.length === 1 ? key === doc.key.toLowerCase() : key === doc.key;
           // Escape must not steal a keystroke from a field the user is typing in.
           const contextOk = doc.key === 'Escape' ? !isInputField : true;
           return [modifierOk && shiftOk && altOk && keyOk && contextOk, handlerFor[doc.id]];

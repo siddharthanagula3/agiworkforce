@@ -15,7 +15,7 @@ function selectableCloudChatModelIds(profile: string): string[] {
   return [...ids];
 }
 
-describe.each(CLOUD_CHAT_PROFILES)('Cloud chat web-search coverage — %s', (profile) => {
+describe.each(CLOUD_CHAT_PROFILES)('Cloud chat web-search coverage, %s', (profile) => {
   it('enumerates a non-empty selectable model roster', () => {
     const ids = selectableCloudChatModelIds(profile);
     expect(ids.length).toBeGreaterThan(0);
@@ -35,7 +35,7 @@ describe.each(CLOUD_CHAT_PROFILES)('Cloud chat web-search coverage — %s', (pro
     }
     expect(
       incapable,
-      `selectable ${profile} models with NO web-search path (native or generic): ${incapable.join(', ') || 'none'} — either add a search/tools capability or remove them from the roster`,
+      `selectable ${profile} models with NO web-search path (native or generic): ${incapable.join(', ') || 'none'}, either add a search/tools capability or remove them from the roster`,
     ).toEqual([]);
   });
 });

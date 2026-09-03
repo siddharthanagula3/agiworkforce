@@ -41,7 +41,7 @@ export function __resetRetrievalIndexForTests(): void {
 export function buildCitation(chunk: CorpusChunk): SupportCitation {
   const snippet = chunk.text.replace(/\s+/g, ' ').trim();
   return {
-    title: chunk.heading ? `${chunk.docTitle} — ${chunk.heading}` : chunk.docTitle,
+    title: chunk.heading ? `${chunk.docTitle}, ${chunk.heading}` : chunk.docTitle,
     url: `${SITE_URL}${chunk.path}`,
     snippet: snippet.length > SNIPPET_CHARS ? `${snippet.slice(0, SNIPPET_CHARS - 1)}…` : snippet,
     docId: chunk.docId,

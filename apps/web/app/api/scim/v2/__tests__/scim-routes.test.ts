@@ -256,7 +256,7 @@ describe('SCIM entitlement gate', () => {
     ['pro', 'pro'],
     ['team', 'team'],
     ['business', 'business'],
-  ])('refuses a %s plan — enterprise_controls is enterprise-only', async (_label, planTier) => {
+  ])('refuses a %s plan, enterprise_controls is enterprise-only', async (_label, planTier) => {
     const { rawToken, state } = await harness({ planTier });
 
     const response = await usersPost(

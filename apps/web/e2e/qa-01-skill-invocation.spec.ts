@@ -121,7 +121,7 @@ interface CaseResult extends SkillCase {
   note: string;
 }
 
-test.describe('QA phase 3 — real skill invocation from real prompts', () => {
+test.describe('QA phase 3, real skill invocation from real prompts', () => {
   test.setTimeout(15 * 60 * 1000);
 
   test('each skill is reached by a natural prompt, and neutral prompts load none', async ({

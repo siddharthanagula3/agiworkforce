@@ -5,11 +5,6 @@ export interface ScheduleTemplate {
   name: string;
   cadenceLabel: string;
   description: string;
-  /**
-   * Overlaid on INITIAL_SCHEDULE_DRAFT, so a template only states what it
-   * changes. Every one sets a real recurrence — a template that left the
-   * default 'once' would be a "weekly review" that runs a single time.
-   */
   draft: Partial<ScheduleDraft>;
 }
 
@@ -80,7 +75,7 @@ export const SCHEDULE_TEMPLATES: readonly ScheduleTemplate[] = [
     draft: {
       name: 'Content ideas',
       prompt:
-        'Suggest five specific things worth writing about this week, based on what I have been working on. For each, give the angle and who it is for — not just a topic.',
+        'Suggest five specific things worth writing about this week, based on what I have been working on. For each, give the angle and who it is for, not just a topic.',
       recurrence: 'weekly',
       daysOfWeek: [1],
       timeOfDay: '10:00',

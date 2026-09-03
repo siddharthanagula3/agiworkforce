@@ -4,13 +4,6 @@ vi.mock('server-only', () => ({}));
 
 import { inspectUploadBytes } from './upload-scan';
 
-/**
- * Uploads reached a publicly-servable URL after only three checks — path
- * safety, a MIME allowlist, and a byte count — none of which open the file.
- * These cover the shapes that are dangerous specifically because of how this
- * product serves them.
- */
-
 const bytes = (...values: number[]) => Uint8Array.from(values);
 const utf8 = (text: string) => new TextEncoder().encode(text);
 
@@ -19,7 +12,7 @@ const JPEG = bytes(0xff, 0xd8, 0xff, 0xe0);
 const ZIP = bytes(0x50, 0x4b, 0x03, 0x04);
 const PDF = utf8('%PDF-1.7\nharmless document body');
 
-describe('inspectUploadBytes — honest files', () => {
+describe('inspectUploadBytes, honest files', () => {
   it.each([
     ['image/png', PNG],
     ['image/jpeg', JPEG],
@@ -37,7 +30,7 @@ describe('inspectUploadBytes — honest files', () => {
   });
 });
 
-describe('inspectUploadBytes — type confusion', () => {
+describe('inspectUploadBytes, type confusion', () => {
   it('rejects a ZIP disguised as a PNG', () => {
     const result = inspectUploadBytes(ZIP, 'image/png');
     expect(result.ok).toBe(false);
@@ -56,7 +49,7 @@ describe('inspectUploadBytes — type confusion', () => {
   });
 });
 
-describe('inspectUploadBytes — executables', () => {
+describe('inspectUploadBytes, executables', () => {
   it.each([
     ['DOS/PE', bytes(0x4d, 0x5a, 0x90, 0x00)],
     ['ELF', bytes(0x7f, 0x45, 0x4c, 0x46)],
@@ -69,7 +62,7 @@ describe('inspectUploadBytes — executables', () => {
   });
 });
 
-describe('inspectUploadBytes — SVG active content', () => {
+describe('inspectUploadBytes, SVG active content', () => {
   it('accepts a static SVG', () => {
     const svg = utf8(
       '<svg xmlns="http://www.w3.org/2000/svg"><rect width="10" height="10"/></svg>',
@@ -104,7 +97,7 @@ describe('inspectUploadBytes — SVG active content', () => {
   });
 });
 
-describe('inspectUploadBytes — PDF active content', () => {
+describe('inspectUploadBytes, PDF active content', () => {
   it.each([
     ['JavaScript', '%PDF-1.7\n/OpenAction << /S /JavaScript /JS (app.alert(1)) >>'],
     ['launch action', '%PDF-1.7\n<< /S /Launch /F (cmd.exe) >>'],
@@ -116,7 +109,7 @@ describe('inspectUploadBytes — PDF active content', () => {
   });
 });
 
-describe('inspectUploadBytes — reporting', () => {
+describe('inspectUploadBytes, reporting', () => {
   it('reports every distinct problem rather than stopping at the first', () => {
     const result = inspectUploadBytes(utf8('#!/bin/sh\necho hi'), 'image/png');
     expect(result.findings.length).toBeGreaterThan(1);

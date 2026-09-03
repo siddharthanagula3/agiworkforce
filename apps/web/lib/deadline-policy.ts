@@ -34,21 +34,6 @@ export const IMAGE_GENERATION_PROVIDER_DEADLINE_MS = 55_000;
 
 export const MIN_CHILD_DEADLINE_MS = 1_000;
 
-/**
- * Clamp a child deadline to what is left of its parent's budget.
- *
- * @param preferredMs   The child's own cap when the parent has room to spare.
- * @param parentBudgetMs Total wall-clock the parent layer may use, or
- *                       `undefined` when the parent is unbounded (then the
- *                       child's own cap is the only bound).
- * @param parentElapsedMs How much of the parent's budget is already spent.
- * @returns The effective deadline: the parent's remaining budget when that is
- *          the smaller number, EXCEPT that the result is never below
- *          `MIN_CHILD_DEADLINE_MS`. A child admitted with the parent already
- *          spent therefore overruns it by up to 1 s — the floor wins on
- *          purpose (see `MIN_CHILD_DEADLINE_MS`), and 1 s is inside the
- *          teardown reserve rather than inside the parent's budget.
- */
 export function nestedDeadlineMs(
   preferredMs: number,
   parentBudgetMs: number | undefined,

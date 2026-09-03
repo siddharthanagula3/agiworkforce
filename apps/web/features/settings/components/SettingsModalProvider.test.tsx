@@ -46,14 +46,7 @@ describe('SettingsModalProvider', () => {
   });
 });
 
-describe('SettingsModalProvider — background is hidden from assistive tech', () => {
-  /**
-   * Radix sets aria-modal and hides the dialog's body-level siblings, but
-   * #main-content is not one it reaches: measured live, 1178 characters of the
-   * chat surface stayed readable behind the open dialog. Focus is trapped, so
-   * keyboard users were fine and only a screen reader's virtual cursor could
-   * wander out — which is exactly the case a focus trap cannot cover.
-   */
+describe('SettingsModalProvider, background is hidden from assistive tech', () => {
   function withMainContent(): HTMLElement {
     const main = document.createElement('div');
     main.id = 'main-content';

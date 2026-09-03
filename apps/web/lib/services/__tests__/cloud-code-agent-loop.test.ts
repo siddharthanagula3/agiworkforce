@@ -432,7 +432,7 @@ describe('cloud code turn usage accounting', () => {
   });
 });
 
-describe('HARD-008 — the command deadline is clamped to the turn budget', () => {
+describe('HARD-008, the command deadline is clamped to the turn budget', () => {
   it('gives a command only the turn budget that is left', async () => {
     const runner = runnerStub();
     const base = 5_000_000;

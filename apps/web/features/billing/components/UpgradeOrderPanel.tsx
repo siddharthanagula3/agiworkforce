@@ -266,7 +266,7 @@ export function UpgradeOrderPanel({
           /*
             Every branch above needs a figure the preview returned, so a failed
             preview fell through to nothing and left a titled card with an empty
-            body — which reads as a panel still loading rather than one that
+            body, which reads as a panel still loading rather than one that
             gave up. The reason is already stated below in the error line; this
             says only that there is no order to show.
           */

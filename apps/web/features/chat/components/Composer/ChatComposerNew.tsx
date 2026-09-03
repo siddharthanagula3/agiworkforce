@@ -113,9 +113,6 @@ import {
   isImageAspectRatioSupported,
   type ImageAspectRatio,
 } from '../../lib/imageGenerationOptions';
-// Video aspect/quality options come from the shared model catalog, not a
-// web-local copy — Mobile and Desktop read the same source, so a model that
-// publishes no 4k size cannot offer it on one surface and hide it on another.
 import { getVideoAspectOptionsForModel, getVideoQualityOptionsForModel } from '@agiworkforce/types';
 import {
   consumePendingMcpContextSelection,
@@ -146,7 +143,6 @@ const COMPOSER_MAX_CHARS = MANAGED_CLOUD_CHAT_MAX_MESSAGE_LENGTH;
 /** Show the counter only once the message is long enough for it to matter. */
 const COMPOSER_COUNTER_THRESHOLD = Math.floor(COMPOSER_MAX_CHARS * 0.75);
 
-/** Composer work mode — claude.ai Chat/Cowork parity ("AGI Work" here). */
 export type ComposerWorkMode = CloudWorkMode;
 
 type ComposerSendArgs = [
@@ -330,20 +326,6 @@ interface ChatComposerProps {
     enabled: boolean;
     limitReached: boolean;
   };
-  /**
-   * Persists the "Temporary chat" privacy flag for the ACTIVE conversation.
-   *
-   * AUDIT-FIX CMP-3: the toggle used to call the chat store's
-   * `updateConversation` — a local Zustand map update with NO network call —
-   * while the server reads `is_temporary` from the database to decide
-   * auto-memory extraction and persistence, and `conversations` is excluded
-   * from the store's `partialize` so the flag was also lost on reload. A user
-   * who switched a live chat to "Temporary" was still having it remembered.
-   *
-   * Hosts must resolve `true` only once the write is durable. When this prop is
-   * absent the control is NOT rendered: a privacy switch with no backing is
-   * worse than no switch.
-   */
   onSetTemporaryChat?: (isTemporary: boolean) => Promise<boolean>;
   /**
    * "Project or folder" picker (Claude-composer parity). Provided only by hosts
@@ -354,10 +336,6 @@ interface ChatComposerProps {
    * project OR a folder, never both. Absent prop = no picker rendered.
    */
   projectPicker?: ComposerProjectPicker;
-  /**
-   * Skips the load/new-chat auto-focus. Set when the route was opened by
-   * clicking a message in search — the highlighted message keeps attention.
-   */
   suppressAutoFocus?: boolean;
 }
 
@@ -387,15 +365,6 @@ export const VIDEO_MODELS: VideoModelOption[] = getModels({ modelTypes: ['video'
 // Default = first video model in catalog order, same contract as images.
 const VIDEO_MODEL_DEFAULT = VIDEO_MODELS[0]?.id ?? '';
 
-/**
- * AUDIT-FIX CMP-9: split a leading `/token` off the composer text.
- *
- * The registry documents the argument form (`/search latest AI news`) but the
- * composer only ever recognised a bare token — the slash menu closed on the
- * first space and nothing else parsed the line, so the documented form was
- * unreachable and sent as literal text. These helpers let both the menu path
- * and the send path read the same shape.
- */
 function splitSlashCommand(value: string): { token: string; argument: string } | null {
   const match = /^\/([A-Za-z0-9][A-Za-z0-9_-]*)(?:[ \t]+([\s\S]*))?$/.exec(value);
   if (!match) return null;
@@ -705,23 +674,6 @@ const ChatComposerNewComponent = ({
   const parkedSend = useMemo(() => firstParkedSend(parkedSends), [parkedSends]);
   /** Fingerprint of the parked send this composer is currently holding. */
   const restoredParkedSendRef = useRef<string | null>(null);
-  // Follow-up queue (claude.ai / ChatGPT parity): a message composed while the
-  // current turn is still streaming is captured here and auto-sent when the turn
-  // finishes, so the user never has to wait or manually re-send. Snapshotting the
-  // exact onSend arguments (incl. the toggle/skill/project meta) at queue time
-  // avoids sending with stale options if the user changes a toggle afterward.
-  //
-  // AUDIT-FIX STR-8/BUG-15: the snapshot now carries the conversation it was
-  // composed FOR. The flush effect below fires on any isTurnActive true->false
-  // edge -- including the one caused by navigating to another chat -- and used
-  // to call `onSend` with no conversation id, so the host resolved it to
-  // whatever chat had become active and a message written for A was sent into B.
-  //
-  // COMPOSER-005: the queue used to be a single slot, so a second send while a
-  // follow-up was already waiting silently destroyed the first — a typed message
-  // vanished with nothing on screen saying so. It is a list now; the flush still
-  // releases exactly one message per finished turn, because the server's
-  // per-conversation concurrency guard has not changed.
   const [queuedFollowUps, setQueuedFollowUps] = useState<QueuedFollowUp[]>([]);
   const queuedFollowUpsRef = useRef<QueuedFollowUp[]>(queuedFollowUps);
   queuedFollowUpsRef.current = queuedFollowUps;
@@ -765,7 +717,6 @@ const ChatComposerNewComponent = ({
   const [selectedMcpContext, setSelectedMcpContext] = useState<McpContextSelection | null>(null);
   const [showSlashMenu, setShowSlashMenu] = useState(false);
   const [slashQuery, setSlashQuery] = useState('');
-  // Cowork folder — local-only; handle is never forwarded to any API route.
   const folderName = useCoworkFolderStore((s) => s.folderName);
   const pickFolder = useCoworkFolderStore((s) => s.pickFolder);
   const clearFolder = useCoworkFolderStore((s) => s.clearFolder);
@@ -804,18 +755,6 @@ const ChatComposerNewComponent = ({
     return () => window.removeEventListener(MCP_CONTEXT_SELECTED_EVENT, listener);
   }, []);
 
-  /**
-   * AUDIT-FIX CMP-11/CMP-14: client gates now read the SAME canonical billing
-   * catalog the server enforces.
-   *
-   * AGI Work was gated on `!isFreeTrial` (i.e. any tier that is not the website
-   * free trial), while `request-processor.ts` requires
-   * `canUseBillingPlanCapability(planTier, 'agi_work')` — PRO_TIERS. A
-   * **basic**-tier user therefore got a fully enabled Chat | AGI Work toggle and
-   * a hard `agi_work_plan_required` error on send. "Create image" had no tier
-   * check at all while `/api/media/image/generate` rejects non-Pro with 403,
-   * so the user composed a whole prompt and failed after a round trip.
-   */
   const subscriptionTier = useBillingStore((s) => s.subscription?.tier ?? 'free');
   const billingPolicyReady = useBillingStore(isBillingPolicyReady);
   const billingPolicyError = useBillingStore((s) => s.error);
@@ -840,21 +779,6 @@ const ChatComposerNewComponent = ({
   const hostCanGenerateImage = typeof onGenerateImage === 'function';
   const hostCanGenerateVideo = typeof onGenerateVideo === 'function';
 
-  /**
-   * AUDIT-FIX CMP-1/CMP-2/CMP-5: the composer's send options now live in the
-   * chat store, keyed by conversation.
-   *
-   * They were `useState` here, and `WebChatPage` renders this component in the
-   * two opposite branches of an `isEmptyChat ? ... : ...` ternary — so sending
-   * the first message unmounted one instance and mounted the other, resetting
-   * work mode, Deep Research, Run code, Office files, style, image
-   * mode and the selected skill with nothing on screen saying so. A chat
-   * started in AGI Work silently became a plain chat from message 2, and
-   * `applyWorkMode` server-side only ever applied to turn 1.
-   *
-   * Store-backed state survives that unmount/remount, and keying it by
-   * conversation stops the toggles leaking from one chat into the next.
-   */
   const toggleBucketKey = conversationId ?? PENDING_CONVERSATION_KEY;
   const storedComposerToggles = useChatStore(
     (s) => s.composerTogglesByConversation[toggleBucketKey],
@@ -927,9 +851,6 @@ const ChatComposerNewComponent = ({
     [connectedConnectorIds, connectorSources, connectorCustomNames],
   );
 
-  // "Project or folder" picker state (rendered only when the host passes
-  // projectPicker — see the prop doc). The project selection lives in the
-  // host's store; only the open/search UI state is local.
   const [showProjectPicker, setShowProjectPicker] = useState(false);
   const [projectQuery, setProjectQuery] = useState('');
 
@@ -952,10 +873,6 @@ const ChatComposerNewComponent = ({
     }
   }, [billingPolicyReady, canUseAgiWork, pickerActiveProjectId, setWorkMode, conversationId]);
 
-  // Platform capabilities (PLATFORM axis — does this surface expose the action at
-  // all). Sourced from the shared capability matrix via the CapabilityProvider;
-  // never branch on `platform === 'desktop'` or probe browser APIs. These gate
-  // RENDERING (absent on web), composing with the model/tier gates below.
   const canUseWorkingDirectory = useCapability('canUseWorkingDirectory');
   const canTakeScreenshotCap = useCapability('canTakeScreenshot');
 
@@ -1006,16 +923,6 @@ const ChatComposerNewComponent = ({
   const [showVideoAspectMenu, setShowVideoAspectMenu] = useState(false);
   const [showVideoQualityMenu, setShowVideoQualityMenu] = useState(false);
 
-  /**
-   * Aspect/quality choices come from the model registry, so the picker is
-   * truthful per model: a model that publishes no 4k size never offers it,
-   * while models with broader envelopes expose their catalog-owned ratios.
-   *
-   * Like the image ratio above, the effective values are DERIVED during render
-   * rather than corrected by an effect — a model switch must not leave an
-   * unsupported tuple staged for even one frame, because that frame is what
-   * the send would use.
-   */
   const videoAspectOptions = useMemo(
     () => getVideoAspectOptionsForModel(videoModelId),
     [videoModelId],
@@ -1088,23 +995,6 @@ const ChatComposerNewComponent = ({
       : hasDocumentAttachments
         ? 'document'
         : 'image';
-  /**
-   * AUDIT-FIX MEDIA-VIDEO-01 (confirms VOICE-MEDIA-010): staged attachments
-   * were silently destroyed by an image/video send.
-   *
-   * `hasAttachmentConflict` above only asks whether the selected TEXT model can
-   * read the file, so it never fired in a media mode. Meanwhile the media send
-   * paths build their request from prompt + generation options only —
-   * `onGenerateImage`/`onGenerateVideo` carry no attachment field, and
-   * `ManagedMediaVideoGenerationRequestSchema` has no `source_image` — and then
-   * `clearComposerState()` wiped the file with nothing on screen saying so.
-   *
-   * Until a real reference-image contract exists end to end, the honest
-   * behaviour is to refuse the staging rather than accept and discard it:
-   * `addChatAttachments` below rejects new files while a media mode is active,
-   * and anything already staged when the mode is entered blocks the send behind
-   * the explicit banner instead of disappearing.
-   */
   const mediaModeActive = imageMode || videoMode;
   const mediaModeNoun = imageMode ? 'Image' : 'Video';
   const mediaAttachmentConflict = mediaModeActive && attachments.length > 0;
@@ -1133,32 +1023,10 @@ const ChatComposerNewComponent = ({
   const researchAvailableForModel =
     isAutoSelected || modelSupportsResearch(selectedModelCaps, selectedModelMeta?.contextWindow);
   const modelSupportsThinkingCap = selectedModelCaps?.thinking ?? false;
-  // Same both-signals rule as web search above: the catalog capability is
-  // necessary but not sufficient. Native-tier providers (anthropic/google/
-  // openai) run code on their own provider-hosted interpreter, so the catalog
-  // flag alone is enough for them. Everyone else executes via E2B, which the
-  // server only offers when the deployment's cut-over flag is on
-  // (AGI_E2B_EXECUTION=1, surfaced via /api/me feature_flags.code_execution) —
-  // gate those on BOTH signals so the "Run code" toggle is never a cosmetic
-  // dead control. The server's real gate is the inline check in
-  // request-processor.ts (~line 1239, `resolvedModelCaps?.codeExecution ?? true`);
-  // that check is deliberately MORE permissive than this one for models absent
-  // from the catalog (defaults to allowed, so a missing catalog entry never
-  // silently drops the tool), so this is not a byte-for-byte mirror — this
-  // client-side gate stays conservative (defaults to unavailable) so the
-  // toggle is never rendered as a control the model may not actually honor.
-  // Mirrored exactly by packages/ui/unified-chat/src/lib/codeExecutionAvailability.ts
-  // (desktop/mobile), which shares this file's 3-signal formula.
   const deploymentCodeExecution = useBillingStore((s) => s.featureFlags?.code_execution ?? false);
   const providerHasNativeCodeExecution = ['anthropic', 'google', 'openai'].includes(
     (selectedModelMeta?.provider ?? '').toLowerCase(),
   );
-  // Two honest paths (mirrors packages/ui/unified-chat isCodeExecutionAvailable):
-  // native-tier providers run code on their own interpreter (catalog codeExecution
-  // cap decides); everyone else uses the model-agnostic platform E2B sandbox, which
-  // only needs tool-calling + the E2B deployment flag — so a tools-capable
-  // open-weight model with `codeExecution:false` gets an honest
-  // Run-code toggle when E2B is live, never a cosmetic dead control.
   const modelSupportsCodeExecution =
     isAutoSelected ||
     ((selectedModelCaps?.codeExecution ?? false) && providerHasNativeCodeExecution) ||
@@ -1234,7 +1102,6 @@ const ChatComposerNewComponent = ({
     videoMode,
   ]);
 
-  // Incognito / temporary chat — wired to the live web-chat-store
   const activeConversationId = useChatStore((s) => s.activeConversationId);
   const isIncognito = useChatStore((s) => {
     const id = s.activeConversationId;
@@ -1319,13 +1186,6 @@ const ChatComposerNewComponent = ({
   const overflowMenuRef = useRef<HTMLDivElement>(null);
   const projectPickerRef = useRef<HTMLDivElement>(null);
   const mentionsRef = useRef<HTMLDivElement>(null);
-  // UI-16: every remaining composer popover is portaled through
-  // AnchoredComposerMenu for the reason documented in that file — the composer
-  // sits inside overflow-hidden shell columns, so an `absolute` popover taller
-  // than the space above it is silently cut off and its rows stop taking
-  // pointer events. Each needs its own trigger to anchor from, and the project
-  // picker needs a content ref too because its outside-click test can no longer
-  // rely on DOM containment.
   const projectPickerTriggerRef = useRef<HTMLButtonElement>(null);
   const projectPickerMenuRef = useRef<HTMLDivElement>(null);
   const imageAspectTriggerRef = useRef<HTMLButtonElement>(null);
@@ -1461,22 +1321,6 @@ const ChatComposerNewComponent = ({
       clearParkedSend(restoredFingerprint);
     }
     clearAttachments();
-    // Deep Research and style are persistent options. Managed Web search is an
-    // ambient capability and is re-derived from the selected model/deployment.
-    // Do not reset those values in the after-send clear.
-    //
-    // AUDIT-FIX CMP-1/CMP-2: that intent is now actually honoured — the toggles
-    // live in the chat store keyed by conversation, so the empty→non-empty
-    // remount that used to wipe them no longer touches them.
-    //
-    // A skill genuinely IS a one-shot choice, so it still clears here. Image and
-    // video mode are NOT: this used to drop them on every send, so generating a
-    // second image meant reopening the menu and re-picking the mode and model
-    // each time, and the composer appeared to snap back to a text model the
-    // instant you pressed send. Observed by the founder on both modes. Every
-    // comparable product keeps you in the mode until you leave it, and there is
-    // already an explicit way out — the × on the mode pill, which clears the
-    // mode and its model together.
     setComposerToggles({ selectedSkillName: null });
     setSelectedMcpContext(null);
     setLocalNotice(null);
@@ -1495,9 +1339,6 @@ const ChatComposerNewComponent = ({
     if (textareaRef.current) {
       textareaRef.current.style.height = COMPOSER_AUTO_HEIGHT;
     }
-    // `availableImageModels`/`availableVideoModels` are gone from these deps
-    // because the clear no longer reads them — the media model now survives a
-    // send, so there is nothing here to reset it to.
   }, [clearAttachments, clearDraftContent, clearParkedSend, conversationId, setComposerToggles]);
 
   useEffect(() => {
@@ -1512,14 +1353,6 @@ const ChatComposerNewComponent = ({
     if (!suppressAutoFocus) takeIdleFocus();
   }, [clearComposerState, clearSignal, suppressAutoFocus, takeIdleFocus]);
 
-  /**
-   * AUDIT-FIX MEDIA-VIDEO-01: every attachment entry point on this surface
-   * funnels through here (the + menu's file input, drag-and-drop, paste,
-   * screenshot capture and the camera dialog), so this is the one place that
-   * can refuse a file the media send paths would only throw away. Refusing out
-   * loud is the point — the previous behaviour accepted the file, showed it in
-   * the preview strip, and then destroyed it on send.
-   */
   const addChatAttachments = useCallback(
     (files: File[]) => {
       if (files.length === 0) return;
@@ -1543,24 +1376,8 @@ const ChatComposerNewComponent = ({
     [addChatAttachments],
   );
 
-  /**
-   * AUDIT-FIX CMP-15: paste-to-attach. The web composer had no `onPaste`
-   * handler anywhere in its directory, so pasting a screenshot was silently
-   * ignored while drag-and-drop worked — the single most common way people
-   * attach a screenshot. Mirrors the shape already proven in
-   * packages/ui/unified-chat/src/components/ChatInput.tsx.
-   */
   const [isCapturingScreenshot, setIsCapturingScreenshot] = useState(false);
 
-  /**
-   * AUDIT-FIX CMP-10: capture the screen and attach the frame.
-   *
-   * Same contract as the shared `AttachmentMenu`'s `onScreenshot(file)` path
-   * (packages/ui/unified-chat) — the web composer was the drifted copy that
-   * rendered the row with no handler at all. Render-gated by
-   * `canTakeScreenshot`, so this never runs on a surface without screen
-   * capture; a cancelled picker resolves by rejection and leaves no notice.
-   */
   const handleTakeScreenshot = useCallback(async () => {
     setShowOverflowMenu(false);
     setIsCapturingScreenshot(true);
@@ -1598,7 +1415,7 @@ const ChatComposerNewComponent = ({
       }
       addChatAttachments([new File([blob], `screenshot-${Date.now()}.png`, { type: 'image/png' })]);
     } catch {
-      // User cancelled the picker or denied permission — not an error state.
+      // noop
     } finally {
       stream?.getTracks().forEach((track) => track.stop());
       setIsCapturingScreenshot(false);
@@ -1757,9 +1574,6 @@ const ChatComposerNewComponent = ({
     setShowOverflowMenu(false);
   }, []);
 
-  // ---------------------------------------------------------------------------
-  // "Project or folder" picker — derived state and handlers
-  // ---------------------------------------------------------------------------
   const activePickerProject = projectPicker
     ? (projectPicker.projects.find((p) => p.id === projectPicker.activeProjectId) ?? null)
     : null;
@@ -1806,9 +1620,6 @@ const ChatComposerNewComponent = ({
     });
   }, [closeProjectPicker, pickFolder, projectPicker]);
 
-  // Switching back to Chat clears the scope selection: what the chip shows is
-  // exactly what the next send carries — no hidden project sticking to a
-  // "Chat"-labeled composer.
   const handleWorkModeChange = useCallback(
     (mode: ComposerWorkMode) => {
       setWorkMode(mode);
@@ -1884,9 +1695,6 @@ const ChatComposerNewComponent = ({
     [availableSkills, mentionMatches],
   );
 
-  // Projects only join the mention menu on the surface state where the scope
-  // chip is rendered — elsewhere `onSelectProject` is cleared again on send, so
-  // an @project row would be a control the viewer sees do nothing.
   const projectScopeSelectable = Boolean(
     projectPicker && (workMode === 'agiwork' || !canUseAgiWork) && !imageMode,
   );
@@ -2018,18 +1826,6 @@ const ChatComposerNewComponent = ({
     },
   };
 
-  /**
-   * AUDIT-FIX CMP-8/CMP-9: resolve a slash command against what the selected
-   * model and plan can ACTUALLY do, and say so when they can't.
-   *
-   * The previous implementation unconditionally called `setMessage('')` and
-   * then switched on only `search|think|image|code` with no `default` branch —
-   * so a custom command defined in settings did nothing except wipe whatever
-   * the user had typed, and its `template` field was never read by any composer
-   * code. `/think` and `/code` also set flags that the capability effects above
-   * immediately cleared for unsupported models, so the command silently did
-   * nothing at all.
-   */
   const resolveSlashCommand = useCallback(
     (commandId: string, argument: string): SlashCommandOutcome => {
       const custom = customCommands.find((c) => c.id === commandId || c.name === commandId);
@@ -2100,9 +1896,6 @@ const ChatComposerNewComponent = ({
           }
           return { status: 'applied', content: argument, toggles: { codeExecutionEnabled: true } };
         default:
-          // browser/terminal/database are capability-gated to desktop and never
-          // reach the web menu (filterSlashCommandsByCapability). Anything else
-          // that lands here is unknown — say so instead of wiping the input.
           return {
             status: 'unavailable',
             notice: `"/${commandId}" isn't available on this surface.`,
@@ -2200,15 +1993,6 @@ const ChatComposerNewComponent = ({
     onStop?.();
   }, [onStop]);
 
-  /**
-   * AUDIT-FIX CMP-9: a fully typed command (`/search latest AI news`) that the
-   * send path should honour. Only an EXACT match against a universal built-in
-   * or a user-defined command counts — a message that merely begins with a
-   * slash is ordinary text and is sent verbatim.
-   *
-   * The built-in ids come from the canonical registry; commands carrying a
-   * `requiredCapability` are desktop-local and never reachable here.
-   */
   const pendingSlashCommand = useMemo(() => {
     const parsed = splitSlashCommand(message);
     if (!parsed) return null;
@@ -2278,17 +2062,6 @@ const ChatComposerNewComponent = ({
       }
     }
 
-    // Warn — do not block — when the outgoing text looks like it contains a
-    // credential.
-    //
-    // The scanner existed (`lib/security/secret-patterns`) but was only wired
-    // into the support-handoff transcript path, so a user pasting an API key
-    // straight into chat got no signal at all before it left the device.
-    //
-    // Deliberately non-blocking and one-shot: the check is a synchronous regex
-    // pass, false positives are possible, and refusing to send someone's own
-    // message is a worse failure than warning about it. The second send goes
-    // through.
     if (!secretWarningAcknowledgedRef.current && containsSecrets(outgoingContent)) {
       secretWarningAcknowledgedRef.current = true;
       setLocalNotice(
@@ -2297,16 +2070,8 @@ const ChatComposerNewComponent = ({
       return;
     }
 
-    // Image generation mode: delegate entirely to parent via onGenerateImage.
-    // Image generation is not part of the streaming chat turn, so it is not
-    // queued — it simply waits until the current turn is idle.
     if (sendImageMode) {
       if (isTurnActive) return;
-      // AUDIT-FIX MEDIA-VIDEO-01: never let this branch run with files staged —
-      // it builds its request from prompt + generation options only, so
-      // `clearComposerState()` below would destroy them. `sendImageMode` can
-      // also be turned on by a typed `/image` command at this exact point,
-      // which is why the guard lives here and not only on the render banner.
       if (attachments.length > 0) {
         setLocalNotice(
           'Image generation works from your prompt only. Remove the attached files, or leave image mode to send them to the chat model.',
@@ -2425,11 +2190,6 @@ const ChatComposerNewComponent = ({
       },
     ];
 
-    // Follow-up while the current turn is still streaming: queue this message and
-    // flush it when the turn finishes (see the active-turn transition effect below).
-    // Only the latest queued message is kept. This is the honest counterpart to the
-    // server's per-conversation concurrency guard — the client never fires a second
-    // concurrent turn; it waits for the first to settle.
     if (isTurnActive) {
       // AUDIT-FIX STR-8/BUG-15: capture the TARGET conversation alongside the
       // arguments so the flush can prove it is still delivering to the chat the
@@ -2637,9 +2397,6 @@ const ChatComposerNewComponent = ({
   useEffect(() => {
     if (wasLoadingRef.current && !isTurnActive) {
       const queue = queuedFollowUpsRef.current;
-      // Exactly one message is released per finished turn — the rest stay
-      // queued for the next edge — so the client still never fires two
-      // concurrent turns at one conversation.
       const deliverable = queue.filter((item) => item.conversationId === (conversationId ?? null));
       const stranded = queue.filter((item) => item.conversationId !== (conversationId ?? null));
       const next = deliverable[0];
@@ -2691,12 +2448,6 @@ const ChatComposerNewComponent = ({
     setQueuedFollowUps((current) => current.filter((item) => item.id !== id));
   }, []);
 
-  /**
-   * Pull a queued message back into the composer to change it. The slot is kept
-   * (`editingQueuedIdRef`) so re-sending replaces it in place rather than
-   * shuffling it to the back of the queue, and the attachments come back with
-   * the text — dropping them would be the same silent data loss this row fixes.
-   */
   const editQueuedMessage = useCallback(
     (id: string) => {
       const target = queuedFollowUpsRef.current.find((item) => item.id === id);
@@ -2823,13 +2574,6 @@ const ChatComposerNewComponent = ({
   const showCharCounter = messageLength >= COMPOSER_COUNTER_THRESHOLD;
   const charCounterExceeded = messageLength >= COMPOSER_MAX_CHARS;
 
-  /**
-   * Derive the SendButton mode. While a turn streams the button always offers
-   * 'stop' (Stop stays reachable); a follow-up composed during streaming is
-   * queued via Enter and shown as a pending chip, then auto-sent on completion
-   * (see handleSubmit + the flush effect above) — so the button never needs a
-   * separate 'queue' state, which would have hidden Stop.
-   */
   const sendButtonMode = isTurnActive ? 'stop' : 'send';
 
   /**
@@ -2926,7 +2670,7 @@ const ChatComposerNewComponent = ({
                   ? 'Queued · sends when the current response finishes: '
                   : `Queued ${index + 1} of ${queuedFollowUps.length}: `}
                 {queued.preview}
-                {/* AUDIT-FIX CMP-16: say which toggles the queued turn will carry —
+                {/* AUDIT-FIX CMP-16: say which toggles the queued turn will carry.
                     they are editable while it waits (the "+" menu stays open during
                     streaming), so the user can see and change them. */}
                 {queued.toolsLabel && (
@@ -3012,7 +2756,7 @@ const ChatComposerNewComponent = ({
         </div>
       )}
 
-      {/* Working Folder Chip — desktop-only capability; absent on web/mobile.
+      {/* Working Folder Chip, desktop-only capability; absent on web/mobile.
           When the unified "Project or folder" picker is present its chip shows
           the folder selection instead, so this standalone chip only renders on
           surfaces without the picker. */}
@@ -3283,21 +3027,11 @@ const ChatComposerNewComponent = ({
 
         <div
           className={cn(
-            // Column layout: the textarea sits full-width on row 1, and the control
-            // cluster below is a SINGLE flex-nowrap row so the Send button can never
-            // drop to a second line. A previous flex-wrap+order layout wrapped inside
-            // a conversation once the sidebar narrowed the column: flex-wrap breaks
-            // lines on each item's CONTENT size, so min-w-0 alone can't stop it — only
-            // flex-nowrap forces one line, while the min-w-0 chain lets the model
-            // pill/hint shrink to fit within it.
-            // M11: every vertical value below `sm` is its own step; the
-            // resting box ran to ~130px at 390px against ChatGPT's ~87px. The
-            // `sm:` halves reproduce today's desktop numbers exactly.
             'flex flex-col gap-1.5 p-1.5 sm:gap-2 sm:p-3',
             emptyState && 'px-3 py-1.5 sm:px-5 sm:py-3',
           )}
         >
-          {/* Textarea wrapper — row 1, full width */}
+          {/* Textarea wrapper, row 1, full width */}
           <div
             ref={composerRowRef}
             className={cn(
@@ -3329,10 +3063,6 @@ const ChatComposerNewComponent = ({
                     : videoMode
                       ? 'Describe the video you want'
                       : // AUDIT-FIX shell-nav-ia-gap-03: the work-mode axis now
-                        // reaches the input itself. Gated on `canUseAgiWork` for
-                        // the same reason the send does (`workMode: canUseAgiWork
-                        // ? workMode : 'chat'`) — a stale toggle on a downgraded
-                        // plan must not promise a mode the send will not use.
                         ((canUseAgiWork ? WORK_MODE_PLACEHOLDERS[workMode] : null) ?? placeholder)
               }
               // Type-ahead: the textarea stays enabled while a turn streams so the
@@ -3376,7 +3106,7 @@ const ChatComposerNewComponent = ({
             </p>
           )}
 
-          {/* Control cluster — row 2, a single non-wrapping line (flex-nowrap). */}
+          {/* Control cluster, row 2, a single non-wrapping line (flex-nowrap). */}
           <div className="flex min-w-0 flex-nowrap items-center gap-1 sm:gap-2">
             {/* + Overflow Menu Button */}
             <div className={cn('relative shrink-0')} ref={overflowRef}>
@@ -3386,12 +3116,6 @@ const ChatComposerNewComponent = ({
                   const next = !showOverflowMenu;
                   setShowOverflowMenu(next);
                 }}
-                // AUDIT-FIX CMP-16: the textarea deliberately stays enabled
-                // while a turn streams so a follow-up can be typed ahead and
-                // queued — but the "+" menu was disabled, so that queued
-                // message could not have its tools set. Only the composer-level
-                // disabled states gate it now; the individual rows inside the
-                // menu keep their own capability gates.
                 disabled={composerDisabled}
                 className={cn(
                   'relative flex h-8 w-8 sm:h-9 sm:w-9 items-center justify-center rounded-full transition-colors',
@@ -3427,7 +3151,7 @@ const ChatComposerNewComponent = ({
                 Portaled and viewport-clamped (see AnchoredComposerMenu): as an
                 `absolute bottom-full` child it was clipped by the chat shell's
                 overflow-hidden column, and at ordinary laptop viewport heights
-                the clip removed its FIRST row — "Add photos & files" — leaving
+                the clip removed its FIRST row, "Add photos & files", leaving
                 the product with no reachable way to attach a file. */}
               <AnchoredComposerMenu
                 anchorRef={overflowTriggerRef}
@@ -3440,7 +3164,7 @@ const ChatComposerNewComponent = ({
               >
                 {
                   <>
-                    {/* 0. Work mode (Chat | AGI Work) — shown in the menu ONLY
+                    {/* 0. Work mode (Chat | AGI Work), shown in the menu ONLY
                         below sm, where the inline segmented toggle is hidden to
                         free composer-row width for the model selector. Keeps
                         work-mode fully switchable on the narrow (mobile)
@@ -3516,7 +3240,7 @@ const ChatComposerNewComponent = ({
 
                         AUDIT-FIX CMP-11: this row had NO tier check in the
                         composer while /api/media/image/generate rejects
-                        non-Pro with 403 — the user composed a whole prompt and
+                        non-Pro with 403, the user composed a whole prompt and
                         failed after a round trip, with `onUpgradeRequest`
                         available and never called. Deep Research one row below
                         was already gated correctly; this now matches it. */}
@@ -3606,7 +3330,7 @@ const ChatComposerNewComponent = ({
                         /api/media/video/generate has been implemented and
                         entitled (billing-catalog: max_15x + enterprise) all
                         along, and MessageBubble already renders the in-flight
-                        shimmer and the finished player — but nothing in the
+                        shimmer and the finished player, but nothing in the
                         product ever started one, so every state below the
                         composer was unreachable. Same component, same gating
                         idiom, same upgrade affordance as "Create image" one row
@@ -3690,11 +3414,11 @@ const ChatComposerNewComponent = ({
                       </>
                     )}
 
-                    {/* 3. Take a screenshot — desktop-only capability. Render-gated
+                    {/* 3. Take a screenshot, desktop-only capability. Render-gated
                         so it is ABSENT (not merely disabled) on web/mobile.
 
                         AUDIT-FIX CMP-10: this rendered an icon and a label with
-                        NO onClick — it did nothing and did not even close the
+                        NO onClick, it did nothing and did not even close the
                         menu. The shared AttachmentMenu already implements the
                         real behaviour (capture → attach as a File); this is now
                         the same contract, driven by the same capability flag. */}
@@ -3717,13 +3441,13 @@ const ChatComposerNewComponent = ({
                       </button>
                     )}
 
-                    {/* 4. Select working folder — desktop-only capability (local
+                    {/* 4. Select working folder, desktop-only capability (local
                         File System Access). Render-gated: ABSENT on web/mobile.
                         The browser-API `canPickFolder` check is NOT the platform
                         gate; it only disables when the desktop browser lacks the
                         API. When the unified "Project or folder" picker is
                         present, folder selection lives there ("Choose a
-                        different folder") — this legacy row only renders on
+                        different folder"), this legacy row only renders on
                         surfaces without the picker so the control never
                         appears twice. */}
                     {!projectPicker && canUseWorkingDirectory && (
@@ -3781,7 +3505,7 @@ const ChatComposerNewComponent = ({
 
                     {/* 5. Skills -- entry point that opens the settings modal at
                         the Skills pane (founder directive 2026-07-10: the plus-menu
-                        holds ENTRIES, not inline lists — the lists live in the
+                        holds ENTRIES, not inline lists, the lists live in the
                         settings modal). Per-message skill selection stays available
                         via the @mention dropdown in the textarea. */}
                     <button
@@ -3945,7 +3669,7 @@ const ChatComposerNewComponent = ({
                       }
                     />
 
-                    {/* 8b. Managed Office creation — server-owned DOCX/PPTX bytes,
+                    {/* 8b. Managed Office creation, server-owned DOCX/PPTX bytes,
                         persisted through the same generated-file pipeline as sandbox output. */}
                     <MenuToggleRow
                       icon={FileText}
@@ -3965,7 +3689,7 @@ const ChatComposerNewComponent = ({
 
                     {/* 8c. Incognito / temporary chat toggle. AUDIT-FIX CMP-3:
                         render-gated on the host actually providing a persistence
-                        path — an unbacked privacy switch is worse than none. */}
+                        path, an unbacked privacy switch is worse than none. */}
                     {activeConversationId && onSetTemporaryChat && (
                       <MenuToggleRow
                         icon={EyeOff}
@@ -4017,7 +3741,7 @@ const ChatComposerNewComponent = ({
               </div>
             )}
 
-            {/* Work-mode segmented toggle (Chat | AGI Work) — claude.ai
+            {/* Work-mode segmented toggle (Chat | AGI Work), claude.ai
               Chat/Cowork parity, sitting immediately right of "+".
               Backed: 'agiwork' reveals
               the below-composer "Project or folder" picker and the selection
@@ -4193,7 +3917,7 @@ const ChatComposerNewComponent = ({
                 )}
 
                 {/* Quality. Scoped to the chosen aspect because the two are not
-                    independent — a resolution can exist in landscape and not in
+                    independent, a resolution can exist in landscape and not in
                     portrait. Durations a quality restricts are surfaced inline
                     so the 8s-only rule is visible BEFORE a failed send. */}
                 {videoQualityOptions.length > 1 && (
@@ -4253,7 +3977,7 @@ const ChatComposerNewComponent = ({
             )}
 
             {/* Model selector. In normal mode the full ComposerFooter sits inline beside
-              the send button. In image mode the image-model picker takes its place —
+              the send button. In image mode the image-model picker takes its place.
               both use `ml-auto` so they right-align and push the mic + send to the
               right edge of the toolbar. In the flex-nowrap control row the footer is
               the only shrinkable item (min-w-0), so it truncates instead of wrapping.
@@ -4355,7 +4079,7 @@ const ChatComposerNewComponent = ({
                 mode. Before this existed, entering video mode left the TEXT
                 selector on screen, so "Describe the video you want" sat beside a
                 text model that had no part in the
-                generation the send button ran — a stale model label. */}
+                generation the send button ran, a stale model label. */}
             {videoMode && (
               <div className="relative ml-auto shrink-0">
                 <button
@@ -4559,7 +4283,7 @@ const ChatComposerNewComponent = ({
 
             <div className="my-1 border-t border-border/30" />
 
-            {/* Local folder — working-directory surfaces (desktop) only.
+            {/* Local folder, working-directory surfaces (desktop) only.
                 Render-gated by the capability matrix so web never shows a
                 folder option; canPickFolder only disables when the desktop
                 browser shell lacks the File System Access API. */}
@@ -4681,12 +4405,12 @@ const ChatComposerNewComponent = ({
       <div className="mt-2 flex min-h-5 flex-wrap items-center justify-center gap-x-1 gap-y-0.5 text-[12px] text-muted-foreground">
         {/* Standing web-search indicator. Search is ambient by design (the manual
             toggle was removed), which left nothing on screen saying whether the
-            current turn can search — `webSearchEnabled` reached the user only
+            current turn can search, `webSearchEnabled` reached the user only
             through the transient queued-follow-up chip and the collapsed send
             preview. It is derived, not a control, so it is text and not a
             button. */}
         {/* Each entry carries its own leading separator inside one flex item, so
-            a wrapped row can never end on a dangling "·" — which is exactly
+            a wrapped row can never end on a dangling "·", which is exactly
             what happened at 390px, where the row broke after the route
             disclosure. */}
         {[
@@ -4714,7 +4438,7 @@ const ChatComposerNewComponent = ({
           /* Accuracy caveat, in the position ChatGPT and Claude both use. The
              explicit Article 50(1) "you are interacting with an AI system"
              sentence was removed on 2026-08-14 in reliance on the regulation's
-             obviousness carve-out, which counsel has NOT reviewed — see
+             obviousness carve-out, which counsel has NOT reviewed, see
              ARTICLE_50_1_WEB_CARVE_OUT in lib/compliance/ai-act.ts. This
              disclaimer is what deliberately stayed; do not trim it too. */
           <span key={COMPOSER_FOOTER_KEYS.accuracy} data-testid="ai-accuracy-disclaimer">
@@ -4780,21 +4504,6 @@ const ChatComposerNewComponent = ({
   );
 };
 
-/**
- * ChatComposerNew with memoization optimization.
- *
- * + menu matches Claude's structure:
- *   Add files/photos; Skills / Connectors / Plugins entries that open the
- *   settings modal at their pane (no inline lists); Use style flyout.
- *
- * Removed from + menu: Focus Mode, Agent Mode, Tools group, Browse Directory,
- * automatic Web search, and reasoning effort (owned by the model picker).
- * Work mode returned as the BACKED (Chat | AGI Work) segmented toggle plus the
- * below-composer "Project or folder" picker (projectPicker prop): the host
- * supplies real projects, the selection threads through send meta into
- * createConversation (conversation project_id), and the server injects the
- * project's instructions/knowledge manifest — so neither control is cosmetic.
- */
 export const ChatComposerNew = memo(ChatComposerNewComponent, (prev, next) => {
   return (
     prev.onSend === next.onSend &&

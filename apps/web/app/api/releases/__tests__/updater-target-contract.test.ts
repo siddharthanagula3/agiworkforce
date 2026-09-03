@@ -2,37 +2,10 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 
-/**
- * The desktop updater shipped dead on every platform for the whole 1.2.0 line, and
- * every existing test over this route passed the entire time. They passed because
- * they hand-wrote `target: 'linux-x86_64'` — a string the real client never sent.
- * The client asked for `/api/releases/darwin/1.2.0`; the route only knows
- * `darwin-aarch64`; it 204'd forever.
- *
- * A route test cannot catch that on its own: the route was always correct. The bug
- * lived in the URL template on the other side of the contract. So this file asserts
- * both halves against each other and derives the client's string the way the plugin
- * does, instead of restating what the route already believes.
- *
- * Note what this file can and cannot tell you: it reads the WORKING TREE, so a green
- * run means the tree is coherent, never that the release is. This test went green
- * against an uncommitted edit to tauri.conf.json and was read as proof the client fix
- * had shipped, while HEAD still carried the broken template — correct selectors that
- * nothing could reach. Nothing here, and nothing else in this repository, checks a
- * release property against HEAD or against a built artifact.
- */
-
 const REPO_ROOT = path.resolve(__dirname, '../../../../../..');
 const TAURI_CONF = path.join(REPO_ROOT, 'apps/desktop/src-tauri/tauri.conf.json');
 const ROUTE = path.join(REPO_ROOT, 'apps/web/app/api/releases/[target]/[version]/route.ts');
 
-/**
- * tauri-plugin-updater substitutes `{{target}}` with `updater_os()`, which returns a
- * bare OS name, and `{{arch}}` with `std::env::consts::ARCH`. The combined
- * `{target}-{arch}` form exists in the plugin but is NOT what the URL path
- * interpolation calls, which is the entire bug — so this mirrors the substitution
- * rather than the convenience function.
- */
 const UPDATER_OS = ['darwin', 'windows', 'linux'] as const;
 const UPDATER_ARCH = ['aarch64', 'x86_64'] as const;
 

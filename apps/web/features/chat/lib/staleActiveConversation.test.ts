@@ -18,7 +18,7 @@ describe('isStaleActiveConversation', () => {
     ).toBe(true);
   });
 
-  it('is false on a genuinely fresh chat (nothing active) — no needless reset', () => {
+  it('is false on a genuinely fresh chat (nothing active), no needless reset', () => {
     expect(
       isStaleActiveConversation({
         ...base,

@@ -83,7 +83,7 @@ describe('countPluginInstallations', () => {
     expect(counts.get('unknown-pack')).toBeUndefined();
   });
 
-  it('never selects or returns a user id — only a plugin id and a count', async () => {
+  it('never selects or returns a user id, only a plugin id and a count', async () => {
     const db = database([{ plugin_id: 'engineering-pack', install_count: 1 }]);
     await countPluginInstallations(db);
     const sql = String(db.query.mock.calls[0]?.[0]);

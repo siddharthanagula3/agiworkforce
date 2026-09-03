@@ -372,7 +372,7 @@ export function WorkspacePolicySection() {
         </div>
         <div style={{ fontSize: 12, color: 'var(--text-3)', margin: '2px 0 10px' }}>
           Which clients your members may sign in to and sync from. This reads the app&apos;s own
-          identifier, so treat it as a deployment setting rather than a security boundary — the
+          identifier, so treat it as a deployment setting rather than a security boundary, the
           privacy-mode rules above are what bind regardless of client.
         </div>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 14 }}>
@@ -408,7 +408,7 @@ export function WorkspacePolicySection() {
         description={
           draft.externalSharingEnabled
             ? 'Members may publish a chat or an artifact to an anonymous public link.'
-            : 'Off. Members cannot create new public links. Links already published stay reachable — revoking those is a separate action.'
+            : 'Off. Members cannot create new public links. Links already published stay reachable, revoking those is a separate action.'
         }
         control={
           <Toggle

@@ -38,7 +38,7 @@ describe('redactSecrets', () => {
     expect(redactSecrets('my invoice doubled last month')).toBe('my invoice doubled last month');
   });
 
-  it('does not throw on a secret — a user pasting their own key must still get help', () => {
+  it('does not throw on a secret, a user pasting their own key must still get help', () => {
     expect(() => redactSecrets(OPENAI_KEY)).not.toThrow();
   });
 });

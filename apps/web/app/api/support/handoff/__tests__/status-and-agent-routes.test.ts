@@ -210,9 +210,6 @@ describe('DELETE /api/support/handoff/[sessionId]', () => {
 });
 
 describe('agent surface', () => {
-  // A support handoff belongs to any customer, so the org admin/owner role —
-  // which anyone gets by creating a workspace — must not reach it. Only a
-  // platform operator may, and a non-operator is told 404, not 403.
   it('hides the queue from a self-service org admin', async () => {
     mocks.requirePlatformAdmin.mockRejectedValue(createError.notFound('Not found.'));
 
@@ -221,7 +218,7 @@ describe('agent surface', () => {
     expect(mocks.listWaitingQueue).not.toHaveBeenCalled();
   });
 
-  it('returns queue metadata only — no transcripts for a browsing admin', async () => {
+  it('returns queue metadata only, no transcripts for a browsing admin', async () => {
     mocks.listWaitingQueue.mockResolvedValue([sessionRow()]);
 
     const response = await QUEUE(req('http://localhost/api/support/handoff/agent/queue'));

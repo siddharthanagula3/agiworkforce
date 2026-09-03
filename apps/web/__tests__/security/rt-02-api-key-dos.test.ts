@@ -1,4 +1,3 @@
-
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 vi.mock('server-only', () => ({}));
@@ -32,7 +31,7 @@ vi.mock('@/lib/server/neon-db', () => ({
 
 import { ApiKeyService, KEY_ID_REGEX } from '@/lib/services/api-key-service';
 
-describe('RT-02: API key DoS fix — fast verify path', () => {
+describe('RT-02: API key DoS fix, fast verify path', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockArgon2Verify.mockResolvedValue(false);
@@ -60,7 +59,7 @@ describe('RT-02: API key DoS fix — fast verify path', () => {
   });
 
   describe('verifyKey: parse-time rejection', () => {
-    it('returns null immediately for garbage keys — no Argon2 call', async () => {
+    it('returns null immediately for garbage keys, no Argon2 call', async () => {
       const result = await ApiKeyService.verifyKey('garbage-not-a-key');
       expect(result).toBeNull();
       expect(mockArgon2Verify).not.toHaveBeenCalled();

@@ -4,14 +4,6 @@ import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import type { AgentEventEnvelope, AgentTaskState } from '@agiworkforce/types/protocol';
 import { appendCloudAgentEvents } from './cloud-agent-run-service';
 
-/**
- * Envelope types a provider emits once per streamed token. They carry no run
- * state, so holding a handful of them for a few hundred milliseconds changes
- * nothing a reader can observe except how far behind the journal is. Every
- * other type — `task-state-changed`, tool boundaries, approvals, errors, stop —
- * flushes the moment it arrives, exactly as it did when each envelope was its
- * own transaction.
- */
 const COALESCED_EVENT_TYPES: ReadonlySet<AgentEventEnvelope['event']['type']> = new Set([
   'text-delta',
   'reasoning-delta',
@@ -34,13 +26,6 @@ export interface CloudAgentEventJournalTarget {
   runId: string;
 }
 
-/**
- * Buffers streamed agent events so a turn journals a few rows per second
- * instead of one full RLS transaction per provider token.
- *
- * Callers must `flush()` on every exit from the stream — completion, failure
- * and cancellation alike — or the tail of the run never reaches the journal.
- */
 export function createCloudAgentEventJournal(
   target: CloudAgentEventJournalTarget,
 ): CloudAgentEventJournal {

@@ -165,15 +165,6 @@ export default async function RootLayout({
     >
       <body className="antialiased">
         {/*
-         * No explicit <head> element here on purpose. The App Router owns the
-         * document head, and a literal <head> in the root layout made the
-         * server stream its children into the BODY instead — landing on top of
-         * SkipLinks and failing hydration for the whole tree on every page.
-         *
-         * First child of <body> so it still executes before any page content is
-         * parsed, which is what keeps the first paint from using the wrong
-         * theme. Inline and blocking on purpose: an external or async script
-         * paints first and flips after.
          */}
         {/* THEME_INIT_SCRIPT is a build-time constant with no interpolation and no
             request-derived input, and a <script> body cannot be text-rendered.
@@ -183,42 +174,15 @@ export default async function RootLayout({
             and SoftwareApplication. Nonce-carried for the strict CSP. */}
         <JsonLd data={[organizationSchema(), webSiteSchema(), softwareApplicationSchema()]} />
         {/*
-         * DPDP consent gating — Clerk's own product telemetry is switched off.
-         *
-         * The cookie banner gates GA4 and nothing else, because GA4 was the
-         * only tracker anyone had counted. Clerk's SDK ships an opt-OUT
-         * telemetry collector that posts to clerk-telemetry.com on mount, for
-         * every visitor, before any consent interaction — and unlike GA4 there
-         * is no switch for a visitor to reach. Rather than add a third consent
-         * category for a ping the product gets no value from, it is disabled
-         * outright: `TelemetryCollector` treats `disabled: true` as final
-         * (@clerk/shared telemetry collector, `#shouldRecord`).
-         *
-         * If this ever needs to come back, it needs a consent category and a
-         * row on /cookies in the same change — not a silent re-enable.
          */}
         <ClerkProvider localization={clerkLocalization} telemetry={{ disabled: true }}>
           <SkipLinks />
           {/*
-           * role="main" (rather than a native <main> tag) so nested route
-           * pages that already render their own <main> (marketing pages)
-           * don't end up with two <main> elements, which is invalid HTML.
-           * This still gives every route — including the authenticated
-           * chat app, which has no <main> of its own — a main landmark
-           * for assistive tech and the skip link to jump to.
            */}
           <div id="main-content" role="main" tabIndex={-1}>
             <Providers nonce={nonce}>{children}</Providers>
           </div>
           {/*
-           * SIX-25 — cookie consent.
-           *
-           * The banner is the only thing that can turn analytics on, and
-           * `AnalyticsConsentGate` is the only thing that may mount GA4. GA4
-           * used to load for every visitor whenever NEXT_PUBLIC_GA_TRACKING_ID
-           * was set, contradicting the /cookies policy ("Analytics is opt-in").
-           * The single switch for that position is
-           * `ANALYTICS_REQUIRES_CONSENT` in shared/lib/cookie-consent.ts.
            */}
           <CookieConsent />
           <WebPushOptIn />

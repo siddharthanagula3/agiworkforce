@@ -158,7 +158,7 @@ describe('GET /api/settings/organization/audit/export', () => {
     );
   });
 
-  it('streams JSONL — one event per line', async () => {
+  it('streams JSONL, one event per line', async () => {
     bind({ role: 'owner', events: [auditRow()] });
 
     const res = await EXPORT(req('/api/settings/organization/audit/export') as never);

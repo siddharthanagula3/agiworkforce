@@ -188,14 +188,6 @@ export interface MessageMetadata {
   model?: string;
   /** Provider that served the turn, written into metadata by turn persistence. */
   provider?: string;
-  /**
-   * Per-turn usage, lifted from the PERSISTED `web_messages.input_tokens` /
-   * `output_tokens` columns by `toChatMessage` on conversation load. There is
-   * no terminal `x_usage` stream frame — one was built and reverted for
-   * breaking response-builder byte parity (docs/decisions/wire-or-cut.md,
-   * "Per-message token/cost") — so these arrive with the persisted row, not
-   * mid-stream, and stay absent for temporary chats.
-   */
   tokensUsed?: number;
   inputTokens?: number;
   outputTokens?: number;
@@ -256,15 +248,6 @@ export interface MessageMetadata {
   agentActivity?: AgentActivityState;
   /** Durable server run + replay cursor for reconnecting this Cloud turn. */
   cloudAgentRun?: ManagedCloudAgentRunReference;
-  /**
-   * Structured, answerable transcript cards produced by a server tool call.
-   *
-   * Typed as the parsed union, so an entry is either `recognized: true` with a
-   * validated body or `recognized: false` carrying only its envelope and the
-   * server-authored `fallback`. A card this build cannot render still persists
-   * and still renders its fallback text — a validation gap costs the user the
-   * widget, never the answer.
-   */
   interactiveCards?: InteractiveCard[];
   interactiveCardsResumed?: boolean;
   interactiveCardSubmissionErrors?: Record<string, string>;
@@ -321,19 +304,6 @@ export interface MessageMetadata {
    * See features/chat/lib/continue-generation.ts for the continuable predicate.
    */
   finishReason?: string;
-  /**
-   * Classified payload from an additive `x_stream_error` SSE delta: the
-   * provider failed mid-stream (after the response had already committed a
-   * 200), so the turn ends with only partial content and no other visible
-   * signal (the server still sends a clean `[DONE]`; `finish_reason` cannot
-   * reliably say 'error' — see packages/ui/unified-chat's `hasStreamError` doc
-   * comment). `code`/`retryable` are surfaced when the provider adapter
-   * supplied them, so the failure stays diagnosable later and the retry
-   * affordance has something to condition on. Drives a "response may be
-   * incomplete" notice + regenerate affordance instead of silently
-   * rendering the partial as a normal completion. Persisted so the notice
-   * survives reload.
-   */
   streamError?: { message: string; code?: string; retryable?: boolean };
   errorCode?: string;
   /** Media tool type for inline rendering (e.g. 'image-generation'). */
@@ -514,22 +484,6 @@ interface ChatState {
    * packages/ui/unified-chat/src/stores/chatStore.ts.
    */
   messagesByConversation: Record<string, Message[]>;
-  /**
-   * Derived mirror of `messagesByConversation[activeConversationId]`, resolved
-   * to the ACTIVE PATH once that conversation has variants. Kept as a real state
-   * field (rather than a computed selector) so every existing consumer of
-   * `state.messages` / `useChatStore((s) => s.messages)` keeps working and keeps
-   * re-rendering on identity change. Never assign it directly: write through the
-   * message actions below, which target an explicit conversation and refresh
-   * this mirror when that conversation is the active one.
-   *
-   * The bucket above holds every row; this holds the ones the reader is looking
-   * at. That split is what keeps an abandoned variant out of the LLM prompt, the
-   * share payload and the export — all of which read the mirror — while reaction
-   * writes, artifact indexing and the pager's own counts still see the tree.
-   * A conversation with no leaf resolves to the bucket BY IDENTITY, so nothing
-   * downstream can tell the difference.
-   */
   messages: Message[];
   /**
    * The row each conversation's visible path ends at, from
@@ -879,12 +833,6 @@ function writeConversationMessages(
   };
 }
 
-/**
- * Write one conversation's rows and the leaf they are read through in a single
- * store write. `writeConversationMessages` reads the leaf from state, which is
- * exactly what a delete cannot do — its rows and its reader position change
- * together, and taking them in two writes renders the frame between them.
- */
 function writeThread(
   state: MessageStateSlice,
   key: string,
@@ -1615,28 +1563,6 @@ export const useChatStore = create<ChatState>()(
             'chat/setComposerToggles',
           ),
 
-        /**
-         * Carry the new-chat composer's toggles onto the conversation the first
-         * send just created.
-         *
-         * Toggles are keyed by conversation so they cannot leak between chats,
-         * and the new-chat surface writes into `PENDING_CONVERSATION_KEY`. But
-         * the first send creates a real conversation and navigates to it, and
-         * nothing moved the pending bucket across — so a chat started in Video
-         * (or Image, or AGI Work) reverted to a plain text composer the instant
-         * its own conversation existed, mid-generation (founder 2026-08-13).
-         * Drafts were already migrated this way; toggles were simply forgotten.
-         *
-         * Deliberately keyed to conversation CREATION rather than to any
-         * activation: doing this on every `setActiveConversation` would let the
-         * pending toggles bleed onto an existing chat opened from the sidebar.
-         * Existing toggles on the target win, and the pending bucket is cleared
-         * so the next new chat starts clean.
-         *
-         * Also migrates the new-chat surface's disabled-connector set for the
-         * same reason: a connector switched off before the first message is
-         * sent must stay off once that message creates the real conversation.
-         */
         adoptPendingComposerToggles: (conversationId) =>
           set(
             (state) => {
@@ -1785,16 +1711,6 @@ export const selectIsConversationStreaming =
  */
 const EMPTY_MESSAGES: Message[] = [];
 
-/**
- * AUDIT-FIX ROOT-CAUSE: one named conversation's transcript, resolved to its
- * ACTIVE PATH. This is the set an abandoned variant must never appear in — LLM
- * context, share, export, snapshots and the retry-banner scan all read it.
- * Anything that has to reason about the tree wants `selectConversationAllRows`.
- *
- * Resolving a branched conversation allocates, so read this imperatively
- * (`selectConversationMessages(id)(useChatStore.getState())`) rather than
- * subscribing with it; components already have the resolved path in `messages`.
- */
 export const selectConversationMessages =
   (conversationId: string | null) =>
   (state: ChatState): Message[] =>

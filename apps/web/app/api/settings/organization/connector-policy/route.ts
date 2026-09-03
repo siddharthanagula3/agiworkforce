@@ -118,9 +118,6 @@ async function handlePut(request: NextRequest): Promise<NextResponse | Response>
     allowCustomConnectors: parsed.data.allowCustomConnectors,
   };
 
-  // A connector on both lists is an administrator contradicting themselves. The
-  // evaluator resolves it — deny wins — but saving it silently would leave the
-  // console showing an integration as approved that members cannot use.
   const overlap = input.allowedConnectors.filter((id) => input.blockedConnectors.includes(id));
   if (overlap.length > 0) {
     throw createError.validation(

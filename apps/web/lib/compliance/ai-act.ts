@@ -20,15 +20,10 @@ export type SyntheticContentKind = Extract<AiActSyntheticContentKind, 'image' | 
 export const ARTICLE_50_1_WEB_CARVE_OUT = Object.freeze({
   reliedOn: true,
   since: '2026-08-14',
-  basis: 'Article 50(1) obviousness carve-out — Regulation (EU) 2024/1689',
+  basis: 'Article 50(1) obviousness carve-out, Regulation (EU) 2024/1689',
   counselReviewed: false,
 });
 
-/**
- * Article 50(2) coverage on web, per synthetic kind. A kind is either marked
- * server-side on the response that carries the artefact, or it is a recorded
- * gap with a stated reason — never silently absent.
- */
 export const ARTICLE_50_2_WEB_SCOPE: Readonly<
   Record<AiActSyntheticContentKind, { readonly marked: boolean; readonly basis: string }>
 > = Object.freeze({

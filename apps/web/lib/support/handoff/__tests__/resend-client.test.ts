@@ -1,4 +1,3 @@
-
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('@/lib/logger', () => ({
@@ -136,7 +135,7 @@ describe('sendSupportEmail', () => {
     expect(result.delivered).toBe(false);
   });
 
-  it('returns a typed failure — never throws — when the network blows up', async () => {
+  it('returns a typed failure, never throws, when the network blows up', async () => {
     fetchMock.mockRejectedValue(new Error('ECONNRESET'));
 
     const result = await sendSupportEmail(input());

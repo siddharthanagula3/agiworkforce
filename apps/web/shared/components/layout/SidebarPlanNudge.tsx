@@ -25,11 +25,6 @@ export function SidebarFreePlanNudge({ onUpgrade }: { onUpgrade: () => void }) {
   );
 }
 
-/**
- * `tierLabel` is null while the plan is not yet trustworthy — see
- * `isBillingPolicyReady`. Rendering nothing beats claiming a tier, because the
- * Free fallback is exactly what sells a paying subscriber an "upgrade".
- */
 export function SidebarPlanBadge({
   tierLabel,
   isFreeTier,

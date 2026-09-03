@@ -1,4 +1,3 @@
-
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('@agiworkforce/routing', async (importOriginal) => {
@@ -66,7 +65,7 @@ describe('unknown questions abstain instead of inventing', () => {
     expect(modelMocks.buildServerProviderAdapter).not.toHaveBeenCalled();
   });
 
-  it('abstains — never answers — when the kill switch is off', async () => {
+  it('abstains, never answers, when the kill switch is off', async () => {
     delete process.env['SUPPORT_AGENT_ENABLED'];
     const result = await answerSupportQuestion(ask('how do I add my anthropic api key'));
     expect(result.kind).toBe('abstention');

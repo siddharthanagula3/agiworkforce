@@ -104,7 +104,7 @@ beforeEach(() => {
   vi.clearAllMocks();
 });
 
-describe('POST /api/chat/conversations/[id]/messages — sibling writes', () => {
+describe('POST /api/chat/conversations/[id]/messages, sibling writes', () => {
   it('converts a linear conversation once, then hangs the new row off its parent', async () => {
     givenDatabase([
       {
@@ -379,10 +379,6 @@ describe('POST /api/chat/conversations/[id]/messages — sibling writes', () => 
   });
 
   it('starts a root rather than a conversion when a plain send follows a null leaf', async () => {
-    // The sequence a client performs right after resetting a branched
-    // conversation to linear: no parent named, no leaf to continue from. This
-    // one never reaches the gate at all — it takes the single statement, which
-    // is the reason a client-reachable null leaf cannot re-parent anything.
     givenDatabase([
       {
         match: CONVERSATION_SELECT,

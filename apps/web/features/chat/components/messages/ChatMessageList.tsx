@@ -56,40 +56,17 @@ import {
   getStreamErrorMessage,
 } from '../../lib/continue-generation';
 
-/**
- * A safety refusal: the provider's safety layer stopped the response.
- * Reaches this surface as `metadata.finishReason` 'refusal' (the canonical
- * StreamChunkStop member, emitted on the legacy web wire as the literal
- * reason) or 'content_filter' (the OpenAI wire vocabulary on the
- * passthrough path). Distinct from streamError (transport/provider failure)
- * and from continuable truncation — it gets its own honest notice, never a
- * generic error and never a silent stop.
- */
 function isRefusalFinish(message: ChatMessage | undefined | null): boolean {
   const reason = (message?.metadata as { finishReason?: unknown } | undefined)?.finishReason;
   return reason === 'refusal' || reason === 'content_filter';
 }
 
-/**
- * A user-initiated Stop, not a model or transport failure. Distinct from
- * isIncompleteTurn/hasStreamError so it never borrows their failure wording
- * or styling — see abandonTurn/handleStreamError in useChatStream.ts, which
- * stamp `finishReason: 'stopped'` on abort.
- */
 function isStoppedTurn(message: ChatMessage | undefined | null): boolean {
   if (!message || message.role !== 'assistant' || message.isStreaming) return false;
   const reason = (message.metadata as { finishReason?: unknown } | undefined)?.finishReason;
   return reason === 'stopped';
 }
 
-/**
- * A turn that never produced a usable assistant reply: either the user's
- * message is trailing with no assistant row after it (a managed-cloud turn
- * dropped before any row was persisted), or the assistant row exists but is
- * marked truncated/error by the server marker or a web-composer error row.
- * Distinct from streamError (additive mid-stream failure with partial content)
- * and refusal — it gets an explicit "didn't complete" affordance with Retry.
- */
 function isIncompleteTurn(message: ChatMessage | undefined | null): boolean {
   if (!message) return false;
   if (message.role === 'user') return true;
@@ -223,11 +200,6 @@ export interface ChatMessageListProps {
    * height, and the cached value would place every row below it wrong.
    */
   activeLeafId?: string | null;
-  /**
-   * The sibling the reader just paged to. Its group is scrolled into view on a
-   * leaf change instead of the transcript jumping to the bottom — the reader is
-   * comparing answers at the branch point, not following a new one.
-   */
   variantAnchorMessageId?: string | null;
   isConversationStreaming?: boolean;
   onRegenerateImage?: (
@@ -261,16 +233,6 @@ interface MessageGroup {
 
 // Pure helpers (exported for tests)
 
-/**
- * Whether an index in the transcript now holds a different message than it did.
- *
- * react-window v2 caches measured row heights BY INDEX and offers no partial
- * invalidation, so the only lever is the key that throws the whole cache away —
- * and it has to be pulled exactly when an index changes meaning. Paging to
- * another variant does that; appending the next turn does not, and keying on the
- * active leaf alone would re-measure the entire transcript on every send once a
- * conversation had branched even once.
- */
 export function isPathReRooted(previous: ChatMessage[], next: ChatMessage[]): boolean {
   if (previous.length > next.length) return true;
   for (let index = 0; index < previous.length; index += 1) {
@@ -298,21 +260,6 @@ export function groupMessages(messages: ChatMessage[]): MessageGroup[] {
   return groups;
 }
 
-/**
- * Formats a date as a human-readable divider label.
- * - "Today" for today's date
- * - "Yesterday" for yesterday's date
- * - "Mar 18" for older dates
- *
- * AUDIT-FIX BUG-30: local-time getters and `toLocaleDateString` resolve
- * against whatever timezone/locale the JS runtime is in. On the server that is
- * the DEPLOYMENT's timezone, so "Today"/"Yesterday" were computed for the
- * datacenter rather than the reader. The function itself stays pure (it is
- * exported and unit-testable); the render path below only calls it after mount
- * so it always runs in the viewer's own timezone, and the locale argument is
- * now omitted so the runtime's locale — not a hardcoded en-US — formats the
- * fallback label.
- */
 export function formatDateDivider(date: Date, now: Date = new Date()): string {
   const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   const startOfYesterday = new Date(startOfToday);
@@ -654,11 +601,6 @@ const MessageRow = memo(function MessageRow({
     () => onPaywallDismiss?.(message.id),
     [onPaywallDismiss, message.id],
   );
-  // Retry is the whole point of this variant, so it is offered only where the
-  // transcript can actually resend — `handleRegenerate` resolves the user turn
-  // behind this row and replays it, the same path the retry affordance uses.
-  // Without a resend the card falls back to the ordinary refusal rather than
-  // rendering a button that does nothing.
   const freeCapacityRecovery = useMemo(
     () =>
       paywall?.freeCapacity && onRegenerate
@@ -688,9 +630,6 @@ const MessageRow = memo(function MessageRow({
   );
 
   if (paywall) {
-    // The card takes the turn's place in the transcript, so it takes the
-    // transcript's column too. Rendered bare it spanned the full surface —
-    // 206px past the message and composer edges on either side.
     return (
       <div className="message-row">
         <div className="message-inner">
@@ -1081,9 +1020,6 @@ const ChatMessageListComponent = ({
   useEffect(() => {
     if (scrolledConversationRef.current === conversationId) return;
     scrolledConversationRef.current = conversationId;
-    // Opening a chat lands at the bottom, so the leaf it arrives with is not a
-    // switch. Adopting it here — before the scroll effect below runs, which
-    // effect order guarantees — is what keeps the two apart.
     scrolledLeafRef.current = activeLeafId;
     setUserScrolledUp(false);
   }, [activeLeafId, conversationId]);
@@ -1160,18 +1096,6 @@ const ChatMessageListComponent = ({
    */
   const showStoppedNotice = Boolean(onRegenerate && !isLoading && isStoppedTurn(lastMessage));
 
-  /**
-   * Mid-stream provider failure (additive `x_stream_error` — see
-   * hasStreamError's doc comment): the turn otherwise looks like a clean
-   * completion, so this is the ONLY signal that tells the user their answer
-   * may be cut off for a reason other than the model finishing normally.
-   * Offered only on the last message, only once streaming has actually
-   * stopped (unlike isMessageContinuable, hasStreamError does not check
-   * isStreaming itself — it stays a pure metadata read — so this checks it
-   * explicitly, same safety bar), and mutually exclusive with Continue (a
-   * turn that failed mid-stream never lands on a continuable finish_reason
-   * in practice, but guard explicitly rather than relying on that).
-   */
   const showStreamErrorNotice = Boolean(
     onRegenerate &&
     !isLoading &&
@@ -1181,14 +1105,6 @@ const ChatMessageListComponent = ({
     hasStreamError(lastMessage),
   );
 
-  /**
-   * Safety refusal notice (see isRefusalFinish): the provider declined to
-   * finish the response. Shown on the last assistant message once streaming
-   * has stopped; mutually exclusive with Continue and the stream-error
-   * notice. Unlike the stream-error notice it does not require onRegenerate
-   * — the honest "declined" state must render regardless; the Retry action
-   * inside it is conditional.
-   */
   const showRefusalNotice = Boolean(
     !isLoading &&
     !lastMessage?.isStreaming &&
@@ -1324,15 +1240,6 @@ const ChatMessageListComponent = ({
     anchorTimerRef.current = null;
   }, []);
 
-  /**
-   * Returning to the live answer is an intent, not a single jump. The rows the
-   * reader scrolled past are unmounted, so the list scrolls to where it
-   * *estimates* the bottom is; they then mount, measure taller, and the bottom
-   * moves further down. Every programmatic scroll-to-bottom arms the same
-   * anchor here, so `handleScroll`'s own `scroll` events — native smooth-scroll
-   * fires one per animation frame short of the target — never read as the user
-   * scrolling away before the target is actually reached.
-   */
   const scrollToBottom = useCallback(
     (behavior: ScrollBehavior = 'smooth') => {
       const listApi = listApiRef.current;
@@ -1796,7 +1703,7 @@ const ChatMessageListComponent = ({
   return (
     <div className={cn('relative flex h-full flex-col', className)} data-testid="chat-message-list">
       {/* AUDIT-FIX GOV-29: the ONLY live region on this surface. Off-screen,
-          atomic, and carrying one short phrase per generation state change —
+          atomic, and carrying one short phrase per generation state change.
           so a screen reader hears "Generating response" and then the finished
           answer, instead of the transcript being re-read on every re-render. */}
       <p role="status" aria-live="polite" aria-atomic="true" className="sr-only">

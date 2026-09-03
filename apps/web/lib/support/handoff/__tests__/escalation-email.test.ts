@@ -1,4 +1,3 @@
-
 import { describe, expect, it, vi } from 'vitest';
 
 vi.mock('@/lib/logger', () => ({
@@ -88,8 +87,8 @@ describe('buildEscalationEmail', () => {
 
   it('says explicitly when the agent tried nothing, instead of leaving a blank a human must interpret', () => {
     const { text } = buildEscalationEmail(row({ attempted_actions: [], citations: [] }));
-    expect(text).toContain('(nothing — the agent did not attempt any account action)');
-    expect(text).toContain('(none — the agent had nothing to cite)');
+    expect(text).toContain('(nothing, the agent did not attempt any account action)');
+    expect(text).toContain('(none, the agent had nothing to cite)');
   });
 
   it('reports an unknown fact as unknown rather than as zero', () => {

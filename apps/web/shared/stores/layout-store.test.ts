@@ -1,4 +1,3 @@
-
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { useUIStore } from './layout-store';
 
@@ -34,7 +33,7 @@ describe('Layout Store', () => {
   });
 });
 
-describe('Layout Store — persisted v1 blobs', () => {
+describe('Layout Store, persisted v1 blobs', () => {
   it('keeps sidebarCollapsed and drops the retired keys on rehydrate', async () => {
     localStorage.setItem(
       'agi-ui-store',

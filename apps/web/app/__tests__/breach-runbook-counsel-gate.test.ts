@@ -68,7 +68,7 @@ describe('breach runbook counsel gate', () => {
       expect(
         preamble,
         `${heading} must warn that the template is unreviewed before the template itself, not only in the file header`,
-      ).toContain(`Legal review: ${PENDING} — this template has not been reviewed by a lawyer.`);
+      ).toContain(`Legal review: ${PENDING}, this template has not been reviewed by a lawyer.`);
     },
   );
 
@@ -124,7 +124,7 @@ describe('breach runbook counsel gate', () => {
     const entry = trackerEntryNaming('docs/runbooks/personal-data-breach.md');
     expect(
       entry,
-      `the Open gaps table says counsel review is tracked in ${FOUNDER_TRACKER}, so that file must carry an entry naming docs/runbooks/personal-data-breach.md — otherwise the review nobody can do in code is tracked nowhere`,
+      `the Open gaps table says counsel review is tracked in ${FOUNDER_TRACKER}, so that file must carry an entry naming docs/runbooks/personal-data-breach.md, otherwise the review nobody can do in code is tracked nowhere`,
     ).not.toBeNull();
     const body = normalize(entry ?? '');
     expect(body, 'the founder entry must cover both unreviewed templates').toContain('§4');

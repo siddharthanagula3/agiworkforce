@@ -7,7 +7,7 @@ vi.mock('@clerk/nextjs/server', () => ({
 
 import { readCookie, getSessionIdFromRequest, getOrCreateAnonSession } from '@/lib/csrf';
 
-describe('web-HIGH-1 readCookie() — anchored cookie parser', () => {
+describe('web-HIGH-1 readCookie(), anchored cookie parser', () => {
   it('reads a cookie at the start of the header', () => {
     expect(readCookie('anon-session-id=abc123', 'anon-session-id')).toBe('abc123');
   });
@@ -61,7 +61,7 @@ describe('web-HIGH-1 readCookie() — anchored cookie parser', () => {
 
 const MINTED_ID = 'anon-0f1e2d3c-4b5a-4697-8877-665544332211';
 
-describe('web-HIGH-1 getSessionIdFromRequest — suffix attack resilience', () => {
+describe('web-HIGH-1 getSessionIdFromRequest, suffix attack resilience', () => {
   function makeRequest(cookieHeader: string): Request {
     return new Request('https://example.com/api/test', {
       headers: { cookie: cookieHeader },
@@ -100,7 +100,7 @@ describe('web-HIGH-1 getSessionIdFromRequest — suffix attack resilience', () =
   });
 });
 
-describe('web-HIGH-1 getOrCreateAnonSession — suffix attack resilience', () => {
+describe('web-HIGH-1 getOrCreateAnonSession, suffix attack resilience', () => {
   function makeRequest(cookieHeader: string): Request {
     return new Request('https://example.com/api/csrf', {
       headers: { cookie: cookieHeader },

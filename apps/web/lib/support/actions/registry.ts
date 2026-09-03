@@ -1,4 +1,3 @@
-
 import 'server-only';
 
 import { z } from 'zod';
@@ -114,11 +113,11 @@ export const SUPPORT_ACTIONS: Readonly<{
       summary: 'We will revoke the API key you picked and issue a replacement.',
       effects: [
         'The current key stops working immediately. Anything using it will start failing.',
-        'A new key is created with the same name and exactly the same scopes — no extra access.',
+        'A new key is created with the same name and exactly the same scopes, no extra access.',
         'The new key is shown to you once and is never stored in plain text, so copy it before closing.',
       ],
       reversibleNote:
-        'Reversible in the sense that you can regenerate again at any time — but the old key cannot be brought back, so update anything that uses it.',
+        'Reversible in the sense that you can regenerate again at any time, but the old key cannot be brought back, so update anything that uses it.',
     }),
     resolveAvailability: (): SupportActionAvailability => ({ available: true }),
     perDayLimit: 5,
@@ -163,7 +162,7 @@ export const SUPPORT_ACTIONS: Readonly<{
       summary: 'We will open the billing portal for your own account.',
       effects: [
         'A billing portal session opens where you can see invoices and manage your subscription.',
-        'Opening the portal by itself changes nothing — any change is one you make there.',
+        'Opening the portal by itself changes nothing, any change is one you make there.',
       ],
       reversibleNote: 'Opening the portal is not a billing change.',
     }),

@@ -27,7 +27,7 @@ export function MessageBubbleSkeleton({
     >
       {/* Geometry mirrors .message-row / .message-inner so the skeleton occupies
           the same column and vertical rhythm as the message it is standing in
-          for — no avatars and no name row, because rendered messages have
+          for, no avatars and no name row, because rendered messages have
           neither. */}
       <div className={cn('mx-auto flex max-w-3xl gap-3 px-4', isUser && 'flex-row-reverse')}>
         <div className={cn('min-w-0 flex-1', isUser && 'flex flex-col items-end')}>

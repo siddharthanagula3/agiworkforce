@@ -11,7 +11,7 @@ function record(name: string, value: unknown): void {
   writeFileSync(path.join(OUT_DIR, name), JSON.stringify(value, null, 2));
 }
 
-test.describe('QA phase 1 — runtime capability discovery', () => {
+test.describe('QA phase 1, runtime capability discovery', () => {
   test('authenticates and enumerates the real skill, connector, and plugin registries', async ({
     page,
   }) => {
@@ -44,7 +44,7 @@ test.describe('QA phase 1 — runtime capability discovery', () => {
 
     expect(
       skills.status(),
-      'authenticated /api/skills must not be 401 — sign-in did not take effect',
+      'authenticated /api/skills must not be 401, sign-in did not take effect',
     ).not.toBe(401);
     expect(connectors.status()).not.toBe(401);
   });

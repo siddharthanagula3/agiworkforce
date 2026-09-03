@@ -10,7 +10,7 @@ import { buildMetadata } from '@/lib/seo/metadata';
 export const metadata = buildMetadata({
   title: 'Skills | Reusable instruction sets for AGI',
   description:
-    'Skills are reusable instruction sets the assistant loads on demand — a house style, a review checklist, a domain glossary. Browse and install them in your AGI workspace.',
+    'Skills are reusable instruction sets the assistant loads on demand, a house style, a review checklist, a domain glossary. Browse and install them in your AGI workspace.',
   path: '/skills',
 });
 

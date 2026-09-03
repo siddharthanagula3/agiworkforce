@@ -18,7 +18,7 @@ describe('computeMemoryPullCursor', () => {
     expect(computeMemoryPullCursor('17', [])).toBe('17');
   });
 
-  it('never regresses below `since` (defensive — should not happen since rows are > since)', () => {
+  it('never regresses below `since` (defensive, should not happen since rows are > since)', () => {
     expect(computeMemoryPullCursor('100', [sv(9)])).toBe('100');
   });
 

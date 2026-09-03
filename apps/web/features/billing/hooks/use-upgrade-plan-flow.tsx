@@ -30,11 +30,6 @@ interface UseUpgradePlanFlowOptions {
   openSettings: (tab: string) => void;
 }
 
-/**
- * Shared between WebChatPage's and WebAppShell's account menus so the
- * upgrade flow — dialog, mid-cycle confirm, and the real Stripe checkout call
- * — cannot drift between the two surfaces.
- */
 export function useUpgradePlanFlow({
   user,
   subscription,

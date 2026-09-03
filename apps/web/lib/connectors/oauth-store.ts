@@ -144,7 +144,7 @@ export async function consumePendingAuthorization(
   } catch (error) {
     logger.warn(
       { connectorId: row.connector_id, error: error instanceof Error ? error.message : 'unknown' },
-      '[connector-oauth] stored PKCE verifier could not be decrypted — refusing the exchange',
+      '[connector-oauth] stored PKCE verifier could not be decrypted, refusing the exchange',
     );
     return null;
   }

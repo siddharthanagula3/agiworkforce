@@ -149,27 +149,7 @@ import { MessageFormatCard } from '../cards/MessageFormatCard';
 import { VideoGenerationPlaceholder } from './VideoGenerationPlaceholder';
 import { EditableMessage } from './EditableMessage';
 
-/**
- * Inline user-message editing (CLR-05).
- *
- * ChatGPT parity: clicking Edit on a sent message turns THAT bubble into a
- * pre-filled textarea with Cancel/Save. Web used to prefill the composer at the
- * bottom of the page instead, leaving the original message sitting untouched in
- * the transcript above while you typed somewhere else — and `EditableMessage`,
- * a complete inline editor, sat in this folder with zero importers.
- *
- * Wired the same way tool approval is: a context the chat page mounts, read here
- * via `useContext`, so MessageBubble stays provider-independent and renderable
- * standalone. With no provider the Edit action falls back to whatever `onEdit`
- * the surface passed (the composer-prefill path), so nothing regresses.
- */
 export interface MessageInlineEditController {
-  /**
-   * Guard + permission to open the editor. Returns false when the surface
-   * refuses this edit (a turn is streaming, an image turn is mid-save, the free
-   * trial is spent) — the controller has already told the user why, so the
-   * caller must simply not enter edit mode.
-   */
   beginEdit: (messageId: string) => boolean;
   /**
    * Resubmit `content` in place of `messageId`. The surface owns the rollback:
@@ -254,19 +234,6 @@ function generatedFileArtifactType(file: GeneratedFileMetadataEntry): ArtifactDa
   return 'code';
 }
 
-/**
- * AUDIT-FIX BUG-31: close a trailing unterminated code fence.
- *
- * The artifact path already strips a growing unclosed block from the chat body
- * (see `cleanedContent`), but that only covers RENDERABLE artifact languages.
- * For every other language — python, sql, a bare fence with no info string —
- * the partial buffer reached the markdown renderer with an open fence. micromark
- * tolerates it, but the block renders unstyled (no `language-*` class, so no
- * highlighting) and the whole tail is re-lexed on every token.
- *
- * Appending the closing fence is a pure display repair: it never mutates the
- * stored message, and it is a no-op when the fence is already closed.
- */
 function closeUnterminatedFence(markdown: string): string {
   if (!extractTrailingUnclosedBlock(markdown)) return markdown;
   return markdown + (markdown.endsWith('\n') ? '' : '\n') + '```';
@@ -295,17 +262,6 @@ const PROVIDER_MODE_BY_PRIVACY_MODE = {
   GeneratedFile['providerMode']
 >;
 
-/**
- * SECURITY-FIX F3 (CWE-863): generated-file descriptors used to be stamped
- * `managed`/`ManagedGateway` unconditionally, so a file produced in a Local or
- * BYOK turn rendered a "Managed" privacy chip — the label the user relies on to
- * know where the bytes went — and the Artifacts panel then read that fabricated
- * label back as the artifact's origin. Only the Local→BYOK handoff writes
- * `metadata.privacyMode`, so the boundary is derived from every signal the turn
- * really carries: its declared labels, then the model that served it. `managed`
- * survives only as the display fallback for a turn with no signal at all;
- * `resolveArtifactOriginPrivacyMode` refuses to treat it as origin evidence.
- */
 function messageTrustBoundary(
   metadata: Message['metadata'],
   model: string | undefined,
@@ -474,11 +430,6 @@ interface Message {
       requiredTier: string;
       recoveryAction?: 'upgrade' | 'subscribe' | 'manage_billing' | 'view_usage' | 'top_up';
     };
-    /**
-     * Parsed interactive cards. The union already encodes whether a body was
-     * validated, so this renderer never sees an unvalidated payload — an
-     * unrecognized card carries only its envelope and its authored fallback.
-     */
     interactiveCards?: InteractiveCard[];
     /** Deep Research run state (activity header + persistence). */
     research?: MessageResearchState;
@@ -608,13 +559,6 @@ const MessageBubbleComponent = function MessageBubble({
   const [brokenAttachmentIds, setBrokenAttachmentIds] = useState<Set<string>>(
     () => new Set<string>(),
   );
-  /**
-   * AUDIT-FIX GOV-33: framer-motion drives the staggered message entry through
-   * INLINE opacity/transform styles, which the global prefers-reduced-motion
-   * reset in globals.css (`transition-duration: 0.01ms !important`) cannot
-   * reach — it only caps CSS transitions and animations. The preference has to
-   * be read here and the entry animation skipped outright.
-   */
   const prefersReducedMotion = useReducedMotion();
   const markAttachmentBroken = useCallback((id: string) => {
     setBrokenAttachmentIds((prev) => {
@@ -630,22 +574,12 @@ const MessageBubbleComponent = function MessageBubble({
   const [userContentOverflows, setUserContentOverflows] = useState(false);
   const [userContentExpanded, setUserContentExpanded] = useState(false);
 
-  /**
-   * Delete confirmation (shell-nav-ia-gap-01). This used to be a native
-   * `window.confirm()` — an OS alert with a browser-chrome "OK", in the middle
-   * of a transcript, for the one action here that destroys content. `useConfirm`
-   * is the shared wrapper around the AlertDialog primitive already used for
-   * delete-schedule and delete-project, so the message delete now reads the same
-   * as every other destructive confirm and its confirm button is red.
-   */
   const { confirm: confirmDestructive, dialog: destructiveConfirmDialog } = useConfirm();
   const handleDeleteWithConfirm = useCallback(() => {
     if (!onDelete) return;
     void (async () => {
       const confirmed = await confirmDestructive({
         title: 'Delete message?',
-        // Only this one message is removed (deletePersistedMessages([id])) — the
-        // rest of the turn stays, so the copy must not imply a cascade.
         description: isUser
           ? 'This message is removed from the conversation. The reply it produced stays. This cannot be undone.'
           : 'This response is removed from the conversation. The message that prompted it stays. This cannot be undone.',
@@ -709,18 +643,10 @@ const MessageBubbleComponent = function MessageBubble({
     },
     [inlineEdit, message.id],
   );
-  // A streaming turn started elsewhere (queued follow-up, regenerate) makes an
-  // open editor stale — close it rather than let Save race the live turn.
   useEffect(() => {
     if (message.isStreaming) setIsEditing(false);
   }, [message.isStreaming]);
 
-  // Manual tool-approval wiring: an awaiting_approval tool card's approve/reject
-  // buttons drive the resume request. The resolver comes from ToolApprovalContext
-  // (mounted by the chat page, which owns the Clerk-authenticated resolver), via
-  // useContext — so MessageBubble stays provider-independent and renderable
-  // standalone. When no provider is present (standalone render / tests) the
-  // resolver is null and the approve/reject affordances are simply not wired.
   const resolveToolApproval = useToolApprovalResolver();
   const handleApproveTool = useCallback(
     (toolCallId: string) => {
@@ -830,16 +756,6 @@ const MessageBubbleComponent = function MessageBubble({
       toast.error('Could not send the report. Please try again.');
     }
   }, [activeConversationId, message.content, message.id, message.sessionId, reportState]);
-  /**
-   * Thumbs up / down on an assistant answer — the one signal every comparable
-   * product collects on every message and this app collected nowhere. The only
-   * routes out were a composer-level dialog and a refusal appeal, neither of
-   * which tells us an ordinary answer was good or bad.
-   *
-   * Stored through /api/feedback with feedback_context 'response_rating', so it
-   * lands in public.feedback and shows up in the operator dashboard's existing
-   * feedback counts with no new table.
-   */
   const rateMessage = useCallback(
     async (rating: 'up' | 'down') => {
       if (ratingState !== 'idle') return;
@@ -876,13 +792,6 @@ const MessageBubbleComponent = function MessageBubble({
     [activeConversationId, message.content, message.id, message.sessionId, ratingState],
   );
 
-  /*
-   * One verdict per answer. The persisted reaction on message metadata is the
-   * source of truth when the host wires `onReact`; `ratingState` only stands in
-   * for hosts that do not. Both sinks are fed from this single control — a
-   * second pair of thumbs used to render beside it, so an answer showed four
-   * thumb icons and two independent verdicts.
-   */
   const responseRating: 'up' | 'down' | null =
     message.metadata?.reaction === 'thumbsUp'
       ? 'up'
@@ -931,14 +840,6 @@ const MessageBubbleComponent = function MessageBubble({
     );
   }, [message.content, isUser, artifactConversationId, message.id, messageCodeBlocks]);
 
-  // Live artifact streaming (Claude parity): while this assistant message is
-  // still streaming and its buffer ends in an UNCLOSED renderable fence, parse
-  // the partial block on every chunk. The sync hook mirrors it into the
-  // ephemeral streaming-artifact store (auto-opening the Artifacts panel) so
-  // the panel shows the file being written line-by-line instead of nothing.
-  // Once the closing fence arrives, extractArtifacts sees the completed block,
-  // the persisted artifact lands under the SAME deterministic id, and the
-  // streaming overlay clears — a seamless handoff to the Preview tab.
   const streamingBlock = useMemo(() => {
     if (isUser || !message.isStreaming) return null;
     const block = extractTrailingUnclosedBlock(message.content, messageCodeBlocks);
@@ -1117,12 +1018,6 @@ const MessageBubbleComponent = function MessageBubble({
 
   const artifacts = useMemo(() => {
     const baseArtifacts = existingArtifacts.length > 0 ? existingArtifacts : extractedArtifacts;
-    // Dedupe by id: the upsert effect below writes generated-file artifacts
-    // into the artifacts store, so on the next render they ALSO arrive via
-    // existingArtifacts — without this they would render twice. Persisted
-    // SharedArtifacts intentionally omit web-only generated-file provenance,
-    // so a reload must also enrich the matching persisted entry with the
-    // freshly reconstructed side-map fields instead of discarding them.
     const merged = [...baseArtifacts];
     for (const artifact of generatedFileArtifacts) {
       const existingIndex = merged.findIndex((existing) => existing.id === artifact.id);
@@ -1222,9 +1117,6 @@ const MessageBubbleComponent = function MessageBubble({
   }, [artifacts, isUser, message.id, artifactConversationId, upsertArtifact]);
 
   const cleanedContent = useMemo(() => {
-    // While an artifact block is streaming into the panel, hide the growing
-    // raw fence from the chat body (a compact "Writing…" chip renders instead)
-    // — mirroring how completed artifact blocks are stripped below.
     const base = streamingBlock
       ? message.content.slice(0, streamingBlock.startIndex).trimEnd()
       : message.content;
@@ -1240,39 +1132,11 @@ const MessageBubbleComponent = function MessageBubble({
     return closeUnterminatedFence(withoutCitationTail);
   }, [message.content, artifacts, streamingBlock, message.metadata?.research, isUser]);
 
-  /**
-   * Rich format cards (recipe / comparison / steps / calculation) for assistant
-   * prose that has a clear structure.
-   *
-   * Deliberately NOT computed while streaming. The detector reads structural
-   * signals — an "## Ingredients" heading, three "Step N:" markers — and a
-   * partial answer crosses those thresholds at arbitrary moments, so running
-   * it per token would flip the layout between prose and card mid-render. It
-   * settles once, when the text is final.
-   *
-   * `MessageFormatCard` keeps the original markdown one click away, so a
-   * mis-detection or a lossy parser costs a toggle rather than the answer.
-   */
   const formatCardType = useMemo(() => {
     if (isUser || message.isStreaming) return null;
     return detectCardType(cleanedContent);
   }, [isUser, message.isStreaming, cleanedContent]);
 
-  /**
-   * A finished assistant turn that rendered NOTHING.
-   *
-   * Observed live in AGI Work: the model ran for 26s, the activity trail said
-   * "Prepared the response → Done", `finishReason` was `stop`, and the turn
-   * persisted the zero-width-space empty-content placeholder — so the transcript showed
-   * a header, a model label and an action bar with no answer between them. The
-   * user is given no way to tell "the model returned nothing" apart from "the
-   * app lost my response", and in a recorded demo it simply looks broken.
-   *
-   * The empty placeholder is legitimate for turns whose OUTPUT is not text (a
-   * generated image, a video, an artifact, a file), so every one of those
-   * renderers is excluded below — this fires only when the turn truly has
-   * nothing to show. Retry already lives in the action bar underneath.
-   */
   const producedNoVisibleOutput = useMemo(() => {
     if (isUser || message.isStreaming) return false;
     if (message.metadata?.finishReason === 'stopped') return false;
@@ -1687,7 +1551,7 @@ const MessageBubbleComponent = function MessageBubble({
           {/* Inline edit (CLR-05): the bubble ITSELF becomes the editor, so the
               message being revised never sits stale above a composer at the far
               end of the page. Replaces the rendered body rather than sitting
-              beside it — two copies of the same message is the bug, not the fix. */}
+              beside it, two copies of the same message is the bug, not the fix. */}
           {isEditing && (
             <div className="w-full min-w-0 text-left">
               <EditableMessage
@@ -1724,10 +1588,6 @@ const MessageBubbleComponent = function MessageBubble({
               !message.metadata?.isExecutingCode &&
               !message.metadata?.codeExecutionResult &&
               message.metadata?.toolType !== 'image-generation' &&
-              // Same reason as image: the media card below IS the progress
-              // indicator. Observed live — the video shimmer rendered with a
-              // "Thinking..." line stacked on top of it, claiming a reasoning
-              // step that is not happening.
               message.metadata?.toolType !== 'video-generation' ? (
                 <div className="flex items-center gap-2 text-muted-foreground">
                   <span className="inline-block h-2 w-2 animate-pulse rounded-full bg-primary" />
@@ -1795,7 +1655,7 @@ const MessageBubbleComponent = function MessageBubble({
             <InteractiveCardBlock cards={message.metadata.interactiveCards} />
           ) : null}
 
-          {/* Compact chip while an artifact block streams into the panel — the raw
+          {/* Compact chip while an artifact block streams into the panel, the raw
               fence is stripped from the body above; this is its in-transcript stand-in. */}
           {!isUser && streamingBlock && (
             <button
@@ -1823,12 +1683,6 @@ const MessageBubbleComponent = function MessageBubble({
               broken-image fallback when the source fails to load. Non-image
               attachments keep the icon+name chip linking to the file. */}
           {displayAttachments.length > 0 && (
-            // `items-start`: a flex row defaults to `align-items: stretch`, so
-            // the compact file chip was being stretched to the height of the
-            // 96px image thumbnail beside it — rendering as a near-empty
-            // 150x96 card with one line of text floating in the middle. The
-            // chip now keeps its natural height and aligns to the thumbnail's
-            // top edge.
             <div className="mt-2 flex flex-wrap items-start gap-2">
               {displayAttachments.map((attachment) => {
                 const isImage = attachment.type.startsWith('image/');
@@ -1839,8 +1693,6 @@ const MessageBubbleComponent = function MessageBubble({
                 const shouldPreview = attachment.type === 'application/pdf';
 
                 if (isImage) {
-                  // Broken-image fallback: never leave a torn-image glyph — show
-                  // a labelled chip so the user still sees which file failed.
                   if (brokenAttachmentIds.has(attachment.id)) {
                     return (
                       <div
@@ -1941,7 +1793,7 @@ const MessageBubbleComponent = function MessageBubble({
               (syntax-highlighted by Shiki, with a copy button + lang label).
               A previous <ArtifactBlock content={cleanedContent}> here
               RE-rendered every fenced block a second time, so non-renderable
-              blocks (python/csv/json/generic — the ones NOT stripped from
+              blocks (python/csv/json/generic, the ones NOT stripped from
               cleanedContent by removeArtifactBlocks) appeared twice (the visible
               "duplicate code block" bug). Renderable artifacts (html/react/svg/
               mermaid) are already stripped from cleanedContent and surfaced via
@@ -1975,8 +1827,8 @@ const MessageBubbleComponent = function MessageBubble({
               silent failure.
 
               `isStreaming` is the in-flight signal, NOT "no URL yet". When the
-              only condition was a missing videoUrl, a FAILED generation — which
-              also has no URL — kept shimmering forever directly above its own
+              only condition was a missing videoUrl, a FAILED generation, which
+              also has no URL, kept shimmering forever directly above its own
               "Video generation failed" text, so a dead turn was indistinguishable
               from a live one. Observed against the real route (503, no provider
               key configured) on 2026-07-27. The writer clears `isStreaming` on
@@ -2334,12 +2186,6 @@ const MessageBubbleComponent = function MessageBubble({
           {!isEditing && (
             <div
               className={cn(
-                // AUDIT-FIX GOV-30: `opacity-0 group-hover:opacity-100` with no
-                // focus counterpart meant a keyboard user tabbed into copy /
-                // edit / delete while they were fully transparent —
-                // focus-visible ring and all. `group-focus-within` reveals the
-                // row the moment focus enters it. The row also stays flex-wrap
-                // so the larger touch targets (GOV-38) cannot overflow a phone.
                 'mt-2 flex flex-wrap items-center gap-1 transition-opacity',
                 ACTION_ROW_MIN_HEIGHT,
                 isUser
@@ -2521,7 +2367,7 @@ const MessageBubbleComponent = function MessageBubble({
                     message's hover row for the revisions Edit produces. */}
                     {variantPager}
 
-                    {/* Regenerate — primary action for assistant messages */}
+                    {/* Regenerate, primary action for assistant messages */}
                     {!isUser &&
                       onRegenerate &&
                       message.metadata?.toolType !== 'image-generation' &&
@@ -2543,13 +2389,13 @@ const MessageBubbleComponent = function MessageBubble({
                       )}
 
                     {/*
-                  Branch / fork — a persistent icon in the action row, not a
+                  Branch / fork, a persistent icon in the action row, not a
                   dropdown entry (shell-nav-ia-gap-08). Manus puts "Continue in
                   new task" directly under every completed response; this was the
                   same wired `onBranch` handler, just buried one click deeper
                   inside "More actions". The assistant row is always visible, so
                   on a response this is now a persistent affordance. It is NOT
-                  duplicated in the menu below — one control, one place.
+                  duplicated in the menu below, one control, one place.
                 */}
                     {onBranch && (
                       <Tooltip>
@@ -2595,7 +2441,7 @@ const MessageBubbleComponent = function MessageBubble({
                       Report an answer as harmful or inaccurate. The web app had
                       no such action: the only routes out were a general
                       feedback link and a refusal APPEAL, which is the opposite
-                      complaint. Assistant messages only — reporting your own
+                      complaint. Assistant messages only, reporting your own
                       message to us is not a thing.
                     */}
                         {!isUser && (
@@ -2620,7 +2466,7 @@ const MessageBubbleComponent = function MessageBubble({
                               {/*
                             Token breakdown for the turn. `tokensUsed` comes
                             from the PERSISTED message row via `toChatMessage`
-                            (no terminal usage stream frame exists — one was
+                            (no terminal usage stream frame exists, one was
                             built and reverted, see docs/decisions/wire-or-cut.md
                             "Per-message token/cost"), so it appears after the
                             turn is saved. `cost` has no producer at all today:
@@ -2713,12 +2559,6 @@ function attachmentsEqual(prev?: Attachment[], next?: Attachment[]): boolean {
   return true;
 }
 
-/**
- * AUDIT-FIX STR-17: every tool entry, not a sample of the ends.
- * With three or more parallel tools the middle cards never left 'running', and
- * Approve/Reject — which flips one entry, usually an interior one — produced no
- * visible feedback until the whole batch resolved.
- */
 function toolEntriesEqual(prev?: ToolEntry[], next?: ToolEntry[]): boolean {
   if (prev === next) return true;
   if (!prev || !next) return false;
@@ -2746,22 +2586,6 @@ function toolEntriesEqual(prev?: ToolEntry[], next?: ToolEntry[]): boolean {
   return true;
 }
 
-/**
- * AUDIT-FIX BUG-29 / STR-17: metadata equality without serializing the bag.
- *
- * The previous implementation ran `JSON.stringify` over BOTH metadata objects
- * on every comparison — once per streamed token per visible message, on the
- * render-critical path, in a list with no virtualization, over a bag that
- * carries the full tool timeline, search results, thinking segments and file
- * descriptors. It was also key-order sensitive, so a re-serialized bag with
- * reordered keys reported "changed" even when nothing had.
- *
- * Field comparison replaces it. Reference identity is the right test for the
- * object-valued spines because the store patches metadata immutably
- * (`{ ...m.metadata, ...patch }` in web-chat-store) and the activity reducer
- * returns a new object for every event it applies — so `!==` means "changed"
- * with no traversal.
- */
 function metadataEqual(prev: Message['metadata'], next: Message['metadata']): boolean {
   if (prev === next) return true;
   return (

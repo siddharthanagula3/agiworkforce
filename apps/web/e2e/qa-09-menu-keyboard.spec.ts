@@ -81,7 +81,7 @@ test.describe('sidebar menu keyboard pattern', () => {
     const open = page.getByRole('button', { name: /^Open project/ }).first();
     await expect(
       open,
-      'no project to open — the account fixture this spec needs is gone',
+      'no project to open, the account fixture this spec needs is gone',
     ).toBeVisible();
     await open.click();
     await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => undefined);

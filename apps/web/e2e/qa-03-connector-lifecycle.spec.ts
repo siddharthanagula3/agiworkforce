@@ -19,7 +19,7 @@ function safeParse(text: string): unknown {
   }
 }
 
-test.describe('QA — connector lifecycle against the running server', () => {
+test.describe('QA, connector lifecycle against the running server', () => {
   test('walks discovery, capabilities, OAuth start, custom connectors and permissions', async ({
     page,
   }) => {
@@ -63,7 +63,6 @@ test.describe('QA — connector lifecycle against the running server', () => {
     }
     evidence['oauthStart'] = oauthStarts;
 
-    // Callback rejection paths — these must fail closed without a valid state.
     const badCallback = await page.request.get(
       '/api/connectors/oauth/callback?code=fake&state=forged',
       { failOnStatusCode: false },

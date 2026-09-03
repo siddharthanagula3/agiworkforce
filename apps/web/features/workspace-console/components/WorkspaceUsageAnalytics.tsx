@@ -71,7 +71,7 @@ function Sparkline({ days }: { days: UsageDayRow[] }) {
       {days.map((day) => (
         <span
           key={day.day}
-          title={`${new Date(day.day).toLocaleDateString()} — ${money(day.costCents)}`}
+          title={`${new Date(day.day).toLocaleDateString()}, ${money(day.costCents)}`}
           style={{
             flex: 1,
             minWidth: 2,
@@ -279,7 +279,7 @@ export function WorkspaceUsageAnalytics() {
         <>
           <BreakdownTable
             title="By member"
-            caption="Who is spending. Volume and cost only — this surface never carries what anyone asked the model."
+            caption="Who is spending. Volume and cost only, this surface never carries what anyone asked the model."
             rows={usage.byMember}
           />
           <BreakdownTable

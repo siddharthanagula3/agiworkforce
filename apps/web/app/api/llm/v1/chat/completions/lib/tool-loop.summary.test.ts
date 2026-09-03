@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { canonicalToolSummary } from './tool-loop';
 
-describe('canonicalToolSummary — MCP connectors', () => {
+describe('canonicalToolSummary, MCP connectors', () => {
   it('uses a named connector server label', () => {
     expect(canonicalToolSummary('mcp__github__get_pull_request_diff', 'connector')).toBe(
       'Using GitHub connector',

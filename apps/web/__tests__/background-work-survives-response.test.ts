@@ -3,14 +3,6 @@ import { resolve } from 'node:path';
 
 import { describe, expect, it } from 'vitest';
 
-/**
- * Work started after the response is sent must be handed to something that
- * holds the invocation open. Both sites below used to read `request.waitUntil`,
- * a member NextRequest does not declare and never carries, so the cast silently
- * resolved to `undefined` and every call took the detached-promise fallback —
- * which completes reliably under `next dev` (the process stays alive) and can
- * be frozen at response flush on the platform.
- */
 const BACKGROUND_WORK_SITES = [
   'app/api/chat/conversations/[id]/messages/lib/generate-title.ts',
   'app/api/github/webhook/route.ts',

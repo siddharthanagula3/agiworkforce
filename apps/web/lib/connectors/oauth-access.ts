@@ -1,4 +1,3 @@
-
 import 'server-only';
 
 import { logger } from '@/lib/logger';
@@ -47,7 +46,7 @@ export async function resolveConnectorAccessToken(
     if (error instanceof ConnectorGrantDecryptionError) {
       logger.warn(
         { connectorId },
-        '[connector-oauth] stored grant could not be decrypted — asking the user to reconnect',
+        '[connector-oauth] stored grant could not be decrypted, asking the user to reconnect',
       );
       return { status: 'reauthorization-required', reason: 'undecryptable' };
     }

@@ -1,4 +1,3 @@
-
 import 'server-only';
 
 import { resolveApiKeyScopes, type ApiKeyScope } from '@/lib/api-key-scopes';
@@ -66,7 +65,7 @@ export async function executeRegenerateApiKey(args: {
   return {
     kind: 'secret_once',
     message:
-      'Your old key is revoked and a new one is issued with the same name and scopes. Copy it now — it is not shown again and is not stored in plain text.',
+      'Your old key is revoked and a new one is issued with the same name and scopes. Copy it now, it is not shown again and is not stored in plain text.',
     apiKey: { id: apiKey.id, name: apiKey.name, keyPrefix: apiKey.key_prefix },
     fullKey: rawKey,
     doNotPersist: true,

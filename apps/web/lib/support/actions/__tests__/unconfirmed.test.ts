@@ -1,4 +1,3 @@
-
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { createFakeNeonDb } from './helpers/fake-neon-db';
@@ -37,7 +36,7 @@ function seedWithSlack() {
   });
 }
 
-describe('support actions — nothing runs without a confirmation', () => {
+describe('support actions, nothing runs without a confirmation', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.db = seedWithSlack();

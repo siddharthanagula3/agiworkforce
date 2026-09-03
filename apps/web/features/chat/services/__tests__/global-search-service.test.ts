@@ -19,7 +19,7 @@ function jsonResponse(body: unknown) {
   return { ok: true, status: 200, json: async () => body } as unknown as Response;
 }
 
-describe('globalSearchService.search — project surfacing', () => {
+describe('globalSearchService.search, project surfacing', () => {
   it('surfaces project matches the route returns, keyed for /projects navigation', async () => {
     fetchMock.mockResolvedValue(
       jsonResponse({

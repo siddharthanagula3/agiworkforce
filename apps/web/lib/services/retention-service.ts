@@ -185,25 +185,6 @@ async function recordSweep(db: DatabaseAdapter, result: RetentionSweepResult): P
   );
 }
 
-/**
- * Deletes workspace conversations past the organization's retention window.
- *
- * THE SAFETY PROPERTY, stated once so it is not diluted by the code below:
- * this function fails CLOSED. If the hold set cannot be established, nothing is
- * deleted and the refusal is recorded as `aborted`. A missed sweep costs a day
- * of retention drift and is corrected on the next run. A sweep that deletes
- * records under legal hold destroys evidence, cannot be undone, and is the kind
- * of failure that ends an enterprise relationship. The asymmetry is total, so
- * every uncertain path here declines to delete.
- *
- * Retention runs from `updated_at`, not `created_at`: an old conversation
- * someone is still working in has not been dormant for the retention window,
- * and deleting it would read as data loss rather than as policy.
- *
- * Requires a privileged connection. The application role has SELECT only on the
- * hold and sweep tables by design (0138) — an organization must not be able to
- * edit the record of what was held or what was deleted.
- */
 export async function sweepOrganizationRetention(
   db: DatabaseAdapter,
   organizationId: string,
@@ -358,17 +339,6 @@ export async function sweepOrganizationRetention(
   }
 }
 
-/**
- * Least-recently-swept organization first, not lowest id first.
- *
- * The caller takes a fixed prefix of this list. Ordered by `organization_id`,
- * the same head was swept every night forever and nothing past the cap was ever
- * deleted — while the cron reported success, so the retention promise was
- * quietly untrue for every workspace behind it. The evidence table already
- * records every real sweep, so it is the ordering key; dry runs are excluded
- * because a manual `?dryRun=1` must not push a workspace to the back of the
- * queue without deleting anything.
- */
 export async function listOrganizationsWithRetentionEnforced(
   db: DatabaseAdapter,
 ): Promise<string[]> {

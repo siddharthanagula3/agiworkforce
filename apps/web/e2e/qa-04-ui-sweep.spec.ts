@@ -7,12 +7,6 @@ import { signIn } from './qa-capability-harness';
 
 const OUT_DIR = process.env['QA_OUT_DIR'] ?? path.resolve(__dirname, '../../../.qa-evidence');
 
-/**
- * scripts/a11y-audit.mjs runs with NO session, so every protected route it
- * "audits" is really the login wall — its own header says so. This sweep signs
- * in first, which is the only way the settings modal, connectors, skills,
- * plugins, chat and workspace surfaces are reachable at all.
- */
 const SLICES: Record<string, string[]> = {
   'settings-sections': [
     '/settings/general',
@@ -178,7 +172,7 @@ const AD_HOC = (process.env['QA_ROUTES'] ?? '')
   .map((r) => r.trim())
   .filter(Boolean);
 
-test.describe(`QA UI sweep — ${SLICE}`, () => {
+test.describe(`QA UI sweep, ${SLICE}`, () => {
   test.setTimeout(15 * 60_000);
   // Without this, axe samples elements mid-transition: the cookie banner fades
   // in, so its text is measured part-way between the background and its real

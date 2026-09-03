@@ -2,16 +2,6 @@ import { describe, expect, it } from 'vitest';
 
 import { evaluateModelAccess, type ModelAccessPolicy } from '@/lib/services/model-policy-evaluator';
 
-/**
- * Provider-identifier dialects.
- *
- * A saved policy row holds the CATALOG spelling (`Provider` in
- * packages/contracts/types/src/provider.ts — `open_router`), while the ask
- * arrives from `resolveProviderFromModel`, which returns the ADAPTER spelling
- * (`openrouter`). A blunt lowercase comparison made every provider BLOCK inert
- * while leaving the allowlist direction looking healthy, so nothing surfaced it.
- */
-
 function policy(overrides: Partial<ModelAccessPolicy> = {}): ModelAccessPolicy {
   return {
     allowedProviders: [],

@@ -39,7 +39,7 @@ function makePostRequest(body: unknown) {
   }) as never;
 }
 
-describe('POST /api/chat/conversations — cloud_chat session labeling', () => {
+describe('POST /api/chat/conversations, cloud_chat session labeling', () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });

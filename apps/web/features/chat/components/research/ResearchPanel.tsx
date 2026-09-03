@@ -287,9 +287,6 @@ export function ResearchPanel({ onAskFollowUp }: ResearchPanelProps) {
   const activeConversationId = useChatStore((s) => s.activeConversationId);
   const { cited, more, query } = sourcesFor(activeConversationId);
   const sourceCount = cited.length + more.length;
-  // Three views: the live source list, the durable report THIS run persisted
-  // (CAP-045 slice 3), and every report the user owns across all conversations
-  // (the gallery — `GET /api/research/reports` with no conversationId).
   const [tab, setTab] = useState<'sources' | 'report' | 'library'>('sources');
 
   // The follow-up lands in the transcript behind this panel, so the panel gets

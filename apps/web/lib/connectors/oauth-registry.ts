@@ -133,7 +133,7 @@ function loadConnectorOAuthRegistry(): Map<string, ConnectorOAuthProvider> {
   } catch (err) {
     logger.error(
       { error: err instanceof Error ? err.message : 'unparseable' },
-      '[connector-oauth] failed to parse CONNECTOR_OAUTH_PROVIDERS_JSON — no OAuth connectors will be offered',
+      '[connector-oauth] failed to parse CONNECTOR_OAUTH_PROVIDERS_JSON, no OAuth connectors will be offered',
     );
   }
 
@@ -184,13 +184,13 @@ export function getConnectorOAuthRedirectUri(): string | null {
     origin = new URL(base);
   } catch {
     logger.error(
-      '[connector-oauth] redirect base URL is not a valid URL — OAuth connectors stay unavailable',
+      '[connector-oauth] redirect base URL is not a valid URL, OAuth connectors stay unavailable',
     );
     return null;
   }
   if (origin.protocol !== 'https:' && !isLocalDevOrigin(origin)) {
     logger.error(
-      '[connector-oauth] redirect base URL must use HTTPS — OAuth connectors stay unavailable',
+      '[connector-oauth] redirect base URL must use HTTPS, OAuth connectors stay unavailable',
     );
     return null;
   }

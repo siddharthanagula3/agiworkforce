@@ -24,14 +24,14 @@ function browserTimezone(): string {
 }
 
 function formatDate(dateKey: string | null): string {
-  if (!dateKey) return '—';
+  if (!dateKey) return ', ';
   const date = new Date(`${dateKey}T12:00:00`);
   if (!Number.isFinite(date.getTime())) return dateKey;
   return new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric' }).format(date);
 }
 
 function formatHour(hour: number | null): string {
-  if (hour === null) return '—';
+  if (hour === null) return ', ';
   return new Intl.DateTimeFormat(undefined, { hour: 'numeric' }).format(new Date(2026, 0, 1, hour));
 }
 
@@ -238,7 +238,7 @@ export function ReflectSection() {
                 <p className="mt-1 text-xs text-muted-foreground">Peak start time</p>
               </div>
             </div>
-            {/* A bare div is role=generic, which PROHIBITS aria-label — every one
+            {/* A bare div is role=generic, which PROHIBITS aria-label, every one
                 of these bars was silently dropped by assistive tech. The chart
                 is one image with a summary; the per-day figures stay reachable
                 as text rather than as sixty separate announcements. */}
@@ -301,7 +301,7 @@ export function ReflectSection() {
                 Expanding your skills
               </h2>
               <p className="mt-1 text-xs text-muted-foreground">
-                Observations and optional next steps—not a performance score.
+                Observations and optional next steps, not a performance score.
               </p>
             </div>
             <div className="grid gap-3 sm:grid-cols-2">
@@ -338,7 +338,8 @@ export function ReflectSection() {
 
       <p className="text-xs leading-5 text-muted-foreground">
         Temporary Chats and AGI Work runs are excluded. Reflect returns activity statistics and
-        broad topic labels to the browser—not message text—and viewing it does not use model quota.
+        broad topic labels to the browser, not message text, and viewing it does not use model
+        quota.
       </p>
     </div>
   );

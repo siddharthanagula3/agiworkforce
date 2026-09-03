@@ -62,7 +62,6 @@ async function readApiError(res: Response): Promise<string> {
   }
 }
 
-/** `null` means the caller is not an owner or admin — a 403, not an error. */
 export function useLegalHolds(): UseQueryResult<LegalHoldsResult | null, Error> {
   return useQuery<LegalHoldsResult | null, Error>({
     queryKey: LEGAL_HOLDS_QUERY_KEY,

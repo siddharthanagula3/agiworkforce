@@ -94,7 +94,7 @@ describe('iframe-sandbox regression (WEB-13)', () => {
     if (offenders.length > 0) {
       const msg = offenders.map((o) => `  ${o.file}:${o.line}: ${o.content}`).join('\n');
       throw new Error(
-        `WEB-13 regression — iframe sandbox combines allow-scripts + allow-same-origin outside the dedicated cross-origin renderer:\n${msg}\n\n` +
+        `WEB-13 regression, iframe sandbox combines allow-scripts + allow-same-origin outside the dedicated cross-origin renderer:\n${msg}\n\n` +
           `Use SandboxedIframe with infrastructure/sandbox, or keep allow-same-origin absent.`,
       );
     }
@@ -131,7 +131,7 @@ describe('iframe-sandbox regression (WEB-13)', () => {
     if (offenders.length > 0) {
       const msg = offenders.map((o) => `  ${o.file}:${o.line}: ${o.content}`).join('\n');
       throw new Error(
-        `iframe sandbox regression — dynamic iframe creation without sandbox assignment:\n${msg}`,
+        `iframe sandbox regression, dynamic iframe creation without sandbox assignment:\n${msg}`,
       );
     }
 
@@ -171,7 +171,7 @@ describe('iframe-sandbox regression (WEB-13)', () => {
     if (offenders.length > 0) {
       const msg = offenders.map((o) => `  ${o.file}:${o.line}: ${o.content}`).join('\n');
       throw new Error(
-        `HTML Blob regression — source creates executable text/html Blob URLs:\n${msg}\n\n` +
+        `HTML Blob regression, source creates executable text/html Blob URLs:\n${msg}\n\n` +
           `Render untrusted HTML in SandboxedIframe and use text/plain for source-view Blob URLs.`,
       );
     }

@@ -24,21 +24,6 @@ export interface PolicyGateResult extends PolicyDecision {
   organizationId: string | null;
 }
 
-/**
- * Resolves the caller's active workspace and asks the evaluator one question.
- *
- * Two requests are deliberately unconstrained and answered `unscoped`:
- * personal scope (no active organization), and an organization that has never
- * saved a policy. Absence of a policy is absence of governance, not a silent
- * application of the table's restrictive column defaults — inheriting those
- * would switch off managed compute for every existing organization the moment
- * this shipped. Once an admin saves a policy, it binds.
- *
- * A failure to read the policy is logged and answered `unscoped` rather than
- * denied: this gate governs an administrator's product configuration, and a
- * transient database error must not look to a member like a policy decision.
- * Tenant isolation does not depend on this path — that is enforced by RLS.
- */
 export async function evaluateActiveWorkspacePolicy(
   db: DatabaseAdapter,
   userId: string,

@@ -208,8 +208,8 @@ export function ProjectSettingsDialog({
             {/*
               Memory scope.
 
-              A decorative <select> used to sit here — one option, no onChange,
-              no persistence — implying per-project scoping the product did not
+              A decorative <select> used to sit here, one option, no onChange,
+              no persistence, implying per-project scoping the product did not
               have. It was removed with a note to re-add a control only once
               memories could actually be scoped. Migration 0135 added
               `user_memories.project_id` and `user_projects.uses_global_memory`,
@@ -273,7 +273,7 @@ export function ProjectSettingsDialog({
             {/*
               Duplicate and Export. The routes shipped without a caller, which
               is the same unwired-backend pattern this codebase keeps getting
-              bitten by — a capability that exists and no user can reach.
+              bitten by, a capability that exists and no user can reach.
             */}
             <div className="order-2 col-span-2 grid grid-cols-2 gap-2 sm:order-none sm:flex sm:items-center">
               <Button

@@ -209,7 +209,7 @@ describe('resolveSharedProjectScope', () => {
     expect(await resolveSharedProjectScope(db, 'solo-user')).toBeNull();
   });
 
-  it('degrades to null — not an exception — when 0086 has not been applied', async () => {
+  it('degrades to null, not an exception, when 0086 has not been applied', async () => {
     const db = {
       query: vi.fn(async () => {
         const error: Error & { code?: string } = new Error(
@@ -260,7 +260,7 @@ describe('shareProject', () => {
     expect(params).toEqual([ORG, PROJECT, 'admin-1', 'read', 25]);
   });
 
-  it('answers 404 when the project is not the actor’s — never a silent success', async () => {
+  it('answers 404 when the project is not the actor’s, never a silent success', async () => {
     const { db } = makeDb(() => []);
     await expect(
       shareProject(db, {
@@ -340,7 +340,7 @@ describe('unshareProject / member access', () => {
     );
   });
 
-  it('404s when the FK refuses — the project is not shared, or the target is not a member', async () => {
+  it('404s when the FK refuses, the project is not shared, or the target is not a member', async () => {
     const { db } = makeDb(() => []);
     await expect(
       setProjectMemberAccess(db, {

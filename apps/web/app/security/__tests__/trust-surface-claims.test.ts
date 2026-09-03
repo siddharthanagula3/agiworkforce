@@ -33,7 +33,7 @@ const UNFALSIFIABLE_HEDGES = [
   'are expected to',
 ] as const;
 
-describe('trust surface — falsifiable statements', () => {
+describe('trust surface, falsifiable statements', () => {
   for (const page of Object.keys(PAGES) as PageName[]) {
     it(`/${page} states controls instead of hedging them`, () => {
       const source = rendered(read(page)).toLowerCase();
@@ -43,7 +43,7 @@ describe('trust surface — falsifiable statements', () => {
   }
 });
 
-describe('trust surface — the honest-gap sections stay present', () => {
+describe('trust surface, the honest-gap sections stay present', () => {
   it('/security keeps a "what we have not done" section', () => {
     const source = read('security');
     expect(source).toContain('id="not-done"');
@@ -101,7 +101,7 @@ describe('trust surface — the honest-gap sections stay present', () => {
   });
 });
 
-describe('trust surface — pages reference each other', () => {
+describe('trust surface, pages reference each other', () => {
   const EXPECTED_LINKS: Record<PageName, string[]> = {
     security: ['/trust', '/status', '/sla', '/privacy', '/subprocessors', '/dpa'],
     trust: ['/security', '/status', '/sla', '/privacy', '/subprocessors', '/dpa'],
@@ -119,7 +119,7 @@ describe('trust surface — pages reference each other', () => {
   }
 });
 
-describe('trust surface — managed cloud maturity is stated', () => {
+describe('trust surface, managed cloud maturity is stated', () => {
   for (const page of ['security', 'trust', 'status', 'sla'] as PageName[]) {
     it(`/${page} calls Managed Cloud a public alpha`, () => {
       expect(read(page).toLowerCase()).toContain('public alpha');
@@ -127,7 +127,7 @@ describe('trust surface — managed cloud maturity is stated', () => {
   }
 });
 
-describe('trust surface — the erasure figure is derived, not remembered', () => {
+describe('trust surface, the erasure figure is derived, not remembered', () => {
   it('publishes the real USER_SCOPED_TABLES length on /security and /trust', async () => {
     const { USER_SCOPED_TABLES } = await import('@/lib/server/account-erasure');
     const count = USER_SCOPED_TABLES.length;

@@ -113,7 +113,7 @@ export function MemoryExclusions() {
     const term = draft.trim().toLowerCase();
     if (term.length < MIN_TERM_LENGTH) {
       setError(
-        `Enter at least ${MIN_TERM_LENGTH} characters — shorter terms match almost anything.`,
+        `Enter at least ${MIN_TERM_LENGTH} characters, shorter terms match almost anything.`,
       );
       return;
     }
@@ -137,7 +137,7 @@ export function MemoryExclusions() {
         </h2>
         <p style={{ fontSize: 13, color: 'var(--text-3)', margin: 0 }}>
           New memories containing any of these terms are discarded before they are saved. Matching
-          is case-insensitive. This applies to <strong>new</strong> memories only — anything already
+          is case-insensitive. This applies to <strong>new</strong> memories only, anything already
           saved stays until you delete it below.
         </p>
       </div>

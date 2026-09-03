@@ -64,7 +64,7 @@ export function SupportActionConfirm({
         <p className={styles['cardTitle']}>I can do this for you</p>
         <p className={styles['cardBody']}>{actionTitle}</p>
         <p className={styles['cardBody']}>
-          Nothing happens yet — I will show you exactly what it does first.
+          Nothing happens yet, I will show you exactly what it does first.
         </p>
         <div className={styles['cardActions']}>
           <button type="button" className={styles['primaryButton']} onClick={onPrepare}>
@@ -138,7 +138,7 @@ export function SupportActionConfirm({
             disabled={running}
           >
             {/* Plain ASCII apostrophe on purpose. `&rsquo;` renders U+2019, which
-                silently changes the button's ACCESSIBLE NAME — voice-control
+                silently changes the button's ACCESSIBLE NAME, voice-control
                 users say "click no don't" and screen-reader users search for it.
                 A typographic flourish is not worth an unaddressable control. */}
             {"No, don't"}

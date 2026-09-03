@@ -301,7 +301,7 @@ function anthropicFailsWith(code: string, message: string): void {
   ];
 }
 
-describe('managed failover — non-streaming', () => {
+describe('managed failover, non-streaming', () => {
   it('success-after-fallback: a 503 primary rotates to the fallback, which serves; attribution and settlement follow the ACTUAL server; one reservation, one settlement', async () => {
     anthropicFailsWith('503', 'upstream unavailable');
 
@@ -394,7 +394,7 @@ describe('managed failover — non-streaming', () => {
   });
 });
 
-describe('managed failover — streaming', () => {
+describe('managed failover, streaming', () => {
   it('success-after-fallback: the fallback serves the SSE stream, stamped with the actual serving model; no failed-attempt text leaks', async () => {
     anthropicFailsWith('503', 'upstream unavailable');
 
@@ -413,7 +413,7 @@ describe('managed failover — streaming', () => {
     expect(managedUsageMocks.finalize.mock.calls[0]![0]).toMatchObject({ outcome: 'completed' });
   });
 
-  it('never-mid-stream: once the primary delivered its first byte, a later failure keeps current behavior — no rotation, no second provider call', async () => {
+  it('never-mid-stream: once the primary delivered its first byte, a later failure keeps current behavior, no rotation, no second provider call', async () => {
     providerControl.anthropicChunks = [
       { type: 'text-delta', delta: 'primary partial text' },
       { type: 'error', code: '503', message: 'upstream died mid-stream', retryable: true },

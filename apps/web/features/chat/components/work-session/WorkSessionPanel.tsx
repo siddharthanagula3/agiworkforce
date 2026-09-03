@@ -69,13 +69,6 @@ export interface WorkSessionContextItem {
 
 export interface WorkSessionSummary {
   status: AgentActivityRunStatus | 'idle';
-  /**
-   * The run's own goal, used as the panel heading. Every session used to be
-   * headed with the literal string "AGI Work session" (agentic-modes-gap-04),
-   * so a user with several sessions could not tell them apart. This is the same
-   * `agiwork:goal` progress entry TaskDetailPanel already renders as "Goal" —
-   * no second title source, and no title where the run never declared a goal.
-   */
   title: string | null;
   progress: WorkSessionProgressItem[];
   outputs: WorkSessionOutput[];

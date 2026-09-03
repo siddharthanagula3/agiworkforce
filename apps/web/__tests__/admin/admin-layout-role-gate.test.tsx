@@ -1,4 +1,3 @@
-
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import React from 'react';
 
@@ -47,7 +46,7 @@ async function callLayout() {
   return AdminLayout({ children });
 }
 
-describe('AdminLayout — role gate', () => {
+describe('AdminLayout, role gate', () => {
   beforeEach(() => {
     mockAuth.mockResolvedValue({ userId: 'user-123' });
     mockGetUser.mockResolvedValue({ id: 'user-123', publicMetadata: {} });

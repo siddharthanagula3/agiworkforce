@@ -32,8 +32,6 @@ describe('the storage meter is computed over the same set the cap enforces', () 
   });
 
   it('never lets a failed meter read take the file list down with it', () => {
-    // Both reads the meter needs — the plan and the usage sum — are wrapped.
-    // An unwrapped one turns a context number into a 500 on the list itself.
     const getHandler = source.slice(
       source.indexOf('let limitBytes: number | null = null;'),
       source.indexOf('storage: { usedBytes, limitBytes }'),

@@ -64,16 +64,16 @@ describe('NotificationsSection grouping', () => {
     render(<NotificationsSection />);
     await waitFor(() => expect(screen.getByText('Synced to your account')).toBeInTheDocument());
 
-    expect(screen.getByRole('switch', { name: 'Reply ready — Browser' })).toHaveAttribute(
+    expect(screen.getByRole('switch', { name: 'Reply ready, Browser' })).toHaveAttribute(
       'aria-checked',
       'true',
     );
-    expect(screen.getByRole('switch', { name: 'Scheduled task finished — Email' })).toHaveAttribute(
+    expect(screen.getByRole('switch', { name: 'Scheduled task finished, Email' })).toHaveAttribute(
       'aria-checked',
       'false',
     );
     expect(
-      screen.getByRole('switch', { name: 'Scheduled task finished — Mobile push' }),
+      screen.getByRole('switch', { name: 'Scheduled task finished, Mobile push' }),
     ).toHaveAttribute('aria-checked', 'false');
   });
 
@@ -81,7 +81,7 @@ describe('NotificationsSection grouping', () => {
     render(<NotificationsSection />);
     await waitFor(() => expect(screen.getByText('Synced to your account')).toBeInTheDocument());
 
-    fireEvent.click(screen.getByRole('switch', { name: 'Scheduled task finished — Mobile push' }));
+    fireEvent.click(screen.getByRole('switch', { name: 'Scheduled task finished, Mobile push' }));
 
     await waitFor(() =>
       expect(mocks.savePreferenceNamespace).toHaveBeenCalledWith('notifications', {

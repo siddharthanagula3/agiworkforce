@@ -327,7 +327,7 @@ describe('rate-limit failure policy', () => {
   });
 });
 
-describe('BILL-33 — an automated block is auditable and appealable', () => {
+describe('BILL-33, an automated block is auditable and appealable', () => {
   beforeEach(() => {
     vi.resetModules();
     delete process.env['UPSTASH_REDIS_REST_URL'];
@@ -541,10 +541,6 @@ describe('non-production rate-limit scale', () => {
 });
 
 describe('managed turn slot age-out', () => {
-  // A slot is normally released by the stream pipe's `finally`. Nothing runs a
-  // `finally` when the platform kills the function at its maxDuration, so the
-  // age-out is the only thing that frees the slot — and at 15 minutes it locked
-  // a free user out of chat six times longer than a turn can legally run.
   it('ages out just above the chat route maxDuration, not minutes later', async () => {
     const routeSource = readFileSync(
       resolve(process.cwd(), 'app/api/llm/v1/chat/completions/route.ts'),

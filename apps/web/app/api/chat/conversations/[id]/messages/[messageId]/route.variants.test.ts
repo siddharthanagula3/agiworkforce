@@ -100,7 +100,7 @@ beforeEach(() => {
   log.length = 0;
 });
 
-describe('DELETE /api/chat/conversations/[id]/messages/[messageId] — splice', () => {
+describe('DELETE /api/chat/conversations/[id]/messages/[messageId], splice', () => {
   it('hands the children to their grandparent before the row goes', async () => {
     givenDatabase([
       owned,
@@ -154,7 +154,7 @@ describe('DELETE /api/chat/conversations/[id]/messages/[messageId] — splice', 
   });
 });
 
-describe('DELETE /api/chat/conversations/[id]/messages/[messageId] — subtree', () => {
+describe('DELETE /api/chat/conversations/[id]/messages/[messageId], subtree', () => {
   const doomed: Responder = {
     match: SUBTREE,
     rows: [{ id: MESSAGE_ID }, { id: CHILD_ID }],
@@ -228,7 +228,7 @@ describe('DELETE /api/chat/conversations/[id]/messages/[messageId] — subtree',
   });
 });
 
-describe('DELETE /api/chat/conversations/[id]/messages/[messageId] — leaf in the response', () => {
+describe('DELETE /api/chat/conversations/[id]/messages/[messageId], leaf in the response', () => {
   const doomed: Responder = { match: SUBTREE, rows: [{ id: MESSAGE_ID }, { id: CHILD_ID }] };
 
   async function leafOf(response: Response): Promise<unknown> {

@@ -57,7 +57,7 @@ async function authed(path: string, init?: RequestInit): Promise<Response> {
 const ENFORCEMENT_COPY: Record<Enforcement, string> = {
   off: 'Recorded only. Nothing acts on the cap.',
   notify:
-    'Crossing the cap is recorded and reported. No turn is refused — use this to watch a budget before deciding to enforce it.',
+    'Crossing the cap is recorded and reported. No turn is refused, use this to watch a budget before deciding to enforce it.',
   block:
     'Managed turns are refused once the cap is reached. Enforcement is eventual rather than exact: the decision is cached briefly, so the workspace can overshoot by roughly a minute of spend.',
 };

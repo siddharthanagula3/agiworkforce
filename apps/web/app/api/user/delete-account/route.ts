@@ -51,7 +51,7 @@ function periodEndLabel(subscription: SubscriptionInfo): string {
 function activeSubscriptionMessage(subscription: SubscriptionInfo): string {
   const plan = subscription.plan_tier;
   if (subscription.cancel_at_period_end) {
-    return `Your ${plan} plan is already cancelled and stays active until ${periodEndLabel(subscription)}. Nothing was deleted — you can delete your account once the plan has ended, or email ${CONTACT_EMAIL} to have it removed sooner.`;
+    return `Your ${plan} plan is already cancelled and stays active until ${periodEndLabel(subscription)}. Nothing was deleted, you can delete your account once the plan has ended, or email ${CONTACT_EMAIL} to have it removed sooner.`;
   }
   return `Cancel your ${plan} plan before deleting your account. Nothing was deleted, and billing continues until you cancel in Settings > Billing. Email ${CONTACT_EMAIL} if you need help.`;
 }

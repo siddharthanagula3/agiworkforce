@@ -25,7 +25,7 @@
         "type": "http",
         "scheme": "bearer",
         "bearerFormat": "JWT",
-        "description": "Session bearer token — a Clerk session JWT or a first-party device token. Browser requests may present the session cookie instead. AGI API keys are rejected wherever this is the only accepted scheme."
+        "description": "Session bearer token, a Clerk session JWT or a first-party device token. Browser requests may present the session cookie instead. AGI API keys are rejected wherever this is the only accepted scheme."
       },
       "ApiKeyAuth": {
         "type": "http",
@@ -340,7 +340,7 @@
           "encoding_format": {
             "type": "string",
             "enum": ["float"],
-            "description": "`base64` is rejected, not ignored — a caller expecting base64 must not receive floats."
+            "description": "`base64` is rejected, not ignored, a caller expecting base64 must not receive floats."
           },
           "user": { "type": "string", "maxLength": 200 }
         }

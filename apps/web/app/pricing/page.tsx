@@ -56,15 +56,6 @@ import { toUserMessage } from '@/lib/user-error-message';
 import '@/features/marketing/components/pages/business/pricing.css';
 import '@/features/marketing/components/pages/business/data-table.css';
 
-// Paid-plan checkout (2026-07-04): open by default, matching the
-// managed-compute public-alpha decision (2026-06-27, lib/managed-compute-gate.ts).
-// The env var is retained ONLY as an incident-response kill-switch: set
-// NEXT_PUBLIC_CHECKOUT_ENABLED=0 (or 'false'/'off') to re-gate.
-//
-// NEXT_PUBLIC_CHECKOUT_ENABLED MUST be kept equal to the server-side
-// STRIPE_CHECKOUT_ENABLED flag (app/api/checkout/route.ts) and to the same
-// server-side checkout flag — see apps/web/.env.example. If they diverge, the
-// CTA and the API will disagree about whether checkout is actually available.
 const CHECKOUT_ENABLED_RAW = process.env['NEXT_PUBLIC_CHECKOUT_ENABLED']?.trim().toLowerCase();
 const CHECKOUT_ENABLED =
   CHECKOUT_ENABLED_RAW !== '0' &&
@@ -188,13 +179,6 @@ interface CompareRow {
   highlighted?: boolean;
 }
 
-/**
- * The training-data-use row is unconditional and identical across every trust
- * mode and plan — apps/web/app/privacy/page.tsx states plainly that "AGI does
- * not use customer conversation content to train AGI-owned models" — so the row
- * is a single constant rather than a per-plan derivation; there is no
- * weaker/stronger variant by tier to compute.
- */
 const UPGRADE_SETTLE_ATTEMPTS = 6;
 const UPGRADE_SETTLE_INTERVAL_MS = 1_000;
 
@@ -209,8 +193,8 @@ function formatLimit(limit: BillingPlanLimit, singular: string, plural: string):
 function managedPlanCapabilities(plan: BillingPlanTier) {
   const limits = getBillingPlanProductLimits(plan);
   return {
-    projects: limits ? formatLimit(limits.projects, 'project', 'projects') : '—',
-    customMcp: limits ? formatLimit(limits.customMcpServers, 'custom MCP', 'custom MCP') : '—',
+    projects: limits ? formatLimit(limits.projects, 'project', 'projects') : ', ',
+    customMcp: limits ? formatLimit(limits.customMcpServers, 'custom MCP', 'custom MCP') : ', ',
     skillsConnectors: canUseBillingPlanCapability(plan, 'skills_connectors') ? 'Yes' : 'No',
     agiWork: canUseBillingPlanCapability(plan, 'agi_work') ? 'Yes' : 'No',
     imageGeneration: canUseBillingPlanCapability(plan, 'image_generation') ? 'Yes' : 'No',
@@ -219,11 +203,6 @@ function managedPlanCapabilities(plan: BillingPlanTier) {
     developerSurfaces: canUseBillingPlanCapability(plan, 'developer_surfaces')
       ? 'CLI, Chrome & VS Code'
       : 'No managed access',
-    // SSO and SCIM directory sync are implemented and entitlement-gated on
-    // `enterprise_controls` (apps/web/features/admin/pages/AdminConsolePage.tsx's
-    // "Implemented — entitlement-gated" Identity row; live routes at
-    // /api/admin/sso and /api/scim/v2), which today only the Enterprise plan
-    // carries. Team gets the underlying `team_admin` controls without those.
     teamControls: canUseBillingPlanCapability(plan, 'enterprise_controls')
       ? 'SSO, SCIM & admin'
       : canUseBillingPlanCapability(plan, 'team_admin')
@@ -233,22 +212,6 @@ function managedPlanCapabilities(plan: BillingPlanTier) {
   };
 }
 
-/**
- * A per-provider "models included" matrix generated live from the canonical
- * catalog
- * (packages/contracts/types/src/models.json's `tierAllowedModels`), through
- * the SAME `canAccessModelForSubscriptionTier` gate the in-app model picker
- * enforces (apps/web/features/chat/components/Composer/ComposerFooter.tsx's
- * `modelLock` -> `isModelSelectableForTier` -> that function). Grouped by
- * provider rather than one row per model — models.json's own verificationLog
- * notes the roster changes weekly, and a
- * hand-typed per-model table would rot the moment it did. Team and Enterprise
- * are folded onto Pro's and Max's columns respectively because
- * `canAccessModelForSubscriptionTier` normalizes them to the same access
- * level (`normalizeSubscriptionAccessTier`: team -> pro, and max/enterprise
- * both unlock the full flagship roster) — the column headers say so plainly
- * rather than implying four identical columns are different.
- */
 const MODEL_ACCESS_COLUMNS: ReadonlyArray<{ label: string; plan: BillingPlanTier }> = [
   { label: BILLING_PLAN_PRICING.free.label, plan: 'free' },
   { label: BILLING_PLAN_PRICING.basic.label, plan: 'basic' },
@@ -308,7 +271,7 @@ function modelAccessByProvider(): ModelAccessRow[] {
 }
 
 function formatModelAccess(accessibleCount: number, total: number): string {
-  if (accessibleCount === 0) return '—';
+  if (accessibleCount === 0) return ', ';
   if (accessibleCount === total) return total === 1 ? 'Included' : `All ${total}`;
   return `${accessibleCount} of ${total}`;
 }
@@ -321,19 +284,6 @@ export default function PricingPage() {
   const { data: billing, isLoading: billingLoading, refetch: refetchBilling } = useBillingData();
   const accountSubscription = useBillingStore((s) => s.subscription);
   const billingPolicyReady = useBillingStore(isBillingPolicyReady);
-  /**
-   * The plan is not current the moment /api/upgrade returns.
-   *
-   * That route answers `activation: 'webhook_pending'` — Stripe has charged, but
-   * plan_tier is only written when customer.subscription.updated arrives. A
-   * single refetch on confirm therefore races the webhook and usually re-reads
-   * the OLD plan, which is what left this page offering "Get Max" next to a
-   * toast saying the upgrade had succeeded.
-   *
-   * So poll, briefly, until the plan actually moves. Bounded because a webhook
-   * that never lands must not spin forever: the page then keeps the plan it last
-   * read, which the query's own refetch-on-focus corrects.
-   */
   const settleUpgradedPlan = useCallback(async () => {
     const planBeforeUpgrade = billing?.plan;
     for (let attempt = 0; attempt < UPGRADE_SETTLE_ATTEMPTS; attempt += 1) {
@@ -506,9 +456,6 @@ export default function PricingPage() {
     if (plan === 'team' && billing.plan === 'team') return 'upgrade';
     if (billing.plan === plan) return 'current';
 
-    // Moving OFF a per-seat organization plan onto an individual plan is not an
-    // upgrade in any direction — it would convert an org subscription into a
-    // personal one and strand the other seats. Route it through billing.
     if (billing.plan === 'team') return 'lower';
 
     // Team has no rank on the individual ladder, but it IS reachable from any
@@ -558,17 +505,6 @@ export default function PricingPage() {
       );
     }
     if (relationship === 'lower') {
-      // Opens the Stripe Customer Portal, which is the only surface that can
-      // actually perform a downgrade. This used to be `<Link href="/billing">`,
-      // and that closed a loop with no exit: /billing redirects to
-      // /settings/billing, which opens the Billing settings modal — the exact
-      // screen whose "Adjust plan" button sent the user to /pricing in the
-      // first place. A Max 15x subscriber who wanted Max 5x could go
-      // Settings → Adjust plan → Pricing → 5x → Manage billing → Settings,
-      // forever, and never reach a control that changes the plan.
-      //
-      // BillingSection hit the identical bug and was fixed the same way; this
-      // copy of it was missed. See the note on `openPortal` there.
       return (
         <button
           type="button"
@@ -682,7 +618,7 @@ export default function PricingPage() {
 
   const max15xUsageMultiplier = managedUsageMultiplier('max_15x', 'pro');
   const max15xUsage =
-    max15xUsageMultiplier === null ? '—' : `${max15xUsageMultiplier}x ${pro.label} usage`;
+    max15xUsageMultiplier === null ? ', ' : `${max15xUsageMultiplier}x ${pro.label} usage`;
 
   const maxTierFeatures =
     maxVariant === 'max'

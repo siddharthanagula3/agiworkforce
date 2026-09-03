@@ -434,11 +434,6 @@ export async function dispatchStripeEvent(
       }
       break;
     }
-    // A warning is Stripe's issuer-sourced signal that a dispute is likely, not
-    // proof of fraud. What to DO about one — claw back, suspend, pre-refund — is
-    // a risk-appetite decision that has not been made, so this records the
-    // warning against the owning account with a stable reason code and leaves
-    // the account untouched. `charge.dispute.created` above is what acts.
     case 'radar.early_fraud_warning.created': {
       const warning = event.data.object as Stripe.Radar.EarlyFraudWarning;
       const chargeId = typeof warning.charge === 'string' ? warning.charge : warning.charge.id;

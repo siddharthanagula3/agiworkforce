@@ -55,15 +55,6 @@ function subscriptionEvent(periodStart: number): Stripe.Subscription {
   } as unknown as Stripe.Subscription;
 }
 
-/**
- * The stored row is a Date, not a string.
- *
- * This is the whole point of the test. `subscriptions.current_period_start` is
- * `timestamptz`, and the Postgres driver hydrates it as a JS Date — even though
- * the query's row type in db.ts declares `string | null`. Every existing
- * webhook fixture wrote `.toISOString()` there, which is why a comparison that
- * is always true against real data looked correct in tests for so long.
- */
 function dbWithStoredPeriodStart(periodStartSeconds: number): DatabaseAdapter {
   const rowsFor = (sql: string): unknown[] => {
     if (sql.includes('select id, user_id, plan_tier')) {
@@ -89,11 +80,6 @@ describe('credit handling across the billing period boundary', () => {
   beforeEach(() => vi.clearAllMocks());
 
   it('does not reset consumed usage when the period has not changed', async () => {
-    // A card swap, a seat change, a cancel-and-resume: benign events that all
-    // arrive as customer.subscription.updated with the SAME period. Before the
-    // fix these compared a Date to an ISO string, which is always unequal, so
-    // every one of them called resetCreditsForNewPeriod and zeroed
-    // credits_used_cents — a repeatable, self-serve reset of a paid allowance.
     await updateSubscriptionFromStripeSubscription(
       dbWithStoredPeriodStart(PERIOD_START),
       {} as Stripe,

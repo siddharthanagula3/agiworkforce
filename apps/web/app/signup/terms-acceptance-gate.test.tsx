@@ -23,14 +23,6 @@ async function renderSignup(redirectTo = '/chat') {
   render(await SignupPage({ searchParams: Promise.resolve({ redirectTo }) }));
 }
 
-/**
- * Founder decision 2026-08-17: no clickwrap above the form. The checkbox blocked
- * the auth widget until ticked, which met people with a consent wall before
- * anything identified them and re-appeared whenever the stored marker was gone.
- * Assent now sits against the button being pressed, and the durable record is
- * still written server-side by /signup/complete — which is what makes "what did
- * they agree to, and when" answerable at all.
- */
 describe('/signup terms assent', () => {
   beforeEach(() => {
     window.localStorage.clear();

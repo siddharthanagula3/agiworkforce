@@ -8,24 +8,6 @@ import { createError } from '@/lib/errors';
 import { getUserScopedDb } from '@/lib/server/rls-db';
 import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
 
-/**
- * The account-wide artifact index (migration 0121).
- *
- *   GET /api/artifacts/index        - newest indexed artifacts for the caller
- *   GET /api/artifacts/index?limit= - bounded page
- *
- * Read-only. Rows are written by the message-persist route as assistant
- * messages land (`lib/index-artifacts.ts`), never by a client.
- *
- * This returns METADATA ONLY — no `content`, because the index deliberately
- * does not store any. An artifact's bytes live in the message that produced it
- * and are re-derived on demand under the same deterministic id, so the client
- * merges these rows with its locally-derived set by identity.
- *
- * Every query runs through `getUserScopedDb`, so 0120's FORCE'd RLS policy
- * enforces isolation in the DATABASE rather than only in this WHERE clause.
- */
-
 export const runtime = 'nodejs';
 
 const QuerySchema = z.object({

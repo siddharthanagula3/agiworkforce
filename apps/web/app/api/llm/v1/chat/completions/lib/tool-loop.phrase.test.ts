@@ -73,7 +73,7 @@ describe('toolStatusPhrase', () => {
       'db_query',
     ].map((t) => toolStatusPhrase(t) ?? '');
     for (const p of allPhrases) {
-      expect(p).not.toContain('—');
+      expect(p).not.toContain(', ');
       expect(p).not.toContain('--');
     }
   });

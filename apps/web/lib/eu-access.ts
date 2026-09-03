@@ -33,14 +33,6 @@ export const EEA_COUNTRY_CODES = new Set([
 
 export type EuAccessDecision = { blocked: false } | { blocked: true; country: string };
 
-/**
- * Article 27 GDPR obliges a non-EU controller offering services to people in the
- * EU to appoint a local representative. No representative is appointed, so EEA
- * traffic is refused rather than served without one. Lifting the block is a
- * one-line env change once a representative exists — the EU-specific consent,
- * erasure and disclosure code stays wired and tested so nothing has to be
- * rebuilt.
- */
 export function decideEuAccess(
   country: string | null | undefined,
   enabled: boolean,

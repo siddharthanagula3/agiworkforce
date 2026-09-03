@@ -121,7 +121,7 @@ export async function assertAccountActive(userId: string): Promise<void> {
   if (failOpen) {
     logger.error(
       { error: lastError, userId },
-      'account_status lookup failed; ACCOUNT_STATUS_FAIL_OPEN set — allowing request',
+      'account_status lookup failed; ACCOUNT_STATUS_FAIL_OPEN set, allowing request',
     );
     return;
   }

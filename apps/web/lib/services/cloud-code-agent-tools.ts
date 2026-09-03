@@ -1,33 +1,5 @@
 import 'server-only';
 
-/**
- * Cloud Code agent — tool contract and command approval boundary.
- *
- * The existing Cloud Code surface is a remote terminal: the user types a
- * command and `runCloudCodeCommand` executes it. This module is the first
- * layer of the agent turn that replaces that with a goal-directed loop, and it
- * owns the part that must be correct before any model is allowed to drive a
- * sandbox: WHICH actions an agent may take unattended.
- *
- * Design rules this file enforces:
- *
- *  - **Fail closed.** `classifyCommandRisk` returns `requires_approval` for
- *    anything it does not positively recognize as safe. A classifier that
- *    defaults to "safe" is worse than no classifier, because it launders
- *    unreviewed commands through an approval UI that always says yes.
- *  - **No parsing-based safety claims.** We do not tokenize a shell line and
- *    reason about "the command" — `sh -c`, backticks, `$( )`, `&&`, `;` and
- *    pipes all defeat that. Anything containing shell metacharacters is
- *    escalated rather than inspected further. This is deliberately blunter
- *    than a real shell parser and that is the point.
- *  - **Denied means denied.** A small set of actions are never approvable from
- *    an agent turn, because approving them in a chat UI cannot be informed
- *    consent (credential exfiltration, host escape, history rewrites).
- *
- * The repo rule this implements: "Always require explicit approval for
- * destructive, external, privileged, or expensive agent actions."
- */
-
 export type CommandRisk =
   | 'safe'
   /** May run only after the user explicitly approves this exact command. */

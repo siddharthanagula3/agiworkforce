@@ -38,25 +38,6 @@ function has(list: readonly string[], value: string): boolean {
   return list.some((entry) => normalize(entry) === value);
 }
 
-/**
- * Decides whether one workspace may use one connector.
- *
- * Precedence mirrors the model evaluator so an administrator does not have to
- * learn two rules: an explicit block wins, then an explicit allow, then a
- * non-empty allowlist excludes everything absent from it.
- *
- * CUSTOM CONNECTORS ARE A SEPARATE QUESTION. A catalog connector is a known
- * integration this product ships; a custom one is an arbitrary member-supplied
- * MCP endpoint. An organization comfortable with the first is often not
- * comfortable with the second, so the switch is its own field and an explicit
- * allow for a specific custom connector still respects it — a blanket "no
- * custom endpoints" must not be silently escapable by naming one.
- *
- * AN EMPTY ALLOWLIST MEANS UNRESTRICTED, NOT DENY-ALL. A row that arrives empty
- * must not cut every member off from every integration.
- *
- * Pure and total: no I/O, no throw, every input yields a decision.
- */
 export function evaluateConnectorAccess(
   policy: ConnectorAccessPolicy | null,
   ask: { connectorId: string | null; isCustom?: boolean },

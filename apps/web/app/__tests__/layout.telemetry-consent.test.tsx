@@ -65,7 +65,7 @@ describe('root layout renders telemetry consent server-side', () => {
     expect(attributeOf(rendered)).toBe('true');
   });
 
-  it('renders false whenever the consent read resolves false — signed out, never opted in, or failed closed', async () => {
+  it('renders false whenever the consent read resolves false, signed out, never opted in, or failed closed', async () => {
     mocks.readServerTelemetryConsent.mockResolvedValue(false);
 
     const rendered = await RootLayout({ children: CHILDREN });

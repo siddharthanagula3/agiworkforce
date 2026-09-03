@@ -79,15 +79,6 @@ export type FreeLaneFailureSignal =
 
 const TIER_RESTRICTED_CODE = 'model_tier_restricted';
 
-/**
- * `ErrorCategory` → `RouteUnavailabilityReason`, the mapping `runtime-state.ts`
- * says its taxonomy was shaped to accept.
- *
- * A category absent from this table is NOT a route-availability signal — an
- * abort, a context overflow, a safety stop and a malformed request all say
- * something about the request, not about whether the route can serve. Blaming
- * the route for them would park healthy free capacity on the user's own input.
- */
 const HEALTH_REASON_BY_CATEGORY: Readonly<
   Partial<Record<ErrorCategory, RouteUnavailabilityReason>>
 > = {
@@ -113,15 +104,6 @@ const HEALTH_REASON_BY_CATEGORY: Readonly<
 const PROVIDER_SCOPED_REASONS: ReadonlySet<RouteUnavailabilityReason> =
   new Set<RouteUnavailabilityReason>(['credential_invalid', 'billing_exhausted']);
 
-/**
- * A tier rejection is a terms fact, never a health fact.
- *
- * `model_tier_restricted` means the account is not entitled to the model — the
- * free-pool record claims capacity the credential does not have. Parking the
- * route as "unhealthy" would let it silently return when the circuit expires;
- * the honest repair is a terms re-review, so this is surfaced and the health
- * store is left alone.
- */
 export function classifyFreeLaneFailure(
   category: string,
   code: string | undefined,
@@ -259,15 +241,6 @@ function clampHeadroom(value: number): number {
   return Math.min(HEADROOM_MAX, Math.max(HEADROOM_MIN, value));
 }
 
-/**
- * The snapshot a caller gets when the state store cannot answer.
- *
- * Eligibility survives — it comes from the reviewed config file and needs no
- * I/O — but every pool is dropped, so `resolveFreeAutoRoute` reports
- * `quota_pool_unknown` and strands. That asymmetry is the point: we still know
- * the terms are clean, and we no longer know whether the allowance is spent.
- * Spending on that uncertainty is the one outcome this lane may not produce.
- */
 function unknownCapacityState(
   nowMs: number,
   freeEligibility: RoutingRuntimeState['freeEligibility'],
@@ -281,18 +254,6 @@ export function resetFreeLaneRuntimeStateCache(): void {
   cachedSnapshot = null;
 }
 
-/**
- * Every record a reviewer actually signed, expired ones included.
- *
- * Adjudicating expiry and terms here would collapse three distinct answers into
- * "not verified". `resolveFreeAutoRoute` gates on both and refuses either way,
- * so handing it the signed record costs no safety and buys the difference
- * between "nobody reviewed this", "the review lapsed" and "the terms forbid it"
- * — which are three different pieces of work for whoever reads the rejection.
- *
- * A row with no reviewer or no timestamp is still dropped: there is no record to
- * hand over, and absence is what `not_verified_free` correctly describes.
- */
 function declaredFreeEligibility(
   document: FreePoolsDocument,
 ): RoutingRuntimeState['freeEligibility'] {
@@ -486,12 +447,6 @@ export async function recordFreeLaneRouteSuccess(input: {
   }));
 }
 
-/**
- * Take a route (or its provider's credential) out of service.
- *
- * `retryAfterSeconds` from a 429 is honoured verbatim when the provider gave
- * one — it knows when its own window reopens better than a backoff curve does.
- */
 export async function recordFreeLaneRouteFailure(input: {
   routeId: string;
   provider: string;

@@ -312,7 +312,7 @@ async function completeAuthorization(): Promise<{ state: string; redirectUri: st
   return { state, redirectUri };
 }
 
-describe('CRIT-001 — an available connector completes the whole lifecycle', () => {
+describe('CRIT-001, an available connector completes the whole lifecycle', () => {
   const originalFetch = globalThis.fetch;
 
   beforeEach(() => {

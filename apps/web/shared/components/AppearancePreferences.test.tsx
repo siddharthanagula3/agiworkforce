@@ -22,7 +22,7 @@ afterEach(() => {
   root().removeAttribute('data-contrast');
 });
 
-describe('AppearancePreferences — text size', () => {
+describe('AppearancePreferences, text size', () => {
   it('sets no attribute for the default, so the base stylesheet stands', () => {
     render(<AppearancePreferences />);
 
@@ -48,7 +48,7 @@ describe('AppearancePreferences — text size', () => {
   });
 });
 
-describe('AppearancePreferences — code wrapping', () => {
+describe('AppearancePreferences, code wrapping', () => {
   it('is absent by default', () => {
     render(<AppearancePreferences />);
 
@@ -73,7 +73,7 @@ describe('AppearancePreferences — code wrapping', () => {
   });
 });
 
-describe('AppearancePreferences — accent colour', () => {
+describe('AppearancePreferences, accent colour', () => {
   it('leaves the brand accent in place for the default', () => {
     render(<AppearancePreferences />);
 
@@ -102,7 +102,7 @@ describe('AppearancePreferences — accent colour', () => {
   });
 });
 
-describe('AppearancePreferences — high contrast', () => {
+describe('AppearancePreferences, high contrast', () => {
   it('is absent by default so the OS preference alone decides', () => {
     render(<AppearancePreferences />);
 
@@ -127,7 +127,7 @@ describe('AppearancePreferences — high contrast', () => {
   });
 });
 
-describe('AppearancePreferences — rendering', () => {
+describe('AppearancePreferences, rendering', () => {
   it('renders nothing into the tree', () => {
     const { container } = render(<AppearancePreferences />);
 

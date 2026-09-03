@@ -1,4 +1,3 @@
-
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const storeMocks = vi.hoisted(() => ({
@@ -231,7 +230,7 @@ describe('escalateToHuman · nobody available (the common case)', () => {
     expect(emailed).not.toContain(jwt);
   });
 
-  it('degrades honestly — and still returns a reference id — when the provider is unconfigured', async () => {
+  it('degrades honestly, and still returns a reference id, when the provider is unconfigured', async () => {
     vi.stubEnv('RESEND_API_KEY', '');
 
     const result = await escalateToHuman(baseInput());

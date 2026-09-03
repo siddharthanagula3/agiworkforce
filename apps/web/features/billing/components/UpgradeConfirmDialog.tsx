@@ -178,7 +178,7 @@ export function UpgradeConfirmDialog({
                     ? 'Review the charge before it goes to your saved card.'
                     : // No itemized breakdown from the server, so the total has
                       // to carry the explanation on its own.
-                      `You'll be charged ${formatMoney(amountDue.cents, amountDue.currency)} today—the prorated difference for the rest of your current billing period. Your renewal date stays the same, at ${formatCatalogPrice(recurringUsd)}/${intervalWord}.`
+                      `You'll be charged ${formatMoney(amountDue.cents, amountDue.currency)} today, the prorated difference for the rest of your current billing period. Your renewal date stays the same, at ${formatCatalogPrice(recurringUsd)}/${intervalWord}.`
                   : 'Review your upgrade before it is charged to your saved card.'}
           </DialogDescription>
         </DialogHeader>

@@ -111,12 +111,6 @@ async function handleListKnowledgeFiles(request: NextRequest, context: RouteCont
     throw createError.internal('Failed to fetch knowledge files');
   }
 
-  // The storage cap is enforced on upload and was invisible until it refused
-  // you. It is ACCOUNT-wide, not per project, so the panel cannot compute it
-  // from the files it just listed — the total has to come from here.
-  // The meter is context; the file list is the point of this endpoint. Neither
-  // the plan read nor the usage read may take the list down with it, so both
-  // degrade to "no meter" rather than propagating.
   let limitBytes: number | null = null;
   try {
     const subscription = await SubscriptionService.getSubscription(db, userId);

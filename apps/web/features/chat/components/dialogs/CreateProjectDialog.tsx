@@ -130,7 +130,7 @@ function CreateProjectDialogImpl({ open, onOpenChange, onCreated }: CreateProjec
               Project name
             </Label>
 
-            {/* Input with a leading decorative icon. (Not a button — an emoji
+            {/* Input with a leading decorative icon. (Not a button, an emoji
                 picker is not implemented, so a clickable no-op would be a dead
                 control; this is a non-interactive affordance instead.) */}
             <div className="relative">

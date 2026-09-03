@@ -4,18 +4,6 @@ import { describe, expect, it } from 'vitest';
 
 import { createManagedOfficeFileToolDefinition } from '@/lib/services/managed-office-file-service';
 
-/**
- * Claim guard for the "Create an Office file" row on /agent-permissions.
- *
- * The page shipped "Generates a document, spreadsheet, or deck inside the
- * sandbox" while create_office_file's discriminated union accepts only `docx`
- * and `pptx` — a public promise of a format the tool cannot produce. This
- * reads the page source as text (matching app/enterprise's claim guards) so it
- * trips on the words a future writer types, and derives the permitted formats
- * from the tool schema so adding xlsx to the union unblocks the copy on its
- * own.
- */
-
 const PAGE = path.join(path.resolve(__dirname, '..'), 'page.tsx');
 
 const OFFICE_FORMAT_WORDS: Readonly<Record<string, readonly RegExp[]>> = {
@@ -33,7 +21,7 @@ function officeFileRowCopy(): string {
   return row![1]!;
 }
 
-describe('/agent-permissions — Office file creation claims', () => {
+describe('/agent-permissions, Office file creation claims', () => {
   it('names every format create_office_file accepts and no format it does not', () => {
     const accepted = (
       createManagedOfficeFileToolDefinition().function.parameters.properties.format as {

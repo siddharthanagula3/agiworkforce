@@ -66,14 +66,6 @@ export async function lockConversationThread(
   return row.active_leaf_message_id;
 }
 
-/**
- * Which row a write hangs off, from the three things a caller can mean.
- *
- * A uuid names the branch point. An explicit null means the root sibling
- * group — the edits of the opening turn — and must not be confused with the
- * third case, an absent parent, which is a caller that does not know about the
- * tree and continues from wherever the reader is.
- */
 export function resolveParentId(
   requested: string | null | undefined,
   activeLeafMessageId: string | null,
@@ -103,21 +95,6 @@ export async function assertParentInConversation(
   }
 }
 
-/**
- * Which row a generated answer hangs off, for a writer that carries no parent
- * of its own — the server-side persistence net, which knows only the
- * conversation and the id it was told to write.
- *
- * Every flow that saves its question first leaves that question as the leaf, so
- * the leaf is the parent. Regeneration is the one that does not: it posts
- * nothing before the stream, so the leaf is still the answer being replaced,
- * and hanging the new answer off it would append a turn where the reader asked
- * for a sibling. The question that answer already answers is its own parent.
- *
- * This is also what makes a replay idempotent: a second persist of the same
- * turn reads its own row as the leaf and resolves to the same parent instead of
- * to itself.
- */
 export async function resolveAnsweredParentId(
   tx: DatabaseAdapter,
   conversationId: string,
@@ -158,20 +135,6 @@ export async function conversationIsUnbranched(
   return row?.unbranched ?? false;
 }
 
-/**
- * Gives a conversation that has only ever been linear the parent pointers its
- * history implies, so the row about to be inserted has something to branch
- * from. Must run before that insert: the new row would otherwise fall inside
- * the same window and be chained onto the transcript instead of branching off
- * it.
- *
- * `parent_id is null` makes it safe to run twice — a conversion that already
- * happened matches no rows. It is NOT safe to run on a conversation that has
- * branched: every root of a sibling group is deliberately null-parented, and
- * the window below would chain each one onto whichever row happens to precede
- * it in time, folding separate branches into a single line. Callers gate on
- * {@link conversationIsUnbranched}, never on the leaf being null.
- */
 export async function stampLinearParents(
   tx: DatabaseAdapter,
   conversationId: string,

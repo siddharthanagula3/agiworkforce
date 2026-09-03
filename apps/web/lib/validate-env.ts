@@ -219,7 +219,7 @@ export function validateProductionKeyTypes(): ValidationResult {
   for (const { env, prefix, impact } of testKeyChecks) {
     const value = process.env[env];
     if (value && value.startsWith(prefix)) {
-      warnings.push(`${env} is a ${prefix}… development/test key in production — ${impact}`);
+      warnings.push(`${env} is a ${prefix}… development/test key in production, ${impact}`);
     }
   }
 
@@ -307,12 +307,12 @@ export function validateSecurityEscapeHatches(): ValidationResult {
 
   for (const { env, impact } of SECURITY_ESCAPE_HATCHES) {
     if (!enabled(process.env[env])) continue;
-    report(`${env} is enabled — ${impact}`);
+    report(`${env} is enabled, ${impact}`);
   }
 
   for (const { env, value, impact } of SECURITY_POLICY_DOWNGRADES) {
     if (process.env[env]?.trim().toLowerCase() !== value) continue;
-    report(`${env} is set to ${value} — ${impact}`);
+    report(`${env} is set to ${value}, ${impact}`);
   }
 
   return { valid: errors.length === 0, errors, warnings };
@@ -334,7 +334,7 @@ export function validateEmailPseudonymPepper(): ValidationResult {
   if (process.env['EMAIL_HASH_PEPPER']?.trim()) return { valid: true, errors, warnings };
 
   const message =
-    'EMAIL_HASH_PEPPER is not set — email addresses are low-entropy and enumerable, so the ' +
+    'EMAIL_HASH_PEPPER is not set, email addresses are low-entropy and enumerable, so the ' +
     'unkeyed SHA-256 fallback is reversible by dictionary and is not a pseudonym. Writing a new ' +
     'pseudonym (waitlist joins, consent records, erasure receipts) throws at runtime in ' +
     'production until this is set to 32+ random bytes.';
@@ -352,7 +352,7 @@ export function validateSandboxOriginConfigured(): ValidationResult {
   if (process.env['NEXT_PUBLIC_SANDBOX_ORIGIN']?.trim()) return { valid: true, errors, warnings };
 
   const message =
-    'NEXT_PUBLIC_SANDBOX_ORIGIN is not set — cross-origin artifact isolation degrades to ' +
+    'NEXT_PUBLIC_SANDBOX_ORIGIN is not set, cross-origin artifact isolation degrades to ' +
     'same-origin srcDoc rendering (allow-same-origin is dropped in that fallback, so this is ' +
     'degraded, not unsafe, but it is not the isolation the trust and security pages describe).' +
     (isProductionRuntime()
@@ -376,7 +376,7 @@ export function validateGeneratedMediaStorage(): ValidationResult {
   if (!hasR2Credentials) {
     warnings.push(
       'Cloudflare R2 credentials are not set (CLOUDFLARE_R2_ACCOUNT_ID, ' +
-        'CLOUDFLARE_R2_ACCESS_KEY_ID, CLOUDFLARE_R2_SECRET_ACCESS_KEY) — managed image and ' +
+        'CLOUDFLARE_R2_ACCESS_KEY_ID, CLOUDFLARE_R2_SECRET_ACCESS_KEY), managed image and ' +
         'video generation report storage_not_configured and stay unavailable in the composer.',
     );
     return { valid: true, errors, warnings };
@@ -387,13 +387,13 @@ export function validateGeneratedMediaStorage(): ValidationResult {
 
   if (!privateBucket) {
     warnings.push(
-      'CLOUDFLARE_R2_PRIVATE_BUCKET_NAME is not set — generated media has nowhere private to ' +
+      'CLOUDFLARE_R2_PRIVATE_BUCKET_NAME is not set, generated media has nowhere private to ' +
         'live, so every managed image and video model reports storage_not_configured and video ' +
         'generation is refused before any credit is reserved.',
     );
   } else if (publicBucket && privateBucket === publicBucket) {
     warnings.push(
-      'CLOUDFLARE_R2_PRIVATE_BUCKET_NAME matches CLOUDFLARE_R2_BUCKET_NAME — private generated ' +
+      'CLOUDFLARE_R2_PRIVATE_BUCKET_NAME matches CLOUDFLARE_R2_BUCKET_NAME, private generated ' +
         'media storage stays disabled until the two name different buckets.',
     );
   }

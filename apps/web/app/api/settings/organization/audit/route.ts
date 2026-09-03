@@ -68,9 +68,6 @@ async function handleGet(request: NextRequest): Promise<NextResponse> {
   const membership = requireOrgMember(await resolveOrgMembership(db, userId));
   await requireTeamAdminAccess(db, userId, membership.organizationId);
 
-  // The audit trail records who did what to whom. A plain member reading it
-  // would be a disclosure, so this is owner/admin only — matching the
-  // `enterprise_audit_events_admin_read` RLS policy rather than relying on it.
   if (!isOrgAdminRole(membership.role)) {
     throw createError.forbidden('Only an organization owner or admin can read the audit trail.');
   }

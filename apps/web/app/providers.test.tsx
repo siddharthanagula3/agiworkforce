@@ -31,10 +31,6 @@ vi.mock('@agiworkforce/unified-chat', () => ({
     <div data-testid="capability-provider">{children}</div>
   ),
 }));
-// Renders null in production too. Stubbed here for the same reason as the
-// other leaves below: this test asserts PROVIDER NESTING, and the real
-// component calls Clerk's useAuth, which throws outside a ClerkProvider —
-// which layout.tsx supplies and this structural test deliberately does not.
 vi.mock('@shared/components/TelemetryConsentSync', () => ({
   TelemetryConsentSync: () => null,
 }));

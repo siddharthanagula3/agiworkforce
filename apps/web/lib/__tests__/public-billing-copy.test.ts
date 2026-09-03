@@ -216,7 +216,7 @@ describe('App Store listing truth', () => {
       if (amounts.length === 0) continue;
       priced += 1;
 
-      const label = /^[•*-]\s*([^—]+?)\s*—/.exec(line)?.[1]?.trim();
+      const label = /^[•*-]\s*([^, ]+?)\s*, /.exec(line)?.[1]?.trim();
       const plan = label ? byLabel.get(label) : undefined;
       expect(
         plan,
@@ -231,7 +231,7 @@ describe('App Store listing truth', () => {
         `${label} is charged ${charged.join('/')} USD but the listing prints ${amounts.join('/')}`,
       ).toEqual(charged.sort((a, b) => a - b));
     }
-    expect(priced, 'no priced plan bullet found — has the PRICING block moved?').toBeGreaterThan(0);
+    expect(priced, 'no priced plan bullet found, has the PRICING block moved?').toBeGreaterThan(0);
   });
 
   it('does not advertise iOS features that ship switched off', () => {
@@ -327,8 +327,6 @@ describe('subprocessor disclosure', () => {
         `name: '${name}'`,
       );
     }
-    expect(checked, 'neither Expo path matched — this test is asserting nothing').toBeGreaterThan(
-      0,
-    );
+    expect(checked, 'neither Expo path matched, this test is asserting nothing').toBeGreaterThan(0);
   });
 });

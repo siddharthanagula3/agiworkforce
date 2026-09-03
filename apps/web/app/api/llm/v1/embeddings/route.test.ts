@@ -86,7 +86,7 @@ afterEach(() => {
   delete process.env['GOOGLE_API_KEY'];
 });
 
-describe('POST /api/llm/v1/embeddings — managed compute kill switch', () => {
+describe('POST /api/llm/v1/embeddings, managed compute kill switch', () => {
   it('refuses before reserving or calling the provider when the kill switch is engaged', async () => {
     vi.stubEnv('AGI_MANAGED_COMPUTE_PRIVATE_BETA', '0');
     try {
@@ -100,7 +100,7 @@ describe('POST /api/llm/v1/embeddings — managed compute kill switch', () => {
   });
 });
 
-describe('POST /api/llm/v1/embeddings — success', () => {
+describe('POST /api/llm/v1/embeddings, success', () => {
   it('returns one indexed embedding per input', async () => {
     googleReturns([
       [0.1, 0.2],
@@ -168,7 +168,7 @@ describe('embedding pricing contract', () => {
   });
 });
 
-describe('POST /api/llm/v1/embeddings — billing on failure', () => {
+describe('POST /api/llm/v1/embeddings, billing on failure', () => {
   it('releases the reservation when the provider fails', async () => {
     mocks.fetch.mockResolvedValue({ ok: false, status: 500, text: async () => 'boom' });
 
@@ -198,7 +198,7 @@ describe('POST /api/llm/v1/embeddings — billing on failure', () => {
   });
 });
 
-describe('POST /api/llm/v1/embeddings — provider result integrity', () => {
+describe('POST /api/llm/v1/embeddings, provider result integrity', () => {
   it('fails when the provider returns fewer vectors than inputs', async () => {
     googleReturns([[0.1]]);
 
@@ -228,7 +228,7 @@ describe('POST /api/llm/v1/embeddings — provider result integrity', () => {
   });
 });
 
-describe('POST /api/llm/v1/embeddings — model selection', () => {
+describe('POST /api/llm/v1/embeddings, model selection', () => {
   it('rejects a chat model and names the valid ids', async () => {
     const response = await POST(post({ input: 'hello', model: CHAT_MODEL }));
 

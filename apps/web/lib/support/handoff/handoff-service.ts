@@ -1,4 +1,3 @@
-
 import 'server-only';
 
 import { logger } from '@/lib/logger';
@@ -142,7 +141,7 @@ export async function escalateToHuman(input: EscalateInput): Promise<HandoffCrea
       expectedReply: config.expectedReplyCopy,
       headline: 'No one is available right now',
       detail:
-        `I've emailed this conversation — including what I already tried and your plan details — ` +
+        `I've emailed this conversation, including what I already tried and your plan details, ` +
         `to ${config.fallbackEmail}. Someone will reply to ${contactEmail} ${config.expectedReplyCopy}. ` +
         `Your reference is ${referenceId}.`,
       nextStep: emailNextStep(),
@@ -168,7 +167,7 @@ export async function escalateToHuman(input: EscalateInput): Promise<HandoffCrea
     detail:
       `Nobody is on live chat, and the support mailbox could not be reached just now, so nothing ` +
       `was sent on your behalf. Please email ${config.fallbackEmail} directly and quote ` +
-      `${referenceId} — your conversation is saved under that reference.`,
+      `${referenceId}, your conversation is saved under that reference.`,
     mailtoHref: mailtoHref(config.fallbackEmail, referenceId, input.summary),
     nextStep: {
       kind: 'contact',

@@ -61,7 +61,7 @@ beforeEach(() => {
   });
 });
 
-describe('POST /api/chat/conversations/[id]/messages/bulk — IDOR guard (#17)', () => {
+describe('POST /api/chat/conversations/[id]/messages/bulk, IDOR guard (#17)', () => {
   function makeContext(id: string) {
     return { params: Promise.resolve({ id }) };
   }

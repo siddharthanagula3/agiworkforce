@@ -75,7 +75,7 @@ afterEach(() => {
   window.localStorage.clear();
 });
 
-describe('useTTS — speech content and state', () => {
+describe('useTTS, speech content and state', () => {
   it('reads clean prose instead of Markdown syntax or raw code', () => {
     const { result } = renderHook(() => useTTS());
 
@@ -117,7 +117,7 @@ describe('useTTS — speech content and state', () => {
   });
 });
 
-describe('useTTS — voice enumeration', () => {
+describe('useTTS, voice enumeration', () => {
   it('picks up voices that arrive after mount', () => {
     const { result } = renderHook(() => useTTS());
     expect(result.current.voices).toEqual([]);
@@ -135,7 +135,7 @@ describe('useTTS — voice enumeration', () => {
   });
 });
 
-describe('useTTS — voice selection', () => {
+describe('useTTS, voice selection', () => {
   it('speaks in the selected voice and matches its language', () => {
     const { result } = renderHook(() => useTTS());
     emitVoicesChanged([ALICE, BRUNO]);
@@ -193,7 +193,7 @@ describe('useTTS — voice selection', () => {
   });
 });
 
-describe('useTTS — missing voice', () => {
+describe('useTTS, missing voice', () => {
   it('still speaks when the stored voice is not installed here', () => {
     window.localStorage.setItem('agi:tts-voice-uri', 'urn:voice:not-on-this-device');
     available = [ALICE];
