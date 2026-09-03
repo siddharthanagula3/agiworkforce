@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Legal/compliance + Platform lead
-Last updated: 2026-08-05
+Last updated: 2026-09-03
 Purpose: the source-of-truth matrix that `/acceptable-use` and `/agent-permissions`
 are written against. Every public sentence on those pages must trace to a row here,
 and every row cites the implementing file. If you change the tool loop, the approval
@@ -132,20 +132,21 @@ DNS-resolution SSRF validation (`assertResolvedPublicHostname`).
 User's **own** OAuth client id/secret, PKCE, tokens encrypted with a
 machine-derived key into local SQLite.
 
-| Provider         | File                                                                                 | Scopes requested                                                                     |
-| ---------------- | ------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------ |
-| Gmail            | `apps/desktop/src-tauri/src/features/communications/gmail_oauth.rs` L47-51, L124-129 | `gmail.readonly`, `gmail.send`, `gmail.modify`, `userinfo.email`, `userinfo.profile` |
-| Google Calendar  | `apps/desktop/src-tauri/src/features/calendar/google_calendar.rs` L15-19, L36-39     | `auth/calendar` (full), `calendar.readonly`, `calendar.events`                       |
-| Outlook Calendar | `apps/desktop/src-tauri/src/features/calendar/outlook_calendar.rs` L15-17, L34-37    | `User.Read`, `Calendars.Read`, `Calendars.ReadWrite`                                 |
+| Provider         | File                                                                                 | Scopes requested                                                     |
+| ---------------- | ------------------------------------------------------------------------------------ | -------------------------------------------------------------------- |
+| Gmail            | `apps/desktop/src-tauri/src/features/communications/gmail_oauth.rs` L46-49, L122-126 | `gmail.readonly`, `gmail.send`, `userinfo.email`, `userinfo.profile` |
+| Google Calendar  | `apps/desktop/src-tauri/src/features/calendar/google_calendar.rs` L15-17, L34-36     | `calendar.readonly`, `calendar.events`                               |
+| Outlook Calendar | `apps/desktop/src-tauri/src/features/calendar/outlook_calendar.rs` L15-17, L34-37    | `User.Read`, `Calendars.Read`, `Calendars.ReadWrite`                 |
 
-Two of these are broader than the advertised capability and are disclosed as such
-on `/agent-permissions`:
-
-- `gmail.modify` permits changing and deleting mail, not only reading and sending.
-- `auth/calendar` is the unrestricted calendar scope; it is requested **alongside**
-  the two narrower scopes, which makes those two redundant.
-
-Narrowing either is a behaviour change and is tracked as a gap, not a copy fix.
+As of 2026-09-03 Gmail and Google Calendar no longer request scopes broader
+than the advertised capability. The Gmail client previously also requested
+`gmail.modify`, which permits changing and deleting mail; it was dropped
+because the desktop code only calls read and watch endpoints. The calendar
+client previously also requested the unrestricted `auth/calendar` scope
+alongside the two narrower scopes shown above, which made it redundant; it was
+dropped because the desktop code only calls calendar-list and event endpoints.
+See `docs/security/connector-scopes.md` for the full rationale and the exact
+API calls each scope covers.
 
 ---
 
@@ -222,8 +223,12 @@ Narrowing either is a behaviour change and is tracked as a gap, not a copy fix.
    are genuinely connectable in a given deployment, and the catalog labels every
    other entry from that answer, so an unconfigured connector renders as
    unavailable rather than offering a Connect button that 501s.
-2. **`gmail.modify` and the full `auth/calendar` scope** are broader than the
-   advertised capability. Narrowing is a behaviour change.
+2. ~~`gmail.modify` and the full `auth/calendar` scope were broader than the
+   advertised capability.~~ Fixed 2026-09-03: the desktop Gmail and Google
+   Calendar clients now request only `gmail.readonly`, `gmail.send`,
+   `calendar.readonly`, and `calendar.events`, matching the endpoints each
+   client actually calls. See section 3 above and
+   `docs/security/connector-scopes.md`.
 3. **The GitHub App installation permission set is not declared in this repo**, so
    it cannot be documented from code.
 4. **The standing per-tool permission UI on web is GitHub-only.**
