@@ -2,16 +2,27 @@
 
 import { Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
+import type { CSSProperties } from 'react';
 import { Header } from '@shared/components/layout/Header';
 import { MarketingFooter } from '@/features/marketing/components/MarketingFooter';
-import {
-  Button,
-  ButtonRow,
-  Eyebrow,
-  Ledger,
-  Prose,
-  Stack,
-} from '@/features/marketing/components/system';
+import { Button, ButtonRow, Eyebrow, Ledger, Prose } from '@/features/marketing/components/system';
+
+const STATEMENT_MAX_WIDTH = '30rem';
+
+const statementStyle: CSSProperties = {
+  display: 'flex',
+  flexDirection: 'column',
+  alignItems: 'center',
+  textAlign: 'center',
+  gap: 'var(--agi-space-5)',
+  maxWidth: STATEMENT_MAX_WIDTH,
+  marginInline: 'auto',
+};
+
+const ledgerWrapStyle: CSSProperties = {
+  width: '100%',
+  textAlign: 'left',
+};
 
 function AuthErrorBody() {
   const searchParams = useSearchParams();
@@ -20,36 +31,34 @@ function AuthErrorBody() {
 
   return (
     <section
-      style={{
-        maxWidth: '30rem',
-        width: '100%',
-        marginInline: 'auto',
-        padding: 'var(--agi-section-y-md) var(--agi-gutter)',
-      }}
+      aria-labelledby="auth-error-title"
+      style={{ padding: 'var(--agi-section-y-md) var(--agi-gutter)' }}
     >
-      <Stack gap="loose">
+      <div style={statementStyle}>
         <div>
           <Eyebrow>Authentication error</Eyebrow>
-          <h1 className="agi-ds-h1">Sign-in didn&rsquo;t complete.</h1>
+          <h1 className="agi-ds-h1" id="auth-error-title">
+            Sign-in didn&rsquo;t complete.
+          </h1>
         </div>
-        <Prose>
-          Something went wrong while authenticating you.{' '}
-          <strong>
-            Try again. Most issues clear up on retry. If it persists, email contact@agiworkforce.com
-            with the error code below.
-          </strong>
-        </Prose>
-        <Ledger
-          caption="Error detail"
-          rows={[{ label: error, value: description || 'No additional details available.' }]}
-        />
+        <Prose>Something went wrong while authenticating you. Most issues clear up on retry.</Prose>
+        <div style={ledgerWrapStyle}>
+          <Ledger
+            caption="Error detail"
+            rows={[{ label: error, value: description || 'No additional details available.' }]}
+          />
+        </div>
         <ButtonRow>
           <Button href="/login">Try sign-in again</Button>
-          <Button href="mailto:contact@agiworkforce.com" variant="secondary">
-            Email support
-          </Button>
         </ButtonRow>
-      </Stack>
+        <Prose size="sm">
+          Still stuck? Email{' '}
+          <a className="agi-ds-link" href="mailto:contact@agiworkforce.com">
+            contact@agiworkforce.com
+          </a>{' '}
+          with the error code above.
+        </Prose>
+      </div>
     </section>
   );
 }
