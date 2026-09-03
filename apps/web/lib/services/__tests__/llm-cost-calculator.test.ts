@@ -522,7 +522,7 @@ describe('LLMCostCalculator — cache-write billing', () => {
   });
 });
 
-describe('LLMCostCalculator — route-aware pricing fallback tiers', () => {
+describe('LLMCostCalculator, route-aware pricing fallback tiers', () => {
   const PRICED_ON = new Date('2026-09-01T00:00:00.000Z');
   const ROUTE_ID = 'open_router/fixture-anthropic-standard';
 
@@ -691,7 +691,7 @@ describe('LLMCostCalculator — route-aware pricing fallback tiers', () => {
   });
 });
 
-describe('LLMCostCalculator — live registry wiring', () => {
+describe('LLMCostCalculator, live registry wiring', () => {
   const PRICED_ON = new Date('2026-09-01T00:00:00.000Z');
   const LIVE_MODEL_ID = requireProviderDefaultModel('anthropic');
   const LIVE_ROUTE_ID = getRoutePricingForModel(LIVE_MODEL_ID).find(

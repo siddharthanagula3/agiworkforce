@@ -11,12 +11,6 @@ import { logger } from '@/lib/logger';
 
 const ANTHROPIC_PROVIDER_ID = 'anthropic';
 
-/**
- * Mirrors `RoutePriceSheet` from `packages/ai/model-registry/generated/registry.ts`
- * (`getRoutePricing`, `getRoutePricingForModel`), trimmed to the fields pricing
- * needs. `@agiworkforce/types` does not re-export those yet; once it does, this
- * package picks them up with no call needed here.
- */
 export interface RoutePriceSheet {
   provider: string;
   isDefault: boolean;
@@ -35,11 +29,6 @@ export interface RouteRegistryPricingLookup {
 const registryModuleLookup = modelCatalogRegistry as unknown as RouteRegistryPricingLookup;
 let routeRegistryLookup: RouteRegistryPricingLookup = registryModuleLookup;
 
-/**
- * `in` rather than optional chaining: a namespace object (and, in tests, a
- * `vi.mock` proxy) throws on a direct read of an export it does not carry,
- * instead of yielding `undefined`.
- */
 function registryExport<Key extends keyof RouteRegistryPricingLookup>(
   lookup: RouteRegistryPricingLookup,
   key: Key,
@@ -47,7 +36,6 @@ function registryExport<Key extends keyof RouteRegistryPricingLookup>(
   return key in lookup ? lookup[key] : undefined;
 }
 
-/** Test/integration seam. Pass null to restore the `@agiworkforce/types` lookup. */
 export function setRouteRegistryPricingLookup(lookup: RouteRegistryPricingLookup | null): void {
   routeRegistryLookup = lookup ?? registryModuleLookup;
 }

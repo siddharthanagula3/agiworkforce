@@ -41,9 +41,7 @@ interface CreditHistoryRow {
 /**
  * GET /api/billing/credit-history
  * List the current user's real per-task credit ledger: purchases, refunds,
- * bonuses, manual adjustments, and every usage deduction. Runs on the
- * RLS-scoped connection from getUserScopedDb(), with the explicit `user_id`
- * predicate kept as a query-level backstop.
+ * bonuses, manual adjustments, and every usage deduction.
  * Returns an empty list if the account has no transactions yet — never
  * fabricated rows.
  */
