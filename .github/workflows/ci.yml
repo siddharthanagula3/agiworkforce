@@ -90,7 +90,7 @@ jobs:
         # .github/security-gate-policy.json is the single place every dependency
         # and static-analysis gate declares the severity it blocks at, and the
         # only place an exclusion may live. A continue-on-error step that is not
-        # registered there — or a registered exclusion that has gone stale —
+        # registered there, or a registered exclusion that has gone stale.
         # fails here instead of quietly weakening the gate.
         run: |
           node --test scripts/check-security-gates.test.mjs
@@ -115,7 +115,7 @@ jobs:
 
       - name: HookEvent fire-site gate (AP-07)
         # AP-07 / R27-PARITY: every HookEvent enum variant must have ≥1
-        # run_hooks() call site in apps/cli/src. Static grep — no cargo build.
+        # run_hooks() call site in apps/cli/src. Static grep, no cargo build.
         run: pnpm check:hook-fire-sites
 
       - name: Rust egress boundary gate
@@ -135,23 +135,23 @@ jobs:
           node --test scripts/check-module-reachability-ratchet.test.mjs
           pnpm check:module-reachability
 
-      - name: Extension AP-02 — no hardcoded color literals
+      - name: Extension AP-02, no hardcoded color literals
         # R27-PARITY: extension must use var(--agi-ext-*) design tokens; no hex/rgb/hsl literals.
         run: pnpm --filter @agiworkforce/extension check:no-hex
 
-      - name: Web AP-02 — no new hardcoded color literals
+      - name: Web AP-02, no new hardcoded color literals
         # DESIGN-SYSTEM-004: ratchet guard over apps/web app/components/lib/features.
         # Pre-existing literals are grandfathered in apps/web/scripts/.no-hex-baseline.json;
         # anything new fails here.
         run: pnpm --filter @agiworkforce/web check:no-hex-web
 
-      - name: Mobile AP-02 — no new hardcoded color literals
+      - name: Mobile AP-02, no new hardcoded color literals
         # DESIGN-SYSTEM-005: ratchet guard over apps/mobile TS/TSX.
         # Pre-existing literals are grandfathered in apps/mobile/scripts/.no-hex-baseline.json,
         # whose own _description already promised "New violations will fail CI".
         run: pnpm check:no-hex-mobile
 
-      - name: Web UI invariants — no new colour, type or legibility regressions
+      - name: Web UI invariants, no new colour, type or legibility regressions
         # Ratchet guard over apps/web and packages/ui TS/TSX during the frontend
         # redesign: raw palette utilities, arbitrary colour literals, opacity-diluted
         # foreground tokens, type below the 12px floor, and hover-only affordances.
@@ -159,7 +159,7 @@ jobs:
         # scripts/.web-ui-invariants-baseline.json and that list only shrinks.
         run: pnpm check:web-ui-invariants
 
-      - name: Extension AP-10 — no direct cloud-IPC in v1
+      - name: Extension AP-10, no direct cloud-IPC in v1
         # R27-PARITY / v1-local-only: cloud feature paths must gate through InviteCodeModal.
         run: pnpm --filter @agiworkforce/extension check:no-cloud-ipc
 
@@ -176,7 +176,7 @@ jobs:
         # anyone reads an advisory warning, so the only useful moment to stop it
         # is before the merge.
         #
-        # Not entropy analysis — every pattern matches a vendor-prefixed
+        # Not entropy analysis, every pattern matches a vendor-prefixed
         # credential format, so a hit is a credential SHAPE rather than "this
         # looks random". Reviewed fixtures live in
         # scripts/secret-scan-allowlist.json keyed on (path, format), and an
@@ -186,7 +186,7 @@ jobs:
       - name: Lock-vs-build drift check (AP-09, advisory)
         # R27-PARITY: compares model ID references in Claude memory lock files
         # against packages/contracts/types/src/models.json. Lock files live in ~/.claude/
-        # (user home — not in repo), so this step exits 0 (skip) in CI and is
+        # (user home, not in repo), so this step exits 0 (skip) in CI and is
         # only substantive when run locally by a developer. Exit 2 = drift
         # warnings; non-blocking (continue-on-error).
         run: pnpm check:lock-drift
@@ -196,7 +196,7 @@ jobs:
         # Catches two regressions:
         #   1. Frontend invoke('foo') where lib.rs has no `foo` registered.
         #   2. #[tauri::command] fn defined in src-tauri but missing from
-        #      the generate_handler!{} list (silently dead — a frontend
+        #      the generate_handler!{} list (silently dead, a frontend
         #      invoke would fail at runtime instead of compile time).
         run: bash apps/desktop/check-wiring.sh
 
@@ -313,8 +313,8 @@ jobs:
         run: pnpm exec turbo run lint --affected
 
       - name: Type check
-        # @agiworkforce/web's `tsc --noEmit` aborts with SIGABRT (exit 134) —
-        # "Ineffective mark-compacts near heap limit" — under Node's default
+        # @agiworkforce/web's `tsc --noEmit` aborts with SIGABRT (exit 134).
+        # "Ineffective mark-compacts near heap limit", under Node's default
         # old-space cap on a standard runner. It is not intermittent: every run
         # that actually schedules web's typecheck has died here, and the runs
         # that looked green simply had web outside `--affected`, so the biggest
@@ -329,7 +329,7 @@ jobs:
       - name: VS Code extension project-reference DAG check
         # `turbo run typecheck --affected` runs each package's own
         # `tsc --noEmit`, which resolves @agiworkforce/types and
-        # @agiworkforce/client-runtime against their already-built dist/ —
+        # @agiworkforce/client-runtime against their already-built dist/.
         # it does not rebuild the composite project-reference graph from
         # source. check:refs (`tsc -b tsconfig.build.json`) is the only thing
         # that does, and is the only thing that would catch a broken
@@ -344,7 +344,7 @@ jobs:
         # deterministic tests into timeout flakes on shared CI runners.
         run: pnpm test:affected
 
-      - name: Test (webview HTML rendering — jsdom)
+      - name: Test (webview HTML rendering, jsdom)
         # F-01 regression gate: parses the rendered webview <script> bodies
         # in jsdom and fails if any contain syntax errors. Catches the class
         # of bug where TypeScript syntax leaks into a JS template literal.
@@ -353,7 +353,7 @@ jobs:
       - name: Test CLI npm wrapper
         # apps/cli/npm is intentionally outside pnpm-workspace.yaml (it's the
         # npm-publish staging package, not a workspace member) and has zero
-        # dependencies, so this needs no install — it guards bin/agi.js, the
+        # dependencies, so this needs no install, it guards bin/agi.js, the
         # actual entrypoint every `npx agi`/`npm i -g` install resolves to.
         # Lives in js-verify (unconditional), not rust-desktop-cli, on
         # purpose: apps/cli/npm/** DOES set rust-desktop-cli's
@@ -376,7 +376,7 @@ jobs:
       #
       # `continue-on-error: true` then swallowed the crash. The "41 pre-existing
       # findings" the old comment tracked as a backlog were not being counted at
-      # all — a crashed scanner and a clean scan were indistinguishable in this
+      # all, a crashed scanner and a clean scan were indistinguishable in this
       # job, which is the actual defect and is what the split below fixes.
       #
       # Semgrep's exit codes separate the two cases: 0 = no findings, 1 =
@@ -431,10 +431,10 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Dependency audit (JS) — critical (blocking)
+      - name: Dependency audit (JS), critical (blocking)
         run: pnpm audit --audit-level=critical
 
-      - name: Dependency audit (JS) — high (blocking, FIX-043)
+      - name: Dependency audit (JS), high (blocking, FIX-043)
         run: pnpm audit --audit-level=high
 
       - name: Semgrep (security audit)
@@ -565,8 +565,8 @@ jobs:
       - name: Reclaim runner disk before the native build
         # The sidecar build died with
         #   rustc-LLVM ERROR: IO failure on output stream: No space left on device
-        # Building the desktop lib drags in the whole native tree — openssl,
-        # aws-lc, libgit2, libsodium, sqlite — and `--profile debug` compiles it
+        # Building the desktop lib drags in the whole native tree, openssl,
+        # aws-lc, libgit2, libsodium, sqlite, and `--profile debug` compiles it
         # all with -C debuginfo=2, which is what fills the volume. The error is
         # about the runner's disk, not about the code.
         #
@@ -585,24 +585,24 @@ jobs:
       - name: Build native messaging host sidecar
         run: pnpm exec turbo run build:native-host --filter=@agiworkforce/desktop -- --profile debug
 
-      - name: Dependency policy (Rust) — bans/sources/licenses (blocking)
+      - name: Dependency policy (Rust), bans/sources/licenses (blocking)
         # deny.toml is the policy source of truth; bans, sources, and licenses
         # are green on the workspace and must stay green.
         run: cargo install cargo-deny --version 0.20.2 --locked --quiet && cargo deny check bans sources licenses
         env:
           CARGO_HOME: ~/.cargo
 
-      - name: Dependency vulnerabilities (Rust) — blocking
+      - name: Dependency vulnerabilities (Rust), blocking
         # Three real rustls-webpki TLS advisories rode into main because the
         # only advisories step was continue-on-error and the audit ignore list
         # blamed them on Tauri. RUSTSEC vulnerabilities now fail the job; the
         # maintenance classes stay allowed here and are reported by the step
-        # below — bundling the two is what made a vulnerability invisible.
+        # below, bundling the two is what made a vulnerability invisible.
         run: cargo deny check advisories --allow unmaintained --allow unsound --allow notice
         env:
           CARGO_HOME: ~/.cargo
 
-      - name: Dependency advisories (Rust) — non-blocking warning-policy debt
+      - name: Dependency advisories (Rust), non-blocking warning-policy debt
         # Unmaintained/unsound/yanked warnings on transitive deps we cannot move
         # past upstream, tracked as RUST-DEPENDENCY-ADVISORIES-01 in
         # docs/agent-context/known-flaws.md. Reported, never blocking.
@@ -612,7 +612,7 @@ jobs:
           CARGO_HOME: ~/.cargo
 
       - name: Test (apps/desktop + apps/cli + shared crates, default features)
-        # Scope the test step to the binaries we actually ship — matches
+        # Scope the test step to the binaries we actually ship, matches
         # the Clippy step's scope (323ab2e5). The 100+ ported codex-rs
         # crates under crates/* have their own pre-existing test
         # regressions (rebrand-related fixture mismatches, mid-port
@@ -622,7 +622,7 @@ jobs:
         #
         # FIX-039 (Sprint 4): the previous form skipped enigo /
         # AutomationService / automation suites. They were silenced under
-        # the assumption that they need DISPLAY — but xvfb-run is already
+        # the assumption that they need DISPLAY, but xvfb-run is already
         # set up at the CI step level, so they can run. If a specific test
         # genuinely needs a real DE, mark it `#[ignore]` at the test level
         # rather than blanket-skipping with `--skip <substring>`.
@@ -677,7 +677,7 @@ jobs:
           # make this half of the gate silently vacuous if the module is renamed.
           matched=$(cargo test -p agiworkforce-desktop --lib data::cloud_sync::fixture_tests -- --list | grep -c ': test$' || true)
           if [ "$matched" -eq 0 ]; then
-            echo "data::cloud_sync::fixture_tests matched no tests — the Rust half of the parity pair is gone" >&2
+            echo "data::cloud_sync::fixture_tests matched no tests, the Rust half of the parity pair is gone" >&2
             exit 1
           fi
           cargo test -p agiworkforce-desktop --lib data::cloud_sync::fixture_tests
@@ -716,8 +716,8 @@ jobs:
       # Without this the sign-in card renders its "in-app sign-in is not
       # configured" fallback instead of the real form, and the reviewed pixel
       # baseline can never match. Clerk parses the key rather than just reading
-      # its prefix — it must base64-decode to a `<host>$` string or the SDK
-      # throws "Publishable key not valid" — so this is the fake
+      # its prefix, it must base64-decode to a `<host>$` string or the SDK
+      # throws "Publishable key not valid", so this is the fake
       # clerk.example.test key scripts/check-clerk-bot-protection.test.mjs
       # builds, not a secret.
       VITE_CLERK_PUBLISHABLE_KEY: pk_test_Y2xlcmsuZXhhbXBsZS50ZXN0JA
@@ -921,7 +921,7 @@ jobs:
       #
       # Trust is granted to THE ONE FORMULA, not the whole tap, and certainly not
       # by exporting HOMEBREW_NO_REQUIRE_TAP_TRUST=1. That env var disables the
-      # check globally for every formula in the job — it is a supply-chain
+      # check globally for every formula in the job, it is a supply-chain
       # control, and switching it off to make CI green is the same move that let
       # a crashed Semgrep report success for months. Homebrew documents it as
       # not recommended and slated for removal.
@@ -1004,7 +1004,7 @@ jobs:
       # jobs use, and live-format on purpose. A pk_test_ key names a Clerk
       # DEVELOPMENT instance, and those issue a dev-browser JWT via a handshake
       # redirect to their frontend API before any route calling auth() renders
-      # — the reason validate-env.ts warns about pk_test in production. `/` is
+      #, the reason validate-env.ts warns about pk_test in production. `/` is
       # the only audited page that calls auth(), so it chased that redirect to
       # a host that does not resolve and was the one page never scanned. A live
       # instance reads cookies directly: no cookies, signed out, no redirect.
@@ -1014,7 +1014,7 @@ jobs:
       # missing billing key as a fatal boot error. These flows are signed-out
       # a11y and public-auth checks that never reach Stripe, and putting real
       # or realistic keys on a public CI runner would be worse than booting
-      # degraded — so take the escape hatch the validator documents.
+      # degraded, so take the escape hatch the validator documents.
       AGI_ALLOW_INVALID_ENV: '1'
     steps:
       - uses: actions/checkout@v6
@@ -1287,7 +1287,7 @@ jobs:
         #
         # TODO(windows-test-load): the agiworkforce-desktop test binary fails
         # to load on the Windows runner with STATUS_ENTRYPOINT_NOT_FOUND
-        # (0xc0000139) — a Windows-specific cross-CRT/DLL incompatibility
+        # (0xc0000139), a Windows-specific cross-CRT/DLL incompatibility
         # introduced somewhere in the C-FFI dependency graph (libsqlite3-sys
         # with bundled-sqlcipher-vendored-openssl, xcap, whisper-rs, or
         # similar). cargo check + clippy on the same Windows toolchain pass,
@@ -1295,7 +1295,7 @@ jobs:
         # mismatched DLL import at process startup. Marking continue-on-error
         # to unblock CI while keeping the Windows check + Windows clippy
         # strict, and the shared crates blocking on Linux in the Test step
-        # above. Track investigation separately — requires a real Windows
+        # above. Track investigation separately, requires a real Windows
         # machine for procmon/depends.exe analysis.
         continue-on-error: true
         run: cargo test --workspace --lib -- --skip landlock --skip seccomp --skip linux_sandbox

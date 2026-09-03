@@ -4,10 +4,10 @@ name: Release CLI
 # Builds 6 platform binaries, publishes 7 npm packages, creates a GitHub release.
 #
 # Required GitHub Secrets:
-#   NPM_TOKEN       — npm automation token (npmjs.com → access tokens → automation)
+#   NPM_TOKEN, npm automation token (npmjs.com → access tokens → automation)
 #
 # Existing secrets reused:
-#   GITHUB_TOKEN    — auto-provided by GitHub Actions
+#   GITHUB_TOKEN, auto-provided by GitHub Actions
 
 on:
   push:
@@ -167,7 +167,7 @@ jobs:
         if: matrix.cross
         run: cargo install cross --version 0.2.5 --locked
 
-      # Cross runs builds in a Docker container — system deps need to be
+      # Cross runs builds in a Docker container, system deps need to be
       # installed inside the container via Cross.toml's pre-build hook.
       # Generate it on the fly (kept out of git so the file doesn't apply
       # to local cargo invocations).

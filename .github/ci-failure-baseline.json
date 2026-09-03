@@ -2,6 +2,6 @@
   "workflow": "ci.yml",
   "commit": "1e858a7f1891ffccdbf8481980b4853399bd765e",
   "recordedAt": "2026-08-13T15:51:06-05:00",
-  "note": "Named baseline for CI failure attribution. A gate red in this commit's CI run is inherited debt; a gate green here and red later is a regression attributed to the commit that first turned it red. List a gate under preExisting only with the tracked item that owns it — scripts/ci-failure-attribution.mjs reports an entry that was green at the baseline as a regression regardless of what is claimed here.",
+  "note": "Named baseline for CI failure attribution. A gate red in this commit's CI run is inherited debt; a gate green here and red later is a regression attributed to the commit that first turned it red. List a gate under preExisting only with the tracked item that owns it, scripts/ci-failure-attribution.mjs reports an entry that was green at the baseline as a regression regardless of what is claimed here.",
   "preExisting": []
 }

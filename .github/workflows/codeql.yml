@@ -88,5 +88,5 @@ jobs:
         # starlark `ProvidesStaticType`, etc.) and would fail `-D unsafe-code`
         # even though they are well-vetted upstream. This matches ci.yml's
         # clippy step (.github/workflows/ci.yml) so the two security gates
-        # stay consistent — see that file for the long-form rationale.
+        # stay consistent, see that file for the long-form rationale.
         run: cargo clippy -p agiworkforce-desktop -p agiworkforce-cli --lib -- -D warnings -D unsafe-code

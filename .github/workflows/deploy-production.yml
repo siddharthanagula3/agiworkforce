@@ -6,7 +6,7 @@ on:
     types: [completed]
   # A promotion that never runs is silent: when CI is not green on a main push
   # the jobs below evaluate their `if` to false and the whole run reports
-  # `skipped`, which GitHub does not alert on. This schedule is the alarm — it
+  # `skipped`, which GitHub does not alert on. This schedule is the alarm, it
   # asks production which commit it is serving and fails when that is not main.
   schedule:
     - cron: '0 7 * * *'
@@ -15,7 +15,7 @@ on:
 concurrency:
   group: production-surfaces
   # Not cancel-in-progress. A cancelled run is not a failed run, so `failure()`
-  # is false and the rollback step below never fires — a second push landing
+  # is false and the rollback step below never fires, a second push landing
   # while the gate is still probing would leave the rejected build promoted
   # with nothing to revert it. Production promotions queue instead.
   cancel-in-progress: false
@@ -125,7 +125,7 @@ jobs:
 
       # Measured from what each surface last actually SHIPPED, not from HEAD^.
       # A commit that lands while CI is red never deploys, so a one-commit diff
-      # strands it permanently — that is what kept the argon2 outage fix
+      # strands it permanently, that is what kept the argon2 outage fix
       # unshipped after CI went green on a commit that touched only scripts/.
       - name: Select affected production surfaces
         id: scope
@@ -140,7 +140,7 @@ jobs:
       # The artifact sandbox origin, measured the same way as the web surface
       # above: from the commit this surface last actually SHIPPED from, resolved
       # out of its own deploy job's history. A one-commit diff would strand a
-      # sandbox change that landed while CI was red — the next green commit's
+      # sandbox change that landed while CI was red, the next green commit's
       # HEAD^..HEAD never mentions infrastructure/sandbox again. Fails open to
       # deploy=true on any error, exactly as the web baseline does.
       - name: Select the artifact sandbox surface
@@ -222,7 +222,7 @@ jobs:
 
       # Captured BEFORE the promotion. The source is the project's production
       # TARGET (`/v9/projects/{id}` -> `targets.production.id`), which is the
-      # deployment currently assigned to the production domains — not the
+      # deployment currently assigned to the production domains, not the
       # newest-created ready production deployment. Those differ after any
       # rollback: the deployment that was rolled back away from stays READY and
       # target=production and is newer, so "newest ready" would hand the next
@@ -321,7 +321,7 @@ jobs:
           echo "::error::Production verification failed; reverting to $PREVIOUS_DEPLOYMENT_ID"
           vercel rollback "$PREVIOUS_DEPLOYMENT_ID" --yes --timeout 10m --token="$VERCEL_TOKEN" --scope "$VERCEL_ORG_ID"
 
-      # Runs on the failure path too — the rollback target is exactly what a
+      # Runs on the failure path too, the rollback target is exactly what a
       # human needs when the gate rejected a build. Skipped only when nothing
       # was promoted, or when the run was cancelled.
       - name: Record deployment summary
@@ -359,7 +359,7 @@ jobs:
   # model-generated HTML, React and SVG artifact from the web app's session, and
   # the CSP in its vercel.json is that isolation boundary. It had a .vercel link
   # but no pipeline, so it reached production only when someone ran the CLI by
-  # hand — and its deployed CSP had already drifted from the repo. Same gate as
+  # hand, and its deployed CSP had already drifted from the repo. Same gate as
   # every other surface here: `needs: scope`, whose `if` admits only a green,
   # push-triggered CI run on main from this repository, and whose checkout is
   # that exact commit.
@@ -371,7 +371,7 @@ jobs:
     timeout-minutes: 15
     # production-web is the environment that holds the Vercel credential for
     # this team; env-drift.yml and clerk-bot-protection.yml reach it the same
-    # way. Only the token is inherited — see the project-link step below.
+    # way. Only the token is inherited, see the project-link step below.
     environment:
       name: production-web
     env:
@@ -440,7 +440,7 @@ jobs:
       # build and no logs. deploy-web escapes that by listing .git and .github in
       # the root .vercelignore. infrastructure/sandbox has no .vercelignore of its
       # own, so it is staged into RUNNER_TEMP instead, where no ancestor is a git
-      # worktree — and the check below proves that rather than assuming it.
+      # worktree, and the check below proves that rather than assuming it.
       - name: Stage the sandbox origin outside the git worktree
         shell: bash
         run: |
