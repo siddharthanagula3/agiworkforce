@@ -3,8 +3,10 @@ import 'server-only';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import { validateSkillDraft, type SkillDraft } from '@agiworkforce/skills/validation';
 import { createError } from '@/lib/errors';
+import { userSkillAuthoringEnabled } from './user-skill-authoring';
 
 const PG_UNIQUE_VIOLATION = '23505';
+const USER_SKILL_AUTHORING_DISABLED_MESSAGE = 'Skill authoring is not available.';
 
 export interface UserSkillRecord {
   id: string;
@@ -57,6 +59,12 @@ function requireValidDraft(draft: SkillDraft): void {
   if (!result.ok) throw createError.validation(result.errors.join(' '));
 }
 
+function requireUserSkillAuthoringEnabled(): void {
+  if (!userSkillAuthoringEnabled()) {
+    throw createError.notFound(USER_SKILL_AUTHORING_DISABLED_MESSAGE);
+  }
+}
+
 export function toUserSkillSummary(record: UserSkillRecord): UserSkillSummary {
   return {
     name: record.name,
@@ -72,6 +80,7 @@ export async function listUserSkills(
   db: DatabaseAdapter,
   userId: string,
 ): Promise<UserSkillRecord[]> {
+  if (!userSkillAuthoringEnabled()) return [];
   const rows = await db.query<UserSkillRow>(
     `select id, name, description, body, created_at, updated_at
        from user_skills
@@ -87,6 +96,7 @@ export async function findUserSkillByName(
   userId: string,
   name: string,
 ): Promise<UserSkillRecord | null> {
+  if (!userSkillAuthoringEnabled()) return null;
   const rows = await db.query<UserSkillRow>(
     `select id, name, description, body, created_at, updated_at
        from user_skills
@@ -101,6 +111,7 @@ export async function createUserSkill(
   userId: string,
   draft: SkillDraft,
 ): Promise<UserSkillRecord> {
+  requireUserSkillAuthoringEnabled();
   requireValidDraft(draft);
   const name = draft.name.trim();
   try {
@@ -125,6 +136,7 @@ export async function updateUserSkill(
   currentName: string,
   draft: SkillDraft,
 ): Promise<UserSkillRecord | null> {
+  requireUserSkillAuthoringEnabled();
   requireValidDraft(draft);
   const name = draft.name.trim();
   try {
@@ -149,6 +161,7 @@ export async function deleteUserSkill(
   userId: string,
   name: string,
 ): Promise<boolean> {
+  requireUserSkillAuthoringEnabled();
   const affected = await db.execute(`delete from user_skills where user_id = $1 and name = $2`, [
     userId,
     name,

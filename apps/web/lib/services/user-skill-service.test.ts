@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('server-only', () => ({}));
 
@@ -10,6 +10,7 @@ import {
   toUserSkillSummary,
   updateUserSkill,
 } from './user-skill-service';
+import { USER_SKILL_AUTHORING_ENV_VAR } from './user-skill-authoring';
 
 interface FakeDb {
   query: ReturnType<typeof vi.fn>;
@@ -40,6 +41,14 @@ function makeDb(overrides: Partial<FakeDb> = {}): FakeDb {
 }
 
 describe('user skill service', () => {
+  beforeEach(() => {
+    process.env[USER_SKILL_AUTHORING_ENV_VAR] = '1';
+  });
+
+  afterEach(() => {
+    delete process.env[USER_SKILL_AUTHORING_ENV_VAR];
+  });
+
   it('lists a user skill scoped to their own id', async () => {
     const db = makeDb();
     await listUserSkills(db as never, 'user_1');
@@ -134,5 +143,47 @@ describe('user skill service', () => {
       downloadable: false,
       editable: true,
     });
+  });
+});
+
+describe('user skill service when authoring is disabled', () => {
+  beforeEach(() => {
+    delete process.env[USER_SKILL_AUTHORING_ENV_VAR];
+  });
+
+  it('lists nothing without touching the database', async () => {
+    const db = makeDb();
+    await expect(listUserSkills(db as never, 'user_1')).resolves.toEqual([]);
+    expect(db.query).not.toHaveBeenCalled();
+  });
+
+  it('finds nothing without touching the database', async () => {
+    const db = makeDb();
+    await expect(findUserSkillByName(db as never, 'user_1', 'release-notes')).resolves.toBeNull();
+    expect(db.query).not.toHaveBeenCalled();
+  });
+
+  it('refuses to create without touching the database', async () => {
+    const db = makeDb();
+    await expect(createUserSkill(db as never, 'user_1', DRAFT)).rejects.toMatchObject({
+      code: 'NOT_FOUND',
+    });
+    expect(db.query).not.toHaveBeenCalled();
+  });
+
+  it('refuses to update without touching the database', async () => {
+    const db = makeDb();
+    await expect(updateUserSkill(db as never, 'user_1', 'old-name', DRAFT)).rejects.toMatchObject({
+      code: 'NOT_FOUND',
+    });
+    expect(db.query).not.toHaveBeenCalled();
+  });
+
+  it('refuses to delete without touching the database', async () => {
+    const db = makeDb();
+    await expect(deleteUserSkill(db as never, 'user_1', 'release-notes')).rejects.toMatchObject({
+      code: 'NOT_FOUND',
+    });
+    expect(db.execute).not.toHaveBeenCalled();
   });
 });
