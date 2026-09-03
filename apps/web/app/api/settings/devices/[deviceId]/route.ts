@@ -9,7 +9,6 @@ import { logger } from '@/lib/logger';
 import { withRateLimit } from '@/lib/rate-limit';
 import { recordAuditEvent } from '@/lib/security-audit';
 import { resolveSessionsPrincipal } from '../../sessions/session-principal';
-import { getNeonDb } from '@/lib/server/neon-db';
 import { isCredentialLinkMissing } from '../schema-state';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -21,7 +20,7 @@ async function handleUnlink(
   const rateLimitResponse = await withRateLimit(request, 'settings-session-revoke');
   if (rateLimitResponse) return rateLimitResponse;
 
-  const { userId } = await resolveSessionsPrincipal(request);
+  const { db, userId } = await resolveSessionsPrincipal(request);
 
   const csrfError = await requireCsrfToken(request);
   if (csrfError) return csrfError as NextResponse;
@@ -31,7 +30,6 @@ async function handleUnlink(
     throw createError.validation('Invalid device ID');
   }
 
-  const db = getNeonDb();
   const result = await db.transaction(async (tx) => {
     const owned = await tx.query<{ kind: string; name: string | null }>(
       `select 'desktop' as kind, name from desktop_devices where id = $1 and user_id = $2

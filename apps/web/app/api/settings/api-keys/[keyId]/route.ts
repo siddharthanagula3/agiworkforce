@@ -5,9 +5,8 @@ import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
-import { getClerkAuthUser } from '@/lib/api-auth';
 import { requireCsrfToken } from '@/lib/csrf';
-import { getNeonDb } from '@/lib/server/neon-db';
+import { getUserScopedDb } from '@/lib/server/rls-db';
 import type { ApiKeyRow } from '@/lib/server/neon-types';
 import { handleCorsPreflightRequest } from '@/lib/cors';
 import { ApiKeyService } from '@/lib/services/api-key-service';
@@ -20,14 +19,12 @@ async function handleRevoke(request: NextRequest, context: { params: Promise<{ k
   const csrfError = await requireCsrfToken(request);
   if (csrfError) return csrfError as NextResponse;
 
-  const { userId } = await getClerkAuthUser(request);
+  const { db, userId } = await getUserScopedDb(request);
   const { keyId } = await context.params;
 
   if (!keyId || typeof keyId !== 'string') {
     throw createError.validation('Invalid key ID');
   }
-
-  const db = getNeonDb();
 
   const [existing] = await db.query<Pick<ApiKeyRow, 'id' | 'user_id' | 'revoked_at'>>(
     `select id, user_id, revoked_at from public.api_keys where id = $1 limit 1`,

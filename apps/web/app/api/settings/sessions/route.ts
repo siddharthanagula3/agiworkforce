@@ -10,7 +10,6 @@ import { logger } from '@/lib/logger';
 import { withRateLimit } from '@/lib/rate-limit';
 import { recordAuditEvent } from '@/lib/security-audit';
 import { resolveSessionsPrincipal } from './session-principal';
-import { getNeonDb } from '@/lib/server/neon-db';
 
 const PAGE_SIZE = 100;
 const MAX_SESSION_PAGES = 20;
@@ -117,7 +116,7 @@ async function handleRevokeAll(request: NextRequest) {
   const rateLimitResponse = await withRateLimit(request, 'settings-session-revoke');
   if (rateLimitResponse) return rateLimitResponse;
 
-  const { userId, currentSessionId } = await resolveSessionsPrincipal(request);
+  const { db, userId, currentSessionId } = await resolveSessionsPrincipal(request);
 
   const csrfError = await requireCsrfToken(request);
   if (csrfError) return csrfError as NextResponse;
@@ -129,7 +128,7 @@ async function handleRevokeAll(request: NextRequest) {
     : undefined;
   const otherSessions = sessions.filter((session) => session.id !== currentSession?.id);
   const result = await revokeInBatches(client, otherSessions);
-  await getNeonDb().execute(
+  await db.execute(
     `update device_refresh_tokens
         set revoked_at = coalesce(revoked_at, now())
       where user_id = $1
