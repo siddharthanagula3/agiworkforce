@@ -37,7 +37,7 @@ const PRODUCT_FACTS: { label: string; value: string }[] = [
   },
   {
     label: 'Available now',
-    value: `AGI Web, in any browser · AGI Desktop, ${SURFACE_STATUS.desktop.toLowerCase()}, with installability verified per platform · AGI CLI, ${SURFACE_STATUS.cli.toLowerCase()}, macOS, Linux and Windows`,
+    value: `AGI Web, in any browser · AGI Desktop, ${SURFACE_STATUS.desktop}, with installability verified per platform · AGI CLI, ${SURFACE_STATUS.cli.toLowerCase()}, macOS, Linux and Windows`,
   },
   {
     label: 'Built, not yet released',
