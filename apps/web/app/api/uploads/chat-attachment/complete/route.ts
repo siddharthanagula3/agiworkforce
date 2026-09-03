@@ -6,7 +6,6 @@ import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { requireCsrfToken } from '@/lib/csrf';
 import { createError } from '@/lib/errors';
-import { getClerkAuthUser } from '@/lib/api-auth';
 import {
   deletePrivateObject,
   getBoundedPrivateObject,
@@ -27,8 +26,7 @@ import {
 } from '@/lib/chat-attachment-policy';
 import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
 import { SYNCED_APP_SURFACES, type SyncedAppSurface } from '@agiworkforce/types';
-import { getNeonDb } from '@/lib/server/neon-db';
-import { resolveActiveOrganizationId } from '@/lib/services/active-workspace-service';
+import { getUserScopedDb } from '@/lib/server/rls-db';
 
 const CompleteChatAttachmentSchema = z.object({
   storageKey: z.string().min(1).max(600),
@@ -49,7 +47,7 @@ async function purgeRejectedUpload(userId: string, storageKey: string): Promise<
 }
 
 async function handleComplete(request: NextRequest): Promise<NextResponse> {
-  const { userId } = await getClerkAuthUser(request);
+  const { db, userId, organizationId } = await getUserScopedDb(request);
   const declaredSurface = request.headers.get('x-agi-surface')?.trim().toLowerCase();
   const sourceSurface: SyncedAppSurface = (SYNCED_APP_SURFACES as readonly string[]).includes(
     declaredSurface ?? '',
@@ -66,8 +64,6 @@ async function handleComplete(request: NextRequest): Promise<NextResponse> {
   if (!isPrivateObjectStorageConfigured()) {
     throw createError.internal('Private object storage is not configured');
   }
-
-  const organizationId = await resolveActiveOrganizationId(getNeonDb(), userId);
 
   const parsed = CompleteChatAttachmentSchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) {
@@ -91,8 +87,8 @@ async function handleComplete(request: NextRequest): Promise<NextResponse> {
 
   const scannedKey = sealedChatAttachmentPathname(storageKey);
   const existing =
-    (await getMediaAssetByStoragePathname(userId, scannedKey, organizationId)) ??
-    (await getMediaAssetByStoragePathname(userId, storageKey, organizationId));
+    (await getMediaAssetByStoragePathname(userId, scannedKey, organizationId, db)) ??
+    (await getMediaAssetByStoragePathname(userId, storageKey, organizationId, db));
   if (existing) {
     return NextResponse.json({
       attachment: {
@@ -178,23 +174,26 @@ async function handleComplete(request: NextRequest): Promise<NextResponse> {
   }
   await purgeRejectedUpload(userId, storageKey);
 
-  const id = await insertMediaAsset({
-    userId,
-    organizationId,
-    kind: isChatImageMimeType(mimeType) ? 'image' : 'file',
-    mimeType,
-    byteSize: object.data.byteLength,
-    storageUrl: scannedKey,
-    storagePathname: scannedKey,
-    sourceSurface,
-    metadata: {
-      filename: fileName,
-      origin: 'upload',
-      surface: 'file',
-      source: 'chat-attachment',
-      previewable: isChatImageMimeType(mimeType) || mimeType === 'application/pdf',
+  const id = await insertMediaAsset(
+    {
+      userId,
+      organizationId,
+      kind: isChatImageMimeType(mimeType) ? 'image' : 'file',
+      mimeType,
+      byteSize: object.data.byteLength,
+      storageUrl: scannedKey,
+      storagePathname: scannedKey,
+      sourceSurface,
+      metadata: {
+        filename: fileName,
+        origin: 'upload',
+        surface: 'file',
+        source: 'chat-attachment',
+        previewable: isChatImageMimeType(mimeType) || mimeType === 'application/pdf',
+      },
     },
-  });
+    db,
+  );
   if (!id) {
     throw createError.internal('Chat attachment storage is not provisioned');
   }

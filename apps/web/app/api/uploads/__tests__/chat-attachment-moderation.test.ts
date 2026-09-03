@@ -3,13 +3,12 @@ import { NextRequest } from 'next/server';
 import { createHash } from 'node:crypto';
 
 const {
-  mockGetClerkAuthUser,
+  mockGetUserScopedDb,
   mockGetBoundedPrivateObject,
   mockCopyPrivateObjectIfUnchanged,
   mockDeletePrivateObject,
   mockInsertMediaAsset,
   mockGetMediaAssetByStoragePathname,
-  mockResolveActiveOrganizationId,
   loggerMock,
   StoredObjectTooLargeError,
 } = vi.hoisted(() => {
@@ -24,13 +23,12 @@ const {
     }
   }
   return {
-    mockGetClerkAuthUser: vi.fn(),
+    mockGetUserScopedDb: vi.fn(),
     mockGetBoundedPrivateObject: vi.fn(),
     mockCopyPrivateObjectIfUnchanged: vi.fn(),
     mockDeletePrivateObject: vi.fn(),
     mockInsertMediaAsset: vi.fn(),
     mockGetMediaAssetByStoragePathname: vi.fn(),
-    mockResolveActiveOrganizationId: vi.fn(),
     loggerMock: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() },
     StoredObjectTooLargeError,
   };
@@ -39,10 +37,8 @@ const {
 vi.mock('@/lib/rate-limit', () => ({ withRateLimit: vi.fn().mockResolvedValue(null) }));
 vi.mock('@/lib/csrf', () => ({ requireCsrfToken: vi.fn().mockResolvedValue(null) }));
 vi.mock('@/lib/logger', () => ({ logger: loggerMock }));
-vi.mock('@/lib/api-auth', () => ({
-  getClerkAuthUser: mockGetClerkAuthUser,
-  getAuthenticatedUserWithClient: vi.fn(),
-  getAuthenticatedUser: vi.fn(),
+vi.mock('@/lib/server/rls-db', () => ({
+  getUserScopedDb: mockGetUserScopedDb,
 }));
 vi.mock('@/lib/server/object-storage', () => ({
   isPrivateObjectStorageConfigured: vi.fn(() => true),
@@ -55,10 +51,6 @@ vi.mock('@/lib/server/media-assets', () => ({
   insertMediaAsset: mockInsertMediaAsset,
   getMediaAssetByStoragePathname: mockGetMediaAssetByStoragePathname,
 }));
-vi.mock('@/lib/server/neon-db', () => ({ getNeonDb: () => ({}) }));
-vi.mock('@/lib/services/active-workspace-service', () => ({
-  resolveActiveOrganizationId: mockResolveActiveOrganizationId,
-}));
 
 import { POST } from '@/app/api/uploads/chat-attachment/complete/route';
 
@@ -70,6 +62,7 @@ const STORAGE_KEY = 'chat-attachments/user-abc/1700000000000_abcdefghijklm.png';
 const ORGANIZATION_ID = '11111111-1111-4111-8111-111111111111';
 
 const savedList = process.env['MODERATION_HASH_DENYLIST'];
+const SCOPED_DB = { query: vi.fn(), execute: vi.fn(), transaction: vi.fn() };
 
 function completeRequest(): NextRequest {
   return new NextRequest('http://localhost/api/uploads/chat-attachment/complete', {
@@ -85,8 +78,11 @@ function completeRequest(): NextRequest {
 }
 
 beforeEach(() => {
-  mockGetClerkAuthUser.mockResolvedValue({ userId: 'user-abc' });
-  mockResolveActiveOrganizationId.mockResolvedValue(ORGANIZATION_ID);
+  mockGetUserScopedDb.mockResolvedValue({
+    db: SCOPED_DB,
+    userId: 'user-abc',
+    organizationId: ORGANIZATION_ID,
+  });
   mockGetMediaAssetByStoragePathname.mockResolvedValue(null);
   mockGetBoundedPrivateObject.mockResolvedValue({
     data: PNG_BYTES,
@@ -116,15 +112,18 @@ describe('POST /api/uploads/chat-attachment/complete · hash denylist', () => {
       'user-abc',
       STORAGE_KEY,
       ORGANIZATION_ID,
+      SCOPED_DB,
     );
     expect(mockInsertMediaAsset).toHaveBeenCalledWith(
       expect.objectContaining({ organizationId: ORGANIZATION_ID }),
+      SCOPED_DB,
     );
     expect(mockInsertMediaAsset).toHaveBeenCalledWith(
       expect.objectContaining({
         storageUrl: `${STORAGE_KEY}.scanned`,
         storagePathname: `${STORAGE_KEY}.scanned`,
       }),
+      SCOPED_DB,
     );
     expect(mockCopyPrivateObjectIfUnchanged).toHaveBeenCalledWith({
       sourceKey: STORAGE_KEY,

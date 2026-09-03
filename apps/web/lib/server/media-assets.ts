@@ -275,8 +275,10 @@ function mapRow(row: Record<string, unknown>): MediaAsset {
   };
 }
 
-export async function insertMediaAsset(p: InsertMediaAssetParams): Promise<string | null> {
-  const db = getNeonDb();
+export async function insertMediaAsset(
+  p: InsertMediaAssetParams,
+  db: MediaAssetQueryClient = getNeonDb(),
+): Promise<string | null> {
   try {
     return await insertMediaAssetRow(db, p, p.organizationId);
   } catch (error) {
@@ -536,8 +538,8 @@ export async function getMediaAssetByStoragePathname(
   userId: string,
   storagePathname: string,
   organizationId: string | null,
+  db: MediaAssetQueryClient = getNeonDb(),
 ): Promise<MediaAssetForServing | null> {
-  const db = getNeonDb();
   try {
     const rows = await db.query<Record<string, unknown>>(
       `select id, user_id, kind, mime_type, byte_size, storage_url, storage_pathname,
