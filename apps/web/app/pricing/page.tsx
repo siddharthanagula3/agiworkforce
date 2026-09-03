@@ -51,7 +51,7 @@ import {
 } from '@features/billing/lib/subscription-owner-presentation';
 import { Header } from '@shared/components/layout/Header';
 import { MarketingFooter } from '@/features/marketing/components/MarketingFooter';
-import { Container, Eyebrow, Prose } from '@/features/marketing/components/system';
+import { Container, Eyebrow, Ledger, Prose } from '@/features/marketing/components/system';
 import { toUserMessage } from '@/lib/user-error-message';
 import '@/features/marketing/components/pages/business/pricing.css';
 import '@/features/marketing/components/pages/business/data-table.css';
@@ -72,6 +72,9 @@ const CHECKOUT_ENABLED =
   CHECKOUT_ENABLED_RAW !== 'off';
 
 type CheckoutPlan = SelfServePaidPlanTier;
+
+const LOCAL_ROUTE_CHARGE = `$${BILLING_PLAN_PRICING['local-only'].monthlyPriceUsd}`;
+const BYOK_ROUTE_CHARGE = `$${BILLING_PLAN_PRICING.byok.monthlyPriceUsd}`;
 
 const localizedPriceEntrySchema = z.object({
   amountMinor: z.number().int().nonnegative(),
@@ -816,19 +819,38 @@ export default function PricingPage() {
       <main id="main-content">
         <section className="agi-ds-section agi-ds-hero" aria-labelledby="pricing-hero-title">
           <Container>
-            <Eyebrow>Pricing</Eyebrow>
-            <h1 id="pricing-hero-title" className="agi-ds-h1">
-              {t('pageTitle')}
-            </h1>
-            <Prose size="lg" className="agi-ds-reveal">
-              {t('heroLede')}
-            </Prose>
-            {!CHECKOUT_ENABLED ? (
-              <p role="status" className="agi-ds-prose" data-size="sm">
-                Checkout is temporarily unavailable. Please try again later. Existing plans and
-                Enterprise contact are unaffected.
-              </p>
-            ) : null}
+            <div className="agi-ds-grid-2 agi-ds-pricing-hero">
+              <div>
+                <Eyebrow>Pricing</Eyebrow>
+                <h1 id="pricing-hero-title" className="agi-ds-h1">
+                  {t('pageTitle')}
+                </h1>
+                <Prose size="lg" className="agi-ds-reveal">
+                  {t('heroLede')}
+                </Prose>
+                {!CHECKOUT_ENABLED ? (
+                  <p role="status" className="agi-ds-prose" data-size="sm">
+                    Checkout is temporarily unavailable. Please try again later. Existing plans and
+                    Enterprise contact are unaffected.
+                  </p>
+                ) : null}
+              </div>
+              <div className="agi-ds-pricing-receipt">
+                <p className="agi-ds-pricing-receipt-head">Route pricing</p>
+                <Ledger
+                  caption="What AGI charges for each route"
+                  rows={[
+                    { label: localLabel, value: `${LOCAL_ROUTE_CHARGE} from AGI` },
+                    {
+                      label: byokLabel,
+                      value: `${BYOK_ROUTE_CHARGE} from AGI, provider rates apply`,
+                    },
+                    { label: 'AGI managed cloud', value: `From ${basicPrice} per month` },
+                    { label: 'Billed by AGI', value: 'Managed cloud only', quiet: true },
+                  ]}
+                />
+              </div>
+            </div>
           </Container>
         </section>
 
@@ -901,8 +923,8 @@ export default function PricingPage() {
 
             <section aria-label={t('audienceBusiness')} hidden={audience !== 'business'}>
               <h2 className="sr-only">{t('audienceBusiness')}</h2>
-              <div className="agi-ds-tier-grid" data-columns="2">
-                <article className="agi-ds-tier">
+              <div className="agi-ds-tier-grid agi-ds-tier-columns" data-columns="2">
+                <article className="agi-ds-tier agi-ds-tier-lifted">
                   <div className="agi-ds-tier-head">
                     <h3 id="pricing-team-title" className="agi-ds-h3">
                       {team.label}
@@ -1074,7 +1096,7 @@ export default function PricingPage() {
                 </p>
               ))}
 
-              <div className="agi-ds-tier-grid" data-columns="4">
+              <div className="agi-ds-tier-grid agi-ds-tier-columns" data-columns="4">
                 <article className="agi-ds-tier">
                   <h3 className="agi-ds-h3">{BILLING_PLAN_PRICING.free.label}</h3>
                   <p className="agi-ds-tier-price-row">
@@ -1147,7 +1169,7 @@ export default function PricingPage() {
                   </article>
                 )}
 
-                <article className="agi-ds-tier" data-recommended="true">
+                <article className="agi-ds-tier agi-ds-tier-lifted" data-recommended="true">
                   <div className="agi-ds-tier-head">
                     <h3 className="agi-ds-h3">{pro.label}</h3>
                     <span className="agi-ds-tier-mark">Recommended</span>
@@ -1276,7 +1298,10 @@ export default function PricingPage() {
                 tabIndex={0}
                 className="agi-ds-compare-table-wrap"
               >
-                <table aria-label="Plan capabilities" className="agi-ds-compare-table">
+                <table
+                  aria-label="Plan capabilities"
+                  className="agi-ds-compare-table agi-ds-compare-table-wide"
+                >
                   <thead>
                     <tr>
                       {COMPARISON_COLUMNS.map(([col, label]) => (
