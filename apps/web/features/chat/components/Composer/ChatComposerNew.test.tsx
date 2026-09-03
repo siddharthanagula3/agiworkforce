@@ -3,11 +3,11 @@ import { act, render, screen, fireEvent, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event';
 import {
   ChatComposerNew,
-  COMPOSER_RESEARCH_MIN_CONTEXT_WINDOW,
   IMAGE_MODELS,
   VIDEO_MODELS,
   type ComposerProjectPicker,
 } from './ChatComposerNew';
+import { RESEARCH_MIN_CONTEXT_WINDOW } from '@features/chat/lib/research-capability-gate';
 import {
   getModelMetadataById,
   getModels,
@@ -910,7 +910,7 @@ describe('ChatComposerNew', () => {
         (model) =>
           model.capabilities.research !== true &&
           model.capabilities.tools === true &&
-          (model.contextWindow ?? 0) >= COMPOSER_RESEARCH_MIN_CONTEXT_WINDOW,
+          (model.contextWindow ?? 0) >= RESEARCH_MIN_CONTEXT_WINDOW,
       );
     expect(
       toolsOnlyResearchModel,
