@@ -1,5 +1,23 @@
-import { listCanonicalModels, type ModelMetadata } from '@agiworkforce/types';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import {
+  listCanonicalModels,
+  requireProviderDefaultModel,
+  type ModelMetadata,
+} from '@agiworkforce/types';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+const { routeOverrides } = vi.hoisted(() => ({
+  routeOverrides: new Map<string, unknown>(),
+}));
+
+vi.mock('@agiworkforce/types', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@agiworkforce/types')>();
+  return {
+    ...actual,
+    getRegistryRoute: (routeId: string) =>
+      routeOverrides.get(routeId) ?? actual.getRegistryRoute(routeId),
+  };
+});
+
 import {
   canFailoverToOpenRouter,
   dispatchProviderForRoute,
@@ -8,6 +26,7 @@ import {
   mappedModelIds,
   openRouterFailoverSlugFor,
   openRouterSlugFor,
+  validateRouteSelection,
 } from '../aggregator-routing';
 
 const ENV_KEYS = ['OPENROUTER_API_KEY'] as const;
@@ -165,5 +184,115 @@ describe('OpenRouter failover routes', () => {
     const failoverIds = new Set(failoverMappedModelIds());
     const both = mappedModelIds().filter((id) => failoverIds.has(id));
     expect(both).toEqual([]);
+  });
+});
+
+const DEFAULT_ANTHROPIC_ROUTE_ID = 'anthropic/claude-sonnet-5';
+const MANAGED_ONLY_EXPERIMENTAL_ROUTE_ID = 'cheaperinference_anthropic/claude-sonnet-5';
+const BYOK_ONLY_EXPERIMENTAL_ROUTE_ID = 'vercel_gateway/claude-sonnet-5';
+const FIXTURE_BLOCKED_ROUTE_ID = 'fixture_blocked_provider/fixture-blocked-model';
+
+describe('validateRouteSelection', () => {
+  afterEach(() => {
+    routeOverrides.clear();
+  });
+
+  it('rejects a route id the registry does not declare', () => {
+    expect(
+      validateRouteSelection('fixture-unknown/fixture-model', {
+        modelId: 'fixture-model',
+        trustMode: 'managed_cloud',
+        hasUserProviderKey: false,
+      }),
+    ).toEqual({ ok: false, reason: 'unknown_route' });
+  });
+
+  it('rejects a route whose model does not match the request', () => {
+    const anthropicModel = requireProviderDefaultModel('anthropic');
+    const otherModel = requireProviderDefaultModel('openai');
+    expect(anthropicModel).not.toBe(otherModel);
+
+    expect(
+      validateRouteSelection(DEFAULT_ANTHROPIC_ROUTE_ID, {
+        modelId: otherModel,
+        trustMode: 'managed_cloud',
+        hasUserProviderKey: false,
+      }),
+    ).toEqual({ ok: false, reason: 'model_mismatch' });
+  });
+
+  it('rejects a route not open to the request trust mode', () => {
+    const model = requireProviderDefaultModel('anthropic');
+
+    expect(
+      validateRouteSelection(MANAGED_ONLY_EXPERIMENTAL_ROUTE_ID, {
+        modelId: model,
+        trustMode: 'byok',
+        hasUserProviderKey: true,
+      }),
+    ).toEqual({ ok: false, reason: 'trust_mode_not_permitted' });
+  });
+
+  it('never admits a blocked route regardless of trust mode or key', () => {
+    routeOverrides.set(FIXTURE_BLOCKED_ROUTE_ID, {
+      modelKey: 'fixture-blocked-model',
+      provider: 'fixture_blocked_provider',
+      harnessId: 'fixture-blocked-provider/chat-completions',
+      trustModes: ['managed_cloud', 'byok'],
+      isDefault: false,
+      commercialStatus: 'blocked',
+    });
+
+    expect(
+      validateRouteSelection(FIXTURE_BLOCKED_ROUTE_ID, {
+        modelId: 'fixture-blocked-model',
+        trustMode: 'byok',
+        hasUserProviderKey: true,
+      }),
+    ).toEqual({ ok: false, reason: 'commercial_status_not_admitted' });
+  });
+
+  it('never admits an experimental-only route to managed traffic', () => {
+    const model = requireProviderDefaultModel('anthropic');
+
+    expect(
+      validateRouteSelection(MANAGED_ONLY_EXPERIMENTAL_ROUTE_ID, {
+        modelId: model,
+        trustMode: 'managed_cloud',
+        hasUserProviderKey: true,
+      }),
+    ).toEqual({ ok: false, reason: 'commercial_status_not_admitted' });
+  });
+
+  it('admits an experimental-only route to byok traffic only when a user key exists', () => {
+    const model = requireProviderDefaultModel('anthropic');
+
+    expect(
+      validateRouteSelection(BYOK_ONLY_EXPERIMENTAL_ROUTE_ID, {
+        modelId: model,
+        trustMode: 'byok',
+        hasUserProviderKey: false,
+      }),
+    ).toEqual({ ok: false, reason: 'commercial_status_not_admitted' });
+
+    expect(
+      validateRouteSelection(BYOK_ONLY_EXPERIMENTAL_ROUTE_ID, {
+        modelId: model,
+        trustMode: 'byok',
+        hasUserProviderKey: true,
+      }),
+    ).toEqual({ ok: true, reason: null });
+  });
+
+  it('admits the default route for managed traffic', () => {
+    const model = requireProviderDefaultModel('anthropic');
+
+    expect(
+      validateRouteSelection(DEFAULT_ANTHROPIC_ROUTE_ID, {
+        modelId: model,
+        trustMode: 'managed_cloud',
+        hasUserProviderKey: false,
+      }),
+    ).toEqual({ ok: true, reason: null });
   });
 });
