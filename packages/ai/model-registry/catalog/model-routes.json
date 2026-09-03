@@ -28,6 +28,19 @@
             "cacheReadPerMillion": 0.2,
             "cacheWritePerMillion": 2.5
           }
+        },
+        {
+          "provider": "cheaperinference_anthropic",
+          "harnessId": "cheaperinference-anthropic/messages",
+          "upstreamModelId": "claude-sonnet-5",
+          "cacheClass": "provider_explicit_prompt_cache",
+          "commercialStatus": "experimental_only",
+          "pricing": {
+            "inputPerMillion": 1.4,
+            "outputPerMillion": 7,
+            "cacheReadPerMillion": 0.14,
+            "cacheWritePerMillion": 1.75
+          }
         }
       ]
     },
@@ -57,6 +70,19 @@
             "outputPerMillion": 10,
             "cacheReadPerMillion": 0.2,
             "cacheWritePerMillion": 2.5
+          }
+        },
+        {
+          "provider": "cheaperinference",
+          "harnessId": "cheaperinference/chat-completions",
+          "upstreamModelId": "gpt-5.6-sol",
+          "cacheClass": "provider_implicit_prompt_cache",
+          "commercialStatus": "experimental_only",
+          "pricing": {
+            "inputPerMillion": 1,
+            "outputPerMillion": 5,
+            "cacheReadPerMillion": 0.1,
+            "cacheWritePerMillion": 1.25
           }
         }
       ]
@@ -88,6 +114,19 @@
             "cacheReadPerMillion": 0.2,
             "cacheWritePerMillion": 2.5
           }
+        },
+        {
+          "provider": "cheaperinference",
+          "harnessId": "cheaperinference/chat-completions",
+          "upstreamModelId": "gpt-5.6-terra",
+          "cacheClass": "provider_implicit_prompt_cache",
+          "commercialStatus": "experimental_only",
+          "pricing": {
+            "inputPerMillion": 0.9917,
+            "outputPerMillion": 5.9502,
+            "cacheReadPerMillion": 0.09917,
+            "cacheWritePerMillion": 1.239625
+          }
         }
       ]
     },
@@ -117,6 +156,19 @@
             "outputPerMillion": 1.2,
             "cacheReadPerMillion": 0.02,
             "cacheWritePerMillion": 0.25
+          }
+        },
+        {
+          "provider": "cheaperinference",
+          "harnessId": "cheaperinference/chat-completions",
+          "upstreamModelId": "gpt-5.6-luna",
+          "cacheClass": "provider_implicit_prompt_cache",
+          "commercialStatus": "experimental_only",
+          "pricing": {
+            "inputPerMillion": 0.08,
+            "outputPerMillion": 0.48,
+            "cacheReadPerMillion": 0.008,
+            "cacheWritePerMillion": 0.1
           }
         }
       ]
@@ -148,6 +200,19 @@
             "cacheReadPerMillion": 1,
             "cacheWritePerMillion": 12.5
           }
+        },
+        {
+          "provider": "cheaperinference_anthropic",
+          "harnessId": "cheaperinference-anthropic/messages",
+          "upstreamModelId": "claude-fable-5",
+          "cacheClass": "provider_explicit_prompt_cache",
+          "commercialStatus": "experimental_only",
+          "pricing": {
+            "inputPerMillion": 7,
+            "outputPerMillion": 35,
+            "cacheReadPerMillion": 0.7,
+            "cacheWritePerMillion": 8.75
+          }
         }
       ]
     },
@@ -177,6 +242,19 @@
             "outputPerMillion": 25,
             "cacheReadPerMillion": 0.5,
             "cacheWritePerMillion": 6.25
+          }
+        },
+        {
+          "provider": "cheaperinference_anthropic",
+          "harnessId": "cheaperinference-anthropic/messages",
+          "upstreamModelId": "claude-opus-5",
+          "cacheClass": "provider_explicit_prompt_cache",
+          "commercialStatus": "experimental_only",
+          "pricing": {
+            "inputPerMillion": 3.5,
+            "outputPerMillion": 17.5,
+            "cacheReadPerMillion": 0.35,
+            "cacheWritePerMillion": 4.375
           }
         }
       ]
@@ -208,6 +286,19 @@
             "cacheReadPerMillion": 0.2,
             "cacheWritePerMillion": 0
           }
+        },
+        {
+          "provider": "cheaperinference",
+          "harnessId": "cheaperinference/chat-completions",
+          "upstreamModelId": "gemini-3.1-pro-preview",
+          "cacheClass": "provider_implicit_prompt_cache",
+          "commercialStatus": "experimental_only",
+          "pricing": {
+            "inputPerMillion": 1.4,
+            "outputPerMillion": 8.4,
+            "cacheReadPerMillion": 0.14,
+            "cacheWritePerMillion": 0.2625
+          }
         }
       ]
     },
@@ -237,6 +328,19 @@
             "outputPerMillion": 2.5,
             "cacheReadPerMillion": 0.03,
             "cacheWritePerMillion": 0
+          }
+        },
+        {
+          "provider": "cheaperinference",
+          "harnessId": "cheaperinference/chat-completions",
+          "upstreamModelId": "google/gemini-3.5-flash-lite",
+          "cacheClass": "provider_implicit_prompt_cache",
+          "commercialStatus": "experimental_only",
+          "pricing": {
+            "inputPerMillion": 0.21,
+            "outputPerMillion": 1.75,
+            "cacheReadPerMillion": 0.021,
+            "cacheWritePerMillion": 0.078333
           }
         }
       ]
@@ -298,6 +402,32 @@
             "cacheReadPerMillion": 0.028,
             "cacheWritePerMillion": 0
           }
+        },
+        {
+          "provider": "cheaperinference",
+          "harnessId": "cheaperinference/chat-completions",
+          "upstreamModelId": "deepseek-v4-flash",
+          "cacheClass": "provider_implicit_prompt_cache",
+          "commercialStatus": "experimental_only",
+          "pricing": {
+            "inputPerMillion": 0.067336,
+            "outputPerMillion": 0.166606,
+            "cacheReadPerMillion": 0.013452,
+            "cacheWritePerMillion": 0.067336
+          }
+        },
+        {
+          "provider": "deepseek_anthropic",
+          "harnessId": "deepseek-anthropic/messages",
+          "upstreamModelId": "deepseek-v4-flash",
+          "cacheClass": "provider_explicit_prompt_cache",
+          "commercialStatus": "agi_direct",
+          "pricing": {
+            "inputPerMillion": 0.44,
+            "outputPerMillion": 1.32,
+            "cacheReadPerMillion": 0.014,
+            "cacheWritePerMillion": 0
+          }
         }
       ]
     },
@@ -326,6 +456,32 @@
             "inputPerMillion": 0.66,
             "outputPerMillion": 1.98,
             "cacheReadPerMillion": 0.022,
+            "cacheWritePerMillion": 0
+          }
+        },
+        {
+          "provider": "cheaperinference",
+          "harnessId": "cheaperinference/chat-completions",
+          "upstreamModelId": "deepseek-v4-pro",
+          "cacheClass": "provider_implicit_prompt_cache",
+          "commercialStatus": "experimental_only",
+          "pricing": {
+            "inputPerMillion": 0.6204,
+            "outputPerMillion": 1.8612,
+            "cacheReadPerMillion": 0.051725,
+            "cacheWritePerMillion": 0.6204
+          }
+        },
+        {
+          "provider": "deepseek_anthropic",
+          "harnessId": "deepseek-anthropic/messages",
+          "upstreamModelId": "deepseek-v4-pro",
+          "cacheClass": "provider_explicit_prompt_cache",
+          "commercialStatus": "agi_direct",
+          "pricing": {
+            "inputPerMillion": 1.32,
+            "outputPerMillion": 3.96,
+            "cacheReadPerMillion": 0.044,
             "cacheWritePerMillion": 0
           }
         }
@@ -402,7 +558,7 @@
           "pricing": {
             "inputPerMillion": 1.4,
             "outputPerMillion": 4.4,
-            "cacheReadPerMillion": 0.26,
+            "cacheReadPerMillion": 0.14,
             "cacheWritePerMillion": 0
           }
         },
@@ -416,6 +572,32 @@
             "inputPerMillion": 0.7,
             "outputPerMillion": 2.2,
             "cacheReadPerMillion": 0.13,
+            "cacheWritePerMillion": 0
+          }
+        },
+        {
+          "provider": "cheaperinference",
+          "harnessId": "cheaperinference/chat-completions",
+          "upstreamModelId": "glm-5.3",
+          "cacheClass": "provider_implicit_prompt_cache",
+          "commercialStatus": "experimental_only",
+          "pricing": {
+            "inputPerMillion": 0.77,
+            "outputPerMillion": 2.42,
+            "cacheReadPerMillion": 0.143,
+            "cacheWritePerMillion": 0.77
+          }
+        },
+        {
+          "provider": "zhipu_anthropic",
+          "harnessId": "zhipu-anthropic/messages",
+          "upstreamModelId": "glm-5.3",
+          "cacheClass": "provider_explicit_prompt_cache",
+          "commercialStatus": "agi_direct",
+          "pricing": {
+            "inputPerMillion": 1.4,
+            "outputPerMillion": 4.4,
+            "cacheReadPerMillion": 0.26,
             "cacheWritePerMillion": 0
           }
         }
@@ -448,6 +630,32 @@
             "cacheReadPerMillion": 0.03,
             "cacheWritePerMillion": 0
           }
+        },
+        {
+          "provider": "cheaperinference",
+          "harnessId": "cheaperinference/chat-completions",
+          "upstreamModelId": "glm-5.3-flash",
+          "cacheClass": "provider_implicit_prompt_cache",
+          "commercialStatus": "experimental_only",
+          "pricing": {
+            "inputPerMillion": 0.066824,
+            "outputPerMillion": 0.222748,
+            "cacheReadPerMillion": 0.013365,
+            "cacheWritePerMillion": 0.066824
+          }
+        },
+        {
+          "provider": "zhipu_anthropic",
+          "harnessId": "zhipu-anthropic/messages",
+          "upstreamModelId": "glm-5.3-flash",
+          "cacheClass": "provider_explicit_prompt_cache",
+          "commercialStatus": "agi_direct",
+          "pricing": {
+            "inputPerMillion": 0.075,
+            "outputPerMillion": 0.25,
+            "cacheReadPerMillion": 0.015,
+            "cacheWritePerMillion": 0
+          }
         }
       ]
     },
@@ -472,6 +680,32 @@
           "upstreamModelId": "moonshotai/kimi-k3",
           "cacheClass": "provider_implicit_prompt_cache",
           "commercialStatus": "experimental_only",
+          "pricing": {
+            "inputPerMillion": 3,
+            "outputPerMillion": 15,
+            "cacheReadPerMillion": 0.3,
+            "cacheWritePerMillion": 0
+          }
+        },
+        {
+          "provider": "cheaperinference",
+          "harnessId": "cheaperinference/chat-completions",
+          "upstreamModelId": "kimi-k3",
+          "cacheClass": "provider_implicit_prompt_cache",
+          "commercialStatus": "experimental_only",
+          "pricing": {
+            "inputPerMillion": 2.1,
+            "outputPerMillion": 10.5,
+            "cacheReadPerMillion": 0.21,
+            "cacheWritePerMillion": 2.1
+          }
+        },
+        {
+          "provider": "moonshot_anthropic",
+          "harnessId": "moonshot-anthropic/messages",
+          "upstreamModelId": "kimi-k3",
+          "cacheClass": "provider_explicit_prompt_cache",
+          "commercialStatus": "agi_direct",
           "pricing": {
             "inputPerMillion": 3,
             "outputPerMillion": 15,
@@ -507,6 +741,19 @@
             "outputPerMillion": 6,
             "cacheReadPerMillion": 0.3,
             "cacheWritePerMillion": 0
+          }
+        },
+        {
+          "provider": "cheaperinference",
+          "harnessId": "cheaperinference/chat-completions",
+          "upstreamModelId": "grok-4.5",
+          "cacheClass": "provider_implicit_prompt_cache",
+          "commercialStatus": "experimental_only",
+          "pricing": {
+            "inputPerMillion": 1.4,
+            "outputPerMillion": 4.2,
+            "cacheReadPerMillion": 0.21,
+            "cacheWritePerMillion": 1.4
           }
         }
       ]
@@ -567,6 +814,19 @@
             "outputPerMillion": 0.5,
             "cacheReadPerMillion": 0,
             "cacheWritePerMillion": 0
+          }
+        },
+        {
+          "provider": "cheaperinference",
+          "harnessId": "cheaperinference/chat-completions",
+          "upstreamModelId": "gpt-oss-120b",
+          "cacheClass": "provider_implicit_prompt_cache",
+          "commercialStatus": "experimental_only",
+          "pricing": {
+            "inputPerMillion": 0.04,
+            "outputPerMillion": 0.2,
+            "cacheReadPerMillion": 0.012057,
+            "cacheWritePerMillion": 0.04
           }
         }
       ]
