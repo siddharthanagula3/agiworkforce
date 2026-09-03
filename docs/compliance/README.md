@@ -40,10 +40,10 @@ per-document revision dates, canonical routes and their aliases) come from
 1. **One canonical page per policy.** `/terms-of-service`, `/privacy-policy`,
    `/cookie-policy`, `/aup` and `/acceptable-use-policy` are permanent (308)
    redirects declared in `apps/web/next.config.ts`. Never recreate them as
-   pages — duplicate legal text that drifts is a liability, not a convenience.
+   pages, duplicate legal text that drifts is a liability, not a convenience.
 2. **Every factual claim must be provable from this repository.** If the code
    does not prove it, cut the sentence or mark it as an absence.
-3. **Do not promise emailed notice.** Not because there is no mail provider —
+3. **Do not promise emailed notice.** Not because there is no mail provider.
    `apps/web/lib/support/handoff/resend-client.ts` calls the Resend HTTP API over
    plain `fetch`, which is why a dependency grep never found it. The claim fails
    for the narrower true reason: no mailing path here can reach an arbitrary
@@ -53,7 +53,7 @@ per-document revision dates, canonical routes and their aliases) come from
 4. **Do not claim a certification.** There is no SOC 2 report, ISO 27001
    certificate or HIPAA position. `/trust` carries the dated status.
 5. **Respect the trust boundaries.** Local, BYOK and Managed Cloud are separate,
-   and the controller/processor split differs between them — see `/dpa` §03. A
+   and the controller/processor split differs between them, see `/dpa` §03. A
    flat "we are the processor" clause is wrong for two of the three.
 6. **Managed Cloud is in public alpha** and open by default since 2026-06-27
    (`apps/web/lib/managed-compute-gate.ts`). Say so where it bears on a

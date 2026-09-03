@@ -27,21 +27,21 @@ and a self-HTTP hop reports the platform unhealthy for reasons of its own.
 **Detection latency is up to 24 hours.** The Vercel project is on the Hobby
 plan, which rejects the deploy outright for any cron more frequent than daily
 (`PROD-VERCEL-DEPLOY-TOPOLOGY-01`), so a tighter cadence would take the site
-down in order to improve its monitoring. Closing this gap is a founder action —
+down in order to improve its monitoring. Closing this gap is a founder action.
 see [Open gaps](#open-gaps).
 
 ## Where the alert lands
 
 The probe sends through the Resend transport
 (`apps/web/lib/support/handoff/resend-client.ts`), addressed to
-`AGI_SUPPORT_FALLBACK_EMAIL` — the mailbox
+`AGI_SUPPORT_FALLBACK_EMAIL`: the mailbox
 `apps/web/lib/support/handoff/config.ts` already requires to be monitored. It
 defaults to `support@agiworkforce.com`.
 
 Delivery requires **both** `RESEND_API_KEY` and a valid
 `AGI_SUPPORT_FROM_EMAIL`. With either missing, nothing is delivered and the
 probe returns **HTTP 500**, so the failed invocation is visible in the Vercel
-cron log — the last signal left once email is gone. Check that log after any
+cron log, the last signal left once email is gone. Check that log after any
 deployment that changes environment variables.
 
 ## Severity
@@ -61,7 +61,7 @@ must not page as a whole-platform outage.
 
 `select 1` against Neon failed. In order:
 
-1. Open the Neon dashboard for the project — check for a suspended compute,
+1. Open the Neon dashboard for the project, check for a suspended compute,
    an exhausted connection pool, or a region incident.
 2. Confirm `DATABASE_URL` / `AGI_DATABASE_URL` are still set on the Vercel
    project. A rotated or dropped variable presents identically to a dead
@@ -74,7 +74,7 @@ must not page as a whole-platform outage.
 Neither `DATABASE_URL` nor `AGI_DATABASE_URL` is set. This is a deploy
 configuration failure, not an outage: the last deployment shipped without a
 database URL. Restore the variable and redeploy. The check reports only a count,
-never names — do not expect the alert to tell you which variable is missing.
+never names, do not expect the alert to tell you which variable is missing.
 
 ### `stripe: unhealthy`
 
@@ -92,7 +92,7 @@ The probe could not measure the platform, so the `database` / `stripe` /
 `environment` lines in that alert read `not measured` and mean nothing. The
 `Failing checks:` line says which one it was: `checks threw` (the harness itself
 is broken) or `timed out after 8000ms` (a dependency accepted the connection and
-never answered — the usual Neon or Stripe stall). Treat a timeout as an outage
+never answered, the usual Neon or Stripe stall). Treat a timeout as an outage
 until `/status`, which races the same checks, says otherwise. The probe pages on
 this path whether or not the mail is delivered, and always returns HTTP 500.
 
@@ -100,7 +100,7 @@ this path whether or not the mail is delivered, and always returns HTTP 500.
 
 Subject `[AGI WARNING] <env> credit settlement drift · N terminal`. This is not
 an outage: it comes from `/api/cron/reconcile-credits`, and it means `N` durable
-credit settlements were abandoned permanently in that run — the provider call
+credit settlements were abandoned permanently in that run, the provider call
 was served, and the reservation delta will never be debited. Balances for those
 accounts are now higher than the usage behind them.
 
@@ -117,10 +117,10 @@ select id, user_id, amount_cents, last_error_code, last_error, completed_at
 ```
 
 `last_error_code` says which failure it was: `RETRY_EXHAUSTED` (12 attempts of a
-retryable fault — look for a Neon incident in that window), `SQLSTATE_*` (a
+retryable fault, look for a Neon incident in that window), `SQLSTATE_*` (a
 non-retryable database error, usually a schema or constraint change), or a
 `deduct_credits()` rejection code (the ledger refused the debit; the account
-state is the thing to inspect, not the queue). The mail carries counts only —
+state is the thing to inspect, not the queue). The mail carries counts only.
 user ids and amounts stay in the database.
 
 Like the health probe, an undelivered alert returns **HTTP 500** so the failed
@@ -136,7 +136,7 @@ that is never exercised is indistinguishable from one that is broken.
 1. Deploy a preview build.
 2. Remove `DATABASE_URL` and `AGI_DATABASE_URL` from the preview environment.
    Both `environment` and `database` then report unhealthy, so overall status is
-   `unhealthy` — the same state a real outage produces.
+   `unhealthy`: the same state a real outage produces.
 3. Invoke the probe with the deployment's cron secret (the schedule is daily, so
    do not wait for it):
 
@@ -167,13 +167,13 @@ These cannot be closed by a commit. They are tracked as founder actions in
 - **No pager.** No PagerDuty/Opsgenie/BetterStack account exists, so the alert
   is an email, not a page: nothing wakes anyone at 03:00 and nothing escalates
   if the first recipient does not acknowledge. Once a vendor is chosen, add its
-  dispatch alongside the email in `dispatchAlert()` — the severity split and the
+  dispatch alongside the email in `dispatchAlert()`, the severity split and the
   undeliverable-is-a-failure behaviour already exist and should be reused.
 - **No external uptime monitor.** Every detector above runs _inside_ the
   deployment being measured, so a deployment that fails to boot, a DNS failure,
   or a Vercel region outage is invisible to all of them. An external monitor
   polling `/api/health` from outside is the only detector that survives the
-  platform being down, and it needs no code — `/api/health` is public and
+  platform being down, and it needs no code, `/api/health` is public and
   already returns 503 when core checks fail.
 - **Daily cadence.** Tighten the `vercel.json` entry to a five-minute schedule
   the same day the Vercel project moves to Pro, and not before.

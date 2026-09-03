@@ -41,7 +41,7 @@ inspiration only (clean-room).
 
 ## Design-inspiration only (no code copied)
 
-openreview, pr-agent (AGPL — never copy code), reviewdog, probot, danger-js,
+openreview, pr-agent (AGPL, never copy code), reviewdog, probot, danger-js,
 revu, ai-code-reviewer, skylos, semgrep-rules, ZAP, Strix. AGPL and
 source-available projects on this list must never contribute code to Guardian
 without explicit legal approval; architecture patterns only.
@@ -50,7 +50,7 @@ without explicit legal approval; architecture patterns only.
 
 1. Every newly enabled external tool gets: exact pin (version + SHA/digest or
    checksum), timeout, machine-readable output, failure policy, retention
-   policy, and a row in this file — enforced by review, verified by the
+   policy, and a row in this file, enforced by review, verified by the
    scanner adapter tests.
 2. GitHub Actions used by `guardian.yml` follow the repo pinning policy
    (`scripts/check-action-pins.sh`): first-party `actions/*` by major tag,

@@ -47,7 +47,7 @@ no brand typeface, a large radius on the one element the eye lands on. Control
 count is high because the surface exposes a lot at once.
 
 **Claude** commits to a narrower column, a small consistent radius, and a
-custom typeface doing the brand work. Its dark is not black — `rgb(21,21,21)`
+custom typeface doing the brand work. Its dark is not black, `rgb(21,21,21)`
 against a `rgb(32,32,31)` composer is a warm near-neutral, and the composer is
 distinguished by a 11-unit lightness step rather than by a shadow or a glow.
 Half the control count of ChatGPT on the same screen.
@@ -55,7 +55,7 @@ Half the control count of ChatGPT on the same screen.
 Neither uses a gradient, a glow, a glass blur, or a coloured accent on the
 primary surface. Both hold their identity with type, spacing and one neutral
 step. That is the same position `AGENTS.md` already commits this product to, so
-parity here is not imitation — it is the same conclusion reached independently.
+parity here is not imitation, it is the same conclusion reached independently.
 
 ## Phone, 390x844
 
@@ -71,7 +71,7 @@ parity here is not imitation — it is the same conclusion reached independently
 ### The one number that matters most
 
 ChatGPT drops from **86 visible controls on desktop to 13 on a phone**. That is
-the mobile design decision, and it is not a re-layout — it is a different set of
+the mobile design decision, and it is not a re-layout, it is a different set of
 controls. Claude does less of this, and keeps its sidebar reachable.
 
 AGI Workforce's phone composer is **136px tall against ChatGPT's 87px**, and the
@@ -90,8 +90,8 @@ two competitors rather than against taste.
 Parity is already held on the things that are easy to get loudly wrong:
 
 - Neutral-first dark surface, no gradient or glow on the primary surface.
-- 358px composer at 390px with 16px side margins — identical to ChatGPT's.
-- 26px composer radius — within 2px of ChatGPT's 28/26.
+- 358px composer at 390px with 16px side margins, identical to ChatGPT's.
+- 26px composer radius, within 2px of ChatGPT's 28/26.
 - No horizontal overflow at 390px.
 
 The gaps are density and disclosure, not styling:
@@ -130,7 +130,7 @@ significant redesign on either side.
 ## Re-measured 2026-09-01, after the frontend transition
 
 AGI Workforce only. The competitor columns below are the 2026-08-30 readings
-carried forward — chatgpt.com and claude.ai were **not** re-measured on this
+carried forward, chatgpt.com and claude.ai were **not** re-measured on this
 pass, so treat those two columns as dated and re-measure before citing them.
 
 Taken on `feat/frontend-parity-wave-1` against a local `next dev` build, signed
@@ -149,8 +149,8 @@ is the measured element, which is the same box the 2026-08-30 phone row used
 | Composer radius           | 26px           | 26px              | 26px              | 14px              |
 | Composer fill             | not taken      | `rgb(33, 33, 33)` | `rgb(33, 33, 33)` | `rgb(32, 32, 31)` |
 | Page background           | `rgb(0, 0, 0)` | `rgb(0, 0, 0)`    | `rgb(0, 0, 0)`    | `rgb(21, 21, 21)` |
-| Footer row height         | not taken      | 20px              | —                 | —                 |
-| Footer items              | 6              | **1**             | —                 | —                 |
+| Footer row height         | not taken      | 20px              | ,                 | ,                 |
+| Footer items              | 6              | **1**             | ,                 | ,                 |
 | Visible buttons           | 8              | 6                 | 13                | 34                |
 | Horizontal overflow       | none           | none              | none              | none              |
 
@@ -164,7 +164,7 @@ Against the 2026-08-30 reading, "Auto · Web search on · Managed cloud · Priva
 Feedback" no longer render at phone width. What remains is the accuracy caveat
 `lib/compliance/ai-act.ts` deliberately keeps, at 12px in a 20px row.
 
-The remaining 14px over ChatGPT's 87px is not the footer — a 20px footer row plus
+The remaining 14px over ChatGPT's 87px is not the footer, a 20px footer row plus
 its 8px margin accounts for 28px of the 145px container, and the input box itself
 is the 101px. Closing the rest means the input row, not the disclosure beneath it.
 
@@ -192,7 +192,7 @@ Two observations, both measured rather than preferred. The composer width sits
 between the two references and nearer ChatGPT's reading column than Claude's.
 The resting height does not: at 127px it is 75px taller than ChatGPT's 52px and
 13px taller than Claude's, so desktop is now the taller surface of the two this
-product ships — the opposite of the phone result, where the work landed. Control
+product ships, the opposite of the phone result, where the work landed. Control
 density (46 against ChatGPT's 86 and Claude's 41) is unchanged in posture.
 
 ### What limits this reading
@@ -203,25 +203,25 @@ outside that margin, the 26px-vs-28px radius comparisons are not.
 
 The database behind this run is one migration behind the branch
 (`0156_message_thread_variants`), so sending a message 500s. That does not touch
-these numbers — every reading here is the resting new-chat screen with no turn in
-flight — but it does mean no conversation-in-progress state was measured, which
+these numbers, every reading here is the resting new-chat screen with no turn in
+flight, but it does mean no conversation-in-progress state was measured, which
 was already outside the 2026-08-30 scope.
 
-### Desktop, 1470x835 — first agiworkforce reading (2026-09-01)
+### Desktop, 1470x835, first agiworkforce reading (2026-09-01)
 
 |                     | agiworkforce      | chatgpt.com (08-30) | claude.ai (08-30) |
 | ------------------- | ----------------- | ------------------- | ----------------- |
 | Composer box        | w=736, **h=127**  | w=768, h=52         | w=640, h=114      |
 | Composer radius     | 26px              | 28px                | 14px              |
 | Composer fill       | `rgb(33, 33, 33)` | `rgb(33, 33, 33)`   | `rgb(32, 32, 31)` |
-| Footer row          | h=24              | —                   | —                 |
+| Footer row          | h=24              | ,                   | ,                 |
 | Visible buttons     | 46                | 86                  | 41                |
 | Horizontal overflow | none              | none                | none              |
 
 The 2026-08-30 desktop table carried no agiworkforce column, so this is the
 baseline. The phone result inverted: at 390px this product now sits under both
 competitors, while on desktop the resting composer is **127px against
-ChatGPT's 52px** — their single collapsed pill against our permanently visible
+ChatGPT's 52px**, their single collapsed pill against our permanently visible
 second control row. Whether desktop should collapse to one resting row is a
 design decision, not a defect; it is queued as one.
 
@@ -237,7 +237,7 @@ Both columns come from the same harness, the same document and the same flush
 boundaries, so they differ only in what is parsed. **After** is
 `createMarkdownBlockSplitter().update(content)`. **Before** is the identical
 parse-only remark processor run over the full accumulated string at the same
-flush — the pre-change behaviour, reconstructed rather than recalled.
+flush, the pre-change behaviour, reconstructed rather than recalled.
 
 | accumulated chars | before: full reparse | after: tail split | tail parsed | samples |
 | ----------------- | -------------------- | ----------------- | ----------- | ------- |
@@ -249,13 +249,13 @@ flush — the pre-change behaviour, reconstructed rather than recalled.
 Median per-flush wall time, 5 measured iterations after a discarded warm-up,
 320 split samples and 25 reparse samples per size.
 
-**The exit criterion holds.** From 10k to 100k chars — a tenfold longer message —
+**The exit criterion holds.** From 10k to 100k chars, a tenfold longer message.
 the full reparse grows **x11.82** and the tail split grows **x1.90**. The reparse
 slope is linear in message length, as an O(message) cost must be. The split's
 x1.90 is not a size effect at all: the tail it parsed grew from 39 to 94 chars
 over the same range, so cost tracked the tail by roughly the ratio the tail
 itself moved. Normalised, the split costs 2.01ms per tail kilochar at 10k and
-1.58ms at 100k — flat to slightly falling. At 100k the split is **656x cheaper
+1.58ms at 100k, flat to slightly falling. At 100k the split is **656x cheaper
 per flush** than the reparse it replaced.
 
 ### What this measurement excludes, and why
@@ -270,9 +270,9 @@ Three limits worth stating before anyone treats a row as a budget:
   x4.60 rather than x1.90, all of it buffer flattening.
 - **Only documents the splitter can settle are measured.** The harness derives
   that set at run time rather than hardcoding it: 23 of the 28 corpus documents
-  qualify. The five excluded ones — an unterminated fence, trailing open display
+  qualify. The five excluded ones, an unterminated fence, trailing open display
   math, an unbalanced raw HTML container, and two carrying reference or footnote
-  definitions — are cases where the splitter deliberately refuses to settle and
+  definitions, are cases where the splitter deliberately refuses to settle and
   `StreamingMarkdownContent` falls back to rendering the message as one unit.
   Those keep the old O(message) cost by design, and this table does not describe
   them.
@@ -295,6 +295,6 @@ ordinary `test` run so CI time does not grow.
 
 The regression gate does run in CI. `streamingParseCost.test.ts` executes the
 same harness at a reduced 1k-to-8k profile in about 0.7s and fails if the split
-slope exceeds x4, or if the full reparse slope drops below x4 — the second
+slope exceeds x4, or if the full reparse slope drops below x4, the second
 assertion being what stops a harness that has quietly stopped measuring anything
 from reporting a flat line as a pass.

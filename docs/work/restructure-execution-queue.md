@@ -8,21 +8,21 @@ Split out of root `PLAN.md` on 2026-08-28. `PLAN.md` keeps the standing
 strategy and phase structure; this file carries the dated queue, which is
 expected to go stale and be deleted when the phase closes.
 
-## Frontend UI/UX redesign — phase state
+## Frontend UI/UX redesign: phase state
 
 Approved 2026-08-30. Resume from `Current phase` after any interruption.
 
-| Phase | Scope                                                                   | State              |
-| ----- | ----------------------------------------------------------------------- | ------------------ |
-| 0a    | Shipping token defects, css-token guard blind spot                      | Done — `e4a11b4fa` |
-| 0b    | Legibility ratchet guard, theme completeness                            | Done               |
-| 1     | Token layer: one namespace, type scale, spacing, radii, z-index, motion | Next               |
-| 2     | Primitive adoption; resolve the four forked components                  | Pending            |
-| 3     | App shell, navigation, footer                                           | Pending            |
-| 4     | Auth, pricing, upgrade, billing                                         | Pending            |
-| 5     | Marketing page families                                                 | Pending            |
-| 6     | Docs as a product                                                       | Pending            |
-| 7     | Shared runtime convergence, block streaming, citations, workbench       | Pending            |
+| Phase | Scope                                                                   | State             |
+| ----- | ----------------------------------------------------------------------- | ----------------- |
+| 0a    | Shipping token defects, css-token guard blind spot                      | Done, `e4a11b4fa` |
+| 0b    | Legibility ratchet guard, theme completeness                            | Done              |
+| 1     | Token layer: one namespace, type scale, spacing, radii, z-index, motion | Next              |
+| 2     | Primitive adoption; resolve the four forked components                  | Pending           |
+| 3     | App shell, navigation, footer                                           | Pending           |
+| 4     | Auth, pricing, upgrade, billing                                         | Pending           |
+| 5     | Marketing page families                                                 | Pending           |
+| 6     | Docs as a product                                                       | Pending           |
+| 7     | Shared runtime convergence, block streaming, citations, workbench       | Pending           |
 
 ### Codex browser-audit remediation (2026-08-30)
 
@@ -35,7 +35,7 @@ M8 connectors table off-viewport at 320px, M9 connector Add menu clipped.
 
 M3 (drawer children off-canvas after a route change) does not reproduce: the S1
 root-cause change fixed it too. Verified at 320px on Library, Projects, Tasks,
-Schedules and `/chat/code` — panel at x=0..272 with all 102 controls inside it.
+Schedules and `/chat/code`, panel at x=0..272 with all 102 controls inside it.
 
 Fixed, covered by tests, browser verification still owed: DR1 research fetch
 before approval, M1 truncation and seams, M2 stopped labelled complete, F1 one
@@ -83,7 +83,7 @@ task identity at 320px, M5 conversation title clipping, M7 search-filter focus,
 M11 composer footer rows, M12 skills descriptions, M15 voice card overflow,
 H1/H2/H3 short-viewport dialogs.
 
-Not reproduced — record before re-opening:
+Not reproduced, record before re-opening:
 
 - F1's `0 B` attachment chip. A genuine 96-byte upload through the composer's
   file input reports `96 B`. The chip reads `File.size` directly, so a zero
@@ -274,7 +274,7 @@ Remaining program work, in order of dependency:
 5. External release gates (founder-run or scheduled, cannot be faked):
    apply+probe the unapplied `apps/web/db/neon` migrations through the current
    head (`0152_restore_null_tolerant_usage_caps.sql` as of 2026-08-28) on prod Neon
-   BEFORE merging this branch to `main` — re-read the directory listing rather
+   BEFORE merging this branch to `main`, re-read the directory listing rather
    than trusting this number, it moves every time a web slice lands; W7
    live-provider + desktop-device smoke; desktop restart-persistence smoke;
    W10 on-device mobile QA.
@@ -284,12 +284,12 @@ Remaining program work, in order of dependency:
 
 2026-08-01: THE AUDIT-REMEDIATION BRANCH IS PARKED, MEASURED, NOT MERGED.
 `fix/audit-remediation-2026-07-25` now carries 47 commits ahead of `main` and
-0 behind, tip `07b87a6fd` — 46 remediation commits dated 2026-07-31..08-01 plus
+0 behind, tip `07b87a6fd`, 46 remediation commits dated 2026-07-31..08-01 plus
 the `chore(deps)` lockfile commit that pairs the working-tree `pnpm-lock.yaml`
 with the already-committed `apps/mobile/package.json` swap
 (`@expo-google-fonts/newsreader` and `expo-font` added,
 `expo-background-fetch` replaced by `expo-background-task`). By slice theme:
-30 mobile commits (the brand/UX parity sweep — artifacts in the transcript and
+30 mobile commits (the brand/UX parity sweep, artifacts in the transcript and
 on the cached path, account-security parity with web, archived chats, accent
 contrast, reflect and team surfaces), 9 desktop (six of them the MCP work:
 protocol-revision negotiation on both the client and our own server, an honest
@@ -305,7 +305,7 @@ identically on every platform.
 The evidence battery was run against this tip and is recorded honestly, red
 included. Green: `pnpm typecheck:all` 46/46 tasks in 5m20.944s with zero
 `error TS`; `cargo check --workspace` clean, zero warnings; every JS/TS surface
-passing in isolation — web 4,638, desktop 1,951, mobile 2,316, extension 1,221,
+passing in isolation, web 4,638, desktop 1,951, mobile 2,316, extension 1,221,
 VS Code 727, i.e. 10,853 across the five named surfaces against the
 2026-07-26 baseline of 10,272 (+581), and 14,146 passed repo-wide across all 45
 turbo test tasks. The aggregate `pnpm test` exited 1, but every failure in it
@@ -313,27 +313,28 @@ was a bare 5s timeout under CPU contention from concurrent batteries and every
 affected package reran green alone; note `turbo run test` has no `--continue`,
 so the first red task cancels the rest and its counts are lower bounds. Red,
 and still open: (a) `pnpm check:llm-operability` is 32 of 34 guardrails passing
-— `check:mobile-hygiene` and `check:readme-ownership` both fail on the same
-three missing files, `apps/mobile/src/features/{archived-chats,reflect,team}/README.md`,
-each of which must carry the `Status:`, `Owner` and `Purpose` markers that
-Per-directory ownership READMEs were retired on 2026-08-08; this is a regression this branch
-introduced and it blocks the pre-push gate. (b) `cargo test --workspace --lib`
-is 6,770 passed / 4 failed / 34 ignored across 14 binaries, all four failures
-inside `agiworkforce-desktop` and all four reproducing deterministically in
-isolation — two effort-catalog assertions in `core::llm` that contradict
-the catalog-selected Anthropic balanced model's `supportedEfforts` since
-`3044350c5`, and two `v59`
-migration tests that expose a real hazard where the `v76` step runs
-`CREATE INDEX` against `realtime_metrics` without guarding that the table
-exists. All four files are byte-identical between `main` and this branch, so
-this is pre-existing `main` breakage surfaced by the battery, not a regression
-here — but it does mean the CHANGELOG 2026-07-26 claim of a green
-`cargo test --workspace --lib` is stale and must not be re-asserted without
-re-qualification. Guardrail count also moved: 34 in the chain now, not the 27
-that entry records.
+
+- `check:mobile-hygiene` and `check:readme-ownership` both fail on the same
+  three missing files, `apps/mobile/src/features/{archived-chats,reflect,team}/README.md`,
+  each of which must carry the `Status:`, `Owner` and `Purpose` markers that
+  Per-directory ownership READMEs were retired on 2026-08-08; this is a regression this branch
+  introduced and it blocks the pre-push gate. (b) `cargo test --workspace --lib`
+  is 6,770 passed / 4 failed / 34 ignored across 14 binaries, all four failures
+  inside `agiworkforce-desktop` and all four reproducing deterministically in
+  isolation, two effort-catalog assertions in `core::llm` that contradict
+  the catalog-selected Anthropic balanced model's `supportedEfforts` since
+  `3044350c5`, and two `v59`
+  migration tests that expose a real hazard where the `v76` step runs
+  `CREATE INDEX` against `realtime_metrics` without guarding that the table
+  exists. All four files are byte-identical between `main` and this branch, so
+  this is pre-existing `main` breakage surfaced by the battery, not a regression
+  here, but it does mean the CHANGELOG 2026-07-26 claim of a green
+  `cargo test --workspace --lib` is stale and must not be re-asserted without
+  re-qualification. Guardrail count also moved: 34 in the chain now, not the 27
+  that entry records.
 
 **Correction, 2026-08-24: all four are fixed and no longer reproduce.** The
-`v76` migration guard landed in `ab9f8687a3` — `migrations.rs:6103-6114` now
+`v76` migration guard landed in `ab9f8687a3`, `migrations.rs:6103-6114` now
 checks `table_exists(conn, "realtime_metrics")` before creating the index
 instead of assuming the table, closing the hazard this checkpoint flagged.
 The effort-catalog predicates the two `core::llm` tests assert are satisfied
@@ -342,37 +343,37 @@ agiworkforce-desktop --lib --locked` for
 `test_migration_v59_rebuilds_and_redacts_auth_sessions`,
 `test_migration_v59_skips_duplicate_hashed_tokens`,
 `test_anthropic_effort_is_model_scoped_and_uses_output_config`, and
-`test_anthropic_adapter_rejects_disabled_opus_at_max_effort` — all four pass.
+`test_anthropic_adapter_rejects_disabled_opus_at_max_effort`, all four pass.
 
 Founder decisions standing as of this checkpoint: the branch is **not pushed**
-and **no PR is open**, deliberately — origin's copy is an ancestor 280 commits
+and **no PR is open**, deliberately, origin's copy is an ancestor 280 commits
 behind, so a push would fast-forward whenever it is authorized. The full
 successor briefing, including tree disposition and the not-run list, is
 the 2026-08-01 remediation handoff (retired 2026-08-08; see git history); read it before resuming.
 Finally, `TODO.md` was deleted in `906fe5cda`, so this Exact Resume Point
-section is now the executable queue — add new work here, not to a new root
+section is now the executable queue, add new work here, not to a new root
 control doc.
 
 Active goal (2026-08-01, latest): **six apps, nothing unwired, zero stubs,
-zero partial** — the completion standard and its four scope decisions are
+zero partial**, the completion standard and its four scope decisions are
 recorded in `docs/work/implementation-status.md` §2026-08-01
 Completion Standard. Desktop first, then the rest; server contracts get built
 on both sides; `audit/inventory.json` is corrected against verified code at the
 end and the checker then enforces it.
 
 Founder decisions (2026-08-01, evening): build 11 of the 13 undecided missing
-surfaces (all except Finances; Plugins resolves to Connectors permanently) —
+surfaces (all except Finances; Plugins resolves to Connectors permanently).
 the full list with external gates is recorded in
 `docs/work/implementation-status.md` §2026-08-01 Founder Scope
 Decisions. Additionally: sonnet-5 low/medium effort follows the catalog (tests
 updated and green), and the branch is authorized for a plain push to origin
 (no PR). Reversed later the same evening: the model picker stays in the "+"
-sheet / stacked control row — no always-stacked composer. New top priority
+sheet / stacked control row, no always-stacked composer. New top priority
 (founder, same evening): desktop Cloud mode presentable at parity with web,
-verified manually through the wdio e2e harness — this outranks the remaining
+verified manually through the wdio e2e harness, this outranks the remaining
 mobile P1/P2 queue and the missing-surfaces program until done.
 
-Same-day update (2026-08-01, post-checkpoint): RED 1 is cleared — `528ba8bc3`
+Same-day update (2026-08-01, post-checkpoint): RED 1 is cleared, `528ba8bc3`
 adds the three missing mobile feature READMEs and a fresh
 `pnpm check:llm-operability` run exits 0 (34/34), so the pre-push gate is green
 again. RED 2 (the four pre-existing desktop cargo failures, including the v76
@@ -382,14 +383,14 @@ against the ChatGPT/Claude iOS reference sets on the founder's Desktop; the
 prioritized backlog lives with the session that produced it and lands here as
 commits.
 
-2026-08-05: THE ROUTER GETS AN OBJECTIVE — EXECUTIONPLAN AND CPST ARE
+2026-08-05: THE ROUTER GETS AN OBJECTIVE, EXECUTIONPLAN AND CPST ARE
 SPECIFIED, NOTHING IS IMPLEMENTED. The design spec landed as
 `docs/architecture/execution-plan-contract.md` (docs-only slice;
 no code, schema, curation, or generated file was touched). It specifies one
 `ExecutionPlan` value carrying model snapshot, provider endpoint, reasoning
 effort, service tier, execution location, harness version, tool bundle,
 retrieval policy, cache policy, verifier, fallback policy, budget, and
-approval policy, each mapped field-by-field onto what already exists — the
+approval policy, each mapped field-by-field onto what already exists, the
 canonical resolvers (`crates/agiworkforce-model-registry/src/lib.rs`,
 `packages/ai/routing/src/auto.ts`), the curation sources
 (`packages/ai/model-registry/catalog/routing-policies.json` and
@@ -398,17 +399,17 @@ canonical resolvers (`crates/agiworkforce-model-registry/src/lib.rs`,
 (`apps/desktop/src-tauri/src/core/llm/llm_router.rs`). Five of the thirteen
 fields already exist in some form and are recorded rather than re-invented;
 `executionLocation` is explicitly the one field the plan may never influence,
-because trust-mode admission stays the sole authority. It also defines CPST —
+because trust-mode admission stays the sole authority. It also defines CPST.
 total variable cost of attempts plus tools plus retries plus fallback, divided
-by tasks that actually succeeded, computed per task family only — and fixes
+by tasks that actually succeeded, computed per task family only, and fixes
 the six telemetry fields it needs. Eight open questions are recorded as
 unknown rather than answered, including which of the two already-diverged
 resolvers is canonical, what identifies a model snapshot (the generated
 registry exposes only `schemaVersion`, no hash, no `generatedAt`), and the
 service-tier vocabulary collision with the existing protocol
-`ServiceTier { Fast, Flex }`. The rollout gates in the spec — router p95
+`ServiceTier { Fast, Flex }`. The rollout gates in the spec, router p95
 around 100ms, router overhead 1-3% of CPST, escalation 5-10%, quality at 98%
-of the balanced baseline, no high-risk regression — are labeled in the
+of the balanced baseline, no high-risk regression, are labeled in the
 document as internal targets that no repo measurement supports yet, not
 market facts, and must be re-derived from the first two weeks of real data
 before they gate anything. Evidence for this slice: `check-doc-status`,
@@ -420,7 +421,7 @@ other in-flight work, which this slice did not create and did not touch.
 Follow-on slices, in dependency order (2 can be built in parallel with 1 but
 cannot ship before 4):
 
-1. CPST telemetry fields — LANDED 2026-08-28. `apps/web/lib/cpst-telemetry.ts`
+1. CPST telemetry fields, LANDED 2026-08-28. `apps/web/lib/cpst-telemetry.ts`
    declares every field below and `0129_cost_event_task_economics.sql` carries the
    columns. Kept for the naming constraint recorded underneath it. Original item:
    Add `taskOutcome`, `retries`, `fallbackUsed`,
@@ -431,14 +432,14 @@ cannot ship before 4):
    `apps/web/lib/services/managed-usage-accounting-service.ts` already uses
    for `accounting`/`reason`/`providerCalls`/`totalTokens`. No migration in
    this slice. Two of the six values already exist in memory and are thrown
-   away — `fallbackReason` and `routeDecision.code` in
-   `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts` — so
+   away, `fallbackReason` and `routeDecision.code` in
+   `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts`, so
    wiring them is a pass-through at the existing reserve/finalize call sites,
    which sit on the hot chat-completions path and must not disturb the
    idempotency-replay or lease-token contracts documented in 0056. The task
    field must be named `taskOutcome`/`task_outcome`: `outcome` is already
    taken by the billing finalization and means "we billed it", not "it
-   worked". Scope is managed cloud only — desktop has only a daily cap, CLI
+   worked". Scope is managed cloud only, desktop has only a daily cap, CLI
    and mobile have no ledger, and `apps/web/lib/cost-tracker.ts` is in-memory
    and is not a CPST source. Exit: two weeks of rows with a measured non-null
    rate per key and a first per-family CPST baseline.
@@ -447,7 +448,7 @@ cannot ship before 4):
    runtime profile, tier ceiling, lifecycle, harness allow-list, capabilities,
    context minimum) and is not relaxed; the Pareto step only orders the
    already-eligible set on cost against measured success. Stickiness is
-   already policy — `auto.continuity` is all-true in `routing-policies.json` —
+   already policy, `auto.continuity` is all-true in `routing-policies.json`.
    and switching must be escalation-only, up the fallback ladder and never
    sideways, because a sideways move buys nothing and pays the full
    cache-reset penalty that `packages/ai/routing/src/model-switch-cache.ts`
@@ -467,7 +468,7 @@ cannot ship before 4):
    user-visible model labels. Exit: shadow plan produced for at least 95% of
    eligible requests, measured router decision latency, a counterfactual CPST
    estimate per family, and a written list of every disagreement that would
-   have crossed a trust boundary — target zero, and any non-zero result
+   have crossed a trust boundary, target zero, and any non-zero result
    blocks live routing outright.
 
 ## Current Evidence Commands

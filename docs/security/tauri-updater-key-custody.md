@@ -14,7 +14,7 @@ update.
   already pins the current public key. There is no server-side recovery: the
   pin lives in the installed binary.
 - Leaking the private half lets anyone sign an archive that every install
-  accepts and executes. Apple notarization does not help — the updater
+  accepts and executes. Apple notarization does not help, the updater
   signature is a separate trust boundary from Developer ID.
 
 ## Custody inventory
@@ -27,7 +27,7 @@ must be removed in the same change that destroys it.
 | ------------------------------------------------------ | ------------------ | ---------- |
 | `~/.tauri/agiworkforce.key` on the founder workstation | working copy       | founder    |
 | GitHub Actions secret `TAURI_SIGNING_PRIVATE_KEY`      | deployment copy    | CI         |
-| _unfilled_ — offline escrow                            | recovery authority | _unfilled_ |
+| _unfilled_, offline escrow                             | recovery authority | _unfilled_ |
 
 The passphrase is a separate secret and must never be escrowed in the same
 container as the key file.
@@ -62,7 +62,7 @@ TAURI_SIGNING_PRIVATE_KEY_PASSWORD='<escrowed passphrase>' \
 The command reads `plugins.updater.pubkey` from the committed Tauri config,
 decrypts the escrowed key with the supplied passphrase, and compares both the
 key id and the Ed25519 public half. It exits non-zero when the file is the wrong
-key, the passphrase is wrong, or the escrowed copy has been corrupted — the
+key, the passphrase is wrong, or the escrowed copy has been corrupted, the
 three failure modes that make an escrow copy worthless at the moment it is
 needed. It accepts either the raw minisign key file or the base64 form stored in
 the GitHub secret.
@@ -87,7 +87,7 @@ backup of the founder workstation restored elsewhere.
 ## Rotation
 
 Tauri's updater pins exactly one public key. A rotated key therefore does not
-reach installed clients through the updater it replaces — the release signed
+reach installed clients through the updater it replaces, the release signed
 with the new key fails signature verification against the old pinned key, and
 those installs stop updating silently.
 
@@ -101,7 +101,7 @@ those installs stop updating silently.
 4. Installs that never take the transition release are stranded and must
    reinstall from the download page. Count them before rotating, and publish a
    reinstall notice if the population is material.
-5. If the old key is unavailable — lost, or withheld because it is compromised —
+5. If the old key is unavailable, lost, or withheld because it is compromised.
    step 2 is impossible and **every** install must reinstall. This is the
    scenario escrow exists to prevent.
 

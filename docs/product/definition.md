@@ -41,7 +41,7 @@ Public v1 launches with:
 
 Managed cloud is in public alpha and open by default (founder decision, 2026-06-27); the private-beta launch gate has been removed.
 
-Development is serial by surface, ordered shortest-remaining-work-first (founder decision 2026-08-05 — supersedes the prior fixed Website-first order here and Decision #20's earlier Mobile-first order): estimate the remaining Class-1 (partial/unwired/stub/broken) work per surface, complete the fastest surface first, then the next fastest, until all six surfaces are at zero. One surface is active at a time. A later surface does not become active until the founder advances the sequence or explicitly authorizes work during QA, review, or another waiting period. The routing substrate (registry dated pricing and cache-write billing, ExecutionPlan/CPST design, CPST telemetry, rules-based router) completes before surface closure begins.
+Development is serial by surface, ordered shortest-remaining-work-first (founder decision 2026-08-05, supersedes the prior fixed Website-first order here and Decision #20's earlier Mobile-first order): estimate the remaining Class-1 (partial/unwired/stub/broken) work per surface, complete the fastest surface first, then the next fastest, until all six surfaces are at zero. One surface is active at a time. A later surface does not become active until the founder advances the sequence or explicitly authorizes work during QA, review, or another waiting period. The routing substrate (registry dated pricing and cache-write billing, ExecutionPlan/CPST design, CPST telemetry, rules-based router) completes before surface closure begins.
 
 The founder explicitly authorized a cross-surface capability sequence on
 2026-08-09, which is the current exception to that one-surface rule: first make
@@ -139,7 +139,7 @@ Anthropic/Claude baseline:
 - Claude in Chrome is a browser-control extension with explicit permissions and prompt-injection defenses.
 
 Official sources as they stood when this snapshot was captured (several have
-since moved or redirected — re-fetch before citing):
+since moved or redirected, re-fetch before citing):
 
 - OpenAI ChatGPT capabilities: https://help.openai.com/en/articles/9260256-chatgpt-capabilities-overview
 - OpenAI ChatGPT apps/connectors: https://help.openai.com/en/articles/11487775-connectors-in-chatgpt
@@ -233,7 +233,7 @@ Billing plan lock (founder decision, 2026-07-18):
 
 Basic is available on Web, Mobile, and Desktop. Free and Basic do not include managed-cloud CLI, Chrome, or VS Code access; Local/BYOK developer use remains available inside its separate trust boundary. Skills and chat tools remain available in Free chat, while AGI Work and managed developer surfaces are Pro+ capabilities.
 
-Subscriptions are globally available (founder, 2026-08-05) — no country is excluded; every region can purchase, with localized amounts where configured and USD everywhere else. Location pricing is server-derived. The Website uses the trusted deployment country header and the configured Stripe Price currency options; it never trusts a browser-supplied currency. India-specific amounts render only for India. Other supported currencies use the matching Stripe currency option, with USD as the honest fallback when no localized Stripe amount is configured.
+Subscriptions are globally available (founder, 2026-08-05), no country is excluded; every region can purchase, with localized amounts where configured and USD everywhere else. Location pricing is server-derived. The Website uses the trusted deployment country header and the configured Stripe Price currency options; it never trusts a browser-supplied currency. India-specific amounts render only for India. Other supported currencies use the matching Stripe currency option, with USD as the honest fallback when no localized Stripe amount is configured.
 
 Paid usage is enforced as overlapping billing-period, rolling seven-day, rolling five-hour, and flagship rolling-week windows. The five-hour allowance is 20% of that plan's weekly allowance and the flagship sub-limit is 30% of the weekly allowance. These are spend windows, not seven daily buckets: usage ages out from its original transaction timestamp. Rolling spend windows warn at 80% and hard-stop at 100%; there is no downgrade or 150% financial grace band. The server-owned reservation includes the estimated in-flight request before provider work and serializes concurrent reservations for one tenant.
 
@@ -433,7 +433,7 @@ Treat these as evidence or working notes, not source of truth:
 - stale PRDs and launch plans
 
 (The former `tasks/**`, `reports/**`, and `docs/archive/**` directories were
-removed repo-wide on 2026-06-28 — do not cite them as existing. `audit/` was
+removed repo-wide on 2026-06-28, do not cite them as existing. `audit/` was
 removed then too but has since been reintroduced and is live again: it is the
 current triage queue, and `audit/capability-gaps.csv` is cited as the source of
 truth by `docs/work/implementation-status.md`. Cite it, but treat its

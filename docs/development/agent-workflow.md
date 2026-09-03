@@ -72,7 +72,7 @@ Recommended naming:
 
 - Branch: `work/<area>-<short-goal>-YYYY-MM-DD`
 - Worktree path: `.worktrees/<lane-id>-<short-goal>`, where `<lane-id>` is an id from
-  `docs/agent-context/lanes.json` — the only lane names `pnpm check:lane-ownership` recognises
+  `docs/agent-context/lanes.json`, the only lane names `pnpm check:lane-ownership` recognises
 - Agent session label: `<area>: <goal>`
 
 Rules:

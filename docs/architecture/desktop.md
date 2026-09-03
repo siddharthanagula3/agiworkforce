@@ -4,7 +4,7 @@
 
 ## Mission
 
-Native Mac / Windows / Linux app for the same chat layer that runs on web and mobile. Power-user surface — keyboard shortcuts, Cmd-K palette, MCP plugins, computer-use (Pro+ tier), Dispatch host for mobile-controlled tasks.
+Native Mac / Windows / Linux app for the same chat layer that runs on web and mobile. Power-user surface, keyboard shortcuts, Cmd-K palette, MCP plugins, computer-use (Pro+ tier), Dispatch host for mobile-controlled tasks.
 
 ## Status at HEAD
 
@@ -21,8 +21,8 @@ Native Mac / Windows / Linux app for the same chat layer that runs on web and mo
 - **749** `.rs` files in `apps/desktop/src-tauri/` · ~**377K** LOC
 - **1,111** `.ts`/`.tsx` files in `apps/desktop/src/` · **303,407** LOC
 - **1,488** `#[tauri::command]` decorators across **137** source files
-- **118** stores (was claimed 84 in older memory — undercount)
-- **74** component subdirs in the former Desktop components tree — all since moved into
+- **118** stores (was claimed 84 in older memory, undercount)
+- **74** component subdirs in the former Desktop components tree, all since moved into
   `apps/desktop/src/features/` and `apps/desktop/src/ui/`. The old tree
   no longer exists; `pnpm check:structure-conventions` fails if any of those retired
   domain directories (including `ui/`) or an import of their old paths reappears.
@@ -73,7 +73,7 @@ apps/desktop/
 | `apps/desktop/src/App.tsx`                                  | Entry. Loads `ChatInterface` from `@agiworkforce/unified-chat` and Desktop chat overlays from `apps/desktop/src/features/chat/`. The retired `apps/desktop/src/components/UnifiedAgenticChat/` directory is removed and guarded. |
 | `apps/desktop/src/features/onboarding/OnboardingWizard.tsx` | Mode picker. **`ModeSelectionDialog` was removed and must not be reintroduced** (PRD V5 §10 lock #2).                                                                                                                            |
 | `apps/desktop/src-tauri/Cargo.toml`                         | Workspace lint rules: `unsafe_code = "deny"`, `await_holding_lock = "warn"`.                                                                                                                                                     |
-| `apps/desktop/src/constants/models.json`                    | Mirror file — DO NOT edit; SSOT is `packages/contracts/types/src/models.json`.                                                                                                                                                   |
+| `apps/desktop/src/constants/models.json`                    | Mirror file, DO NOT edit; SSOT is `packages/contracts/types/src/models.json`.                                                                                                                                                    |
 | `.github/workflows/release-desktop.yml`                     | Canonical `v-desktop-*` workflow. Validates versions, builds Linux x86_64, attaches the Tauri updater signature, publishes, then ingests updater metadata.                                                                       |
 | `.github/workflows/build-windows-release.yml`               | Manual recovery workflow for a selected published desktop tag. Checks out that tag, requires Azure Artifact Signing identity/config, verifies Authenticode before upload, then ingests Windows updater metadata.                 |
 
@@ -138,19 +138,19 @@ Mobile-to-Desktop Dispatch and on-device scheduled routines both exist in code, 
 `/agi-work` marketing page claims ("Scheduled routines and mobile-to-desktop dispatch ship with the
 Desktop app"). Evidence:
 
-- **Outbound signing exists** — this closes the old "W6 #15 outbound signer" item, which said
+- **Outbound signing exists**: this closes the old "W6 #15 outbound signer" item, which said
   desktop could receive but not sign. `signOutbound()`
   (`apps/desktop/src/services/dispatch.ts:313`) invokes the Rust `dispatch_hmac_sign` command, and
   every outbound companion control message is signed through it in `sendCompanionControl()`
   (`apps/desktop/src/stores/connectionStore.ts:241`).
-- **Inbound dispatch runs a real task** — the runtime is started at
+- **Inbound dispatch runs a real task**, the runtime is started at
   `apps/desktop/src/App.tsx:649` (`initializeCoworkDispatchRuntime`), and a
   `dispatch.task.create` control message submits an actual agent goal
   (`apps/desktop/src/services/coworkDispatch.ts:412-468`), streaming status back to Mobile.
-- **Dispatch is default-deny per device** — `apps/desktop/src/stores/coworkDispatchStore.ts` starts
+- **Dispatch is default-deny per device**, `apps/desktop/src/stores/coworkDispatchStore.ts` starts
   `enabled: false`; only Settings → Cowork turns it on, and a task arriving while it is off is
   rejected with that reason. Pairing alone never grants execution authority.
-- **Scheduled routines are real and persisted** — the scheduler lives in
+- **Scheduled routines are real and persisted**, the scheduler lives in
   `apps/desktop/src-tauri/src/sys/commands/scheduler.rs`, its store is created at
   `apps/desktop/src-tauri/src/lib.rs:812-844` (SQLite `scheduler.db`, temp-dir fallback), and its
   commands are registered at `apps/desktop/src-tauri/src/lib.rs:2022-2032`. The UI is
@@ -162,8 +162,8 @@ CAP-049 is about that missing surface and the host-relay contract, not about the
 
 ## Current open work (Wave 6, in flight)
 
-1. **W6 #19** — Remove hardcoded model fallbacks in 5 Web files (cross-surface — see [docs/surfaces/web.md](web.md)).
-2. **W6 #22** — CLI sandbox hard-refuse on Windows + Linux-no-bwrap (no silent fallthrough). Cross-surface with CLI.
+1. **W6 #19**: Remove hardcoded model fallbacks in 5 Web files (cross-surface, see [docs/surfaces/web.md](web.md)).
+2. **W6 #22**: CLI sandbox hard-refuse on Windows + Linux-no-bwrap (no silent fallthrough). Cross-surface with CLI.
 
 ## Gotchas
 
@@ -171,7 +171,7 @@ CAP-049 is about that missing surface and the host-relay contract, not about the
 - **Retired chat folder:** `apps/desktop/src/components/UnifiedAgenticChat/` is removed. Do not recreate it. Desktop-owned chat code now lives in `apps/desktop/src/features/chat/`; the component name `UnifiedAgenticChat` can still appear inside that feature folder and tests.
 - **There is no desktop model mirror.** `apps/desktop/src/constants/models.json` does not exist; the catalog is resolved through `packages/contracts/types/src/model-catalog.ts` like every other surface.
 - **macOS code-signing identity:** `D2PR62RLT4`. Don't change without owner approval.
-- **Bundle identifier:** `com.agiworkforce.desktop`. Don't change — would break update channel.
+- **Bundle identifier:** `com.agiworkforce.desktop`. Don't change, would break update channel.
 
 ## Current References
 
@@ -183,9 +183,9 @@ CAP-049 is about that missing surface and the host-relay contract, not about the
 
 ## Memory references
 
-- `memory/reference/patterns/release-pipeline.md` — desktop + CLI signing, notarization, update endpoint
-- `memory/reference/patterns/tauri-build-commands.md` — Tauri v2 build/bundle/sign commands
-- `memory/audits/release-v1.2.0-2026-05-04.md` — v1.2.0 release state + APPLE\_\* secret blockers
+- `memory/reference/patterns/release-pipeline.md`, desktop + CLI signing, notarization, update endpoint
+- `memory/reference/patterns/tauri-build-commands.md`, Tauri v2 build/bundle/sign commands
+- `memory/audits/release-v1.2.0-2026-05-04.md`, v1.2.0 release state + APPLE\_\* secret blockers
 
 ## Operational owner
 

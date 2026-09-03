@@ -361,7 +361,7 @@ No surface owns a model list.
 - Add to project/context where allowed.
 - Delete subject to ownership/retention policy.
 
-Actions are generated from capability, ownership, retention, and trust policy—not shown universally.
+Actions are generated from capability, ownership, retention, and trust policy, not shown universally.
 
 ### 8.3 Branching
 
@@ -566,7 +566,7 @@ Cross-scope search respects data boundaries. A global UI must not imply a global
 - Browser-internal/restricted pages keep Managed Cloud chat available while showing an accessible notice and disabling only page context and browser automation.
 - The monolithic side panel must be split by domain before major feature growth.
 
-## 13. Current implementation reality — 2026-07-16 snapshot, cells corrected 2026-08-09
+## 13. Current implementation reality, 2026-07-16 snapshot, cells corrected 2026-08-09
 
 | Capability                        | Web            | Desktop                                                  | Mobile                   | CLI                    | VS Code                | Chrome                                   |
 | --------------------------------- | -------------- | -------------------------------------------------------- | ------------------------ | ---------------------- | ---------------------- | ---------------------------------------- |
@@ -590,13 +590,13 @@ work superseded; mirrors the same corrections in
 
 - The single "Work/Cowork run: Missing/Missing/Missing" row conflated two
   capabilities and is split, matching the parity matrix's 2026-08-06 split.
-  **AGI Work** — composer-mode dispatch — is mounted and wired end to end on all
+  **AGI Work**: composer-mode dispatch, is mounted and wired end to end on all
   three consumer surfaces (`apps/web/lib/workflows/start-cloud-agent-workflow.ts`,
   `apps/web/app/tasks/page.tsx`, `apps/mobile/app/(app)/agents/index.tsx`,
   `AgiWorkProjects`/`AgiWorkArtifacts`/`AgiWorkScheduled` rendered from
   `apps/desktop/src/features/v3/DesktopShellV3.tsx`). Only the **standalone
-  Cowork session surface** — a dedicated resumable async workspace rather than a
-  mode inside chat — is still Missing.
+  Cowork session surface**, a dedicated resumable async workspace rather than a
+  mode inside chat, is still Missing.
 - Desktop developer sessions are no longer "missing from current shell":
   `CodeWorkspace` is lazy-mounted in `DesktopShellV3.tsx` (Local-only, since
   2026-08-04). What is still missing is the remote projection, which the
@@ -606,19 +606,19 @@ work superseded; mirrors the same corrections in
   (`apps/desktop/src/api/voice.ts`, consumed in
   `apps/desktop/src/features/settings/VoiceSettings.tsx`) and reads "Not
   available in this build" while the probe is false, pinned by
-  `VoiceSettings.test.tsx`. The underlying capability is still unbuilt —
+  `VoiceSettings.test.tsx`. The underlying capability is still unbuilt.
   `DESKTOP-SYSTEM-DICTATION-UNWIRED-01` in `docs/agent-context/known-flaws.md`
-  stays open — but the UI does not advertise it.
+  stays open, but the UI does not advertise it.
 - CLI voice is present, not absent: `apps/cli/src/voice.rs` (`cpal` capture,
   Whisper API/local binary, Local-mode egress gate) is reached from both
   `apps/cli/src/repl/mod.rs` and `apps/cli/src/tui/tui_app.rs` via `/voice`.
 
 ## 14. Immediate remediation order
 
-### P0 — remove deception and complete foundations
+### P0: remove deception and complete foundations
 
 1. Complete Desktop system-wide dictation end to end. **The availability-claim
-   branch of this item is done (2026-07-17, `dcb14ca97`)** — the settings control
+   branch of this item is done (2026-07-17, `dcb14ca97`)**, the settings control
    is gated on the `systemDictationAvailable` probe and says "Not available in
    this build" while it is false. Building the feature is still open
    (`DESKTOP-SYSTEM-DICTATION-UNWIRED-01`).
@@ -628,7 +628,7 @@ work superseded; mirrors the same corrections in
 5. Gate every control from the effective harness/capability result.
 6. Select one Web chat shell and mechanically delete the unmounted alternative after proof.
 
-### P1 — shared frontend health
+### P1: shared frontend health
 
 1. Extract headless transcript/event/approval state from DOM renderers.
 2. Split Chrome `side_panel.ts` into domain modules.
@@ -637,7 +637,7 @@ work superseded; mirrors the same corrections in
 5. Wire CLI MCP elicitation into the live TUI.
 6. Reconcile Mobile sync flags/naming with actual Cloud sync behavior.
 
-### P2 — product parity
+### P2: product parity
 
 1. Implement first-class Work runs and screens.
 2. Implement artifact renderer manifests and versions across supported surfaces.

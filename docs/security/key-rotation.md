@@ -17,8 +17,8 @@ revoking every connector grant and re-enrolling every 2FA user.
 | `user_custom_connectors.auth_header_enc`           | `CUSTOM_CONNECTOR_TOKEN_ENCRYPTION_KEY` | 64 hex chars  | `iv:ciphertext:tag` (hex)     | `auth_header_key_version`  |
 | `github_installations.access_token_enc`            | `GITHUB_TOKEN_ENCRYPTION_KEY`           | 64 hex chars  | `iv:ciphertext:tag` (hex)     | `access_token_key_version` |
 | `user_two_factor.totp_secret_enc`                  | `TOTP_ENCRYPTION_KEY`                   | ≥32 raw chars | base64(IV ‖ ciphertext ‖ tag) | `totp_secret_key_version`  |
-| `connector_oauth_authorizations.code_verifier_enc` | `CUSTOM_CONNECTOR_TOKEN_ENCRYPTION_KEY` | 64 hex chars  | `iv:ciphertext:tag` (hex)     | none — expires in minutes  |
-| `device_authorization_codes.access_token`          | `DEVICE_TOKEN_ENCRYPTION_KEY`           | 64 hex chars  | base64(IV ‖ ciphertext ‖ tag) | none — expires in minutes  |
+| `connector_oauth_authorizations.code_verifier_enc` | `CUSTOM_CONNECTOR_TOKEN_ENCRYPTION_KEY` | 64 hex chars  | `iv:ciphertext:tag` (hex)     | none, expires in minutes   |
+| `device_authorization_codes.access_token`          | `DEVICE_TOKEN_ENCRYPTION_KEY`           | 64 hex chars  | base64(IV ‖ ciphertext ‖ tag) | none, expires in minutes   |
 
 The last two rows hold minutes-lived values. Rotating their key strands
 in-flight flows only: a user retries the connect or the device pairing and it
@@ -40,14 +40,14 @@ that key invalidates outstanding desktop tokens and the desktop app re-pairs.
 
 | Var              | Meaning                                            |
 | ---------------- | -------------------------------------------------- |
-| `<NAME>`         | active key — the one new ciphertext is sealed with |
+| `<NAME>`         | active key, the one new ciphertext is sealed with  |
 | `<NAME>_ID`      | id for that key, default `1`                       |
 | `<NAME>_RETIRED` | `id:material` pairs, comma separated, newest first |
 
 The default of `<NAME>_ID` and the default of every `*_key_version` column are
 both `1`, so a deployment that has never set either is already consistent and
-needs no backfill. Ids must match `^[A-Za-z0-9_-]{1,32}$` — the same shape the
-column's CHECK constraint enforces — and no id may appear twice in one ring.
+needs no backfill. Ids must match `^[A-Za-z0-9_-]{1,32}$`, the same shape the
+column's CHECK constraint enforces, and no id may appear twice in one ring.
 
 ## Which readers understand the ring
 
@@ -78,7 +78,7 @@ and the four `/api/settings/2fa/*` routes call it directly.
 
 ## Rotation cadence
 
-Scheduled rotation is the same procedure as an incident rotation — every row
+Scheduled rotation is the same procedure as an incident rotation, every row
 below runs `## Rotating a key` end to end, with `scripts/reencrypt.mjs` as the
 sweep. Nothing here rotates itself; the date is a calendar obligation on the
 Owner named in the header.
@@ -95,7 +95,7 @@ someone who should not have it: a leaked deployment env, a departing operator
 who held it, a restored backup handled outside the sealed record, or any
 finding that names the key. An unscheduled rotation resets the next-due date.
 
-`DEVICE_TOKEN_ENCRYPTION_KEY` has no sweep because it seals nothing durable —
+`DEVICE_TOKEN_ENCRYPTION_KEY` has no sweep because it seals nothing durable.
 rotating it is an env swap and a redeploy, and its 12-month entry exists so the
 key does not outlive every other one by default.
 
@@ -111,15 +111,15 @@ no hardware-backed custody, and no escrow copy outside the deployment provider.
 What this costs, precisely: a database restore taken before a rotation is
 readable only if the key bytes active at backup time still exist. The ring
 (`<NAME>_RETIRED`) is what preserves them, and it is preserved by an operator
-pasting a value into a deployment env — not by a system. Lose those bytes and
+pasting a value into a deployment env, not by a system. Lose those bytes and
 the restored `connector_oauth_grants`, `user_custom_connectors`,
 `github_installations` and `user_two_factor` ciphertexts are unrecoverable.
 Connector grants and GitHub installations can be re-authorized by the user;
 enrolled TOTP secrets cannot, and every affected user must re-enroll 2FA.
 
-This is accepted rather than solved because the mitigations already in place —
+This is accepted rather than solved because the mitigations already in place.
 per-key ids, a ring that reads retired keys, a resumable sweep, and the sealed
-record required by step 6 — bound the blast radius to "users re-authorize",
+record required by step 6, bound the blast radius to "users re-authorize",
 and because introducing a KMS moves custody to a vendor without removing the
 operator step that actually fails. It is not accepted permanently: revisit it
 at the next review, and revisit it immediately if a restore ever needs a key
@@ -179,7 +179,7 @@ that yet.
    reader, `TOTP_ENCRYPTION_KEY` included, is ring-aware: deploy the ring
    (step 4) and traffic keeps working while the sweep runs. Skip to step 4.
 
-4. **Set the ring** — in the deployed environment as well as locally for the
+4. **Set the ring**: in the deployed environment as well as locally for the
    sweep. The old key moves to `_RETIRED` under the id it currently carries in
    the database, and the new key becomes active under a fresh id. Deploy this
    BEFORE the sweep: a ring-aware reader needs the retired key to read the rows
@@ -200,7 +200,7 @@ that yet.
    ```
 
    Targets: `connector-grants`, `custom-connectors`, `github-installations`,
-   `two-factor`, or `all`. Interrupting the script is safe — it resumes from
+   `two-factor`, or `all`. Interrupting the script is safe, it resumes from
    the `*_key_version` column, so a re-run picks up exactly the rows it had not
    reached. A completed target selects nothing on a second run.
 
@@ -211,7 +211,7 @@ that yet.
 
 6. **Drop `_RETIRED`** from the deployed env once the sweep reports `scanned=0`
    for every target, and redeploy. Keep the old key in a sealed record until the
-   next rotation — it is the only way back if a restore predates the sweep.
+   next rotation, it is the only way back if a restore predates the sweep.
 
 7. **Verify** a live read of each rotated surface (connect a connector, load a
    GitHub PR review, complete a 2FA challenge) before ending the window.
@@ -260,7 +260,7 @@ the result:
 A restore returns rows encrypted under whatever key was active when the backup
 was taken. Put that key in `<NAME>_RETIRED` under the id the restored rows
 carry in their `*_key_version` column, then run the sweep to bring them
-forward. Without the old key bytes those rows are unrecoverable — that is the
+forward. Without the old key bytes those rows are unrecoverable, that is the
 accepted risk recorded above, and step 6's sealed record is the only thing
 standing between a restore and permanent loss.
 
@@ -269,7 +269,7 @@ standing between a restore and permanent loss.
 Once a rotation has settled, `node scripts/reencrypt.mjs --target=<name>
 --format=versioned --apply` rewrites the column as `v1.<keyId>.<iv>.<ct>.<tag>`,
 which names its key in the bytes instead of relying on trial decryption. Only
-run it after the ring-aware reader is fully deployed — no instance of an older
+run it after the ring-aware reader is fully deployed, no instance of an older
 build may still be serving that column. The sweep enforces the ready/not-ready
 half of that itself; the "fully deployed" half is yours to confirm.
 
