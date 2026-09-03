@@ -181,6 +181,45 @@ converts this accepted risk into a live one.
 7. **Verify** a live read of each rotated surface (connect a connector, load a
    GitHub PR review, complete a 2FA challenge) before ending the window.
 
+## Rehearsing a rotation before the scheduled date
+
+`apps/web/db/neon/0104_key_version.sql:12` records that no key on the cadence
+table above has ever actually been rotated. `scripts/key-rotation-drill.mjs`
+is the rehearsal: it creates a disposable Neon branch from the current head
+(the same branch-creation path `docs/runbooks/database-backup-restore.md`
+uses for its restore drill), runs `reencryptTarget` from
+`scripts/reencrypt.mjs` against that branch with the ring you export exactly
+as step 4 above describes, decrypts a random sample of the rewritten rows
+under the new active key to confirm the round trip, and deletes the branch
+when it finishes.
+
+```bash
+export CUSTOM_CONNECTOR_TOKEN_ENCRYPTION_KEY=<new hex>
+export CUSTOM_CONNECTOR_TOKEN_ENCRYPTION_KEY_ID=2
+export CUSTOM_CONNECTOR_TOKEN_ENCRYPTION_KEY_RETIRED=1:<old hex>
+NEON_API_KEY=<api key, loaded from your shell's own env> \
+NEON_PROJECT_ID=<project id> \
+  node scripts/key-rotation-drill.mjs --target=connector-grants
+```
+
+Nothing it touches is production: the branch is disposable and deleted on
+exit unless `--keep` is passed, and no target ever runs with `--apply` against
+`NEON_DATABASE_URL`/`AGI_DATABASE_URL` itself. A nonzero exit or a `sample=`
+count with any failures means the ring is wrong, not that production data is
+at risk. Fix the ring and rerun before touching the real rotation in
+`## Rotating a key`.
+
+Run this rehearsal once ahead of each date in the cadence table, and record
+the result:
+
+| Date       | Target(s) | Sample result | Operator |
+| ---------- | --------- | ------------- | -------- |
+| _unfilled_ |           |               |          |
+
+`BLOCKED_BY_HUMAN`: no rehearsal has been run. It needs the same
+`NEON_API_KEY` / `NEON_PROJECT_ID` provisioning gap recorded in
+`docs/runbooks/database-backup-restore.md`'s restore-drill log.
+
 ## Restoring a database backup
 
 A restore returns rows encrypted under whatever key was active when the backup
