@@ -2,7 +2,7 @@
 
 import { useId, useState, type FormEvent } from 'react';
 import { joinPublicWaitlist } from '@/lib/services/waitlistServiceClient';
-import { WAITLIST_CONSENT_PURPOSES } from '@/lib/consent-purposes';
+import { WAITLIST_CONSENT_PURPOSES, type ConsentPurpose } from '@/lib/consent-purposes';
 import {
   ConsentCheckboxes,
   missingRequiredConsents,
@@ -18,10 +18,12 @@ export function PublicWaitlistForm({
   source = 'website',
   ctaLabel = 'Join Waitlist',
   successMessage = "You're on the list. We'll email you when the Enterprise program opens for your requirements.",
+  purposes = WAITLIST_CONSENT_PURPOSES,
 }: {
   source?: WaitlistModalSource;
   ctaLabel?: string;
   successMessage?: string;
+  purposes?: readonly ConsentPurpose[];
 }) {
   const emailId = useId();
   const errorId = useId();
@@ -41,7 +43,7 @@ export function PublicWaitlistForm({
       return;
     }
 
-    const missing = missingRequiredConsents(WAITLIST_CONSENT_PURPOSES, consented);
+    const missing = missingRequiredConsents(purposes, consented);
     if (missing.length > 0) {
       setErrorMsg('Tick the box agreeing to your email being stored before joining.');
       setState('error');
@@ -54,7 +56,7 @@ export function PublicWaitlistForm({
     const result = await joinPublicWaitlist({
       email: normalized,
       referralSource: source,
-      consent: toConsentDecisions(WAITLIST_CONSENT_PURPOSES, consented),
+      consent: toConsentDecisions(purposes, consented),
       consentSurface: 'web-waitlist-inline',
     });
     if (result.success) {
@@ -103,7 +105,7 @@ export function PublicWaitlistForm({
         }}
       />
       <ConsentCheckboxes
-        purposes={WAITLIST_CONSENT_PURPOSES}
+        purposes={purposes}
         value={consented}
         disabled={state === 'submitting'}
         onChange={(next) => {

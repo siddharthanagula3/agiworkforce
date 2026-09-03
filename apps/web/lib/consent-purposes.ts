@@ -1,4 +1,3 @@
-
 export interface ConsentPurpose {
   readonly id: string;
   readonly label: string;
@@ -12,6 +11,13 @@ export const CONSENT_PURPOSES: readonly ConsentPurpose[] = [
     label: 'Store my email address on the enterprise early-access list.',
     description:
       'Your address is stored so we can reach you when enterprise organisation and SSO features open. It is used for that and nothing else. To be straight about the mechanism: nothing in the product mails this list automatically, so the announcement is sent by a person.',
+    necessaryForRequest: true,
+  },
+  {
+    id: 'platform_availability_waitlist',
+    label: 'Store my email address so we can tell you when this platform ships.',
+    description:
+      'Your address is stored so we can email you once AGI Mobile, AGI in Chrome or AGI in VS Code has a verified installer to download. It is used for that and nothing else, and is unrelated to the enterprise organisation and SSO early-access list.',
     necessaryForRequest: true,
   },
   {
@@ -35,6 +41,16 @@ export const WAITLIST_CONSENT_PURPOSE_IDS = ['enterprise_waitlist', 'product_upd
 export const WAITLIST_CONSENT_PURPOSES: readonly ConsentPurpose[] = CONSENT_PURPOSES.filter(
   (purpose) => (WAITLIST_CONSENT_PURPOSE_IDS as readonly string[]).includes(purpose.id),
 );
+
+export const PLATFORM_AVAILABILITY_CONSENT_PURPOSE_IDS = [
+  'platform_availability_waitlist',
+  'product_updates',
+] as const;
+
+export const PLATFORM_AVAILABILITY_CONSENT_PURPOSES: readonly ConsentPurpose[] =
+  CONSENT_PURPOSES.filter((purpose) =>
+    (PLATFORM_AVAILABILITY_CONSENT_PURPOSE_IDS as readonly string[]).includes(purpose.id),
+  );
 
 const PURPOSE_IDS: ReadonlySet<string> = new Set(CONSENT_PURPOSES.map((purpose) => purpose.id));
 
