@@ -1,4 +1,3 @@
-
 import { describe, expect, it } from 'vitest';
 
 import { createMinimaxAdapter } from '../index';
@@ -42,5 +41,30 @@ describe('createMinimaxAdapter', () => {
     expect(() =>
       createMinimaxAdapter({ apiKey: 'test-key', baseUrl: 'https://evil.attacker.com/v1' }),
     ).not.toThrow();
+  });
+
+  it('requests stream_options.include_usage=true on the wire', async () => {
+    let seenBody: Record<string, unknown> | undefined;
+    const adapter = createMinimaxAdapter({
+      apiKey: 'test-key',
+      fetch: async (_input, init) => {
+        seenBody = JSON.parse(String(init?.body));
+        return new Response('data: [DONE]\n\n', {
+          status: 200,
+          headers: { 'content-type': 'text/event-stream' },
+        });
+      },
+    });
+
+    for await (const _chunk of adapter.stream(
+      { model: 'any-model', messages: [{ role: 'user', content: 'ping' }] },
+      new AbortController().signal,
+    )) {
+      void _chunk;
+    }
+
+    expect(
+      (seenBody?.stream_options as { include_usage?: boolean } | undefined)?.include_usage,
+    ).toBe(true);
   });
 });

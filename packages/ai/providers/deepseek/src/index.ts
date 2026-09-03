@@ -32,6 +32,7 @@ import {
 } from '@agiworkforce/providers-openai';
 
 import { DEEPSEEK_MODEL_CATALOG } from './catalog';
+import { withDeepSeekCacheUsageNormalization } from './cache-usage';
 
 const DEEPSEEK_DEFAULT_BASE_URL = 'https://api.deepseek.com';
 
@@ -102,9 +103,10 @@ export function createDeepSeekAdapter(config: DeepSeekAdapterConfig = {}): Provi
           params as unknown as Parameters<typeof sdk.chat.completions.create>[0],
           { signal },
         );
-        const watched = withStreamIdleWatchdog(
-          translateOpenAIStream(sdkStream as unknown as AsyncIterable<OpenAIChatCompletionChunk>),
+        const normalized = withDeepSeekCacheUsageNormalization(
+          sdkStream as unknown as AsyncIterable<OpenAIChatCompletionChunk>,
         );
+        const watched = withStreamIdleWatchdog(translateOpenAIStream(normalized));
         for await (const chunk of watched) {
           yield chunk;
         }
@@ -129,3 +131,4 @@ export const deepseekAdapterFactory: ProviderAdapterFactory = (config) =>
   createDeepSeekAdapter(config as DeepSeekAdapterConfig);
 
 export { DEEPSEEK_MODEL_CATALOG } from './catalog';
+export { withDeepSeekCacheUsageNormalization } from './cache-usage';
