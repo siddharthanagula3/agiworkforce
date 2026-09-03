@@ -15,15 +15,22 @@ import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import type { PluginRegistryEntry } from '@agiworkforce/types';
 import {
   countPluginInstallations,
+  getPluginInstallationSettings,
   installWebPlugin,
   listEnabledPluginIds,
   setWebPluginEnabled,
   uninstallWebPlugin,
+  updatePluginInstallationSettings,
 } from './plugin-installation-service';
 
-function database(rows: unknown[]): DatabaseAdapter & { query: ReturnType<typeof vi.fn> } {
-  const db = { query: vi.fn().mockResolvedValue(rows) };
-  return db as unknown as DatabaseAdapter & { query: ReturnType<typeof vi.fn> };
+function database(
+  rows: unknown[],
+): DatabaseAdapter & { query: ReturnType<typeof vi.fn>; execute: ReturnType<typeof vi.fn> } {
+  const db = { query: vi.fn().mockResolvedValue(rows), execute: vi.fn().mockResolvedValue(0) };
+  return db as unknown as DatabaseAdapter & {
+    query: ReturnType<typeof vi.fn>;
+    execute: ReturnType<typeof vi.fn>;
+  };
 }
 
 function registryEntry(overrides: Partial<PluginRegistryEntry>): PluginRegistryEntry {
@@ -132,7 +139,12 @@ describe('installWebPlugin', () => {
       installedAt: '2026-09-03T00:00:00.000Z',
       updatedAt: '2026-09-03T00:00:00.000Z',
     });
-    expect(db.query.mock.calls[0]?.[1]).toEqual(['user-1', 'research-pack', '1.0.0']);
+    expect(db.query.mock.calls[0]?.[1]).toEqual([
+      'user-1',
+      'research-pack',
+      '1.0.0',
+      JSON.stringify(['literature-review']),
+    ]);
   });
 
   it('refuses a preview entry that is not web-installable', async () => {
@@ -251,5 +263,117 @@ describe('listEnabledPluginIds', () => {
     const sql = String(db.query.mock.calls[0]?.[0]).toLowerCase();
     expect(sql).toContain("registry.status = 'published'");
     expect(sql).toContain('registry.web_installable = true');
+  });
+});
+
+describe('getPluginInstallationSettings', () => {
+  beforeEach(() => {
+    getNeonDbMock.mockReset();
+  });
+
+  it('returns null when the plugin is not installed', async () => {
+    const db = database([]);
+    await expect(
+      getPluginInstallationSettings(db, 'user-1', 'engineering-pack'),
+    ).resolves.toBeNull();
+  });
+
+  it('reports each required connector alongside its connect state', async () => {
+    const db = database([]);
+    db.query
+      .mockResolvedValueOnce([
+        {
+          plugin_id: 'engineering-pack',
+          enabled_skills: ['code-review'],
+          custom_example_prompts: [],
+          declared_skills: ['code-review', 'systematic-debugging'],
+          required_connectors: ['github'],
+          example_prompts: ['Review this pull request.'],
+        },
+      ])
+      .mockResolvedValueOnce([{ connector_id: 'github' }]);
+
+    const settings = await getPluginInstallationSettings(db, 'user-1', 'engineering-pack');
+
+    expect(settings).toEqual({
+      pluginId: 'engineering-pack',
+      enabledSkills: ['code-review'],
+      examplePrompts: ['Review this pull request.'],
+      connectors: [{ connectorId: 'github', connected: true }],
+      agents: [],
+    });
+  });
+
+  it('prefers a custom example prompt override over the plugin defaults', async () => {
+    const db = database([]);
+    db.query
+      .mockResolvedValueOnce([
+        {
+          plugin_id: 'writing-pack',
+          enabled_skills: [],
+          custom_example_prompts: ['Draft a memo about the launch.'],
+          declared_skills: [],
+          required_connectors: [],
+          example_prompts: ['Draft a project brief.'],
+        },
+      ])
+      .mockResolvedValueOnce([]);
+
+    const settings = await getPluginInstallationSettings(db, 'user-1', 'writing-pack');
+    expect(settings?.examplePrompts).toEqual(['Draft a memo about the launch.']);
+  });
+});
+
+describe('updatePluginInstallationSettings', () => {
+  beforeEach(() => {
+    getNeonDbMock.mockReset();
+  });
+
+  it('keeps only the skills the plugin actually declares', async () => {
+    const db = database([]);
+    db.query
+      .mockResolvedValueOnce([{ declared_skills: ['code-review', 'systematic-debugging'] }])
+      .mockResolvedValueOnce([
+        {
+          plugin_id: 'engineering-pack',
+          enabled_skills: ['code-review'],
+          custom_example_prompts: [],
+          declared_skills: ['code-review', 'systematic-debugging'],
+          required_connectors: [],
+          example_prompts: [],
+        },
+      ])
+      .mockResolvedValueOnce([]);
+
+    await updatePluginInstallationSettings(db, 'user-1', 'engineering-pack', {
+      enabledSkills: ['code-review', 'not-a-declared-skill'],
+    });
+
+    const params = db.execute.mock.calls[0]?.[1] as unknown[];
+    expect(params?.[2]).toBe(JSON.stringify(['code-review']));
+  });
+
+  it('clears a custom example prompt override back to defaults with null', async () => {
+    const db = database([]);
+    db.query
+      .mockResolvedValueOnce([{ declared_skills: [] }])
+      .mockResolvedValueOnce([
+        {
+          plugin_id: 'writing-pack',
+          enabled_skills: [],
+          custom_example_prompts: [],
+          declared_skills: [],
+          required_connectors: [],
+          example_prompts: ['Draft a project brief.'],
+        },
+      ])
+      .mockResolvedValueOnce([]);
+
+    await updatePluginInstallationSettings(db, 'user-1', 'writing-pack', {
+      customExamplePrompts: null,
+    });
+
+    const params = db.execute.mock.calls[0]?.[1] as unknown[];
+    expect(params?.[2]).toBeNull();
   });
 });

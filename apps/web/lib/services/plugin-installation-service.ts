@@ -2,6 +2,10 @@ import 'server-only';
 
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import { isPluginEntryWebInstallable, type PluginInstallation } from '@agiworkforce/types';
+import type {
+  PluginConnectorRequirementState,
+  PluginInstallationSettings,
+} from '@agiworkforce/cloud-contracts';
 
 import { getPluginRegistryEntry } from './plugin-registry-service';
 import { getNeonDb } from '@/lib/server/neon-db';
@@ -12,6 +16,21 @@ interface PluginInstallationRow {
   enabled: boolean;
   installed_at: string | Date;
   updated_at: string | Date;
+}
+
+interface PluginInstallationSettingsRow {
+  plugin_id: string;
+  enabled_skills: unknown;
+  custom_example_prompts: unknown;
+  declared_skills: unknown;
+  required_connectors: unknown;
+  example_prompts: unknown;
+}
+
+function toStringArray(value: unknown): string[] {
+  return Array.isArray(value)
+    ? value.filter((item): item is string => typeof item === 'string')
+    : [];
 }
 
 function toIso(value: string | Date): string {
@@ -53,14 +72,14 @@ export async function installWebPlugin(
 
   const rows = await db.query<PluginInstallationRow>(
     `insert into public.plugin_installations
-       (user_id, plugin_id, installed_version, enabled, installed_at, updated_at)
-     values ($1, $2, $3, true, now(), now())
+       (user_id, plugin_id, installed_version, enabled, enabled_skills, installed_at, updated_at)
+     values ($1, $2, $3, true, $4::jsonb, now(), now())
      on conflict (user_id, plugin_id) do update
        set installed_version = excluded.installed_version,
            enabled = true,
            updated_at = now()
      returning plugin_id, installed_version, enabled, installed_at, updated_at`,
-    [userId, pluginId, found.entry.version],
+    [userId, pluginId, found.entry.version, JSON.stringify(found.entry.declaredSkills)],
   );
   return rows[0] ? mapInstallation(rows[0]) : null;
 }
@@ -139,4 +158,95 @@ export async function countPluginInstallations(db: DatabaseAdapter): Promise<Map
     counts.set(row.plugin_id, Number.isFinite(value) ? value : 0);
   }
   return counts;
+}
+
+async function connectorRequirementStates(
+  db: DatabaseAdapter,
+  userId: string,
+  connectorIds: readonly string[],
+): Promise<PluginConnectorRequirementState[]> {
+  if (connectorIds.length === 0) return [];
+  const rows = await db.query<{ connector_id: string }>(
+    `select connector_id
+       from public.user_connectors
+      where user_id = $1 and connector_id = any($2::text[]) and is_active = true`,
+    [userId, connectorIds],
+  );
+  const connected = new Set(rows.map((row) => row.connector_id));
+  return connectorIds.map((connectorId) => ({
+    connectorId,
+    connected: connected.has(connectorId),
+  }));
+}
+
+export async function getPluginInstallationSettings(
+  db: DatabaseAdapter,
+  userId: string,
+  pluginId: string,
+): Promise<PluginInstallationSettings | null> {
+  const rows = await db.query<PluginInstallationSettingsRow>(
+    `select installation.plugin_id, installation.enabled_skills, installation.custom_example_prompts,
+            registry.declared_skills, registry.required_connectors, registry.example_prompts
+       from public.plugin_installations installation
+       join public.plugin_registry_entries registry on registry.id = installation.plugin_id
+      where installation.user_id = $1 and installation.plugin_id = $2
+      limit 1`,
+    [userId, pluginId],
+  );
+  const row = rows[0];
+  if (!row) return null;
+
+  const requiredConnectors = toStringArray(row.required_connectors);
+  const customExamplePrompts = toStringArray(row.custom_example_prompts);
+  return {
+    pluginId: row.plugin_id,
+    enabledSkills: toStringArray(row.enabled_skills),
+    examplePrompts:
+      customExamplePrompts.length > 0 ? customExamplePrompts : toStringArray(row.example_prompts),
+    connectors: await connectorRequirementStates(db, userId, requiredConnectors),
+    agents: [],
+  };
+}
+
+export interface PluginInstallationSettingsUpdate {
+  enabledSkills?: string[];
+  customExamplePrompts?: string[] | null;
+}
+
+export async function updatePluginInstallationSettings(
+  db: DatabaseAdapter,
+  userId: string,
+  pluginId: string,
+  update: PluginInstallationSettingsUpdate,
+): Promise<PluginInstallationSettings | null> {
+  const rows = await db.query<{ declared_skills: unknown }>(
+    `select declared_skills from public.plugin_registry_entries where id = $1 limit 1`,
+    [pluginId],
+  );
+  const declaredSkills = new Set(toStringArray(rows[0]?.declared_skills));
+
+  if (update.enabledSkills !== undefined) {
+    const nextEnabledSkills = update.enabledSkills.filter((skill) => declaredSkills.has(skill));
+    await db.execute(
+      `update public.plugin_installations
+          set enabled_skills = $3::jsonb, updated_at = now()
+        where user_id = $1 and plugin_id = $2`,
+      [userId, pluginId, JSON.stringify(nextEnabledSkills)],
+    );
+  }
+
+  if (update.customExamplePrompts !== undefined) {
+    await db.execute(
+      `update public.plugin_installations
+          set custom_example_prompts = $3::jsonb, updated_at = now()
+        where user_id = $1 and plugin_id = $2`,
+      [
+        userId,
+        pluginId,
+        update.customExamplePrompts === null ? null : JSON.stringify(update.customExamplePrompts),
+      ],
+    );
+  }
+
+  return getPluginInstallationSettings(db, userId, pluginId);
 }
