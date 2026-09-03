@@ -9,7 +9,7 @@ import {
 } from '../index';
 import { InMemoryDisclosureLedger } from './test-ledger';
 
-describe('Article50Disclosure — compose', () => {
+describe('Article50Disclosure, compose', () => {
   it('returns one merged summary block, not three separate prompts', () => {
     const copy = composeFirstRunDisclosure({
       surface: 'mobile',
@@ -62,7 +62,7 @@ describe('Article50Disclosure — compose', () => {
   });
 });
 
-describe('Article50Disclosure — gate', () => {
+describe('Article50Disclosure, gate', () => {
   it('returns false until acceptance is written to the ledger', async () => {
     const ledger = new InMemoryDisclosureLedger();
     expect(isDisclosureSatisfied(ledger, false)).toBe(false);

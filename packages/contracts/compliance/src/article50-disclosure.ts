@@ -1,38 +1,3 @@
-/**
- * Article50Disclosure — the "you are interacting with AI" first-run gate.
- *
- * PRD V5 §10 lock #26 ground truth:
- *
- *   > Article 50(1) "you are interacting with AI" first-run disclosure
- *   > (covers V4's Apple 5.1.2(i) consent flow + adds explicit chatbot label).
- *   > [...]
- *   > Enforcer: `packages/contracts/compliance/src/article50.ts` runs in onboarding
- *   > flow before first AI request.
- *
- * The lock is explicit that the Article 50(1) disclosure and the Apple
- * 5.1.2(i) consent modal are **combined into a single screen** so users don't
- * get double-prompted. That's why this module exports:
- *
- *   - `DisclosureRecord` — what we persist
- *   - `composeFirstRunDisclosure()` — returns the merged copy block for the
- *     single combined consent screen (chat label + 5.1.2(i) named-provider
- *     consent + Chinese-HQ default-off note)
- *   - `recordDisclosureAcceptance()` — appends to the consent ledger
- *   - `isDisclosureSatisfied()` — gate that the LLM HTTP client checks
- *     before issuing the first `/api/llm/*` request
- *
- * The actual React Native / web modal lives in the host app — this package
- * intentionally ships no UI code. The copy is exported as plain strings so
- * the mobile + web + desktop surfaces can render with their own design tokens.
- *
- * Verbatim Article 50(1) text:
- *   "Providers shall ensure that AI systems intended to interact directly
- *    with natural persons are designed and developed in such a way that the
- *    natural persons concerned are informed that they are interacting with
- *    an AI system [...]"
- *   — Regulation (EU) 2024/1689, Article 50(1).
- */
-
 import {
   ARTICLE_50_1_VERBATIM,
   ARTICLE_50_2_VERBATIM,

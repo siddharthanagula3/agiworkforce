@@ -14,14 +14,6 @@ export type AgentEventEnvelope = {
    * See [`AGENT_EVENT_SCHEMA_VERSION`].
    */
   schemaVersion: number;
-  /**
-   * Session/conversation identity. Plain `String`, not the CLI's
-   * UUID-backed `ThreadId`: the app-server dialect's real wire `threadId`
-   * is already a JSON string (`developer_host.rs` takes `thread_id:
-   * String`), and web/desktop session identity is not guaranteed
-   * UUID-shaped (e.g. a Neon-assigned id) — forcing UUID validation here
-   * would reject real values from two of the three target dialects.
-   */
   sessionId: string;
   /**
    * Turn identity, same `String` rationale as `session_id` (app-server's
@@ -29,15 +21,6 @@ export type AgentEventEnvelope = {
    * `Uuid` to `String` before ever putting it on the wire).
    */
   turnId: string;
-  /**
-   * Monotonically increasing per-envelope counter, scoped to one
-   * `turn_id`, starting at 0. New in this envelope — none of the three
-   * source dialects has one today (app-server's `turn/output_delta`
-   * notifications carry no ordering signal at all), which is a real gap
-   * this envelope closes: without it, a client cannot detect a dropped
-   * or reordered event on any transport that doesn't itself guarantee
-   * ordering.
-   */
   sequence: number;
   /**
    * Wall-clock emission time, Unix epoch milliseconds. Millisecond (not

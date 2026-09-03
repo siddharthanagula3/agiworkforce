@@ -1,46 +1,3 @@
-/**
- * Plugin Registry Types
- *
- * The shared shape of the hosted plugin registry (CAP-046 slice 1). Three
- * surfaces read it and they must agree byte-for-byte:
- *
- *   - `apps/web/lib/services/plugin-registry-service.ts` maps
- *     `public.plugin_registry_entries` rows (db/neon/0096) onto these types.
- *   - `GET /api/plugins` and `GET /api/plugins/[id]` serve them verbatim.
- *   - `apps/cli/src/features/plugins/registry.rs` deserializes the same JSON
- *     and hands {@link PluginManifest} to the existing manifest loader, whose
- *     serde shape (camelCase, `mcpServers`, tolerant `transport`/`url` fields)
- *     this module mirrors deliberately.
- *
- * LAUNCH SCOPE: first-party only. Third-party submission and manifest signing
- * are pending founder decisions, so {@link PluginPublisher.kind} already models
- * `third-party` and {@link PluginIntegrity} already carries the signature
- * fields — both stay unpopulated until those decisions land. Adding them later
- * is a value change, not a breaking contract change.
- *
- * HONESTY: nothing here models a rating. {@link PluginRegistryEntry.installCount}
- * is the one exception to "no fabricated numbers": it is a real, observed
- * aggregate over `public.plugin_installations` (COUNT grouped by plugin id,
- * read on the privileged connection so no caller ever sees who installed —
- * see `countPluginInstallations`), computed by `GET /api/plugins` and absent
- * — never zero — anywhere that aggregate was not run, including the
- * single-entry endpoints. {@link PluginRegistryEntry.status} plus
- * {@link PluginRegistryEntry.distribution} are the only availability claims,
- * and `distribution === null` means "declared, not distributable" — the state
- * every launch row is actually in.
- *
- * {@link PluginRegistryEntry.skillsRequireInstall} guards a specific false
- * claim: a pack whose {@link PluginRegistryEntry.declaredSkills} are all
- * already reachable without installing anything (no Skill's frontmatter
- * names this entry as its `plugin` owner) grants nothing by being installed —
- * it is a curated bundle, not an access grant, and the UI must say so.
- * `GET /api/plugins` and `GET /api/plugins/[id]` compute it against the live
- * Skill catalog; it is never hand-set on a row.
- *
- * @module plugins
- * @packageDocumentation
- */
-
 export type PluginPublisherKind = 'first-party' | 'third-party';
 
 /** Every valid {@link PluginPublisherKind}. */
@@ -56,18 +13,6 @@ export interface PluginPublisher {
   url?: string | null;
 }
 
-/**
- * Availability of a registry entry.
- *
- * - `preview`     — the pack is declared (name, contents, required connectors)
- *                   but nothing is distributable yet: {@link PluginRegistryEntry.distribution}
- *                   is null and installing it is impossible, not merely gated.
- * - `published`   — a real manifest artifact is resolvable; `distribution` is
- *                   non-null and carries the URL the CLI fetches.
- * - `deprecated`  — was published, should no longer be installed. Existing
- *                   installs keep working; the entry stays readable so a
- *                   resolver can explain why it stopped.
- */
 export type PluginRegistryStatus = 'preview' | 'published' | 'deprecated';
 
 /** Every valid {@link PluginRegistryStatus}. */
@@ -173,12 +118,6 @@ export interface PluginIntegrity {
   signatureAlgorithm: string | null;
 }
 
-/**
- * How the current version is fetched.
- *
- * `null` on a {@link PluginRegistryEntry} means the entry is not distributable —
- * the honest state of every launch row.
- */
 export interface PluginDistribution {
   manifestUrl: string;
   /** Digest of the artifact at {@link manifestUrl}, when published. */

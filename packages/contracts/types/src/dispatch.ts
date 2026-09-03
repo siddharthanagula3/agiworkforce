@@ -1,23 +1,3 @@
-/**
- * Anthropic Dispatch — canonical wire format contract.
- *
- * This file is the single source of truth for the Dispatch HMAC envelope
- * shared between the mobile signer (`apps/mobile/lib/dispatchHmac.ts`) and
- * the desktop verifier (`apps/desktop/src-tauri/src/sys/security/dispatch_hmac.rs`).
- *
- * Both peers MUST agree on:
- *   - the envelope shape ({hmac, nonce, payload, ts, type})
- *   - the canonical signing input (alphabetical keys, payload byte-verbatim)
- *   - the HKDF derivation (SHA-256, info `dispatch-hmac-v2`)
- *   - the replay-prevention parameters (timestamp window + nonce TTL)
- *   - the transitional cutoff (`DISPATCH_HMAC_REQUIRED_AFTER`)
- *
- * Drift between the two sides is a security defect — keep them lockstep.
- *
- * @see apps/mobile/lib/dispatchHmac.ts
- * @see apps/desktop/src-tauri/src/sys/security/dispatch_hmac.rs
- */
-
 export type DispatchSignatureAlgorithm = 'hmac-sha256-v2';
 
 export const DISPATCH_SIGNATURE_ALGORITHM: DispatchSignatureAlgorithm = 'hmac-sha256-v2';

@@ -1,4 +1,3 @@
-
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -234,7 +233,7 @@ addPolicy(
   'valid-tightening.agipolicy',
   makeSignedContainer(basePolicy(), policyKey1.privateKey, POLICY_CONTAINER_FORMAT),
   { ok: true },
-  'Restricts providers, forbids BYOK, blocks managed-cloud egress, bounds retention — all tighter than the default baseline.',
+  'Restricts providers, forbids BYOK, blocks managed-cloud egress, bounds retention, all tighter than the default baseline.',
 );
 
 addPolicy(

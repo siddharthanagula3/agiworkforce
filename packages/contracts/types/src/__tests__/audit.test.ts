@@ -1,4 +1,3 @@
-
 import { describe, it, expect } from 'vitest';
 import {
   createAuditEvent,
@@ -24,7 +23,7 @@ function makeMinimalParams(overrides: Partial<Parameters<typeof createAuditEvent
   };
 }
 
-describe('createAuditEvent — required fields', () => {
+describe('createAuditEvent, required fields', () => {
   it('creates an event with all required fields present', () => {
     const event = createAuditEvent(makeMinimalParams());
 
@@ -146,7 +145,7 @@ describe('severity override', () => {
   });
 });
 
-describe('system events — null userId', () => {
+describe('system events, null userId', () => {
   it('creates a valid event with null userId', () => {
     const event = createAuditEvent({
       ...makeMinimalParams({ userId: null }),

@@ -1,4 +1,3 @@
-
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -29,7 +28,7 @@ function readFixture(file: string): Uint8Array {
   return new Uint8Array(readFileSync(join(fixturesDir, file)));
 }
 
-describe('verifyLicense — fixture corpus replay', () => {
+describe('verifyLicense, fixture corpus replay', () => {
   it('covers accept, every error variant, and grace/rotation', () => {
     const codes = new Set(manifest.cases.map((c) => ('code' in c.expect ? c.expect.code : 'ok')));
     for (const code of ['ok', 'bad_signature', 'expired', 'not_yet_valid', 'malformed']) {
@@ -60,7 +59,7 @@ describe('verifyLicense — fixture corpus replay', () => {
   }
 });
 
-describe('verifyLicense — expiry and grace boundaries', () => {
+describe('verifyLicense, expiry and grace boundaries', () => {
   const root = deriveKeyPairFromSeed('boundary-root');
   const issuedAt = 1_000_000_000_000;
   const expiresAt = issuedAt + 30 * 86_400_000;
@@ -118,7 +117,7 @@ describe('verifyLicense — expiry and grace boundaries', () => {
   });
 });
 
-describe('verifyLicense — key rotation', () => {
+describe('verifyLicense, key rotation', () => {
   const oldKey = deriveKeyPairFromSeed('rotate-old');
   const newKey = deriveKeyPairFromSeed('rotate-new');
   const claims = {
@@ -148,7 +147,7 @@ describe('verifyLicense — key rotation', () => {
     if (!r.ok) expect(r.error.code).toBe('bad_signature');
   });
 
-  it('never throws — returns a structured verdict for garbage input', () => {
+  it('never throws, returns a structured verdict for garbage input', () => {
     const r = verifyLicense(new Uint8Array([0, 1, 2, 3, 255]), [newKey.publicKeyB64], now);
     expect(r.ok).toBe(false);
     if (!r.ok) expect(r.error.code).toBe('malformed');

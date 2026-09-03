@@ -9,7 +9,7 @@ import {
 
 const FIXTURE_MODEL_ID = 'fixture-embedding-model';
 
-describe('ManagedEmbeddingsRequestSchema — accepts', () => {
+describe('ManagedEmbeddingsRequestSchema, accepts', () => {
   it('a single string', () => {
     const result = ManagedEmbeddingsRequestSchema.safeParse({ input: 'hello' });
 
@@ -39,7 +39,7 @@ describe('ManagedEmbeddingsRequestSchema — accepts', () => {
   });
 });
 
-describe('ManagedEmbeddingsRequestSchema — rejects', () => {
+describe('ManagedEmbeddingsRequestSchema, rejects', () => {
   it('an empty input', () => {
     expect(ManagedEmbeddingsRequestSchema.safeParse({ input: '' }).success).toBe(false);
     expect(ManagedEmbeddingsRequestSchema.safeParse({ input: [] }).success).toBe(false);

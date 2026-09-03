@@ -41,8 +41,6 @@ describe('formatUsageResetIn', () => {
   });
 
   it('never understates the wait by rounding an hour down', () => {
-    // 3h29m used to render as "3 hours" — someone returning at that point
-    // finds the window has not reset.
     expect(inMs(3 * HOUR + 29 * MIN)).toBe('Resets in 3 hr 29 min');
   });
 

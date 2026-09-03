@@ -144,7 +144,7 @@ describe('evaluateCapabilityAdmission', () => {
     expect([...result.grantedRequirementIds].sort()).toEqual(['canUseImages', 'canUseWebSearch']);
   });
 
-  it('rejects with a typed result when a mandatory requirement is missing — never silently proceeds', () => {
+  it('rejects with a typed result when a mandatory requirement is missing, never silently proceeds', () => {
     const document = documentGranting('canUseImages');
     const result = evaluateCapabilityAdmission(document, [
       { capabilityId: 'canUseImages', strength: 'mandatory' },
@@ -223,7 +223,7 @@ describe('evaluateCapabilityAdmission', () => {
   });
 });
 
-describe('capability-document versioning (W5 tail — real versions, not placeholders)', () => {
+describe('capability-document versioning (W5 tail, real versions, not placeholders)', () => {
   const baseLayers = () => ({
     model: grant('model', 'models.json@9.1.0', ['canUseWebSearch', 'canUseVoice']),
     tier: grant('tier', 'tier:pro', ['canUseWebSearch', 'canUseVoice']),
