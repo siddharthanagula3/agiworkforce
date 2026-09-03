@@ -107,6 +107,10 @@ describe('toConnectorSection', () => {
   it('offers name sort only, since the snapshot carries no dates or counts', () => {
     expect(toConnectorSection([record()], new Set()).sortOptions).toEqual(['name']);
   });
+
+  it('declares connectors installable so the card offers Connect', () => {
+    expect(toConnectorSection([record()], new Set()).installable).toBe(true);
+  });
 });
 
 describe('toConnectorDetail', () => {

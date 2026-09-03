@@ -78,14 +78,17 @@ function makeAdapter(patch: Partial<DirectoryAdapter> = {}): DirectoryAdapter {
         },
       ],
       sortOptions: ['name', 'popular'],
+      installable: false,
     },
     connectors: {
       entries: [{ id: 'customerscore', name: 'Customerscore', description: 'Customer health' }],
       sortOptions: ['name'],
+      installable: true,
     },
     plugins: {
       entries: [{ id: 'productivity', name: 'Productivity', description: 'Manage tasks' }],
       sortOptions: ['name'],
+      installable: true,
     },
     loadDetail: (section) => Promise.resolve(DETAILS[section]),
     ...patch,
@@ -183,6 +186,20 @@ describe('DirectoryModal shell', () => {
     fireEvent.click(screen.getByRole('button', { name: /Sort by/ }));
     fireEvent.click(await screen.findByRole('menuitem', { name: 'Most popular' }));
     expect(names()).toEqual(['Beta', 'Alpha']);
+  });
+
+  it('renders no card action for a section that installs nothing', () => {
+    renderModal({ install: vi.fn(), openSettings: vi.fn() });
+    expect(screen.queryByRole('button', { name: /^Add \/?canvas-design$/ })).toBeNull();
+    fireEvent.click(screen.getByRole('tab', { name: 'Connectors' }));
+    expect(screen.getByRole('button', { name: 'Add Customerscore' })).toBeTruthy();
+  });
+
+  it('offers no install control on a skill detail, since no route installs one', async () => {
+    renderModal({ install: vi.fn() });
+    fireEvent.click(screen.getByRole('button', { name: '/canvas-design' }));
+    expect(await screen.findByRole('heading', { name: 'canvas-design' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Install' })).toBeNull();
   });
 
   it('hides the add marketplace control unless the adapter supports it', () => {

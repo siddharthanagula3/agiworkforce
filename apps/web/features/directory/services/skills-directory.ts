@@ -42,7 +42,6 @@ export function toSkillEntry(skill: ManagedSkillSummary): DirectoryEntry {
     publisher: skillPublisher(skill.source),
     description: skill.description,
     sourceId: skillSourceId(skill.source),
-    badges: [skillSourceId(skill.source) === DIRECTORY_SOURCE_YOURS ? 'yours' : 'agi'],
     facets: { [SKILL_LIFECYCLE_GROUP_ID]: [skill.lifecycle] },
   };
 }
@@ -76,6 +75,7 @@ export function toSkillSection(skills: readonly ManagedSkillSummary[]): Director
   const entries = skills.map(toSkillEntry);
   return {
     entries,
+    installable: false,
     sources: skillSources(entries),
     filterGroups: skillFilterGroups(skills),
     sortOptions: ['name'],

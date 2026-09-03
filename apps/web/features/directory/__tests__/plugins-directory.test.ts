@@ -189,6 +189,10 @@ describe('toPluginSection', () => {
     expect(mixed.filterGroups?.[0]?.id).toBe('status');
   });
 
+  it('declares plugins installable so the card offers Install', () => {
+    expect(toPluginSection(snapshot(), NOW).installable).toBe(true);
+  });
+
   it('offers the popular sort only when a real count exists', () => {
     expect(toPluginSection(snapshot(), NOW).sortOptions).toEqual(['popular', 'updated', 'name']);
     const countless = toPluginSection(
