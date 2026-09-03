@@ -101,7 +101,7 @@ export function buildCategoryCheck(
     lines.push(`### Findings (${ranked.length})`);
     for (const f of ranked.slice(0, 100)) {
       const location = f.start_line ? `${f.path}:${f.start_line}` : f.path;
-      lines.push(`- **${f.severity}** \`${f.rule_id}\` ${location} — ${f.title}`);
+      lines.push(`- **${f.severity}** \`${f.rule_id}\` ${location}, ${f.title}`);
     }
     if (ranked.length > 100) lines.push(`- …and ${ranked.length - 100} more (see dashboard)`);
   }
@@ -136,7 +136,7 @@ export function buildPolicyCheck(headSha: string, decision: PolicyDecision): Che
     lines.push('', `### Blocking findings (${decision.blocking.length})`);
     for (const f of decision.blocking) {
       lines.push(
-        `- **${f.severity}** \`${f.rule_id}\` ${f.path}${f.start_line ? `:${f.start_line}` : ''} — ${f.title}`,
+        `- **${f.severity}** \`${f.rule_id}\` ${f.path}${f.start_line ? `:${f.start_line}` : ''}, ${f.title}`,
       );
     }
   }
