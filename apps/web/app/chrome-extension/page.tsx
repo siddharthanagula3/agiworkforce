@@ -87,25 +87,36 @@ export default function ChromeExtensionPage() {
                 loudest of the three.
               </Prose>
             </div>
-            <FactGrid
-              items={[
-                {
-                  meta: 'api.agiworkforce.com',
-                  title: 'Chat and the page text you attach',
-                  body: 'Press send and your message, the conversation so far, and any page text you attached go to AGI Managed Cloud. The extension holds no provider key and offers no second chat route, so this is the only road for an answer. An origin you have not approved contributes no page text to it.',
-                },
-                {
-                  meta: 'localhost:8787',
-                  title: 'The optional Desktop bridge',
-                  body: 'Pair AGI Desktop once, by reading a code off its window and typing it into the panel, and the status pill turns from Desktop optional into Desktop tools. The capture shortcut has this destination and no other, so on an unpaired browser it captures nothing at all.',
-                },
-                {
-                  meta: 'api.agiworkforce.com, plus images',
-                  title: 'A computer-use run',
-                  body: 'Browser control needs Managed Cloud sign-in and a separate per-origin approval that grants full DevTools-Protocol control of your signed-in session there. Every step of the run posts the conversation and the screenshots it has taken to the Managed Cloud gateway under your account token.',
-                },
-              ]}
-            />
+            <Stack gap="base">
+              <Eyebrow>api.agiworkforce.com</Eyebrow>
+              <h3 className="agi-ds-h3">Chat and the page text you attach</h3>
+              <Prose size="sm">
+                Press send and your message, the conversation so far, and any page text you attached
+                go to AGI Managed Cloud. The extension holds no provider key and offers no second
+                chat route, so this is the only road for an answer. An origin you have not approved
+                contributes no page text to it.
+              </Prose>
+            </Stack>
+            <Stack gap="base">
+              <Eyebrow>localhost:8787</Eyebrow>
+              <h3 className="agi-ds-h3">The optional Desktop bridge</h3>
+              <Prose size="sm">
+                Pair AGI Desktop once, by reading a code off its window and typing it into the
+                panel, and the status pill turns from Desktop optional into Desktop tools. The
+                capture shortcut has this destination and no other, so on an unpaired browser it
+                captures nothing at all.
+              </Prose>
+            </Stack>
+            <Stack gap="base">
+              <Eyebrow>api.agiworkforce.com, plus images</Eyebrow>
+              <h3 className="agi-ds-h3">A computer-use run</h3>
+              <Prose size="sm">
+                Browser control needs Managed Cloud sign-in and a separate per-origin approval that
+                grants full DevTools-Protocol control of your signed-in session there. Every step of
+                the run posts the conversation and the screenshots it has taken to the Managed Cloud
+                gateway under your account token.
+              </Prose>
+            </Stack>
           </Stack>
         </Section>
 
