@@ -2,15 +2,19 @@ import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import type { ZodType } from 'zod';
 import { FatalError, RetryableError } from 'workflow';
 
+import { logger } from '@/lib/logger';
 import {
   claimCloudAgentExecutionOperation,
   completeCloudAgentExecutionOperation,
   failCloudAgentExecutionOperation,
   fingerprintCloudAgentOperation,
+  renewCloudAgentExecutionOperationLease,
+  OPERATION_LEASE_RENEWAL_INTERVAL_SECONDS,
   type CloudAgentOperationKind,
   type CloudAgentRetrySafety,
 } from '@/lib/services/cloud-agent-execution-service';
 
+const MILLISECONDS_PER_SECOND = 1000;
 const RAW_PAYLOAD_MESSAGE_PATTERN = /^\s*(?:\d{3}\s+)?[[{]/;
 const RAW_PAYLOAD_EXECUTION_ERROR_MESSAGE =
   'The external operation returned a response AGI could not summarize.';
@@ -44,6 +48,28 @@ function recordedFailureMessage(error: Record<string, unknown> | null): string {
   return typeof message === 'string' && message.trim().length > 0
     ? message
     : 'The durable external operation previously failed.';
+}
+
+async function withLeaseHeartbeat<TResult>(
+  renew: () => Promise<boolean>,
+  run: () => Promise<TResult>,
+): Promise<TResult> {
+  const timer = setInterval(() => {
+    void renew()
+      .then((renewed) => {
+        if (!renewed) {
+          logger.warn('Cloud agent operation lease renewal found the lease no longer held');
+        }
+      })
+      .catch((error: unknown) => {
+        logger.error({ error }, 'Cloud agent operation lease renewal failed');
+      });
+  }, OPERATION_LEASE_RENEWAL_INTERVAL_SECONDS * MILLISECONDS_PER_SECOND);
+  try {
+    return await run();
+  } finally {
+    clearInterval(timer);
+  }
 }
 
 export async function executeCloudAgentOperation<TResult extends object>(
@@ -94,7 +120,17 @@ export async function executeCloudAgentOperation<TResult extends object>(
 
   let result: TResult;
   try {
-    result = input.resultSchema.parse(await input.execute());
+    result = input.resultSchema.parse(
+      await withLeaseHeartbeat(
+        () =>
+          renewCloudAgentExecutionOperationLease(db, {
+            userId: input.userId,
+            operationId: claim.operationId,
+            leaseToken: claim.leaseToken,
+          }),
+        input.execute,
+      ),
+    );
   } catch (rawError) {
     const error = sanitizeExecutionError(rawError);
     await failCloudAgentExecutionOperation(db, {
