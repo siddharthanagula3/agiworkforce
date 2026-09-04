@@ -1,0 +1,50 @@
+import { describe, expect, it, vi } from 'vitest';
+import type { DatabaseAdapter } from '@agiworkforce/data-layer';
+
+vi.mock('server-only', () => ({}));
+vi.mock('@/lib/logger', () => ({
+  logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() },
+}));
+
+const query = vi.fn(async (sql: string) =>
+  sql.includes("set_config('request.jwt.claim.sub'") ? [] : [],
+);
+const execute = vi.fn(async () => 0);
+const tx = { query, execute } as unknown as DatabaseAdapter;
+const serviceDb = {
+  transaction: vi.fn(async (callback: (db: DatabaseAdapter) => Promise<unknown>) => callback(tx)),
+} as unknown as DatabaseAdapter;
+
+vi.mock('@/lib/server/neon-db', () => ({
+  getNeonDb: vi.fn(() => serviceDb),
+}));
+
+import { backfillDisplayNameFromUpstream } from '../user-identity';
+
+describe('backfillDisplayNameFromUpstream', () => {
+  it('binds the signed-in user before writing the lazily created profile row', async () => {
+    await backfillDisplayNameFromUpstream('user-42', 'Ada Lovelace');
+
+    expect(execute).toHaveBeenCalledWith('set local role app_rls');
+    expect(query).toHaveBeenNthCalledWith(
+      1,
+      expect.stringContaining("set_config('request.jwt.claim.sub', $1, true)"),
+      ['user-42', ''],
+    );
+    expect(query).toHaveBeenNthCalledWith(
+      2,
+      expect.stringContaining('insert into public.profiles'),
+      ['user-42', 'Ada Lovelace'],
+    );
+  });
+
+  it('skips the write for a blank candidate name', async () => {
+    execute.mockClear();
+    query.mockClear();
+
+    await backfillDisplayNameFromUpstream('user-42', '   ');
+
+    expect(execute).not.toHaveBeenCalled();
+    expect(query).not.toHaveBeenCalled();
+  });
+});

@@ -2,6 +2,7 @@ import 'server-only';
 
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import { getNeonDb } from '@/lib/server/neon-db';
+import { createClaimedUserScopedDb } from '@/lib/server/claimed-user-scope-db';
 import Stripe from 'stripe';
 import { logger } from '@/lib/logger';
 import { CreditService } from './credit-service';
@@ -239,9 +240,9 @@ export class SubscriptionService {
   }
 
   private static async ensureProfileExists(userId: string, email: string): Promise<void> {
-    const db = getNeonDb();
+    const scopedDb = createClaimedUserScopedDb(getNeonDb(), { userId, organizationId: null });
 
-    const existing = await db.query<Pick<ProfileRow, 'id'>>(
+    const existing = await scopedDb.query<Pick<ProfileRow, 'id'>>(
       'SELECT id FROM profiles WHERE id = $1 LIMIT 1',
       [userId],
     );
@@ -249,7 +250,7 @@ export class SubscriptionService {
     if (existing.length === 0) {
       logger.info({ userId, email }, 'Creating missing profile for user');
       try {
-        await db.execute('INSERT INTO profiles (id, email) VALUES ($1, $2)', [userId, email]);
+        await scopedDb.execute('INSERT INTO profiles (id, email) VALUES ($1, $2)', [userId, email]);
         logger.info({ userId, email }, 'Profile created successfully');
       } catch (insertError) {
         if ((insertError as { code?: string }).code !== '23505') {
