@@ -265,7 +265,9 @@ describe('WebSettingsModal connectors adapter (honest web semantics)', () => {
 
   it('renders no Connect buttons when the server reports nothing connectable, and hides local-only connectors', async () => {
     stubFetch();
-    render(<WebSettingsModal open onClose={vi.fn()} initialSection="connectors" />);
+    render(<WebSettingsModal open onClose={vi.fn()} initialSection="general" />);
+    await settleParentConnectorState();
+    openConnectorsSection();
 
     expect(await screen.findByRole('button', { name: 'Add custom connector' })).toBeTruthy();
     expect(await screen.findByPlaceholderText('Search connectors')).toBeTruthy();
