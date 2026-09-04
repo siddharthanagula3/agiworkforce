@@ -34,6 +34,7 @@ export const DIRECTORY_EMPTY_COPY: Record<DirectorySectionKey, string> = {
   plugins: 'No plugins match this search.',
 };
 
+export const DIRECTORY_CREATE_LABEL = 'New';
 export const DIRECTORY_LOADING_LABEL = 'Loading directory';
 export const DIRECTORY_RETRY_LABEL = 'Try again';
 

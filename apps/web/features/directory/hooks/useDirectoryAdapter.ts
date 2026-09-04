@@ -59,7 +59,7 @@ import {
 } from '../services/skills-directory';
 
 const EMPTY: DirectorySection = { entries: [] };
-const SECTIONS: readonly DirectorySectionKey[] = ['skills', 'connectors', 'plugins'];
+const SECTIONS: readonly DirectorySectionKey[] = ['skills', 'plugins'];
 
 interface ConnectStartBody {
   message?: string;
@@ -76,7 +76,14 @@ async function postJson(path: string, body: unknown): Promise<Response> {
   });
 }
 
-export function useDirectoryAdapter(): DirectoryAdapter {
+export interface DirectoryAdapterOptions {
+  onCreateSkill?: () => void;
+  onEditSkill?: (name: string) => void;
+  createSkillLabel?: string;
+}
+
+export function useDirectoryAdapter(options: DirectoryAdapterOptions = {}): DirectoryAdapter {
+  const { onCreateSkill, onEditSkill, createSkillLabel } = options;
   const [skills, setSkills] = useState<DirectorySection>(EMPTY);
   const [connectors, setConnectors] = useState<DirectorySection>(EMPTY);
   const [plugins, setPlugins] = useState<DirectorySection>(EMPTY);
@@ -96,7 +103,7 @@ export function useDirectoryAdapter(): DirectoryAdapter {
       installedSkills.current = installed;
       setSkills({ ...toSkillSection(catalog, installed), retry: loadSkills });
     } catch {
-      setSkills((prev) => ({ ...prev, loading: false, error: SKILLS_FAILED_COPY }));
+      setSkills((prev) => ({ ...prev, loading: false, error: SKILLS_FAILED_COPY, retry: loadSkills }));
     }
   }, []);
 
@@ -110,7 +117,7 @@ export function useDirectoryAdapter(): DirectoryAdapter {
       connectedIds.current = connected;
       setConnectors({ ...toConnectorSection(records, connected), retry: loadConnectors });
     } catch {
-      setConnectors((prev) => ({ ...prev, loading: false, error: CONNECTORS_FAILED_COPY }));
+      setConnectors((prev) => ({ ...prev, loading: false, error: CONNECTORS_FAILED_COPY, retry: loadConnectors }));
     }
   }, []);
 
@@ -125,7 +132,7 @@ export function useDirectoryAdapter(): DirectoryAdapter {
         retry: loadPlugins,
       });
     } catch {
-      setPlugins((prev) => ({ ...prev, loading: false, error: PLUGINS_FAILED_COPY }));
+      setPlugins((prev) => ({ ...prev, loading: false, error: PLUGINS_FAILED_COPY, retry: loadPlugins }));
     }
   }, []);
 
@@ -277,6 +284,20 @@ export function useDirectoryAdapter(): DirectoryAdapter {
     [loadPlugins],
   );
 
+  const openSettings = useCallback(
+    (section: DirectorySectionKey, id: string) => {
+      if (section === 'skills') onEditSkill?.(id);
+    },
+    [onEditSkill],
+  );
+
+  const createEntry = useCallback(
+    (section: DirectorySectionKey) => {
+      if (section === 'skills') onCreateSkill?.();
+    },
+    [onCreateSkill],
+  );
+
   return useMemo(
     () => ({
       sections: SECTIONS,
@@ -287,6 +308,9 @@ export function useDirectoryAdapter(): DirectoryAdapter {
       loadDetail,
       install,
       uninstall,
+      ...(onEditSkill ? { openSettings } : {}),
+      ...(onCreateSkill ? { createEntry } : {}),
+      ...(createSkillLabel ? { createEntryLabel: createSkillLabel } : {}),
       copyLink,
       copyValue,
       downloadSkillFile,
@@ -302,6 +326,11 @@ export function useDirectoryAdapter(): DirectoryAdapter {
       loadDetail,
       install,
       uninstall,
+      openSettings,
+      createEntry,
+      onEditSkill,
+      onCreateSkill,
+      createSkillLabel,
       copyLink,
       copyValue,
       downloadSkillFile,

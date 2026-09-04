@@ -800,7 +800,7 @@ describe('Plugins pane (table)', () => {
 
 describe('Customize panels render the directory', () => {
   const directoryAdapter = {
-    sections: ['skills', 'connectors', 'plugins'] as const,
+    sections: ['skills'] as const,
     skills: {
       installable: true,
       entries: [
@@ -823,8 +823,20 @@ describe('Customize panels render the directory', () => {
     expect(screen.queryByPlaceholderText('Search skills')).toBeNull();
   });
 
-  it('renders a directory panel for every customize section', () => {
+  it('leaves a section the adapter does not serve on its legacy panel', () => {
     renderModal({ activeSection: 'connectors', directoryAdapter });
-    expect(screen.getByPlaceholderText('Search connectors')).toBeTruthy();
+    expect(screen.queryByPlaceholderText('Search connectors')).toBeNull();
+  });
+
+  it('renders the directory for a section the adapter does serve', () => {
+    renderModal({
+      activeSection: 'plugins',
+      directoryAdapter: {
+        ...directoryAdapter,
+        sections: ['skills', 'plugins'] as const,
+        plugins: { entries: [], sortOptions: ['name'] as const },
+      },
+    });
+    expect(screen.getByPlaceholderText('Search plugins')).toBeTruthy();
   });
 });

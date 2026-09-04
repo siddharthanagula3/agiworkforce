@@ -46,6 +46,8 @@ function stubFetch({
     downloadable?: boolean;
   }>,
   canAuthorSkills = false,
+  installedSkillNames = [] as string[],
+  skillCatalogFailAttempts = [] as number[],
   plugins = [
     {
       id: 'github-automation',
@@ -60,24 +62,30 @@ function stubFetch({
       updatedAt: '2026-08-01T00:00:00.000Z',
     },
   ],
-  pluginFailuresBeforeSuccess = 0,
+  pluginCatalogFailAttempts = [] as number[],
   available = [] as string[],
   connectorFailuresBeforeSuccess = 0,
   connectorFailureStatus = 503,
-  skillFailuresBeforeSuccess = 0,
   installationsFailuresBeforeSuccess = 0,
   installationsFailureStatus = 500,
   installationsFailureMode = 'status' as 'status' | 'invalid-schema' | 'json-throw',
 } = {}) {
   let connectorRequests = 0;
-  let skillRequests = 0;
-  let pluginCatalogRequests = 0;
+  let skillCatalogAttempt = 0;
+  let pluginCatalogAttempt = 0;
   let installationsRequests = 0;
-  const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+  const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = typeof input === 'string' ? input : input.toString();
-    if (url.includes('/api/skills')) {
-      const shouldFail = skillRequests < skillFailuresBeforeSuccess;
-      skillRequests += 1;
+    if (url === '/api/skills/installs') {
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({ installed: installedSkillNames }),
+      } as Response;
+    }
+    if (url === '/api/skills?catalog=all') {
+      skillCatalogAttempt += 1;
+      const shouldFail = skillCatalogFailAttempts.includes(skillCatalogAttempt);
       return {
         ok: !shouldFail,
         status: shouldFail ? 503 : 200,
@@ -91,15 +99,43 @@ function stubFetch({
         }),
       } as Response;
     }
+    if (url.includes('/api/skills')) {
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({
+          skills: skills.map((skill) => ({
+            ...skill,
+            lifecycle: skill.lifecycle ?? 'included',
+            downloadable: skill.downloadable ?? false,
+          })),
+          canAuthorSkills,
+        }),
+      } as Response;
+    }
+    if (url.includes('/api/plugins/marketplaces/entries')) {
+      return { ok: true, status: 200, json: async () => ({ entries: [] }) } as Response;
+    }
+    if (url.includes('/api/plugins/marketplace-installations')) {
+      return { ok: true, status: 200, json: async () => ({ installations: [] }) } as Response;
+    }
+    if (url.includes('/api/plugins/marketplaces')) {
+      return { ok: true, status: 200, json: async () => ({ sources: [] }) } as Response;
+    }
     if (url.includes('/api/plugins/installations')) {
       return { ok: true, json: async () => ({ installations: [] }) } as Response;
     }
     if (url.includes('/api/plugins')) {
-      const shouldFail = pluginCatalogRequests < pluginFailuresBeforeSuccess;
-      pluginCatalogRequests += 1;
+      const isLegacyPluginRequest = init?.credentials === 'include';
+      if (!isLegacyPluginRequest) {
+        pluginCatalogAttempt += 1;
+        if (pluginCatalogFailAttempts.includes(pluginCatalogAttempt)) {
+          return { ok: false, status: 503, json: async () => ({}) } as Response;
+        }
+      }
       return {
-        ok: !shouldFail,
-        status: shouldFail ? 503 : 200,
+        ok: true,
+        status: 200,
         json: async () => ({ entries: plugins, total: plugins.length }),
       } as Response;
     }
@@ -169,18 +205,14 @@ describe('WebSettingsModal connectors adapter (honest web semantics)', () => {
     await waitFor(() => expect(within(notionRow).getByText('Connected')).toBeTruthy());
   });
 
-  it('labels a preregistered connector and a no-endpoint connector "Needs setup by AGI", never "Coming soon"', async () => {
+  it('keeps a no-endpoint, unconfigured connector out of the table instead of ever labeling it "Coming soon"', async () => {
     stubFetch({ connectors: [{ connectorId: 'notion', connectedAt: '2026-07-01T00:00:00Z' }] });
     render(<WebSettingsModal open onClose={vi.fn()} initialSection="connectors" />);
 
-    await screen.findByRole('table');
-    const { fireEvent } = await import('@testing-library/react');
-    fireEvent.click(screen.getByRole('button', { name: /^Add$/ }));
-    fireEvent.click(screen.getByRole('menuitem', { name: 'Browse connectors' }));
-
-    await screen.findByText('Slack');
-    expect(screen.getByText('Google Sheets')).toBeTruthy();
-    expect(screen.getAllByText('Needs setup by AGI').length).toBeGreaterThan(0);
+    const table = await screen.findByRole('table');
+    expect(within(table).getByText('Notion')).toBeTruthy();
+    expect(screen.queryByText('Slack')).toBeNull();
+    expect(screen.queryByText('Google Sheets')).toBeNull();
     expect(screen.queryByText('Coming soon')).toBeNull();
   });
 
@@ -433,36 +465,6 @@ describe('WebSettingsModal connectors adapter (honest web semantics)', () => {
     await waitFor(() => expect(screen.queryByPlaceholderText('My connector')).toBeNull());
   });
 
-  it('loads every real catalogue when the shared directory opens from Connectors', async () => {
-    stubFetch({
-      skills: [
-        {
-          name: 'release-notes',
-          description: 'Draft release notes from verified changes.',
-          source: 'bundled',
-          downloadable: true,
-        },
-      ],
-    });
-    render(<WebSettingsModal open onClose={vi.fn()} initialSection="connectors" />);
-
-    await screen.findByText('Connect your first tool');
-    const { fireEvent } = await import('@testing-library/react');
-    fireEvent.click(screen.getByRole('button', { name: /^Add$/ }));
-    fireEvent.click(screen.getByRole('menuitem', { name: 'Browse connectors' }));
-
-    const tablist = screen.getByRole('tablist', { name: 'Directory sections' });
-    fireEvent.click(within(tablist).getByRole('tab', { name: 'Skills' }));
-    expect(await screen.findByText('/release-notes')).toBeTruthy();
-    expect(screen.getByText('Included')).toBeTruthy();
-    expect(screen.getByRole('link', { name: 'Download release-notes SKILL.md' })).toBeTruthy();
-
-    fireEvent.click(within(tablist).getByRole('tab', { name: 'Plugins' }));
-    expect(await screen.findByText('GitHub Automation')).toBeTruthy();
-    expect(screen.getAllByText('Coming later').length).toBeGreaterThan(0);
-    expect(screen.queryByRole('button', { name: /install github automation/i })).toBeNull();
-  });
-
   it('reaches per-tool connector permissions from the settings connector detail', async () => {
     stubFetch({
       connectors: [{ connectorId: 'notion', connectedAt: '2026-07-01T00:00:00Z' }],
@@ -551,7 +553,7 @@ describe('WebSettingsModal connectors adapter (honest web semantics)', () => {
 
   it('shows a skills loading failure and retries instead of presenting an empty environment', async () => {
     stubFetch({
-      skillFailuresBeforeSuccess: 1,
+      skillCatalogFailAttempts: [2],
       skills: [
         {
           name: 'fixture-reviewed-skill',
@@ -561,22 +563,19 @@ describe('WebSettingsModal connectors adapter (honest web semantics)', () => {
       ],
     });
     render(<WebSettingsModal open onClose={vi.fn()} initialSection="skills" />);
-
-    expect(
-      await screen.findByText(
-        'Skills could not be loaded because the server returned an error. This is not a problem with your connection, retry, or contact support if it persists.',
-      ),
-    ).toBeTruthy();
+    await screen.findByText('/fixture-reviewed-skill');
 
     const { fireEvent } = await import('@testing-library/react');
+    const nav = screen.getByRole('navigation', { name: 'Settings navigation' });
+    fireEvent.click(within(nav).getByRole('button', { name: 'General' }));
+    fireEvent.click(within(nav).getByRole('button', { name: 'Skills' }));
+
+    expect(await screen.findByText('Skills are unavailable right now.')).toBeTruthy();
+
     fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
 
-    expect(await screen.findByText('fixture-reviewed-skill')).toBeTruthy();
-    expect(
-      screen.queryByText(
-        'Skills could not be loaded because the server returned an error. This is not a problem with your connection, retry, or contact support if it persists.',
-      ),
-    ).toBeNull();
+    expect(await screen.findByText('/fixture-reviewed-skill')).toBeTruthy();
+    expect(screen.queryByText('Skills are unavailable right now.')).toBeNull();
   });
 
   it('hides New skill and row actions when the server has not enabled skill authoring', async () => {
@@ -588,12 +587,19 @@ describe('WebSettingsModal connectors adapter (honest web semantics)', () => {
           description: 'A reviewed fixture skill.',
           source: 'bundled',
         },
+        {
+          name: 'fixture-authored-skill',
+          description: 'An authored fixture skill.',
+          source: 'personal',
+        },
       ],
     });
     render(<WebSettingsModal open onClose={vi.fn()} initialSection="skills" />);
 
-    await screen.findByText('fixture-reviewed-skill');
+    await screen.findByText('/fixture-authored-skill');
     expect(screen.queryByRole('button', { name: 'New skill' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Settings fixture-authored-skill' })).toBeNull();
+    expect(screen.getByRole('button', { name: 'Remove fixture-authored-skill' })).toBeTruthy();
   });
 
   it('shows New skill when the server enables skill authoring', async () => {
@@ -605,36 +611,36 @@ describe('WebSettingsModal connectors adapter (honest web semantics)', () => {
           description: 'A reviewed fixture skill.',
           source: 'bundled',
         },
+        {
+          name: 'fixture-authored-skill',
+          description: 'An authored fixture skill.',
+          source: 'personal',
+        },
       ],
     });
     render(<WebSettingsModal open onClose={vi.fn()} initialSection="skills" />);
 
-    await screen.findByText('fixture-reviewed-skill');
+    await screen.findByText('/fixture-authored-skill');
     expect(await screen.findByRole('button', { name: 'New skill' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Settings fixture-authored-skill' })).toBeTruthy();
   });
 
   it('shows a plugin loading failure and retries instead of presenting a fake directory', async () => {
-    stubFetch({ pluginFailuresBeforeSuccess: 1 });
+    stubFetch({ pluginCatalogFailAttempts: [2] });
     render(<WebSettingsModal open onClose={vi.fn()} initialSection="plugins" />);
-
-    expect(
-      await screen.findByText(
-        'Plugins could not be loaded because the server returned an error. This is not a problem with your connection, retry, or contact support if it persists.',
-      ),
-    ).toBeTruthy();
+    await screen.findByText('GitHub Automation');
 
     const { fireEvent } = await import('@testing-library/react');
-    fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
+    const nav = screen.getByRole('navigation', { name: 'Settings navigation' });
+    fireEvent.click(within(nav).getByRole('button', { name: 'General' }));
+    fireEvent.click(within(nav).getByRole('button', { name: 'Plugins' }));
 
-    expect(await screen.findByText(/No plugins installed/)).toBeTruthy();
-    fireEvent.click(screen.getByRole('button', { name: 'Browse' }));
+    expect(await screen.findByText('The plugin catalog is unavailable right now.')).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
+
     expect(await screen.findByText('GitHub Automation')).toBeTruthy();
-    expect(
-      screen.queryByText(
-        'Plugins could not be loaded because the server returned an error. This is not a problem with your connection, retry, or contact support if it persists.',
-      ),
-    ).toBeNull();
-    expect(screen.queryByRole('button', { name: /install/i })).toBeNull();
+    expect(screen.queryByText('The plugin catalog is unavailable right now.')).toBeNull();
   });
 
   it('renders the account-backed Time and focus section from the shared settings nav', () => {
