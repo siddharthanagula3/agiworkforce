@@ -3,6 +3,8 @@ import { NextRequest } from 'next/server';
 
 const mocks = vi.hoisted(() => ({
   query: vi.fn(),
+  bindExecute: vi.fn(),
+  bindQuery: vi.fn(),
   auth: vi.fn(),
   withRateLimit: vi.fn(),
 }));
@@ -12,7 +14,24 @@ vi.mock('@/lib/logger', () => ({
   logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() },
 }));
 vi.mock('@/lib/server/neon-db', () => ({
-  getNeonDb: vi.fn(() => ({ query: (...args: unknown[]) => mocks.query(...args) })),
+  getNeonDb: vi.fn(() => ({
+    query: (...args: unknown[]) => mocks.query(...args),
+    transaction: async (callback: (tx: unknown) => Promise<unknown>) =>
+      callback({
+        query: (...args: unknown[]) => {
+          const [sql] = args as [string];
+          if (sql.includes("set_config('request.jwt.claim.sub'")) {
+            mocks.bindQuery(...args);
+            return [];
+          }
+          return mocks.query(...args);
+        },
+        execute: (...args: unknown[]) => {
+          mocks.bindExecute(...args);
+          return 0;
+        },
+      }),
+  })),
 }));
 vi.mock('@clerk/nextjs/server', () => ({ auth: () => mocks.auth() }));
 vi.mock('@/lib/csrf', () => ({ requireCsrfToken: vi.fn(async () => null) }));
@@ -37,10 +56,30 @@ function acceptRequest(
 describe('recordTermsAcceptance', () => {
   beforeEach(() => {
     mocks.query.mockReset();
+    mocks.bindExecute.mockReset();
+    mocks.bindQuery.mockReset();
   });
 
   it('names the revision of /terms the user was actually shown', () => {
     expect(CURRENT_TERMS_VERSION).toBe(POLICY_LAST_UPDATED.terms);
+  });
+
+  it('binds the caller as the tenant before writing the profiles row', async () => {
+    mocks.query.mockResolvedValueOnce([
+      {
+        terms_version: CURRENT_TERMS_VERSION,
+        terms_accepted_at: '2026-08-08T10:00:00.000Z',
+        terms_accepted_surface: 'web-signup',
+      },
+    ]);
+
+    await recordTermsAcceptance('user_123', 'web-signup');
+
+    expect(mocks.bindExecute).toHaveBeenCalledWith('set local role app_rls');
+    expect(mocks.bindQuery).toHaveBeenCalledWith(
+      expect.stringContaining("set_config('request.jwt.claim.sub', $1, true)"),
+      ['user_123', ''],
+    );
   });
 
   it('writes the version, instant and surface against the account', async () => {
@@ -122,6 +161,8 @@ describe('recordTermsAcceptance', () => {
 describe('POST /api/terms/accept', () => {
   beforeEach(() => {
     mocks.query.mockReset();
+    mocks.bindExecute.mockReset();
+    mocks.bindQuery.mockReset();
     mocks.auth.mockReset();
   });
 

@@ -255,7 +255,10 @@ export async function getFreeTrialPublicUsage(userId: string): Promise<FreeTrial
     weeklyWindowHours,
     monthlyBudgetMicrousd,
   } = FREE_TRIAL_INTERNAL_USAGE_POLICY;
-  const [snapshot] = await getNeonDb().query<FreeTrialUsageSnapshotRow>(FREE_USAGE_SNAPSHOT_SQL, [
+  const [snapshot] = await createClaimedUserScopedDb(getNeonDb(), {
+    userId,
+    organizationId: null,
+  }).query<FreeTrialUsageSnapshotRow>(FREE_USAGE_SNAPSHOT_SQL, [
     userId,
     fiveHourWindowHours,
     weeklyWindowHours,
