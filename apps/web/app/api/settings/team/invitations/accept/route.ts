@@ -9,6 +9,7 @@ import { logger } from '@/lib/logger';
 import { getClerkAuthUser } from '@/lib/api-auth';
 import { requireCsrfToken } from '@/lib/csrf';
 import { getNeonDb } from '@/lib/server/neon-db';
+import { createClaimedUserScopedDb } from '@/lib/server/claimed-user-scope-db';
 import type { ProfileRow } from '@/lib/server/neon-types';
 import { handleCorsPreflightRequest } from '@/lib/cors';
 import {
@@ -38,9 +39,15 @@ async function handleAccept(request: NextRequest) {
   }
   const { token, action } = parsed.data;
 
+  // The token lookups below stay on the raw owner connection on purpose: the
+  // invitee has no organization_members row yet, so RLS (organization_invitations_admin_access,
+  // 0085_organization_seats_lifecycle.sql) cannot authorize accepting or declining by
+  // membership. The one-time token is the authorization, not the session's org scope.
+  // check-db-isolation.mjs documents the same reasoning for organization-invitation-service.ts.
   const db = getNeonDb();
+  const scopedDb = createClaimedUserScopedDb(db, { userId, organizationId: null });
 
-  const [profile] = await db.query<Pick<ProfileRow, 'id' | 'email'>>(
+  const [profile] = await scopedDb.query<Pick<ProfileRow, 'id' | 'email'>>(
     `select id, email from public.profiles where id = $1 limit 1`,
     [userId],
   );

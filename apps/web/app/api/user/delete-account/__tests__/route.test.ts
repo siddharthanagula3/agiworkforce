@@ -2,14 +2,14 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('server-only', () => ({}));
 
-const { mockExecute, mockEraseUserAccountData, mockDeleteUser, mockGetSubscription } = vi.hoisted(
-  () => ({
+const { mockExecute, mockQuery, mockEraseUserAccountData, mockDeleteUser, mockGetSubscription } =
+  vi.hoisted(() => ({
     mockExecute: vi.fn(),
+    mockQuery: vi.fn(),
     mockEraseUserAccountData: vi.fn(),
     mockDeleteUser: vi.fn(),
     mockGetSubscription: vi.fn(),
-  }),
-);
+  }));
 
 vi.mock('@/lib/rate-limit', () => ({
   withRateLimit: vi.fn(async () => null),
@@ -43,6 +43,12 @@ vi.mock('@/lib/server/pseudonymize', () => ({
 vi.mock('@/lib/server/neon-db', () => ({
   getNeonDb: vi.fn(() => ({
     execute: (...args: unknown[]) => mockExecute(...args),
+    query: (...args: unknown[]) => mockQuery(...args),
+    transaction: async (callback: (tx: unknown) => unknown) =>
+      callback({
+        execute: (...args: unknown[]) => mockExecute(...args),
+        query: (...args: unknown[]) => mockQuery(...args),
+      }),
   })),
 }));
 
@@ -62,8 +68,8 @@ vi.mock('@/lib/services/subscription-service', () => ({
 
 import { DELETE } from '../route';
 
-function deleteRequest() {
-  return new Request('http://localhost:3000/api/user/delete-account', {
+function deleteRequest(url = 'http://localhost:3000/api/user/delete-account') {
+  return new Request(url, {
     method: 'DELETE',
   }) as never;
 }
@@ -237,5 +243,36 @@ describe('DELETE /api/user/delete-account', () => {
     expect(response.status).toBe(500);
     expect(body.error).not.toMatch(/no data was partially removed/i);
     expect(mockDeleteUser).not.toHaveBeenCalled();
+  });
+
+  it('binds the scheduling update to the claimed session scope', async () => {
+    mockExecute.mockResolvedValue(1);
+
+    await DELETE(deleteRequest());
+
+    expect(mockExecute).toHaveBeenCalledWith('set local role app_rls');
+    expect(mockQuery).toHaveBeenCalledWith(
+      expect.stringContaining("set_config('request.jwt.claim.sub', $1, true)"),
+      ['user_deleting', ''],
+    );
+  });
+
+  it('ignores an identity smuggled into the query string and schedules deletion for the session user', async () => {
+    mockExecute.mockResolvedValue(1);
+
+    const response = await DELETE(
+      deleteRequest('http://localhost:3000/api/user/delete-account?userId=victim-user'),
+    );
+
+    expect(response.status).toBe(200);
+    expect(mockExecute).toHaveBeenCalledWith(
+      expect.stringContaining('where id = $3'),
+      expect.arrayContaining(['user_deleting']),
+    );
+    expect(
+      mockExecute.mock.calls.some(
+        ([, params]) => Array.isArray(params) && params.includes('victim-user'),
+      ),
+    ).toBe(false);
   });
 });

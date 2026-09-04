@@ -4,12 +4,14 @@ vi.mock('server-only', () => ({}));
 
 const {
   mockQuery,
+  mockExecute,
   mockGetClerkAuthUser,
   mockRequireCsrfToken,
   mockWithRateLimit,
   mockRecordAuditEvent,
 } = vi.hoisted(() => ({
   mockQuery: vi.fn(),
+  mockExecute: vi.fn(),
   mockGetClerkAuthUser: vi.fn(),
   mockRequireCsrfToken: vi.fn(),
   mockWithRateLimit: vi.fn(),
@@ -48,6 +50,12 @@ vi.mock('@/lib/server/pseudonymize', () => ({
 vi.mock('@/lib/server/neon-db', () => ({
   getNeonDb: vi.fn(() => ({
     query: (...args: unknown[]) => mockQuery(...args),
+    execute: (...args: unknown[]) => mockExecute(...args),
+    transaction: async (callback: (tx: unknown) => unknown) =>
+      callback({
+        query: (...args: unknown[]) => mockQuery(...args),
+        execute: (...args: unknown[]) => mockExecute(...args),
+      }),
   })),
 }));
 
@@ -72,15 +80,20 @@ describe('POST /api/user/delete-account/cancel', () => {
   });
 
   it('cancels a deletion inside the grace window and records it symmetrically with scheduling', async () => {
-    mockQuery.mockResolvedValueOnce([{ id: 'user_cancelling' }]);
+    mockQuery
+      .mockResolvedValueOnce([]) // claimed-scope bind ahead of the UPDATE
+      .mockResolvedValueOnce([{ id: 'user_cancelling' }]);
 
     const response = await POST(cancelRequest());
     const body = await response.json();
 
     expect(response.status).toBe(200);
     expect(body.cancelled).toBe(true);
-    expect(mockQuery).toHaveBeenCalledTimes(1);
-    const [sql, params] = mockQuery.mock.calls[0] as [string, unknown[]];
+    expect(mockQuery).toHaveBeenCalledTimes(2);
+    const update = mockQuery.mock.calls.find(([sql]) =>
+      String(sql).includes('deletion_requested_at'),
+    );
+    const [sql, params] = update as [string, unknown[]];
     expect(sql).toMatch(/deletion_requested_at\s*=\s*null/i);
     expect(sql).toMatch(/deletion_scheduled_for\s*=\s*null/i);
     expect(sql).toMatch(/deletion_scheduled_for\s*>\s*now\(\)/i);
@@ -96,7 +109,9 @@ describe('POST /api/user/delete-account/cancel', () => {
 
   it('is a clean no-op when nothing is pending, not a 500', async () => {
     mockQuery
+      .mockResolvedValueOnce([]) // claimed-scope bind ahead of the UPDATE
       .mockResolvedValueOnce([]) // conditional UPDATE matches nothing
+      .mockResolvedValueOnce([]) // claimed-scope bind ahead of the follow-up SELECT
       .mockResolvedValueOnce([{ deletion_scheduled_for: null }]); // follow-up SELECT
 
     const response = await POST(cancelRequest());
@@ -110,7 +125,9 @@ describe('POST /api/user/delete-account/cancel', () => {
   it('refuses to cancel once the grace window has closed, and does not touch the columns', async () => {
     const expired = new Date(Date.now() - 60 * 1000).toISOString();
     mockQuery
+      .mockResolvedValueOnce([]) // claimed-scope bind ahead of the UPDATE
       .mockResolvedValueOnce([]) // conditional UPDATE matches nothing (expired)
+      .mockResolvedValueOnce([]) // claimed-scope bind ahead of the follow-up SELECT
       .mockResolvedValueOnce([{ deletion_scheduled_for: expired }]);
 
     const response = await POST(cancelRequest());
@@ -143,12 +160,48 @@ describe('POST /api/user/delete-account/cancel', () => {
 
   it('is scoped to the caller: the UPDATE is parameterised by their own userId, not a client-supplied id', async () => {
     mockGetClerkAuthUser.mockResolvedValue({ userId: 'user_other_caller' });
-    mockQuery.mockResolvedValueOnce([{ id: 'user_other_caller' }]);
+    mockQuery
+      .mockResolvedValueOnce([]) // claimed-scope bind ahead of the UPDATE
+      .mockResolvedValueOnce([{ id: 'user_other_caller' }]);
 
     await POST(cancelRequest());
 
-    const [, params] = mockQuery.mock.calls[0] as [string, unknown[]];
+    const update = mockQuery.mock.calls.find(([sql]) =>
+      String(sql).includes('deletion_requested_at'),
+    );
+    const [, params] = update as [string, unknown[]];
     expect(params).toEqual(['user_other_caller']);
+  });
+
+  it('binds the cancellation update to the claimed session scope', async () => {
+    mockQuery.mockResolvedValueOnce([]).mockResolvedValueOnce([{ id: 'user_cancelling' }]);
+
+    await POST(cancelRequest());
+
+    expect(mockExecute).toHaveBeenCalledWith('set local role app_rls');
+    expect(mockQuery).toHaveBeenCalledWith(
+      expect.stringContaining("set_config('request.jwt.claim.sub', $1, true)"),
+      ['user_cancelling', ''],
+    );
+  });
+
+  it('ignores an identity smuggled into the query string and cancels for the session user', async () => {
+    mockQuery.mockResolvedValueOnce([]).mockResolvedValueOnce([{ id: 'user_cancelling' }]);
+
+    const response = await POST(
+      new Request('http://localhost:3000/api/user/delete-account/cancel?userId=victim-user', {
+        method: 'POST',
+      }) as never,
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body.cancelled).toBe(true);
+    expect(
+      mockQuery.mock.calls.some(
+        ([, params]) => Array.isArray(params) && params.includes('victim-user'),
+      ),
+    ).toBe(false);
   });
 
   it('rejects the request when CSRF validation fails', async () => {

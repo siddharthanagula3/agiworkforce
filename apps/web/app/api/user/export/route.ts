@@ -12,6 +12,7 @@ import {
 } from '@/lib/cors';
 import { getClerkAuthUser } from '@/lib/api-auth';
 import { getNeonDb } from '@/lib/server/neon-db';
+import { createClaimedUserScopedDb } from '@/lib/server/claimed-user-scope-db';
 import { listUserBillingInvoices } from '@/lib/services/billing-invoice-service';
 import { getManagedUsageSummary } from '@/lib/services/managed-usage-summary-service';
 import { recordAuditEvent } from '@/lib/security-audit';
@@ -31,7 +32,7 @@ async function handleExportUserData(request: NextRequest) {
 
   try {
     const { userId, email } = await getClerkAuthUser(request);
-    const db = getNeonDb();
+    const db = createClaimedUserScopedDb(getNeonDb(), { userId, organizationId: null });
 
     logger.info(
       {
