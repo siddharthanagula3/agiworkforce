@@ -1,3 +1,5 @@
+import type { ReactNode } from 'react';
+
 export type DirectorySectionKey = 'skills' | 'connectors' | 'plugins';
 
 export type DirectoryBadgeKind = 'agi' | 'partner' | 'verified' | 'community' | 'yours';
@@ -152,6 +154,7 @@ export interface DirectoryAdapter {
   uninstall?: (section: DirectorySectionKey, id: string) => Promise<void> | void;
   openSettings?: (section: DirectorySectionKey, id: string) => Promise<void> | void;
   createEntry?: (section: DirectorySectionKey) => void;
+  renderDetailFooter?: (section: DirectorySectionKey, id: string) => ReactNode;
   copyLink?: (section: DirectorySectionKey, id: string) => Promise<void> | void;
   openHref?: (href: string) => Promise<void> | void;
   copyValue?: (value: string) => Promise<void> | void;

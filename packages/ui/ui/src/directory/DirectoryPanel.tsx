@@ -214,6 +214,7 @@ export function DirectoryPanel({
             onOpenSettings={openSettings}
             onCopyLink={copyLink}
             onOpenHref={adapter.openHref}
+            footer={adapter.renderDetailFooter?.(section, detail.id)}
             busy={busy}
           />
         );
