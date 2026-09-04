@@ -139,7 +139,7 @@ describe('POST /api/settings/organization, purchased seats', () => {
   });
 
   it('does not invent seats for a plan that is not sold by the seat', async () => {
-    stubQueries(subscriptionRow({ plan_tier: 'enterprise' }));
+    stubQueries(subscriptionRow({ plan_tier: 'pro' }));
 
     const response = await POST(createRequest());
 
