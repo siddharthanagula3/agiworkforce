@@ -51,12 +51,12 @@ type PresignBody = {
   projectId?: string;
 };
 
-function presignRequest(body: PresignBody): NextRequest {
+function presignRequest(body: PresignBody, origin = 'http://localhost:3000'): NextRequest {
   // http://localhost:3000 is the one non-production origin the R2 CORS
   // policy allowlists (see scripts/r2-apply-cors.mjs); any other origin now
-  // gets routed through the same-origin chat-attachment upload proxy instead
-  // of a direct presigned URL.
-  return new NextRequest('http://localhost:3000/api/uploads/presign', {
+  // gets routed through the same-origin chat-attachment or knowledge-file
+  // upload proxy instead of a direct presigned URL.
+  return new NextRequest(`${origin}/api/uploads/presign`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
@@ -167,6 +167,32 @@ describe('POST /api/uploads/presign · type policy', () => {
       expect.stringContaining('organization_id is not distinct from $3::uuid'),
       ['proj-1', 'user-abc', '11111111-1111-4111-8111-111111111111'],
     );
+  });
+
+  it('routes a knowledge file through the same-origin proxy off the CORS-safe dev origin', async () => {
+    const response = await POST(
+      presignRequest(
+        {
+          kind: 'knowledge-file',
+          fileName: 'spec.pdf',
+          mimeType: 'application/pdf',
+          byteCount: 900_000,
+          projectId: 'proj-1',
+        },
+        'http://localhost:3100',
+      ),
+    );
+    const body = (await response.json()) as {
+      uploadUrl: string;
+      uploadHeaders: Record<string, string>;
+    };
+
+    expect(response.status).toBe(200);
+    expect(mockGetPresignedPrivateUploadUrl).not.toHaveBeenCalled();
+    expect(body.uploadUrl).toMatch(
+      /^http:\/\/localhost:3100\/api\/uploads\/knowledge-file\/put\?key=knowledge-files%2Fprojects%2Fproj-1%2F/,
+    );
+    expect(body.uploadHeaders).toHaveProperty('x-csrf-token');
   });
 
   it('signs chat attachments only for the private bucket and returns no public locator', async () => {
