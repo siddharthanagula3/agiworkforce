@@ -12,7 +12,6 @@ import { withIsoTimestamps } from '@/lib/server/iso-timestamps';
 import { normalizeMessageMetadata, type ChatMessageRow } from '@/lib/server/neon-chat';
 import { getUserScopedDb } from '@/lib/server/rls-db';
 import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
-import { resolveActiveOrganizationId } from '@/lib/services/active-workspace-service';
 import { scheduleArtifactIndexing } from '../lib/index-artifacts';
 import {
   assertParentInConversation,
@@ -42,7 +41,7 @@ const BulkSaveSchema = z.object({
 });
 
 async function handleBulkSave(request: NextRequest, context: RouteContext) {
-  const { db, userId } = await getUserScopedDb(request);
+  const { db, userId, organizationId } = await getUserScopedDb(request);
 
   const csrfError = await requireCsrfToken(request);
   if (csrfError) return csrfError as NextResponse;
@@ -63,8 +62,6 @@ async function handleBulkSave(request: NextRequest, context: RouteContext) {
   if (!parsed.success) throw createError.validation('Invalid request body', parsed.error);
 
   const { messages } = parsed.data;
-
-  const organizationId = await resolveActiveOrganizationId(db, userId);
 
   const [conv] = await db.query<{ id: string; active_leaf_message_id: string | null }>(
     `select id, active_leaf_message_id

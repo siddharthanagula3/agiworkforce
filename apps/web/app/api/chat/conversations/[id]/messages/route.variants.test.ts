@@ -25,10 +25,7 @@ vi.mock('@/lib/server/neon-chat', () => ({
   normalizeMessageMetadata: (value: unknown) => value,
 }));
 vi.mock('@/lib/server/rls-db', () => ({
-  getUserScopedDb: vi.fn(async () => ({ db, userId: USER_ID, organizationId: null })),
-}));
-vi.mock('@/lib/services/active-workspace-service', () => ({
-  resolveActiveOrganizationId: vi.fn(async () => ORGANIZATION_ID),
+  getUserScopedDb: vi.fn(async () => ({ db, userId: USER_ID, organizationId: ORGANIZATION_ID })),
 }));
 vi.mock('@/lib/csrf', () => ({ requireCsrfToken: vi.fn(async () => null) }));
 vi.mock('@/lib/rate-limit', () => ({ withRateLimit: vi.fn(async () => null) }));
