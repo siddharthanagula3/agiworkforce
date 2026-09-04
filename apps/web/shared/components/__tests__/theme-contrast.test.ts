@@ -149,7 +149,14 @@ function colorToken(block: string, name: string): string {
 // foundation.css owns these four; globals.css owns the rest of the shadcn set.
 // The `foundation layer` suite asserts globals.css declares none of them, so the
 // two halves of each block below can never disagree about a name.
-const FOUNDATION_OWNED = ['--background', '--foreground', '--border', '--destructive-text'];
+const FOUNDATION_OWNED = [
+  '--background',
+  '--foreground',
+  '--border',
+  '--destructive-text',
+  '--logo-surface',
+  '--logo-on-surface',
+];
 const webBase = baseThemeBlocks(globalsCss);
 const web = {
   light: `${foundationLight}\n${webBase.light}`,
@@ -188,6 +195,26 @@ const DARK_CARD = colorToken(web.dark, '--card');
 const DARK_POPOVER = colorToken(web.dark, '--popover');
 
 const SWATCHES = ['default', 'green', 'blue', 'violet', 'rose'] as const;
+
+describe('the logo tile is fixed light in both themes', () => {
+  for (const [theme, block] of [
+    ['light', web.light],
+    ['dark', web.dark],
+  ] as const) {
+    it(`${theme}: --logo-on-surface on --logo-surface >= 4.5:1`, () => {
+      expect(
+        contrastRatio(colorToken(block, '--logo-on-surface'), colorToken(block, '--logo-surface')),
+      ).toBeGreaterThanOrEqual(WCAG_AA_NORMAL);
+    });
+  }
+
+  it('keeps the same surface in both themes so a near black mark never inverts', () => {
+    expect(colorToken(web.dark, '--logo-surface')).toEqual(colorToken(web.light, '--logo-surface'));
+    expect(colorToken(web.dark, '--logo-on-surface')).toEqual(
+      colorToken(web.light, '--logo-on-surface'),
+    );
+  });
+});
 
 describe('destructive tokens carry both roles', () => {
   // One --destructive served text and solid fills at once, so each theme failed

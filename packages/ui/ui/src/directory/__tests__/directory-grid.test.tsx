@@ -91,6 +91,28 @@ describe('DirectoryGrid', () => {
     expect(screen.getByText('Adobe')).toBeTruthy();
   });
 
+  it('keeps every logo tile on a light surface so a black mark stays visible', () => {
+    renderGrid({
+      section: 'connectors',
+      entries: [
+        { id: 'anthropic', name: 'Anthropic', description: 'Models', brandId: 'anthropic' },
+      ],
+    });
+    const tile = document.querySelector('[aria-hidden="true"]');
+    expect(tile?.className).toContain('bg-logo-surface');
+    expect(tile?.className).toContain('text-logo-on-surface');
+  });
+
+  it('keeps the monogram readable on that same light tile', () => {
+    renderGrid({
+      section: 'connectors',
+      entries: [{ id: 'x', name: 'Unknown', description: 'None', monogram: 'UN' }],
+    });
+    const tile = screen.getByText('UN');
+    expect(tile.className).toContain('bg-logo-surface');
+    expect(tile.className).not.toContain('text-muted-foreground');
+  });
+
   it('renders a per entry error', () => {
     renderGrid({ entries: [{ ...skill, error: 'Install failed' }] });
     expect(screen.getByText('Install failed')).toBeTruthy();

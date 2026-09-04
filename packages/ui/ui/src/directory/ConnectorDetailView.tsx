@@ -66,7 +66,7 @@ function ConnectorLogoTile({ detail }: { detail: DirectoryConnectorDetail }) {
       className={cn(
         DETAIL_LOGO_SIZE,
         DETAIL_LOGO_SHAPE,
-        'inline-flex items-center justify-center bg-muted text-lg font-semibold text-muted-foreground',
+        'inline-flex items-center justify-center text-lg font-semibold',
       )}
     >
       {monogram}
