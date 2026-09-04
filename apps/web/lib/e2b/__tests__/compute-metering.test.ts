@@ -14,9 +14,6 @@ const RATE_ENV = 'AGI_E2B_COMPUTE_MICROUSD_PER_SECOND';
 
 function clearScopedEnv(): void {
   vi.stubEnv(RATE_ENV, undefined);
-  vi.stubEnv('NODE_ENV', undefined);
-  vi.stubEnv('VERCEL_ENV', undefined);
-  vi.stubEnv('NEXT_PHASE', undefined);
 }
 
 function resetMocks(): void {
@@ -53,47 +50,23 @@ describe('sandboxComputeIsPriceable, the provisioning gate', () => {
     vi.unstubAllEnvs();
   });
 
-  it('is false on a production runtime with no configured rate', async () => {
-    vi.stubEnv('NODE_ENV', 'production');
+  it('is true with no override, priced from the published per-vCPU table', async () => {
     const mod = await loadModule();
-    expect(mod.sandboxComputeIsPriceable()).toBe(false);
+    expect(mod.sandboxComputeIsPriceable()).toBe(true);
+    expect(logger.error).not.toHaveBeenCalled();
   });
 
-  it('is false on a self-hosted production runtime signalled only by VERCEL_ENV', async () => {
-    vi.stubEnv('VERCEL_ENV', 'production');
-    const mod = await loadModule();
-    expect(mod.sandboxComputeIsPriceable()).toBe(false);
-  });
-
-  it('is false on production when the rate is not a positive number', async () => {
-    vi.stubEnv('NODE_ENV', 'production');
+  it('is false when the override is set but not a positive number', async () => {
     vi.stubEnv(RATE_ENV, '0');
     const mod = await loadModule();
     expect(mod.sandboxComputeIsPriceable()).toBe(false);
     expect(logger.error).toHaveBeenCalledTimes(1);
   });
 
-  it('is true on production once a rate is configured', async () => {
-    vi.stubEnv('NODE_ENV', 'production');
+  it('is true once a valid override is configured', async () => {
     vi.stubEnv(RATE_ENV, '28');
     const mod = await loadModule();
     expect(mod.sandboxComputeIsPriceable()).toBe(true);
-  });
-
-  it('is true during the production build phase', async () => {
-    vi.stubEnv('NODE_ENV', 'production');
-    vi.stubEnv('NEXT_PHASE', 'phase-production-build');
-    const mod = await loadModule();
-    expect(mod.sandboxComputeIsPriceable()).toBe(true);
-  });
-
-  it('is true on a preview deployment and on a dev box, warning once', async () => {
-    vi.stubEnv('NODE_ENV', 'production');
-    vi.stubEnv('VERCEL_ENV', 'preview');
-    const mod = await loadModule();
-    expect(mod.sandboxComputeIsPriceable()).toBe(true);
-    expect(mod.sandboxComputeIsPriceable()).toBe(true);
-    expect(logger.warn).toHaveBeenCalledTimes(1);
   });
 });
 
@@ -107,17 +80,37 @@ describe('getSandboxComputeMicrousdPerSecond', () => {
     vi.unstubAllEnvs();
   });
 
-  it('returns 0 when the rate is unset or unusable', async () => {
+  it('falls back to the published per-vCPU table default (2 vCPU) with no vcpuCount given', async () => {
     const mod = await loadModule();
-    expect(mod.getSandboxComputeMicrousdPerSecond()).toBe(0);
-    vi.stubEnv(RATE_ENV, 'not-a-number');
-    expect(mod.getSandboxComputeMicrousdPerSecond()).toBe(0);
+    expect(mod.getSandboxComputeMicrousdPerSecond()).toBe(28);
   });
 
-  it('returns the configured rate', async () => {
+  it('scales linearly with the declared vCPU count', async () => {
+    const mod = await loadModule();
+    expect(mod.getSandboxComputeMicrousdPerSecond(1)).toBe(14);
+    expect(mod.getSandboxComputeMicrousdPerSecond(2)).toBe(28);
+    expect(mod.getSandboxComputeMicrousdPerSecond(4)).toBe(56);
+    expect(mod.getSandboxComputeMicrousdPerSecond(6)).toBe(84);
+    expect(mod.getSandboxComputeMicrousdPerSecond(8)).toBe(112);
+  });
+
+  it('treats a zero or negative vCPU count as unknown, using the default', async () => {
+    const mod = await loadModule();
+    expect(mod.getSandboxComputeMicrousdPerSecond(0)).toBe(28);
+    expect(mod.getSandboxComputeMicrousdPerSecond(-1)).toBe(28);
+    expect(mod.getSandboxComputeMicrousdPerSecond(null)).toBe(28);
+  });
+
+  it('returns 0 when the override is set but unusable, ignoring the table', async () => {
+    vi.stubEnv(RATE_ENV, 'not-a-number');
+    const mod = await loadModule();
+    expect(mod.getSandboxComputeMicrousdPerSecond(8)).toBe(0);
+  });
+
+  it('the override wins over the table regardless of vCPU count', async () => {
     vi.stubEnv(RATE_ENV, '250');
     const mod = await loadModule();
-    expect(mod.getSandboxComputeMicrousdPerSecond()).toBe(250);
+    expect(mod.getSandboxComputeMicrousdPerSecond(8)).toBe(250);
   });
 });
 
@@ -131,8 +124,8 @@ describe('meterSandboxComputeInterval', () => {
     vi.unstubAllEnvs();
   });
 
-  it('reports every unpriced interval and never throws at the caller', async () => {
-    vi.stubEnv('NODE_ENV', 'production');
+  it('reports every interval as UNPRICED when the override is explicitly invalid', async () => {
+    vi.stubEnv(RATE_ENV, 'garbage');
     const mod = await loadModule();
 
     await expect(mod.meterSandboxComputeInterval(interval())).resolves.toBe(0);
@@ -141,20 +134,15 @@ describe('meterSandboxComputeInterval', () => {
     );
 
     expect(settleCreditsDurably).not.toHaveBeenCalled();
-    expect(logger.error).toHaveBeenCalledTimes(2);
-    expect(logger.error.mock.calls[0]?.[0]).toMatchObject({
-      elapsedMs: 60_000,
-      unbilledMs: 60_000,
-    });
-    expect(logger.error.mock.calls[1]?.[0]).toMatchObject({
-      elapsedMs: 60_000,
-      unbilledMs: 120_000,
-    });
+    const unpricedCalls = logger.error.mock.calls.filter(
+      (call) => typeof call[0] === 'object' && call[0] !== null && 'elapsedMs' in call[0],
+    );
+    expect(unpricedCalls).toHaveLength(2);
+    expect(unpricedCalls[0]?.[0]).toMatchObject({ elapsedMs: 60_000, unbilledMs: 60_000 });
+    expect(unpricedCalls[1]?.[0]).toMatchObject({ elapsedMs: 60_000, unbilledMs: 120_000 });
   });
 
-  it('counts an interval that rounds to 0 cents at a realistic rate as unbilled', async () => {
-    vi.stubEnv('NODE_ENV', 'production');
-    vi.stubEnv(RATE_ENV, '28');
+  it('counts an interval that rounds to 0 cents at the default table rate as unbilled', async () => {
     const mod = await loadModule();
 
     await expect(mod.meterSandboxComputeInterval(interval())).resolves.toBe(0);
@@ -168,7 +156,6 @@ describe('meterSandboxComputeInterval', () => {
   });
 
   it('stays silent for an interval that was never billable', async () => {
-    vi.stubEnv('NODE_ENV', 'production');
     const mod = await loadModule();
 
     await expect(mod.meterSandboxComputeInterval(interval({ endedAtMs: 1_000_000 }))).resolves.toBe(
@@ -179,8 +166,7 @@ describe('meterSandboxComputeInterval', () => {
     expect(logger.warn).not.toHaveBeenCalled();
   });
 
-  it('settles a priced interval into the usage ledger', async () => {
-    vi.stubEnv('NODE_ENV', 'production');
+  it('settles a priced interval into the usage ledger using the override', async () => {
     vi.stubEnv(RATE_ENV, '28');
     const mod = await loadModule();
     const hour = interval({ endedAtMs: 1_000_000 + 3_600_000 });
@@ -196,8 +182,34 @@ describe('meterSandboxComputeInterval', () => {
     expect(logger.error).not.toHaveBeenCalled();
   });
 
+  it('settles a priced interval into the usage ledger from the table when no override is configured', async () => {
+    const mod = await loadModule();
+    const hour = interval({ endedAtMs: 1_000_000 + 3_600_000 });
+
+    await expect(mod.meterSandboxComputeInterval(hour)).resolves.toBe(10);
+    expect(settleCreditsDurably).toHaveBeenCalledWith(
+      expect.objectContaining({
+        userId: 'user-1',
+        amountCents: 10,
+        metadata: expect.objectContaining({ microusd_per_second: 28 }),
+      }),
+    );
+  });
+
+  it('uses the interval vCPU count to select the table rate', async () => {
+    const mod = await loadModule();
+    const hour = interval({ endedAtMs: 1_000_000 + 3_600_000, vcpuCount: 4 });
+
+    await expect(mod.meterSandboxComputeInterval(hour)).resolves.toBe(20);
+    expect(settleCreditsDurably).toHaveBeenCalledWith(
+      expect.objectContaining({
+        amountCents: 20,
+        metadata: expect.objectContaining({ microusd_per_second: 56 }),
+      }),
+    );
+  });
+
   it('swallows a ledger failure so pause / kill / reclaim still release the sandbox', async () => {
-    vi.stubEnv('NODE_ENV', 'production');
     vi.stubEnv(RATE_ENV, '5000');
     const mod = await loadModule();
     settleCreditsDurably.mockRejectedValueOnce(new Error('ledger down'));

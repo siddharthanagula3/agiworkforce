@@ -51,6 +51,7 @@ import {
   harnessCredentialSpecs,
   harnessIsProxyCovered,
   harnessProxyBaseUrlEnv,
+  templateVcpuCount,
   type HarnessCredentialSpec,
 } from './templates';
 import { fullNetworkNeedsProxy } from './network-policy';
@@ -360,10 +361,12 @@ async function closeBillableInterval(
   const startedAtMs = session.activeSinceMs;
   if (typeof startedAtMs !== 'number') return;
 
+  const vcpuCount = (await templateVcpuCount(session.templateId ?? scope.templateId)) ?? undefined;
   await meterSandboxComputeInterval({
     userId: scope.userId,
     sandboxId: session.sandboxId,
     ...scopeAttribution(scope),
+    vcpuCount,
     startedAtMs,
     endedAtMs: Date.now(),
     reason,
@@ -601,6 +604,7 @@ export async function getE2BExecutor(scope?: E2BSessionScope): Promise<E2BExecut
       ...(activeSinceMs !== undefined ? { activeSinceMs } : {}),
       ...(scope.networkAccess ? { networkAccess: scope.networkAccess } : {}),
       ...(extraHosts && extraHosts.length > 0 ? { extraHosts } : {}),
+      ...(template ? { templateId: template } : {}),
     };
     await saveE2BSession(scope, session);
   }
@@ -795,6 +799,7 @@ export async function getE2BExecutor(scope?: E2BSessionScope): Promise<E2BExecut
           userId: scope.userId,
           sandboxId,
           ...scopeAttribution(scope),
+          vcpuCount: (await templateVcpuCount(template)) ?? undefined,
           startedAtMs: intervalStartedAtMs,
           endedAtMs: Date.now(),
           reason: 'pause',
