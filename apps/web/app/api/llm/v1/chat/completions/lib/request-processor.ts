@@ -146,10 +146,12 @@ import {
   type Skill,
 } from '@agiworkforce/skills';
 import {
+  filterSkillsByInstallOverrides,
   getManagedSkillCatalog,
   getManagedSkillCatalogForPlugins,
   SkillCatalogUnavailableError,
 } from '@/lib/services/skill-catalog-service';
+import { getSkillInstallOverrides } from '@/lib/services/skill-install-service';
 import { findUserSkillByName, type UserSkillRecord } from '@/lib/services/user-skill-service';
 import { listEnabledPluginIdsForUser } from '@/lib/services/plugin-installation-service';
 import type { CloudChatSurface } from '@/lib/free-chat-surface-policy';
@@ -2585,6 +2587,11 @@ export async function processRequest(
   }
 
   const preSkillMessageCount = chatRequest.messages.length;
+  let skillInstallOverridesPromise: Promise<ReadonlyMap<string, boolean>> | undefined;
+  const loadSkillInstallOverrides = async (): Promise<ReadonlyMap<string, boolean>> => {
+    skillInstallOverridesPromise ??= getSkillInstallOverrides((await scopedDbPromise).db, userId);
+    return skillInstallOverridesPromise;
+  };
   if (chatRequest.skill_name) {
     const requestedSkillName = chatRequest.skill_name;
     let managedSkillCatalog: Skill[];
@@ -2610,6 +2617,10 @@ export async function processRequest(
       }
       throw error;
     }
+    managedSkillCatalog = filterSkillsByInstallOverrides(
+      managedSkillCatalog,
+      await loadSkillInstallOverrides(),
+    );
     if (resolvedModelCaps?.tools === false) {
       return {
         ok: false,
@@ -2653,7 +2664,11 @@ export async function processRequest(
       prompt: lastUserText,
       surface: chatSurface,
       toolsCapable: resolvedModelCaps?.tools !== false,
-      loadCatalog: getManagedSkillCatalog,
+      loadCatalog: async () =>
+        filterSkillsByInstallOverrides(
+          await getManagedSkillCatalog(),
+          await loadSkillInstallOverrides(),
+        ),
     });
     if (offeredSkills.length > 0) {
       logger.info(

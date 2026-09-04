@@ -24,9 +24,10 @@ vi.mock('@/lib/server/generated-file-persist', () => ({
 const userSkillService = vi.hoisted(() => ({ findUserSkillByName: vi.fn() }));
 vi.mock('@/lib/services/user-skill-service', () => userSkillService);
 
+const neonAdapter = vi.hoisted(() => ({ query: vi.fn(async (_sql: string) => [] as unknown[]) }));
 vi.mock('@/lib/server/neon-db', () => {
   const emptyAdapter = {
-    query: async () => [],
+    query: neonAdapter.query,
     execute: async () => 0,
     transaction: async (fn: (tx: unknown) => unknown) => fn(emptyAdapter),
     withUser: () => emptyAdapter,
@@ -171,6 +172,8 @@ describe('managed Cloud Skill tool loop', () => {
   beforeEach(async () => {
     provider.stream.mockReset();
     userSkillService.findUserSkillByName.mockReset();
+    neonAdapter.query.mockReset();
+    neonAdapter.query.mockResolvedValue([]);
     root = await mkdtemp(join(tmpdir(), 'cloud-skill-loop-'));
     const directory = join(root, 'design-review');
     await mkdir(directory, { recursive: true });
@@ -337,5 +340,63 @@ describe('managed Cloud Skill tool loop', () => {
     expect(output).toContain('Unknown tool: skill');
     expect(output).toContain('"status":"failed"');
     expect(output).not.toContain('Inspect the rendered interface');
+  });
+
+  it('refuses to load a managed skill the caller uninstalled, with the same unknown-skill wording', async () => {
+    neonAdapter.query.mockImplementation(async (sql: string) =>
+      sql.includes('user_settings')
+        ? [{ settings: { skills: { installs: { 'design-review': false } } } }]
+        : [],
+    );
+    provider.stream
+      .mockResolvedValueOnce(toolCallStream('design-review'))
+      .mockResolvedValueOnce(finalAnswerStream('That skill is unavailable.'));
+
+    const output = await collect(
+      runToolLoop(makeProcessed(root), { approvalMode: 'auto', userId: 'caller-1' }),
+    );
+
+    expect(output).toContain('"status":"failed"');
+    expect(output).toContain('Unknown skill: design-review');
+    expect(output).not.toContain('Inspect the rendered interface');
+    expect(
+      neonAdapter.query.mock.calls.filter(([sql]) => String(sql).includes('user_settings')),
+    ).toHaveLength(1);
+  });
+
+  it('loads the skill again once the caller reinstalls it', async () => {
+    neonAdapter.query.mockImplementation(async (sql: string) =>
+      sql.includes('user_settings') ? [{ settings: { skills: { installs: {} } } }] : [],
+    );
+    provider.stream
+      .mockResolvedValueOnce(toolCallStream('design-review'))
+      .mockResolvedValueOnce(finalAnswerStream('I used the selected review guidance.'));
+
+    const output = await collect(
+      runToolLoop(makeProcessed(root), { approvalMode: 'auto', userId: 'caller-1' }),
+    );
+
+    expect(output).toContain('"status":"completed"');
+    expect(output).toContain('Inspect the rendered interface');
+  });
+
+  it('reads the install overrides once even when the skill tool is called twice in one turn', async () => {
+    neonAdapter.query.mockImplementation(async (sql: string) =>
+      sql.includes('user_settings') ? [{ settings: {} }] : [],
+    );
+    userSkillService.findUserSkillByName.mockResolvedValueOnce(null);
+    provider.stream
+      .mockResolvedValueOnce(toolCallStream('nowhere-skill'))
+      .mockResolvedValueOnce(toolCallStream('design-review'))
+      .mockResolvedValueOnce(finalAnswerStream('Done.'));
+
+    const output = await collect(
+      runToolLoop(makeProcessed(root), { approvalMode: 'auto', userId: 'caller-1' }),
+    );
+
+    expect(output).toContain('Inspect the rendered interface');
+    expect(
+      neonAdapter.query.mock.calls.filter(([sql]) => String(sql).includes('user_settings')),
+    ).toHaveLength(1);
   });
 });
