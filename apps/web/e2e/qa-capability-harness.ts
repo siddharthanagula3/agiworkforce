@@ -2,15 +2,49 @@ import type { Page, Request } from '@playwright/test';
 
 export const QA_USER = 'user_3F8wXtZ4rDJ1SZmfO02Lz3BHj2v';
 
-export async function mintSignInTicket(): Promise<string> {
+export type QaIdentity = 'primary' | 'secondary';
+
+const QA_SECOND_USER_ID_ENV = 'QA_SECOND_USER_ID';
+const QA_SECOND_USER_EMAIL = 'qa4+clerk_test@example.com';
+
+function requireClerkSecret(): string {
   const secret = process.env['CLERK_SECRET_KEY'];
   if (!secret) {
     throw new Error('CLERK_SECRET_KEY missing from process.env (.env.local not loaded)');
   }
+  return secret;
+}
+
+async function resolveSecondUserId(secret: string): Promise<string> {
+  const envId = process.env[QA_SECOND_USER_ID_ENV];
+  if (envId) return envId;
+  const res = await fetch(
+    `https://api.clerk.com/v1/users?${new URLSearchParams({ query: QA_SECOND_USER_EMAIL })}`,
+    { headers: { Authorization: `Bearer ${secret}` } },
+  );
+  if (!res.ok) {
+    throw new Error(`clerk user lookup failed: HTTP ${res.status} ${await res.text()}`);
+  }
+  const users = (await res.json()) as { id: string }[];
+  const match = users[0];
+  if (!match) {
+    throw new Error(
+      `no Clerk user found for ${QA_SECOND_USER_EMAIL}; set ${QA_SECOND_USER_ID_ENV}`,
+    );
+  }
+  return match.id;
+}
+
+async function resolveIdentityUserId(identity: QaIdentity, secret: string): Promise<string> {
+  return identity === 'primary' ? QA_USER : resolveSecondUserId(secret);
+}
+
+export async function mintSignInTicketFor(userId: string): Promise<string> {
+  const secret = requireClerkSecret();
   const res = await fetch('https://api.clerk.com/v1/sign_in_tokens', {
     method: 'POST',
     headers: { Authorization: `Bearer ${secret}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ user_id: QA_USER }),
+    body: JSON.stringify({ user_id: userId }),
   });
   if (!res.ok) {
     throw new Error(`sign_in_tokens failed: HTTP ${res.status} ${await res.text()}`);
@@ -18,6 +52,10 @@ export async function mintSignInTicket(): Promise<string> {
   const json = (await res.json()) as { token?: string };
   if (!json.token) throw new Error('sign_in_tokens returned no token');
   return json.token;
+}
+
+export async function mintSignInTicket(): Promise<string> {
+  return mintSignInTicketFor(QA_USER);
 }
 
 export async function signInWithTicket(page: Page, ticket: string): Promise<void> {
@@ -61,6 +99,16 @@ export async function signInWithTicket(page: Page, ticket: string): Promise<void
 
 export async function signIn(page: Page): Promise<void> {
   await signInWithTicket(page, await mintSignInTicket());
+}
+
+export async function signInAs(page: Page, identity: QaIdentity): Promise<void> {
+  const secret = requireClerkSecret();
+  const userId = await resolveIdentityUserId(identity, secret);
+  await signInWithTicket(page, await mintSignInTicketFor(userId));
+}
+
+export async function resolveIdentityId(identity: QaIdentity): Promise<string> {
+  return resolveIdentityUserId(identity, requireClerkSecret());
 }
 
 export interface ApiCallResult {
