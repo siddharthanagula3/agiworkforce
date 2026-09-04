@@ -249,7 +249,7 @@ export function ConnectorLogo({
     return (
       <div
         className={cn(
-          'flex shrink-0 items-center justify-center border border-border/60 bg-muted/30',
+          'flex shrink-0 items-center justify-center border border-border/60 bg-muted/30 text-foreground',
           wrapper,
           className,
         )}
@@ -261,7 +261,6 @@ export function ConnectorLogo({
           viewBox="0 0 24 24"
           width={svg}
           height={svg}
-          className="text-foreground"
           style={{ fill: fillColor(icon), flexShrink: 0 }}
         >
           <path d={icon.path} />
