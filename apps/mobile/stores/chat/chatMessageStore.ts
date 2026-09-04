@@ -208,7 +208,7 @@ export const useChatMessageStore = create<MessageState>()(
               );
           }
         } catch {
-          // noop
+          return;
         } finally {
           set({ isLoadingConversations: false });
         }
@@ -1207,7 +1207,7 @@ function captureArtifactsForLoadedMessages(
       );
     if (artifacts.length > 0) useArtifactStore.getState().addArtifacts(artifacts);
   } catch {
-    // noop
+    return;
   }
 }
 

@@ -24,7 +24,7 @@ export function getMobileSendQueue(): MessageQueue {
       try {
         storage.set(key, value);
       } catch {
-        // noop
+        return;
       }
     },
   });

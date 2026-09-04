@@ -88,16 +88,16 @@ describe('Onboarding, local setup with cloud invite gate', () => {
     while (Date.now() < deadline && !reachedChat) {
       try {
         await element(by.id('download-skip-btn')).tap();
-      } catch {
-        // noop
+      } catch (err) {
+        void err;
       }
       try {
         await waitFor(element(by.id('chat.composer.input')))
           .toBeVisible()
           .withTimeout(3000);
         reachedChat = true;
-      } catch {
-        // noop
+      } catch (err) {
+        void err;
       }
     }
 
