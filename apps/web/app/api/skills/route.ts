@@ -12,6 +12,7 @@ import { SkillDraftBodySchema } from './skill-draft-schema';
 import {
   findManagedDirectorySkillByName,
   getManagedSkillDirectoryForPlugins,
+  invalidateManagedSkillCatalogCache,
   SkillCatalogUnavailableError,
 } from '@/lib/services/skill-catalog-service';
 import { resolveInstalledManagedSkills } from '@/lib/services/skill-install-service';
@@ -50,24 +51,30 @@ async function handleListSkills(request: NextRequest) {
   }
   const canAuthorSkills = userSkillAuthoringEnabled();
   const userSkills = canAuthorSkills ? await listUserSkills(getNeonDb(), userId) : [];
-  const body = ManagedSkillsResponseSchema.parse({
-    skills: [
-      ...skills.map((s) => ({
-        name: s.name,
-        description: s.description,
-        source: s.source,
-        lifecycle: s.frontmatter['draft'] === true ? 'draft' : 'included',
-        downloadable: s.source === 'bundled' && s.frontmatter['draft'] !== true,
-        // Straight from the bundle's frontmatter. Omitted when the skill has
-        // none, so the column can say "unknown" instead of showing a version
-        // this route made up.
-        ...(typeof s.frontmatter['version'] === 'string' && s.frontmatter['version'].trim()
-          ? { version: s.frontmatter['version'].trim() }
-          : {}),
-      })),
-      ...userSkills,
-    ],
-  });
+  let body;
+  try {
+    body = ManagedSkillsResponseSchema.parse({
+      skills: [
+        ...skills.map((s) => ({
+          name: s.name,
+          description: s.description,
+          source: s.source,
+          lifecycle: s.frontmatter['draft'] === true ? 'draft' : 'included',
+          downloadable: s.source === 'bundled' && s.frontmatter['draft'] !== true,
+          // Straight from the bundle's frontmatter. Omitted when the skill has
+          // none, so the column can say "unknown" instead of showing a version
+          // this route made up.
+          ...(typeof s.frontmatter['version'] === 'string' && s.frontmatter['version'].trim()
+            ? { version: s.frontmatter['version'].trim() }
+            : {}),
+        })),
+        ...userSkills,
+      ],
+    });
+  } catch (error) {
+    invalidateManagedSkillCatalogCache();
+    throw error;
+  }
   return NextResponse.json({ ...body, canAuthorSkills });
 }
 

@@ -333,7 +333,17 @@ export async function executeManagedSkillToolForPlugins(
   });
 }
 
-export function resetManagedSkillCatalogCacheForTests(): void {
+/**
+ * Called when a cached directory read produces a response that fails the
+ * public contract (`ManagedSkillsResponseSchema`). Without this, a directory
+ * poisoned by a mid-write file read stays cached for the full TTL, so a
+ * retry within that window replays the identical failure.
+ */
+export function invalidateManagedSkillCatalogCache(): void {
   skillCache = null;
   executableSkillCache = null;
+}
+
+export function resetManagedSkillCatalogCacheForTests(): void {
+  invalidateManagedSkillCatalogCache();
 }
