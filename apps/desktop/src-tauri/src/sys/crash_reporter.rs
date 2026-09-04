@@ -1,3 +1,4 @@
+use crate::sys::security::log_redaction::redact_secrets;
 use once_cell::sync::OnceCell;
 use sentry::protocol::Level;
 use sentry::types::Dsn;
@@ -52,12 +53,18 @@ pub fn is_enabled() -> bool {
     ENABLED.load(Ordering::SeqCst)
 }
 
+fn redacted_panic_report(location: &str, message: &str) -> String {
+    let redacted_message = redact_secrets(message);
+    let redacted_location = redact_secrets(location);
+    format!("{redacted_message} ({redacted_location})")
+}
+
 pub fn capture_panic(location: &str, message: &str) {
     if !is_enabled() || GUARD.get().is_none() {
         return;
     }
 
-    sentry::capture_message(&format!("{message} ({location})"), Level::Fatal);
+    sentry::capture_message(&redacted_panic_report(location, message), Level::Fatal);
     if let Some(client) = sentry::Hub::current().client() {
         client.flush(Some(FLUSH_TIMEOUT));
     }
@@ -90,5 +97,41 @@ mod tests {
         set_enabled(true);
         capture_panic("test.rs:1:1", "boom");
         set_enabled(false);
+    }
+
+    #[test]
+    fn redacted_panic_report_leaves_ordinary_messages_untouched() {
+        let report = redacted_panic_report("src/lib.rs:42:9", "index out of bounds: len 3");
+        assert_eq!(report, "index out of bounds: len 3 (src/lib.rs:42:9)");
+    }
+
+    #[test]
+    fn redacted_panic_report_scrubs_a_bearer_token_from_the_message() {
+        let report = redacted_panic_report(
+            "src/net.rs:10:1",
+            "request failed: Authorization: Bearer sk-1234567890abcdef1234567890abcdef",
+        );
+        assert!(!report.contains("sk-1234567890abcdef1234567890abcdef"));
+        assert!(report.contains("[REDACTED"));
+    }
+
+    #[test]
+    fn redacted_panic_report_scrubs_a_provider_api_key_from_the_message() {
+        let report = redacted_panic_report(
+            "src/providers/anthropic.rs:88:5",
+            "unwrap on None: api_key=sk-ant-abcdefghijklmnopqrstuvwxyz012345",
+        );
+        assert!(!report.contains("sk-ant-abcdefghijklmnopqrstuvwxyz012345"));
+        assert!(report.contains("[REDACTED_ANTHROPIC_KEY]"));
+    }
+
+    #[test]
+    fn redacted_panic_report_scrubs_a_jwt_from_the_message() {
+        let report = redacted_panic_report(
+            "src/auth/session.rs:5:5",
+            "token decode failed for eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.dozjgNryP4J3jVmNHl0w5N_XgL0n3I9PlFUP0THsR8U",
+        );
+        assert!(!report.contains("eyJhbGciOiJIUzI1NiJ9"));
+        assert!(report.contains("[REDACTED_JWT]"));
     }
 }
