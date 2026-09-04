@@ -399,3 +399,129 @@ test('a real owner constraint in code still satisfies the owner check', () => {
 
   assert.equal(result.status, 0, `expected pass, got:\n${result.stdout}${result.stderr}`);
 });
+
+const TRAVEL_BOOKINGS_RLS_MIGRATION = `create table if not exists public.travel_bookings (
+  id uuid primary key default gen_random_uuid(),
+  user_id text not null
+);
+alter table public.travel_bookings enable row level security;
+alter table public.travel_bookings force row level security;
+`;
+
+test('a table that gains RLS is scanned by pass 1 even though it is not in USER_OWNED_TABLES', () => {
+  const result = runOnSandbox({
+    [`${NEON}/0001_bookings.sql`]: TRAVEL_BOOKINGS_RLS_MIGRATION,
+    'apps/web/lib/bookings.ts': [
+      "import { getNeonDb } from './db';",
+      'export async function listBookings() {',
+      '  const db = getNeonDb();',
+      '  return db.query(`select id from travel_bookings order by created_at desc`);',
+      '}',
+    ].join('\n'),
+  });
+  assert.equal(result.status, 1, `expected failure, got:\n${result.stdout}`);
+  assert.match(result.stderr, /travel_bookings/);
+  assert.match(result.stderr, /no owner constraint/);
+});
+
+test('an RLS-derived table with a real owner predicate passes pass 1', () => {
+  const result = runOnSandbox({
+    [`${NEON}/0001_bookings.sql`]: TRAVEL_BOOKINGS_RLS_MIGRATION,
+    'apps/web/lib/bookings.ts': [
+      "import { getNeonDb } from './db';",
+      'export async function listBookings(userId) {',
+      '  const db = getNeonDb();',
+      '  return db.query(`select id from travel_bookings where user_id = $1`, [userId]);',
+      '}',
+    ].join('\n'),
+  });
+  assert.equal(result.status, 0, `expected pass, got:\n${result.stderr}`);
+});
+
+test('pass 1 now walks apps/web/features, not just apps/web/app/api and apps/web/lib', () => {
+  const result = runOnSandbox({
+    [`${NEON}/0001_shares.sql`]: SHARES_MIGRATION,
+    'apps/web/features/sharing/server/list-shares.ts': [
+      "import { getNeonDb } from '@/lib/server/neon-db';",
+      'export async function listShares() {',
+      '  const db = getNeonDb();',
+      '  return db.query(`select id from shared_sessions order by created_at desc`);',
+      '}',
+    ].join('\n'),
+  });
+  assert.equal(result.status, 1, `expected failure, got:\n${result.stdout}`);
+  assert.match(result.stderr, /shared_sessions/);
+  assert.match(result.stderr, /features\/sharing\/server\/list-shares\.ts/);
+});
+
+test('pass 1 now walks every page under apps/web/app, not only apps/web/app/api', () => {
+  const result = runOnSandbox({
+    [`${NEON}/0001_shares.sql`]: SHARES_MIGRATION,
+    'apps/web/app/workspace/layout.tsx': [
+      "import { getNeonDb } from '@/lib/server/neon-db';",
+      'export default async function WorkspaceLayout() {',
+      '  const db = getNeonDb();',
+      '  return db.query(`select id from shared_sessions order by created_at desc`);',
+      '}',
+    ].join('\n'),
+  });
+  assert.equal(result.status, 1, `expected failure, got:\n${result.stdout}`);
+  assert.match(result.stderr, /shared_sessions/);
+  assert.match(result.stderr, /app\/workspace\/layout\.tsx/);
+});
+
+const PROFILES_RLS_MIGRATION = `create table if not exists public.profiles (
+  id text primary key,
+  email text
+);
+alter table public.profiles enable row level security;
+alter table public.profiles force row level security;
+`;
+
+test('a bare id predicate scopes a statement over profiles, which has no user_id column', () => {
+  const result = runOnSandbox({
+    [`${NEON}/0001_profiles.sql`]: PROFILES_RLS_MIGRATION,
+    'apps/web/lib/profile.ts': [
+      "import { getNeonDb } from './db';",
+      'export async function getProfile(userId) {',
+      '  const db = getNeonDb();',
+      '  return db.query(`select id, email from profiles where id = $1`, [userId]);',
+      '}',
+    ].join('\n'),
+  });
+  assert.equal(result.status, 0, `expected pass, got:\n${result.stderr}`);
+});
+
+test('an email lookup on profiles does not satisfy the self-id exemption', () => {
+  const result = runOnSandbox({
+    [`${NEON}/0001_profiles.sql`]: PROFILES_RLS_MIGRATION,
+    'apps/web/lib/profile.ts': [
+      "import { getNeonDb } from './db';",
+      'export async function findProfileByEmail(email) {',
+      '  const db = getNeonDb();',
+      '  return db.query(`select id, email from profiles where lower(email) = lower($1)`, [email]);',
+      '}',
+    ].join('\n'),
+  });
+  assert.equal(result.status, 1, `expected failure, got:\n${result.stdout}`);
+  assert.match(result.stderr, /profiles/);
+  assert.match(result.stderr, /no owner constraint/);
+});
+
+test('a bare id predicate does not exempt a statement that also touches a non-self-id table', () => {
+  const result = runOnSandbox({
+    [`${NEON}/0001_profiles.sql`]: PROFILES_RLS_MIGRATION,
+    [`${NEON}/0002_shares.sql`]: SHARES_MIGRATION,
+    'apps/web/lib/mixed.ts': [
+      "import { getNeonDb } from './db';",
+      'export async function listMixed() {',
+      '  const db = getNeonDb();',
+      '  return db.query(',
+      '    `select p.id from profiles p join shared_sessions s on s.id = p.id where p.id = s.id`,',
+      '  );',
+      '}',
+    ].join('\n'),
+  });
+  assert.equal(result.status, 1, `expected failure, got:\n${result.stdout}`);
+  assert.match(result.stderr, /shared_sessions/);
+});
