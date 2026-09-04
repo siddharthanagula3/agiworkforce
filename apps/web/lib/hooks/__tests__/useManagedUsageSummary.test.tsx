@@ -46,7 +46,7 @@ describe('useManagedUsageSummary', () => {
     percentage = 95;
 
     await act(async () => {
-      await vi.advanceTimersByTimeAsync(61_000);
+      await vi.advanceTimersByTimeAsync(301_000);
     });
 
     await waitFor(() => expect(result.current.usage?.session_usage_percentage).toBe(95));
@@ -86,7 +86,7 @@ describe('useManagedUsageSummary', () => {
 
     ok = false;
     await act(async () => {
-      await vi.advanceTimersByTimeAsync(61_000);
+      await vi.advanceTimersByTimeAsync(301_000);
     });
 
     await waitFor(() => expect(result.current.stale).toBe(true));
