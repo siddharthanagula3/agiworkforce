@@ -82,6 +82,15 @@ export interface AdminPolicy {
    * this ships.
    */
   externalSharingEnabled: boolean;
+  /**
+   * Whether members of this workspace may use managed account memory at all.
+   *
+   * False means no member gets memory regardless of their own per-user
+   * setting, matching how Claude Team/Enterprise and ChatGPT Enterprise gate
+   * memory behind an admin. Defaults false so no existing workspace gains
+   * memory when this ships; an owner or admin must turn it on.
+   */
+  allowMemory: boolean;
   secretHandling: SecretHandlingMode;
   requireMfa: boolean;
   monthlySpendCapCents: number | null;
@@ -388,6 +397,7 @@ export const DEFAULT_ENTERPRISE_ADMIN_POLICY: Omit<AdminPolicy, 'organizationId'
   // permanently deleting conversations, which only a workspace owner can decide.
   retentionEnforced: false,
   externalSharingEnabled: true,
+  allowMemory: false,
   secretHandling: SECRET_HANDLING_MODE_DEFAULT.organization,
   requireMfa: false,
   monthlySpendCapCents: null,

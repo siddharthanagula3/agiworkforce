@@ -28,6 +28,7 @@ function policyRow(overrides: Record<string, unknown> = {}): AdminPolicyRow {
     retention_days: 365,
     retention_enforced: false,
     external_sharing_enabled: true,
+    allow_memory: false,
     metadata: {},
     updated_at: '2026-08-22T00:00:00.000Z',
     ...overrides,
@@ -114,6 +115,18 @@ describe('formatAdminPolicy, ipAllowList', () => {
   });
 });
 
+describe('formatAdminPolicy, allowMemory', () => {
+  it('defaults to false, matching the column default', () => {
+    expect(formatAdminPolicy(policyRow()).allowMemory).toBe(false);
+  });
+
+  it('reads a saved allowMemory value off the column, not metadata', () => {
+    expect(formatAdminPolicy(policyRow({ allow_memory: true, metadata: {} })).allowMemory).toBe(
+      true,
+    );
+  });
+});
+
 describe('defaultAdminPolicyFor', () => {
   it('defaults an unconfigured organization to redact', () => {
     expect(defaultAdminPolicyFor(ORGANIZATION_ID).secretHandling).toBe('redact');
@@ -157,7 +170,7 @@ describe('upsertOrganizationPolicy, secretHandling', () => {
     await upsertOrganizationPolicy(db, ORGANIZATION_ID, input);
 
     const params = query.mock.calls[0]?.[1] as unknown[];
-    const writtenMetadata = JSON.parse(params[13] as string);
+    const writtenMetadata = JSON.parse(params[14] as string);
     expect(writtenMetadata).toMatchObject({ note: 'kept', secretHandling: 'block' });
   });
 });
@@ -187,7 +200,7 @@ describe('upsertOrganizationPolicy, requireMfa and monthlySpendCapCents', () => 
     await upsertOrganizationPolicy(db, ORGANIZATION_ID, input);
 
     const params = query.mock.calls[0]?.[1] as unknown[];
-    const writtenMetadata = JSON.parse(params[13] as string);
+    const writtenMetadata = JSON.parse(params[14] as string);
     expect(writtenMetadata).toMatchObject({ requireMfa: true, monthlySpendCapCents: 25_000 });
   });
 
@@ -201,7 +214,7 @@ describe('upsertOrganizationPolicy, requireMfa and monthlySpendCapCents', () => 
     await upsertOrganizationPolicy(db, ORGANIZATION_ID, input);
 
     const params = query.mock.calls[0]?.[1] as unknown[];
-    const writtenMetadata = JSON.parse(params[13] as string);
+    const writtenMetadata = JSON.parse(params[14] as string);
     expect(writtenMetadata['monthlySpendCapCents']).toBeNull();
   });
 });
@@ -225,7 +238,7 @@ describe('upsertOrganizationPolicy, zeroDataRetentionOnly', () => {
     await upsertOrganizationPolicy(db, ORGANIZATION_ID, input);
 
     const params = query.mock.calls[0]?.[1] as unknown[];
-    const writtenMetadata = JSON.parse(params[13] as string);
+    const writtenMetadata = JSON.parse(params[14] as string);
     expect(writtenMetadata).toMatchObject({ zeroDataRetentionOnly: true });
   });
 });
@@ -252,7 +265,32 @@ describe('upsertOrganizationPolicy, ipAllowList', () => {
     await upsertOrganizationPolicy(db, ORGANIZATION_ID, input);
 
     const params = query.mock.calls[0]?.[1] as unknown[];
-    const writtenMetadata = JSON.parse(params[13] as string);
+    const writtenMetadata = JSON.parse(params[14] as string);
     expect(writtenMetadata).toMatchObject({ ipAllowList: ['203.0.113.0/24'] });
+  });
+});
+
+describe('upsertOrganizationPolicy, allowMemory', () => {
+  let query: ReturnType<typeof vi.fn>;
+  let db: DatabaseAdapter;
+
+  beforeEach(() => {
+    query = vi.fn();
+    db = { query } as unknown as DatabaseAdapter;
+  });
+
+  it('writes allowMemory as its own column, not into metadata', async () => {
+    query.mockResolvedValueOnce([policyRow({ allow_memory: true })]);
+
+    const input = { ...defaultAdminPolicyFor(ORGANIZATION_ID), allowMemory: true };
+    delete (input as { organizationId?: string }).organizationId;
+    delete (input as { updatedAt?: string }).updatedAt;
+
+    await upsertOrganizationPolicy(db, ORGANIZATION_ID, input);
+
+    const params = query.mock.calls[0]?.[1] as unknown[];
+    expect(params[13]).toBe(true);
+    const writtenMetadata = JSON.parse(params[14] as string);
+    expect(writtenMetadata['allowMemory']).toBeUndefined();
   });
 });

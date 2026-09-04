@@ -1962,7 +1962,10 @@ export async function processRequest(
           );
           return DISABLED_MANAGED_MEMORY_POLICY;
         }
-        return loadManagedMemoryPolicy(scoped.db, { userId });
+        return loadManagedMemoryPolicy(scoped.db, {
+          userId,
+          organizationId: scoped.organizationId,
+        });
       })().catch((error: unknown) => {
         logger.error(
           { error, userId, conversationId: chatRequest.conversation_id },
