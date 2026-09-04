@@ -110,7 +110,6 @@ pub(crate) struct ErrorEvent {
     pub(crate) message: String,
 }
 
-
 #[derive(Debug, Clone, Serialize)]
 #[serde(tag = "method", rename_all = "snake_case")]
 pub(crate) enum ControlRequest {
@@ -182,7 +181,6 @@ pub(crate) enum HookResult {
     Continue { modified_input: Option<Value> },
     Block { reason: Option<String> },
 }
-
 
 #[derive(Debug, Clone, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]

@@ -529,10 +529,7 @@ mod tests {
     #[test]
     fn display_rate_limited_with_retry() {
         let err = CliError::rate_limited("anthropic", Some(30));
-        assert_eq!(
-            err.to_string(),
-            "[anthropic] Rate limited, retry after 30s"
-        );
+        assert_eq!(err.to_string(), "[anthropic] Rate limited, retry after 30s");
     }
 
     #[test]
