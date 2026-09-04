@@ -77,6 +77,10 @@
     {
       "path": "/api/cron/refresh-connector-directory",
       "schedule": "15 6 * * *"
+    },
+    {
+      "path": "/api/cron/report-enterprise-usage",
+      "schedule": "10 5 * * *"
     }
   ]
 }
