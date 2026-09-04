@@ -7,9 +7,7 @@
   "framework": "nextjs",
   "ignoreCommand": "bash vercel-ignore-build.sh",
   "git": {
-    "deploymentEnabled": {
-      "main": false
-    }
+    "deploymentEnabled": false
   },
   "crons": [
     {
