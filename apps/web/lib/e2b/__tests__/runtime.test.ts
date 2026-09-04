@@ -433,7 +433,7 @@ describe('getE2BExecutor, harness credentials', () => {
     });
   });
 
-  it('seeds the sandbox with the managed provider key for a harness the proxy does not cover', async () => {
+  it('withholds the raw managed provider key from a code-session sandbox for a harness the proxy does not cover, even when the platform has one', async () => {
     buildServerProviderAdapter.mockImplementation((providerId: string) => {
       if (providerId === 'factory') return { config: { apiKey: 'sk-managed-factory' } };
       throw new Error(`no managed key configured for ${providerId}`);
@@ -445,7 +445,23 @@ describe('getE2BExecutor, harness credentials', () => {
     const createOptions = (create.mock.calls[0] as unknown[])[1] as {
       envs?: Record<string, string>;
     };
-    expect(createOptions.envs).toEqual({ FACTORY_API_KEY: 'sk-managed-factory' });
+    expect(createOptions.envs).toBeUndefined();
+    expect(buildServerProviderAdapter).not.toHaveBeenCalled();
+  });
+
+  it('withholds the raw key for opencode too, even though it is a multi-provider fallback, not a single-provider miss', async () => {
+    buildServerProviderAdapter.mockImplementation((providerId: string) => {
+      if (providerId === 'openai') return { config: { apiKey: 'sk-openai' } };
+      throw new Error(`no managed key configured for ${providerId}`);
+    });
+
+    const { getE2BExecutor } = await import('../runtime');
+    await getE2BExecutor(codeScope('code-opencode-danger', 'none', { templateId: 'opencode' }));
+
+    const createOptions = (create.mock.calls[0] as unknown[])[1] as {
+      envs?: Record<string, string>;
+    };
+    expect(createOptions.envs).toBeUndefined();
   });
 
   it('omits the credential entirely when no managed key resolves for the harness', async () => {
@@ -497,14 +513,21 @@ describe('getE2BExecutor, harness credentials', () => {
     expect(createOptions.envs).toEqual({ ANTHROPIC_API_KEY: 'sk-explicit' });
   });
 
-  it('lists every provider opencode can auto-detect, keeping only the ones that resolve', async () => {
+  it('lists every provider opencode can auto-detect for a non-code-session (bare) scope, where the multi-provider proxy gap does not apply', async () => {
     buildServerProviderAdapter.mockImplementation((providerId: string) => {
       if (providerId === 'openai') return { config: { apiKey: 'sk-openai' } };
       throw new Error(`no managed key configured for ${providerId}`);
     });
 
     const { getE2BExecutor } = await import('../runtime');
-    await getE2BExecutor(codeScope('code-opencode', 'trusted', { templateId: 'opencode' }));
+    await getE2BExecutor({
+      tenantId: 'managed-cloud',
+      userId: 'user-code',
+      conversationId: 'convo-opencode',
+      networkAccess: 'trusted',
+      planTier: 'pro',
+      templateId: 'opencode',
+    });
 
     const createOptions = (create.mock.calls[0] as unknown[])[1] as {
       envs?: Record<string, string>;
@@ -513,21 +536,19 @@ describe('getE2BExecutor, harness credentials', () => {
   });
 
   it('carries the resolved credential into every sandbox command, including a resumed one', async () => {
-    buildServerProviderAdapter.mockImplementation((providerId: string) => {
-      if (providerId === 'factory') return { config: { apiKey: 'sk-managed-factory' } };
-      throw new Error(`no managed key configured for ${providerId}`);
-    });
-
     const { getE2BExecutor } = await import('../runtime');
     const executor = await getE2BExecutor(
-      codeScope('code-cmd', 'trusted', { templateId: 'droid' }),
+      codeScope('code-cmd', 'trusted', {
+        templateId: 'droid',
+        explicitCredential: { envVar: 'FACTORY_API_KEY', value: 'sk-explicit-factory' },
+      }),
     );
     await executor!.runCommand?.({ command: 'droid -p "hi"' });
 
     const instance = await create.mock.results[0]!.value;
     expect(instance.commands.run).toHaveBeenCalledWith(
       'droid -p "hi"',
-      expect.objectContaining({ envs: { FACTORY_API_KEY: 'sk-managed-factory' } }),
+      expect.objectContaining({ envs: { FACTORY_API_KEY: 'sk-explicit-factory' } }),
     );
   });
 

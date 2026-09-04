@@ -369,7 +369,10 @@ async function handleProxy(
   for (const [key, value] of request.headers) {
     if (!HOP_BY_HOP_REQUEST_HEADERS.has(key.toLowerCase())) forwardHeaders.set(key, value);
   }
-  forwardHeaders.set(authHeaderName, apiKey);
+  forwardHeaders.set(
+    authHeaderName,
+    authHeaderName.toLowerCase() === 'authorization' ? `Bearer ${apiKey}` : apiKey,
+  );
 
   const method = request.method.toUpperCase();
   const forwardsBody = method !== 'GET' && method !== 'HEAD';

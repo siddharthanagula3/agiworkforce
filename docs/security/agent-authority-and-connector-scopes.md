@@ -200,6 +200,21 @@ API calls each scope covers.
   (`apps/web/lib/e2b/egress-host-resolution.ts`). This is a point-in-time
   check: a host that later rebinds its DNS to a private or metadata address
   after the session starts is not re-resolved server-side.
+- **A raw managed provider key never enters a sandbox**, whatever the network
+  preset. A coding harness is "proxy-covered" only when it has exactly one
+  provider credential and a verified way to redirect its traffic through
+  `provider-proxy/[...path]/route.ts` on a session-scoped, short-lived token,
+  either an env var (`claude`, via `ANTHROPIC_BASE_URL`) or a config file the
+  session bootstrap writes once at creation (`codex`, via `~/.codex/config.toml`'s
+  `model_providers.<id>.base_url`/`env_key`); see `harnessIsProxyCovered` and
+  `harnessProxyConfigFile` in `apps/web/lib/e2b/templates.ts`. For every other
+  harness (`droid`, `amp`, `grok`, `opencode`, and any future addition with no
+  verified override), `resolveHarnessEnvs` in `runtime.ts` withholds the
+  managed key rather than injecting it, and `POST /api/code/sessions` refuses
+  managed-mode session creation for it outright (`harness_credential_unavailable`)
+  unless the caller supplies their own credential. `sessions/[sessionId]/provider-proxy/[...path]/route.ts`
+  gates and meters every proxied inference call the same way the other
+  platform-funded compute entry points under `api/code` do.
 
 ---
 

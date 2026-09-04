@@ -213,12 +213,47 @@ describe('provider-proxy route', () => {
 
   it('refuses a provider the proxy does not cover', async () => {
     const { req, context } = request({
-      headers: { 'x-api-key': token({ providerId: 'openai' }) },
+      headers: { 'x-api-key': token({ providerId: 'google' }) },
     });
     const response = await POST(req, context);
     expect(response.status).toBe(502);
     const body = (await response.json()) as { error: { code: string } };
     expect(body.error.code).toBe('provider_proxy_unavailable');
+  });
+
+  it('forwards an openai-proxied call as a Bearer-authenticated request, with no doubled /v1', async () => {
+    mockBuildAdapter.mockImplementation((providerId: string) => {
+      if (providerId === 'openai') return { config: { apiKey: 'sk-managed-openai' } };
+      throw new Error(`no managed key for ${providerId}`);
+    });
+    const fetchMock = vi.fn(
+      async (_url: string, _init?: RequestInit) =>
+        new Response('{"ok":true}', {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    const { req, context } = request({
+      path: ['responses'],
+      headers: {
+        authorization: `Bearer ${token({ providerId: 'openai' })}`,
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({ model: 'test-openai-model' }),
+    });
+    const response = await POST(req, context);
+
+    expect(response.status).toBe(200);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe('https://api.openai.com/v1/responses');
+    const headers = init.headers as Headers;
+    expect(headers.get('authorization')).toBe('Bearer sk-managed-openai');
+    expect(headers.get('x-api-key')).toBeNull();
+
+    vi.unstubAllGlobals();
   });
 
   it('502s when the provider has no managed key configured', async () => {
