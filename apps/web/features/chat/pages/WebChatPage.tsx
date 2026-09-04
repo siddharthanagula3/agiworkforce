@@ -1037,7 +1037,8 @@ export default function WebChatPage() {
     [handleOpenUpgradeDialog, openSettings],
   );
 
-  const { usage: managedUsageSummary } = useManagedUsageSummary();
+  const { usage: managedUsageSummary, refresh: refreshManagedUsageSummary } =
+    useManagedUsageSummary();
   /*
    * The one limit worth warning about, named in prose above the composer.
    * Usage was previously visible only in Settings, so the first signal a user
@@ -1370,6 +1371,13 @@ export default function WebChatPage() {
 
   const wasStreamingRef = useRef(false);
   const browserReplyReady = useBrowserReplyReadyPreference();
+
+  const wasStreamingForUsageRef = useRef(false);
+  useEffect(() => {
+    const turnJustFinished = wasStreamingForUsageRef.current && !isStreaming;
+    wasStreamingForUsageRef.current = isStreaming;
+    if (turnJustFinished) void refreshManagedUsageSummary();
+  }, [isStreaming, refreshManagedUsageSummary]);
 
   useEffect(() => {
     const justFinished = wasStreamingRef.current && !isStreaming;
