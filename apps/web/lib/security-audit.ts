@@ -238,7 +238,18 @@ export type AuditEventType =
   | 'legal_hold_released'
   | 'secret_detected'
   | 'spend_cap_exceeded'
-  | 'ip_not_allowed';
+  | 'ip_not_allowed'
+  | 'sso_connection_created'
+  | 'sso_connection_updated'
+  | 'sso_connection_activated'
+  | 'sso_connection_deactivated'
+  | 'sso_connection_deleted'
+  | 'scim_token_created'
+  | 'scim_token_revoked'
+  | 'directory_sync_connection_created'
+  | 'directory_sync_connection_deleted'
+  | 'scim_membership_granted'
+  | 'scim_membership_revoked';
 
 export type AuditOutcome = 'success' | 'failure' | 'denied';
 
@@ -484,6 +495,21 @@ function inferResourceType(eventType: AuditEventType): string {
       return 'two_factor';
     case 'admin_policy_changed':
       return 'organization_policy';
+    case 'sso_connection_created':
+    case 'sso_connection_updated':
+    case 'sso_connection_activated':
+    case 'sso_connection_deactivated':
+    case 'sso_connection_deleted':
+      return 'sso_connection';
+    case 'scim_token_created':
+    case 'scim_token_revoked':
+      return 'scim_token';
+    case 'directory_sync_connection_created':
+    case 'directory_sync_connection_deleted':
+      return 'directory_sync_connection';
+    case 'scim_membership_granted':
+    case 'scim_membership_revoked':
+      return 'organization_member';
     default:
       return 'unknown';
   }
