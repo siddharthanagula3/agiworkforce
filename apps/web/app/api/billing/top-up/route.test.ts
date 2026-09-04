@@ -7,6 +7,23 @@ const mocks = vi.hoisted(() => ({
   retrieveSubscription: vi.fn(async () => ({ currency: 'usd' })),
   audit: vi.fn(),
   getUserScopedDb: vi.fn(),
+  evaluateActiveWorkspacePolicy: vi.fn(
+    async (
+      ..._args: unknown[]
+    ): Promise<{
+      allowed: boolean;
+      code: string;
+      reason: string;
+      obligations: unknown[];
+      organizationId: string | null;
+    }> => ({
+      allowed: true,
+      code: 'unscoped',
+      reason: 'No workspace policy applies to this request.',
+      obligations: [],
+      organizationId: null,
+    }),
+  ),
 }));
 
 vi.mock('server-only', () => ({}));
@@ -14,6 +31,11 @@ vi.mock('@/lib/rate-limit', () => ({ withRateLimit: vi.fn(async () => null) }));
 vi.mock('@/lib/csrf', () => ({ requireCsrfToken: vi.fn(async () => null) }));
 vi.mock('@/lib/server/rls-db', () => ({
   getUserScopedDb: (...args: unknown[]) => mocks.getUserScopedDb(...args),
+}));
+vi.mock('@/lib/server/neon-db', () => ({ getNeonDb: vi.fn(() => ({})) }));
+vi.mock('@/lib/services/organization-policy-gate', () => ({
+  evaluateActiveWorkspacePolicy: (...args: unknown[]) =>
+    mocks.evaluateActiveWorkspacePolicy(...args),
 }));
 vi.mock('@/lib/security-audit', () => ({
   recordAuditEvent: (...args: unknown[]) => mocks.audit(...args),
@@ -152,6 +174,24 @@ describe('POST /api/billing/top-up', () => {
 
     expect(response.status).toBe(503);
     expect(await response.json()).toMatchObject({ error: { code: 'SERVICE_UNAVAILABLE' } });
+    expect(mocks.createSession).not.toHaveBeenCalled();
+  });
+
+  it('refuses a top-up once the workspace billing hold blocks new paid usage', async () => {
+    mocks.evaluateActiveWorkspacePolicy.mockResolvedValueOnce({
+      allowed: false,
+      code: 'billing_past_due',
+      reason: 'New paid usage is on hold: payment is 65 days past due.',
+      obligations: [],
+      organizationId: 'org_1',
+    });
+
+    const response = await POST(request(10));
+
+    expect(response.status).toBe(409);
+    expect(await response.json()).toMatchObject({
+      error: { message: expect.stringContaining('65 days past due') },
+    });
     expect(mocks.createSession).not.toHaveBeenCalled();
   });
 

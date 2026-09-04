@@ -19,6 +19,8 @@ import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { withRateLimit } from '@/lib/rate-limit';
 import { recordAuditEvent } from '@/lib/security-audit';
+import { evaluateActiveWorkspacePolicy } from '@/lib/services/organization-policy-gate';
+import { getNeonDb } from '@/lib/server/neon-db';
 import { getUserScopedDb } from '@/lib/server/rls-db';
 import type { SubscriptionRow } from '@/lib/server/neon-types';
 import { isStripeCustomerId, isStripeSubscriptionId } from '@/lib/server/stripe-resource-ids';
@@ -74,6 +76,16 @@ async function handleTopUp(request: NextRequest): Promise<NextResponse> {
 
   const rateLimitResponse = await withRateLimit(request, 'checkout');
   if (rateLimitResponse) return rateLimitResponse;
+
+  const billingGate = await evaluateActiveWorkspacePolicy(
+    getNeonDb(),
+    userId,
+    { resource: 'credit_topup' },
+    request,
+  );
+  if (!billingGate.allowed) {
+    throw createError.conflict(billingGate.reason);
+  }
 
   const parsed = TopUpRequestSchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) {
