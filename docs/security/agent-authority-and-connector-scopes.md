@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Legal/compliance + Platform lead
-Last updated: 2026-09-03
+Last updated: 2026-09-04
 Purpose: the source-of-truth matrix that `/acceptable-use` and `/agent-permissions`
 are written against. Every public sentence on those pages must trace to a row here,
 and every row cites the implementing file. If you change the tool loop, the approval
@@ -192,6 +192,14 @@ API calls each scope covers.
   `github.com`, `api.github.com`, `raw.githubusercontent.com`,
   `objects.githubusercontent.com`, `registry.npmjs.org`, `npmjs.com`,
   `pypi.org`, `files.pythonhosted.org`.
+- Cloud Code sessions may add up to 10 extra egress hosts
+  (`apps/web/lib/e2b/egress-hosts.ts`). At session creation each host (and the
+  base domain of a leading wildcard) is resolved with `node:dns/promises` and
+  rejected if any A/AAAA answer is loopback, link-local, RFC1918/unique-local,
+  the cloud metadata address, or unresolvable
+  (`apps/web/lib/e2b/egress-host-resolution.ts`). This is a point-in-time
+  check: a host that later rebinds its DNS to a private or metadata address
+  after the session starts is not re-resolved server-side.
 
 ---
 
