@@ -17,11 +17,11 @@ import { CONTACT_EMAIL, contactMailto } from '@/lib/legal-constants';
 export const metadata = buildMetadata({
   title: 'SLA',
   description:
-    'Planned service levels for AGI Managed Cloud. Public alpha: these are targets, not a contractual commitment, and this page says which is which.',
+    'Support response commitments by plan, current today, plus the uptime and credit targets AGI Managed Cloud is building toward in public alpha. This page says which is which.',
   path: '/sla',
 });
 
-const LAST_REVIEWED = '5 August 2026';
+const LAST_REVIEWED = '4 September 2026';
 
 const UPTIME: readonly LedgerRow[] = [
   { label: 'Web (agiworkforce.com)', value: '99.9% target · monthly window' },
@@ -40,17 +40,31 @@ const UPTIME: readonly LedgerRow[] = [
 ];
 
 const RESPONSE: readonly LedgerRow[] = [
-  { label: 'Free', value: '48 hours · email' },
-  { label: 'Basic and Pro', value: '24 hours · priority email' },
-  { label: 'Max 5x, Max 15x, and Team', value: '8 hours · priority email' },
-  { label: 'Enterprise', value: '4 hours · priority email' },
+  {
+    label: 'Free, Basic, Pro, and Max (5x and 15x)',
+    value: 'Help centre and email · no response-time commitment',
+  },
+  {
+    label: 'Team',
+    value: 'Email · first response within 1 business day, Central Time',
+  },
+  {
+    label: 'Enterprise',
+    value:
+      'Named contact · first response within 4 business hours (Central Time) for a service-down report, 1 business day otherwise · escalation path · status page',
+  },
+  {
+    label: 'Premium support add-on',
+    value: 'Faster response and on-call, negotiated as an Enterprise order-form line only',
+    quiet: true,
+  },
 ];
 
 const NOT_YET: readonly LedgerRow[] = [
   {
-    label: 'Not contractual',
+    label: 'Uptime targets are not contractual',
     value:
-      'These targets take effect only if and when a plan agreement says so. Until then they describe what we are building toward, and nothing on this page creates an obligation.',
+      'The uptime numbers above take effect only if and when a plan agreement says so. Until then they describe what we are building toward, and nothing on this page creates an uptime obligation. The support response commitments in the table above are current policy, not a future target.',
   },
   {
     label: 'No measured history',
@@ -58,13 +72,14 @@ const NOT_YET: readonly LedgerRow[] = [
       'We do not publish historical uptime, and we have no incident archive. The live check on /status is a point-in-time signal covering three dependencies, not an availability record.',
   },
   {
-    label: 'No tiered support routing',
+    label: 'Support routing is manual',
     value:
-      'Support requests currently arrive in a single email queue. There is no plan-derived priority routing implemented, so treat the response table above as a plan rather than a description of today.',
+      'Support requests arrive in a single email queue and are triaged by hand against the commitment above. There is no automated, plan-derived routing system.',
   },
   {
-    label: 'No on-call rotation',
-    value: 'There is no 24/7 rotation. Response is best-effort during working hours.',
+    label: 'No 24/7 coverage',
+    value:
+      'There is no on-call rotation and no round-the-clock coverage. We do not claim 24/7 support because a small team could not staff it honestly; response follows the business-hours and business-day targets above.',
   },
   {
     label: 'No recovery objectives',
@@ -86,13 +101,14 @@ export default function SlaPage() {
         <PageHero
           id="agi-sla-title"
           eyebrow="Service levels"
-          title="Targets we are building toward, labeled as targets."
+          title="Support commitments that hold today; uptime targets we are building toward."
           lede={
             <>
               AGI Managed Cloud is in public alpha.{' '}
               <strong>
-                The numbers below are planned targets, not a binding commitment, and they take
-                effect only when a plan agreement says so.
+                The support response commitments below are current policy. The uptime and credit
+                numbers are planned targets, not a binding commitment, and they take effect only
+                when a plan agreement says so.
               </strong>{' '}
               Local and BYOK modes have no AGI service in the request path, so there is nothing for
               us to commit to there. Reviewed {LAST_REVIEWED}.
@@ -117,17 +133,23 @@ export default function SlaPage() {
           <Stack gap="loose">
             <div>
               <h2 className="agi-ds-h2" id="agi-sla-response-title">
-                First response, by plan, once support routing exists.
+                First response, by plan.
               </h2>
               <Prose>
-                Plan names match the billing catalogue. Plan pricing is on{' '}
+                These are current support commitments, not planned targets. Plan names match the
+                billing catalogue. Plan pricing is on{' '}
                 <Link href="/pricing" className="agi-ds-link">
                   /pricing
                 </Link>
-                ; it is not restated here so there is only one source of truth for it.
+                ; it is not restated here so there is only one source of truth for it. Full detail,
+                including how to reach us, is on{' '}
+                <Link href="/support" className="agi-ds-link">
+                  /support
+                </Link>
+                .
               </Prose>
             </div>
-            <Ledger caption="Planned response times" rows={RESPONSE} />
+            <Ledger caption="Support response commitments" rows={RESPONSE} />
           </Stack>
         </Section>
 
