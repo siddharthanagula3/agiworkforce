@@ -1672,6 +1672,9 @@ html[data-contrast='more'] *:focus-visible {
   --agi-ground: #ffffff;
   --agi-ground-2: #f4f7fb;
   --agi-ground-3: #e8eef6;
+  --agi-bg: var(--agi-ground);
+  --agi-bg-2: var(--agi-ground-2);
+  --agi-bg-3: var(--agi-ground-3);
   --agi-ink: #0f172a;
   --agi-ink-2: #475569;
   --agi-ink-3: #5b6b7f;
