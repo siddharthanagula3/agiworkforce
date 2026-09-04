@@ -138,6 +138,11 @@ async function resolveProcurementReference(
   return metadataReference || null;
 }
 
+const ENDED_SUBSCRIPTION_STATUSES: ReadonlySet<Stripe.Subscription.Status> = new Set([
+  'canceled',
+  'incomplete_expired',
+]);
+
 async function resolveOrganizationIdForSubscriptionOwner(
   db: DatabaseAdapter,
   stripeSubscriptionId: string,
@@ -259,19 +264,25 @@ export async function syncEnterpriseContractFromSubscription(
   const stripeCustomerId = extractCustomerId(subscription.customer);
   const negotiated = resolveNegotiatedContractMetadata(subscription);
   const eventCreatedAt = typeof options.eventCreatedAt === 'number' ? options.eventCreatedAt : null;
+  const subscriptionEnded = ENDED_SUBSCRIPTION_STATUSES.has(subscription.status);
 
   const written = await db.query<{ organization_id: string }>(
     `insert into public.organization_billing_contracts
        (organization_id, stripe_customer_id, stripe_subscription_id, stripe_product_id, stripe_price_id,
         procurement_reference, contract_term_start, contract_term_end, billing_cadence, committed_seats,
         included_usage_cents_per_period, overage_stripe_price_id, committed_usage_block_cents,
-        minimum_annual_spend_cents, support_tier, customer_legal_entity, last_stripe_event_at)
+        minimum_annual_spend_cents, support_tier, customer_legal_entity, last_stripe_event_at, ended_at)
      values (
        $1::uuid, $2::text, $3::text, $4::text, $5::text, $6::text, $7::date, $8::date, $9::text, $10::integer,
        coalesce($11::bigint, 0), $12::text, coalesce($13::bigint, 0), coalesce($14::bigint, 0), $15::text, $16::text,
-       to_timestamp($17::double precision)
+       to_timestamp($17::double precision),
+       case when $18::boolean then now() else null end
      )
      on conflict (organization_id) do update set
+       ended_at = case
+         when $18::boolean then coalesce(organization_billing_contracts.ended_at, now())
+         else null
+       end,
        stripe_customer_id = excluded.stripe_customer_id,
        stripe_subscription_id = excluded.stripe_subscription_id,
        stripe_product_id = excluded.stripe_product_id,
@@ -331,6 +342,7 @@ export async function syncEnterpriseContractFromSubscription(
       negotiated.supportTier,
       negotiated.customerLegalEntity,
       eventCreatedAt,
+      subscriptionEnded,
     ],
   );
 
