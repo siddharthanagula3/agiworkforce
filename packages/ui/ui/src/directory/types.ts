@@ -51,6 +51,7 @@ export interface DirectorySection {
   loading?: boolean;
   error?: string | null;
   notice?: string | null;
+  createLabel?: string;
   sources?: readonly DirectorySourceChip[];
   sourcesHeading?: string;
   filterGroups?: readonly DirectoryFilterGroup[];
@@ -149,7 +150,6 @@ export interface DirectoryAdapter {
   uninstall?: (section: DirectorySectionKey, id: string) => Promise<void> | void;
   openSettings?: (section: DirectorySectionKey, id: string) => Promise<void> | void;
   createEntry?: (section: DirectorySectionKey) => void;
-  createEntryLabel?: string;
   copyLink?: (section: DirectorySectionKey, id: string) => Promise<void> | void;
   openHref?: (href: string) => Promise<void> | void;
   copyValue?: (value: string) => Promise<void> | void;

@@ -101,11 +101,15 @@ export function useDirectoryAdapter(options: DirectoryAdapterOptions = {}): Dire
       ]);
       skillCache.current = catalog;
       installedSkills.current = installed;
-      setSkills({ ...toSkillSection(catalog, installed), retry: loadSkills });
+      setSkills({
+        ...toSkillSection(catalog, installed),
+        ...(createSkillLabel ? { createLabel: createSkillLabel } : {}),
+        retry: loadSkills,
+      });
     } catch {
       setSkills((prev) => ({ ...prev, loading: false, error: SKILLS_FAILED_COPY, retry: loadSkills }));
     }
-  }, []);
+  }, [createSkillLabel]);
 
   const loadConnectors = useCallback(async () => {
     setConnectors((prev) => ({ ...prev, loading: true, error: null }));
@@ -310,7 +314,6 @@ export function useDirectoryAdapter(options: DirectoryAdapterOptions = {}): Dire
       uninstall,
       ...(onEditSkill ? { openSettings } : {}),
       ...(onCreateSkill ? { createEntry } : {}),
-      ...(createSkillLabel ? { createEntryLabel: createSkillLabel } : {}),
       copyLink,
       copyValue,
       downloadSkillFile,
