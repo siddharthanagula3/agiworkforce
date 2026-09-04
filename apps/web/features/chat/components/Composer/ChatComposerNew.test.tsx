@@ -111,6 +111,7 @@ vi.mock('./SendButton', () => ({
 
 vi.mock('./ComposerFooter', () => ({
   ComposerFooter: () => <div data-testid="composer-footer" />,
+  ComposerModelSummary: () => <span data-testid="composer-model-summary" />,
 }));
 
 vi.mock('./VoiceInputButton', () => ({
@@ -214,8 +215,10 @@ describe('ChatComposerNew', () => {
     try {
       render(<ChatComposerNew onSend={vi.fn()} />);
       const textarea = screen.getByRole('textbox', { name: /message input/i });
+      // Not the empty-state (home) instance: rest height is the one-row
+      // chat target, 36px content plus the card's own 8px padding = 52px.
       expect(textarea).toHaveStyle({
-        height: '52px',
+        height: '36px',
       });
       expect(textarea.closest('.chat-composer-container')).toHaveClass('bg-[var(--chat-bg)]');
       expect(textarea.closest('.chat-composer-container')).not.toHaveClass('bg-background/95');
@@ -225,7 +228,7 @@ describe('ChatComposerNew', () => {
     }
   });
 
-  it('keeps the control cluster on one line (flex-nowrap) so Send never drops to a 2nd row', () => {
+  it('keeps plus, textbox, and Send on one line (flex-nowrap) at rest', () => {
     const { container } = render(<ChatComposerNew onSend={vi.fn()} />);
     const cluster = container.querySelector('.flex-nowrap') as HTMLElement | null;
     expect(cluster).toBeTruthy();
@@ -233,11 +236,12 @@ describe('ChatComposerNew', () => {
 
     const plus = screen.getByRole('button', { name: /add attachments and tools/i });
     const send = screen.getByRole('button', { name: /send message/i });
-    expect(cluster!.contains(plus)).toBe(true);
-    expect(cluster!.contains(send)).toBe(true);
-
     const textarea = screen.getByRole('textbox', { name: /message input/i });
-    expect(cluster!.contains(textarea)).toBe(false);
+    // Parity target: one row at rest (plus, textbox, right cluster), not the
+    // textbox on its own row above a separate control row.
+    expect(cluster!.contains(plus)).toBe(true);
+    expect(cluster!.contains(textarea)).toBe(true);
+    expect(cluster!.contains(send)).toBe(true);
   });
 
   it('calls onSend with typed message on Cmd+Enter', async () => {
@@ -307,6 +311,7 @@ describe('ChatComposerNew', () => {
     render(
       <ChatComposerNew
         onSend={onSendMock}
+        emptyState
         projectPicker={{
           projects: [{ id: 'proj-2', name: 'Mobile App' }],
           activeProjectId: 'proj-2',
@@ -859,6 +864,7 @@ describe('ChatComposerNew', () => {
     render(
       <ChatComposerNew
         onSend={vi.fn()}
+        emptyState
         projectPicker={{
           projects: [{ id: 'proj-1', name: 'Website Redesign' }],
           activeProjectId: null,
@@ -892,6 +898,7 @@ describe('ChatComposerNew', () => {
     render(
       <ChatComposerNew
         onSend={vi.fn()}
+        emptyState
         placeholder="How can I help you today?"
         projectPicker={{
           projects: [{ id: 'proj-1', name: 'Website Redesign' }],
@@ -1143,14 +1150,14 @@ describe('ChatComposerNew', () => {
     });
 
     it('is hidden in Chat mode and appears below the composer in AGI Work mode', () => {
-      render(<ChatComposerNew onSend={vi.fn()} projectPicker={makePicker()} />);
+      render(<ChatComposerNew onSend={vi.fn()} emptyState projectPicker={makePicker()} />);
       expect(screen.queryByRole('button', { name: 'Project or folder' })).not.toBeInTheDocument();
       enterAgiWork();
       expect(screen.getByRole('button', { name: 'Project or folder' })).toBeInTheDocument();
     });
 
     it('opens a searchable popover listing the real projects', () => {
-      render(<ChatComposerNew onSend={vi.fn()} projectPicker={makePicker()} />);
+      render(<ChatComposerNew onSend={vi.fn()} emptyState projectPicker={makePicker()} />);
       enterAgiWork();
       fireEvent.click(screen.getByRole('button', { name: 'Project or folder' }));
       expect(screen.getByRole('textbox', { name: /search projects/i })).toBeInTheDocument();
@@ -1159,7 +1166,7 @@ describe('ChatComposerNew', () => {
     });
 
     it('filters the project list as the user searches', async () => {
-      render(<ChatComposerNew onSend={vi.fn()} projectPicker={makePicker()} />);
+      render(<ChatComposerNew onSend={vi.fn()} emptyState projectPicker={makePicker()} />);
       enterAgiWork();
       fireEvent.click(screen.getByRole('button', { name: 'Project or folder' }));
       await userEvent.type(screen.getByRole('textbox', { name: /search projects/i }), 'mobile');
@@ -1169,7 +1176,7 @@ describe('ChatComposerNew', () => {
 
     it('selecting a project reports its projectId to the host (the value threaded into createConversation)', () => {
       const picker = makePicker();
-      render(<ChatComposerNew onSend={vi.fn()} projectPicker={picker} />);
+      render(<ChatComposerNew onSend={vi.fn()} emptyState projectPicker={picker} />);
       enterAgiWork();
       fireEvent.click(screen.getByRole('button', { name: 'Project or folder' }));
       fireEvent.click(screen.getByText('Mobile App'));
@@ -1178,7 +1185,7 @@ describe('ChatComposerNew', () => {
 
     it('a preselected project (URL entry) auto-enters AGI Work and shows the project on the chip', () => {
       const picker = makePicker({ activeProjectId: 'proj-1' });
-      render(<ChatComposerNew onSend={vi.fn()} projectPicker={picker} />);
+      render(<ChatComposerNew onSend={vi.fn()} emptyState projectPicker={picker} />);
       expect(screen.getByRole('button', { name: 'AGI Work' })).toHaveAttribute(
         'aria-pressed',
         'true',
@@ -1195,7 +1202,7 @@ describe('ChatComposerNew', () => {
 
     it('switching back to Chat clears the project selection (no hidden scope)', () => {
       const picker = makePicker({ activeProjectId: 'proj-1' });
-      render(<ChatComposerNew onSend={vi.fn()} projectPicker={picker} />);
+      render(<ChatComposerNew onSend={vi.fn()} emptyState projectPicker={picker} />);
       fireEvent.click(screen.getByRole('button', { name: 'Chat' }));
       expect(picker.onSelectProject).toHaveBeenCalledWith(null);
       expect(screen.queryByRole('button', { name: 'Project or folder' })).not.toBeInTheDocument();
@@ -1203,7 +1210,7 @@ describe('ChatComposerNew', () => {
 
     it('offers Create new project (opens the host CreateProjectDialog)', () => {
       const picker = makePicker();
-      render(<ChatComposerNew onSend={vi.fn()} projectPicker={picker} />);
+      render(<ChatComposerNew onSend={vi.fn()} emptyState projectPicker={picker} />);
       enterAgiWork();
       fireEvent.click(screen.getByRole('button', { name: 'Project or folder' }));
       fireEvent.click(screen.getByText('Create new project'));
@@ -1211,7 +1218,7 @@ describe('ChatComposerNew', () => {
     });
 
     it('does NOT offer local-folder selection on web (working-directory is a desktop capability)', () => {
-      render(<ChatComposerNew onSend={vi.fn()} projectPicker={makePicker()} />);
+      render(<ChatComposerNew onSend={vi.fn()} emptyState projectPicker={makePicker()} />);
       enterAgiWork();
       fireEvent.click(screen.getByRole('button', { name: 'Project or folder' }));
       expect(screen.queryByText('Choose a different folder')).not.toBeInTheDocument();
@@ -1220,7 +1227,7 @@ describe('ChatComposerNew', () => {
     it('offers "Choose a different folder" only on working-directory surfaces (desktop)', () => {
       render(
         <CapabilityProvider platform="desktop">
-          <ChatComposerNew onSend={vi.fn()} projectPicker={makePicker()} />
+          <ChatComposerNew onSend={vi.fn()} emptyState projectPicker={makePicker()} />
         </CapabilityProvider>,
       );
       enterAgiWork();
