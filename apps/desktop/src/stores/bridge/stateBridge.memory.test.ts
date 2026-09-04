@@ -45,7 +45,7 @@ async function flush() {
   }
 }
 
-describe('bridgeMemoryStore — decayEnabled reflects real backend config', () => {
+describe('bridgeMemoryStore, decayEnabled reflects real backend config', () => {
   beforeEach(() => {
     state.current = {
       memory: { totalEntries: 0, avgImportance: 0, decayEnabled: false },

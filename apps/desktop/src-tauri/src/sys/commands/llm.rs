@@ -85,12 +85,6 @@ fn resolve_provider_for_routing(s: &str) -> Option<Provider> {
     Provider::from_string(s)
 }
 
-/// FIX-F19 (audit 2026-05-19): wire the previously-dormant
-/// `PromptInjectionDetector` into LLM ingress. **Detect-and-log only per plan;
-/// do NOT block** — false-positive rate on legitimate code prompts is too high
-/// to gate the user's request. Emits a `tracing::warn` with the risk score,
-/// confidence, detected patterns, and recommendation so audit_logger / Sentry
-/// pick up the signal for later analysis.
 fn scan_messages_for_prompt_injection(messages: &[ChatMessage]) {
     use std::sync::OnceLock;
     static DETECTOR: OnceLock<PromptInjectionDetector> = OnceLock::new();
@@ -241,10 +235,6 @@ pub async fn llm_send_message(
         }
     }
 
-    // FIX-F19 (audit 2026-05-19): scan inbound user messages for prompt
-    // injection signals. Detect-and-log only (no blocking) — emit telemetry
-    // via `tracing::warn` on `agi.llm.prompt_injection` so audit_logger picks
-    // it up. Wire-up of the previously-dormant detector.
     scan_messages_for_prompt_injection(&request.messages);
 
     // Pre-flight authentication check for cloud credits.
@@ -476,13 +466,6 @@ pub async fn llm_configure_provider(
 
     match provider.as_str() {
         "ollama" => {
-            // Reject malformed URLs here rather than letting them silently reach
-            // OllamaProvider::is_available(), where a bad value (e.g. a stray
-            // partial string left over from an in-progress settings edit) makes
-            // every request URL-builder error, is_available() collapses that into
-            // a plain `false`, and the router reports the generic "no local
-            // provider reachable" — a deeply confusing failure with no link back
-            // to the actual bad setting.
             if let Some(ref url) = base_url {
                 let parsed = url
                     .parse::<reqwest::Url>()
@@ -500,12 +483,6 @@ pub async fn llm_configure_provider(
             Ok(())
         }
         "lmstudio" | "llamacpp" | "vllm" => {
-            // LM Studio, llama.cpp, and vLLM are local OpenAI-compatible runtimes routed
-            // through DirectApiProvider. Like Ollama, no API key is required — reject
-            // malformed URLs here (same validation gate as the "ollama" branch above)
-            // rather than letting them silently reach `is_available()`, which would
-            // collapse a bad value into a plain `false` with no link back to the actual
-            // bad setting.
             if let Some(ref url) = base_url {
                 let parsed = url
                     .parse::<reqwest::Url>()
@@ -540,10 +517,6 @@ pub async fn llm_configure_provider(
             let provider_enum = Provider::from_string(&provider)
                 .ok_or_else(|| format!("Unknown provider: {}", provider))?;
 
-            // Try the explicitly passed api_key first, then fall back to the
-            // encrypted key stored in the MCP settings database (FIX-001 —
-            // pass through the master-password helper so the lookup tries
-            // the vault key first before falling back to machine-key).
             let resolved_key = api_key
                 .filter(|k| !k.is_empty())
                 .or_else(|| {
@@ -573,20 +546,6 @@ pub async fn llm_configure_provider(
     }
 }
 
-/// Re-register BYOK (direct-API) providers whose encrypted keys survived from
-/// a previous session.
-///
-/// `save_api_key`/`llm_configure_provider` only add a provider to the
-/// in-memory `LLMRouter` at the moment a key is saved. Restarting the app
-/// rebuilds an empty router — the frontend's settings-rehydration callback
-/// (`stores/settingsStore.ts`) only re-registers the local runtimes (Ollama,
-/// LM Studio, llama.cpp), never BYOK cloud providers. Without this step,
-/// every configured BYOK provider (OpenRouter, OpenAI, Anthropic, ...)
-/// reports `configured: false` after every restart even though its key is
-/// still safely stored (encrypted) in `settings_v2` — the user would have to
-/// re-paste the same key every launch with no indication why. Called once
-/// from `lib.rs`'s `setup()` after the LLM router and master-password
-/// encryption state exist.
 pub async fn rehydrate_byok_providers(
     router: &Arc<RwLock<LLMRouter>>,
     encryption: &crate::sys::security::MasterPasswordEncryption,
@@ -621,11 +580,6 @@ pub async fn rehydrate_byok_providers(
         let Some(provider_enum) = Provider::from_string(&provider_id) else {
             continue;
         };
-        // Ollama has no API key; ManagedCloud uses access tokens, not
-        // settings_v2 keys; local runtimes (LM Studio/llama.cpp/vLLM) are
-        // re-registered by the frontend's settings rehydration / lazy
-        // `ensure_*_provider` on first Local-mode send — mirrors the
-        // equivalent skip in `save_api_key`.
         if matches!(
             provider_enum,
             Provider::Ollama
@@ -657,9 +611,6 @@ pub async fn rehydrate_byok_providers(
                 );
             }
             Err(e) => {
-                // Providers needing more than a bare key (Azure's deployment URL,
-                // Bedrock's SigV4 creds) can't be rehydrated from settings_v2 alone —
-                // log and continue rather than fail the whole rehydration pass.
                 tracing::warn!(
                     "BYOK rehydration: could not restore '{}' provider ({}). Re-configure it in Settings \u{2192} Models & Keys.",
                     provider_enum.as_string(),
@@ -824,9 +775,6 @@ pub async fn llm_get_available_models(
         }
     }
 
-    // LM Studio / llama.cpp / vLLM: same dynamic-discovery pattern as Ollama above —
-    // only shown when the local server is actually reachable and reports installed
-    // models (never a fake availability badge).
     if router.has_provider(Provider::LmStudio) {
         match llm_list_lmstudio_models().await {
             Ok(models) => {
@@ -860,13 +808,6 @@ pub async fn llm_get_available_models(
         }
     }
 
-    // OpenRouter: live catalog supplements (never replaces) the small curated
-    // free-tier set already added above from the static JSON catalog —
-    // OpenRouter proxies hundreds of models across many underlying providers,
-    // which can't reasonably be hand-curated. Only fetched once a key is
-    // configured, both for network hygiene (no background calls to a third
-    // party for users who haven't opted into OpenRouter) and because listing
-    // models a user can't actually call would be misleading.
     if router.has_provider(Provider::OpenRouter) {
         match llm_list_openrouter_models().await {
             Ok(models) => {
@@ -889,8 +830,6 @@ pub async fn llm_check_provider_status(
 ) -> Result<ProviderStatus, String> {
     let router = state.router.read().await;
 
-    // Local runtimes (Ollama, LM Studio, llama.cpp, vLLM) are "available" purely
-    // based on whether the local server responds — they never require an API key.
     let is_local_runtime = matches!(
         provider.as_str(),
         "ollama" | "lmstudio" | "llamacpp" | "vllm"
@@ -1162,12 +1101,6 @@ async fn list_ollama_models_internal() -> Result<Vec<ModelInfo>, String> {
     Ok(models)
 }
 
-// --- LM Studio / llama.cpp / vLLM model listing -----------------------------
-//
-// All three expose an OpenAI-compatible `GET /v1/models` endpoint returning
-// `{"data": [{"id": "..."}, ...]}` — unlike Ollama's `/api/tags` shape, so this
-// is intentionally NOT a copy of `list_ollama_models_internal`. One shared
-// parser is used for all three providers since the wire format is identical.
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct OpenAICompatModel {
@@ -1224,9 +1157,6 @@ async fn list_openai_compat_models_internal(
         .collect())
 }
 
-/// List models currently loaded/served by LM Studio (`GET /v1/models`).
-/// Returns `Err` if LM Studio isn't running or isn't reachable at the configured URL —
-/// callers must not synthesize a fallback list (no fake availability).
 #[tauri::command]
 pub async fn llm_list_lmstudio_models() -> Result<Vec<ModelInfo>, String> {
     list_openai_compat_models_internal(LMSTUDIO_DEFAULT_BASE_URL, Provider::LmStudio, "LM Studio")
@@ -1240,27 +1170,11 @@ pub async fn llm_list_llamacpp_models() -> Result<Vec<ModelInfo>, String> {
         .await
 }
 
-/// List models currently loaded/served by vLLM (`GET /v1/models`).
-/// Returns `Err` if vLLM isn't running or isn't reachable at the configured URL —
-/// callers must not synthesize a fallback list (no fake availability).
 #[tauri::command]
 pub async fn llm_list_vllm_models() -> Result<Vec<ModelInfo>, String> {
     list_openai_compat_models_internal(VLLM_DEFAULT_BASE_URL, Provider::Vllm, "vLLM").await
 }
 
-// --- OpenRouter live model catalog ------------------------------------------
-//
-// OpenRouter is a BYOK gateway proxying hundreds of models across many
-// underlying providers — the small hand-curated set in
-// `packages/ai/model-registry/catalog/models.curation.json` (a handful of free-tier models)
-// can't reasonably represent that whole catalog. This fetches OpenRouter's
-// public `/api/v1/models` list live and supplements (never replaces) the
-// curated entries in `llm_get_available_models`. Reference implementation
-// already shipped in `apps/cli/src/models/openrouter_models.rs`: that GET
-// requires no auth header (it's a public catalog listing, unlike chat
-// completions), so this mirrors it rather than sending a bearer token that
-// could turn an invalid/expired key into a spurious 401 on a request that
-// doesn't need auth at all.
 
 #[derive(Debug, Clone, Deserialize)]
 struct OpenRouterArchitecture {
@@ -1345,12 +1259,6 @@ async fn list_openrouter_models_internal() -> Result<Vec<ModelInfo>, String> {
         .collect())
 }
 
-/// List OpenRouter's live model catalog (`GET /api/v1/models`). Unlike the
-/// local-runtime listers above, callers should only invoke this once an
-/// OpenRouter API key is configured (BYOK) — see the `has_provider` gate in
-/// `llm_get_available_models` — even though the endpoint itself is public,
-/// so the app doesn't make background egress calls to a third party for
-/// users who never opted into OpenRouter.
 pub async fn llm_list_openrouter_models() -> Result<Vec<ModelInfo>, String> {
     list_openrouter_models_internal().await
 }
@@ -1421,12 +1329,6 @@ pub async fn clear_model_capability_cache() -> Result<(), String> {
     Ok(())
 }
 
-/// Reset the session cost accumulator to zero.
-///
-/// The LLM router tracks cumulative cost across all invocations in a session.
-/// Once it hits `SESSION_COST_SAFETY_CAP` it refuses new requests. This command
-/// lets the frontend (or user) reset the counter — e.g. at conversation start or
-/// when the user explicitly acknowledges the spend.
 #[tauri::command]
 pub async fn reset_session_cost(state: State<'_, LLMState>) -> Result<(), String> {
     let router = state.router.read().await;

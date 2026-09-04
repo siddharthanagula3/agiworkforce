@@ -203,12 +203,10 @@ impl RAGEngine {
             }
         }
 
-        tracing::warn!("RAG using hash-based embeddings — semantic quality degraded");
+        tracing::warn!("RAG using hash-based embeddings, semantic quality degraded");
         self.generate_hash_embedding(text)
     }
 
-    /// Hash-based bag-of-words embedding (384-dim). NOT semantic — used only as
-    /// a degraded fallback when no real embedding provider is available.
     fn generate_hash_embedding(&self, text: &str) -> Result<Vec<f32>> {
         let words: Vec<&str> = text.split_whitespace().collect();
         let mut embedding = vec![0.0f32; 384];

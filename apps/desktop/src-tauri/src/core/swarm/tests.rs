@@ -309,20 +309,10 @@ mod agent_spawner_tests {
     }
 }
 
-// H49 — Task decomposer cache invalidation tests
-// The decomposition_cache field is private, so we test the public API:
-//   - `invalidate_cache(goal)` removes the entry for a specific goal
-//   - `clear_cache()` removes all entries
-//   - `DecompositionCacheEntry::is_expired()` respects DECOMPOSITION_CACHE_TTL
-// Since `decompose()` requires a live LLM, we test the cache management helpers
-// and the TTL constant independently.
 mod cache_invalidation_tests {
     use super::*;
     use sha2::{Digest, Sha256};
 
-    /// Build the same SHA-256 hash that `DecompositionCacheKey::from_goal` would build.
-    /// This lets us verify that identical goals produce the same hash and that
-    /// different goals produce different hashes — without accessing the private type.
     fn compute_goal_hash(goal: &crate::core::agi::Goal) -> String {
         let mut hasher = Sha256::new();
         hasher.update(goal.description.as_bytes());
@@ -371,9 +361,6 @@ mod cache_invalidation_tests {
 
     #[test]
     fn test_sha256_hash_uniqueness_different_ids_same_description() {
-        // The task_id is stored separately from the hash — two goals with the same
-        // description but different IDs get the SAME content hash but different keys
-        // (because the key is (task_id, hash)).  Verify the hash portion is equal.
         let goal_a = make_goal("task-1", "Identical description");
         let goal_b = make_goal("task-2", "Identical description");
         let hash_a = compute_goal_hash(&goal_a);
@@ -489,10 +476,6 @@ mod integration_tests {
     }
 }
 
-// desktop-trust-boundary-01 — swarm fan-out must inherit the parent goal's
-// trust boundary end-to-end: parent Goal → AgentTask → sub-agent mini-Goal.
-// These call the same production builders `execute_parallel` and
-// `execute_subtask` use, so a regression to `trust_mode: None` fails here.
 mod trust_boundary_tests {
     use super::*;
     use agent_spawner::AgentSpawner;

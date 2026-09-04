@@ -41,7 +41,6 @@ impl CheckpointStore {
             // (tables may reference each other or other tables that don't exist yet)
             conn.execute_batch("PRAGMA foreign_keys = OFF")?;
 
-            // Create agi_tasks first — agi_task_checkpoints references it via FK.
             conn.execute(
                 "CREATE TABLE IF NOT EXISTS agi_tasks (
                     id TEXT PRIMARY KEY,

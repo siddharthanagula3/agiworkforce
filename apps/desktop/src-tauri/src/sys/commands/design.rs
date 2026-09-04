@@ -454,11 +454,11 @@ CSS:
 {}
 ```
 
-Pre-computed contrast ratios (use these exact values — do not recalculate):
+Pre-computed contrast ratios (use these exact values, do not recalculate):
 {}
 
 Check for:
-- Color contrast ratios (minimum 4.5:1 for normal text, 3:1 for large text) — use the pre-computed ratios above where available
+- Color contrast ratios (minimum 4.5:1 for normal text, 3:1 for large text), use the pre-computed ratios above where available
 - Focus indicators
 - Color as sole indicator
 - Font sizes (minimum 16px for body text)

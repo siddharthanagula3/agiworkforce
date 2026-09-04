@@ -60,7 +60,6 @@ impl McpExtensionsState {
         let conn =
             Connection::open_in_memory().expect("in-memory SQLite connection should never fail");
         let db = Arc::new(std::sync::Mutex::new(conn));
-        // Repository with in-memory db — table creation may fail but that's acceptable in degraded mode
         let repository = Arc::new(ExtensionRepository::new(db).unwrap_or_else(|_| {
             // Fallback: create repo with a fresh in-memory connection that has the tables
             let conn2 = Connection::open_in_memory()

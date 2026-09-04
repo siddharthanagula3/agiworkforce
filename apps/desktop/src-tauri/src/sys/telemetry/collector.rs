@@ -38,15 +38,6 @@ pub struct CollectorConfig {
     /// events to `analytics_events.json` inside this directory (the Tauri
     /// app-data directory). When `None` the local-file fallback is skipped.
     pub app_data_dir: Option<PathBuf>,
-    /// TRUST-BOUNDARY: when the session is in a Local trust boundary —
-    /// `Some("local")` (device-only) OR `Some("byok")` (user's own keys,
-    /// client-direct, no AGI compute) — the collector silently drops all events
-    /// and flushes, mirroring the TS analytics.ts gate. Per the suite rule
-    /// "Local Mode (on-device + BYOK) = zero cloud telemetry", BYOK telemetry
-    /// must never reach our cloud. Only `Some("managed")` / other values
-    /// (including `None`, the pre-sync default) allow normal operation. Never
-    /// promote Local/BYOK events to the HTTP endpoint or the local file
-    /// regardless of `enabled`. See `is_local_trust_boundary`.
     pub privacy_mode: Option<String>,
 }
 
@@ -180,7 +171,6 @@ impl TelemetryCollector {
                     }
                 }
             } else {
-                // Endpoint var is set but empty — treat as not configured.
                 false
             }
         } else {
@@ -201,8 +191,6 @@ impl TelemetryCollector {
                     tracing::debug!("Persisted analytics batch {} to local file", batch.batch_id);
                 }
             }
-            // If app_data_dir is None, events are intentionally dropped (collector
-            // not fully configured yet — same behavior as before this change).
         }
 
         Ok(())
@@ -220,7 +208,6 @@ impl TelemetryCollector {
 
         let file_path = app_data_dir.join(LOCAL_EVENTS_FILE);
 
-        // Load existing events (ignore parse errors — treat corrupt file as empty).
         let mut stored: Vec<TelemetryEvent> = if file_path.exists() {
             let raw = fs::read_to_string(&file_path)?;
             serde_json::from_str(&raw).unwrap_or_default()

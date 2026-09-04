@@ -247,7 +247,7 @@ export const useWindowStore = create<WindowState>()(
             await get().getState();
             await get().isFloatingVisible();
           } catch {
-            // Non-critical — window state will be fetched on demand
+            return;
           }
         },
       })),

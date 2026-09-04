@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { modelsCatalogJson } from '@agiworkforce/types';
 import { MODEL_ID_ALIASES, MODEL_METADATA, normalizeModelId } from '../../constants/llm';
 
-describe('MODEL_METADATA — apiModelId uniqueness (audit regression)', () => {
+describe('MODEL_METADATA, apiModelId uniqueness (audit regression)', () => {
   const canonicalCatalogEntries = Object.entries(
     modelsCatalogJson.models as Record<string, { id: string; apiModelId?: string }>,
   ).filter(([modelId, metadata]) => metadata.id === modelId);

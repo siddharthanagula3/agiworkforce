@@ -21,7 +21,7 @@ const TIER_CONTENT: Partial<Record<UIPlanTier, TierContent>> = {
     price: 'Free forever',
     bullets: [
       'Ollama, LM Studio, and llama.cpp local models',
-      'Fully offline — zero data leaves your device',
+      'Fully offline, zero data leaves your device',
       'No account required',
       'Unlimited local conversations',
     ],

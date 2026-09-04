@@ -46,7 +46,7 @@ function linkMany(count: number, dbIdOffset: number = 1): Array<[string, number]
   return pairs;
 }
 
-describe('linkConversationId — M7: pruneIdMappingsIfNeeded() is called', () => {
+describe('linkConversationId, M7: pruneIdMappingsIfNeeded() is called', () => {
   beforeEach(() => {
     clearIdMappings();
     vi.clearAllMocks();
@@ -100,7 +100,6 @@ describe('linkConversationId — M7: pruneIdMappingsIfNeeded() is called', () =>
     });
 
     it('triggers pruning when more than MAX_ID_MAPPINGS entries are inserted', () => {
-
       const baseUuids: string[] = [];
       for (let i = 1; i <= MAX_ID_MAPPINGS; i++) {
         baseUuids.push(dbIdToUuid(i));

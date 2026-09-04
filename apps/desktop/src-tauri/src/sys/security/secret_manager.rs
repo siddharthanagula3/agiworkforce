@@ -136,7 +136,7 @@ impl SecretManager {
         let encrypted_json = Self::wrap_secret(&encryption_key, secret)?;
 
         let conn = self.db_conn.lock().map_err(|_| {
-            SecretError::EncryptionError("Database lock corrupted — mutex poisoned".into())
+            SecretError::EncryptionError("Database lock corrupted, mutex poisoned".into())
         })?;
 
         conn.execute(
@@ -168,7 +168,7 @@ impl SecretManager {
     /// Retrieve and decrypt secret from database
     fn get_secret_from_database(&self, key: &str) -> Result<String, SecretError> {
         let conn = self.db_conn.lock().map_err(|_| {
-            SecretError::EncryptionError("Database lock corrupted — mutex poisoned".into())
+            SecretError::EncryptionError("Database lock corrupted, mutex poisoned".into())
         })?;
 
         let encrypted_json: String = conn
@@ -229,7 +229,7 @@ impl SecretManager {
     /// Check whether an encrypted secret exists for the provided key.
     pub fn has_secret(&self, key: &str) -> Result<bool, SecretError> {
         let conn = self.db_conn.lock().map_err(|_| {
-            SecretError::EncryptionError("Database lock corrupted — mutex poisoned".into())
+            SecretError::EncryptionError("Database lock corrupted, mutex poisoned".into())
         })?;
 
         let exists: i64 = conn
@@ -280,7 +280,7 @@ impl SecretManager {
     /// Delete a stored secret by key.
     pub fn delete_secret(&self, key: &str) -> Result<(), SecretError> {
         let conn = self.db_conn.lock().map_err(|_| {
-            SecretError::EncryptionError("Database lock corrupted — mutex poisoned".into())
+            SecretError::EncryptionError("Database lock corrupted, mutex poisoned".into())
         })?;
 
         conn.execute(

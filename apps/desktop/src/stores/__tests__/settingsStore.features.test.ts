@@ -32,7 +32,7 @@ function resetStore() {
   });
 }
 
-describe('settingsStore — features capability toggles', () => {
+describe('settingsStore, features capability toggles', () => {
   beforeEach(() => {
     resetStore();
     vi.clearAllMocks();
@@ -163,7 +163,6 @@ describe('settingsStore — features capability toggles', () => {
           taskRouting: {},
         },
         customModels: [],
-        // No features field — as it would be in v10
       };
 
       const migrated = options.migrate(v10State, 10) as Record<string, unknown>;

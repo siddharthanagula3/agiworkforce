@@ -344,7 +344,7 @@ impl CostCalculator {
                     provider = ?provider,
                     input_tokens,
                     output_tokens,
-                    "no pricing found for model or provider; returning 0.0 cost — \
+                    "no pricing found for model or provider; returning 0.0 cost, \
                      add model pricing to models.json to enable accurate cost tracking"
                 );
                 0.0
@@ -352,13 +352,6 @@ impl CostCalculator {
         }
     }
 
-    /// Calculate cost with cache pricing applied, priced on `as_of`.
-    ///
-    /// Rates are read from the model catalog (`cached_input`, `cached_write`,
-    /// and `cachePolicy.writeMultiplier`), NOT from hardcoded multipliers —
-    /// those drifted from the real prices and overcharged managed-cloud cache
-    /// reads. When a model prices no cache read, the full input rate is used.
-    /// See [`CostCalculator::calculate`] for why `as_of` is explicit.
     #[allow(clippy::too_many_arguments)]
     pub fn calculate_with_cache(
         &self,
@@ -402,7 +395,7 @@ impl CostCalculator {
                     completion_tokens,
                     cache_read_tokens,
                     cache_creation_tokens,
-                    "no pricing found for model or provider; returning 0.0 cost — \
+                    "no pricing found for model or provider; returning 0.0 cost, \
                      add model pricing to models.json to enable accurate cost tracking"
                 );
                 return 0.0;
@@ -1064,7 +1057,7 @@ mod tests {
         let stale_multiplier_cost = token_scale * pricing.input_cost * 0.5;
         assert!(
             (cost - expected).abs() < 1e-9,
-            "cache-read cost {} should equal the catalog-derived {} — the stale \
+            "cache-read cost {} should equal the catalog-derived {}, the stale \
              provider multiplier would give {}",
             cost,
             expected,
@@ -1100,10 +1093,6 @@ mod tests {
 
     #[test]
     fn anthropic_cache_write_falls_back_to_the_published_surcharge() {
-        // Anthropic reports cache writes disjoint from input, so a written
-        // token is billed ONLY here — falling back to the plain input rate
-        // would drop the published 25% surcharge that apps/web and the gateway
-        // both charge.
         let calc = unpriced_cache_calculator();
 
         let cost = calc.calculate_with_cache(
@@ -1283,12 +1272,6 @@ mod tests {
 
     #[test]
     fn sonnet_5_bills_the_founder_standard_rate_on_every_date() {
-        // Founder pin — Decision #22 (docs/decisions/README.md,
-        // reaffirmed 2026-08-05): Sonnet 5 bills users the standard $3/$15 per
-        // MTok (cache read $0.30, 5m write $3.75) on EVERY date. Anthropic's
-        // introductory window is a provider-COST fact for the registry's
-        // verificationLog, never a product price. Fixed dates on both sides of
-        // that retired 2026-09-01 boundary.
         let calc = CostCalculator::new();
         let model = founder_standard_anthropic_model();
         for date in [day(2020, 1, 1), day(2026, 8, 15), day(2026, 9, 15)] {

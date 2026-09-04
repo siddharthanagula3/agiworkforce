@@ -66,7 +66,7 @@ impl ShortcutsState {
             Shortcut {
                 id: "toggle_window".to_string(),
                 key: platform_default_quick_query_combo().to_string(),
-                description: "Quick Query — ask anything from any app".to_string(),
+                description: "Quick Query, ask anything from any app".to_string(),
                 action: "quick_query".to_string(),
                 enabled: true,
                 is_global: true,
@@ -321,7 +321,7 @@ pub async fn apply_quick_query_hotkey_preferences(
         .unwrap_or_else(|| Shortcut {
             id: "toggle_window".to_string(),
             key: resolved_combo.clone(),
-            description: "Quick Query — ask anything from any app".to_string(),
+            description: "Quick Query, ask anything from any app".to_string(),
             action: "quick_query".to_string(),
             enabled: false,
             is_global: true,
@@ -630,8 +630,6 @@ pub async fn shortcuts_update(
             let mut registered = shortcuts_state.registered_keys.lock().await;
             registered.retain(|k| k != &rejected_key);
 
-            // `is_global` is already true here — this arm only runs inside the
-            // `shortcut.is_global` branch above.
             if was_enabled {
                 if register_global_shortcut(&app, &old_key, shortcut.action.clone()).is_ok() {
                     registered.push(old_key);

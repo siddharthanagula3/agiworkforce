@@ -1121,10 +1121,6 @@ mod tests {
     }
 }
 
-// desktop-trust-boundary-01 — e2e threading proof: `Goal.trust_mode` (not a
-// constant) must land in the `RouterPreferences` the AGI executor path builds
-// and gate `LLMRouter::candidates`/invocation. Drives the real seam
-// `ToolExecutor::execute` → `LlmExecutor::execute_reason` → router.
 #[cfg(test)]
 mod trust_mode_threading_tests {
     use crate::core::agi::executors::{ExecutorContext, LlmExecutor, ToolExecutor};
@@ -1287,9 +1283,6 @@ mod trust_mode_threading_tests {
         let fixture = router_with_cloud_providers();
         let executor = LlmExecutor::new(fixture.router.clone());
         let context = executor_context(fixture.router.clone());
-        // Identical request to the ManagedCloud test above — only the goal's
-        // trust_mode differs. If the executor hardcoded the boundary instead
-        // of threading `goal.trust_mode`, one of these two tests would fail.
         let execution = execution_context(None);
 
         let explicit_cloud = executor

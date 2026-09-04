@@ -15,13 +15,7 @@ import {
 } from 'recharts';
 import { Button } from '@/ui/Button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/ui/Card';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/ui/Select';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/ui/Select';
 import { ScrollArea } from '@/ui/ScrollArea';
 import { Skeleton } from '@/ui/Skeleton';
 import { useBillingUsageStore } from '../../stores/billingUsage';
@@ -213,7 +207,7 @@ export const CostDashboard = memo(function CostDashboard() {
                     <p className="text-2xl font-semibold text-foreground">
                       {overview?.today_total && overview?.monthly_budget
                         ? `${Math.min((overview.today_total / overview.monthly_budget) * 100, 100).toFixed(1)}%`
-                        : '—'}
+                        : ', '}
                     </p>
                     <div className="h-2 w-full rounded-full bg-muted overflow-hidden">
                       <div
@@ -250,7 +244,7 @@ export const CostDashboard = memo(function CostDashboard() {
                     <p className="text-2xl font-semibold text-foreground">
                       {overview?.month_total && overview?.monthly_budget
                         ? `${Math.min((overview.month_total / overview.monthly_budget) * 100, 100).toFixed(1)}%`
-                        : '—'}
+                        : ', '}
                     </p>
                     <div className="h-2 w-full rounded-full bg-muted overflow-hidden">
                       <div

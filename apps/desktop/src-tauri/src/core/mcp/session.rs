@@ -76,8 +76,6 @@ pub struct McpSession {
 
     /// Server capabilities, protected by RwLock for thread-safe access.
     capabilities: Arc<RwLock<Option<super::protocol::ServerCapabilities>>>,
-    /// Server-authored usage guidance from `initialize`, stored ALREADY
-    /// sanitised and capped — see `McpSession::instructions`.
     instructions: Arc<RwLock<Option<String>>>,
     /// Protocol revision the server selected. Recorded so later code can branch
     /// on the negotiated level rather than assume one.
@@ -104,12 +102,6 @@ pub struct McpSession {
 /// then talk past us.
 pub(crate) const SUPPORTED_PROTOCOL_VERSIONS: &[&str] = &["2025-11-25"];
 
-/// Cap for server-authored `instructions`.
-///
-/// Deliberately larger than the 1024-byte tool-description cap — instructions
-/// are meant to carry real usage guidance — but bounded all the same. Without a
-/// limit a server can flood the model's context and crowd out the user's own
-/// message, which needs no injection markers to do damage.
 const MCP_INSTRUCTIONS_MAX_LEN: usize = 4096;
 
 /// Strip, cap and de-inject server-authored instructions.
@@ -327,10 +319,6 @@ impl McpSession {
             *capabilities = Some(result.capabilities.clone());
         }
         {
-            // Sanitise ONCE, at the boundary, so no consumer can forget. This
-            // string is written by a third-party server and is destined for the
-            // model's context, which makes it the same class of input as a tool
-            // description — and the same injection vector.
             let mut instructions = self.instructions.write();
             *instructions = result
                 .instructions
@@ -535,7 +523,6 @@ impl McpSession {
                 Ok(response)
             }
             Ok(Err(_)) => {
-                // Channel closed — treat as cancellation
                 tracing::warn!(
                     "[MCP Session] Elicitation '{}' channel closed unexpectedly",
                     elicitation_id
@@ -547,7 +534,6 @@ impl McpSession {
                 })
             }
             Err(_) => {
-                // Timeout expired — clean up and return a cancelled response
                 self.pending_elicitations.lock().remove(&elicitation_id);
                 tracing::warn!(
                     "[MCP Session] Elicitation '{}' timed out after {}s on server '{}'",
@@ -573,7 +559,6 @@ impl McpSession {
         let mut pending = self.pending_elicitations.lock();
         match pending.remove(&response.id) {
             Some(pending_elicitation) => {
-                // Ignore send errors — the waiting task may have already been dropped.
                 let _ = pending_elicitation.sender.send(response);
                 Ok(())
             }
@@ -715,8 +700,6 @@ mod tests {
         assert!(out.contains("&quot;") && out.contains("&lt;"));
     }
 
-    /// Unbounded instructions crowd the user's own message out of context.
-    /// Truncation must land on a char boundary — a byte slice panics mid-codepoint.
     #[test]
     fn test_server_instructions_are_capped_on_a_char_boundary() {
         let flood = "\u{4f60}\u{597d}".repeat(4096); // multi-byte CJK

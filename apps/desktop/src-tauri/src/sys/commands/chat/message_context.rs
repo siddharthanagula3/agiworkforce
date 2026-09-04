@@ -37,19 +37,6 @@ pub(super) fn append_history_messages(
     }
 }
 
-/// Inject MCP servers' own usage guidance as a system message.
-///
-/// Servers may return `instructions` from `initialize` — how to use their tools
-/// well, which paths they expect, what they will refuse. The field was parsed
-/// and stored but never reached the model, so that guidance did nothing.
-///
-/// The strings arrive already sanitised, capped and wrapped in
-/// `<mcp_server_instructions server="...">` at the session boundary, so this
-/// function does no filtering of its own: one place owns that, and duplicating
-/// it here would invite the two copies to drift.
-///
-/// Non-fatal by construction — with no servers, or none supplying guidance,
-/// nothing is added.
 pub(super) fn inject_mcp_server_instructions(
     mcp_client: &crate::core::mcp::McpClient,
     llm_messages: &mut Vec<ChatMessage>,

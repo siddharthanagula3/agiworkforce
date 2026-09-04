@@ -180,15 +180,6 @@ impl CdpEndpoint {
         }
     }
 
-    /// Wait until nothing answers the DevTools version endpoint any more.
-    ///
-    /// Closing a browser kills the process, but the port is not guaranteed to
-    /// be free the instant `wait()` returns. Without this, a close immediately
-    /// followed by a relaunch could see the *dying* instance still answering,
-    /// hand back a handle bound to it, and leave the freshly spawned process
-    /// orphaned — the "close, then relaunch" half of the browser-control
-    /// lifecycle. Returns `false` if the endpoint is still answering when the
-    /// deadline passes; the caller decides how loud that is.
     pub async fn wait_for_shutdown(&self, timeout: Duration) -> bool {
         let deadline = tokio::time::Instant::now() + timeout;
 
@@ -354,17 +345,6 @@ fn drain_child_stderr(child: &mut Child) -> String {
     String::from_utf8_lossy(&buffer).trim().to_string()
 }
 
-/// Profile directory used when the caller does not name one.
-///
-/// Chrome (and every Chromium fork) refuses to open a second instance against
-/// a user-data directory that is already in use: the newly spawned process
-/// forwards its command line to the running instance and exits immediately.
-/// With no `--user-data-dir` that is the *default* profile, so on the very
-/// common stock-macOS setup — the user's own Chrome already open — the
-/// browser-control runtime spawned a process that died instantly and the
-/// DevTools port never opened. Automation therefore gets its own profile
-/// directory, which also keeps agent browsing out of the user's logged-in
-/// session.
 fn default_automation_profile_dir() -> Result<String> {
     let base = dirs::data_dir().ok_or_else(|| {
         Error::Other(
@@ -456,13 +436,6 @@ fn find_on_path(name: &str) -> Option<String> {
     None
 }
 
-/// Resolve a browser executable from known install locations, then `PATH`.
-///
-/// Discovery order is: absolute `install_paths` in the order given, then each
-/// name in `path_names` looked up on `PATH`. When nothing is installed this
-/// returns a typed error naming every location that was probed and the
-/// override env var — the launcher used to hand a bare name to `spawn` and
-/// surface the kernel's bare "No such file or directory" instead.
 fn resolve_browser_executable(
     install_paths: &[String],
     path_names: &[&str],
@@ -701,21 +674,6 @@ impl PlaywrightBridge {
         Ok(())
     }
 
-    /// Spawn `exe` and wait for it to open the configured DevTools port.
-    ///
-    /// Two failure modes are distinguished, because they need different fixes
-    /// and the old code reported neither:
-    ///
-    /// * the process exits before DevTools opens — the usual cause on a stock
-    ///   machine (an already-running instance took over the command line, a
-    ///   quarantined or unsigned binary, a bad `--user-data-dir`). The wait
-    ///   short-circuits the moment `try_wait` reports an exit and the child's
-    ///   own stderr is included, instead of burning the whole timeout and
-    ///   throwing the output away.
-    /// * the process is alive but never opens the port — reported after a
-    ///   bounded wait, with the child cleaned up so nothing is left running.
-    ///
-    /// Neither path can spin: every loop iteration re-checks the deadline.
     async fn spawn_and_await_cdp(
         &self,
         exe: &str,
@@ -865,9 +823,6 @@ impl PlaywrightBridge {
 
         if let Some(ws_endpoint) = adopted_ws_endpoint {
             stopped = true;
-            // `Browser.close` tears the socket down as it runs, so a transport
-            // error here is expected and is not proof the browser survived —
-            // the shutdown probe below is what decides that.
             if let Err(error) = self
                 .send_cdp_command(&ws_endpoint, "Browser.close", serde_json::json!({}))
                 .await
@@ -943,9 +898,6 @@ impl PlaywrightBridge {
             "--disable-sync",
             "--disable-translate",
             "--disable-popup-blocking",
-            // SECURITY: "--no-sandbox" intentionally removed from the allowlist — it lets a
-            // caller disable the Chrome renderer sandbox (audit: systemic-tauri-ipc-shell-injection).
-            // The desktop app runs as the user (not root), so the sandbox works without it.
             "--mute-audio",
             "--incognito",
             "--start-maximized",
@@ -1037,25 +989,11 @@ impl PlaywrightBridge {
     // Chrome DevTools Protocol (CDP) commands
     // ---------------------------------------------------------------
 
-    /// Fetch the list of available CDP targets (pages/tabs) from the running Chrome instance.
-    ///
-    /// Sends an HTTP GET to `http://127.0.0.1:<port>/json` and deserializes the
-    /// response into a vector of `CdpTarget`.
-    // Used by: CDP browser automation API — navigate/click/type/screenshot/evaluate
     #[allow(dead_code)]
     pub async fn list_targets(&self) -> Result<Vec<CdpTarget>> {
         self.endpoint().list_targets().await
     }
 
-    /// Open a WebSocket to the given CDP target URL, send a single JSON-RPC
-    /// command, and return the response.
-    ///
-    /// The connection is opened, one message is sent, responses are read until
-    /// the one with the matching `id` is found, and then the socket is closed.
-    /// Because `tungstenite` is synchronous, this is wrapped in
-    /// `tokio::task::spawn_blocking`. A 30-second timeout prevents hanging if
-    /// Chrome stops responding.
-    // Used by: CDP browser automation API — internal transport for all CDP methods
     #[allow(dead_code)]
     async fn send_cdp_command(
         &self,
@@ -1156,7 +1094,6 @@ impl PlaywrightBridge {
                                     method_owned
                                 ));
                             }
-                            // Binary, Ping, Pong, Frame — skip them.
                             _ => {}
                         }
                     }
@@ -1176,8 +1113,6 @@ impl PlaywrightBridge {
         Ok(result)
     }
 
-    /// Helper: find the first `"page"` target with a valid `webSocketDebuggerUrl`.
-    // Used by: CDP browser automation API — page targeting for navigate/click/type/etc.
     #[allow(dead_code)]
     async fn first_page_ws_url(&self) -> Result<String> {
         let targets = self.list_targets().await?;
@@ -1353,9 +1288,6 @@ impl PlaywrightBridge {
     }
 }
 
-/// Escape special characters in a string intended for insertion into a
-/// JavaScript single-quoted string literal.
-// Used by: CDP browser automation API — click_selector and type_text
 #[allow(dead_code)]
 fn escape_js_string(s: &str) -> String {
     s.replace('\\', "\\\\")
@@ -1368,9 +1300,6 @@ fn escape_js_string(s: &str) -> String {
         .replace('\u{2029}', "\\u2029")
 }
 
-/// Check the CDP `Runtime.evaluate` response for an exception description and
-/// return an error if one is present.
-// Used by: CDP browser automation API — click_selector, type_text, evaluate_js
 #[allow(dead_code)]
 fn check_runtime_exception(response: &serde_json::Value, context: &str) -> Result<()> {
     if let Some(result) = response.get("result") {
@@ -1729,11 +1658,6 @@ mod tests {
 
     #[tokio::test]
     async fn launch_adopts_a_browser_that_is_already_serving_devtools() {
-        // "Reconnect" in the browser-control lifecycle: a runtime left by an
-        // earlier app run still owns the port and the automation profile.
-        // Spawning a second instance against that profile only makes the new
-        // process hand off its command line and die, so the running one has to
-        // be adopted — without consulting executable discovery at all.
         let port = spawn_fake_cdp_version_endpoint("ws://127.0.0.1:1/devtools/browser/adopted");
         let bridge = PlaywrightBridge::with_config(PlaywrightConfig {
             ws_port: port,

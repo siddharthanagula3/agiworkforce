@@ -232,8 +232,7 @@ export function CreateTaskModal({ isOpen, editingTask, onClose }: CreateTaskModa
           {/* Model selector */}
           <div>
             <label htmlFor="task-model" className="mb-1.5 block text-sm font-medium text-slate-300">
-              Model{' '}
-              <span className="text-slate-500 font-normal">(optional — uses app default)</span>
+              Model <span className="text-slate-500 font-normal">(optional, uses app default)</span>
             </label>
             <select
               id="task-model"

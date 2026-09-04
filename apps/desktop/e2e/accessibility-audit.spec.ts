@@ -1,4 +1,3 @@
-
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test } from '@playwright/test';
 
@@ -18,7 +17,7 @@ function formatViolations(
     .join('\n');
 }
 
-test.describe('Desktop accessibility audit — WCAG 2.1 A/AA', () => {
+test.describe('Desktop accessibility audit, WCAG 2.1 A/AA', () => {
   test('cloud sign-in has no automated WCAG violations', async ({ page }) => {
     await page.emulateMedia({ reducedMotion: 'reduce' });
     await page.goto('/');

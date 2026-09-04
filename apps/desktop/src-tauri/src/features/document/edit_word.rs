@@ -60,7 +60,7 @@ impl WordEditor {
         // The source file is acknowledged but content is not preserved.
         tracing::warn!(
             "Word document editing creates a new document from edits only. \
-             Source file '{}' content is not preserved — in-place editing not yet supported by docx_rs.",
+             Source file '{}' content is not preserved, in-place editing not yet supported by docx_rs.",
             file_path
         );
 

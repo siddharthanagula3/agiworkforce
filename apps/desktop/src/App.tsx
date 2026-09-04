@@ -1613,7 +1613,7 @@ const DesktopShell = () => {
   ) {
     return (
       <div className="flex h-screen items-center justify-center bg-background">
-        {/* Skeleton layout — shown while the cloud session is being validated */}
+        {/* Skeleton layout, shown while the cloud session is being validated */}
         <div className="flex w-full max-w-sm flex-col items-center gap-4 px-6">
           <div className="h-10 w-10 animate-pulse rounded-xl bg-muted" />
           <div className="h-4 w-32 animate-pulse rounded bg-muted" />
@@ -1886,7 +1886,7 @@ const DesktopShell = () => {
         <Suspense fallback={null}>
           <ErrorToastContainer position="top-right" />
         </Suspense>
-        {/* Plans/Pricing modal — triggered by chat:action open-plans-modal */}
+        {/* Plans/Pricing modal, triggered by chat:action open-plans-modal */}
         <PlansModal open={plansModalOpen} onOpenChange={setPlansModalOpen} />
         <Suspense fallback={null}>
           <TimeoutWarningDialog

@@ -1,17 +1,3 @@
-// H18 — Task planner tests.
-//
-// `TaskPlanner` wraps an LLMRouter for the `plan_task()` call, which
-// requires live network.  But `parse_plan_response()` (and therefore
-// `parse_plan` / `parse_step` / `parse_action` / `parse_click_target`)
-// is a pure JSON-parsing method that can be called on a planner built
-// with an Arc<RwLock<LLMRouter>>.
-//
-// Strategy:
-//  • Build a minimal `TaskPlanner` using `LLMRouter::new()` (no API keys needed
-//    — the router itself compiles fine; we never call send_message in these tests).
-//  • Call `parse_plan_response()` with realistic JSON strings and assert that
-//    the resulting `TaskStep` / `Action` fields are correct.
-//  • Mark tests that would need a live LLM with `#[ignore = "needs a live LLM; the planner is exercised against real model output, not a fixture"]`.
 #[cfg(test)]
 mod tests {
     use crate::core::agent::planner::TaskPlanner;
@@ -29,9 +15,6 @@ mod tests {
         TaskPlanner::new(router).expect("TaskPlanner::new must not fail")
     }
 
-    // ------------------------------------------------------------------
-    // parse_plan_response — valid JSON arrays
-    // ------------------------------------------------------------------
 
     #[test]
     fn test_parse_plan_response_screenshot_step() {
@@ -343,9 +326,6 @@ mod tests {
         assert_eq!(steps[2].id, "step_3");
     }
 
-    // ------------------------------------------------------------------
-    // parse_plan_response — extracted from LLM response with markdown wrapper
-    // ------------------------------------------------------------------
 
     #[test]
     fn test_parse_plan_response_embedded_in_markdown() {
@@ -373,9 +353,6 @@ I need to take a screenshot first.
         assert_eq!(steps[0].id, "step_1");
     }
 
-    // ------------------------------------------------------------------
-    // parse_plan_response — error cases
-    // ------------------------------------------------------------------
 
     #[test]
     fn test_parse_plan_response_no_json_array_returns_error() {
@@ -422,9 +399,6 @@ I need to take a screenshot first.
         assert!(steps.is_empty(), "Empty JSON array must produce no steps");
     }
 
-    // ------------------------------------------------------------------
-    // Bug #51 — camelCase IPC: parser accepts both camelCase and snake_case
-    // ------------------------------------------------------------------
 
     #[test]
     fn test_parse_plan_response_camel_case_keys() {
@@ -622,9 +596,6 @@ I need to take a screenshot first.
         }
     }
 
-    // ------------------------------------------------------------------
-    // Live LLM tests — marked #[ignore = "needs a live LLM; the planner is exercised against real model output, not a fixture"]
-    // ------------------------------------------------------------------
 
     #[tokio::test]
     #[ignore = "needs a live LLM; the planner is exercised against real model output, not a fixture"] // Requires a configured LLM provider

@@ -337,12 +337,12 @@ function ActivitySection({ timeseries, models, nowMs }: ActivitySectionProps) {
             <Stat label="Active days" value={`${summary.activeDays} / ${ACTIVITY_SPAN_DAYS}`} />
             <Stat
               label="Busiest day"
-              value={summary.busiestDay ? formatIsoDay(summary.busiestDay.date) : '—'}
+              value={summary.busiestDay ? formatIsoDay(summary.busiestDay.date) : ', '}
               hint={summary.busiestDay ? `$${summary.busiestDay.cost.toFixed(4)}` : undefined}
             />
             <Stat
               label="Favourite model"
-              value={favourite ? favourite.model_name || favourite.model_id : '—'}
+              value={favourite ? favourite.model_name || favourite.model_id : ', '}
               hint={favourite ? `${favourite.total_tokens.toLocaleString()} tok` : undefined}
             />
           </div>
@@ -586,7 +586,7 @@ export function UsageDashboard() {
                 </div>
               </div>
 
-              {/* Monthly budget bar — only shown when a budget is configured */}
+              {/* Monthly budget bar, only shown when a budget is configured */}
               {monthlyBudget !== null && monthlyBudget > 0 && (
                 <div className="space-y-1.5">
                   <div className="flex items-center justify-between gap-2">

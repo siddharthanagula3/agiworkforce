@@ -778,8 +778,6 @@ fn try_git_revert(file_path: &str) -> Result<(), String> {
     let validated_path = validate_path_security(file_path)?;
     let validated_path_str = validated_path.to_string_lossy().to_string();
 
-    // Use Command with separate args (not shell) — safe from injection as long as
-    // the path is passed as a single argument via the args array.
     let output = std::process::Command::new("git")
         .args(["checkout", "HEAD", "--", &validated_path_str])
         .output()

@@ -18,9 +18,6 @@ pub(super) struct SendMessageFlags {
     pub is_web_focus: bool,
     pub stream_mode: bool,
     pub incognito: bool,
-    /// True when the frontend toggle is set to Local mode.
-    /// When true, the backend MUST NOT route to ManagedCloud under any
-    /// circumstances — not even as a fallback.
     pub is_local_mode: bool,
 }
 
@@ -92,8 +89,6 @@ pub(super) fn resolve_request_flags(
         || match request.active_mode.as_deref() {
             Some("cloud") => false,
             Some("local") => true,
-            // Legacy path: if prefer_cloud_credits is explicitly true treat as cloud;
-            // otherwise treat as local (safe default — never silently bleed to cloud).
             _ => !request.prefer_cloud_credits,
         },
         ChatExecutionMode::uses_local_storage,
@@ -291,12 +286,6 @@ pub(super) async fn prepare_send_message(
         std::env::consts::ARCH
     );
 
-    // Project-scoped conversation ("AGI Work"): inject the project's custom
-    // instructions + knowledge base into the system context — the local mirror
-    // of web request-processor's loadProjectContext/formatProjectSystemPrompt.
-    // Best-effort: a project-load failure must not take down the chat turn,
-    // but it is logged loudly because silently dropping the user's project
-    // instructions is a scope lie.
     if let Some(project_id) = conversation
         .project_id
         .as_deref()
@@ -644,13 +633,6 @@ fn truncate_chars(value: &str, max: usize) -> String {
     }
 }
 
-/// Load the project scope prompt for a project-scoped conversation.
-///
-/// Returns `None` when the project does not exist, is archived, or carries
-/// nothing worth injecting — the turn proceeds without project context in all
-/// three cases. Unlike web (`project_knowledge_files` is metadata-only), the
-/// desktop v65 `knowledge_base_files` column stores extracted file content, so
-/// bounded content excerpts are injected rather than a name-only manifest.
 pub(super) fn load_project_scope_prompt(
     conn: &rusqlite::Connection,
     project_id: &str,
@@ -683,7 +665,7 @@ pub(super) fn load_project_scope_prompt(
         ),
         Ok(None) => {
             debug!(
-                "[Chat] Conversation is scoped to project {project_id}, but no active project row exists — skipping project context"
+                "[Chat] Conversation is scoped to project {project_id}, but no active project row exists, skipping project context"
             );
             None
         }
@@ -756,7 +738,7 @@ pub(super) fn format_project_scope_prompt(
                         truncate_chars(content, MAX_PROJECT_SCOPE_FILE_CONTENT_CHARS)
                     ),
                     None => format!(
-                        "### {heading}\n(content not extracted — only the file name is available)"
+                        "### {heading}\n(content not extracted, only the file name is available)"
                     ),
                 }
             })
@@ -837,9 +819,6 @@ fn load_or_create_conversation(
         let conversation = repository::get_conversation(&conn, id, &request.user_id)
             .map_err(|e| format!("Failed to get new conversation: {e}"))?;
         if cloud_sync_enabled {
-            // Mint UUIDv7 cloud_id and mark for push.
-            // Reuse the already-held guard — re-acquiring the same non-reentrant
-            // std::sync::Mutex would deadlock.
             if let Err(e) = cloud_sync::mark_conversation_for_push(&conn, id) {
                 tracing::warn!(error = %e, conversation_id = id, "failed to mark conversation for cloud push");
             }
@@ -913,9 +892,6 @@ fn create_user_message_record(
         let saved_message = repository::get_message(&conn, id)
             .map_err(|e| format!("Failed to retrieve user message: {e}"))?;
         if cloud_sync_enabled {
-            // Mint cloud_id and mark user message for push.
-            // Reuse the already-held guard — re-acquiring the same non-reentrant
-            // std::sync::Mutex would deadlock.
             if let Err(e) = cloud_sync::mark_message_for_push(&conn, id) {
                 tracing::warn!(error = %e, message_id = id, "failed to mark user message for cloud push");
             }
@@ -973,24 +949,6 @@ async fn resolve_effective_folder(
     }
 }
 
-/// Advertise installed skills to the model as metadata ONLY.
-///
-/// Progressive disclosure (DESKTOP-SKILLS-EAGER-INJECTION-01): the turn carries a
-/// name + description catalog and nothing else. Instruction bodies stay on disk
-/// until the model explicitly calls the `skill` tool with `action=load`, which is
-/// also where the untrusted-body fence and the workspace consent gate live. The
-/// path this replaced Jaccard-scored every skill against the raw user message and
-/// pushed the top matches' full bodies into the prompt, so every turn paid
-/// full-body token cost for skills the model never chose.
-///
-/// `request.auto_inject_skills` stays part of the desktop IPC contract
-/// (`autoInjectSkills`; written by the settings store and by the MCP server bridge
-/// in `core::mcp::server::executor`). Its meaning is now "offer the skill catalog
-/// and the `skill` tool for this turn" — `false` keeps skills out of the turn
-/// entirely, which is exactly what the existing callers passing `false` want.
-///
-/// Returns whether skills were offered, so the tool catalog can drop the `skill`
-/// tool for turns that are not allowed to use it (no hidden availability).
 fn maybe_inject_skill_catalog(
     app_handle: &tauri::AppHandle,
     request: &ChatSendMessageRequest,
@@ -1140,10 +1098,6 @@ mod tests {
         assert!(!derive_cloud_sync_enabled(Some("Local"), false));
     }
 
-    // Regression guard for CTX-005 / AGI-DOC-0018 BK-11.01 (AC-19): context
-    // assembly must be deterministic. Relevance ranking is gone with the eager
-    // path, so what has to stay stable now is the catalog block itself — the model
-    // picks the skill, but the prompt it picks from must not reorder between runs.
     #[test]
     fn skill_catalog_block_is_deterministic() {
         let skill = |name: &str| {
@@ -1439,12 +1393,6 @@ mod tests {
 
     #[test]
     fn explicit_thinking_mode_false_disables_even_with_trigger() {
-        // User explicitly turned off thinking in UI, message has "ultrathink".
-        // Explicit false wins over the trigger word AND must emit an explicit
-        // disable signal (Some(Enabled(false))), not None: some providers default
-        // thinking ON at the API level, so the "false" must survive to the
-        // provider layer rather than being omitted (see resolve_thinking_parameter
-        // §2). Either way thinking is disabled — the trigger never re-enables it.
         let thinking = resolve_thinking_parameter(
             manually_controlled_anthropic_model(),
             Some(false),
@@ -1642,7 +1590,6 @@ mod tests {
     fn project_scope_prompt_caps_oversized_instructions() {
         let oversized = "x".repeat(20_000);
         let prompt = format_project_scope_prompt("P", None, Some(&oversized), None).unwrap();
-        // 8k cap + ellipsis, plus the surrounding framing — far below the raw size.
         assert!(prompt.chars().count() < 9_000);
         assert!(prompt.contains('…'));
     }

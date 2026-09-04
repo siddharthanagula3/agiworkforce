@@ -2054,7 +2054,7 @@ export async function invoke<T>(command: string, args?: Record<string, unknown>)
         try {
           localStorage.setItem(`agi_mock_pref:${prefKey}`, String(args?.['value'] ?? ''));
         } catch {
-          /* storage unavailable — treat as no-op */
+          return undefined as T;
         }
       }
       return undefined as T;

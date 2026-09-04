@@ -1173,12 +1173,6 @@ pub(super) fn infer_mime_type(ext: &str) -> &'static str {
     }
 }
 
-/// Best-effort auto-format: run the appropriate formatter for a file extension.
-///
-/// This is intentionally fire-and-forget. If the formatter is not installed or
-/// fails for any reason, we silently skip — the file write has already succeeded.
-/// We delegate to the existing `format_file` Tauri command module which handles
-/// formatter detection, project-local binary resolution, and fallback chains.
 async fn try_auto_format(path: &str, ext: &str) -> Result<()> {
     use crate::sys::commands::code_search::format_file;
 

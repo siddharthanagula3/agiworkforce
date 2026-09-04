@@ -48,7 +48,7 @@ pub fn build_system_tray(app: &mut App) -> Result<()> {
 
     // Windows Credential Manager tooltip limit is 128 characters.
     // We keep the tooltip short and enforce the cap defensively.
-    let raw_tooltip = "AGI Workforce — AI Desktop Platform";
+    let raw_tooltip = "AGI Workforce, AI Desktop Platform";
     let tooltip = &raw_tooltip[..128.min(raw_tooltip.len())];
 
     let tray_builder = TrayIconBuilder::with_id(MAIN_TRAY_ID)

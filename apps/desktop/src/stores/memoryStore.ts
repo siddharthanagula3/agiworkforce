@@ -798,7 +798,7 @@ export function buildMemoryContext(memories: MemoryEntry[], maxTokens: number = 
 
   if (eligible.length === 0) return '';
 
-  const header = '[User Memory — from previous conversations]';
+  const header = '[User Memory, from previous conversations]';
   const lines: string[] = [header];
   let budget = maxTokens - estimateTokens(header + '\n');
 

@@ -79,7 +79,6 @@ mod byok_vault_tests {
         let salt_path = tmp.path().join("test.salt");
         let wrong_key = derive_key("wrong-password", &salt_path);
         let result = Stronghold::new(&snapshot_path, wrong_key);
-        // Stronghold must return Err — wrong password cannot decrypt the snapshot.
         assert!(
             result.is_err(),
             "wrong password must fail to open the vault"

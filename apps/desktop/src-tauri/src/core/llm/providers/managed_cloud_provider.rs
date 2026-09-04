@@ -44,13 +44,6 @@ fn method_not_allowed_message() -> &'static str {
     }
 }
 
-// DESK-10 (audit 2026-05-03): the FIX-007 `impl Default` was an
-// `expect(...)` that panicked on TLS-builder failure (Alpine CI,
-// minimal Windows installs without the Visual C++ Redistributable,
-// sandboxed environments). `Default` is invoked in test harnesses and
-// `#[derive(Default)]` containers, giving the panic a wide blast
-// radius. Removed entirely — every caller now uses
-// `ManagedCloudProvider::new().map_err(...)` and propagates errors.
 
 impl ManagedCloudProvider {
     fn canonicalize_cloud_model(model: &str) -> String {
@@ -785,15 +778,6 @@ impl LLMProvider for ManagedCloudProvider {
             }
         }
 
-        // c4 DECISION (2026-07-16): ManagedCloud deliberately STAYS on the
-        // desktop `parse_sse_stream` decoder instead of the shared
-        // `agiworkforce-llm` engine (which every direct provider now uses).
-        // The managed gateway's envelope is OpenAI-shaped PLUS a per-chunk
-        // `credits` billing object the crate cannot represent — migrating
-        // would silently drop live billing telemetry. Pinned by
-        // `c4_pin_managed_cloud_credits_extraction_from_openai_shaped_sse`
-        // in tests/sse_parser_tests.rs; unblock by adding a vendor-meta
-        // event to the crate first.
         use crate::core::llm::sse_parser::parse_sse_stream;
         Ok(Box::pin(parse_sse_stream(
             res,

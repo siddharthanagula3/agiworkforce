@@ -286,9 +286,6 @@ mod tests {
         }
     }
 
-    // -----------------------------------------------------------------------
-    // Cache key collision — different base_urls must not share entries
-    // -----------------------------------------------------------------------
 
     /// Verifies that the cache key incorporates the base_url so that two
     /// Ollama instances serving the same model name are treated independently.
@@ -330,9 +327,6 @@ mod tests {
         );
     }
 
-    // -----------------------------------------------------------------------
-    // clear_capability_cache — async cache management
-    // -----------------------------------------------------------------------
 
     /// Manually insert an entry into the cache and verify that
     /// `clear_capability_cache` removes it.

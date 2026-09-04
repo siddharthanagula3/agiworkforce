@@ -16,12 +16,6 @@ function parseMode(raw: string | null): ComposerEditorMode | null {
   return null;
 }
 
-/**
- * Reads the same key and accepts the same two values as web's composer gate, so
- * one stored override moves both surfaces. Anything else stored — including the
- * value web writes for a mode desktop has not shipped — resolves to the
- * textarea, which is the arm every consumer gets until the founder flips it.
- */
 export function resolveComposerEditorMode(): ComposerEditorMode {
   return parseMode(safeGetItem(COMPOSER_EDITOR_STORAGE_KEY)) ?? COMPOSER_EDITOR_MODES.textarea;
 }

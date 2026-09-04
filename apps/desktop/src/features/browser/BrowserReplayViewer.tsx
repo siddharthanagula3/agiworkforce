@@ -147,7 +147,7 @@ function ActionRow({ action, index, screenshotData, onViewScreenshot }: ActionRo
             action.details.selector ??
             action.details.text ??
             action.details.script ??
-            '—'}
+            ', '}
         </span>
 
         {/* Duration */}

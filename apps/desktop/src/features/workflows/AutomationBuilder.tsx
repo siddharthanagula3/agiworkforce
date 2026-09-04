@@ -50,13 +50,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/ui/Dialog';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/ui/Select';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/ui/Select';
 import { Switch } from '@/ui/Switch';
 import { EmptyState } from '@/ui/EmptyState';
 
@@ -114,7 +108,7 @@ function formatTs(ts: number | null): string {
 }
 
 function formatDuration(ms: number | null): string {
-  if (ms === null) return '—';
+  if (ms === null) return ', ';
   if (ms < 1000) return `${ms}ms`;
   return `${(ms / 1000).toFixed(1)}s`;
 }
@@ -344,7 +338,7 @@ function ConfigSummary({ trigger }: { trigger: EventTriggerDefinition }) {
     summary = `Path: ${wh.path}${wh.authToken ? ' · Auth token set' : ''}`;
   } else if (trigger.type === 'file_watcher') {
     const fw = cfg as FileWatcherConfig;
-    summary = `Watch: ${fw.watchPath || '(unset)'} — ${fw.glob}`;
+    summary = `Watch: ${fw.watchPath || '(unset)'}, ${fw.glob}`;
   }
 
   return (
@@ -682,7 +676,7 @@ function TriggerForm({ open, initial, editId, onClose, onSubmit }: TriggerFormPr
               <div>
                 <p className="text-xs font-medium text-foreground">Require approval</p>
                 <p className="text-[10px] text-muted-foreground">
-                  Pause before executing — approve from mobile
+                  Pause before executing, approve from mobile
                 </p>
               </div>
               <Switch

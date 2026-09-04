@@ -1,4 +1,3 @@
-
 import { describe, it, expect, beforeEach } from 'vitest';
 import { enableMapSet } from 'immer';
 
@@ -9,7 +8,7 @@ import { useToolStore } from '../stores/chat/toolStore';
 import { useSettingsStore } from '../stores/settingsStore';
 import { useAppModeStore } from '../stores/appModeStore';
 
-describe('ChatStore — conversation lifecycle', () => {
+describe('ChatStore, conversation lifecycle', () => {
   beforeEach(() => {
     useAppModeStore.setState({ mode: 'local' });
     useChatStore.getState().clearHistory();
@@ -81,7 +80,7 @@ describe('ChatStore — conversation lifecycle', () => {
   });
 });
 
-describe('ChatStore — tool timeline and agentic loop', () => {
+describe('ChatStore, tool timeline and agentic loop', () => {
   beforeEach(() => {
     useChatStore.getState().clearHistory();
   });
@@ -168,7 +167,7 @@ describe('ChatStore — tool timeline and agentic loop', () => {
   });
 });
 
-describe('ToolStore — tool executions and approvals', () => {
+describe('ToolStore, tool executions and approvals', () => {
   beforeEach(() => {
     useToolStore.getState().resetOnLogout();
   });
@@ -189,7 +188,7 @@ describe('ToolStore — tool executions and approvals', () => {
     expect(execs[0]?.success).toBe(true);
   });
 
-  it('manages approval requests — add, approve, reject', () => {
+  it('manages approval requests, add, approve, reject', () => {
     useToolStore.getState().addApprovalRequest({
       id: 'approval-1',
       type: 'terminal_command',
@@ -274,7 +273,7 @@ describe('ToolStore — tool executions and approvals', () => {
   });
 });
 
-describe('SettingsStore — configuration persistence', () => {
+describe('SettingsStore, configuration persistence', () => {
   it('has sensible defaults for LLM config', () => {
     const state = useSettingsStore.getState();
     expect(state.llmConfig.defaultProvider).toBe('managed_cloud');

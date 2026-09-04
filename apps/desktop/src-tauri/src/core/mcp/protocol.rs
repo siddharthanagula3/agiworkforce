@@ -18,17 +18,6 @@ pub struct JsonRpcResponse {
     pub id: RequestId,
 }
 
-/// JSON-RPC error code for `UnsupportedProtocolVersionError` (MCP 2026-07-28).
-///
-/// A modern-only server rejecting our legacy `initialize` SHOULD return this
-/// with `data.supported` listing the revisions it speaks. The spec calls that
-/// message out specifically because legacy clients cannot fall forward — it may
-/// be the only diagnostic a user ever sees, so it is worth classifying rather
-/// than folding into the generic server-error bucket.
-///
-/// Only the code is modelled. The engine flattens JSON-RPC error frames to a
-/// string before the desktop taxonomy sees them, so `data.supported` does not
-/// survive; a typed struct for it would be a shape nothing can populate.
 pub const UNSUPPORTED_PROTOCOL_VERSION_CODE: i32 = -32022;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -303,7 +292,6 @@ pub struct ServerCapabilitiesV2 {
     /// Log streaming capability.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub logging: Option<std::collections::HashMap<String, Value>>,
-    /// Elicitation support — server can request user input (spec 2025-11-25).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub elicitation: Option<std::collections::HashMap<String, Value>>,
 }

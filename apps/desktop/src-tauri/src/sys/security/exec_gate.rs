@@ -1,58 +1,16 @@
-//! Execution-policy gate — the desktop's shell-command DECISION CORE, backed
-//! by the shared `agiworkforce-execpolicy` crate (Wave 5a of the Rust engine
-//! extraction plan, mirroring `apps/cli/src/features/exec/exec_policy.rs`).
-//!
-//! Decision model (three-way, most-restrictive-wins):
-//! - [`Decision::Forbidden`] — catastrophic; never runs, not even with user
-//!   approval. Encoded as argv-prefix rules in [`default_policy`], plus the
-//!   `command_validator` dangerous-pattern substring blocklist consulted by
-//!   the heuristics fallback (execpolicy prefix rules cannot express
-//!   substrings, pipes, or shell operators).
-//! - [`Decision::Prompt`] — must route into the desktop's existing
-//!   confirmation flow. `command_validator::requires_confirmation` delegates
-//!   here, and its callers (`sys/commands/git.rs`, `sys/commands/terminal.rs`)
-//!   route `true` into `tool_confirmation::request_confirmation_simple`.
-//! - [`Decision::Allow`] — no content-based objection. Callers may still gate
-//!   on cwd scope, trust level, or per-tool safety tiers.
-//!
-//! What this module deliberately does NOT do: input hygiene. Null bytes,
-//! length caps, blocked metacharacters, `$()` command substitution, one-shot
-//! shell operators, pipe-to-shell substring detection, suspicious-pattern
-//! audit logging, the security audit log, and the root-execution preflight
-//! all stay in `command_validator` as an app-local pre-filter that runs
-//! BEFORE this gate — the execpolicy engine is argv-prefix based and cannot
-//! model any of those. Removing the pre-filter would weaken blocking.
 
 use agiworkforce_execpolicy::{Decision, Policy, RuleMatch};
 use std::sync::LazyLock;
 
 use super::command_validator::matches_dangerous_pattern;
 
-/// Catastrophic argv prefixes that are `Forbidden` outright — "no human
-/// should be able to approve this in an agent loop" cases.
-///
-/// This is the UNION of the CLI gate's catastrophic list
-/// (`apps/cli/src/features/exec/exec_policy.rs::FORBIDDEN_PREFIXES`) and every
-/// `command_validator::DANGEROUS_PATTERNS` entry that is genuinely an
-/// argv-prefix catastrophe. Substring-shaped patterns (pipe-to-shell,
-/// redirects to /etc or devices, `/dev/tcp/` paths, Windows backslash forms
-/// that shlex cannot tokenize) stay in the `command_validator` pre-filter and
-/// in the heuristics fallback below — they are NOT argv-prefix expressible.
-///
-/// Matching happens against a lowercased copy of the argv, so every token
-/// here must be lowercase. `default_policy` also registers a `sudo`-prefixed
-/// variant of every entry.
 const FORBIDDEN_PREFIXES: &[&[&str]] = &[
-    // — CLI catastrophic list (kept verbatim for cross-app parity) —
     &["rm", "-rf", "/"],
     &["rm", "-rf", "/*"],
     &["rm", "-rf", "--no-preserve-root", "/"],
     &["mkfs.ext4", "/dev/sda"],
     &["dd", "if=/dev/zero", "of=/dev/sda"],
     &[":(){", ":|:&};:"], // classic fork bomb (best-effort literal match)
-    // — desktop DANGEROUS_PATTERNS, argv-prefix catastrophes —
-    // System destruction. The argv rules also catch quoted forms such as
-    // `rm -rf "/"` that dodge the substring blocklist (shlex strips quotes).
     &["rm", "-r", "/"],
     &["rm", "-rf", "~"],
     &["rm", "-rf", "$home"],
@@ -88,7 +46,6 @@ const FORBIDDEN_PREFIXES: &[&[&str]] = &[
     &["sudo", "rm"],
     &["mv", "/"],
     &["cp", "/dev/null", "/"],
-    // Code injection — bare names and absolute paths (RT-02 parity)
     &["python", "-c"],
     &["python2", "-c"],
     &["python3", "-c"],
@@ -144,20 +101,6 @@ const FORBIDDEN_PREFIXES: &[&[&str]] = &[
     &["reg", "delete", "hkcr"],
 ];
 
-/// Prompt-worthy substring patterns for the heuristics fallback — commands
-/// that are not catastrophic but must route through the confirmation flow.
-///
-/// This is the union of the desktop's previous Prompt classifiers, moved here
-/// so execpolicy is the single three-way decision core:
-/// - the bespoke `dangerous_patterns` list from
-///   `policy/engine.rs::evaluate_shell_command` (replaced by this gate), and
-/// - the bulk-modification + system-configuration lists from
-///   `command_validator::requires_confirmation` (which now delegates here).
-///
-/// Matched as lowercase substrings of the raw command, exactly like the code
-/// they replace. Entries subsumed by Forbidden rules (e.g. `mkfs`, `dd if=`)
-/// are kept for defense-in-depth: if a Forbidden rule ever regressed, these
-/// still force a prompt instead of silently allowing.
 pub(crate) const PROMPT_PATTERNS: &[&str] = &[
     // policy/engine.rs shell-command patterns (previously RequireApproval)
     "rm -rf /",
@@ -250,9 +193,6 @@ pub fn evaluate_full(policy: &Policy, command: &str) -> GateOutcome {
             matched_forbidden_prefix: None,
         };
     }
-    // Rules are all lowercase; match against a lowercased copy so `RM -RF /`
-    // cannot dodge a rule. There are no Allow prefix rules, so lowercasing
-    // can only add Forbidden matches — stricter-only by construction.
     let argv_lower: Vec<String> = argv.iter().map(|t| t.to_lowercase()).collect();
     let fallback = |_: &[String]| heuristic_decision(command);
     let evaluation = policy.check(&argv_lower, &fallback);

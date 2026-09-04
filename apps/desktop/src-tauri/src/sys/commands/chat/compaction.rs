@@ -105,9 +105,6 @@ pub(super) async fn compact_context(
         });
     }
 
-    // The command carries no model, so budget the pass against the model the
-    // conversation last ran on — the automatic pass in `context_monitor` reads
-    // the same catalog window.
     let conversation_model = messages
         .iter()
         .rev()
@@ -386,8 +383,6 @@ mod tests {
             .expect("conversation")
         };
 
-        // 40_000 code points ≈ 10_000 estimated tokens per message, so the ten
-        // preserved messages alone are ~100k — well past the old flat target.
         let body = "x".repeat(40_000);
         {
             let conn = db.connection().expect("db connection");

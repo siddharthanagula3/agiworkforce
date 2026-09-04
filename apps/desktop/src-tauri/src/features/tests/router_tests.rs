@@ -141,10 +141,6 @@ mod cost_calculator_tests {
     // ... removed redundant cost tests ...
 }
 
-// H56 — Groq, xAI (Grok), DeepSeek SSE format tests
-// All three providers use the OpenAI-compatible SSE format.  We verify that the
-// JSON payloads these providers emit can be parsed with the same logic used for
-// OpenAI, covering: stream start, content chunk, tool call chunk, stream end, keepalive.
 #[cfg(test)]
 mod groq_sse_tests {
     /// Groq sends standard OpenAI-compatible SSE with an extra `x_groq` metadata field.

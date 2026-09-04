@@ -13,13 +13,7 @@ import {
 } from 'lucide-react';
 import { Button } from '@/ui/Button';
 import { Input } from '@/ui/Input';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/ui/Select';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/ui/Select';
 import { ScrollArea } from '@/ui/ScrollArea';
 import { Separator } from '@/ui/Separator';
 import { useCloudStore } from '../../stores/cloudStore';
@@ -484,10 +478,10 @@ export function CloudStoragePanel() {
                         {isFolder ? 'Folder' : file.mime_type || 'File'}
                       </td>
                       <td className="px-3 py-2 text-xs text-muted-foreground">
-                        {isFolder ? '-' : file.size ? formatBytes(file.size) : '—'}
+                        {isFolder ? '-' : file.size ? formatBytes(file.size) : ', '}
                       </td>
                       <td className="px-3 py-2 text-xs text-muted-foreground">
-                        {file.modified_at ? new Date(file.modified_at).toLocaleString() : '—'}
+                        {file.modified_at ? new Date(file.modified_at).toLocaleString() : ', '}
                       </td>
                       <td className="px-3 py-2">
                         <div className="flex justify-end gap-2">

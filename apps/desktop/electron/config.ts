@@ -1,28 +1,7 @@
-/**
- * Electron cloud shell configuration.
- *
- * Constant names here are deliberately distinct from the renderer's
- * `WEB_APP_URL` / `API_BASE_URL` (`src/api/config.ts`): the repo's eslint
- * egress rule pins raw `fetch()` of those identifiers to the renderer's
- * egress-guard chokepoint, which exists to protect the Local trust boundary.
- * This shell has no Local mode — every request it can make is Managed Cloud
- * by construction (Clerk FAPI + our own API, both allowlisted below), so the
- * main process is its own egress chokepoint.
- */
-
 export const CLOUD_APP_ORIGIN = 'https://agiworkforce.com';
 
 export type RendererMode = 'remote' | 'bundled';
 
-/**
- * Bundled is the shipped mode: it is the only one that attaches `preload.cjs`,
- * so it is the only one in which the IPC bridge, the account bridge, quick ask,
- * screenshot capture, the secret store and — critically — the
- * `agiworkforce-cloud://` OAuth callback have any receiver. Nothing sets this
- * variable at package or launch time, so defaulting to `remote` meant every
- * installed build silently dropped its own deep links and never loaded the
- * renderer it ships. `remote` stays available as an explicit opt-out.
- */
 export const RENDERER_MODE: RendererMode =
   process.env['AGI_CLOUD_RENDERER'] === 'remote' ? 'remote' : 'bundled';
 

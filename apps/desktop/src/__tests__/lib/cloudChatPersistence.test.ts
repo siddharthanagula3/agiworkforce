@@ -117,7 +117,7 @@ describe('DCL-2 Local + BYOK never instantiate the cloud client', () => {
   });
 });
 
-describe('DCL-4 desktop cloud is open — sign-in is the only gate', () => {
+describe('DCL-4 desktop cloud is open, sign-in is the only gate', () => {
   it('setMode(cloud) succeeds for a signed-in account and the seam activates', () => {
     useAppModeStore.getState().setMode('cloud');
 

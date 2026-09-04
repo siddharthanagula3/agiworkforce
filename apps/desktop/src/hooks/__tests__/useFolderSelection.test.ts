@@ -90,7 +90,7 @@ describe('useFolderSelection', () => {
   });
 });
 
-describe('useFolderSelection — cloud mode grants no capability', () => {
+describe('useFolderSelection, cloud mode grants no capability', () => {
   const cloudGrant = {
     grantId: '11111111-1111-4111-8111-111111111111',
     path: '/Users/x/repo',

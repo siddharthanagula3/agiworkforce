@@ -782,10 +782,6 @@ impl MemoryStore {
             .filter_map(|r| r.ok())
             .filter_map(|memory| {
                 if let Some(ref emb) = memory.embedding {
-                    // Skip embeddings with different dimensions — they come from
-                    // different models and live in incompatible vector spaces.
-                    // Comparing (or zero-padding) across dimensions gives incorrect
-                    // cosine similarity scores.
                     let similarity =
                         agiworkforce_agent_core::memory::cosine_similarity(query_embedding, emb)?;
                     if similarity > 0.0 {

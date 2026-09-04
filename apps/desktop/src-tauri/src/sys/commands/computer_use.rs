@@ -220,20 +220,6 @@ impl ConsentPrompt {
     }
 }
 
-/// F20 (audit 2026-08-21): the consent screen is a product precondition for any
-/// computer-use action, but it was enforced only by a renderer-side Zustand
-/// flag, so anything that could reach `invoke()` could take over the desktop.
-///
-/// Three properties make the gate hold against that caller. The stored grant is
-/// sealed under the per-install secret and a per-process scope secret, so the
-/// row a renderer can write through `settings_v2_set` is not consent and a row
-/// it copied out of `settings_v2_get` stops verifying once consent is revoked.
-/// A grant is minted only by the native prompt below, which is answered on the
-/// desktop rather than in the webview, and while that prompt is on screen the
-/// whole process is barred from synthesizing input at it: commands refuse
-/// through this gate, and everything else — the script executor, the agent
-/// loops, the LLM UI tools — stalls on the OS-automation lock the prompt
-/// holds.
 pub(crate) async fn require_consent(
     app_handle: &tauri::AppHandle,
     settings: &SettingsServiceState,
@@ -426,12 +412,6 @@ pub async fn computer_use_start_session(
     Ok(session_id)
 }
 
-/// Internal screen-capture worker — does the actual work without any
-/// confirmation gate. Used by both the gated IPC entry point
-/// (`computer_use_capture_screen`) and the dispatcher
-/// (`computer_use_execute_tool`), which has its own dispatch-level gate.
-/// Calling this from a non-IPC code path bypasses the user-confirmation
-/// gate, so any new caller MUST justify why bypass is acceptable.
 async fn capture_screen_inner(
     state: &Arc<Mutex<ComputerUseState>>,
 ) -> Result<ScreenCapture, String> {
@@ -528,13 +508,6 @@ async fn require_confirmation(
     Ok(())
 }
 
-// DESK-9 (audit 2026-05-03): the previous implementation had
-// `computer_use_execute_tool` calling other `#[tauri::command]` fns
-// directly in Rust. That's unsupported Tauri API misuse — those
-// functions are wrapped by the IPC layer and not meant to be invoked
-// without going through `invoke()`. Refactor: move the OS-interaction
-// + record-action logic into private `perform_*_inner` helpers, and
-// have BOTH the IPC command and execute_tool call those.
 
 async fn click_inner(x: i32, y: i32, state: &Arc<Mutex<ComputerUseState>>) -> Result<(), String> {
     tracing::info!("Clicking at ({}, {})", x, y);
@@ -575,8 +548,6 @@ async fn move_mouse_inner(
 }
 
 async fn type_text_inner(text: String, state: &Arc<Mutex<ComputerUseState>>) -> Result<(), String> {
-    // FIX-003: replaced `tracing::info!("Typing text: {}", text)` — the
-    // previous form spilled raw passwords into the log pipeline.
     tracing::info!("Typing {} chars", text.chars().count());
     perform_type(&text).map_err(|e| format!("Failed to type text: {}", e))?;
     let computer_state = state.lock().await;
@@ -640,9 +611,6 @@ pub async fn computer_use_type_text(
     require_confirmation(
         &app_handle,
         "computer_use_type_text",
-        // Surface only the length to the approval prompt — the literal
-        // text could contain credentials the model captured from the
-        // user's clipboard or a previous tool call.
         serde_json::json!({ "chars": text.chars().count() }),
     )
     .await?;
@@ -848,41 +816,6 @@ fn perform_type(text: &str) -> Result<(), anyhow::Error> {
     Ok(())
 }
 
-/// Zoom into a screen region for detailed inspection.
-///
-/// Captures the specified region from the screen and scales it up
-/// for improved element detection and OCR accuracy.
-///
-/// # Arguments
-///
-/// * `request` - The zoom request containing region coordinates and zoom level
-///
-/// # Returns
-///
-/// A `ZoomRegionResponse` containing the zoomed image and metadata.
-///
-/// # Examples
-///
-/// ```typescript
-/// // From frontend:
-/// const result = await invoke('computer_use_zoom_region', {
-///   request: {
-///     x: 100,
-///     y: 200,
-///     width: 50,
-///     height: 30,
-///     zoom_level: 4.0,
-///   }
-/// });
-/// // result.image_data contains base64 PNG of 200x120 zoomed image
-/// ```
-///
-/// DESK-ZOOM-REGION-UNGATED (audit 2026-05-06): zoom captures screen pixels —
-/// identical privacy surface to `computer_use_capture_screen`. This command
-/// now requires the same `require_confirmation` gate. The inner work is
-/// extracted to `zoom_region_inner` so the execute_tool dispatcher (already
-/// gated at dispatch level, ~line 429) and `computer_use_zoom_at_point` can
-/// call it without a second confirmation dialog.
 #[tauri::command]
 pub async fn computer_use_zoom_region(
     request: ZoomRegionRequest,
@@ -907,14 +840,6 @@ pub async fn computer_use_zoom_region(
     zoom_region_inner(request, state.inner()).await
 }
 
-/// Inner zoom implementation — no confirmation gate.
-///
-/// Callers that are already behind a confirmation gate may call this directly:
-/// - `computer_use_zoom_region` (gated immediately above)
-/// - `computer_use_zoom_at_point` (gated inside that command)
-/// - `computer_use_execute_tool` dispatcher (gated at dispatch level, ~line 429)
-///
-/// Any new caller NOT already behind a gate MUST add one before calling this.
 async fn zoom_region_inner(
     request: ZoomRegionRequest,
     state: &Arc<Mutex<ComputerUseState>>,
@@ -1065,17 +990,6 @@ pub fn computer_use_suggest_zoom_level(width: u32, height: u32) -> f32 {
     crate::automation::computer_use::suggest_zoom_level(width, height).scale_factor()
 }
 
-/// TRUST BOUNDARY (desktop-trust-boundary-01): rejects OPA submissions whose
-/// declared execution boundary contradicts the provider they name — the same
-/// coherence validation the chat layer applies in
-/// `sys/commands/chat/types.rs` (`ChatSendMessageRequest::validate`).
-///
-/// Absent `execution_mode` stays fail-closed Local in the router; absent
-/// `provider` lets the router pick within the declared boundary — both pass.
-/// `CloudManaged` + a direct vendor provider string is deliberately allowed:
-/// it is a model-family hint from the managed-mode picker, and the router's
-/// `ManagedCloud` trust filter only admits managed-cloud candidates, so the
-/// hint can never cause direct vendor egress.
 fn validate_opa_execution_boundary(
     execution_mode: Option<crate::sys::commands::chat::types::ChatExecutionMode>,
     provider: Option<Provider>,
@@ -1379,13 +1293,6 @@ pub async fn app_permissions_list(
     Ok(permissions_state.list_permissions().await)
 }
 
-/// Sets the permission status for an app (allow / deny / ask).
-///
-/// `bundle_id` is optional but recommended on macOS — it lets the gate
-/// match against `frontmostApplication.bundleIdentifier` rather than the
-/// localized display name.
-///
-/// `status` accepts: `allowed`, `denied`, or `ask`.
 #[tauri::command]
 pub async fn app_permissions_set(
     app_name: String,
@@ -1426,9 +1333,6 @@ pub async fn app_permissions_remove(
     Ok(())
 }
 
-/// Best-effort persistence of the permission registry to the app data dir.
-/// Failures are logged but don't bubble up — the in-memory state is still
-/// authoritative for the current session.
 async fn persist_permissions(app_handle: &tauri::AppHandle, mgr: &Arc<AppPermissionManager>) {
     use tauri::Manager as _;
     let path = match app_handle.path().app_data_dir() {
@@ -1469,8 +1373,6 @@ pub fn app_permissions_always_blocked() -> Vec<String> {
         .collect()
 }
 
-/// Returns the currently focused application — used by the settings UI to
-/// help the user discover and approve new apps.
 #[tauri::command]
 pub fn app_permissions_active_window() -> Option<crate::automation::computer_use::ActiveWindow> {
     crate::automation::computer_use::WindowCoordinator::get_active_window()
@@ -1626,11 +1528,6 @@ mod tests {
         assert_eq!(prompts.load(Ordering::SeqCst), 1);
     }
 
-    /// The whole gate rests on the prompt being answered on the desktop rather
-    /// than from inside the app. A compromised renderer can reach every
-    /// synthetic-input command, so while the prompt is up those commands must
-    /// refuse — otherwise a `Return` aimed at the alert's default button mints
-    /// the grant the prompt exists to withhold.
     #[tokio::test]
     async fn synthetic_input_cannot_answer_the_consent_prompt() {
         let settings = settings_state();
@@ -1676,13 +1573,6 @@ mod tests {
         );
     }
 
-    /// F20 (audit 2026-08-21, recovery): the refusal above is blind to every
-    /// caller that never passes through a command — the script executor behind
-    /// `automation_execute_script`, the autonomous agent loop, the LLM UI
-    /// tools — and each of them can drive a real click at the dialog's "Allow"
-    /// button. All of them have to take the process-wide OS-automation lock
-    /// first, so the prompt holds it: the probe stands in for that click and
-    /// must not reach the OS until the user has answered.
     #[tokio::test]
     async fn nothing_in_this_process_can_synthesize_input_while_the_prompt_is_up() {
         let settings = settings_state();

@@ -26,12 +26,6 @@ export const FALLBACK_SUPPORTED_CONNECTOR_IDS: string[] = [
 const CONNECTORS_PERSIST_KEY = 'agiworkforce-connectors-store';
 const LEGACY_SHARED_PERSIST_KEY = 'connectors-store';
 
-/**
- * One-time move of the pre-rename payload onto {@link CONNECTORS_PERSIST_KEY},
- * so an upgrade does not blank the connector list on first paint. Runs before
- * `create()` because persist rehydrates during store construction. The legacy
- * entry is left in place — the duplicate store still owns it.
- */
 function adoptLegacyPersistedState(): void {
   if (typeof window === 'undefined' || !window.localStorage) return;
   try {
@@ -39,7 +33,7 @@ function adoptLegacyPersistedState(): void {
     const legacy = window.localStorage.getItem(LEGACY_SHARED_PERSIST_KEY);
     if (legacy !== null) window.localStorage.setItem(CONNECTORS_PERSIST_KEY, legacy);
   } catch {
-    // Storage unavailable (private mode, quota) — start from defaults instead.
+    return;
   }
 }
 
@@ -111,7 +105,7 @@ export const useConnectorsStore = create<ConnectorsState>()(
                 const verifiedProviders = await McpClient.listConnectedProviders();
                 if (!verifiedProviders.includes(id)) {
                   throw new Error(
-                    'AGI could not verify a live MCP connection for this connector — it may not have a supported backend yet.',
+                    'AGI could not verify a live MCP connection for this connector, it may not have a supported backend yet.',
                   );
                 }
                 break;
@@ -145,7 +139,7 @@ export const useConnectorsStore = create<ConnectorsState>()(
             const verifiedProviders = await McpClient.listConnectedProviders();
             if (!verifiedProviders.includes(id)) {
               throw new Error(
-                'AGI could not verify a live MCP connection for this connector — it may not have a supported backend yet.',
+                'AGI could not verify a live MCP connection for this connector, it may not have a supported backend yet.',
               );
             }
             set((state) => ({
@@ -201,9 +195,7 @@ export const useConnectorsStore = create<ConnectorsState>()(
               set({ supportedConnectorIds: ids });
             }
           } catch {
-            // Best-effort: keep the last-known-good (persisted or fallback)
-            // list. Not surfaced as a user-facing error — the grid still
-            // renders correctly with the previous value.
+            return;
           }
         },
 

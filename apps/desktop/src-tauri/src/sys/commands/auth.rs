@@ -4,8 +4,6 @@ use tauri::State;
 use super::security::SecretManagerState;
 use crate::sys::security::{verify_jwt_signature_with_secret, SecretManager};
 
-/// Managed state for session tokens — avoids process-global statics.
-/// Wrapped in an RwLock so multiple readers can coexist with exclusive writers.
 pub struct SessionState(pub RwLock<Option<String>>);
 
 impl SessionState {

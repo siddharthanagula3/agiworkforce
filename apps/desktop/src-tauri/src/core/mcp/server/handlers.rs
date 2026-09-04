@@ -67,24 +67,8 @@ pub async fn dispatch(
     }
 }
 
-/// Legacy revisions this server can serve, newest first.
-///
-/// Both are `initialize`-based and differ only in features this server does not
-/// expose (it serves `tools/list` and `tools/call` and nothing else), so either
-/// is honest. 2026-07-28 is absent: that revision is stateless and requires
-/// `server/discover` plus per-request `_meta` handling, none of which this
-/// server implements — a modern client probing us gets `-32601` and correctly
-/// falls back, which is the outcome the spec's compatibility matrix expects.
 const SERVER_SUPPORTED_PROTOCOL_VERSIONS: &[&str] = &["2025-11-25", "2024-11-05"];
 
-/// Pick the revision to answer `initialize` with.
-///
-/// The spec has the server confirm the revision it will speak: echo the
-/// client's request when we can serve it, otherwise name our own preference and
-/// let the client decide whether to proceed. Answering a fixed 2024-11-05 to
-/// everyone — as this did — tells a 2025-11-25 client we are two revisions
-/// behind, and a client that validates the response (as ours now does) drops
-/// the connection over a difference that does not exist in what we serve.
 fn negotiate_protocol_version(requested: Option<&str>) -> &'static str {
     requested
         .and_then(|want| {

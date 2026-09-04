@@ -115,7 +115,7 @@ export function PlansModal({ open, onOpenChange }: PlansModalProps) {
                   Plans &amp; Pricing
                 </DialogTitle>
                 <DialogDescription className="text-sm text-muted-foreground">
-                  AGI Workforce — Beyond one model. Beyond one surface.{' '}
+                  AGI Workforce, Beyond one model. Beyond one surface.{' '}
                   <span className="font-medium">Local and BYOK are always free.</span>
                 </DialogDescription>
               </div>
@@ -176,9 +176,9 @@ export function PlansModal({ open, onOpenChange }: PlansModalProps) {
 
             {/* Footer note */}
             <p className="mt-6 text-center text-[11px] text-muted-foreground">
-              AGI Cloud is in public alpha — no invite needed, available on desktop, web, and
-              mobile. Local and BYOK also work on desktop and stay on your device. Paid upgrades
-              show the exact charge before confirmation.{' '}
+              AGI Cloud is in public alpha, no invite needed, available on desktop, web, and mobile.
+              Local and BYOK also work on desktop and stay on your device. Paid upgrades show the
+              exact charge before confirmation.{' '}
               <button
                 type="button"
                 onClick={() => void openExternalUrl(`${WEB_APP_URL}/contact-sales`)}

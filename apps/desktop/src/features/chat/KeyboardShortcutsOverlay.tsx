@@ -149,7 +149,6 @@ export function KeyboardShortcutsOverlay({
   const sendShortcut = useSettingsStore((state) => state.chatPreferences.sendShortcut ?? 'enter');
   const voiceHotkey = useVoiceInputStore((state) => state.hotkey);
 
-  // Escape key closes the overlay — copies the ref to local var for cleanup safety
   const handleKeyDown = useCallback(
     (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
@@ -222,7 +221,7 @@ export function KeyboardShortcutsOverlay({
               </Button>
             </div>
 
-            {/* Scrollable body — two-column grid */}
+            {/* Scrollable body, two-column grid */}
             <div className="overflow-y-auto flex-1 p-5">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 {/* Inline sections */}

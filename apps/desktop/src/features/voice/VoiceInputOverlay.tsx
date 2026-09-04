@@ -110,14 +110,14 @@ export function VoiceInputOverlay() {
         {statusLabel}
       </div>
 
-      {/* Processing sub-label — only shown when AI cleanup is running */}
+      {/* Processing sub-label, only shown when AI cleanup is running */}
       {isProcessing && postProcessingMode === 'ai' && (
         <div className="bg-violet-900/60 border border-violet-700/50 rounded-full px-3 py-1 text-xs text-violet-300 shadow-lg select-none">
           AI is removing filler words
         </div>
       )}
 
-      {/* Preview transcript — shows cleaned text before it's inserted */}
+      {/* Preview transcript, shows cleaned text before it's inserted */}
       {isPreview && pendingTranscript && (
         <div className="max-w-sm bg-zinc-800/95 backdrop-blur-sm border border-green-700/50 rounded-xl px-4 py-2.5 text-sm text-zinc-100 shadow-lg select-none text-center leading-relaxed">
           {pendingTranscript.length > 120

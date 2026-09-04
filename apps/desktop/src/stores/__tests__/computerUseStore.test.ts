@@ -48,7 +48,7 @@ describe('computerUseStore', () => {
         }),
       );
       expect(toast.info).toHaveBeenCalledWith(
-        'Cloud vision model requires a BYOK continuation — using local models in Local mode',
+        'Cloud vision model requires a BYOK continuation, using local models in Local mode',
       );
     });
 
@@ -64,7 +64,7 @@ describe('computerUseStore', () => {
         expect.objectContaining({ provider: null, model: null, executionMode: 'local_only' }),
       );
       expect(toast.info).toHaveBeenCalledWith(
-        'Cloud vision model requires a BYOK continuation — using local models in Local mode',
+        'Cloud vision model requires a BYOK continuation, using local models in Local mode',
       );
     });
 

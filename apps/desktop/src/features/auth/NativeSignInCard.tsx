@@ -1,4 +1,3 @@
-
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ArrowLeft, ExternalLink, Loader2, Lock, LogIn, Mail, ShieldCheck } from 'lucide-react';
 import { Button } from '@/ui/Button';
@@ -648,7 +647,7 @@ export function NativeSignInCard({ onSuccess }: NativeSignInCardProps) {
         <div className="mt-5 space-y-3" data-testid="password-reset-required">
           <p className="text-sm leading-6 text-muted-foreground">
             AGI Cloud requires a new password for this account. AGI Desktop does not run password
-            resets in the app — resetting a password proves ownership of your email, and that has to
+            resets in the app, resetting a password proves ownership of your email, and that has to
             happen on the account service itself.
           </p>
           <Button
@@ -706,7 +705,7 @@ export function NativeSignInCard({ onSuccess }: NativeSignInCardProps) {
           <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-emerald-500" aria-hidden="true" />
           <p className="text-xs leading-5 text-muted-foreground">
             Your password goes only to the AGI account service. AGI Desktop stores a short-lived,
-            revocable session in your system credential vault — never your password.
+            revocable session in your system credential vault, never your password.
           </p>
         </div>
 

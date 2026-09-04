@@ -129,34 +129,11 @@ impl ConnectionGuard {
         self.conn.as_mut().map(|c| &mut c.conn)
     }
 
-    /// Get a reference to the underlying connection.
-    ///
-    /// # Invariant
-    ///
-    /// `self.conn` is `Some(_)` for the entire lifetime of `ConnectionGuard`. The
-    /// only path that sets it to `None` is `Drop::drop()` at the bottom of this
-    /// file, which consumes `self` — after that the guard cannot be referenced.
-    /// The field is private; no public API can take the connection out without
-    /// destroying the guard.
-    ///
-    /// # Why not return `Result`?
-    ///
-    /// Because the unreachable path is unreachable in safe Rust, returning
-    /// `Result` would force every caller to handle an error case that cannot
-    /// occur, polluting the API. If you have a handle that *might* be returned
-    /// (e.g., during cleanup), use [`try_get`] which already returns `Option`.
-    ///
-    /// # Panic safety (DESK-SQLITE-PANIC mitigation)
-    ///
-    /// Workspace Cargo.toml sets `panic = "abort"`, so any reached panic kills
-    /// the backend. The path below logs a structured error and aborts only if
-    /// the invariant above is violated by `unsafe` code or a future bug. CI's
-    /// `cargo clippy -- -D clippy::panic` would flag a regression here.
     #[track_caller]
     pub fn get(&self) -> &Connection {
         debug_assert!(
             self.conn.is_some(),
-            "ConnectionGuard.conn is None at deref-time — see DESK-SQLITE-PANIC",
+            "ConnectionGuard.conn is None at deref-time, see DESK-SQLITE-PANIC",
         );
         match self.conn.as_ref() {
             Some(c) => &c.conn,
@@ -166,24 +143,23 @@ impl ConnectionGuard {
                     invariant = "ConnectionGuard.conn must be Some until Drop",
                     location = ?std::panic::Location::caller(),
                     backtrace = ?std::backtrace::Backtrace::capture(),
-                    "ConnectionGuard::get() invariant violated — see DESK-SQLITE-PANIC",
+                    "ConnectionGuard::get() invariant violated, see DESK-SQLITE-PANIC",
                 );
                 // Invariant violated by unsafe code or future bug. Abort with structured log
                 // is preferred over silent UB. Callers who tolerate fallibility must use try_get().
                 panic!(
-                    "ConnectionGuard invariant violated at {} — see DESK-SQLITE-PANIC",
+                    "ConnectionGuard invariant violated at {}, see DESK-SQLITE-PANIC",
                     std::panic::Location::caller()
                 );
             }
         }
     }
 
-    /// Mutable counterpart to [`get`]. Same invariant + panic safety — see [`get`] docs.
     #[track_caller]
     pub fn get_mut(&mut self) -> &mut Connection {
         debug_assert!(
             self.conn.is_some(),
-            "ConnectionGuard.conn is None at deref-time — see DESK-SQLITE-PANIC",
+            "ConnectionGuard.conn is None at deref-time, see DESK-SQLITE-PANIC",
         );
         match self.conn.as_mut() {
             Some(c) => &mut c.conn,
@@ -193,10 +169,10 @@ impl ConnectionGuard {
                     invariant = "ConnectionGuard.conn must be Some until Drop",
                     location = ?std::panic::Location::caller(),
                     backtrace = ?std::backtrace::Backtrace::capture(),
-                    "ConnectionGuard::get_mut() invariant violated — see DESK-SQLITE-PANIC",
+                    "ConnectionGuard::get_mut() invariant violated, see DESK-SQLITE-PANIC",
                 );
                 panic!(
-                    "ConnectionGuard invariant violated at {} — see DESK-SQLITE-PANIC",
+                    "ConnectionGuard invariant violated at {}, see DESK-SQLITE-PANIC",
                     std::panic::Location::caller()
                 );
             }

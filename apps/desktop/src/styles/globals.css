@@ -25,8 +25,8 @@
 @source "../../index.html";
 /* Shared workspace component packages consumed from source (no dist build).
    Tailwind v4 does not auto-scan sibling workspace packages, so utilities used
-   ONLY inside these packages — notably arbitrary classes like
-   `bg-[var(--chat-user-bubble-bg)]` in the unified-chat MessageBubble — were
+   ONLY inside these packages, notably arbitrary classes like
+   `bg-[var(--chat-user-bubble-bg)]` in the unified-chat MessageBubble, were
    never generated, silently dropping the chat surface's theming. Scan them
    explicitly so the shared chat UI renders with its intended backgrounds. */
 @source "../../../../packages/ui/unified-chat/src/**/*.{js,ts,jsx,tsx}";
@@ -369,7 +369,7 @@
    *
    * The only :focus-visible rules in this file sat inside `prefers-contrast` and
    * `forced-colors` queries, so under ordinary settings NOTHING in the desktop app
-   * showed a focus ring — sidebar nav rows, icon buttons and custom controls were
+   * showed a focus ring, sidebar nav rows, icon buttons and custom controls were
    * all silently focusable. :focus-visible (not :focus) means pointer users never
    * see it, so this costs nothing visually while making the app keyboard-navigable.
    * The high-contrast blocks below still override it with a stronger treatment.

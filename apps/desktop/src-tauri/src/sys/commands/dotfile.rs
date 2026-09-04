@@ -60,10 +60,6 @@ fn shared_config_path() -> Result<PathBuf, String> {
     Ok(home.join(".agiworkforce").join("config.toml"))
 }
 
-/// Read the shared `~/.agiworkforce/config.toml` and return it as JSON.
-///
-/// Returns `{}` if the file does not exist. Returns an error only on
-/// genuine I/O or parse failures — a missing file is not an error.
 #[tauri::command]
 pub async fn read_shared_config() -> Result<serde_json::Value, String> {
     let config_path = shared_config_path()?;
@@ -175,16 +171,6 @@ pub async fn dotfile_list_mcp_servers() -> Result<serde_json::Value, String> {
         .unwrap_or(serde_json::json!({})))
 }
 
-/// Add a server entry to `~/.agiworkforce/mcp.json`.
-///
-/// Creates the file with a `{ "mcpServers": {} }` skeleton when missing.
-///
-/// After writing, reloads the live MCP client so the new server actually
-/// connects immediately instead of only existing on disk until the next app
-/// restart — fixes DESKTOP-MCP-DOTFILE-CONFIG-FAKE-SUCCESS-01, where this
-/// command previously reported success without the server ever being
-/// reachable by the running MCP client (`core::mcp::config::McpServersConfig`,
-/// which never read this file before `merge_dotfile_servers` was added).
 #[tauri::command]
 pub async fn dotfile_add_mcp_server(
     mcp_state: State<'_, McpState>,
@@ -365,7 +351,6 @@ pub async fn dotfile_read_memories() -> Result<String, String> {
 fn json_to_toml(json: &serde_json::Value) -> Result<toml::Value, String> {
     match json {
         serde_json::Value::Null => {
-            // TOML has no null — use empty string as a placeholder.
             Ok(toml::Value::String(String::new()))
         }
         serde_json::Value::Bool(b) => Ok(toml::Value::Boolean(*b)),

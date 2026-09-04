@@ -677,7 +677,7 @@ describe('TauriRuntime', () => {
           event: {
             type: 'progress-update',
             progressId: 'local-agent-iteration',
-            summary: 'Agent iteration 2/8 — 1 tool',
+            summary: 'Agent iteration 2/8 to 1 tool',
             detail: 'Running local tools',
             status: 'running',
           },

@@ -107,7 +107,6 @@ impl Default for Message {
     }
 }
 
-/// Default branch ID constant — used across fork/list/switch/delete operations.
 pub const DEFAULT_BRANCH_ID: &str = "main";
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -121,7 +120,6 @@ pub struct ConversationBranch {
     pub created_at: DateTime<Utc>,
 }
 
-/// Result from a conversation fork operation — returned to the frontend.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ForkResult {

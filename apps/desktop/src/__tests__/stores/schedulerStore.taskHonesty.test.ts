@@ -38,7 +38,7 @@ function makeTask(overrides: Partial<ScheduledTask> = {}): ScheduledTask {
   };
 }
 
-describe('schedulerStore task actions — native (Tauri) failure honesty', () => {
+describe('schedulerStore task actions, native (Tauri) failure honesty', () => {
   let setItemSpy: ReturnType<typeof vi.spyOn>;
 
   beforeEach(() => {
@@ -64,10 +64,7 @@ describe('schedulerStore task actions — native (Tauri) failure honesty', () =>
     const state = useSchedulerStore.getState();
     expect(state.tasks).toEqual([]);
     expect(state.error).toBeTruthy();
-    expect(setItemSpy).not.toHaveBeenCalledWith(
-      TASKS_FALLBACK_STORAGE_KEY,
-      expect.anything(),
-    );
+    expect(setItemSpy).not.toHaveBeenCalledWith(TASKS_FALLBACK_STORAGE_KEY, expect.anything());
   });
 
   it('updateTask rejects and leaves the existing task exactly as it was', async () => {
@@ -85,10 +82,7 @@ describe('schedulerStore task actions — native (Tauri) failure honesty', () =>
     expect(state.tasks).toHaveLength(1);
     expect(state.tasks[0]).toEqual(original);
     expect(state.error).toBeTruthy();
-    expect(setItemSpy).not.toHaveBeenCalledWith(
-      TASKS_FALLBACK_STORAGE_KEY,
-      expect.anything(),
-    );
+    expect(setItemSpy).not.toHaveBeenCalledWith(TASKS_FALLBACK_STORAGE_KEY, expect.anything());
   });
 
   it('deleteTask rejects and does not remove the task', async () => {
@@ -103,10 +97,7 @@ describe('schedulerStore task actions — native (Tauri) failure honesty', () =>
     const state = useSchedulerStore.getState();
     expect(state.tasks).toHaveLength(1);
     expect(state.tasks[0]).toEqual(original);
-    expect(setItemSpy).not.toHaveBeenCalledWith(
-      TASKS_FALLBACK_STORAGE_KEY,
-      expect.anything(),
-    );
+    expect(setItemSpy).not.toHaveBeenCalledWith(TASKS_FALLBACK_STORAGE_KEY, expect.anything());
   });
 
   it('toggleTask rejects and does not flip the task status', async () => {
@@ -120,10 +111,7 @@ describe('schedulerStore task actions — native (Tauri) failure honesty', () =>
 
     const state = useSchedulerStore.getState();
     expect(state.tasks[0]?.status).toBe('active');
-    expect(setItemSpy).not.toHaveBeenCalledWith(
-      TASKS_FALLBACK_STORAGE_KEY,
-      expect.anything(),
-    );
+    expect(setItemSpy).not.toHaveBeenCalledWith(TASKS_FALLBACK_STORAGE_KEY, expect.anything());
   });
 
   it('runNow rejects and does not record a run', async () => {
@@ -138,10 +126,7 @@ describe('schedulerStore task actions — native (Tauri) failure honesty', () =>
     const state = useSchedulerStore.getState();
     expect(state.tasks[0]?.runCount).toBe(2);
     expect(state.tasks[0]?.lastRunAt).toBeNull();
-    expect(setItemSpy).not.toHaveBeenCalledWith(
-      TASKS_FALLBACK_STORAGE_KEY,
-      expect.anything(),
-    );
+    expect(setItemSpy).not.toHaveBeenCalledWith(TASKS_FALLBACK_STORAGE_KEY, expect.anything());
   });
 
   it('on success, createTask refreshes from the backend instead of trusting a local guess', async () => {

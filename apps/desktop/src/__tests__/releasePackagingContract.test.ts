@@ -3,16 +3,6 @@ import { resolve } from 'node:path';
 
 import { describe, expect, it } from 'vitest';
 
-/**
- * Resolved from this file, not from `process.cwd()`, so the suite behaves the
- * same however it is invoked — from `apps/desktop`, from the repo root, or from
- * a CI step that sets its own working directory.
- *
- * Note what this file can and cannot tell you: it reads the working tree, so a
- * green run means the tree is coherent, never that the release is. The updater
- * template that shipped dead through the whole 1.2.0 line would have passed
- * here the moment someone edited it, committed or not.
- */
 const SRC_TAURI = resolve(import.meta.dirname, '../../src-tauri');
 
 const conf = JSON.parse(readFileSync(resolve(SRC_TAURI, 'tauri.conf.json'), 'utf8')) as {
@@ -69,13 +59,6 @@ describe('published updater artifact shape', () => {
   });
 
   it('names the macOS updater archive with no architecture token', () => {
-    // The macOS updater artifact is the `.app` directory tarred by
-    // tauri-bundler's updater_bundle, which derives the name from the bundle's
-    // own file_name — `${productName}.app.tar.gz`. The release builds one
-    // universal binary (`--target universal-apple-darwin`), so the triple
-    // appears in the output *directory*, never in the artifact name. Any
-    // selector requiring `aarch64`, `arm64`, `x86_64` or `universal` in the
-    // filename therefore matches nothing.
     expect(conf.productName).not.toMatch(/aarch64|arm64|x86_64|x64|amd64|universal/i);
   });
 });

@@ -56,12 +56,12 @@ const AGENT_MODE_CONFIG: Record<AgentMode, { label: string; description: string;
   {
     safe: {
       label: 'Safe',
-      description: 'Read-only tools only — no destructive operations',
+      description: 'Read-only tools only, no destructive operations',
       color: 'border-emerald-500/40 bg-emerald-500/5 text-emerald-400',
     },
     plan: {
       label: 'Plan',
-      description: 'Read-only analysis and planning — never writes or executes',
+      description: 'Read-only analysis and planning, never writes or executes',
       color: 'border-violet-500/40 bg-violet-500/5 text-violet-400',
     },
     build: {
@@ -71,7 +71,7 @@ const AGENT_MODE_CONFIG: Record<AgentMode, { label: string; description: string;
     },
     autopilot: {
       label: 'Autopilot',
-      description: 'All tools auto-approved — use with caution',
+      description: 'All tools auto-approved, use with caution',
       color: 'border-amber-500/40 bg-amber-500/5 text-amber-400',
     },
   };
@@ -258,7 +258,7 @@ export const SafetyPolicies: React.FC<SafetyPoliciesProps> = ({ className }) => 
           <div>
             <div className="text-sm font-medium text-amber-400">Auto-Approve All Tools</div>
             <div className="text-xs text-gray-500 mt-0.5">
-              Bypasses all confirmation dialogs — use only in trusted environments
+              Bypasses all confirmation dialogs, use only in trusted environments
             </div>
           </div>
           <div className="flex items-center gap-2">

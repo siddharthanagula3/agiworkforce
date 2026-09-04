@@ -20,7 +20,6 @@ pub struct ExecuteResult {
     stream_id: Option<String>,
 }
 
-// AUDIT-FIX: H-14 — refuse unquoted shell metachars; shlex::split honors quoted args so legitimate `echo "a; b"` works.
 fn reject_unquoted_shell_metachars(command: &str) -> Result<(), String> {
     let tokens = shlex::split(command)
         .ok_or_else(|| "command failed shell-tokenization (unbalanced quotes)".to_string())?;
@@ -104,7 +103,6 @@ pub async fn execute_terminal_command(
         return Err(e.to_string());
     }
 
-    // AUDIT-FIX: H-14 — tokenize and reject unquoted shell metachars before delegating to `sh -c`.
     if let Err(e) = reject_unquoted_shell_metachars(&command) {
         tracing::warn!(correlation_id = %correlation_id, error = %e, "metachar reject");
         return Err(e);
@@ -416,7 +414,7 @@ pub async fn terminal_execute(
         app,
         command,
         working_dir,
-        None, // shell — use default
+        None,
         None, // stream_id
         None, // emit_events
         None, // timeout_ms

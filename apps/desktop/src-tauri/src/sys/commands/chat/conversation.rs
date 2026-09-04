@@ -42,10 +42,6 @@ pub fn chat_create_conversation(
         .map_err(|e| format!("Failed to retrieve conversation {}: {e}", id))
 }
 
-/// List conversations for a user.
-/// `app_mode`: optional mode filter — "local" or "cloud".
-/// When provided, only conversations created in that mode are returned.
-/// When absent, all conversations for the user are returned (legacy behaviour).
 #[tauri::command]
 pub fn chat_get_conversations(
     db: State<'_, AppDatabase>,
@@ -399,14 +395,6 @@ pub async fn sync_conversations_to_cloud(
 
     let outcome = cloud_sync::sync_now(&db, &user_id, &token, &base_url).await?;
 
-    // Drive MEMORY + PROJECTS delta sync on the SAME managed-cloud trigger, so the
-    // existing scheduler (cloudSyncTrigger: mode→managed, post-turn debounce, 30s
-    // tick) reconciles all three entity types — not just chat. Without this, the
-    // memory_sync/projects_sync engines were built + tested but had no runtime
-    // caller (dead code). Each has its own single-flight guard and `app_mode='cloud'`
-    // row gating, and the egress gate above already restricts this command to managed
-    // mode. A failure in either MUST NOT fail chat sync — log and continue so one
-    // entity's hiccup can't block the others (graceful degradation).
     match memory_sync::sync_memories_now(&db, &user_id, &token, &base_url).await {
         Ok(m) => {
             tracing::debug!(

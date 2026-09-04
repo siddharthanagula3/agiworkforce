@@ -181,7 +181,7 @@ function MemorySettingsContent({ adapter, scope }: MemorySettingsContentProps) {
             Export / import. The store has had `exportAll` and
             `importJsonString` all along, but the only UI that surfaced them was
             `MemoryManager` behind `showImportExport`, and its sole caller
-            (`MemoryBrowserModal`) was never mounted — so a user could not get
+            (`MemoryBrowserModal`) was never mounted, so a user could not get
             their memories out of the device at all. Local scope only: cloud
             memories are exported through the account data-export path.
           */}

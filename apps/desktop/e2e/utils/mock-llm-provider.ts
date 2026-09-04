@@ -112,8 +112,8 @@ export class MockLLMProvider {
           let body: { title?: string; model?: string } = {};
           try {
             body = route.request().postDataJSON() ?? {};
-          } catch {
-            // empty body — fine
+          } catch (err) {
+            void err;
           }
           route.fulfill({
             status: 200,

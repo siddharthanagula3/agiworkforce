@@ -100,7 +100,6 @@ impl ToolExecutor {
                 });
             }
         } else {
-            // No app handle available — cannot ask user
             let mut pending = PENDING_QUESTIONS.lock().await;
             pending.remove(&question_id);
             return Ok(ToolResult {
@@ -130,7 +129,6 @@ impl ToolExecutor {
                 });
             }
             Err(_) => {
-                // Timeout — clean up pending entry
                 let mut pending = PENDING_QUESTIONS.lock().await;
                 pending.remove(&question_id);
                 return Ok(ToolResult {

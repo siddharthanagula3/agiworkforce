@@ -1107,7 +1107,6 @@ mod tests {
 
     #[test]
     fn sigv4_signing_key_derivation() {
-        // Test-only placeholder credentials — not real AWS keys
         let test_key_id = String::from_utf8(vec![b'A', b'K', b'I', b'D']).unwrap();
         let test_secret = String::from_utf8(vec![b'S', b'E', b'C', b'R', b'E', b'T']).unwrap();
         let signer = SigV4Signer::new(&test_key_id, &test_secret, "us-east-1");

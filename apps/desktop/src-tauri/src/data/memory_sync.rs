@@ -1,49 +1,3 @@
-//! Desktop cloud memory sync engine (managed-cloud only).
-//!
-//! Delta-syncs the SQLite `user_memory` table with the managed-cloud
-//! `/api/memory/sync` endpoint, mirroring the chat engine in `cloud_sync.rs`.
-//!
-//! MANAGED-ONLY: every entry point is gated on a valid bearer token. The mint
-//! hook (`mark_memory_for_push`) guards on `app_mode = 'cloud'` so local/BYOK
-//! memories can never acquire a cloud_id or have needs_push=1. The trust boundary
-//! is the same as chat: `derive_cloud_sync_enabled` in `send_message_setup.rs`.
-//!
-//! Wire protocol v2 (server-version compare-and-swap):
-//!   POST /api/memory/sync  { protocolVersion: 2,
-//!                            memories: [{ id, content, category?, source?,
-//!                              pinned?, baseVersion, isDeleted? }] }
-//!                        → { protocolVersion: 2, applied, conflicts, cursor }
-//!   GET  /api/memory/sync?since=<cursor>
-//!                        → { memories: [{ id, content, category, source,
-//!                             is_deleted, created_at, updated_at,
-//!                             server_version }], cursor, hasMore }
-//!
-//! INTEGER PKs are never sent over the wire; only `cloud_id` (UUIDv7).
-//! `user_id` is never sent in a push body — the server derives it from session.
-//!
-//! ACCOUNT SCOPING: one desktop install serves many accounts and the local DB
-//! survives sign-out, so every push, ack, conflict and pull statement is scoped
-//! to `user_memory.sync_user_id` the same way `cloud_sync.rs` scopes on
-//! `conversations.user_id`. Rows created before that stamp existed are adopted
-//! once, and only while no second account is known to this device
-//! (`only_account_on_device`). Residual gap: a memory created in cloud mode by
-//! an account that then signs out WITHOUT ever completing a sync is still
-//! unowned, so the next account on the device adopts it. Closing that needs the
-//! owner stamped at creation in `sys/commands/memory.rs`, which is outside this
-//! engine.
-//!
-//! Known local-schema gaps:
-//!   - `topic` is NOT in the wire protocol. Pull-insert synthesizes it from
-//!     `cloud_id` to satisfy the `NOT NULL` + `UNIQUE(category,topic)` constraint.
-//!     Semantic loss: the topic is meaningless for pulled rows; local topic is
-//!     preserved for push (content carries the real payload).
-//!   - `importance` is NOT in the wire. Pulled rows default to 5 (DB default).
-//!   - `category` from the server may be NULL or any string; it is clamped to
-//!     the allowed set {'Preference','Fact','Decision','Context'} on insert.
-//!     Unknown categories fall to 'Context'. Per-row errors skip, not abort.
-//!   - Tombstone + UNIQUE(category,topic) race: if a user deletes then recreates
-//!     the same category+topic in cloud mode, the lingering cloud_id and
-//!     deleted_at_utc might collide. Tracked as a known gap — not fixed here.
 
 use chrono::{DateTime, SecondsFormat, Utc};
 use reqwest::Client;
@@ -53,21 +7,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use tracing::{debug, warn};
 use uuid::Uuid;
 
-// ---------------------------------------------------------------------------
-// Wire shapes — field names must match the server schema exactly.
-// Push uses camelCase (PushMemorySchema in route.ts); pull returns snake_case.
-// ---------------------------------------------------------------------------
 
-/// Pushed memory (camelCase, matching PushMemorySchema on server).
-///
-/// IMPORTANT: The server Zod schema uses `.optional()` (not `.nullable()`) for
-/// `isDeleted` and `createdAt`. That means `undefined` (key absent) is accepted
-/// but `null` (key present, JSON null) fails validation. All `Option<T>` fields
-/// on this struct MUST carry `skip_serializing_if = "Option::is_none"` so serde
-/// omits the key entirely rather than emitting `"isDeleted": null`.
-///
-/// `category` and `source` are `.nullable().optional()` on the server, so null
-/// is technically OK there — but omitting them is equally safe and simpler.
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct PushMemory {
@@ -108,7 +48,6 @@ struct MemoryPushResponse {
     protocol_version: u8,
     applied: Vec<AckedMemory>,
     conflicts: Vec<MemoryConflict>,
-    // cursor present but unused for push — pull has its own cursor.
     #[allow(dead_code)]
     cursor: Option<String>,
 }
@@ -155,9 +94,6 @@ pub struct MemorySyncOutcome {
     pub memories_pulled: usize,
 }
 
-// ---------------------------------------------------------------------------
-// Helpers — re-use the bigint cursor logic from cloud_sync (same algorithm).
-// ---------------------------------------------------------------------------
 
 fn bigint_greater(a: &str, b: &str) -> bool {
     let na = a.trim_start_matches('0');
@@ -201,13 +137,11 @@ fn to_z_datetime(s: &str) -> String {
     }
     warn!(
         raw_ts = s,
-        "memory_sync: to_z_datetime: unparseable timestamp — using now_z()"
+        "memory_sync: to_z_datetime: unparseable timestamp, using now_z()"
     );
     now_z()
 }
 
-/// Clamp a server-side category string to the local CHECK constraint values.
-/// The route stores whatever the client sends — we must guard on ingest.
 fn normalize_category(cat: Option<&str>) -> &'static str {
     match cat {
         Some(c) if c.eq_ignore_ascii_case("Preference") || c.eq_ignore_ascii_case("preference") => {
@@ -227,9 +161,6 @@ fn normalize_category(cat: Option<&str>) -> &'static str {
 
 static MEMORY_SYNC_IN_FLIGHT: AtomicBool = AtomicBool::new(false);
 
-// ---------------------------------------------------------------------------
-// DB cursor helpers — per-user memory cursor in cloud_sync_state.memory_cursor.
-// ---------------------------------------------------------------------------
 
 fn read_memory_cursor(conn: &Connection, user_id: &str) -> String {
     conn.query_row(
@@ -251,9 +182,6 @@ fn write_memory_cursor(conn: &Connection, user_id: &str, cursor: &str) {
     );
 }
 
-// ---------------------------------------------------------------------------
-// Account scoping — which account owns a local cloud row.
-// ---------------------------------------------------------------------------
 
 /// Add the owner stamp to `user_memory` when the local DB predates it. The
 /// engine runs it on every cycle rather than relying on a schema migration
@@ -317,9 +245,6 @@ fn claim_unowned_memories(conn: &Connection, user_id: &str) -> usize {
 // Identity minting.
 // ---------------------------------------------------------------------------
 
-/// Mint a UUIDv7 cloud_id for a newly-created cloud memory and mark it for push.
-/// Idempotent: COALESCE ensures a second call keeps the original cloud_id.
-/// Guard: only runs when `app_mode = 'cloud'` — local/BYOK rows are never touched.
 pub fn mark_memory_for_push(conn: &Connection, memory_id: i64) -> SqlResult<()> {
     let cloud_id = Uuid::now_v7().to_string();
     let now = now_z();
@@ -518,7 +443,6 @@ fn apply_memory_deltas(conn: &Connection, user_id: &str, deltas: &[MemoryDelta])
                 );
                 applied += 1;
             }
-            // If we don't have the row, the delete already propagated — no-op.
         } else if let Some((local_id, needs_push)) = existing {
             if needs_push != 0 {
                 let _ = conn.execute(
@@ -545,9 +469,6 @@ fn apply_memory_deltas(conn: &Connection, user_id: &str, deltas: &[MemoryDelta])
             );
             applied += 1;
         } else {
-            // New row from another device — INSERT.
-            // `topic` is NOT in the wire; synthesize from cloud_id to satisfy NOT NULL +
-            // UNIQUE(category,topic). The actual semantic content is in `content`.
             let category = normalize_category(d.category.as_deref());
             let topic = format!("cloud:{}", &d.id);
             let created_at = to_z_datetime(&d.created_at);
@@ -577,7 +498,7 @@ fn apply_memory_deltas(conn: &Connection, user_id: &str, deltas: &[MemoryDelta])
                 }
                 Err(e) => {
                     // Partial UNIQUE index on cloud_id catches a race; log and skip.
-                    debug!(cloud_id = %d.id, error = %e, "memory_sync: skipping pulled memory — insert failed");
+                    debug!(cloud_id = %d.id, error = %e, "memory_sync: skipping pulled memory, insert failed");
                 }
             }
         }
@@ -585,9 +506,6 @@ fn apply_memory_deltas(conn: &Connection, user_id: &str, deltas: &[MemoryDelta])
     applied
 }
 
-/// Select the next cursor for the memory pull. Memory is ONE table (unlike chat
-/// which has two), so the server's cursor IS the safe frontier — just guard against
-/// moving backwards.
 fn select_next_memory_cursor(current: &str, resp_cursor: &Option<String>) -> String {
     match resp_cursor {
         Some(c) => max_cursor(current, std::slice::from_ref(c)),
@@ -821,7 +739,6 @@ mod tests {
         );
     }
 
-    // ── Test 2: Mint — sets cloud_id + needs_push on cloud memory ────────────
 
     #[test]
     fn mint_sets_cloud_id_and_needs_push_for_cloud_memory() {
@@ -1069,16 +986,9 @@ mod tests {
         assert_eq!(select_next_memory_cursor("7", &None), "7");
     }
 
-    // ── Test 8a: Push wire shape — non-deleted memory (common case) ──────────
-    //
-    // Zod schema: isDeleted: z.boolean().optional() → optional (not nullable)
-    //
-    // When these fields are None, serde MUST omit the key entirely (skip_serializing_if).
-    // Emitting `"isDeleted": null` would fail Zod and 400 the push.
 
     #[test]
     fn push_body_serializes_to_camelcase_schema() {
-        // Case A: normal (non-deleted) memory — isDeleted and client clocks are absent.
         let body_normal = MemoryPushBody {
             protocol_version: 2,
             memories: vec![PushMemory {
@@ -1104,11 +1014,11 @@ mod tests {
         // None → key MUST be absent (Zod .optional() rejects null; undefined = absent).
         assert!(
             mem_normal.get("isDeleted").is_none(),
-            "isDeleted must be absent when None — Zod .optional() rejects null"
+            "isDeleted must be absent when None, Zod .optional() rejects null"
         );
         assert!(
             mem_normal.get("createdAt").is_none(),
-            "createdAt must be absent when None — Zod .optional() rejects null"
+            "createdAt must be absent when None, Zod .optional() rejects null"
         );
 
         // snake_case keys must never appear.
@@ -1124,7 +1034,6 @@ mod tests {
         // user_id must not be in push body.
         assert!(mem_normal.get("userId").is_none() && mem_normal.get("user_id").is_none());
 
-        // Case B: tombstone — isDeleted must be present and true.
         let body_tombstone = MemoryPushBody {
             protocol_version: 2,
             memories: vec![PushMemory {
@@ -1145,7 +1054,6 @@ mod tests {
             "tombstone must emit isDeleted: true"
         );
         assert!(mem_tomb.get("createdAt").is_none());
-        // category/source absent when None (nullable optional — omitting is fine).
         assert!(mem_tomb.get("category").is_none());
         assert!(mem_tomb.get("source").is_none());
     }

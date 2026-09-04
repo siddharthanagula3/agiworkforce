@@ -27,7 +27,6 @@ pub fn should_emit_progress(tool_id: &str) -> bool {
         }
     }
     map.insert(tool_id.to_string(), now);
-    // Prevent unbounded growth — clear old entries if map gets large
     if map.len() > 500 {
         let cutoff = now - std::time::Duration::from_secs(30);
         map.retain(|_, v| *v > cutoff);
@@ -291,7 +290,6 @@ mod tests {
         let info =
             get_tool_display_info("mcp__filesystem__read_file", r#"{"path": "src/main.rs"}"#);
         assert_eq!(info.display_name, "Read");
-        // "src/main.rs" has only 2 path segments — shorten_path returns as-is
         assert_eq!(info.display_args, "src/main.rs");
     }
 
@@ -302,7 +300,6 @@ mod tests {
             r#"{"path": "apps/desktop/src/components/Auth/AuthPage.tsx"}"#,
         );
         assert_eq!(info.display_name, "Read");
-        // Long path — only last 2 segments shown
         assert_eq!(info.display_args, "Auth/AuthPage.tsx");
     }
 

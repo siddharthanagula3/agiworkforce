@@ -269,8 +269,8 @@ export const useSkillMarketplaceStore = create<SkillMarketplaceState>()(
       reloadSkills: async () => {
         try {
           await invoke('skill_reload');
-        } catch {
-          // Non-fatal — proceed to re-fetch regardless
+        } catch (err) {
+          void err;
         }
         set({ skills: [], isLoading: false, hasLoaded: false, error: null });
         await get().fetchSkills();

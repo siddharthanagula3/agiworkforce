@@ -80,7 +80,7 @@ export function StartupRecoveryBootstrap({
     const previousTitle = document.title;
     const previousHtmlBackground = document.documentElement.style.backgroundColor;
     const previousBodyBackground = document.body.style.backgroundColor;
-    document.title = 'AGI — Local data recovery';
+    document.title = 'AGI, Local data recovery';
     document.documentElement.style.backgroundColor = '#080b10';
     document.body.style.backgroundColor = '#080b10';
     return () => {

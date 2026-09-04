@@ -1,4 +1,3 @@
-
 import {
   AlertCircle,
   Check,
@@ -522,7 +521,7 @@ export function CustomModelsSettings() {
                   <StatusDot status={model.status} />
                 </div>
                 <p className="text-xs text-muted-foreground mt-0.5 truncate">
-                  {model.baseUrl} &mdash; {model.modelId}
+                  {model.baseUrl}, {model.modelId}
                 </p>
                 {model.status === 'error' && model.errorMessage && (
                   <p className="text-xs text-red-500 mt-0.5">{model.errorMessage}</p>

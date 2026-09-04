@@ -1062,7 +1062,7 @@ impl WorkflowExecutor {
 
         let executor = self.mcp_tool_executor.as_ref().ok_or_else(|| {
             format!(
-                "MCP tool executor not available — cannot execute tool '{}'",
+                "MCP tool executor not available, cannot execute tool '{}'",
                 data.tool_name
             )
         })?;

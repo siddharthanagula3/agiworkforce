@@ -39,8 +39,6 @@ export function BudgetStatusWidget() {
         if (cancelled) return;
         const message = err instanceof Error ? err.message : String(err);
         setError(message);
-        // Don't clear stale status — better to show a slightly stale
-        // value than to disappear when the IPC blips.
       }
       if (!cancelled) {
         timer = setTimeout(poll, POLL_INTERVAL_MS);
@@ -64,7 +62,7 @@ export function BudgetStatusWidget() {
         <TooltipTrigger asChild>
           <div className="flex items-center gap-1.5 cursor-default text-muted-foreground">
             <DollarSign className="h-3.5 w-3.5" />
-            <span>—</span>
+            <span>, </span>
           </div>
         </TooltipTrigger>
         <TooltipContent side="top">

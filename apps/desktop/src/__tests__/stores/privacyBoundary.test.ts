@@ -10,7 +10,7 @@ beforeEach(() => {
   useAppModeStore.setState({ mode: 'local' });
 });
 
-describe('selectPrivacyMode — local mode (real selector)', () => {
+describe('selectPrivacyMode, local mode (real selector)', () => {
   it('returns local when mode is local', () => {
     useAppModeStore.setState({ mode: 'local' });
     expect(selectPrivacyMode(useAppModeStore.getState())).toBe('local');
@@ -106,8 +106,6 @@ describe('CRITICAL: telemetry egress gate (real analytics.track)', () => {
     expect(invoke).toHaveBeenCalledWith('analytics_set_privacy_mode', { mode: 'local' });
   });
 });
-
-// uses — the REAL exported selectPrivacyMode — against real store state, and
 
 describe('CRITICAL: managed-cloud credential-forward gate (real selectPrivacyMode)', () => {
   it('local mode → selector !== managed, so credential forward returns early', () => {

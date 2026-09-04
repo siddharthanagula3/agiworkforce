@@ -51,17 +51,6 @@ const BROWSER_DEFAULT_TIMEOUT_MS: u64 = 30_000;
 const BROWSER_MAX_TIMEOUT_MS: u64 = 120_000;
 const BROWSER_SCRIPT_MAX_BYTES: usize = 100_000;
 
-/// Validates a CSS selector for safety before it reaches the browser DOM query API.
-///
-/// Uses a layered defense:
-/// 1. Reject empty / excessively long selectors
-/// 2. Reject characters that enable JS string breakout (`<`, `'`, `"`, `\`, `` ` ``)
-/// 3. Blocklist dangerous CSS/JS patterns (`@import`, `javascript:`, `expression(`)
-/// 4. Allowlist pseudo-classes — only known-safe ones are permitted
-/// 5. Reject nested `:not()` / `:has()` abuse
-///
-/// Returns `Ok(())` when the selector is safe, or `Err(reason)` with a
-/// human-readable rejection reason.
 fn validate_css_selector(selector: &str) -> Result<(), String> {
     // 1. Length / emptiness guards
     let trimmed = selector.trim();
@@ -93,7 +82,6 @@ fn validate_css_selector(selector: &str) -> Result<(), String> {
         return Err("contains null byte".to_string());
     }
 
-    // 3. Blocklist — dangerous patterns
     if lower.contains("@import") {
         return Err("contains @import (code injection risk)".to_string());
     }
@@ -113,9 +101,6 @@ fn validate_css_selector(selector: &str) -> Result<(), String> {
         return Err("contains url() (external resource loading risk)".to_string());
     }
 
-    // 4. Reject :has() — it allows parent/ancestor selection which can have
-    //    side effects in some engines and is a known attack surface.
-    //    Check before pseudo-class allowlist walk so the error message is specific.
     if lower.contains(":has(") {
         return Err("contains :has() (parent selection with potential side effects)".to_string());
     }
@@ -124,7 +109,6 @@ fn validate_css_selector(selector: &str) -> Result<(), String> {
     //    Walk the selector and extract every `:name` or `::name` token.
     validate_pseudo_classes(trimmed)?;
 
-    // 6. Reject nested :not() — `:not(:not(...))` is a known abuse vector.
     validate_not_nesting(trimmed)?;
 
     Ok(())
@@ -138,8 +122,6 @@ fn validate_pseudo_classes(selector: &str) -> Result<(), String> {
     let mut i = 0;
 
     while i < len {
-        // Skip past attribute selectors `[...]` entirely — colons inside
-        // attribute values (e.g. `[href="http://x"]`) are not pseudo-classes.
         if bytes[i] == b'[' {
             let mut depth = 1u32;
             i += 1;
@@ -169,7 +151,6 @@ fn validate_pseudo_classes(selector: &str) -> Result<(), String> {
                 i += 1;
             }
             if i == name_start {
-                // Bare `:` at end or followed by non-alpha — skip.
                 continue;
             }
             // For functional pseudo-classes like `:nth-child(2n)`, we compare
@@ -178,7 +159,6 @@ fn validate_pseudo_classes(selector: &str) -> Result<(), String> {
             let pseudo_lower = pseudo_name.to_lowercase();
 
             let is_safe = SAFE_PSEUDO_CLASSES.iter().any(|safe| pseudo_lower == *safe);
-            // Also allow `:not(` — we validate nesting depth separately.
             let is_not = pseudo_lower == ":not";
 
             if !is_safe && !is_not {
@@ -195,8 +175,6 @@ fn validate_pseudo_classes(selector: &str) -> Result<(), String> {
     Ok(())
 }
 
-/// Reject selectors that contain nested `:not()` — e.g. `:not(:not(div))`.
-/// Single-level `:not(.foo)` is permitted.
 fn validate_not_nesting(selector: &str) -> Result<(), String> {
     let lower = selector.to_lowercase();
     let bytes = lower.as_bytes();
@@ -206,8 +184,6 @@ fn validate_not_nesting(selector: &str) -> Result<(), String> {
     let mut i = 0;
     while i + not_pattern.len() <= len {
         if &bytes[i..i + not_pattern.len()] == not_pattern {
-            // Found `:not(` — scan inside its parenthesised argument for
-            // another `:not(`.
             let inner_start = i + not_pattern.len();
             let mut depth = 1u32;
             let mut j = inner_start;
@@ -1306,9 +1282,6 @@ impl ToolExecutor {
 mod tests {
     use super::*;
 
-    // ---------------------------------------------------------------
-    // Safe selectors — must all pass
-    // ---------------------------------------------------------------
 
     #[test]
     fn test_safe_id_selector() {
@@ -1431,9 +1404,6 @@ mod tests {
         assert!(validate_css_selector("input::placeholder").is_ok());
     }
 
-    // ---------------------------------------------------------------
-    // Dangerous selectors — must all be rejected
-    // ---------------------------------------------------------------
 
     #[test]
     fn test_reject_empty_selector() {
@@ -1574,10 +1544,6 @@ mod tests {
         assert!(err.contains("maximum length"), "unexpected: {err}");
     }
 
-    // ---------------------------------------------------------------
-    // Edge cases — make sure colon inside attribute values is not
-    // misidentified as a pseudo-class.
-    // ---------------------------------------------------------------
 
     #[test]
     fn test_colon_inside_attribute_brackets_is_safe() {

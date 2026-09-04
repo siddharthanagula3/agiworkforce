@@ -458,7 +458,6 @@ impl<L: SummaryLLM> ConversationSummarizer<L> {
                 .ok()
                 .flatten();
 
-            // SECURITY: Filter zero vectors — cosine similarity is undefined for zero magnitude.
             let embedding = embedding
                 .filter(|embedding| agiworkforce_agent_core::memory::valid_embedding(embedding));
 
@@ -552,14 +551,6 @@ struct OllamaChatMessage {
     content: String,
 }
 
-/// Production SummaryLLM implementation that generates real embeddings via HTTP.
-///
-/// Uses a 3-tier fallback strategy:
-/// 1. A provider-discovered Ollama embedding model (no API key needed)
-/// 2. A catalog-addressable OpenAI embedding model (requires API key)
-/// 3. Returns None (honest "no embedding available")
-///
-/// NEVER returns zero vectors — that corrupts similarity search.
 pub struct HttpSummaryLLM {
     http_client: Client,
     ollama_url: String,
@@ -814,7 +805,6 @@ impl SummaryLLM for HttpSummaryLLM {
             }
         };
 
-        // Both providers failed — propagate error explicitly
         let final_error = format!(
             "Failed to summarize conversation: all LLM providers failed. \
              Ollama: {}. OpenAI: {}",
@@ -824,14 +814,6 @@ impl SummaryLLM for HttpSummaryLLM {
         Err(Error::LLMError(LLMError::ApiError(final_error)))
     }
 
-    /// Generate embeddings with 3-tier fallback, stored at native dimensions.
-    /// 1. Provider-discovered Ollama local embedding model
-    /// 2. Catalog-addressable OpenAI cloud embedding model
-    /// 3. None (no embedding available — honest, no zero vectors)
-    ///
-    /// Embeddings are stored at their native dimension. The vector_search
-    /// function skips comparisons between embeddings of different dimensions
-    /// (different models produce incompatible vector spaces).
     async fn generate_embedding(&self, text: &str) -> Result<Option<Vec<f32>>> {
         if text.trim().is_empty() {
             tracing::debug!("Skipping embedding generation for empty text");
@@ -866,7 +848,6 @@ impl SummaryLLM for HttpSummaryLLM {
             }
         }
 
-        // Tier 3: No embedding available — return None (NOT zero vectors)
         tracing::warn!("No embedding provider available. Memory will use FTS-only search.");
         Ok(None)
     }
@@ -1045,7 +1026,6 @@ mod tests {
         }
 
         async fn generate_embedding(&self, _text: &str) -> Result<Option<Vec<f32>>> {
-            // Both tiers failed — return None, never zero vectors
             Ok(None)
         }
     }
@@ -1279,7 +1259,6 @@ mod tests {
     // Bug #32: Explicit error propagation tests
     // =========================================================================
 
-    /// Mock LLM that always fails extraction — simulates both providers down.
     struct MockFailingLLM;
 
     #[async_trait::async_trait]
@@ -1299,7 +1278,6 @@ mod tests {
         }
     }
 
-    /// Mock LLM that fails on first call, succeeds on second — simulates retry success.
     struct MockFailThenSucceedLLM {
         call_count: std::sync::atomic::AtomicU32,
     }
@@ -1419,7 +1397,6 @@ mod tests {
         let llm = Arc::new(MockFailingLLM);
         let summarizer = ConversationSummarizer::new(store, llm);
 
-        // Run summarization — no candidates exist, so it should succeed with 0 stats
         let result = summarizer.run_summarization(None).await;
         assert!(
             result.is_ok(),

@@ -1,34 +1,3 @@
-//! Support-bundle assembly for desktop logs.
-//!
-//! Three registered IPC commands copy application logs out of the app:
-//! `get_filtered_logs` (whose result `FeedbackDialog` uploads to
-//! `/api/feedback`), and `error_get_logs` / `error_export_logs`, which hand log
-//! text to the webview. All three build their output through
-//! [`collect_bundle_lines`] so one set of rules applies to every copy that
-//! leaves the log directory.
-//!
-//! What this module actually does, stated exactly:
-//!
-//! * It reads the files the rolling appender writes. `RollingFileAppender` with
-//!   a daily rotation names them `agiworkforce.log.<date>`, not
-//!   `agiworkforce.log`, so the prefix is matched rather than the extension.
-//! * A line that does not parse as a JSON object emitted by the tracing JSON
-//!   layer is dropped. Its shape is unknown, so what it might carry is unknown.
-//! * Structured event fields are an allowlist ([`ALLOWED_EVENT_FIELDS`]). A log
-//!   site that attaches `prompt`, `content`, `transcript`, or any other field
-//!   not named there does not reach a bundle, and a field added to a log site
-//!   later stays out until someone adds it here deliberately.
-//! * The free-form `message` string and the `error` field are kept, because a
-//!   bundle without them is not diagnostic. Both are scrubbed with
-//!   [`crate::sys::logging::filter_sensitive_data`], and the rendered record is
-//!   truncated to [`MAX_LINE_BYTES`]. These two are the parts that are NOT
-//!   allowlisted, and that is the limit of the guarantee here: a log site that
-//!   formats user text into its own message string would still reach a bundle.
-//!   Log sites must therefore not do that — see the `prompt_chars` /
-//!   `text_chars` fields in `sys::commands::scheduler` and
-//!   `features::messaging::teams` for the shape to use instead.
-//! * A record whose rendered text mentions account or billing terms is dropped
-//!   whole rather than redacted.
 
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -76,9 +45,6 @@ pub const ALLOWED_EVENT_FIELDS: &[&str] = &[
 /// credentials and truncated rather than passed through.
 const SCRUBBED_TEXT_FIELDS: &[&str] = &["error", "message"];
 
-/// Terms that mark a record as carrying account or billing data. Matching
-/// records are dropped rather than redacted — a support bundle has no reason
-/// to carry any of it.
 const ACCOUNT_TERMS: &[&str] = &[
     "account_id",
     "balance",

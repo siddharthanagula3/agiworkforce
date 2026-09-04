@@ -1,10 +1,3 @@
-//! ResearchSwarmOrchestrator — thin wrapper that drives the swarm system
-//! for research-mode parallel execution.
-//!
-//! Instead of sequentially looping through search strategies, this module
-//! converts strategies into a swarm dependency graph (all-parallel) and
-//! lets the [`SwarmOrchestrator`] execute them concurrently with up to 100
-//! agents.
 
 use super::agents::SearchAgentResult;
 use super::swarm_bridge;
@@ -71,15 +64,6 @@ impl ResearchSwarmOrchestrator {
             swarm_result.speedup_ratio,
         );
 
-        // Extract per-subtask results from the swarm output.
-        //
-        // `SwarmResult.output` is the aggregated output — it may be an object
-        // or array depending on the aggregation strategy.  We need the
-        // individual SubtaskResult values which are not directly on SwarmResult
-        // but can be reconstructed from the output structure.
-        //
-        // However, the swarm aggregator already merged them. For research we
-        // need per-agent results, so we reconstruct from the output.
         let agent_results = reconstruct_agent_results_from_output(
             &swarm_result.output,
             swarm_result.succeeded,
@@ -113,12 +97,10 @@ fn reconstruct_agent_results_from_output(
         }
     }
 
-    // Case 2: output is a single merged object — try to parse as one result
     if let Some(agent_result) = try_parse_single_result(output) {
         return vec![agent_result];
     }
 
-    // Case 3: fallback — return empty
     Vec::new()
 }
 

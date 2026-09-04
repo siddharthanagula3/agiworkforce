@@ -1,11 +1,10 @@
-
 const FACT_TEXT = `QA memory fact ${Date.now()}`;
 const FACT_EDITED = `${FACT_TEXT} (edited)`;
 
 import { waitForSettingsReady } from '../support/close-settings';
 import { waitForDesktopShell } from '../support/desktop-shell';
 
-describe('AGI Desktop Settings — Memory tab (real add/edit/delete + persistence)', () => {
+describe('AGI Desktop Settings, Memory tab (real add/edit/delete + persistence)', () => {
   it('adds, persists across reopen, edits, and deletes a memory fact', async function () {
     this.timeout(60000);
 

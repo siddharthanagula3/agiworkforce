@@ -1,4 +1,3 @@
-
 import { Code2, X } from 'lucide-react';
 import { useShallow } from 'zustand/react/shallow';
 import { useCanvasStore } from '../../stores/editingStore';
@@ -26,7 +25,7 @@ export function CanvasContainer({ onClose, onFixBug }: CanvasContainerProps) {
 
   return (
     <div className="fixed inset-y-0 right-0 z-30 flex h-full border-l border-white/10 bg-[#0b0c14] shadow-2xl">
-      {/* Artifact List sidebar — always shown */}
+      {/* Artifact List sidebar, always shown */}
       <div
         className="flex flex-col border-r border-white/10"
         style={{ width: showPanel ? 220 : 320 }}
@@ -50,7 +49,7 @@ export function CanvasContainer({ onClose, onFixBug }: CanvasContainerProps) {
         <ArtifactList className="flex-1 overflow-hidden" />
       </div>
 
-      {/* Canvas Panel — shown when an artifact is active */}
+      {/* Canvas Panel, shown when an artifact is active */}
       {showPanel && (
         <div className="flex flex-col" style={{ width: 600 }}>
           <CanvasPanel

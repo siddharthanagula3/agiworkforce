@@ -611,7 +611,7 @@ export const useComputerUseStore = create<ComputerUseState>()(
           !isLocalProvider(resolvedProvider);
         if (providerCrossesLocalBoundary) {
           toast.info(
-            'Cloud vision model requires a BYOK continuation — using local models in Local mode',
+            'Cloud vision model requires a BYOK continuation, using local models in Local mode',
           );
         }
         try {

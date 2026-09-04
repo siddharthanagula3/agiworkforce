@@ -45,7 +45,6 @@ pub fn strategies_to_dependency_graph(
             goal_id.clone(),
         );
 
-        // All research strategies are independent — no dependencies
         subtask.dependencies = Vec::new();
 
         // Map priority from the strategy (1-10 scale) to swarm priority
@@ -102,7 +101,6 @@ pub fn swarm_results_to_agent_results(results: Vec<SubtaskResult>) -> Vec<Search
                     error: None,
                 }
             } else {
-                // Failed subtask — produce a failed SearchAgentResult
                 let agent_type = parse_agent_type_from_subtask_id(&sr.subtask_id);
                 SearchAgentResult::failed(
                     agent_type,

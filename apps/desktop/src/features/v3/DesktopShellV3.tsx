@@ -354,9 +354,6 @@ export function DesktopShellV3({
     pendingAttachments?.ownerKey === composerAttachmentOwnerKey ? pendingAttachments : null;
 
   useEffect(() => {
-    // A panel the new trust boundary cannot render otherwise fell through to the
-    // Projects fallback while the sidebar still highlighted the panel the user
-    // left — the content silently became something they never asked for.
     const stranded = privacyMode === 'local' ? CLOUD_ONLY_PANELS : DEVICE_ONLY_PANELS;
     if (stranded.includes(activePanel)) {
       setActivePanel('chat');
@@ -794,7 +791,7 @@ export function DesktopShellV3({
             )}
             <CapModal onSwitchModel={handleSwitchModel} />
 
-            {/* Artifact viewer panel — mounts when the artifact store requests it open.
+            {/* Artifact viewer panel, mounts when the artifact store requests it open.
             Shares the same artifactStore instance that AgiWorkArtifacts writes,
             so setActiveArtifact + openPanel in the grid card opens this panel. */}
             {privacyMode === 'local' && artifactPanelOpen && (
@@ -897,8 +894,8 @@ export function DesktopShellV3({
         </div>
 
         {/*
-          Live execution sidecar: timeline, screen view, terminal, and — most
-          importantly — approval prompts. It self-gates on `isOpen` and takes no
+          Live execution sidecar: timeline, screen view, terminal, and, most
+          importantly, approval prompts. It self-gates on `isOpen` and takes no
           props, so mounting it here is the whole wiring. Before this, a running
           agent produced no visual feedback at all and a `tool_execution`
           approval had nowhere to render.

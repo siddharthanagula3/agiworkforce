@@ -26,7 +26,7 @@ import {
   useSchedulerStore,
 } from '../../stores/schedulerStore';
 
-describe('schedulerStore — Tauri command wiring', () => {
+describe('schedulerStore, Tauri command wiring', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     useSchedulerStore.setState({ jobs: [], tasks: [], isLoading: false, error: null });

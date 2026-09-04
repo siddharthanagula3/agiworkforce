@@ -304,10 +304,6 @@ enum WorkflowDatabase {
 
 pub struct WorkflowEngine {
     database: WorkflowDatabase,
-    /// Set once during Tauri setup. Every execution — manual, scheduled, or
-    /// event-triggered — funnels its status and log writes through this engine,
-    /// so holding the handle here is what makes `workflow:*` events reach the UI
-    /// from background tasks that have no `State` access of their own.
     app_handle: OnceLock<AppHandle>,
 }
 

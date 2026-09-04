@@ -1,4 +1,3 @@
-
 import * as fs from 'node:fs';
 import { waitForDesktopShell } from '../support/desktop-shell';
 
@@ -7,7 +6,7 @@ const SCREEN_DIR =
 
 fs.mkdirSync(SCREEN_DIR, { recursive: true });
 
-describe('AGI Desktop Workspace — Projects (real create/persist/rename)', () => {
+describe('AGI Desktop Workspace, Projects (real create/persist/rename)', () => {
   it('creates a project, persists it, and renames it via real UI', async function () {
     this.timeout(60000);
 

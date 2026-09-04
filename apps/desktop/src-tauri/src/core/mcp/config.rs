@@ -433,42 +433,11 @@ impl McpServersConfig {
         Ok(app_data.join(GLOBAL_MCP_CONFIG_FILENAME))
     }
 
-    /// Returns the path to the shared CLI dotfile MCP config,
-    /// `~/.agiworkforce/mcp.json`, or `None` if the home directory can't be
-    /// resolved.
-    ///
-    /// This is a genuinely separate, intentional cross-surface config file —
-    /// not a duplicate of [`Self::default_config_path`]. `apps/cli` reads it
-    /// directly as one of its default global MCP config locations
-    /// (`apps/cli/src/mcp/mod.rs::load_default_mcp_configs`), `agi init`
-    /// creates it by default (`apps/cli/src/init.rs`), and
-    /// `apps/cli/src/sync.rs` treats it as one of the files synced across
-    /// surfaces. See [`Self::merge_dotfile_servers`] for why the desktop MCP
-    /// client also needs to honor it.
     pub fn dotfile_config_path() -> Option<PathBuf> {
         let home = dirs::home_dir()?;
         Some(home.join(".agiworkforce").join("mcp.json"))
     }
 
-    /// Merge any servers declared in the shared CLI dotfile
-    /// (`~/.agiworkforce/mcp.json`, see [`Self::dotfile_config_path`]) into
-    /// `self`, without overwriting a server name already defined in the
-    /// primary desktop config (primary config wins on name collisions).
-    ///
-    /// Fixes DESKTOP-MCP-DOTFILE-CONFIG-FAKE-SUCCESS-01: Settings → Developer
-    /// (`DotfileSettings.tsx`) writes servers to this dotfile via the
-    /// `dotfile_add_mcp_server` Tauri command, which used to show a success
-    /// toast even though the live MCP client (this struct, loaded from
-    /// [`Self::default_config_path`]) never read the file — the server was
-    /// persisted but never actually connected or exposed tools. Call this on
-    /// every config (re)load so dotfile-declared servers behave the same as
-    /// servers added through the "Advanced MCP configuration" UI
-    /// (`ConnectorGallery.tsx` → `mcp_update_config`).
-    ///
-    /// Best-effort: any I/O or parse failure is logged and treated as "no
-    /// dotfile servers to merge" rather than propagated, since this file is
-    /// optional and mainly written by other surfaces (CLI, this app's own
-    /// Settings → Developer panel).
     pub fn merge_dotfile_servers(&mut self) {
         let Some(path) = Self::dotfile_config_path() else {
             return;
@@ -743,18 +712,10 @@ impl McpServersConfig {
             return Ok(());
         }
 
-        // ── Sync phase ─────────────────────────────────────────────────────────
-        // Collect which servers/keys need OAuth refresh vs. can be resolved now.
-        // The DB connection is opened, queried, and dropped before any .await.
-        //
-        // HIGH-008: rusqlite::Connection is !Send — it must NOT be held across an
-        // await point. All synchronous DB access happens here; OAuth HTTP refresh
-        // (async) is performed below after the connection is gone.
 
         enum Resolved {
             /// Value was resolved synchronously from DB.
             Done(String),
-            /// OAuth provider token — needs async HTTP refresh check.
             NeedsOAuth(String),
         }
 
@@ -896,7 +857,7 @@ impl McpServersConfig {
                     }
                 }
             }
-        } // conn dropped here — no !Send value crosses the await below
+        }
 
         // ── Async phase ────────────────────────────────────────────────────────
         // For each NeedsOAuth entry, call the async get_oauth_token (which may
@@ -1059,8 +1020,6 @@ pub fn upsert_settings_v2_value(
     Ok(())
 }
 
-/// Synchronous helper: read all OAuth token fields from the DB and return owned values.
-/// The connection is opened and closed within this fn — no `conn` is held across await points.
 struct OAuthTokenData {
     encrypted_access: String,
     expires_at: Option<i64>,
@@ -1115,7 +1074,6 @@ fn read_oauth_token_data(provider: &str) -> Result<OAuthTokenData, String> {
             }
         });
 
-    // conn is dropped here — no !Send value crosses an await point
     Ok(OAuthTokenData {
         encrypted_access,
         expires_at,
@@ -1181,7 +1139,6 @@ fn store_refreshed_oauth_token(
 /// All DB access is completed synchronously before any `.await`, ensuring
 /// `rusqlite::Connection` (which is `!Send`) never crosses an await point.
 async fn get_oauth_token(provider: &str) -> Result<String, String> {
-    // Sync phase: read all DB data — no !Send values held past this point
     let data = read_oauth_token_data(provider)?;
 
     let current_time = SystemTime::now()
@@ -1198,7 +1155,6 @@ async fn get_oauth_token(provider: &str) -> Result<String, String> {
             );
 
             if let Some(refresh_token) = data.refresh_token {
-                // Async phase: HTTP token refresh — no DB connection in scope here
                 match refresh_oauth_token(provider, &refresh_token).await {
                     Ok((new_access, new_expires)) => {
                         store_refreshed_oauth_token(
@@ -1386,7 +1342,6 @@ fn store_new_refresh_token(provider: &str, new_refresh_token: &str) {
 /// All DB access is completed before any `.await` to ensure `rusqlite::Connection`
 /// (which is `!Send`) never crosses an await point.
 async fn refresh_oauth_token(provider: &str, refresh_token: &str) -> Result<(String, i64), String> {
-    // Sync phase: resolve provider config and read DB credentials — no !Send across await
     let provider_config = get_oauth_provider_config(provider)
         .ok_or_else(|| format!("Unknown OAuth provider: {}", provider))?;
 
@@ -1396,7 +1351,6 @@ async fn refresh_oauth_token(provider: &str, refresh_token: &str) -> Result<(Str
         provider_config.client_secret_keys,
     )?;
 
-    // Async phase: HTTP request — no DB connection in scope
     let client = reqwest::Client::new();
 
     let response = client
@@ -1548,27 +1502,8 @@ pub fn encrypt_mcp_credential(plaintext: &str) -> Option<String> {
 /// Magic string embedded in every `.mcpb` bundle file to detect the format.
 const BUNDLE_MAGIC: &str = "mcpb/1";
 
-/// MCP Bundle — packages multiple server configurations into a single portable file.
-///
-/// Bundles (`.mcpb`) allow sharing a curated set of MCP server configurations
-/// with a team or publishing them to a marketplace. They are JSON documents
-/// containing a `magic` field for format detection, plus the server list and
-/// arbitrary metadata.
-///
-/// # File format (`.mcpb`)
-/// ```json
-/// {
-///   "magic": "mcpb/1",
-///   "name": "My Workspace Bundle",
-///   "version": "1.0.0",
-///   "description": "Filesystem + GitHub for the backend team",
-///   "servers": { ... },
-///   "metadata": { ... }
-/// }
-/// ```
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct McpBundle {
-    /// Format discriminator — must be `"mcpb/1"` for the current bundle version.
     #[serde(default = "bundle_magic_default")]
     pub magic: String,
 
@@ -1841,13 +1776,6 @@ mod tests {
         );
     }
 
-    // BASE-008: this was `#[ignore]`d with the note "pre-existing reasoned skip",
-    // which states that it was skipped, not why. There is no why: the body
-    // constructs a default struct in memory and asserts four fields — no
-    // network, no filesystem, no external binary, nothing that could make it
-    // opt-in. The six genuinely-ignored tests in tests/mcp_integration_test.rs
-    // need a network-installable MCP server binary; this one needs nothing.
-    // Un-ignored and running.
     #[test]
     fn test_default_config() {
         let config = McpServersConfig::default();
@@ -2440,10 +2368,6 @@ mod tests {
             assert!(servers.contains_key("claude:filesystem"));
             assert_eq!(servers["claude:filesystem"]["command"], "npx");
 
-            // And the newly-written entry actually merges back in for the
-            // live client — the exact mechanism `reload_active_config` relies
-            // on, proving this is the same durable persistence path as
-            // `dotfile_add_mcp_server`.
             let mut config = McpServersConfig {
                 mcp_servers: HashMap::new(),
             };

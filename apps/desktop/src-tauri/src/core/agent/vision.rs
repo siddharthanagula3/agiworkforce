@@ -70,7 +70,7 @@ impl VisionAutomation {
             Action::WaitForElement { target, .. } | Action::Click { target } => {
                 if Self::target_requires_ocr(target) && !Self::is_ocr_available() {
                     return Err(anyhow!(
-                        "OCR feature not enabled — cannot perform text-based vision operation. \
+                        "OCR feature not enabled, cannot perform text-based vision operation. \
                          Build with the 'ocr' feature flag or use coordinate/UIAElement targets."
                     ));
                 }
@@ -79,7 +79,7 @@ impl VisionAutomation {
             Action::Type { target, .. } => {
                 if Self::target_requires_ocr(target) && !Self::is_ocr_available() {
                     return Err(anyhow!(
-                        "OCR feature not enabled — cannot locate text target for typing. \
+                        "OCR feature not enabled, cannot locate text target for typing. \
                          Build with the 'ocr' feature flag or use coordinate/UIAElement targets."
                     ));
                 }
@@ -88,7 +88,7 @@ impl VisionAutomation {
             Action::SearchText { .. } => {
                 if !Self::is_ocr_available() {
                     return Err(anyhow!(
-                        "OCR feature not enabled — cannot search for text on screen. \
+                        "OCR feature not enabled, cannot search for text on screen. \
                          Build with the 'ocr' feature flag."
                     ));
                 }
@@ -153,7 +153,7 @@ impl VisionAutomation {
             // Guard: reject zero-dimension captures (headless / broken display).
             if img_width == 0 || img_height == 0 {
                 tracing::warn!(
-                    "Captured screen has zero dimensions ({}x{}) — cannot locate text",
+                    "Captured screen has zero dimensions ({}x{}), cannot locate text",
                     img_width,
                     img_height
                 );
@@ -183,7 +183,7 @@ impl VisionAutomation {
             // almost certainly garbage and would cause false-positive clicks.
             if ocr_result.confidence <= MIN_OCR_CONFIDENCE {
                 tracing::info!(
-                    "OCR confidence too low ({:.1}% < {:.1}%) — discarding result",
+                    "OCR confidence too low ({:.1}% < {:.1}%), discarding result",
                     ocr_result.confidence * 100.0,
                     MIN_OCR_CONFIDENCE * 100.0
                 );
@@ -253,7 +253,7 @@ impl VisionAutomation {
                     let center_y = (img_height / 2) as i32;
                     tracing::warn!(
                         "find_text: word-level bounding boxes unavailable for query '{}', \
-                         falling back to screen center ({}, {}) — click accuracy will be low",
+                         falling back to screen center ({}, {}), click accuracy will be low",
                         query,
                         center_x,
                         center_y
@@ -273,7 +273,7 @@ impl VisionAutomation {
             // Return an error immediately so callers (e.g. wait_for_element) surface a
             // useful diagnostic instead of silently spinning until their timeout.
             Err(anyhow!(
-                "OCR feature not enabled — cannot search for text on screen"
+                "OCR feature not enabled, cannot search for text on screen"
             ))
         }
     }
@@ -319,17 +319,14 @@ impl VisionAutomation {
         // Pre-flight: fail immediately if the target requires OCR but it is unavailable.
         if Self::target_requires_ocr(target) && !Self::is_ocr_available() {
             return Err(anyhow!(
-                "OCR feature not enabled — cannot wait for text element on screen. \
+                "OCR feature not enabled, cannot wait for text element on screen. \
                  Build with the 'ocr' feature flag or use coordinate/UIAElement targets."
             ));
         }
 
-        // Fail immediately for target types that cannot be waited on (Coordinates
-        // and UIAElement have no visual search — they are either immediately
-        // available or not).
         if !Self::target_requires_screen_capture(target) {
             return Err(anyhow!(
-                "Cannot wait for {} target — only TextMatch and ImageMatch \
+                "Cannot wait for {} target, only TextMatch and ImageMatch \
                  targets support visual polling. Use Click for coordinate or \
                  UIAElement targets instead.",
                 match target {
@@ -392,7 +389,6 @@ impl VisionAutomation {
                             if err_str.contains("Template not found")
                                 || err_str.contains("best score")
                             {
-                                // Normal "not found yet" — keep polling
                                 consecutive_capture_failures = 0;
                             } else {
                                 consecutive_capture_failures += 1;

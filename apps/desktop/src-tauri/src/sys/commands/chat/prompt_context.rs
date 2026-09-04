@@ -163,7 +163,6 @@ pub fn load_project_instructions(folder: &std::path::Path) -> Option<String> {
                     return Some(truncated);
                 }
                 Ok(_) => {
-                    // File exists but is empty — continue to next candidate
                 }
                 Err(e) => {
                     debug!("[PromptContext] Could not read {:?}: {}", path, e);

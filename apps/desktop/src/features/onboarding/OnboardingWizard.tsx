@@ -202,7 +202,7 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
                   {ollama.available ? (
                     <div className="flex items-center gap-1.5 text-xs text-green-400">
                       <CheckCircle2 className="w-3.5 h-3.5" />
-                      Ollama running — {ollama.modelCount} model
+                      Ollama running, {ollama.modelCount} model
                       {ollama.modelCount !== 1 ? 's' : ''}
                     </div>
                   ) : (
@@ -261,10 +261,10 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
               </div>
               <div className="space-y-1">
                 <p className="text-sm font-semibold text-foreground">Cloud Mode</p>
-                <p className="text-xs text-blue-400 font-medium">Public alpha — available now</p>
+                <p className="text-xs text-blue-400 font-medium">Public alpha, available now</p>
                 <p className="text-xs text-muted-foreground leading-relaxed mt-1">
                   AGI Cloud (subscriptions, hosted storage, synced chats) is in public alpha. Sign
-                  in to sync your chats across desktop, web, and mobile — or continue with Local or
+                  in to sync your chats across desktop, web, and mobile, or continue with Local or
                   BYOK, which stay on your device.
                 </p>
               </div>
@@ -272,7 +272,7 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
                 This card's action enters the Cloud workspace (the host wires
                 `onCloudModeSelected` to `setMode('cloud')`, which renders the
                 device sign-in screen). It was labelled "Continue with Local for
-                now", which described the opposite of what it does — the Local
+                now", which described the opposite of what it does, the Local
                 card and "Skip for now" are the ways to stay local.
               */}
               <button

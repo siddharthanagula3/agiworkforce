@@ -1105,8 +1105,6 @@ mod malformed_message_tests {
     /// Test parsing error response with invalid error object
     #[test]
     fn test_error_response_invalid_error_object() {
-        // Error without code — ErrorObject.code is i32 (required), so serde
-        // deserialization should fail when the field is absent.
         let missing_code = r#"{"jsonrpc":"2.0","error":{"message":"error"},"id":1}"#;
         let result = McpMessage::from_str(missing_code);
         assert!(
@@ -1114,8 +1112,6 @@ mod malformed_message_tests {
             "expected parse to fail when 'code' is missing from error object"
         );
 
-        // Error without message — ErrorObject.message is String (required), so
-        // deserialization should also fail when the field is absent.
         let missing_message = r#"{"jsonrpc":"2.0","error":{"code":-32600},"id":1}"#;
         let result = McpMessage::from_str(missing_message);
         assert!(

@@ -258,18 +258,6 @@ fn validate_table_name(table: &str) -> Result<()> {
     Ok(())
 }
 
-/// Run a migration within a transaction for atomicity.
-/// If the migration fails, the transaction is rolled back and the database remains unchanged.
-///
-/// DESK-6 (audit 2026-05-03): the previous implementation used
-/// `format!("SAVEPOINT migration_v{version}")` and the matching ROLLBACK
-/// TO / RELEASE statements with raw string interpolation. While `version`
-/// is hard-coded today, the pattern is unsafe by construction — if any
-/// future caller passed a value derived from a corrupt DB read or user
-/// input the format! would produce a SQL fragment with no quoting.
-/// We sanity-check the version is a positive integer (which all current
-/// callers satisfy) and assert it explicitly so any future drift will
-/// trip in dev rather than producing an injection vector.
 fn run_migration_in_transaction<F>(conn: &Connection, version: i32, migration_fn: F) -> Result<()>
 where
     F: FnOnce(&Connection) -> Result<()>,
@@ -280,7 +268,7 @@ where
     // forming a malformed identifier.
     assert!(
         (1..=10_000).contains(&version),
-        "migration version {version} out of expected range — refusing to build SAVEPOINT name",
+        "migration version {version} out of expected range, refusing to build SAVEPOINT name",
     );
     let savepoint_name = format!("migration_v{}", version);
     conn.execute(&format!("SAVEPOINT {}", savepoint_name), [])?;
@@ -4791,22 +4779,6 @@ fn apply_migration_v54(conn: &Connection) -> Result<()> {
     Ok(())
 }
 
-/// Migration v55: Backfill existing messages into the FTS index.
-///
-/// Migration v45 created the `messages_fts` virtual table and installed
-/// INSERT/UPDATE/DELETE triggers so that all *new* messages are indexed
-/// automatically.  However, any messages that were written before v45 were
-/// never inserted into `messages_fts`.  This migration performs a one-time
-/// backfill: it inserts every row from `messages` that is not already present
-/// in `messages_fts`, using the same column mapping the v45 triggers use.
-///
-/// The operation is idempotent: rows that were already indexed by the v45
-/// triggers (because they were written after that migration ran) are skipped
-/// via the `NOT EXISTS` sub-query so no duplicates are created.
-///
-/// FTS5 availability is checked first.  When FTS5 is not compiled into the
-/// SQLite build (e.g. certain embedded or sandboxed builds) the backfill is
-/// silently skipped — the same graceful-degradation behaviour applied in v45.
 fn apply_migration_v55(conn: &Connection) -> Result<()> {
     // Check whether FTS5 is available by probing the virtual table.
     let fts_available: bool = conn
@@ -5278,24 +5250,6 @@ fn apply_migration_v62(conn: &Connection) -> Result<()> {
     Ok(())
 }
 
-/// Migration v63 (FIX-F6, audit 2026-05-19): close the
-/// remember-able-privileged-transition Lies-in-the-Loop bypass.
-///
-/// Two changes:
-/// 1. Add `never_remember INTEGER NOT NULL DEFAULT 0` column. Future entries
-///    written for tools on the NEVER_REMEMBERABLE allowlist will have this
-///    set to 1; the runtime check in tool_confirmation::respond_tool_-
-///    confirmation rejects remember_choice=true for those tools at the
-///    source so the column should always be 0 going forward — it exists
-///    as a forensic flag in case any historical write slipped through.
-///
-/// 2. DELETE every existing row whose tool_name is in NEVER_REMEMBERABLE.
-///    A prior build allowed users to check "remember this choice" for
-///    set_auto_approve_all / set_agent_mode:autopilot / execute_code etc.
-///    Those rows represent a live one-click bypass on every startup.
-///    Wiping them at migration time invalidates the bypass even for users
-///    upgrading from a vulnerable build. Wrapped in the standard
-///    run_migration_in_transaction wrapper so a partial failure rolls back.
 fn apply_migration_v63(conn: &Connection) -> Result<()> {
     // Step 1: add the never_remember column (idempotent via PRAGMA query
     // pattern so re-running on an environment that already has the column
@@ -5341,11 +5295,6 @@ fn apply_migration_v63(conn: &Connection) -> Result<()> {
     Ok(())
 }
 
-/// Migration v64: Add round-10 fields to the projects table.
-/// icon_emoji stores a single grapheme emoji; accent_color stores one of the
-/// canonical ProjectAccentColor values; default_privacy_mode stores the
-/// PrivacyMode ('local'|'byok'|'managed'). All columns are nullable and
-/// backward-compatible — existing rows will read as NULL.
 fn apply_migration_v64(conn: &Connection) -> Result<()> {
     ensure_column(conn, "projects", "icon_emoji", "icon_emoji TEXT")?;
     ensure_column(conn, "projects", "accent_color", "accent_color TEXT")?;
@@ -5371,13 +5320,6 @@ fn apply_migration_v65(conn: &Connection) -> Result<()> {
     Ok(())
 }
 
-/// Migration v66: Add app_mode column to conversations for strict Local/Cloud separation.
-///
-/// Each conversation belongs to exactly one mode: "local" or "cloud".
-/// Queries that list conversations for the sidebar MUST filter by the active mode
-/// so Local-mode conversations never appear in Cloud mode and vice-versa.
-/// Existing rows default to "local" (the safest default — they were created before
-/// the cloud feature existed and were never synced).
 fn apply_migration_v66(conn: &Connection) -> Result<()> {
     ensure_column(
         conn,
@@ -5399,17 +5341,6 @@ fn apply_migration_v66(conn: &Connection) -> Result<()> {
     Ok(())
 }
 
-/// Migration v67: Cloud sync identity + bookkeeping columns.
-///
-/// Additive only — local INTEGER PKs and the INTEGER conversation_id FK are
-/// untouched. Only the WIRE protocol uses cloud_id. SQLite cannot add a UNIQUE
-/// constraint via ALTER TABLE ADD COLUMN, so uniqueness is enforced via a
-/// partial unique index on non-NULL cloud_ids.
-///
-/// Safety: if `conversations` or `messages` do not yet exist (can happen when
-/// this migration runs in a partial test schema seeded from an earlier version),
-/// the column additions are skipped — the tables will be created with these
-/// columns by their own earlier migrations (v1) in a real upgrade.
 fn apply_migration_v67(conn: &Connection) -> Result<()> {
     // Helper: returns true if the given table exists in the schema.
     let table_exists = |table: &str| -> bool {
@@ -5427,7 +5358,7 @@ fn apply_migration_v67(conn: &Connection) -> Result<()> {
         if !table_exists(table) {
             tracing::debug!(
                 table = table,
-                "v67: skipping cloud sync columns — table does not exist yet"
+                "v67: skipping cloud sync columns, table does not exist yet"
             );
             continue;
         }
@@ -5490,11 +5421,6 @@ fn apply_migration_v67(conn: &Connection) -> Result<()> {
         [],
     )?;
 
-    // Orphan buffer: a pulled message whose parent conversation has not landed yet
-    // (the conversation is re-versioned on every update, so it can sit ABOVE its own
-    // older messages and arrive in a later pull page). Persist the message here
-    // instead of dropping it, and replay once the parent's local row exists — without
-    // this, such messages are lost permanently.
     conn.execute(
         "CREATE TABLE IF NOT EXISTS cloud_sync_pending_messages ( \
             cloud_id TEXT PRIMARY KEY, \
@@ -5514,14 +5440,6 @@ fn apply_migration_v67(conn: &Connection) -> Result<()> {
     Ok(())
 }
 
-/// Migration v68: Cloud sync columns for `user_memory` (managed-cloud memory sharing).
-///
-/// Mirrors v66 (`app_mode`) + v67 (`cloud_id` / `needs_push` / `server_version` / UTC tombstone
-/// timestamps) but applied to `user_memory` so memories sync cross-device exactly like chats.
-///
-/// Additive only — existing local rows (app_mode DEFAULT 'local') are untouched.
-/// A separate `memory_cursor` column is added to `cloud_sync_state` so the memory HWM
-/// is tracked independently of the chat cursor.
 fn apply_migration_v68(conn: &Connection) -> Result<()> {
     let table_exists = |table: &str| -> bool {
         conn.query_row(
@@ -5543,7 +5461,6 @@ fn apply_migration_v68(conn: &Connection) -> Result<()> {
             "app_mode",
             "app_mode TEXT NOT NULL DEFAULT 'local'",
         )?;
-        // UUIDv7 cloud id — NULL until first cloud sync marks the row.
         ensure_column(conn, "user_memory", "cloud_id", "cloud_id TEXT")?;
         // Bigint-string server version from the Postgres sequence.
         ensure_column(conn, "user_memory", "server_version", "server_version TEXT")?;
@@ -5577,7 +5494,7 @@ fn apply_migration_v68(conn: &Connection) -> Result<()> {
             [],
         )?;
     } else {
-        tracing::debug!("v68: skipping user_memory columns — table does not exist yet");
+        tracing::debug!("v68: skipping user_memory columns, table does not exist yet");
     }
 
     // Per-user MEMORY cursor (separate from the chat cursor so the two streams
@@ -5607,17 +5524,6 @@ fn apply_migration_v68(conn: &Connection) -> Result<()> {
     Ok(())
 }
 
-/// Migration v69: Cloud sync columns for `projects` (managed-cloud project sharing).
-///
-/// Mirrors v68 (`user_memory`) but applied to `projects` so projects sync cross-device
-/// exactly like memories and chats.
-///
-/// Additive only — existing local rows (app_mode DEFAULT 'local') are untouched.
-/// A separate `project_cursor` column is added to `cloud_sync_state` so the projects
-/// HWM is tracked independently of chat and memory cursors.
-///
-/// Also adds a `metadata` TEXT column to `projects` (JSON blob) that the wire protocol
-/// includes for arbitrary structured data — absent from the original v44 schema.
 fn apply_migration_v69(conn: &Connection) -> Result<()> {
     let table_exists = |table: &str| -> bool {
         conn.query_row(
@@ -5639,7 +5545,6 @@ fn apply_migration_v69(conn: &Connection) -> Result<()> {
             "app_mode",
             "app_mode TEXT NOT NULL DEFAULT 'local'",
         )?;
-        // UUIDv7 cloud id — NULL until first cloud sync marks the row.
         ensure_column(conn, "projects", "cloud_id", "cloud_id TEXT")?;
         // Bigint-string server version from the Postgres sequence.
         ensure_column(conn, "projects", "server_version", "server_version TEXT")?;
@@ -5654,8 +5559,6 @@ fn apply_migration_v69(conn: &Connection) -> Result<()> {
             "needs_push",
             "needs_push INTEGER NOT NULL DEFAULT 0",
         )?;
-        // metadata JSON blob — wire field `metadata` (record<string, unknown>).
-        // Not part of original v44 schema; added here so pull can store it.
         ensure_column(conn, "projects", "metadata", "metadata TEXT")?;
 
         // Partial UNIQUE index on cloud_id (cannot add UNIQUE via ALTER TABLE ADD COLUMN).
@@ -5675,7 +5578,7 @@ fn apply_migration_v69(conn: &Connection) -> Result<()> {
             [],
         )?;
     } else {
-        tracing::debug!("v69: skipping projects columns — table does not exist yet");
+        tracing::debug!("v69: skipping projects columns, table does not exist yet");
     }
 
     // Per-user PROJECTS cursor (separate from chat + memory cursors).
@@ -5687,7 +5590,6 @@ fn apply_migration_v69(conn: &Connection) -> Result<()> {
             "project_cursor TEXT NOT NULL DEFAULT '0'",
         )?;
     } else {
-        // cloud_sync_state not yet created (v67 not applied) — create defensively.
         conn.execute(
             "CREATE TABLE IF NOT EXISTS cloud_sync_state ( \
                 user_id TEXT PRIMARY KEY, \
@@ -5703,10 +5605,6 @@ fn apply_migration_v69(conn: &Connection) -> Result<()> {
     Ok(())
 }
 
-/// Migration v70: add `settings_cursor` column to `cloud_sync_state`.
-/// The legacy native settings-sync path persisted a per-user server version
-/// cursor here so pull can skip unchanged documents.  No user-data table is
-/// altered — settings live in-memory (SettingsState) not in a dedicated table.
 fn apply_migration_v70(conn: &Connection) -> Result<()> {
     let table_exists = |table: &str| -> bool {
         conn.query_row(
@@ -5726,7 +5624,6 @@ fn apply_migration_v70(conn: &Connection) -> Result<()> {
             "settings_cursor TEXT NOT NULL DEFAULT '0'",
         )?;
     } else {
-        // cloud_sync_state not yet created — create defensively with all known columns.
         conn.execute(
             "CREATE TABLE IF NOT EXISTS cloud_sync_state ( \
                 user_id TEXT PRIMARY KEY, \
@@ -5743,23 +5640,6 @@ fn apply_migration_v70(conn: &Connection) -> Result<()> {
     Ok(())
 }
 
-/// Migration v71: Cloud sync identity + bookkeeping columns for `artifacts`.
-///
-/// Mirrors v67 (conversations/messages) but applied to the `artifacts` table
-/// so artifacts participate in the shared chat-cursor sync on `/api/chat/sync`.
-///
-/// The `artifacts` table uses a TEXT primary key (UUID generated at create time,
-/// stored in `id`). We add a dedicated `cloud_id` (UUIDv7) for the wire layer so
-/// the local ID (which may be a v4 UUID or other local-only format) and the cloud
-/// identity are always distinct. `conversation_cloud_id` mirrors the parent
-/// conversation's cloud_id so the gather JOIN can skip the conversations table.
-///
-/// `app_mode` defaults to 'local' — existing rows are local-only and will not be
-/// pushed (safe default, same as conversations/messages/memory/projects).
-/// `deleted_at_utc` is the soft-delete tombstone column (the base schema has no
-/// `deleted_at`; the cloud protocol requires tombstone propagation).
-///
-/// Additive only — existing schema and data are untouched.
 fn apply_migration_v71(conn: &Connection) -> Result<()> {
     let table_exists = |table: &str| -> bool {
         conn.query_row(
@@ -5772,7 +5652,6 @@ fn apply_migration_v71(conn: &Connection) -> Result<()> {
     };
 
     if table_exists("artifacts") {
-        // app_mode: 'local' | 'cloud' — existing rows default to 'local'.
         ensure_column(
             conn,
             "artifacts",
@@ -5783,8 +5662,6 @@ fn apply_migration_v71(conn: &Connection) -> Result<()> {
         ensure_column(conn, "artifacts", "cloud_id", "cloud_id TEXT")?;
         // server_version: bigint-string from the Postgres sequence.
         ensure_column(conn, "artifacts", "server_version", "server_version TEXT")?;
-        // conversation_cloud_id: the parent conversation's cloud_id (denormalized
-        // for gather efficiency — avoids joining conversations at push time).
         ensure_column(
             conn,
             "artifacts",
@@ -5819,7 +5696,7 @@ fn apply_migration_v71(conn: &Connection) -> Result<()> {
             [],
         )?;
     } else {
-        tracing::debug!("v71: skipping artifacts columns — table does not exist yet");
+        tracing::debug!("v71: skipping artifacts columns, table does not exist yet");
     }
 
     Ok(())
@@ -5967,12 +5844,6 @@ fn apply_migration_v74(conn: &Connection) -> Result<()> {
     Ok(())
 }
 
-/// Migration v75: Add `project_id` to conversations for local project scoping
-/// ("AGI Work"). DESKTOP-PROJECT-SCOPING-UNWIRED-01 seam A: TauriRuntime has
-/// always sent `projectId` on conversation create, but there was no column to
-/// persist it into. Nullable TEXT referencing `projects.id`; NULL = unscoped.
-/// No FK constraint — `projects` rows are soft-deletable and a dangling scope
-/// must degrade to "no project context", not block conversation reads.
 fn apply_migration_v75(conn: &Connection) -> Result<()> {
     ensure_column(conn, "conversations", "project_id", "project_id TEXT")?;
     conn.execute(
@@ -6116,17 +5987,6 @@ fn apply_migration_v76(conn: &Connection) -> Result<()> {
     Ok(())
 }
 
-/// Migration v77: fix the `user_memory.category` CHECK constraint.
-///
-/// v46 created the table with `CHECK(category IN ('Preference', 'Fact',
-/// 'Decision', 'Context'))` — PascalCase. But `MemoryCategory::as_str`
-/// (agiworkforce-agent-core) returns the lowercase canonical wire value
-/// ("preference"/"fact"/"decision"/"context"), which `MemoryManager::remember`
-/// writes. Every insert therefore failed the CHECK with
-/// "CHECK constraint failed: category IN (...)", surfacing in Settings →
-/// Memory as "Could not update memory" on every add/edit. SQLite cannot ALTER
-/// a CHECK, so rebuild the table with a case-insensitive constraint and copy
-/// existing rows, normalizing any legacy PascalCase categories to lowercase.
 fn apply_migration_v77(conn: &Connection) -> Result<()> {
     // Guard: only rebuild if the table exists (fresh installs already get the
     // corrected shape below on first run of this migration).
@@ -6159,10 +6019,6 @@ fn apply_migration_v77(conn: &Connection) -> Result<()> {
         return Ok(());
     }
 
-    // Capture the live CREATE TABLE statement so the rebuild keeps every column
-    // later migrations added (server_id, created_at_utc, needs_push, …) — they
-    // used ALTER TABLE ADD COLUMN, which leaves the original CHECK clause
-    // intact, so a text swap of just that clause is safe.
     let create_sql: String = conn.query_row(
         "SELECT sql FROM sqlite_master WHERE type='table' AND name='user_memory'",
         [],
@@ -6337,15 +6193,6 @@ fn apply_migration_v79(conn: &Connection) -> Result<()> {
     Ok(())
 }
 
-/// Migration v80: re-wrap MCP credentials and OAuth tokens an older build
-/// encrypted with the machine-only key.
-///
-/// `settings_v2` holds every secret written through `core::mcp::config` and
-/// `sys::commands::mcp_oauth`, and those readers derive one key and decrypt
-/// with it directly. Without this pass the rotated key would leave every stored
-/// token unreadable and overwritten on the next save. AES-GCM authentication
-/// decides which rows belong to this purpose, so rows other consumers of the
-/// table wrote — settings under the database key above all — are never touched.
 fn apply_migration_v80(conn: &Connection) -> Result<()> {
     use crate::sys::security::machine_key::{self, KeyPurpose};
     use crate::sys::security::machine_key_rewrap;
@@ -6438,14 +6285,6 @@ const MACHINE_ONLY_SECRET_COLUMNS: [(&str, &str, machine_key::KeyPurpose); 5] = 
     ),
 ];
 
-/// Migration v81: re-wrap the email, Gmail, calendar, and generic app secrets
-/// an older build encrypted with the machine-only key.
-///
-/// Those readers already fall back to the legacy key, so nothing is unreadable
-/// without this pass — but until each row is rewritten it stays decryptable by
-/// any unprivileged local process, which is exactly what F5 reported. Rewriting
-/// them on read alone would leave a credential the user never touches again
-/// exposed forever.
 fn apply_migration_v81(conn: &Connection) -> Result<()> {
     if !machine_key::has_install_secret() {
         machine_key::record_machine_only_payload("stored_account_credentials");
@@ -7096,11 +6935,6 @@ mod tests {
         );
     }
 
-    /// FIX-047: smoke-test the most critical tables produced by the
-    /// migration chain — conversations, messages, settings — by doing a
-    /// minimal INSERT then SELECT round-trip. Catches "table exists but
-    /// is the wrong shape" regressions where a later migration drops or
-    /// renames a column the runtime still depends on.
     #[test]
     fn test_critical_tables_round_trip() {
         let conn = Connection::open_in_memory().unwrap();
@@ -7121,7 +6955,6 @@ mod tests {
             .unwrap();
         assert_eq!(title, "hello");
 
-        // messages — needs to FK against the conversation just inserted
         conn.execute(
             "INSERT INTO messages (id, conversation_id, role, content, created_at)
              VALUES (1, 1, 'user', 'ping', '2026-01-01T00:00:00Z')",
@@ -7136,7 +6969,6 @@ mod tests {
             .unwrap();
         assert_eq!(role, "user");
 
-        // settings_v2 — categorized KV table used by the runtime to read user prefs
         conn.execute(
             "INSERT INTO settings_v2 (key, value, category, created_at, updated_at)
              VALUES ('test_key', 'test_value', 'ui', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z')",
@@ -7432,11 +7264,6 @@ mod tests {
         assert_eq!(row_count, 1);
     }
 
-    /// FIX-F6 (audit 2026-05-19): pin the behaviour of migration v63 — it
-    /// must (a) add the `never_remember` column to `remembered_tool_choices`
-    /// and (b) DELETE any pre-existing row whose `tool_name` is on the
-    /// never-rememberable list. The fixture seeds rows that would represent
-    /// a live one-click LITL bypass on every startup if not purged.
     #[test]
     fn migration_v63_purges_dangerous_remembered_choices() {
         let conn = Connection::open_in_memory().unwrap();

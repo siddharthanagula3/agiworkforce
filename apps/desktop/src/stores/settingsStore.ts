@@ -345,7 +345,7 @@ const defaultSettings: Pick<
     terminalSandbox: { ...defaultTerminalSandboxPreferences },
   },
   globalHotkeyPreferences: {
-    enabled: true, // Enabled by default — competitive parity with Claude Desktop / ChatGPT Desktop
+    enabled: true,
     combo: getDefaultGlobalHotkeyCombo(),
   },
   personalization: defaultPersonalization,
@@ -1616,7 +1616,7 @@ export const useSettingsStore = create<SettingsState>()(
               set(
                 {
                   error:
-                    'Capability settings could not be applied. Disabled capabilities are not being enforced — restart the app before running tools.',
+                    'Capability settings could not be applied. Disabled capabilities are not being enforced, restart the app before running tools.',
                 },
                 undefined,
                 'settings/loadSettings/capabilitySyncFailed',

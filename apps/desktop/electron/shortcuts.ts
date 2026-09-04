@@ -11,7 +11,7 @@ let warnedAboutConflict = false;
 
 function warnOnce(accelerator: string, label: string): void {
   console.warn(
-    `[shortcuts] could not register ${label} shortcut (${accelerator}) — already in use.`,
+    `[shortcuts] could not register ${label} shortcut (${accelerator}), already in use.`,
   );
   if (warnedAboutConflict) return;
   warnedAboutConflict = true;

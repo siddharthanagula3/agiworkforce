@@ -122,7 +122,7 @@ describe('desktopExecutionProfileFor', () => {
     });
   }
 
-  it('keeps tool/workflow planes local for BYOK — only the model call leaves the device', () => {
+  it('keeps tool/workflow planes local for BYOK, only the model call leaves the device', () => {
     const profile = desktopExecutionProfileFor('byok');
     expect(profile.tools.cloudExecutionAllowed).toBe(false);
     expect(profile.workflow.orchestrator).toBe('local_agent_loop');
@@ -185,7 +185,7 @@ describe('assertDesktopRuntimeAgreesWithExecutionProfile', () => {
   });
 });
 
-describe('createDesktopChatRuntimeWithLabeling — selection stays identical to createDesktopChatRuntime', () => {
+describe('createDesktopChatRuntimeWithLabeling, selection stays identical to createDesktopChatRuntime', () => {
   it('selects the same concrete class as the unwrapped composition root, for every environment', () => {
     const envs = [
       { isTauriHost: true, appMode: 'local' as const },
@@ -213,7 +213,7 @@ describe('createDesktopChatRuntimeWithLabeling — selection stays identical to 
   });
 });
 
-describe('createDesktopChatRuntimeWithLabeling — the agreement check has real teeth, not a rubber stamp', () => {
+describe('createDesktopChatRuntimeWithLabeling, the agreement check has real teeth, not a rubber stamp', () => {
   it('throws when the cloud factory is wired to a non-cloud runtime class', () => {
     const badFactories = {
       local: () => new TauriRuntime(),
@@ -251,7 +251,7 @@ describe('createDesktopChatRuntimeWithLabeling — the agreement check has real 
   });
 });
 
-describe('createDesktopChatRuntimeWithLabeling — return type stays ChatRuntime (no wrapper leakage)', () => {
+describe('createDesktopChatRuntimeWithLabeling, return type stays ChatRuntime (no wrapper leakage)', () => {
   it('the returned value is exactly the runtime instance, not a wrapped/decorated object', () => {
     const runtime: ChatRuntime = createDesktopChatRuntimeWithLabeling({
       isTauriHost: true,

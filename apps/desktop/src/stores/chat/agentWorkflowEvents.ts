@@ -675,7 +675,7 @@ export async function applyBackgroundAgentCompleted(
   const summaryPath = payload.summaryPath?.trim() ?? '';
 
   await sendBackgroundAgentNotification(
-    'AGI Workforce — Task Completed',
+    'AGI Workforce, Task Completed',
     goal.length > 120 ? `${goal.slice(0, 117)}...` : goal,
   );
 
@@ -707,7 +707,7 @@ export async function applyBackgroundAgentFailed(
   const error = payload.error?.trim() || payload.message?.trim() || 'Background task failed';
 
   await sendBackgroundAgentNotification(
-    'AGI Workforce — Task Failed',
+    'AGI Workforce, Task Failed',
     error.length > 120 ? `${error.slice(0, 117)}...` : error,
   );
 

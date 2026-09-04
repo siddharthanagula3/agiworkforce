@@ -67,7 +67,7 @@ if (flags.includes('--probe')) {
   }
   if (portOpened) {
     console.error(
-      `FAIL: the binary opened WebDriver port ${PROBE_PORT} — the wdio plugin registered in ` +
+      `FAIL: the binary opened WebDriver port ${PROBE_PORT}, the wdio plugin registered in ` +
         'what should be a release (non-debug_assertions) build.',
     );
     failed = true;

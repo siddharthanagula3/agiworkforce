@@ -361,8 +361,8 @@ export const useArtifactStore = create<ArtifactStoreState>()(
                 return { artifacts: newArtifacts, isLoading: false };
               });
               return artifact;
-            } catch {
-              // Command not yet registered — apply the diff locally and call artifact_update
+            } catch (err) {
+              void err;
             }
 
             const cached = get().artifacts.get(id);
