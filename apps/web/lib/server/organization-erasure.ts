@@ -3,6 +3,7 @@ import 'server-only';
 import { getNeonDb } from '@/lib/server/neon-db';
 import { logger } from '@/lib/logger';
 import { deleteStoredMediaObjects } from '@/lib/server/media-storage';
+import { invalidateActiveOrganizationCache } from '@/lib/server/request-context-cache';
 
 /**
  * Every table whose rows belong to one organization and are erased outright
@@ -275,9 +276,23 @@ export async function eraseOrganizationData(
   let organizationRetained = true;
   if (dataDisposed && !options.retainOrganizationRow) {
     try {
+      const members = await db.query<{ user_id: string }>(
+        `select user_id from public.organization_members where organization_id = $1`,
+        [organizationId],
+      );
       await db.execute(`delete from public.organizations where id = $1`, [organizationId]);
       organizationRetained = false;
       tables['organization_members'] = { deleted: true };
+      await Promise.all(
+        members.map((member) =>
+          invalidateActiveOrganizationCache(member.user_id).catch((error) => {
+            logger.error(
+              { organizationId, userId: member.user_id, error },
+              'Organization erasure failed to invalidate a member active-organization cache',
+            );
+          }),
+        ),
+      );
     } catch (error) {
       complete = false;
       tables['organization_members'] = { deleted: false, retainedForRetry: true };
