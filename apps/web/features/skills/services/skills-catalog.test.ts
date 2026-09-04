@@ -40,3 +40,36 @@ describe('skillAuthoringCapability', () => {
     expect(skillAuthoringCapability()).toBe(false);
   });
 });
+
+describe('loadSkillsCatalog caching', () => {
+  beforeEach(() => {
+    invalidateSkillsCatalog();
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    invalidateSkillsCatalog();
+  });
+
+  it('two consumers loading within the cache window issue one request', async () => {
+    const fetchMock = stubSkillsResponse(true);
+    vi.stubGlobal('fetch', fetchMock);
+
+    await Promise.all([loadSkillsCatalog(), loadSkillsCatalog()]);
+    await loadSkillsCatalog();
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('invalidation forces the next load to refetch', async () => {
+    const fetchMock = stubSkillsResponse(true);
+    vi.stubGlobal('fetch', fetchMock);
+
+    await loadSkillsCatalog();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+
+    invalidateSkillsCatalog();
+    await loadSkillsCatalog();
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+});
