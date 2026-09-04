@@ -6,7 +6,7 @@ type ComposerOnSend = (
   attachments?: File[],
   skillId?: string,
   meta?: Record<string, unknown>,
-) => false | void;
+) => false | void | typeof SEND_GUARD_BLOCKED;
 
 const mocks = vi.hoisted(() => ({
   composerOnSend: null as ComposerOnSend | null,
@@ -123,6 +123,7 @@ vi.mock('../../components/Composer/ChatComposerNew', () => ({
     mocks.composerPrefillText = props.prefillText;
     return null;
   },
+  SEND_GUARD_BLOCKED: 'guard-blocked',
 }));
 vi.mock('../../components/messages/ChatMessageList', () => ({
   ChatMessageList: () => null,
@@ -238,6 +239,12 @@ vi.mock('@shared/components/agi/SidebarWordmark', () => ({ SidebarWordmark: () =
 
 import WebChatPage from '../WebChatPage';
 import { firstParkedSend, selectParkedSends, useChatStore } from '@shared/stores/web-chat-store';
+import type { SEND_GUARD_BLOCKED } from '../../components/Composer/ChatComposerNew';
+
+// Type-checked against the real export so this drifts loudly, not silently,
+// if the sentinel's literal value ever changes: the composer module itself is
+// mocked below, so the runtime value cannot be imported directly.
+const GUARD_BLOCKED = 'guard-blocked' satisfies typeof SEND_GUARD_BLOCKED;
 
 const FIRST_MESSAGE = 'Summarize the attached notes for me please';
 const SECOND_MESSAGE = 'Actually, forget the file, just say hi';
@@ -280,9 +287,19 @@ describe('WebChatPage concurrent send during attachment upload', () => {
     await waitFor(() => expect(mocks.composerConversationId).not.toBeNull());
 
     const secondFile = new File(['other'], 'other.txt', { type: 'text/plain' });
+    let secondSendResult: false | void | typeof SEND_GUARD_BLOCKED = undefined;
     act(() => {
-      mocks.composerOnSend!(SECOND_MESSAGE, [secondFile], undefined, {});
+      secondSendResult = mocks.composerOnSend!(SECOND_MESSAGE, [secondFile], undefined, {});
     });
+
+    // The composer's own `handleSubmit` clears its text and attachments
+    // unless `onSend` returns exactly this sentinel -- a plain `false` (or
+    // `undefined`, `void sendContent(...)` discarded silently) both clear it,
+    // which is what stranded the second message's text (files-1). Distinct
+    // from `false` because the composer must ALSO skip resetting the shared
+    // send-pending flag: the first send is still genuinely in flight and
+    // still owns it.
+    expect(secondSendResult).toBe(GUARD_BLOCKED);
 
     // The second send must never reach the model while the first is still
     // resolving its upload -- that is the corruption this guards against.

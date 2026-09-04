@@ -250,7 +250,7 @@ interface ChatComposerProps {
     attachments?: File[],
     skillId?: string,
     meta?: ComposerSendMeta,
-  ) => void | false;
+  ) => void | false | typeof SEND_GUARD_BLOCKED;
   /**
    * Conversation this composer is currently editing for (`null` on the
    * new-chat surface).
@@ -427,6 +427,16 @@ const COMPOSER_AUTOFOCUS_MEDIA_QUERY = '(min-width: 768px) and (pointer: fine)';
 const RESTORED_DRAFT_NOTICE = "Couldn't send. Restored here so you can try again.";
 const RESTORED_BLOCKED_SEND_NOTICE =
   'Your previous message was still starting, so this one is back here. Send it again.';
+
+/**
+ * Distinct from a plain `false`: an earlier send (not this composer's own)
+ * still owns the module-scope send-pending flag, so `handleSubmit` must skip
+ * `setSendPendingFlag(false)` along with the clear -- flipping it here would
+ * hide the "Sending..." state of the send that is still actually in flight.
+ * A ceremony intercept still returns plain `false`, since nothing else in
+ * that case holds the flag.
+ */
+export const SEND_GUARD_BLOCKED = 'guard-blocked' as const;
 
 /**
  * The legacy textarea's resting height is pinned in JS, so the `sm:` step its
@@ -2252,6 +2262,7 @@ const ChatComposerNewComponent = ({
     setSendPendingFlag(true);
     const result = onSend(...sendArgs);
 
+    if (result === SEND_GUARD_BLOCKED) return;
     if (result === false) {
       setSendPendingFlag(false);
       return;
@@ -2416,8 +2427,15 @@ const ChatComposerNewComponent = ({
       return;
     }
     restoredParkedSendRef.current = parkedSend.fingerprint;
-    setSendPendingFlag(false);
+    // Only when THIS effect is the one putting the text back: the module-scope
+    // pending flag is shared, and `live` already equal to `parkedSend.content`
+    // means the guard's own caller never cleared the composer in the first
+    // place (see `SEND_GUARD_BLOCKED` in WebChatPage's `handleSend`) -- an
+    // earlier send this one collided with can still genuinely be in flight,
+    // and clearing the flag here would hide its "Sending..." state instead of
+    // this send's.
     if (live) return;
+    setSendPendingFlag(false);
     writeComposerMessage(parkedSend.content);
     setLocalNotice(RESTORED_BLOCKED_SEND_NOTICE);
   }, [clearParkedSend, conversationId, parkedSend, writeComposerMessage]);

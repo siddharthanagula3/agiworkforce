@@ -117,7 +117,7 @@ import {
 } from '../components/messages/MessageBubble';
 import { ChatLoadingState } from '../components/messages/ChatLoadingState';
 import { ImageTranscriptRecoveryNotice } from '../components/ImageTranscriptRecoveryNotice';
-import { ChatComposerNew } from '../components/Composer/ChatComposerNew';
+import { ChatComposerNew, SEND_GUARD_BLOCKED } from '../components/Composer/ChatComposerNew';
 import { GreetingBanner } from '../components/GreetingBanner/GreetingBanner';
 import { SidebarWordmark } from '@shared/components/agi/SidebarWordmark';
 import { buildAppNavItems } from '@shared/components/layout/app-nav-items';
@@ -869,6 +869,15 @@ export default function WebChatPage() {
   // resolution comment inside sendContent for why the key itself can change
   // between the first send and a second one racing behind it.
   const inFlightSendFingerprintsRef = useRef<Map<string, string>>(new Map());
+  // Set synchronously, inside the guard-collision branch below, before
+  // `sendContent`'s first `await` -- so `handleSend` can read it the instant
+  // its own synchronous call into `sendContent` returns, without waiting on
+  // the async function's Promise. `onSend`'s contract is a SYNCHRONOUS
+  // `false` for "the composer must not clear itself"; `sendContent` resolves
+  // that decision asynchronously in general, but the guard-collision case
+  // resolves it before any await, so this ref is the one case that can honor
+  // the contract instead of discarding it through `void sendContent(...)`.
+  const lastSendGuardBlockedRef = useRef(false);
   // Conversations whose auto-title read has already been started. The effect below
   // re-runs on every `conversations` change, including the one its own adoption
   // causes, so without this it would start a second read pass mid-flight.
@@ -1503,6 +1512,7 @@ export default function WebChatPage() {
       // a DIFFERENT chat is never silently swallowed. A brand-new chat has no id
       // yet, so pre-create sends share one key -- which is exactly right: two
       // rapid submits on the empty surface must not create two conversations.
+      lastSendGuardBlockedRef.current = false;
       const sendGuardKey =
         options.conversationId || urlConversationId || bareChatSessionId || NEW_CHAT_SEND_GUARD_KEY;
       const sendFingerprint = buildSendFingerprint(content, options.attachments);
@@ -1525,6 +1535,7 @@ export default function WebChatPage() {
         parkBlockedSend(sendFingerprint, content);
         if (options.attachments?.length) setRestoredAttachments(options.attachments);
         toast.error(BLOCKED_SEND_TOAST);
+        lastSendGuardBlockedRef.current = true;
         return false;
       }
       sendingConversationsRef.current.add(sendGuardKey);
@@ -2872,7 +2883,12 @@ export default function WebChatPage() {
   }, [stopGeneration, displayedConversationId]);
 
   const handleSend = useCallback(
-    (content: string, attachments?: File[], skillId?: string, meta?: SendMeta): false | void => {
+    (
+      content: string,
+      attachments?: File[],
+      skillId?: string,
+      meta?: SendMeta,
+    ): false | typeof SEND_GUARD_BLOCKED | void => {
       const resolvedMeta = skillId && !meta?.skillName ? { ...meta, skillName: skillId } : meta;
 
       // Natural-language image requests use the existing media harness even
@@ -2910,11 +2926,24 @@ export default function WebChatPage() {
           setHandoffError(null);
         },
         send: () => {
+          // `sendContent` is async, but the guard-collision branch it may take
+          // runs entirely before its first `await`, so `lastSendGuardBlockedRef`
+          // is already set by the time this synchronous call returns -- long
+          // before the returned promise itself settles. `void` here is
+          // discarding the eventual resolution, not this synchronous decision.
           void sendContent(content, { attachments, meta: resolvedMeta });
         },
       });
 
       if (decision === 'ceremony') return false;
+      // The composer must not clear a send the guard just refused: it owns the
+      // text and attachments the user is about to lose otherwise, and the
+      // store-side parkedSend handback is a backstop for a remount, not a
+      // substitute for simply not clearing the instance that is still on
+      // screen. See `lastSendGuardBlockedRef`'s doc comment above. Distinct
+      // from plain `false`: the send this one collided with is still in
+      // flight and still owns the composer's shared send-pending flag.
+      if (lastSendGuardBlockedRef.current) return SEND_GUARD_BLOCKED;
     },
     [
       displayedConversation,
