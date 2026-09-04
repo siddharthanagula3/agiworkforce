@@ -3,6 +3,7 @@ import 'server-only';
 import Stripe from 'stripe';
 import { getNeonDb } from '@/lib/server/neon-db';
 import { logger } from '@/lib/logger';
+import { getSharedRedisClient } from '@/lib/rate-limit';
 import { STRIPE_CLIENT_OPTIONS } from '@/lib/stripe-config';
 import { getConfiguredStripePriceIds } from '@/lib/price-tier-mapping';
 import {
@@ -10,6 +11,34 @@ import {
   RENDER_CACHE_SECONDS,
   RENDER_CACHE_TAGS,
 } from '@/lib/server/render-cache';
+
+const DATABASE_PROBE_MIN_INTERVAL_SECONDS = 3_600;
+const DATABASE_PROBE_LAST_SUCCESS_REDIS_KEY = 'agi-health-probe:database-last-success-at';
+
+async function shouldSkipDatabaseProbe(): Promise<boolean> {
+  try {
+    const redis = getSharedRedisClient();
+    if (!redis) return false;
+    const lastSuccessAt = await redis.get<number>(DATABASE_PROBE_LAST_SUCCESS_REDIS_KEY);
+    if (!lastSuccessAt) return false;
+    return Date.now() - lastSuccessAt < DATABASE_PROBE_MIN_INTERVAL_SECONDS * 1_000;
+  } catch (error) {
+    logger.error({ error }, 'Health probe database throttle check failed');
+    return false;
+  }
+}
+
+async function recordDatabaseProbeSuccess(): Promise<void> {
+  try {
+    const redis = getSharedRedisClient();
+    if (!redis) return;
+    await redis.set(DATABASE_PROBE_LAST_SUCCESS_REDIS_KEY, Date.now(), {
+      ex: DATABASE_PROBE_MIN_INTERVAL_SECONDS,
+    });
+  } catch (error) {
+    logger.error({ error }, 'Health probe database throttle record failed');
+  }
+}
 
 export interface HealthCheckResult {
   status: 'healthy' | 'degraded' | 'unhealthy';
@@ -46,14 +75,19 @@ export async function runHealthChecks(): Promise<HealthCheckResult> {
     logger.warn({ missingEnvVars }, 'Health check: missing Neon environment variables');
   }
 
-  try {
-    const db = getNeonDb();
-    await db.query('select 1');
+  if (await shouldSkipDatabaseProbe()) {
     checks.database.status = 'healthy';
-  } catch (error) {
-    checks.database.status = 'unhealthy';
-    checks.database.message = 'unavailable';
-    logger.error({ error }, 'Database health check failed');
+  } else {
+    try {
+      const db = getNeonDb();
+      await db.query('select 1');
+      checks.database.status = 'healthy';
+      await recordDatabaseProbeSuccess();
+    } catch (error) {
+      checks.database.status = 'unhealthy';
+      checks.database.message = 'unavailable';
+      logger.error({ error }, 'Database health check failed');
+    }
   }
 
   try {
