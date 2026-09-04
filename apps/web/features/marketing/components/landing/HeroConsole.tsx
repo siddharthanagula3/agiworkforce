@@ -112,8 +112,8 @@ export function HeroConsole() {
         </p>
         <div className="agi-home-answer">
           {CONSOLE_ANSWER.map((section) => (
-            <section key={section.heading}>
-              <h3>{section.heading}</h3>
+            <section key={section.heading} aria-label={section.heading}>
+              <p className="agi-home-answer-heading">{section.heading}</p>
               <ul>
                 {section.items.map(([term, detail]) => (
                   <li key={term}>

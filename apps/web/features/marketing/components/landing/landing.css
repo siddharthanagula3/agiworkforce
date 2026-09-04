@@ -361,7 +361,7 @@
   border-top: 1px solid var(--agi-rule);
 }
 
-.agi-home .agi-home-answer h3 {
+.agi-home .agi-home-answer-heading {
   margin: 0 0 0.375rem;
   font-size: var(--agi-text-md);
   font-weight: 600;
@@ -999,5 +999,18 @@
   .agi-home .agi-home-receipt-row {
     grid-template-columns: minmax(0, 1fr);
     gap: 0.125rem;
+  }
+}
+
+@media (pointer: coarse) {
+  .agi-home .agi-home-lane-tab {
+    min-height: 40px;
+  }
+
+  .agi-home .agi-home-link,
+  .agi-home .agi-home-release-name {
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
   }
 }
