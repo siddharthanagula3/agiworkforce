@@ -117,7 +117,11 @@ import {
 } from '../components/messages/MessageBubble';
 import { ChatLoadingState } from '../components/messages/ChatLoadingState';
 import { ImageTranscriptRecoveryNotice } from '../components/ImageTranscriptRecoveryNotice';
-import { ChatComposerNew, SEND_GUARD_BLOCKED } from '../components/Composer/ChatComposerNew';
+import {
+  ChatComposerNew,
+  SEND_GUARD_BLOCKED,
+  type ComposerWorkMode,
+} from '../components/Composer/ChatComposerNew';
 import { GreetingBanner } from '../components/GreetingBanner/GreetingBanner';
 import { SidebarWordmark } from '@shared/components/agi/SidebarWordmark';
 import { buildAppNavItems } from '@shared/components/layout/app-nav-items';
@@ -734,7 +738,18 @@ function findHighlightableMessageElement(messageId: string): HTMLElement | null 
   );
 }
 
-export default function WebChatPage() {
+interface WebChatPageProps {
+  /**
+   * Set only by `/chat/page.tsx` reading the `x-agi-pathname` header the proxy
+   * stamps on its /agi-work rewrite (see apps/web/proxy.ts). A query param
+   * would not survive that rewrite: `useSearchParams()` reflects the browser's
+   * actual address bar, which the rewrite leaves showing /agi-work, not the
+   * internal /chat target it renders.
+   */
+  initialWorkMode?: ComposerWorkMode;
+}
+
+export default function WebChatPage({ initialWorkMode }: WebChatPageProps) {
   useArtifactCloudSync();
 
   const { confirm: confirmDestructive, dialog: destructiveConfirmDialog } = useConfirm();
@@ -824,6 +839,20 @@ export default function WebChatPage() {
     url.searchParams.delete('starterPrompt');
     router.replace(url.pathname + url.search);
   }, [starterPromptParam, router]);
+
+  // AGI Work has no page of its own, it is the composer's work-mode toggle;
+  // /chat/page.tsx passes initialWorkMode down when the proxy rewrote a
+  // signed-in visit to /agi-work here (see apps/web/proxy.ts). This lands the
+  // new-chat composer already switched to it; the toggle's own billing-
+  // capability effect corrects back to 'chat' if the account is not entitled.
+  // Applied once: a later manual switch back to Chat must stick even though
+  // this prop value never changes across the page's lifetime.
+  const initialWorkModeAppliedRef = useRef(false);
+  useEffect(() => {
+    if (!initialWorkMode || initialWorkModeAppliedRef.current) return;
+    initialWorkModeAppliedRef.current = true;
+    useChatStore.getState().setComposerToggles({ workMode: initialWorkMode }, null);
+  }, [initialWorkMode]);
 
   const pendingEditRollbackRef = useRef<PendingEditRollback | null>(null);
   const sendReplacingMessagesRef = useRef<

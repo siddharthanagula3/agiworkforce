@@ -134,6 +134,54 @@ describe('web proxy', () => {
     expect(response?.headers.get('x-middleware-rewrite')).toBeNull();
   });
 
+  it('leaves /agi-work alone with no session cookie, still through Clerk session middleware', async () => {
+    clerkState.clerkPaths = [];
+    const { proxy } = await import('../proxy');
+
+    const response = await proxy(new NextRequest('http://localhost/agi-work'), {} as never);
+
+    expect(clerkState.clerkPaths).toEqual(['/agi-work']);
+    expect(response?.headers.get('x-middleware-rewrite')).toBeNull();
+    expect(response?.headers.get('Content-Security-Policy')).toContain("default-src 'self'");
+  });
+
+  it('rewrites /agi-work to /chat for a signed-in visitor', async () => {
+    const { proxy } = await import('../proxy');
+
+    const response = await proxy(
+      new NextRequest('http://localhost/agi-work', {
+        headers: { Cookie: '__client_uat=1700000000' },
+      }),
+      {} as never,
+    );
+
+    expect(response?.headers.get('x-middleware-rewrite')).toBe('http://localhost/chat');
+  });
+
+  it('leaves /agi-code alone with no session cookie, still through Clerk session middleware', async () => {
+    clerkState.clerkPaths = [];
+    const { proxy } = await import('../proxy');
+
+    const response = await proxy(new NextRequest('http://localhost/agi-code'), {} as never);
+
+    expect(clerkState.clerkPaths).toEqual(['/agi-code']);
+    expect(response?.headers.get('x-middleware-rewrite')).toBeNull();
+    expect(response?.headers.get('Content-Security-Policy')).toContain("default-src 'self'");
+  });
+
+  it('rewrites /agi-code to /chat/code for a signed-in visitor', async () => {
+    const { proxy } = await import('../proxy');
+
+    const response = await proxy(
+      new NextRequest('http://localhost/agi-code', {
+        headers: { Cookie: '__client_uat=1700000000' },
+      }),
+      {} as never,
+    );
+
+    expect(response?.headers.get('x-middleware-rewrite')).toBe('http://localhost/chat/code');
+  });
+
   it('runs the post-login acceptance checkpoint through Clerk session middleware', async () => {
     const { proxy } = await import('../proxy');
 
