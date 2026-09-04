@@ -8,6 +8,7 @@ const mocks = vi.hoisted(() => ({
   query: vi.fn(),
   execute: vi.fn(),
   deleteStoredMediaObjects: vi.fn(),
+  invalidateActiveOrganizationCache: vi.fn(async () => undefined),
 }));
 
 vi.mock('server-only', () => ({}));
@@ -22,6 +23,10 @@ vi.mock('@/lib/server/neon-db', () => ({
 }));
 vi.mock('@/lib/server/media-storage', () => ({
   deleteStoredMediaObjects: (...args: unknown[]) => mocks.deleteStoredMediaObjects(...args),
+}));
+vi.mock('@/lib/server/request-context-cache', () => ({
+  invalidateActiveOrganizationCache: (...args: unknown[]) =>
+    mocks.invalidateActiveOrganizationCache(...args),
 }));
 
 import {
@@ -82,6 +87,7 @@ interface ErasureFixture {
   failStatementMatching?: string;
   underLegalHold?: boolean;
   legalHoldError?: Error;
+  members?: Array<{ user_id: string }>;
 }
 
 function primeDb(fixture: ErasureFixture = {}): void {
@@ -89,6 +95,9 @@ function primeDb(fixture: ErasureFixture = {}): void {
     if (sql.includes('public.legal_holds')) {
       if (fixture.legalHoldError) throw fixture.legalHoldError;
       return [{ held: fixture.underLegalHold ?? false }];
+    }
+    if (sql.includes('select user_id from public.organization_members')) {
+      return fixture.members ?? [];
     }
     if (sql.includes('media_assets')) return fixture.mediaRows ?? [];
     return [];
@@ -262,6 +271,28 @@ describe('eraseOrganizationData', () => {
         sql.includes('delete from public.organizations where id = $1'),
       ),
     ).toBe(false);
+  });
+
+  it("invalidates each removed member's active-organization cache after the row delete succeeds", async () => {
+    primeDb({ members: [{ user_id: 'user-1' }, { user_id: 'user-2' }] });
+
+    await eraseOrganizationData('org-1');
+
+    expect(mocks.invalidateActiveOrganizationCache).toHaveBeenCalledTimes(2);
+    expect(mocks.invalidateActiveOrganizationCache).toHaveBeenCalledWith('user-1');
+    expect(mocks.invalidateActiveOrganizationCache).toHaveBeenCalledWith('user-2');
+  });
+
+  it('does not invalidate any member cache when the organization row delete fails', async () => {
+    primeDb({
+      members: [{ user_id: 'user-1' }],
+      failStatementMatching: 'delete from public.organizations where id = $1',
+    });
+
+    const report = await eraseOrganizationData('org-1');
+
+    expect(report.organizationRetained).toBe(true);
+    expect(mocks.invalidateActiveOrganizationCache).not.toHaveBeenCalled();
   });
 
   it('retains the organization row when retainOrganizationRow is set', async () => {
