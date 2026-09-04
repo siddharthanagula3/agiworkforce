@@ -45,7 +45,22 @@ vi.mock('@/lib/server/neon-db', () => ({
       return mockQuery(sql, params);
     },
     execute: mockExecute,
-    transaction: vi.fn((fn: (db: unknown) => unknown) => fn({})),
+    transaction: vi.fn(async (fn: (db: unknown) => unknown) =>
+      fn({
+        query: (sql: string, params: unknown[]) => {
+          if (typeof sql === 'string' && sql.includes('set_config')) {
+            return Promise.resolve([]);
+          }
+          return mockQuery(sql, params);
+        },
+        execute: (sql: string, params: unknown[]) => {
+          if (sql === 'set local role app_rls') {
+            return Promise.resolve(0);
+          }
+          return mockExecute(sql, params);
+        },
+      }),
+    ),
     withUser: vi.fn(() => ({})),
     dispose: vi.fn(),
   })),
