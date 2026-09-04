@@ -392,7 +392,7 @@ export function KnowledgeFilesPanel({ projectId }: Props) {
                   confirm({
                     title: `Remove ${file.fileName}?`,
                     description:
-                      'The file is deleted from this project\u2019s knowledge and the assistant stops using it. This cannot be undone \u2014 the file would have to be uploaded again.',
+                      'The file is deleted from this project\u2019s knowledge and the assistant stops using it. This cannot be undone, the file would have to be uploaded again.',
                     confirmLabel: 'Remove file',
                     onConfirm: () => handleDelete(file),
                   });

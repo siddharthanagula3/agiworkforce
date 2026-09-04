@@ -3,7 +3,7 @@
   "registeredWithoutFrontendCaller": [
     {
       "command": "document_edit_excel",
-      "reason": "Agent-selected tool, not a renderer command. The LLM tool executor calls the Rust function directly (core/llm/tool_executor/document_tools.rs) after tool_guard approval; there is deliberately no invoke() call site because no UI drives spreadsheet editing. Registered so the same entry point is reachable if a UI is added. No document_edit_word counterpart exists on purpose \u2014 see docs/decisions/wire-or-cut.md."
+      "reason": "Agent-selected tool, not a renderer command. The LLM tool executor calls the Rust function directly (core/llm/tool_executor/document_tools.rs) after tool_guard approval; there is deliberately no invoke() call site because no UI drives spreadsheet editing. Registered so the same entry point is reachable if a UI is added. No document_edit_word counterpart exists on purpose, see docs/decisions/wire-or-cut.md."
     },
     {
       "command": "llm_list_llamacpp_models",

@@ -931,7 +931,7 @@ export const MessageBubble = memo(function MessageBubble({
           previously only reachable via a hidden 400ms long-press sheet (copy/retry/
           export/delete) or an undiscoverable double-tap (reactions); surface the core
           ones inline so a completed answer has visible affordances. Reuses the existing
-          copyToClipboard / onRetryMessage / onReaction handlers \u2014 the active thumb also
+          copyToClipboard / onRetryMessage / onReaction handlers, the active thumb also
           replaces the old standalone reaction badge. */}
       {isAssistant && !message.isStreaming && message.content.trim() ? (
         <View
