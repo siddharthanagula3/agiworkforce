@@ -24,6 +24,7 @@ import {
 } from '@agiworkforce/icons';
 import { cn } from '../cn';
 import { useUiTranslation } from '../i18n';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../primitives/Tooltip';
 import { isMenuPanelOpen, Menu, MenuItem, MenuSeparator } from './Menu';
 import { SearchOverlay } from './SearchOverlay';
 import { SessionItem, type SessionItemHandlers } from './SessionItem';
@@ -66,6 +67,8 @@ export interface SidebarProps extends SessionItemHandlers {
   onProjectDelete?: (projectId: string) => void;
   onProjectCreate?: () => void;
 
+  getSessionHref?: (session: SidebarSession) => string;
+
   navItems?: SidebarNavItem[];
   renderNavLink?: (item: SidebarNavItem) => React.ReactNode;
   navExtraSlot?: React.ReactNode;
@@ -75,6 +78,8 @@ export interface SidebarProps extends SessionItemHandlers {
 }
 
 const DEFAULT_EXPANDED: SidebarTemporalGroup[] = ['today', 'yesterday', 'thisWeek'];
+const COLLAPSED_RAIL_WIDTH = 52;
+const ROW_FOCUSABLE_SELECTOR = 'a, button';
 
 export function Sidebar(props: SidebarProps) {
   const {
@@ -87,7 +92,6 @@ export function Sidebar(props: SidebarProps) {
     collapsed = false,
     width = 260,
     isSimpleMode = false,
-    mode = 'local',
     budgetPercent = 0,
     showUsageWidget = false,
     onNewChat,
@@ -102,6 +106,7 @@ export function Sidebar(props: SidebarProps) {
     onProjectPin,
     onProjectDelete,
     onProjectCreate,
+    getSessionHref,
     navItems,
     renderNavLink,
     navExtraSlot,
@@ -250,7 +255,7 @@ export function Sidebar(props: SidebarProps) {
     const row = listRef.current?.querySelector<HTMLElement>(
       `[data-sidebar-session-index="${index}"]`,
     );
-    return row?.querySelector<HTMLElement>('button') ?? null;
+    return row?.querySelector<HTMLElement>(ROW_FOCUSABLE_SELECTOR) ?? null;
   }, []);
 
   useEffect(() => {
@@ -259,7 +264,7 @@ export function Sidebar(props: SidebarProps) {
     const rows = container.querySelectorAll<HTMLElement>('[data-sidebar-session-index]');
     rows.forEach((row) => {
       const index = Number(row.dataset['sidebarSessionIndex']);
-      const button = row.querySelector<HTMLElement>('button');
+      const button = row.querySelector<HTMLElement>(ROW_FOCUSABLE_SELECTOR);
       if (!button) return;
       button.tabIndex = index === activeRowIndex ? 0 : -1;
     });
@@ -347,6 +352,7 @@ export function Sidebar(props: SidebarProps) {
             projectName={session.projectId ? projectNameById.get(session.projectId) : undefined}
             projects={projects}
             simple={isSimpleMode}
+            href={getSessionHref?.(session)}
             onSelect={onSelect}
             onRename={onRename}
             onDelete={onDelete}
@@ -368,6 +374,7 @@ export function Sidebar(props: SidebarProps) {
       projectNameById,
       projects,
       isSimpleMode,
+      getSessionHref,
       onSelect,
       onRename,
       onDelete,
@@ -409,51 +416,43 @@ export function Sidebar(props: SidebarProps) {
   const resolvedNavItems = navItems ?? EMPTY_NAV_ITEMS;
 
   if (collapsed) {
+    const toggleLabel = t('sidebar.toggleSidebar', 'Toggle sidebar');
     return (
-      <div className="flex w-16 flex-col border-r border-[var(--chat-border-subtle)] bg-[var(--chat-sidebar-bg)] transition-all duration-300 ease-in-out">
-        <div className="flex flex-col items-center gap-4 p-3">
-          <RailButton
-            label={t('sidebar.expandSidebar', 'Expand sidebar')}
-            icon={PanelLeft}
-            onClick={onToggleCollapse}
-          />
-          <RailButton
-            label={t('sidebar.newChatAction', 'New chat')}
-            icon={SquarePen}
-            onClick={onNewChat}
-          />
-          <RailButton
-            label={tCommon('search', 'Search')}
-            icon={Search}
-            onClick={handleOpenSearch}
-          />
-          {resolvedNavItems.map((item) => (
+      <TooltipProvider delayDuration={200}>
+        <nav
+          aria-label={t('sidebar.navLabel', 'Chat history')}
+          className="flex flex-col border-r border-[var(--chat-border-subtle)] bg-[var(--chat-sidebar-bg)] transition-all duration-300 ease-in-out"
+          style={{ width: COLLAPSED_RAIL_WIDTH }}
+        >
+          <div className="flex flex-col items-center gap-2 py-3">
+            <RailButton label={toggleLabel} icon={PanelLeft} onClick={onToggleCollapse} />
             <RailButton
-              key={item.id}
-              label={item.label}
-              icon={item.icon}
-              isActive={item.isActive}
-              onClick={item.onClick}
+              label={t('sidebar.newChatAction', 'New chat')}
+              icon={SquarePen}
+              onClick={onNewChat}
             />
-          ))}
-          <span
-            role="img"
-            aria-label={
-              mode === 'local' ? t('sidebar.local', 'Local') : t('sidebar.cloud', 'Cloud')
-            }
-            title={mode === 'local' ? t('sidebar.local', 'Local') : t('sidebar.cloud', 'Cloud')}
-            className={cn(
-              'h-2 w-2 rounded-full',
-              mode === 'local' ? 'bg-emerald-400' : 'bg-blue-400',
-            )}
-          />
-        </div>
-        {collapsedFooterSlot && (
-          <div className="mt-auto flex flex-col items-center gap-1 border-t border-[hsl(var(--border))] p-3">
-            {collapsedFooterSlot}
+            <RailButton
+              label={tCommon('search', 'Search')}
+              icon={Search}
+              onClick={handleOpenSearch}
+            />
+            {resolvedNavItems.map((item) => (
+              <RailButton
+                key={item.id}
+                label={item.label}
+                icon={item.icon}
+                isActive={item.isActive}
+                onClick={item.onClick}
+              />
+            ))}
           </div>
-        )}
-      </div>
+          {collapsedFooterSlot && (
+            <div className="mt-auto flex flex-col items-center gap-1 border-t border-[hsl(var(--border))] py-3">
+              {collapsedFooterSlot}
+            </div>
+          )}
+        </nav>
+      </TooltipProvider>
     );
   }
 
@@ -474,7 +473,8 @@ export function Sidebar(props: SidebarProps) {
         />
       )}
 
-      <div
+      <nav
+        aria-label={t('sidebar.navLabel', 'Chat history')}
         className={cn(
           // inset-auto is load-bearing: the root is positioned only so its own
           // descendants can anchor to it, and it is never itself offset. Without
@@ -496,7 +496,7 @@ export function Sidebar(props: SidebarProps) {
             <button
               type="button"
               onClick={onToggleCollapse}
-              aria-label={t('sidebar.collapseSidebar', 'Collapse sidebar')}
+              aria-label={t('sidebar.toggleSidebar', 'Toggle sidebar')}
               className="flex h-8 w-8 items-center justify-center rounded-md text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--accent))] hover:text-[hsl(var(--foreground))]"
             >
               <PanelLeft className="h-4 w-4" />
@@ -595,7 +595,7 @@ export function Sidebar(props: SidebarProps) {
                           ? t('sidebar.expandProjects', 'Expand projects')
                           : t('sidebar.collapseProjects', 'Collapse projects')
                       }
-                      className="flex min-h-6 min-w-0 flex-1 items-center gap-1 text-[12px] font-semibold uppercase tracking-wider text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))] transition-colors"
+                      className="flex min-h-6 min-w-0 flex-1 items-center gap-1 text-[13px] font-semibold text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))] transition-colors"
                     >
                       <span>{t('sidebar.projects', 'Projects')}</span>
                       <ChevronRight
@@ -693,7 +693,7 @@ export function Sidebar(props: SidebarProps) {
                       {/* Pinned sub-section */}
                       {pinnedProjects.length > 0 && (
                         <div className="mb-2">
-                          <div className="mb-0.5 px-3 py-0.5 text-[12px] font-semibold uppercase tracking-wider text-[hsl(var(--muted-foreground))]">
+                          <div className="mb-0.5 px-3 py-0.5 text-[13px] font-semibold text-[hsl(var(--muted-foreground))]">
                             {t('sidebar.pinned', 'Pinned')}
                           </div>
                           {pinnedProjects.map((project) => (
@@ -714,6 +714,7 @@ export function Sidebar(props: SidebarProps) {
                               onPin={onProjectPin}
                               onDelete={onProjectDelete}
                               onSelectSession={onSelect}
+                              getSessionHref={getSessionHref}
                             />
                           ))}
                         </div>
@@ -738,6 +739,7 @@ export function Sidebar(props: SidebarProps) {
                           onPin={onProjectPin}
                           onDelete={onProjectDelete}
                           onSelectSession={onSelect}
+                          getSessionHref={getSessionHref}
                         />
                       ))}
                       {!showAllProjects && unpinnedProjects.length > PROJECTS_SHOW_LIMIT && (
@@ -765,14 +767,14 @@ export function Sidebar(props: SidebarProps) {
 
               {/* Chats section header + pinned sessions */}
               {(pinned.length > 0 || grouped.size > 0) && (
-                <div className="mb-1 px-3 py-1 text-[12px] font-semibold uppercase tracking-wider text-[hsl(var(--muted-foreground))]">
+                <div className="mb-1 px-3 py-1 text-[13px] font-semibold text-[hsl(var(--muted-foreground))]">
                   {t('sidebar.chats', 'Chats')}
                 </div>
               )}
 
               {pinned.length > 0 && (
                 <div className="mb-4">
-                  <div className="mb-2 flex items-center gap-1 px-3 text-xs font-semibold uppercase tracking-wider text-[hsl(var(--muted-foreground))]">
+                  <div className="mb-2 flex items-center gap-1 px-3 text-[13px] font-semibold text-[hsl(var(--muted-foreground))]">
                     <Pin className="h-3 w-3" /> {t('sidebar.pinned', 'Pinned')}
                   </div>
                   {pinned.map(renderSessionRow)}
@@ -911,7 +913,7 @@ export function Sidebar(props: SidebarProps) {
             <div className="min-w-0 flex-1 overflow-hidden">{footerSlot}</div>
           </div>
         </div>
-      </div>
+      </nav>
     </>
   );
 }
@@ -928,21 +930,25 @@ function RailButton({
   isActive?: boolean;
 }) {
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      aria-label={label}
-      title={label}
-      aria-current={isActive ? 'page' : undefined}
-      className={cn(
-        'flex h-9 w-9 items-center justify-center rounded-lg transition-colors hover:bg-[hsl(var(--accent))] hover:text-[hsl(var(--foreground))]',
-        isActive
-          ? 'bg-[hsl(var(--accent))] text-[hsl(var(--foreground))]'
-          : 'text-[hsl(var(--muted-foreground))]',
-      )}
-    >
-      <Icon className="h-4 w-4" />
-    </button>
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <button
+          type="button"
+          onClick={onClick}
+          aria-label={label}
+          aria-current={isActive ? 'page' : undefined}
+          className={cn(
+            'flex h-9 w-9 items-center justify-center rounded-lg transition-colors hover:bg-[hsl(var(--accent))] hover:text-[hsl(var(--foreground))]',
+            isActive
+              ? 'bg-[hsl(var(--accent))] text-[hsl(var(--foreground))]'
+              : 'text-[hsl(var(--muted-foreground))]',
+          )}
+        >
+          <Icon className="h-5 w-5" />
+        </button>
+      </TooltipTrigger>
+      <TooltipContent side="right">{label}</TooltipContent>
+    </Tooltip>
   );
 }
 
@@ -966,6 +972,7 @@ interface ProjectRowProps {
   onPin?: (id: string) => void;
   onDelete?: (id: string) => void;
   onSelectSession?: (id: string) => void;
+  getSessionHref?: (session: SidebarSession) => string;
 }
 
 function ProjectRow({
@@ -984,6 +991,7 @@ function ProjectRow({
   onPin,
   onDelete,
   onSelectSession,
+  getSessionHref,
 }: ProjectRowProps) {
   const { t } = useUiTranslation('chat');
   const [menuOpen, setMenuOpen] = useState(false);
@@ -1179,18 +1187,15 @@ function ProjectRow({
             <>
               {visibleSessions.map((session) => {
                 const isActive = session.id === activeSessionId;
-                return (
-                  <button
-                    key={session.id}
-                    type="button"
-                    onClick={() => onSelectSession?.(session.id)}
-                    className={cn(
-                      'group/projchat flex w-full items-center gap-2 rounded-md px-3 py-1.5 text-left transition-colors',
-                      isActive
-                        ? 'bg-[hsl(var(--accent))] text-[hsl(var(--foreground))]'
-                        : 'text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--accent))] hover:text-[hsl(var(--foreground))]',
-                    )}
-                  >
+                const href = getSessionHref?.(session);
+                const rowClassName = cn(
+                  'group/projchat flex w-full items-center gap-2 rounded-md px-3 py-1.5 text-left transition-colors',
+                  isActive
+                    ? 'bg-[hsl(var(--accent))] text-[hsl(var(--foreground))]'
+                    : 'text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--accent))] hover:text-[hsl(var(--foreground))]',
+                );
+                const rowChildren = (
+                  <>
                     {/* Active indicator dot */}
                     {isActive && (
                       <span
@@ -1201,6 +1206,41 @@ function ProjectRow({
                     <span className="flex-1 truncate text-xs">
                       {session.title || t('sidebar.untitledChat', 'Untitled chat')}
                     </span>
+                  </>
+                );
+                if (href) {
+                  return (
+                    <a
+                      key={session.id}
+                      href={href}
+                      onClick={(event) => {
+                        if (
+                          event.defaultPrevented ||
+                          event.button !== 0 ||
+                          event.metaKey ||
+                          event.ctrlKey ||
+                          event.shiftKey ||
+                          event.altKey
+                        ) {
+                          return;
+                        }
+                        event.preventDefault();
+                        onSelectSession?.(session.id);
+                      }}
+                      className={rowClassName}
+                    >
+                      {rowChildren}
+                    </a>
+                  );
+                }
+                return (
+                  <button
+                    key={session.id}
+                    type="button"
+                    onClick={() => onSelectSession?.(session.id)}
+                    className={rowClassName}
+                  >
+                    {rowChildren}
                   </button>
                 );
               })}

@@ -1,6 +1,6 @@
 'use client';
 
-import { memo, useEffect, useRef, useState } from 'react';
+import { memo, useEffect, useRef, useState, type MouseEvent } from 'react';
 import {
   Archive,
   ArchiveRestore,
@@ -39,6 +39,7 @@ export interface SessionItemProps extends SessionItemHandlers {
   projectName?: string;
   projects?: SidebarProject[];
   simple?: boolean;
+  href?: string;
 }
 
 function SessionItemBase({
@@ -48,6 +49,7 @@ function SessionItemBase({
   projectName,
   projects,
   simple = false,
+  href,
   onSelect,
   onRename,
   onDelete,
@@ -68,7 +70,7 @@ function SessionItemBase({
   // the right row even when a rename reorders the visible list out from
   // under it, unlike the sidebar's own index-based keyboard-focus tracking,
   // which is exactly what went stale and left the ring on a neighboring row.
-  const selectButtonRef = useRef<HTMLButtonElement>(null);
+  const selectButtonRef = useRef<HTMLAnchorElement | HTMLButtonElement>(null);
   const returnFocusOnExitRef = useRef(false);
 
   useEffect(() => {
@@ -95,7 +97,44 @@ function SessionItemBase({
     setIsRenaming(false);
   };
 
-  const preview = session.lastMessage ?? session.preview;
+  const rowLabel = session.title || t('sidebar.untitled', 'Untitled');
+  const rowTitle = projectName
+    ? `${rowLabel} (${t('sidebar.inProject', 'in {{name}}', { name: projectName })})`
+    : rowLabel;
+
+  const handleRowActivate = (event: MouseEvent) => {
+    if (
+      event.defaultPrevented ||
+      event.button !== 0 ||
+      event.metaKey ||
+      event.ctrlKey ||
+      event.shiftKey ||
+      event.altKey
+    ) {
+      return;
+    }
+    event.preventDefault();
+    onSelect(session.id);
+  };
+
+  const rowContent = (
+    <div className="flex min-w-0 items-center gap-1.5">
+      {session.starred && <Star className="h-3 w-3 shrink-0 fill-amber-400 text-amber-400" />}
+      {session.runState === 'running' && (
+        <span
+          data-testid={`session-running-${session.id}`}
+          className="relative flex h-2 w-2 shrink-0"
+        >
+          <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-primary opacity-75 motion-reduce:animate-none" />
+          <span className="relative inline-flex h-2 w-2 rounded-full bg-primary" />
+          <span className="sr-only">{t('sidebar.running', 'Running')}</span>
+        </span>
+      )}
+      <span className="truncate text-sm font-medium text-[hsl(var(--foreground))]">{rowLabel}</span>
+    </div>
+  );
+
+  const rowClassName = 'flex h-[34px] min-w-0 flex-1 items-center overflow-hidden px-3 text-left';
 
   if (isRenaming) {
     return (
@@ -136,42 +175,35 @@ function SessionItemBase({
       )}
     >
       <div className="flex items-center">
-        <button
-          ref={selectButtonRef}
-          type="button"
-          onClick={() => onSelect(session.id)}
-          onDoubleClick={() => setIsRenaming(true)}
-          aria-current={isActive ? 'page' : undefined}
-          className="min-w-0 flex-1 overflow-hidden px-3 py-2 text-left"
-        >
-          <div className="flex items-center gap-1.5">
-            {session.starred && <Star className="h-3 w-3 shrink-0 fill-amber-400 text-amber-400" />}
-            {session.runState === 'running' && (
-              <span
-                data-testid={`session-running-${session.id}`}
-                className="relative flex h-2 w-2 shrink-0"
-              >
-                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-primary opacity-75 motion-reduce:animate-none" />
-                <span className="relative inline-flex h-2 w-2 rounded-full bg-primary" />
-                <span className="sr-only">{t('sidebar.running', 'Running')}</span>
-              </span>
-            )}
-            <span
-              title={session.title || t('sidebar.untitled', 'Untitled')}
-              className="truncate text-sm font-medium text-[hsl(var(--foreground))]"
-            >
-              {session.title || t('sidebar.untitled', 'Untitled')}
-            </span>
-          </div>
-          {preview && (
-            <div className="truncate text-xs text-[hsl(var(--muted-foreground))]">{preview}</div>
-          )}
-          {projectName && (
-            <div className="mt-0.5 truncate text-[12px] text-[hsl(var(--muted-foreground))]">
-              {t('sidebar.inProject', 'in {{name}}', { name: projectName })}
-            </div>
-          )}
-        </button>
+        {href ? (
+          <a
+            ref={(el) => {
+              selectButtonRef.current = el;
+            }}
+            href={href}
+            onClick={handleRowActivate}
+            onDoubleClick={() => setIsRenaming(true)}
+            aria-current={isActive ? 'page' : undefined}
+            title={rowTitle}
+            className={rowClassName}
+          >
+            {rowContent}
+          </a>
+        ) : (
+          <button
+            ref={(el) => {
+              selectButtonRef.current = el;
+            }}
+            type="button"
+            onClick={() => onSelect(session.id)}
+            onDoubleClick={() => setIsRenaming(true)}
+            aria-current={isActive ? 'page' : undefined}
+            title={rowTitle}
+            className={rowClassName}
+          >
+            {rowContent}
+          </button>
+        )}
 
         {/*
          * Revealed on hover OR focus-within OR on any device that cannot hover.

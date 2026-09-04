@@ -4581,6 +4581,7 @@ export default function WebChatPage({ initialWorkMode }: WebChatPageProps) {
     navItems: sidebarNavItems,
     footerSlot: sidebarFooterSlot,
     collapsedFooterSlot: sidebarCollapsedFooterSlot,
+    getSessionHref: (session: SidebarSession) => `/chat/${encodeURIComponent(session.id)}`,
     // GOV-19: the two props the shared Sidebar's usage widget needs.
     showUsageWidget: managedUsageSummary !== null,
     budgetPercent: managedBudgetPercent,
