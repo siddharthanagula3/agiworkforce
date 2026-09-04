@@ -2,6 +2,7 @@ pub mod account;
 pub mod api;
 pub mod billing;
 pub mod commands;
+pub mod crash_reporter;
 pub mod diagnostics;
 pub mod error;
 pub mod filesystem;
