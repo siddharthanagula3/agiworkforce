@@ -18,6 +18,7 @@ import {
   getManagedSkillDirectoryForPlugins,
   getManagedSkillLayers,
   getManagedSkillPluginOwners,
+  invalidateManagedSkillCatalogCache,
   parseSkillLayersConfig,
   resetManagedSkillCatalogCacheForTests,
 } from './skill-catalog-service';
@@ -101,6 +102,38 @@ describe('managed Skill catalog service', () => {
       }),
     );
     expect(second).toBe(first);
+  });
+
+  it('forces a fresh read on the next call instead of replaying a poisoned cache', async () => {
+    const first = await getManagedSkillDirectory();
+    expect(first.some((entry) => entry.name === 'design-review')).toBe(true);
+
+    await writeFile(
+      join(root, 'design-review', 'SKILL.md'),
+      [
+        '---',
+        'name: design-review',
+        'description: Revised after a retry-triggering failure.',
+        '---',
+        '',
+        'Inspect the rendered interface and cite concrete defects.',
+      ].join('\n'),
+      'utf-8',
+    );
+
+    const stillCached = await getManagedSkillDirectory();
+    expect(stillCached).toBe(first);
+
+    invalidateManagedSkillCatalogCache();
+
+    const afterInvalidation = await getManagedSkillDirectory();
+    expect(afterInvalidation).not.toBe(first);
+    expect(afterInvalidation).toContainEqual(
+      expect.objectContaining({
+        name: 'design-review',
+        description: 'Revised after a retry-triggering failure.',
+      }),
+    );
   });
 
   it('always loads the canonical bundled root before optional overlays', () => {
