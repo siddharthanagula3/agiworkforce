@@ -21,9 +21,10 @@ export function isEntitledEnterpriseSubscriptionStatus(
   status: string | null | undefined,
   collectionReadOnly: boolean,
 ): boolean {
+  if (collectionReadOnly) return false;
   const normalized = (status ?? '').trim().toLowerCase();
   if ((ENTERPRISE_GRACE_SUBSCRIPTION_STATUSES as readonly string[]).includes(normalized)) {
-    return !collectionReadOnly;
+    return true;
   }
   return isEntitledSubscriptionStatus(normalized);
 }

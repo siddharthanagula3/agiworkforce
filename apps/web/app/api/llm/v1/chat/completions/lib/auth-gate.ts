@@ -1,6 +1,7 @@
 import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
+import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import { withRateLimit } from '@/lib/rate-limit';
 import { getClerkAuthUser } from '@/lib/api-auth';
 import { SubscriptionService, type SubscriptionInfo } from '@/lib/services/subscription-service';
@@ -17,7 +18,6 @@ import { isMfaRequiredError } from '@/lib/mfa-policy-gate';
 import { isIpNotAllowedError } from '@/lib/ip-allow-list-gate';
 import { logger } from '@/lib/logger';
 import { getNeonDb } from '@/lib/server/neon-db';
-import { resolveActiveOrganizationId } from '@/lib/services/active-workspace-service';
 import { readOrganizationCollectionState } from '@/lib/services/enterprise-collection-state';
 import {
   resolveSubscriptionAccess,
@@ -27,13 +27,45 @@ import { resolveAuthenticatedSurface } from './request-surface';
 
 const ENTERPRISE_PLAN_TIER = 'enterprise';
 
+/**
+ * The organization an enterprise subscription actually funds: the org owned
+ * by the subscriber (`organizations.owner_user_id`), or failing that, an
+ * organization the caller holds a seat in. Deliberately independent of
+ * `resolveActiveOrganizationId`, which honors the caller-supplied
+ * `x-agi-organization-id` header (including the documented `personal`
+ * value), a delinquent org's own owner or member can send that header to
+ * pick which organization gets consulted, which must never be the mechanism
+ * that decides whether a 91-day-overdue enterprise contract still buys
+ * unlimited managed completions.
+ */
+async function resolveEnterpriseFundingOrganizationId(
+  db: Pick<DatabaseAdapter, 'query'>,
+  userId: string,
+): Promise<string | null> {
+  const [row] = await db.query<{ organization_id: string }>(
+    `select organization_id
+       from (
+         select o.id as organization_id, 0 as priority
+           from public.organizations o
+          where o.owner_user_id = $1
+         union all
+         select m.organization_id, 1 as priority
+           from public.organization_members m
+          where m.user_id = $1
+       ) funding
+      order by priority asc
+      limit 1`,
+    [userId],
+  );
+  return row?.organization_id ?? null;
+}
+
 async function resolveEnterpriseCollectionAccessState(
   userId: string,
-  request: NextRequest,
 ): Promise<EnterpriseCollectionAccessState> {
   try {
     const db = getNeonDb();
-    const organizationId = await resolveActiveOrganizationId(db, userId, request);
+    const organizationId = await resolveEnterpriseFundingOrganizationId(db, userId);
     if (!organizationId) return { readOnly: false };
     const state = await readOrganizationCollectionState(db, organizationId);
     return { readOnly: state.readOnly };
@@ -207,13 +239,16 @@ export async function runAuthGate(request: NextRequest): Promise<AuthGateResult>
 
   const enterpriseCollection =
     subscription.plan_tier?.toLowerCase() === ENTERPRISE_PLAN_TIER
-      ? await resolveEnterpriseCollectionAccessState(userId, request)
+      ? await resolveEnterpriseCollectionAccessState(userId)
       : undefined;
 
-  if (
-    !resolveSubscriptionAccess(subscription.status, subscription.plan_tier, enterpriseCollection)
-      .managedExecution
-  ) {
+  const access = resolveSubscriptionAccess(
+    subscription.status,
+    subscription.plan_tier,
+    enterpriseCollection,
+  );
+
+  if (!access.managedExecution) {
     if (isFreePlanTier(subscription.plan_tier)) {
       return enforceManagedCloudSurface(request, {
         ok: true,
@@ -227,14 +262,18 @@ export async function runAuthGate(request: NextRequest): Promise<AuthGateResult>
       });
     }
 
+    const billingReadOnly = enterpriseCollection?.readOnly === true;
+
     return {
       ok: false,
       response: NextResponse.json(
         {
           error: {
-            message: `Subscription is ${subscription.status}. Please update your payment method.`,
+            message: billingReadOnly
+              ? 'Your workspace is read-only: enterprise billing collection is past the read-only threshold. Ask your billing owner to resolve the outstanding invoice.'
+              : `Subscription is ${subscription.status}. Please update your payment method.`,
             type: 'invalid_request_error',
-            code: 'subscription_inactive',
+            code: billingReadOnly ? 'billing_read_only' : 'subscription_inactive',
           },
         },
         { status: 403 },

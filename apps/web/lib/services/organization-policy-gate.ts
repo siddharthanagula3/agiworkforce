@@ -30,6 +30,83 @@ export interface PolicyGateResult extends PolicyDecision {
 }
 
 /**
+ * The organization an enterprise billing contract actually funds: the org
+ * owned by the caller (`organizations.owner_user_id`), or failing that, an
+ * organization the caller holds a seat in. Used only as a billing-hold
+ * backstop for personal-scope requests, never as the workspace whose
+ * `AdminPolicy` governs the request, that stays `resolveActiveOrganizationId`,
+ * which honors the caller's explicit workspace selection including the
+ * documented `x-agi-organization-id: personal` header. A read-only
+ * organization's own owner or a seat member can send that header to select
+ * personal scope; the billing hold on their real, unpaid contract must not
+ * disappear because of it.
+ */
+async function resolveEnterpriseFundingOrganizationId(
+  db: DatabaseAdapter,
+  userId: string,
+): Promise<string | null> {
+  const [row] = await db.query<{ organization_id: string }>(
+    `select organization_id
+       from (
+         select o.id as organization_id, 0 as priority
+           from public.organizations o
+          where o.owner_user_id = $1
+         union all
+         select m.organization_id, 1 as priority
+           from public.organization_members m
+          where m.user_id = $1
+       ) funding
+      order by priority asc
+      limit 1`,
+    [userId],
+  );
+  return row?.organization_id ?? null;
+}
+
+async function evaluateFundingOrganizationBillingHold(
+  db: DatabaseAdapter,
+  userId: string,
+  ask: PolicyAsk,
+): Promise<PolicyGateResult | null> {
+  let fundingOrganizationId: string | null;
+  try {
+    fundingOrganizationId = await resolveEnterpriseFundingOrganizationId(db, userId);
+  } catch (error) {
+    logger.error(
+      { error, userId, resource: ask.resource },
+      '[org-policy] funding organization lookup failed; billing hold treated as not applicable',
+    );
+    return null;
+  }
+  if (!fundingOrganizationId) return null;
+
+  let collectionState = CURRENT_COLLECTION_STATE;
+  try {
+    collectionState = await readOrganizationCollectionState(db, fundingOrganizationId);
+  } catch (error) {
+    logger.error(
+      { error, userId, organizationId: fundingOrganizationId, resource: ask.resource },
+      '[org-policy] collection state read failed; billing hold treated as not applicable',
+    );
+    return null;
+  }
+
+  const billingHold = evaluateBillingHold(ask, collectionState);
+  if (!billingHold) return null;
+
+  logger.info(
+    {
+      userId,
+      organizationId: fundingOrganizationId,
+      resource: ask.resource,
+      code: billingHold.code,
+    },
+    '[org-policy] personal-scope request denied by funding organization billing hold',
+  );
+  return { ...billingHold, organizationId: fundingOrganizationId };
+}
+
+/**
  * Resolves the caller's active workspace and asks the evaluator one question.
  *
  * Two requests are deliberately unconstrained and answered `unscoped`:
@@ -43,6 +120,12 @@ export interface PolicyGateResult extends PolicyDecision {
  * denied: this gate governs an administrator's product configuration, and a
  * transient database error must not look to a member like a policy decision.
  * Tenant isolation does not depend on this path, that is enforced by RLS.
+ *
+ * Personal scope is unconstrained for policy, but not for an unpaid
+ * enterprise contract: before answering `unscoped`, a resolved personal scope
+ * is checked against the caller's own funding organization's billing hold, so
+ * that scope selection is never the mechanism that decides whether a
+ * delinquent enterprise contract still buys managed compute.
  */
 export async function evaluateActiveWorkspacePolicy(
   db: DatabaseAdapter,
@@ -59,7 +142,11 @@ export async function evaluateActiveWorkspacePolicy(
     return { ...UNSCOPED_POLICY_DECISION, organizationId: null };
   }
 
-  if (!organizationId) return { ...UNSCOPED_POLICY_DECISION, organizationId: null };
+  if (!organizationId) {
+    const fundingBillingHold = await evaluateFundingOrganizationBillingHold(db, userId, ask);
+    if (fundingBillingHold) return fundingBillingHold;
+    return { ...UNSCOPED_POLICY_DECISION, organizationId: null };
+  }
 
   let collectionState = CURRENT_COLLECTION_STATE;
   try {

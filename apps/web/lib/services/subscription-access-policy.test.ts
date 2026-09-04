@@ -164,6 +164,18 @@ describe('subscription access policy · enterprise collection grace', () => {
     expect(access.effectivePlanTier).toBe('free');
   });
 
+  it('drops entitlement for an active enterprise account once read-only, the send_invoice case where Stripe status never leaves active', () => {
+    const access = resolveSubscriptionAccess('active', 'enterprise', { readOnly: true });
+    for (const key of ACCESS_KEYS) expect(access[key]).toBe(false);
+    expect(access.effectivePlanTier).toBe('free');
+  });
+
+  it('keeps an active enterprise account entitled while not read-only', () => {
+    const access = resolveSubscriptionAccess('active', 'enterprise', { readOnly: false });
+    for (const key of ACCESS_KEYS) expect(access[key]).toBe(true);
+    expect(access.effectivePlanTier).toBe('enterprise');
+  });
+
   it('leaves the ordinary rank ladder in charge when no collection state is supplied', () => {
     const access = resolveSubscriptionAccess('past_due', 'enterprise');
     for (const key of ACCESS_KEYS) expect(access[key]).toBe(false);
