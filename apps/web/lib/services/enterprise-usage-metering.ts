@@ -167,33 +167,6 @@ async function resolveMeterEventName(
   return meter.event_name;
 }
 
-export async function readEnterpriseUsageAllowance(
-  db: DatabaseAdapter,
-  organizationId: string,
-  now: Date = new Date(),
-): Promise<EnterpriseUsageAllowance | null> {
-  const [contract] = await db.query<EnterpriseBillingContractMeteringRow>(
-    `select organization_id, stripe_customer_id, included_usage_cents_per_period,
-            committed_usage_block_cents, overage_stripe_price_id, metadata
-       from public.organization_billing_contracts
-      where organization_id = $1
-        and ended_at is null
-      limit 1`,
-    [organizationId],
-  );
-  if (!contract) return null;
-
-  const period = resolveEnterpriseUsagePeriod(now);
-  const consumedCents = await getOrganizationMonthToDateSpendCents(organizationId, db, period);
-  return computeEnterpriseUsageAllowance({
-    organizationId,
-    period,
-    includedUsageCentsPerPeriod: toNumber(contract.included_usage_cents_per_period),
-    committedUsageBlockCents: toNumber(contract.committed_usage_block_cents),
-    consumedCents,
-  });
-}
-
 export async function reportEnterpriseOverageUsage(input: {
   db: DatabaseAdapter;
   stripe: Stripe;
