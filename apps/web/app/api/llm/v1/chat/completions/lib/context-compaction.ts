@@ -236,8 +236,9 @@ async function resolveCompactionSummary(params: {
       `select compaction_summary, compaction_summary_through_message_id
          from web_conversations
         where id = $1
+          and user_id = $2
         limit 1`,
-      [params.conversationId],
+      [params.conversationId, params.userId],
     ),
     params.db.query<{ id: string }>(
       `select id from web_messages
@@ -290,8 +291,9 @@ async function resolveCompactionSummary(params: {
     `update web_conversations
         set compaction_summary = $1,
             compaction_summary_through_message_id = $2
-      where id = $3`,
-    [summary, boundaryMessageId, params.conversationId],
+      where id = $3
+        and user_id = $4`,
+    [summary, boundaryMessageId, params.conversationId, params.userId],
   );
 
   return summary;
