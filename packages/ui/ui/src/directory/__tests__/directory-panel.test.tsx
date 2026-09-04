@@ -183,6 +183,81 @@ describe('DirectoryPanel layout', () => {
   });
 });
 
+describe('DirectoryPanel install consent', () => {
+  it('installs straight away when the entry carries no notice', () => {
+    const install = vi.fn();
+    renderPanel('plugins', { install });
+    fireEvent.click(screen.getByRole('button', { name: 'Add Productivity' }));
+    expect(install).toHaveBeenCalledWith('plugins', 'productivity');
+  });
+
+  it('asks first when the surface says what installing does', async () => {
+    const install = vi.fn();
+    renderPanel('plugins', {
+      install,
+      plugins: {
+        installable: true,
+        entries: [
+          {
+            id: 'productivity',
+            name: 'Productivity',
+            description: 'Manage tasks',
+            installNotice: "Installing adds this pack's skills to your account.",
+          },
+        ],
+      },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Add Productivity' }));
+    expect(await screen.findByText('Install Productivity?')).toBeTruthy();
+    expect(
+      screen.getByText("Installing adds this pack's skills to your account."),
+    ).toBeTruthy();
+    expect(install).not.toHaveBeenCalled();
+  });
+
+  it('installs once the notice is accepted', async () => {
+    const install = vi.fn();
+    renderPanel('plugins', {
+      install,
+      plugins: {
+        installable: true,
+        entries: [
+          {
+            id: 'productivity',
+            name: 'Productivity',
+            description: 'Manage tasks',
+            installNotice: 'This pack reuses connectors you have already connected.',
+          },
+        ],
+      },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Add Productivity' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Install' }));
+    await waitFor(() => expect(install).toHaveBeenCalledWith('plugins', 'productivity'));
+  });
+
+  it('does not install when the notice is cancelled', async () => {
+    const install = vi.fn();
+    renderPanel('plugins', {
+      install,
+      plugins: {
+        installable: true,
+        entries: [
+          {
+            id: 'productivity',
+            name: 'Productivity',
+            description: 'Manage tasks',
+            installNotice: 'This pack declares no skills.',
+          },
+        ],
+      },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Add Productivity' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Cancel' }));
+    expect(install).not.toHaveBeenCalled();
+  });
+});
+
 describe('DirectoryPanel detail', () => {
   it('opens the detail inline and returns with Back', async () => {
     renderPanel();

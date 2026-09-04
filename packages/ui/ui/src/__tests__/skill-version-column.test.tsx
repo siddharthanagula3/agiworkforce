@@ -43,7 +43,7 @@ describe('skill version column', () => {
     mount([skill({ name: 'Unversioned' })]);
 
     const row = screen.getByText('Unversioned').closest('tr');
-    expect(within(row as HTMLElement).getByText(', ')).toBeTruthy();
+    expect(within(row as HTMLElement).getByText('\u2013')).toBeTruthy();
   });
 
   it('never labels the column as a date it cannot supply', () => {

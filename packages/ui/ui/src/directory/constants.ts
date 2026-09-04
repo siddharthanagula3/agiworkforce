@@ -138,3 +138,6 @@ export const SHOW_LESS_LABEL = 'Show less';
 export const CHIP_PREVIEW_COUNT = 8;
 
 export const MARKETPLACE_UNAVAILABLE_COPY = 'Plugin marketplaces are not available yet.';
+
+export const INSTALL_CONFIRM_TITLE_PREFIX = 'Install';
+export const INSTALL_CONFIRM_CANCEL_LABEL = 'Cancel';

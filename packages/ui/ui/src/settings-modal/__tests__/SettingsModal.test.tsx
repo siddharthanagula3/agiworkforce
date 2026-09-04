@@ -161,17 +161,6 @@ describe('SettingsModal nav (web IA)', () => {
     expect(bottomFade.className).toContain('opacity-0');
   });
 
-  it('keeps the Skills lifecycle and download controls visible on narrow screens', () => {
-    renderModal({ activeSection: 'skills' });
-
-    expect(screen.getByRole('columnheader', { name: 'Author' }).className).toContain('hidden');
-    expect(screen.getByRole('columnheader', { name: 'Author' }).className).toContain(
-      'sm:table-cell',
-    );
-    expect(screen.getByRole('columnheader', { name: 'Status' }).className).toContain('w-[36%]');
-    expect(screen.getByRole('link', { name: 'Download docx SKILL.md' })).toBeTruthy();
-    expect(screen.getByText('Included')).toBeTruthy();
-  });
 
   it('renders no New skill control or Actions column when the adapter cannot author skills', () => {
     renderModal({ activeSection: 'skills' });
@@ -551,60 +540,8 @@ describe('Connectors pane (table)', () => {
     expect(screen.queryByText(/Scopes for/)).toBeNull();
   });
 
-  it('Add dropdown offers Browse connectors and Add custom connector', () => {
-    renderModal();
-    fireEvent.click(screen.getByRole('button', { name: /^Add$/ }));
-    const dialog = screen.getByRole('dialog');
-    expect(dialog.contains(screen.getByRole('menu'))).toBe(true);
-    expect(screen.getByRole('menuitem', { name: 'Browse connectors' })).toBeTruthy();
-    expect(screen.getByRole('menuitem', { name: 'Add custom connector' })).toBeTruthy();
-  });
 
-  it('Browse connectors opens the shared directory with Skills/Connectors/Plugins tabs', () => {
-    renderModal();
-    fireEvent.click(screen.getByRole('button', { name: /^Add$/ }));
-    fireEvent.click(screen.getByRole('menuitem', { name: 'Browse connectors' }));
 
-    expect(screen.getByText('Browse directory')).toBeTruthy();
-    const tablist = screen.getByRole('tablist', { name: 'Directory sections' });
-    expect(within(tablist).getByRole('tab', { name: 'Skills' })).toBeTruthy();
-    expect(within(tablist).getByRole('tab', { name: 'Connectors' })).toBeTruthy();
-    expect(within(tablist).getByRole('tab', { name: 'Plugins' })).toBeTruthy();
-
-    // Connectors tab shows the catalog cards (still no fake Connect for
-    // non-connectable entries, and no local-only connectors).
-    expect(screen.getByText('Notion')).toBeTruthy();
-    expect(screen.queryByText('Local Filesystem')).toBeNull();
-
-    // Skills tab shows loaded skills as /name cards without any counts.
-    fireEvent.click(within(tablist).getByRole('tab', { name: 'Skills' }));
-    expect(screen.getByText('/humanizer')).toBeTruthy();
-
-    // Plugins tab reuses the discoverable catalogue without pretending those
-    // entries are installed or installable on this surface.
-    fireEvent.click(within(tablist).getByRole('tab', { name: 'Plugins' }));
-    expect(screen.getByText('GitHub Automation')).toBeTruthy();
-    expect(screen.getByText('Catalogue preview')).toBeTruthy();
-    expect(
-      screen.getByRole('link', { name: 'View GitHub Automation details' }).getAttribute('href'),
-    ).toBe('/plugins/github-automation');
-    expect(screen.queryByRole('button', { name: /install github automation/i })).toBeNull();
-  });
-
-  it('splits the browse catalogue into what this environment can use and what it cannot', () => {
-    renderModal({}, { connectConnector: vi.fn() });
-    fireEvent.click(screen.getByRole('button', { name: /^Add$/ }));
-    fireEvent.click(screen.getByRole('menuitem', { name: 'Browse connectors' }));
-
-    const usable = screen.getByText('Available in this environment (1)').closest('section')!;
-    expect(within(usable).getByText('GitHub')).toBeTruthy();
-
-    const preview = screen.getByText('Not connectable here yet (2)').closest('section')!;
-    expect(within(preview).getByText('Notion')).toBeTruthy();
-    expect(within(preview).getByText('Stripe')).toBeTruthy();
-    expect(within(preview).queryByText('GitHub')).toBeNull();
-    expect(within(preview).queryByRole('button', { name: /^Connect / })).toBeNull();
-  });
 
   it('opens the custom-connector docs without tearing down the settings modal', () => {
     renderModal();
@@ -616,178 +553,13 @@ describe('Connectors pane (table)', () => {
     expect(learnMore.getAttribute('rel')).toContain('noreferrer');
   });
 
-  it('shows honest loading states for directory catalogues', () => {
-    renderModal({}, { skills: [], skillsLoading: true, pluginCatalog: [], pluginsLoading: true });
-    fireEvent.click(screen.getByRole('button', { name: /^Add$/ }));
-    fireEvent.click(screen.getByRole('menuitem', { name: 'Browse connectors' }));
 
-    const tablist = screen.getByRole('tablist', { name: 'Directory sections' });
-    fireEvent.click(within(tablist).getByRole('tab', { name: 'Skills' }));
-    expect(screen.getByText('Loading skills…')).toBeTruthy();
-    fireEvent.click(within(tablist).getByRole('tab', { name: 'Plugins' }));
-    expect(screen.getByText('Loading plugins…')).toBeTruthy();
-  });
 
-  const MULTI_PLUGIN_CATALOG = [
-    {
-      id: 'engineering-pack',
-      name: 'Engineering Pack',
-      description: 'Review, debug, and design-check.',
-      enabled: false,
-      author: 'AGI',
-      category: 'Developer',
-      installable: true,
-      declaredSkills: ['code-review'],
-      requiredConnectors: ['github'],
-      examplePrompts: ['Review this pull request for bugs and style issues.'],
-      updatedAt: '2026-08-20T00:00:00.000Z',
-    },
-    {
-      id: 'writing-pack',
-      name: 'Writing Pack',
-      description: 'Draft, present, and cite.',
-      enabled: false,
-      author: 'AGI',
-      category: 'Productivity',
-      installable: true,
-      declaredSkills: ['document-creation'],
-      requiredConnectors: [],
-      examplePrompts: [],
-      updatedAt: '2026-08-01T00:00:00.000Z',
-    },
-  ];
 
-  it('filters the plugin catalogue by category', () => {
-    renderModal({}, { pluginCatalog: MULTI_PLUGIN_CATALOG });
-    fireEvent.click(screen.getByRole('button', { name: /^Add$/ }));
-    fireEvent.click(screen.getByRole('menuitem', { name: 'Browse connectors' }));
-    fireEvent.click(
-      within(screen.getByRole('tablist', { name: 'Directory sections' })).getByRole('tab', {
-        name: 'Plugins',
-      }),
-    );
 
-    expect(screen.getByText('Engineering Pack')).toBeTruthy();
-    expect(screen.getByText('Writing Pack')).toBeTruthy();
 
-    fireEvent.change(screen.getByRole('combobox', { name: 'Filter by category' }), {
-      target: { value: 'Developer' },
-    });
-    expect(screen.getByText('Engineering Pack')).toBeTruthy();
-    expect(screen.queryByText('Writing Pack')).toBeNull();
-  });
 
-  it('sorts the plugin catalogue by recently updated', () => {
-    renderModal({}, { pluginCatalog: MULTI_PLUGIN_CATALOG });
-    fireEvent.click(screen.getByRole('button', { name: /^Add$/ }));
-    fireEvent.click(screen.getByRole('menuitem', { name: 'Browse connectors' }));
-    fireEvent.click(
-      within(screen.getByRole('tablist', { name: 'Directory sections' })).getByRole('tab', {
-        name: 'Plugins',
-      }),
-    );
 
-    const grid = document.getElementById('settings-directory-plugins')!;
-    const namesInOrder = () =>
-      Array.from(grid.querySelectorAll('span.truncate')).map((el) => el.textContent);
-    expect(namesInOrder()).toEqual(['Engineering Pack', 'Writing Pack']);
-
-    fireEvent.change(screen.getByRole('combobox', { name: 'Sort by' }), {
-      target: { value: 'updated' },
-    });
-    expect(namesInOrder()).toEqual(['Engineering Pack', 'Writing Pack']);
-  });
-
-  it('offers Most popular only once at least one entry carries a real install count', () => {
-    renderModal({}, { pluginCatalog: MULTI_PLUGIN_CATALOG });
-    fireEvent.click(screen.getByRole('button', { name: /^Add$/ }));
-    fireEvent.click(screen.getByRole('menuitem', { name: 'Browse connectors' }));
-    fireEvent.click(
-      within(screen.getByRole('tablist', { name: 'Directory sections' })).getByRole('tab', {
-        name: 'Plugins',
-      }),
-    );
-    expect(
-      within(screen.getByRole('combobox', { name: 'Sort by' })).queryByText('Most popular'),
-    ).toBeNull();
-  });
-
-  it('sorts the plugin catalogue by install count once real counts are wired', () => {
-    renderModal(
-      {},
-      {
-        pluginCatalog: [
-          { ...MULTI_PLUGIN_CATALOG[0]!, installCount: 5 },
-          { ...MULTI_PLUGIN_CATALOG[1]!, installCount: 90 },
-        ],
-      },
-    );
-    fireEvent.click(screen.getByRole('button', { name: /^Add$/ }));
-    fireEvent.click(screen.getByRole('menuitem', { name: 'Browse connectors' }));
-    fireEvent.click(
-      within(screen.getByRole('tablist', { name: 'Directory sections' })).getByRole('tab', {
-        name: 'Plugins',
-      }),
-    );
-
-    const grid = document.getElementById('settings-directory-plugins')!;
-    fireEvent.change(screen.getByRole('combobox', { name: 'Sort by' }), {
-      target: { value: 'popular' },
-    });
-    const namesInOrder = Array.from(grid.querySelectorAll('span.truncate')).map(
-      (el) => el.textContent,
-    );
-    expect(namesInOrder).toEqual(['Writing Pack', 'Engineering Pack']);
-  });
-
-  it('renders a category chip and install count on a plugin card', () => {
-    renderModal(
-      {},
-      {
-        pluginCatalog: [
-          { ...MULTI_PLUGIN_CATALOG[0]!, installCount: 42 },
-          MULTI_PLUGIN_CATALOG[1]!,
-        ],
-      },
-    );
-    fireEvent.click(screen.getByRole('button', { name: /^Add$/ }));
-    fireEvent.click(screen.getByRole('menuitem', { name: 'Browse connectors' }));
-    fireEvent.click(
-      within(screen.getByRole('tablist', { name: 'Directory sections' })).getByRole('tab', {
-        name: 'Plugins',
-      }),
-    );
-
-    const grid = within(document.getElementById('settings-directory-plugins')!);
-    expect(grid.getByText('Developer')).toBeTruthy();
-    expect(grid.getByText('Productivity')).toBeTruthy();
-    expect(grid.getByText('42 installs')).toBeTruthy();
-  });
-
-  it('shows bundled skills, connectors, and try-asking prompts before installing', () => {
-    const installPlugin = vi.fn();
-    renderModal({}, { pluginCatalog: MULTI_PLUGIN_CATALOG, installPlugin });
-    fireEvent.click(screen.getByRole('button', { name: /^Add$/ }));
-    fireEvent.click(screen.getByRole('menuitem', { name: 'Browse connectors' }));
-    fireEvent.click(
-      within(screen.getByRole('tablist', { name: 'Directory sections' })).getByRole('tab', {
-        name: 'Plugins',
-      }),
-    );
-
-    fireEvent.click(screen.getAllByRole('button', { name: 'Install' })[0]!);
-    const dialog = screen.getByRole('dialog');
-    expect(within(dialog).getByText('Install Engineering Pack?')).toBeTruthy();
-    expect(within(dialog).getByText('code-review')).toBeTruthy();
-    expect(within(dialog).getByText('github')).toBeTruthy();
-    expect(
-      within(dialog).getByText(/Review this pull request for bugs and style issues\./),
-    ).toBeTruthy();
-    expect(within(dialog).getByText(/does not connect them for you/i)).toBeTruthy();
-
-    fireEvent.click(within(dialog).getByRole('button', { name: 'Install' }));
-    expect(installPlugin).toHaveBeenCalledWith('engineering-pack');
-  });
 
   // CONNECTOR-FORM-PASSWORD-AUTOFILL-01
   it('opts the custom-connector fields out of password-manager autofill', () => {
@@ -963,7 +735,7 @@ describe('Connectors pane (table)', () => {
 });
 
 describe('Skills pane (table)', () => {
-  it('renders a Skill/Author table with honest author labels and a Browse button', () => {
+  it('renders a Skill/Author table with honest author labels', () => {
     renderModal({ activeSection: 'skills' });
     expect(
       screen.getByText(
@@ -975,23 +747,10 @@ describe('Skills pane (table)', () => {
     expect(screen.getByText('humanizer')).toBeTruthy();
     expect(screen.getByText('You')).toBeTruthy(); // personal source
     expect(screen.getByText('AGI')).toBeTruthy(); // bundled source
-    // No Add dropdown: there is no real create/upload skill capability.
     expect(screen.queryByRole('button', { name: /^Add$/ })).toBeNull();
-
-    fireEvent.click(screen.getByRole('button', { name: 'Browse' }));
-    expect(screen.getByText('Browse directory')).toBeTruthy();
-    expect(screen.getByText('/humanizer')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Browse' })).toBeNull();
   });
 
-  it('delegates skill downloads to the native host when it owns external navigation', () => {
-    const openHref = vi.fn();
-    renderModal({ activeSection: 'skills' }, { openHref });
-
-    fireEvent.click(screen.getByRole('button', { name: 'Download docx SKILL.md' }));
-
-    expect(openHref).toHaveBeenCalledWith('/api/skills/docx/download');
-    expect(screen.queryByRole('link', { name: 'Download docx SKILL.md' })).toBeNull();
-  });
 });
 
 describe('Plugins pane (table)', () => {
@@ -1003,7 +762,7 @@ describe('Plugins pane (table)', () => {
       ),
     ).toBeTruthy();
     expect(screen.queryByRole('button', { name: /^Add$/ })).toBeNull();
-    expect(screen.getByRole('button', { name: 'Browse' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Browse' })).toBeNull();
   });
 
   it('renders plugin rows with optional columns only when real data exists, and gates Add items on capabilities', () => {
@@ -1036,5 +795,36 @@ describe('Plugins pane (table)', () => {
     expect(screen.getByRole('menuitem', { name: 'Add marketplace' })).toBeTruthy();
     expect(screen.getByRole('menuitem', { name: 'Upload plugin' })).toBeTruthy();
     expect(screen.queryByRole('menuitem', { name: /Create/ })).toBeNull();
+  });
+});
+
+describe('Customize panels render the directory', () => {
+  const directoryAdapter = {
+    sections: ['skills', 'connectors', 'plugins'] as const,
+    skills: {
+      installable: true,
+      entries: [
+        { id: 'humanizer', name: 'humanizer', slashName: true, description: 'Rewrites text' },
+      ],
+      sortOptions: ['name'] as const,
+    },
+  };
+
+  it('replaces the skills table with the directory panel when an adapter is supplied', () => {
+    renderModal({ activeSection: 'skills', directoryAdapter });
+    expect(screen.getByPlaceholderText('Search skills')).toBeTruthy();
+    expect(screen.getByRole('button', { name: '/humanizer' })).toBeTruthy();
+    expect(screen.queryByRole('columnheader', { name: 'Skill' })).toBeNull();
+  });
+
+  it('keeps the legacy table when no directory adapter is supplied', () => {
+    renderModal({ activeSection: 'skills' });
+    expect(screen.getByRole('columnheader', { name: 'Skill' })).toBeTruthy();
+    expect(screen.queryByPlaceholderText('Search skills')).toBeNull();
+  });
+
+  it('renders a directory panel for every customize section', () => {
+    renderModal({ activeSection: 'connectors', directoryAdapter });
+    expect(screen.getByPlaceholderText('Search connectors')).toBeTruthy();
   });
 });
