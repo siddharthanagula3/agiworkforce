@@ -41,6 +41,7 @@ export interface UserScopedDb {
 export interface UserScopedDbOptions {
   apiKeyScope?: ApiKeyScope;
   mfaGateExemptForOwner?: boolean;
+  resolveOrganization?: boolean;
 }
 
 export const ACTIVE_ORG_HEADER = MANAGED_CLOUD_ORGANIZATION_HEADER;
@@ -72,11 +73,14 @@ export async function getUserScopedDb(
   request: NextRequest,
   options: UserScopedDbOptions = {},
 ): Promise<UserScopedDb> {
+  const resolveOrganization = options.resolveOrganization ?? true;
   const authHeader = request.headers.get('authorization');
   if (authHeader?.startsWith('Bearer ')) {
     const token = authHeader.substring(7);
     const { userId } = await getClerkAuthUser(request, options);
-    const organizationId = await resolveRequestOrganizationId(request, userId);
+    const organizationId = resolveOrganization
+      ? await resolveRequestOrganizationId(request, userId)
+      : null;
     setTenantScope({ userId, organizationId: organizationId ?? undefined });
     return {
       db: isApiKeyToken(token)
@@ -92,7 +96,9 @@ export async function getUserScopedDb(
     const token = await getToken();
     if (token) {
       await assertAccountActive(userId);
-      const organizationId = await resolveRequestOrganizationId(request, userId);
+      const organizationId = resolveOrganization
+        ? await resolveRequestOrganizationId(request, userId)
+        : null;
       setTenantScope({ userId, organizationId: organizationId ?? undefined });
       return {
         db: getRlsCapableDb().withUser(token).withOrg(organizationId),

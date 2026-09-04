@@ -55,7 +55,7 @@ async function handleGet(request: NextRequest) {
   const rateLimitResponse = await withRateLimit(request, 'settings-activity');
   if (rateLimitResponse) return rateLimitResponse;
 
-  const { db, userId } = await getUserScopedDb(request);
+  const { db, userId } = await getUserScopedDb(request, { resolveOrganization: false });
   const namespace = new URL(request.url).searchParams.get('namespace');
   const settings = await readSettings(db, userId);
 
@@ -73,7 +73,7 @@ async function handlePut(request: NextRequest) {
   const rateLimitResponse = await withRateLimit(request, 'settings-org-patch');
   if (rateLimitResponse) return rateLimitResponse;
 
-  const { db, userId } = await getUserScopedDb(request);
+  const { db, userId } = await getUserScopedDb(request, { resolveOrganization: false });
 
   let parsed: z.infer<typeof SettingsPatchSchema>;
   try {
