@@ -509,6 +509,49 @@ describe('getE2BExecutor, harness credentials', () => {
   });
 });
 
+describe('getE2BExecutor, full network interim guard', () => {
+  beforeEach(() => {
+    sessions.clear();
+    vi.clearAllMocks();
+    sandboxCounter = 0;
+    listedSandboxes = [];
+  });
+
+  it('refuses full network when a managed credential would enter the sandbox unproxied', async () => {
+    buildServerProviderAdapter.mockImplementation((providerId: string) => {
+      if (providerId === 'anthropic') return { config: { apiKey: 'sk-managed-anthropic' } };
+      throw new Error(`no managed key configured for ${providerId}`);
+    });
+    const { getE2BExecutor } = await import('../runtime');
+    const executor = await getE2BExecutor(
+      codeScope('code-full-guard', 'full', { templateId: 'claude' }),
+    );
+    expect(executor).toBeNull();
+    expect(create).not.toHaveBeenCalled();
+  });
+
+  it('still allows full network for a runtime with no harness credential', async () => {
+    const { getE2BExecutor } = await import('../runtime');
+    const executor = await getE2BExecutor(
+      codeScope('code-full-image', 'full', { templateId: 'code-interpreter-v1' }),
+    );
+    expect(executor).not.toBeNull();
+    expect(create).toHaveBeenCalledTimes(1);
+  });
+
+  it('lets an explicit credential proceed under full network', async () => {
+    const { getE2BExecutor } = await import('../runtime');
+    const executor = await getE2BExecutor(
+      codeScope('code-full-explicit', 'full', {
+        templateId: 'claude',
+        explicitCredential: { envVar: 'ANTHROPIC_API_KEY', value: 'sk-explicit' },
+      }),
+    );
+    expect(executor).not.toBeNull();
+    expect(create).toHaveBeenCalledTimes(1);
+  });
+});
+
 describe('getE2BExecutor, git operations', () => {
   beforeEach(() => {
     sessions.clear();
