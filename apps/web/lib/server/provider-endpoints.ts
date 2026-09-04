@@ -67,7 +67,7 @@ function normalizeRoot(url: string, versionSegment: string): string {
   return root;
 }
 
-function resolveProviderApiRoot(provider: ManagedProviderId): string {
+export function resolveProviderApiRoot(provider: ManagedProviderId): string {
   const { defaultRoot, envKey, versionSegment } = PROVIDER_ENDPOINTS[provider];
   const candidate = getOptionalEnv(envKey);
   if (!candidate) return defaultRoot;
@@ -84,6 +84,10 @@ function resolveProviderApiRoot(provider: ManagedProviderId): string {
     'Refusing *_BASE_URL override pointing to a non-allowlisted host (potential SSRF)',
   );
   return defaultRoot;
+}
+
+export function isManagedProviderId(value: string): value is ManagedProviderId {
+  return Object.prototype.hasOwnProperty.call(PROVIDER_ENDPOINTS, value);
 }
 
 export function providerApiUrl(provider: ManagedProviderId, path: string): string {
