@@ -1,9 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
 
+const tx = vi.hoisted(() => ({ query: vi.fn(), execute: vi.fn() }));
+
 const mocks = vi.hoisted(() => ({
   query: vi.fn(),
   execute: vi.fn(),
+  transaction: vi.fn(),
   createPortalSession: vi.fn(),
   listCustomers: vi.fn(),
 }));
@@ -30,6 +33,7 @@ vi.mock('@/lib/server/neon-db', () => ({
   getNeonDb: () => ({
     query: mocks.query,
     execute: mocks.execute,
+    transaction: mocks.transaction,
   }),
 }));
 vi.mock('stripe', () => ({
@@ -74,6 +78,11 @@ describe('POST /api/portal', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.execute.mockResolvedValue(1);
+    mocks.transaction.mockImplementation(async (callback: (transaction: typeof tx) => unknown) =>
+      callback(tx),
+    );
+    tx.execute.mockResolvedValue(1);
+    tx.query.mockResolvedValue([]);
     mocks.createPortalSession.mockResolvedValue({
       id: 'bps_1',
       url: 'https://billing.stripe.com/session/test',
@@ -154,7 +163,12 @@ describe('POST /api/portal', () => {
   describe('email fallback (BIZ-015: no cross-customer portal sessions)', () => {
     function unlinkedAccount() {
       mocks.query.mockResolvedValueOnce([]);
-      mocks.query.mockResolvedValueOnce([{ stripe_customer_id: null }]);
+      tx.query.mockImplementation(async (sql: string) => {
+        if (sql.includes('select stripe_customer_id from profiles')) {
+          return [{ stripe_customer_id: null }];
+        }
+        return [];
+      });
     }
 
     it('refuses a customer matched only by email, and links nothing', async () => {
@@ -168,6 +182,16 @@ describe('POST /api/portal', () => {
       expect(response.status).toBe(403);
       expect(mocks.createPortalSession).not.toHaveBeenCalled();
       expect(mocks.execute).not.toHaveBeenCalled();
+      expect(mocks.transaction).toHaveBeenCalled();
+      expect(tx.execute).toHaveBeenCalledWith('set local role app_rls');
+      expect(tx.query).toHaveBeenCalledWith(
+        expect.stringContaining("set_config('request.jwt.claim.sub', $1, true)"),
+        ['user-1', ''],
+      );
+      expect(tx.query).toHaveBeenCalledWith(
+        'select stripe_customer_id from profiles where id = $1 limit 1',
+        ['user-1'],
+      );
     });
 
     it('picks the customer whose metadata names the caller, not the email twin', async () => {
@@ -186,6 +210,10 @@ describe('POST /api/portal', () => {
         customer: 'cus_owned',
         return_url: 'https://agiworkforce.com/pricing',
       });
+      expect(tx.execute).toHaveBeenCalledWith(
+        'update profiles set stripe_customer_id = $1 where id = $2',
+        ['cus_owned', 'user-1'],
+      );
     });
   });
 });
@@ -198,6 +226,11 @@ describe('cancel deep-link', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.execute.mockResolvedValue(1);
+    mocks.transaction.mockImplementation(async (callback: (transaction: typeof tx) => unknown) =>
+      callback(tx),
+    );
+    tx.execute.mockResolvedValue(1);
+    tx.query.mockResolvedValue([]);
     mocks.createPortalSession.mockResolvedValue({
       id: 'bps_1',
       url: 'https://billing.stripe.com/session/test',
