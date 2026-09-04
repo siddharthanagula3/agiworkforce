@@ -6,7 +6,16 @@ vi.mock('@/lib/logger', () => ({
 }));
 
 const mockQuery = vi.hoisted(() => vi.fn());
-vi.mock('@/lib/server/neon-db', () => ({ getNeonDb: () => ({ query: mockQuery }) }));
+const mockExecute = vi.hoisted(() => vi.fn(async () => 0));
+vi.mock('@/lib/server/neon-db', () => ({
+  getNeonDb: () => ({
+    query: mockQuery,
+    execute: mockExecute,
+    transaction: (
+      callback: (tx: { query: typeof mockQuery; execute: typeof mockExecute }) => unknown,
+    ) => callback({ query: mockQuery, execute: mockExecute }),
+  }),
+}));
 
 import { buildCustomInstructionsPreamble, formatPersonalizationBlock } from '../user-identity';
 
