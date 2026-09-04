@@ -3,6 +3,12 @@
 //! Each test group corresponds to an audit finding and verifies the fix is in
 //! place so the bug cannot regress silently.
 
+// ---------------------------------------------------------------------------
+// R1, Phantom model names removed from get_model_for_task
+//
+// These routes previously returned invented or retired model names. The tests
+// now prove that the provider API resolves the catalog's current task route.
+// ---------------------------------------------------------------------------
 mod r1_phantom_models {
     use crate::core::llm::{Provider, TaskType};
 
@@ -98,6 +104,13 @@ mod r1_phantom_models {
     }
 }
 
+// ---------------------------------------------------------------------------
+// R2, Degraded state constructors must not panic
+//
+// lib.rs now calls new_degraded() / Default::default() as fallbacks when the
+// primary state initialisation fails.  These tests confirm that each of those
+// paths constructs a value without panicking.
+// ---------------------------------------------------------------------------
 mod r2_degraded_state_constructors {
     use crate::sys::commands::master_password::MasterPasswordState;
     use crate::sys::commands::memory::MemoryState;
@@ -159,6 +172,12 @@ mod r2_degraded_state_constructors {
     }
 }
 
+// ---------------------------------------------------------------------------
+// R3, AppState::default() uses temp-dir storage and does not panic
+//
+// When AppState::load() fails (e.g. missing config dir), the fallback is
+// AppState::default().  Verify it builds cleanly and has sane defaults.
+// ---------------------------------------------------------------------------
 mod r3_app_state_default {
     use crate::data::state::{AppState, DockPosition, PersistentWindowState};
 
@@ -225,6 +244,12 @@ mod r3_app_state_default {
     }
 }
 
+// ---------------------------------------------------------------------------
+// R4, EmbeddingService::new_degraded does not panic
+//
+// The service creates temp dirs and in-process resources; it must not panic
+// even in a CI environment with no GPU or model files.
+// ---------------------------------------------------------------------------
 mod r4_embedding_service_degraded {
     use crate::core::embeddings::EmbeddingService;
 
@@ -239,6 +264,12 @@ mod r4_embedding_service_degraded {
     }
 }
 
+// ---------------------------------------------------------------------------
+// R5, ContextCompactor ordering: recent messages are kept, old ones compacted
+//
+// Regression for the bug where the split_at index was inverted and old
+// messages were "kept" while recent ones were summarised.
+// ---------------------------------------------------------------------------
 mod r5_context_compactor_ordering {
     use crate::core::agent::context_compactor::{CompactionConfig, ContextCompactor};
     use crate::data::db::models::{Message, MessageRole};
@@ -382,6 +413,7 @@ mod r5_context_compactor_ordering {
         };
         let compactor = ContextCompactor::new(config);
 
+        // 5 messages with high token counts, but fewer than min_messages
         let messages: Vec<Message> = (1..=5).map(|i| make_message(i, "x", 500)).collect();
 
         assert!(
@@ -431,6 +463,19 @@ mod r5_context_compactor_ordering {
     }
 }
 
+// ---------------------------------------------------------------------------
+// R6, ai_access_file path validation rejects sensitive paths
+//
+// H26 note: The production path validation lives in `core::agent::executor`
+// as private methods `validate_file_path` and `validate_write_path` on
+// `AgentExecutor`. They require filesystem access (canonicalize) and the full
+// struct, so they cannot be called directly from unit tests. The denylist
+// logic below is intentionally replicated to test the deny-check patterns in
+// isolation. The production functions additionally check `check_blocked_prefix`
+// which covers /etc, /proc, /sys, /dev, /boot, /root, /usr, /var, /sbin, /bin
+// and home-dir sensitive paths (.ssh, .gnupg, .config, Library on macOS).
+// If the production denylist changes, these tests should be updated accordingly.
+// ---------------------------------------------------------------------------
 mod r6_path_validation {
     /// Helper: verify that a path string is rejected by the denylist logic.
     /// This mirrors the deny-check logic from `AgentExecutor::check_blocked_prefix`
@@ -559,6 +604,12 @@ mod r6_path_validation {
     }
 }
 
+// ---------------------------------------------------------------------------
+// R7, Token counter graceful fallback
+//
+// estimate_text_tokens must never panic regardless of input, including edge
+// cases that might trip up the tiktoken tokenizer.
+// ---------------------------------------------------------------------------
 mod r7_token_counter_fallback {
     use crate::core::llm::token_counter::TokenCounter;
 

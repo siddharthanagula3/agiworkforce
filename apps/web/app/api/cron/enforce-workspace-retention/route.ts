@@ -18,6 +18,23 @@ export const runtime = 'nodejs';
 /** Bounded per run so one night's work cannot exceed the function timeout. */
 const MAX_ORGANIZATIONS_PER_RUN = 50;
 
+/**
+ * Deletes workspace conversations past each organization's retention window.
+ *
+ * Only organizations that explicitly set `retention_enforced` are considered.
+ * `listOrganizationsWithRetentionEnforced` filters on it, and
+ * `sweepOrganizationRetention` re-checks rather than trusting the caller. An
+ * organization that never opted in is never touched, whatever a bug upstream
+ * decides.
+ *
+ * Runs on the privileged connection because it deletes across every member of
+ * a workspace and writes the sweep record, which the application role is
+ * deliberately denied (0138): an organization must not be able to edit the
+ * evidence of what was deleted on its behalf.
+ *
+ * `?dryRun=1` reports what would be removed without removing it. Use it to
+ * confirm the blast radius before an organization turns enforcement on.
+ */
 export async function GET(request: NextRequest): Promise<NextResponse> {
   if (!verifyCronRequest(request)) {
     logger.warn('Unauthorized workspace retention cron request');

@@ -1,3 +1,42 @@
+//! Host-authoritative destination policy for outbound HTTP.
+//!
+//! The desktop WebView is confined by a CSP `connect-src` allowlist, but that
+//! allowlist only governs requests issued by renderer JavaScript. Anything the
+//! renderer hands to the Rust process, an `invoke()`d command, an LLM tool
+//! call, leaves the machine from outside the WebView, where the CSP has no
+//! reach. The destination therefore has to be judged in Rust, and it has to be
+//! judged the same way on every surface, so this module owns that judgement:
+//! `tool_guard` (LLM and MCP tool calls) and `sys::commands::api`
+//! (renderer-supplied URLs) both call it rather than keeping private copies.
+//!
+//! What it decides is the DESTINATION only, whether the host is reachable on
+//! the public internet. It does not authenticate the caller, does not
+//! rate-limit, and it does not inspect the payload.
+//!
+//! A hostname is judged by the addresses it RESOLVES to, not by its spelling,
+//! so `metadata.google.internal`, `localtest.me` and `127-0-0-1.sslip.io` are
+//! refused on the strength of their A/AAAA records rather than a name
+//! denylist. Two limits on that, stated precisely because the previous version
+//! of this comment overstated them:
+//!
+//! * DNS REBINDING IS CLOSED ON [`PublicHttpClient`]. The addresses the
+//!   judgement used are pinned onto that client's transport ([`PinnedResolver`]),
+//!   so the address dialed is the address checked and there is no second lookup
+//!   for a hostile resolver to answer differently. Every other transport in the
+//!   process, bare `reqwest::Client`s, sidecars, local runtimes, resolves
+//!   independently and remains exposed to the race.
+//! * DNS FAILS CLOSED. A hostname has to resolve to at least one public address
+//!   before an arbitrary-public request is allowed. Treating lookup failure as
+//!   permission made the validator and transport two independent DNS queries:
+//!   an attacker could fail the first one and answer the second one internally.
+//!
+//! REDIRECTS are part of the destination, not an afterthought: judging only the
+//! first URL is no guard at all when the client follows up to ten further hops.
+//! [`public_destination_redirect_policy`] re-runs the judgement on every hop and
+//! is installed on every `reqwest::Client` built under `sys::api`, all five
+//! `ApiClient` builders and the `OAuth2Client` one, which matters most because
+//! its three token calls POST `client_secret` in a form body and a 307/308
+//! preserves both method and body.
 
 use std::fmt;
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, ToSocketAddrs};
@@ -9,6 +48,9 @@ pub enum EgressDenial {
     InvalidUrl(String),
     /// Scheme other than `http`/`https` (`file:`, `ftp:`, custom handlers).
     UnsupportedScheme(String),
+    /// Host resolves to, or literally names, an address that is not routable on
+    /// the public internet, loopback, private, link-local (cloud metadata),
+    /// CGNAT, multicast, or reserved.
     InternalDestination(String),
     /// The host could not be proven public because DNS returned no addresses
     /// or failed. Public-only callers fail closed rather than handing the same
@@ -86,6 +128,9 @@ pub(crate) fn judge_destination(
         return Err(EgressDenial::UnsupportedScheme(scheme.to_string()));
     }
 
+    // For `http`/`https` the url crate never yields a hostless URL, it rejects
+    // `http://` and `http://:80/` outright, and reads `http:///path` as the host
+    // `path`, so a missing host is an unparseable URL, not a state of its own.
     let (Some(host_str), Some(host)) = (parsed.host_str(), parsed.host()) else {
         return Err(EgressDenial::InvalidUrl(url.to_string()));
     };
@@ -142,6 +187,13 @@ pub(crate) fn judge_destination(
     }
 }
 
+/// Hostnames the major clouds publish for their instance metadata service.
+///
+/// These resolve to a link-local address only from inside the cloud that serves
+/// them, so resolution alone would let them through everywhere else, including
+/// on a developer laptop, where the request would then be answered by whatever
+/// a hostile resolver felt like. Refusing them by name costs nothing and makes
+/// the concrete IMDS case independent of where the process happens to run.
 pub(crate) fn is_metadata_name(domain: &str) -> bool {
     let lower = domain.to_ascii_lowercase();
     let lower = lower.strip_suffix('.').unwrap_or(&lower);
@@ -155,6 +207,11 @@ pub(crate) fn is_metadata_name(domain: &str) -> bool {
     )
 }
 
+/// True for hostnames that name the local machine rather than an address.
+/// `localhost` is the reserved name (RFC 6761) and `.localhost` its reserved
+/// suffix; `localhost.<something>` is kept out for the same reason the previous
+/// tool-guard denylist kept it out, it reads as the local machine to a user
+/// approving a tool call.
 pub(crate) fn is_loopback_name(domain: &str) -> bool {
     let lower = domain.to_ascii_lowercase();
     lower == "localhost" || lower.ends_with(".localhost") || lower.starts_with("localhost.")
@@ -167,11 +224,11 @@ pub(crate) fn is_internal_ipv4(ip: Ipv4Addr) -> bool {
     let [a, b, _, _] = ip.octets();
     ip.is_loopback() // 127.0.0.0/8
         || ip.is_private() // 10/8, 172.16/12, 192.168/16
-        || ip.is_link_local()
+        || ip.is_link_local() // 169.254/16, cloud metadata (IMDS)
         || ip.is_broadcast()
         || ip.is_documentation()
-        || a == 0
-        || (a == 100 && (64..=127).contains(&b))
+        || a == 0 // 0.0.0.0/8, "this network"; most stacks route it to the local host
+        || (a == 100 && (64..=127).contains(&b)) // 100.64/10 CGNAT, carrier and mesh-VPN peers
         || a >= 224 // 224/4 multicast + 240/4 reserved
 }
 
@@ -204,6 +261,26 @@ pub(crate) fn is_internal_ipv6(ip: Ipv6Addr) -> bool {
 /// so the ceiling has to be restated here.
 const MAX_REDIRECT_HOPS: usize = 10;
 
+/// The redirect policy every outbound client is built with.
+///
+/// Judging only the URL a caller hands us is worthless while the client then
+/// follows up to ten `Location:` headers unchecked, a front server answering
+/// `302 Location: http://169.254.169.254/latest/meta-data/` turns any allowed
+/// destination into a metadata read. Each hop is therefore judged by the same
+/// [`ensure_public_http_destination`] the first URL went through.
+///
+/// One exemption: a hop that stays inside the origin it came from is followed
+/// without re-judging. It cannot reach anything the first check did not already
+/// permit, and it is what keeps a development API server on `localhost`, a
+/// destination `ApiState::execute_request` deliberately allows, usable, since
+/// those servers redirect for trailing slashes and canonical paths.
+///
+/// Stated plainly, because the exemption is a real (small) widening: skipping
+/// the re-judgement also skips the re-RESOLUTION, so a name that answered public
+/// on the first hop and private on the second is followed. That is the same DNS
+/// rebinding race the module doc already declares open, not a new hole, a
+/// cross-origin hop is still resolved and judged every time, but the exemption
+/// does hand the race one extra turn per same-origin hop.
 pub fn public_destination_redirect_policy() -> reqwest::redirect::Policy {
     reqwest::redirect::Policy::custom(|attempt| {
         if attempt.previous().len() >= MAX_REDIRECT_HOPS {
@@ -243,6 +320,13 @@ pub fn strict_public_destination_redirect_policy() -> reqwest::redirect::Policy 
     })
 }
 
+/// The addresses each host was judged on, shared between the validator and the
+/// transport's DNS resolver.
+///
+/// This is what closes the rebinding race the module doc used to declare open:
+/// validation and connection are no longer two independent DNS queries, so a
+/// resolver that answers public once and private once cannot win the second
+/// answer, there is no second answer.
 #[derive(Debug, Default)]
 pub struct PinnedDestinations {
     addresses: std::sync::Mutex<std::collections::HashMap<String, Vec<IpAddr>>>,
@@ -635,6 +719,8 @@ mod tests {
                 ),
                 "{url} must be refused without needing a resolver"
             );
+            // And through the production entry point, which wires the OS
+            // resolver, off-cloud these names have no records at all.
             assert!(
                 matches!(
                     ensure_public_http_destination(url),
@@ -661,6 +747,9 @@ mod tests {
         );
     }
 
+    /// `http:///path`, the example the deleted `MissingHost` variant claimed.
+    /// is read by the url crate as the host `path`, and a hostless `http://` does
+    /// not parse at all. Pinned so the variant is not reintroduced.
     #[test]
     fn http_urls_always_carry_a_host() {
         let parsed = url::Url::parse("http:///path").expect("http:///path parses");
