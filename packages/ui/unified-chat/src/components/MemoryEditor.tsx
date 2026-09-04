@@ -312,7 +312,7 @@ export function MemoryEditor({
                             confirm({
                               title: 'Delete this memory?',
                               description:
-                                'The assistant stops using this fact in future conversations. It cannot be restored \u2014 it would have to be saved again.',
+                                'The assistant stops using this fact in future conversations. It cannot be restored, it would have to be saved again.',
                               confirmLabel: 'Delete memory',
                               onConfirm: () => runMutation(() => remove(fact.id)),
                             })

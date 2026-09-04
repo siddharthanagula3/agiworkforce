@@ -5,14 +5,14 @@
     {
       "id": "js-dependency-audit-critical",
       "job": "security",
-      "step": "Dependency audit (JS) \u2014 critical (blocking)",
+      "step": "Dependency audit (JS), critical (blocking)",
       "tool": "pnpm audit",
       "blocksAt": "critical"
     },
     {
       "id": "js-dependency-audit-high",
       "job": "security",
-      "step": "Dependency audit (JS) \u2014 high (blocking, FIX-043)",
+      "step": "Dependency audit (JS), high (blocking, FIX-043)",
       "tool": "pnpm audit",
       "blocksAt": "high"
     },
@@ -26,14 +26,14 @@
     {
       "id": "rust-dependency-policy",
       "job": "rust-desktop-cli",
-      "step": "Dependency policy (Rust) \u2014 bans/sources/licenses (blocking)",
+      "step": "Dependency policy (Rust), bans/sources/licenses (blocking)",
       "tool": "cargo deny",
       "blocksAt": "any-policy-violation"
     },
     {
       "id": "rust-dependency-vulnerabilities",
       "job": "rust-desktop-cli",
-      "step": "Dependency vulnerabilities (Rust) \u2014 blocking",
+      "step": "Dependency vulnerabilities (Rust), blocking",
       "tool": "cargo deny",
       "blocksAt": "vulnerability"
     },
@@ -59,7 +59,7 @@
       "id": "rust-advisory-maintenance-classes",
       "kind": "continue-on-error",
       "job": "rust-desktop-cli",
-      "step": "Dependency advisories (Rust) \u2014 non-blocking warning-policy debt",
+      "step": "Dependency advisories (Rust), non-blocking warning-policy debt",
       "reason": "Unmaintained, unsound, and yanked warnings on transitive crates with no upstream replacement. RUSTSEC vulnerabilities are still blocking in the step above.",
       "owner": "Platform lead",
       "tracking": "RUST-DEPENDENCY-ADVISORIES-01 (docs/agent-context/known-flaws.md)"

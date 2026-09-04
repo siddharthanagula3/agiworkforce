@@ -54,7 +54,7 @@
       "line": 146,
       "literal": "rgba(",
       "rule": "rgba",
-      "_note": "scrim-shaped \u2014 convert to colors.scrim or similar token in follow-up"
+      "_note": "scrim-shaped, convert to colors.scrim or similar token in follow-up"
     },
     {
       "file": "apps/mobile/app/(app)/agents/[id].tsx",
@@ -223,7 +223,7 @@
       "line": 395,
       "literal": "rgba(",
       "rule": "rgba",
-      "_note": "scrim-shaped \u2014 convert to colors.scrim or similar token in follow-up"
+      "_note": "scrim-shaped, convert to colors.scrim or similar token in follow-up"
     },
     {
       "file": "apps/mobile/app/(app)/chat/[id].tsx",
@@ -506,7 +506,7 @@
       "line": 217,
       "literal": "rgba(",
       "rule": "rgba",
-      "_note": "scrim-shaped \u2014 convert to colors.scrim or similar token in follow-up"
+      "_note": "scrim-shaped, convert to colors.scrim or similar token in follow-up"
     },
     {
       "file": "apps/mobile/app/(app)/translate.tsx",
@@ -525,7 +525,7 @@
       "line": 395,
       "literal": "rgba(",
       "rule": "rgba",
-      "_note": "scrim-shaped \u2014 convert to colors.scrim or similar token in follow-up"
+      "_note": "scrim-shaped, convert to colors.scrim or similar token in follow-up"
     },
     {
       "file": "apps/mobile/app/(app)/voice.tsx",
@@ -1984,7 +1984,7 @@
       "line": 123,
       "literal": "rgba(",
       "rule": "rgba",
-      "_note": "scrim-shaped \u2014 convert to colors.scrim or similar token in follow-up"
+      "_note": "scrim-shaped, convert to colors.scrim or similar token in follow-up"
     },
     {
       "file": "apps/mobile/src/features/chat/components/ModeSwitchModal.tsx",
@@ -2297,14 +2297,14 @@
       "line": 152,
       "literal": "rgba(",
       "rule": "rgba",
-      "_note": "scrim-shaped \u2014 convert to colors.scrim or similar token in follow-up"
+      "_note": "scrim-shaped, convert to colors.scrim or similar token in follow-up"
     },
     {
       "file": "apps/mobile/src/features/chat/components/ToolCallCard.tsx",
       "line": 180,
       "literal": "rgba(",
       "rule": "rgba",
-      "_note": "scrim-shaped \u2014 convert to colors.scrim or similar token in follow-up"
+      "_note": "scrim-shaped, convert to colors.scrim or similar token in follow-up"
     },
     {
       "file": "apps/mobile/src/features/chat/components/ToolCallCard.tsx",
