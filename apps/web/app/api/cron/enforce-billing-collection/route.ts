@@ -79,7 +79,7 @@ async function loadEnterpriseContractsNeedingReview(db: DatabaseAdapter): Promis
        join public.organizations o on o.id = c.organization_id
        left join public.profiles p on p.id = o.owner_user_id
       where c.ended_at is null
-        and (c.oldest_open_invoice_id is not null or c.collection_stage <> $1::text)`,
+        and (c.oldest_open_invoice_due_at is not null or c.collection_stage <> $1::text)`,
     [CURRENT_COLLECTION_STAGE],
   );
 }
