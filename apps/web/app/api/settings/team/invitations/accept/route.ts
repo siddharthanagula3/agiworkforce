@@ -39,11 +39,6 @@ async function handleAccept(request: NextRequest) {
   }
   const { token, action } = parsed.data;
 
-  // The token lookups below stay on the raw owner connection on purpose: the
-  // invitee has no organization_members row yet, so RLS (organization_invitations_admin_access,
-  // 0085_organization_seats_lifecycle.sql) cannot authorize accepting or declining by
-  // membership. The one-time token is the authorization, not the session's org scope.
-  // check-db-isolation.mjs documents the same reasoning for organization-invitation-service.ts.
   const db = getNeonDb();
   const scopedDb = createClaimedUserScopedDb(db, { userId, organizationId: null });
 
