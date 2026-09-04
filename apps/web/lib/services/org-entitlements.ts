@@ -19,6 +19,24 @@ export interface OrganizationEntitlements {
 }
 
 /**
+ * Resolves what a single user's OWN subscription entitles them to, on
+ * whichever connection the caller passes.
+ *
+ * `resolveOrganizationEntitlementPlan` calls this for its owner-fallback
+ * branch, and callers that need to know what a specific member would bring
+ * to an organization (before that member holds any role in it, such as an
+ * ownership-transfer candidate) call it directly with the same connection
+ * they already hold, so the two paths cannot drift apart.
+ */
+export async function resolveUserPersonalPlanTier(
+  db: DatabaseAdapter,
+  userId: string,
+): Promise<BillingPlanTier> {
+  const subscription = await SubscriptionService.getSubscription(db, userId);
+  return normalizeBillingPlanTier(effectivePlanTier(subscription?.plan_tier, subscription?.status));
+}
+
+/**
  * Resolves what an ORGANIZATION is entitled to, on the privileged connection.
  *
  * It deliberately does not accept a caller-scoped adapter, because accepting
@@ -77,8 +95,7 @@ export async function resolveOrganizationEntitlementPlan(
   );
 
   if (!billing?.user_id) return normalizeBillingPlanTier('free');
-  const subscription = await SubscriptionService.getSubscription(db, billing.user_id);
-  return normalizeBillingPlanTier(effectivePlanTier(subscription?.plan_tier, subscription?.status));
+  return resolveUserPersonalPlanTier(db, billing.user_id);
 }
 
 export async function getOrganizationEntitlements(
