@@ -1,6 +1,7 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ChatComposerNew, resetSendPendingFlagForTests } from './ChatComposerNew';
+import { useChatStore } from '@shared/stores/web-chat-store';
 
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ push: vi.fn(), replace: vi.fn(), prefetch: vi.fn(), back: vi.fn() }),
@@ -43,6 +44,7 @@ function submit(text: string) {
 
 beforeEach(() => {
   resetSendPendingFlagForTests();
+  useChatStore.setState({ parkedSendsByFingerprint: {} });
 });
 
 describe('composer shows a sending indicator across the upload gap (files-2)', () => {
@@ -51,6 +53,34 @@ describe('composer shows a sending indicator across the upload gap (files-2)', (
     render(<ChatComposerNew onSend={onSend} emptyState conversationId={null} />);
 
     submit('summarize the attached file');
+
+    expect(sendButton()).toHaveAttribute('aria-label', 'Sending message…');
+  });
+
+  it("does not clear a still-in-flight send's indicator when a blocked second send parks text the composer already shows (files-1)", () => {
+    const onSend = vi.fn();
+    render(<ChatComposerNew onSend={onSend} conversationId="client-conv-1" />);
+
+    // A first send that is genuinely still in flight (its attachment upload
+    // has not settled) is what keeps the module-scope flag true here.
+    submit('first message, attachment still uploading');
+    expect(sendButton()).toHaveAttribute('aria-label', 'Sending message…');
+
+    // A second send the guard refuses no longer clears the composer (see
+    // `SEND_GUARD_BLOCKED` in WebChatPage's `handleSend`), so its text is
+    // already sitting in the box by the time WebChatPage parks it under its
+    // own fingerprint -- exactly what this asserts against overwriting.
+    fireEvent.change(screen.getByRole('textbox', { name: /message input/i }), {
+      target: { value: 'second message, blocked by the guard' },
+    });
+    act(() => {
+      useChatStore
+        .getState()
+        .parkBlockedSend(
+          'second message, blocked by the guard|',
+          'second message, blocked by the guard',
+        );
+    });
 
     expect(sendButton()).toHaveAttribute('aria-label', 'Sending message…');
   });
