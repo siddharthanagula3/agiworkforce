@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useMemo, useRef, useState } from 'react';
+import type { ReactNode } from 'react';
 
 import type { ManagedSkillSummary } from '@agiworkforce/cloud-contracts';
 import type { DirectoryRecord } from '@/lib/connectors/directory/types';
@@ -47,6 +48,7 @@ import {
   toConnectorDetail,
   toConnectorSection,
   toCuratedConnectorDetail,
+  withConnectorErrors,
 } from '../services/connectors-directory';
 import {
   fetchPluginSnapshot,
@@ -65,7 +67,7 @@ import {
 } from '../services/skills-directory';
 
 const EMPTY: DirectorySection = { entries: [] };
-const SECTIONS: readonly DirectorySectionKey[] = ['skills', 'plugins'];
+const SECTIONS: readonly DirectorySectionKey[] = ['skills', 'connectors', 'plugins'];
 
 interface ConnectStartBody {
   message?: string;
@@ -88,6 +90,10 @@ export interface DirectoryAdapterOptions {
   createSkillLabel?: string;
   curatedConnectors?: readonly SettingsConnector[];
   connectedConnectors?: readonly ConnectedConnector[];
+  connectorsError?: string | null;
+  connectorsNotice?: string | null;
+  renderConnectorDetailFooter?: (id: string) => ReactNode;
+  onRetryConnectors?: () => Promise<void> | void;
   onConnectConnector?: (id: string) => Promise<void> | void;
   onDisconnectConnector?: (id: string) => Promise<void> | void;
 }
@@ -99,6 +105,10 @@ export function useDirectoryAdapter(options: DirectoryAdapterOptions = {}): Dire
     createSkillLabel,
     curatedConnectors,
     connectedConnectors,
+    connectorsError,
+    connectorsNotice,
+    renderConnectorDetailFooter,
+    onRetryConnectors,
     onConnectConnector,
     onDisconnectConnector,
   } = options;
@@ -108,6 +118,11 @@ export function useDirectoryAdapter(options: DirectoryAdapterOptions = {}): Dire
   const skillCache = useRef<readonly ManagedSkillSummary[]>([]);
   const installedSkills = useRef<ReadonlySet<string>>(new Set<string>());
   const connectedIds = useRef<ReadonlySet<string>>(new Set<string>());
+  const connectorErrors = useRef<Record<string, string>>({});
+  const connectorsErrorRef = useRef<string | null>(null);
+  const connectorsNoticeRef = useRef<string | null>(null);
+  connectorsErrorRef.current = connectorsError ?? null;
+  connectorsNoticeRef.current = connectorsNotice ?? null;
   const curatedRef = useRef<readonly SettingsConnector[]>([]);
   const connectedRef = useRef<readonly ConnectedConnector[]>([]);
   curatedRef.current = curatedConnectors ?? [];
@@ -133,6 +148,11 @@ export function useDirectoryAdapter(options: DirectoryAdapterOptions = {}): Dire
     }
   }, [createSkillLabel]);
 
+  const retryConnectorsRef = useRef<(() => Promise<void>) | null>(null);
+  const retryConnectors = useCallback(async () => {
+    await retryConnectorsRef.current?.();
+  }, []);
+
   const loadConnectors = useCallback(async () => {
     setConnectors((prev) => ({ ...prev, loading: true, error: null }));
     try {
@@ -142,14 +162,24 @@ export function useDirectoryAdapter(options: DirectoryAdapterOptions = {}): Dire
       ]);
       const merged = new Set([...connected, ...connectedConnectorIds(connectedRef.current)]);
       connectedIds.current = merged;
+      const section = toConnectorSection(records, merged, curatedRef.current);
       setConnectors({
-        ...toConnectorSection(records, merged, curatedRef.current),
-        retry: loadConnectors,
+        ...section,
+        entries: withConnectorErrors(section.entries, connectorErrors.current),
+        ...(connectorsErrorRef.current ? { error: connectorsErrorRef.current } : {}),
+        ...(connectorsNoticeRef.current ? { notice: connectorsNoticeRef.current } : {}),
+        retry: retryConnectors,
       });
     } catch {
       setConnectors((prev) => ({ ...prev, loading: false, error: CONNECTORS_FAILED_COPY, retry: loadConnectors }));
     }
-  }, []);
+  }, [retryConnectors]);
+
+  retryConnectorsRef.current = async () => {
+    connectorErrors.current = {};
+    await onRetryConnectors?.();
+    await loadConnectors();
+  };
 
   const loadPlugins = useCallback(async () => {
     setPlugins((prev) => ({ ...prev, loading: true, error: null }));
@@ -202,7 +232,13 @@ export function useDirectoryAdapter(options: DirectoryAdapterOptions = {}): Dire
   const connect = useCallback(
     async (id: string) => {
       if (onConnectConnector) {
-        await onConnectConnector(id);
+        try {
+          await onConnectConnector(id);
+          delete connectorErrors.current[id];
+        } catch (caught) {
+          connectorErrors.current[id] =
+            caught instanceof Error ? caught.message : CONNECT_FAILED_COPY;
+        }
         await loadConnectors();
         return;
       }
@@ -350,6 +386,12 @@ export function useDirectoryAdapter(options: DirectoryAdapterOptions = {}): Dire
       uninstall,
       ...(onEditSkill ? { openSettings } : {}),
       ...(onCreateSkill ? { createEntry } : {}),
+      ...(renderConnectorDetailFooter
+        ? {
+            renderDetailFooter: (section: DirectorySectionKey, id: string) =>
+              section === 'connectors' ? renderConnectorDetailFooter(id) : null,
+          }
+        : {}),
       copyLink,
       copyValue,
       downloadSkillFile,
@@ -369,6 +411,7 @@ export function useDirectoryAdapter(options: DirectoryAdapterOptions = {}): Dire
       createEntry,
       onEditSkill,
       onCreateSkill,
+      renderConnectorDetailFooter,
       copyLink,
       copyValue,
       downloadSkillFile,

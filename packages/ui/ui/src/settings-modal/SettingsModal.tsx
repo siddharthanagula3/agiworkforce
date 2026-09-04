@@ -51,6 +51,8 @@ import {
   describeCustomMcpJsonImportError,
 } from './custom-mcp-json-import';
 
+const ADD_CUSTOM_CONNECTOR_LABEL = 'Add custom connector';
+
 const UNKNOWN_VERSION_PLACEHOLDER = '\u2013';
 
 const DIRECTORY_SECTIONS = ['skills', 'connectors', 'plugins'] as const;
@@ -1812,6 +1814,7 @@ export interface SettingsModalProps {
   /** Data for built-in Connectors/Skills/Plugins panels. */
   adapter?: SettingsDataAdapter;
   directoryAdapter?: DirectoryAdapter;
+  directoryHeaderActions?: Partial<Record<string, React.ReactNode>>;
   /**
    * Permission disclosure rendered in the built-in connector detail view before
    * the Connect/Disconnect control. Surface-owned so this package never
@@ -1851,6 +1854,7 @@ export function SettingsModal({
   navGroups,
   adapter,
   directoryAdapter,
+  directoryHeaderActions,
   connectorDisclosure,
   workRole,
   renderConnectorToolPermissions,
@@ -1861,6 +1865,7 @@ export function SettingsModal({
 }: SettingsModalProps) {
   const { t } = useUiTranslation('settings');
   const [navSearch, setNavSearch] = useState('');
+  const [customConnectorOpen, setCustomConnectorOpen] = useState(false);
 
   // Grouped nav (preferred): filter items within each group, dropping groups
   // that end up empty so headers never orphan.
@@ -1895,9 +1900,31 @@ export function SettingsModal({
       isDirectorySection(activeSection) &&
       directoryAdapter.sections.includes(activeSection)
     ) {
+      if (activeSection === 'connectors' && customConnectorOpen && adapter?.addCustomConnector) {
+        return (
+          <AddCustomConnectorForm adapter={adapter} onBack={() => setCustomConnectorOpen(false)} />
+        );
+      }
+      const customAction =
+        activeSection === 'connectors' && adapter?.addCustomConnector ? (
+          <button
+            type="button"
+            onClick={() => setCustomConnectorOpen(true)}
+            className={cn(
+              'inline-flex min-h-8 shrink-0 items-center rounded-lg border border-border px-3 text-xs font-medium text-foreground transition-colors hover:bg-muted',
+              FOCUS_RING,
+            )}
+          >
+            {ADD_CUSTOM_CONNECTOR_LABEL}
+          </button>
+        ) : null;
       return (
         sectionContent[activeSection] ?? (
-          <DirectoryPanel section={activeSection} adapter={directoryAdapter} />
+          <DirectoryPanel
+            section={activeSection}
+            adapter={directoryAdapter}
+            headerActions={directoryHeaderActions?.[activeSection] ?? customAction}
+          />
         )
       );
     }

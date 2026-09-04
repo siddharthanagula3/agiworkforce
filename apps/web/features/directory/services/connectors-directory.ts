@@ -252,3 +252,13 @@ export async function fetchConnectorRecord(id: string): Promise<DirectoryRecord 
   const body = (await response.json()) as { entry?: DirectoryRecord };
   return body.entry ?? null;
 }
+
+export function withConnectorErrors(
+  entries: readonly DirectoryEntry[],
+  errors: Readonly<Record<string, string>>,
+): DirectoryEntry[] {
+  return entries.map((entry) => {
+    const message = errors[entry.id];
+    return message ? { ...entry, error: message } : entry;
+  });
+}

@@ -123,6 +123,7 @@ export function ConnectorDetailView({
   onCopyLink,
   onCopyValue,
   onOpenHref,
+  footer,
   busy,
 }: {
   detail: DirectoryConnectorDetail;
@@ -133,6 +134,7 @@ export function ConnectorDetailView({
   onCopyLink?: () => void;
   onCopyValue?: (value: string) => Promise<void> | void;
   onOpenHref?: (href: string) => Promise<void> | void;
+  footer?: ReactNode;
   busy?: boolean;
 }) {
   const connected = detail.connected === true;
@@ -243,6 +245,8 @@ export function ConnectorDetailView({
           </section>
         </>
       ) : null}
+
+      {footer}
 
       {moreInfo.length > 0 ? (
         <section className="flex flex-col gap-2">
