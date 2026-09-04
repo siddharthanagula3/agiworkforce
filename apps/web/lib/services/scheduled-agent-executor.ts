@@ -25,9 +25,9 @@ import { classifyToolLoopInputs } from '@/app/api/llm/v1/chat/completions/lib/to
 import { resolveTurnCodeExecutionTools } from '@/lib/e2b/execution-tools';
 import { e2bProvisioningReady } from '@/lib/e2b/gate';
 import type { WebMcpToolDef } from '@/lib/mcp-tool-executor';
-import { isFreePlanTier } from '@/lib/services/free-trial-service';
 import { getCustomRemoteMcpLimit } from '@/lib/services/free-plan-entitlements';
 import { LLMCostCalculator } from '@/lib/services/llm-cost-calculator';
+import { evaluateManagedComputeAccess } from '@/lib/services/managed-compute-access';
 import {
   createObservedProviderUsage,
   hasObservedProviderUsage,
@@ -61,7 +61,6 @@ import type {
 const MAX_PROMPT_LENGTH = 50_000;
 const MAX_OUTPUT_CHARS = 100_000;
 const MAX_OUTPUT_TOKENS = 4_096;
-const ACTIVE_SUBSCRIPTION_STATUSES = new Set(['active', 'trialing']);
 
 const SCHEDULED_TASK_DIRECTIVE =
   'Complete the scheduled task now. Return the final result directly. ' +
@@ -372,12 +371,23 @@ export const executeScheduledAgent: ScheduledTaskExecutor = async function execu
 
   const subscription = await SubscriptionService.getSubscription(scope.db, scope.userId);
   const subscriptionTier = subscription?.plan_tier ?? 'free';
-  if (
-    subscription &&
-    !ACTIVE_SUBSCRIPTION_STATUSES.has(subscription.status) &&
-    !isFreePlanTier(subscription.plan_tier)
-  ) {
-    throw new Error('Scheduled execution requires an active subscription');
+  const accessDecision = await evaluateManagedComputeAccess(
+    scope.db,
+    scope.userId,
+    subscription,
+    'api',
+    { organizationId: scope.organizationId },
+  );
+  if (!accessDecision.allowed) {
+    logger.info(
+      { taskId: task.id, runId, code: accessDecision.code },
+      'Scheduled execution skipped by managed-compute access policy',
+    );
+    return {
+      text: `Scheduled execution skipped: ${accessDecision.reason}`,
+      model: task.model ?? 'auto',
+      billingStatus: accessDecision.code,
+    };
   }
 
   const taskType = classifyTaskLocally(prompt, []).type;

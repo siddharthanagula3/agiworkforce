@@ -46,6 +46,7 @@ vi.mock('@/lib/services/provider-adapter-service', () => ({
   hasServerProviderKey: mockHasServerProviderKey,
 }));
 
+import { SubscriptionService } from '@/lib/services/subscription-service';
 import { POST } from './route';
 
 function postRequest(body: unknown): NextRequest {
@@ -157,6 +158,29 @@ describe('POST /api/code/sessions, the full-network interim guard', () => {
     );
     expect(response.status).toBe(201);
     expect(mockCreateSession).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('POST /api/code/sessions, the managed-compute billing gate', () => {
+  it('refuses session creation for a delinquent enterprise subscription', async () => {
+    vi.mocked(SubscriptionService.getSubscription).mockResolvedValueOnce({
+      plan_tier: 'enterprise',
+      status: 'canceled',
+    } as never);
+
+    const response = await POST(
+      postRequest({
+        requestId: 'req-33345678',
+        title: 'workspace',
+        networkAccess: 'none',
+        runtimeId: null,
+      }),
+    );
+
+    expect(response.status).toBe(403);
+    const body = (await response.json()) as { error: { code: string } };
+    expect(body.error.code).toBe('subscription_inactive');
+    expect(mockCreateSession).not.toHaveBeenCalled();
   });
 });
 
