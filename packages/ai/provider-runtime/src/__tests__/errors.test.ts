@@ -4,6 +4,7 @@ import {
   CannotRetryError,
   FallbackTriggeredError,
   EmptyProviderResponseError,
+  SPENDING_CAP_PROVIDER_HINT,
   classifyError,
   parseContextOverflow,
 } from '../errors';
@@ -184,6 +185,48 @@ describe('classifyError', () => {
     const c = classifyError(err);
     expect(c.category).toBe('client_error');
     expect(c.retryable).toBe(false);
+  });
+
+  it('classifies a 429 with an insufficient_quota code as quota_exhausted, not rate_limit', () => {
+    const err = { status: 429, code: 'insufficient_quota', message: 'You exceeded your quota' };
+    const c = classifyError(err);
+    expect(c.category).toBe('quota_exhausted');
+    expect(c.retryable).toBe(false);
+    expect(c.fallbackable).toBe(true);
+  });
+
+  it('classifies a 429 whose status is RESOURCE_EXHAUSTED as quota_exhausted', () => {
+    const err = { status: 429, error: { status: 'RESOURCE_EXHAUSTED' }, message: 'no capacity' };
+    const c = classifyError(err);
+    expect(c.category).toBe('quota_exhausted');
+  });
+
+  it('classifies a 429 naming only a spending cap as quota_exhausted with the spending-cap hint', () => {
+    const err = { status: 429, message: 'You have hit your spending cap for this project' };
+    const c = classifyError(err);
+    expect(c.category).toBe('quota_exhausted');
+    expect(c.fallbackable).toBe(true);
+    expect(c.providerHint).toBe(SPENDING_CAP_PROVIDER_HINT);
+  });
+
+  it('classifies a plain 429 with neither a quota code nor spending-cap wording as rate_limit', () => {
+    const err = { status: 429, message: 'Too many requests, please slow down' };
+    const c = classifyError(err);
+    expect(c.category).toBe('rate_limit');
+    expect(c.providerHint).toBeUndefined();
+  });
+
+  it('classifies an out-of-funds message without a 429 status as billing_exhausted, distinct from quota_exhausted', () => {
+    const err = { message: 'Your credit balance is too low to make this request' };
+    const c = classifyError(err);
+    expect(c.category).toBe('billing_exhausted');
+    expect(c.retryable).toBe(false);
+    expect(c.fallbackable).toBe(false);
+  });
+
+  it('classifies a 402 as billing_exhausted', () => {
+    const c = classifyError({ status: 402, message: 'Payment required' });
+    expect(c.category).toBe('billing_exhausted');
   });
 
   it('classifies unknown errors as unknown', () => {
