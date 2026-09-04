@@ -28,6 +28,9 @@ import {
   withConnectorReturnPath,
 } from '@/features/connectors/hooks/use-connectors';
 import { getCsrfToken } from '@/lib/client/csrf';
+import { useDirectoryAdapter } from '@/features/directory';
+
+const NEW_SKILL_LABEL = 'New skill';
 import { announceSkillCatalogChanged } from '@shared/events/skill-catalog-events';
 import type { WebSettingsContentSection } from '../lib/web-settings-sections';
 
@@ -1194,6 +1197,16 @@ export function WebSettingsModal({
     removePlugin,
   };
 
+  const directoryAdapter = useDirectoryAdapter(
+    canAuthorSkills
+      ? {
+          onCreateSkill,
+          onEditSkill: (name: string) => editSkill({ name } as SettingsSkill),
+          createSkillLabel: NEW_SKILL_LABEL,
+        }
+      : {},
+  );
+
   const sectionContent: Record<WebSettingsContentSection, React.ReactNode> = {
     general: <GeneralSection />,
     account: <AccountSection />,
@@ -1232,6 +1245,7 @@ export function WebSettingsModal({
           sectionContent={sectionContent}
           navGroups={WEB_SETTINGS_NAV_GROUPS}
           adapter={adapter}
+          directoryAdapter={directoryAdapter}
           connectorDisclosure={<ConnectorConsentSummary />}
           renderConnectorScopes={(connectorId) => <ConnectorScopeList connectorId={connectorId} />}
           renderConnectorCapabilities={(connectorId) => (
