@@ -26,7 +26,7 @@ const FALLBACK_ERROR_REPORTER = `<script>
         '*'
       );
     } catch (e) {
-      // noop
+      return;
     }
   }
   window.addEventListener(

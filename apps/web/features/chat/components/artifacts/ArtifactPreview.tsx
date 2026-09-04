@@ -305,8 +305,8 @@ export function ArtifactPreview({
             if (url.pathname.startsWith('/api/files/')) url.searchParams.set('preview', 'pdf');
             return url.href;
           }
-        } catch {
-          // noop
+        } catch (err) {
+          void err;
         }
       }
       // Relative same-origin path.
@@ -802,8 +802,8 @@ if (__AgiApp) {
       } else if (!enter && document.fullscreenElement && document.exitFullscreen) {
         void document.exitFullscreen().catch(() => {});
       }
-    } catch {
-      // noop
+    } catch (err) {
+      void err;
     }
   };
 

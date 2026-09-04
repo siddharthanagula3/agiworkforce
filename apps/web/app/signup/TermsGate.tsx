@@ -35,8 +35,8 @@ export function TermsGate({
         if (window.localStorage.getItem(TERMS_GATE_STORAGE_KEY) === POLICY_LAST_UPDATED.terms) {
           setAccepted(true);
         }
-      } catch {
-        // noop
+      } catch (err) {
+        void err;
       }
     }
     setHydrated(true);
