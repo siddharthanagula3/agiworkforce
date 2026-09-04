@@ -1,63 +1,52 @@
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import { StarterPrompts } from './StarterPrompts';
 import { DEFAULT_STARTER_PROMPTS, ONBOARDING_USE_CASES } from '../lib/use-cases';
 
-const mocks = vi.hoisted(() => ({
-  fetchNamespace: vi.fn(),
-}));
-
-vi.mock('@/app/settings/_lib/preferences-client', () => ({
-  fetchStoredPreferenceNamespace: (namespace: string) => mocks.fetchNamespace(namespace),
-}));
-
 describe('StarterPrompts', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-  });
-
-  it('shows the default prompts before the chosen use case has loaded', () => {
-    mocks.fetchNamespace.mockReturnValue(new Promise(() => {}));
-
-    render(<StarterPrompts onSelect={vi.fn()} />);
+  it('shows the default prompts when no use case is chosen', () => {
+    render(<StarterPrompts useCase={null} onSelect={vi.fn()} />);
 
     for (const prompt of DEFAULT_STARTER_PROMPTS) {
       expect(screen.getByRole('button', { name: prompt })).toBeInTheDocument();
     }
   });
 
-  it('shows the prompts for the chosen use case once loaded', async () => {
+  it('shows the prompts for the chosen use case', () => {
     const useCase = ONBOARDING_USE_CASES[0]!;
-    mocks.fetchNamespace.mockResolvedValue({ primaryUseCase: useCase.value });
+    render(<StarterPrompts useCase={useCase.value} onSelect={vi.fn()} />);
 
-    render(<StarterPrompts onSelect={vi.fn()} />);
-
-    expect(
-      await screen.findByRole('button', { name: useCase.starterPrompts[0] }),
-    ).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: useCase.starterPrompts[0] })).toBeInTheDocument();
   });
 
-  it('falls back to the default prompts for an unrecognized use case', async () => {
-    mocks.fetchNamespace.mockResolvedValue({ primaryUseCase: 'not-a-real-use-case' });
+  it('updates live as the chosen use case changes', () => {
+    const first = ONBOARDING_USE_CASES[0]!;
+    const second = ONBOARDING_USE_CASES[1]!;
+    const { rerender } = render(<StarterPrompts useCase={first.value} onSelect={vi.fn()} />);
 
-    render(<StarterPrompts onSelect={vi.fn()} />);
+    expect(screen.getByRole('button', { name: first.starterPrompts[0] })).toBeInTheDocument();
 
-    expect(
-      await screen.findByRole('button', { name: DEFAULT_STARTER_PROMPTS[0] }),
-    ).toBeInTheDocument();
+    rerender(<StarterPrompts useCase={second.value} onSelect={vi.fn()} />);
+
+    expect(screen.queryByRole('button', { name: first.starterPrompts[0] })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: second.starterPrompts[0] })).toBeInTheDocument();
+  });
+
+  it('falls back to the default prompts for an unrecognized use case', () => {
+    render(<StarterPrompts useCase="not-a-real-use-case" onSelect={vi.fn()} />);
+
+    expect(screen.getByRole('button', { name: DEFAULT_STARTER_PROMPTS[0] })).toBeInTheDocument();
   });
 
   it('hands the exact prompt text to onSelect when clicked', async () => {
-    mocks.fetchNamespace.mockResolvedValue({});
     const onSelect = vi.fn();
     const user = userEvent.setup();
 
-    render(<StarterPrompts onSelect={onSelect} />);
+    render(<StarterPrompts useCase={null} onSelect={onSelect} />);
 
-    const button = await screen.findByRole('button', { name: DEFAULT_STARTER_PROMPTS[0] });
-    await user.click(button);
+    await user.click(screen.getByRole('button', { name: DEFAULT_STARTER_PROMPTS[0] }));
 
     expect(onSelect).toHaveBeenCalledWith(DEFAULT_STARTER_PROMPTS[0]);
   });

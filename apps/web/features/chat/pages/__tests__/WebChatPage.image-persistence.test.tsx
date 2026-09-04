@@ -67,7 +67,6 @@ vi.mock('@/lib/client/csrf', () => ({
 }));
 vi.mock('@/app/settings/_lib/preferences-client', () => ({
   fetchPreferenceNamespace: async () => ({ browserReplyReady: true }),
-  fetchStoredPreferenceNamespace: async () => ({}),
   PREFERENCE_NAMESPACE_SAVED_EVENT: 'agi:preference-namespace-saved',
 }));
 
