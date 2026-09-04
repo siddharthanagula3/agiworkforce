@@ -145,14 +145,18 @@ const PROHIBITED = [
       <>
         Model-authored code runs in an isolated ephemeral cloud sandbox with a bounded lifetime and
         a per-plan concurrency allowance. A code session carries one of three outbound network
-        policies: <code>none</code> (no outbound access), <code>trusted</code> (a fixed allowlist of
-        package and source hosts, everything else denied), or <code>full</code> (unrestricted
-        outbound access). Choosing <code>full</code> does not widen what these rules permit: the
-        restrictions below apply at every network setting. Do not use it for cryptocurrency mining
-        or other resource-arbitrage workloads; for denial-of-service traffic, port scanning, or
-        vulnerability scanning against systems you do not own; for developing or distributing
-        malware, ransomware, or credential-cracking tooling; or to attempt to escape the sandbox,
-        reach our internal network, or reach another customer&rsquo;s workload.
+        policies: <code>none</code> (no outbound access beyond our own provider-credential proxy),{' '}
+        <code>trusted</code> (a fixed allowlist of package and source hosts, everything else
+        denied), or <code>full</code> (unrestricted outbound access). Under <code>none</code> or{' '}
+        <code>trusted</code>, you may add up to ten of your own hostnames to that allowlist; our
+        provider-credential proxy stays reachable at every setting, including <code>none</code>, so
+        a proxied model credential still works with no other egress granted. Choosing{' '}
+        <code>full</code> does not widen what these rules permit: the restrictions below apply at
+        every network setting. Do not use it for cryptocurrency mining or other resource-arbitrage
+        workloads; for denial-of-service traffic, port scanning, or vulnerability scanning against
+        systems you do not own; for developing or distributing malware, ransomware, or
+        credential-cracking tooling; or to attempt to escape the sandbox, reach our internal
+        network, or reach another customer&rsquo;s workload.
       </>
     ),
   },
