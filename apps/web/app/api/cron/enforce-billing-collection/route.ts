@@ -13,6 +13,11 @@ import {
   deriveCollectionState,
   type CollectionStage,
 } from '@/lib/services/enterprise-collection-state';
+import { getOrganizationSeatState } from '@/lib/services/organization-seat-service';
+import {
+  persistPurchasedSeatsOnOrganization,
+  type SeatPersistenceOutcome,
+} from '@/app/api/stripe-webhook/lib/seats';
 
 export const runtime = 'nodejs';
 
@@ -20,6 +25,8 @@ const MS_PER_DAY = 24 * 60 * 60 * 1000;
 const AUDIT_ENDPOINT = '/api/cron/enforce-billing-collection';
 const AUDIT_SURFACE = 'cron';
 const COLLECTION_STAGE_CHANGED_AUDIT_REASON = 'collection_stage_changed';
+const CURRENT_COLLECTION_STAGE: CollectionStage = 'current';
+const SEAT_CATCH_UP_PLAN_TIER = 'enterprise';
 
 const OWNER_NOTICE_STAGES = new Set<CollectionStage>(['past_due_30', 'past_due_60', 'read_only']);
 const DAILY_INTERNAL_REPEAT_STAGES = new Set<CollectionStage>([
@@ -42,6 +49,9 @@ interface ContractRow {
   collection_stage: CollectionStage;
   last_collection_notice_at: string | null;
   owner_email: string | null;
+  committed_seats: number;
+  stripe_subscription_id: string | null;
+  stripe_customer_id: string | null;
 }
 
 export interface CollectionStageOutcome {
@@ -52,20 +62,25 @@ export interface CollectionStageOutcome {
   changed: boolean;
   ownerNotified: boolean;
   internalNotified: boolean;
+  seatCatchUp: SeatPersistenceOutcome | null;
 }
 
-async function loadOpenEnterpriseContracts(db: DatabaseAdapter): Promise<ContractRow[]> {
+async function loadEnterpriseContractsNeedingReview(db: DatabaseAdapter): Promise<ContractRow[]> {
   return db.query<ContractRow>(
     `select c.organization_id,
             c.oldest_open_invoice_due_at,
             c.collection_stage,
             c.last_collection_notice_at,
+            c.committed_seats,
+            c.stripe_subscription_id,
+            c.stripe_customer_id,
             p.email as owner_email
        from public.organization_billing_contracts c
        join public.organizations o on o.id = c.organization_id
        left join public.profiles p on p.id = o.owner_user_id
-      where c.oldest_open_invoice_id is not null
-        and c.ended_at is null`,
+      where c.ended_at is null
+        and (c.oldest_open_invoice_id is not null or c.collection_stage <> $1::text)`,
+    [CURRENT_COLLECTION_STAGE],
   );
 }
 
@@ -106,11 +121,54 @@ function internalNoticeContent(
   };
 }
 
+async function reconcileSeatCatchUp(
+  db: DatabaseAdapter,
+  contract: Pick<
+    ContractRow,
+    'organization_id' | 'committed_seats' | 'stripe_subscription_id' | 'stripe_customer_id'
+  >,
+): Promise<SeatPersistenceOutcome | null> {
+  const seatState = await getOrganizationSeatState(db, contract.organization_id);
+  if (!seatState?.ownerUserId) return null;
+  if (contract.committed_seats <= seatState.licensedSeats) return null;
+
+  const outcome = await persistPurchasedSeatsOnOrganization(db, {
+    ownerUserId: seatState.ownerUserId,
+    seats: contract.committed_seats,
+    planTier: SEAT_CATCH_UP_PLAN_TIER,
+    stripeSubscriptionId: contract.stripe_subscription_id,
+    stripeCustomerId: contract.stripe_customer_id,
+  });
+
+  if (outcome === 'persisted') {
+    logger.info(
+      {
+        organizationId: contract.organization_id,
+        fromLicensedSeats: seatState.licensedSeats,
+        toLicensedSeats: contract.committed_seats,
+      },
+      'Enterprise seat catch-up raised licensed_seats to committed_seats now that collection is current',
+    );
+  } else {
+    logger.warn(
+      {
+        organizationId: contract.organization_id,
+        committedSeats: contract.committed_seats,
+        licensedSeats: seatState.licensedSeats,
+        outcome,
+      },
+      'Enterprise seat catch-up did not apply',
+    );
+  }
+
+  return outcome;
+}
+
 export async function enforceBillingCollection(
   db: DatabaseAdapter,
   nowMs: number = Date.now(),
 ): Promise<CollectionStageOutcome[]> {
-  const contracts = await loadOpenEnterpriseContracts(db);
+  const contracts = await loadEnterpriseContractsNeedingReview(db);
   const billingAlertEmail = process.env['BILLING_ALERT_EMAIL']?.trim() || null;
   const fromEmail = getHandoffConfig().fromEmail;
   const outcomes: CollectionStageOutcome[] = [];
@@ -207,6 +265,9 @@ export async function enforceBillingCollection(
       }
     }
 
+    const seatCatchUp =
+      state.stage === CURRENT_COLLECTION_STAGE ? await reconcileSeatCatchUp(db, contract) : null;
+
     outcomes.push({
       organizationId: contract.organization_id,
       previousStage: contract.collection_stage,
@@ -215,6 +276,7 @@ export async function enforceBillingCollection(
       changed,
       ownerNotified,
       internalNotified,
+      seatCatchUp,
     });
   }
 
