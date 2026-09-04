@@ -70,7 +70,12 @@ vi.mock('@/lib/server/neon-db', () => ({
   getNeonDb: vi.fn(() => ({
     query: (...args: unknown[]) => mockNeonQuery(...args),
     execute: (...args: unknown[]) => mockNeonExecute(...args),
-    transaction: vi.fn((fn: (db: unknown) => unknown) => fn({})),
+    transaction: vi.fn((fn: (db: unknown) => unknown) =>
+      fn({
+        query: (...args: unknown[]) => mockNeonQuery(...args),
+        execute: (...args: unknown[]) => mockNeonExecute(...args),
+      }),
+    ),
     withUser: vi.fn(() => ({})),
     dispose: vi.fn(),
   })),

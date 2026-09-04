@@ -78,7 +78,7 @@
 }
 
 .cell[data-cell-status='error'] {
-  border-color: color-mix(in srgb, hsl(var(--destructive)) 46%, var(--chat-border));
+  border-color: color-mix(in srgb, var(--color-danger-fill) 46%, var(--chat-border));
 }
 
 .cellHeader {
@@ -174,7 +174,7 @@
 
 .outputError {
   margin: 0;
-  color: hsl(var(--destructive-text));
+  color: var(--color-danger-text);
   font-family: var(--font-geist-mono), ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 12px;
   white-space: pre-wrap;
@@ -219,7 +219,7 @@
 }
 
 .filesError {
-  color: hsl(var(--destructive-text));
+  color: var(--color-danger-text);
   font-size: 12px;
   margin-bottom: 6px;
 }

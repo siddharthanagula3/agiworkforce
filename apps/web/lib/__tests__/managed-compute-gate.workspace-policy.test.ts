@@ -111,12 +111,13 @@ describe('buildOrganizationPolicyGateResponse', () => {
   });
 
   it('passes a personal-scope request through without reading a policy', async () => {
-    mockQuery.mockResolvedValueOnce([]);
+    mockQuery.mockResolvedValue([]);
 
     await expect(
       buildOrganizationPolicyGateResponse('user-1', request() as never, DESCRIPTOR),
     ).resolves.toBeNull();
-    expect(mockQuery).toHaveBeenCalledTimes(1);
+    const statements = mockQuery.mock.calls.map((call) => String(call[0]));
+    expect(statements.some((sql) => sql.includes('organization_admin_policies'))).toBe(false);
   });
 
   it('passes through when the database is unreachable, so a fault is never shown as a denial', async () => {
