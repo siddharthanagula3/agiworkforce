@@ -873,6 +873,9 @@ export function CloudCodePage({ api = cloudCodeApi }: CloudCodePageProps) {
                         </span>
                         <span>{selectedSession.workspacePath}</span>
                         <span>{selectedSession.networkAccess} network</span>
+                        {selectedSession.extraHosts.length > 0 && (
+                          <span>+ {selectedSession.extraHosts.join(', ')}</span>
+                        )}
                       </div>
                     </div>
                     {selectedSession.state !== 'closed' &&

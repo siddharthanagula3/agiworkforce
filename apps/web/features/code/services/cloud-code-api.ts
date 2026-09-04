@@ -30,6 +30,7 @@ const sessionSchema = z.object({
   repositoryBranch: z.string().nullable().default(null),
   networkAccess: z.enum(CLOUD_CODE_NETWORK_ACCESS),
   runtimeId: z.string().nullable().default(null),
+  extraHosts: z.array(z.string()).default([]),
   state: z.enum(CLOUD_CODE_SESSION_STATES),
   workspacePath: z.string(),
   lastError: z.string().nullable(),
