@@ -428,6 +428,16 @@ export const rateLimitConfigs = {
     window: '1 m',
     failClosed: true,
   },
+  'settings-org-delete': {
+    limit: 5,
+    window: '1 h', // irreversible once the grace window passes
+    failClosed: true,
+  },
+  'settings-org-delete-cancel': {
+    limit: 10,
+    window: '1 h',
+    failClosed: true,
+  },
   'settings-org-seats': {
     limit: 60,
     window: '1 m',
