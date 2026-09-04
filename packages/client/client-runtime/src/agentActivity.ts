@@ -147,8 +147,12 @@ const LOCAL_START_PROGRESS_ID = 'progress:local-starting';
 const GENERATION_PROGRESS_ID_PREFIX = 'progress:generation';
 const GENERATION_PROGRESS_KIND = 'generation';
 const PREPARING_PROGRESS_ID = 'progress:preparing';
+export const REASONING_PROGRESS_SUMMARY = 'Reasoning';
+export const WRITING_RESPONSE_PROGRESS_SUMMARY = 'Writing response';
 
-function isGenerationProgressEntry(entry: AgentActivityEntry): entry is AgentActivityProgressEntry {
+export function isGenerationProgressEntry(
+  entry: AgentActivityEntry,
+): entry is AgentActivityProgressEntry {
   return entry.kind === 'progress' && entry.progressId === GENERATION_PROGRESS_KIND;
 }
 
@@ -738,7 +742,10 @@ function applyAgentEvent(
 
     case 'text-delta':
     case 'reasoning-delta': {
-      const summary = event.type === 'reasoning-delta' ? 'Reasoning' : 'Writing response';
+      const summary =
+        event.type === 'reasoning-delta'
+          ? REASONING_PROGRESS_SUMMARY
+          : WRITING_RESPONSE_PROGRESS_SUMMARY;
       const index = next.entries.findIndex(
         (entry) => isGenerationProgressEntry(entry) && entry.status === 'running',
       );

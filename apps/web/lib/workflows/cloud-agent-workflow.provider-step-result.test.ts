@@ -31,6 +31,7 @@ function fullLine(): Required<CollectedProviderLine> {
   return {
     line: 'data: {"choices":[{"delta":{"content":"hi"}}]}\n',
     publicTextDelta: 'hi',
+    reasoningDelta: 'hi',
     serverToolStart: { toolCallId: 'call-1', name: 'web_search' },
     serverToolResults: [
       {
