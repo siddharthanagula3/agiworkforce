@@ -1,5 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
+process.env['CSRF_SECRET'] ||= 'a'.repeat(40);
+process.env['NEXT_PUBLIC_APP_URL'] ||= 'https://app.agiworkforce.test';
+
 vi.mock('server-only', () => ({}));
 vi.mock('@/lib/logger', () => ({
   logger: { warn: vi.fn(), error: vi.fn(), info: vi.fn() },
@@ -397,19 +400,19 @@ describe('getE2BExecutor, harness credentials', () => {
     });
   });
 
-  it('seeds the sandbox with the managed provider key for the selected harness', async () => {
+  it('seeds the sandbox with the managed provider key for a harness the proxy does not cover', async () => {
     buildServerProviderAdapter.mockImplementation((providerId: string) => {
-      if (providerId === 'anthropic') return { config: { apiKey: 'sk-managed-anthropic' } };
+      if (providerId === 'factory') return { config: { apiKey: 'sk-managed-factory' } };
       throw new Error(`no managed key configured for ${providerId}`);
     });
 
     const { getE2BExecutor } = await import('../runtime');
-    await getE2BExecutor(codeScope('code-claude', 'trusted', { templateId: 'claude' }));
+    await getE2BExecutor(codeScope('code-droid', 'trusted', { templateId: 'droid' }));
 
     const createOptions = (create.mock.calls[0] as unknown[])[1] as {
       envs?: Record<string, string>;
     };
-    expect(createOptions.envs).toEqual({ ANTHROPIC_API_KEY: 'sk-managed-anthropic' });
+    expect(createOptions.envs).toEqual({ FACTORY_API_KEY: 'sk-managed-factory' });
   });
 
   it('omits the credential entirely when no managed key resolves for the harness', async () => {
@@ -478,20 +481,20 @@ describe('getE2BExecutor, harness credentials', () => {
 
   it('carries the resolved credential into every sandbox command, including a resumed one', async () => {
     buildServerProviderAdapter.mockImplementation((providerId: string) => {
-      if (providerId === 'anthropic') return { config: { apiKey: 'sk-managed-anthropic' } };
+      if (providerId === 'factory') return { config: { apiKey: 'sk-managed-factory' } };
       throw new Error(`no managed key configured for ${providerId}`);
     });
 
     const { getE2BExecutor } = await import('../runtime');
     const executor = await getE2BExecutor(
-      codeScope('code-cmd', 'trusted', { templateId: 'claude' }),
+      codeScope('code-cmd', 'trusted', { templateId: 'droid' }),
     );
-    await executor!.runCommand?.({ command: 'claude -p "hi"' });
+    await executor!.runCommand?.({ command: 'droid -p "hi"' });
 
     const instance = await create.mock.results[0]!.value;
     expect(instance.commands.run).toHaveBeenCalledWith(
-      'claude -p "hi"',
-      expect.objectContaining({ envs: { ANTHROPIC_API_KEY: 'sk-managed-anthropic' } }),
+      'droid -p "hi"',
+      expect.objectContaining({ envs: { FACTORY_API_KEY: 'sk-managed-factory' } }),
     );
   });
 
@@ -509,6 +512,86 @@ describe('getE2BExecutor, harness credentials', () => {
   });
 });
 
+describe('getE2BExecutor, provider-proxy credential injection', () => {
+  beforeEach(() => {
+    sessions.clear();
+    vi.clearAllMocks();
+    sandboxCounter = 0;
+    listedSandboxes = [];
+    buildServerProviderAdapter.mockImplementation(() => ({
+      config: { apiKey: 'sk-managed-should-never-reach-the-sandbox' },
+    }));
+  });
+
+  it('injects the proxy base URL and a minted session token instead of the managed key', async () => {
+    const { getE2BExecutor } = await import('../runtime');
+    const { verifyProviderProxyToken } = await import('../provider-proxy-token');
+    await getE2BExecutor(codeScope('code-claude-proxy', 'trusted', { templateId: 'claude' }));
+
+    const createOptions = (create.mock.calls[0] as unknown[])[1] as {
+      envs?: Record<string, string>;
+    };
+    expect(createOptions.envs?.['ANTHROPIC_BASE_URL']).toBe(
+      'https://app.agiworkforce.test/api/code/sessions/code-claude-proxy/provider-proxy',
+    );
+    const token = createOptions.envs?.['ANTHROPIC_API_KEY'];
+    expect(token).toBeDefined();
+    expect(token).not.toBe('sk-managed-should-never-reach-the-sandbox');
+    expect(verifyProviderProxyToken(token!)).toMatchObject({
+      sessionId: 'code-claude-proxy',
+      userId: 'user-code',
+      providerId: 'anthropic',
+    });
+  });
+
+  it('proxies the harness even under full network access', async () => {
+    const { getE2BExecutor } = await import('../runtime');
+    const executor = await getE2BExecutor(
+      codeScope('code-claude-full', 'full', { templateId: 'claude' }),
+    );
+    expect(executor).not.toBeNull();
+
+    const createOptions = (create.mock.calls[0] as unknown[])[1] as {
+      envs?: Record<string, string>;
+    };
+    expect(createOptions.envs?.['ANTHROPIC_API_KEY']).not.toBe(
+      'sk-managed-should-never-reach-the-sandbox',
+    );
+  });
+
+  it('an explicit credential still wins over the proxy', async () => {
+    const { getE2BExecutor } = await import('../runtime');
+    await getE2BExecutor(
+      codeScope('code-claude-explicit', 'trusted', {
+        templateId: 'claude',
+        explicitCredential: { envVar: 'ANTHROPIC_API_KEY', value: 'sk-explicit' },
+      }),
+    );
+
+    const createOptions = (create.mock.calls[0] as unknown[])[1] as {
+      envs?: Record<string, string>;
+    };
+    expect(createOptions.envs).toEqual({ ANTHROPIC_API_KEY: 'sk-explicit' });
+  });
+
+  it('omits the credential rather than falling back to the raw key when the proxy has no base URL', async () => {
+    const savedAppUrl = process.env['NEXT_PUBLIC_APP_URL'];
+    delete process.env['NEXT_PUBLIC_APP_URL'];
+    try {
+      const { getE2BExecutor } = await import('../runtime');
+      await getE2BExecutor(codeScope('code-claude-nourl', 'trusted', { templateId: 'claude' }));
+
+      const createOptions = (create.mock.calls[0] as unknown[])[1] as {
+        envs?: Record<string, string>;
+      };
+      expect(createOptions.envs).toBeUndefined();
+    } finally {
+      if (savedAppUrl === undefined) delete process.env['NEXT_PUBLIC_APP_URL'];
+      else process.env['NEXT_PUBLIC_APP_URL'] = savedAppUrl;
+    }
+  });
+});
+
 describe('getE2BExecutor, full network interim guard', () => {
   beforeEach(() => {
     sessions.clear();
@@ -519,15 +602,28 @@ describe('getE2BExecutor, full network interim guard', () => {
 
   it('refuses full network when a managed credential would enter the sandbox unproxied', async () => {
     buildServerProviderAdapter.mockImplementation((providerId: string) => {
+      if (providerId === 'factory') return { config: { apiKey: 'sk-managed-factory' } };
+      throw new Error(`no managed key configured for ${providerId}`);
+    });
+    const { getE2BExecutor } = await import('../runtime');
+    const executor = await getE2BExecutor(
+      codeScope('code-full-guard', 'full', { templateId: 'droid' }),
+    );
+    expect(executor).toBeNull();
+    expect(create).not.toHaveBeenCalled();
+  });
+
+  it('allows full network for a harness the credential proxy covers', async () => {
+    buildServerProviderAdapter.mockImplementation((providerId: string) => {
       if (providerId === 'anthropic') return { config: { apiKey: 'sk-managed-anthropic' } };
       throw new Error(`no managed key configured for ${providerId}`);
     });
     const { getE2BExecutor } = await import('../runtime');
     const executor = await getE2BExecutor(
-      codeScope('code-full-guard', 'full', { templateId: 'claude' }),
+      codeScope('code-full-proxied', 'full', { templateId: 'claude' }),
     );
-    expect(executor).toBeNull();
-    expect(create).not.toHaveBeenCalled();
+    expect(executor).not.toBeNull();
+    expect(create).toHaveBeenCalledTimes(1);
   });
 
   it('still allows full network for a runtime with no harness credential', async () => {

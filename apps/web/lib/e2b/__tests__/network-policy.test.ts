@@ -3,10 +3,16 @@ import { describe, expect, it } from 'vitest';
 import { NETWORK_ACCESS_REQUIRES_PROXY_CODE, fullNetworkNeedsProxy } from '../network-policy';
 
 describe('fullNetworkNeedsProxy', () => {
-  it('flags full network for a harness whose managed credential would enter the sandbox', () => {
-    expect(fullNetworkNeedsProxy('full', 'claude')).toBe(true);
+  it('flags full network for a harness whose managed credential would enter the sandbox unproxied', () => {
     expect(fullNetworkNeedsProxy('full', 'codex')).toBe(true);
+    expect(fullNetworkNeedsProxy('full', 'droid')).toBe(true);
+    expect(fullNetworkNeedsProxy('full', 'amp')).toBe(true);
+    expect(fullNetworkNeedsProxy('full', 'grok')).toBe(true);
     expect(fullNetworkNeedsProxy('full', 'opencode')).toBe(true);
+  });
+
+  it('no longer flags a harness the credential proxy covers', () => {
+    expect(fullNetworkNeedsProxy('full', 'claude')).toBe(false);
   });
 
   it('is false outside full network', () => {
