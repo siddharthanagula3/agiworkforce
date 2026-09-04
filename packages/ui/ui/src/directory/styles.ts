@@ -21,8 +21,10 @@ export const DIRECTORY_ADD_BUTTON =
 
 export const ENTRY_ICON_SIZE = 'size-8 shrink-0';
 
-export const ENTRY_ICON_SHAPE = 'rounded-md border border-border';
+export const LOGO_SURFACE = 'bg-logo-surface text-logo-on-surface';
+
+export const ENTRY_ICON_SHAPE = `rounded-md border border-border ${LOGO_SURFACE}`;
 
 export const DETAIL_LOGO_SIZE = 'size-16 shrink-0';
 
-export const DETAIL_LOGO_SHAPE = 'rounded-xl border border-border';
+export const DETAIL_LOGO_SHAPE = `rounded-xl border border-border ${LOGO_SURFACE}`;

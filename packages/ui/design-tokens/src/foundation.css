@@ -61,6 +61,12 @@
     --border: 214.3 31.8% 91.4%;
     --destructive-text: 0 84.2% 45%;
 
+    /* A vendor logo is drawn on a surface the brand chose, not on ours: many
+     * marks are near black and vanish on a dark ground. This pair is fixed in
+     * both themes for that reason. */
+    --logo-surface: 0 0% 100%;
+    --logo-on-surface: 0 0% 12%;
+
     --surface-page: var(--n-25);
     --surface-subtle: var(--n-50);
     --surface-elevated: var(--n-0);
@@ -224,6 +230,9 @@
     --foreground: var(--neutral-fg-1);
     --border: var(--neutral-4);
     --destructive-text: 0 84% 65%;
+
+    --logo-surface: 0 0% 100%;
+    --logo-on-surface: 0 0% 12%;
 
     --surface-page: var(--n-1000);
     --surface-subtle: var(--n-950);

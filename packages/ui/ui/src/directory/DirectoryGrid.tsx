@@ -56,7 +56,7 @@ function EntryIcon({ entry }: { entry: DirectoryEntry }) {
       className={cn(
         ENTRY_ICON_SIZE,
         ENTRY_ICON_SHAPE,
-        'inline-flex items-center justify-center bg-muted text-xs font-semibold text-muted-foreground',
+        'inline-flex items-center justify-center text-xs font-semibold',
       )}
     >
       {entryMonogram(entry)}
