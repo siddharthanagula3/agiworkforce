@@ -4824,7 +4824,7 @@ aria-expanded and the API total together settled it.
 
 ## 2026-09-04 A canceled enterprise contract's `ended_at` never clears on
 
-resubscribe (`BILLING-ENTERPRISE-CONTRACT-ENDED-AT-STICKY`, Medium, open)
+resubscribe (`BILLING-ENTERPRISE-CONTRACT-ENDED-AT-STICKY`, Medium, fixed 2026-09-04: the contract upsert now clears `ended_at` whenever the synced subscription is live and only keeps it for a canceled or expired one)
 
 `syncEnterpriseContractFromSubscription`
 (`apps/web/lib/services/enterprise-billing-service.ts:264-326`) upserts
