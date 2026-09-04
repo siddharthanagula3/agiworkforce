@@ -1,5 +1,7 @@
 import { by, device, element, waitFor } from 'detox';
 
+const COLD_SIMULATOR_LAUNCH_TIMEOUT_MS = 5 * 60 * 1000;
+
 describe('Mobile first-run shell', () => {
   beforeAll(async () => {
     await device.launchApp({
@@ -8,7 +10,7 @@ describe('Mobile first-run shell', () => {
       launchArgs: { detoxEnableSynchronization: '0' },
     });
     await device.disableSynchronization();
-  });
+  }, COLD_SIMULATOR_LAUNCH_TIMEOUT_MS);
 
   afterAll(async () => {
     await device.terminateApp();
