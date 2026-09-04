@@ -48,6 +48,7 @@ type StoredRow = {
   title: unknown;
   repository_url: unknown;
   network_access: unknown;
+  extra_hosts: unknown;
   state: unknown;
   workspace_path: unknown;
   last_error: unknown;
@@ -559,6 +560,7 @@ function createFakeDb(): FakeDb {
         network_access: params[5],
         state: 'provisioning',
         workspace_path: params[6],
+        extra_hosts: params[9],
         last_error: null,
         run_lease_token: null,
         run_lease_expires_at: null,
@@ -751,6 +753,97 @@ describe('createCloudCodeSession extra egress hosts', () => {
       null,
       ['example.com'],
     );
+  });
+
+  it('persists the normalized extra hosts and returns them from the created session', async () => {
+    const db = createFakeDb();
+    const session = await createCloudCodeSession(
+      db,
+      OWNER,
+      { ...createInput(0), extraHosts: ['Example.com', 'example.com', 'other.example.com'] },
+      PLAN_TIER,
+    );
+
+    expect(session.extraHosts.slice().sort()).toEqual(['example.com', 'other.example.com']);
+  });
+
+  it('reports no extra hosts for a session created without any', async () => {
+    const db = createFakeDb();
+    const session = await createCloudCodeSession(db, OWNER, createInput(0), PLAN_TIER);
+
+    expect(session.extraHosts).toEqual([]);
+  });
+
+  it('reuses the session unchanged when a retried requestId repeats the same extra hosts', async () => {
+    const db = createFakeDb();
+    const first = await createCloudCodeSession(
+      db,
+      OWNER,
+      { ...createInput(0), extraHosts: ['example.com'] },
+      PLAN_TIER,
+    );
+    const second = await createCloudCodeSession(
+      db,
+      OWNER,
+      { ...createInput(0), extraHosts: ['example.com'] },
+      PLAN_TIER,
+    );
+
+    expect(second.id).toBe(first.id);
+    expect(db.rows).toHaveLength(1);
+  });
+
+  it('reuses the session when a retried requestId repeats the same hosts in a different order', async () => {
+    const db = createFakeDb();
+    const first = await createCloudCodeSession(
+      db,
+      OWNER,
+      { ...createInput(0), extraHosts: ['a.example.com', 'b.example.com'] },
+      PLAN_TIER,
+    );
+    const second = await createCloudCodeSession(
+      db,
+      OWNER,
+      { ...createInput(0), extraHosts: ['b.example.com', 'a.example.com'] },
+      PLAN_TIER,
+    );
+
+    expect(second.id).toBe(first.id);
+    expect(db.rows).toHaveLength(1);
+  });
+
+  it('rejects a reused requestId that changes the extra hosts, as a conflict rather than a silent no-op', async () => {
+    const db = createFakeDb();
+    await createCloudCodeSession(
+      db,
+      OWNER,
+      { ...createInput(0), extraHosts: ['example.com'] },
+      PLAN_TIER,
+    );
+
+    await expect(
+      createCloudCodeSession(
+        db,
+        OWNER,
+        { ...createInput(0), extraHosts: ['different.example.com'] },
+        PLAN_TIER,
+      ),
+    ).rejects.toBeInstanceOf(CloudCodeConflictError);
+    expect(db.rows).toHaveLength(1);
+  });
+
+  it('rejects a reused requestId that drops a previously requested extra host', async () => {
+    const db = createFakeDb();
+    await createCloudCodeSession(
+      db,
+      OWNER,
+      { ...createInput(0), extraHosts: ['example.com'] },
+      PLAN_TIER,
+    );
+
+    await expect(
+      createCloudCodeSession(db, OWNER, { ...createInput(0), extraHosts: [] }, PLAN_TIER),
+    ).rejects.toBeInstanceOf(CloudCodeConflictError);
   });
 });
 

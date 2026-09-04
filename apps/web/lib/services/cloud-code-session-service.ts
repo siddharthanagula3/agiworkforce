@@ -148,6 +148,7 @@ interface SessionRow extends Record<string, unknown> {
   network_access: string;
   runtime_id?: string | null;
   repository_branch?: string | null;
+  extra_hosts?: string[] | null;
   state: string;
   workspace_path: string;
   last_error: string | null;
@@ -208,6 +209,7 @@ export function mapCloudCodeSession(row: SessionRow): CloudCodeSession {
     repositoryBranch: row.repository_branch ?? null,
     networkAccess: asNetworkAccess(row.network_access),
     runtimeId: row.runtime_id ?? null,
+    extraHosts: row.extra_hosts ?? [],
     state: asSessionState(row.state),
     workspacePath: row.workspace_path,
     lastError: row.last_error,
@@ -535,13 +537,23 @@ async function findByRequestId(
   return rows[0] ?? null;
 }
 
+function sameExtraHosts(stored: string[] | null | undefined, requested: string[]): boolean {
+  const storedSorted = [...(stored ?? [])].sort();
+  const requestedSorted = [...requested].sort();
+  return (
+    storedSorted.length === requestedSorted.length &&
+    storedSorted.every((host, index) => host === requestedSorted[index])
+  );
+}
+
 function sameCreateRequest(row: SessionRow, input: ValidatedCreateInput): boolean {
   return (
     row.title === input.title &&
     row.repository_url === input.repositoryUrl &&
     row.network_access === input.networkAccess &&
     (row.runtime_id ?? null) === input.runtimeId &&
-    (row.repository_branch ?? null) === input.repositoryBranch
+    (row.repository_branch ?? null) === input.repositoryBranch &&
+    sameExtraHosts(row.extra_hosts, input.extraHosts)
   );
 }
 
@@ -626,8 +638,8 @@ export async function createCloudCodeSession(
       const inserted = await tx.query<SessionRow>(
         `insert into cloud_code_sessions (
            user_id, organization_id, request_id, title, repository_url,
-           network_access, state, workspace_path, runtime_id, repository_branch
-         ) values ($1, $2, $3, $4, $5, $6, 'provisioning', $7, $8, $9)
+           network_access, state, workspace_path, runtime_id, repository_branch, extra_hosts
+         ) values ($1, $2, $3, $4, $5, $6, 'provisioning', $7, $8, $9, $10)
          returning *`,
         [
           owner.userId,
@@ -639,6 +651,7 @@ export async function createCloudCodeSession(
           validated.workspacePath,
           validated.runtimeId,
           validated.repositoryBranch,
+          validated.extraHosts,
         ],
       );
       return { row: inserted[0]!, reused: false };
@@ -821,6 +834,8 @@ export async function runCloudCodeCommand(
     claim.session.networkAccess,
     planTier,
     claim.session.runtimeId,
+    null,
+    claim.session.extraHosts,
   );
   const startedAt = new Date();
   const executor = await getE2BExecutor(scope);
@@ -944,6 +959,8 @@ export async function commitAndPushCloudCodeSession(
     claim.session.networkAccess,
     planTier,
     claim.session.runtimeId,
+    null,
+    claim.session.extraHosts,
   );
   const executor = await getE2BExecutor(scope);
   if (!executor?.git) {
