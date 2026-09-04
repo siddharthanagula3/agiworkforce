@@ -15,14 +15,16 @@ export function effectivePlanTier(
 }
 
 const ENTERPRISE_PLAN_TIER = 'enterprise';
-const PAST_DUE_SUBSCRIPTION_STATUS = 'past_due';
+const ENTERPRISE_GRACE_SUBSCRIPTION_STATUSES = ['past_due', 'unpaid'] as const;
 
 export function isEntitledEnterpriseSubscriptionStatus(
   status: string | null | undefined,
   collectionReadOnly: boolean,
 ): boolean {
   const normalized = (status ?? '').trim().toLowerCase();
-  if (normalized === PAST_DUE_SUBSCRIPTION_STATUS) return !collectionReadOnly;
+  if ((ENTERPRISE_GRACE_SUBSCRIPTION_STATUSES as readonly string[]).includes(normalized)) {
+    return !collectionReadOnly;
+  }
   return isEntitledSubscriptionStatus(normalized);
 }
 

@@ -146,6 +146,24 @@ describe('subscription access policy · enterprise collection grace', () => {
     expect(access.effectivePlanTier).toBe('free');
   });
 
+  it('keeps an enterprise account entitled while unpaid and not read-only', () => {
+    const access = resolveSubscriptionAccess('unpaid', 'enterprise', { readOnly: false });
+    for (const key of ACCESS_KEYS) expect(access[key]).toBe(true);
+    expect(access.effectivePlanTier).toBe('enterprise');
+  });
+
+  it('drops entitlement for an unpaid enterprise account once read-only', () => {
+    const access = resolveSubscriptionAccess('unpaid', 'enterprise', { readOnly: true });
+    for (const key of ACCESS_KEYS) expect(access[key]).toBe(false);
+    expect(access.effectivePlanTier).toBe('free');
+  });
+
+  it('ends entitlement for a canceled enterprise account even when not read-only', () => {
+    const access = resolveSubscriptionAccess('canceled', 'enterprise', { readOnly: false });
+    for (const key of ACCESS_KEYS) expect(access[key]).toBe(false);
+    expect(access.effectivePlanTier).toBe('free');
+  });
+
   it('leaves the ordinary rank ladder in charge when no collection state is supplied', () => {
     const access = resolveSubscriptionAccess('past_due', 'enterprise');
     for (const key of ACCESS_KEYS) expect(access[key]).toBe(false);
