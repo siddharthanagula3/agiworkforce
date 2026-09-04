@@ -1,4 +1,4 @@
--- 0164 — the admin memory gate and the cached context-compaction summary.
+-- 0164 : the admin memory gate and the cached context-compaction summary.
 --
 -- NOT YET APPLIED, draft only, pending explicit approval before running.
 --
@@ -42,7 +42,7 @@ comment on column public.web_conversations.compaction_summary_through_message_id
 commit;
 
 -- =============================================================================
--- VERIFICATION — run MANUALLY on a throwaway Neon BRANCH before production.
+-- VERIFICATION : run MANUALLY on a throwaway Neon BRANCH before production.
 -- (Commented so it never runs during apply.)
 -- =============================================================================
 -- -- 1. No workspace gains memory as a side effect of this migration:

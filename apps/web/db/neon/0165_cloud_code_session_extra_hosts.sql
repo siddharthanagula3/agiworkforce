@@ -1,6 +1,6 @@
--- 0165 — remember the extra egress hosts a Code session allowlisted.
+-- 0165 : remember the extra egress hosts a Code session allowlisted.
 --
--- NOT YET APPLIED — draft only, pending explicit approval before running.
+-- NOT YET APPLIED : draft only, pending explicit approval before running.
 --
 -- Session creation can allowlist extra hostnames on top of the
 -- none/trusted/full network preset, applied through E2B network rules. Until
