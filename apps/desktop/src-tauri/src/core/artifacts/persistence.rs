@@ -97,10 +97,6 @@ pub fn save_artifact_to_db(conn: &Connection, artifact: &Artifact) -> Result<(),
     )
     .map_err(|e| format!("Failed to save artifact: {}", e))?;
 
-    // Derive app_mode from the parent conversation so that cloud-conversation artifacts
-    // are flagged 'cloud' immediately. This is the mechanism that makes mark_artifact_for_push
-    // effective — the WHERE app_mode='cloud' guard there is the backstop, not the trigger.
-    // Artifacts without a conversation_id (orphan) stay 'local' (the column default).
     conn.execute(
         "UPDATE artifacts \
          SET app_mode = COALESCE( \
@@ -118,16 +114,13 @@ pub fn save_artifact_to_db(conn: &Connection, artifact: &Artifact) -> Result<(),
         )
     })?;
 
-    // CLOUD SYNC HOOK: mark for push if this artifact belongs to a cloud conversation.
-    // The gate is entirely inside mark_artifact_for_push (WHERE app_mode='cloud') so
-    // local/BYOK artifacts are never touched — no mode state needed here.
     if let Err(e) = cloud_sync::mark_artifact_for_push(conn, &artifact.id) {
         // Non-fatal: log and continue. A missed mark will be retried on the next
         // save (or caught by the next sync's gather pass if cloud_id is already set).
         tracing::warn!(
             artifact_id = %artifact.id,
             error = %e,
-            "Failed to mark artifact for cloud push — will retry on next sync"
+            "Failed to mark artifact for cloud push, will retry on next sync"
         );
     }
 
@@ -920,10 +913,6 @@ mod tests {
         }
     }
 
-    /// save_artifact_to_db under a CLOUD conversation: app_mode must be 'cloud',
-    /// needs_push=1, cloud_id set, conversation_cloud_id set — exercising the
-    /// real code path (not a raw INSERT) so the derive-from-conversation UPDATE
-    /// and mark_artifact_for_push hook are both verified.
     #[test]
     fn save_artifact_under_cloud_conversation_marks_for_push() {
         let conn = fresh_db();
@@ -981,8 +970,6 @@ mod tests {
         );
     }
 
-    /// save_artifact_to_db under a LOCAL conversation: app_mode must stay 'local',
-    /// needs_push=0, cloud_id NULL — the real path must never sync local artifacts.
     #[test]
     fn save_artifact_under_local_conversation_stays_local() {
         let conn = fresh_db();

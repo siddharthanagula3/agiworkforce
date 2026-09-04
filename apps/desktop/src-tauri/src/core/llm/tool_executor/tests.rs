@@ -586,10 +586,6 @@ fn test_internal_resource_persistence_is_explicit_per_turn() {
 
 #[tokio::test]
 async fn test_create_artifact_is_policy_registered() {
-    // Without a policy entry, ToolExecutionGuard::validate_tool_call rejects
-    // ANY tool call for an unregistered tool name with UnauthorizedTool —
-    // this test guards against that regression (DESKTOP-ARTIFACTS-ENTIRELY-
-    // UNWIRED-01 fix landing without the matching tool_guard.rs policy).
     let guard = crate::sys::security::ToolExecutionGuard::new();
 
     guard

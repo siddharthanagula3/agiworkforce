@@ -768,7 +768,7 @@ fn get_embedded_registry() -> Vec<McpBundle> {
             id: "mcp-git".to_string(),
             name: "Git".to_string(),
             version: "0.6.2".to_string(),
-            description: "Git repository operations — status, diff, commit, branch, log, and more. Read, search, and manipulate local Git repositories.".to_string(),
+            description: "Git repository operations, status, diff, commit, branch, log, and more. Read, search, and manipulate local Git repositories.".to_string(),
             author: "Model Context Protocol".to_string(),
             category: "development".to_string(),
             icon_url: Some("https://git-scm.com/images/logos/downloads/Git-Icon-1788C.png".to_string()),
@@ -2095,7 +2095,7 @@ fn get_embedded_registry() -> Vec<McpBundle> {
             id: "mcp-playwright".to_string(),
             name: "Playwright".to_string(),
             version: "0.0.22".to_string(),
-            description: "Browser automation using Playwright by Microsoft. Interact with web pages through structured accessibility snapshots — click, type, navigate, screenshot, and run Playwright code.".to_string(),
+            description: "Browser automation using Playwright by Microsoft. Interact with web pages through structured accessibility snapshots, click, type, navigate, screenshot, and run Playwright code.".to_string(),
             author: "Microsoft".to_string(),
             category: "automation".to_string(),
             icon_url: Some("https://playwright.dev/img/playwright-logo.svg".to_string()),
@@ -2474,7 +2474,7 @@ fn get_embedded_registry() -> Vec<McpBundle> {
             tools: vec![
                 BundleTool {
                     name: "codemcp".to_string(),
-                    description: "Initialize a coding session — edit files, run tests, and apply refactors with Git-versioned changes".to_string(),
+                    description: "Initialize a coding session, edit files, run tests, and apply refactors with Git-versioned changes".to_string(),
                     parameters: vec![
                         BundleToolParameter { name: "chat_id".to_string(), param_type: "string".to_string(), required: true, description: "Session identifier".to_string() },
                         BundleToolParameter { name: "subcmd".to_string(), param_type: "string".to_string(), required: true, description: "Subcommand: InitProject, ReadFile, WriteFile, EditFile, RunCommand".to_string() },

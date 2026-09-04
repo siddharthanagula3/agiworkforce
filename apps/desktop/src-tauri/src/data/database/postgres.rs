@@ -67,9 +67,6 @@ impl PostgresPool {
                 // Health-check the pooled connection
                 match client.execute("SELECT 1", &[]).await {
                     Ok(_) => {
-                        // Connection is healthy — clone the Arc and return
-                        // Note: tokio_postgres::Client doesn't implement Clone,
-                        // so we return the pool reference pattern below instead.
                     }
                     Err(_) => {
                         // Connection is dead, will recreate below
@@ -84,9 +81,6 @@ impl PostgresPool {
             while let Some(client) = clients.pop() {
                 match client.execute("SELECT 1", &[]).await {
                     Ok(_) => {
-                        // Healthy — put it back and create a new one from the pool config
-                        // (tokio_postgres::Client is not Clone, so we return this one
-                        // and replenish the pool in the background)
                         let config_clone = self.config.clone();
                         let clients_arc = self.clients.clone();
                         let max = self.max_size;
@@ -118,7 +112,6 @@ impl PostgresPool {
             }
         }
 
-        // No healthy connections in pool — create a fresh one
         let conn_str = self.config.build_connection_string()?;
         let (client, connection) = tokio_postgres::connect(&conn_str, NoTls).await?;
         tokio::spawn(async move {

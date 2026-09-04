@@ -62,26 +62,12 @@ interface PairingResponse {
 
 const PAIRING_SECRET_BYTES = 32;
 
-/**
- * 32 random bytes that key the dispatch control channel. Generated here and
- * published only in the QR / pairing-link payload the phone reads optically —
- * it is deliberately never sent to the signaling relay, which is the party the
- * envelope HMAC has to defend against.
- */
 function generatePairingSecret(): string {
   const bytes = new Uint8Array(PAIRING_SECRET_BYTES);
   crypto.getRandomValues(bytes);
   return Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
 }
 
-/**
- * `agiw3:` marks a payload that carries the out-of-band secret; a build that
- * predates it can only render `agiw:`, so the phone can tell the two apart
- * without trusting anything the relay chose. The pair token is deliberately
- * left out — the phone claims its own from the relay — which keeps the payload
- * inside the length the phone's manual-entry field accepts, so "copy the
- * pairing link and paste it" stays a working path for a phone with no camera.
- */
 function buildPairingPayload(code: string, secret: string): string {
   return `agiw3:${code}:${secret}`;
 }
@@ -473,7 +459,7 @@ export const useConnectionStore = create<MobileCompanionState>()(
               }
             } else {
               console.warn(
-                '[dispatch] peer_ready metadata missing dispatchSalt — ' +
+                '[dispatch] peer_ready metadata missing dispatchSalt, ' +
                   'mobile may need update before 2026-06-05 cutoff.',
               );
             }

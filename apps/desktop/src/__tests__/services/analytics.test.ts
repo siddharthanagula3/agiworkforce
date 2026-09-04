@@ -308,7 +308,7 @@ describe('AnalyticsService', () => {
       expect(service.getSessionInfo().events_count).toBe(before);
     });
 
-    it('STRESS: interleaved cloud/local tracks — only cloud-mode calls are counted', () => {
+    it('STRESS: interleaved cloud/local tracks, only cloud-mode calls are counted', () => {
       const before = service.getSessionInfo().events_count;
       let cloudCalls = 0;
       for (let i = 0; i < 100; i++) {

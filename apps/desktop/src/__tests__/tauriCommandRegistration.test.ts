@@ -44,8 +44,8 @@ describe('tauri command registration contracts', () => {
         } catch {
           try {
             memRs = readFileSync(alternatePath, 'utf8');
-          } catch {
-            // Neither path exists — fail explicitly so renames/moves are caught.
+          } catch (err) {
+            void err;
           }
         }
         expect(memRs).not.toBe('');

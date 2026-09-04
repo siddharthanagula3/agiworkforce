@@ -75,14 +75,7 @@ mod security_test_cases {
 
     #[test]
     fn test_whitespace_only_command_returns_empty_error() {
-        // Whitespace is not empty by byte length, but the validator checks
-        // after normalize — however the raw check is on the original string.
-        // The validator checks `command.is_empty()` on the raw string, so
-        // a space character is NOT rejected as empty.  This test verifies
-        // "   " passes the empty check and then gets through (safe whitespace).
         let cfg = ValidationConfig::oneshot();
-        // A single space is not blocked by dangerous patterns, metacharacters,
-        // or operators — it should succeed.
         assert!(validate_command(" ", &cfg).is_ok());
     }
 
@@ -164,9 +157,6 @@ mod security_test_cases {
         assert!(matches!(result, Err(CommandValidationError::NullByte)));
     }
 
-    // -----------------------------------------------------------------------
-    // Safe commands — happy path
-    // -----------------------------------------------------------------------
 
     #[test]
     fn test_safe_commands_pass_in_oneshot_mode() {
@@ -217,9 +207,6 @@ mod security_test_cases {
         }
     }
 
-    // -----------------------------------------------------------------------
-    // Dangerous pattern blocking — system destruction
-    // -----------------------------------------------------------------------
 
     #[test]
     fn test_rm_rf_root_is_blocked() {
@@ -299,9 +286,6 @@ mod security_test_cases {
         assert!(validate_command("systemctl reboot", &cfg).is_err());
     }
 
-    // -----------------------------------------------------------------------
-    // Dangerous pattern blocking — privileged operations
-    // -----------------------------------------------------------------------
 
     #[test]
     fn test_sudo_rm_is_blocked() {
@@ -327,9 +311,6 @@ mod security_test_cases {
         assert!(validate_command("chmod 777 /", &cfg).is_err());
     }
 
-    // -----------------------------------------------------------------------
-    // Dangerous pattern blocking — remote code execution
-    // -----------------------------------------------------------------------
 
     #[test]
     fn test_curl_pipe_bash_is_blocked() {
@@ -358,13 +339,9 @@ mod security_test_cases {
     #[test]
     fn test_pipe_bash_without_curl_is_blocked() {
         let cfg = ValidationConfig::interactive();
-        // "| bash" alone is a dangerous pattern — blocked even in interactive mode
         assert!(validate_command("cat exploit.sh | bash", &cfg).is_err());
     }
 
-    // -----------------------------------------------------------------------
-    // Dangerous pattern blocking — code injection
-    // -----------------------------------------------------------------------
 
     #[test]
     fn test_eval_dollar_parens_is_blocked() {
@@ -402,9 +379,6 @@ mod security_test_cases {
         assert!(validate_command("ruby -e 'puts 42'", &cfg).is_err());
     }
 
-    // -----------------------------------------------------------------------
-    // Dangerous pattern blocking — reverse shells
-    // -----------------------------------------------------------------------
 
     #[test]
     fn test_nc_dash_e_is_blocked() {
@@ -430,9 +404,6 @@ mod security_test_cases {
         assert!(validate_command("mkfifo /tmp/f", &cfg).is_err());
     }
 
-    // -----------------------------------------------------------------------
-    // Dangerous pattern blocking — history tampering
-    // -----------------------------------------------------------------------
 
     #[test]
     fn test_history_clear_is_blocked() {
@@ -446,9 +417,6 @@ mod security_test_cases {
         assert!(validate_command("crontab -r", &cfg).is_err());
     }
 
-    // -----------------------------------------------------------------------
-    // Dangerous pattern blocking — kernel modules
-    // -----------------------------------------------------------------------
 
     #[test]
     fn test_insmod_is_blocked() {
@@ -593,7 +561,6 @@ mod security_test_cases {
 
     #[test]
     fn test_backtick_blocked_even_in_interactive_mode() {
-        // Backticks enable command substitution — must be blocked everywhere
         let cfg = ValidationConfig::interactive();
         let result = validate_command("`id`", &cfg);
         assert!(
@@ -626,7 +593,6 @@ mod security_test_cases {
             block_operators: false,
             ..ValidationConfig::default()
         };
-        // $(whoami) alone — not a dangerous pattern — should now pass
         let result = validate_command("echo $(whoami)", &cfg);
         assert!(
             result.is_ok(),
@@ -747,7 +713,6 @@ mod security_test_cases {
 
     #[test]
     fn test_interactive_input_strips_trailing_newline_before_check() {
-        // "shutdown -h now\n" — dangerous pattern should still be caught
         assert!(validate_interactive_input("shutdown -h now\n", None).is_err());
     }
 
@@ -988,16 +953,12 @@ mod security_test_cases {
         assert_ne!(RiskLevel::Low, RiskLevel::Critical);
     }
 
-    // -----------------------------------------------------------------------
-    // Edge cases — special character combinations
-    // -----------------------------------------------------------------------
 
     #[test]
     fn test_windows_path_in_normal_command_is_allowed() {
         // A normal command referencing a Windows path should not be blocked
         let cfg = ValidationConfig::interactive();
         let cmd = r"dir C:\Users\test\Documents";
-        // "dir" with a Windows path is safe — should not match dangerous patterns
         assert!(validate_command(cmd, &cfg).is_ok());
     }
 

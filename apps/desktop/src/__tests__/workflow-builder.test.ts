@@ -1,4 +1,3 @@
-
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { invoke } from '@tauri-apps/api/core';
 import {
@@ -113,12 +112,12 @@ describe('update workflow', () => {
 
     vi.mocked(invoke).mockResolvedValueOnce(undefined);
 
-    const updated = { ...def1, name: 'Workflow A — Renamed' };
+    const updated = { ...def1, name: 'Workflow A, Renamed' };
     await useWorkflowStore.getState().updateWorkflow('wf-a', updated);
 
     const wfA = useWorkflowStore.getState().workflows.find((w) => w.id === 'wf-a');
     const wfB = useWorkflowStore.getState().workflows.find((w) => w.id === 'wf-b');
-    expect(wfA?.name).toBe('Workflow A — Renamed');
+    expect(wfA?.name).toBe('Workflow A, Renamed');
     expect(wfB?.name).toBe('Workflow B');
   });
 });

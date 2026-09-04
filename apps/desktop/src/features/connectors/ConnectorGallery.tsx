@@ -968,7 +968,7 @@ export function ConnectorGallery() {
         </section>
       ) : null}
 
-      {/* OAuth app credentials — collapsible; must be configured before connecting */}
+      {/* OAuth app credentials, collapsible; must be configured before connecting */}
       <section className="space-y-2">
         <button
           type="button"

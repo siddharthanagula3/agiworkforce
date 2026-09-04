@@ -63,19 +63,6 @@ struct ConnectorMcpMapping {
     credential_source: ConnectorCredentialSource,
 }
 
-/// Canonical connector → MCP server mapping table.
-///
-/// AUDIT-FIX (DESKTOP-CONNECTOR-MAPPING-DRIFT-FAKE-CONNECTED-01): this table
-/// is now the single source of truth for "does clicking Connect on this
-/// connector ever spawn a real MCP server". Previously the frontend catalog
-/// (`connectorDefinitions.ts`'s `CONNECTOR_DIRECTORY`) advertised several
-/// connector ids (atlassian, google_sheets, context7, canva, hubspot) that
-/// had no entry here, so `mcp_connect_connector` silently no-opped and
-/// `mcp_list_connected_providers` still reported "connected" purely from
-/// credential presence — a permanent fake-connected badge with zero backing
-/// tools. `mcp_get_supported_connector_ids` (below) exposes exactly these
-/// keys to the frontend so the "Available to connect" grid can never again
-/// advertise a connector this table doesn't back.
 const CONNECTOR_MCP_MAPPINGS: &[(&str, ConnectorMcpMapping)] = &[
     (
         "github",
@@ -251,18 +238,6 @@ fn get_connector_mcp_mapping(connector_id: &str) -> Option<ConnectorMcpMapping> 
         .map(|(_, mapping)| mapping.clone())
 }
 
-/// Reverse lookup: map an MCP `server_name` (e.g. "connector-github") back to
-/// its connector catalog id (e.g. "github").
-///
-/// The per-tool connector permission store
-/// (`packages/ui/unified-chat/src/lib/connectorPermissionStore.ts`, backed by
-/// `connector_permission_get`/`connector_permission_set` in
-/// `connector_permissions.rs`) is keyed by this catalog id, while MCP tool
-/// calls only carry the MCP `server_name`. Without this mapping the two
-/// never compare equal (e.g. "github" vs "connector-github") and a saved
-/// permission silently never matches at lookup time. Returns `None` for MCP
-/// servers outside the connector catalog (custom/user-added servers), which
-/// have no catalog id — callers should fall back to the raw server name.
 pub(crate) fn connector_id_for_server_name(server_name: &str) -> Option<&'static str> {
     CONNECTOR_MCP_MAPPINGS
         .iter()
@@ -270,13 +245,6 @@ pub(crate) fn connector_id_for_server_name(server_name: &str) -> Option<&'static
         .map(|(id, _)| *id)
 }
 
-/// Every connector id that has a real, working MCP server mapping — i.e.
-/// every id `get_connector_mcp_mapping` resolves to `Some(..)`. This is the
-/// backend half of the DESKTOP-CONNECTOR-MAPPING-DRIFT-FAKE-CONNECTED-01 fix:
-/// the frontend "Available to connect" grid derives its visible set from
-/// this list (via `mcp_get_supported_connector_ids`) instead of trusting its
-/// own static catalog, so a connector can never be advertised as connectable
-/// without real backend support behind it.
 pub(crate) fn supported_connector_ids() -> Vec<&'static str> {
     CONNECTOR_MCP_MAPPINGS.iter().map(|(id, _)| *id).collect()
 }
@@ -451,7 +419,6 @@ impl McpOAuthProvider {
 
     /// Build the RFC 8252 §7.3 loopback redirect URI for this provider at `port`.
     pub fn redirect_uri(&self, port: u16) -> String {
-        // AUDIT-FIX: H-3 — loopback HTTP listener replaces hijackable custom scheme.
         format!("http://127.0.0.1:{}/oauth/callback", port)
     }
 }
@@ -523,7 +490,6 @@ struct PkceChallenge {
 
 impl PkceChallenge {
     fn generate() -> Self {
-        // AUDIT-FIX: H-2 — 32 bytes of OsRng entropy → base64url-no-pad (43 chars), no modulo bias.
         let mut verifier_bytes = [0u8; 32];
         OsRng.fill_bytes(&mut verifier_bytes);
         let code_verifier = general_purpose::URL_SAFE_NO_PAD.encode(verifier_bytes);
@@ -546,12 +512,7 @@ struct PendingOAuthFlow {
     provider: McpOAuthProvider,
     code_verifier: String,
     created_at: u64,
-    redirect_uri: String, // AUDIT-FIX: H-3 — captured loopback URI
-    /// The literal connector id the frontend started the flow for (e.g.
-    /// "gmail", "google_drive", "google_calendar" — several distinct
-    /// connector ids can share one `McpOAuthProvider` bucket). Captured so
-    /// the loopback callback listener (AUDIT-FIX OAUTH-LOOPBACK-COMPLETION-01)
-    /// can activate the right MCP server once tokens are stored.
+    redirect_uri: String,
     connector_id: String,
 }
 
@@ -896,19 +857,10 @@ pub async fn mcp_oauth_start(
     state: tauri::State<'_, McpOAuthState>,
     app: tauri::AppHandle,
 ) -> Result<OAuthStartResponse, String> {
-    // The frontend passes the connector catalog id here (e.g. "gmail",
-    // "google_drive" — see `connectorsStore.connect(id)` ->
-    // `McpClient.oauthStartRaw(id)`), which is more specific than the
-    // canonical `McpOAuthProvider` bucket it resolves to below. Captured so
-    // the loopback callback listener can activate the right MCP server.
     let connector_id = provider.clone();
     let oauth_provider = McpOAuthProvider::from_str(&provider)
         .ok_or_else(|| format!("Unknown provider: {}", provider))?;
 
-    // AUDIT-FIX: CI-3 — HITL gate before navigating the user to a third-party
-    // OAuth consent page. Without this an agent following a prompt-injected
-    // instruction could silently start an OAuth flow against an attacker-controlled
-    // provider. Pattern mirrors file_ops.rs:501.
     if !crate::sys::commands::tool_confirmation::request_confirmation_simple(
         &app,
         "mcp_oauth_consent",
@@ -933,7 +885,6 @@ pub async fn mcp_oauth_start(
 
     // Build authorization URL
     let scopes = oauth_provider.default_scopes().join(" ");
-    // AUDIT-FIX: H-3 — bind a loopback listener; use its assigned port in the redirect URI.
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
         .await
         .map_err(|e| format!("Failed to bind loopback OAuth listener: {}", e))?;
@@ -996,18 +947,6 @@ pub async fn mcp_oauth_start(
         );
     }
 
-    // AUDIT-FIX OAUTH-LOOPBACK-COMPLETION-01: the listener above used to be
-    // dropped right after reading its assigned port, with a comment claiming
-    // it would be "reopened on the callback handler invocation" — nothing
-    // ever did that, so no process was listening on `redirect_uri` and the
-    // OAuth flow could never complete. Keep the listener alive and hand it to
-    // a background task that serves exactly one request (the provider's
-    // redirect), completes the token exchange, and activates the connector's
-    // MCP server — all inside this process. This intentionally does NOT
-    // route back out through the OS via the `agiworkforce://` custom-scheme
-    // deep link (see `useDeepLink.ts`): doing so would reintroduce the exact
-    // custom-scheme hijack risk that moving `redirect_uri` to a loopback
-    // interface (AUDIT-FIX: H-3, above) was meant to close.
     let pending_flows_for_listener = state.pending_flows.clone();
     let http_client_for_listener = state.http_client.clone();
     let callback_state = oauth_state.clone();
@@ -1044,18 +983,6 @@ pub async fn mcp_oauth_start(
     })
 }
 
-/// Validate the CSRF `callback_state`, exchange `code` for tokens with the
-/// provider recorded in the matching pending flow, and persist them.
-///
-/// Shared by `mcp_oauth_callback` (the legacy custom-scheme deep-link path —
-/// still a valid Tauri command surface, kept for backward compatibility) and
-/// `run_oauth_loopback_listener` (the primary completion path since
-/// AUDIT-FIX H-3 moved `redirect_uri` off the custom scheme onto a loopback
-/// HTTP interface). `expected_provider`, when `Some`, must match the pending
-/// flow's stored provider or the exchange is rejected without consuming the
-/// flow — preserves `mcp_oauth_callback`'s original cross-check against its
-/// `provider` argument (sourced from the deep-link URL) so a caller can
-/// retry with the correct provider instead of losing the pending flow.
 async fn complete_oauth_exchange(
     pending_flows: &Arc<RwLock<HashMap<String, PendingOAuthFlow>>>,
     http_client: &reqwest::Client,
@@ -1093,7 +1020,6 @@ async fn complete_oauth_exchange(
     // Get client credentials
     let (client_id, client_secret) = get_client_credentials(oauth_provider)?;
 
-    // Exchange code for tokens (AUDIT-FIX: H-3 — use the loopback URI captured at start)
     let redirect_uri = pending_flow.redirect_uri.clone();
 
     let mut params = HashMap::new();
@@ -1230,11 +1156,6 @@ pub async fn mcp_oauth_callback(
 // Loopback OAuth Callback Listener (AUDIT-FIX OAUTH-LOOPBACK-COMPLETION-01)
 // ============================================================================
 
-/// Serves exactly one HTTP request on `listener` — the OAuth provider's
-/// redirect to our loopback `redirect_uri` — then shuts down. Bounded to 5
-/// minutes; if nothing arrives in that window the pending flow is dropped so
-/// it cannot be replayed later, and the frontend's own client-side timeout
-/// (`OAUTH_TIMEOUT_MS` in `connectorsStore.ts`) reports the failure to the user.
 async fn run_oauth_loopback_listener(
     listener: tokio::net::TcpListener,
     expected_state: String,
@@ -1349,10 +1270,6 @@ async fn run_oauth_loopback_listener(
             )
             .await;
 
-            // Best-effort: activate the MCP server immediately so the
-            // connector is usable without a manual reconnect step. A failure
-            // here does not roll back the already-stored tokens — the user
-            // can retry activation from Settings → Connectors.
             if let Err(e) = connect_connector_internal(&connector_id, &app).await {
                 tracing::warn!(
                     "[MCP OAuth] Tokens stored for '{}' but connector activation failed: {}",
@@ -1436,21 +1353,6 @@ p{{color:#9a9a9a;font-size:14px}}</style></head><body><div class=\"card\">\
     )
 }
 
-/// Emit the OAuth completion signal for the frontend once the loopback
-/// listener finishes (success, provider error, or exchange failure).
-///
-/// `mcp:connection_changed` / `mcp:tools_updated` (emitted inside
-/// `connect_connector_internal`, mirroring `mcp_connect_connector`) already
-/// refresh the live MCP tools/servers store (`useAgenticEvents.ts` ->
-/// `useMcpStore`). This additionally emits `mcp-oauth-callback` /
-/// `mcp-oauth-error` — the same event names `ConnectorGallery.tsx`'s
-/// `window.addEventListener` listens for — so a small frontend follow-up
-/// (`listen('mcp-oauth-callback', e => window.dispatchEvent(new CustomEvent(...)))`)
-/// can bridge Tauri events into that listener without a further backend
-/// change. NOTE: as of this fix nothing performs that bridge, so
-/// `ConnectorGallery`'s local "Connecting…" spinner and
-/// `connectorsStore.pendingOAuth` do not yet clear from this signal alone —
-/// see the open risk noted alongside this fix.
 fn emit_oauth_completion_events(
     app: &tauri::AppHandle,
     succeeded: Option<(McpOAuthProvider, String)>,
@@ -1722,13 +1624,11 @@ pub async fn mcp_oauth_set_credentials(
     let conn = open_mcp_settings_db()?;
     let helper = Some(encryption.inner());
 
-    // Encrypt and store client_id (FIX-001 — uses master-password key when configured)
     let encrypted_id = encrypt_credential(helper, &client_id)?;
     let id_key = format!("mcp_oauth_config_{}_client_id", oauth_provider.as_str());
     upsert_settings_v2_value(&conn, &id_key, &encrypted_id, "security", true)
         .map_err(|e| format!("Failed to store client_id: {}", e))?;
 
-    // Encrypt and store client_secret (FIX-001 — uses master-password key when configured)
     let encrypted_secret = encrypt_credential(helper, &client_secret)?;
     let secret_key = format!("mcp_oauth_config_{}_client_secret", oauth_provider.as_str());
     upsert_settings_v2_value(&conn, &secret_key, &encrypted_secret, "security", true)
@@ -1742,16 +1642,6 @@ pub async fn mcp_oauth_set_credentials(
     Ok(())
 }
 
-/// Check whether OAuth app credentials (client_id + client_secret) have been
-/// stored for a given provider.  Does NOT decrypt — uses a COUNT(*) presence
-/// check on settings_v2 rows so the vault lock state is irrelevant.
-///
-/// Returns `{ configured: true }` when BOTH client_id and client_secret rows
-/// exist for the resolved provider, `{ configured: false }` otherwise.
-///
-/// The provider string is resolved via `McpOAuthProvider::from_str` exactly as
-/// `get_client_credentials` and `mcp_oauth_set_credentials` do, so badge state
-/// and actual credential lookup are always in sync.
 #[tauri::command]
 pub async fn mcp_oauth_credentials_status(provider: String) -> Result<serde_json::Value, String> {
     let oauth_provider = McpOAuthProvider::from_str(&provider)
@@ -1928,12 +1818,6 @@ async fn fetch_user_info(
     }
 }
 
-/// Server-name prefix `CustomRemoteMcpConnectorDialog.tsx`'s
-/// `slugifyServerName` always applies to a user-added remote MCP connector
-/// (e.g. "custom-acme-mcp"). These entries are written directly into
-/// `config.mcp_servers` — never through `get_connector_mcp_mapping` or the
-/// OAuth/API-key credential tables — so they need a separate inclusion rule
-/// in `resolve_connected_providers` (see AUDIT note there).
 const CUSTOM_MCP_SERVER_PREFIX: &str = "custom-";
 
 /// Every connector id `mcp_list_connected_providers` will consider.
@@ -1989,26 +1873,6 @@ const KNOWN_CONNECTOR_PROVIDERS: &[&str] = &[
     "webex",
 ];
 
-/// Core "is this connector really connected" logic, split out from the
-/// `#[tauri::command]` wrapper so it can be unit tested without constructing
-/// a full `tauri::State<McpState>`.
-///
-/// AUDIT-FIX (DESKTOP-CONNECTOR-MAPPING-DRIFT-FAKE-CONNECTED-01): a provider
-/// used to be reported "connected" purely because a credential (OAuth token
-/// or API key) existed in `settings_v2` — regardless of whether any MCP
-/// server was ever actually provisioned for it. That let any gap in
-/// `get_connector_mcp_mapping` (e.g. atlassian, google_sheets, context7,
-/// which all have working OAuth/credential flows but no mapping entry)
-/// present a permanent green "Connected" badge with zero backing tools.
-///
-/// The fix: credentials are necessary but no longer sufficient.
-/// - If the connector has no entry in `get_connector_mcp_mapping` at all,
-///   there is no MCP server that could ever back it, so it can never count
-///   as connected — regardless of stray credentials.
-/// - If it does have a mapping, it only counts as connected when that
-///   mapping's `server_name` is both configured and present in the live MCP
-///   client's connected set. Configuration is intentionally discovery-only:
-///   saving or enabling a server never means the user approved a connection.
 fn resolve_connected_providers(
     conn: &rusqlite::Connection,
     configured_servers: &std::collections::HashSet<String>,
@@ -2044,31 +1908,12 @@ fn resolve_connected_providers(
                 {
                     providers.push(provider.to_string());
                 }
-                // Else: credentials/config may exist, but no approved live
-                // connection backs the connector — do not fake-badge it.
             }
             None => {
-                // No MCP-backed server exists for this id at all. Credential
-                // presence alone can never mean "connected" — this is exactly
-                // the structural gap that produced permanent fake-connected
-                // badges for atlassian/google_sheets/context7.
             }
         }
     }
 
-    // AUDIT-FIX (custom-connectors-never-show-connected-01): a user-added
-    // remote MCP connector (CustomRemoteMcpConnectorDialog.tsx) is written
-    // straight into `config.mcp_servers` under a `custom-<slug>` key via
-    // `mcp_update_config`, then connected only through the explicit approval
-    // action.
-    // It never goes through `get_connector_mcp_mapping` or the OAuth/API-key
-    // credential tables (there is no catalog id for it, nothing to look up
-    // above), so the loop over `known_providers` can never surface it,
-    // leaving `mcp_list_connected_providers` — and therefore
-    // ConnectorGallery's "Connected" section — permanently blind to it even
-    // though it works in chat. It meets the identical bar the loop above
-    // uses for catalog connectors (server name present in the persisted
-    // config), so include it only when the live client confirms it is active.
     let mut custom_server_names: Vec<String> = live_connected_servers
         .iter()
         .filter(|name| {
@@ -2082,8 +1927,6 @@ fn resolve_connected_providers(
     Ok(providers)
 }
 
-/// Lists all connector provider IDs that are genuinely connected — i.e. have
-/// stored credentials *and* a real, persisted MCP server backing them.
 #[tauri::command]
 pub async fn mcp_list_connected_providers(
     mcp_state: tauri::State<'_, McpState>,
@@ -2165,7 +2008,6 @@ async fn connect_connector_internal(
     let mapping = match get_connector_mcp_mapping(connector_id) {
         Some(m) => m,
         None => {
-            // No MCP mapping for this connector — mark connected without MCP
             tracing::info!(
                 "No MCP server mapping for connector '{}', skipping MCP setup",
                 connector_id
@@ -2213,9 +2055,6 @@ async fn connect_connector_internal(
             }
         }
         ConnectorCredentialSource::ApiKey => {
-            // Retrieve API key from settings_v2 (FIX-001 — master-password helper
-            // is grabbed off the AppHandle so legacy rows still decrypt via
-            // machine-key fallback when the vault isn't configured).
             let encryption_state =
                 app_handle.state::<crate::sys::security::MasterPasswordEncryption>();
             let api_key = retrieve_api_key(Some(encryption_state.inner()), connector_id)?;
@@ -2389,7 +2228,6 @@ pub async fn save_api_key(
 ) -> Result<(), String> {
     let conn = open_mcp_settings_db()?;
 
-    // Encrypt the API key before storing (FIX-001 — uses master-password key when configured)
     let encrypted = encrypt_credential(Some(encryption.inner()), &key)?;
     let setting_key = format!("api_key_{}", provider);
 
@@ -2402,10 +2240,8 @@ pub async fn save_api_key(
     if let Some(provider_enum) = crate::core::llm::Provider::from_string(&provider) {
         match provider_enum {
             crate::core::llm::Provider::Ollama => {
-                // Ollama doesn't use API keys — skip activation
             }
             crate::core::llm::Provider::ManagedCloud => {
-                // ManagedCloud uses access tokens, not API keys — skip activation
             }
             _ => {
                 // BYOK: Create a DirectApiProvider for the provider
@@ -2522,9 +2358,6 @@ fn decrypt_credential_value(
     decrypt_credential_value_machine_only(encrypted)
 }
 
-/// Public alias of [`decrypt_credential_value_machine_only`] for the
-/// vault migration command — exposed so `master_password.rs` can read
-/// legacy rows without re-implementing the AES-GCM unpacking.
 pub(crate) fn decrypt_legacy_machine_credential(encrypted: &str) -> Result<String, String> {
     decrypt_credential_value_machine_only(encrypted)
 }
@@ -2723,12 +2556,6 @@ mod tests {
         assert!(!providers.contains(&"google_drive".to_string()));
     }
 
-    /// Once a real MCP server has actually been provisioned (i.e. its
-    /// `server_name` is present in the persisted config — what
-    /// `mcp_connect_connector` inserts on success), the provider correctly
-    /// resolves as connected. Also confirms Google's legacy
-    /// `mcp_oauth_tokens_google_drive` alias still resolves through
-    /// `has_stored_tokens_for_provider`.
     #[tokio::test]
     async fn provider_is_connected_once_credentials_and_a_configured_server_both_exist() {
         let providers = with_temp_settings_db(|conn| async move {
@@ -2756,17 +2583,10 @@ mod tests {
         .await;
 
         assert!(providers.contains(&"gmail".to_string()));
-        // google_calendar/google_drive share the same Google credentials but
-        // have their own distinct server names, which were NOT added to
-        // `configured_servers` above — they must not be reported connected.
         assert!(!providers.contains(&"google_calendar".to_string()));
         assert!(!providers.contains(&"google_drive".to_string()));
     }
 
-    /// A connector id with no entry in `get_connector_mcp_mapping` at all
-    /// (e.g. a legacy/never-implemented catalog id) can never be reported as
-    /// connected, even if a stray credential row exists for it — this is the
-    /// core structural fix for DESKTOP-CONNECTOR-MAPPING-DRIFT-FAKE-CONNECTED-01.
     #[tokio::test]
     async fn provider_with_no_mcp_mapping_is_never_reported_connected() {
         assert!(get_connector_mcp_mapping("atlassian").is_none());
@@ -2797,12 +2617,6 @@ mod tests {
         assert!(!providers.contains(&"atlassian".to_string()));
     }
 
-    /// AUDIT-FIX (custom-connectors-never-show-connected-01): a live
-    /// `custom-*` server (added via CustomRemoteMcpConnectorDialog.tsx and
-    /// persisted through `mcp_update_config`) must be reported connected
-    /// even though it has no `get_connector_mcp_mapping` entry and no
-    /// OAuth/API-key credential row — those only apply to catalog
-    /// connectors, not user-added remote MCP servers.
     #[tokio::test]
     async fn live_custom_mcp_server_is_reported_connected_without_catalog_credentials() {
         let providers = with_temp_settings_db(|conn| async move {
@@ -2822,8 +2636,6 @@ mod tests {
         .await;
 
         assert!(providers.contains(&"custom-acme-mcp".to_string()));
-        // A non-custom, non-catalog server name must still never resolve —
-        // this test doesn't loosen the existing unmapped-id guarantee.
         assert!(!providers.contains(&"connector-something-else".to_string()));
     }
 

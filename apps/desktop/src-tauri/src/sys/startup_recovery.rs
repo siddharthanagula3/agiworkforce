@@ -55,11 +55,6 @@ impl StartupRecoveryInfo {
         }
     }
 
-    /// The database key lives in OS secure storage because it is what decrypts
-    /// the database. A *denied* permission prompt is by far the most common way
-    /// to reach this screen and is fully recoverable, so the copy names that
-    /// case and the fix instead of stopping at "unavailable" — which reads like
-    /// a broken install and gives the user nothing to do.
     fn secure_storage() -> Self {
         Self {
             code: "DB_SECURE_STORAGE".to_string(),
@@ -132,7 +127,7 @@ pub fn show_recovery_window(app: &AppHandle) {
         return;
     };
 
-    if let Err(error) = window.set_title("AGI — Local data recovery") {
+    if let Err(error) = window.set_title("AGI, Local data recovery") {
         tracing::warn!("Failed to set startup-recovery window title: {error}");
     }
     if let Err(error) = window.show() {
@@ -257,9 +252,6 @@ mod tests {
 
     #[test]
     fn denied_credential_prompt_tells_the_user_how_to_recover() {
-        // Reaching this screen by dismissing a Keychain prompt is recoverable,
-        // and the previous copy ("Secure storage is unavailable") gave no way
-        // back — it read like a broken install for a one-click fix.
         let info = StartupRecoveryInfo::from_database_error(&DatabaseKeyError::SecureStorage(
             "User denied access".to_string(),
         ));

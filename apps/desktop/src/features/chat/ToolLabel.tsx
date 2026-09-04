@@ -304,7 +304,7 @@ export function ToolLabel({ entry }: { entry: ToolLabelEntry }) {
           </span>
         )}
 
-        {/* Output toggle — shown when there is any expandable content */}
+        {/* Output toggle, shown when there is any expandable content */}
         {hasOutput && (
           <button
             type="button"
@@ -321,7 +321,7 @@ export function ToolLabel({ entry }: { entry: ToolLabelEntry }) {
         )}
       </div>
 
-      {/* Inline output section — shown when expanded */}
+      {/* Inline output section, shown when expanded */}
       {hasOutput && outputExpanded && (
         <div className="pl-8">
           {terminalOutput && <TerminalOutputView output={terminalOutput} />}

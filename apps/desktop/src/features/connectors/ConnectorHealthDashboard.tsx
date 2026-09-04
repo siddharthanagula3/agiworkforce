@@ -1,4 +1,3 @@
-
 import { useCallback, useEffect } from 'react';
 import {
   Activity,
@@ -201,7 +200,7 @@ export function ConnectorHealthDashboard({ className }: ConnectorHealthDashboard
                     <Tooltip>
                       <TooltipTrigger asChild>
                         <span className="text-xs text-destructive truncate max-w-[120px] cursor-help">
-                          — {healthEntry.error_message}
+                          - {healthEntry.error_message}
                         </span>
                       </TooltipTrigger>
                       <TooltipContent>{healthEntry.error_message}</TooltipContent>

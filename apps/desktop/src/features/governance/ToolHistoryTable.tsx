@@ -223,13 +223,13 @@ export const ToolHistoryTable: React.FC<ToolHistoryTableProps> = ({ className })
                     </span>
                   </td>
                   <td className="px-3 py-2 text-gray-400 max-w-[200px] truncate">
-                    {entry.description ?? '—'}
+                    {entry.description ?? ', '}
                   </td>
                   <td className="px-3 py-2 text-gray-400 max-w-[160px] truncate">
                     {entry.error ? (
                       <span className="text-red-400">{entry.error}</span>
                     ) : (
-                      (entry.result ?? '—')
+                      (entry.result ?? ', ')
                     )}
                   </td>
                 </tr>

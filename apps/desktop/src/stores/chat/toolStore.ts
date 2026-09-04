@@ -963,9 +963,9 @@ export const useToolStore = create<ToolState>()(
                     const timedOutApproval = state.pendingApprovals[idx]!;
                     timedOutApproval.status = 'timeout';
                     timedOutApproval.rejectedAt = new Date();
-                    timedOutApproval.rejectionReason = 'Timed out — automatically denied';
+                    timedOutApproval.rejectionReason = 'Timed out, automatically denied';
                     upsertApprovalAuditEntry(state.actionLog, timedOutApproval, 'failed', {
-                      error: 'Approval timed out — automatically denied',
+                      error: 'Approval timed out, automatically denied',
                     });
                     state.pendingApprovals.splice(idx, 1);
                   }
@@ -984,7 +984,7 @@ export const useToolStore = create<ToolState>()(
                   if (idx !== -1) {
                     const timedOutApproval = state.pendingApprovals[idx]!;
                     upsertApprovalAuditEntry(state.actionLog, timedOutApproval, 'success', {
-                      result: 'Approval timed out — automatically approved',
+                      result: 'Approval timed out, automatically approved',
                     });
                     state.pendingApprovals.splice(idx, 1);
                   }

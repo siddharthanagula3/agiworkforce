@@ -93,8 +93,6 @@ describe('settingsStore agent mode backend sync', () => {
     expect(useSettingsStore.getState().chatPreferences.agentMode).toBe('plan');
   });
 
-  // SafetyPolicies.tsx — calls `set_agent_mode` directly and never updates
-  // 'safe' (e.g. set via SafetyPolicies.tsx in a prior session). After the
   it('hydrates the stricter backend-persisted agent mode instead of pushing a stale frontend default', async () => {
     const invokeMock = vi.fn(async (command: string) => {
       switch (command) {

@@ -135,9 +135,6 @@ pub enum SafetyReason {
     InvalidCoordinates { x: i32, y: i32 },
     /// Active foreground app is on the user's deny list.
     AppDenied { app_name: String },
-    /// Active foreground app is on the hardcoded always-blocked refuse-list
-    /// (investment / crypto / banking / payments). Cannot be overridden by
-    /// user settings — matches Claude Cowork's hard-blocked categories.
     AppHardBlocked {
         app_name: String,
         bundle_id: Option<String>,
@@ -805,10 +802,6 @@ impl ComputerUseSafetyLayer {
 mod tests {
     use super::*;
 
-    /// CI has no desktop session, so `get_active_window()` returns None here —
-    /// the same state a Linux v1 host or a blocked AppleScript produces. That
-    /// used to allow the action; a banking window that reports no name would
-    /// have sailed past the always-blocked list.
     #[tokio::test]
     async fn unreadable_foreground_app_asks_instead_of_allowing() {
         let layer = ComputerUseSafetyLayer::with_app_permissions(

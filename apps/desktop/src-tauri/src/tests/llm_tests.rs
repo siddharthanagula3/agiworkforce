@@ -238,9 +238,6 @@ mod llm_test_cases {
         assert!(tc.id.is_empty());
     }
 
-    // -----------------------------------------------------------------------
-    // OpenAI SSE parser — happy path
-    // -----------------------------------------------------------------------
 
     #[test]
     fn test_parse_openai_sse_basic_content() {
@@ -357,9 +354,6 @@ mod llm_test_cases {
         assert_eq!(chunk.content.len(), 50_000);
     }
 
-    // -----------------------------------------------------------------------
-    // OpenAI SSE parser — error paths
-    // -----------------------------------------------------------------------
 
     #[test]
     fn test_parse_openai_sse_api_error_returns_err() {
@@ -379,7 +373,6 @@ mod llm_test_cases {
 
     #[test]
     fn test_parse_openai_sse_empty_event_gives_empty_chunk() {
-        // Event with no data lines at all — produces an empty chunk (not an error)
         let event = "";
         let chunk =
             parse_sse_event(event, Provider::OpenAI).expect("parse should succeed on empty input");
@@ -387,21 +380,9 @@ mod llm_test_cases {
         assert!(!chunk.done);
     }
 
-    // -----------------------------------------------------------------------
-    // Anthropic SSE parser — happy path
-    // -----------------------------------------------------------------------
 
-    // -----------------------------------------------------------------------
-    // Anthropic SSE parser — error paths
-    // -----------------------------------------------------------------------
 
-    // -----------------------------------------------------------------------
-    // Google SSE parser — happy path
-    // -----------------------------------------------------------------------
 
-    // -----------------------------------------------------------------------
-    // Ollama SSE parser — happy path
-    // -----------------------------------------------------------------------
 
     #[test]
     fn test_parse_ollama_sse_basic_content() {
@@ -453,9 +434,6 @@ mod llm_test_cases {
         assert!(tcs[0].arguments.contains("url"));
     }
 
-    // -----------------------------------------------------------------------
-    // Ollama SSE parser — error paths
-    // -----------------------------------------------------------------------
 
     #[test]
     fn test_parse_ollama_sse_error_field_returns_err() {
@@ -473,9 +451,6 @@ mod llm_test_cases {
         assert!(result.is_err());
     }
 
-    // -----------------------------------------------------------------------
-    // Provider routing — same format parsers
-    // -----------------------------------------------------------------------
 
     #[test]
     fn test_perplexity_uses_openai_format() {

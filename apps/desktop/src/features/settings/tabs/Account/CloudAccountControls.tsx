@@ -1,4 +1,3 @@
-
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import {
@@ -313,7 +312,7 @@ function ApiKeysSection() {
       <div>
         <h3 className="text-sm font-medium text-foreground">API keys</h3>
         <p className="mt-1 text-xs leading-5 text-muted-foreground">
-          Keys for the OpenAI-compatible API. They authorize your Cloud account only — never this
+          Keys for the OpenAI-compatible API. They authorize your Cloud account only, never this
           device&apos;s Local workspace, files, or model keys.
         </p>
       </div>
@@ -324,7 +323,7 @@ function ApiKeysSection() {
       {issuedKey ? (
         <div role="status" className="rounded-lg border border-border bg-card/40 p-4">
           <p className="text-xs font-medium text-foreground">
-            Copy this key now — it is shown once and never stored on this device.
+            Copy this key now, it is shown once and never stored on this device.
           </p>
           <p className="mt-2 break-all font-mono text-[11px] text-muted-foreground">{issuedKey}</p>
         </div>

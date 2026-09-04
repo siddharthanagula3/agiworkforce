@@ -226,10 +226,6 @@ pub async fn save_attachment<'a>(
         })
         .unwrap_or_else(|| format!("attachment_{}", uuid::Uuid::new_v4()));
 
-    // The name comes straight out of MIME headers a sender controls, and
-    // `Path::join` discards the base when the joined component is absolute —
-    // `filename="/Users/x/Library/LaunchAgents/e.plist"` wrote exactly there.
-    // Keep the last path segment only, and never `.`, `..` or an embedded NUL.
     let filename = sanitize_attachment_filename(&filename);
     let file_path = temp_dir.join(&filename);
     let content = attachment_part

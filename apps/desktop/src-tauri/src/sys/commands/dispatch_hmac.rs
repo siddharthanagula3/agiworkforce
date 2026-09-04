@@ -84,17 +84,6 @@ impl Default for DispatchHmacState {
 
 // ── Commands ────────────────────────────────────────────────────────────────
 
-/// Derive + store the session key for the active Dispatch connection.
-///
-/// `pairing_code` is the user-visible 8+ char pairing code shared between
-/// devices and `session_salt` is the random per-session salt the signaling
-/// relay sent in `dispatchSalt` — both are relay-visible and only bind the key
-/// to one session. `pairing_secret` is the 64-char hex of the 32 random bytes
-/// this desktop published solely in the QR payload; it is the keying material
-/// that keeps the relay from reproducing the session key.
-///
-/// Returns the derived key as a 64-char hex string for diagnostic logging
-/// only; do not persist it.
 #[tauri::command]
 pub fn dispatch_hmac_init(
     state: State<'_, DispatchHmacState>,
@@ -109,7 +98,6 @@ pub fn dispatch_hmac_init(
         .lock()
         .map_err(|_| "state lock poisoned".to_string())?;
     inner.session_key = Some(key);
-    // Wipe the cache too — a new pairing means a fresh nonce window.
     inner.cache = NonceCache::new();
     Ok(hex_encode(&key))
 }
@@ -131,7 +119,7 @@ pub fn dispatch_hmac_verify(
         .lock()
         .map_err(|_| "state lock poisoned".to_string())?;
     let key = inner.session_key.ok_or_else(|| {
-        "dispatch session not initialized — call dispatch_hmac_init first".to_string()
+        "dispatch session not initialized, call dispatch_hmac_init first".to_string()
     })?;
     let cache = &mut inner.cache;
     let outcome = dispatch_hmac::verify(&envelope_json, &key, cache)
@@ -145,7 +133,7 @@ pub fn dispatch_hmac_verify(
     if matches!(outcome, VerifyOutcome::UnsignedTransitional) {
         tracing::warn!(
             target: "dispatch_hmac",
-            "Accepting unsigned message in transitional window — sender did not provide HMAC. \
+            "Accepting unsigned message in transitional window, sender did not provide HMAC. \
              Mobile app may need update before 2026-06-05 cutoff.",
         );
     }
@@ -167,7 +155,7 @@ pub fn dispatch_hmac_sign(
         .lock()
         .map_err(|_| "state lock poisoned".to_string())?;
     let key = inner.session_key.ok_or_else(|| {
-        "dispatch session not initialized — call dispatch_hmac_init first".to_string()
+        "dispatch session not initialized, call dispatch_hmac_init first".to_string()
     })?;
     dispatch_hmac::sign_to_string(&payload, &msg_type, &key).map_err(|e| e.to_string())
 }
@@ -223,8 +211,6 @@ mod tests {
     }
 
     fn init_and_get_key(state: &DispatchHmacState) -> [u8; 32] {
-        // Mimic dispatch_hmac_init without the Tauri State wrapper — the inner
-        // Mutex is the same.
         let key =
             dispatch_hmac::derive_session_key("ABCD1234", "saltsalt", &"ab".repeat(32)).unwrap();
         let mut inner = state.inner.lock().unwrap();
@@ -290,7 +276,6 @@ mod tests {
 
     #[test]
     fn verify_error_strings_are_stable() {
-        // Frontend code may pattern-match on these — keep the strings stable.
         assert_eq!(verify_error_to_string(VerifyError::Malformed), "malformed");
         assert_eq!(
             verify_error_to_string(VerifyError::NonceReplay),

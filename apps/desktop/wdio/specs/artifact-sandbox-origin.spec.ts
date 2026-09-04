@@ -1,4 +1,3 @@
-
 import { waitForDesktopShell } from '../support/desktop-shell';
 
 const ARTIFACT_SCHEME = 'artifact';
@@ -172,7 +171,7 @@ describe('DES-C15 · artifact previews have their own origin in the packaged app
       timeout: HANDSHAKE_TIMEOUT_MS,
       interval: 250,
       timeoutMsg:
-        'The artifact rendered but its own script never reported — the preview document is ' +
+        'The artifact rendered but its own script never reported, the preview document is ' +
         'still inheriting a policy that forbids inline scripts.',
     });
     const state = await readProbe();

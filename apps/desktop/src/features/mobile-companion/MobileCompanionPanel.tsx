@@ -21,10 +21,7 @@ export function MobileCompanionPanel() {
   const isConnected = status === 'streaming' || (status === 'pairing' && peerConnected);
   const isPaired = peerConnected;
 
-  useEffect(() => {
-    // Intentionally empty — approval events are handled by the runtime activity listeners
-    // which populates toolStore.pendingApprovals for us.
-  }, []);
+  useEffect(() => {}, []);
 
   return (
     <div className="flex flex-col h-full gap-4 p-4 overflow-y-auto">
@@ -108,7 +105,7 @@ export function MobileCompanionPanel() {
       {/* Connection status while streaming */}
       {isConnected && (
         <div className="rounded-md border border-sky-200 bg-sky-50 p-3 text-sm text-sky-700">
-          Screen sharing active — your mobile can view and approve agent actions remotely.
+          Screen sharing active, your mobile can view and approve agent actions remotely.
         </div>
       )}
     </div>

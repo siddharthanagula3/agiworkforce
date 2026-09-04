@@ -503,8 +503,6 @@ Do not repeat the error message."#,
         }))
     }
 
-    /// Execute task with retry and model fallback
-    // Used by: resilient agent execution — retry with different models on failure
     async fn _execute_with_retry_fallback(
         &self,
         agi: &Arc<AGICore>,

@@ -128,7 +128,7 @@ impl DesktopMcpServerExecutor {
                 .try_state::<crate::sys::commands::tool_confirmation::ToolConfirmationState>()
         else {
             tracing::error!(
-                "[SECURITY][MCP] ToolConfirmationState unavailable — denying {}",
+                "[SECURITY][MCP] ToolConfirmationState unavailable, denying {}",
                 tool_name
             );
             return Some(self.outcome_from_error(
@@ -435,7 +435,7 @@ impl DesktopMcpServerExecutor {
                 }
             } else {
                 tracing::error!(
-                    "[SECURITY][MCP] ToolConfirmationState not available — \
+                    "[SECURITY][MCP] ToolConfirmationState not available, \
                      DENYING bash execution. Security state must be initialized."
                 );
                 return Ok(self.outcome_from_error(

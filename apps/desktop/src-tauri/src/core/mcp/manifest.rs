@@ -1,4 +1,3 @@
-//! AUDIT-FIX: CI-5 — MCP allow-list enforcement.
 
 use serde::Deserialize;
 use std::path::Path;

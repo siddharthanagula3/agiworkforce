@@ -122,8 +122,8 @@ export async function getAuthHeaders(
           headers['X-CSRF-Token'] = csrfToken;
         }
       }
-    } catch {
-      // CSRF fetch failed — continue without it
+    } catch (err) {
+      void err;
     }
   }
 

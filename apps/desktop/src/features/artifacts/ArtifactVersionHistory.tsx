@@ -1,4 +1,3 @@
-
 import { formatDistanceToNow } from 'date-fns';
 import { Check, ChevronRight, GitBranch, Loader2, RotateCcw } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
@@ -257,10 +256,10 @@ function DiffPanel({ diff }: { diff: VersionDiff }) {
         <div className="rounded-lg border border-zinc-200 dark:border-zinc-800 overflow-hidden text-xs font-mono">
           <div className="grid grid-cols-2 divide-x divide-zinc-200 dark:divide-zinc-700">
             <div className="px-2 py-1 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 text-[10px] font-sans">
-              v{diff.from_version} — before
+              v{diff.from_version}, before
             </div>
             <div className="px-2 py-1 bg-green-50 dark:bg-green-900/20 text-green-600 dark:text-green-400 text-[10px] font-sans">
-              v{diff.to_version} — after
+              v{diff.to_version}, after
             </div>
           </div>
           <div className="max-h-64 overflow-y-auto">

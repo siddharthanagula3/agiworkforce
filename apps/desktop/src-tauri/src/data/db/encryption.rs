@@ -312,9 +312,6 @@ pub fn migrate_to_encrypted(db_path: &str, key: &[u8]) -> Result<(), String> {
     std::fs::rename(&temp_encrypted_path, db_path)
         .map_err(|e| format!("Failed to replace DB with encrypted version: {}", e))?;
 
-    // Step 7: [M25] Delete the plaintext backup to avoid leaving sensitive data on disk.
-    // Log a warning if deletion fails (e.g., read-only fs) but do not fail the migration —
-    // the encrypted database is already in place and the migration succeeded.
     if let Err(e) = std::fs::remove_file(&backup_path) {
         tracing::warn!(
             "SQLCipher migration succeeded but failed to delete plaintext backup at '{}': {}. \
@@ -604,7 +601,6 @@ mod tests {
             assert_eq!(value, "top-secret");
         }
 
-        // 2. Negative proof — only exercised when SQLCipher is compiled in.
         if !cipher_version.trim().is_empty() {
             let plain = Connection::open(&path).expect("plain open of file handle");
             let read_result = plain.query_row("SELECT value FROM secret WHERE id = 1;", [], |r| {

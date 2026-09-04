@@ -1639,9 +1639,6 @@ mod tests {
         assert!(result.is_err());
     }
 
-    // ------------------------------------------------------------------
-    // truncate_string — private helper, only accessible from inline tests
-    // ------------------------------------------------------------------
 
     #[test]
     fn test_truncate_string_short_unchanged() {

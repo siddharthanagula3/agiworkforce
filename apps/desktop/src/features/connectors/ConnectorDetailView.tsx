@@ -1,14 +1,7 @@
-
 import { useCallback, useEffect, useState } from 'react';
 import { AlertCircle, ChevronLeft, Loader2, Shield, Puzzle } from 'lucide-react';
 import { useIsMounted } from '@/hooks/useIsMounted';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/ui/Select';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/ui/Select';
 import {
   type ConnectorPermissionLevel,
   CONNECTOR_PERMISSION_LABEL,
@@ -227,7 +220,7 @@ export function ConnectorDetailView({ connector, tools, onBack }: ConnectorDetai
           className="flex items-center gap-2 rounded-lg bg-destructive/10 px-3 py-2 text-xs text-destructive"
         >
           <AlertCircle className="h-3.5 w-3.5 shrink-0" />
-          <span>Permission not saved — {saveError}</span>
+          <span>Permission not saved, {saveError}</span>
         </div>
       )}
 

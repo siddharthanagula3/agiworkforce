@@ -171,7 +171,7 @@ async fn execute_deploy_project(
     // Insert pending deployment record
     let Some(ref app) = context.app_handle else {
         return Err(anyhow!(
-            "Cannot deploy right now — no app handle available. Please try again later."
+            "Cannot deploy right now, no app handle available. Please try again later."
         ));
     };
 

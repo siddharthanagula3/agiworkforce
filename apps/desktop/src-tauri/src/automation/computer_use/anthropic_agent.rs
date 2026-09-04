@@ -227,7 +227,6 @@ impl AnthropicComputerUseAgent {
             let tool_calls = match &response.tool_calls {
                 Some(tc) if !tc.is_empty() => tc.clone(),
                 _ => {
-                    // No tool calls — task is complete (or pause_turn with no tools)
                     if finish_reason == "pause_turn" {
                         // Continue the loop to let Claude resume
                         continue;

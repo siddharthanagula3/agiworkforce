@@ -117,8 +117,6 @@ test.describe('@reachability v3 surface', () => {
     expect(await buttons.count()).toBeGreaterThanOrEqual(0);
   });
 
-  // FIXME (found 2026-07-03, out of scope for the auth-gate fix in this
-  // built) — not a test-environment issue. Marked `fixme` rather than
   test.fixme('"customize" tab is reachable through sidebar nav text', async ({ page }) => {
     const sidebar = page.locator('[data-v3-sidebar]').first();
     const text = sidebar.getByText(/customize/i).first();

@@ -241,7 +241,7 @@ export function NetworkProxySettings() {
                 setSaved(false);
                 setClearPassword(false);
               }}
-              placeholder={value.hasPassword ? 'Saved securely — enter to replace' : ''}
+              placeholder={value.hasPassword ? 'Saved securely, enter to replace' : ''}
               autoComplete="new-password"
             />
             <Button

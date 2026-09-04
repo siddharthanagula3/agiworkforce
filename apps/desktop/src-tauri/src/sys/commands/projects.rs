@@ -1,17 +1,3 @@
-//! Project management commands for the AGI Workforce desktop app.
-//!
-//! This module provides Tauri commands for creating, reading, updating, and deleting
-//! projects. Projects group conversations, files, and custom instructions together.
-//!
-//! CLOUD SYNC HOOK:
-//! Write commands (project_create, project_update, project_delete) accept an optional
-//! `active_mode` param. When the active mode is managed-cloud, they call
-//! `mark_project_for_push` / `soft_delete_project_for_push` on the AppDatabase so the
-//! next project sync cycle will push the change. The gate uses the same
-//! `derive_cloud_sync_enabled` function that chat + memory sync use — the identical
-//! trust-boundary function, not a reimplementation.
-//! `projects.app_mode = 'cloud'` is set on rows created in cloud mode; the WHERE guard
-//! in `mark_project_for_push` makes it impossible to mark a local row.
 
 use rusqlite::{params, OptionalExtension};
 use serde::{Deserialize, Serialize};
@@ -54,8 +40,6 @@ pub struct Project {
     pub icon_emoji: Option<String>,
     pub accent_color: Option<String>,
     pub default_privacy_mode: Option<String>,
-    /// JSON-serialized knowledge base file metadata with extracted content.
-    /// Added in v65 migration — None means no knowledge files stored.
     #[serde(default)]
     pub knowledge_base_files: Option<serde_json::Value>,
 }
@@ -107,8 +91,6 @@ fn set_project_cloud_mode(db: &AppDatabase, project_id: &str) {
     }
 }
 
-/// Mark an existing cloud project for push. Non-fatal — a failed mark is logged
-/// but must never cause the write command to fail.
 fn try_mark_project_for_push(db: &AppDatabase, project_id: &str) {
     if let Ok(conn) = db.connection() {
         if let Err(e) = projects_sync::mark_project_for_push(&conn, project_id) {
@@ -429,8 +411,8 @@ pub async fn project_delete(
         // (soft-deleted, tombstone will propagate). If not a cloud row, fall through.
         if let Ok(conn) = db.connection() {
             match projects_sync::soft_delete_project_for_push(&conn, &id) {
-                Ok(true) => return Ok(()), // cloud row — tombstoned, skip hard-delete
-                Ok(false) => {}            // local row — fall through to hard-delete
+                Ok(true) => return Ok(()),
+                Ok(false) => {}
                 Err(e) => {
                     tracing::warn!(error = %e, %id, "projects: soft-delete failed, falling back to hard-delete");
                 }

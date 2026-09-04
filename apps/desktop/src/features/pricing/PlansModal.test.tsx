@@ -132,7 +132,7 @@ describe('PlansModal account plan ownership', () => {
   });
 });
 
-describe('PlansModal paid-plan CTA routing (public alpha — no waitlist)', () => {
+describe('PlansModal paid-plan CTA routing (public alpha, no waitlist)', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     useAuthStore.setState({

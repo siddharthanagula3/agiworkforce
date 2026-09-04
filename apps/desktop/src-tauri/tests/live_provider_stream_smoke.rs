@@ -1,26 +1,3 @@
-//! Live-provider streaming smoke for the Wave 5 c2 desktop→`agiworkforce-llm`
-//! decode swap (`docs/plans/rust-engine-extraction-2026-07-09.md`).
-//!
-//! Ignored by default (`#[ignore = "makes real, paid provider streaming calls; run explicitly with --ignored"]`): it makes real, paid streaming calls. Run
-//! explicitly with keys present in `apps/web/.env.local`:
-//!
-//! ```bash
-//! cargo test -p agiworkforce-desktop --test live_provider_stream_smoke \
-//!     -- --ignored --nocapture
-//! ```
-//!
-//! For each provider it drives the SAME code path `chat_send_message` uses as
-//! deep as is invokable without a running Tauri UI:
-//! `DirectApiProvider::send_message_streaming` → `provider_adapter` request
-//! build → HTTP POST → `stream_engine::decode_direct_stream` (the NEW shared
-//! `agiworkforce-llm` dialect runner) → desktop `StreamChunk` projection. It
-//! asserts: the stream opens, ≥1 text delta arrives, the stream terminates
-//! cleanly with a finish reason, and usage is present when the provider sends
-//! it.
-//!
-//! Keys are read from the env file at runtime and NEVER printed. Model ids come
-//! from `packages/contracts/types/src/models.json` (SSOT) — never invented. Spend is kept
-//! trivial: `max_tokens = 32`, one request per provider, no retries.
 
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -33,9 +10,6 @@ use futures_util::StreamExt;
 /// Parse `KEY=VALUE` lines from `apps/web/.env.local` without pulling in a
 /// dotenv dependency. Values are returned but never logged.
 fn load_env_keys() -> HashMap<String, String> {
-    // `AGI_SMOKE_ENV_FILE` lets the runner point at the real key file when it
-    // lives outside the (worktree) checkout — the file is gitignored and its
-    // values are never copied into the repo or printed.
     let env_path = if let Ok(explicit) = std::env::var("AGI_SMOKE_ENV_FILE") {
         PathBuf::from(explicit)
     } else {
@@ -175,11 +149,6 @@ async fn smoke_one(
 async fn live_provider_stream_smoke() {
     let keys = load_env_keys();
 
-    // (Provider, label, accepted key env var
-    // names in priority order — first non-empty match wins). Most providers use
-    // a single canonical name; Google's key is written under several aliases
-    // across env files (GOOGLE_API_KEY / GOOGLE_AI_API_KEY / GEMINI_API_KEY),
-    // mirroring the web/gateway adapter fallback chain, so we accept all three.
     let targets: &[(Provider, &'static str, &'static [&'static str])] = &[
         (Provider::Anthropic, "anthropic", &["ANTHROPIC_API_KEY"]),
         (Provider::DeepSeek, "deepseek", &["DEEPSEEK_API_KEY"]),
@@ -189,12 +158,7 @@ async fn live_provider_stream_smoke() {
             &["GOOGLE_API_KEY", "GOOGLE_AI_API_KEY", "GEMINI_API_KEY"],
         ),
         (Provider::OpenAI, "openai", &["OPENAI_API_KEY"]),
-        // Moonshot is OpenAI-compatible (Chat Completions) — a second live
-        // exercise of the crate's OpenAI-compat runner alongside DeepSeek.
         (Provider::Moonshot, "moonshot", &["MOONSHOT_API_KEY"]),
-        // Additional OpenAI-compatible providers present in the env file — any
-        // one with a live key proves the crate's OpenAI-compat runner end to
-        // end through the new desktop path.
         (Provider::XAI, "xai", &["XAI_API_KEY"]),
         (Provider::Qwen, "qwen", &["QWEN_API_KEY"]),
         (Provider::Zhipu, "zhipu", &["ZHIPU_API_KEY"]),
@@ -207,7 +171,7 @@ async fn live_provider_stream_smoke() {
             .iter()
             .find_map(|name| keys.get(*name).filter(|k| !k.is_empty()))
         else {
-            eprintln!("[smoke] {label}: no {key_envs:?} in env.local — skipping");
+            eprintln!("[smoke] {label}: no {key_envs:?} in env.local, skipping");
             continue;
         };
         let model = get_task_model(provider, "chat");
@@ -242,11 +206,6 @@ async fn live_provider_stream_smoke() {
     println!("green providers: {green}/{}", outcomes.len());
     println!("================================================================================\n");
 
-    // A stream that FAILS AT OPEN never reached the decode path — that's an
-    // environment/auth problem (dead/quota key, or a request-shape issue like
-    // OpenAI reasoning models emitting a Responses body to /chat/completions),
-    // NOT a regression in this swap. A stream that OPENED and then errored is a
-    // genuine decode-path regression and must fail the smoke.
     let mid_stream_regressions: Vec<String> = outcomes
         .iter()
         .filter(|o| o.opened && o.error.is_some())
@@ -264,6 +223,6 @@ async fn live_provider_stream_smoke() {
     assert!(
         green >= 1,
         "expected >=1 provider streaming green through the new path, got {green} \
-         (every provider failed at open — check that env keys are live)"
+         (every provider failed at open, check that env keys are live)"
     );
 }

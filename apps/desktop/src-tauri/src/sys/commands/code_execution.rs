@@ -22,7 +22,7 @@ fn truncate_output(s: String, max_bytes: usize) -> String {
         end -= 1;
     }
     format!(
-        "{}...\n[truncated — output exceeded {} bytes]",
+        "{}...\n[truncated, output exceeded {} bytes]",
         &s[..end],
         max_bytes
     )

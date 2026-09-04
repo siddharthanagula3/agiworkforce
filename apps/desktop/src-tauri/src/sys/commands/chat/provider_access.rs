@@ -83,20 +83,6 @@ pub(crate) async fn ensure_managed_cloud_provider(
     }
 }
 
-/// Ensure the Ollama provider is registered on the router before a Local-mode
-/// chat is routed.
-///
-/// The normal registration path (`llm_configure_provider("ollama")` ->
-/// `router.set_ollama(...)`) is driven by a best-effort frontend
-/// settings-rehydration callback (apps/desktop/src/stores/settingsStore.ts),
-/// which is `try/catch`'d to the console. If that callback never fired (fresh
-/// session, error during rehydration), the router has NO Ollama provider, so
-/// `LLMRouter::candidates()` returns an empty list and the send is silently
-/// dropped *before any `/api/chat` call* — the exact "user message shows, no
-/// reply, no error" Local-mode failure. Registering lazily here makes Local
-/// inference independent of that callback. Cheap: no network until first use,
-/// and a no-op when Ollama is already registered. Mirrors
-/// `ensure_managed_cloud_provider`.
 pub(crate) async fn ensure_ollama_provider(
     router: &Arc<tokio::sync::RwLock<crate::core::llm::llm_router::LLMRouter>>,
 ) {

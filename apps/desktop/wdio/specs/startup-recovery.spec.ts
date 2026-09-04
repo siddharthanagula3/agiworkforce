@@ -20,7 +20,7 @@ describe('AGI Desktop encrypted-database startup recovery', () => {
     await heading.waitForDisplayed({ timeout: 15000 });
     await expect(heading).toHaveText('AGI could not unlock local data');
 
-    expect(await browser.getTitle()).toBe('AGI — Local data recovery');
+    expect(await browser.getTitle()).toBe('AGI, Local data recovery');
 
     const bodyText = await $('body').getText();
     expect(bodyText).toContain('DB_UNLOCK');

@@ -66,7 +66,7 @@ describe('isOurCloudHost', () => {
   });
 });
 
-describe('guardedFetch — DRIFT REGRESSION (Clerk hosts desktop missed are now blocked in Local mode)', () => {
+describe('guardedFetch, DRIFT REGRESSION (Clerk hosts desktop missed are now blocked in Local mode)', () => {
   const PREVIOUSLY_LEAKED = [
     'https://foo.clerk.dev/v1/client',
     'https://frontend-api.clerk.services/v1/environment',
@@ -86,7 +86,7 @@ describe('guardedFetch — DRIFT REGRESSION (Clerk hosts desktop missed are now 
   );
 });
 
-describe('guardedFetch — privacy mode "local"', () => {
+describe('guardedFetch, privacy mode "local"', () => {
   beforeEach(() => {
     getStateMock.mockReturnValue({ privacyMode: 'local' });
   });
@@ -106,7 +106,7 @@ describe('guardedFetch — privacy mode "local"', () => {
   });
 });
 
-describe('guardedFetch — privacy mode "byok" (REGRESSION: must block our-cloud)', () => {
+describe('guardedFetch, privacy mode "byok" (REGRESSION: must block our-cloud)', () => {
   beforeEach(() => {
     getStateMock.mockReturnValue({ privacyMode: 'byok' });
   });
@@ -129,7 +129,7 @@ describe('guardedFetch — privacy mode "byok" (REGRESSION: must block our-cloud
   });
 });
 
-describe('guardedFetch — privacy mode "managed" (managed cloud)', () => {
+describe('guardedFetch, privacy mode "managed" (managed cloud)', () => {
   beforeEach(() => {
     getStateMock.mockReturnValue({ privacyMode: 'managed' });
   });
@@ -147,7 +147,7 @@ describe('guardedFetch — privacy mode "managed" (managed cloud)', () => {
   });
 });
 
-describe('guardedFetch — fail-closed', () => {
+describe('guardedFetch, fail-closed', () => {
   it('treats an unreadable store (getState throws) as Local and blocks', async () => {
     getStateMock.mockImplementation(() => {
       throw new Error('store not initialized');
@@ -167,10 +167,10 @@ describe('guardedFetch — fail-closed', () => {
   });
 });
 
-describe('guardedFetch — desktop P0 endpoints stay behind the chokepoint', () => {
+describe('guardedFetch, desktop P0 endpoints stay behind the chokepoint', () => {
   // hosts). The matching eslint rule blocks the raw-fetch form at lint time;
   const P0_ENDPOINTS = [
-    'https://agiworkforce.com/api/shared', // ShareConversationDialog — full conversation
+    'https://agiworkforce.com/api/shared',
     'https://www.agiworkforce.com/api/models', // App.tsx model-catalog fallback
     'https://api.agiworkforce.com/api/pair/initiate', // connectionStore mobile pairing (gateway host)
   ];
@@ -195,7 +195,7 @@ describe('guardedFetch — desktop P0 endpoints stay behind the chokepoint', () 
   });
 });
 
-describe('guardedFetch — input shapes (privacy mode "local")', () => {
+describe('guardedFetch, input shapes (privacy mode "local")', () => {
   beforeEach(() => {
     getStateMock.mockReturnValue({ privacyMode: 'local' });
   });

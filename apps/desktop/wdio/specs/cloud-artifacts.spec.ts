@@ -1,4 +1,3 @@
-
 import {
   installCloudApiStubs,
   mockDeviceAuthorization,
@@ -327,7 +326,7 @@ describe('AGI Desktop Cloud artifacts', () => {
         timeout: 90_000,
         interval: 500,
         timeoutMsg:
-          'The large-artifact assistant turn did not survive the reload — the metadata ' +
+          'The large-artifact assistant turn did not survive the reload, the metadata ' +
           'budget guard did not prevent the 400 that discards the whole turn.',
       },
     );

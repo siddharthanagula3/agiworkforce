@@ -1,4 +1,3 @@
-
 import { invoke } from '../lib/tauri-mock';
 
 export interface CacheTypeStats {
@@ -46,8 +45,6 @@ export interface CacheAnalytics {
   total_cost_saved: number;
   total_tokens_saved: number;
 }
-
-// Types — Codebase Cache (re-exported from cacheStore for convenience)
 
 export interface FileTreeEntry {
   path: string;

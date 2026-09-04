@@ -24,7 +24,7 @@ const VOICE_PERSONAS: VoicePersona[] = [
     name: 'Friendly',
     description: 'Warm, approachable, and conversational.',
     Icon: Smile,
-    samplePhrase: "Hey there! I'm so excited to help you out today — let's get started!",
+    samplePhrase: "Hey there! I'm so excited to help you out today, let's get started!",
   },
   {
     id: 'calm',
@@ -40,7 +40,7 @@ const VOICE_PERSONAS: VoicePersona[] = [
     description: 'Upbeat, fast-paced, and motivating.',
     Icon: Zap,
     samplePhrase:
-      "Let's go! I'm fired up and ready to tackle whatever you throw at me — bring it on!",
+      "Let's go! I'm fired up and ready to tackle whatever you throw at me, bring it on!",
   },
   {
     id: 'storyteller',

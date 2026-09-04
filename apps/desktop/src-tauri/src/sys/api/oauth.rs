@@ -363,12 +363,6 @@ mod tests {
         assert!(url.contains("code_challenge_method=S256"));
     }
 
-    /// The token endpoint is judged once, before this client exists. That check
-    /// is worthless while the client follows `Location:` unjudged: a 307
-    /// preserves method AND body, so the `client_secret` in the form body is
-    /// replayed verbatim to wherever the redirect points. This asserts the
-    /// second hop into loopback is never opened — and therefore that the secret
-    /// never leaves for it.
     #[tokio::test]
     async fn token_requests_do_not_replay_the_client_secret_across_a_redirect() {
         use std::sync::atomic::{AtomicUsize, Ordering};

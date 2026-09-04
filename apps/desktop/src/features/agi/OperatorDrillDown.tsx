@@ -290,7 +290,7 @@ function pruneStaleOperatorNotes(): void {
       localStorage.removeItem(k);
     }
   } catch {
-    // localStorage unavailable — ignore
+    return;
   }
 }
 

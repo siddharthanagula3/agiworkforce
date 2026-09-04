@@ -111,8 +111,6 @@ export default defineConfig({
           TAURI_DEV_HOST: '127.0.0.1',
           VITE_DESKTOP_UI_DEV_LOCAL: '0',
         },
-        // CI starts this same server itself before invoking Playwright, and the
-        // dev server is strictPort — a second one would abort the whole run.
         reuseExistingServer: true,
         timeout: 180000,
         stdout: 'pipe',

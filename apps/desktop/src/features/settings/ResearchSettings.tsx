@@ -2,13 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Check, Loader2, AlertCircle, FlaskConical } from 'lucide-react';
 import { Label } from '@/ui/Label';
 import { Switch } from '@/ui/Switch';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/ui/Select';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/ui/Select';
 import { Slider } from '@/ui/Slider';
 import { invoke } from '@/lib/tauri-mock';
 import { getSimpleErrorMessage } from '@/lib/errorMessages';
@@ -25,7 +19,7 @@ const RESEARCH_MODES: { value: ResearchMode; label: string; description: string 
   {
     value: 'standard',
     label: 'Standard',
-    description: 'Balanced depth — good for most research tasks',
+    description: 'Balanced depth, good for most research tasks',
   },
   {
     value: 'deep',
@@ -35,7 +29,7 @@ const RESEARCH_MODES: { value: ResearchMode; label: string; description: string 
   {
     value: 'comprehensive',
     label: 'Comprehensive',
-    description: 'Exhaustive investigation — may take several minutes',
+    description: 'Exhaustive investigation, may take several minutes',
   },
 ];
 
@@ -341,7 +335,7 @@ export function ResearchSettings() {
         </div>
       </div>
 
-      {/* Citation toggle — stored via user pref */}
+      {/* Citation toggle, stored via user pref */}
       <CitationToggle />
     </div>
   );

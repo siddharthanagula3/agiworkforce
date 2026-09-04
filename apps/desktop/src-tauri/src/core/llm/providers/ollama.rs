@@ -9,20 +9,6 @@ use serde::{Deserialize, Serialize};
 use std::error::Error;
 use std::pin::Pin;
 
-/// Hard cap on how many tools get injected as markdown text into the system
-/// prompt for models without native tool-calling support (see
-/// `prompt_tool_injection.rs`). Tool-native models are unaffected — they
-/// still receive the full set via Ollama's compact structured `tools` field
-/// below, which this cap does not touch.
-///
-/// Confirmed empirically (2026-07-11, docs/agent-context/known-flaws.md): a
-/// realistic 111-tool catalog in this injected format measured 88.7s of
-/// prompt-eval ALONE on an idle, warm Ollama instance — already at the
-/// streaming timeout's edge before the model generated a single token. 111
-/// tools stuffed into one small local model's context is wrong regardless of
-/// timeout headroom; a cap keeps prompt-eval bounded and, per common
-/// tool-selection-accuracy findings, likely improves the model's ability to
-/// pick the right tool from a smaller list too.
 const MAX_PROMPT_INJECTED_TOOLS: usize = 32;
 
 /// Applies `MAX_PROMPT_INJECTED_TOOLS`, logging when the catalog is actually
@@ -33,7 +19,7 @@ fn cap_tools_for_prompt_injection(tools: &[ToolDefinition]) -> &[ToolDefinition]
         tracing::warn!(
             "[Ollama] {} tool(s) enabled but this model has no native tool support; \
              only the first {} are injected into the system prompt to keep prompt-eval \
-             time bounded — the remaining {} are unavailable this turn.",
+             time bounded, the remaining {} are unavailable this turn.",
             tools.len(),
             MAX_PROMPT_INJECTED_TOOLS,
             tools.len() - MAX_PROMPT_INJECTED_TOOLS,
@@ -100,7 +86,6 @@ fn resolve_ollama_think(thinking: Option<&crate::core::llm::ThinkingParameter>) 
     }
 }
 
-/// RETIRED by c2c (2026-07-16) — see [`OllamaRequest`].
 #[allow(dead_code)]
 #[derive(Debug, Clone, Serialize)]
 struct OllamaOptions {
@@ -127,13 +112,6 @@ const OLLAMA_DEFAULT_NUM_CTX: u32 = 32768;
 
 use crate::core::llm::provider_adapter::to_crate_tool_definitions;
 
-/// Convert desktop `ChatMessage`s into shared-crate wire messages.
-///
-/// `images` (raw base64, already vision-gated by the caller) attach to the
-/// LAST user message as `ContentBlock::Image` so the crate's nativization
-/// emits them as that message's `images` array — Ollama's native `/api/chat`
-/// vision format. (The retired local builder sent a TOP-LEVEL `images` field,
-/// which `/api/chat` ignores; that placement fix is an enumerated c2c delta.)
 fn to_wire_messages(
     messages: &[crate::core::llm::ChatMessage],
     images: Option<&[String]>,
@@ -190,13 +168,6 @@ fn to_wire_messages(
         .collect()
 }
 
-/// c2c (2026-07-16): build the native `/api/chat` request body through the
-/// shared `agiworkforce-llm` serializers instead of the retired local
-/// `OllamaRequest` twin. Deliberately does NOT apply the crate's
-/// `compact_ollama_message_values` system-prompt compaction — the desktop
-/// never compacted, and adopting compaction is a separate product decision.
-/// Byte-parity with the retired builder is proven by
-/// `tests/c2c_request_oracle.rs` modulo the enumerated intentional deltas.
 pub(crate) fn build_ollama_chat_body(
     request: &LLMRequest,
     effective_messages: &[crate::core::llm::ChatMessage],
@@ -388,9 +359,6 @@ impl OllamaProvider {
         })
     }
 
-    /// RETIRED by c2c (2026-07-16) — see [`OllamaRequest`]. Message conversion
-    /// now flows through the shared crate serializers in
-    /// [`build_ollama_chat_body`].
     #[allow(dead_code)]
     fn to_ollama_messages(messages: &[crate::core::llm::ChatMessage]) -> Vec<OllamaMessage> {
         messages
@@ -468,7 +436,7 @@ impl LLMProvider for OllamaProvider {
                     let capped_tools = cap_tools_for_prompt_injection(req_tools);
                     tracing::info!(
                         "[Ollama] Model {} does not support native tools \
-                         — injecting {} tool(s) into system prompt",
+                         - injecting {} tool(s) into system prompt",
                         request.model,
                         capped_tools.len(),
                     );
@@ -664,7 +632,7 @@ impl LLMProvider for OllamaProvider {
                     let capped_tools = cap_tools_for_prompt_injection(req_tools);
                     tracing::info!(
                         "[Ollama] Model {} does not support native tools \
-                         — injecting {} tool(s) into system prompt (streaming)",
+                         - injecting {} tool(s) into system prompt (streaming)",
                         request.model,
                         capped_tools.len(),
                     );
@@ -705,9 +673,6 @@ impl LLMProvider for OllamaProvider {
 
         tracing::debug!("Ollama streaming response received, starting JSON line parsing");
 
-        // c2b: decode Ollama's `/api/chat` NDJSON through the shared engine
-        // (byte-identical to the retired `parse_sse_stream` Ollama path modulo the
-        // enumerated intentional decode fixes — proven by the c2a oracle).
         let inner_stream =
             decode_direct_stream(response, crate::core::llm::Provider::Ollama, &request.model);
 

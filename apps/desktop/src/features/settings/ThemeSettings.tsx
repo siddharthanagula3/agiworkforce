@@ -97,7 +97,7 @@ function importThemeFromFile(onRefresh: () => void): void {
         toast.success(`Theme "${result.theme.name}" imported`);
         onRefresh();
       } catch {
-        toast.error('Failed to parse theme file — ensure it is valid JSON');
+        toast.error('Failed to parse theme file, ensure it is valid JSON');
       }
     };
     reader.readAsText(file);
@@ -189,7 +189,7 @@ function DarkMiniUI() {
 function SystemMiniUI() {
   return (
     <div className="flex h-full w-full overflow-hidden">
-      {/* Left half — light */}
+      {/* Left half, light */}
       <div className="flex h-full w-1/2 flex-col bg-white">
         <div className="flex h-5 items-center gap-1 border-b border-gray-200 bg-gray-100 px-1.5">
           <span className="h-1.5 w-1.5 rounded-full bg-red-400" />
@@ -210,7 +210,7 @@ function SystemMiniUI() {
       </div>
       {/* Divider line */}
       <div className="w-px bg-gray-400/40" />
-      {/* Right half — dark */}
+      {/* Right half, dark */}
       <div className="flex h-full w-1/2 flex-col bg-gray-900">
         <div className="flex h-5 items-center gap-1 border-b border-gray-700 bg-gray-800 px-1.5">
           <span className="h-1.5 w-1.5 rounded-full bg-green-500" />

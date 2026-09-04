@@ -96,8 +96,6 @@ pub fn conversation_fork(
     )
     .map_err(|e| format!("Failed to create branch: {e}"))?;
 
-    // Copy messages into the new branch — use a transaction for atomicity
-    // unchecked_transaction is safe here: we are not inside another transaction scope
     let tx = conn.unchecked_transaction().map_err(|e| e.to_string())?;
 
     for src in &messages_to_copy {
@@ -145,7 +143,6 @@ pub fn conversation_list_branches(
     })
 }
 
-/// Switch to a branch — returns all messages on that branch in order.
 #[tauri::command]
 pub fn conversation_switch_branch(
     db: State<'_, AppDatabase>,

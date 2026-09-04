@@ -188,8 +188,8 @@ export function BridgePairRequests({
             </p>
             <p className="mt-2 text-xs text-muted-foreground">
               Type this code into the extension to finish pairing. It expires in{' '}
-              {secondsLeft(request.expiresAt, now)}s. If you did not start this, deny it — nothing
-              is installed until the code is entered.
+              {secondsLeft(request.expiresAt, now)}s. If you did not start this, deny it, nothing is
+              installed until the code is entered.
             </p>
             <button
               type="button"

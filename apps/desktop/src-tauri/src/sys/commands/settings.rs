@@ -88,9 +88,6 @@ pub struct ChatPreferences {
     pub allow_tool_assisted_memory_generation: bool,
     #[serde(default)]
     pub auto_save_memories: bool,
-    /// Where chat history is persisted.
-    /// `"local"` — SQLite only, never synced to cloud (default).
-    /// `"cloud"` — reserved for explicit cloud storage; unavailable in Desktop v1.
     #[serde(default = "default_chat_storage_mode")]
     pub chat_storage_mode: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]

@@ -32,7 +32,7 @@ beforeEach(() => {
   h.userId = 'u1';
 });
 
-describe('triggerCloudSync — managed-only gate', () => {
+describe('triggerCloudSync, managed-only gate', () => {
   it('invokes the sync command in managed mode with the current userId', () => {
     triggerCloudSync();
     expect(h.invoke).toHaveBeenCalledTimes(1);

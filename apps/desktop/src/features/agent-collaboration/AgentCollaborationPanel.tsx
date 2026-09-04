@@ -702,7 +702,7 @@ export function AgentCollaborationPanel({ className }: AgentCollaborationPanelPr
             </>
           )}
 
-          {/* Tasks Tab — Task Delegation UI */}
+          {/* Tasks Tab, Task Delegation UI */}
           {activeTab === 'tasks' && (
             <>
               <div className="p-2 text-xs font-medium text-muted-foreground border-b border-border/20 flex items-center gap-1">
@@ -787,7 +787,7 @@ export function AgentCollaborationPanel({ className }: AgentCollaborationPanelPr
             </>
           )}
 
-          {/* Results Tab — Aggregated Results View */}
+          {/* Results Tab, Aggregated Results View */}
           {activeTab === 'results' && (
             <>
               <div className="p-2 text-xs font-medium text-muted-foreground border-b border-border/20 flex items-center justify-between">

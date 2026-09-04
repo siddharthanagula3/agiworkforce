@@ -1,4 +1,3 @@
-
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type {
   ManagedCloudReflectRange,
@@ -24,14 +23,14 @@ function browserTimezone(): string {
 }
 
 function formatDateKey(dateKey: string | null): string {
-  if (!dateKey) return '—';
+  if (!dateKey) return ', ';
   const date = new Date(`${dateKey}T12:00:00`);
   if (Number.isNaN(date.getTime())) return dateKey;
   return new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric' }).format(date);
 }
 
 function formatHour(hour: number | null): string {
-  if (hour === null) return '—';
+  if (hour === null) return ', ';
   return new Intl.DateTimeFormat(undefined, { hour: 'numeric' }).format(new Date(2026, 0, 1, hour));
 }
 
@@ -206,7 +205,7 @@ export function CloudReflectSection() {
             <div>
               <h3 className="text-sm font-medium text-foreground">Expanding your skills</h3>
               <p className="mt-1 text-xs text-muted-foreground">
-                Observations and optional next steps — not a performance score.
+                Observations and optional next steps, not a performance score.
               </p>
               <ul className="mt-3 grid gap-3 sm:grid-cols-2">
                 {recap.insights.map((insight) => (
@@ -239,7 +238,7 @@ export function CloudReflectSection() {
       ) : null}
 
       <p className="text-xs leading-5 text-muted-foreground">
-        Temporary Chats and AGI Work runs are excluded. Reflect reads Managed Cloud activity only —
+        Temporary Chats and AGI Work runs are excluded. Reflect reads Managed Cloud activity only.
         Local Mode chats on this device are never part of a recap.
       </p>
     </div>

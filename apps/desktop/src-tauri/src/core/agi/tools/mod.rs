@@ -2295,15 +2295,10 @@ impl ToolRegistry {
             dependencies: vec![],
         })?;
 
-        // Artifact creation — renders substantial/reusable content in a
-        // dedicated side panel instead of inline in the chat reply (mirrors
-        // Claude/ChatGPT-style "artifacts"/"canvas"). See
-        // core/llm/tool_executor/artifact_tools.rs for the implementation
-        // and the frontend-type -> ArtifactType mapping.
         self.register_tool(Tool {
             id: "create_artifact".to_string(),
             name: "Create Artifact".to_string(),
-            description: "Create a rich, standalone artifact (code file, markdown document, HTML page, Mermaid diagram, React component, spreadsheet/table/CSV, presentation, or email draft) that renders live in a dedicated side panel next to the chat, instead of inline in the reply. Use this for substantial, self-contained, or reusable content — a complete code file, a full document, a diagram, or an interactive HTML/React preview. Do not use it for short snippets, explanations, or conversational text; keep those in the normal reply.".to_string(),
+            description: "Create a rich, standalone artifact (code file, markdown document, HTML page, Mermaid diagram, React component, spreadsheet/table/CSV, presentation, or email draft) that renders live in a dedicated side panel next to the chat, instead of inline in the reply. Use this for substantial, self-contained, or reusable content, a complete code file, a full document, a diagram, or an interactive HTML/React preview. Do not use it for short snippets, explanations, or conversational text; keep those in the normal reply.".to_string(),
             capabilities: vec![ToolCapability::TextProcessing],
             parameters: vec![
                 ToolParameter {
@@ -2324,7 +2319,7 @@ impl ToolRegistry {
                     name: "content".to_string(),
                     parameter_type: ParameterType::String,
                     required: true,
-                    description: "The full artifact content (source code, markdown text, HTML markup, Mermaid diagram syntax, React component source, CSV/table data, etc.). Provide the complete content — this is not incrementally appended.".to_string(),
+                    description: "The full artifact content (source code, markdown text, HTML markup, Mermaid diagram syntax, React component source, CSV/table data, etc.). Provide the complete content, this is not incrementally appended.".to_string(),
                     default: None,
                 },
                 ToolParameter {
@@ -3397,7 +3392,6 @@ impl ToolRegistry {
             dependencies: vec![],
         })?;
 
-        // ── Grep — regex content search ──────────────────────────────────────
         self.register_tool(Tool {
             id: "grep_search".to_string(),
             name: "Grep (Content Search)".to_string(),
@@ -3483,7 +3477,6 @@ impl ToolRegistry {
             dependencies: vec![],
         })?;
 
-        // ── Glob — file pattern search ───────────────────────────────────────
         self.register_tool(Tool {
             id: "glob_search".to_string(),
             name: "Glob (File Pattern Search)".to_string(),

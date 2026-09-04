@@ -341,7 +341,7 @@ impl WhatsAppClient {
         let secret = self
             .app_secret
             .as_ref()
-            .ok_or("App secret not configured — cannot verify webhook signature")?;
+            .ok_or("App secret not configured, cannot verify webhook signature")?;
 
         let expected_hex = signature_header
             .strip_prefix("sha256=")

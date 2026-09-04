@@ -87,7 +87,6 @@ pub struct ErrorStats {
     pub log_file_size_bytes: u64,
 }
 
-/// Counts only — no log text crosses this boundary.
 #[tauri::command]
 pub async fn error_get_stats() -> Result<ErrorStats, String> {
     let mut stats = ErrorStats {

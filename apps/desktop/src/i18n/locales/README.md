@@ -1,8 +1,8 @@
-# Legacy desktop locale copy — not loaded at runtime
+# Legacy desktop locale copy, not loaded at runtime
 
 Desktop translates through `@agiworkforce/i18n` (`packages/ui/i18n/locales`).
 Nothing here is bundled: `src/i18n/index.ts` never reads this directory, so a
-key added here renders as its own name in the running app — that is exactly how
+key added here renders as its own name in the running app, that is exactly how
 the sidebar shipped literal `sidebar.noConversations` text (native WDIO run,
 2026-08-01).
 

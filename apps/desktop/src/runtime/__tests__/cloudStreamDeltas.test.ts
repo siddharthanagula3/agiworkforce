@@ -12,7 +12,7 @@ function payload(delta: Record<string, unknown>): Record<string, unknown> {
   return { choices: [{ delta, index: 0 }], model: 'fixture-stream-model' };
 }
 
-describe('cloudStreamDeltas — every x_* delta key the wire can emit', () => {
+describe('cloudStreamDeltas, every x_* delta key the wire can emit', () => {
   it('x_agent_event: validates, emits, and projects the canonical activity state', () => {
     const { sink, events } = makeSink();
     sink.onEvent(

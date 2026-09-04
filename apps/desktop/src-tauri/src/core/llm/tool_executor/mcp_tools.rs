@@ -5,14 +5,6 @@ use super::*;
 /// Override per-call by passing `timeout_ms` in the tool arguments.
 pub(super) const MCP_TOOL_TIMEOUT_MS: u64 = 120_000;
 
-/// Ceiling this layer will accept for a requested `timeout_ms` (300s).
-///
-/// This is a CEILING, not a promise. For a stdio MCP server the round trip is
-/// separately bounded by `core::mcp::transport::STDIO_REQUEST_TIMEOUT_SECS`
-/// (120s), which is the smaller of the two and therefore what a caller
-/// requesting 300s actually gets. Relating those two deadlines properly —
-/// threading the accepted timeout through `McpTransport::send_request` so the
-/// transport honours it — is the open remainder of HARD-008 on this path.
 pub(super) const MCP_TOOL_MAX_TIMEOUT_MS: u64 = 300_000;
 
 impl ToolExecutor {

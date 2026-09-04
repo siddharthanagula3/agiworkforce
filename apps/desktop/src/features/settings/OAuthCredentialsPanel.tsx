@@ -240,9 +240,7 @@ export function OAuthCredentialsPanel() {
             [p.id]: { ...prev[p.id], configured: result.configured },
           }));
         })
-        .catch(() => {
-          // Command may not exist yet — silently ignore and leave configured=false
-        });
+        .catch(() => {});
     }
   }, []);
 
@@ -331,7 +329,7 @@ export function OAuthCredentialsPanel() {
                 key={provider.id}
                 className="rounded-lg border border-border bg-card overflow-hidden"
               >
-                {/* Header row — always visible */}
+                {/* Header row, always visible */}
                 <button
                   type="button"
                   className="w-full flex items-center gap-3 p-4 text-left hover:bg-accent transition-colors"
@@ -445,7 +443,7 @@ export function OAuthCredentialsPanel() {
                       </Button>
                       {ps.configured && (
                         <span className="text-xs text-muted-foreground">
-                          Credentials already on file — saving will overwrite them.
+                          Credentials already on file, saving will overwrite them.
                         </span>
                       )}
                     </div>

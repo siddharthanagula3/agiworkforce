@@ -15,7 +15,7 @@ const FREE_ECONOMY_MODELS = ECONOMY_MODELS.filter(
   (modelId) => getModelMetadataById(modelId)?.tierPolicy?.minTier === 'free',
 );
 
-describe('isModelAllowedForTier — Free is not Basic', () => {
+describe('isModelAllowedForTier, Free is not Basic', () => {
   it('has Economy models that Free must not reach (otherwise this suite proves nothing)', () => {
     expect(PAID_ONLY_ECONOMY_MODELS.length).toBeGreaterThan(0);
     expect(FREE_ECONOMY_MODELS.length).toBeGreaterThan(0);

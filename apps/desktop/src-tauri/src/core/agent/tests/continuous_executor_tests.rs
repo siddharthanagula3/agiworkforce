@@ -510,11 +510,6 @@ fn test_daily_limit_tracker_unlimited() {
 // [M25] Concurrent checkpoint persistence tests
 // ============================================================================
 
-/// Test that concurrent checkpoint writes to the same session do not corrupt
-/// the database.  Two async tasks each write a sequence of checkpoints for the
-/// same task_id.  After both finish the latest checkpoint must be one of the
-/// two final writes (last-write-wins) and `load_latest_checkpoint` must return
-/// a fully-consistent row — no partial data, no panic.
 #[tokio::test]
 async fn test_concurrent_checkpoint_writes() {
     use std::sync::Arc;
@@ -577,7 +572,6 @@ async fn test_concurrent_checkpoint_writes() {
         }
     });
 
-    // Wait for both writers to finish — neither should panic or return Err
     handle_a.await.unwrap();
     handle_b.await.unwrap();
 
@@ -619,12 +613,6 @@ async fn test_concurrent_checkpoint_writes() {
     );
 }
 
-/// Test that corrupt or truncated checkpoint data does not cause a panic.
-/// Instead, `load_latest_checkpoint` must either return `None` or an `Err` —
-/// never a panic or silently garbage data.
-///
-/// We simulate corruption by inserting rows with invalid JSON directly via
-/// raw SQL, bypassing the typed `save_checkpoint` method.
 #[test]
 fn test_corrupt_checkpoint_recovery() {
     use rusqlite::Connection;
@@ -714,7 +702,6 @@ fn test_corrupt_checkpoint_recovery() {
     // Either Ok(Some(..)) with degraded data or Ok(None) or Err(..) is fine.
     match &result_truncated {
         Ok(Some(ckpt)) => {
-            // The checkpoint was loaded — verify it didn't silently mix up fields
             assert_eq!(ckpt.task_id, task_id_truncated);
             assert_eq!(ckpt.step_number, 5);
             // metadata may be empty if JSON parsing failed gracefully

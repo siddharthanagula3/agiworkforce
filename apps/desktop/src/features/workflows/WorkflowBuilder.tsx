@@ -315,9 +315,6 @@ export function WorkflowBuilder({ workflowId, className, onSaved }: WorkflowBuil
       for (const warning of commandWarnings) {
         toast.warning(`Dangerous command detected: ${warning}`);
       }
-      // Show the warnings but still allow the user to make an informed decision —
-      // a blocking error here would prevent legitimate power-user commands.
-      // The warning is surfaced so the operator can review.
     }
 
     setSaving(true);
@@ -355,7 +352,7 @@ export function WorkflowBuilder({ workflowId, className, onSaved }: WorkflowBuil
   if (isLoading && workflowId) {
     return (
       <div className={cn('flex h-full flex-col items-center justify-center gap-3', className)}>
-        {/* Skeleton loading — not a spinner */}
+        {/* Skeleton loading, not a spinner */}
         <div className="w-full max-w-md space-y-3 px-8">
           <div className="h-6 w-2/5 animate-pulse rounded bg-muted" />
           <div className="h-48 w-full animate-pulse rounded-lg bg-muted" />

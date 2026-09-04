@@ -35,7 +35,7 @@ describe('ErrorTrackingService', () => {
     vi.unstubAllEnvs();
   });
 
-  describe('trust boundary — telemetry suppression (BYOK is private, not just Local)', () => {
+  describe('trust boundary, telemetry suppression (BYOK is private, not just Local)', () => {
     beforeEach(() => {
       service.updateConfig({ enabled: true });
       vi.mocked(analytics.track).mockClear();
@@ -54,7 +54,7 @@ describe('ErrorTrackingService', () => {
       expect(analytics.track).not.toHaveBeenCalled();
     });
 
-    it('fails CLOSED — suppresses when the privacy mode cannot be read', () => {
+    it('fails CLOSED, suppresses when the privacy mode cannot be read', () => {
       privacyModeMock.mockImplementation(() => {
         throw new Error('store unavailable');
       });

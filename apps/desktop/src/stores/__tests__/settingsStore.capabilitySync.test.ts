@@ -35,7 +35,7 @@ function mockInvoke(overrides: Record<string, () => unknown> = {}) {
   });
 }
 
-describe('settingsStore — capability sync failures are not reported as success', () => {
+describe('settingsStore, capability sync failures are not reported as success', () => {
   beforeEach(() => {
     invoke.mockReset();
     useSettingsStore.setState({

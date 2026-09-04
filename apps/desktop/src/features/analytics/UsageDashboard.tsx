@@ -222,7 +222,7 @@ export const UsageDashboard: React.FC = () => {
             <h3 className="text-sm font-medium text-muted-foreground">Monthly Usage</h3>
             {managedUsagePercentage === null ? (
               <>
-                <p className="text-2xl font-bold mt-2 text-muted-foreground">—</p>
+                <p className="text-2xl font-bold mt-2 text-muted-foreground">, </p>
                 <p className="text-xs text-muted-foreground mt-1">
                   Managed usage is available in Cloud settings
                 </p>
@@ -258,7 +258,7 @@ export const UsageDashboard: React.FC = () => {
                 billingUsageStats ? 'text-blue-500' : 'text-muted-foreground',
               )}
             >
-              {billingUsageStats ? billingUsageStats.llm_tokens_used.toLocaleString() : '—'}
+              {billingUsageStats ? billingUsageStats.llm_tokens_used.toLocaleString() : ', '}
             </p>
             <p className="text-xs text-muted-foreground mt-1">
               {billingUsageStats ? 'Total tokens processing' : 'Metered server-side'}
@@ -432,7 +432,7 @@ export const UsageDashboard: React.FC = () => {
                       {event.count}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-muted-foreground">
-                      <span className="text-muted-foreground">—</span>
+                      <span className="text-muted-foreground">, </span>
                     </td>
                   </tr>
                 ))}

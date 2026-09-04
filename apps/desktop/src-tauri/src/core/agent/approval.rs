@@ -98,8 +98,6 @@ impl ApprovalManager {
             return Ok(true);
         }
 
-        // AlwaysRequire is an unconditional deny — short-circuit before any other
-        // rule can grant approval, preventing PatternMatch from bypassing it.
         if self
             .approval_rules
             .iter()
@@ -184,8 +182,6 @@ impl ApprovalManager {
         let has_dangerous_step = task.steps.iter().any(|step| {
             match &step.action {
                 Action::ExecuteCommand { .. } => {
-                    // All command execution is dangerous — this covers
-                    // terminal_execute and db_execute tool categories
                     true
                 }
                 Action::WriteFile { path, .. } => {
@@ -328,15 +324,6 @@ impl ResolvedLedger {
     }
 }
 
-/// Releases the controller's pending slot if `request_approval` goes away
-/// without reaching a terminal state — which is exactly what happens when a
-/// caller wraps the call in its own `tokio::time::timeout` and that outer
-/// timeout wins, or when the surrounding run is cancelled.
-///
-/// The slot used to leak: the map entry stayed forever, so the controller grew
-/// without bound and a later decision for that id removed a dead entry and
-/// failed with `Failed to send approval resolution`, instead of telling the
-/// caller the request was no longer live.
 struct PendingSlot<'a> {
     pending: &'a Mutex<HashMap<String, PendingApproval>>,
     action_id: String,
@@ -451,8 +438,6 @@ impl ApprovalController {
             );
         }
 
-        // From here on every exit — including the caller dropping this future —
-        // releases the pending slot.
         let mut slot = PendingSlot {
             pending: &self.pending,
             action_id: payload.action_id.clone(),

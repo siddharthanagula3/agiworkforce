@@ -225,7 +225,7 @@ export async function expectCloudShellReady(page: Page, timeout = 30000): Promis
       timeout,
       message:
         'The v3 Cloud shell never mounted. The usual cause is an unmocked Managed Cloud endpoint ' +
-        'failing the conversation boundary — call mockCloudApi(page) before page.goto().',
+        'failing the conversation boundary, call mockCloudApi(page) before page.goto().',
     })
     .toBeGreaterThan(0);
 

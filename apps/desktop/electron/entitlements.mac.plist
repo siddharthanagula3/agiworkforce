@@ -2,7 +2,7 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <!--
   Hardened-runtime entitlements for the AGI cloud desktop shell (Developer ID
-  distribution, notarized). Deliberately minimal — the cloud-only shell has no
+  distribution, notarized). Deliberately minimal, the cloud-only shell has no
   local files, automation, or camera features:
 
   - allow-jit: required for V8 JIT under the hardened runtime.

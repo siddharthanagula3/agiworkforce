@@ -1,4 +1,3 @@
-
 import { Code2, FileText, Globe, Plus, Trash2 } from 'lucide-react';
 import { useCallback } from 'react';
 import { useShallow } from 'zustand/react/shallow';
@@ -144,7 +143,7 @@ export function ArtifactList({ className }: ArtifactListProps) {
                 </div>
               </div>
 
-              {/* Delete button — visible on hover */}
+              {/* Delete button, visible on hover */}
               <button
                 type="button"
                 onClick={(e) => handleDelete(e, artifact.id)}

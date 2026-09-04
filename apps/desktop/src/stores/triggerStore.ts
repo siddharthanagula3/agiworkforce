@@ -284,7 +284,7 @@ export const useTriggerStore = create<TriggerState>()(
               'trigger/fetchExecutions/success',
             );
           } catch {
-            // non-fatal — execution log is supplementary
+            return;
           }
         },
       })),

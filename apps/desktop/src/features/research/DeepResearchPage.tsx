@@ -197,7 +197,7 @@ export function DeepResearchPage({ className }: DeepResearchPageProps) {
           {/*
             Active session: result.
             This used to be an inline block that showed only the summary and key
-            findings — the actual report body, its citations, copy, and PDF
+            findings, the actual report body, its citations, copy, and PDF
             export were unreachable, even though a complete component for them
             already existed in this directory taking exactly the store's
             `ResearchResponse`. A finished research run that will not show you

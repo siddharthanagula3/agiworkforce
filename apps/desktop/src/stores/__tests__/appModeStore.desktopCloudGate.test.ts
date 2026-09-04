@@ -39,7 +39,7 @@ describe('DCL-4: desktop managed cloud is open (public alpha)', () => {
     useAuthStore.setState({ isAuthenticated: false, accessToken: null, plan: 'free' });
   });
 
-  it('availability copy is honest — no coming-soon / invite / waitlist framing', () => {
+  it('availability copy is honest, no coming-soon / invite / waitlist framing', () => {
     expect(DESKTOP_CLOUD_TAGLINE).not.toMatch(BANNED);
     expect(DESKTOP_CLOUD_TAGLINE_SHORT).not.toMatch(BANNED);
     expect(v3English.sidebar.mode.cloudUnavailable).not.toMatch(BANNED);

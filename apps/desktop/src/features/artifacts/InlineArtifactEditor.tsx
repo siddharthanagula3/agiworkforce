@@ -1,4 +1,3 @@
-
 import { useCallback, useState } from 'react';
 import { cn } from '@/lib/utils';
 import { computeLineDiff, type ArtifactDiff } from '@/lib/diffUtils';
@@ -65,7 +64,7 @@ export function InlineArtifactEditor({ artifact, onSave, onCancel }: InlineArtif
       {/* Footer hint */}
       {hasChanges && (
         <div className="px-3 py-1.5 text-xs text-zinc-500 dark:text-zinc-400 border-t border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900/30">
-          Unsaved changes — click Save to apply diff
+          Unsaved changes, click Save to apply diff
         </div>
       )}
     </div>

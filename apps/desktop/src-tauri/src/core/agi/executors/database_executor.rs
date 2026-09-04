@@ -715,8 +715,6 @@ mod tests {
         assert!(DatabaseExecutor::validate_query("SAVEPOINT my_savepoint").is_err());
     }
 
-    // CLAUDE-SECURITY F3 — db_execute ran LLM-authored SQL with only the
-    // upstream substring denylist in front of the live connection.
 
     fn write_context() -> ExecutorContext {
         ExecutorContext {

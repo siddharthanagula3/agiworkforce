@@ -14,11 +14,6 @@ interface BudgetStatus {
 const CAP_STEP_USD = '0.01';
 const MIN_CAP_USD = '0';
 
-/**
- * The daily cap is the only spend ceiling that survives a restart — the
- * router's session cap resets with every run — so it is the control that
- * bounds an autonomous loop replaying against the keys entered above.
- */
 export function DailyBudgetSettings() {
   const [capInput, setCapInput] = React.useState('');
   const [status, setStatus] = React.useState<BudgetStatus | null>(null);

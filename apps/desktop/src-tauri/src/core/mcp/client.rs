@@ -80,13 +80,6 @@ impl McpClient {
         self.sessions.read().keys().cloned().collect()
     }
 
-    /// Sanitised usage guidance from every initialised server, in server-name
-    /// order so the injected block is stable across calls.
-    ///
-    /// Servers that sent no `instructions` are skipped rather than contributing
-    /// an empty heading. Each string was already stripped, capped and wrapped in
-    /// provenance delimiters at the session boundary — see
-    /// `McpSession::instructions`.
     pub fn all_server_instructions(&self) -> Vec<(String, String)> {
         let sessions = self.sessions.read();
         let mut collected: Vec<(String, String)> = sessions

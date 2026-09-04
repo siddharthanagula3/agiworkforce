@@ -1,22 +1,3 @@
-//! One owner for the AGI Dictation lifecycle.
-//!
-//! Phase 1 of `docs/plans/desktop-system-dictation.md`: a single state machine
-//! (`idle -> capturing -> transcribing -> injecting -> idle`) that both entry
-//! paths must route through — the in-app hotkey (webview capture) and the
-//! global OS hotkey hook. The coordinator owns admission, session identity,
-//! and transition legality; it deliberately has no Tauri, audio, or injection
-//! dependencies so the machine is unit-testable in isolation.
-//!
-//! Session identity: every session gets a unique ID, and every mutation must
-//! present the ID it was issued. A call carrying a stale ID (an older session
-//! finished or was cancelled) is rejected with [`SessionError::StaleSession`]
-//! so late events can never corrupt a newer session.
-//!
-//! Global-source admission fails closed: system-wide dictation is not
-//! available until the plan's phase-7 release gates pass for an OS/channel
-//! (tracked by `DESKTOP-SYSTEM-DICTATION-UNWIRED-01`), so
-//! [`system_dictation_available`] is a compile-time `false` and
-//! [`DictationCoordinator::begin`] refuses `Global` sessions.
 
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Mutex;

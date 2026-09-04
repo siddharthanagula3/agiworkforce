@@ -198,7 +198,7 @@ export function PersonalizationSettings() {
               value={draft.bio}
               onChange={(e) => commit({ bio: e.target.value })}
               placeholder={
-                'Share relevant context — expertise level, interests, goals, or anything else that helps the AI give better answers.'
+                'Share relevant context, expertise level, interests, goals, or anything else that helps the AI give better answers.'
               }
               rows={4}
               maxLength={1000}

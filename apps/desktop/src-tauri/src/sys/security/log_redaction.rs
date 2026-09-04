@@ -52,36 +52,19 @@ static REDACTION_PATTERNS: Lazy<Vec<(Regex, &'static str)>> = Lazy::new(|| {
             Regex::new(r"github_pat_[a-zA-Z0-9_]{22,}").expect("static regex"),
             "[REDACTED_GITHUB_TOKEN]",
         ),
-        // xAI API keys — ported from the TS redactor
-        // (packages/platform/utils/src/logger.ts) to close the pattern-drift
-        // gap flagged in the trust-boundary audit (desktop-trust-boundary-01).
         (
             Regex::new(r"xai-[a-zA-Z0-9]{20,}").expect("static regex"),
             "[REDACTED_XAI_KEY]",
         ),
-        // JWTs (header.payload.signature) — ported from the TS redactor.
         (
             Regex::new(r"eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}")
                 .expect("static regex"),
             "[REDACTED_JWT]",
         ),
-        // Generic bearer tokens. Deliberately placed *after* all
-        // vendor-specific formats above (sk-ant-/sk-/AIzaSy/gsk_/stripe/
-        // AKIA/gh[ps]_/github_pat_/xai-/JWT) — same ordering the TS redactor
-        // uses — so a vendor-specific label wins when a value happens to
-        // match both a specific format and this generic one.
         (
             Regex::new(r"(?i)bearer\s+[a-zA-Z0-9._\-/+=]{20,}").expect("static regex"),
             "Bearer [REDACTED_TOKEN]",
         ),
-        // Generic API key / bearer token patterns in key=value or key:value
-        // format. Also placed after the vendor-specific patterns for the
-        // same reason. Widened to also catch bare `secret`/`token` key names
-        // (not just `secret_key`/`auth_token`/`access_token`) per the
-        // trust-boundary audit (desktop-trust-boundary-01) — the existing
-        // alternatives are kept, this only adds coverage. Without the
-        // reordering above, this alone would swallow e.g. `GITHUB_TOKEN=...`
-        // or `XAI_API_KEY=...` before the more specific label got a chance.
         (
             Regex::new(r#"(?i)(api[_-]?key|apikey|secret[_-]?key|secret|access[_-]?token|auth[_-]?token|token)['"]?\s*[=:]\s*['"]?[a-zA-Z0-9_\-/.+=]{16,}['"]?"#).expect("static regex"),
             "$1=[REDACTED]",
@@ -113,12 +96,6 @@ static REDACTION_PATTERNS: Lazy<Vec<(Regex, &'static str)>> = Lazy::new(|| {
                 .expect("static regex"),
             "[REDACTED LINE]",
         ),
-        // Whole lines that mention "password"/"passwd" — catches form-label
-        // style logging (e.g. `password: hunter2`) that the key=value
-        // pattern above doesn't parse. Ported from the TS redactor; mirrors
-        // its whole-line redaction rather than trying to isolate the value,
-        // since labels and values are not reliably separated by `=`/`:` in
-        // free-form command/log text.
         (
             Regex::new(r"(?im)^.*\bpassw(?:or)?d\b.*$").expect("static regex"),
             "[REDACTED LINE]",

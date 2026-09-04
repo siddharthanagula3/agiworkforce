@@ -1,18 +1,3 @@
-// H17 — Approval module tests.
-//
-// Tests that CAN run without AppHandle (sync):
-//  • `ApprovalRule` enum — construction and matching
-//  • `ApprovalScopeType` enum — serialisation
-//  • `ApprovalScope` construction
-//  • `ApprovalResolution` enum — construction
-//  • `ApprovalManager` — new(), should_approve() for auto-approve and manual paths
-//  • `ApprovalController` — new() (requires only a filesystem path), resolve() race detection,
-//    is_action_trusted()
-//
-// Tests that need a Tauri AppHandle (request_approval emits events):
-//  • `test_approval_race_condition_prevention` (uses mock_app)
-//  • `test_approval_toctou_prevention` (uses mock_app)
-//  These are kept below, they already call real production code.
 #[cfg(test)]
 mod tests {
     use crate::core::agent::approval::*;
@@ -22,9 +7,6 @@ mod tests {
     use tempfile::TempDir;
     use tokio::task;
 
-    // ------------------------------------------------------------------
-    // ApprovalRule — construction and Debug
-    // ------------------------------------------------------------------
 
     #[test]
     fn test_approval_rule_variants_are_constructable() {
@@ -49,9 +31,6 @@ mod tests {
         }
     }
 
-    // ------------------------------------------------------------------
-    // ApprovalScopeType — serialisation
-    // ------------------------------------------------------------------
 
     #[test]
     fn test_approval_scope_type_serde_terminal() {
@@ -78,9 +57,6 @@ mod tests {
         }
     }
 
-    // ------------------------------------------------------------------
-    // ApprovalScope — construction and field access
-    // ------------------------------------------------------------------
 
     #[test]
     fn test_approval_scope_construction_terminal() {
@@ -113,9 +89,6 @@ mod tests {
         assert!(scope.command.is_none());
     }
 
-    // ------------------------------------------------------------------
-    // ApprovalResolution — construction
-    // ------------------------------------------------------------------
 
     #[test]
     fn test_approval_resolution_approved_trust_true() {
@@ -147,9 +120,6 @@ mod tests {
         }
     }
 
-    // ------------------------------------------------------------------
-    // ApprovalManager — should_approve() with auto_approve config
-    // ------------------------------------------------------------------
 
     fn make_read_only_task() -> Task {
         Task {
@@ -248,9 +218,6 @@ mod tests {
         assert!(result);
     }
 
-    // ------------------------------------------------------------------
-    // ApprovalController — construct from temp dir, is_action_trusted
-    // ------------------------------------------------------------------
 
     #[tokio::test]
     async fn test_approval_controller_new_from_temp_dir() {
@@ -339,10 +306,6 @@ mod tests {
         }
     }
 
-    // ------------------------------------------------------------------
-    // Async tests that use mock_app — kept from original because they DO
-    // call real production code.
-    // ------------------------------------------------------------------
 
     #[tokio::test]
     async fn test_approval_race_condition_prevention() {
@@ -494,13 +457,6 @@ mod tests {
         );
     }
 
-    // ------------------------------------------------------------------
-    // CRIT-004 — the approval lifecycle the renderer depends on.
-    //
-    // Every test below drives `ApprovalController` exactly the way
-    // `core/agent/autonomous.rs` and `core/llm/tool_executor/mod.rs` drive it
-    // in production: request -> emit -> wait -> terminal state.
-    // ------------------------------------------------------------------
 
     fn approval_payload(action_id: &str) -> ApprovalRequestPayload {
         ApprovalRequestPayload {

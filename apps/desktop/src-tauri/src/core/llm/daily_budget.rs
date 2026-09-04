@@ -1,24 +1,3 @@
-//! Per-user daily LLM-spend cap (FIX-007, Sprint 3).
-//!
-//! Prior to FIX-007 the only spending guard was the per-session $50 cap in
-//! `core/agent/autonomous.rs`, which resets every run. An indirect prompt
-//! injection plus a poisoned doc could repeatedly trigger autonomous runs
-//! and bleed the user's BYOK keys for as much money as the model could be
-//! coaxed into requesting in a day.
-//!
-//! `DailyBudgetGuard` tracks spend per `(user_id, day)` in a small SQLite
-//! table. The LLM router consults it before dispatching a request
-//! (`check_or_reject`) and credits the real charge afterwards
-//! (`record_actual`), so the cap is applied to every cost-bearing call that
-//! flows through `record_completed_request_cost`.
-//!
-//! The router runs far below the Tauri command layer and holds neither an
-//! `AppHandle` nor any account identity, so the guard is published twice: as
-//! Tauri State for the commands, and through [`install_global`] for the cost
-//! paths that cannot take `State`. Those paths spend against
-//! [`LOCAL_PROFILE_BUDGET_KEY`] — on desktop the budget envelope is the
-//! profile, since each profile has its own app-data directory and its own
-//! copy of this table. Default `$25/day`; configurable via `Settings`.
 use std::sync::Arc;
 use std::sync::Mutex;
 use std::sync::OnceLock;
@@ -137,13 +116,6 @@ impl DailyBudgetGuard {
         })
     }
 
-    /// Pre-flight gate: refuse the call when today's spend has already
-    /// reached the cap. Records nothing — the charge is only known after the
-    /// provider responds, and is credited by [`Self::record_actual`].
-    ///
-    /// A read failure is treated as zero spend rather than as a refusal: the
-    /// cap exists to bound runaway autonomous loops, not to take the app
-    /// offline when SQLite is briefly unavailable.
     pub fn check_or_reject(&self, user_id: &str) -> Result<(), BudgetExceededError> {
         let day = current_day_utc();
         let spent = self.spent_today(user_id, &day).unwrap_or(0.0);

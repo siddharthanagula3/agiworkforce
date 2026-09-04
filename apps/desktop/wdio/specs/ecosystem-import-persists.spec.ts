@@ -1,4 +1,3 @@
-
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
@@ -111,13 +110,13 @@ async function cleanup() {
   try {
     await invokeTauri('mcp_disconnect_server', { name: IMPORTED_SERVER_NAME });
   } catch (err) {
-    console.log('CLEANUP — mcp_disconnect_server (non-fatal):', err);
+    console.log('CLEANUP, mcp_disconnect_server (non-fatal):', err);
   }
 
   try {
     await invokeTauri('dotfile_remove_mcp_server', { name: IMPORTED_SERVER_NAME });
   } catch (err) {
-    console.log('CLEANUP — dotfile_remove_mcp_server (non-fatal):', err);
+    console.log('CLEANUP, dotfile_remove_mcp_server (non-fatal):', err);
   }
 
   try {
@@ -128,23 +127,23 @@ async function cleanup() {
       if (raw.mcpServers && IMPORTED_SERVER_NAME in raw.mcpServers) {
         delete raw.mcpServers[IMPORTED_SERVER_NAME];
         fs.writeFileSync(DOTFILE_MCP_JSON, JSON.stringify(raw, null, 2));
-        console.log('CLEANUP — scrubbed test server directly from ~/.agiworkforce/mcp.json');
+        console.log('CLEANUP, scrubbed test server directly from ~/.agiworkforce/mcp.json');
       }
     }
   } catch (err) {
-    console.log('CLEANUP — direct dotfile scrub failed:', err);
+    console.log('CLEANUP, direct dotfile scrub failed:', err);
   }
 
   try {
     if (!ZED_CONFIG_DIR_PREEXISTED && fs.existsSync(ZED_CONFIG_DIR)) {
       fs.rmSync(ZED_CONFIG_DIR, { recursive: true, force: true });
-      console.log('CLEANUP — removed synthetic ~/.config/zed directory');
+      console.log('CLEANUP, removed synthetic ~/.config/zed directory');
     } else if (ZED_CONFIG_DIR_PREEXISTED && fs.existsSync(ZED_SETTINGS_PATH)) {
       fs.rmSync(ZED_SETTINGS_PATH, { force: true });
-      console.log('CLEANUP — removed synthetic ~/.config/zed/settings.json');
+      console.log('CLEANUP, removed synthetic ~/.config/zed/settings.json');
     }
   } catch (err) {
-    console.log('CLEANUP — Zed config removal failed:', err);
+    console.log('CLEANUP, Zed config removal failed:', err);
   }
 }
 

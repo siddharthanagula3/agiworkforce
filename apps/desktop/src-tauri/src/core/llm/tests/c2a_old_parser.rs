@@ -1,27 +1,3 @@
-//! VENDORED pre-swap desktop SSE decoder — c2a oracle reference ONLY.
-//!
-//! Byte-verbatim copy of
-//! `apps/desktop/src-tauri/src/core/llm/sse_parser.rs` lines 77-1180 as of
-//! commit `5889cf7eb^` (the parent of the c2b decode-swap commit), i.e. the
-//! LAST state of the old per-provider decoders before desktop adopted the
-//! shared `agiworkforce-llm` engine. It exists so `c2a_decode_oracle.rs` can
-//! replay the same fixture bytes through OLD and NEW decode paths and hold
-//! them to byte-identity with enumerated exceptions.
-//!
-//! Enumerated seam substitutions (the ONLY deltas from the historical code):
-//!   S1 `SseStreamParser::new(reqwest::Response, ..)` ->
-//!      `from_chunks(Vec<Bytes>, ..)`; `inner` item error type
-//!      `reqwest::Error` -> `Box<dyn Error + Send + Sync>` (fixture replay
-//!      has no transport errors; the old code boxed them at the same seam).
-//!   S2 the corresponding `Err(Box::new(e))` -> `Err(e)` (already boxed).
-//!   S3 `struct SseStreamParser` / entry made `pub(crate)`; the old
-//!      `parse_sse_stream(reqwest::Response, ..)` wrapper is dropped.
-//!   S4 chunk types (`StreamChunk`/`TokenUsage`/`StreamingToolCall`) are
-//!      imported from the live `sse_parser` module instead of redefined —
-//!      verified byte-identical between `5889cf7eb^` and the working tree.
-//!
-//! DO NOT extend, fix, or modernize this module. It is a historical fixture.
-//! It dies with the c2a gate once the twin deletion wave lands.
 
 #![allow(clippy::all)]
 
@@ -344,16 +320,6 @@ fn parse_openai_sse(event: &str) -> Result<StreamChunk, Box<dyn Error + Send + S
                             delta.get("tool_calls").and_then(|tc| tc.as_array())
                         {
                             for (position, tool_call) in delta_tool_calls.iter().enumerate() {
-                                // Prefer the explicit "index" field from the provider.
-                                // Falling back to array position is dangerous because a
-                                // single-element array with index=1 would be misassigned
-                                // to 0. When the explicit index is missing AND the delta
-                                // array has only one element, use the last-seen index
-                                // (from a prior data: line) if available — this handles
-                                // continuation deltas that carry only arguments without
-                                // repeating the index. For multi-element arrays without
-                                // explicit indices, fall back to array position (best we
-                                // can do) and log a warning.
                                 let explicit_index = tool_call
                                     .get("index")
                                     .and_then(|i| i.as_u64())
@@ -367,7 +333,7 @@ fn parse_openai_sse(event: &str) -> Result<StreamChunk, Box<dyn Error + Send + S
                                 } else {
                                     tracing::warn!(
                                         "[SSE] Tool call delta at position {} missing 'index' \
-                                        field in multi-tool chunk — falling back to array \
+                                        field in multi-tool chunk, falling back to array \
                                         position. This may corrupt tool call accumulation.",
                                         position
                                     );

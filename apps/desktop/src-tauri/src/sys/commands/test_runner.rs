@@ -135,15 +135,6 @@ fn detect_runner(root: &Path) -> TestRunner {
 // Tauri command
 // ─────────────────────────────────────────────
 
-/// Run project tests and return structured pass/fail results.
-///
-/// The agent uses this to run tests, parse failures, fix them, and repeat.
-///
-/// # Arguments
-/// * `project_root`  — Path to the project root. Defaults to cwd / project folder.
-/// * `runner`        — Force a specific runner, or omit to auto-detect.
-/// * `filter`        — Optional test name filter (e.g. "my_module::my_test").
-/// * `timeout_secs`  — Timeout in seconds (default 120).
 pub async fn test_run(
     settings_state: tauri::State<'_, SettingsState>,
     project_root: Option<String>,

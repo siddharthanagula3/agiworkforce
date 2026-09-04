@@ -144,11 +144,6 @@ impl DirectApiProvider {
                 .bearer_auth(&self.api_key)
                 .header("HTTP-Referer", "https://www.agiworkforce.com")
                 .header("X-Title", "AGI Workforce"),
-            // Local runtimes (LM Studio, llama.cpp, vLLM) don't require an API key by
-            // default. Skip the Authorization header entirely when no key was configured
-            // rather than sending an empty Bearer token — some local servers reject
-            // malformed auth headers. vLLM does support an optional `--api-key` flag, so
-            // when a key IS configured this falls through to the Bearer branch below.
             Provider::LmStudio | Provider::LlamaCpp | Provider::Vllm if self.api_key.is_empty() => {
                 builder
             }
@@ -214,19 +209,6 @@ impl DirectApiProvider {
     }
 }
 
-/// Allowed loopback ports for local AI providers (RT-05 fix).
-///
-/// Only these ports may be used with `http://localhost` or `http://127.0.0.1`:
-///   - 11434 — Ollama default
-///   - 1234  — LM Studio default
-///   - 8080  — common generic local inference server (also llama.cpp default)
-///   - 8000  — vLLM default
-///   - 5000  — common Flask/FastAPI local server
-///   - 3000  — common Node.js local server
-///
-/// Any other localhost port is an SSRF pivot risk (e.g. pointing at port 8787
-/// would make the LLM client POST bearer-token-authenticated requests to the
-/// desktop bridge).
 const ALLOWED_LOOPBACK_PORTS: &[u16] = &[11434, 1234, 8080, 8000, 5000, 3000];
 
 /// Hosts of providers this product has removed. A retired host keeps resolving in
@@ -557,9 +539,6 @@ impl LLMProvider for DirectApiProvider {
 
     fn is_configured(&self) -> bool {
         match self.provider {
-            // Local runtimes never require an API key — presence of a registered
-            // instance (always constructed with a valid base_url) is sufficient,
-            // mirroring OllamaProvider::is_configured().
             Provider::LmStudio | Provider::LlamaCpp | Provider::Vllm => true,
             _ => !self.api_key.is_empty(),
         }
@@ -841,8 +820,6 @@ mod tests {
 
     #[test]
     fn openrouter_apply_auth_sends_bearer_and_attribution_headers() {
-        // OpenRouter recommends HTTP-Referer/X-Title on every request for its
-        // ToS/leaderboard attribution — mirrors apps/web/lib/llm-providers/openrouter.ts.
         let p = DirectApiProvider::new(Provider::OpenRouter, "sk-or-v1-test".to_string(), None)
             .expect("should create");
         let builder = reqwest::Client::new().post("https://openrouter.ai/api/v1/chat/completions");
@@ -933,9 +910,6 @@ mod tests {
         );
     }
 
-    /// Unlike `OllamaProvider::new()`, `DirectApiProvider::new()` validates the base
-    /// URL eagerly at construction time (`validate_provider_base_url`), so a malformed
-    /// URL can never reach `is_available()` in the first place — it fails fast here.
     #[test]
     fn lmstudio_rejects_malformed_base_url_at_construction() {
         let result = DirectApiProvider::new(
@@ -966,13 +940,6 @@ mod tests {
         assert!(result.is_err());
     }
 
-    /// `is_available()` must complete quickly (bounded by its internal 2s timeout)
-    /// and never panic regardless of whether a local server actually answers on the
-    /// default port. Not asserting the specific boolean here — unlike the malformed-URL
-    /// tests above, this exercises a real network call, and asserting "not running"
-    /// would be flaky on a dev machine that happens to have LM Studio/llama.cpp open
-    /// or something else bound to that port. Live "not running" behavior is verified
-    /// manually (see PR notes) against this sandbox's actual absence of both runtimes.
     #[tokio::test]
     async fn lmstudio_is_available_completes_without_panicking() {
         let p = DirectApiProvider::new(Provider::LmStudio, String::new(), None)
@@ -994,10 +961,6 @@ mod tests {
         let _ = p.is_available().await;
     }
 
-    /// Unlike LM Studio/llama.cpp (which never send an Authorization header), vLLM
-    /// supports an optional `--api-key` server flag. When no key is configured (the
-    /// common case), no Authorization header should be sent — same as the other
-    /// local runtimes.
     #[test]
     fn vllm_apply_auth_omits_bearer_header_when_no_key_configured() {
         let p = DirectApiProvider::new(Provider::Vllm, String::new(), None).expect("should create");
@@ -1027,8 +990,6 @@ mod tests {
         );
     }
 
-    /// Cloud BYOK providers must keep the default "assumed available" behavior —
-    /// the local-runtime health-ping override must not affect them.
     #[tokio::test]
     async fn openai_is_available_defaults_to_true() {
         let p = DirectApiProvider::new(Provider::OpenAI, "sk-test".to_string(), None)

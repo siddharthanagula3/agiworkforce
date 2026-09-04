@@ -89,8 +89,6 @@ use crate::sys::commands::chat::tool_timeouts::{
     resolve_followup_total_timeout_secs, resolve_streaming_tool_loop_max_iterations,
     resolve_streaming_tool_loop_max_secs,
 };
-// All named constants live in state.rs as pub(crate) — import them here so
-// mod.rs code can reference them without duplication.
 pub use crate::sys::commands::chat::pending::{
     chat_add_pending_message, chat_clear_pending_messages, chat_get_pending_messages,
     chat_pop_pending_message, has_pending_messages, has_pending_messages_for_conversation,

@@ -121,14 +121,6 @@ fn cleanup_old_logs(log_dir: &PathBuf, max_files: usize) -> Result<(), Box<dyn s
     Ok(())
 }
 
-/// Compiled once. `filter_sensitive_data` is called for every field of every
-/// record a support bundle carries (up to
-/// `crate::sys::support_bundle::MAX_BUNDLE_LINES` records), so recompiling
-/// these on each call is thousands of regex builds per bundle.
-///
-/// The patterns are literals, so a compile failure is a bug in this file, not a
-/// runtime condition — panic rather than silently shipping a redactor that skips
-/// a rule.
 static SENSITIVE_PATTERNS: once_cell::sync::Lazy<Vec<(regex::Regex, &'static str)>> =
     once_cell::sync::Lazy::new(|| {
         raw_sensitive_patterns()

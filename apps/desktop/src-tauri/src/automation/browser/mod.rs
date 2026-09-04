@@ -27,13 +27,6 @@ pub struct BrowserState {
 }
 
 impl BrowserState {
-    /// SEV-DESK-02: production constructor — threads the Tauri `AppHandle`
-    /// through to `ExtensionBridge` so dangerous browser-mutating actions
-    /// (`execute_script`, `navigate`, cookie ops, localStorage ops) can
-    /// surface a confirmation prompt before reaching the page.
-    ///
-    /// Tests / non-IPC callers may pass `None`; in that case any gated
-    /// `ExtensionBridge` method fails closed with an explicit error.
     pub async fn new(app_handle: Option<tauri::AppHandle>) -> Result<Self> {
         let extension = match app_handle {
             Some(handle) => ExtensionBridge::with_app_handle(handle),

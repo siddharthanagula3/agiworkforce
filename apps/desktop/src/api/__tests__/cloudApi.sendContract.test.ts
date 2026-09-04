@@ -24,7 +24,7 @@ function sentBody(fetchMock: ReturnType<typeof vi.fn>): Record<string, unknown> 
   return JSON.parse(String(init?.body)) as Record<string, unknown>;
 }
 
-describe('sendCloudMessage — outbound body contract', () => {
+describe('sendCloudMessage, outbound body contract', () => {
   beforeEach(() => {
     vi.spyOn(cloudAccountAuth, 'getValidSession').mockResolvedValue({
       access_token: 'token',
@@ -112,7 +112,7 @@ describe('sendCloudMessage — outbound body contract', () => {
   });
 });
 
-describe('sendCloudMessage — refusal classification (DES-C22)', () => {
+describe('sendCloudMessage, refusal classification (DES-C22)', () => {
   beforeEach(() => {
     vi.spyOn(cloudAccountAuth, 'getValidSession').mockResolvedValue({
       access_token: 'token',

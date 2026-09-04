@@ -14,7 +14,6 @@ const ALLOWED_CLI_BINARIES: &[&str] = &["signal-cli"];
 /// then resolve it to a full path via PATH lookup.
 /// Rejects any path containing directory separators to prevent command injection.
 fn validate_cli_path(path: &str) -> Result<String> {
-    // Reject paths containing directory separators — only bare binary names allowed
     if path.contains('/') || path.contains('\\') {
         return Err(Error::PermissionError(format!(
             "CLI path must be a simple binary name without path separators, got: {}",
@@ -43,8 +42,6 @@ fn validate_cli_path(path: &str) -> Result<String> {
     Ok(resolved.to_string_lossy().into_owned())
 }
 
-/// Validate that a config path is safe — it must resolve to a location within
-/// the user's home directory to prevent path traversal attacks.
 fn validate_config_path(config_path: &str) -> Result<String> {
     let path = Path::new(config_path);
 
