@@ -499,6 +499,45 @@ describe('CloudCodePage', () => {
     expect(screen.getByRole('button', { name: 'Create session' })).toBeEnabled();
   });
 
+  it('sends parsed extra hosts alongside the network preset', async () => {
+    const api = createApi();
+    const user = userEvent.setup();
+    render(<CloudCodePage api={api} />);
+
+    await screen.findByRole('button', { name: 'Create session' });
+    const hostsField = screen.getByLabelText(/Extra allowed hosts/i);
+    await user.type(hostsField, 'api.example.com, *.internal.example.com ,');
+    await user.click(screen.getByRole('button', { name: 'Create session' }));
+
+    await waitFor(() =>
+      expect(api.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          networkAccess: 'none',
+          extraHosts: ['api.example.com', '*.internal.example.com'],
+        }),
+      ),
+    );
+  });
+
+  it('hides and omits extra hosts under full network', async () => {
+    const api = createApi();
+    const user = userEvent.setup();
+    render(<CloudCodePage api={api} />);
+
+    await screen.findByRole('button', { name: 'Create session' });
+    await user.click(screen.getByText('Full network'));
+    expect(screen.queryByLabelText(/Extra allowed hosts/i)).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole('checkbox'));
+    await user.click(screen.getByRole('button', { name: 'Create session' }));
+
+    await waitFor(() =>
+      expect(api.create).toHaveBeenCalledWith(
+        expect.objectContaining({ networkAccess: 'full', extraHosts: undefined }),
+      ),
+    );
+  });
+
   it('starts an agent turn against the session agent endpoint', async () => {
     const api = createApi({
       list: vi.fn(async () => ({

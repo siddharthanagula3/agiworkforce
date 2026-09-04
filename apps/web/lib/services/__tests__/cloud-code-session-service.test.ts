@@ -3,9 +3,10 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 vi.mock('server-only', () => ({}));
 vi.mock('@/lib/logger', () => ({ logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() } }));
 vi.mock('@/lib/e2b/runtime', () => ({ getE2BExecutor: vi.fn(), killE2BSession: vi.fn() }));
-vi.mock('@/lib/e2b/session-store', () => ({
+const { managedCloudCodeSessionScope } = vi.hoisted(() => ({
   managedCloudCodeSessionScope: vi.fn(() => ({ scope: 'test' })),
 }));
+vi.mock('@/lib/e2b/session-store', () => ({ managedCloudCodeSessionScope }));
 vi.mock('@/lib/github-app', () => ({
   isGitHubAppConfigured: vi.fn(() => true),
   isGitHubInstallationLinkingAvailable: vi.fn(() => true),
@@ -31,6 +32,7 @@ import {
   createCloudCodeSession,
   releaseCloudCodeSessionAfterRun,
   runCloudCodeCommand,
+  validateCreateCloudCodeSession,
   type CloudCodeOwner,
 } from '@/lib/services/cloud-code-session-service';
 
@@ -700,6 +702,55 @@ describe('createCloudCodeSession quota enforcement', () => {
       createCloudCodeSession(db, OWNER, { ...createInput(0), title: 'Different title' }, PLAN_TIER),
     ).rejects.toBeInstanceOf(CloudCodeConflictError);
     expect(db.rows).toHaveLength(1);
+  });
+});
+
+describe('createCloudCodeSession extra egress hosts', () => {
+  beforeEach(() => {
+    managedCloudCodeSessionScope.mockClear();
+    vi.mocked(getE2BExecutor).mockResolvedValue({
+      runCommand: vi.fn(async () => ({ ok: true, stdout: '', stderr: '', exitCode: 0 })),
+      pause: vi.fn(async () => {}),
+      dispose: vi.fn(async () => {}),
+    } as unknown as Awaited<ReturnType<typeof getE2BExecutor>>);
+  });
+
+  it('rejects an invalid extra host at validation time', () => {
+    expect(() =>
+      validateCreateCloudCodeSession({
+        ...createInput(0),
+        extraHosts: ['not a host'],
+      }),
+    ).toThrow(CloudCodeValidationError);
+  });
+
+  it('rejects more than the named maximum of extra hosts', () => {
+    expect(() =>
+      validateCreateCloudCodeSession({
+        ...createInput(0),
+        extraHosts: Array.from({ length: 11 }, (_, i) => `host-${i}.example.com`),
+      }),
+    ).toThrow(CloudCodeValidationError);
+  });
+
+  it('normalizes and forwards extra hosts to the sandbox scope', async () => {
+    const db = createFakeDb();
+    await createCloudCodeSession(
+      db,
+      OWNER,
+      { ...createInput(0), extraHosts: ['Example.com', 'example.com'] },
+      PLAN_TIER,
+    );
+
+    expect(managedCloudCodeSessionScope).toHaveBeenCalledWith(
+      OWNER.userId,
+      expect.any(String),
+      'none',
+      PLAN_TIER,
+      null,
+      null,
+      ['example.com'],
+    );
   });
 });
 

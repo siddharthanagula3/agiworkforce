@@ -648,6 +648,100 @@ describe('getE2BExecutor, full network interim guard', () => {
   });
 });
 
+describe('getE2BExecutor, egress allowlist', () => {
+  beforeEach(() => {
+    sessions.clear();
+    vi.clearAllMocks();
+    sandboxCounter = 0;
+    listedSandboxes = [];
+  });
+
+  it('always allows the provider-proxy host alongside the trusted preset', async () => {
+    const { getE2BExecutor } = await import('../runtime');
+    await getE2BExecutor(codeScope('code-proxy-host', 'trusted'));
+
+    const createOptions = (create.mock.calls[0] as unknown[])[0] as {
+      network: { allowOut: string[] };
+    };
+    expect(createOptions.network.allowOut).toContain('app.agiworkforce.test');
+  });
+
+  it('allows extra hostnames on top of the trusted preset', async () => {
+    const { getE2BExecutor } = await import('../runtime');
+    await getE2BExecutor({
+      ...codeScope('code-extra-hosts', 'trusted'),
+      extraHosts: ['api.example.com', '*.internal.example.com'],
+    });
+
+    const createOptions = (create.mock.calls[0] as unknown[])[0] as {
+      network: { allowOut: string[] };
+    };
+    expect(createOptions.network.allowOut).toEqual(
+      expect.arrayContaining(['api.example.com', '*.internal.example.com', 'github.com']),
+    );
+  });
+
+  it('allows only the extra hosts and the proxy host under none, nothing else', async () => {
+    const { getE2BExecutor } = await import('../runtime');
+    await getE2BExecutor({
+      ...codeScope('code-none-extra', 'none'),
+      extraHosts: ['api.example.com'],
+    });
+
+    const createOptions = (create.mock.calls[0] as unknown[])[0] as {
+      network: { allowOut: string[]; denyOut: string[] };
+      allowInternetAccess?: boolean;
+    };
+    expect(createOptions.allowInternetAccess).toBeUndefined();
+    expect(createOptions.network.allowOut.sort()).toEqual(
+      ['api.example.com', 'app.agiworkforce.test'].sort(),
+    );
+    expect(createOptions.network.denyOut).toEqual(['0.0.0.0/0']);
+  });
+
+  it('stays fully closed under none with no extra hosts configured', async () => {
+    const { getE2BExecutor } = await import('../runtime');
+    await getE2BExecutor(codeScope('code-none-plain', 'none'));
+
+    const createOptions = (create.mock.calls[0] as unknown[])[0] as {
+      network?: { allowOut: string[] };
+      allowInternetAccess?: boolean;
+    };
+    expect(createOptions.allowInternetAccess).toBeUndefined();
+    expect(createOptions.network?.allowOut).toEqual(['app.agiworkforce.test']);
+  });
+
+  it('persists extra hosts so a later resumed call still enforces them', async () => {
+    const { getE2BExecutor } = await import('../runtime');
+    await getE2BExecutor({
+      ...codeScope('code-sticky-hosts', 'trusted'),
+      extraHosts: ['api.example.com'],
+    });
+
+    await getE2BExecutor(codeScope('code-sticky-hosts', 'trusted'));
+
+    const instance = await connect.mock.results[0]!.value;
+    expect(instance.updateNetwork).toHaveBeenCalledWith(
+      expect.objectContaining({ allowOut: expect.arrayContaining(['api.example.com']) }),
+    );
+  });
+
+  it('ignores extra hosts entirely under full network access', async () => {
+    const { getE2BExecutor } = await import('../runtime');
+    await getE2BExecutor({
+      ...codeScope('code-full-extra', 'full'),
+      extraHosts: ['api.example.com'],
+    });
+
+    const createOptions = (create.mock.calls[0] as unknown[])[0] as {
+      allowInternetAccess?: boolean;
+      network?: unknown;
+    };
+    expect(createOptions.allowInternetAccess).toBe(true);
+    expect(createOptions.network).toBeUndefined();
+  });
+});
+
 describe('getE2BExecutor, git operations', () => {
   beforeEach(() => {
     sessions.clear();
