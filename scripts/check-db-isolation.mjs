@@ -123,6 +123,14 @@ const ALLOWLIST = [
     reason: 'webhook resolves its own subject from the Stripe event',
   },
   {
+    match: /lib\/services\/enterprise-billing-service\.ts$/,
+    tables: ['organizations', 'organization_billing_contracts'],
+    reason:
+      'the same webhook subject reached through the billing service: the organization is ' +
+      'resolved by its owner_user_id, which is the subscription owner the signed Stripe event ' +
+      'mapped, and the contract is keyed by the Stripe subscription id only that event can supply',
+  },
+  {
     match: /api\/webhooks\//,
     reason: 'inbound webhooks resolve their subject from the signed payload',
   },
