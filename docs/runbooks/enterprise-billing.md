@@ -212,11 +212,11 @@ action beyond confirming payment landed.
 ## 8. Usage metering and overage reporting
 
 For a contract with `overage_stripe_price_id` set, the included allowance
-for the current contract period is `included_usage_cents_per_period` plus
-`committed_usage_block_cents`. Consumption is the organization's month-to-date
-managed-usage spend the existing ledger already tracks
-(`getOrganizationMonthToDateSpendCents`), aggregated over the contract
-period rather than the calendar month; overage is spend beyond the
+is a monthly pool: `included_usage_cents_per_period` plus
+`committed_usage_block_cents` per calendar month, the same window the
+ledger's month-to-date spend function already uses
+(`getOrganizationMonthToDateSpendCents`). The annual invoice covers the
+seats plus twelve monthly allowances; overage is spend beyond the month's
 allowance. Consumption itself is never blocked by the allowance; the
 organization's own configured spend limit remains the only hard cap. The
 daily `report-enterprise-usage` cron (WP-C) reports new overage since the
