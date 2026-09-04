@@ -296,6 +296,102 @@ describe('syncEnterpriseContractFromSubscription', () => {
     ).toBe(false);
     expect(loggerMocks.warn).toHaveBeenCalled();
   });
+
+  it('writes the negotiated contract fields present in subscription metadata', async () => {
+    const { db, calls } = makeDb((sql) => {
+      if (sql.includes('from subscriptions')) return [{ user_id: 'user_1' }];
+      if (sql.includes('from public.organizations')) return [{ id: 'org_1' }];
+      return [];
+    });
+
+    await syncEnterpriseContractFromSubscription(
+      db,
+      fakeStripe(),
+      subscriptionFixture({
+        metadata: {
+          included_usage_cents_per_month: '500000',
+          overage_price_id: 'price_overage_1',
+          committed_usage_block_cents: '250000',
+          minimum_annual_spend_cents: '12000000',
+          support_tier: 'platinum',
+          customer_legal_entity: 'Acme Corp Ltd.',
+        },
+      }),
+    );
+
+    const upsert = calls.find((call) =>
+      call.sql.includes('insert into public.organization_billing_contracts'),
+    );
+    expect(upsert!.params.slice(10)).toEqual([
+      500000,
+      'price_overage_1',
+      250000,
+      12000000,
+      'platinum',
+      'Acme Corp Ltd.',
+    ]);
+  });
+
+  it('leaves negotiated fields untouched when metadata omits them', async () => {
+    const { db, calls } = makeDb((sql) => {
+      if (sql.includes('from subscriptions')) return [{ user_id: 'user_1' }];
+      if (sql.includes('from public.organizations')) return [{ id: 'org_1' }];
+      return [];
+    });
+
+    await syncEnterpriseContractFromSubscription(db, fakeStripe(), subscriptionFixture());
+
+    const upsert = calls.find((call) =>
+      call.sql.includes('insert into public.organization_billing_contracts'),
+    );
+    expect(upsert!.params.slice(10)).toEqual([null, null, null, null, null, null]);
+    expect(upsert!.sql).toContain('coalesce($11, 0)');
+    expect(upsert!.sql).toContain('organization_billing_contracts.included_usage_cents_per_period');
+  });
+
+  it('ignores and logs a malformed negotiated cents value rather than writing it', async () => {
+    const { db, calls } = makeDb((sql) => {
+      if (sql.includes('from subscriptions')) return [{ user_id: 'user_1' }];
+      if (sql.includes('from public.organizations')) return [{ id: 'org_1' }];
+      return [];
+    });
+
+    await syncEnterpriseContractFromSubscription(
+      db,
+      fakeStripe(),
+      subscriptionFixture({
+        metadata: { minimum_annual_spend_cents: 'not-a-number' },
+      }),
+    );
+
+    const upsert = calls.find((call) =>
+      call.sql.includes('insert into public.organization_billing_contracts'),
+    );
+    expect(upsert!.params[13]).toBeNull();
+    expect(loggerMocks.error).toHaveBeenCalledWith(
+      expect.objectContaining({ key: 'minimum_annual_spend_cents', value: 'not-a-number' }),
+      expect.stringContaining('Malformed enterprise contract metadata'),
+    );
+  });
+
+  it('rejects a negative negotiated cents value', async () => {
+    const { db, calls } = makeDb((sql) => {
+      if (sql.includes('from subscriptions')) return [{ user_id: 'user_1' }];
+      if (sql.includes('from public.organizations')) return [{ id: 'org_1' }];
+      return [];
+    });
+
+    await syncEnterpriseContractFromSubscription(
+      db,
+      fakeStripe(),
+      subscriptionFixture({ metadata: { committed_usage_block_cents: '-100' } }),
+    );
+
+    const upsert = calls.find((call) =>
+      call.sql.includes('insert into public.organization_billing_contracts'),
+    );
+    expect(upsert!.params[12]).toBeNull();
+  });
 });
 
 function invoiceFixture(overrides: Partial<Stripe.Invoice> = {}): Stripe.Invoice {

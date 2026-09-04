@@ -19,6 +19,12 @@ const DEFAULT_BILLING_CADENCE: BillingCadence = 'annual';
 const QUARTERLY_BILLING_CADENCE: BillingCadence = 'quarterly';
 const PROCUREMENT_CUSTOM_FIELD_NAME_PATTERN = /^(po|po\s*number|purchase\s*order)$/iu;
 const PROCUREMENT_METADATA_KEY = 'po_number';
+const CONTRACT_METADATA_KEY_INCLUDED_USAGE_CENTS_PER_MONTH = 'included_usage_cents_per_month';
+const CONTRACT_METADATA_KEY_OVERAGE_PRICE_ID = 'overage_price_id';
+const CONTRACT_METADATA_KEY_COMMITTED_USAGE_BLOCK_CENTS = 'committed_usage_block_cents';
+const CONTRACT_METADATA_KEY_MINIMUM_ANNUAL_SPEND_CENTS = 'minimum_annual_spend_cents';
+const CONTRACT_METADATA_KEY_SUPPORT_TIER = 'support_tier';
+const CONTRACT_METADATA_KEY_CUSTOMER_LEGAL_ENTITY = 'customer_legal_entity';
 const AUDIT_ENDPOINT = '/api/stripe-webhook';
 const AUDIT_SURFACE = 'stripe_webhook';
 const UNMAPPED_ENTERPRISE_PRICE_AUDIT_REASON = 'unmapped_stripe_price';
@@ -148,6 +154,67 @@ async function resolveOrganizationIdForSubscriptionOwner(
   return orgRow?.id ?? null;
 }
 
+function parseMetadataNonNegativeCents(
+  metadata: Stripe.Metadata | null | undefined,
+  key: string,
+  subscriptionId: string,
+): number | null {
+  const raw = metadata?.[key];
+  if (raw === undefined) return null;
+  const parsed = Number(raw);
+  if (!Number.isFinite(parsed) || !Number.isInteger(parsed) || parsed < 0) {
+    logger.error(
+      { subscriptionId, key, value: raw },
+      'Malformed enterprise contract metadata cents value; ignored',
+    );
+    return null;
+  }
+  return parsed;
+}
+
+function parseMetadataText(
+  metadata: Stripe.Metadata | null | undefined,
+  key: string,
+): string | null {
+  const raw = metadata?.[key]?.trim();
+  return raw ? raw : null;
+}
+
+interface NegotiatedContractMetadata {
+  includedUsageCentsPerPeriod: number | null;
+  overagePriceId: string | null;
+  committedUsageBlockCents: number | null;
+  minimumAnnualSpendCents: number | null;
+  supportTier: string | null;
+  customerLegalEntity: string | null;
+}
+
+function resolveNegotiatedContractMetadata(
+  subscription: Stripe.Subscription,
+): NegotiatedContractMetadata {
+  const metadata = subscription.metadata;
+  return {
+    includedUsageCentsPerPeriod: parseMetadataNonNegativeCents(
+      metadata,
+      CONTRACT_METADATA_KEY_INCLUDED_USAGE_CENTS_PER_MONTH,
+      subscription.id,
+    ),
+    overagePriceId: parseMetadataText(metadata, CONTRACT_METADATA_KEY_OVERAGE_PRICE_ID),
+    committedUsageBlockCents: parseMetadataNonNegativeCents(
+      metadata,
+      CONTRACT_METADATA_KEY_COMMITTED_USAGE_BLOCK_CENTS,
+      subscription.id,
+    ),
+    minimumAnnualSpendCents: parseMetadataNonNegativeCents(
+      metadata,
+      CONTRACT_METADATA_KEY_MINIMUM_ANNUAL_SPEND_CENTS,
+      subscription.id,
+    ),
+    supportTier: parseMetadataText(metadata, CONTRACT_METADATA_KEY_SUPPORT_TIER),
+    customerLegalEntity: parseMetadataText(metadata, CONTRACT_METADATA_KEY_CUSTOMER_LEGAL_ENTITY),
+  };
+}
+
 export async function syncEnterpriseContractFromSubscription(
   db: DatabaseAdapter,
   stripe: Stripe,
@@ -183,12 +250,15 @@ export async function syncEnterpriseContractFromSubscription(
   const procurementReference = await resolveProcurementReference(stripe, subscription);
   const committedSeats = resolveCommittedSeats(subscription);
   const stripeCustomerId = extractCustomerId(subscription.customer);
+  const negotiated = resolveNegotiatedContractMetadata(subscription);
 
   await db.execute(
     `insert into public.organization_billing_contracts
        (organization_id, stripe_customer_id, stripe_subscription_id, stripe_product_id, stripe_price_id,
-        procurement_reference, contract_term_start, contract_term_end, billing_cadence, committed_seats)
-     values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+        procurement_reference, contract_term_start, contract_term_end, billing_cadence, committed_seats,
+        included_usage_cents_per_period, overage_stripe_price_id, committed_usage_block_cents,
+        minimum_annual_spend_cents, support_tier, customer_legal_entity)
+     values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, coalesce($11, 0), $12, coalesce($13, 0), coalesce($14, 0), $15, $16)
      on conflict (organization_id) do update set
        stripe_customer_id = excluded.stripe_customer_id,
        stripe_subscription_id = excluded.stripe_subscription_id,
@@ -201,7 +271,28 @@ export async function syncEnterpriseContractFromSubscription(
        contract_term_start = excluded.contract_term_start,
        contract_term_end = excluded.contract_term_end,
        billing_cadence = excluded.billing_cadence,
-       committed_seats = excluded.committed_seats`,
+       committed_seats = excluded.committed_seats,
+       included_usage_cents_per_period = coalesce(
+         $11,
+         organization_billing_contracts.included_usage_cents_per_period
+       ),
+       overage_stripe_price_id = coalesce(
+         excluded.overage_stripe_price_id,
+         organization_billing_contracts.overage_stripe_price_id
+       ),
+       committed_usage_block_cents = coalesce(
+         $13,
+         organization_billing_contracts.committed_usage_block_cents
+       ),
+       minimum_annual_spend_cents = coalesce(
+         $14,
+         organization_billing_contracts.minimum_annual_spend_cents
+       ),
+       support_tier = coalesce(excluded.support_tier, organization_billing_contracts.support_tier),
+       customer_legal_entity = coalesce(
+         excluded.customer_legal_entity,
+         organization_billing_contracts.customer_legal_entity
+       )`,
     [
       organizationId,
       stripeCustomerId,
@@ -213,6 +304,12 @@ export async function syncEnterpriseContractFromSubscription(
       period ? isoDate(period.end) : null,
       cadence,
       committedSeats,
+      negotiated.includedUsageCentsPerPeriod,
+      negotiated.overagePriceId,
+      negotiated.committedUsageBlockCents,
+      negotiated.minimumAnnualSpendCents,
+      negotiated.supportTier,
+      negotiated.customerLegalEntity,
     ],
   );
 
