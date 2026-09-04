@@ -1,3 +1,16 @@
+//! Master-password-derived AES-256-GCM helper (FIX-001 / FIX-002 / FIX-004).
+//!
+//! Wraps [`MasterPasswordManager`] so credential-storage IPC handlers can
+//! encrypt/decrypt with a single call without each one re-implementing the
+//! cipher boilerplate. The wire format is `base64(nonce || ciphertext)`.
+//! one self-contained string per credential, matching the inline format
+//! that the existing `encrypt_credential` callers in `mcp_oauth.rs` already
+//! consume so call-site refactors stay narrow.
+//!
+//! All operations require the vault to be unlocked. When the vault is
+//! locked, both `encrypt` and `decrypt` propagate
+//! [`MasterPasswordError::AppLocked`] up the IPC layer so the frontend can
+//! surface the unlock modal before retrying.
 use std::sync::{Arc, Mutex};
 
 use aes_gcm::aead::rand_core::{OsRng, RngCore};
@@ -34,6 +47,10 @@ impl MasterPasswordEncryption {
             .unwrap_or(false)
     }
 
+    /// Returns whether the user has set up a master password. When this is
+    /// `false`, credential-storage call sites should fall back to
+    /// machine-key derivation for backwards compatibility, no vault has
+    /// been initialized yet.
     pub fn is_configured(&self) -> bool {
         self.manager
             .lock()
@@ -68,6 +85,12 @@ impl MasterPasswordEncryption {
         Ok(general_purpose::STANDARD.encode(combined))
     }
 
+    /// Decrypt the `base64(nonce || ciphertext)` value produced by
+    /// [`MasterPasswordEncryption::encrypt`] for the same `purpose`. Always
+    /// derives the key first so a locked vault surfaces
+    /// `MasterPasswordError::AppLocked` even when the caller hands in
+    /// garbage ciphertext, callers should always be able to distinguish
+    /// "you need to unlock" from "your data is corrupted".
     pub fn decrypt(
         &self,
         purpose: KeyPurpose,

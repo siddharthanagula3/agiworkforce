@@ -1,3 +1,13 @@
+//! Re-wrap payloads an older build encrypted under the machine-only key.
+//!
+//! [`machine_key`] no longer derives keys from machine identifiers alone, so
+//! every payload a shipped build wrote has to be read once under the legacy key
+//! and written back under the per-install key. Stores that own their AES-GCM
+//! framing, `base64(nonce || ciphertext)`, are swept here rather than at each
+//! read site, so a consumer that never re-reads a value still keeps its data.
+//!
+//! Every entry point is idempotent: a payload already under the per-install key
+//! is left byte-for-byte alone.
 
 use super::machine_key::{self, KeyDerivationError, KeyPurpose};
 use aes_gcm::{

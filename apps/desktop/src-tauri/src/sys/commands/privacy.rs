@@ -330,6 +330,10 @@ fn collect_artefact_paths(
     Ok(paths)
 }
 
+/// Delete the artefacts the erased rows referenced, but only the ones the app
+/// itself wrote. Path columns also hold locations the user owns, a watched
+/// folder, an indexed project, and erasing an account must not erase those,
+/// so containment inside an app-owned root is the authority, not the column.
 fn remove_contained_artefacts(paths: &[std::path::PathBuf], roots: &[std::path::PathBuf]) -> usize {
     let canonical_roots: Vec<std::path::PathBuf> = roots
         .iter()

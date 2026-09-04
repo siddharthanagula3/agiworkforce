@@ -1,3 +1,69 @@
+//! Application-layer HMAC authentication for Dispatch control messages.
+//!
+//! Desktop counterpart to `apps/mobile/lib/dispatchHmac.ts`. Mobile signs
+//! every outbound control message with HMAC-SHA-256 over a canonical envelope;
+//! desktop must verify the HMAC, the timestamp window, and the nonce
+//! freshness. Without verification, anyone who reaches the data channel can
+//! forge `surface=desktop, role=assistant` messages that the mobile UI
+//! consumes via Realtime, a prompt-injection vector.
+//!
+//! # Trust boundary
+//!
+//! This layer defends against the signaling relay. The keying material is
+//! `pairing_secret`: 32 random bytes the desktop generates locally and
+//! publishes only in the QR / pairing-link payload the phone reads optically.
+//! It is never sent to the relay, so the relay, a relay compromise, and a
+//! TLS-intercepting proxy all lack the IKM and cannot reproduce the session
+//! key or mint envelopes that verify in either direction. The pairing code and
+//! session salt are relay-visible and are mixed into the HKDF salt only to
+//! bind the key to one session; they are not sufficient on their own.
+//!
+//! # Wire format
+//!
+//! ```text
+//! {
+//!   "hmac":    "<hex HMAC-SHA-256, 64 chars>",
+//!   "nonce":   "<base64 16 random bytes>",
+//!   "payload": <original control-message JSON>,
+//!   "ts":      <unix ms integer>,
+//!   "type":    "<action string, mirrors payload.action>",
+//!   "v":       3
+//! }
+//! ```
+//!
+//! Keys are alphabetically ordered. The HMAC covers
+//! `JSON.stringify({nonce, payload, ts, type, v})`, i.e. the envelope without
+//! the `hmac` field. Mobile uses `JSON.stringify` with insertion-order keys;
+//! we preserve compatibility by holding `payload` as a raw JSON value (no
+//! re-canonicalization on the receive path).
+//!
+//! `v` is refused unless it equals [`ENVELOPE_VERSION`]. A v2 peer derives its
+//! key from relay-visible material only, so it is rejected as
+//! [`VerifyError::ProtocolVersionUnsupported`], an explicit "update required"
+//! rather than a confusing HMAC mismatch.
+//!
+//! # Session secret derivation (HKDF-SHA-256, RFC 5869)
+//!
+//! ```text
+//! IKM  = pairing_secret                          // 32 out-of-band random bytes
+//! Salt = UTF-8(pairing_code + ":" + session_salt) // relay-visible, binds the session
+//! Info = UTF-8("dispatch-hmac-v3")
+//! PRK  = HMAC-SHA-256(salt, IKM)           // extract
+//! OKM  = HMAC-SHA-256(PRK, Info || 0x01)   // single-block expand → 32 bytes
+//! ```
+//!
+//! # Replay prevention
+//!
+//! 1. Timestamp window: receiver rejects |now - ts| > 30_000 ms.
+//! 2. Nonce cache: sliding 60s window, duplicate nonces rejected, stale
+//!    entries evicted on each verify call.
+//!
+//! # Transitional mode
+//!
+//! Messages without an `hmac` field are accepted with a warning until
+//! [`DISPATCH_HMAC_REQUIRED_AFTER`]. After that date they are rejected with
+//! [`VerifyError::UnsignedTransitional`]. This mirrors the mobile cutoff
+//! exactly so both peers fail-closed at the same moment.
 
 use std::collections::HashMap;
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -22,9 +88,22 @@ pub const MAX_MESSAGE_AGE_MS: i64 = 30_000;
 /// cache when a replay attempt arrives.
 pub const NONCE_CACHE_TTL_MS: i64 = 60_000;
 
+/// ISO 8601 UTC date after which unsigned messages must be rejected.
+/// Mirrors `packages/contracts/types/src/dispatch.ts:DISPATCH_HMAC_REQUIRED_AFTER`
+/// (which is the canonical source, `apps/mobile/lib/dispatchHmac.ts` and
+/// `apps/desktop/src/services/dispatch.ts` import from there). All four
+/// surfaces must move together.
+///
+/// FIX-F-DISPATCH-DESYNC (audit 2026-05-19): the previous value had
+/// string="2026-06-05" but ms=1_780_185_600_000 which actually maps to
+/// 2026-05-31, a 5-day silent desync where the real cutoff was earlier
+/// than the documented one. The string and ms are now both 2026-05-26,
+/// pulled forward to close the unsigned-acceptance window. A unit test
+/// in `fix_dispatch_hmac_cutoff_alignment_tests` now pins the alignment.
 pub const DISPATCH_HMAC_REQUIRED_AFTER: &str = "2026-05-26T00:00:00.000Z";
 const DISPATCH_HMAC_REQUIRED_AFTER_MS: i64 = 1_779_753_600_000;
 
+/// HKDF info parameter, must match the mobile peer.
 const HKDF_INFO: &[u8] = b"dispatch-hmac-v3";
 
 /// Wire-protocol version carried in every envelope and covered by the HMAC.
@@ -77,12 +156,19 @@ pub enum VerifyError {
     InvalidEncoding(String),
 }
 
+/// Outcome of [`verify`], `Ok(VerifyOk::Signed)` when HMAC matched and the
+/// nonce was added to the cache; `Ok(VerifyOk::UnsignedTransitional)` when
+/// no `hmac` field was present and we are still within the transitional
+/// window (caller should `tracing::warn!` and process anyway).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum VerifyOk {
     Signed,
     UnsignedTransitional,
 }
 
+/// A signed envelope as it appears on the wire. `payload` is held as a
+/// raw JSON value so we sign over the original bytes, re-canonicalizing
+/// would break compatibility with mobile's `JSON.stringify` insertion order.
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Envelope<'a> {
     pub hmac: String,
@@ -95,6 +181,8 @@ pub struct Envelope<'a> {
     pub v: i64,
 }
 
+/// An envelope without an `hmac` field, used for the transitional window
+/// where mobile may still receive unsigned desktop messages.
 #[derive(Debug, Deserialize)]
 struct MaybeSignedEnvelope<'a> {
     #[serde(default)]
@@ -184,6 +272,9 @@ pub fn derive_session_key(
     Ok(out)
 }
 
+/// Build the canonical signing input. Keys are emitted in alphabetical
+/// order: `nonce < payload < ts < type < v`. The `payload` is splat into the
+/// string verbatim, its original byte sequence determines the HMAC.
 fn canonical_signing_input(
     nonce: &str,
     payload: &RawValue,
@@ -233,6 +324,10 @@ pub fn verify_with_clock(
     cache: &mut NonceCache,
     now_ms: i64,
 ) -> Result<VerifyOk, VerifyError> {
+    // Explicitly reject non-objects (arrays, null, scalars, garbage) before
+    // struct deserialization. serde happily fills a struct with all defaults
+    // from `null` or `[]`, which would silently route into the unsigned-
+    // transitional path, we want those rejected as Malformed.
     let trimmed = raw_envelope_json.trim_start();
     if !trimmed.starts_with('{') {
         return Err(VerifyError::Malformed);
@@ -240,6 +335,7 @@ pub fn verify_with_clock(
     let parsed: MaybeSignedEnvelope =
         serde_json::from_str(raw_envelope_json).map_err(|_| VerifyError::Malformed)?;
 
+    // Transitional path, no hmac field present.
     if parsed.hmac.is_none() {
         if now_ms < DISPATCH_HMAC_REQUIRED_AFTER_MS {
             return Ok(VerifyOk::UnsignedTransitional);
@@ -264,6 +360,7 @@ pub fn verify_with_clock(
         return Err(VerifyError::TimestampExpired(MAX_MESSAGE_AGE_MS));
     }
 
+    // Nonce cache check, prune stale entries first.
     cache.prune(now_ms);
     if cache.contains(&nonce) {
         return Err(VerifyError::NonceReplay);
@@ -415,6 +512,8 @@ mod tests {
 
     #[test]
     fn derive_matches_the_mobile_vector() {
+        // Pinned against `deriveDispatchSecret` in apps/mobile/lib/dispatchHmac.ts.
+        // the same vector is asserted in apps/mobile/__tests__/dispatchHmac.test.ts.
         let key = derive_session_key("ABCD1234WXYZ", "a1b2c3d4e5f60718", TEST_SECRET).unwrap();
         assert_eq!(
             hex_encode(&key),
@@ -585,6 +684,7 @@ mod tests {
         )
         .unwrap();
         let mut cache = NonceCache::new();
+        // Exactly 29_999ms in the past, within the ±30s window.
         let now = 1_700_000_000_000 + 29_999;
         let result = verify_with_clock(&envelope, &key, &mut cache, now);
         assert_eq!(result, Ok(VerifyOk::Signed));
@@ -762,6 +862,9 @@ mod tests {
 
     #[test]
     fn canonical_input_preserves_payload_byte_sequence() {
+        // Mobile uses JSON.stringify which preserves insertion order for
+        // payload objects. We hold payload as RawValue so re-canonicalization
+        // is impossible, the bytes go through verbatim.
         let payload = serde_json::value::RawValue::from_string(
             "{\"z\":1,\"a\":2}".into(), // intentionally non-alphabetical
         )
@@ -773,6 +876,14 @@ mod tests {
 
 #[cfg(test)]
 mod fix_dispatch_hmac_cutoff_alignment_tests {
+    //! FIX-F-DISPATCH-DESYNC (audit 2026-05-19): pin that the
+    //! `DISPATCH_HMAC_REQUIRED_AFTER` ISO 8601 string and the
+    //! `DISPATCH_HMAC_REQUIRED_AFTER_MS` integer constant agree on the same
+    //! point in time. A previous version had string="2026-06-05" but
+    //! ms=1_780_185_600_000 which actually maps to 2026-05-31, a 5-day
+    //! silent desync where the real cutoff was earlier than the documented
+    //! one. This regression test catches any future drift between the two
+    //! representations at `cargo test` time.
     use super::{DISPATCH_HMAC_REQUIRED_AFTER, DISPATCH_HMAC_REQUIRED_AFTER_MS};
     use chrono::{DateTime, Utc};
 

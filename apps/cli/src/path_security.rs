@@ -110,6 +110,33 @@ pub fn clear_additional_workspace_roots_for_tests() {
     unregister_additional_workspace_roots(&owned);
 }
 
+/// Directories whose contents the CLI loads as TRUSTED, always-on instructions
+/// for every future session in a project.
+///
+/// `memory.rs::load_rules` reads `.agiworkforce/rules/*.md` into the system
+/// prompt of every session, and `custom_commands.rs::default_roots` registers
+/// `.agiworkforce/commands`, `.claude/commands` and `~/.agiworkforce/prompts/claude`,
+/// each recursively globbed for `*.md` and offered as slash commands. None of
+/// them is fenced as untrusted, because all are meant to be authored by the
+/// human who owns the repository.
+///
+/// Nothing stopped the AGENT writing them. `validate_workspace_path` enforces
+/// containment only, is this path under an allowed root, and
+/// `.agiworkforce/rules/anything.md` is inside the project, so it passed. One
+/// approved `write_file`, with content sourced from a poisoned web page or an
+/// MCP tool result, therefore rewrote the agent's own instructions for that
+/// repository permanently, for that session and every session after it.
+///
+/// That is a privilege escalation from "influence one turn" to "influence
+/// every future turn", and it is invisible: the directory is dotfile-hidden and
+/// auto-loaded, so it does not read like configuration a human is reviewing.
+///
+/// Reads are unaffected, the CLI must load these to work. Only agent WRITES
+/// are refused. A human edits them with their own editor, which is the point.
+///
+/// Every entry must be a directory some loader in this crate reads as trusted
+/// instructions. The match is a substring one, so a bare `.claude/commands`
+/// covers the project root and the `~/.claude/commands` user root alike.
 const AGENT_INSTRUCTION_DIRS: &[&str] = &[
     ".agiworkforce/rules",
     ".agiworkforce/commands",
@@ -129,6 +156,12 @@ fn is_agent_instruction_path(path: &Path) -> bool {
     })
 }
 
+/// Canonicalize the deepest existing ancestor of `path` and re-attach the
+/// components below it.
+///
+/// Resolves every symlink that `realpath` can resolve, i.e. every one whose
+/// target exists. A symlink whose target does not exist yet survives this
+/// untouched, see `resolve_for_denylist`, which is why that wrapper exists.
 fn resolve_existing_prefix(path: &Path) -> PathBuf {
     for ancestor in path.ancestors() {
         let Ok(canonical) = ancestor.canonicalize() else {
@@ -153,6 +186,23 @@ fn resolve_existing_prefix(path: &Path) -> PathBuf {
 /// so a link cycle cannot spin here forever.
 const MAX_DENYLIST_LINK_HOPS: usize = 16;
 
+/// Resolve `path` to the location a write to it would actually land on.
+///
+/// The denylist matches on text, and `validate_workspace_path_with_cwd` hands
+/// back a not-yet-created file spelled exactly as the caller spelled it. Two
+/// spellings reach an instruction directory without ever containing its name:
+/// a different casing, where the filesystem is case-insensitive, and a symlink
+/// somewhere inside the project.
+///
+/// Canonicalizing the existing prefix collapses both, but only for a link
+/// whose target already exists. A link whose target is still absent is what an
+/// attacker actually commits, and it is invisible to both `exists` and
+/// `canonicalize`: the ancestor walk pops the link's own name and re-attaches
+/// it as raw text, dropping exactly the indirection it was meant to resolve.
+/// `tokio::fs::write` at the four write sites opens with `O_CREAT` and follows
+/// it regardless, materializing the target. So a dangling leaf link is read
+/// here by hand, with `symlink_metadata`, which does not follow, and its target
+/// resolved the same way, repeatedly, for chained links.
 fn resolve_for_denylist(path: &Path) -> PathBuf {
     let mut resolved = resolve_existing_prefix(path);
     for _ in 0..MAX_DENYLIST_LINK_HOPS {
@@ -437,6 +487,10 @@ mod agent_instruction_denylist_tests {
     use super::*;
     use std::fs;
 
+    /// The attack this closes: one approved `write_file`, with content from a
+    /// poisoned web page or MCP tool result, lands in a directory the CLI loads
+    /// as trusted always-on instructions, rewriting the agent's own
+    /// instructions for that repository and every session after it.
     #[test]
     fn rules_file_write_denied() {
         let tmp = tempfile::tempdir().expect("tempdir");
@@ -572,6 +626,8 @@ mod agent_instruction_denylist_tests {
 
     #[test]
     fn still_allows_ordinary_project_writes() {
+        // The denylist must not become a general obstacle, this is what proves
+        // the guard is narrow rather than broadly breaking the write tool.
         let tmp = tempfile::tempdir().expect("tempdir");
         let src = tmp.path().join("src");
         fs::create_dir_all(&src).expect("create src");
