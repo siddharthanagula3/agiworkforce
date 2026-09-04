@@ -337,6 +337,17 @@ to advance time rather than waiting real days for the 30/60/90 checkpoints.
       test card, since those are the decided primary rails.
       Verified 2026-09-04 in test mode on a fresh `send_invoice` subscription (`sub_1UBsOv0zEfO6BZMhTsYaXlTT`) for the existing test customer on the existing seat price. Invoice `in_1UBsOv0zEfO6BZMh1HwDZra4` ($144,000) paid with the ACH Direct Debit test account (`000123456789` / routing `110000000`), verified through a `SetupIntent` with the test microdeposit amounts (`32`, `45`) then `POST /v1/invoices/{id}/pay`. A second, subscription-linked invoice `in_1UBsXX0zEfO6BZMh28wvvFFC` ($1,000) was paid by bank transfer: `payment_settings.payment_method_types=[customer_balance]`, funded with `stripe test_helpers customers fund_cash_balance`, which Stripe auto-reconciled. Both invoices' resulting events were replayed through `stripe-replay.mjs`; `organization_billing_invoices` shows both rows `status = paid` with `amount_paid_cents` matching. An earlier, non-subscription-linked bank-transfer invoice was paid in Stripe but never appeared in the local ledger, because `recordEnterpriseInvoiceEvent` (`apps/web/lib/services/enterprise-billing-service.ts:443-444`) only records invoices resolvable to a `stripe_subscription_id`; that invoice was abandoned in favor of the subscription-linked one above and is not part of this evidence.
 
+- [x] The read-only hold binds a contract whose Stripe subscription status is
+      still `active` (the permanent state of a `send_invoice` subscription
+      that Stripe leaves past due) and cannot be dodged with the
+      `x-agi-organization-id: personal` header. The earlier policy-gate check
+      above exercised only the organization-scoped path. Verified 2026-09-04
+      over HTTP against the local server after db39ade91: with the contract's
+      oldest open invoice set 100 days past due and the subscription row
+      `active`, a managed chat completion from the owner account answered
+      403 `billing_read_only` both with the personal header and without it;
+      with the hold cleared the same requests passed the billing gate.
+
 - [x] A stale `customer.subscription.updated` delivered after
       `customer.subscription.deleted` must not revive the ended contract.
       Verified 2026-09-04 against the local database through the running
