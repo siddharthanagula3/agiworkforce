@@ -31,6 +31,7 @@ import {
   Telescope,
   ListChecks,
   Brain,
+  Globe,
 } from '@agiworkforce/icons';
 import { cn } from '@shared/lib/utils';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@agiworkforce/ui';
@@ -42,7 +43,8 @@ import { useSettingsModal } from '@features/settings/components/SettingsModalPro
 import { useSettingsStore } from '@shared/stores/web-settings-store';
 import { SendButton } from './SendButton';
 import { ComposerInput } from './ComposerInput';
-import { ComposerFooter } from './ComposerFooter';
+import { ComposerFooter, ComposerModelSummary } from './ComposerFooter';
+import { StyleSelector } from './StyleSelector';
 import { DragDropOverlay } from './DragDropOverlay';
 import { VoiceInputButton } from './VoiceInputButton';
 import { AttachmentPreview } from './AttachmentPreview';
@@ -73,7 +75,6 @@ import { useStyleStore, getStyleInstruction } from '@features/chat/stores/style-
 import { containsSecrets } from '@/lib/security/secrets-audit';
 import { useRouter } from 'next/navigation';
 import { useTranslation } from 'react-i18next';
-import Link from 'next/link';
 import {
   canUseBillingPlanCapability,
   getModels,
@@ -105,7 +106,6 @@ import { modelSupportsResearch } from '@features/chat/lib/research-capability-ga
 import { useCoworkFolderStore, supportsDirectoryPicker } from '@shared/stores/cowork-folder-store';
 import { FREE_TRIAL_MODELS } from '@/lib/free-trial-config';
 import { MANAGED_CLOUD_CHAT_MAX_MESSAGE_LENGTH } from '@agiworkforce/cloud-contracts';
-import { ComposerFeedbackDialog } from './ComposerFeedbackDialog';
 import { buildAgiWorkGoalInput, type AgiWorkGoalInput } from '@/features/chat/utils/agiwork-plan';
 import { AI_ACCURACY_DISCLAIMER } from '@/lib/compliance/ai-act';
 import {
@@ -183,33 +183,23 @@ const WORK_MODE_PLACEHOLDERS: Record<ComposerWorkMode, string | null> = {
 };
 
 const COMPOSER_FOOTER_KEYS = {
-  webSearch: 'web-search',
-  memory: 'memory',
-  sendPreview: 'send-preview',
   accuracy: 'accuracy',
-  privacy: 'privacy',
-  feedback: 'feedback',
+  model: 'model',
 } as const;
 
 /**
- * Entries the phone drops. Measured at 390px on 2026-08-31: chatgpt.com shows
- * one line here and puts it above its composer, claude.ai shows nothing at all,
- * and ours ran to three rows: 136px of composer against ChatGPT's 87px. The
- * composer's own control row is already full at that width (312 of 324px), so
- * nothing can move into it.
- *
- * Each of these has a second entry point on a phone: web search is derived from
- * the resolved model whose picker sits directly above, Privacy is reachable from
- * settings and several pages, Feedback has an entry in the transcript, and the
- * send route moves into the "+" menu (see the SendPreview card there). What
- * stays at every width is the accuracy caveat; see the Article 50(1) note at
- * its render site.
+ * The footer is one quiet line: the disclaimer left, the resolved model and
+ * effort right (Claude's convention). Measured at 390px on 2026-08-31 the
+ * older, denser footer ran to three rows: 136px of composer against
+ * ChatGPT's 87px. The model summary is desk-only there; the picker directly
+ * above already names the model. Web search, memory, the send route,
+ * Privacy and Feedback all moved out: web search and memory are small marked
+ * glyphs in the right cluster plus a status row in the "+" menu, the send
+ * route lives in the "+" menu's SendPreview card at every width, Privacy is
+ * reachable from Settings, and Feedback has an entry in the transcript.
  */
 const DESK_ONLY_COMPOSER_FOOTER_KEYS: ReadonlySet<string> = new Set<string>([
-  COMPOSER_FOOTER_KEYS.webSearch,
-  COMPOSER_FOOTER_KEYS.sendPreview,
-  COMPOSER_FOOTER_KEYS.privacy,
-  COMPOSER_FOOTER_KEYS.feedback,
+  COMPOSER_FOOTER_KEYS.model,
 ]);
 
 const COMPOSER_FOOTER_ENTRY_TESTID_PREFIX = 'composer-footer-entry-';
@@ -419,7 +409,13 @@ const FOCUS_AFTER_TRANSCRIPT_MS = 50;
 
 const COMPOSER_AUTO_HEIGHT = 'auto';
 const COMPOSER_MAX_HEIGHT_PX = 240;
-const COMPOSER_RESTING_HEIGHT_PX = 52;
+/**
+ * An existing chat's one-row rest state: 36px content row + the card's 8px
+ * top/bottom padding lands on the 52px rest-height parity target at 1543px.
+ */
+const COMPOSER_RESTING_HEIGHT_PX = 36;
+/** The home composer's own row, its second row (mode toggle) sits below it. */
+const COMPOSER_RESTING_HEIGHT_EMPTY_PX = 40;
 /** M11: the mobile step of the same box the `sm:` utilities carry. */
 const COMPOSER_RESTING_HEIGHT_COMPACT_PX = 36;
 const COMPOSER_COMPACT_MEDIA_QUERY = '(max-width: 639px)';
@@ -442,11 +438,12 @@ export const SEND_GUARD_BLOCKED = 'guard-blocked' as const;
  * The legacy textarea's resting height is pinned in JS, so the `sm:` step its
  * classes carry can never reach it; this is the one density value that cannot
  * be a responsive class. jsdom has no `matchMedia`, which resolves to the
- * desktop number the existing first-paint test measures.
+ * desktop non-empty number the existing first-paint test measures.
  */
-function composerRestingHeightPx(): number {
+function composerRestingHeightPx(emptyState: boolean): number {
   const compact = window.matchMedia?.(COMPOSER_COMPACT_MEDIA_QUERY).matches === true;
-  return compact ? COMPOSER_RESTING_HEIGHT_COMPACT_PX : COMPOSER_RESTING_HEIGHT_PX;
+  if (compact) return COMPOSER_RESTING_HEIGHT_COMPACT_PX;
+  return emptyState ? COMPOSER_RESTING_HEIGHT_EMPTY_PX : COMPOSER_RESTING_HEIGHT_PX;
 }
 
 /**
@@ -1062,12 +1059,16 @@ const ChatComposerNewComponent = ({
     isAutoSelected || modelSupportsResearch(selectedModelCaps, selectedModelMeta?.contextWindow);
   const modelSupportsThinkingCap = selectedModelCaps?.thinking ?? false;
   const deploymentCodeExecution = useBillingStore((s) => s.featureFlags?.code_execution ?? false);
-  const providerHasNativeCodeExecution = ['anthropic', 'google', 'openai'].includes(
-    (selectedModelMeta?.provider ?? '').toLowerCase(),
-  );
+  // Whether this model can run code is a registry capability
+  // (selectedModelCaps.codeExecution, curated per-model in models.curation.json),
+  // never a provider-name allowlist: request-processor.ts gates the server turn
+  // on `resolvedModelCaps?.codeExecution === true` alone, and the catalog
+  // marks codeExecution true for at least one live model outside the
+  // previously hardcoded three-provider list, so that allowlist here hid the
+  // control for a model the server would have honored.
   const modelSupportsCodeExecution =
     isAutoSelected ||
-    ((selectedModelCaps?.codeExecution ?? false) && providerHasNativeCodeExecution) ||
+    (selectedModelCaps?.codeExecution ?? false) ||
     ((selectedModelCaps?.tools ?? false) && deploymentCodeExecution);
   const modelSupportsOfficeCreation = isAutoSelected || (selectedModelCaps?.tools ?? false);
 
@@ -1548,7 +1549,7 @@ const ChatComposerNewComponent = ({
     // but the initial mobile composer has already consumed most of the screen.
     // Empty content never needs measurement, so keep its stable one-line height
     // and reserve scrollHeight reads for real text.
-    const resting = composerRestingHeightPx();
+    const resting = composerRestingHeightPx(Boolean(emptyState));
     if (message.length === 0) {
       textarea.style.height = `${resting}px`;
       return;
@@ -1556,7 +1557,7 @@ const ChatComposerNewComponent = ({
     textarea.style.height = COMPOSER_AUTO_HEIGHT;
     const newHeight = Math.min(Math.max(textarea.scrollHeight, resting), COMPOSER_MAX_HEIGHT_PX);
     textarea.style.height = `${newHeight}px`;
-  }, [message]);
+  }, [message, emptyState]);
 
   // Close popover on outside click or Escape
   useEffect(() => {
@@ -2952,15 +2953,15 @@ const ChatComposerNewComponent = ({
         </div>
       )}
 
-      {/* Main Input Container */}
+      {/* Main Input Container. One card shape and no permanent shadow at every
+          state (rest, empty, focus): a shadow only ever appears on focus. */}
       <div
         id="chat-composer"
         className={cn(
-          'relative border bg-[var(--chat-input-bg)] shadow-sm backdrop-blur-sm transition-all duration-200',
-          emptyState ? 'rounded-[26px]' : 'rounded-2xl',
+          'relative rounded-2xl border bg-[var(--chat-input-bg)] backdrop-blur-sm transition-all duration-200',
           isFocused
             ? 'border-[var(--chat-accent-primary)]/40 shadow-md ring-2 ring-[var(--chat-accent-primary)]/30'
-            : 'border-[var(--chat-glass-border)]',
+            : 'border-[var(--chat-border-strong)] shadow-none',
         )}
       >
         {/* Slash Command Menu */}
@@ -3079,87 +3080,18 @@ const ChatComposerNewComponent = ({
 
         <div
           className={cn(
-            'flex flex-col gap-1.5 p-1.5 sm:gap-2 sm:p-3',
-            emptyState && 'px-3 py-1.5 sm:px-5 sm:py-3',
+            'flex flex-col gap-1.5 p-1.5 sm:gap-2 sm:p-2',
+            // Home carries its own second row (mode toggle) inside the same
+            // card, so its vertical padding stays tighter than the (already
+            // token-driven) base to hold the whole card under the 100px
+            // parity target at 1543.
+            emptyState && 'px-3 py-1.5 sm:px-5 sm:py-1.5',
           )}
         >
-          {/* Textarea wrapper, row 1, full width */}
-          <div
-            ref={composerRowRef}
-            className={cn(
-              'relative w-full min-h-[36px]',
-              emptyState ? 'sm:min-h-[40px]' : 'sm:min-h-[52px]',
-            )}
-          >
-            <ComposerInput
-              textareaRef={textareaRef}
-              editorRef={composerEditorRef}
-              value={message}
-              onChange={handleInputChange}
-              onTextChange={handleComposerTextChange}
-              onKeyDown={handleKeyDown}
-              onPaste={handlePaste}
-              onPasteDecision={handleEditorPasteDecision}
-              onDropFiles={handleEditorDropFiles}
-              onSubmit={handleSubmit}
-              onFocusChange={setIsFocused}
-              existingFileNames={attachmentNames}
-              mention={composerMention}
-              isSlashMenuActive={() => showSlashMenu}
-              onSlashMenuKey={(key) => slashMenuRef.current?.handleKey(key) ?? false}
-              placeholder={
-                isTurnActive && !imageMode && !videoMode
-                  ? 'Reply: sends when the current response finishes'
-                  : imageMode
-                    ? 'Describe or edit an image'
-                    : videoMode
-                      ? 'Describe the video you want'
-                      : // AUDIT-FIX shell-nav-ia-gap-03: the work-mode axis now
-                        ((canUseAgiWork ? WORK_MODE_PLACEHOLDERS[workMode] : null) ?? placeholder)
-              }
-              // Type-ahead: the textarea stays enabled while a turn streams so the
-              // user can compose a follow-up (queued + auto-sent on completion).
-              // Image mode has no streaming turn to type ahead of, so it stays gated.
-              disabled={composerDisabled || ((imageMode || videoMode) && isTurnActive)}
-              emptyState={Boolean(emptyState)}
-              maxLength={COMPOSER_MAX_CHARS}
-              ariaDescribedBy={showCharCounter ? 'composer-char-counter' : undefined}
-            />
-            {/* AUDIT-FIX CMP-32: character budget. Silent before it matters,
-                explicit once the message approaches the contract ceiling. */}
-            {showCharCounter && (
-              <p
-                id="composer-char-counter"
-                role="status"
-                className={cn(
-                  'absolute bottom-0 right-2 z-20 text-[12px] tabular-nums',
-                  charCounterExceeded ? 'text-danger' : 'text-muted-foreground',
-                )}
-              >
-                {messageLength.toLocaleString()} / {COMPOSER_MAX_CHARS.toLocaleString()} characters
-                {charCounterExceeded ? ' · limit reached' : ''}
-              </p>
-            )}
-          </div>
-
-          {/* AUDIT-FIX CMP-9: a typed command is applied on send, so say so
-              before the user presses Enter. */}
-          {pendingSlashCommand && pendingSlashOutcome && (
-            <p className="px-2 text-[12px] text-muted-foreground" role="status">
-              {pendingSlashOutcome.status === 'unavailable' ? (
-                pendingSlashOutcome.notice
-              ) : (
-                <>
-                  <span className="font-medium text-foreground">{pendingSlashCommand.label}</span>{' '}
-                  runs on send
-                  {pendingSlashCommand.argument ? ` with: ${pendingSlashCommand.argument}` : ''}
-                </>
-              )}
-            </p>
-          )}
-
-          {/* Control cluster, row 2, a single non-wrapping line (flex-nowrap). */}
-          <div className="flex min-w-0 flex-nowrap items-center gap-1 sm:gap-2">
+          {/* Rest-state row: one non-wrapping line (plus, textbox, right
+              cluster). items-end keeps the plus/model/mic/send controls
+              pinned to the textbox's last line as it autosizes taller. */}
+          <div className="flex min-w-0 flex-nowrap items-end gap-1 sm:gap-2">
             {/* + Overflow Menu Button */}
             <div className={cn('relative shrink-0')} ref={overflowRef}>
               <button
@@ -3217,11 +3149,12 @@ const ChatComposerNewComponent = ({
                 {
                   <>
                     {/* 0. Work mode (Chat | AGI Work), shown in the menu ONLY
-                        below sm, where the inline segmented toggle is hidden to
-                        free composer-row width for the model selector. Keeps
-                        work-mode fully switchable on the narrow (mobile)
-                        composer instead of dropping the control. */}
-                    {projectPicker && !imageMode && canUseAgiWork && (
+                        below sm, where the home composer's second-row segmented
+                        toggle is hidden to free row width for the model
+                        selector. Keeps work-mode fully switchable on the narrow
+                        (mobile) composer instead of dropping the control. Home
+                        only: an existing chat's mode was set at creation. */}
+                    {emptyState && projectPicker && !imageMode && canUseAgiWork && (
                       <div className="chat-composer-mode-in-menu sm:hidden">
                         <div className="flex items-center gap-3 rounded-lg px-3 py-2">
                           <span className="flex-1 text-left text-sm">Mode</span>
@@ -3682,8 +3615,39 @@ const ChatComposerNewComponent = ({
                       <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
                     </button>
 
+                    {/* 7a. Response style, relocated off the composer face
+                        into the "+" menu; StyleSelector owns its own
+                        trigger and portaled popover, so it mounts unchanged. */}
+                    {!isFreeTrial && (
+                      <div className="px-3 py-1">
+                        <StyleSelector />
+                      </div>
+                    )}
+
                     {/* Divider */}
                     <div className="my-1 border-t border-border/30" />
+
+                    {/* 7b. Standing web-search status. Search is ambient
+                        (model/deployment driven, not a manual toggle), so this
+                        is a status row, never a button pretending to control
+                        it; the on state also shows as a small marked glyph in
+                        the right cluster. */}
+                    {billingPolicyReady && (
+                      <div
+                        className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm text-muted-foreground"
+                        title={
+                          webSearchEnabled
+                            ? 'This model can search the web when the question needs current information.'
+                            : 'This model has no web-search path, so this turn answers from its training data.'
+                        }
+                      >
+                        <Globe className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+                        <span className="flex-1 text-left">Web search</span>
+                        <span className="text-[12px] font-medium">
+                          {webSearchEnabled ? 'On' : 'Off'}
+                        </span>
+                      </div>
+                    )}
 
                     {/* 8. Deep Research toggle */}
                     <MenuToggleRow
@@ -3774,14 +3738,15 @@ const ChatComposerNewComponent = ({
                       />
                     )}
 
-                    {/* 9. Send route; the one entry the collapsed mobile
-                        footer drops that has no other home. It is last so the
-                        menu's initial focus still lands on an action, and it is
-                        the card variant because the compact one opens an
-                        `absolute bottom-full` popover that this panel's own
-                        `overflow-y-auto` would clip. */}
+                    {/* 9. Send route (managed cloud state); moved out of the
+                        footer entirely (target: one quiet disclaimer+model
+                        line), so this is now its sole, every-width home. It
+                        is last so the menu's initial focus still lands on an
+                        action, and it is the card variant because the compact
+                        one opens an `absolute bottom-full` popover that this
+                        panel's own `overflow-y-auto` would clip. */}
                     {sendPreviewPresentation && (
-                      <div className="md:hidden" data-testid={COMPOSER_MENU_SEND_ROUTE_TESTID}>
+                      <div data-testid={COMPOSER_MENU_SEND_ROUTE_TESTID}>
                         <div className="my-1 border-t border-border/40" />
                         <SendPreview presentation={sendPreviewPresentation} variant="card" />
                       </div>
@@ -3790,6 +3755,106 @@ const ChatComposerNewComponent = ({
                 }
               </AnchoredComposerMenu>
             </div>
+
+            {/* Textbox, grows to a cap then scrolls internally; the card
+                itself never changes width while it grows. */}
+            <div
+              ref={composerRowRef}
+              className={cn(
+                'relative min-w-0 flex-1 min-h-[36px]',
+                emptyState ? 'sm:min-h-[40px]' : 'sm:min-h-[36px]',
+              )}
+            >
+              <ComposerInput
+                textareaRef={textareaRef}
+                editorRef={composerEditorRef}
+                value={message}
+                onChange={handleInputChange}
+                onTextChange={handleComposerTextChange}
+                onKeyDown={handleKeyDown}
+                onPaste={handlePaste}
+                onPasteDecision={handleEditorPasteDecision}
+                onDropFiles={handleEditorDropFiles}
+                onSubmit={handleSubmit}
+                onFocusChange={setIsFocused}
+                existingFileNames={attachmentNames}
+                mention={composerMention}
+                isSlashMenuActive={() => showSlashMenu}
+                onSlashMenuKey={(key) => slashMenuRef.current?.handleKey(key) ?? false}
+                placeholder={
+                  isTurnActive && !imageMode && !videoMode
+                    ? 'Reply: sends when the current response finishes'
+                    : imageMode
+                      ? 'Describe or edit an image'
+                      : videoMode
+                        ? 'Describe the video you want'
+                        : // AUDIT-FIX shell-nav-ia-gap-03: the work-mode axis now
+                          ((canUseAgiWork ? WORK_MODE_PLACEHOLDERS[workMode] : null) ?? placeholder)
+                }
+                // Type-ahead: the textarea stays enabled while a turn streams so the
+                // user can compose a follow-up (queued + auto-sent on completion).
+                // Image mode has no streaming turn to type ahead of, so it stays gated.
+                disabled={composerDisabled || ((imageMode || videoMode) && isTurnActive)}
+                emptyState={Boolean(emptyState)}
+                maxLength={COMPOSER_MAX_CHARS}
+                ariaDescribedBy={showCharCounter ? 'composer-char-counter' : undefined}
+              />
+              {/* AUDIT-FIX CMP-32: character budget. Silent before it matters,
+                  explicit once the message approaches the contract ceiling. */}
+              {showCharCounter && (
+                <p
+                  id="composer-char-counter"
+                  role="status"
+                  className={cn(
+                    'absolute bottom-0 right-2 z-20 text-[12px] tabular-nums',
+                    charCounterExceeded ? 'text-danger' : 'text-muted-foreground',
+                  )}
+                >
+                  {messageLength.toLocaleString()} / {COMPOSER_MAX_CHARS.toLocaleString()}{' '}
+                  characters
+                  {charCounterExceeded ? ' · limit reached' : ''}
+                </p>
+              )}
+            </div>
+
+            {/* Standing web-search indicator, a small marked glyph, not a
+                control: search is ambient (model/deployment driven), so this
+                is text/status, never a button pretending to toggle it. Full
+                reachability lives in the "+" menu's status row below. */}
+            {billingPolicyReady && (
+              <span
+                data-testid="web-search-indicator"
+                data-active={webSearchEnabled ? 'true' : 'false'}
+                title={
+                  webSearchEnabled
+                    ? 'This model can search the web when the question needs current information.'
+                    : 'This model has no web-search path, so this turn answers from its training data.'
+                }
+                className={cn(
+                  'inline-flex h-2 w-2 shrink-0 items-center justify-center self-center rounded-full',
+                  webSearchEnabled ? 'bg-[var(--chat-accent-primary)]' : 'bg-transparent',
+                )}
+              >
+                <span className="sr-only">
+                  {webSearchEnabled ? 'Web search on' : 'Web search off'}
+                </span>
+              </span>
+            )}
+
+            {/* Per-chat Memory-off marker, same treatment as the web-search
+                glyph: visible without opening the menu, silent when memory is
+                on (the common case). */}
+            {memoryCapabilityEnabled && !memoryEnabledForChat && (
+              <span
+                data-testid="memory-indicator"
+                data-active="false"
+                title="Memory is off for this conversation. This turn neither reads nor saves account memories."
+                className="inline-flex shrink-0 items-center self-center text-[var(--chat-text-muted)]"
+              >
+                <Brain className="h-3.5 w-3.5" aria-hidden="true" />
+                <span className="sr-only">Memory off</span>
+              </span>
+            )}
 
             {primaryOverflowActive && PrimaryOverflowIcon && (
               <div
@@ -3809,37 +3874,6 @@ const ChatComposerNewComponent = ({
                     +{overflowActiveCount - 1}
                   </span>
                 )}
-              </div>
-            )}
-
-            {/* Work-mode segmented toggle (Chat | AGI Work), claude.ai
-              Chat/Cowork parity, sitting immediately right of "+".
-              Backed: 'agiwork' reveals
-              the below-composer "Project or folder" picker and the selection
-              threads through send meta → createConversation → server project
-              context. Hidden below sm (relocated into the + menu "Mode" row)
-              so the nowrap control row never squeezes out Send. */}
-            {projectPicker && !imageMode && canUseAgiWork && (
-              <div className="chat-composer-mode-inline hidden shrink-0 items-center rounded-full border border-[var(--chat-glass-border)] bg-muted/40 p-0.5 text-xs font-medium sm:flex">
-                {(['chat', 'agiwork'] as const).map((mode) => (
-                  <button
-                    key={mode}
-                    type="button"
-                    onClick={() => handleWorkModeChange(mode)}
-                    disabled={isTurnActive || composerDisabled}
-                    aria-pressed={workMode === mode}
-                    title={WORK_MODE_TITLES[mode]}
-                    className={cn(
-                      'flex h-7 items-center rounded-full px-3 transition-colors',
-                      workMode === mode
-                        ? 'bg-background text-foreground shadow-sm'
-                        : 'text-muted-foreground hover:text-foreground',
-                      (isTurnActive || composerDisabled) && 'cursor-not-allowed opacity-50',
-                    )}
-                  >
-                    {mode === 'chat' ? 'Chat' : 'AGI Work'}
-                  </button>
-                ))}
               </div>
             )}
 
@@ -4047,11 +4081,11 @@ const ChatComposerNewComponent = ({
               </div>
             )}
 
-            {/* Model selector. In normal mode the full ComposerFooter sits inline beside
-              the send button. In image mode the image-model picker takes its place.
-              both use `ml-auto` so they right-align and push the mic + send to the
-              right edge of the toolbar. In the flex-nowrap control row the footer is
-              the only shrinkable item (min-w-0), so it truncates instead of wrapping.
+            {/* Model selector. In normal mode the compact ComposerFooter pill
+              sits beside the send button; in image mode the image-model
+              picker takes its place. The textbox above carries the row's
+              `flex-1`, so these right-cluster controls need no `ml-auto` of
+              their own to reach the right edge.
 
               Video mode is excluded for the same reason as image mode, and it used
               not to be: the video pill above documents that video resolves its model
@@ -4066,17 +4100,16 @@ const ChatComposerNewComponent = ({
             {!imageMode && !videoMode && (
               <ComposerFooter
                 inline
-                className="ml-auto min-w-0"
+                className="min-w-0 shrink"
                 showModelSelector
                 lockModelSelector={false}
-                showStyleSelector={!isFreeTrial}
                 onUpgradeRequest={onUpgradeRequest}
                 onModelChange={onModelChange}
               />
             )}
 
             {imageMode && (
-              <div className="relative ml-auto shrink-0">
+              <div className="relative shrink-0">
                 <button
                   ref={imageModelTriggerRef}
                   type="button"
@@ -4152,7 +4185,7 @@ const ChatComposerNewComponent = ({
                 text model that had no part in the
                 generation the send button ran, a stale model label. */}
             {videoMode && (
-              <div className="relative ml-auto shrink-0">
+              <div className="relative shrink-0">
                 <button
                   ref={videoModelTriggerRef}
                   type="button"
@@ -4245,6 +4278,50 @@ const ChatComposerNewComponent = ({
               className="shrink-0"
             />
           </div>
+
+          {/* AUDIT-FIX CMP-9: a typed command is applied on send, so say so
+              before the user presses Enter. */}
+          {pendingSlashCommand && pendingSlashOutcome && (
+            <p className="px-2 text-[12px] text-muted-foreground" role="status">
+              {pendingSlashOutcome.status === 'unavailable' ? (
+                pendingSlashOutcome.notice
+              ) : (
+                <>
+                  <span className="font-medium text-foreground">{pendingSlashCommand.label}</span>{' '}
+                  runs on send
+                  {pendingSlashCommand.argument ? ` with: ${pendingSlashCommand.argument}` : ''}
+                </>
+              )}
+            </p>
+          )}
+
+          {/* Second row, home composer only: Chat | AGI Work mode toggle.
+              An existing chat's mode was set at creation, so the composer for
+              an ongoing conversation stays a single row (mobile still reaches
+              this through the "+" menu's Mode row). */}
+          {emptyState && projectPicker && !imageMode && canUseAgiWork && (
+            <div className="chat-composer-mode-inline hidden shrink-0 items-center self-start rounded-full border border-[var(--chat-border-strong)] bg-muted/40 p-0.5 text-xs font-medium sm:flex">
+              {(['chat', 'agiwork'] as const).map((mode) => (
+                <button
+                  key={mode}
+                  type="button"
+                  onClick={() => handleWorkModeChange(mode)}
+                  disabled={isTurnActive || composerDisabled}
+                  aria-pressed={workMode === mode}
+                  title={WORK_MODE_TITLES[mode]}
+                  className={cn(
+                    'flex h-7 items-center rounded-full px-3 transition-colors',
+                    workMode === mode
+                      ? 'bg-background text-foreground shadow-sm'
+                      : 'text-muted-foreground hover:text-foreground',
+                    (isTurnActive || composerDisabled) && 'cursor-not-allowed opacity-50',
+                  )}
+                >
+                  {mode === 'chat' ? 'Chat' : 'AGI Work'}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
 
         {/* Hidden file input */}
@@ -4469,117 +4546,33 @@ const ChatComposerNewComponent = ({
         </div>
       )}
 
-      {/* Compact route disclosure + disclaimer · both sit below the composer
-          instead of consuming a full banner above the textarea. The destination
-          remains visible before send and expands to the complete payload/tool
-          explanation only when requested. */}
-      <div className="mt-2 flex min-h-5 flex-wrap items-center justify-center gap-x-1 gap-y-0.5 text-[12px] text-muted-foreground">
-        {/* Standing web-search indicator. Search is ambient by design (the manual
-            toggle was removed), which left nothing on screen saying whether the
-            current turn can search, `webSearchEnabled` reached the user only
-            through the transient queued-follow-up chip and the collapsed send
-            preview. It is derived, not a control, so it is text and not a
-            button. */}
-        {/* Each entry carries its own leading separator inside one flex item, so
-            a wrapped row can never end on a dangling "·", which is exactly
-            what happened at 390px, where the row broke after the route
-            disclosure. */}
-        {[
-          billingPolicyReady ? (
-            <span
-              key={COMPOSER_FOOTER_KEYS.webSearch}
-              data-testid="web-search-indicator"
-              data-active={webSearchEnabled ? 'true' : 'false'}
-              title={
-                webSearchEnabled
-                  ? 'This model can search the web when the question needs current information.'
-                  : 'This model has no web-search path, so this turn answers from its training data.'
-              }
-            >
-              {webSearchEnabled ? 'Web search on' : 'Web search off'}
-            </span>
-          ) : null,
-          memoryCapabilityEnabled && !memoryEnabledForChat ? (
-            <span
-              key={COMPOSER_FOOTER_KEYS.memory}
-              data-testid="memory-indicator"
-              data-active="false"
-              title="Memory is off for this conversation. This turn neither reads nor saves account memories."
-            >
-              Memory off
-            </span>
-          ) : null,
-          sendPreviewPresentation ? (
-            <SendPreview
-              key={COMPOSER_FOOTER_KEYS.sendPreview}
-              presentation={sendPreviewPresentation}
-              variant="compact"
-            />
-          ) : null,
-          /* Accuracy caveat, in the position ChatGPT and Claude both use. The
-             explicit Article 50(1) "you are interacting with an AI system"
-             sentence was removed on 2026-08-14 in reliance on the regulation's
-             obviousness carve-out, which counsel has NOT reviewed, see
-             ARTICLE_50_1_WEB_CARVE_OUT in lib/compliance/ai-act.ts. This
-             disclaimer is what deliberately stayed; do not trim it too. */
-          <span key={COMPOSER_FOOTER_KEYS.accuracy} data-testid="ai-accuracy-disclaimer">
-            {AI_ACCURACY_DISCLAIMER}
-          </span>,
-          <Link
-            key={COMPOSER_FOOTER_KEYS.privacy}
-            href="/privacy"
-            target="_blank"
-            rel="noopener noreferrer"
-            data-inline-link="true"
-            className="underline-offset-2 transition-colors hover:text-foreground hover:underline focus-visible:rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          >
-            Privacy
-          </Link>,
-          <ComposerFeedbackDialog
-            key={COMPOSER_FOOTER_KEYS.feedback}
-            conversationId={conversationId}
-          />,
-        ]
-          .filter(Boolean)
-          .map((entry, index, entries) => {
-            const key = (entry as { key: string }).key;
-            const isDeskOnly = (candidate: unknown) =>
-              DESK_ONLY_COMPOSER_FOOTER_KEYS.has((candidate as { key: string }).key);
-            // `md` is the breakpoint both shells gate their narrow-viewport
-            // layout on (`matchMedia('(max-width: 768px)')`), so the row
-            // collapses on exactly the widths that render the mobile shell.
-            // See DESK_ONLY_COMPOSER_FOOTER_KEYS for what a phone loses and
-            // where each dropped entry is still reachable.
-            const deskOnly = isDeskOnly(entry);
-            return (
-              <span
-                key={key}
-                data-testid={`${COMPOSER_FOOTER_ENTRY_TESTID_PREFIX}${key}`}
-                className={cn(
-                  'items-center gap-x-1 whitespace-nowrap',
-                  deskOnly ? 'hidden md:inline-flex' : 'inline-flex',
-                )}
-              >
-                {/* The separator has to follow what is VISIBLE at this
-                    breakpoint, not the array position: hiding an entry with a
-                    class left the row starting on a dangling "·", which is the
-                    same defect the ordering above was written to avoid. */}
-                {index > 0 && (
-                  <span
-                    aria-hidden="true"
-                    className={cn(
-                      entries.slice(0, index).some((prior) => !isDeskOnly(prior))
-                        ? 'inline'
-                        : 'hidden md:inline',
-                    )}
-                  >
-                    ·
-                  </span>
-                )}
-                {entry}
-              </span>
-            );
-          })}
+      {/* Footer: one quiet line under the card, disclaimer left, resolved
+          model and effort right. The model summary drops below md, where the
+          picker directly above already names the model; the disclaimer is
+          the one thing every width keeps. */}
+      <div className="mt-2 flex min-h-5 items-center justify-between gap-2 text-[12px] text-muted-foreground">
+        {/* Accuracy caveat, in the position ChatGPT and Claude both use. The
+           explicit Article 50(1) "you are interacting with an AI system"
+           sentence was removed on 2026-08-14 in reliance on the regulation's
+           obviousness carve-out, which counsel has NOT reviewed, see
+           ARTICLE_50_1_WEB_CARVE_OUT in lib/compliance/ai-act.ts. This
+           disclaimer is what deliberately stayed; do not trim it too. */}
+        <span
+          data-testid={`${COMPOSER_FOOTER_ENTRY_TESTID_PREFIX}${COMPOSER_FOOTER_KEYS.accuracy}`}
+        >
+          <span data-testid="ai-accuracy-disclaimer">{AI_ACCURACY_DISCLAIMER}</span>
+        </span>
+        <span
+          data-testid={`${COMPOSER_FOOTER_ENTRY_TESTID_PREFIX}${COMPOSER_FOOTER_KEYS.model}`}
+          className={cn(
+            'shrink-0 whitespace-nowrap',
+            DESK_ONLY_COMPOSER_FOOTER_KEYS.has(COMPOSER_FOOTER_KEYS.model)
+              ? 'hidden md:inline'
+              : 'inline',
+          )}
+        >
+          <ComposerModelSummary />
+        </span>
       </div>
     </div>
   );

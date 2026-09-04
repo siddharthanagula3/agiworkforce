@@ -32,16 +32,19 @@ vi.mock('@features/connectors/hooks/use-connectors', () => ({
 }));
 
 /**
- * M11. The resting composer measured ~130px at 390px against ChatGPT's ~87px,
- * and every contributing value was a single unconditional class: `p-2`/`py-3`
- * of column padding, `gap-2` between the rows, a 52px input row and a 44px mic
- * that set the control row's height on its own.
+ * M11, extended by the composer parity wave. The resting composer measured
+ * ~130px at 390px against ChatGPT's ~87px, and every contributing value was a
+ * single unconditional class: `p-2`/`py-3` of column padding, `gap-2` between
+ * the rows, a 52px input row and a 44px mic that set the control row's height
+ * on its own.
  *
- * The budget these classes now describe at 390px is
- * 2 (border) + 12 (p-1.5) + 6 (gap-1.5) + 36 (input row) + 32 (controls) = 88px.
- * Each one keeps an `sm:` half carrying the number desktop had, because desktop
- * was explicitly not part of this slice. A browser re-measure is the proof;
- * these are the class states it will be measuring.
+ * The parity wave then merged the textbox and the control row into one
+ * flex-nowrap line (plus, textbox, right cluster), so the budget at 390px is
+ * 2 (border) + 12 (p-1.5) + 36 (one row) = 50px at rest. Desktop's own inner
+ * padding moved from 12px (`sm:p-3`) to 8px (`sm:p-2`, the parity target) so
+ * an existing chat's 36px control row plus 8+8 padding lands on the 52px
+ * rest-height target at 1543px. A browser re-measure is the proof; these are
+ * the class states it will be measuring.
  */
 function box(): HTMLElement {
   const node = document.querySelector('#chat-composer');
@@ -57,20 +60,22 @@ describe('composer mobile density', () => {
   it('halves the column padding and row gap below sm and restores both above it', () => {
     render(<ChatComposerNew onSend={vi.fn()} />);
 
-    expect(column()).toHaveClass('p-1.5', 'gap-1.5', 'sm:p-3', 'sm:gap-2');
+    expect(column()).toHaveClass('p-1.5', 'gap-1.5', 'sm:p-2', 'sm:gap-2');
   });
 
   it('keeps the empty-state surface on the same mobile step', () => {
     render(<ChatComposerNew onSend={vi.fn()} emptyState />);
 
-    expect(column()).toHaveClass('px-3', 'py-1.5', 'sm:px-5', 'sm:py-3');
+    expect(column()).toHaveClass('px-3', 'py-1.5', 'sm:px-5', 'sm:py-1.5');
   });
 
-  it('shortens the input row below sm without moving either desktop height', () => {
+  it('shares the 36px mobile step, and moves only the chat desktop height (parity one-row merge)', () => {
     const view = render(<ChatComposerNew onSend={vi.fn()} />);
     const row = () => screen.getByRole('textbox').parentElement as HTMLElement;
 
-    expect(row()).toHaveClass('min-h-[36px]', 'sm:min-h-[52px]');
+    // Chat: the textbox row is 36px at `sm:` too, so 36 + the card's 8px
+    // top/bottom padding lands on the 52px rest-height parity target.
+    expect(row()).toHaveClass('min-h-[36px]', 'sm:min-h-[36px]');
 
     view.rerender(<ChatComposerNew onSend={vi.fn()} emptyState />);
     expect(row()).toHaveClass('min-h-[36px]', 'sm:min-h-[40px]');

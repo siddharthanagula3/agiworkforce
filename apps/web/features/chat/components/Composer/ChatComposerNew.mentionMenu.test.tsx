@@ -102,7 +102,9 @@ describe('composer @mention menu', () => {
 
   it('scopes the chat to a project picked from the mention menu', () => {
     const onSelectProject = vi.fn();
-    render(<ChatComposerNew onSend={vi.fn()} projectPicker={picker({ onSelectProject })} />);
+    render(
+      <ChatComposerNew onSend={vi.fn()} emptyState projectPicker={picker({ onSelectProject })} />,
+    );
 
     fireEvent.click(screen.getByRole('button', { name: 'AGI Work' }));
     const textarea = typeInComposer('@Laun');
