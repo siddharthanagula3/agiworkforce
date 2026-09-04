@@ -87,4 +87,73 @@ describe('cloud agent workflow stream projection', () => {
     expect(projected[0]?.sse).toContain('"x_interactive_card"');
     expect(projected[0]?.sse).toContain('tool-map-fixture');
   });
+
+  it('forwards tool status and search results deltas untouched', () => {
+    const toolStatus = { type: 'mcp_tool_use', name: 'web_search', status: 'running' };
+    const searchResults = { content: [{ type: 'web_search_result', url: 'https://example.com' }] };
+    const chunk = new TextEncoder().encode(
+      [
+        `data: ${JSON.stringify({ choices: [{ delta: { x_tool_status: toolStatus } }] })}`,
+        `data: ${JSON.stringify({ choices: [{ delta: { x_search_results: searchResults } }] })}`,
+        '',
+      ].join('\n'),
+    );
+
+    const projected = projectCloudAgentWorkflowChunk(chunk);
+
+    expect(projected).toHaveLength(2);
+    expect(projected[0]?.envelope).toBeUndefined();
+    expect(projected[0]?.sse).toContain('"x_tool_status"');
+    expect(projected[0]?.sse).toContain('web_search');
+    expect(projected[1]?.sse).toContain('"x_search_results"');
+    expect(projected[1]?.sse).toContain('example.com');
+  });
+
+  it('forwards unrecognized activity delta types without an allowlist entry', () => {
+    const chunk = new TextEncoder().encode(
+      `data: ${JSON.stringify({
+        choices: [{ delta: { x_research_status: { phase: 'planning' } } }],
+      })}\n\n`,
+    );
+
+    const projected = projectCloudAgentWorkflowChunk(chunk);
+
+    expect(projected).toHaveLength(1);
+    expect(projected[0]?.sse).toContain('"x_research_status"');
+  });
+
+  it('preserves the original interleaving of tool status and canonical agent events', () => {
+    const envelope = {
+      schemaVersion: 4,
+      sessionId: 'session-1',
+      turnId: 'turn-1',
+      sequence: 7,
+      emittedAtMs: 2_000,
+      event: { type: 'lifecycle', phase: 'heartbeat' },
+    };
+    const toolStatus = { type: 'mcp_tool_use', name: 'web_search', status: 'completed' };
+    const chunk = new TextEncoder().encode(
+      [
+        `data: ${JSON.stringify({ choices: [{ delta: { x_tool_status: toolStatus } }] })}`,
+        `data: ${JSON.stringify({ choices: [{ delta: { x_agent_event: envelope } }] })}`,
+        '',
+      ].join('\n'),
+    );
+
+    const projected = projectCloudAgentWorkflowChunk(chunk);
+
+    expect(projected).toHaveLength(2);
+    expect(projected[0]?.sse).toContain('"x_tool_status"');
+    expect(projected[1]?.envelope).toEqual(envelope);
+  });
+
+  it('drops a content delta that carries no other forwardable key', () => {
+    const chunk = new TextEncoder().encode(
+      `data: ${JSON.stringify({ choices: [{ delta: { content: 'partial token' } }] })}\n\n`,
+    );
+
+    const projected = projectCloudAgentWorkflowChunk(chunk);
+
+    expect(projected).toHaveLength(0);
+  });
 });
