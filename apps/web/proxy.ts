@@ -8,6 +8,9 @@ import { getClerkAuthorizedParties } from './lib/clerk-authorized-parties';
 import { hasBrowserSessionCookie as isBrowserSessionCookiePresent } from './lib/session-cookie';
 
 const CHAT_ROOT_PATH = '/chat';
+const AGI_WORK_PATH = '/agi-work';
+const AGI_CODE_PATH = '/agi-code';
+const CLOUD_CODE_PATH = '/chat/code';
 
 const UNAVAILABLE_PATH = '/region-unavailable';
 
@@ -82,7 +85,18 @@ function hasBrowserSessionCookie(request: NextRequest): boolean {
   return isBrowserSessionCookiePresent(request.cookies.getAll());
 }
 
-function buildHomeResponse(request: NextRequest): NextResponse {
+// A signed-in visitor to a marketing route that has a real product surface
+// behind it gets that surface instead of the pitch for it, the way ChatGPT's
+// Work toggle and Claude's Cowork open the product rather than a landing page.
+// A signed-out visitor keeps the marketing page. The rewrite (not a redirect)
+// leaves the address bar showing the marketing path, matching how `/` already
+// resolves to `/chat` for a signed-in session.
+// The rewrite target's own query string is invisible to the rendered page:
+// `useSearchParams()` reflects the browser's actual address bar (still
+// showing the marketing path), not this internal URL. A page that needs to
+// know it was reached via this rewrite reads the `x-agi-pathname` header
+// this sets below, exactly as `apps/web/app/chat/layout.tsx` already does.
+function buildProductRewriteResponse(request: NextRequest, targetPath: string): NextResponse {
   const nonce = btoa(crypto.randomUUID());
   const csp = buildCspWithNonce(nonce);
   const requestHeaders = new Headers(request.headers);
@@ -91,12 +105,24 @@ function buildHomeResponse(request: NextRequest): NextResponse {
   requestHeaders.set('Content-Security-Policy', csp);
 
   const response = hasBrowserSessionCookie(request)
-    ? NextResponse.rewrite(new URL(CHAT_ROOT_PATH, request.url), {
+    ? NextResponse.rewrite(new URL(targetPath, request.url), {
         request: { headers: requestHeaders },
       })
     : NextResponse.next({ request: { headers: requestHeaders } });
   response.headers.set('Content-Security-Policy', csp);
   return response;
+}
+
+function buildHomeResponse(request: NextRequest): NextResponse {
+  return buildProductRewriteResponse(request, CHAT_ROOT_PATH);
+}
+
+function buildAgiWorkResponse(request: NextRequest): NextResponse {
+  return buildProductRewriteResponse(request, CHAT_ROOT_PATH);
+}
+
+function buildAgiCodeResponse(request: NextRequest): NextResponse {
+  return buildProductRewriteResponse(request, CLOUD_CODE_PATH);
 }
 
 function buildSignedOutRedirect(request: NextRequest): NextResponse {
@@ -144,6 +170,8 @@ const isClerkSessionRoute = createRouteMatcher([
   '/workspace(.*)',
   '/operator(.*)',
   '/welcome(.*)',
+  AGI_WORK_PATH,
+  AGI_CODE_PATH,
   '/api/(.*)',
 ]);
 
@@ -159,8 +187,12 @@ const clerkAuthorizedParties = ((): string[] | null => {
 // unresolvable allowlist must stop the request instead of authenticating it.
 const clerkAwareProxy = clerkAuthorizedParties
   ? clerkMiddleware(
-      (_auth, request: NextRequest) =>
-        request.nextUrl.pathname === '/' ? buildHomeResponse(request) : buildCspResponse(request),
+      (_auth, request: NextRequest) => {
+        if (request.nextUrl.pathname === '/') return buildHomeResponse(request);
+        if (request.nextUrl.pathname === AGI_WORK_PATH) return buildAgiWorkResponse(request);
+        if (request.nextUrl.pathname === AGI_CODE_PATH) return buildAgiCodeResponse(request);
+        return buildCspResponse(request);
+      },
       { authorizedParties: clerkAuthorizedParties },
     )
   : null;
