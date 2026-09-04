@@ -2,7 +2,7 @@ import { buildMetadata } from '@/lib/seo/metadata';
 import { Header } from '@shared/components/layout/Header';
 import { MarketingFooter } from '@/features/marketing/components/MarketingFooter';
 import { Section, Stack } from '@/features/marketing/components/system';
-import { PageHero } from '@/features/marketing/components/pages/surfaces/shared';
+import { FactLine, PageHero } from '@/features/marketing/components/pages/surfaces/shared';
 import { LinkGrid } from '@/features/marketing/components/pages/features/shared';
 
 export const metadata = buildMetadata({
@@ -50,6 +50,12 @@ const SECTIONS = [
   },
 ];
 
+const HERO_FACTS = [
+  `Entries: ${SECTIONS.length}`,
+  'Placeholders: 0',
+  'Every one a real page with real content',
+];
+
 export default function ResourcesPage() {
   return (
     <div data-design="agi" className="agi-ds-page">
@@ -62,6 +68,8 @@ export default function ResourcesPage() {
           lede="Every entry below is a real page with real content. Nothing here is a placeholder."
           ctas={[]}
         />
+
+        <FactLine facts={HERO_FACTS} />
 
         <Section id="index" labelledBy="agi-resources-index-title" rule>
           <Stack gap="loose">
