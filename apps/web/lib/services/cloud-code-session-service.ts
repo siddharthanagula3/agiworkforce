@@ -16,6 +16,7 @@ import {
   resolveCloudCodeCommandDeadlineMs,
 } from '@/lib/deadline-policy';
 import { getE2BExecutor, killE2BSession } from '@/lib/e2b/runtime';
+import { InvalidExtraEgressHostsError, normalizeExtraEgressHosts } from '@/lib/e2b/egress-hosts';
 import type { CommandExecutionResult } from '@/lib/e2b/types';
 import { knownHarnessCommandIds, listCloudCodeRuntimes } from '@/lib/e2b/templates';
 import { managedCloudCodeSessionScope } from '@/lib/e2b/session-store';
@@ -176,6 +177,7 @@ interface ValidatedCreateInput {
   workspacePath: string;
   runtimeId: string | null;
   repositoryBranch: string | null;
+  extraHosts: string[];
 }
 
 function iso(value: string | Date): string {
@@ -316,6 +318,15 @@ export function validateCreateCloudCodeSession(
       'Repository setup requires Trusted hosts or Full network access',
     );
   }
+  let extraHosts: string[];
+  try {
+    extraHosts = normalizeExtraEgressHosts(input.extraHosts);
+  } catch (error) {
+    if (error instanceof InvalidExtraEgressHostsError) {
+      throw new CloudCodeValidationError(error.message);
+    }
+    throw error;
+  }
   return {
     requestId: input.requestId,
     title,
@@ -326,6 +337,7 @@ export function validateCreateCloudCodeSession(
     // await; this stays synchronous for the callers that only shape-check.
     runtimeId: typeof input.runtimeId === 'string' ? input.runtimeId.trim() || null : null,
     repositoryBranch,
+    extraHosts,
   };
 }
 
@@ -649,6 +661,8 @@ export async function createCloudCodeSession(
     validated.networkAccess,
     planTier,
     validated.runtimeId,
+    null,
+    validated.extraHosts,
   );
   const executor = await getE2BExecutor(scope);
   if (!executor?.runCommand) {

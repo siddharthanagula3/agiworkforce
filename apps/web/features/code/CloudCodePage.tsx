@@ -90,6 +90,13 @@ const NETWORK_OPTIONS: Array<{
   },
 ];
 
+function parseExtraHosts(value: string): string[] {
+  return value
+    .split(',')
+    .map((host) => host.trim())
+    .filter((host) => host.length > 0);
+}
+
 function makeRequestId(): string {
   if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
     return crypto.randomUUID();
@@ -158,6 +165,7 @@ export function CloudCodePage({ api = cloudCodeApi }: CloudCodePageProps) {
   const [repositoryUrl, setRepositoryUrl] = useState('');
   const [repositoryBranch, setRepositoryBranch] = useState('');
   const [networkAccess, setNetworkAccess] = useState<CloudCodeNetworkAccess>('none');
+  const [extraHosts, setExtraHosts] = useState('');
   // Empty string is "the default image", the catalogue never contains one, so
   // it cannot collide with a real template id.
   const [runtimeId, setRuntimeId] = useState('');
@@ -332,6 +340,7 @@ export function CloudCodePage({ api = cloudCodeApi }: CloudCodePageProps) {
         networkAccess,
         fullNetworkAcknowledged: networkAccess === 'full' ? fullNetworkAccepted : undefined,
         runtimeId: runtimeId || null,
+        extraHosts: networkAccess === 'full' ? undefined : parseExtraHosts(extraHosts),
       });
       replaceSession(body.session);
       setSelectedId(body.session.id);
@@ -343,6 +352,7 @@ export function CloudCodePage({ api = cloudCodeApi }: CloudCodePageProps) {
       setNetworkAccess('none');
       setFullNetworkAccepted(false);
       setRuntimeId('');
+      setExtraHosts('');
 
       // createCloudCodeSession provisions synchronously and returns the session
       // already `ready`, so the task can start in the same gesture rather than
@@ -782,6 +792,24 @@ export function CloudCodePage({ api = cloudCodeApi }: CloudCodePageProps) {
                         })}
                       </div>
                     </fieldset>
+
+                    {networkAccess !== 'full' && (
+                      <label className={styles['field']}>
+                        <span className={styles['label']}>Extra allowed hosts (optional)</span>
+                        <input
+                          className={styles['input']}
+                          value={extraHosts}
+                          onChange={(event) => setExtraHosts(event.target.value)}
+                          placeholder="api.example.com, *.internal.example.com"
+                          disabled={creating}
+                        />
+                        <span className={styles['help']}>
+                          Comma-separated hostnames this session may reach on top of{' '}
+                          {networkAccess === 'trusted' ? 'the trusted hosts above' : 'nothing else'}
+                          . A single leading wildcard subdomain is allowed, up to 10 hosts.
+                        </span>
+                      </label>
+                    )}
 
                     {networkAccess === 'full' && (
                       <label className={styles['acknowledgement']}>
