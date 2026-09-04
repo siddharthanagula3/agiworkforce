@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import process from 'node:process';
@@ -52,24 +53,61 @@ const EXTERNALLY_PROVIDED = [
 
 const HSL_TRIPLET_RE = /^\s*[\d.]+\s+[\d.]+%\s+[\d.]+%\s*$/;
 
-function walk(dir, out = []) {
+const LS_FILES_MAX_BUFFER = 64 * 1024 * 1024;
+const RUNTIME_SKIPPED_DIRECTORIES = new Set([
+  'node_modules',
+  'dist',
+  '.next',
+  'src-tauri',
+  '__tests__',
+]);
+const TAILWIND_SKIPPED_DIRECTORIES = new Set(['node_modules', 'dist', '.next', 'src-tauri']);
+const listedFilesByDir = new Map();
+
+/**
+ * Files git considers part of the workspace under `dir`: tracked plus untracked
+ * but not ignored. Generated artifacts (build output, the workflow devkit's
+ * multi-megabyte route bundle) are ignored and never scanned, which is what
+ * keeps this guard seconds long instead of minutes.
+ */
+function listWorkspaceFiles(dir) {
+  if (listedFilesByDir.has(dir)) return listedFilesByDir.get(dir);
   const abs = path.join(root, dir);
-  if (!fs.existsSync(abs)) return out;
-  for (const entry of fs.readdirSync(abs, { withFileTypes: true })) {
-    const rel = path.join(dir, entry.name);
-    if (entry.isDirectory()) {
-      if (['node_modules', 'dist', '.next', 'src-tauri', '__tests__'].includes(entry.name))
-        continue;
-      walk(rel, out);
-    } else if (
-      /\.(tsx?|css)$/.test(entry.name) &&
-      !/\.(test|spec)\.tsx?$/.test(entry.name) &&
-      !/\.d\.ts$/.test(entry.name)
-    ) {
-      out.push(rel);
-    }
+  if (!fs.existsSync(abs)) {
+    listedFilesByDir.set(dir, []);
+    return [];
   }
-  return out;
+  const out = execFileSync(
+    'git',
+    ['ls-files', '-z', '--cached', '--others', '--exclude-standard', '--', dir],
+    { cwd: root, maxBuffer: LS_FILES_MAX_BUFFER },
+  );
+  const files = out
+    .toString('utf8')
+    .split('\0')
+    .filter(Boolean)
+    .filter((rel) => fs.existsSync(path.join(root, rel)));
+  listedFilesByDir.set(dir, files);
+  return files;
+}
+
+function insideSkippedDirectory(rel, skipped) {
+  return rel
+    .split('/')
+    .slice(0, -1)
+    .some((segment) => skipped.has(segment));
+}
+
+function walk(dir) {
+  return listWorkspaceFiles(dir).filter((rel) => {
+    const name = path.basename(rel);
+    return (
+      !insideSkippedDirectory(rel, RUNTIME_SKIPPED_DIRECTORIES) &&
+      /\.(tsx?|css)$/.test(name) &&
+      !/\.(test|spec)\.tsx?$/.test(name) &&
+      !/\.d\.ts$/.test(name)
+    );
+  });
 }
 
 /**
@@ -78,19 +116,12 @@ function walk(dir, out = []) {
  * candidates even though they are not useful inputs to the custom-property
  * reference check. Keep those files in the arbitrary-utility safety scan.
  */
-function walkTailwindSources(dir, out = []) {
-  const abs = path.join(root, dir);
-  if (!fs.existsSync(abs)) return out;
-  for (const entry of fs.readdirSync(abs, { withFileTypes: true })) {
-    const rel = path.join(dir, entry.name);
-    if (entry.isDirectory()) {
-      if (['node_modules', 'dist', '.next', 'src-tauri'].includes(entry.name)) continue;
-      walkTailwindSources(rel, out);
-    } else if (/\.(?:[cm]?[jt]sx?|mdx)$/.test(entry.name)) {
-      out.push(rel);
-    }
-  }
-  return out;
+function walkTailwindSources(dir) {
+  return listWorkspaceFiles(dir).filter(
+    (rel) =>
+      !insideSkippedDirectory(rel, TAILWIND_SKIPPED_DIRECTORIES) &&
+      /\.(?:[cm]?[jt]sx?|mdx)$/.test(path.basename(rel)),
+  );
 }
 
 function nextFontTokens() {
