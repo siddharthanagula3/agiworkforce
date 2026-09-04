@@ -103,7 +103,9 @@ export async function dispatchStripeEvent(
       await updateSubscriptionFromStripeSubscription(db, stripe, subscription, {
         eventSequence: event.created,
       });
-      await syncEnterpriseContractFromSubscription(db, stripe, subscription);
+      await syncEnterpriseContractFromSubscription(db, stripe, subscription, {
+        eventCreatedAt: event.created,
+      });
       break;
     }
     case 'invoice.paid':
@@ -117,9 +119,11 @@ export async function dispatchStripeEvent(
         await updateSubscriptionFromStripeSubscription(db, stripe, subscription, {
           eventSequence: event.created,
         });
-        await syncEnterpriseContractFromSubscription(db, stripe, subscription);
+        await syncEnterpriseContractFromSubscription(db, stripe, subscription, {
+          eventCreatedAt: event.created,
+        });
       }
-      await recordEnterpriseInvoiceEvent(db, invoice);
+      await recordEnterpriseInvoiceEvent(db, invoice, { eventCreatedAt: event.created });
       break;
     }
     case 'invoice.created':
@@ -129,7 +133,7 @@ export async function dispatchStripeEvent(
     case 'invoice.voided':
     case 'invoice.overdue': {
       const invoice = event.data.object as Stripe.Invoice;
-      await recordEnterpriseInvoiceEvent(db, invoice);
+      await recordEnterpriseInvoiceEvent(db, invoice, { eventCreatedAt: event.created });
       break;
     }
     case 'customer.subscription.deleted': {
@@ -201,7 +205,7 @@ export async function dispatchStripeEvent(
           [stripeCustomerId],
         );
       }
-      await recordEnterpriseInvoiceEvent(db, invoice);
+      await recordEnterpriseInvoiceEvent(db, invoice, { eventCreatedAt: event.created });
       break;
     }
     case 'payment_intent.processing': {

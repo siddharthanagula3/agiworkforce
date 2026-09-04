@@ -217,10 +217,15 @@ function resolveNegotiatedContractMetadata(
   };
 }
 
+export interface EnterpriseSyncOptions {
+  eventCreatedAt?: number | null;
+}
+
 export async function syncEnterpriseContractFromSubscription(
   db: DatabaseAdapter,
   stripe: Stripe,
   subscription: Stripe.Subscription,
+  options: EnterpriseSyncOptions = {},
 ): Promise<void> {
   const item = subscription.items.data[0];
   if (!item) return;
@@ -253,16 +258,18 @@ export async function syncEnterpriseContractFromSubscription(
   const committedSeats = resolveCommittedSeats(subscription);
   const stripeCustomerId = extractCustomerId(subscription.customer);
   const negotiated = resolveNegotiatedContractMetadata(subscription);
+  const eventCreatedAt = typeof options.eventCreatedAt === 'number' ? options.eventCreatedAt : null;
 
-  await db.execute(
+  const written = await db.query<{ organization_id: string }>(
     `insert into public.organization_billing_contracts
        (organization_id, stripe_customer_id, stripe_subscription_id, stripe_product_id, stripe_price_id,
         procurement_reference, contract_term_start, contract_term_end, billing_cadence, committed_seats,
         included_usage_cents_per_period, overage_stripe_price_id, committed_usage_block_cents,
-        minimum_annual_spend_cents, support_tier, customer_legal_entity)
+        minimum_annual_spend_cents, support_tier, customer_legal_entity, last_stripe_event_at)
      values (
        $1::uuid, $2::text, $3::text, $4::text, $5::text, $6::text, $7::date, $8::date, $9::text, $10::integer,
-       coalesce($11::bigint, 0), $12::text, coalesce($13::bigint, 0), coalesce($14::bigint, 0), $15::text, $16::text
+       coalesce($11::bigint, 0), $12::text, coalesce($13::bigint, 0), coalesce($14::bigint, 0), $15::text, $16::text,
+       to_timestamp($17::double precision)
      )
      on conflict (organization_id) do update set
        stripe_customer_id = excluded.stripe_customer_id,
@@ -297,7 +304,15 @@ export async function syncEnterpriseContractFromSubscription(
        customer_legal_entity = coalesce(
          $16::text,
          organization_billing_contracts.customer_legal_entity
-       )`,
+       ),
+       last_stripe_event_at = coalesce(
+         excluded.last_stripe_event_at,
+         organization_billing_contracts.last_stripe_event_at
+       )
+     where $17::double precision is null
+        or organization_billing_contracts.last_stripe_event_at is null
+        or organization_billing_contracts.last_stripe_event_at <= to_timestamp($17::double precision)
+     returning organization_id`,
     [
       organizationId,
       stripeCustomerId,
@@ -315,8 +330,17 @@ export async function syncEnterpriseContractFromSubscription(
       negotiated.minimumAnnualSpendCents,
       negotiated.supportTier,
       negotiated.customerLegalEntity,
+      eventCreatedAt,
     ],
   );
+
+  if (written.length === 0) {
+    logger.debug(
+      { organizationId, subscriptionId: subscription.id, eventCreatedAt },
+      'Enterprise contract sync skipped: a newer event has already been applied',
+    );
+    return;
+  }
 
   logger.info(
     { organizationId, subscriptionId: subscription.id, committedSeats, cadence },
@@ -413,6 +437,7 @@ function resolveInvoiceProcurementReference(invoice: Stripe.Invoice): string | n
 export async function recordEnterpriseInvoiceEvent(
   db: DatabaseAdapter,
   invoice: Stripe.Invoice,
+  options: EnterpriseSyncOptions = {},
 ): Promise<void> {
   if (!invoice.id) return;
   const stripeSubscriptionId = extractInvoiceSubscriptionId(invoice);
@@ -428,15 +453,17 @@ export async function recordEnterpriseInvoiceEvent(
   const organizationId = contract?.organization_id;
   if (!organizationId) return;
 
-  await db.execute(
+  const eventCreatedAt = typeof options.eventCreatedAt === 'number' ? options.eventCreatedAt : null;
+
+  const written = await db.query<{ stripe_invoice_id: string }>(
     `insert into public.organization_billing_invoices
        (stripe_invoice_id, organization_id, stripe_subscription_id, invoice_number, status, collection_method,
         amount_due_cents, amount_paid_cents, currency, procurement_reference, period_start, period_end, due_at,
-        paid_at, voided_at, hosted_invoice_url, invoice_pdf_url)
+        paid_at, voided_at, hosted_invoice_url, invoice_pdf_url, last_stripe_event_at)
      values (
        $1::text, $2::uuid, $3::text, $4::text, $5::text, $6::text, $7::bigint, $8::bigint, $9::text,
        $10::text, $11::timestamptz, $12::timestamptz, $13::timestamptz, $14::timestamptz, $15::timestamptz,
-       $16::text, $17::text
+       $16::text, $17::text, to_timestamp($18::double precision)
      )
      on conflict (stripe_invoice_id) do update set
        organization_id = excluded.organization_id,
@@ -457,7 +484,15 @@ export async function recordEnterpriseInvoiceEvent(
        paid_at = excluded.paid_at,
        voided_at = excluded.voided_at,
        hosted_invoice_url = excluded.hosted_invoice_url,
-       invoice_pdf_url = excluded.invoice_pdf_url`,
+       invoice_pdf_url = excluded.invoice_pdf_url,
+       last_stripe_event_at = coalesce(
+         excluded.last_stripe_event_at,
+         organization_billing_invoices.last_stripe_event_at
+       )
+     where $18::double precision is null
+        or organization_billing_invoices.last_stripe_event_at is null
+        or organization_billing_invoices.last_stripe_event_at <= to_timestamp($18::double precision)
+     returning stripe_invoice_id`,
     [
       invoice.id,
       organizationId,
@@ -476,8 +511,17 @@ export async function recordEnterpriseInvoiceEvent(
       isoTimestamp(invoice.status_transitions?.voided_at),
       invoice.hosted_invoice_url ?? null,
       invoice.invoice_pdf ?? null,
+      eventCreatedAt,
     ],
   );
+
+  if (written.length === 0) {
+    logger.debug(
+      { invoiceId: invoice.id, organizationId, eventCreatedAt },
+      'Enterprise invoice ledger update skipped: a newer event has already been applied',
+    );
+    return;
+  }
 
   await recomputeOldestOpenInvoice(db, organizationId);
 }
