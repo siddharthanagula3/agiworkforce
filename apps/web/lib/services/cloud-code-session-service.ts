@@ -457,6 +457,30 @@ export async function getCloudCodeSession(
   return mapCloudCodeSession(row);
 }
 
+/**
+ * The funding organization a session was created under, for a caller that
+ * authenticates the user without already knowing it (the provider-proxy
+ * route: a session-scoped bearer token, not a workspace-selecting browser
+ * request). {@link getCloudCodeSession} cannot serve this, its own owner
+ * filter requires the organization id as an input. Scoped by user id alone,
+ * the same trust level {@link getE2BSession} already applies to this caller.
+ */
+export async function resolveCloudCodeSessionOwnerOrganizationId(
+  db: DatabaseAdapter,
+  userId: string,
+  sessionId: string,
+): Promise<string | null> {
+  if (!UUID_RE.test(sessionId)) return null;
+  const rows = await db.query<{ organization_id: string | null }>(
+    `select organization_id
+       from cloud_code_sessions
+      where id = $1 and user_id = $2
+      limit 1`,
+    [sessionId, userId],
+  );
+  return rows[0]?.organization_id ?? null;
+}
+
 export async function listCloudCodeTerminalEntries(
   db: DatabaseAdapter,
   owner: CloudCodeOwner,
