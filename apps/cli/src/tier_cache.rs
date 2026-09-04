@@ -1,3 +1,29 @@
+//! Tier cache, async managed-account tier query with 1-hour on-disk TTL.
+//!
+//! The CLI calls `resolve_user_tier()` at startup to determine which model pool
+//! to default to.  It writes the result to
+//! `~/.agiworkforce/cache/tier.toml` so subsequent runs don't block on a
+//! network call.
+//!
+//! ## Tier model
+//! Canonical billing tiers (from `packages/contracts/types/src/billing-catalog.ts`):
+//!   `free` | `basic` | `pro` | `max` | `max_15x` | `team` | `enterprise`
+//! The CLI also tracks `byok` for Local/BYOK sessions (not a server-side tier).
+//! Customer-facing tier identity stays exact here. Model routing may group
+//! Team with Pro and Max 15x with Max, but account/status UI must not relabel
+//! what the customer purchased.
+//!
+//! ## Flow
+//! 1. Check `~/.agiworkforce/cache/tier.toml`, if present and < 1 h old, return cached tier.
+//! 2. Query `AGIWORKFORCE_API_BASE/api/me` with `Authorization: Bearer <AGIWORKFORCE_JWT>`.
+//! 3. Write result to cache.  On any error, return `None` (caller uses config default).
+//!
+//! ## Security
+//! - JWT is read from `AGIWORKFORCE_JWT`, then the OS credential store populated
+//!   by `agi login`, then the legacy `~/.agiworkforce/auth.toml`.
+//! - Request always uses HTTPS, and only to an allowlisted `*.agiworkforce.com` host.
+//! - Cache file is written atomically via temp-file + rename.
+//! - Timeout: 3 seconds, never blocks interactive startup visibly.
 
 #![allow(dead_code)]
 
@@ -46,6 +72,7 @@ pub enum UserTier {
     Max15x,
     Team,
     Enterprise,
+    /// BYOK / Local mode, tier enforcement is the user's responsibility.
     Byok,
 }
 
@@ -111,6 +138,9 @@ impl std::fmt::Display for UserTier {
 // On-disk cache envelope
 // ---------------------------------------------------------------------------
 
+/// TOML file written to `~/.agiworkforce/cache/tier.toml`.
+/// Only the tier string and timestamp are persisted, no token/credit fields
+/// (the flat subscription model has no usage metering on the CLI side).
 #[derive(Debug, Serialize, Deserialize)]
 struct TierCacheEnvelope {
     /// The resolved tier string (must parse as `UserTier`).
@@ -149,6 +179,8 @@ pub fn read_tier_cache() -> Option<CachedTier> {
     Some(CachedTier { tier })
 }
 
+/// Write a fresh tier to the disk cache.  Errors are silently swallowed, a
+/// failed cache write is never fatal.
 pub fn write_tier_cache(tier: &UserTier) {
     let path = tier_cache_path();
     if let Some(parent) = path.parent() {
@@ -171,6 +203,9 @@ pub fn write_tier_cache(tier: &UserTier) {
 // Tier API response shape
 // ---------------------------------------------------------------------------
 
+/// Minimal shape returned by `GET /api/me`.
+/// The web route nests subscription details under `plan`.
+/// We no longer read `credits`, the flat subscription model has no per-use credits.
 #[derive(Debug, Deserialize)]
 struct MeApiResponse {
     plan: Option<MePlan>,
@@ -193,6 +228,8 @@ struct MePlan {
 pub struct TierResolution {
     /// The resolved tier, if available (from cache or network).
     pub cached: Option<CachedTier>,
+    /// True when the network returned HTTP 401, signals the caller to print a
+    /// re-auth hint.  Callers MUST NOT block Local/BYOK runs when this is true.
     pub needs_reauth: bool,
 }
 
@@ -282,6 +319,7 @@ pub fn reconcile_fetched_tier(fetched: &UserTier, cached: &UserTier) -> UserTier
     if tier_rank(fetched) >= tier_rank(cached) {
         fetched.clone()
     } else {
+        // fetched is lower (e.g. Free returned on a DB hiccup), keep cached.
         cached.clone()
     }
 }
@@ -290,6 +328,18 @@ pub fn reconcile_fetched_tier(fetched: &UserTier, cached: &UserTier) -> UserTier
 // Network fetch
 // ---------------------------------------------------------------------------
 
+/// Resolve the user's tier: cache-first, then network, then `None`.
+///
+/// This function is intentionally non-blocking at the call site: it uses
+/// `tokio::time::timeout` so it never exceeds `TIER_FETCH_TIMEOUT` (3 s).
+///
+/// Returns a `TierResolution` with:
+///   - `cached`: the resolved tier (from cache or network)
+///   - `needs_reauth`: true when the network returned HTTP 401
+///
+/// # Arguments
+/// * `jwt`, AGI Workforce JWT (Bearer token).  If `None`, we skip
+///   the network call and return only what's in the cache.
 pub async fn resolve_user_tier(jwt: Option<&str>) -> TierResolution {
     // Fast path: return fresh cache without touching the network.
     if let Some(cached) = read_tier_cache() {
@@ -299,6 +349,7 @@ pub async fn resolve_user_tier(jwt: Option<&str>) -> TierResolution {
         };
     }
 
+    // No cache or expired, try the network if we have credentials.
     let jwt = match jwt {
         Some(j) if !j.is_empty() => j,
         _ => {
@@ -354,6 +405,7 @@ pub async fn resolve_user_tier(jwt: Option<&str>) -> TierResolution {
                 (Some(fetched), None) => fetched,
                 (None, Some(existing)) => existing.tier, // unknown string → keep cache
                 (None, None) => {
+                    // Unknown server tier string, fail-closed to Free.
                     tracing::debug!(
                         "[tier_cache] Unknown tier string '{}' from /api/me, defaulting to Free (fail-closed)",
                         tier_str
@@ -525,6 +577,7 @@ pub fn load_jwt() -> Option<String> {
         }
     }
 
+    // Legacy auth store, look for a `managed_cloud` or `agiworkforce` token.
     let auth_path = dirs::home_dir()
         .unwrap_or_else(|| PathBuf::from("."))
         .join(".agiworkforce")
@@ -585,11 +638,13 @@ mod tests {
 
     #[test]
     fn parse_tier_str_enterprise_is_distinct() {
+        // Enterprise is NOT collapsed to Max, it has its own variant.
         assert_eq!(parse_tier_str("enterprise"), Some(UserTier::Enterprise));
     }
 
     #[test]
     fn parse_tier_str_unknown_is_none_fail_closed() {
+        // Unknown strings return None (fail-closed, callers default to Free).
         assert_eq!(parse_tier_str("unknown_tier"), None);
         assert_eq!(parse_tier_str(""), None);
         assert_eq!(parse_tier_str("hobby"), None);

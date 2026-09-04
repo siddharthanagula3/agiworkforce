@@ -73,6 +73,12 @@ const PRIMARY_ITEMS: PrimaryItem[] = [
     icon: FolderOpen,
     route: '/(app)/(tabs)/projects',
   },
+  // Library is the single place generated media and files live. "Artifacts"
+  // was a second grid over the same material, and a worse one, since its
+  // tiles rendered no thumbnails, so it is de-listed here rather than kept as
+  // a competing entry point (founder 2026-08-13). The `/(app)/artifacts`
+  // route still exists and is still reachable from an artifact card in a
+  // message; only the drawer row is gone.
   {
     key: 'library',
     label: 'Library',
@@ -105,6 +111,13 @@ const PRIMARY_ITEMS: PrimaryItem[] = [
     icon: MonitorSmartphone,
     route: '/(app)/companion',
   },
+  // AGI Work NAVIGATES; it does not toggle (founder 2026-08-13). A drawer row
+  // that silently flipped a session stance gave no feedback about what it had
+  // changed and no way to see the work it produced. `workMode` is a property of
+  // a cloud agent RUN (cloud-contracts/cloud-agent-runs.ts), not of a
+  // conversation, so "the AGI Work chats" are exactly the runs list at
+  // /(app)/tasks, which is also why no separate "Tasks" row sits beside this
+  // one showing the same records.
   {
     key: 'tasks',
     label: 'AGI Work',

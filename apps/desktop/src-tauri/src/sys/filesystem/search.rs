@@ -2,6 +2,10 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use walkdir::WalkDir;
 
+/// FIX-014 (Sprint 2): the user-supplied `limit` was previously
+/// unbounded, so a malicious or buggy caller could pass `usize::MAX` and
+/// drive the walker until OOM on a large workspace. Cap at 10 000 hits
+/// per request, well above any reasonable picker UI's needs.
 const MAX_RESULT_LIMIT: usize = 10_000;
 
 /// FIX-014: hard-stop the underlying `walkdir` traversal after this many
@@ -9,6 +13,13 @@ const MAX_RESULT_LIMIT: usize = 10_000;
 /// so a wide tree with no matches can't pin a thread indefinitely.
 const MAX_ENTRIES_VISITED: usize = 100_000;
 
+/// DESK-12 (audit 2026-05-03): the previous implementation rooted the
+/// walk at `std::env::current_dir()`, which on a Tauri app launched from
+/// the macOS dock or Finder is `/`. That walked tens of thousands of
+/// system files (returning paths from `/etc`, `~/.ssh`, etc. that are
+/// not "hidden" by the dotfile filter) and pinned a thread for several
+/// seconds. Use the user's `HOME` directory as the safe default
+/// workspace root, bounded, predictable, and never `/`.
 fn search_root() -> Result<PathBuf, String> {
     if let Ok(cwd) = std::env::current_dir() {
         // Trust cwd only if it isn't the filesystem root.
@@ -277,6 +288,12 @@ mod tests {
         assert!(!is_ignored(Path::new("project/src/main.rs")));
     }
 
+    /// FIX-014 (Sprint 2): the public IPC clamps a `usize::MAX` callers
+    /// pass in down to `MAX_RESULT_LIMIT` so a buggy or malicious frontend
+    /// can't drive the walker until OOM. Pinning the constants here is
+    /// enough, a real walk against macOS tempdirs trips the
+    /// "starts-with-dot" hidden-path filter and would test the wrong
+    /// invariant.
     #[test]
     fn limit_constants_are_protective() {
         assert!(MAX_RESULT_LIMIT > 0);

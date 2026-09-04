@@ -3,6 +3,12 @@ use serde::{Deserialize, Serialize};
 #[cfg(test)]
 use crate::models::ToolCallResponse;
 
+// NOTE (Wave 5e1): the loop-guard primitives that used to live here.
+// `MAX_AGENTIC_ITERATIONS`, `LOOP_DETECTION_THRESHOLD`, the content-loop
+// window constants, `hash_tool_call`, and `detect_content_loop`, moved VERBATIM
+// into `agiworkforce-agent-core` (`runaway` module) when the turn loop was
+// extracted. Import them from `agiworkforce_agent_core` instead. What stays here
+// is the CLI-local `ToolCall`/args conversion glue the tool executors consume.
 
 /// Represents a tool invocation for execution by tools.rs.
 #[derive(Debug, Clone, Serialize, Deserialize)]

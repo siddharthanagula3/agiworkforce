@@ -1,3 +1,11 @@
+//! AGI Dictation, system dictation lifecycle (plan:
+//! `docs/plans/desktop-system-dictation.md`, flaw:
+//! `DESKTOP-SYSTEM-DICTATION-UNWIRED-01`).
+//!
+//! Phase-1 modules only: the lifecycle coordinator and the stoppable global
+//! hotkey hook. Capture, target pinning, injection transactions,
+//! personalization, and the remaining plan stages land behind this module as
+//! they are proven.
 
 pub mod capture;
 pub mod coordinator;

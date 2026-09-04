@@ -15,6 +15,20 @@ function createCodedError(message: string, code: string): CodedError {
   return error;
 }
 
+/**
+ * Rejects any command the Rust `generate_handler!` registry does not answer.
+ *
+ * Exported so `src/lib/tauri-mock.ts` can call it: 178 renderer modules import
+ * their `invoke` from there, and only two (`features/code/FileTree.tsx`,
+ * `stores/editingStore.ts`) import this module's `invoke`. Coverage is still not
+ * total, `features/startup-recovery/StartupRecoveryBootstrap.tsx`,
+ * `services/analyticsQueries.ts`, `lib/newChatReset.ts` and
+ * `lib/browserAutomation.ts` import `@tauri-apps/api/core` directly and reach
+ * Rust without passing this check.
+ *
+ * @throws CodedError 'INVALID_COMMAND' if the name is not a Tauri command name
+ * @throws CodedError 'UNKNOWN_COMMAND' if the name is not registered in Rust
+ */
 export function assertRegisteredCommand(command: string): void {
   if (!COMMAND_NAME_PATTERN.test(command)) {
     throw createCodedError(`Invalid IPC command name: ${command}`, 'INVALID_COMMAND');

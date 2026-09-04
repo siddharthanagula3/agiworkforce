@@ -1,6 +1,15 @@
 #!/usr/bin/env node
 /* global fetch, AbortSignal */
 
+// Cross-checks compiled registry pricing and limits against BerriAI/litellm's
+// model_prices_and_context_window.json, fetched at runtime and never vendored.
+//
+// litellm is a third-party community snapshot, not an authority. Neither side is
+// presumed right. Every row printed here is an instruction to open the provider's
+// own pricing page and decide there, it is not a defect report against this catalog.
+//
+// Advisory by design: exit 0 unless --strict. Attribution: THIRD_PARTY_LICENSES.md.
+
 import console from 'node:console';
 import fs from 'node:fs';
 import path from 'node:path';

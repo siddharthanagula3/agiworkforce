@@ -119,6 +119,10 @@ export const ManagedCloudUpdateConversationRequestSchema = z.object({
   starred: z.boolean().optional(),
   archived: z.boolean().optional(),
   isTemporary: z.boolean().optional(),
+  // Three-way, matching resolveParentId in the messages route's thread lib:
+  // absent leaves the recorded leaf alone, a uuid names the variant being read,
+  // and an explicit null returns the conversation to its linear reading, the
+  // only honest answer once the path that leaf named has been deleted.
   activeLeafMessageId: z.string().uuid().nullable().optional(),
 });
 export type ManagedCloudUpdateConversationRequest = z.infer<

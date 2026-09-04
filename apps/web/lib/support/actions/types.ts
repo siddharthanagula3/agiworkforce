@@ -37,6 +37,14 @@ export interface SupportActionEndpoint {
 
 export type SupportActionResult =
   | { kind: 'completed'; message: string }
+  /**
+   * CARRIES LIVE CREDENTIAL MATERIAL.
+   *
+   * `fullKey` must be rendered once in the UI and MUST NOT be written into a
+   * support transcript, an escalation email, an audit detail, or any model
+   * prompt. `sanitizeAuditDetail` redacts sk_live_-shaped values as a backstop
+   * on the audit path only, nothing protects a transcript path.
+   */
   | {
       kind: 'secret_once';
       message: string;

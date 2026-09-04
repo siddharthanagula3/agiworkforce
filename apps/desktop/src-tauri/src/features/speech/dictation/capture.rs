@@ -26,6 +26,8 @@ use std::sync::{Arc, Mutex};
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use serde::Serialize;
 
+/// Hard cap for one capture session. 5 minutes of mono audio at 48 kHz is
+/// ~57 MB of f32 samples, bounded, and far beyond a dictation utterance.
 pub const MAX_CAPTURE_SECONDS: u32 = 300;
 
 #[derive(Debug, Clone, Serialize)]
@@ -100,6 +102,11 @@ impl BoundedSampleSink {
     }
 }
 
+/// Holds state for an active capture session.
+///
+/// Uses `std::sync::Mutex` for the sink because `cpal::Stream` is not `Send`
+///, the stream lives on a dedicated OS thread; this handle only carries the
+/// shared flags/buffer and the thread's join handle.
 pub struct CaptureHandle {
     /// When set to `true`, the capture thread stops and drops the stream.
     pub stop_flag: Arc<AtomicBool>,

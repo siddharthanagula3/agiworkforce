@@ -69,6 +69,17 @@ impl ApiState {
             .map_err(|e| format!("API request failed: {}", e))
     }
 
+    /// Execute a request whose URL was chosen by the WebView.
+    ///
+    /// The WebView's CSP `connect-src` allowlist only governs `fetch`/`XHR`
+    /// issued by renderer JavaScript. `invoke()`-ing one of the `api_*` commands
+    /// moves the request into the Rust process, where that allowlist has no
+    /// effect, so the destination is judged here against the same
+    /// `egress_policy` the tool guard applies to LLM-supplied URLs. Every
+    /// renderer-facing `api_*` command routes through this method, the
+    /// unchecked [`Self::execute_request`] is for URLs the app builds itself
+    /// from an already-validated base (account, credits, OAuth), which are
+    /// allowed to reach a `localhost` API server in development.
     pub async fn execute_renderer_request(
         &self,
         request: ApiRequest,
@@ -86,6 +97,15 @@ impl ApiState {
     }
 }
 
+/// Judge the two endpoints of a renderer-supplied OAuth 2.0 client.
+///
+/// `token_url` is where `api_oauth_exchange_code` / `api_oauth_refresh_token` /
+/// `api_oauth_client_credentials` later POST the client secret, and `auth_url`
+/// is where the user is sent to authenticate, both are chosen by the renderer,
+/// so both go through the same egress policy as any other renderer-supplied
+/// destination, before the client is stored. `redirect_uri` is deliberately not
+/// judged: it is the loopback callback the browser returns to, not a
+/// destination this process connects out to.
 fn ensure_oauth_endpoints_public(config: &OAuth2Config) -> Result<(), String> {
     ensure_oauth_endpoints_public_with(config, &SystemResolver)
 }
@@ -470,6 +490,8 @@ mod tests {
             client_secret: Some("shhh".to_string()),
             auth_url: "https://idp.example.com/oauth/authorize".to_string(),
             token_url: "https://idp.example.com/oauth/token".to_string(),
+            // A loopback callback is normal for a native OAuth client and must
+            // stay allowed, the browser returns to it, we do not connect to it.
             redirect_uri: "http://localhost:3000/callback".to_string(),
             scopes: vec!["read".to_string()],
             use_pkce: true,

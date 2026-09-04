@@ -3,6 +3,17 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { TOOL_APPROVAL_RESUME_PATH } from '@agiworkforce/cloud-contracts';
 
+/**
+ * The durable tool-approval resume endpoint has exactly one address:
+ * `TOOL_APPROVAL_RESUME_PATH`, exported by `@agiworkforce/cloud-contracts`.
+ *
+ * Two things can silently break a surface here, and neither shows up in a
+ * build. The constant can drift away from the Next.js route that actually
+ * serves it, and a client can retype the literal so a server-side move leaves
+ * that one surface posting approvals at a dead URL, the run stays suspended
+ * and the user sees a turn that never resumes. Mobile carried such a copy
+ * until 68591008c; Web and Desktop carried theirs until this test landed.
+ */
 const REPO_ROOT = path.resolve(import.meta.dirname, '../../../..');
 const WEB_APP_DIR = path.resolve(import.meta.dirname, '../../app');
 

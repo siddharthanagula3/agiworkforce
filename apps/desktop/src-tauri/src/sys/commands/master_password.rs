@@ -76,9 +76,20 @@ impl LockoutState {
     fn record_success(&mut self) {
         self.failed_count = 0;
         self.locked_until = None;
+        // require_restart is NOT cleared on success, the app must restart.
     }
 }
 
+// Process-lifetime singleton guarded by a Mutex.
+// Uses std::sync::OnceLock so the state is lazily initialised and never
+// re-created across hot-reloads in tests.
+//
+// I2 fix: parking_lot::Mutex (not std::sync::Mutex). With std::sync::Mutex,
+// a panic while holding the lock poisons it forever, every subsequent
+// vault verify/unlock call would hit `lock().map_err(...)` and return a
+// generic 500-style error. The user could not recover without restarting
+// the app; meanwhile the lockout counter is process-lifetime so the
+// attacker benefits from the DoS. parking_lot::Mutex does not poison.
 static LOCKOUT: std::sync::OnceLock<parking_lot::Mutex<LockoutState>> = std::sync::OnceLock::new();
 
 fn lockout() -> &'static parking_lot::Mutex<LockoutState> {
@@ -446,6 +457,7 @@ pub async fn master_password_migrate_credentials(
         rows_skipped_undecryptable: 0,
     };
 
+    // ---- Table 1: settings_v2, api_key_* and mcp_oauth_config_*_client_*
     {
         let mut conn = crate::core::mcp::config::open_mcp_settings_db()?;
         let tx = conn
@@ -509,6 +521,7 @@ pub async fn master_password_migrate_credentials(
             .map_err(|e| format!("Failed to commit settings_v2 migration tx: {e}"))?;
     }
 
+    // ---- Table 2: messaging_connections, encrypt the credentials JSON blob.
     {
         let conn = db.connection()?;
         let candidates: Vec<(String, String)> = {
@@ -531,6 +544,10 @@ pub async fn master_password_migrate_credentials(
                 continue;
             }
 
+            // Legacy rows are stored as raw JSON, wrap them under the master
+            // key. If the value is neither valid JSON nor master-key
+            // ciphertext we count it and leave it; the surrounding error
+            // path on send_message will surface the bad data.
             if serde_json::from_str::<serde_json::Value>(&value).is_err() {
                 report.rows_skipped_undecryptable += 1;
                 continue;

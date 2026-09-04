@@ -1,3 +1,30 @@
+/**
+ * tierGuard, mobile-local provider-switch gate.
+ *
+ * Mirrors the logic of unified-chat's `selectProviderSwitchGate` selector.
+ * Lives here (rather than unified-chat-rn) because unified-chat-rn does not
+ * exist yet, Phase C will extract and share this.
+ *
+ * Rule: switching to a different provider mid-thread requires `max` or higher
+ * on this surface (see `PROVIDER_SWITCH_MIN_TIER`).
+ * Canonical Auto selections are provider-agnostic and never trigger the gate.
+ * An identical provider switch is always allowed.
+ *
+ * CANONICAL ALIGNMENT (2026-08-05, MOBILE-PROVIDER-SWITCH-GATE-DIVERGENCE-01).
+ * this guard now delegates to the shared `canSwitchProviderInThread()` in
+ * `packages/contracts/types/src/design-system/user-identity.ts`, which admits
+ * only `max` / `max_15x` / `enterprise` and denies `pro` / `team`. Mobile maps
+ * `enterprise` / `max_15x` → `max` in {@link mapBillingPlanToUIPlan}, so the
+ * mapped gate admits exactly those canonical tiers. This matches web, desktop,
+ * and the VS Code guard (`apps/extension-vscode/src/integrations/
+ * providerSwitchGuard.ts`). The prior `pro`-tier divergence is closed.
+ *
+ * Contract drift fix (2026-05-08): the guard now operates on the canonical
+ * {@link UIPlanTier}. Mobile still persists a {@link BillingPlanTier}
+ * for display labels and compatibility with older installs. Call
+ * {@link mapBillingPlanToUIPlan} at the boundary.
+ */
+
 import {
   type BillingPlanTier,
   type UIPlanTier,
@@ -7,6 +34,22 @@ import {
 
 export type ProviderSwitchDecision = 'allow' | 'upgrade-required';
 
+/**
+ * Map the persisted {@link BillingPlanTier} (used by `tierStore` and the
+ * `/api/me` payload) to the canonical {@link UIPlanTier} used by every gate
+ * decision across the platform.
+ *
+ * Mapping rules:
+ *   - `local-only` → `local`        (renamed in canonical contract)
+ *   - legacy direct-provider tiers → `local` on Mobile
+ *   - `free`       → `local`        (Mobile demo starts from local access)
+ *   - `enterprise` → `max`          (enterprise users get max gates)
+ *   - everything else passes through unchanged.
+ *
+ * Mobile keeps `BillingPlanTier` strings in MMKV so older installs continue to
+ * rehydrate correctly. Renaming `local-only` → `local` would invalidate every
+ * persisted tier, that's why we map at the boundary instead.
+ */
 export function mapBillingPlanToUIPlan(plan: BillingPlanTier): UIPlanTier {
   switch (plan) {
     case 'local-only':

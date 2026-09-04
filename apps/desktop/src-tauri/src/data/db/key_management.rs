@@ -261,6 +261,16 @@ fn create_stable_database<S: DatabaseKeyStore>(
     open_with_key(path, &key, key_origin)
 }
 
+/// Retire a proven legacy machine-derived key by rekeying onto a fresh one.
+///
+/// Keeping the proven key would leave every byte of the database, chat
+/// history included, decryptable by anyone who can read this machine's public
+/// identifiers, which is the whole reason the key is legacy.
+///
+/// The replacement is persisted before the rekey runs. A crash between the two
+/// leaves a stored key that no longer opens the file, which the legacy proof
+/// below recovers from on the next launch; rekeying first would instead strand
+/// the database under a key nobody holds.
 fn retire_legacy_database_key<S: DatabaseKeyStore>(
     path: &Path,
     path_string: &str,
@@ -290,6 +300,13 @@ fn retire_legacy_database_key<S: DatabaseKeyStore>(
     open_with_key(path_string, &replacement, DatabaseKeyOrigin::RekeyedLegacy)
 }
 
+/// Open the main database using a stable OS-protected key.
+///
+/// Existing ciphertext is never modified while candidate keys are evaluated.
+/// A legacy candidate that reads the schema authorizes exactly one action.
+/// rekeying the file onto a fresh random key, and is never itself persisted,
+/// including when secure storage already holds it. Plaintext migration uses a
+/// newly generated stable key unless a stored stable key already exists.
 pub fn open_main_database<S: DatabaseKeyStore>(
     path: impl AsRef<Path>,
     store: &S,

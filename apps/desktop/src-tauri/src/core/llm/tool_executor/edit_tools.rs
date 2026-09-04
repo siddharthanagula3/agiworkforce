@@ -584,6 +584,17 @@ impl ToolExecutor {
         })
     }
 
+    /// Execute the `edit_exact_replace` tool: find-and-replace with uniqueness validation.
+    ///
+    /// Parameters:
+    /// - `path` (required), file path to edit
+    /// - `old_text` (required), text to find and replace
+    /// - `new_text` (required), replacement text
+    /// - `replace_all` (optional bool, default false), replace all occurrences
+    ///
+    /// When `replace_all` is false (default), the `old_text` must appear exactly once in
+    /// the file. If multiple occurrences are found, returns an error with occurrence count
+    /// and line numbers so the caller can provide more context or opt into replace_all.
     pub(crate) async fn execute_edit_exact_replace_tool(
         &self,
         args: &HashMap<String, Value>,
@@ -960,6 +971,8 @@ fn parse_unified_diff(patch: &str) -> Result<Vec<DiffHunk>> {
             // Addition: only in replacement
             replacement_lines.push(added.to_string());
         } else {
+            // Lines without a prefix in a hunk body, treat as context
+            // (some tools emit diff lines without a leading space)
             expected_lines.push(line.to_string());
             replacement_lines.push(line.to_string());
         }

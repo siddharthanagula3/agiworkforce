@@ -92,6 +92,15 @@ const automationState: AutomationState = {
 };
 let lastPointerTarget: Element | null = null;
 
+/**
+ * Whether this page's origin carries the user's approval.
+ *
+ * Read once per document and shared, because every startup call this gates
+ * wakes the service worker. Ungated, an extension declaring `http://*\/*`
+ * content scripts woke the worker twice on every page load of every site the
+ * user visits, and on a site the user never approved, both wakes could only
+ * end in the allowlist rejection.
+ */
 const originApproved: Promise<boolean> = (async () => {
   if (!/^https?:/.test(location.protocol)) return false;
   try {
@@ -1764,7 +1773,9 @@ function handleStopRecording(): ExtensionResponse {
       type: 'STOP_RECORDING',
       actions,
     })
-    .catch(() => {});
+    .catch(() => {
+      // Background may not be listening, not fatal
+    });
 
   return { success: true, recording: false, actions } as ExtensionResponse;
 }

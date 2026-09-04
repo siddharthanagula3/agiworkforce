@@ -10,6 +10,12 @@ describe('connector directory catalog', () => {
     expect(FEATURED_CONNECTORS.every((connector) => !connector.comingSoon)).toBe(true);
   });
 
+  // ConnectorGallery renders CONNECTOR_DIRECTORY ∩ supportedConnectorIds, so a
+  // connector the runtime backs is still invisible if the catalog marks it
+  // comingSoon. Outlook and Jira were hidden that way while
+  // CONNECTOR_MCP_MAPPINGS spawned real MCP servers for both. The assertion
+  // above cannot catch it, CONNECTOR_DIRECTORY is defined as that filter's
+  // output, so it holds by construction.
   it('shows every connector the runtime declares supported', () => {
     const visible = new Set(CONNECTOR_DIRECTORY.map((connector) => connector.id));
     const hidden = FALLBACK_SUPPORTED_CONNECTOR_IDS.filter((id) => !visible.has(id));

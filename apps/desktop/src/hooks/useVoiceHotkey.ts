@@ -21,6 +21,32 @@ interface DictationEvent {
 const WAKE_REFUSED_FALLBACK = 'Wake-phrase detection is not available in this build.';
 const DICTATION_REFUSED_FALLBACK = 'System-wide dictation is not available in this build.';
 
+/**
+ * Registers the voice dictation hotkey using keydown/keyup events on document.
+ *
+ * Pressing the configured hotkey calls startListening(); releasing calls
+ * stopListening(). The overlay VoiceInputOverlay renders automatically based
+ * on the store mode.
+ *
+ * For 'caps_lock' mode the hotkey acts as a toggle: first Caps Lock press
+ * starts listening, second Caps Lock press stops listening. Note that browsers
+ * expose CapsLock via KeyboardEvent.code === 'CapsLock' on keydown; the
+ * actual lock state is readable via KeyboardEvent.getModifierState('CapsLock').
+ *
+ * The hook is also the single webview subscriber for the two backend
+ * dictation channels, which had none: `wake:event` (a matched wake phrase
+ * starts dictation; `refused`/`stopped` clear the settings "Listening" badge)
+ * and `dictation:event` (a refused global-hotkey session surfaces as a voice
+ * error, which `VoiceInputOverlay` toasts).
+ *
+ * IMPORTANT: `useVoiceInputStore` here is re-exported from
+ * `stores/settingsStore.ts` (defined in `stores/settings/voice.ts`).
+ * this is the SAME store instance watched by `VoiceInputOverlay.tsx` and
+ * `VoiceSettings.tsx`, and the one driven by the Quick Query voice request
+ * in `App.tsx`. The former duplicate `stores/voiceInputStore.ts` owner was
+ * removed after it caused DESKTOP-VOICE-DICTATION-STORE-MISMATCH-01 (the
+ * hotkey recorded audio while the overlay watched a different store).
+ */
 export function useVoiceHotkey() {
   const startListening = useVoiceInputStore((s) => s.startListening);
   const stopListening = useVoiceInputStore((s) => s.stopListening);

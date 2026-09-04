@@ -54,6 +54,17 @@ impl KnowledgeBase {
         Ok(kb)
     }
 
+    /// Open a connection to the knowledge store.
+    ///
+    /// In production `KnowledgeBase` is always pointed at the MAIN database
+    /// (lib.rs: `ProjectKnowledgeState::new(db_path)` "shares the main DB
+    /// path"), which is keyed by `MainDatabaseAccess`, NOT the machine key
+    /// that `open_keyed_connection` derives. Opening it with the machine key
+    /// failed every query with "file is not a database", silently breaking
+    /// project knowledge add/search. Use the registered main-DB connection
+    /// when startup has registered it; fall back to a keyed open of `db_path`
+    /// only in isolated unit tests (no registration), where `db_path` is a
+    /// throwaway temp file.
     fn open(&self) -> Result<Connection> {
         if crate::data::db::key_management::main_database_access_registered() {
             crate::data::db::key_management::open_registered_main_database_connection()

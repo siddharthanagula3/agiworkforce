@@ -2,9 +2,29 @@ import { test, expect, type Page } from '@playwright/test';
 
 import { signIn } from './qa-capability-harness';
 
+/**
+ * /chat used to hand-roll its narrow-viewport sidebar drawer, a fixed overlay
+ * with its own focus trap, Escape handler and Tab cycling, while every other
+ * route on WebAppShell used the shared Sheet. It now uses the same Sheet, so
+ * the modal contract is Radix's rather than this page's.
+ *
+ * A browser spec rather than a jsdom one, because every claim here depends on
+ * listener ordering that jsdom does not reproduce. Three handlers compete for
+ * the same keys inside this drawer: Radix's dialog, the sidebar's own
+ * document-level arrow-key list navigation, and the row menu's capture-phase
+ * handler. That competition already produced one defect the unit test could
+ * not see (see qa-09-menu-keyboard.spec.ts), which is why
+ * .claude/rules/ui-colour-and-interaction.md requires this class of behaviour
+ * to be covered here.
+ */
+
 const MOBILE_VIEWPORT = { width: 390, height: 844 } as const;
 const DRAWER_TEST_ID = 'chat-mobile-nav-drawer';
 const TRIGGER_NAME = 'Open navigation';
+// An open drawer puts the trigger inside an aria-hidden, inert subtree, the
+// modal contract working as intended, so it leaves the accessibility tree and
+// no role query resolves it. State asserted while the drawer is open has to
+// address the element itself.
 const TRIGGER_SELECTOR = `[aria-label="${TRIGGER_NAME}"]`;
 const SETTLE_MS = 700;
 const LOAD_TIMEOUT_MS = 20_000;
@@ -125,6 +145,7 @@ test.describe('chat sidebar drawer', () => {
 
     const menu = page.locator('[role="menu"]');
     await expect(menu).toBeVisible();
+    // Rendering is not the claim under test, reachability is.
     const pointerEvents = await menu.evaluate((el) => getComputedStyle(el).pointerEvents);
     expect(pointerEvents, 'the portalled menu inherited the dialog body lock').toBe('auto');
     await expect(menu.getByRole('menuitem').first()).toBeEnabled();

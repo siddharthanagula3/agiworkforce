@@ -24,6 +24,22 @@ type SubRow = Pick<
   | 'status'
 >;
 
+/**
+ * Paged, and newest rollover first.
+ *
+ * The unbounded `select` this replaces had no LIMIT, no ORDER BY and no
+ * `maxDuration`, so on renewal night it was killed partway through at whatever
+ * physical heap position it had reached, and, with no ordering, the next night
+ * died at the same place. The subscriptions past that point never received
+ * their period credits and those paying users opened the app to a zero balance.
+ *
+ * `current_period_start desc` puts the subscriptions that actually rolled over
+ * most recently at the front, so a run that runs out of budget defers the ones
+ * whose credits an earlier night already allocated
+ * (`allocateCreditsForPeriod` is a get-or-create, so re-visiting them is a
+ * no-op anyway). The keyset carries `id` as the tiebreak because renewal
+ * timestamps collide in bulk.
+ */
 const PAGE_SQL = `
   select id, user_id, plan_tier, stripe_price_id, current_period_start, current_period_end, status
     from subscriptions

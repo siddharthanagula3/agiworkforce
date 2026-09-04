@@ -58,8 +58,8 @@ export async function safeResolveWorkspacePath(
           if (checkSensitive && isSensitiveFile(real)) {
             return { ok: false, reason: 'sensitive' };
           }
-        } catch (err) {
-          void err;
+        } catch {
+          // noop
         }
       }
       return {

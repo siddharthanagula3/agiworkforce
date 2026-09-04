@@ -18,6 +18,12 @@ interface ScheduleCardProps {
   schedule: ScheduleTask;
   operation: ScheduleOperation;
   error: string | null;
+  /**
+   * True while a run for this schedule is actually in flight, either a
+   * manual "Run Now" the user just triggered, or a cron-triggered run the
+   * page detected by polling. Drives the row's transient status dot; it has
+   * nothing to do with `schedule.status`, whose enum has no 'running' value.
+   */
   isRunningNow: boolean;
   historyExpanded: boolean;
   history: ScheduleHistoryState;

@@ -310,6 +310,12 @@ describe('PP-24, the custom-command editor is reachable', () => {
   });
 
   it('persists a chatFont only because something now renders it', () => {
+    // This asserted chatFont was ABSENT, because an earlier version persisted a
+    // font preference nothing read, the same "control that lies" this file
+    // exists to catch. The control is real as of 2026-08-21, so the guard now
+    // asserts the whole chain instead of the absence: a control, an attribute
+    // stamped on the document, and a stylesheet rule that answers it. Any link
+    // removed and this fails, which is what the absence check was reaching for.
     expect(generalSection).toContain('chatFont');
 
     const appearance = readFileSync(

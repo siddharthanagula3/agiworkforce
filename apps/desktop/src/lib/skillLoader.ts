@@ -1,3 +1,24 @@
+/**
+ * Skill Loader for Desktop App
+ *
+ * Loads AI employee skill definitions from bundled .md files using Vite's
+ * import.meta.glob(). Parses YAML frontmatter to extract skill metadata
+ * (name, description, category, tools, expertise) and the markdown body
+ * as the systemPrompt.
+ *
+ * Uses a 5-minute cache to avoid re-parsing on every access.
+ *
+ * Filesystem-resident skills (user-authored under `<project>/.claude/skills/`,
+ * `~/.claude/skills/`, etc.) load through the shared `@agiworkforce/skills`
+ * package, see `loadFilesystemSkills()` below. The two paths intentionally
+ * coexist: the bundled employees ship with the desktop binary, while user
+ * skills live on disk and merge in via precedence (highest wins).
+ *
+ * @deprecated The bundled-only `loadSkills()` API will be retired once
+ * the `appStateStore` slice for skill catalogs lands. New consumers should
+ * prefer `loadFilesystemSkills()` for layered loading.
+ */
+
 export interface LoadedSkill {
   id: string;
   name: string;

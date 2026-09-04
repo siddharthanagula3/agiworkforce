@@ -382,6 +382,14 @@ const messagePort: MessageStorePort = {
   },
 };
 
+/**
+ * Applies pulled conversation deltas via the shared sync-apply rule (see
+ * @agiworkforce/sync conversations.ts: tombstone-remove, server-revision
+ * upsert, complete dirty-mutation preservation). Exported (not just used
+ * internally), kept as a named export with this exact one-argument signature because
+ * apps/mobile/__tests__/cloud-delete-rename-durability.test.ts imports and
+ * calls it directly.
+ */
 export function applyConversationDeltas(deltas: ConversationWireDelta[]): void {
   const dirtyIds = useCloudSyncStateStore.getState().dirtyConversationIds;
   applyConversationDeltasCore(conversationPort, deltas, dirtyIds);

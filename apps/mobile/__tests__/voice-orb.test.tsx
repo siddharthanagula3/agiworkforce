@@ -1,3 +1,21 @@
+/**
+ * PAR-M03: "voice shaking here and there".
+ *
+ * The orb used to be re-targeted with `withSpring` straight off ~10-20Hz mic
+ * metering, and its phase-driven `withRepeat` loops listed `audioLevel` in the
+ * same dependency array, so they restarted on every tick. A spring re-targeted
+ * every frame never settles; that overshoot is what the founder saw.
+ *
+ * The fix was applied once before to `app/(app)/voice.tsx` and missed the copy
+ * the chat tab actually opened, so this pins the shape of the effects, not
+ * just the output. There is exactly one orb now, and these are its rules.
+ *
+ * Shared values do not survive a re-render under the repo's reanimated mock
+ * (`jest.setup.js` returns a fresh object from `useSharedValue`), so the
+ * smoothing itself is asserted through the exported pure step instead of by
+ * reading a rendered transform.
+ */
+
 import React from 'react';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';

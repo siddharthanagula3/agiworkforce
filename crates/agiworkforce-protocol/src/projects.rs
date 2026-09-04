@@ -1,3 +1,17 @@
+//! Project schema, Rust mirror of `@agiworkforce/types`'s ProjectRecord and
+//! companion types.
+//!
+//! Round-10 autonomous suite-transformation slice (2026-05-21). The
+//! TypeScript canonical source lives at
+//! `packages/contracts/types/src/suite-contracts.ts`. This Rust mirror exists so the
+//! CLI, Tauri backends, and future cloud services can serialize and
+//! deserialize project metadata against the same wire shape that Web,
+//! Desktop, and Mobile consume.
+//!
+//! Field naming uses `#[serde(rename_all = "camelCase")]` to match the TS
+//! shape exactly. The enums use `#[serde(rename_all = "lowercase")]` to
+//! match the TS string-literal unions (`'local' | 'byok' | 'managed'`
+//! style).
 
 use schemars::JsonSchema;
 use serde::Deserialize;
@@ -75,6 +89,10 @@ pub enum ProjectSourceSurface {
     Chrome,
 }
 
+/// Consumer chat-sync surfaces per the locked /goal rule. Mirrors the TS
+/// `SYNCED_APP_SURFACES` export in `packages/contracts/types/src/suite-contracts.ts`.
+/// Chat history may sync across these surfaces only, see
+/// `assertSurfaceCanSyncChats` on the TS side.
 pub const SYNCED_APP_SURFACES: &[ProjectSourceSurface] = &[
     ProjectSourceSurface::Web,
     ProjectSourceSurface::Desktop,
@@ -104,6 +122,11 @@ impl ProjectSourceSurface {
     }
 }
 
+/// ProjectRecord, canonical Rust mirror of the TS `ProjectRecord`.
+///
+/// All "denormalized" or display-only fields are optional so backends can
+/// emit minimal payloads when they don't have the data (e.g. count fields
+/// from the CLI before knowledge files are persisted).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct ProjectRecord {
@@ -167,6 +190,9 @@ pub struct ProjectKnowledgeFile {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub summary: Option<String>,
     pub source_surface: ProjectSourceSurface,
+    /// Original uploader. Nullable because the migration uses
+    /// `ON DELETE SET NULL`, when the auth user is deleted, the file row
+    /// survives with a tombstoned audit trail.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub added_by_user_id: Option<String>,
     pub added_at: String,
@@ -174,6 +200,10 @@ pub struct ProjectKnowledgeFile {
     pub retention_expires_at: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub deleted_at: Option<String>,
+    /// Storage URI of the underlying binary in managed cloud storage. The
+    /// Postgres column is `storage_uri text NOT NULL`. Consumers should
+    /// not assume this is a public URL, most files require a signed-URL
+    /// fetch via the storage SDK.
     pub storage_uri: String,
 }
 

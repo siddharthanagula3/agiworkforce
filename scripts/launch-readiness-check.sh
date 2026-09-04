@@ -1,4 +1,10 @@
 #!/usr/bin/env bash
+# scripts/launch-readiness-check.sh, Verify everything is ready for `git tag v-cli-1.0.0`.
+#
+# Run this RIGHT before tagging. If everything passes, you're safe to tag.
+# If any check fails, fix it before tagging.
+#
+# Usage: bash scripts/launch-readiness-check.sh
 
 set -e
 
@@ -126,6 +132,8 @@ info "  - Homebrew tap repo: https://github.com/siddharthanagula3/homebrew-tap"
 info "    (must exist with at least a README)"
 info "  - clone tap locally: ~/code/homebrew-tap (for update-homebrew-tap.sh)"
 
+# 9. Audit remediation ledger, a release cannot be completed while the
+#    remediation plan still carries unchecked tasks.
 echo ""
 echo "[9/9] Audit remediation ledger"
 if audit_progress=$(node scripts/check-audit-progress.mjs 2>&1); then

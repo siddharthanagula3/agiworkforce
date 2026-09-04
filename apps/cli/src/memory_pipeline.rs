@@ -1,3 +1,15 @@
+//! 2-Phase Memory Extraction Pipeline.
+//!
+//! Phase 1, Session Summary Extraction (on session end):
+//!   Collect the last N messages from a completed session, extract reusable
+//!   learnings, and save them to `~/.agiworkforce/memories/session_summaries/{session_id}.md`.
+//!
+//! Phase 2, Consolidation (on startup, max once per hour):
+//!   Read all session summaries, merge/deduplicate into `~/.agiworkforce/memories/raw_memories.md`,
+//!   and prune summaries older than 30 days.
+//!
+//! All operations are best-effort: errors are logged to stderr and never
+//! block the main agent loop.
 
 use agiworkforce_agent_core::memory::normalize_memory_key;
 use anyhow::Result;
@@ -72,6 +84,9 @@ pub fn save_memory_settings(
     )
 }
 
+/// Cap consolidated memory to at most `max_facts` non-empty lines, keeping the
+/// most recent (the merged list is newest-last). Returns the input unchanged when
+/// already within the cap, with the default 500 cap this is a no-op in practice.
 fn cap_consolidated_facts(consolidated: &str, max_facts: usize) -> String {
     let lines: Vec<&str> = consolidated.lines().collect();
     let content_count = lines.iter().filter(|l| !l.trim().is_empty()).count();
@@ -97,7 +112,22 @@ fn cap_consolidated_facts(consolidated: &str, max_facts: usize) -> String {
 pub struct MemoryPipeline;
 
 impl MemoryPipeline {
+    // -----------------------------------------------------------------
+    // Phase 1, Session Summary Extraction
+    // -----------------------------------------------------------------
 
+    /// Extract learnings from a completed session. Best-effort, never blocks.
+    ///
+    /// Collects the last N messages (up to `MAX_MESSAGE_CHARS`), attempts an
+    /// LLM call to extract reusable patterns, and writes the result to
+    /// `~/.agiworkforce/memories/session_summaries/{session_id}.md`.
+    ///
+    /// If the LLM call fails or times out, falls back to saving raw message
+    /// content as the summary.
+    /// `local_only` MUST be true whenever the source session is in Local privacy
+    /// mode. When true, summarization runs entirely on-device (deterministic
+    /// fallback, no network), Local-session content must never reach a cloud
+    /// summarizer (locked never-silent-egress invariant).
     pub async fn extract_session_summary(
         home: &Path,
         session_id: &str,
@@ -208,6 +238,9 @@ impl MemoryPipeline {
         Ok(result.text)
     }
 
+    // -----------------------------------------------------------------
+    // Phase 2, Consolidation
+    // -----------------------------------------------------------------
 
     /// Consolidate all session summaries into `raw_memories.md`.
     ///
@@ -360,6 +393,7 @@ impl MemoryPipeline {
         let raw_path = home.join("memories").join("raw_memories.md");
         let summaries_dir = home.join("memories").join("session_summaries");
 
+        // No summaries at all, nothing to consolidate
         if !summaries_dir.exists() {
             return false;
         }
@@ -860,6 +894,7 @@ mod tests {
         let summaries = home.join("memories").join("session_summaries");
         fs::create_dir_all(&summaries).unwrap();
         fs::write(summaries.join("test.md"), "some content").unwrap();
+        // No raw_memories.md exists, should need consolidation
         assert!(MemoryPipeline::needs_consolidation(home));
     }
 
@@ -896,6 +931,9 @@ mod tests {
         assert!(result.is_ok());
     }
 
+    /// Privacy boundary: a Local-mode session must summarize ON-DEVICE only.
+    /// With `local_only = true` the pipeline must NOT touch the network, it uses
+    /// the deterministic on-device fallback and records that in the metadata header.
     #[tokio::test]
     async fn test_extract_session_summary_local_only_stays_on_device() {
         let dir = tempfile::tempdir().unwrap();

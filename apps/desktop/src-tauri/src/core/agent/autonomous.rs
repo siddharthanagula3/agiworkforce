@@ -359,6 +359,7 @@ impl AutonomousAgent {
                         return Err(anyhow!("Task was cancelled"));
                     }
                     _ => {
+                        // Still running, wait for notification instead of busy-polling
                     }
                 }
             } else {
@@ -371,7 +372,7 @@ impl AutonomousAgent {
                 self.task_notify.notified(),
             )
             .await
-            .ok();
+            .ok(); // timeout is fine, just re-loop and check
         }
     }
 
@@ -898,6 +899,9 @@ impl AutonomousAgent {
                                         task.steps.extend(new_steps);
                                         task.retry_count = 0;
                                         task.replan_count += 1;
+                                        // ISSUE-01 fix: Bounds check after replan.
+                                        // if new steps didn't actually add anything
+                                        // at step_index, fail instead of OOB access.
                                         if task.steps.len() <= step_index {
                                             tracing::error!(
                                                 "[Agent] Replan produced no executable steps at index {} (total {}), failing task",
@@ -1298,6 +1302,14 @@ Be concise."#,
             .map_err(|e| anyhow!("Failed to parse replanned steps: {}", e))
     }
 
+    /// H3 fix: Feed step execution results back to the LLM so it can adjust
+    /// the remaining plan. This creates the tool-result feedback loop that was
+    /// previously missing, the LLM now sees what each step actually produced
+    /// and can revise future steps accordingly.
+    ///
+    /// Returns `Ok(Some(steps))` if the LLM wants to revise the remaining plan,
+    /// `Ok(None)` if the existing plan is confirmed, or `Err` on LLM failure
+    /// (caller should treat this as non-fatal and continue with the original plan).
     async fn consult_llm_after_step(
         &self,
         task_goal: &str,
@@ -1382,6 +1394,8 @@ Use the same action types: Screenshot, Click, Type, Navigate, WaitForElement, Ex
     }
 
     async fn check_resource_limits(&self, sys: &mut System) -> Result<bool> {
+        // Refresh only CPU, memory, and the current process, avoids the full
+        // process/disk scan of new_all() + refresh_all() on every iteration.
         sys.refresh_cpu();
         sys.refresh_memory();
 

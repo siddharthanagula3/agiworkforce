@@ -71,6 +71,17 @@ function readScopes(value: unknown): string[] | null {
   return scopes;
 }
 
+/**
+ * Verify a tool result against the trusted-path checks documented above.
+ *
+ * @param params.qualifiedToolName `ToolEntry.name`, the `x_tool_result.name`
+ *   the server emitted, which is the model-visible qualified tool name.
+ * @param params.result `ToolEntry.result`, the `x_tool_result.content`.
+ * @param params.isError whether the result was marked a failure. The server
+ *   always sets `isError: true` on this envelope so the model treats it as a
+ *   failed call; a "successful" tool result carrying the envelope did not come
+ *   from that path.
+ */
 export function readConnectorConnectRequest(params: {
   qualifiedToolName: string;
   result: string | undefined;

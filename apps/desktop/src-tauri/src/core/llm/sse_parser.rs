@@ -275,6 +275,13 @@ pub(crate) fn parse_sse_event(
 ) -> Result<StreamChunk, Box<dyn Error + Send + Sync>> {
     match provider {
         crate::core::llm::Provider::OpenAI => parse_openai_sse(event),
+        // Wave 5 c2: Anthropic Messages + Google Gemini SSE decode moved to the
+        // shared `agiworkforce-llm` crate (driven via `stream_engine`). Their
+        // desktop decoders were deleted with the strangler swap. These arms are
+        // unreachable in practice, DirectApiProvider now decodes Anthropic and
+        // Google through the crate, and the only remaining callers of this
+        // function are the Ollama and ManagedCloud provider paths. The
+        // OpenAI-compatible fallback keeps the match total without a panic.
         crate::core::llm::Provider::Anthropic => parse_openai_sse(event),
         crate::core::llm::Provider::Google => parse_openai_sse(event),
         crate::core::llm::Provider::Ollama => parse_ollama_sse(event),
@@ -388,6 +395,16 @@ fn parse_openai_sse(event: &str) -> Result<StreamChunk, Box<dyn Error + Send + S
                             delta.get("tool_calls").and_then(|tc| tc.as_array())
                         {
                             for (position, tool_call) in delta_tool_calls.iter().enumerate() {
+                                // Prefer the explicit "index" field from the provider.
+                                // Falling back to array position is dangerous because a
+                                // single-element array with index=1 would be misassigned
+                                // to 0. When the explicit index is missing AND the delta
+                                // array has only one element, use the last-seen index
+                                // (from a prior data: line) if available, this handles
+                                // continuation deltas that carry only arguments without
+                                // repeating the index. For multi-element arrays without
+                                // explicit indices, fall back to array position (best we
+                                // can do) and log a warning.
                                 let explicit_index = tool_call
                                     .get("index")
                                     .and_then(|i| i.as_u64())

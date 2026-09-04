@@ -344,6 +344,33 @@ export interface MarkdownContentProps {
   citations?: readonly MarkdownCitation[];
 }
 
+/**
+ * Canonical chat markdown renderer, shared by web and desktop.
+ *
+ * Source of truth ported from apps/web/features/chat/components/messages/
+ * MarkdownContent.tsx (round-consolidated into unified-chat). Plugin order
+ * (raw HTML -> sanitize -> KaTeX) and the KaTeX CSS import are both
+ * load-bearing, see inline comments below and markdownSanitizeSchema.ts.
+ * Syntax highlighting is deliberately NOT a rehype plugin: Shiki is async and
+ * react-markdown runs its pipeline synchronously, so CodeBlock highlights
+ * after paint and only for blocks that are not the streaming tail.
+ *
+ * Exported memoized (see below). Scoped to what the two live call paths
+ * actually do, because the saving is not uniform across them:
+ *
+ * - Desktop (App.tsx -> DesktopShellV3 -> ChatInterface -> MessageList ->
+ *   MessageBubble -> ThinkingBlock:274). Nothing on that chain has a memo
+ *   boundary, so every token of the *answer* re-rendered the reasoning body
+ *   above it and re-parsed the whole already-finished reasoning text. This
+ *   memo bails there, that is the large win.
+ * - Web (/chat -> WebChatPage -> ChatMessageList -> apps/web MessageBubble
+ *   :1166). That bubble is already memoized on content, so finished messages
+ *   did not re-render before this either; what this memo saves there is the
+ *   mid-turn renders where metadata changes while content does not.
+ *
+ * It does NOT make the message that is actively streaming cheaper: its content
+ * genuinely changes on every token, so it re-parses either way.
+ */
 function MarkdownContentImpl({
   content,
   isStreaming,

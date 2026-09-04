@@ -229,6 +229,22 @@ impl IncrementalIndexer {
 mod tests {
     use super::*;
 
+    /// A SimilaritySearch backed by a database this test alone owns.
+    ///
+    /// Both tests below used to pass a bare relative `PathBuf::from("test.db")`,
+    /// which resolves against the process working directory, so they opened
+    /// the SAME SQLite file, and `cargo test` runs them in PARALLEL. The result
+    /// is an intermittent "Error code 1: SQL error or missing database" that
+    /// fails whichever test loses the race, with 4,632 others passing around it.
+    /// That is what took CI red on main.
+    ///
+    /// It also wrote a stray `test.db` into whatever directory the suite ran in.
+    ///
+    /// Every other test in this crate already does it this way
+    /// (`temp_dir.path().join("test.db")` in checkpoint_store, project_memory,
+    /// memory_manager, continuous_executor); these two were the exception. The
+    /// TempDir is returned and must be held for the test's lifetime, dropping
+    /// it deletes the directory out from under the open database.
     fn isolated_search() -> (tempfile::TempDir, SimilaritySearch) {
         let dir = tempfile::tempdir().expect("create temp dir for the test database");
         let search = SimilaritySearch::new(dir.path().join("test.db"))

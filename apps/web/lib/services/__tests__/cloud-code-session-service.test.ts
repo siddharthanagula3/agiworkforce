@@ -67,6 +67,20 @@ interface TerminalRow {
   completed_at: unknown;
 }
 
+/*
+ * A very small SQL evaluator, enough for the statements this service emits.
+ *
+ * The fake adapter below used to decide behaviour by asking whether the SQL
+ * contained a substring and then applying its own hand-written TypeScript in
+ * place of the predicate. That catches a deleted predicate and nothing else:
+ * rewriting the lease expiry to `now() + interval '999 days'` makes every LIVE
+ * lease instantly reclaimable, two runs driving one sandbox, worse than the
+ * wedge the feature fixes, and the suite stayed green. So the fake now parses
+ * and executes the WHERE and SET the service actually emits. Anything it
+ * cannot represent throws rather than being quietly approximated, so a rewrite
+ * of these statements is loud instead of silently unasserted.
+ */
+
 type SqlValue =
   | { kind: 'null' }
   | { kind: 'text'; value: string }
@@ -553,6 +567,9 @@ function createFakeDb(): FakeDb {
       rows.push(row);
       return [row] as unknown as T[];
     }
+    // Every remaining statement against cloud_code_sessions is answered by
+    // running its own WHERE, including the lease predicate, whatever the
+    // service currently emits, over the fixture rows.
     if (sql.includes('from cloud_code_sessions') && sql.includes('count(*)')) {
       const count = rows.filter((row) => matchesWhere(sql, row, params, now)).length;
       return [{ count }] as unknown as T[];

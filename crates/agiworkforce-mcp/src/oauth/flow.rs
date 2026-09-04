@@ -1,3 +1,20 @@
+//! OAuth 2.0 + PKCE flow for MCP servers.
+//!
+//! Implements the happy paths of:
+//!
+//! * RFC 9728: OAuth 2.0 Protected Resource Metadata (server tells us where
+//!   its authorization server lives, either via the `WWW-Authenticate: Bearer
+//!   resource_metadata="<url>"` challenge or via
+//!   `<server>/.well-known/oauth-protected-resource`).
+//! * RFC 8414: OAuth 2.0 Authorization Server Metadata (discovers the
+//!   `authorization_endpoint`, `token_endpoint`, optional
+//!   `registration_endpoint`).
+//! * RFC 7591: Dynamic Client Registration (only when the caller doesn't
+//!   supply a `client_id`).
+//! * RFC 6749 / RFC 7636, Authorization-Code grant with PKCE.
+//!
+//! Browser launch is delegated to the host via [`BrowserAuthorizer`] so the
+//! CLI's user-action chokepoint stays authoritative.
 
 use anyhow::{Context, Result, anyhow, bail};
 use serde::{Deserialize, Serialize};
@@ -184,6 +201,9 @@ pub async fn discover_protected_resource(
     server_url: &str,
     www_authenticate: Option<&str>,
 ) -> Result<(String, ProtectedResourceMetadata)> {
+    // RFC 9728 §5.1: the challenge may only point at the resource server's own
+    // metadata. Without this the server chooses any URL it likes and this
+    // process fetches it, the SSRF primitive, loopback services included.
     let metadata_url = match parse_resource_metadata_url(www_authenticate) {
         Some(advertised) => {
             security::enforce_same_origin(server_url, &advertised, "protected-resource metadata")
@@ -324,6 +344,14 @@ pub async fn dynamic_register(
 // PKCE flow
 // ---------------------------------------------------------------------------
 
+/// Bind a loopback listener for the OAuth callback and derive the redirect URI
+/// that matches it.
+///
+/// Centralized so dynamic registration and the PKCE flow are both driven by the
+/// SAME (listener, redirect_uri) pair, eliminating the prior bug where
+/// `dynamic_register` used a port-less placeholder while `start_pkce_flow`
+/// bound a fresh random port, producing a `redirect_uri` mismatch on
+/// authorization servers that don't honour RFC 8252 §7.3.
 async fn prepare_loopback_callback(oauth_cfg: &OAuthConfig) -> Result<(TcpListener, String)> {
     if let Some(uri) = oauth_cfg.redirect_uri.as_deref() {
         let parsed = reqwest::Url::parse(uri)
@@ -344,6 +372,8 @@ async fn prepare_loopback_callback(oauth_cfg: &OAuthConfig) -> Result<(TcpListen
                     })?;
                 return Ok((listener, uri.to_string()));
             }
+            // Loopback with no port, placeholder pattern. Bind a real port and
+            // rewrite the URI so RFC-strict AS implementations are happy.
         }
         // Non-loopback redirect_uri: this binary can only receive the callback
         // on loopback. Refuse rather than burn the user's time.
@@ -414,6 +444,10 @@ pub async fn start_pkce_flow(
         &state,
     );
 
+    // Open browser through the host chokepoint; if it declines/fails, print the
+    // URL so the user can copy it. Only print the full URL (including `state`)
+    // in that fallback path, never on the success path, so a sibling process
+    // reading the terminal can't race the loopback callback.
     if browser.open_url(&authorize_url) {
         eprintln!("\n  [mcp oauth] opened browser for {server_url} (waiting for callback)\n");
     } else {
@@ -855,6 +889,9 @@ pub async fn perform_full_oauth(
     Ok(token)
 }
 
+// ---------------------------------------------------------------------------
+// Tests (parsing helpers only, flows hit real network/browser)
+// ---------------------------------------------------------------------------
 
 #[cfg(test)]
 mod tests {

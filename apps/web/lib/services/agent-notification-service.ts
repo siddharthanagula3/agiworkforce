@@ -4,6 +4,16 @@ import { logger } from '@/lib/logger';
 import { getNeonDb } from '@/lib/server/neon-db';
 import { sendPushToUser } from './push-notification-service';
 
+/**
+ * Preference key for cloud agent lifecycle push.
+ *
+ * `schedule-notification-service` gates on an opt-IN key because a scheduled
+ * run is a background convenience the user may never have asked to hear about.
+ * An agent run the user started themselves, and that is now blocked on them,
+ * or has just stopped, is operational, so this key is opt-OUT: only an
+ * explicit `false` silences it. The device still has the final say, because
+ * mobile's `notificationPrefsStore` categories suppress display per event type.
+ */
 export const AGENT_PUSH_PREFERENCE_KEY = 'mobilePushAgentActivity';
 
 export type AgentRunNotificationEvent =

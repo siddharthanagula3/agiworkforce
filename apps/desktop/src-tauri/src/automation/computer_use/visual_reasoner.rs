@@ -481,6 +481,12 @@ If not found:
             prefer_cloud_credits: false,
             local_only: false,
             managed_cloud_only: false,
+            // TRUST BOUNDARY (desktop-trust-boundary-01): threaded from
+            // `ComputerUseConfig` by the `ComputerUseAgent` constructors so
+            // the observe step routes to the same boundary as the planning
+            // call, otherwise byok/cloud tasks dead-end at observe before
+            // planning ever runs. `None` fails closed to Local via
+            // `effective_trust_mode`'s default.
             trust_mode: self.config.trust_mode,
         };
 

@@ -1,3 +1,33 @@
+/**
+ * Artifact Derivation Service (canonical, cross-surface)
+ *
+ * The ONE place artifacts are derived from message content. Web, desktop, and
+ * mobile all consume this instead of their own forked copies
+ * (`apps/web/.../artifact-detector.ts`, `apps/mobile/.../artifacts/store.ts`).
+ *
+ * Two properties make this the canonical home:
+ *
+ *  1. DETERMINISTIC IDENTITY. Every surface computes the SAME id for the same
+ *     derived artifact: `derived_id = uuidv5(conversationId:messageId:ordinal)`.
+ *     The forked web copy used `Date.now()` + `crypto.randomUUID()`, a fresh id
+ *     on every render, which is precisely why derived artifacts could not be
+ *     de-duplicated or cloud-synced across devices. This module fixes that
+ *     (see docs/plans/artifact-cloud-sync-design-2026-06-21.md §4 and
+ *     docs/plans/shared-packages-consolidation-plan-2026-06-21.md §3).
+ *
+ *  2. PLATFORM-AGNOSTIC OUTPUT. Returns `SharedArtifact` (from
+ *     `@agiworkforce/types`), which each surface maps to its own view type
+ *     (web `ArtifactData`, mobile `MobileArtifact`). No DOM, no RN, safe to
+ *     import from all three surfaces.
+ *
+ * Inclusion policy is parameterized because the surfaces legitimately differ:
+ *  - web shows only *renderable* artifacts (html/react/svg/mermaid/marked);
+ *  - mobile's gallery shows *all* code blocks with >= `minCodeLines` lines.
+ * Both are expressed via `include`.
+ *
+ * @module artifact-derivation
+ */
+
 import { v5 as uuidv5 } from 'uuid';
 import type { SharedArtifact, SharedArtifactType } from '@agiworkforce/types';
 

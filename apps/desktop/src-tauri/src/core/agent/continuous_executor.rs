@@ -367,6 +367,14 @@ impl DailyLimitTracker {
         self.limits_exceeded.store(exceeded, Ordering::SeqCst);
     }
 
+    /// Returns true if daily limits are exceeded.
+    ///
+    /// # Concurrency note (M3, TOCTOU fix)
+    /// The previous implementation used a read lock to check the date and then
+    /// promoted to a write lock if a reset was needed. This left a window where
+    /// two threads could both observe `stats.date != today` on the read lock and
+    /// both attempt the reset, causing a double-reset. We now acquire the write
+    /// lock unconditionally so the check and the reset are performed atomically.
     pub fn is_limit_exceeded(&self) -> bool {
         let today = Utc::now().format("%Y-%m-%d").to_string();
         let mut stats = self.stats.write();

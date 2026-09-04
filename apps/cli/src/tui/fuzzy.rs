@@ -1,3 +1,9 @@
+//! Shared fuzzy matching + ranking for the TUI pickers (slash commands, models,
+//! agents…). A query matches a candidate when every query char appears in the
+//! candidate in order (case-insensitive). The returned score rewards contiguous
+//! runs, start-of-string matches, and word/camelCase boundaries so the best
+//! candidates rank first, far better than a plain substring filter (e.g. `mdl`
+//! matches `model`, and `/model` ranks above a description-only hit).
 
 /// Whole-string `to_lowercase` can turn one char into several (U+0130 lowercases
 /// to `i` + U+0307), so a lowercased char vector cannot be indexed with the same

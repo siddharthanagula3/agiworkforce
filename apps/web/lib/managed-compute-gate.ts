@@ -175,6 +175,16 @@ export async function buildModelPolicyGateResponse(
   );
 }
 
+/**
+ * Refuses a request that would mint an anonymous public link when the caller's
+ * workspace has turned public sharing off.
+ *
+ * Only NEW links are refused. A link already published stays reachable, because
+ * revoking published content is a different decision with different
+ * consequences, a member who shared a document with a customer last week
+ * should not have it break because an administrator changed a setting today.
+ * The policy copy says so, and so does the settings panel.
+ */
 export async function buildExternalSharingGateResponse(
   userId: string,
   request: NextRequest,
@@ -206,6 +216,20 @@ export async function buildExternalSharingGateResponse(
   );
 }
 
+/**
+ * Refuses a metered turn once the workspace has reached a spend limit it chose
+ * to enforce.
+ *
+ * Only the `block` mode refuses; `notify` exists so a finance owner can watch a
+ * budget before deciding to enforce it. The decision is cached briefly, so
+ * enforcement is eventual rather than exact and a workspace can overshoot by
+ * roughly one window of spend, the console says so rather than implying a hard
+ * ceiling it does not have.
+ *
+ * Ungoverned on any failure, including an unresolvable workspace or an
+ * unreachable database: a billing lookup failing is an infrastructure fault, and
+ * refusing every member's work over it is worse than briefly overshooting.
+ */
 export async function buildSpendLimitGateResponse(
   userId: string,
   request: NextRequest,

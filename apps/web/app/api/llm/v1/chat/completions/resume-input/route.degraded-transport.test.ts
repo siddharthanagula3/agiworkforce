@@ -1,6 +1,16 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest, NextResponse } from 'next/server';
 
+/**
+ * AGI-39 for the MRTR (`input_required`) resume, proved the same way its approval
+ * twin is: nothing is mocked between the route and the transport. The Workflow
+ * platform is made unavailable and the real `runCloudAgentTurn` chooses. An
+ * authorized input resume must still COMPLETE, 200, an SSE body, the collected
+ * responses threaded into `runToolLoop`, rather than 503.
+ *
+ * And every authorization gate must still refuse while it is degraded.
+ */
+
 const RUN_ID = '0190a000-0000-7000-8000-000000000001';
 const CHECKPOINT_ID = '0190a000-0000-7000-8000-000000000002';
 const LEASE_TOKEN = '0190a000-0000-7000-8000-000000000003';

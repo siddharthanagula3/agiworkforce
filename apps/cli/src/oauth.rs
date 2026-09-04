@@ -20,6 +20,10 @@ pub struct OAuthProvider {
     pub token_url: &'static str,
     pub redirect_uri: &'static str,
     pub scopes: &'static str,
+    /// True when the provider echoes the CSRF `state` back appended to the
+    /// authorization code as `code#state` (Anthropic's convention). When true,
+    /// the returned state fragment is REQUIRED and validated against our nonce.
+    /// it can never be silently skipped (an attacker omitting it must fail).
     pub echoes_state_in_code: bool,
 }
 
@@ -72,6 +76,10 @@ pub const ALL_PROVIDERS: &[&OAuthProvider] =
 pub struct PkceCodes {
     pub verifier: String,
     pub challenge: String,
+    /// Independent CSRF nonce for the `state` parameter. MUST stay distinct
+    /// from `verifier`, RFC 7636 requires the code_verifier to remain secret
+    /// on the client until token exchange, so it must never travel in the
+    /// authorize URL.
     pub state: String,
 }
 
@@ -287,6 +295,9 @@ pub async fn oauth_login(provider: &OAuthProvider) -> Result<crate::auth::AuthEn
         .interact()
         .context("Failed to read authorization code")?;
 
+    // CSRF: a provider that echoes `state` back (Anthropic returns `code#state`)
+    // MUST return our exact nonce. Require the fragment and validate it, never
+    // silently skip, so an attacker cannot bypass the check by omitting `#state`.
     if provider.echoes_state_in_code {
         let (_, returned_state) = code
             .split_once('#')
@@ -434,6 +445,7 @@ pub async fn device_code_login(api_base: &str) -> Result<crate::auth::AuthEntry>
         let status = poll_resp.status();
 
         if status == reqwest::StatusCode::FORBIDDEN {
+            // Authorization pending, keep polling
             if attempt % 6 == 0 {
                 eprintln!(
                     "  {} Still waiting... ({}s elapsed)",
@@ -567,6 +579,13 @@ pub(crate) mod external_open_spy {
     }
 }
 
+/// The single chokepoint for launching the user's default browser.
+///
+/// Returns `true` only when a browser was (or, under the test spy, would have
+/// been) launched. Refuses to open anything for a non-user-initiated context,
+/// so module-load, registration, and test paths can never trigger a tab on
+/// their own. Never panics, failures degrade to `false` so callers can fall
+/// back to printing the URL.
 #[must_use]
 pub fn open_external_url(url: &str, ctx: UserActionContext) -> bool {
     if !ctx.triggered_by_user() {
@@ -624,6 +643,12 @@ mod open_chokepoint_tests {
         assert_eq!(external_open_spy::open_count(), 1);
     }
 
+    /// Source-level invariant: the raw browser launcher (`webbrowser::open(`) may
+    /// appear in `apps/cli/src` EXACTLY once, inside this file's chokepoint
+    /// `open_external_url`. This catches a future regression that re-adds a
+    /// *direct* launch (the exact original-bug pattern, e.g. in
+    /// `render_install_app`), which a runtime spy on the chokepoint cannot see
+    /// because a direct call never routes through the spy.
     #[test]
     fn webbrowser_open_only_called_from_the_chokepoint() {
         use std::path::Path;

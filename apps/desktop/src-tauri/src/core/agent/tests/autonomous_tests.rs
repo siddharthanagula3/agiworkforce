@@ -1,3 +1,18 @@
+// C9, Autonomous agent tests.
+//
+// `AutonomousAgent` requires an LLMRouter + AutomationService, both of which
+// need runtime resources (network, DB, screen capture).  We test what is
+// available without those dependencies:
+//
+//  • `TaskStatus` enum: all variants, Serialize/Deserialize, PartialEq
+//  • `Task` struct: construction and field access
+//  • `AgentConfig`: Default values and custom construction
+//  • `ScreenshotQuality` / `VisionModel` enums
+//  • `Action` enum: construction of each variant
+//  • `ClickTarget` enum: construction of each variant
+//  • `ScrollDirection` enum: serialisation
+//  • `TaskStep` construction
+//  • `PENDING_TASK_APPROVALS` static (accessible without runtime)
 #[cfg(test)]
 mod tests {
     use crate::core::agent::autonomous::PENDING_TASK_APPROVALS;
@@ -7,6 +22,9 @@ mod tests {
     };
     use std::time::{Duration, Instant};
 
+    // ------------------------------------------------------------------
+    // TaskStatus, enum variants and PartialEq
+    // ------------------------------------------------------------------
 
     #[test]
     fn test_task_status_pending_eq() {
@@ -78,6 +96,9 @@ mod tests {
         }
     }
 
+    // ------------------------------------------------------------------
+    // AgentConfig, Default
+    // ------------------------------------------------------------------
 
     #[test]
     fn test_agent_config_default_values() {
@@ -115,6 +136,9 @@ mod tests {
         assert!(cfg.max_session_cost > cfg.max_cost_per_task);
     }
 
+    // ------------------------------------------------------------------
+    // ScreenshotQuality / VisionModel, enum serialisation
+    // ------------------------------------------------------------------
 
     #[test]
     fn test_screenshot_quality_serde() {
@@ -142,6 +166,9 @@ mod tests {
         }
     }
 
+    // ------------------------------------------------------------------
+    // Action enum, construction of each variant
+    // ------------------------------------------------------------------
 
     #[test]
     fn test_action_screenshot_no_region() {

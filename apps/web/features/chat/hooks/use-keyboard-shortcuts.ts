@@ -129,6 +129,11 @@ export function useKeyboardShortcuts(options: UseKeyboardShortcutsOptions = {}) 
       // every Shift binding below has to compare against the unshifted letter.
       const key = event.key.length === 1 ? event.key.toLowerCase() : event.key;
 
+      // Driven by KEYBOARD_SHORTCUT_DOCS rather than a parallel hardcoded list.
+      // The two used to be separate, so the Settings list described bindings
+      // this matcher did not read, and a disable switch over that list would
+      // have been decorative. One source now decides both what is shown and
+      // what fires.
       const handlerFor: Record<string, (() => void) | undefined> = {
         'open-search': onSearch,
         'show-shortcuts': onShowShortcuts,

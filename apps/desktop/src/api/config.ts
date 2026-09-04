@@ -11,6 +11,15 @@ export const API_BASE_URL: string = import.meta.env.VITE_API_BASE_URL || 'https:
 export const WEB_APP_URL: string =
   (import.meta.env['VITE_WEB_APP_URL'] as string | undefined) || 'https://agiworkforce.com';
 
+/**
+ * Express api-gateway base URL.
+ *
+ * STB-8 fix: routes such as `/api/pair/*` exist ONLY in
+ * `services/api-gateway`: there is no Next.js route and no rewrite bridging
+ * them (`next.config.ts` / `vercel.json` only rewrite `/v1/*`). Calling them
+ * against {@link API_BASE_URL} returns 404. Both hosts are ours, so the egress
+ * guard blocks them identically in Local/BYOK mode.
+ */
 export const GATEWAY_BASE_URL: string =
   (import.meta.env['VITE_GATEWAY_BASE_URL'] as string | undefined) ||
   'https://api.agiworkforce.com';

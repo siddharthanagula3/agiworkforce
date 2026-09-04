@@ -37,6 +37,21 @@ use tokio_tungstenite::{
     WebSocketStream,
 };
 
+// SEV-DESK-01 limits ─────────────────────────────────────────────────────────
+//
+// The realtime server binds 127.0.0.1 and accepts ws+http upgrades from
+// the Chrome extension, VS Code extension, and Tauri webview. Without these
+// caps, any local process running as the same user (malware, bug-installer)
+// could open thousands of unauthenticated connections to exhaust file
+// descriptors / heap, or brute-force the IPC token.
+//
+// MAX_CONNECTIONS, total simultaneous accepted connections. Beyond this, the
+//   accept loop drops new connections at the TCP level (no upgrade).
+// MAX_AUTH_FAILURES / AUTH_FAILURE_WINDOW, within any 60s rolling window,
+//   five auth failures from the same IP triggers a lockout.
+// LOCKOUT_DURATION, duration the offending IP is rejected at handshake.
+// MAX_WS_MESSAGE_SIZE, caps a single WS frame so a malicious / buggy peer
+//   cannot force the server to buffer 64 MiB before validating.
 const MAX_CONNECTIONS: usize = 32;
 const MAX_AUTH_FAILURES: u32 = 5;
 const AUTH_FAILURE_WINDOW: Duration = Duration::from_secs(60);
@@ -350,8 +365,28 @@ fn is_pair_manifest_install_authorized(raw_request: &str, local_bridge_secret: &
         && bool::from(sent_token.as_bytes().ct_eq(local_bridge_secret.as_bytes()))
 }
 
+// ── RT-04: WebSocket Origin allow-list ───────────────────────────────────────
+//
+// Any WebSocket from a non-allowed origin is rejected at the HTTP-upgrade
+// phase, before any application data is exchanged.  Allowed origins:
+//
+//   • chrome-extension://..., Chrome/Chromium extension (any ID)
+//   • vscode-webview://..., VS Code webview panel
+//   • vscode-file://..., VS Code file-based webview
+//   • null, Tauri webview (no Origin header)
+//   • http(s)://localhost[:port], localhost (dev tools, Electron)
+//   • http(s)://127.0.0.1[:port], loopback IPv4
+//   • http(s)://[::1][:port], loopback IPv6
+//
+// HTTP/HTTPS pages from arbitrary domains are always rejected.
+//
+// B3 fix: the previous implementation used `origin.starts_with("http://localhost")`
+// which silently accepted `http://localhost.attacker.com`. We now require the
+// host component (after the scheme + `://`) to *equal* one of the allowed
+// values (modulo an optional `:port` suffix) so prefix attacks are closed.
 fn is_origin_allowed(origin: Option<&str>) -> bool {
     let Some(origin) = origin else {
+        // No Origin header, Tauri native webview; allow.
         return true;
     };
     if origin == "null" {
@@ -374,6 +409,9 @@ fn is_origin_allowed(origin: Option<&str>) -> bool {
     };
     // Strip optional :port. IPv6 origins are bracketed: `[::1]:8080` -> host `[::1]`.
     let host = if let Some(stripped) = rest.strip_prefix('[') {
+        // IPv6: host runs through the closing ']'. `stripped` does NOT
+        // include the leading `[`, so the `]` index in `stripped` is offset
+        // by 1 relative to `rest`, and we want to keep BOTH brackets.
         match stripped.find(']') {
             Some(end) => &rest[..end + 2], // +1 for `[`, +1 for `]`
             None => return false,
@@ -388,6 +426,11 @@ fn is_origin_allowed(origin: Option<&str>) -> bool {
     matches!(host, "localhost" | "127.0.0.1" | "[::1]")
 }
 
+/// CLAUDE-SECURITY F2: a bridge peer's script body is the same untrusted
+/// input the AGI and IPC paths screen, and the capability grant only says the
+/// peer may run *a* script, not that this one is safe. Screening here makes
+/// the content screen a property of the sink instead of a property of one
+/// caller.
 fn ensure_peer_script_allowed(script: &str) -> Result<(), String> {
     crate::sys::security::tool_guard::ToolExecutionGuard::screen_browser_script(script)
         .map_err(|reason| format!("Blocked browser script: it may not use {reason}"))
@@ -687,6 +730,11 @@ impl RealtimeServer {
         loop {
             match listener.accept().await {
                 Ok((stream, peer)) => {
+                    // SEV-DESK-01: cap simultaneous connections. `try_acquire_owned`
+                    // is non-blocking, when the cap is reached we drop the
+                    // connection at the TCP layer rather than queue it (queueing
+                    // would still consume the FD and let an attacker hold it
+                    // indefinitely).
                     let permit = match self.connection_semaphore.clone().try_acquire_owned() {
                         Ok(permit) => permit,
                         Err(_) => {
@@ -777,6 +825,24 @@ impl RealtimeServer {
         }
     }
 
+    // ── E2: HTTP /pair handler ────────────────────────────────────────────────
+    //
+    // Accepts POST /pair from loopback only. Reads the minimal HTTP/1.1 framing
+    // (headers until \r\n\r\n, then Content-Length body bytes), validates the
+    // path, generates a 32-byte random token, stores it in the shared pair_token
+    // lock, and returns {"token":"…","fingerprint":"…"} as JSON.
+    //
+    // If the request asks to install/refresh a native messaging manifest for
+    // an extension ID, it must include X-Bridge-Token matching the desktop
+    // bridge secret (the `.ipc_token` value, readable only through the Tauri
+    // UI or the 0600 file). SEC-11: the pair token this endpoint mints must
+    // never authorize the install, a caller could obtain one by posting an
+    // empty body, making the credential self-issuing and letting any local
+    // page or process add an attacker-controlled extension ID to the native
+    // host manifest.
+    //
+    // Calling /pair a second time ROTATES the token (idempotent success, new value).
+    // Non-loopback source IPs and wrong paths both receive 403 / 404 respectively.
 
     async fn handle_http_pair(stream: TcpStream, peer: SocketAddr, state: PairEndpointState) {
         Self::handle_http_pair_with(stream, peer, state, |extension_id| {
@@ -827,6 +893,7 @@ impl RealtimeServer {
             return;
         }
 
+        // Read up to 4 KiB, enough for any real HTTP /pair request.
         let mut buf = vec![0u8; 4096];
         let n = match stream.read(&mut buf).await {
             Ok(0) | Err(_) => return,
@@ -856,6 +923,11 @@ impl RealtimeServer {
             return;
         }
 
+        // CSRF guard: reject cross-site Origins. Loopback-only is NOT enough, the
+        // browser is on loopback, so any web page can fetch() this port. A legit
+        // pairing request comes from an extension (chrome-extension://,
+        // vscode-webview://) or a native client (no Origin / "null"); a normal web
+        // origin (https://evil.com) must not be able to rotate or read the pair token.
         let origin = header_section.lines().find_map(|line| {
             let (name, value) = line.split_once(':')?;
             if name.trim().eq_ignore_ascii_case("origin") {
@@ -1251,6 +1323,9 @@ impl RealtimeServer {
             return;
         }
 
+        // SEV-DESK-01: success, clear any prior failure budget for this IP
+        // so a transient typo or token-rotation race does not poison future
+        // connections.
         Self::clear_auth_failures(&auth_failures, peer.ip()).await;
 
         if let Some(user_id) = &user_id_from_auth {
@@ -1689,6 +1764,14 @@ impl RealtimeServer {
         Ok(())
     }
 
+    /// Whether the bridge may hand a peer what the live document holds.
+    ///
+    /// The navigation guard only sees the first hop. A page a peer opened can
+    /// redirect into an internal service, so the destination is re-checked from
+    /// the document itself before its markup, text, or pixels leave the browser.
+    /// Address literals are enough here, the metadata and router endpoints a
+    /// redirect chain lands on are literals, and skipping DNS keeps every read
+    /// off the resolver.
     fn ensure_document_readable(url: &str) -> Result<(), String> {
         let candidate = url.trim();
         if candidate.is_empty() || candidate.eq_ignore_ascii_case(BLANK_DOCUMENT_URL) {
@@ -1992,6 +2075,9 @@ impl RealtimeServer {
                 let app = app_handle.ok_or_else(|| "Desktop app handle unavailable".to_string())?;
                 let (client, resolved_tab_id) =
                     Self::get_native_cdp_client_for_read(app, tab_id).await?;
+                // JSON-encode the selector into a JS string literal (quotes + full
+                // escaping included). Single-quote-only escaping was insufficient.
+                // backslashes/newlines could break out of the literal and inject JS.
                 let selector_js = serde_json::to_string(&selector).map_err(|e| e.to_string())?;
                 let script = format!(
                     r#"(function() {{
@@ -3046,6 +3132,10 @@ mod tests {
         assert_eq!(*pair_token.read().await, token);
     }
 
+    /// The security property: the code travels Desktop → human → extension,
+    /// never over HTTP. A caller that reaches the loopback port but cannot see
+    /// the Desktop screen holds the request id and nothing else, so it cannot
+    /// confirm, and its guesses are exhausted long before the code space is.
     #[tokio::test]
     async fn pair_confirm_refuses_a_caller_that_cannot_see_the_desktop_screen() {
         let pending = new_pending_pair_requests();
@@ -3361,6 +3451,7 @@ mod tests {
             resp.starts_with("HTTP/1.1 403"),
             "expected 403, got: {resp}"
         );
+        // pair_token must remain empty, no token issued
         assert!(pair_token.read().await.is_empty());
     }
 

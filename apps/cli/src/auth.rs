@@ -31,6 +31,8 @@ pub enum AuthEntry {
 pub struct AuthStore {
     #[serde(flatten)]
     pub entries: HashMap<String, AuthEntry>,
+    /// Transient copilot API token cache: (token, expires_at_unix_seconds).
+    /// Not persisted to disk, refreshed on demand.
     #[serde(skip)]
     pub copilot_cache: Option<(String, i64)>,
 }
@@ -49,12 +51,17 @@ pub struct AuthStatusEntry {
     pub permissions_secure: bool,
 }
 
+// ──────────────────────────────────────────────────────────────────────────────
+// RefreshError, typed error classification for token refresh failures
+// ──────────────────────────────────────────────────────────────────────────────
 
 #[derive(Debug)]
 pub enum RefreshError {
+    /// Refresh token expired or revoked, user must re-authenticate.
     InvalidGrant(String),
     /// Network connectivity failure (DNS, timeout, connection refused).
     NetworkError(String),
+    /// Server returned 5xx, transient, may succeed on retry.
     ServerError(String),
     /// Any other failure.
     Unknown(String),
@@ -466,6 +473,20 @@ const GITHUB_CLIENT_ID: &str = "Ov23li8tweQw6odWQebz";
 /// Public per OAuth spec (not a secret). Registered via OpenAI developer portal.
 const CHATGPT_CLIENT_ID: &str = "app_EMoamEEZ73f0CkXaXp7hrann";
 const AGIWORKFORCE_AUTH_KEY: &str = "agiworkforce";
+// HOST FOOTGUN NOTE: There are three different hosts in the AGI Workforce surface:
+//   - https://api.agiworkforce.com, device code login endpoints (oauth.rs device_code_login),
+//                                      used by this const
+//   - https://agiworkforce.com, /api/me tier lookup (tier_cache::DEFAULT_API_BASE),
+//                                      used by resolve_user_tier()
+//   - the configured managed inference host, selected by models/provider_dispatch.rs only
+//     after an explicit Managed privacy handoff; there is no separate cloud-task command
+//
+// These MUST NOT be conflated. The unauthenticated device-grant endpoints now
+// live on the web origin (apps/web: POST /api/auth/device/code + /token), so the
+// base targets `agiworkforce.com/api`. The base MUST include `/api` because
+// `device_code_login` appends `/auth/device/code` (→ `/api/auth/device/code`).
+// Override with AGI_AUTH_BASE (e.g. `http://localhost:3000/api`) to test against
+// a local `next dev` web server.
 const AGIWORKFORCE_API_BASE: &str = "https://agiworkforce.com/api";
 /// Maximum number of polling attempts during device code authentication (5s intervals = 5min).
 const MAX_POLL_ATTEMPTS: u32 = 60;
@@ -891,6 +912,7 @@ pub async fn resolve_auth(
                 None => return Ok(None),
             };
 
+            // Check the transient cache first, avoid fetching a new token on every request
             let now_secs = chrono::Utc::now().timestamp();
             if let Some((ref cached_token, cached_expires)) = store.copilot_cache {
                 if cached_expires > now_secs + 30 {
@@ -949,6 +971,14 @@ pub async fn resolve_auth(
                 Some("https://chatgpt.com/backend-api/codex/responses".to_string()),
             )))
         }
+        // INTENTIONAL SEAM, managed AGI Workforce cloud auth is NOT wired here.
+        // A future "agiworkforce" / "managed_cloud" arm is BLOCKED on:
+        //   (a) a proven headless token-grant endpoint (device code or browser-link/poll),
+        //   (b) managed-cloud beta exit with ledger, abuse, refund, and retention controls,
+        //   (c) explicit user consent + visible provider label at every inference call.
+        // When that arm is added it MUST preserve the Local/BYOK trust boundary:
+        // Local and BYOK sessions must never be silently routed through managed cloud.
+        // See the HOST FOOTGUN NOTE near AGIWORKFORCE_API_BASE for the three-host context.
         _ => Ok(None),
     }
 }
@@ -1218,6 +1248,9 @@ pub async fn interactive_api_key_login() -> Result<()> {
     interactive_api_key_login_for_provider(API_KEY_PROVIDERS[selection].id).await
 }
 
+// ──────────────────────────────────────────────────────────────────────────────
+// Base64url Decoder (for JWT parsing, no external crate needed)
+// ──────────────────────────────────────────────────────────────────────────────
 
 fn base64url_decode(input: &str) -> Result<Vec<u8>> {
     // Base64url alphabet: A-Z a-z 0-9 - _

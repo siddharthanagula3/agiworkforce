@@ -2295,6 +2295,11 @@ impl ToolRegistry {
             dependencies: vec![],
         })?;
 
+        // Artifact creation, renders substantial/reusable content in a
+        // dedicated side panel instead of inline in the chat reply (mirrors
+        // Claude/ChatGPT-style "artifacts"/"canvas"). See
+        // core/llm/tool_executor/artifact_tools.rs for the implementation
+        // and the frontend-type -> ArtifactType mapping.
         self.register_tool(Tool {
             id: "create_artifact".to_string(),
             name: "Create Artifact".to_string(),
@@ -3392,6 +3397,7 @@ impl ToolRegistry {
             dependencies: vec![],
         })?;
 
+        // ── Grep, regex content search ──────────────────────────────────────
         self.register_tool(Tool {
             id: "grep_search".to_string(),
             name: "Grep (Content Search)".to_string(),
@@ -3477,6 +3483,7 @@ impl ToolRegistry {
             dependencies: vec![],
         })?;
 
+        // ── Glob, file pattern search ───────────────────────────────────────
         self.register_tool(Tool {
             id: "glob_search".to_string(),
             name: "Glob (File Pattern Search)".to_string(),

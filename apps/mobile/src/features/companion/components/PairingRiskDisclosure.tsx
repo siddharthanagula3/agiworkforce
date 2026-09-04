@@ -6,6 +6,14 @@ import { Text } from '@/components/ui/text';
 import { openExternalUrl } from '@/lib/safeOpenURL';
 import { useThemeColors } from '@/src/ui/theme';
 
+/**
+ * There is no Dispatch-specific safety document under `apps/web/app` today.
+ * verified 2026-08-01: the route list has no `dispatch/`, `pairing/` or
+ * `safety/` directory. `/security` is the closest page that actually exists and
+ * actually answers the question ("Sandboxed by default", "Approval flow",
+ * "Audit trail"), so it is what this links to. Repoint this constant if a
+ * dedicated pairing-safety page ships.
+ */
 export const DISPATCH_SAFETY_URL = 'https://agiworkforce.com/security';
 
 export function PairingRiskDisclosure({ className }: { className?: string }) {

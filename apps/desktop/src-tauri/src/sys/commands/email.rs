@@ -20,6 +20,9 @@ use mailparse::parse_mail;
 
 const DEFAULT_FOLDER: &str = "INBOX";
 
+/// Value an earlier build wrote to `password_encrypted` when the secret lived
+/// in the OS keyring. Retained only to recognise those rows and ask for the
+/// password again, nothing writes it any more.
 const LEGACY_KEYRING_MARKER: &str = "__KEYRING__";
 
 // =============================================================================
@@ -75,6 +78,17 @@ fn get_email_password_encrypted(encrypted_value: &str) -> Result<String> {
 // Credential Storage
 // =============================================================================
 
+/// Store an email password.
+///
+/// Encrypted with AES-256-GCM under a machine-derived key and written to the
+/// `password_encrypted` column of the already SQLCipher-encrypted database.
+///
+/// This deliberately does NOT use the OS keyring. Doing so put email behind a
+/// second, separately-ACLed Keychain item, and because the read path migrated
+/// on access, simply reading a password performed a Keychain *write*, so the
+/// user was re-prompted during ordinary use. The database key remains in the
+/// OS keyring (see data::db::key_management); that one is required to open the
+/// database at all.
 fn store_email_password(conn: &Connection, account_id: i64, password: &str) -> Result<()> {
     store_email_password_encrypted(conn, account_id, password)
 }
@@ -111,6 +125,10 @@ fn get_email_password(conn: &Connection, account_id: i64) -> Result<String> {
 
     let password = get_email_password_encrypted(&encrypted_value)?;
 
+    // Legacy rows hold Base64, which is an encoding, not encryption. The value
+    // has just been decoded, so upgrade the row to AES-256-GCM in place and let
+    // the weak form disappear on first read. A failure here is not fatal, the
+    // caller already has the password it asked for.
     if !encrypted_value.starts_with('{') {
         if let Err(error) = store_email_password_encrypted(conn, account_id, &password) {
             warn!("Failed to upgrade legacy email password to encrypted storage: {error}");
@@ -815,6 +833,7 @@ fn map_account_row(row: &Row<'_>) -> rusqlite::Result<EmailAccountRecord> {
         smtp_host: row.get(7)?,
         smtp_port: row.get::<_, i64>(8)? as u16,
         smtp_use_tls: int_to_bool(row.get::<_, i64>(9)?),
+        // Column 10 is password_encrypted, skip it (passwords retrieved via get_email_password)
         created_at: row.get(11)?,
         last_sync: row.get(12)?,
     })

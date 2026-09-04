@@ -7,6 +7,12 @@ import { useAgentControlStore } from '../../stores/agentControlStore';
 import { createChatModelInfo } from '../../lib/modelInfo';
 import { requireCatalogModel } from '../../test/modelCatalogFixtures';
 
+// The model picker ships a thinking toggle with per-model effort options, and
+// it was tested, but the one production call site never passed `effort` or
+// `onEffortChange`, so `showThinkingToggle` was permanently false and no user
+// could reach it. Both controls now write the SAME agentControlStore the
+// EffortChip writes, so this is a second entry point to one source of truth,
+// not the duplicated thinking state AUDIT-FIX CMP-24 had to unpick.
 const metadata = requireCatalogModel(
   (model) =>
     model.reasoning?.canDisableThinking === true && model.reasoning.defaultEffort === 'high',

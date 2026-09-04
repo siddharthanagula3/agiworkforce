@@ -1,7 +1,9 @@
 use super::*;
 
+/// Maximum code length allowed for execution (1MB), mirrors core/agi/executors/code_executor.rs.
 const MAX_CODE_LENGTH: usize = 1024 * 1024;
 
+/// Maximum code length allowed for analysis (500KB), mirrors core/agi/executors/code_executor.rs.
 const MAX_ANALYSIS_CODE_LENGTH: usize = 512 * 1024;
 
 const TERMINAL_DEFAULT_TIMEOUT_MS: u64 = 60_000;
@@ -89,6 +91,10 @@ impl ToolExecutor {
             .and_then(|v| v.as_str())
             .map(|s| s.to_string())
             .or_else(|| self.project_folder.clone());
+        // [H11] Security fix (supersedes AUDIT-TERMINAL-054): Always use system default shell.
+        // The shell type must NOT be LLM-controllable, an LLM requesting
+        // shell='wsl' could bypass bash-configured validator rules.
+        // If multi-shell support is needed, it must be a user settings preference.
         let shell = match get_default_shell() {
             ShellType::PowerShell => "powershell",
             ShellType::Cmd => "cmd",

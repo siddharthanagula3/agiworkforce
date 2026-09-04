@@ -1602,6 +1602,9 @@ impl AGICore {
             }
         }
 
+        // FIX-031: drop the JoinHandle so the registry doesn't grow without
+        // bound. We don't .abort() here, by the time cleanup_goal runs the
+        // worker has already returned (achieve_goal exited on its own).
         if let Ok(mut handles) = lock_with_recovery(&self.goal_handles, "cleanup_goal:goal_handles")
         {
             if handles.remove(goal_id).is_some() {
@@ -1744,6 +1747,10 @@ impl AGICore {
             }
         }
 
+        // FIX-031: hard-cancel, abort the spawned worker so a long-running
+        // .await (e.g. an LLM call) is interrupted immediately instead of
+        // waiting for the iteration to finish. The handle is removed from
+        // the registry so future cancels are no-ops on the same id.
         if let Ok(mut handles) = lock_with_recovery(&self.goal_handles, "cancel_goal:goal_handles")
         {
             if let Some(handle) = handles.remove(goal_id) {

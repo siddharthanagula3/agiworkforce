@@ -36,6 +36,15 @@ static BLOCKED_KEYWORD_RE: Lazy<Regex> = Lazy::new(|| {
 static BLOCK_COMMENT_RE: Lazy<Regex> =
     Lazy::new(|| Regex::new(r"/\*[\s\S]*?\*/").expect("static regex is valid"));
 
+/// Validates that a SQL query is a read-only SELECT/WITH statement.
+///
+/// Defences applied (in order):
+/// 1. Strip block comments (`/* … */`) before keyword matching, prevents `SEL/**/ECT`.
+/// 2. Word-boundary regex matching for blocked DML/DDL keywords.
+/// 3. Reject semicolons, prevents multi-statement injection (`SELECT 1; DROP TABLE x`).
+/// 4. Require the query to start with SELECT or WITH after stripping leading whitespace.
+///
+/// The optional `context` is included in error messages (e.g. "batch query at index 3").
 fn validate_read_only_sql(sql: &str, context: Option<&str>) -> Result<(), String> {
     let loc = context
         .map(|ctx| format!(" in {}", ctx))
@@ -1037,6 +1046,8 @@ pub async fn db_store_password(
     // different legacy path on some platforms.
     let conn = open_main_database(&app)?;
 
+    // Enable WAL mode on this standalone connection to reduce lock contention with
+    // the pool (M16 mitigation, remove once migrated to pool-based access).
     conn.execute_batch("PRAGMA journal_mode=WAL;")
         .map_err(|e| format!("Failed to enable WAL mode: {}", e))?;
 

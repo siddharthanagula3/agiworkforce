@@ -116,6 +116,15 @@ function providerBrandHex(providerKey: string): string {
   return id ? (PROVIDER_DISPLAY[id].brandColor ?? '#71717A') : '#71717A';
 }
 
+// ---------------------------------------------------------------------------
+// Reasoning / effort capability (per-model, driven by models.json `reasoning`).
+//
+// The flyout is rendered off `model.reasoning.control` + `supportedEfforts` so
+// each model shows ONLY the effort marks it actually accepts, fixing the prior
+// "xhigh/max shown (and disabled) for every model" behaviour. See
+// docs/research/reasoning-effort-capability-matrix-2026-07-10.md (UI adaptation).
+// ---------------------------------------------------------------------------
+
 /** The per-model reasoning block (absent ⇒ non-reasoning `none`). */
 function reasoningFor(model: AIModel): ModelReasoning {
   return getModelReasoning(model.id);
@@ -127,6 +136,7 @@ function modelSupportsThinking(model: AIModel): boolean {
   return r.capable && r.control !== 'none';
 }
 
+/** Effort mark labels, extended to cover the provider vocab (`none`, `minimal`). */
 const EFFORT_CHIP_LABEL: Record<string, string> = {
   none: 'None',
   minimal: 'Minimal',
@@ -171,6 +181,11 @@ function isModelSelectableForTier(model: AIModel, tier: string | null): boolean 
   return isModelAllowedForTier(model.id, tier);
 }
 
+// ---------------------------------------------------------------------------
+// Environment gating (Phase A, Phase B replaces environmentAvailability with
+// the real managed-compute-beta signal once the E2B client is wired in).
+// ---------------------------------------------------------------------------
+
 /**
  * Return the current availability of a model's required execution environment.
  *
@@ -183,17 +198,39 @@ function isModelSelectableForTier(model: AIModel, tier: string | null): boolean 
  * currently reachable, then return { configured: true, available: <ping> }.
  */
 function environmentAvailability(_env: ModelEnvironment): EnvironmentAvailability {
+  // Phase A: all environments are unconfigured, env-gated models stay locked.
   return { configured: false };
 }
 
+/**
+ * Combined lock decision: tier gate first, then environment gate.
+ *
+ * Keeping these two separate signals in one function means every call-site
+ * (search branch, partition, "More models" inline, reset effect) routes through
+ * the same logic, no gating leak is possible from a partial update.
+ *
+ * Returns:
+ *   locked:  true  → row is grayed/disabled
+ *   reason:  string → shown in aria-label / tooltip (env-lock only; tier-lock
+ *                      keeps existing "requires upgrade" wording)
+ *   kind:    'tier' | 'env' → determines click behaviour and badge copy
+ *
+ * CRITICAL SAFETY: a model WITHOUT requiresEnvironment returns the same result
+ * as the old isModelSelectableForTier call, so no current model is affected.
+ */
 function modelLock(
   model: AIModel,
   tier: string | null,
 ): { locked: boolean; reason?: string; kind: 'tier' | 'env' | 'coming_soon' } {
+  // Availability check FIRST, a coming_soon/unavailable model is display-only:
+  // never selectable, never routable, regardless of tier. This is the picker
+  // side of the availability invariant (guardrail-enforced in the catalog).
   if (model.availability && model.availability !== 'live') {
     return {
       locked: true,
       kind: 'coming_soon',
+      // `unavailableReason` in models.json is an internal ops record (probe
+      // results, key provisioning), never surface it to users.
       reason: 'Coming soon, not yet available',
     };
   }
@@ -212,9 +249,28 @@ function modelLock(
   return { locked: false, kind: 'tier' };
 }
 
+/**
+ * True for models that burn plan usage fastest · drives the usage-rate tooltip.
+ *
+ * AUDIT-FIX CMP-25: this used to be `model.name.toLowerCase().includes('opus')`
+ *, a substring match on a DISPLAY NAME. It silently missed every other premium
+ * model (and would have fired on any unrelated model whose name happened to
+ * contain the word). `getPickerModelTier` is the catalog's own answer to
+ * "which bucket is this model in", and is already what the picker's Pro badge
+ * uses, so the tooltip and the badge can no longer disagree.
+ */
 function isHighUsageRateModel(model: AIModel): boolean {
   return getPickerModelTier(model.id) === 'premium';
 }
+
+// ---------------------------------------------------------------------------
+// Deprecation advance-warning (CLR-01 / mqp-08). `model.deprecationDate`
+// (model-store.ts) is only ever set to a date still in the future, the
+// picker already drops a model outright once its deprecation_date has
+// passed (isCurrentModel). This renders the advance notice for the window
+// leading up to that deadline, matching ChatGPT's in-picker "Leaving on
+// <date>" countdown instead of letting the model vanish with zero warning.
+// ---------------------------------------------------------------------------
 
 /** How many days ahead of the scheduled retirement the picker starts warning. */
 const DEPRECATION_WARNING_WINDOW_DAYS = 30;
@@ -249,6 +305,17 @@ function modelCapabilityBadges(modelId: string): string[] {
   return badges;
 }
 
+/**
+ * Partition models into "recommended" (top ~4 for the user's tier) and
+ * "more" (the rest). Flagship (locked) models always appear in recommended
+ * with an isLocked flag so free users see them with an inline Upgrade link.
+ *
+ * When a search query is present we skip partitioning so the user sees all
+ * matching results in a flat list.
+ *
+ * Uses modelLock() for all lock decisions so tier gating and env gating are
+ * always applied together, no partial-update leak.
+ */
 function partitionModels(
   models: AIModel[],
   tier: string | null,
@@ -655,6 +722,18 @@ export function ComposerFooter({
 
   const selectedModel = getSelectedModel();
 
+  // Prompt-cache safety: switching the model mid-conversation resets the cache and re-bills
+  // prior context at full input price (caching is per-model). Warn before committing such a
+  // switch. Logic lives in the shared @agiworkforce/routing policy (reused by all surfaces).
+  //
+  // Count only COMPLETED assistant turns in an ACTIVE conversation:
+  //   - `activeConversationId` gate: an empty/new chat holds no cached prefix.
+  //   - `!m.isStreaming` gate: the assistant message added at the START of the
+  //     very first turn is an empty streaming placeholder. Counting it made the
+  //     "Switch model mid-conversation?" dialog fire on a brand-new chat that has
+  //     no real prior context yet (coordinator audit, Claude/DeepSeek/Moonshot,
+  //     the caching-capable providers). A completed turn (isStreaming=false) is
+  //     real cached context and still warns.
   const assistantTurnCount = useChatStore((s) =>
     s.activeConversationId
       ? s.messages.filter((m) => m.role === 'assistant' && !m.isStreaming).length
@@ -761,6 +840,10 @@ export function ComposerFooter({
 
   useEffect(() => {
     if (!billingPolicyReady) return;
+    // modelLock covers tier, env AND availability gates, closing the selection-
+    // reset leak where a now-invalid model could remain selected after the tier
+    // changed. (coming_soon models can never be selected in the first place, but
+    // this also recovers if a live model is retired.)
     if (modelLock(selectedModel, tier).locked) {
       setSelectedModelId(getBestAutoModeForTier(tier));
     }

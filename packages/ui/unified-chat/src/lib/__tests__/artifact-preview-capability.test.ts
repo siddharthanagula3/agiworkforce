@@ -1,3 +1,14 @@
+/**
+ * artifact-preview-capability.test.ts, DES-C15.
+ *
+ * The probe is what stands between the user and a silently inert artifact
+ * preview inside the packaged desktop app, so its failure modes matter as much
+ * as its happy path: an inconclusive measurement must resolve `'unknown'` (which
+ * every caller renders as "say nothing"), never `'blocked'`, or the app would
+ * warn about a restriction that does not exist.
+ *
+ * @vitest-environment jsdom
+ */
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   probeSameDocumentScriptSupport,

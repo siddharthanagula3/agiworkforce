@@ -268,6 +268,13 @@ async fn query_single_model(
         ..Default::default()
     };
 
+    // TRUST BOUNDARY (desktop-trust-boundary-01): `council_query` is not
+    // wired to any tauri command today (no caller under sys/commands), dead
+    // code, so fail-closed here has no live impact. `..Default::default()`
+    // leaves `trust_mode: None`, which now fails closed to Local via
+    // `effective_trust_mode`'s default; the explicit multi-provider
+    // selection this feature relies on would need real trust_mode threading
+    // before it could go live.
     let prefs = RouterPreferences {
         provider: Provider::from_string(provider_str),
         model: Some(model_str.to_string()),

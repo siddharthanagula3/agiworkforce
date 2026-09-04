@@ -22,6 +22,11 @@ function openExportMenu() {
   fireEvent.click(screen.getByRole('button', { name: /download or export artifact/i }));
 }
 
+// The export options were built and gated behind `onExportNative`, which no
+// caller passed, so no user could export an artifact natively. Wiring it
+// raised a second question: web can build PDF and DOCX but has no xlsx writer,
+// and an 'excel' option that fails after the user picks it is worse than none.
+// `nativeExportFormats` is what keeps the menu honest.
 describe('artifact native export', () => {
   it('offers nothing when the host cannot export', () => {
     render(<ArtifactRenderer artifact={codeArtifact} />);

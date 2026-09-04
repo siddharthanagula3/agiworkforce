@@ -290,6 +290,21 @@ export function environmentAvailability(_env: ModelEnvironment): EnvironmentAvai
   return { configured: false };
 }
 
+/**
+ * Pure function: given a model's metadata, return whether it is selectable
+ * under the current (Phase A) environment availability, and why not if locked.
+ *
+ * Keeping this separate from tier logic means callers (pickers, tests) can
+ * consume a single, predictable seam, no gating leak is possible from a
+ * partial update.
+ *
+ * CRITICAL SAFETY: models without requiresEnvironment are always environment-OK,
+ * so no current model's appearance or selectability is altered.
+ *
+ * Returns:
+ *   envSelectable: true  → no environment gate applies (proceed to tier check)
+ *   envSelectable: false → locked; show `reason` as tooltip/badge copy
+ */
 export function getModelEnvironmentGate(model: Pick<ModelMetadata, 'requiresEnvironment'>): {
   envSelectable: boolean;
   reason?: string;

@@ -80,6 +80,37 @@ for (const root of LOCALE_ROOTS) {
   }
 }
 
+/*
+ * Untranslated-by-default ratchet.
+ *
+ * Parity above compares locales to EACH OTHER, so a key that exists in none of
+ * them is perfectly consistent, which is how this list grew undetected. The
+ * check passed green while the sidebar, composer and model picker were
+ * English-only for a user who chose Japanese.
+ *
+ * This does not translate anything. It stops the number growing: a NEW `t()`
+ * key with an inline default and no catalogue entry fails here. Lowering the
+ * baseline is the work; raising it needs a deliberate edit.
+ *
+ * The scan is namespace-aware: it resolves which catalogue file a key must
+ * live in from the `useUiTranslation('<ns>')` / `useTranslation('<ns>')`
+ * binding in scope at the call site (nearest preceding declaration of the
+ * same local variable name in the same file), or from an explicit
+ * `t('ns:key', ...)` form. A bare-key match against ANY catalogue file
+ * (namespace-less) is what let `sidebar.noConversations` hide behind an
+ * unrelated same-named key in `v3.json` while the component actually reads
+ * the `chat` namespace, which lacks it. The scan reads whole file contents
+ * (not a line-oriented grep), so a `t(` call whose key and default sit on
+ * different source lines, invisible to a line-based scan, is still found.
+ *
+ * WEB-CORE-CHAT-UI-NOT-LOCALISED-01 slice 1 (sidebar + selector + composer,
+ * 126 keys) landed across all 12 locales, dropping the baseline from 254 to
+ * 104. Slice 2 fixed this scanner's namespace blindness and multi-line
+ * blindness, which raised the honest count from 104 to 113 (the two known
+ * blind-spot keys plus 7 more this scan finally saw), translated all 113
+ * across all 12 locales, and dropped the baseline to 0. See
+ * ExecutionPlan.md for the full history.
+ */
 const UNTRANSLATED_DEFAULT_BASELINE = 0;
 
 const SCAN_ROOTS = ['apps/web', 'packages/ui'];

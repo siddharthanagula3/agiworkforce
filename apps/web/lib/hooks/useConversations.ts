@@ -545,6 +545,11 @@ export function useConversations(): UseConversationsReturn {
     fetchConversations();
   }, [fetchConversations, isLoaded, isSignedIn]);
 
+  // Without this the mount effect is the ONLY caller, so a list fetch that
+  // failed once stayed failed until a full page reload, the sidebar renders
+  // the message with no control to retry. Coming back to the tab or regaining
+  // the network is exactly when the fetch is worth repeating, and it costs one
+  // request only when the last attempt actually failed.
   useEffect(() => {
     if (!isLoaded || !isSignedIn || !listError) return;
     const retry = () => {

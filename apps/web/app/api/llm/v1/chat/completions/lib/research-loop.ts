@@ -176,6 +176,13 @@ export interface ResearchLoopOptions {
    * import-graph reason as the tool loop. Absent means no rotation.
    */
   failover?: ToolLoopFailoverPlan;
+  /**
+   * CAP-045 slice 1: durable report persistence. Injected rather than imported
+   * so the loop keeps no database handle of its own (the route owns the
+   * RLS-scoped adapter and the run's identity). Called at most once per run, on
+   * every terminal path, completed, failed, and interrupted, so a retry
+   * always has gathered material to resume from.
+   */
   persistReport?: ResearchReportSink;
   /**
    * CAP-045 slice 4: sources carried forward from a previous attempt at the
@@ -194,6 +201,12 @@ export interface ResearchLoopOptions {
    * searches executed are exactly the ones that were shown and accepted.
    */
   approvedPlan?: ResearchStep[];
+  /**
+   * Stop after planning and hand the plan to the user for a Start/Cancel
+   * decision instead of searching straight away. The approved plan comes back
+   * on the next request, which is what makes this stateless, the paused run
+   * holds no server-side session.
+   */
   requirePlanApproval?: boolean;
 }
 
@@ -294,6 +307,14 @@ export function researchPlanEvent(steps: ResearchStep[], responseModel: string):
   });
 }
 
+/**
+ * Parse the planning turn's reply into concrete search queries.
+ *
+ * Preferred shape is a JSON array of strings; a plain markdown/numbered list is
+ * accepted as a fallback because models drift. Anything else yields an empty
+ * plan, the loop then shows the round it really runs instead of inventing
+ * queries the model never committed to.
+ */
 export function parsePlanQueries(text: string): string[] {
   const queries: string[] = [];
   const push = (value: unknown): void => {
@@ -326,6 +347,11 @@ export function parsePlanQueries(text: string): string[] {
   return queries;
 }
 
+/**
+ * Split a synthesized report into the outline fields the contract stores
+ * separately. Purely derived from real report text, nothing is invented; every
+ * field degrades to an empty value when the report does not contain it.
+ */
 export function extractReportOutline(content: string): {
   title: string;
   summary: string;
@@ -687,6 +713,9 @@ async function* collectTurn(
           }
         }
 
+        // Function tool_calls: accumulate fragments so the loop can execute
+        // url_fetch calls (the only function tool research turns keep, see
+        // the tools filter in runResearchLoop).
         if (Array.isArray(delta?.['tool_calls']) && (delta['tool_calls'] as unknown[]).length > 0) {
           hadToolCalls = true;
           for (const tc of delta['tool_calls'] as unknown[]) {
@@ -901,6 +930,7 @@ export async function* runResearchLoop(
   for (const priorSource of options.priorSources ?? []) {
     sources.add(priorSource);
   }
+  /** Queries a previous attempt already completed, never re-run. */
   const carriedQueries = (options.priorSteps ?? [])
     .filter((step) => step.type === 'search' && step.status === 'completed')
     .map((step) => step.description)
@@ -1333,12 +1363,30 @@ export async function* runResearchLoop(
     }
 
     let cutShortReason: string | null = null;
+    /**
+     * The real provider error from the last gathering round that threw.
+     *
+     * A round-1 failure reports the upstream message verbatim and stops, but a
+     * failure in round 2+ used to be logged and then dropped: the loop kept the
+     * partial material, ran synthesis anyway, and, when synthesis also came
+     * back empty, blamed "the model returned an empty report" and told the user
+     * to retry. Observed locally with an Anthropic key at $0: every upstream
+     * call was rejected with "Your credit balance is too low to access the
+     * Anthropic API", the user was told the model had gone quiet, and the
+     * suggested retry could never have succeeded. Keep the cause so the failure
+     * branch can name it instead of guessing.
+     */
     let lastTurnError: string | null = null;
 
     // ── Gathering rounds ──
     for (let round = 1; round <= maxGatherRounds; round++) {
       iteration = planningTurnEnabled ? round + 1 : round;
 
+      // Plan bookkeeping. Round 1 executes the planned queries as one batch:
+      // provider-native search does not attribute results back to an individual
+      // query, so per-query completion cannot be observed and is not claimed.
+      // the batch moves together. Later rounds are gap-filling work the plan did
+      // not contain, so each appends its own honest step.
       let roundStepIds: string[];
       if (round === 1) {
         if (plan.every((step) => step.status !== 'pending')) {
@@ -1396,6 +1444,11 @@ export async function* runResearchLoop(
         if (yield* flushCancellationIfRequested()) return;
         roundSearchEvents += turn.searchEvents;
 
+        // url_fetch resolution passes: when the turn ended on tool_calls,
+        // execute the fetches (bounded), feed the results back, and let the
+        // model finish its notes for this round. Fetched text lives only in
+        // this round's turnMessages, the persistent thread gets the capped
+        // notes below, so the token budget stays under control.
         let fetchPasses = 0;
         const roundFetchCount = { count: 0 }; // per-round cap spans all passes
         while (
@@ -1514,6 +1567,12 @@ export async function* runResearchLoop(
         );
         markPlanSteps([synthesisStepId], 'failed');
         yield planEvent();
+        // Attribute the failure to what actually caused it. "The model returned
+        // an empty report" is only credible when the gathering rounds really did
+        // gather something; with zero sources AND a captured upstream error the
+        // far likelier story is that every provider call was rejected, and
+        // telling the user to retry is then actively wrong, the retry cannot
+        // succeed until whatever rejected the call is fixed.
         const upstreamFailed = lastTurnError !== null && sources.size === 0;
         const statusLabel = upstreamFailed
           ? 'Report generation failed upstream'

@@ -441,8 +441,8 @@ export async function resolveGatewayBase(): Promise<string> {
         if (validated) return validated;
       }
     }
-  } catch (err) {
-    void err;
+  } catch {
+    /* noop */
   }
   return DEFAULT_GATEWAY_BASE;
 }

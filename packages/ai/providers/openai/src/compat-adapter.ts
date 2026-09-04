@@ -1,3 +1,20 @@
+/**
+ * Shared constructor for OpenAI-compatible provider adapters.
+ *
+ * A vendor that ships an OpenAI-shaped Chat Completions endpoint needs no
+ * bespoke transport: `detectOpenAICompletionsCompat` derives the payload
+ * dialect from the base URL, `translateChatRequest` / `translateOpenAIStream`
+ * carry the wire format, and `classifyError` normalises failures. What remains
+ * per vendor is identity (id, label, auth env var), its default endpoint and
+ * its curated catalog, the four fields `OpenAICompatAdapterSpec` asks for.
+ *
+ * Vendors whose endpoint deviates from the OpenAI shape (extra headers,
+ * response rewriting, vendor-only request fields) keep their own hand-written
+ * adapter; this helper deliberately exposes no hooks for that.
+ *
+ * @packageDocumentation
+ */
+
 import OpenAI from 'openai';
 import type {
   AuthMethod,

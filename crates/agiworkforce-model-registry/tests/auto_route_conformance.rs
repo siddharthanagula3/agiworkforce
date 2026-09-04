@@ -1,3 +1,16 @@
+//! The Rust half of the cross-language Auto-routing conformance contract.
+//!
+//! This crate and `packages/ai/routing/src/auto.ts` are two independent
+//! resolvers over one generated policy. Design-doc **OQ-1 (which of them is
+//! canonical) is undecided**, so neither is treated as the other's reference.
+//! but a routing-policy or resolver change must not silently make them
+//! disagree. Both replay
+//! `packages/ai/routing/src/__tests__/fixtures/auto-route-conformance.json`;
+//! the fixture is the contract, not either implementation.
+//!
+//! Regenerate it from the TypeScript suite
+//! (`AGI_UPDATE_ROUTING_CONFORMANCE=1`) and re-run this test: a case only that
+//! side changed fails here.
 
 use std::collections::BTreeMap;
 

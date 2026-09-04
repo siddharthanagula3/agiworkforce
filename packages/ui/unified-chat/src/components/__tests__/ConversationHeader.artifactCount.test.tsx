@@ -1,3 +1,13 @@
+/**
+ * ConversationHeader.artifactCount.test.tsx, DES-C05.
+ *
+ * The artifacts toggle existed but had no way to say what was behind it, and on
+ * desktop no host ever passed a handler, so it never rendered at all. The count
+ * has to reach the accessible name, not just a decorative badge, a screen
+ * reader user gets "Toggle artifacts panel" either way otherwise.
+ *
+ * @vitest-environment jsdom
+ */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, render, screen } from '@testing-library/react';
 import { ConversationHeader } from '../ConversationHeader';

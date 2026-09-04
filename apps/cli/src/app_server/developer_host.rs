@@ -1682,6 +1682,12 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
             .ok_or_else(|| DeveloperSessionHostError::not_found("Running turn disappeared"))?;
         drop(running_turns);
         let process_owner = running.process_owner;
+        // Order matters: the turn task holds the session mutex across
+        // `agent.send`, and the two steps below need it. `abort` releases it
+        // only because `SubagentManager::wait_all` polls instead of blocking on
+        // `join`, without that await point this lock and that join wedge each
+        // other. Join last: awaiting the aborted task before the subagents are
+        // cancelled waits for exactly the work the interrupt is meant to stop.
         running.handle.abort();
         let process_shutdown_error = crate::process_tree::terminate_owners_and_wait(
             &[process_owner],
@@ -1876,6 +1882,14 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
     }
 }
 
+/// Build the config a turn hands to the engine, with the process defaults
+/// replaced by this session's own route.
+///
+/// A subagent re-derives its provider from `config.default.{model,provider}`
+/// instead of from the session that spawned it, and `ToolExecOptions
+/// .privacy_mode`, the only gate on the network tools, is derived from that
+/// provider. Left at the process defaults, a Local session's child would route
+/// somewhere else and unlock tools the parent is not allowed to use.
 fn turn_config_pinned_to_session_route(base: &CliConfig, agent: &AgentSession) -> CliConfig {
     let mut config = base.clone();
     config.default.model = agent.model.clone();

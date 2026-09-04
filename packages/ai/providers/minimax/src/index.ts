@@ -1,3 +1,15 @@
+/**
+ * @agiworkforce/providers-minimax
+ *
+ * MiniMax provider adapter implementing `ProviderAdapter` from
+ * `@agiworkforce/types`. MiniMax ships an OpenAI-compatible Chat Completions
+ * endpoint at `https://api.minimax.io/v1` (see `./base-url.ts`), so this is a
+ * thin config wrapper around the shared `@agiworkforce/providers-openai`
+ * translate/stream layer, the same pattern as deepseek/xai/moonshot.
+ *
+ * @packageDocumentation
+ */
+
 import OpenAI from 'openai';
 import type {
   AuthMethod,

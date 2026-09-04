@@ -3,6 +3,13 @@ use tracing::warn;
 
 use super::AppDatabase;
 
+/// Export a conversation as formatted text.
+///
+/// Queries all messages for the given `conversation_id` from the local
+/// database and returns them formatted according to `format`.
+///
+/// Supported formats:
+/// - `"markdown"`, Each message rendered as `## {Role}\n\n{content}\n\n---\n\n`.
 #[tauri::command]
 pub async fn conversation_export(
     conversation_id: String,

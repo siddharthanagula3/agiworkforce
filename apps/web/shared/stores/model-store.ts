@@ -35,6 +35,15 @@ export interface AIModel {
   availability?: ModelAvailability;
   /** Reason shown on the coming_soon/unavailable row tooltip. */
   unavailableReason?: string;
+  /**
+   * ISO date this model is scheduled to retire. Only ever set when the date
+   * is still in the future, `isCurrentModel()` already drops the model
+   * entirely once its `deprecation_date` has passed, so a defined value here
+   * always describes a still-selectable model with a scheduled end date.
+   * Consumers (ComposerFooter's ModelRow) use this to render an advance
+   * "Leaving on <date>" warning instead of letting the model vanish with no
+   * notice on the deadline (CLR-01 / mqp-08).
+   */
   deprecationDate?: string;
 }
 
@@ -84,6 +93,21 @@ function describeModel(metadata: ModelMetadata): string {
   return 'Fast and cost-efficient';
 }
 
+/**
+ * Whether a model is CURRENT (safe to show in the primary picker). Excludes any
+ * model the catalog marks deprecated, explicitly (`deprecated: true` /
+ * `status: 'deprecated'`) or by a `deprecation_date` already in the past. The
+ * picker must show only the latest models (claude.ai parity); a superseded/old
+ * version must never appear in the list. Future-dated `deprecation_date`s are
+ * still current (the model is scheduled but not yet retired).
+ */
+/**
+ * These lifecycle fields exist in the canonical models.json but are not part
+ * of the web's narrower local ModelMetadata interface, read them
+ * defensively. Shared by `isCurrentModel` (the on/off gate) and
+ * `futureDeprecationDate` (the advance-warning label) so both read the exact
+ * same catalog value.
+ */
 function lifecycleFields(metadata: ModelMetadata): {
   deprecated?: boolean;
   status?: string;
@@ -107,6 +131,14 @@ function isCurrentModel(metadata: ModelMetadata): boolean {
   return true;
 }
 
+/**
+ * The model's scheduled retirement date, IFF it is still in the future.
+ * Callers only ever reach this after `isCurrentModel()` has already admitted
+ * the model, so in practice this always returns either undefined (nothing
+ * scheduled) or a future date, never a date that has already passed. Exists
+ * so the picker can render an advance "Leaving on <date>" warning (CLR-01 /
+ * mqp-08) instead of the model just vanishing the instant the deadline hits.
+ */
 function futureDeprecationDate(metadata: ModelMetadata): string | undefined {
   const { deprecation_date } = lifecycleFields(metadata);
   if (!deprecation_date) return undefined;
@@ -230,6 +262,12 @@ export interface ModelSubstitution {
   resolvedLabel: string;
 }
 
+/**
+ * Non-null exactly when `resolveSelectableModelId` would swap the given id for
+ * something else, the conversation's saved model was retired, dropped from the
+ * catalog, or is display-only. Callers use it to tell the user the swap
+ * happened instead of letting the model change under them (AI-49).
+ */
 export function describeModelSubstitution(
   modelId: string | null | undefined,
 ): ModelSubstitution | null {

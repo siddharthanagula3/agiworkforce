@@ -1,3 +1,15 @@
+/**
+ * webviewContent.webview.test.ts, jsdom-based smoke + security tests
+ * for the rendered webview HTML produced by getWebviewContent().
+ *
+ * Catches F-01-class bugs (TS syntax leaking into the webview JS string
+ * body causes the entire script to fail at parse time, breaking the
+ * sidebar chat panel) and F-02-class bugs (CSP misconfiguration that
+ * would allow inline scripts or third-party domains).
+ *
+ * @vitest-environment jsdom
+ */
+
 import { describe, expect, it } from 'vitest';
 import { getWebviewContent } from '../features/sidebar-webview/webviewContent';
 

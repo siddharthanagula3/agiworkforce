@@ -1,3 +1,28 @@
+//! Native Clerk Frontend API transport for Desktop sign-in.
+//!
+//! Why this lives in Rust rather than in the webview:
+//!
+//! 1. **Origin.** A Clerk production instance validates the browser `Origin`
+//!    against the instance's allowed origins and answers `origin_invalid`
+//!    otherwise. The Tauri webview's origin (`tauri://localhost` /
+//!    `http://tauri.localhost`) is not, and should not be, an allowed web
+//!    origin for the instance. The native HTTP client sends no `Origin`, which
+//!    is exactly how Clerk's own React Native/Expo client talks to FAPI.
+//! 2. **Native session semantics.** Clerk's native contract (verified against
+//!    the installed `@clerk/expo` build,
+//!    `dist/provider/singleton/createClerkInstance.js`) is: send
+//!    `_is_native=1`, omit cookies, carry the client JWT in the `authorization`
+//!    REQUEST header, and read the rotated client JWT back from the
+//!    `authorization` RESPONSE header. A cookie-based webview fetch cannot do
+//!    that.
+//! 3. **Blast radius.** The path allowlist below means this command can only
+//!    ever reach the sign-in and session-token routes of the one Clerk
+//!    instance named by our own publishable key. It is not a general proxy.
+//!
+//! Credentials (password, email code, MFA code, client JWT, session JWT) are
+//! never logged here and never persisted here. `ApiClient::execute` logs the
+//! method and URL only, never headers or bodies, and every credential this
+//! module handles travels in a header or a form body.
 
 use std::collections::HashMap;
 
@@ -87,6 +112,11 @@ fn frontend_api_from_publishable_key(publishable_key: &str) -> Result<String, St
     Ok(host.to_string())
 }
 
+/// Allowlist the exact Clerk routes native Desktop sign-in needs.
+///
+/// Anything else, user updates, organization routes, sign-ups, arbitrary
+/// paths, is refused, so a compromised webview cannot turn this command into
+/// a general-purpose Clerk client.
 fn validate_clerk_path(path: &str) -> Result<(), String> {
     if !path.starts_with('/') || path.contains("..") || path.contains("//") {
         return Err("Refusing an unsupported Clerk request path.".to_string());
@@ -175,6 +205,12 @@ fn response_client_token(response: &ApiResponse) -> Option<String> {
         .filter(|value| !value.is_empty())
 }
 
+/// Perform one native Clerk Frontend API call on behalf of the Desktop
+/// sign-in form.
+///
+/// `body` is already `application/x-www-form-urlencoded`, the wire format
+/// Clerk's own client uses, and is passed through untouched. It may contain a
+/// password or a one-time code; it is never logged and never written to disk.
 #[tauri::command]
 #[allow(non_snake_case)]
 pub async fn account_clerk_native_request(
@@ -232,6 +268,8 @@ pub async fn account_clerk_native_request(
 
     let client = state.get_single_attempt_client()?;
     let response = client.execute(request).await.map_err(|error| {
+        // Transport failure. Say it is a transport failure, the caller maps
+        // this to a network message, never to "your account was rejected".
         format!("Could not reach the AGI account service: {error}")
     })?;
 

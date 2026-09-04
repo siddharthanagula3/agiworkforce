@@ -9,8 +9,19 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::error::Error;
 
+/// FIX-007 (Sprint 3): hard upper bound on `max_tokens` for any single
+/// LLM request. Without this, an indirect prompt injection could request
+/// `max_tokens: 1_000_000` and bleed the user's BYOK budget, there is
+/// no per-request cap on the LLM provider side either. 16 384 covers
+/// every legitimate code-mode response we ship today; UI flows that
+/// genuinely need more still go through `clamp_max_tokens` and accept
+/// the cap so the bound applies even when the request shape is exotic.
 const PER_REQUEST_MAX_TOKENS_CEILING: u32 = 16_384;
 
+/// Clamp `max_tokens` to [`PER_REQUEST_MAX_TOKENS_CEILING`] when the caller
+/// supplied a value. None inputs stay None, the provider's own default
+/// applies. Returns the (possibly clamped) value plus a `clamped` flag
+/// for callers that want to log when the cap fired.
 fn clamp_max_tokens(requested: Option<u32>) -> (Option<u32>, bool) {
     match requested {
         Some(value) if value > PER_REQUEST_MAX_TOKENS_CEILING => {
@@ -380,6 +391,17 @@ impl ProviderAdapter for OpenAIAdapter {
 }
 
 impl OpenAIAdapter {
+    /// c3 switch predicate for the CHAT COMPLETIONS arm (Responses routing is
+    /// untouched): can the shared crate serializer express this request
+    /// byte-faithfully? Fallbacks (no silent drops):
+    /// - structured outputs / response_format / audio have no crate shape;
+    /// - OpenAI SERVER tools (web_search, code_interpreter, ...) use typed
+    ///   builtin definitions the crate `ToolDefinition` cannot express;
+    /// - multimodal is crate-expressible only as Text/Image parts with the
+    ///   default `detail: auto` and at least one Image (the legacy arm sends
+    ///   `image_url.detail` and an always-array content; the crate omits
+    ///   `detail`, wire-equivalent for `auto` only, and downgrades a lone
+    ///   text part to a plain string).
     fn chat_crate_expressible(request: &LLMRequest) -> bool {
         let no_desktop_only_fields = request.output_config.is_none()
             && request.response_format.is_none()
@@ -405,6 +427,14 @@ impl OpenAIAdapter {
         no_desktop_only_fields && no_server_tools && multimodal_expressible
     }
 
+    /// Convert the desktop request's system + messages into crate wire
+    /// messages for the OpenAI-compatible dialect. Unlike the legacy chat
+    /// arm, which DROPS assistant `tool_calls` and the tool message's
+    /// `tool_call_id` (a real bug: replayed tool conversations 400 on
+    /// OpenAI), the crate serializer emits correct tool history; that fix
+    /// is pinned in `tests/c2c_request_oracle.rs`. Mirroring the legacy arm,
+    /// a multimodal message serializes its parts only (plain `content` is
+    /// not appended).
     fn openai_wire_messages(request: &LLMRequest) -> Vec<agiworkforce_llm::Message> {
         use agiworkforce_llm::{ContentBlock, Message};
         use base64::{engine::general_purpose::STANDARD, Engine as _};
@@ -461,6 +491,12 @@ impl OpenAIAdapter {
         out
     }
 
+    /// c3 (2026-07-16): build the Chat Completions body through the shared
+    /// `agiworkforce-llm` serializer. Desktop-side policy stays here: catalog
+    /// model-id mapping, the FIX-007 max-tokens clamp, and the catalog-based
+    /// `max_completion_tokens`-vs-`max_tokens` field choice (the crate's own
+    /// URL-based `OpenAiOpts::for_url` heuristic is not consulted, the
+    /// desktop knows the provider from its catalog).
     pub(crate) fn adapt_chat_via_crate(
         request: &LLMRequest,
     ) -> Result<Value, Box<dyn Error + Send + Sync>> {
@@ -495,6 +531,9 @@ impl OpenAIAdapter {
                 == Some(Provider::OpenAI),
         };
         let mut body = agiworkforce_llm::build_openai_compat_request_body(&req, &opts);
+        // The crate engine is streaming-only; the desktop's blocking send
+        // path omits `stream`, and `stream_options` is only valid WITH
+        // `stream` (OpenAI 400s it otherwise).
         if !request.stream {
             if let Some(obj) = body.as_object_mut() {
                 obj.remove("stream");
@@ -504,6 +543,12 @@ impl OpenAIAdapter {
         Ok(body)
     }
 
+    /// Resolve the Responses `reasoning.effort` for thinking-capable OpenAI
+    /// models. Shared by the legacy Responses arm and the c3 crate path.
+    /// Checking capabilities.thinking on the catalog entry is sufficient.
+    /// every thinking-capable OpenAI model accepts the reasoning_effort
+    /// param; no hardcoded model-family prefixes per the locked rule.
+    /// temperature/top_p are ONLY allowed when the resolved effort is unset.
     fn resolve_responses_reasoning_effort(request: &LLMRequest) -> Option<String> {
         let codex_effort_override = Self::codex_model_effort_override(&request.model);
         if !super::thinking::ThinkingConfig::model_supports_thinking(&request.model) {
@@ -614,6 +659,13 @@ impl OpenAIAdapter {
         out
     }
 
+    /// c3 (2026-07-16): build the Responses body through the shared
+    /// `agiworkforce-llm` serializer. Desktop-side policy stays here: model
+    /// canonicalization, the FIX-007 max-tokens clamp, and the catalog-driven
+    /// reasoning-effort resolution (thinking capability + codex suffix
+    /// override). Intentional delta vs the legacy arm (oracle-pinned): a
+    /// single text-only user turn is sent as one typed input item instead of
+    /// the compact string form, wire-equivalent per the Responses API.
     pub(crate) fn adapt_responses_via_crate(
         request: &LLMRequest,
     ) -> Result<Value, Box<dyn Error + Send + Sync>> {
@@ -940,6 +992,14 @@ impl OpenAIAdapter {
         Ok((serde_json::json!(processed_parts), total_image_tokens))
     }
 
+    /// Adapt a catalog-selected reasoning request to the Responses API format.
+    ///
+    /// LEGACY TWIN since c3 (2026-07-16), the FALLBACK for request shapes
+    /// [`Self::responses_crate_expressible`] cannot route to the shared crate
+    /// serializer (structured outputs, server tools, per-tool `strict`,
+    /// multimodal input, audio/background/continuity). Slated for the
+    /// founder-gated twin-deletion; pub(crate) so the c2c oracle can call it
+    /// directly as its OLD side.
     pub(crate) fn adapt_to_responses_api(
         &self,
         request: &LLMRequest,
@@ -974,6 +1034,8 @@ impl OpenAIAdapter {
             api_request["instructions"] = serde_json::json!(system);
         }
 
+        // Determine reasoning effort for thinking-capable OpenAI models
+        // (shared with the c3 crate path, see the helper).
         let resolved_reasoning_effort = Self::resolve_responses_reasoning_effort(request);
 
         if let Some(ref effort) = resolved_reasoning_effort {
@@ -1094,6 +1156,15 @@ impl OpenAIAdapter {
         Ok(api_request)
     }
 
+    /// Adapt request to legacy Chat Completions API format.
+    ///
+    /// LEGACY TWIN since c3 (2026-07-16), the FALLBACK for request shapes
+    /// [`Self::chat_crate_expressible`] cannot route to the shared crate
+    /// serializer (structured outputs, server tools, non-auto image detail,
+    /// audio). KNOWN BUGS preserved verbatim here (fixed on the crate path):
+    /// assistant `tool_calls` and tool `tool_call_id` are dropped. Slated for
+    /// the founder-gated twin-deletion; pub(crate) so the c2c oracle can call
+    /// it directly as its OLD side.
     pub(crate) fn adapt_to_chat_completions_api(
         &self,
         request: &LLMRequest,
@@ -1969,6 +2040,11 @@ impl OpenAIAdapter {
     }
 }
 
+/// Convert desktop tool definitions to the shared crate's wire type. Only
+/// `name`/`description`/`input_schema` ever reach a provider payload, the
+/// crate's serializers pick API-bound fields by name, so the executor
+/// metadata stays client-side by construction. Shared by every c2c/c3
+/// crate-serializer switch (ollama, anthropic, ...).
 pub(crate) fn to_crate_tool_definitions(
     tools: &[super::ToolDefinition],
 ) -> Vec<agiworkforce_llm::ToolDefinition> {
@@ -2275,6 +2351,13 @@ impl AnthropicAdapter {
         Ok(body)
     }
 
+    /// LEGACY TWIN, the pre-c3 request builder, now the FALLBACK for request
+    /// shapes [`Self::crate_expressible`] cannot route to the shared crate
+    /// serializer (structured outputs, server tools, documents, explicit
+    /// cache_control, audio/background/continuity). Slated for the
+    /// founder-gated twin-deletion once the crate expresses those shapes; the
+    /// c2c oracle vendors nothing from here, it calls this arm directly as
+    /// its OLD side.
     pub(crate) fn adapt_request_legacy(
         request: &LLMRequest,
     ) -> Result<Value, Box<dyn Error + Send + Sync>> {
@@ -2573,6 +2656,16 @@ impl AnthropicAdapter {
             anthropic_request["stream"] = serde_json::json!(true);
         }
 
+        // ── Extended thinking / adaptive thinking ────────────────────
+        // Anthropic expects: {"type":"enabled","budget_tokens":N} or {"type":"adaptive"}.
+        // The ThinkingParameter::Enabled variant serializes as a bare boolean via
+        // serde(untagged), so we must map it explicitly to Anthropic's format.
+        //
+        // IMPORTANT constraints when thinking is enabled:
+        //   1. `temperature` must be omitted (defaults to 1), any other value
+        //      causes a 400 error from the Anthropic API.
+        //   2. `max_tokens` must be >= budget_tokens + 1, otherwise the API
+        //      rejects the request because there are no tokens left for output.
         let mut thinking_budget_tokens: Option<u32> = None;
         if let Some(thinking) = &request.thinking {
             use super::ThinkingParameter;
@@ -2964,6 +3057,15 @@ impl AnthropicAdapter {
 pub(crate) struct GoogleAdapter;
 
 impl GoogleAdapter {
+    /// c3 switch predicate: can the shared crate serializer express this
+    /// request byte-faithfully? Fallbacks (no silent drops):
+    /// - tool schemas the legacy normalizer would CHANGE (or that require the
+    ///   `parametersJsonSchema` form), the crate passes schemas verbatim;
+    /// - multimodal parts beyond Text/Image/ToolUse/ToolResult (Audio, Video,
+    ///   Document) have no crate `ContentBlock`.
+    ///
+    /// (output_config/response_format/audio are NOT gated: the legacy gemini
+    /// arm never serialized them, so dropping them is exact legacy parity.)
     fn crate_expressible(request: &LLMRequest) -> bool {
         let tools_expressible = request.tools.as_ref().is_none_or(|tools| {
             tools.iter().all(|tool| {
@@ -3022,6 +3124,13 @@ impl GoogleAdapter {
         (budget > 0).then_some(budget)
     }
 
+    /// Convert the desktop request's system + messages into crate wire
+    /// messages for the Gemini dialect. Tool-result turns become "user"
+    /// ToolResult blocks, the crate resolves the real FUNCTION NAME from the
+    /// originating ToolUse (the legacy arm sent role "function" with the CALL
+    /// ID as `functionResponse.name`, which Gemini cannot pair, a real bug
+    /// the switch fixes, pinned in the oracle). Mirroring the legacy arm, a
+    /// multimodal message serializes its parts only.
     fn wire_messages(request: &LLMRequest) -> Vec<agiworkforce_llm::Message> {
         use agiworkforce_llm::{ContentBlock, Message};
         use base64::{engine::general_purpose::STANDARD, Engine as _};
@@ -3090,6 +3199,12 @@ impl GoogleAdapter {
         out
     }
 
+    /// c3 (2026-07-16): build the `generateContent` body through the shared
+    /// `agiworkforce-llm` serializer. Desktop-side policy stays here: the
+    /// catalog-gated thinking-budget resolution. The model is URL-embedded by
+    /// the HTTP layer, not body-carried, so no id mapping happens here
+    /// (mirrors the legacy arm). No FIX-007 clamp either, the legacy gemini
+    /// arm never clamped (legacy-parity; the clamp gap is pre-existing).
     pub(crate) fn adapt_request_via_crate(
         request: &LLMRequest,
     ) -> Result<Value, Box<dyn Error + Send + Sync>> {
@@ -3122,6 +3237,12 @@ impl GoogleAdapter {
 }
 
 impl GoogleAdapter {
+    /// LEGACY TWIN since c3 (2026-07-16), see [`Self::crate_expressible`];
+    /// the FALLBACK for exotic tool schemas and non-crate multimodal parts.
+    /// KNOWN BUG preserved verbatim here (fixed on the crate path): tool
+    /// results are sent as role "function" with the CALL ID in
+    /// `functionResponse.name`. Slated for the founder-gated twin-deletion;
+    /// pub(crate) so the c2c oracle can call it directly as its OLD side.
     pub(crate) fn adapt_request_legacy(
         request: &LLMRequest,
     ) -> Result<Value, Box<dyn Error + Send + Sync>> {

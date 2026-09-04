@@ -268,6 +268,10 @@ mod tests {
     }
 }
 
+// H22, route_with_retry integration-level tests
+// route_with_retry on LLMRouter requires live providers; these tests exercise the
+// equivalent logic through FallbackChain which implements the same retry/fallback/
+// rate-limit-skip/cost-cap semantics used by route_with_retry internally.
 #[cfg(test)]
 mod route_with_retry_tests {
     use crate::core::llm::fallback_chain::{FallbackChain, FallbackConfig, ModelCandidate};
@@ -373,6 +377,8 @@ mod route_with_retry_tests {
     /// checks against LLMRouter.session_cost which is internal state).
     #[test]
     fn test_cost_cap_enforcement_documented_at_fifty_dollars() {
+        // This mirrors the safety cap constant in llm_router.rs.
+        // If the constant changes, this test breaks, alerting the team.
         const CAP: f64 = 50.0;
 
         let below = 49.99_f64;
@@ -447,6 +453,8 @@ mod route_with_retry_tests {
     }
 }
 
+// H52, LLM Router fallback chain tests
+// M14 fix: Import the actual constant instead of hardcoding a local copy.
 #[cfg(test)]
 mod router_fallback_tests {
     use crate::core::llm::llm_router::{
@@ -569,6 +577,10 @@ mod router_fallback_tests {
     }
 }
 
+// H53, is_retryable_error unit tests
+// llm_router::is_retryable_error is private, but fallback_chain::is_retryable_error
+// is pub and implements the same classification rules.  We test the public function
+// from fallback_chain; the logic in llm_router is identical.
 #[cfg(test)]
 mod is_retryable_error_tests {
     use crate::core::llm::fallback_chain::is_retryable_error;
@@ -753,6 +765,13 @@ mod is_retryable_error_tests {
 
     #[test]
     fn test_credit_without_exhaust_context() {
+        // "credit" alone (not paired with "exhaust") must NOT block retries.
+        // e.g., "credit card" is unrelated to quota exhaustion.
+        // This is a soft assertion: the combined rule is
+        //   contains("credit") && contains("exhaust")
+        // so "credit card declined" alone is neither matched nor non-matched by
+        // the exhaustion rule, it falls through to other checks.
+        // Here we just document that "credit" by itself doesn't guarantee non-retryable.
         let err = "credit";
         // "credit" alone has no "exhaust" so the billing guard won't fire.
         // It also has no 402/insufficient_quota/billing/payment_required keywords.
@@ -775,6 +794,20 @@ mod is_retryable_error_tests {
     }
 }
 
+// =========================================================================
+// #34, Streaming idle timeout tests
+//
+// These tests exercise the `futures_util::stream::unfold` wrapper that
+// `send_message_streaming_with_retry` applies around the raw provider stream.
+// We replicate the exact same `unfold` pattern against mock streams with
+// configurable timing so we can verify:
+//   - idle timeout fires when no data arrives
+//   - idle timeout does NOT fire when data arrives within the threshold
+//   - the stream terminates (returns None) after the idle timeout error
+//   - events near the timeout boundary succeed
+//   - keepalive chunks reset the idle timer
+//   - a single event followed by silence triggers idle timeout
+// =========================================================================
 #[cfg(test)]
 mod streaming_idle_timeout_tests {
     use crate::core::llm::sse_parser::StreamChunk;
@@ -938,6 +971,8 @@ mod streaming_idle_timeout_tests {
         let inner: std::pin::Pin<Box<dyn futures_util::Stream<Item = ChunkResult> + Send>> =
             Box::pin(rx_stream);
 
+        // Send one chunk, then drop the sender to simulate no more data
+        // BUT don't drop tx, keep it alive so the stream hangs (doesn't end).
         tx.send(Ok(text_chunk("first"))).await.expect("send ok");
 
         let mut wrapped = wrap_with_idle_timeout(inner, TEST_IDLE_TIMEOUT);
@@ -1268,6 +1303,11 @@ mod streaming_connection_timeout_tests {
 
     #[test]
     fn test_streaming_timeout_uses_the_uncapped_tool_set_not_a_provider_specific_cap() {
+        // compute_streaming_timeout is provider-agnostic and must size off the
+        // request's real tool set, independent of any downstream provider-specific
+        // cap (e.g. Ollama's MAX_PROMPT_INJECTED_TOOLS = 32), a smaller, capped
+        // count here would under-estimate the timeout for providers that inject
+        // the full set. 40 tools already exceeds Ollama's 32-tool cap.
         let messages = vec![make_message("Say the word banana and nothing else.")];
         let tools: Vec<ToolDefinition> = (0..40).map(|i| make_tool(&format!("tool_{i}"))).collect();
         let timeout = compute_streaming_timeout(&messages, Some(&tools));

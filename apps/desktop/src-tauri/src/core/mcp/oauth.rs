@@ -136,6 +136,13 @@ fn persist_token(server_name: &str, token: &McpOAuthToken) -> Result<(), String>
             server_name
         )
     })?;
+    // Category MUST be one of the settings_v2 CHECK values
+    // ('llm','ui','security','window','system'). These four writes previously
+    // passed "mcp_oauth", which is not in that set, so every MCP OAuth token
+    // persist failed with "CHECK constraint failed: settings_v2", the whole
+    // MCP OAuth login path was broken. Encrypted OAuth tokens belong under
+    // 'security' (the same bucket the other upsert_settings_v2_value callers
+    // use); the row key already namespaces them per server.
     upsert_settings_v2_value(
         &conn,
         &db_key_access(server_name),
@@ -467,6 +474,7 @@ impl McpOAuthManager {
             token_type: format!("{:?}", token_result.token_type()),
         };
 
+        // Persist to encrypted DB (sync, no rusqlite::Connection across await)
         persist_token(server_name, &token).map_err(|e| {
             McpError::InvalidConfig(format!(
                 "Failed to persist OAuth token for MCP server '{}': {}",
@@ -706,6 +714,7 @@ fn build_oauth_client(config: &McpOAuthConfig) -> McpResult<BasicClient> {
     Ok(client)
 }
 
+// ── OAuth CIMD, Client-Initiated Metadata Discovery (spec 2025-11-25) ───────
 
 /// Client metadata sent during the OAuth CIMD handshake.
 ///

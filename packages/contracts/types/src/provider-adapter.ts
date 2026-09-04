@@ -141,6 +141,16 @@ export type ThinkingConfig =
       includeThoughts?: boolean;
     }
   | { type: 'disabled' }
+  /**
+   * Adaptive extended thinking: the model chooses its own thinking depth
+   * with no client-specified budget. Anthropic-specific today (newer Claude
+   * models where `anthropicUsesAdaptiveThinking()`-style capability checks
+   * apply, see apps/web's request-processor.ts `buildThinkingConfig`).
+   * `packages/ai/providers/anthropic/src/translate.ts` maps this straight to
+   * Anthropic's `thinking: {type:'adaptive'}` request field. Other adapters
+   * that don't support adaptive thinking should treat this the same as
+   * `{type:'enabled'}` with no explicit budget (their own default applies).
+   */
   | { type: 'adaptive' };
 
 export interface ChatRequest {
@@ -211,6 +221,32 @@ export interface StreamChunkCitation {
   payload: unknown;
 }
 
+/**
+ * Safety-net passthrough for an upstream stream event a provider adapter
+ * does not (yet) have a dedicated translation for. `payload` is the
+ * COMPLETE raw vendor event, untouched.
+ *
+ * Why this exists: the legacy web wire (stream-transform.ts, pre-Wave-2)
+ * reshapes only the Anthropic event shapes it explicitly recognizes;
+ * anything else falls through its `if/else if` chain unchanged and is
+ * serialized straight onto the SSE stream as-is. Byte-stability for the
+ * web v1 route means reproducing that default-passthrough behavior for
+ * event types this migration didn't explicitly account for, rather than
+ * silently dropping them, which
+ * `packages/ai/providers/anthropic/src/stream.ts`'s translator would
+ * otherwise do for any content-block/delta type outside its known set.
+ *
+ * Producer: any adapter's `stream.ts`, for vendor event types it
+ * recognizes as "exists but not (yet) worth a dedicated StreamChunk
+ * variant", currently `packages/ai/providers/anthropic/src/stream.ts` for
+ * `content_block_start` block types outside {text, thinking, tool_use,
+ * server_tool_use, web_search_tool_result, code_execution_tool_result,
+ * web_fetch_tool_result}.
+ * Consumer: `OpenAIWireAssembler` (web v1 route only, matching its
+ * `citationsMode`-style opt-in), which re-serializes `payload` verbatim.
+ * Surfaces without a legacy raw-passthrough wire to match should ignore
+ * this chunk type.
+ */
 export interface StreamChunkVendorRaw {
   type: 'vendor-raw';
   payload: unknown;
@@ -248,6 +284,20 @@ export interface StreamChunkError {
 
 export interface StreamChunkStop {
   type: 'stop';
+  /**
+   * `'refusal'` is the first-class safety-stop member (mirrors the agent
+   * event envelope's `AgentEventStopReason::Refusal`): the provider's safety
+   * layer stopped the response. It is the canonical target for BOTH
+   * Anthropic's `stop_reason: 'refusal'` and OpenAI's wire
+   * `finish_reason: 'content_filter'`, one honest concept, not two
+   * vendor-specific ones, and distinct from `'error'` (transport/provider
+   * failure) and from normal completion.
+   *
+   * `'pause_turn'` is NOT a completion: the provider suspended a still-running
+   * turn (Anthropic's `stop_reason: 'pause_turn'`, emitted for long-running
+   * server tools) and the turn is resumable by sending the response back.
+   * Callers must not report it as a finished answer.
+   */
   reason:
     | 'end_turn'
     | 'max_tokens'

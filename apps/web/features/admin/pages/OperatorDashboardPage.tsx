@@ -120,6 +120,13 @@ export function OperatorDashboardPage() {
     return parsed;
   }
 
+  /**
+   * Fleet-wide reset is previewed first and then confirmed by typing the
+   * phrase, because it rewrites billing state for every active account and
+   * re-running it does not undo it. The preview is what makes the typed
+   * confirmation meaningful, the operator sees the real number before
+   * committing to it.
+   */
   async function resetEveryone() {
     setBulkBusy(true);
     setNotice(null);

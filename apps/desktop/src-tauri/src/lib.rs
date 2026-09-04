@@ -59,6 +59,9 @@ pub struct AppDirs {
     pub data_dir: PathBuf,
 }
 
+/// Returns `true` when this process already holds macOS Accessibility permission.
+/// Uses `AXIsProcessTrusted()` which **never prompts**, it only reads the TCC database.
+/// Call this before any API that would trigger the "control this computer" dialog.
 #[cfg(target_os = "macos")]
 #[allow(unsafe_code)]
 fn accessibility_is_trusted() -> bool {
@@ -228,12 +231,24 @@ pub fn run() {
         builder = builder.plugin(tauri_plugin_updater::Builder::new().build());
     }
 
+    // Embedded WebDriver server for E2E testing (WebdriverIO Tauri service).
+    // debug_assertions is a real rustc cfg (unlike in Cargo.toml dependency
+    // selectors, which don't support it), this never registers/starts in release.
     #[cfg(debug_assertions)]
     {
         builder = builder.plugin(tauri_plugin_wdio_webdriver::init());
+        // Companion plugin adding browser.tauri.execute()/mock() to the same
+        // @wdio/tauri-service harness, same debug-only rationale as above.
         builder = builder.plugin(tauri_plugin_wdio::init());
     }
 
+    // DES-C15: give artifact previews their own origin (`artifact://localhost`,
+    // `http://artifact.localhost` on Windows) serving the SAME renderer web
+    // deploys. A same-document `srcdoc` preview inherits this app's CSP.
+    // `script-src 'self' 'wasm-unsafe-eval'`, so interactive HTML and React
+    // artifacts rendered inert inside the packaged binary. A separate origin does
+    // not inherit that policy. Registered on the Builder (not in `setup`) because
+    // Tauri wires URI scheme handlers when the webview is created.
     builder = crate::ui::artifact_sandbox::register_artifact_sandbox_protocol(builder);
 
     builder
@@ -308,6 +323,10 @@ pub fn run() {
             );
             app.manage(startup_recovery.clone());
 
+            // B1: BYOK encrypted key vault (tauri-plugin-stronghold v2.3.1, MIT/Apache-2.0).
+            // Salt persisted to $APPDATA/stronghold.salt; snapshot to $APPDATA/keys.stronghold.
+            // Password-hash = Argon2id (32-byte, persistent salt via kdf feature).
+            // Trust boundary: BYOK only, never routes Local keys to Cloud.
             {
                 let salt_path = app_data_dir.join("stronghold.salt");
                 if let Err(e) = app.handle().plugin(
@@ -759,6 +778,12 @@ pub fn run() {
                 }
             }
 
+            // Conversation summarizer state for automatic memory extraction.
+            // Its MemoryStore lives in the encrypted main database, so it must
+            // open through MainDatabaseAccess, a plain Connection::open (what
+            // ConversationSummarizerState::new used) opened the SQLCipher file
+            // unkeyed and every scheduled summarization run failed with "file
+            // is not a database".
             {
                 use crate::sys::commands::memory::ConversationSummarizerState;
                 match main_database_access.open_connection() {
@@ -910,6 +935,9 @@ pub fn run() {
                     })
                 }
             };
+            // Register default memory maintenance jobs (daily summarization + weekly decay).
+            // Idempotent, skips if jobs already exist (including jobs just hydrated from disk),
+            // so a paused/edited default job is left as the user set it rather than recreated.
             scheduler_state.register_default_memory_jobs();
             // Start the background polling loop so scheduled jobs fire automatically.
             // The loop polls every 30 seconds and dispatches any jobs whose next_run
@@ -2778,9 +2806,16 @@ pub fn run() {
             // Stripe payment method commands
             // ============================================================
 
+            // ============================================================
+            // FIX-023 (Sprint 5): commands previously defined with
+            // #[tauri::command] but missing from this list, found by
+            // apps/desktop/check-wiring.sh. Wiring them up so the
+            // frontend can actually call them when the matching UI lands.
+            // ============================================================
 
             // Error recovery (sys/error/commands.rs)
 
+            // Billing, payment methods + invoice email + setup intent
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

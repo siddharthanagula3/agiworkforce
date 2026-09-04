@@ -1391,6 +1391,13 @@ const GROUP_PATCH_PATHS = new Set(['members', 'displayname', 'externalid']);
 
 const MEMBER_FILTER_VALUE = /value\s+eq\s+(?:"([^"]+)"|'([^']+)')/giu;
 
+/**
+ * RFC 7644 §3.5.2.2: `{"op":"remove","path":"members[value eq \"id\"]"}` with no
+ * `value` body removes THAT member. Okta, Entra ID and OneLogin all deprovision
+ * a single user this way, so treating the filter as absent, which
+ * normalizePatchPath does, since it strips `[...]`, turns one removal into
+ * "delete every member of this group".
+ */
 export function parseMemberFilterIds(path: string | undefined): string[] {
   if (!path) return [];
   const bracket = path.match(/\[([^\]]*)\]/u);

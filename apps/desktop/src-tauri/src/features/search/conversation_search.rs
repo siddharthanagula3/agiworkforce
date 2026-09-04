@@ -1,3 +1,16 @@
+//! Agent-callable conversation search tools.
+//!
+//! Provides two high-level operations modeled after Claude's built-in
+//! `conversation_search` and `recent_chats` tools:
+//!
+//! - **`search_past_conversations`**, FTS5 keyword search across all chat
+//!   messages, returning ranked results with conversation context.
+//! - **`get_recent_conversations`**, Retrieve the N most recently updated
+//!   conversations with title, timestamp, and message count.
+//!
+//! Both functions operate on the same SQLite database used by the chat module
+//! and are designed to be called from the agent tool executor or via Tauri
+//! commands from the frontend.
 
 use rusqlite::Connection;
 use serde::{Deserialize, Serialize};

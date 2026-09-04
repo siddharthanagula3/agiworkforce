@@ -81,6 +81,14 @@ function subscribe(
   });
 }
 
+/**
+ * A push service hands out one endpoint per browser profile, so after a second
+ * account signs in here the browser still holds the first account's
+ * registration. The server refuses to move a registration between accounts, so
+ * the held one is dropped and a fresh endpoint is taken out for this account.
+ * without that, the second person to use a shared browser could never turn
+ * notifications on at all.
+ */
 async function registerSubscription(
   registration: ServiceWorkerRegistration,
   publicKey: string,

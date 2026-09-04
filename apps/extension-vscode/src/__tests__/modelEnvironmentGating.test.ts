@@ -1,3 +1,16 @@
+/**
+ * modelEnvironmentGating.test.ts, P3 Phase A: environment-gating in the model picker.
+ *
+ * Three test suites:
+ *   1. Pure unit, evaluateModelEnvironment + environmentAvailability (no mock needed).
+ *   2. Real catalog, every model from getCoreManualModelOptions() appears in the
+ *      picker output (safety property: current catalog has no flagged models).
+ *   3. Synthetic flagged model, a model with requiresEnvironment:'e2b' is filtered
+ *      out of buildGroupedQuickPickItems() (gating property).
+ *
+ * The flagged model lives ONLY in the test mock, models.json is NOT modified.
+ */
+
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { evaluateModelEnvironment } from '@agiworkforce/types';
 import { environmentAvailability } from '../features/model-picker/modelConstants';
@@ -46,6 +59,8 @@ describe('evaluateModelEnvironment, logic', () => {
     expect(result.selectable).toBe(false);
   });
 });
+
+// ─── Suite 2: Real catalog, safety property ──────────────────────────────────
 
 describe('buildGroupedQuickPickItems, real catalog, no flagged models', () => {
   it('every LIVE model appears in the picker output; non-live models never do', async () => {

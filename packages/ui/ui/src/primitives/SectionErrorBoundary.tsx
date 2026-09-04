@@ -5,6 +5,21 @@ import { AlertCircle, RefreshCw } from 'lucide-react';
 import { cn } from '../cn';
 import { Button } from './Button';
 
+/**
+ * Drift resolution: dev-mode detection differs by bundler, web uses
+ * `process.env.NODE_ENV === 'development'` (correct for Next.js, which inlines
+ * NODE_ENV at build time); desktop uses `import.meta.env.DEV` (correct for
+ * Vite/Tauri). Neither is "wrong" for its own runtime, but a shared package
+ * can't fork per-bundler without an abstraction, and `import.meta.env` has no
+ * ambient type here (no `vite/client` types in packages/ui/ui), it would not
+ * compile standalone. Using web's `process.env.NODE_ENV` check: `@types/node`
+ * is available via the workspace root, and bundlers that define
+ * `process.env.NODE_ENV` (webpack, Next.js, and Vite itself via its default
+ * `define` shim) all satisfy it, whereas the reverse isn't true for consumers
+ * without Vite. If a future consumer's bundler doesn't inline `process.env`,
+ * this should become an injected `isDev` prop/context rather than re-forking
+ * per bundler.
+ */
 export interface SectionErrorBoundaryProps {
   children: ReactNode;
   sectionName?: string;

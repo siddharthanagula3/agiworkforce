@@ -74,12 +74,31 @@ async function announceAgentRunEvent(notice: AgentRunNotice): Promise<void> {
   }
 }
 
+/**
+ * Terminal states worth telling the user about. `cancelled` is the user's own
+ * doing, schedule notifications skip it for the same reason, and `archived`
+ * is bookkeeping.
+ */
 const NOTIFIED_TERMINAL_EVENTS: Partial<Record<AgentTaskState, 'completed' | 'failed'>> = {
   ready_for_review: 'completed',
   completed: 'completed',
   failed: 'failed',
 };
 
+/**
+ * Decides, from one statement's own before/after view of `cloud_agent_runs`,
+ * whether this write is the one that carried a run into a terminal state.
+ *
+ * Two writers move a run's state: the event journal
+ * ({@link appendCloudAgentEventsWithinTransaction}, which derives the state from
+ * a `task-state-changed` envelope) and {@link transitionCloudAgentRun}. The
+ * journal always writes first on the workflow path, the tool loop emits
+ * `ready_for_review`/`failed` before the workflow settles, so a decision made
+ * anywhere downstream of it can only ever see an already-terminal run. Both
+ * writers therefore read the pre-update row in the same locked statement and
+ * ask here; whichever one actually performs the transition owes the notice, and
+ * the other sees a terminal `previousState` and stays silent.
+ */
 function terminalNoticeFor(input: {
   nextState: AgentTaskState | null | undefined;
   previousState: string | null;
@@ -538,6 +557,18 @@ export async function appendCloudAgentEvent(
   });
 }
 
+/**
+ * Journal a whole batch of envelopes in ONE transaction.
+ *
+ * The streaming paths emit a `text-delta` envelope per provider SSE line, and
+ * journalling each one on its own cost a full RLS transaction, connect,
+ * `BEGIN; SET LOCAL ROLE app_rls`, `set_config`, INSERT, locked UPDATE, COMMIT,
+ * release, roughly six round trips per token, on the critical path of the
+ * stream, holding one of the pool's clients throughout. Callers coalesce the
+ * deltas (see `createCloudAgentEventJournal`) and land them here as a single
+ * multi-row INSERT plus one run-row update, which is what keeps a long answer
+ * from issuing thousands of serialized transactions against a pool of tens.
+ */
 export async function appendCloudAgentEvents(
   db: DatabaseAdapter,
   input: { userId: string; runId: string; envelopes: readonly AgentEventEnvelope[] },
@@ -630,6 +661,8 @@ async function appendCloudAgentEventsWithinTransaction(
     (highest, envelope) => Math.max(highest, envelope.sequence),
     0,
   );
+  // Only a `task-state-changed` envelope that actually landed may move the run,
+  // and when several are batched the last one wins, the batch is ordered.
   const stateEnvelope = [...input.envelopes]
     .reverse()
     .find(
@@ -687,6 +720,10 @@ export async function transitionCloudAgentRun(
   db: DatabaseAdapter,
   input: { userId: string; runId: string; state: AgentTaskState },
 ): Promise<CloudAgentRun> {
+  // The `previous` CTE locks the row and reads its pre-update snapshot, so a
+  // repeated transition into the same terminal state, and, on the workflow
+  // path, a settle that follows a journal write that already moved the run.
+  // notifies at most once.
   const rows = await db.query<CloudAgentRunRow>(
     `with previous as (
         select id, state from public.cloud_agent_runs

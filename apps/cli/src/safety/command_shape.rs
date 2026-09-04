@@ -1,3 +1,26 @@
+//! Canonical view of the programs a command string will actually run.
+//!
+//! An authorization filter has to compare against what the shell executes, not
+//! the spelling the caller chose. Quoting (`'rm'`), grouping (`(rm ...)`),
+//! keywords (`if true; then rm ...; fi`), wrappers (`env rm ...`, `sh -c '...'`,
+//! `xargs rm`) and substitutions (`$(which rm)`) all reach the same binary while
+//! defeating a literal match on the command string.
+//!
+//! Units come out of the walk in two grades. A *committed* unit is one this
+//! module can show the string runs; it decides both the allow verdict and the
+//! fail-closed check. A *speculative* unit is an over-approximation emitted
+//! wherever a wrapper's option grammar is only partly known (`strace -Z val rm
+//! -rf x`, `su -c 'rm -rf x'`): it may convict against a deny rule but never
+//! clears a call, so a gap in the wrapper tables cannot open a hole.
+//!
+//! A unit that runs code this walk cannot read, a shell taking its script from
+//! stdin, a heredoc or a file, `source`, an interpreter handed inline code, is
+//! reported unresolvable so callers fail closed. Project runners (`make`,
+//! `npm run`), version-control front ends whose config carries commands (`git`
+//! aliases) and tools whose data can turn into code on some platforms (GNU
+//! `sed`'s `e`) hide their work just as thoroughly but stay resolvable on
+//! purpose: refusing every one of them would leave no usable filter, so a
+//! command rule cannot constrain what those spawn.
 
 use std::collections::HashSet;
 
@@ -15,6 +38,10 @@ const SHELL_KEYWORDS: &[&str] = &[
 /// Headers whose remaining words are values, not a command to run.
 const WORD_LIST_HEADERS: &[&str] = &["case", "for", "select"];
 
+/// Programs that take a script. Only a `-c` operand is text this walk can read;
+/// every other form is hidden. The non-Bourne entries (`csh`, `fish`, `pwsh`,
+/// `cmd`) are here because they run the same `rm` with the same spelling, their
+/// payload is walked as shell text, an over-approximation that can only convict.
 const SHELLS: &[&str] = &[
     "ash",
     "bash",
@@ -361,6 +388,10 @@ fn canonical_program(program: &str) -> String {
     name.to_string()
 }
 
+/// The script a shell runs. Anything other than a `-c` operand, a script file,
+/// stdin, a heredoc, or an option table gap that makes the operand ambiguous.
+/// yields no payload and marks the invocation hidden, because the shell will run
+/// a program this walk never sees.
 fn shell_plan(args: &[String]) -> ExecutionPlan {
     let mut index = 0;
     while index < args.len() {
@@ -826,6 +857,9 @@ fn join_program(program: &str, rest: &[String]) -> String {
         .join(" ")
 }
 
+/// Drop everything the shell consumes before the program name, keywords, brace
+/// and test delimiters, environment assignments and leading redirections, and
+/// return the simple command's words, program first.
 fn command_words(slice: &[Token]) -> Option<Vec<String>> {
     let mut index = 0;
     while index < slice.len() {
@@ -868,6 +902,10 @@ fn command_words(slice: &[Token]) -> Option<Vec<String>> {
     (!words.is_empty()).then_some(words)
 }
 
+/// Command lines smuggled in as the value of an assignment, an environment
+/// variable a program hands to a shell, or a `…Command=` setting such as
+/// `ssh -o ProxyCommand=…`. Emitted as guesses only, so a variable that happens
+/// to hold a program name cannot change what an allowlist covers.
 fn command_valued_env_payloads(slice: &[Token]) -> Vec<String> {
     slice
         .iter()

@@ -1,3 +1,22 @@
+/**
+ * @agiworkforce/providers-qwen
+ *
+ * Qwen (Alibaba) provider adapter implementing `ProviderAdapter` from
+ * `@agiworkforce/types`. Defaults to Alibaba DashScope's OpenAI-COMPATIBLE
+ * mode (`https://dashscope.aliyuncs.com/compatible-mode/v1`) rather than the
+ * DashScope native generation API, see `./base-url.ts` for why. The compat
+ * layer registers the compatible-mode URL as
+ * `endpointClass: 'modelstudio-native'` (see
+ * `openai-responses-payload-policy.ts`'s `MODELSTUDIO_NATIVE_BASE_URLS`),
+ * which enables native streaming-usage compat.
+ *
+ * MuleRouter was removed as a gateway on 2026-07-27; Qwen now reaches us
+ * either direct via DashScope or through OpenRouter. `baseUrl` overrides
+ * stay allowlisted to DashScope hosts and loopback only.
+ *
+ * @packageDocumentation
+ */
+
 import OpenAI from 'openai';
 import type {
   AuthMethod,

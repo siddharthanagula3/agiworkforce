@@ -1,3 +1,27 @@
+/**
+ * What a Code session can run in: a coding harness, or a plain image.
+ *
+ * A harness is an E2B template with a coding agent's CLI already installed.
+ * you cannot code in a browser without a sandbox, so the sandbox is where the
+ * agent lives. E2B publishes one per agent and documents them under
+ * https://docs.e2b.dev/agents.
+ *
+ * The harnesses are declared rather than discovered because E2B has no endpoint
+ * that lists public templates: `GET /templates` returns only the team's own,
+ * and `/templates/aliases/{alias}` answers 403 for a public name. Spawning one
+ * by name works regardless, which is how they are reachable at all.
+ *
+ * Every entry below was verified by spawning it on 2026-08-31 and locating the
+ * binary inside; the paths in `agentCommand` are the observed ones, not
+ * documentation's word. Do not add an entry that has not been spawned.
+ *
+ * The team's own templates are read live on top, so a template published in the
+ * E2B console appears without a release. The merged list is also the allowlist:
+ * a client may only name something it contains.
+ *
+ * Fails soft, unlike the executor: if the live read fails the harnesses still
+ * stand, and a session with no choice uses the SDK's default image.
+ */
 import 'server-only';
 
 import { z } from 'zod';
@@ -225,6 +249,7 @@ async function fetchTemplates(apiKey: string): Promise<CloudCodeRuntime[]> {
     .sort((a, b) => a.name.localeCompare(b.name));
 }
 
+/** Team templates win on a name collision, their own build is the one they mean. */
 function merge(teamTemplates: readonly CloudCodeRuntime[]): CloudCodeRuntime[] {
   const claimed = new Set(teamTemplates.map((runtime) => runtime.id));
   return [...CODING_HARNESSES.filter((harness) => !claimed.has(harness.id)), ...teamTemplates];

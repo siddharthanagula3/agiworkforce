@@ -42,6 +42,14 @@ function stripCodeSeparators(code: string): string {
   return code.replace(/[ -]/g, '');
 }
 
+/**
+ * Canonicalize a scanned or pasted payload for the pairing-code validator in
+ * `services/companion.ts`, which the QR scanner gates every camera read and
+ * every manual submit on. That validator only understands `agiw:<code>` and
+ * `agiw:<code>:<64 hex>`, so the `agiw3:` scheme is folded down to the shape it
+ * recognises, otherwise the scanner would silently ignore Desktop's own QR.
+ * Only `parsePairingPayload` reads the version, and it reads the raw input.
+ */
 export function normalizePairingInput(raw: string): string {
   const trimmed = raw.trim();
 

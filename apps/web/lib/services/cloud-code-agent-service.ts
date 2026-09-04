@@ -46,8 +46,33 @@ const UNKNOWN_TOOL_NAME = 'unknown';
 
 const MAX_STEP_OUTPUT_LENGTH = 100_000;
 
+/**
+ * The wall-clock ceiling the platform enforces on the two routes that reach this
+ * service: `export const maxDuration = 300` in
+ * `app/api/code/sessions/[sessionId]/agent/route.ts` and in that route's
+ * `approvals/route.ts`. Next.js needs `maxDuration` to be a literal, so it
+ * cannot import this, the three values are kept in step by hand.
+ */
 const CLOUD_CODE_ROUTE_FUNCTION_LIMIT_MS = 300_000;
 
+/**
+ * What an agent turn is actually allowed to spend, and why it is not
+ * {@link CLOUD_CODE_TURN_BUDGET_MS}.
+ *
+ * `cloud-code-agent-loop.ts` defaults to that 600 s standalone budget, which is
+ * twice the platform ceiling above. Under that default the loop's own `timeout`
+ * guard is unreachable dead code: the function is killed at 300 s, and a
+ * platform kill runs no `finally`, no `catch`, nothing. The turn row is left at
+ * `state = 'running'` with a null `stop_reason`, the managed-usage reservation
+ * is never finalised, and the E2B sandbox is never paused or disposed, it just
+ * keeps costing money until something else reaps it.
+ *
+ * The ceiling is the one budget we do not control, so the loop budget moves
+ * under it and keeps the same teardown reserve the chat tool loop keeps for its
+ * own unwind (settle the reservation, write the terminal turn row, pause the
+ * sandbox). The loop now reaches its `timeout` return with time to spare, which
+ * is what makes every line of that unwind path run at all.
+ */
 export const CLOUD_CODE_AGENT_TURN_BUDGET_MS = Math.min(
   CLOUD_CODE_TURN_BUDGET_MS,
   CLOUD_CODE_ROUTE_FUNCTION_LIMIT_MS - FUNCTION_TEARDOWN_RESERVE_MS,
@@ -204,6 +229,20 @@ export interface CloudCodeAgentTurnRecord {
   errorMessage?: string;
 }
 
+/**
+ * Map a loop stop reason onto one of the five `cloud_code_agent_turns.state`
+ * values.
+ *
+ * `timeout`, `max_steps` and `denied` used to fall through a `default` arm that
+ * returned `completed`, so a turn the clock cut off was persisted as
+ * `state = 'completed', stop_reason = 'timeout'`, a contradiction, and one that
+ * made an abandoned turn indistinguishable from a finished one to every query
+ * that filters on `state`. None of the three reached a conclusion, and the
+ * schema has no "incomplete" state, so `failed` is the honest answer.
+ *
+ * There is deliberately no `default`: a stop reason added later must be mapped
+ * here, and the unreachable trailing return is `failed`, never `completed`.
+ */
 function turnStateFor(stopReason: CloudCodeAgentResult['stopReason']): string {
   switch (stopReason) {
     case 'done':
@@ -445,6 +484,11 @@ async function runClaimedAgentTurn(
   const state = turnStateFor(result.stopReason);
   const cumulativeSteps = initialStepIndex + result.stepsUsed;
 
+  // The terminal row and the settlement are two writes that must both happen.
+  // The row used to be written first and un-guarded, so a failure there returned
+  // before the reservation was ever finalised, the turn ended holding a live
+  // reservation and nobody knew. Record the failure, settle regardless, and only
+  // then answer for the row.
   let terminalRowWritten = true;
   try {
     await db.query(

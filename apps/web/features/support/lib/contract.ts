@@ -157,6 +157,13 @@ export type SupportHandoffView =
       mailtoHref: string | null;
     }
   | { kind: 'closed'; referenceId: string | null; headline: string; detail: string }
+  /**
+   * The client-side deadline elapsed and the server had not moved the session
+   * on. The widget stops rendering a waiting state here NO MATTER WHAT the poll
+   * says, this is the third of the three independent enforcers (client
+   * deadline, server-on-poll transition, cron sweep) and the only one that
+   * still works when the server is wedged.
+   */
   | { kind: 'timed_out'; referenceId: string | null; headline: string; detail: string }
   | { kind: 'failed'; message: string };
 

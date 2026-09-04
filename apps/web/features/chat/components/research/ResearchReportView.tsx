@@ -1,5 +1,21 @@
 'use client';
 
+/**
+ * ResearchReportView (CAP-045 slice 3)
+ *
+ * A persisted Deep Research report rendered as a durable artifact, mirroring
+ * the ArtifactsPanel layout ResearchPanel already follows: header with title
+ * and actions, scrollable body, source list at the foot.
+ *
+ * Everything shown comes from the stored `ResearchReport`. Sections the report
+ * does not have (no key findings, no citations) are simply absent, none of
+ * them are synthesized here.
+ *
+ * Export reuses the EXISTING document-export-service (the same one
+ * EnhancedExportDialog calls). No new export machinery: markdown, PDF, and
+ * DOCX are whatever that service already produces.
+ */
+
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Download,
@@ -246,6 +262,12 @@ interface ResearchReportViewProps {
   onClose?: () => void;
   /** Injected in tests; defaults to the shared document-export-service. */
   exportService?: Pick<typeof documentExportService, 'exportDocument'>;
+  /**
+   * Host-injected hand-off to the artifacts surface. Supplied by hosts that
+   * HAVE one (the chat panel); left undefined elsewhere (the standalone report
+   * gallery), where no artifacts panel exists to receive the result, an action
+   * that cannot work must not be offered.
+   */
   onCreateArtifact?: (artifact: ReportArtifactInput) => void;
   /**
    * Host-injected send for a grounded follow-up question. Supplied by hosts

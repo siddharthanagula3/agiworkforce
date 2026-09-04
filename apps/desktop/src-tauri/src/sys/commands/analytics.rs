@@ -191,6 +191,10 @@ pub async fn analytics_get_usage_stats(
         )
         .unwrap_or(0);
 
+    // Bug #82 fix: The old query compared session `id` (which is unique per
+    // session) to itself, so it would always return 0. For a single-user
+    // desktop app we check whether any sessions exist before today, if not,
+    // this is a new user today.
     let has_prior_sessions: bool = conn
         .query_row(
             "SELECT EXISTS(SELECT 1 FROM user_sessions WHERE started_at < ?1)",

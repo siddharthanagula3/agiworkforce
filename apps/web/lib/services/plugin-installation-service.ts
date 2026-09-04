@@ -135,6 +135,17 @@ export function listEnabledPluginIdsForUser(userId: string): Promise<Set<string>
   return listEnabledPluginIds(getNeonDb(), userId);
 }
 
+/**
+ * Real install counts, grouped by plugin, for the public catalogue.
+ *
+ * `db` must be the privileged connection (`getNeonDb()`, never a
+ * `.withUser()`-scoped one), `plugin_installations` has FORCE ROW LEVEL
+ * SECURITY, so a caller-scoped connection would only ever see its own row and
+ * every count would collapse to 0 or 1 (the same shape of bug
+ * `resolveOrganizationEntitlementPlan` in `org-entitlements.ts` was fixed for).
+ * The query selects only `plugin_id` and a count, never `user_id`, so who
+ * installed a plugin is never observable from the result.
+ */
 export async function countPluginInstallations(db: DatabaseAdapter): Promise<Map<string, number>> {
   const rows = await db.query<{ plugin_id: string; install_count: string | number }>(
     `select plugin_id, count(*) as install_count

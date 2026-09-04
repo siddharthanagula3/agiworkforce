@@ -45,6 +45,11 @@ export interface WorkspacePostureResult {
 
 export const WORKSPACE_POSTURE_QUERY_KEY = ['workspace', 'posture'] as const;
 
+/**
+ * `null` means the caller is not an owner or admin of an entitled workspace.
+ * a 403, which is a legitimate state for a personal account or a plain member,
+ * not an error worth a red banner.
+ */
 export function useWorkspacePosture(): UseQueryResult<WorkspacePostureResult | null, Error> {
   return useQuery<WorkspacePostureResult | null, Error>({
     queryKey: WORKSPACE_POSTURE_QUERY_KEY,

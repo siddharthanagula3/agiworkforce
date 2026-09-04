@@ -1,3 +1,22 @@
+//! `message_queue`: Rust port of the TypeScript `messageQueueManager`.
+//!
+//! Provides a priority-lane (`now > next > later`), FIFO-within-lane send
+//! pipeline shared by the CLI's REPL and SDK paths. The TypeScript surfaces
+//! (desktop, web, mobile, Chrome ext, VS Code ext) use the canonical
+//! implementation in `packages/client/client-runtime/src/queue/messageQueueManager.ts`;
+//! this module is the Rust analog so the CLI participates in the same
+//! send-pipeline contract.
+//!
+//! Design invariants:
+//!  - Three lanes: `Now`, `Next`, `Later`, totally ordered by priority class.
+//!  - FIFO within a lane (oldest enqueue wins).
+//!  - Per-lane cap of 100 (matches TS `LANE_CAP`); over-cap enqueue returns
+//!    `Err(QueueError::Full)`.
+//!  - Atomic compare-and-swap dequeue via `dequeue_if(expected_id)`.
+//!  - Mutex-guarded internal storage so multiple async tasks can share one
+//!    queue safely.
+//!
+//! Reference: `tasks/research/deep/u2-utils-direct-h-n.md` §2.5.
 
 use std::sync::{Arc, Mutex};
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -23,15 +42,19 @@ impl QueuePriority {
     }
 }
 
+/// Per-lane cap, matches `LANE_CAP` in the TypeScript implementation.
 pub const LANE_CAP: usize = 100;
 
 /// Discriminator for the input mode of a queued command.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PromptInputMode {
+    /// User-typed text, round-trips through `pop_all_editable`.
     Prompt,
+    /// Shell-like command, also editable.
     Bash,
     /// System notification (subagent ticks, scheduled tasks). Not editable.
     TaskNotification,
+    /// Channel message, visible but not editable.
     ChannelMessage,
 }
 
@@ -57,7 +80,11 @@ pub struct QueuedCommand {
 /// Errors the queue can return to a caller.
 #[derive(Debug)]
 pub enum QueueError {
+    /// The lane is at `LANE_CAP` (or the configured override), caller must
+    /// drop, retry later, or surface backpressure.
     Full { lane: QueuePriority, cap: usize },
+    /// Atomic compare-and-swap dequeue lost the race, another consumer
+    /// already removed the command. Caller should refresh its snapshot.
     Race { id: String },
 }
 
@@ -78,12 +105,17 @@ impl std::fmt::Display for QueueError {
 
 impl std::error::Error for QueueError {}
 
+/// Result of `pop_all_editable`, combined input text + cursor offset.
+/// Image / pasted-content reconstruction is intentionally omitted from the
+/// CLI port (the TUI does not currently embed images in the prompt buffer).
 #[derive(Debug, Clone)]
 pub struct PopAllEditableResult {
     pub text: String,
     pub cursor_offset: usize,
 }
 
+/// Per-surface message queue, wrap with `Arc<MessageQueue>` to share between
+/// async tasks.
 pub struct MessageQueue {
     inner: Mutex<Inner>,
     lane_cap: usize,
@@ -118,6 +150,7 @@ impl MessageQueue {
         inner.items.iter().filter(|c| c.priority == lane).count()
     }
 
+    /// Snapshot of the queue contents (clone, callers cannot mutate).
     pub fn snapshot(&self) -> Vec<QueuedCommand> {
         self.inner
             .lock()
@@ -446,6 +479,9 @@ mod tests {
 
     #[test]
     fn property_test_1000_random_messages_preserves_order() {
+        // FIFO-within-priority + total order across priority classes.
+        // The pseudo-random sequence is deterministic, uses xorshift over a
+        // fixed seed so the test is reproducible.
         let q = MessageQueue::with_cap(2_000);
         let mut seed: u64 = 0xDEAD_BEEF_CAFE_BABE;
         let lanes = [

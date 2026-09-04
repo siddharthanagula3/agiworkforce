@@ -1,3 +1,10 @@
+/**
+ * Workflow types: re-exported from the shared package.
+ *
+ * Desktop-specific React Flow types are kept here; core workflow
+ * contracts live in @agiworkforce/types.
+ */
+
 export type {
   WorkflowDefinition,
   WorkflowNode,

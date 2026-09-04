@@ -2,6 +2,24 @@ import 'server-only';
 
 import { logger } from '@/lib/logger';
 
+/**
+ * Explicit connection-pool bounds for the two module-level Neon pools.
+ *
+ * Left unset, `pg-pool` applies `max: 10` per pool and no statement or query
+ * timeout at all. Ten is the entire per-instance budget on a runtime that packs
+ * many concurrent invocations onto one instance, and with no timeout a single
+ * pathological query pins one of the ten slots for as long as it wants, the
+ * app then serves roughly one hang in ten with a healthy-looking database,
+ * because the queue is inside the function, not in Postgres.
+ *
+ * The RLS pool carries all user traffic and every streamed turn, so it gets the
+ * larger budget. The service pool carries webhooks, crons and the account gate.
+ *
+ * Sized for Neon's POOLED (`-pooler`) endpoint. Against the direct endpoint the
+ * ceiling is the compute size's `max_connections` shared across every warm
+ * instance, and these numbers are too generous, see
+ * {@link assertPooledDatabaseEndpoint}.
+ */
 const RLS_POOL_SIZE = 20;
 const SERVICE_POOL_SIZE = 10;
 
@@ -19,6 +37,12 @@ const WEBHOOK_POOL_SIZE = 4;
  */
 const STATEMENT_TIMEOUT_MS = 15_000;
 
+/**
+ * Client-side backstop for the case Postgres never answers at all, a dropped
+ * connection mid-query leaves `statement_timeout` with nothing to fire against.
+ * Must exceed the statement timeout so the server-side cancel wins when both
+ * could apply, and the error names the real cause.
+ */
 const QUERY_TIMEOUT_MS = 20_000;
 
 const CONNECTION_TIMEOUT_MS = 10_000;

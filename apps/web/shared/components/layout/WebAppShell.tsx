@@ -1,5 +1,25 @@
 'use client';
 
+/**
+ * WebAppShell · persistent app-shell chrome (sidebar + content area) for
+ * secondary authenticated web surfaces that are NOT the chat page, currently
+ * the Projects hub (`/chat/projects`) and project detail (`/chat/projects/[id]`).
+ *
+ * Why this exists: those routes previously rendered bare `<main>` pages with a
+ * back-arrow and no sidebar, so navigating to Projects dropped the user out of
+ * the product shell. This wrapper mounts the same shared `@agiworkforce/ui`
+ * <Sidebar> the live chat page uses (recents, projects, new-chat, search,
+ * brand wordmark, account footer) so those routes stay inside the shell.
+ *
+ * The chat page (`WebChatPage`) keeps its own richer Sidebar wiring (streaming
+ * state, dialogs, etc.) and is intentionally NOT refactored onto this shell.
+ * this is the light-weight, navigation-focused variant for the project surfaces.
+ *
+ * Project data is loaded through the account-scoped managed-cloud session.
+ * Signed-out visits never fire authenticated project requests and never reuse
+ * project metadata from the previous Clerk account.
+ */
+
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { useClerk } from '@clerk/nextjs';
@@ -216,6 +236,10 @@ export function WebAppShell({ children }: WebAppShellProps) {
   const handleProjectPin = useCallback((projectId: string) => toggleStar(projectId), [toggleStar]);
   const handleProjectDelete = useCallback(
     async (projectId: string) => {
+      // The shared <Sidebar> invokes this straight from the project row's
+      // three-dot menu with no confirmation of its own, so this shell deleted a
+      // project on a single stray click, worse than the native confirm the chat
+      // shell at least had. Same dialog and copy as ProjectSettingsDialog.
       const project = storeProjects.find((p) => p.id === projectId);
       const confirmed = await confirmDestructive(projectDeleteConfirm(project?.name));
       if (!confirmed) return;
@@ -234,6 +258,9 @@ export function WebAppShell({ children }: WebAppShellProps) {
   // dialog directly when WebChatPage renders the sidebar.
   const handleProjectCreate = useCallback(() => router.push('/chat/projects?new=1'), [router]);
 
+  // ONE rail definition, shared with WebChatPage, see `app-nav-items.ts` for
+  // why (the two hand-maintained copies had drifted and this shell was the only
+  // one exposing Tasks).
   const hiddenNavIds = useSettingsStore((state) => state.hiddenNavIds) ?? EMPTY_NAV_IDS;
 
   const sidebarNavItems = useMemo<SidebarNavItem[]>(
@@ -260,6 +287,10 @@ export function WebAppShell({ children }: WebAppShellProps) {
   // and the pricing page use.
   const currentTier = subscription?.tier ?? (billingPolicyReady ? 'free' : undefined);
   const isFreeTier = currentTier === 'free';
+  // Capitalising the raw tier id rendered "Max_15x" for max_15x, which the
+  // badge's `uppercase` class then showed as "MAX_15X". Use the catalog's own
+  // label ("Max 15x"), the same source the chat sidebar and shared
+  // UserProfile already use, so all three footers agree.
   const tierLabel = currentTier ? getBillingPlanPricing(currentTier).label : null;
 
   const handleLogout = useCallback(async () => {
@@ -333,6 +364,10 @@ export function WebAppShell({ children }: WebAppShellProps) {
     </div>
   );
 
+  // collapsedFooterSlot: the icon rail has no room for the full account row,
+  // but still needs a way into Settings and the legal-reachability links.
+  // without it, collapsing the sidebar hid all of that with no other entry
+  // point on this shell.
   const collapsedFooterSlot = isAccountLoading ? undefined : (
     <TooltipProvider>
       <DropdownMenu>

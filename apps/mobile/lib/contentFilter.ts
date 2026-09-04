@@ -1,3 +1,19 @@
+/**
+ * Strict client-side content filter.
+ *
+ * When minor mode or the adult safety preference is active, outgoing prompts
+ * are checked against a keyword/pattern blocklist before being sent to any
+ * LLM. The check is synchronous and purely client-side, no network call, no
+ * model evaluation.
+ *
+ * Policy: EU AI Act Article 5(1)(b) requires that AI systems not use
+ * subliminal techniques or exploit vulnerabilities of minors. Our mitigation
+ * is to refuse prompts that clearly request adult-only or harmful content
+ * when minor mode is active.
+ *
+ * The refusal copy is exact and must not be changed without legal review.
+ */
+
 import {
   checkContentFilter as checkSharedContentFilter,
   type ContentFilterResult,

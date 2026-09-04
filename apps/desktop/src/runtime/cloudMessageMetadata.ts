@@ -1,3 +1,39 @@
+/**
+ * Managed-cloud assistant-message metadata budgeting (DES-C06).
+ *
+ * `POST /api/chat/conversations/:id/messages` validates `metadata` against
+ * `MANAGED_CLOUD_CHAT_MAX_METADATA_LENGTH` (32 000 serialized chars, see
+ * `packages/contracts/cloud-contracts/src/conversations.ts`), enforced
+ * server-side in `apps/web/lib/server/neon-chat.ts`. Desktop used to POST the
+ * whole stream projection unchecked, `thinking`, `toolCalls`, `webSearchResults`,
+ * `generatedFiles` AND full artifact `content` all sharing that one budget. A
+ * single real artifact (a 20-50 KB HTML page) overflowed it, the POST 400'd, and
+ * `CloudRuntime.persistAssistantTurn` rethrew: the ENTIRE assistant turn was
+ * lost on reopen, not just the oversized field.
+ *
+ * Web never had this problem because artifacts never enter message metadata.
+ * they live in the dedicated row-per-artifact `web_artifacts` table
+ * (`apps/web/app/api/chat/sync/route.ts`). Desktop has no such table, so this
+ * module does two things instead:
+ *
+ *  1. DROPS RE-DERIVABLE ARTIFACTS. With DES-C05's client-side derivation
+ *     landed, an artifact whose content is verbatim inside the message body is
+ *     reconstructed from `message.content` on reopen with the SAME deterministic
+ *     id. Persisting its bytes is pure duplication, so it is removed. Lossless.
+ *  2. BUDGET-TRIMS WHAT REMAINS. If the metadata is still over the cap, optional
+ *     projections are dropped in a fixed least-valuable-first order until it
+ *     fits, and the names of the dropped fields are recorded in
+ *     `metadataTrimmed` so the transcript can say so (`MessageBubble` renders
+ *     the note). Losing a thinking trace beats losing the answer.
+ *
+ * Never dropped: `finishReason`, `streamError`, `cloudApproval` and
+ * `cloudAgentRun`. Those are control state, a dropped `cloudApproval` would
+ * strand a suspended tool-approval turn with no way to resume it, and a dropped
+ * `streamError` would silently retract a truncation warning.
+ *
+ * @module cloudMessageMetadata
+ */
+
 import {
   MANAGED_CLOUD_CHAT_MAX_METADATA_LENGTH,
   managedCloudMetadataLength,

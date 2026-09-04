@@ -76,6 +76,10 @@ export const useWaitlistStore = create<WaitlistState>()(
       name: 'waitlist-store',
       storage: createJSONStorage(() => mmkvStorage),
       skipHydration: true,
+      // Managed-cloud entitlement is never persisted: it is a mirror of the
+      // Clerk-authenticated session (setCloudAccess from the token bridge), and
+      // a rehydrated `true` would route chats to managed cloud on cold start
+      // before, or without, that session being proven.
       partialize: (state) => ({
         joined: state.joined,
         email: state.email,

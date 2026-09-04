@@ -1,3 +1,41 @@
+/**
+ * @file config.ts
+ * @module lib/support/handoff/config
+ *
+ * Deployment configuration for live human handoff. Every value here fails
+ * closed: an unconfigured deployment must degrade honestly, never claim a human
+ * is available, and never claim an email was sent.
+ *
+ * # Environment variables (ALL new, none of these existed before this module)
+ *
+ * `.env.example` is not writable from this workstream, so this docblock is the
+ * authoritative list until it is mirrored there.
+ *
+ *   AGI_SUPPORT_LIVE_HANDOFF_ENABLED         default `0`, live handoff is
+ *       IMPOSSIBLE until this is explicitly truthy. A deployment that has never
+ *       configured support can never offer a human. This is gate 1 of 4 in
+ *       presence-service.ts.
+ *   AGI_SUPPORT_FALLBACK_EMAIL               default `support@agiworkforce.com`
+ *       Where escalations are mailed when no human is available. MUST be a
+ *       monitored mailbox, see the `support@` vs `contact@` risk in the
+ *       workstream report.
+ *   AGI_SUPPORT_FROM_EMAIL                   default `support@agiworkforce.com`
+ *       Must be on a Resend-verified sending domain or every send is rejected.
+ *   AGI_SUPPORT_EXPECTED_REPLY_COPY          default `within one business day`
+ *       The reply promise shown to the user. Configurable so a deployment tells
+ *       the truth about its own staffing instead of inheriting a promise.
+ *   AGI_SUPPORT_AGENT_HEARTBEAT_TTL_SECONDS  default `90`
+ *   AGI_SUPPORT_HANDOFF_WAIT_TIMEOUT_SECONDS default `120`
+ *   AGI_SUPPORT_HANDOFF_IDLE_TIMEOUT_SECONDS default `900`
+ *   AGI_SUPPORT_HANDOFF_POLL_INTERVAL_MS     default `3000`
+ *   AGI_SUPPORT_HANDOFF_RETENTION_DAYS       default `90`
+ *   RESEND_API_KEY                           no default. Absent ⇒
+ *       `fallback.configured === false`, surfaced to the user, never swallowed.
+ *
+ * Config is read per call rather than captured at module load so tests (and a
+ * runtime env change on a warm lambda) observe the current environment.
+ */
+
 import 'server-only';
 
 function isTruthy(raw: string | undefined): boolean {

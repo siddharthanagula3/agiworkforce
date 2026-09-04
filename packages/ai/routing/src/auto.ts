@@ -157,6 +157,14 @@ export interface AutoRoutingRequest {
   estimatedOutputTokens?: number;
   taskFamily?: TaskFamily | null;
   enableTaskFamilyStage?: boolean;
+  /**
+   * Slots to consider FIRST, supplied by the caller for this request only.
+   *
+   * Reordering, never admission: see `applySlotPreference`. Absent, the
+   * default, leaves the ordering exactly as static policy computed it, which
+   * is why the TS/Rust conformance fixture is unaffected and the Rust resolver
+   * needs no counterpart.
+   */
   preferSlots?: readonly string[];
   /**
    * The route that already holds a warm prompt cache for this conversation.
@@ -349,6 +357,30 @@ function evaluateSessionCapabilityAdmission(
   };
 }
 
+/**
+ * Move caller-preferred slots to the front of the ordering.
+ *
+ * REORDERING ONLY, and structurally so: a preferred slot survives just when
+ * `allowedSlots`: the tier's own admission set, straight from
+ * `tierAllowedSlots`: already contains it. Nothing is added that the tier could
+ * not already reach, and every downstream gate (capability, lifecycle, harness,
+ * trust mode, context, affordability) still runs unchanged on the result. This
+ * decides what is CONSIDERED FIRST, never what is eligible.
+ *
+ * WHY A CALLER SUPPLIES THIS AT ALL
+ * ---------------------------------
+ * Tier-keyed static policy cannot express a preference that applies to some
+ * holders of a tier and not others, and the free lane needs exactly that:
+ * `normalizeTier` folds `basic`, `hobby` and every unrecognised or absent tier
+ * into `free`, so an ordering written into `preferredSlots` for the free tier
+ * also changes the default route for paying Basic customers, observed as a 502
+ * when a Basic request was handed a route its surface could not serve. The
+ * caller knows which holder of the tier it is looking at; the registry cannot.
+ *
+ * This is the same architectural move `free-auto.ts` documents one layer up:
+ * live, caller-known facts stay out of the compiled catalog so the TS/Rust
+ * conformance fixture stays reproducible. Absent, this is a no-op.
+ */
 function applySlotPreference(
   orderedSlots: readonly string[],
   preferSlots: readonly string[] | undefined,
@@ -544,6 +576,16 @@ function routeAdmissionRejections(
   return reasons;
 }
 
+/**
+ * Order every admissible route of one canonical model, best first.
+ *
+ * Never a model substitution: each candidate serves the same canonical model
+ * through a different provider, harness and price sheet. Ranking is
+ * health, then credential availability, then the route's own expected cost,
+ * then the model's default route, then route id, the last two so two
+ * equally priced routes cannot reorder between runs or between the
+ * TypeScript and Rust resolvers.
+ */
 function rankRoutes(
   candidates: readonly RankedRoute[],
   request: AutoRoutingRequest,

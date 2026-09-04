@@ -92,6 +92,24 @@ type ArtifactOriginSource = Pick<
 
 export type ArtifactOriginMessage = Pick<Message, 'id' | 'model' | 'metadata'>;
 
+/**
+ * SECURITY-FIX F3 (CWE-863): the publish button used to declare
+ * `privacyMode: 'managed'` for every artifact, which made the managed-cloud
+ * upload unconditional.
+ *
+ * The boundary is derived from every signal the conversation actually carries,
+ * reduced most-restrictive-first, and is `undefined` when the conversation
+ * carries none, which `publishArtifact` refuses rather than guessing at. Only
+ * the Local→BYOK handoff writes `metadata.privacyMode`, so an ordinary Local
+ * (Ollama/LM Studio) conversation is unlabeled and must be classified from the
+ * model that served it, the same model-derived boundary the regenerate guards
+ * use, plus any `providerMode` a turn declares.
+ *
+ * A `managed` label on the artifact's own descriptors is deliberately NOT
+ * evidence: those descriptors are synthesised client-side from this very turn,
+ * so `managed` there is a display default rather than an observation. Their
+ * non-managed labels still count, because those only ever narrow the boundary.
+ */
 export function resolveArtifactOriginPrivacyMode(
   artifact: ArtifactOriginSource,
   messages: readonly ArtifactOriginMessage[],

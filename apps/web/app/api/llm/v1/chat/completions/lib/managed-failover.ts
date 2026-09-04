@@ -1,5 +1,47 @@
 import 'server-only';
 
+/**
+ * Managed provider failover for the Web twin (AUTO-ROUTER-MIGRATION-01).
+ *
+ * Mirrors the gateway's landed semantics (services/api-gateway/src/routes/
+ * llm.ts failover section): rotate to the resolver's next candidate ONLY
+ *   - on availability-class failures (connection / server_error /
+ *     server_overload / capacity_off_switch / api_timeout, plus
+ *     direct-provider rate limits), or on a credential rejection, which
+ *     condemns the ONE provider account whose managed key was refused and
+ *     therefore skips that provider's remaining routes instead of replaying
+ *     the same rejected key, never on aborts, safety stops, context or
+ *     invalid-model errors, or billing errors, or, under the narrow
+ *     conditions `isRotatableRequestRejection` states, on a request the
+ *     provider itself refused;
+ *   - before the first byte reaches the client, route.ts's rotation point
+ *     is `startProviderStream`'s first-chunk peek, so a rotated attempt has
+ *     by construction produced NO content (failed-attempt text cannot leak);
+ *   - for Auto-profile requests, explicit selections are structurally
+ *     rotation-free because the resolver emits an empty fallback plan for
+ *     them (`processed.fallbackModels` is `[]`);
+ *   - after re-checking candidate admission at attempt time (tier ladder,
+ *     provider resolution, adapter availability), a stale plan entry is
+ *     skipped, never served.
+ *
+ * The OpenRouter route-retry below is NOT drawn from the candidate plan, so the
+ * policy filtering the request processor applies to `fallbackModels` does not
+ * govern it. It is checked against the policy snapshot directly (`modelPolicy`
+ * option), and a refusal falls through to the candidate rotation.
+ *
+ * Deliberately NARROWER than the gateway in one dimension: requests carrying
+ * tools (provider-native tool definitions ride `llmRequest.tools` in the
+ * provider's own wire shape) may rotate only within the same provider. A
+ * different provider could not consume those definitions safely.
+ *
+ * Billing: rotation happens INSIDE one managed-usage lifecycle, the single
+ * reservation taken by the request processor spans all attempts, and
+ * settlement happens once, priced by the model that actually served (the
+ * attempt view below swaps `chatRequest.model`/`llmRequest.model`, which is
+ * what `settleStreamBilling`/`finalizeBilling` price from, while carrying
+ * `managedUsage` through unchanged).
+ */
+
 import { classifyError, CredentialFailoverState } from '@agiworkforce/provider-runtime';
 import { isAutoModeModelId } from '@agiworkforce/types';
 import { canAccessModel } from '@/lib/model-tiers';
@@ -12,6 +54,23 @@ import { evaluateModelAccess, type ModelAccessPolicy } from '@/lib/services/mode
 import type { ProcessedRequest } from './request-processor';
 import { buildThinkingConfig, resolveRequestEffort } from './request-processor';
 
+/** Availability classes only, plus direct-provider rate limits. A managed Auto
+ *  request should not fail because one upstream project exhausted quota;
+ *  explicit selections remain rotation-free by construction.
+ *
+ *  Credential rejections are deliberately excluded here, they rotate under the
+ *  separate provider-scoped rule below (`CredentialFailoverState`).
+ *
+ *  `quota_exhausted` IS eligible: that route's window is spent, but a different
+ *  route with its own quota is a legitimate answer. What must never appear here
+ *  is `billing_exhausted`, see `NEVER_ROTATE_CATEGORIES`.
+ *
+ *  `empty_response` is eligible for a different reason than the rest: the
+ *  route did not fail, it answered with nothing. A different route may
+ *  simply produce content where this one did not. The tool loop is the only
+ *  caller that ever raises it (via `EmptyProviderResponseError`), and it
+ *  does so at most once per turn, see `tool-loop.ts`'s
+ *  `emptyResponseRotationUsed`. */
 const FAILOVER_ELIGIBLE_CATEGORIES: ReadonlySet<string> = new Set([
   'connection',
   'server_error',
@@ -23,6 +82,22 @@ const FAILOVER_ELIGIBLE_CATEGORIES: ReadonlySet<string> = new Set([
   'empty_response',
 ]);
 
+/**
+ * Classes that must NEVER produce a rotation, whatever else says otherwise.
+ *
+ * `billing_exhausted` is the load-bearing member. Anthropic's "credit balance is
+ * too low" used to classify as `auth`, and `CredentialFailoverState` treats any
+ * `auth` as a bad credential worth rotating away from, so an AGIWorkforce
+ * account that had simply run out of money would silently push the request onto
+ * a DIFFERENT PAID provider and spend more there. An unfunded credential is a
+ * valid credential; running out of money is an operator problem, not a routing
+ * problem, and hiding it by spending elsewhere is the worst possible response.
+ *
+ * `safety` is here for a different reason: a policy refusal must never be
+ * shopped around providers until one accepts the content. `content_blocked`
+ * is the same refusal observed through a clean stream instead of a thrown
+ * error, and must never rotate for the same reason.
+ */
 const NEVER_ROTATE_CATEGORIES: ReadonlySet<string> = new Set([
   'billing_exhausted',
   'safety',
@@ -114,6 +189,22 @@ export function createFailoverPlan(
   options: {
     signal: AbortSignal;
     isProviderDispatchable: (provider: string) => boolean;
+    /**
+     * The workspace model policy snapshot the request processor already read,
+     * handed in so the OpenRouter route-retry below can be governed by it.
+     *
+     * It is a SNAPSHOT, deliberately: this plan runs inside a live stream's
+     * failure path, and a database read there would put policy availability on
+     * the critical path of every upstream hiccup. The request processor reads
+     * the row once, before the first attempt, and every hop in the request.
+     * primary gate, cheaper-model downgrade, plan filtering, and now the
+     * route-retry, answers to that same one snapshot.
+     *
+     * `null` or omitted means UNGOVERNED, matching the evaluator's contract: no
+     * policy row, personal scope, or a read that deliberately failed open. It
+     * does NOT mean deny, because a briefly unreachable policy table must not
+     * take failover away from every workspace that has no policy at all.
+     */
     modelPolicy?: ModelAccessPolicy | null;
     /**
      * Observes every attempt failure with the classification already computed
@@ -195,6 +286,21 @@ export function createFailoverPlan(
     return null;
   };
 
+  /**
+   * Rotation for a free-lane request: re-enter the stage, never the paid plan.
+   *
+   * `free-auto.ts` documents `excludeRouteIds` as the mechanism for exactly this
+   *, pick the next eligible $0 route without handing back one that already
+   * failed, and re-running the stage rather than walking a precomputed list is
+   * what lets a route parked by THIS request's failures drop out of the running.
+   *
+   * When it returns null the request ends. It does not fall through to the paid
+   * candidate plan or the OpenRouter route-retry in either mode: `strict` may
+   * never spend, and in `prefer` the fall-through is the INITIAL decision, taken
+   * before dispatch. Rotating a half-served free request onto paid capacity
+   * would spend money on a turn the user was told was free, and the subsidized
+   * trial path it would be falling back to is itself rotation-free today.
+   */
   const nextFreeLaneCandidate = (): FailoverAttempt | null => {
     if (!freeLane) return null;
     for (;;) {
@@ -253,6 +359,17 @@ export function createFailoverPlan(
       (tool) => !(tool && typeof tool === 'object' && 'function' in tool),
     );
     if (hasVendorNativeTools) return null;
+    // The workspace may forbid OpenRouter outright. `next()` consults this
+    // route-retry BEFORE the candidate plan, and the retry does not draw from
+    // that plan, so filtering `fallbackModels` upstream never reached here: a
+    // workspace pinned to `allowedProviders: ['anthropic']` was still served
+    // through OpenRouter on any availability-class failure. Same pure evaluator
+    // the primary gate uses, against the snapshot already in hand.
+    //
+    // Note this asks about the SAME model on a DIFFERENT provider, which is the
+    // whole point of the route-retry, so an explicit model allow can still
+    // carry it through a provider block, exactly as the evaluator's documented
+    // precedence says it should.
     const decision = evaluateModelAccess(options.modelPolicy ?? null, {
       provider: 'openrouter',
       modelId: processed.llmRequest.model,

@@ -477,6 +477,19 @@ fn list_files_recursive(
     Ok(())
 }
 
+/// Get a summary of the project folder for LLM context
+///
+/// This provides a condensed view of the project structure suitable for
+/// including in the system prompt.
+///
+/// # Returns
+/// * `Ok(String)` - A formatted summary of the project
+/// * `Err(String)` - Error if no project folder is set
+///
+/// Deterministic ordering for the project file-type breakdown (AC-19, context
+/// assembly MUST be deterministic). Primary key: file count, descending.
+/// Tiebreaker: extension name, ascending, so equal-count extensions render in a
+/// stable, reproducible order regardless of the source `HashMap`'s iteration order.
 fn cmp_file_type_desc(a: &(&String, &u32), b: &(&String, &u32)) -> std::cmp::Ordering {
     b.1.cmp(a.1).then_with(|| a.0.cmp(b.0))
 }
@@ -642,6 +655,7 @@ pub async fn project_load_instructions(
     let folder = state.get_folder().await;
     let mut results: Vec<ProjectInstructionFile> = Vec::new();
 
+    // 1. Workspace-local, walk from project root up to git root (max 5 levels).
     if let Some(ref project_dir) = folder {
         let mut current = PathBuf::from(project_dir);
         let mut levels = 0;

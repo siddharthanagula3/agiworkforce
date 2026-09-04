@@ -1,3 +1,30 @@
+//! Hosted plugin registry resolution (CAP-046 slice 4).
+//!
+//! `plugins.rs` already installs a plugin from a local directory or a git URL,
+//! and it already understands `name@marketplace` dependency addressing, but
+//! there was nowhere to ask what `name@marketplace` MEANS. This module is that
+//! lookup: it resolves a plugin reference against the hosted registry that
+//! `apps/web/app/api/plugins` serves, and hands the resulting
+//! [`PluginManifest`] back to the existing loader.
+//!
+//! Three rules shape everything here:
+//!
+//! 1. **No hardcoded production URL.** The registry base URL must be supplied
+//!    by the user, through `AGI_PLUGIN_REGISTRY_URL` or the
+//!    `[plugins] registry_url` key in `~/.agiworkforce/config.toml`. A CLI that
+//!    silently phones a default host is a network side effect nobody approved.
+//! 2. **Fail closed on integrity.** A manifest artifact is only accepted when
+//!    its SHA-256 matches the digest the registry published for it. Resolution
+//!    of an artifact with no published digest is refused unless the caller
+//!    explicitly opts in, mirroring `plugin install`'s existing
+//!    `--integrity` / `--unsafe-no-integrity` contract.
+//! 3. **Never claim installability the registry did not.** A `preview` entry
+//!    has no artifact; resolving it returns [`RegistryError::NotInstallable`]
+//!    instead of synthesizing a manifest from the entry's declared contents.
+//!
+//! Transport is behind the [`RegistryTransport`] trait so the resolution logic
+//! is testable without a network, and so the same logic can be driven by the
+//! real HTTP client (`HttpRegistryTransport`).
 
 use std::collections::HashSet;
 use std::path::PathBuf;
@@ -98,6 +125,9 @@ impl std::fmt::Display for RegistryError {
 
 impl std::error::Error for RegistryError {}
 
+// ---------------------------------------------------------------------------
+// Wire types, mirror packages/contracts/types/src/plugins.ts
+// ---------------------------------------------------------------------------
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -106,6 +136,8 @@ pub struct RegistryPublisher {
     pub id: String,
     #[serde(default)]
     pub name: String,
+    /// `first-party` or `third-party`. Never used to grant trust, it is
+    /// displayed, and third-party entries do not exist at launch.
     #[serde(default)]
     pub kind: String,
 }
@@ -160,6 +192,8 @@ pub struct RegistryEntry {
 #[serde(rename_all = "camelCase")]
 pub struct RegistryEntryResponse {
     pub entry: RegistryEntry,
+    /// The inline manifest, when the registry stores one. It is metadata for
+    /// display, resolution always re-downloads and verifies the artifact.
     #[serde(default)]
     pub manifest: Option<PluginManifest>,
 }
@@ -843,6 +877,7 @@ mod tests {
             matches!(error, RegistryError::NotInstallable { ref status, .. } if status == "preview"),
             "{error}"
         );
+        // Only the entry lookup happened, nothing was downloaded.
         assert_eq!(log.lock().unwrap().len(), 1);
     }
 
@@ -1013,6 +1048,10 @@ mod tests {
 
     // ── Real HTTP path ─────────────────────────────────────────────────────
 
+    /// Drives `HttpRegistryTransport` against a loopback server that speaks
+    /// HTTP/1.1 by hand, so the reqwest client, the URL rules, the digest
+    /// check, and the manifest parse are all exercised for real, no mock
+    /// standing in for the transport itself.
     #[tokio::test]
     async fn resolves_over_real_http_against_a_loopback_server() {
         use tokio::io::{AsyncReadExt, AsyncWriteExt};

@@ -13,6 +13,12 @@ const EXTENSIONS = new Set(['.ts', '.tsx', '.html', '.css']);
 // recursion's result; a guard that can pass on nothing is worse than no guard.
 const MIN_SCANNED_FILES = 20;
 
+/**
+ * Files that still carry raw colour literals, with the exact number each is
+ * allowed. A new literal in a listed file, or any literal in an unlisted file,
+ * fails. Removing one fails too, with the number to lower it to, so the debt
+ * can only ever shrink.
+ */
 const KNOWN_VIOLATIONS = {
   'src/content.ts': 6,
   'src/features/cloud-bridge/InviteCodeModal.ts': 4,
@@ -43,6 +49,8 @@ const EXEMPT_LINE_RE = [
   /<meta[^>]+content/, // any <meta> with content attribute (covers theme-color meta)
 ];
 
+// A literal used as the fallback arm of a design token, var(--token, #hex).
+// is the token being used correctly, not a bypass of it.
 const TOKEN_FALLBACK_RE = /var\(\s*--[\w-]+\s*,[^)]*\)/g;
 
 function stripTokenFallbacks(line) {

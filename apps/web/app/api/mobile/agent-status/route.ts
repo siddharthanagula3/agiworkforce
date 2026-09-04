@@ -43,6 +43,10 @@ async function handleGet(request: NextRequest) {
   let pauseRows: unknown[];
   let runningRows: { running: number | string }[];
   try {
+    // Tenancy predicate: the checkpoint, the run, and the join key are all
+    // pinned to the authenticated caller, `checkpoint.user_id = $1`,
+    // `runs.user_id = $1`, and `runs.user_id = checkpoint.user_id`, so a row
+    // belonging to another user cannot survive any one of them being wrong.
     [pauseRows, runningRows] = await Promise.all([
       db.query(
         `select checkpoint.id,

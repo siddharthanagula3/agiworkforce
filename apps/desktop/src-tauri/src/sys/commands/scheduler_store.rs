@@ -1,3 +1,16 @@
+//! Persistence layer for the proactive scheduler.
+//!
+//! Stores `ScheduledJob` rows in the app's local encrypted SQLite database
+//! (see `crate::data::db::encryption`), following the same storage idiom as
+//! `core::agi::checkpoint_store` and `core::agi::outcome_tracker`: each
+//! operation opens a fresh keyed connection, and the job, including its
+//! nested `action_data`, is stored as a single JSON blob column rather than
+//! mapped field-by-field, so it round-trips through the same
+//! `Serialize`/`Deserialize` impl already used for the Tauri IPC boundary.
+//!
+//! Before this existed, `ProactiveScheduler` held jobs only in an in-memory
+//! `RwLock<HashMap>`, so every app restart silently wiped all user-created
+//! schedules.
 
 use std::collections::HashMap;
 use std::path::Path;

@@ -10,6 +10,13 @@ export type ConnectorAuthScheme =
 
 export type ConnectorScopeSource =
   | 'first-party'
+  /**
+   * Supplied by the deployment operator at runtime, the provider descriptor in
+   * `CONNECTOR_OAUTH_PROVIDERS_JSON`, or the GitHub App's own permission set on
+   * github.com. This repository does not know them, so `scopes` stays empty and
+   * the scopes a user actually granted are reported per-grant by
+   * `GET /api/connectors` instead of guessed here.
+   */
   | 'operator-defined'
   /** No scope concept (device-local). */
   | 'not-applicable';
@@ -256,6 +263,7 @@ export function getConnectorActionSource(connectorId: string): ConnectorActionSo
   return getConnectorCapability(connectorId)?.actionSource ?? 'runtime-discovered';
 }
 
+/** Empty for every remote-MCP and device-local connector, ask the server. */
 export function getDeclaredConnectorActions(connectorId: string): readonly string[] {
   return getConnectorCapability(connectorId)?.supportedActions ?? NO_DECLARED_ACTIONS;
 }

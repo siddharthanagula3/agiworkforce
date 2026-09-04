@@ -103,6 +103,19 @@ export async function runHealthChecks(): Promise<HealthCheckResult> {
   };
 }
 
+/**
+ * The status page's copy of the checks, computed once per window for everyone.
+ *
+ * `runHealthChecks` opens a database connection and makes 1 + N Stripe API
+ * calls (`products.list` plus one `prices.retrieve` per configured price). The
+ * answer is the same for every visitor, so running it per page view turned a
+ * public page into a traffic-proportional load generator against Stripe and
+ * Neon: a crawler or an incident-driven refresh storm hits hardest exactly
+ * when those dependencies are least able to take it.
+ *
+ * `timestamp` in the result is the moment the checks actually ran, and the page
+ * shows it, so a cached answer never claims to be more current than it is.
+ */
 export const getCachedHealthChecks = cachedRenderInput(runHealthChecks, {
   keyParts: ['status-page', 'health-checks'],
   tags: [RENDER_CACHE_TAGS.statusHealth],

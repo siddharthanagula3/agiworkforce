@@ -22,6 +22,14 @@ export default async function LoginCompletePage({
   const { userId } = await auth();
 
   if (!userId) {
+    // NOT a redirect. /login renders Clerk's <SignIn forceRedirectUrl> pointing
+    // back here, so a browser holding a session this server rejects bounces
+    // between the two forever, client "succeeds", server disagrees, repeat,
+    // hammering Clerk's API on every lap. Sending them to /login again cannot
+    // work while the stale session that causes the bounce is still in the
+    // browser, so it is cleared client-side first. `authRetry` marks the one
+    // attempt we make, so a session that survives sign-out gets an explanation
+    // rather than another lap.
     const loginUrl = `/login?redirectTo=${encodeURIComponent(redirectTo)}${
       isDesktopSurface ? '&surface=desktop' : ''
     }&authRetry=1`;

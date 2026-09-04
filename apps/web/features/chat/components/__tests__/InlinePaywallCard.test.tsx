@@ -47,6 +47,10 @@ describe('InlinePaywallCard', () => {
   // -------------------------------------------------------------------------
 
   describe('headline copy', () => {
+    // G11: the headline now discloses the required tier's published monthly
+    // price (Gemini benchmark: "Get 5x more usage with AI Ultra.
+    // $99.99/month"), read via the same getBillingPlanPricing/getPlanPriceUsd
+    // call the component already made for the tier label.
     const cases: Array<[PaywallFeature, RequiredTier, string]> = [
       ['web_search', 'basic', 'Upgrade to Basic, $7/mo for web search'],
       ['video_generation', 'max_15x', 'Upgrade to Max 15x, $200/mo for video generation'],
@@ -183,6 +187,9 @@ describe('InlinePaywallCard', () => {
       expect(screen.queryByText('Upgrade to Max 15x', { exact: false })).toBeNull();
     });
 
+    // QA-037: a Max 15x subscriber whose credit account had no allocation read
+    // as "budget exhausted", and the card answered with "Upgrade to Basic.
+    // $7/mo". The card is handed the current tier; it must use it.
     it('never offers a tier the subscriber already holds', () => {
       render(
         <InlinePaywallCard

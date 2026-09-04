@@ -1,3 +1,14 @@
+//! Hooks system, event-driven command execution.
+//!
+//! Hooks are configured in ~/.agiworkforce/hooks.json and run shell commands
+//! in response to lifecycle events (SessionStart, Stop, AfterToolUse).
+//!
+//! Hooks can optionally include a `matcher` regex, the hook only fires when
+//! the matcher matches the event name **or** the `tool_name` from the input.
+//!
+//! Hook stdout is parsed as JSON to allow control-flow decisions:
+//! - `{"decision": "block", "reason": "..."}` → blocks the action
+//! - `{"continue": false}` → signals the caller to stop
 
 use anyhow::{Context, Result};
 use regex::Regex;
@@ -28,6 +39,8 @@ pub struct Hook {
     #[serde(default = "default_blocking")]
     pub blocking: bool,
 
+    /// Optional regex matcher, hook only runs if matcher matches the event
+    /// name or the `tool_name` from the input payload.
     #[serde(default)]
     pub matcher: Option<String>,
 
@@ -48,10 +61,17 @@ fn default_blocking() -> bool {
     true
 }
 
+/// Hook events, canonical names match Claude Code's 19-event vocabulary
+/// for free interop with `~/.claude/hooks.json` configs. Old AGI-specific
+/// names (`BeforeToolUse`, `PreEdit`, …) still load via custom Deserialize
+/// with a one-time stderr deprecation warning per alias per session.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize)]
 pub enum HookEvent {
     SessionStart,
     SessionEnd,
+    /// Fires before any tool call. Replaces the legacy `BeforeToolUse`,
+    /// `PreEdit`, `PreCommand` events, use the `if:` field on the hook to
+    /// filter to a specific tool (e.g. `if: "Bash(git *)"`).
     PreToolUse,
     /// Fires after any tool call completes. Replaces `AfterToolUse`,
     /// `PostEdit`, `PostCommand`.
@@ -78,6 +98,12 @@ pub enum HookEvent {
     /// LLM. Hook may inject extra context via `{"additional_context": "..."}`.
     /// Adapted from OpenClaw's `before_prompt_build`.
     BeforePromptBuild,
+    /// Fires after a tool returns and before its output is appended to the
+    /// transcript. Hook may rewrite the output via
+    /// `{"updated_mcp_tool_output": "..."}` (PII redaction, secret scrubbing,
+    /// truncation). Distinct from `PostToolUse`, runs *closer* to persistence
+    /// and is the right place for storage-affecting transforms. Adapted from
+    /// OpenClaw's `tool_result_persist`.
     ToolResultPersist,
     /// Fires when a subagent starts. Renamed from `SubagentSpawned`.
     SubagentStart,
@@ -173,6 +199,7 @@ fn deprecation_seen() -> &'static Mutex<HashSet<String>> {
 /// canonical `HookEvent`. Emits a one-time stderr deprecation warning the
 /// first time a given legacy alias is seen this session.
 fn resolve_event_name(name: &str) -> Option<HookEvent> {
+    // Canonical names, no warning, no alias table.
     let canonical = match name {
         "SessionStart" => Some(HookEvent::SessionStart),
         "SessionEnd" => Some(HookEvent::SessionEnd),
@@ -212,6 +239,7 @@ fn resolve_event_name(name: &str) -> Option<HookEvent> {
         return Some(event);
     }
 
+    // Legacy aliases, resolve + warn once per session per alias.
     let (event, hint): (HookEvent, &'static str) = match name {
         "BeforeToolUse" => (HookEvent::PreToolUse, ""),
         "AfterToolUse" => (HookEvent::PostToolUse, ""),
@@ -274,6 +302,15 @@ impl<'de> Deserialize<'de> for HookEvent {
     }
 }
 
+/// Parse a permission-rule pattern of the form `ToolName(arg-glob)` and
+/// test whether the given `tool_name` and tool args match.
+///
+/// Examples: `Bash(git *)`, `Edit(*.rs)`, `WebFetch(*)`.
+///
+/// The arg-glob uses shell-style `*` (any chars) and `?` (one char) and is
+/// anchored, the entire arg must match. The arg-glob is tested against the
+/// first string-valued field of `tool_args` (or against an empty string if
+/// `tool_args` is absent / has no string field).
 fn matches_permission_rule(
     rule: &str,
     tool_name: &str,
@@ -313,6 +350,9 @@ fn matches_permission_rule(
     glob_match(arg_glob, &arg_value)
 }
 
+/// Tiny shell-style glob matcher: `*` matches any (possibly empty) run of
+/// characters, `?` matches exactly one character, all other chars match
+/// literally. Anchored, the entire input must match.
 fn glob_match(pattern: &str, input: &str) -> bool {
     let p: Vec<char> = pattern.chars().collect();
     let s: Vec<char> = input.chars().collect();
@@ -434,6 +474,12 @@ pub struct TriggersConfig {
     #[serde(default = "default_webhook_port")]
     pub webhook_port: u16,
 
+    /// Bearer token for webhook authentication.
+    ///
+    /// HIGH-3: This field is REQUIRED when any webhook triggers are configured.
+    /// The daemon will refuse to start without a token of at least 32 characters.
+    /// Setting this to None means no token is configured, the token validation
+    /// in `run_daemon` will reject this before the server starts.
     #[serde(default)]
     pub webhook_token: Option<String>,
 
@@ -545,6 +591,7 @@ pub struct HookResult {
 /// Aggregate outcome across multiple hook results.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum HookAggregateOutcome {
+    /// All hooks passed, proceed normally.
     Continue,
     /// At least one hook signalled `should_stop`.
     Stop,
@@ -587,6 +634,29 @@ pub fn aggregate_results(results: &[HookResult]) -> HookAggregateOutcome {
 // Hook loading
 // ---------------------------------------------------------------------------
 
+/// Load hooks configuration from ~/.agiworkforce/hooks.json, then merge
+/// plugin-declared hooks on top.
+///
+/// Merge order (Sprint B6): user `~/.agiworkforce/hooks.json` first, then each
+/// installed plugin's `hooks:` section appended after the user's hooks for
+/// the same event. This means user hooks run first; plugin hooks run after.
+/// Plugin authors who want a guaranteed pre-user position should use
+/// `matcher`/`if_condition` to scope their hook narrowly.
+///
+/// Verifies file permissions on Unix (rejects group/other-readable files).
+///
+/// IMPORTANT: every one of load_hooks()'s ~10 call sites across the CLI
+/// discards the `Err` via `.unwrap_or_default()` (hooks are optional, so a
+/// missing/broken config must not crash the caller). That previously meant
+/// malformed JSON and the CLI-NEW-011 symlink/UID-mismatch security refusal
+/// were both silently swallowed, hooks would just stop firing with zero
+/// diagnostic anywhere, and a symlink attack would look identical to "no
+/// hooks configured". To fix this once instead of at every call site, this
+/// function prints a one-line `Warning: ...` to stderr itself immediately
+/// before returning any `Err`, so the warning fires regardless of how the
+/// caller consumes the `Result`. Callers that want the warning-then-default
+/// behavior explicitly can use [`load_hooks_or_default`] instead of chaining
+/// `.unwrap_or_default()` themselves.
 pub fn load_hooks() -> Result<HooksConfig> {
     match load_hooks_inner() {
         Ok(config) => Ok(config),
@@ -601,6 +671,10 @@ pub fn load_hooks() -> Result<HooksConfig> {
     }
 }
 
+/// Load hooks configuration, defaulting to an empty config (with the
+/// standard load-failure warning already printed by [`load_hooks`]) if
+/// loading fails. Prefer this over `load_hooks().unwrap_or_default()` at new
+/// call sites, it's equivalent, but names the fallback behavior explicitly.
 pub fn load_hooks_or_default() -> HooksConfig {
     load_hooks().unwrap_or_default()
 }
@@ -611,6 +685,19 @@ fn load_hooks_inner() -> Result<HooksConfig> {
     let mut config: HooksConfig = if !path.exists() {
         HooksConfig::default()
     } else {
+        // Security: verify hooks.json permissions and ownership.
+        //
+        // CLI-NEW-011 hardening (2026-05-04 audit):
+        //   1. Original check rejected mode `&0o022` (group/other-writable) but
+        //      ignored `&0o044` (group/other-readable). hooks.json may contain
+        //      sensitive command strings, paths, embedded tokens, project
+        //      identifiers, so a readable file is still a leak.
+        //   2. There was no ownership check at all. A symlink-replacement
+        //      attack (drop a symlink at ~/.agiworkforce/hooks.json pointing
+        //      to a different user's hooks.json) could trick this code into
+        //      executing hooks defined by another user. We now refuse to load
+        //      hooks.json when the file's owning UID does not match the
+        //      current process UID.
         #[cfg(unix)]
         {
             use std::os::unix::fs::MetadataExt;
@@ -757,6 +844,8 @@ fn hook_matches(hook: &Hook, event_name: &str, input: &HookInput) -> bool {
     if let Some(rule) = &hook.if_condition {
         let tool_name = match input.tool_name.as_deref() {
             Some(t) => t,
+            // No tool_name in the input, `if:` rules can't match (they're
+            // tool-specific by design). Skip the hook.
             None => return false,
         };
         if !matches_permission_rule(rule, tool_name, input.tool_args.as_ref()) {
@@ -954,6 +1043,15 @@ fn append_updated_input_audit(
     file.write_all(entry.as_bytes())
 }
 
+/// Aggregate transformer fields across hook results. Caller decides how to
+/// apply the result, typically:
+///   - `updated_input` mutates the tool args before exec (BeforeToolUse)
+///   - `updated_mcp_tool_output` replaces the tool result (AfterToolUse)
+///   - `additional_context` is appended as a system message
+///
+/// HIGH-2: when `updated_input` is present in any hook result, the rewrite is
+/// logged to stderr and ~/.agiworkforce/security-audit.log. This makes
+/// hook-driven tool argument tampering visible to the user.
 pub fn aggregate_transformers(results: &[HookResult]) -> HookTransformers {
     let mut t = HookTransformers::default();
     let mut ctx_chunks: Vec<&str> = Vec::new();
@@ -1457,6 +1555,7 @@ mod tests {
         );
         let config = HooksConfig { hooks };
 
+        // tool_name=read_file, first hook should be skipped, second runs
         let input = HookInput {
             event: "AfterToolUse".to_string(),
             session_id: None,
@@ -1920,6 +2019,9 @@ mod tests {
         assert!(list.contains("[matcher: ^bash$]"));
     }
 
+    // -----------------------------------------------------------------------
+    // HIGH-2: Plugin trust, project-local plugin hooks must be blocked
+    // -----------------------------------------------------------------------
 
     /// Simulate the from_project_dir filtering logic from plugins::hook_configs().
     fn simulate_hook_configs_filtering(

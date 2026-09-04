@@ -638,8 +638,8 @@ export function ChatInterface({
           try {
             const versions = await runtime.getArtifactVersions(updated);
             setActiveArtifactVersions(versions.length > 0 ? versions : [updated]);
-          } catch (err) {
-            console.error('[ChatInterface] Failed to load artifact versions:', err);
+          } catch {
+            // noop
           }
         }
       }

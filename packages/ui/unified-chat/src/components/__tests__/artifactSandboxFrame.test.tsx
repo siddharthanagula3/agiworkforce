@@ -1,3 +1,23 @@
+/**
+ * artifactSandboxFrame.test.tsx, DES-C15, the origin half.
+ *
+ * `ArtifactSandboxFrame` is what makes an interactive artifact actually run
+ * inside the packaged desktop app: it renders the preview from a dedicated
+ * origin (`artifact://localhost`) instead of a `srcdoc` document that inherits
+ * the app's `script-src 'self' 'wasm-unsafe-eval'`.
+ *
+ * These tests pin the properties that decide whether that works and whether it
+ * stays safe:
+ *   - with no origin, behaviour is byte-identical to the old srcDoc frame,
+ *   - with an origin, the frame is pointed at it and the artifact is shipped
+ *     ONLY after the renderer's handshake, addressed to that renderer,
+ *   - a sandbox that never answers degrades to srcDoc and TELLS the host, so
+ *     the host can put its honest "scripts are blocked here" notice back,
+ *   - `allow-same-origin` never appears on the fallback frame.
+ *
+ * @vitest-environment jsdom
+ */
+
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 

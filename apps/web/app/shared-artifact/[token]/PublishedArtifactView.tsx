@@ -12,6 +12,15 @@ import {
   type PublishedArtifactKind,
 } from '@/features/chat/components/artifacts/publishedArtifactRender';
 
+/**
+ * Public viewer for a published artifact (CAP-015 slice 2).
+ *
+ * Renders untrusted, publicly reachable content, so the kind branch here is the
+ * security boundary, see `publishedArtifactRender.ts` for the rule. Scripted
+ * kinds go through {@link SandboxedIframe} (cross-origin sandbox origin, or the
+ * null-origin `srcDoc` fallback); everything else renders inert.
+ */
+
 export interface PublishedArtifactViewProps {
   title: string;
   kind: PublishedArtifactKind;

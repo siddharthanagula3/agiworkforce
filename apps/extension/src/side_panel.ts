@@ -5269,7 +5269,7 @@ function refreshPageHostname(): void {
       refreshTabGroupUI();
     });
   } catch {
-    return;
+    /* noop */
   }
 }
 

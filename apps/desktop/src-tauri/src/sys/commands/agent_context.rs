@@ -1,8 +1,40 @@
+/// Per-command async context for the Rust side of the IPC boundary.
+///
+/// AsyncLocalStorage on the TS side isolates JS async chains. On the Rust side,
+/// tokio::task_local! provides the same isolation within a tokio task.
+///
+/// Cross-boundary contract: context values do NOT cross the Rust↔TS IPC boundary
+/// automatically. Values that Rust needs (e.g., conversation_id) must be
+/// passed as explicit fields in the Tauri command's request payload.
+///
+/// Usage in a Tauri command:
+/// ```rust,ignore
+/// use agiworkforce_desktop::sys::commands::agent_context::{CommandContext, COMMAND_CTX};
+///
+/// #[tauri::command]
+/// pub async fn my_command(conversation_id: Option<String>) -> Result<String, String> {
+///     let ctx = CommandContext {
+///         request_id: uuid::Uuid::new_v4().to_string(),
+///         conversation_id,
+///         command_name: "my_command".to_string(),
+///         invoked_at_ms: std::time::SystemTime::now()
+///             .duration_since(std::time::UNIX_EPOCH)
+///             .unwrap_or_default()
+///             .as_millis() as u64,
+///     };
+///     COMMAND_CTX.scope(ctx, async move {
+///         // Any code awaited here, including sub-tasks, can call
+///         // COMMAND_CTX.with(|ctx| ...) to read the bound context.
+///         do_async_work().await
+///     }).await
+/// }
+/// ```
 use serde::{Deserialize, Serialize};
 
 /// Per-Tauri-command context bound to a tokio task via COMMAND_CTX.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CommandContext {
+    /// Stable ID for this invocation, correlates with TS-side AgentContext.requestId.
     pub request_id: String,
     /// Active conversation ID, None for non-chat commands.
     pub conversation_id: Option<String>,
@@ -13,9 +45,22 @@ pub struct CommandContext {
 }
 
 tokio::task_local! {
+    /// Task-local storage for per-command context on the Rust side.
+    ///
+    /// This is the Rust analogue of AsyncLocalStorage<AgentContext> on the TS side.
+    /// Set it at command entry via `COMMAND_CTX.scope(ctx, future).await`, the
+    /// context is then readable via `COMMAND_CTX.with(|ctx| ...)` anywhere in
+    /// the same tokio task (including across .await points) without passing it
+    /// explicitly through every call frame.
+    ///
+    /// tokio::task_local! is Send + Sync safe because each tokio task has its own
+    /// independent copy, there is no sharing across tasks.
     pub static COMMAND_CTX: CommandContext;
 }
 
+/// Attempt to read a field from the current task-local context.
+/// Returns None when called outside a COMMAND_CTX.scope(), handles legacy
+/// command paths that haven't been wired yet.
 pub fn try_get_request_id() -> Option<String> {
     COMMAND_CTX.try_with(|ctx| ctx.request_id.clone()).ok()
 }
@@ -118,7 +163,10 @@ mod tests {
                 let outer_id = try_get_request_id().unwrap();
                 assert_eq!(outer_id, "outer");
 
+                // Spawn a child task, it does NOT inherit the parent task-local.
+                // This documents the expected isolation behavior.
                 let child = tokio::spawn(async {
+                    // No COMMAND_CTX.scope() in the child, so try_with returns None.
                     assert!(
                         try_get_request_id().is_none(),
                         "child must not inherit parent task-local"

@@ -12,6 +12,16 @@ export interface GetSendQueueOptions extends CreateMessageQueueOptions {
   reset?: boolean;
 }
 
+/**
+ * Return the per-surface message queue. The first call for a given
+ * `surfaceId` creates the queue and caches it; subsequent calls return the
+ * same instance.
+ *
+ * @param surfaceId, stable identifier for the calling surface
+ *                    (`'desktop'`, `'web'`, `'mobile'`, `'extension'`,
+ *                    `'extension-vscode'`).
+ * @param options, optional `storage` adapter, lane cap override, logger.
+ */
 export function getSendQueue(surfaceId: string, options?: GetSendQueueOptions): MessageQueue {
   if (options?.reset) queues.delete(surfaceId);
   let queue = queues.get(surfaceId);

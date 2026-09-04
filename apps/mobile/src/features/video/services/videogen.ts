@@ -38,6 +38,16 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+/**
+ * Create a video generation task.
+ *
+ * `Idempotency-Key` is REQUIRED by `/api/media/video/generate`, the route calls
+ * `parseManagedUsageIdempotencyKey` before doing any work. The key is derived
+ * ONCE per user action so a transport retry settles the same task rather than
+ * billing a second generation.
+ *
+ * @throws {Error} On network or server errors.
+ */
 export async function startVideoGeneration(
   request: VideoGenRequest,
   options: { operationId?: string } = {},

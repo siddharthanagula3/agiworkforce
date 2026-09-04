@@ -5,6 +5,12 @@ export interface FailureMode {
   expectedResponse: string;
 }
 
+/**
+ * The failure modes this system claims to survive. A claim only counts once
+ * `fault-injection.test.ts` injects the fault named here against real
+ * production code and asserts the response, the guard in that file fails if a
+ * mode is listed with no injection behind it.
+ */
 export const FAILURE_MODES: readonly FailureMode[] = Object.freeze([
   {
     id: 'dependency-rate-limited-with-retry-after',

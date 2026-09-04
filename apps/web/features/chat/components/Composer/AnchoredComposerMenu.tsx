@@ -1,5 +1,40 @@
 'use client';
 
+/**
+ * AnchoredComposerMenu: a composer popover that cannot be clipped away.
+ *
+ * WHY THIS EXISTS
+ *
+ * Every composer menu was an `absolute bottom-full` div rendered inside the
+ * composer. The composer sits at the bottom of a column of `overflow-hidden`
+ * flex containers (the chat shell clips its own scroll regions), so a popover
+ * taller than the space above the composer is not scrolled or flipped, it is
+ * silently CUT OFF, and the clipped rows stop receiving pointer events.
+ *
+ * That was not theoretical. At a 670px-tall viewport the "+" menu is 392px and
+ * opened with its top 34px outside the clip rect, which removed the FIRST row.
+ * "Add photos & files", from the product. `document.elementFromPoint` over
+ * that row returned the shell div, not the button. There was no way to attach a
+ * file to a message from the web composer at all: the hidden `<input
+ * type="file">` was still in the DOM, still wired, and unreachable.
+ *
+ * `position: fixed` alone does not fix it either, the composer sets
+ * `backdrop-blur` below `md`, and a backdrop-filter ancestor becomes the
+ * containing block for fixed descendants, so the clip returns on the exact
+ * narrow viewports where space is tightest.
+ *
+ * So: render through a portal on `document.body`, position from the trigger's
+ * own rect, flip below when there is more room there, and clamp the height to
+ * the viewport with internal scrolling. A menu can then be arbitrarily tall and
+ * every row stays reachable.
+ *
+ * The caller keeps ownership of open/close state and of its own outside-click
+ * handling; because the content is portaled OUT of the trigger's subtree, a
+ * caller whose "click outside" test is `triggerWrapper.contains(target)` must
+ * also consult {@link AnchoredComposerMenuProps.contentRef}, or every click
+ * inside the menu reads as an outside click.
+ */
+
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { cn } from '@shared/lib/utils';
@@ -28,6 +63,14 @@ export interface AnchoredComposerMenuProps {
   className?: string;
   /** Announced name for the popup. Without it the panel is an unlabelled region. */
   label: string;
+  /**
+   * Moves focus to the first focusable row on open, and lets Arrow/Home/End
+   * move real focus between rows. Right for a menu opened by a click; wrong
+   * for one opened by typing (mentions, slash commands), where taking focus
+   * off the input sends the rest of the user's keystrokes nowhere, that
+   * caller keeps focus in its own field and moves a virtual highlight from
+   * the same keydown it already reads.
+   */
   autoFocusFirstItem?: boolean;
   /** Escape and Tab-out close the popup through this. */
   onRequestClose?: () => void;

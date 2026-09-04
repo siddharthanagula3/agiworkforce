@@ -35,6 +35,10 @@ export async function recordManagedAutoMemoryTurn(params: {
       db = scoped.db;
     }
 
+    // A fact learned inside a project belongs to that project. Writing it
+    // unscoped would put a client's details into every unrelated chat, which is
+    // the leak project memory exists to prevent, so the project is resolved
+    // here rather than defaulting to global at four separate call sites.
     const conversationId = params.processed.conversationId;
     const [conversationRow] = conversationId
       ? await db.query<{ project_id: string | null }>(

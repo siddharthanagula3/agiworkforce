@@ -65,6 +65,11 @@ pub struct ComputerUseConfig {
     pub session: SessionConfig,
     /// Window manager configuration.
     pub window: WindowManagerConfig,
+    /// Stream 2: explicit model override for the planning vision LLM.
+    /// `None` lets the router pick (typically the user's default vision
+    /// model). Setting this to any vision-capable catalog model lets the user choose
+    /// any vision-capable model from the catalog, this is the multi-
+    /// provider differentiator vs Claude Cowork's Anthropic-only computer use.
     pub model: Option<String>,
     /// Stream 2: explicit provider override paired with `model`. When
     /// `Some`, the router targets this provider; when `None`, lets the
@@ -194,11 +199,17 @@ impl ComputerUseAgent {
         })
     }
 
+    /// Creates a new Computer Use agent with an attached per-app permission
+    /// registry. The agent will consult this registry on every action that
+    /// would affect the foreground window, closing the per-app blocklist
+    /// gap from today's architecture audit.
     pub fn with_app_permissions(
         llm_router: Arc<RwLock<LLMRouter>>,
         config: ComputerUseConfig,
         app_permissions: Arc<AppPermissionManager>,
     ) -> Result<Self> {
+        // TRUST BOUNDARY (desktop-trust-boundary-01): same threading as
+        // `new`, observe and plan must share one execution boundary.
         let mut visual_config = config.visual.clone();
         visual_config.trust_mode = config.trust_mode;
         let visual_reasoner = VisualReasoner::new(Arc::clone(&llm_router), visual_config);
@@ -374,6 +385,13 @@ impl ComputerUseAgent {
                     continue;
                 }
 
+                // Handle confirmation requirement. FAIL CLOSED: the pause/resume flow
+                // below is an unwired stub (no resume command exists and the wait loop
+                // has no timeout). A destructive action the safety layer flags for
+                // confirmation must NOT auto-execute, the previous gate
+                // (`&& task.require_confirmation`, always false) let it run with no
+                // confirmation at all. Unless the caller explicitly opts into the
+                // pause flow (require_confirmation=true) AND drives resume, block it.
                 if decision.requires_confirmation && !task.require_confirmation {
                     tracing::warn!(
                         "Destructive action requires confirmation but no HITL is available; blocking: {:?}",
@@ -394,6 +412,20 @@ impl ComputerUseAgent {
                 if decision.requires_confirmation && task.require_confirmation {
                     session.pause(decision.warnings.join(", "), action.clone());
 
+                    // BOUNDED wait. There is still no resume channel: `session`
+                    // is owned by this loop and `is_paused` is a plain bool, so
+                    // nothing outside can clear it, a caller that sets
+                    // `require_confirmation: true` would otherwise spin here
+                    // forever, holding the automation session open.
+                    //
+                    // Nothing sets that flag today (it defaults to false and has
+                    // no assignment in Rust or TS), so this branch is currently
+                    // unreachable; the fail-closed block above handles every real
+                    // confirmation case. The timeout exists so the hang cannot
+                    // appear the moment someone does set it.
+                    //
+                    // Real human-in-the-loop confirmation needs a shared signal
+                    // threaded into this loop, see docs/decisions/wire-or-cut.md.
                     let waited_from = Instant::now();
                     while session.is_paused()
                         && !session.is_cancelled()
@@ -621,6 +653,9 @@ Only include actions you're confident will make progress."#,
                 tool_call_id: None,
                 multimodal_content: Some(multimodal_content),
             }],
+            // Stream 2: honor an explicit model override from the config so
+            // the user can choose any vision-capable model (Claude / GPT /
+            // Gemini / Grok / Llama) for computer use, not just Anthropic.
             model: self.config.model.clone().unwrap_or_default(),
             temperature: Some(0.2), // Low temperature for consistent planning
             max_tokens: Some(2048),

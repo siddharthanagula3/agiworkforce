@@ -1,3 +1,9 @@
+//! `MemoriesSettingsView`: overlay for configuring the auto-memory system.
+//!
+//! Three settings: Auto-memory toggle, decay threshold, and max facts cap.
+//! Each item is a (label, value) pair; Enter toggles boolean fields and cycles
+//! numeric presets. Esc closes without saving; Enter on a boolean item saves
+//! immediately (stateless, the caller reads `settings()` on Submit).
 
 #![allow(dead_code)]
 

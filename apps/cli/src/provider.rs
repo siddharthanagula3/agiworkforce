@@ -3,6 +3,13 @@
 //! Each provider normalizes messages, tool definitions, and streaming responses
 //! into a common format. Provider-specific quirks are handled here.
 
+// Provider catalog mixes live helpers (find_model, provider_for_model,
+// format_model_list[_with_local], used by lib.rs, doctor.rs, slash_commands.rs,
+// --list-models) with reserved-for-future-wiring helpers
+// (models_for_provider, supports_tool_use, default_temperature, …). Rather than
+// a blanket file-level `#![allow(dead_code)]`, each currently-unwired item
+// carries its own scoped `#[allow(dead_code)]` so a genuinely orphaned *new*
+// helper still trips the dead-code lint instead of rotting unnoticed.
 
 use crate::model_catalog;
 use serde_json::Value;
@@ -62,6 +69,14 @@ impl From<&model_catalog::Model> for ModelInfo {
     }
 }
 
+/// Look up a model by ID (case-insensitive, exact match preferred, then an
+/// *unambiguous* prefix match).
+///
+/// The prefix fallback only resolves when exactly one catalog entry matches the
+/// bidirectional prefix relation. A truncated query that matches
+/// several entries returns `None` rather than silently binding to whichever
+/// model happens to come first in catalog order, otherwise capability,
+/// pricing, and deprecation lookups could bind to the wrong model.
 pub fn find_model(model_id: &str) -> Option<ModelInfo> {
     let lower = model_id.to_lowercase();
     let catalog = model_catalog();
@@ -121,6 +136,10 @@ pub fn provider_for_model(model_id: &str) -> Option<&'static str> {
     }
 }
 
+/// Check whether a model supports tool use (function calling).
+///
+/// Returns `false` for unknown models (safe default, avoids sending tool
+/// schemas to models that would reject or ignore them).
 #[allow(dead_code)] // reserved: tool-schema gating (exercised by tests)
 pub fn supports_tool_use(model_id: &str) -> bool {
     find_model(model_id).is_some_and(|m| m.supports_tools)
@@ -366,6 +385,14 @@ impl MessageNormalizer {
         format!("call{:05}", index)
     }
 
+    /// Sanitize a JSON Schema for Gemini (remove unsupported fields).
+    ///
+    /// Gemini's function-declaration schema is an OpenAPI 3.0 subset and rejects
+    /// several JSON Schema keywords. We strip the unsupported set at every level
+    /// and recurse through *all* schema-bearing positions, not just
+    /// `properties`, so array-item and union sub-schemas are sanitized too.
+    /// Otherwise tools with `items`/`anyOf`/`oneOf` sub-schemas still carry
+    /// rejected fields and fail tool registration with a 400.
     #[allow(dead_code)] // reserved: Gemini schema sanitization (exercised by tests)
     pub fn sanitize_gemini_schema(schema: &Value) -> Value {
         // Keywords Gemini's function-declaration schema rejects outright.
@@ -831,6 +858,12 @@ mod tests {
 
     #[test]
     fn test_default_temperature_gemini() {
+        // No Gemini model currently carries reasoning.rejectsSamplingParameters,
+        // so every one of them takes the family default. If a Gemini release
+        // starts rejecting temperature, set the flag in models.curation.json.
+        // do not add an ID back here. The flag is enforced in
+        // `models::streaming::effective_temperature`, which is what the request
+        // body actually reads.
         for model in models_for_provider("google") {
             assert_eq!(
                 default_temperature(&model.id),
@@ -1066,6 +1099,9 @@ mod tests {
 
     #[test]
     fn test_sanitize_gemini_schema_recurses_all_positions() {
+        // A schema with unsupported fields buried in items, anyOf, and nested
+        // object properties, Gemini rejects `default` and `additionalProperties`
+        // at every level, so the sanitizer must strip them everywhere.
         let schema = serde_json::json!({
             "type": "object",
             "default": {},

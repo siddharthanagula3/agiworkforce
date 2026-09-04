@@ -41,6 +41,11 @@ const LEAVER_OTHER_ORG_SHARE: ShareFixture = {
   orgShortId: 'bbbbbbbbbb',
 };
 
+/**
+ * A connector owned by someone who is staying, which reached this workspace
+ * through the leaver. Ownership, not who pressed share, decides whose token is
+ * about to be orphaned, so this one must survive.
+ */
 const COLLEAGUE_SHARE: ShareFixture = {
   organizationId: ORG,
   connectorRowId: 'conn-colleague',
@@ -319,6 +324,9 @@ describe('deprovisionMember', () => {
     });
 
     it("leaves another member's connector shared with this workspace alone", async () => {
+      // The leaver pressed share, but the token belongs to a colleague who is
+      // staying, unsharing it would cut the workspace off from a live
+      // connector for no reason.
       const { db, result } = run();
 
       expect((await result).sharedConnectorsUnshared).toBe(1);

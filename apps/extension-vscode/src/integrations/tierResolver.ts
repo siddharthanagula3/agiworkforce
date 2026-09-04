@@ -20,6 +20,13 @@ const VALID_TIERS: ReadonlySet<string> = new Set<UIPlanTier>([
   'enterprise',
 ]);
 
+/**
+ * Tier ordering: lower index = lower tier.
+ * Used to compare tiers (e.g. is 'basic' < 'pro'?).
+ *
+ * Kept here as a local convenience for tests that introspect order; the
+ * canonical comparator is {@link tierAtLeast} from `@agiworkforce/types`.
+ */
 export const TIER_ORDER: readonly Tier[] = [
   'local',
   'byok',
@@ -89,6 +96,12 @@ export async function refreshAccountTierCache(
   return tier;
 }
 
+/**
+ * Synchronous tier resolution for callers that cannot await, currently the
+ * webview HTML builders, which run inside `resolveWebviewView` / a constructor.
+ *
+ * Identical to {@link resolveTier}; kept for webview builders that cannot await.
+ */
 export function resolveTierSync(context: vscode.ExtensionContext): Tier {
   const cachedTier = coerceTier(context.globalState.get<string>('tierStatus.cachedTier'));
   if (cachedTier !== undefined) return cachedTier;

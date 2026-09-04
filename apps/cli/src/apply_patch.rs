@@ -29,10 +29,37 @@ pub struct PatchResult {
     pub exit_code: i32,
 }
 
+/// CLI-NEW-007 fix (2026-05-04 audit): scan a unified diff for the file
+/// targets it touches and verify each one is contained within `cwd`.
+///
+/// FIX (audit 2026-05-20, §3): the equivalent TS validator in
+/// `packages/tools/apply-patch` takes a `workspaceOnly: boolean` flag. The Rust
+/// CLI never had a way to opt out, workspace-only is the only mode.
+/// To make that invariant explicit (and protect against a future refactor
+/// re-introducing an `--unsafe-paths` knob): this function fails closed.
+/// There is no `workspace_only: false` code path; any change here that
+/// adds one MUST default to `true` and require an explicit caller opt-in
+/// at the CLI command surface, never at this validator.
+///
+/// Without this check, a patch with `--- /etc/cron.d/backdoor` flowed straight
+/// into `git apply`. Modern git refuses absolute paths by default, but:
+///   - older gits (< 2.20) accept them,
+///   - `core.worktree` redirection silently changes what "outside" means,
+///   - and a future regression (e.g., adding `--unsafe-paths`) would re-open
+///     the hole. A pre-check defense doesn't depend on git's behavior.
+///
+/// Strips standard `a/` and `b/` prefixes that git emits for headers, rejects
+/// any remaining absolute path, and rejects any path whose components escape
+/// `cwd` via parent traversal.
 fn validate_patch_targets(patch: &str, cwd: &Path) -> Result<()> {
     let cwd_canonical = cwd.canonicalize().unwrap_or_else(|_| cwd.to_path_buf());
 
     for line in patch.lines() {
+        // Headers we care about look like:
+        //   --- a/src/foo.rs
+        //   +++ b/src/foo.rs
+        //   --- /dev/null            (new file, fine, special-case)
+        //   diff --git a/x b/y       (we read the a/b paths from --- / +++)
         let raw = if let Some(rest) = line.strip_prefix("--- ") {
             rest
         } else if let Some(rest) = line.strip_prefix("+++ ") {
@@ -41,6 +68,7 @@ fn validate_patch_targets(patch: &str, cwd: &Path) -> Result<()> {
             continue;
         };
 
+        // git emits "/dev/null" for create / delete halves, that's fine.
         let trimmed = raw.split('\t').next().unwrap_or(raw).trim();
         if trimmed == "/dev/null" || trimmed.is_empty() {
             continue;
@@ -144,6 +172,13 @@ pub async fn apply_git_patch(patch: &str, cwd: Option<&Path>) -> Result<PatchRes
     let mut conflicted = Vec::new();
     let mut skipped = Vec::new();
     if code == 0 {
+        // `git apply --stat` only summarizes what a patch *would* touch, it
+        // doesn't validate applicability the way the real `git apply` (run
+        // above as `apply`) does. Only trust that summary, and only report
+        // files as "applied", once the real apply invocation has actually
+        // succeeded. Reporting from `--stat` unconditionally previously made
+        // `agi apply` claim success (and list changed files) even when the
+        // real apply failed and nothing was written to disk.
         for line in String::from_utf8_lossy(&stat.stdout).lines() {
             if let Some(f) = line.split('|').next() {
                 let t = f.trim();
@@ -160,6 +195,9 @@ pub async fn apply_git_patch(patch: &str, cwd: Option<&Path>) -> Result<PatchRes
                 skipped.push(line.to_string());
             }
         }
+        // Neither category matched a known pattern, surface the raw error
+        // rather than silently dropping it, so a failed apply is never
+        // reported as clean with an empty everything.
         if conflicted.is_empty() && skipped.is_empty() {
             let stderr = String::from_utf8_lossy(&apply.stderr).trim().to_string();
             conflicted.push(if stderr.is_empty() {
@@ -262,6 +300,8 @@ mod patch_validation_tests {
         );
     }
 
+    /// `a/x/../y/foo` traverses up once but doesn't actually escape, the
+    /// parent is consumed by the next normal segment. Allowed.
     #[test]
     fn allows_traversal_that_stays_within_root() {
         let patch = "--- a/src/../README.md\n+++ b/src/../README.md\n@@ -1,1 +1,1 @@\n-old\n+new\n";

@@ -132,6 +132,10 @@ pub(super) fn build_system_prompt(
 
     let mut prompt = String::with_capacity(4096);
     prompt.push_str(base);
+    // Operational guidance, always appended (even when a custom base is set) so the
+    // agent knows how to behave and how to drive its tools. Principles adapted from
+    // production coding-agent CLIs (concise tone, read-before-edit, minimal-change,
+    // verify-before-claiming, faithful reporting, deliberate tool use).
     prompt.push_str(
         "\n\n# Tone and style\n\
          - Be concise and direct. Lead with the answer or the action, not the reasoning. Skip preamble, filler, and restating the user's request, just do it.\n\

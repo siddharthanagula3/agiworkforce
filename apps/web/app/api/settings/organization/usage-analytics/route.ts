@@ -26,6 +26,12 @@ export interface OrganizationUsageResponse {
   usage: OrganizationUsage;
 }
 
+/**
+ * Admin-only. Per-member spend is operational insight an administrator needs to
+ * run a budget, and it is also a record of what each named person did, so it
+ * is gated on the role that is accountable for the workspace rather than served
+ * to everyone in it.
+ */
 async function handleGet(request: NextRequest): Promise<NextResponse> {
   const rateLimitResponse = await withRateLimit(request, 'settings-org');
   if (rateLimitResponse) return rateLimitResponse;

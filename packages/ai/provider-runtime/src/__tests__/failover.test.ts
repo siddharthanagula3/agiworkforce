@@ -21,6 +21,15 @@ describe('credential failover admission', () => {
     expect(isCredentialFailureCategory(classified.category)).toBe(true);
   });
 
+  // CORRECTED: this case previously asserted `category === 'auth'`, which
+  // encoded a real defect rather than a requirement. An exhausted credit balance
+  // is an unfunded, but perfectly VALID, credential. Classifying it as a
+  // credential failure made it a rotation trigger, so an AGIWorkforce account
+  // that had run out of money silently pushed the request onto a different PAID
+  // provider and spent more there instead of surfacing the billing problem.
+  //
+  // The assertion is inverted deliberately. See billing-failure-taxonomy.test.ts
+  // for the full invariant.
   it('refuses credential rotation for an exhausted credit balance', () => {
     const classified = classifyError({
       status: 400,

@@ -1,3 +1,11 @@
+/**
+ * Sandboxed preload for the Electron cloud shell.
+ *
+ * Exposes exactly the `ElectronHostBridge` contract
+ * (`src/lib/tauri-electron/bridgeContract.ts`) as `window.agiHost`, the only
+ * surface the renderer has beyond the DOM. No Node globals leak into the page
+ * (`contextIsolation: true`, `sandbox: true`, `nodeIntegration: false`).
+ */
 import { contextBridge, ipcRenderer } from 'electron';
 import {
   ELECTRON_BRIDGE_COMMANDS,

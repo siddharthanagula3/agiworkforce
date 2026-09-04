@@ -1,3 +1,17 @@
+/**
+ * webviewAttachmentCap.test.ts, the composer's client-side size bound must
+ * never exceed the host's `attachFiles` Zod ceiling.
+ *
+ * `parseWebviewMessage` failing drops the WHOLE batch, not the one oversized
+ * file, and the host then posts no `attachFilesAck`, so every chip in that
+ * drop stays stuck on "uploading" and any well-sized file dropped alongside
+ * the offender is silently lost. A webview bound above the schema's ceiling
+ * therefore turns a per-file rejection into a dead composer, which is exactly
+ * what a 10 MiB webview constant did against a 10,000,000-byte schema.
+ *
+ * @vitest-environment jsdom
+ */
+
 import { describe, expect, it } from 'vitest';
 import { getWebviewContent } from '../features/sidebar-webview/webviewContent';
 import { parseWebviewMessage } from '../protocol/webviewMessages';

@@ -196,6 +196,12 @@ export function AccountSection() {
     [clerkSignOut, logout, router],
   );
 
+  // ── Delete account (canonical, working flow on this surface) ───────────────
+  // CSRF, the DELETE call, response parsing, and the post-success sign-out
+  // sequence all live in useDeleteAccount (features/settings/hooks/
+  // use-settings-queries.ts), this is now the only account-deletion
+  // implementation in the app; PrivacySection's independent copy (which never
+  // signed the user out) was collapsed onto this hook.
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [deleteConfirmInput, setDeleteConfirmInput] = useState('');
   const deleteAccountMutation = useDeleteAccount();
@@ -209,6 +215,12 @@ export function AccountSection() {
     void deleteAccountMutation.signOutAfterDeletion();
   }, [deleteAccountMutation]);
 
+  // ── Cancel a pending deletion, before the erasure deadline ──────────────────
+  // The account stays reachable here because scheduling a deletion does not
+  // revoke the Clerk session, only the post-confirm sign-out above does, and
+  // only once the user clicks Continue. Signing back in before the deadline
+  // (the Clerk identity itself is not deleted until the purge cron runs)
+  // lands here with deletionStatus.pending true, which is what this reads.
   const [showCancelDialog, setShowCancelDialog] = useState(false);
   const deletionStatus = useAccountDeletionStatus();
   const cancelDeletionMutation = useCancelAccountDeletion();

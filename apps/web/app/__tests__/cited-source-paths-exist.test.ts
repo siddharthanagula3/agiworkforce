@@ -26,6 +26,10 @@ function resolves(cited: string): boolean {
   return candidates.some((c) => existsSync(join(REPO, c)) || existsSync(join(WEB, c)));
 }
 
+// These pages cite source paths as EVIDENCE, the subprocessor table names the
+// route that sends a prompt to each vendor, the privacy pages name the erasure
+// inventory. A moved file turns a checkable disclosure into an unverifiable
+// assertion, and nothing else would notice.
 describe('source paths cited in user-facing copy still exist', () => {
   it('finds citations at all, so this cannot pass vacuously', () => {
     const found = pages().flatMap((p) => [...renderedCopy(p).matchAll(PATH_PATTERN)]);

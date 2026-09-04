@@ -1294,6 +1294,15 @@ describe('plan approval gate', () => {
 });
 
 describe('empty synthesis, attributing the cause honestly', () => {
+  /**
+   * Observed locally with an Anthropic key at $0: every upstream call was
+   * rejected with "Your credit balance is too low to access the Anthropic API",
+   * the run gathered nothing, synthesis came back empty, and the user was told
+   * "the model returned an empty report. Try running the research again." Both
+   * halves were wrong, the model never got a chance to speak, and the retry
+   * could not have succeeded. Zero sources plus a captured upstream error is an
+   * infrastructure failure, not a shy model.
+   */
   it('names the upstream provider error instead of blaming the model when nothing was gathered', async () => {
     streamRequestMock
       .mockResolvedValueOnce(planStream())

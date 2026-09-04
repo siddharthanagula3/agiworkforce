@@ -138,6 +138,13 @@ impl ProjectMemoryManager {
         })
     }
 
+    /// Create a ProjectMemoryManager over an already opened connection.
+    ///
+    /// The main database is keyed by `MainDatabaseAccess` (Keychain-stored, or
+    /// the WDIO harness key), not by the machine-derived key that
+    /// `open_keyed_connection` uses, opening the main DB path through the
+    /// keyed helper fails with "file is not a database". Callers pointing at
+    /// the main database must hand in a connection from `MainDatabaseAccess`.
     pub fn from_connection(conn: Connection) -> Self {
         Self {
             conn: Mutex::new(conn),

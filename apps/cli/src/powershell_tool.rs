@@ -1,3 +1,10 @@
+//! PowerShell tool, Windows shell execution behind a read-only allowlist.
+//!
+//! Distinct from generic `run_command` because PowerShell has its own
+//! security model: ConstrainedLanguageMode (CLM) verbs, execution policies,
+//! and registry-touching cmdlets we want to warn about.
+//!
+//! Detects `pwsh`, `powershell.exe`, `powershell` (in that order) on PATH.
 
 #![allow(dead_code)]
 
@@ -52,6 +59,7 @@ pub const DESTRUCTIVE_VERBS: &[&str] = &[
     "New-PSDrive", // can map external drives
 ];
 
+/// Cmdlets that touch the Windows registry, warn even when not safe_mode.
 pub const REGISTRY_CMDLETS: &[&str] = &[
     "Get-ItemProperty",
     "Set-ItemProperty",
@@ -205,6 +213,12 @@ impl CommandShape {
     }
 }
 
+/// Classify a command by what it can invoke.
+///
+/// This is an allowlist, so the answer for an unrecognized construct is
+/// always `Unconstrained`, the inverse of a denylist, which has to
+/// enumerate every spelling of a forbidden name and loses to the first one
+/// it missed.
 pub fn command_shape(command: &str) -> CommandShape {
     let mut statements: Vec<Vec<String>> = Vec::new();
     let mut segments: Vec<String> = Vec::new();
@@ -321,6 +335,16 @@ fn refusal(
     ))
 }
 
+/// Execute a PowerShell command and capture stdout/stderr/exit.
+///
+/// `safe_mode` (default true) admits only what `command_shape` proves is a
+/// plain pipeline of allowlisted read-only commands, and only when
+/// `safety_check` is also silent. The allowlist is the gate because the
+/// denylist cannot be one: PowerShell rebuilds any forbidden name from
+/// backticks, concatenation, or `[char]`, so silence from `safety_check`
+/// proves nothing. Tool arguments alone, which an injected prompt controls
+///, therefore never reach the interpreter with an arbitrary payload, no
+/// matter what the caller decided about confirmation.
 pub async fn execute(req: &PowerShellRequest) -> Result<PowerShellResult> {
     let warnings = safety_check(&req.command);
     let shape = command_shape(&req.command);
@@ -511,6 +535,11 @@ mod hardening_tests {
 
 #[cfg(test)]
 mod allowlist_gate_tests {
+    //! The denylist is not the authorization boundary: obfuscated payloads
+    //! produce zero warnings, so the allowlist has to decide.
+    //!
+    //! Every payload here is inert if it ever did run, a regression test
+    //! must not be able to execute its own exploit.
     use super::*;
 
     const OBFUSCATED: &str = "I`nvoke-Expression 'Get-Date'";

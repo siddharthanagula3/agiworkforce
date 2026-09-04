@@ -1,5 +1,19 @@
+/// Coverage wave 2, plugin manifest loading and trust boundary.
+///
+/// Exercises:
+///  1. load_manifest_for() returns None on a missing directory.
+///  2. All 5 manifest formats parse correctly via load_manifest_for() with
+///     the correct ManifestFormat tag (round-trip on known fixture).
+///  3. Priority ordering: .agiworkforce-plugin wins over .claude-plugin.
+///  4. hook_configs_with_trust() returns from_project_dir=true for a
+///     project-local plugin (HIGH-2 trust boundary).
+///  5. hook_configs() OMITS hooks from project-local plugins (the security
+///     enforcement half of the trust boundary).
 use agiworkforce_cli::plugins::{load_manifest_for, ManifestFormat, PluginsManager};
 
+// ---------------------------------------------------------------------------
+// Helper, write a minimal plugin.json to a temp path.
+// ---------------------------------------------------------------------------
 fn write_manifest(root: &std::path::Path, rel: &str, content: &str) {
     let path = root.join(rel);
     std::fs::create_dir_all(path.parent().unwrap()).unwrap();
@@ -114,6 +128,9 @@ fn load_manifest_legacy_mcp_format() {
     assert_eq!(format.short_tag(), "legacy");
 }
 
+// ---------------------------------------------------------------------------
+// Test 3: Priority, .agiworkforce-plugin wins when both formats are present.
+// ---------------------------------------------------------------------------
 #[test]
 fn load_manifest_priority_agiworkforce_over_claude() {
     let dir = tempfile::tempdir().unwrap();
@@ -181,6 +198,9 @@ fn project_local_plugin_hooks_are_untrusted() {
     let fake_home = tempfile::tempdir().unwrap();
     let _home_guard = HomeEnvGuard::set(fake_home.path());
 
+    // PluginsManager scans the (now-empty temp) global dir and then the
+    // project dir. The global dir does not exist under the temp home, so it
+    // is skipped gracefully, only the fixture plugin is loaded.
     let mut manager = PluginsManager::new();
     manager
         .load_all(Some(project_dir.path()))

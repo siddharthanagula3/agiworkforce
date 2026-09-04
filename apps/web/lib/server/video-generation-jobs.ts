@@ -853,6 +853,10 @@ export async function finalizeVideoGenerationJob(input: {
     ],
   );
 
+  // A completed video settles inside finalize_video_generation_job, which calls the
+  // billing SQL directly and never passes through finalizeManagedUsageRequest, so the
+  // COGS event has to be emitted here or video, the most expensive non-token
+  // capability, would be the one capability missing from the ledger.
   if (job && job.billingOutcome === 'completed') {
     await recordSettledProviderCost({
       userId: job.userId,
