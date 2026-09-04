@@ -11,6 +11,7 @@ import {
   persistProvenActiveWorkspaceSelection,
   resolveActiveOrganizationId,
   resolveOrganizationMembershipId,
+  touchesActiveOrganizationNamespace,
 } from '../active-workspace-service';
 
 function fakeCacheRedis() {
@@ -170,5 +171,23 @@ describe('active workspace persistence, warm Redis cache', () => {
 
     await expect(resolveActiveOrganizationId(h.db, 'user-1')).resolves.toBe(ORGANIZATION_ID);
     expect(h.query).not.toHaveBeenCalled();
+  });
+});
+
+describe('touchesActiveOrganizationNamespace', () => {
+  it('is true for a delta carrying the workspace namespace', () => {
+    expect(touchesActiveOrganizationNamespace({ workspace: { activeOrganizationId: 'x' } })).toBe(
+      true,
+    );
+  });
+
+  it('is false for a delta with unrelated namespaces', () => {
+    expect(touchesActiveOrganizationNamespace({ appearance: { theme: 'dark' } })).toBe(false);
+  });
+
+  it('is false for an empty or missing delta', () => {
+    expect(touchesActiveOrganizationNamespace({})).toBe(false);
+    expect(touchesActiveOrganizationNamespace(null)).toBe(false);
+    expect(touchesActiveOrganizationNamespace(undefined)).toBe(false);
   });
 });

@@ -8,6 +8,8 @@ import { requireCsrfToken } from '@/lib/csrf';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { getUserScopedDb } from '@/lib/server/rls-db';
+import { touchesActiveOrganizationNamespace } from '@/lib/services/active-workspace-service';
+import { invalidateActiveOrganizationCache } from '@/lib/server/request-context-cache';
 
 const SettingsPatchSchema = z.object({
   namespace: z
@@ -111,6 +113,10 @@ async function handlePut(request: NextRequest) {
   } catch (error) {
     logger.error({ error, userId }, 'Failed to persist user settings');
     throw createError.internal('Failed to save settings');
+  }
+
+  if (touchesActiveOrganizationNamespace(delta)) {
+    await invalidateActiveOrganizationCache(userId);
   }
 
   return NextResponse.json({ settings: merged });
