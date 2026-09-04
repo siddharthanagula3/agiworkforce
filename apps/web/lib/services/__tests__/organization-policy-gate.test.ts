@@ -10,6 +10,7 @@ import {
   resolveSecretHandlingPolicy,
   resolveZeroDataRetentionPolicy,
 } from '../organization-policy-gate';
+import { clearIpAllowListCacheForTests } from '../organization-ip-allow-list-cache';
 
 const ORGANIZATION_ID = '11111111-1111-4111-8111-111111111111';
 
@@ -32,6 +33,7 @@ function policyRow(overrides: Record<string, unknown> = {}) {
     allow_chrome_cloud_sync: false,
     audit_export_enabled: true,
     retention_days: 365,
+    ip_allow_list: [],
     metadata: {},
     updated_at: '2026-08-22T00:00:00.000Z',
     ...overrides,
@@ -504,7 +506,10 @@ describe('resolveZeroDataRetentionPolicy', () => {
 });
 
 describe('resolveIpAllowListPolicy', () => {
-  beforeEach(() => vi.clearAllMocks());
+  beforeEach(() => {
+    vi.clearAllMocks();
+    clearIpAllowListCacheForTests();
+  });
 
   it('defaults a personal-scope request to an empty allow list', async () => {
     const h = harness();
@@ -528,11 +533,26 @@ describe('resolveIpAllowListPolicy', () => {
     const h = harness();
     h.query
       .mockResolvedValueOnce([{ organization_id: ORGANIZATION_ID }])
-      .mockResolvedValueOnce([policyRow({ metadata: { ipAllowList: ['203.0.113.0/24'] } })]);
+      .mockResolvedValueOnce([policyRow({ ip_allow_list: ['203.0.113.0/24'] })]);
 
     const result = await resolveIpAllowListPolicy(h.db, 'user-1');
 
     expect(result).toEqual({ cidrs: ['203.0.113.0/24'], organizationId: ORGANIZATION_ID });
+  });
+
+  it('caches the resolved allow list so a second call for the same organization skips the policy read', async () => {
+    const h = harness();
+    h.query
+      .mockResolvedValueOnce([{ organization_id: ORGANIZATION_ID }])
+      .mockResolvedValueOnce([policyRow({ ip_allow_list: ['203.0.113.0/24'] })])
+      .mockResolvedValueOnce([{ organization_id: ORGANIZATION_ID }]);
+
+    const first = await resolveIpAllowListPolicy(h.db, 'user-1');
+    const second = await resolveIpAllowListPolicy(h.db, 'user-1');
+
+    expect(first).toEqual({ cidrs: ['203.0.113.0/24'], organizationId: ORGANIZATION_ID });
+    expect(second).toEqual({ cidrs: ['203.0.113.0/24'], organizationId: ORGANIZATION_ID });
+    expect(h.query).toHaveBeenCalledTimes(3);
   });
 
   it('fails open (empty allow list) when the policy read fails', async () => {

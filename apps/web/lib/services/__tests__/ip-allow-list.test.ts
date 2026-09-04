@@ -67,4 +67,16 @@ describe('isIpAllowed', () => {
     expect(isIpAllowed('203.0.113.5', ['garbage', '203.0.113.0/24'])).toBe(true);
     expect(isIpAllowed('198.51.100.9', ['garbage', '203.0.113.0/24'])).toBe(false);
   });
+
+  it('allows an ipv4-mapped ipv6 client address inside a configured ipv4 subnet', () => {
+    expect(isIpAllowed('::ffff:203.0.113.5', ['203.0.113.0/24'])).toBe(true);
+  });
+
+  it('denies an ipv4-mapped ipv6 client address outside every configured ipv4 subnet', () => {
+    expect(isIpAllowed('::ffff:198.51.100.9', ['203.0.113.0/24'])).toBe(false);
+  });
+
+  it('allows an ipv4-mapped ipv6 client address inside a configured ipv4-mapped ipv6 subnet', () => {
+    expect(isIpAllowed('::ffff:203.0.113.5', ['::ffff:203.0.113.0/120'])).toBe(true);
+  });
 });

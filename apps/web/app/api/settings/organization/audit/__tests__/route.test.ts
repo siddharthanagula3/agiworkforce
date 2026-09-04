@@ -38,6 +38,7 @@ const POLICY_EXPORT_OFF = {
   allow_chrome_cloud_sync: false,
   audit_export_enabled: false,
   retention_days: 365,
+  ip_allow_list: [],
   metadata: {},
   updated_at: '2026-08-23T00:00:00.000Z',
 };
