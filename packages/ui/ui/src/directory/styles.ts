@@ -2,7 +2,7 @@ export const DIRECTORY_FOCUS_RING =
   'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background';
 
 export const DIRECTORY_CARD =
-  'group relative flex w-full flex-col gap-2 rounded-xl border border-border bg-card p-4 text-left transition-shadow motion-reduce:transition-none hover:shadow-md';
+  'group relative flex w-full cursor-pointer flex-col gap-2 rounded-xl border border-border bg-card p-4 text-left transition-colors motion-reduce:transition-none hover:border-foreground/20 hover:bg-muted';
 
 export const DIRECTORY_CHIP =
   'inline-flex min-h-8 items-center gap-1 rounded-full border border-transparent px-3 text-xs font-medium';

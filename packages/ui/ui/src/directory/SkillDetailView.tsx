@@ -85,6 +85,7 @@ export function SkillDetailView({
         subtitle={detail.publisher}
         primaryLabel={installed ? UNINSTALL_LABEL : INSTALL_LABEL}
         primaryDone={false}
+        primarySecondary={installed}
         onPrimary={installed ? onUninstall : onInstall}
         onCopyLink={onCopyLink}
         busy={busy}
