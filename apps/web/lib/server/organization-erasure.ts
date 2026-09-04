@@ -77,6 +77,12 @@ export const ORGANIZATION_ANONYMIZED_COLUMNS: ReadonlyArray<{
     column: 'organization_id',
     reason: 'Cost-of-goods and billing history; the row survives, the tenant does not.',
   },
+  {
+    table: 'provider_cost_events',
+    column: 'organization_id',
+    reason:
+      'Settled provider cost per request, owned by the member who made it and needed for overage reconciliation; the funding organization is detached.',
+  },
 ];
 
 export const ORGANIZATION_UNDELETED_TABLES: Readonly<Record<string, string>> = {
