@@ -119,6 +119,7 @@ import { ChatLoadingState } from '../components/messages/ChatLoadingState';
 import { ImageTranscriptRecoveryNotice } from '../components/ImageTranscriptRecoveryNotice';
 import { ChatComposerNew } from '../components/Composer/ChatComposerNew';
 import { GreetingBanner } from '../components/GreetingBanner/GreetingBanner';
+import { StarterPrompts } from '@/features/onboarding/components/StarterPrompts';
 import { SidebarWordmark } from '@shared/components/agi/SidebarWordmark';
 import { buildAppNavItems } from '@shared/components/layout/app-nav-items';
 import {
@@ -4820,6 +4821,7 @@ export default function WebChatPage() {
                     }}
                   />
                 </div>
+                <StarterPrompts onSelect={setComposerPrefill} />
               </div>
             </div>
           ) : (
