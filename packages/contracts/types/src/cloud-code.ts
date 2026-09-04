@@ -43,6 +43,8 @@ export interface CloudCodeSession {
   networkAccess: CloudCodeNetworkAccess;
   /** Null for sessions created before the runtime was selectable. */
   runtimeId: string | null;
+  /** Extra hostnames allowlisted on top of networkAccess. Empty for most sessions. */
+  extraHosts: string[];
   state: CloudCodeSessionState;
   workspacePath: string;
   lastError: string | null;

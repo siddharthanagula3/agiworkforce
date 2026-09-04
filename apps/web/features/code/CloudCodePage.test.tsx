@@ -37,6 +37,7 @@ const session: CloudCodeSession = {
   repositoryBranch: null,
   networkAccess: 'none',
   runtimeId: null,
+  extraHosts: [],
   state: 'ready',
   workspacePath: '/home/user',
   lastError: null,
@@ -359,6 +360,50 @@ describe('CloudCodePage', () => {
       expect(commit).toHaveBeenCalledWith(repoSession.id, 'wire the settings toggle'),
     );
     expect(await screen.findByText('Pushed to the repository.')).toBeInTheDocument();
+  });
+
+  it('shows the extra hosts a session was created with', async () => {
+    const withHosts = { ...session, extraHosts: ['api.example.com', '*.internal.example.com'] };
+    const api = createApi({
+      list: vi.fn(async () => ({
+        availability: {
+          deploymentEnabled: true,
+          storageReady: true,
+          planEntitled: true,
+          planTier: 'pro',
+          maxSessions: 5,
+        },
+        sessions: [withHosts],
+        runtimes: [],
+      })),
+      get: vi.fn(async () => ({ session: withHosts, terminalEntries: [] })),
+    });
+
+    render(<CloudCodePage api={api} />);
+
+    await screen.findByRole('textbox', { name: 'Terminal command' });
+    expect(screen.getByText('+ api.example.com, *.internal.example.com')).toBeInTheDocument();
+  });
+
+  it('does not show an extra hosts badge for a session created without any', async () => {
+    const api = createApi({
+      list: vi.fn(async () => ({
+        availability: {
+          deploymentEnabled: true,
+          storageReady: true,
+          planEntitled: true,
+          planTier: 'pro',
+          maxSessions: 5,
+        },
+        sessions: [session],
+        runtimes: [],
+      })),
+    });
+
+    render(<CloudCodePage api={api} />);
+
+    await screen.findByRole('textbox', { name: 'Terminal command' });
+    expect(screen.queryByText(/^\+ /)).not.toBeInTheDocument();
   });
 
   it('does not offer commit and push for a session with no repository', async () => {
