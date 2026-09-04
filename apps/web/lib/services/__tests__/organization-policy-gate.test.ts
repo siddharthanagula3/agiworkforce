@@ -33,7 +33,6 @@ function policyRow(overrides: Record<string, unknown> = {}) {
     allow_chrome_cloud_sync: false,
     audit_export_enabled: true,
     retention_days: 365,
-    ip_allow_list: [],
     metadata: {},
     updated_at: '2026-08-22T00:00:00.000Z',
     ...overrides,
@@ -533,7 +532,7 @@ describe('resolveIpAllowListPolicy', () => {
     const h = harness();
     h.query
       .mockResolvedValueOnce([{ organization_id: ORGANIZATION_ID }])
-      .mockResolvedValueOnce([policyRow({ ip_allow_list: ['203.0.113.0/24'] })]);
+      .mockResolvedValueOnce([policyRow({ metadata: { ipAllowList: ['203.0.113.0/24'] } })]);
 
     const result = await resolveIpAllowListPolicy(h.db, 'user-1');
 
@@ -544,7 +543,7 @@ describe('resolveIpAllowListPolicy', () => {
     const h = harness();
     h.query
       .mockResolvedValueOnce([{ organization_id: ORGANIZATION_ID }])
-      .mockResolvedValueOnce([policyRow({ ip_allow_list: ['203.0.113.0/24'] })])
+      .mockResolvedValueOnce([policyRow({ metadata: { ipAllowList: ['203.0.113.0/24'] } })])
       .mockResolvedValueOnce([{ organization_id: ORGANIZATION_ID }]);
 
     const first = await resolveIpAllowListPolicy(h.db, 'user-1');
