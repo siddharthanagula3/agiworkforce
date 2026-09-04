@@ -72,9 +72,11 @@ export default function ContactSalesPage() {
                   body: (
                     <>
                       SSO and SCIM provisioning are implemented and configured by your org owner;
-                      audit capture is in place but extracts are supplied under contract; neither
-                      per-organization retention windows nor org-wide BYOK enforcement is shipped,
-                      and both are handled under contract. The{' '}
+                      audit events are recorded append-only and your owner can read, filter and
+                      export them as JSONL; per-organization retention windows with enforcement and
+                      legal holds are shipped; your owner can disallow managed compute for the whole
+                      workspace so every seat runs local or on your own keys; dedicated capacity is
+                      handled under contract. The{' '}
                       <a className="agi-ds-link" href="/enterprise">
                         enterprise page
                       </a>{' '}

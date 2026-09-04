@@ -158,7 +158,7 @@ export default function EnterprisePage() {
                 {
                   label: 'BYOK posture',
                   value:
-                    'The strongest control available today, and it needs no feature work from us: every seat can run fully local, or on your own provider keys on Desktop, CLI, and VS Code, and no conversation content reaches AGI infrastructure at all. It is architecture rather than administration. There is no org-wide BYOK enforcement, so we cannot stop a member choosing managed cloud. Requiring it org-wide is a contract-scoped commitment.',
+                    'The strongest control available today, and it needs no feature work from us: every seat can run fully local, or on your own provider keys on Desktop, CLI, and VS Code, and no conversation content reaches AGI infrastructure at all. It is architecture rather than administration. Your workspace owner can also disallow managed compute for the whole workspace in the policy section, which refuses managed requests from every seat and limits members to local and BYOK surfaces; what a member runs outside the product is beyond its reach.',
                 },
                 {
                   label: 'Service levels',
