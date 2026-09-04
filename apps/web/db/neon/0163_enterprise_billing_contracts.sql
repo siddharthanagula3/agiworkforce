@@ -46,6 +46,7 @@ create table if not exists public.organization_billing_contracts (
   ended_at timestamptz,
   metadata jsonb not null default '{}'::jsonb
     check (jsonb_typeof(metadata) = 'object'),
+  last_stripe_event_at timestamptz,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
@@ -80,6 +81,7 @@ create table if not exists public.organization_billing_invoices (
   voided_at timestamptz,
   hosted_invoice_url text,
   invoice_pdf_url text,
+  last_stripe_event_at timestamptz,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );

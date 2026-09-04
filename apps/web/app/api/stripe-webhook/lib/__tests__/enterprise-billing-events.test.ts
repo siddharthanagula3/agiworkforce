@@ -110,6 +110,7 @@ describe('enterprise billing event wiring', () => {
       expect.anything(),
       expect.anything(),
       sub,
+      { eventCreatedAt: NOW },
     );
   });
 
@@ -121,6 +122,7 @@ describe('enterprise billing event wiring', () => {
       expect.anything(),
       expect.anything(),
       sub,
+      { eventCreatedAt: NOW },
     );
   });
 
@@ -137,10 +139,12 @@ describe('enterprise billing event wiring', () => {
       expect.anything(),
       stripe,
       sub,
+      { eventCreatedAt: NOW },
     );
     expect(enterpriseBillingMocks.recordEnterpriseInvoiceEvent).toHaveBeenCalledWith(
       expect.anything(),
       invoice,
+      { eventCreatedAt: NOW },
     );
   });
 
@@ -166,7 +170,7 @@ describe('enterprise billing event wiring', () => {
       expect(
         enterpriseBillingMocks.recordEnterpriseInvoiceEvent,
         `${type} did not record an enterprise invoice ledger entry`,
-      ).toHaveBeenCalledWith(expect.anything(), invoice);
+      ).toHaveBeenCalledWith(expect.anything(), invoice, { eventCreatedAt: NOW });
     }
   });
 
