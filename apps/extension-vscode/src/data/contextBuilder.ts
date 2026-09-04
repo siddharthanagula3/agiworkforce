@@ -116,8 +116,8 @@ export class ContextBuilder {
       try {
         const result = await execFileAsync('git', ['diff', '--stat'], execOpts);
         diffOutput = result.stdout.trim();
-      } catch {
-        // noop
+      } catch (err) {
+        void err;
       }
 
       if (statusOutput === '' && diffOutput === '') {

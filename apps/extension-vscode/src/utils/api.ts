@@ -405,7 +405,7 @@ function httpsPostStream(
             const parsed = JSON.parse(data) as ChatCompletionChunk;
             onChunk(parsed);
           } catch {
-            // noop
+            continue;
           }
         }
       });
