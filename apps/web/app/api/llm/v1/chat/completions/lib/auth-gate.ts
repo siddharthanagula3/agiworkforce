@@ -1,7 +1,6 @@
 import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
-import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import { withRateLimit } from '@/lib/rate-limit';
 import { getClerkAuthUser } from '@/lib/api-auth';
 import { SubscriptionService, type SubscriptionInfo } from '@/lib/services/subscription-service';
@@ -19,6 +18,7 @@ import { isIpNotAllowedError } from '@/lib/ip-allow-list-gate';
 import { logger } from '@/lib/logger';
 import { getNeonDb } from '@/lib/server/neon-db';
 import { readOrganizationCollectionState } from '@/lib/services/enterprise-collection-state';
+import { resolveEnterpriseFundingOrganizationId } from '@/lib/services/enterprise-funding-organization';
 import {
   resolveSubscriptionAccess,
   type EnterpriseCollectionAccessState,
@@ -26,39 +26,6 @@ import {
 import { resolveAuthenticatedSurface } from './request-surface';
 
 const ENTERPRISE_PLAN_TIER = 'enterprise';
-
-/**
- * The organization an enterprise subscription actually funds: the org owned
- * by the subscriber (`organizations.owner_user_id`), or failing that, an
- * organization the caller holds a seat in. Deliberately independent of
- * `resolveActiveOrganizationId`, which honors the caller-supplied
- * `x-agi-organization-id` header (including the documented `personal`
- * value), a delinquent org's own owner or member can send that header to
- * pick which organization gets consulted, which must never be the mechanism
- * that decides whether a 91-day-overdue enterprise contract still buys
- * unlimited managed completions.
- */
-async function resolveEnterpriseFundingOrganizationId(
-  db: Pick<DatabaseAdapter, 'query'>,
-  userId: string,
-): Promise<string | null> {
-  const [row] = await db.query<{ organization_id: string }>(
-    `select organization_id
-       from (
-         select o.id as organization_id, 0 as priority
-           from public.organizations o
-          where o.owner_user_id = $1
-         union all
-         select m.organization_id, 1 as priority
-           from public.organization_members m
-          where m.user_id = $1
-       ) funding
-      order by priority asc
-      limit 1`,
-    [userId],
-  );
-  return row?.organization_id ?? null;
-}
 
 async function resolveEnterpriseCollectionAccessState(
   userId: string,
