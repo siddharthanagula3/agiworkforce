@@ -25,6 +25,7 @@ export * as auth from './auth';
 export * as security from './security';
 export * as window from './window';
 export * as shortcuts from './shortcuts';
+export * as autostart from './autostart';
 export * as models from './models';
 export * as ollama from './ollama';
 export * as completion from './completion';
