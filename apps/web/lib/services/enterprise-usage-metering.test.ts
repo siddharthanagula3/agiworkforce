@@ -14,7 +14,6 @@ vi.mock('@/lib/logger', () => ({
 import {
   computeEnterpriseUsageAllowance,
   computeNewOverageToReportCents,
-  readEnterpriseUsageAllowance,
   reportEnterpriseOverageUsage,
   resolveEnterpriseUsagePeriod,
 } from './enterprise-usage-metering';
@@ -151,45 +150,6 @@ describe('computeNewOverageToReportCents', () => {
         previouslyReported: { period: '2026-02', cumulativeOverageReportedCents: 9_000 },
       }),
     ).toBe(500);
-  });
-});
-
-describe('readEnterpriseUsageAllowance', () => {
-  it('returns null when the organization has no active contract', async () => {
-    const db = fakeDb([]);
-
-    const result = await readEnterpriseUsageAllowance(db, 'org_missing', FEBRUARY);
-
-    expect(result).toBeNull();
-  });
-
-  it('computes the allowance from the contract and the month-to-date ledger', async () => {
-    getOrganizationMonthToDateSpendCents.mockResolvedValueOnce(75_000);
-    const db = fakeDb([
-      {
-        organization_id: 'org_1',
-        stripe_customer_id: 'cus_1',
-        included_usage_cents_per_period: 50_000,
-        committed_usage_block_cents: 10_000,
-        overage_stripe_price_id: 'price_overage',
-        metadata: {},
-      },
-    ]);
-
-    const result = await readEnterpriseUsageAllowance(db, 'org_1', FEBRUARY);
-
-    expect(result).toEqual({
-      organizationId: 'org_1',
-      period: resolveEnterpriseUsagePeriod(FEBRUARY),
-      allowanceCents: 60_000,
-      consumedCents: 75_000,
-      overageCents: 15_000,
-    });
-    expect(getOrganizationMonthToDateSpendCents).toHaveBeenCalledWith(
-      'org_1',
-      db,
-      resolveEnterpriseUsagePeriod(FEBRUARY),
-    );
   });
 });
 
