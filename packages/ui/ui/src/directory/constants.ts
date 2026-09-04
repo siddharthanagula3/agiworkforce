@@ -106,6 +106,7 @@ export const ADD_MARKETPLACE_REMOVE_CONFIRM_BODY =
   'Its plugins leave the directory. Plugins you already installed from it stay installed.';
 
 export const GENERIC_ERROR_COPY = 'Something went wrong. Try again.';
+export const MARKETPLACE_SYNC_FAILED_COPY = 'That marketplace could not be synced.';
 
 export const INSTALL_COUNT_FLOOR = 10;
 

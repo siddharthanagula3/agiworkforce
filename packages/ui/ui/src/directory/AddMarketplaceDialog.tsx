@@ -4,6 +4,7 @@ import { GitBranch, Store } from 'lucide-react';
 import { useState } from 'react';
 
 import { cn } from '../cn';
+import { toUserMessage } from '../lib/network-error';
 import {
   Dialog,
   DialogContent,
@@ -31,7 +32,7 @@ import {
   ADD_MARKETPLACE_SUBMIT_LABEL,
   ADD_MARKETPLACE_SYNCED_LABEL,
   ADD_MARKETPLACE_URL_LABEL,
-  GENERIC_ERROR_COPY,
+  MARKETPLACE_SYNC_FAILED_COPY,
 } from './constants';
 import { DIRECTORY_FOCUS_RING } from './styles';
 import type { DirectoryMarketplaceInput, DirectoryMarketplaceResult } from './types';
@@ -113,7 +114,7 @@ export function AddMarketplaceDialog({
       setResult(created);
       setStep('result');
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : GENERIC_ERROR_COPY);
+      setError(toUserMessage(caught, MARKETPLACE_SYNC_FAILED_COPY));
     } finally {
       setBusy(false);
     }
