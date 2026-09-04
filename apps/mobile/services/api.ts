@@ -326,8 +326,8 @@ async function request<T>(
             friendlyMessage = nested.message;
           }
         }
-      } catch {
-        // noop
+      } catch (err) {
+        void err;
       }
       if (friendlyMessage) {
         throw new ApiHttpError(friendlyMessage, response.status, errorCode);
@@ -361,8 +361,8 @@ async function uploadErrorMessage(response: Response, fileName: string): Promise
     if (typeof candidate === 'string' && candidate.trim()) return candidate;
     const nested = (parsed['error'] as { message?: unknown } | undefined)?.message;
     if (typeof nested === 'string' && nested.trim()) return nested;
-  } catch {
-    // noop
+  } catch (err) {
+    void err;
   }
   if (__DEV__ && body) {
     console.warn(`[api] upload step -> HTTP ${response.status}:`, body.slice(0, 500));

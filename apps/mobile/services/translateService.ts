@@ -96,8 +96,8 @@ export async function translate(
         backend,
         pairCached,
       };
-    } catch {
-      // noop
+    } catch (err) {
+      void err;
     }
   }
 
