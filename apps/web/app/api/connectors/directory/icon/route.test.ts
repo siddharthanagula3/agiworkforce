@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
 
 const mocks = vi.hoisted(() => ({
-  readDirectorySnapshot: vi.fn(),
+  getSnapshotRecords: vi.fn(),
   getIconForUrl: vi.fn(),
 }));
 
@@ -12,8 +12,8 @@ vi.mock('@/lib/cors', () => ({
   withCorsRoute: <T>(handler: T) => handler,
   handleCorsPreflightRequest: vi.fn(() => null),
 }));
-vi.mock('@/lib/connectors/directory/snapshot-cache', () => ({
-  readDirectorySnapshot: () => mocks.readDirectorySnapshot(),
+vi.mock('@/lib/connectors/directory/memory-cache', () => ({
+  getSnapshotRecords: () => mocks.getSnapshotRecords(),
 }));
 vi.mock('@/lib/connectors/directory/icon-fetch', () => ({
   getIconForUrl: (...args: unknown[]) => mocks.getIconForUrl(...args),
@@ -32,16 +32,14 @@ describe('GET /api/connectors/directory/icon', () => {
   });
 
   it('404s when the id is not in the snapshot', async () => {
-    mocks.readDirectorySnapshot.mockResolvedValueOnce({ records: [] });
+    mocks.getSnapshotRecords.mockResolvedValueOnce([]);
 
     const response = await GET(request('?id=notion'));
     expect(response.status).toBe(404);
   });
 
   it('404s when the record has no recorded icon url', async () => {
-    mocks.readDirectorySnapshot.mockResolvedValueOnce({
-      records: [{ id: 'notion', iconUrl: null }],
-    });
+    mocks.getSnapshotRecords.mockResolvedValueOnce([{ id: 'notion', iconUrl: null }]);
 
     const response = await GET(request('?id=notion'));
     expect(response.status).toBe(404);
@@ -49,9 +47,9 @@ describe('GET /api/connectors/directory/icon', () => {
   });
 
   it('404s when the icon could not be fetched', async () => {
-    mocks.readDirectorySnapshot.mockResolvedValueOnce({
-      records: [{ id: 'notion', iconUrl: 'https://cdn.example.com/notion.png' }],
-    });
+    mocks.getSnapshotRecords.mockResolvedValueOnce([
+      { id: 'notion', iconUrl: 'https://cdn.example.com/notion.png' },
+    ]);
     mocks.getIconForUrl.mockResolvedValueOnce(null);
 
     const response = await GET(request('?id=notion'));
@@ -59,9 +57,9 @@ describe('GET /api/connectors/directory/icon', () => {
   });
 
   it('streams the cached icon bytes with the right content type', async () => {
-    mocks.readDirectorySnapshot.mockResolvedValueOnce({
-      records: [{ id: 'notion', iconUrl: 'https://cdn.example.com/notion.png' }],
-    });
+    mocks.getSnapshotRecords.mockResolvedValueOnce([
+      { id: 'notion', iconUrl: 'https://cdn.example.com/notion.png' },
+    ]);
     mocks.getIconForUrl.mockResolvedValueOnce({
       contentType: 'image/png',
       base64: Buffer.from([1, 2, 3]).toString('base64'),

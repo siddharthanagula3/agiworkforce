@@ -74,7 +74,7 @@
     },
     {
       "path": "/api/cron/refresh-connector-directory",
-      "schedule": "*/15 * * * *"
+      "schedule": "0 * * * *"
     }
   ]
 }

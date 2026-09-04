@@ -8,7 +8,7 @@ import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { logger } from '@/lib/logger';
 import { DIRECTORY_CATEGORIES } from '@/lib/connectors/directory/categorize';
-import { readDirectorySnapshot } from '@/lib/connectors/directory/snapshot-cache';
+import { getSnapshotRecords } from '@/lib/connectors/directory/memory-cache';
 import { toDirectoryEntryView } from '@/lib/connectors/directory/view';
 import type {
   DirectoryAuthMode,
@@ -69,9 +69,8 @@ async function handleGet(request: NextRequest): Promise<NextResponse> {
   }
 
   try {
-    const snapshot = await readDirectorySnapshot();
-    const records = snapshot?.records ?? [];
     const query = parsed.data;
+    const records = await getSnapshotRecords();
 
     const filtered = records.filter((record) => {
       if (query.search && !matchesSearch(record, query.search)) return false;
@@ -91,7 +90,6 @@ async function handleGet(request: NextRequest): Promise<NextResponse> {
         entries: page.map(toDirectoryEntryView),
         total: filtered.length,
         nextCursor: nextOffset < filtered.length ? String(nextOffset) : null,
-        updatedAt: snapshot?.updatedAt ?? null,
         categories: DIRECTORY_CATEGORIES,
         connectableModes: CONNECTABLE_MODES,
       },
