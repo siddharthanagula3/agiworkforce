@@ -151,6 +151,30 @@ Repeat this section for each new Enterprise customer, after the Order Form
    days out. If it does not, the subscription was created with the wrong
    collection method and must be recreated; it cannot be safely converted
    in place without leaving a stray invoice behind.
+7. **Set the negotiated contract fields as subscription metadata.** These
+   terms come from the Order Form and have no operator UI; the webhook reads
+   them from `metadata` on `customer.subscription.created` and
+   `customer.subscription.updated` and writes each into the matching column
+   on `organization_billing_contracts`. Metadata is acceptable for these
+   specifically because they are contract terms, not entitlement, section 1
+   still applies to the tier itself. Set any subset that the Order Form
+   records; a key left out of metadata leaves its column untouched rather
+   than clearing a value set here or by a later edit, and a value that does
+   not parse as a non-negative integer is ignored and logged rather than
+   written.
+
+   | Metadata key                     | Contract column                   | Format                                             |
+   | -------------------------------- | --------------------------------- | -------------------------------------------------- |
+   | `included_usage_cents_per_month` | `included_usage_cents_per_period` | non-negative integer cents                         |
+   | `overage_price_id`               | `overage_stripe_price_id`         | the metered price id from step 2, if any           |
+   | `committed_usage_block_cents`    | `committed_usage_block_cents`     | non-negative integer cents                         |
+   | `minimum_annual_spend_cents`     | `minimum_annual_spend_cents`      | non-negative integer cents                         |
+   | `support_tier`                   | `support_tier`                    | free text, whatever the Order Form's SLA tier says |
+   | `customer_legal_entity`          | `customer_legal_entity`           | free text, the Order Form's Customer Legal Entity  |
+
+   `po_number` is also read from metadata, but only ever as the fallback
+   `procurement_reference` source described in step 5; it is never written to
+   any other column.
 
 ## 4. What each webhook does
 
