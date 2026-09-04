@@ -26,6 +26,7 @@ import {
   consumePendingSecurityAnomalyCheck,
   logSecurityEvent,
   SECURITY_EVENT_ACTIVITY_REDIS_KEY,
+  sanitizeAuditDetail,
 } from './security-audit';
 
 function fakeRedis() {
@@ -97,5 +98,19 @@ describe('consumePendingSecurityAnomalyCheck', () => {
     mocks.getSharedRedisClient.mockReturnValue(redis);
 
     await expect(consumePendingSecurityAnomalyCheck()).resolves.toBeNull();
+  });
+});
+
+describe('sanitizeAuditDetail', () => {
+  it('keeps the ip allow list change alongside the changed keys', () => {
+    const detail = sanitizeAuditDetail({
+      changedKeys: ['ipAllowList'],
+      ipAllowListChange: { from: ['10.0.0.0/8'], to: ['10.0.0.0/8', '192.168.1.0/24'] },
+    });
+    expect(detail['changedKeys']).toEqual(['ipAllowList']);
+    expect(detail['ipAllowListChange']).toEqual({
+      from: ['10.0.0.0/8'],
+      to: ['10.0.0.0/8', '192.168.1.0/24'],
+    });
   });
 });

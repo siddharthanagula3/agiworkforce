@@ -25,15 +25,21 @@ export function providerProxyDefaultBaseUrl(providerId: string): string | undefi
   return resolveProviderApiRoot(providerId);
 }
 
-export function resolveAppOrigin(): string | null {
-  const configured =
-    process.env['AGI_PROVIDER_PROXY_ORIGIN']?.trim() || process.env['NEXT_PUBLIC_APP_URL']?.trim();
-  if (!configured) return null;
+function parseOrigin(value: string | undefined): string | null {
+  const trimmed = value?.trim();
+  if (!trimmed) return null;
   try {
-    return new URL(configured).origin;
+    return new URL(trimmed).origin;
   } catch {
     return null;
   }
+}
+
+export function resolveAppOrigin(): string | null {
+  return (
+    parseOrigin(process.env['AGI_PROVIDER_PROXY_ORIGIN']) ??
+    parseOrigin(process.env['NEXT_PUBLIC_APP_URL'])
+  );
 }
 
 export function providerProxyBaseUrl(sessionId: string): string | null {
