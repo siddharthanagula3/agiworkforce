@@ -111,7 +111,8 @@ function describeRuntime(runtime: CloudCodeRuntime): string {
   const detail = [runtime.summary, [cores, memory].filter(Boolean).join(', ')]
     .filter(Boolean)
     .join(' · ');
-  return detail ? `${runtime.name}, ${detail}` : runtime.name;
+  const label = detail ? `${runtime.name}, ${detail}` : runtime.name;
+  return runtime.needsUserCredential ? `${label}, needs your own API key` : label;
 }
 
 // Named friendly but returning error.message verbatim: with a 500 carrying

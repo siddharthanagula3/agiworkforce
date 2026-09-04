@@ -60,6 +60,7 @@ const runtimeSchema = z.object({
   memoryMB: z.number().nonnegative(),
   diskSizeMB: z.number().nonnegative(),
   isPublic: z.boolean(),
+  needsUserCredential: z.boolean().optional(),
 });
 
 const listSchema = z.object({

@@ -8,6 +8,7 @@ const {
   mockE2bReady,
   mockBetaEnabled,
   mockCreateSession,
+  mockHasServerProviderKey,
 } = vi.hoisted(() => ({
   mockGetUserScopedDb: vi.fn(),
   mockCsrf: vi.fn(),
@@ -15,6 +16,7 @@ const {
   mockE2bReady: vi.fn(),
   mockBetaEnabled: vi.fn(),
   mockCreateSession: vi.fn(),
+  mockHasServerProviderKey: vi.fn(),
 }));
 
 vi.mock('@/lib/logger', () => ({
@@ -40,6 +42,9 @@ vi.mock('@/lib/services/cloud-code-session-service', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/lib/services/cloud-code-session-service')>();
   return { ...actual, createCloudCodeSession: mockCreateSession };
 });
+vi.mock('@/lib/services/provider-adapter-service', () => ({
+  hasServerProviderKey: mockHasServerProviderKey,
+}));
 
 import { POST } from './route';
 
@@ -63,6 +68,7 @@ beforeEach(() => {
     title: 'workspace',
     state: 'ready',
   });
+  mockHasServerProviderKey.mockReturnValue(true);
 });
 
 describe('POST /api/code/sessions, the full-network interim guard', () => {
@@ -146,6 +152,53 @@ describe('POST /api/code/sessions, the full-network interim guard', () => {
         title: 'workspace',
         networkAccess: 'full',
         fullNetworkAcknowledged: true,
+        runtimeId: 'claude',
+      }),
+    );
+    expect(response.status).toBe(201);
+    expect(mockCreateSession).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('POST /api/code/sessions, the managed-credential availability guard', () => {
+  it('rejects a harness with no managed credential and no explicit credential', async () => {
+    mockHasServerProviderKey.mockReturnValue(false);
+    const response = await POST(
+      postRequest({
+        requestId: 'req-2234567a',
+        title: 'workspace',
+        networkAccess: 'trusted',
+        runtimeId: 'droid',
+      }),
+    );
+    expect(response.status).toBe(422);
+    const body = (await response.json()) as { error: { code: string; message: string } };
+    expect(body.error.code).toBe('harness_credential_unavailable');
+    expect(body.error.message).toContain('Droid');
+    expect(mockCreateSession).not.toHaveBeenCalled();
+  });
+
+  it('allows a harness with no managed credential when an explicit credential is supplied', async () => {
+    mockHasServerProviderKey.mockReturnValue(false);
+    const response = await POST(
+      postRequest({
+        requestId: 'req-2234567b',
+        title: 'workspace',
+        networkAccess: 'trusted',
+        runtimeId: 'droid',
+        harnessCredential: 'user-supplied-factory-key',
+      }),
+    );
+    expect(response.status).toBe(201);
+    expect(mockCreateSession).toHaveBeenCalledTimes(1);
+  });
+
+  it('allows a harness with a managed credential configured', async () => {
+    const response = await POST(
+      postRequest({
+        requestId: 'req-2234567c',
+        title: 'workspace',
+        networkAccess: 'trusted',
         runtimeId: 'claude',
       }),
     );

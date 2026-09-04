@@ -97,7 +97,7 @@ function resolveServerProviderApiKey(providerId: string): string | undefined {
   return undefined;
 }
 
-function hasServerProviderKey(providerId: string): boolean {
+export function hasServerProviderKey(providerId: string): boolean {
   return resolveServerProviderApiKey(providerId) !== undefined;
 }
 
