@@ -8,7 +8,7 @@ const mocks = vi.hoisted(() => ({
   query: vi.fn(),
   execute: vi.fn(),
   deleteStoredMediaObjects: vi.fn(),
-  invalidateActiveOrganizationCache: vi.fn(async () => undefined),
+  invalidateActiveOrganizationCache: vi.fn(async (..._args: unknown[]) => undefined),
 }));
 
 vi.mock('server-only', () => ({}));
