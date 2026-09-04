@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
+import { useAuth } from '@clerk/nextjs';
 import { X } from 'lucide-react';
 import {
   Switch,
@@ -26,11 +27,23 @@ const CLOSE_ICON_SIZE = 16;
 const PROMPT_DELAY_MS = 1000;
 
 export const CookieConsent = () => {
+  const { isLoaded, isSignedIn } = useAuth();
   const [showBanner, setShowBanner] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [preferences, setPreferences] = useState<CookiePreferences>(NECESSARY_ONLY_PREFERENCES);
 
+  // Consent belongs to the public site: a signed-in visitor is inside the
+  // product, not deciding whether to use it, so the unsolicited banner never
+  // opens there the way it never does on chatgpt.com or claude.ai. The
+  // explicit "Change your cookie preferences" control on /cookies is
+  // untouched by this, it opens `showSettings` directly regardless of
+  // sign-in state, since that is a deliberate visit, not an interruption.
   useEffect(() => {
+    if (!isLoaded || isSignedIn) {
+      setShowBanner(false);
+      return undefined;
+    }
+
     const stored = readCookiePreferences();
     if (stored) {
       setPreferences(stored);
@@ -39,7 +52,7 @@ export const CookieConsent = () => {
 
     const timer = setTimeout(() => setShowBanner(true), PROMPT_DELAY_MS);
     return () => clearTimeout(timer);
-  }, []);
+  }, [isLoaded, isSignedIn]);
 
   useEffect(() => {
     const openSettings = () => {
