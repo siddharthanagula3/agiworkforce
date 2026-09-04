@@ -3,6 +3,7 @@ import 'server-only';
 import { NextRequest, NextResponse } from 'next/server';
 import Stripe from 'stripe';
 import { getNeonDb } from '@/lib/server/neon-db';
+import { createClaimedUserScopedDb } from '@/lib/server/claimed-user-scope-db';
 import { resolveCheckoutReturnOrigin } from '@/lib/server/checkout-return-origin';
 import type { ProfileRow, SubscriptionRow } from '@/lib/server/neon-types';
 import { getOptionalEnv, requireEnv } from '@shared/utils/env';
@@ -101,6 +102,7 @@ async function handleCheckout(request: NextRequest): Promise<NextResponse> {
   }
 
   const db = getNeonDb();
+  const scopedDb = createClaimedUserScopedDb(db, { userId, organizationId: null });
   const user = { id: userId, email: userEmail };
 
   let rawBody: unknown;
@@ -169,7 +171,7 @@ async function handleCheckout(request: NextRequest): Promise<NextResponse> {
 
   let profileRows: Array<Pick<ProfileRow, 'stripe_customer_id'>>;
   try {
-    profileRows = await db.query<Pick<ProfileRow, 'stripe_customer_id'>>(
+    profileRows = await scopedDb.query<Pick<ProfileRow, 'stripe_customer_id'>>(
       'select stripe_customer_id from profiles where id = $1 limit 1',
       [user.id],
     );
@@ -196,7 +198,7 @@ async function handleCheckout(request: NextRequest): Promise<NextResponse> {
       );
 
       try {
-        await db.execute('update profiles set stripe_customer_id = $1 where id = $2', [
+        await scopedDb.execute('update profiles set stripe_customer_id = $1 where id = $2', [
           customer.id,
           user.id,
         ]);
