@@ -329,6 +329,7 @@ describe('syncEnterpriseContractFromSubscription', () => {
       12000000,
       'platinum',
       'Acme Corp Ltd.',
+      null,
     ]);
   });
 
@@ -344,7 +345,7 @@ describe('syncEnterpriseContractFromSubscription', () => {
     const upsert = calls.find((call) =>
       call.sql.includes('insert into public.organization_billing_contracts'),
     );
-    expect(upsert!.params.slice(10)).toEqual([null, null, null, null, null, null]);
+    expect(upsert!.params.slice(10)).toEqual([null, null, null, null, null, null, null]);
     expect(upsert!.sql).toContain('coalesce($11::bigint, 0)');
     expect(upsert!.sql).toContain('organization_billing_contracts.included_usage_cents_per_period');
   });
@@ -392,6 +393,58 @@ describe('syncEnterpriseContractFromSubscription', () => {
     );
     expect(upsert!.params[12]).toBeNull();
   });
+
+  it('passes the event timestamp through and guards the update against an older event', async () => {
+    const { db, calls } = makeDb((sql) => {
+      if (sql.includes('from subscriptions')) return [{ user_id: 'user_1' }];
+      if (sql.includes('from public.organizations')) return [{ id: 'org_1' }];
+      if (sql.includes('insert into public.organization_billing_contracts')) {
+        return [{ organization_id: 'org_1' }];
+      }
+      return [];
+    });
+
+    await syncEnterpriseContractFromSubscription(db, fakeStripe(), subscriptionFixture(), {
+      eventCreatedAt: 1_700_000_500,
+    });
+
+    const upsert = calls.find((call) =>
+      call.sql.includes('insert into public.organization_billing_contracts'),
+    );
+    expect(upsert!.params.at(-1)).toBe(1_700_000_500);
+    expect(upsert!.sql).toMatch(
+      /organization_billing_contracts\.last_stripe_event_at\s*<=\s*to_timestamp\(\$17/u,
+    );
+    expect(loggerMocks.info).toHaveBeenCalledWith(
+      expect.anything(),
+      'Enterprise billing contract synced from Stripe subscription',
+    );
+  });
+
+  it('skips the write and logs at debug when a newer event has already been applied', async () => {
+    const { db, calls } = makeDb((sql) => {
+      if (sql.includes('from subscriptions')) return [{ user_id: 'user_1' }];
+      if (sql.includes('from public.organizations')) return [{ id: 'org_1' }];
+      if (sql.includes('insert into public.organization_billing_contracts')) return [];
+      return [];
+    });
+
+    await syncEnterpriseContractFromSubscription(db, fakeStripe(), subscriptionFixture(), {
+      eventCreatedAt: 1_600_000_000,
+    });
+
+    expect(loggerMocks.debug).toHaveBeenCalledWith(
+      expect.objectContaining({ organizationId: 'org_1', eventCreatedAt: 1_600_000_000 }),
+      expect.stringContaining('a newer event has already been applied'),
+    );
+    expect(loggerMocks.info).not.toHaveBeenCalledWith(
+      expect.anything(),
+      'Enterprise billing contract synced from Stripe subscription',
+    );
+    expect(
+      calls.some((call) => call.sql.includes('insert into public.organization_billing_contracts')),
+    ).toBe(true);
+  });
 });
 
 function invoiceFixture(overrides: Partial<Stripe.Invoice> = {}): Stripe.Invoice {
@@ -431,6 +484,9 @@ describe('recordEnterpriseInvoiceEvent', () => {
 
   it('upserts the invoice row and recomputes the oldest open invoice', async () => {
     const { db, calls } = makeDb((sql) => {
+      if (sql.includes('insert into public.organization_billing_invoices')) {
+        return [{ stripe_invoice_id: 'in_open_1' }];
+      }
       if (
         sql.includes('from public.organization_billing_contracts') &&
         sql.includes('stripe_subscription_id')
@@ -464,6 +520,9 @@ describe('recordEnterpriseInvoiceEvent', () => {
 
   it('clears the oldest open invoice when nothing is open any more and the stage is already current', async () => {
     const { db, calls } = makeDb((sql) => {
+      if (sql.includes('insert into public.organization_billing_invoices')) {
+        return [{ stripe_invoice_id: 'in_open_1' }];
+      }
       if (
         sql.includes('from public.organization_billing_contracts') &&
         sql.includes('stripe_subscription_id')
@@ -489,6 +548,9 @@ describe('recordEnterpriseInvoiceEvent', () => {
 
   it('restores collection_stage to current, audits, and clears the notice throttle once the last invoice is paid', async () => {
     const { db, calls } = makeDb((sql) => {
+      if (sql.includes('insert into public.organization_billing_invoices')) {
+        return [{ stripe_invoice_id: 'in_open_1' }];
+      }
       if (
         sql.includes('from public.organization_billing_contracts') &&
         sql.includes('stripe_subscription_id')
@@ -520,6 +582,72 @@ describe('recordEnterpriseInvoiceEvent', () => {
         }),
       }),
     );
+  });
+
+  it('passes the event timestamp through and recomputes the ledger on the normal path', async () => {
+    const { db, calls } = makeDb((sql) => {
+      if (sql.includes('insert into public.organization_billing_invoices')) {
+        return [{ stripe_invoice_id: 'in_open_1' }];
+      }
+      if (
+        sql.includes('from public.organization_billing_contracts') &&
+        sql.includes('stripe_subscription_id')
+      ) {
+        return [{ organization_id: 'org_1' }];
+      }
+      if (sql.includes('from public.organization_billing_invoices')) {
+        return [{ stripe_invoice_id: 'in_open_1', due_at: '2023-11-26T00:00:00.000Z' }];
+      }
+      return [];
+    });
+
+    await recordEnterpriseInvoiceEvent(db, invoiceFixture(), { eventCreatedAt: 1_700_000_500 });
+
+    const insert = calls.find((call) =>
+      call.sql.includes('insert into public.organization_billing_invoices'),
+    );
+    expect(insert!.params.at(-1)).toBe(1_700_000_500);
+    expect(insert!.sql).toMatch(
+      /organization_billing_invoices\.last_stripe_event_at\s*<=\s*to_timestamp\(\$18/u,
+    );
+    expect(
+      calls.some(
+        (call) =>
+          call.sql.includes('update public.organization_billing_contracts') &&
+          call.sql.includes('oldest_open_invoice_id'),
+      ),
+    ).toBe(true);
+  });
+
+  it('skips the write, logs at debug, and never recomputes when a newer event has already been applied', async () => {
+    const { db, calls } = makeDb((sql) => {
+      if (sql.includes('insert into public.organization_billing_invoices')) return [];
+      if (
+        sql.includes('from public.organization_billing_contracts') &&
+        sql.includes('stripe_subscription_id')
+      ) {
+        return [{ organization_id: 'org_1' }];
+      }
+      return [];
+    });
+
+    await recordEnterpriseInvoiceEvent(db, invoiceFixture(), { eventCreatedAt: 1_600_000_000 });
+
+    expect(loggerMocks.debug).toHaveBeenCalledWith(
+      expect.objectContaining({
+        invoiceId: 'in_open_1',
+        organizationId: 'org_1',
+        eventCreatedAt: 1_600_000_000,
+      }),
+      expect.stringContaining('a newer event has already been applied'),
+    );
+    expect(
+      calls.some(
+        (call) =>
+          call.sql.includes('update public.organization_billing_contracts') &&
+          call.sql.includes('oldest_open_invoice_id'),
+      ),
+    ).toBe(false);
   });
 });
 

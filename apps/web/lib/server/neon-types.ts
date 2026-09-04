@@ -537,6 +537,7 @@ export type OrganizationBillingContractRow = {
   last_collection_notice_at: string | null;
   ended_at: string | null;
   metadata: Record<string, unknown>;
+  last_stripe_event_at: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -559,6 +560,7 @@ export type OrganizationBillingInvoiceRow = {
   voided_at: string | null;
   hosted_invoice_url: string | null;
   invoice_pdf_url: string | null;
+  last_stripe_event_at: string | null;
   created_at: string;
   updated_at: string;
 };
