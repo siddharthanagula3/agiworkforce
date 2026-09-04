@@ -163,7 +163,7 @@ export default function EnterprisePage() {
                 {
                   label: 'Service levels',
                   value:
-                    'Response and uptime numbers are planned targets rather than binding commitments. See the SLA page for exactly which is which.',
+                    'Your named contact gets a first response within 4 business hours (Central Time) for a service-down report, and within 1 business day otherwise, with an escalation path and the status page: a current commitment, not a target. Uptime numbers remain planned targets rather than binding commitments. See the SLA page for exactly which is which.',
                 },
                 {
                   label: 'MSA',

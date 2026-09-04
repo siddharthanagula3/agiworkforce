@@ -1001,6 +1001,10 @@ export default function PricingPage() {
                       <CheckIcon />
                       {t('teamFeature4')}
                     </li>
+                    <li>
+                      <CheckIcon />
+                      {t('teamFeature5')}
+                    </li>
                   </ul>
                   <div className="agi-ds-tier-seats">
                     <label className="agi-ds-tier-seats-label" htmlFor="team-seat-count">
