@@ -273,6 +273,11 @@ export const rateLimitConfigs = {
     window: '1 m', // 60 conversation operations per minute
     failClosed: false,
   },
+  'code-provider-proxy': {
+    limit: 120,
+    window: '1 m', // one managed sandbox's coding-agent LLM calls, generous for an active turn
+    failClosed: true, // Security-sensitive: this route injects a managed provider credential
+  },
   'chat-message': {
     limit: 20,
     window: '1 m', // 20 messages per minute (to prevent API abuse)

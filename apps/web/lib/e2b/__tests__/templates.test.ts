@@ -5,6 +5,8 @@ vi.mock('@/lib/logger', () => ({ logger: { warn: vi.fn(), info: vi.fn(), error: 
 import {
   clearCloudCodeRuntimeCache,
   harnessCredentialSpecs,
+  harnessIsProxyCovered,
+  harnessProxyBaseUrlEnv,
   knownHarnessCommandIds,
   listCloudCodeRuntimes,
 } from '../templates';
@@ -217,6 +219,25 @@ describe('harness credential specs', () => {
   it('returns nothing for a harness with no declared credential, including openclaw', () => {
     expect(harnessCredentialSpecs('openclaw')).toEqual([]);
     expect(harnessCredentialSpecs('not-a-harness')).toEqual([]);
+  });
+});
+
+describe('harness proxy coverage', () => {
+  it('names the base-URL env var only for a harness with a verified override', () => {
+    expect(harnessProxyBaseUrlEnv('claude')).toBe('ANTHROPIC_BASE_URL');
+    expect(harnessProxyBaseUrlEnv('codex')).toBeUndefined();
+    expect(harnessProxyBaseUrlEnv('droid')).toBeUndefined();
+    expect(harnessProxyBaseUrlEnv('amp')).toBeUndefined();
+    expect(harnessProxyBaseUrlEnv('grok')).toBeUndefined();
+    expect(harnessProxyBaseUrlEnv('opencode')).toBeUndefined();
+  });
+
+  it('covers only a single-provider harness with a verified base-URL override', () => {
+    expect(harnessIsProxyCovered('claude')).toBe(true);
+    expect(harnessIsProxyCovered('codex')).toBe(false);
+    expect(harnessIsProxyCovered('opencode')).toBe(false);
+    expect(harnessIsProxyCovered('openclaw')).toBe(false);
+    expect(harnessIsProxyCovered('not-a-harness')).toBe(false);
   });
 });
 
