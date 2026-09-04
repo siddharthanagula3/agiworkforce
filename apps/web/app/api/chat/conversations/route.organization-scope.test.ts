@@ -17,11 +17,8 @@ vi.mock('@/lib/server/rls-db', () => ({
   getUserScopedDb: vi.fn(async () => ({
     db: { query: mocks.query, execute: mocks.execute },
     userId: 'user-1',
-    organizationId: null,
+    organizationId: mocks.activeOrganizationId,
   })),
-}));
-vi.mock('@/lib/services/active-workspace-service', () => ({
-  resolveActiveOrganizationId: vi.fn(async () => mocks.activeOrganizationId),
 }));
 vi.mock('@/lib/csrf', () => ({ requireCsrfToken: vi.fn(async () => null) }));
 vi.mock('@/lib/rate-limit', () => ({ withRateLimit: vi.fn(async () => null) }));

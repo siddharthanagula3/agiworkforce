@@ -13,7 +13,6 @@ import {
   MANAGED_CLOUD_CHAT_MAX_PAGE_SIZE,
 } from '@agiworkforce/cloud-contracts';
 import { buildCloudChatSessionLabel } from '@/lib/services/chat-session-label-service';
-import { resolveActiveOrganizationId } from '@/lib/services/active-workspace-service';
 import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
 
 function parsePositiveInt(raw: string | null, fallback: number, max?: number): number {
@@ -26,7 +25,7 @@ async function handleGetConversations(request: NextRequest) {
   const rateLimitResponse = await withRateLimit(request, 'chat-conversation');
   if (rateLimitResponse) return rateLimitResponse;
 
-  const { db, userId } = await getUserScopedDb(request);
+  const { db, userId, organizationId } = await getUserScopedDb(request);
 
   const url = new URL(request.url);
   const rawQ = url.searchParams.get('q') ?? '';
@@ -55,7 +54,6 @@ async function handleGetConversations(request: NextRequest) {
   const includeHistoryStats = url.searchParams.get('includeHistoryStats') === '1';
   const statsOnly = includeHistoryStats && url.searchParams.get('statsOnly') === '1';
 
-  const organizationId = await resolveActiveOrganizationId(db, userId, request);
   try {
     const where = ['user_id = $1', 'organization_id is not distinct from $2'];
     where.push(deletedFilter === 'only' ? 'deleted_at is not null' : 'deleted_at is null');
@@ -137,7 +135,7 @@ async function handleGetConversations(request: NextRequest) {
 }
 
 async function handleCreateConversation(request: NextRequest) {
-  const { db, userId } = await getUserScopedDb(request);
+  const { db, userId, organizationId } = await getUserScopedDb(request);
 
   const csrfResponse = await requireCsrfToken(request);
   if (csrfResponse) return csrfResponse;
@@ -157,7 +155,6 @@ async function handleCreateConversation(request: NextRequest) {
     throw createError.validation('Invalid request body', validationResult.error);
   }
   const body = validationResult.data;
-  const organizationId = await resolveActiveOrganizationId(db, userId, request);
 
   if (body.projectId) {
     let ownedProject: { id: string } | undefined;
