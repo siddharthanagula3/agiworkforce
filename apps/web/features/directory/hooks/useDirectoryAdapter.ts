@@ -42,6 +42,7 @@ import {
 } from '../constants';
 import {
   connectedConnectorIds,
+  connectorReauthorizationErrors,
   fetchConnectedConnectorIds,
   fetchConnectorRecord,
   fetchConnectorRecords,
@@ -144,7 +145,12 @@ export function useDirectoryAdapter(options: DirectoryAdapterOptions = {}): Dire
         retry: loadSkills,
       });
     } catch {
-      setSkills((prev) => ({ ...prev, loading: false, error: SKILLS_FAILED_COPY, retry: loadSkills }));
+      setSkills((prev) => ({
+        ...prev,
+        loading: false,
+        error: SKILLS_FAILED_COPY,
+        retry: loadSkills,
+      }));
     }
   }, [createSkillLabel]);
 
@@ -163,15 +169,24 @@ export function useDirectoryAdapter(options: DirectoryAdapterOptions = {}): Dire
       const merged = new Set([...connected, ...connectedConnectorIds(connectedRef.current)]);
       connectedIds.current = merged;
       const section = toConnectorSection(records, merged, curatedRef.current);
+      const errors = {
+        ...connectorReauthorizationErrors(connectedRef.current),
+        ...connectorErrors.current,
+      };
       setConnectors({
         ...section,
-        entries: withConnectorErrors(section.entries, connectorErrors.current),
+        entries: withConnectorErrors(section.entries, errors),
         ...(connectorsErrorRef.current ? { error: connectorsErrorRef.current } : {}),
         ...(connectorsNoticeRef.current ? { notice: connectorsNoticeRef.current } : {}),
         retry: retryConnectors,
       });
     } catch {
-      setConnectors((prev) => ({ ...prev, loading: false, error: CONNECTORS_FAILED_COPY, retry: loadConnectors }));
+      setConnectors((prev) => ({
+        ...prev,
+        loading: false,
+        error: CONNECTORS_FAILED_COPY,
+        retry: loadConnectors,
+      }));
     }
   }, [retryConnectors]);
 
@@ -192,7 +207,12 @@ export function useDirectoryAdapter(options: DirectoryAdapterOptions = {}): Dire
         retry: loadPlugins,
       });
     } catch {
-      setPlugins((prev) => ({ ...prev, loading: false, error: PLUGINS_FAILED_COPY, retry: loadPlugins }));
+      setPlugins((prev) => ({
+        ...prev,
+        loading: false,
+        error: PLUGINS_FAILED_COPY,
+        retry: loadPlugins,
+      }));
     }
   }, []);
 

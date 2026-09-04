@@ -6,3 +6,4 @@ export {
   SETTINGS_SECTION_SLUGS,
   type SettingsDirectoryRoute,
 } from './routing';
+export { CONNECTOR_REAUTHORIZATION_COPY } from './constants';
