@@ -37,6 +37,12 @@ vi.mock('next/link', () => ({
   ),
 }));
 
+const clerkAuthMocks = vi.hoisted(() => ({
+  useAuth: vi.fn(() => ({ isLoaded: true, isSignedIn: false })),
+}));
+
+vi.mock('@clerk/nextjs', () => ({ useAuth: clerkAuthMocks.useAuth }));
+
 const TRACKING_ID = 'G-TESTID0000';
 
 function gaScripts(): HTMLScriptElement[] {
@@ -52,6 +58,7 @@ function storeDecision(preferences: CookiePreferences): void {
 
 beforeEach(() => {
   window.localStorage.clear();
+  clerkAuthMocks.useAuth.mockReturnValue({ isLoaded: true, isSignedIn: false });
 });
 
 afterEach(() => {
@@ -362,6 +369,78 @@ describe('CookieConsent banner drives the gate', () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  // Consent belongs to the public site: a signed-in visitor is inside the
+  // product, not deciding whether to use it, the way neither chatgpt.com nor
+  // claude.ai interrupt a signed-in session with this banner.
+  it('never opens for a signed-in visitor, undecided or not', async () => {
+    clerkAuthMocks.useAuth.mockReturnValue({ isLoaded: true, isSignedIn: true });
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      render(<CookieConsent />);
+
+      await act(async () => {
+        vi.advanceTimersByTime(2000);
+      });
+
+      expect(screen.queryByRole('region', { name: 'Cookie consent' })).toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('waits for Clerk to resolve before deciding whether to open', async () => {
+    clerkAuthMocks.useAuth.mockReturnValue({ isLoaded: false, isSignedIn: false });
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      const { rerender } = render(<CookieConsent />);
+
+      await act(async () => {
+        vi.advanceTimersByTime(2000);
+      });
+      expect(screen.queryByRole('region', { name: 'Cookie consent' })).toBeNull();
+
+      clerkAuthMocks.useAuth.mockReturnValue({ isLoaded: true, isSignedIn: false });
+      rerender(<CookieConsent />);
+      await act(async () => {
+        vi.advanceTimersByTime(1200);
+      });
+
+      expect(await screen.findByRole('region', { name: 'Cookie consent' })).toBeTruthy();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('closes immediately if the visitor signs in while the banner is up', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      const { rerender } = render(<CookieConsent />);
+
+      await act(async () => {
+        vi.advanceTimersByTime(1200);
+      });
+      expect(await screen.findByRole('region', { name: 'Cookie consent' })).toBeTruthy();
+
+      clerkAuthMocks.useAuth.mockReturnValue({ isLoaded: true, isSignedIn: true });
+      rerender(<CookieConsent />);
+
+      expect(screen.queryByRole('region', { name: 'Cookie consent' })).toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('still opens from the explicit /cookies preferences control for a signed-in visitor', async () => {
+    clerkAuthMocks.useAuth.mockReturnValue({ isLoaded: true, isSignedIn: true });
+    render(<CookieConsent />);
+
+    await act(async () => {
+      window.dispatchEvent(new CustomEvent(COOKIE_CONSENT_OPEN_EVENT));
+    });
+
+    expect(await screen.findByRole('switch', { name: 'Analytics cookies' })).toBeTruthy();
   });
 
   it('re-prompts, and keeps analytics off, when the stored consent predates the notice', async () => {
