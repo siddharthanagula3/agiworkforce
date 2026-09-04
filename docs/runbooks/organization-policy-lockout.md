@@ -79,17 +79,17 @@ update public.organization_admin_policies
  where organization_id = '<organization-id>';
 ```
 
-**To clear `ipAllowList`:** since migration 0167, this is its own column, not
-a metadata key:
+**To clear `ipAllowList`:** same table, same column, different key:
 
 ```sql
 update public.organization_admin_policies
-   set ip_allow_list = '{}'
+   set metadata = metadata - 'ipAllowList'
  where organization_id = '<organization-id>';
 ```
 
-Neither operation touches `default_privacy_mode`, `retention_days`, or any
-other column, and neither requires reconstructing the rest of the policy row.
+Both operations are additive removals of a single jsonb key. They do not
+touch `default_privacy_mode`, `retention_days`, or any other column, and they
+do not require reconstructing the rest of the policy row.
 
 After clearing either field, tell the affected owner to sign in again. The
 next request re-evaluates the policy from the row just updated.

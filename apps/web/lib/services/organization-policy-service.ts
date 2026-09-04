@@ -41,7 +41,6 @@ interface AdminPolicyRow {
   retention_enforced: boolean;
   external_sharing_enabled: boolean;
   allow_memory: boolean;
-  ip_allow_list: string[];
   metadata: Record<string, unknown> | null;
   updated_at: string;
 }
@@ -50,7 +49,7 @@ const POLICY_COLUMNS = `organization_id, default_privacy_mode, allowed_privacy_m
   allow_managed_compute, require_local_to_byok_preview, chat_sync_surfaces,
   allow_cli_cloud_sync, allow_vscode_cloud_sync, allow_chrome_cloud_sync,
   audit_export_enabled, retention_days, retention_enforced,
-  external_sharing_enabled, allow_memory, ip_allow_list, metadata, updated_at`;
+  external_sharing_enabled, allow_memory, metadata, updated_at`;
 
 function toIso(value: unknown): string {
   if (value instanceof Date) return value.toISOString();
@@ -78,6 +77,12 @@ function readZeroDataRetentionOnly(metadata: Record<string, unknown> | null): bo
   return metadata?.['zeroDataRetentionOnly'] === true;
 }
 
+function readIpAllowList(metadata: Record<string, unknown> | null): readonly string[] {
+  const value = metadata?.['ipAllowList'];
+  if (!Array.isArray(value)) return [];
+  return value.filter((entry): entry is string => typeof entry === 'string');
+}
+
 export function formatAdminPolicy(row: AdminPolicyRow): AdminPolicy {
   return {
     organizationId: row.organization_id,
@@ -98,7 +103,7 @@ export function formatAdminPolicy(row: AdminPolicyRow): AdminPolicy {
     requireMfa: readRequireMfa(row.metadata),
     monthlySpendCapCents: readMonthlySpendCapCents(row.metadata),
     zeroDataRetentionOnly: readZeroDataRetentionOnly(row.metadata),
-    ipAllowList: [...row.ip_allow_list],
+    ipAllowList: readIpAllowList(row.metadata),
     metadata: row.metadata ?? {},
     updatedAt: toIso(row.updated_at),
   };
@@ -160,8 +165,8 @@ export async function upsertOrganizationPolicy(
        allow_managed_compute, require_local_to_byok_preview, chat_sync_surfaces,
        allow_cli_cloud_sync, allow_vscode_cloud_sync, allow_chrome_cloud_sync,
        audit_export_enabled, retention_days, retention_enforced,
-       external_sharing_enabled, allow_memory, ip_allow_list, metadata
-     ) values ($1, $2, $3::text[], $4, $5, $6::text[], $7, $8, $9, $10, $11, $12, $13, $14, $15::text[], $16::jsonb)
+       external_sharing_enabled, allow_memory, metadata
+     ) values ($1, $2, $3::text[], $4, $5, $6::text[], $7, $8, $9, $10, $11, $12, $13, $14, $15::jsonb)
      on conflict (organization_id) do update set
        default_privacy_mode          = excluded.default_privacy_mode,
        allowed_privacy_modes         = excluded.allowed_privacy_modes,
@@ -176,7 +181,6 @@ export async function upsertOrganizationPolicy(
        retention_enforced            = excluded.retention_enforced,
        external_sharing_enabled      = excluded.external_sharing_enabled,
        allow_memory                  = excluded.allow_memory,
-       ip_allow_list                 = excluded.ip_allow_list,
        metadata                      = excluded.metadata
      returning ${POLICY_COLUMNS}`,
     [
@@ -194,13 +198,13 @@ export async function upsertOrganizationPolicy(
       input.retentionEnforced,
       input.externalSharingEnabled,
       input.allowMemory,
-      input.ipAllowList,
       JSON.stringify({
         ...(input.metadata ?? {}),
         secretHandling: input.secretHandling,
         requireMfa: input.requireMfa,
         monthlySpendCapCents: input.monthlySpendCapCents,
         zeroDataRetentionOnly: input.zeroDataRetentionOnly,
+        ipAllowList: input.ipAllowList,
       }),
     ],
   );
