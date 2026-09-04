@@ -82,6 +82,36 @@ describe('POST /api/code/sessions, the full-network interim guard', () => {
     expect(mockCreateSession).not.toHaveBeenCalled();
   });
 
+  it('refuses extra egress hosts under trusted network for the same harness', async () => {
+    const response = await POST(
+      postRequest({
+        requestId: 'req-12345690',
+        title: 'workspace',
+        networkAccess: 'trusted',
+        runtimeId: 'droid',
+        extraHosts: ['reports.example.com'],
+      }),
+    );
+    expect(response.status).toBe(422);
+    const body = (await response.json()) as { error: { code: string } };
+    expect(body.error.code).toBe('network_access_requires_proxy');
+    expect(mockCreateSession).not.toHaveBeenCalled();
+  });
+
+  it('allows extra egress hosts under trusted network for a proxied harness', async () => {
+    const response = await POST(
+      postRequest({
+        requestId: 'req-12345691',
+        title: 'workspace',
+        networkAccess: 'trusted',
+        runtimeId: 'claude',
+        extraHosts: ['reports.example.com'],
+      }),
+    );
+    expect(response.status).toBe(201);
+    expect(mockCreateSession).toHaveBeenCalledTimes(1);
+  });
+
   it('allows full network when no coding-agent harness is selected', async () => {
     const response = await POST(
       postRequest({

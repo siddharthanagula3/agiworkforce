@@ -55,7 +55,7 @@ import {
   templateVcpuCount,
   type HarnessCredentialSpec,
 } from './templates';
-import { fullNetworkNeedsProxy } from './network-policy';
+import { egressNeedsProxy } from './network-policy';
 import { providerProxyBaseUrl, providerProxyHost } from './provider-proxy';
 import { mintProviderProxyToken } from './provider-proxy-token';
 import {
@@ -521,15 +521,16 @@ export async function getE2BExecutor(scope?: E2BSessionScope): Promise<E2BExecut
   const template = scope?.templateId?.trim() || null;
   if (
     scope &&
-    fullNetworkNeedsProxy(
+    egressNeedsProxy(
       scope.networkAccess ?? CHAT_SANDBOX_NETWORK_ACCESS,
       template,
       Boolean(scope.explicitCredential),
+      scope.extraHosts?.length ?? 0,
     )
   ) {
     logger.warn(
       { ...scopeLog(scope), template },
-      '[e2b] refusing full network access: a managed credential would enter the sandbox unproxied (fail-closed)',
+      '[e2b] refusing widened egress: a managed credential would enter the sandbox unproxied (fail-closed)',
     );
     return null;
   }
