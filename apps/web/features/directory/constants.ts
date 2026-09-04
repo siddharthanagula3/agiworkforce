@@ -53,6 +53,7 @@ export const CONNECTORS_FAILED_COPY = 'The connector directory is unavailable ri
 export const PLUGINS_FAILED_COPY = 'The plugin catalog is unavailable right now.';
 export const MARKETPLACE_FAILED_COPY = 'That marketplace could not be synced.';
 export const CONNECT_FAILED_COPY = 'Could not start this connection. Try again later.';
+export const CONNECTOR_REAUTHORIZATION_COPY = 'Needs to be reconnected.';
 
 export const CSRF_HEADER = 'x-csrf-token';
 export const JSON_CONTENT_TYPE = 'application/json';
