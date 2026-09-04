@@ -5,22 +5,15 @@ import {
   type ManagedSkillSummary,
 } from '@agiworkforce/cloud-contracts';
 import { SKILL_CATALOG_CHANGED_EVENT } from '@shared/events/skill-catalog-events';
+import { queryClient, queryKeys } from '@shared/stores/query-client';
 
 /**
- * One in-flight request for the skill catalogue, shared by every consumer.
- * The composer and the settings modal each fetched `/api/skills` on their own,
- * so a page rendering both issued the same request up to four times.
+ * The shared query client dedupes concurrent mounts and caches the catalogue
+ * for its default staleTime, so the composer and the settings modal rendering
+ * together (or a page remounting on conversation switch) issue one request
+ * instead of one each.
  */
-let inFlight: Promise<ManagedSkillSummary[]> | null = null;
-let loadedAt = 0;
 let canAuthorSkills = false;
-
-/**
- * Long enough to collapse the mount storm that made a single page issue four
- * identical requests, short enough that the catalogue is not frozen for the
- * session when it changes outside this tab.
- */
-const CATALOG_TTL_MS = 30_000;
 
 /** Carries the HTTP status so callers can say what actually failed. */
 export class SkillsCatalogError extends Error {
@@ -44,23 +37,16 @@ export function skillAuthoringCapability(): boolean {
 }
 
 export function loadSkillsCatalog(): Promise<ManagedSkillSummary[]> {
-  const now = Date.now();
-  if (inFlight && now - loadedAt < CATALOG_TTL_MS) return inFlight;
-  loadedAt = now;
-  inFlight = request().catch((error: unknown) => {
-    // A failed load must not be cached, or every later consumer inherits the
-    // failure with no way to retry.
-    inFlight = null;
-    loadedAt = 0;
-    throw error;
+  return queryClient.fetchQuery({
+    queryKey: queryKeys.skills.catalog(),
+    queryFn: request,
+    meta: { silent: true },
   });
-  return inFlight;
 }
 
 export function invalidateSkillsCatalog(): void {
-  inFlight = null;
-  loadedAt = 0;
   canAuthorSkills = false;
+  void queryClient.removeQueries({ queryKey: queryKeys.skills.catalog() });
 }
 
 if (typeof window !== 'undefined') {
