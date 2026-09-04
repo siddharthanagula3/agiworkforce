@@ -115,15 +115,20 @@ describe('free trial service', () => {
   });
 
   it('returns separate public percentages and resets without private operands', async () => {
-    db.query.mockResolvedValueOnce([
-      usageRow({
-        fiveHourUsedMicrousd: 15_000,
-        weeklyUsedMicrousd: 30_000,
-        monthlyUsedMicrousd: 50_000,
-        fiveHourOldestAt: FIVE_HOUR_OLDEST,
-        weeklyOldestAt: WEEKLY_OLDEST,
-      }),
-    ]);
+    tx.query.mockImplementation(async (sql: string) => {
+      if (sql.includes('five_hour_used_microusd')) {
+        return [
+          usageRow({
+            fiveHourUsedMicrousd: 15_000,
+            weeklyUsedMicrousd: 30_000,
+            monthlyUsedMicrousd: 50_000,
+            fiveHourOldestAt: FIVE_HOUR_OLDEST,
+            weeklyOldestAt: WEEKLY_OLDEST,
+          }),
+        ];
+      }
+      return [];
+    });
 
     const snapshot = await getFreeTrialPublicUsage('user-1');
 
@@ -137,10 +142,18 @@ describe('free trial service', () => {
       hasUsageRemaining: true,
     });
     expect(JSON.stringify(snapshot)).not.toMatch(/microusd|budget|cost|reserved/i);
+    expect(tx.execute).toHaveBeenCalledWith('set local role app_rls');
+    expect(tx.query).toHaveBeenCalledWith(
+      expect.stringContaining("set_config('request.jwt.claim.sub', $1, true)"),
+      ['user-1', ''],
+    );
   });
 
   it('returns an unused account-month snapshot when no reservation exists', async () => {
-    db.query.mockResolvedValueOnce([usageRow()]);
+    tx.query.mockImplementation(async (sql: string) => {
+      if (sql.includes('five_hour_used_microusd')) return [usageRow()];
+      return [];
+    });
 
     await expect(getFreeTrialPublicUsage('user-1')).resolves.toEqual({
       usagePercentage: 0,

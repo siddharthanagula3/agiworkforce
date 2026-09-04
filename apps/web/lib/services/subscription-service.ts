@@ -274,7 +274,7 @@ export class SubscriptionService {
     try {
       logger.info({ userId, email }, 'Attempting self-healing subscription sync');
 
-      const db = getNeonDb();
+      const db = createClaimedUserScopedDb(getNeonDb(), { userId, organizationId: null });
 
       const profileRows = await db.query<Pick<ProfileRow, 'stripe_customer_id'>>(
         'SELECT stripe_customer_id FROM profiles WHERE id = $1 LIMIT 1',

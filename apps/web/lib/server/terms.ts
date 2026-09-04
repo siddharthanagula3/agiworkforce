@@ -1,6 +1,7 @@
 import 'server-only';
 
 import { getNeonDb } from '@/lib/server/neon-db';
+import { createClaimedUserScopedDb } from '@/lib/server/claimed-user-scope-db';
 import { POLICY_LAST_UPDATED } from '@/lib/legal-constants';
 
 export const CURRENT_TERMS_VERSION: string = POLICY_LAST_UPDATED.terms;
@@ -33,7 +34,10 @@ function toAcceptance(row: TermsAcceptanceRow | undefined): TermsAcceptance | nu
 }
 
 async function readTermsAcceptance(userId: string): Promise<TermsAcceptance | null> {
-  const rows = await getNeonDb().query<TermsAcceptanceRow>(
+  const rows = await createClaimedUserScopedDb(getNeonDb(), {
+    userId,
+    organizationId: null,
+  }).query<TermsAcceptanceRow>(
     `select terms_version, terms_accepted_at, terms_accepted_surface
        from public.profiles
       where id = $1
@@ -52,7 +56,7 @@ export async function recordTermsAcceptance(
   userId: string,
   surface: TermsAcceptanceSurface,
 ): Promise<TermsAcceptance> {
-  const db = getNeonDb();
+  const db = createClaimedUserScopedDb(getNeonDb(), { userId, organizationId: null });
   const written = await db.query<TermsAcceptanceRow>(
     `insert into public.profiles (id, terms_version, terms_accepted_at, terms_accepted_surface, updated_at)
      values ($1, $2, now(), $3, now())
