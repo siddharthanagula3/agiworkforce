@@ -12,10 +12,7 @@ import {
   pendingSiteIconSource,
   resolveSiteIconForRecord,
 } from '@/lib/connectors/directory/favicon-probe';
-import {
-  readDirectorySnapshot,
-  upsertDirectoryRecord,
-} from '@/lib/connectors/directory/snapshot-cache';
+import { getSnapshotRecords } from '@/lib/connectors/directory/memory-cache';
 import { discoverAndCacheToolNames } from '@/lib/connectors/directory/tool-discovery';
 import { toDirectoryEntryView } from '@/lib/connectors/directory/view';
 
@@ -33,24 +30,22 @@ async function handleGet(
   const connectorId = id.map((segment) => decodeURIComponent(segment)).join('/');
   if (!connectorId) throw createError.validation('Connector directory id is required');
 
-  const snapshot = await readDirectorySnapshot();
-  let record = snapshot?.records.find((entry) => entry.id === connectorId) ?? null;
+  const records = await getSnapshotRecords();
+  let record = records.find((entry) => entry.id === connectorId) ?? null;
   if (!record) throw createError.notFound('Connector directory entry not found');
 
   if (record.authMode === 'unknown') {
     record = await resolveAuthModeForRecord(record);
-    await upsertDirectoryRecord(record);
   }
 
   if (pendingSiteIconSource(record)) {
     record = await resolveSiteIconForRecord(record);
-    await upsertDirectoryRecord(record);
   }
 
   if (record.toolNames.length === 0) {
     const auth = await getClerkAuthUser(request).catch(() => null);
     if (auth?.userId) {
-      const discovered = await discoverAndCacheToolNames(auth.userId, record.id);
+      const discovered = await discoverAndCacheToolNames(auth.userId, record.id, record.toolNames);
       if (discovered && discovered.length > 0) record = { ...record, toolNames: discovered };
     }
   }

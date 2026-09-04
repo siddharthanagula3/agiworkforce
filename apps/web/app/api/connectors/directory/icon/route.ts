@@ -7,7 +7,7 @@ import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { createError } from '@/lib/errors';
 import { getIconForUrl } from '@/lib/connectors/directory/icon-fetch';
-import { readDirectorySnapshot } from '@/lib/connectors/directory/snapshot-cache';
+import { getSnapshotRecords } from '@/lib/connectors/directory/memory-cache';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -19,8 +19,8 @@ async function handleGet(request: NextRequest): Promise<NextResponse> {
   const connectorId = new URL(request.url).searchParams.get('id');
   if (!connectorId) throw createError.validation('id query parameter is required');
 
-  const snapshot = await readDirectorySnapshot();
-  const record = snapshot?.records.find((entry) => entry.id === connectorId) ?? null;
+  const records = await getSnapshotRecords();
+  const record = records.find((entry) => entry.id === connectorId) ?? null;
   if (!record?.iconUrl) throw createError.notFound('No icon recorded for this connector');
 
   const icon = await getIconForUrl(record.iconUrl);
