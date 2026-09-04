@@ -17,10 +17,10 @@ export const metadata = buildMetadata({
 });
 
 const HERO_TRANSCRIPT: { kind: 'cmd' | 'out' | 'dim'; text: string }[] = [
-  { kind: 'cmd', text: 'ollama pull llama3.1' },
+  { kind: 'cmd', text: 'ollama pull <model>' },
   { kind: 'cmd', text: 'agi models scan' },
   { kind: 'out', text: 'ollama · http://localhost:11434 · 1 model' },
-  { kind: 'cmd', text: 'agi --provider ollama --model llama3.1' },
+  { kind: 'cmd', text: 'agi --provider ollama --model <model>' },
 ];
 
 const SURFACE_FACTS = [
