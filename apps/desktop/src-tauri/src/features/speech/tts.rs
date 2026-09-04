@@ -80,6 +80,13 @@ pub enum TtsInterruptReason {
     Error,
 }
 
+/// Event emitted when TTS playback state changes.
+///
+/// Failures are NOT a variant here, they leave through `Err`, so a caller
+/// cannot mistake one for playback (see `TtsPlayer::speak`). `Started` was
+/// likewise removed: it was constructed and immediately discarded, and the only
+/// start signal any surface reads is the `voice:tts_started` event the command
+/// emits directly.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type", content = "data")]
 pub enum TtsPlaybackEvent {
@@ -364,6 +371,14 @@ impl TextToSpeech for OpenAiTts {
     }
 }
 
+/// The voices `SystemTts` can actually speak with on a build whose platform
+/// support is `platform_supported`.
+///
+/// A voice entry the build cannot speak with is placeholder data. This used to
+/// return "System Default" unconditionally, so the Windows and Linux builds.
+/// where `SystemTts::speak_sync` is unimplemented, advertised a selectable
+/// voice whose only behaviour was to fail. Split out from `list_voices` so both
+/// branches are testable from any host, not only from the platform under test.
 fn system_voice_catalog(platform_supported: bool) -> Vec<Voice> {
     if !platform_supported {
         return Vec::new();
@@ -395,6 +410,13 @@ impl SystemTts {
         }
     }
 
+    /// Whether this build can actually drive the OS speech synthesiser.
+    ///
+    /// Only the macOS arm of `speak_sync` is implemented, every other target
+    /// returns "System TTS not implemented for this platform". Callers that
+    /// REPORT availability (`voice_get_capabilities`) or enumerate voices must
+    /// gate on this instead of on `TtsProvider::System` being selected, which
+    /// is merely the default and true everywhere.
     pub const fn platform_supported() -> bool {
         cfg!(target_os = "macos")
     }
@@ -607,6 +629,14 @@ impl TtsPlayer {
             *guard = None;
         }
 
+        // A synthesis failure must leave as a failure. This used to return
+        // `Ok(TtsPlaybackEvent::Error { .. })`, and nothing anywhere inspected
+        // the returned variant: `voice_tts_speak_with_barge_in` took its `Ok`
+        // arm, emitted `voice:tts_completed`, and resolved the promise. On
+        // Windows and Linux, where `SystemTts` cannot speak at all, the user
+        // heard nothing while every layer above reported success, including the
+        // browser-TTS fallback in `useTTS.speakWithBargeIn`, which is wired to
+        // a rejected promise and so never ran.
         result.map(|_| TtsPlaybackEvent::Completed {
             text: text.to_string(),
             duration_ms,
@@ -761,6 +791,10 @@ mod tests {
         assert_eq!(voices[0].id, "system-default");
     }
 
+    /// `platform_supported()` must track the ONLY arm of `speak_sync` that is
+    /// implemented. Asserted from the unsupported side, which is where the
+    /// capability lie lived, on macOS this only pins the constant, without
+    /// spawning `say` into a test run.
     #[test]
     fn system_tts_platform_support_matches_the_implemented_speak_arm() {
         if SystemTts::platform_supported() {
@@ -800,6 +834,8 @@ mod tests {
         assert_eq!(player.elapsed_ms(), 0);
     }
 
+    /// A provider that cannot speak, stands in for `SystemTts` on Windows and
+    /// Linux, and for a network provider that is down.
     struct FailingTts;
 
     #[async_trait]
@@ -836,6 +872,11 @@ mod tests {
         }
     }
 
+    /// THE regression. `speak` used to wrap a synthesis failure as
+    /// `Ok(TtsPlaybackEvent::Error { .. })`, which `voice_tts_speak_with_barge_in`
+    /// read as its success arm, it emitted `voice:tts_completed` and resolved
+    /// the promise, so the frontend's catch-based fallback to browser TTS never
+    /// ran and the user got silence reported as success.
     #[tokio::test]
     async fn speak_surfaces_a_synthesis_failure_as_an_error() {
         let player = TtsPlayer::new(Box::new(FailingTts));

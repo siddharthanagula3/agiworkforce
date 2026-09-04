@@ -12,4 +12,9 @@ if (!isDeveloperSessionSurface(SOURCE_SURFACE)) {
   );
 }
 
+/**
+ * Narrowed alias: exported so call sites that need the
+ * `DeveloperSessionSurface` discriminated union don't have to repeat the
+ * `isDeveloperSessionSurface` check.
+ */
 export const DEVELOPER_SURFACE: DeveloperSessionSurface = SOURCE_SURFACE as DeveloperSessionSurface;

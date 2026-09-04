@@ -1,3 +1,48 @@
+/**
+ * Session stickiness and escalation-only switching for the task-family stage.
+ *
+ * Design source of truth:
+ * `docs/architecture/execution-plan-contract.md` §2.3 (session
+ * stickiness is already policy, `auto.continuity` is all-true, and what is
+ * missing is measuring whether honouring it was the cheaper choice), §3 field
+ * 11 (`fallbackPolicy.escalateOnly: true` is the default for this router work:
+ * "a switch may only move up the ladder, never sideways"), and §5 Stage 2.
+ *
+ * WHY THIS IS SEPARATE FROM `resolveAutoRoute`
+ * -------------------------------------------
+ * `resolveAutoRoute` is pure and stateless, it has no session. Continuity
+ * needs the session's pinned route and the previous attempt's failure signal,
+ * both of which only the caller holds. So the resolver produces the ladder
+ * (`TaskFamilyOrdering.escalationLadder`) and this module decides, from the
+ * caller's session state, whether to stay put, move up, or start over.
+ *
+ * WHAT COUNTS AS A FAILURE SIGNAL
+ * -------------------------------
+ * Nothing invented. The managed-cloud path already computes a `fallbackReason`
+ * string when it swaps model mid-request
+ * (`apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts`). That
+ * string, present, IS the failure signal. Absent means no failure, and absent
+ * never permits a switch.
+ *
+ * THE TWO RULES
+ * -------------
+ *  1. **Pinned by default.** Same family, no failure signal → the session keeps
+ *     its model even when this turn's router would have preferred a different
+ *     one. Switching models mid-conversation is a guaranteed prompt-cache miss
+ *     that re-bills the whole prefix at full input price
+ *     (`assessModelSwitchCache`), so a switch that buys nothing costs real money.
+ *  2. **Escalation only.** With a failure signal, the session may move UP the
+ *     ladder and only up. A lateral move buys nothing and pays the full
+ *     cache-reset penalty; a downward move is a silent quality downgrade
+ *     mid-session, which Decision #10 forbids outright. Both are refused with
+ *     their own reason code rather than being quietly allowed.
+ *
+ * Pure: no I/O, no clock, no platform dependency.
+ *
+ * @module routing/task-family-continuity
+ * @packageDocumentation
+ */
+
 import { assessModelSwitchCache, type ModelSwitchCacheAssessment } from './model-switch-cache';
 import type { TaskFamily } from './task-family';
 
@@ -19,7 +64,9 @@ export type TaskFamilyContinuityAction = 'start' | 'pin' | 'escalate' | 'hold' |
 
 export type TaskFamilyContinuityReason =
   | 'session_started'
+  /** Same family, no failure, the pin is kept. */
   | 'family_pinned'
+  /** Failure signal plus a strictly higher rung, the pin moves up. */
   | 'escalated_on_failure'
   /** Failure signal but the candidate sits at the same rung. */
   | 'lateral_move_blocked'
@@ -29,6 +76,7 @@ export type TaskFamilyContinuityReason =
   | 'ladder_exhausted'
   /** Failure signal but the candidate is not on the ladder at all. */
   | 'candidate_off_ladder'
+  /** The family changed, the pin is released and Auto re-evaluates. */
   | 'family_changed'
   /** The fast path declined this turn; continuity does not apply. */
   | 'family_unclassified';

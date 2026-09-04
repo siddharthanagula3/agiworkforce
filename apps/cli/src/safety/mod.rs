@@ -44,6 +44,9 @@ pub enum CommandSafety {
 pub fn classify_command(command: &str) -> CommandSafety {
     let trimmed = command.trim();
 
+    // Before the subshell check, see if the top-level command itself is dangerous.
+    // `eval $(...)` or `exec \`...\`` are dangerous because the base command is
+    // dangerous, the subshell doesn't reduce the severity.
     if trimmed.contains("$(") || trimmed.contains('`') {
         let first_word = trimmed.split_whitespace().next().unwrap_or("");
         let base_cmd = strip_path(first_word);
@@ -97,6 +100,8 @@ pub fn classify_command(command: &str) -> CommandSafety {
     }
 }
 
+/// Split a command line on `|`, `;`, and `&&`, trimming each segment.
+/// Respects single and double quotes, operators inside quotes are literal.
 pub(crate) fn split_segments(command: &str) -> Vec<String> {
     let mut segments = Vec::new();
     let mut current = String::new();
@@ -133,6 +138,10 @@ pub(crate) fn split_segments(command: &str) -> Vec<String> {
         // Only split on operators when outside quotes
         if !in_single_quote && !in_double_quote {
             match ch {
+                // Newlines and `\r` are real command separators that `sh -c`
+                // honors, without splitting on them, "ls\nrm -rf /" classifies as
+                // the single safe base command "ls" and the destructive tail runs
+                // unapproved.
                 '|' | ';' | '\n' | '\r' => {
                     let seg = current.trim().to_string();
                     if !seg.is_empty() {
@@ -142,6 +151,10 @@ pub(crate) fn split_segments(command: &str) -> Vec<String> {
                     continue;
                 }
                 '&' => {
+                    // Split on both `&&` (logical AND) AND a lone `&` (background
+                    // operator). A backgrounded command (`echo ok & rm -rf x`) is a
+                    // separate command and must be classified on its own, folding
+                    // it into the prefix let it inherit the prefix's Safe rating.
                     if chars.peek() == Some(&'&') {
                         chars.next(); // consume second '&'
                     }
@@ -247,26 +260,32 @@ fn classify_single_segment(segment: &str, prev_was_safe: bool) -> CommandSafety 
     // `git diff --no-index /dev/null secrets.env > /tmp/exfil` would auto-approve
     // an arbitrary file read/write with no prompt.
 
+    // `rm`, force flags make it Dangerous, otherwise Unknown.
     if base_cmd == "rm" {
         return demote_safe_on_redirection(classify_rm(trimmed), trimmed);
     }
 
+    // `find`, dangerous if any exec/delete options present.
     if base_cmd == "find" {
         return demote_safe_on_redirection(classify_find(trimmed), trimmed);
     }
 
+    // `rg` (ripgrep), dangerous if any execution options present.
     if base_cmd == "rg" {
         return demote_safe_on_redirection(classify_rg(trimmed), trimmed);
     }
 
+    // `sed`, only safe when used as read-only print: `sed -n Np` or `sed -n M,Np`.
     if base_cmd == "sed" {
         return demote_safe_on_redirection(classify_sed(trimmed), trimmed);
     }
 
+    // `base64`, dangerous with output file options.
     if base_cmd == "base64" {
         return demote_safe_on_redirection(classify_base64(trimmed), trimmed);
     }
 
+    // `sort`, safe unless it writes through output options.
     if base_cmd == "sort" {
         return demote_safe_on_redirection(classify_sort(trimmed), trimmed);
     }
@@ -279,6 +298,7 @@ fn classify_single_segment(segment: &str, prev_was_safe: bool) -> CommandSafety 
         return demote_safe_on_redirection(classify_ip(trimmed), trimmed);
     }
 
+    // `git`, enhanced subcommand validation.
     if base_cmd == "git" {
         return demote_safe_on_redirection(classify_git(trimmed), trimmed);
     }
@@ -1362,6 +1382,8 @@ mod tests {
 
     #[test]
     fn single_ampersand_splits_background_command() {
+        // A lone `&` is the background operator and MUST split, otherwise a
+        // backgrounded destructive command inherits the prefix's safety rating.
         let segs = split_segments("my-server &");
         assert_eq!(segs, vec!["my-server"]);
         let segs2 = split_segments("echo ok & rm -rf /tmp/x");
@@ -1370,6 +1392,8 @@ mod tests {
 
     #[test]
     fn newline_splits_commands() {
+        // Newlines are command separators (sh -c honors them), a safe prefix must
+        // not hide a destructive command on the next line.
         let segs = split_segments("ls\nrm -rf /tmp/x");
         assert_eq!(segs, vec!["ls", "rm -rf /tmp/x"]);
     }

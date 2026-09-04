@@ -98,6 +98,12 @@ pub(crate) async fn connect_legacy(
 
     let (tx, rx) = mpsc::channel::<serde_json::Value>(64);
 
+    // Best-effort SSE listener with reconnect (desktop parity: up to 5
+    // consecutive connect failures, linear 1s backoff, attempts reset after a
+    // successful connect). Non-blocking, bringup never waits on the GET, and
+    // servers without an SSE stream keep working POST-only. The supervisor
+    // holds `tx` for the lifetime of the transport so the request correlator's
+    // channel stays open even when no stream is attached.
     spawn_legacy_sse_supervisor(
         name,
         sse_url,
@@ -117,6 +123,11 @@ pub(crate) async fn connect_legacy(
     })
 }
 
+/// Refuse to hand configured credentials to a cleartext connection. Loopback
+/// stays exempt so local `http://` dev MCP servers keep working; every other
+/// host must be reached over HTTPS before an `Authorization`/API-key header the
+/// host configured is attached to a GET or a POST. Headers that carry no secret
+/// do not gate bringup, see [`super::http::headers_carry_credentials`].
 fn refuse_cleartext_credentials(
     name: &str,
     url: &str,
@@ -152,6 +163,10 @@ fn spawn_legacy_sse_supervisor(
 ) {
     let server_name = name.to_string();
     tokio::spawn(async move {
+        // Desktop parity (connect_sse): the SSE GET refuses cleartext HTTP to
+        // non-localhost hosts so credentials cannot transit a network
+        // unencrypted. POSTs are unaffected (they matched desktop's POST path,
+        // which had no such check), the transport degrades to POST-only.
         if let Err(e) = crate::security::enforce_https_for_remote(&sse_url) {
             eprintln!("[{server_name}] SSE-legacy: {e:#}; continuing POST-only (no SSE listener)");
             std::future::pending::<()>().await;
@@ -172,6 +187,7 @@ fn spawn_legacy_sse_supervisor(
                     )
                     .await;
                     if matches!(outcome, DrainOutcome::ReceiverClosed) {
+                        // Transport dropped, exit for good.
                         return;
                     }
                     eprintln!("[{server_name}] SSE-legacy: stream ended; reconnecting");
@@ -200,6 +216,10 @@ fn spawn_legacy_sse_supervisor(
     });
 }
 
+/// Build the long-lived reqwest client for SSE transports. Do NOT set
+/// `.timeout()` here, the SSE GET stays open indefinitely and any per-request
+/// cap kills it. Per-call timeouts are applied via `tokio::time::timeout` in
+/// send_request.
 fn build_sse_client(url: &str, timeouts: &McpTimeouts) -> Result<reqwest::Client> {
     // This one client carries the SSE GET *and* every JSON-RPC POST, so the
     // redirect pin has to be here: an unpinned client would hand a
@@ -211,6 +231,11 @@ fn build_sse_client(url: &str, timeouts: &McpTimeouts) -> Result<reqwest::Client
     // rather than at each caller where a new one could forget it. Release
     // builds refuse this outright; debug builds allow loopback only.
     crate::security::enforce_tls_verification_policy(url, timeouts.verify_tls)?;
+    // The policy above already bails in release, so this is unreachable there.
+    // Gating the call site as well keeps `danger_accept_invalid_certs` out of
+    // the release binary entirely, so the guarantee survives someone later
+    // dropping the policy call, and it is what `rust/disabled-certificate-check`
+    // flagged, since the query cannot see the early-return guard.
     #[cfg(debug_assertions)]
     if !timeouts.verify_tls {
         builder = builder.danger_accept_invalid_certs(true);
@@ -247,6 +272,7 @@ async fn open_sse_stream(
     Ok(resp)
 }
 
+/// Why a drain stopped, decides whether a legacy supervisor reconnects.
 enum DrainOutcome {
     /// The frame receiver was dropped: the transport is gone; do not reconnect.
     ReceiverClosed,
@@ -324,6 +350,8 @@ async fn drain_stream(
                     if let Some(rest) = line.strip_prefix("event:") {
                         current_event = Some(rest.trim().to_string());
                     } else if let Some(rest) = line.strip_prefix("data:") {
+                        // SSE allows data fields split across multiple `data:`
+                        // lines, concatenate with newlines per spec.
                         if !data_buf.is_empty() {
                             data_buf.push('\n');
                         }
@@ -335,6 +363,10 @@ async fn drain_stream(
                     current_event = None;
                     continue;
                 }
+                // Handle endpoint hints from the server (MCP "everything"
+                // server pattern: `event: endpoint\ndata: /messages?...`).
+                // Legacy split-endpoint connections pass no `endpoint_tx`.
+                // their POST endpoint is fixed at `{base}/message`.
                 if current_event.as_deref() == Some("endpoint") {
                     if let Some(ep_tx) = endpoint_tx {
                         match resolve_endpoint(base_url, data_buf.trim()) {
@@ -353,6 +385,9 @@ async fn drain_stream(
                 }
                 match serde_json::from_str::<serde_json::Value>(&data_buf) {
                     Ok(v) => {
+                        // Best-effort: surface true server notifications
+                        // (method present, no id) out-of-band. Never blocks the
+                        // drain, a full/absent receiver just drops the notice.
                         if v.get("method").is_some() && v.get("id").is_none() {
                             if let Some(method) =
                                 v.get("method").and_then(|m| m.as_str()).map(String::from)
@@ -363,6 +398,7 @@ async fn drain_stream(
                             }
                         }
                         if tx.send(v).await.is_err() {
+                            // Receiver dropped, connection closed.
                             return DrainOutcome::ReceiverClosed;
                         }
                     }
@@ -380,6 +416,15 @@ async fn drain_stream(
     DrainOutcome::StreamEnded
 }
 
+/// Resolve the SSE-supplied endpoint hint against the original SSE URL. Hints
+/// may be absolute (`https://...`) or relative paths (`/messages?id=…`).
+///
+/// The hint is chosen by the remote server, and every later JSON-RPC POST.
+/// carrying the credential headers the host configured for *this* server, goes
+/// to whatever it names. So it is resolved against the configured URL and then
+/// held to that origin: a cross-origin hint (absolute, or a protocol-relative
+/// `//other.host/path` that `join` would honor) is refused, and the caller
+/// keeps POSTing to the URL the user configured.
 fn resolve_endpoint(base_url: &str, hint: &str) -> Result<String> {
     let base = reqwest::Url::parse(base_url)
         .with_context(|| format!("parse SSE base URL '{base_url}'"))?;

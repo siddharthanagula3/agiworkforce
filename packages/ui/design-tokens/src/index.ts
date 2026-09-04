@@ -149,6 +149,13 @@ export const agiRadii = {
   '2xl': '24px',
 } as const;
 
+/**
+ * Concrete family names, never the var(--font-*) indirection chat.css uses.
+ * This map reaches surfaces only through `agiChatCssVars`, which is emitted as
+ * a literal CSS block by `cssVarsToString` for hosts that cannot import the
+ * stylesheet, none of which run next/font, so a var(--font-*) here would name
+ * nothing. Keep the families in step with chat.css's fallbacks.
+ */
 export const agiTypography = {
   sans: "'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif",
   serif: "'Newsreader', Georgia, 'Times New Roman', serif",

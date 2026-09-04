@@ -1,3 +1,67 @@
+/**
+ * @file adapters/neon.ts
+ * @module @agiworkforce/data-layer/adapters/neon
+ *
+ * # Neon adapter
+ *
+ * Neon (https://neon.tech) is serverless Postgres with branching, generous
+ * free tier, and the `@neondatabase/serverless` driver, purpose-built for
+ * edge runtimes (Vercel Edge, Cloudflare Workers) AND ordinary Node.
+ *
+ * Wire it up by setting two env vars:
+ *
+ * ```bash
+ * AGI_DATABASE_PROVIDER=neon
+ * AGI_DATABASE_URL=postgresql://user:pwd@ep-xxx.us-east-2.aws.neon.tech/db?sslmode=require
+ * ```
+ *
+ * Feature code never imports this class directly, it goes through
+ * `createDatabaseClient()` in `../factory.ts`. This adapter just satisfies
+ * the vendor-neutral `DatabaseAdapter` contract from `../types.ts`.
+ *
+ * ## RLS contract
+ *
+ * This adapter binds the Clerk JWT subject via a Postgres-native session GUC:
+ *
+ * ```sql
+ * SET LOCAL request.jwt.claim.sub = '<sub>';
+ * ```
+ *
+ * Your RLS policies must read it back with
+ * `current_setting('request.jwt.claim.sub', true)`.
+ *
+ * ```sql
+ * CREATE POLICY "owner_only" ON conversations
+ *   USING (user_id::text = current_setting('request.jwt.claim.sub', true));
+ * ```
+ *
+ * SECURITY: `withUser(jwt)` does NOT verify the JWT signature, it only
+ * base64url-decodes the middle segment and reads `.sub`. Binding an
+ * unverified `sub` to RLS is an impersonation footgun, so `withUser()` is
+ * DEFAULT-DENY: it throws unless the adapter is constructed with
+ * `unsafeAllowUnverifiedJwtSubject: true`. Verify the token upstream
+ * (Clerk `verifyToken` / `ClerkAuthAdapter.verifyJwt`) BEFORE opting in.
+ * The live web gateway never calls this path; it derives identity from
+ * Clerk `auth()` directly.
+ *
+ * ## Connection pooling
+ *
+ * The driver's `Pool` export multiplexes over WebSocket internally for
+ * Node and over `fetch` for edge. You DO NOT run PgBouncer in front. For
+ * one-shot edge invocations consider the `neon()` HTTP function instead;
+ * for long-lived Node servers `Pool` is the right call (we use it here).
+ *
+ * ## Storage + Realtime
+ *
+ * Neon doesn't ship those. Pair this adapter with:
+ *
+ * - Storage: S3 / R2 / B2 (planned `s3.ts` adapter) or Vercel Blob.
+ * - Realtime: Pusher / Ably / self-hosted ws or Vercel Edge Pub/Sub.
+ *
+ * The factory rejects `AGI_STORAGE_PROVIDER=s3` etc. today with a
+ * `DataLayerConfigError` pointing at the current technical architecture.
+ */
+
 import type { Pool, PoolClient, QueryResult } from '@neondatabase/serverless';
 import {
   type DatabaseAdapter,
@@ -53,6 +117,25 @@ type NeonModule = typeof import('@neondatabase/serverless');
 
 let _neonModule: NeonModule | null = null;
 
+/**
+ * Points the driver at a local WebSocket proxy instead of Neon.
+ *
+ * The driver reaches Postgres over a WebSocket, so it cannot talk to a plain
+ * Postgres on TCP. That makes the whole stack unverifiable against a throwaway
+ * database: migrations can be applied with psql and services can be driven with
+ * `pg`, but the APP cannot be pointed anywhere except a real Neon branch, and
+ * "policy denies a live turn" stays unobserved.
+ *
+ * Set `AGI_DATABASE_WS_PROXY` to a `host:port` running neondatabase/wsproxy to
+ * close that gap. Absent, which is every deployed environment, this function
+ * does nothing at all and the driver behaves exactly as before.
+ *
+ * DEVELOPMENT ONLY, and it refuses to be anything else: a proxy host outside
+ * localhost is rejected rather than honoured, because a production deployment
+ * that picked this variable up from a stray export would send its database
+ * traffic, credentials included, over an unencrypted socket to somebody else's
+ * machine.
+ */
 function isLoopbackHost(hostname: string): boolean {
   return hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '::1';
 }
@@ -83,6 +166,10 @@ function applyLocalWebSocketProxy(neon: NeonModule): void {
     );
   }
 
+  // The driver hands the target host and port to this callback, and wsproxy
+  // reads them from `?address=`. Returning the bare proxy host instead produces
+  // a 404 on the upgrade, and letting wsproxy APPEND_PORT do the job doubles the
+  // port into something like 5543355433, both cost a debugging cycle.
   neon.neonConfig.wsProxy = (host: string, port: number | string) =>
     `${proxy}/v1?address=${host}:${port}`;
   neon.neonConfig.useSecureWebSocket = false;
@@ -160,6 +247,22 @@ async function loadNeon(connectionHost: string): Promise<NeonModule> {
   return loaded;
 }
 
+/**
+ * Decode the `sub` claim from a JWT WITHOUT verifying its signature.
+ *
+ * @internal SECURITY: this trusts an UNVERIFIED token. An attacker who can
+ * reach a caller that forwards a self-minted JWT here controls the `sub`
+ * that drives RLS, i.e. impersonation. It is ONLY safe when the caller has
+ * already verified the signature (e.g. via {@link ClerkAuthAdapter.verifyJwt}
+ * / Clerk `verifyToken`) BEFORE handing the token to `withUser`. Because
+ * that precondition is invisible from here, `withUser` is default-deny: it
+ * refuses to call this unless the adapter was explicitly constructed with
+ * `unsafeAllowUnverifiedJwtSubject: true`. Do not export this helper.
+ *
+ * Throws if the JWT is malformed (wrong segment count, non-JSON middle,
+ * missing/non-string `sub`). Throwing surfaces operator config bugs early
+ * rather than silently dropping RLS context.
+ */
 function decodeJwtSub(jwt: string): string {
   const parts = jwt.split('.');
   if (parts.length !== 3) {
@@ -257,6 +360,22 @@ const DEFAULT_IDLE_TIMEOUT_MS = 5_000;
 export interface NeonDatabaseAdapterConfig extends DatabaseConnectionConfig {
   pool?: Pool;
   poolPromise?: Promise<Pool>;
+  /**
+   * Opt in to the UNVERIFIED-JWT escape hatch.
+   *
+   * @internal SECURITY DEFAULT-DENY. `withUser(jwt)` decodes the `sub` claim
+   * of the supplied token WITHOUT verifying its signature and binds it as the
+   * RLS subject. If a caller forwards an attacker-minted JWT, the attacker
+   * picks the `sub` and impersonates any user. So `withUser()` THROWS unless
+   * this flag is explicitly set to `true`, forcing the integrator to
+   * acknowledge that the token has already been signature-verified upstream
+   * (Clerk `verifyToken` / {@link ClerkAuthAdapter}) before it reaches here.
+   *
+   * The live web gateway never sets this, it derives identity from Clerk
+   * `auth()` directly and never calls `withUser`. Leave it unset unless you
+   * are wiring a verified-token-only path and have proven the verification
+   * happens first.
+   */
   unsafeAllowUnverifiedJwtSubject?: boolean;
 }
 
@@ -308,6 +427,15 @@ export class NeonDatabaseAdapter implements DatabaseAdapter {
     return pool;
   }
 
+  /**
+   * `pool.connect()` can hand back either a brand-new client or one already
+   * wired on an earlier checkout, so this attaches at most once per client
+   *, attaching on the Pool's own `connect` event instead would disqualify
+   * {@link applyPoolQueryViaFetch}'s fast path for every pool sharing this
+   * driver module. The pool strips its own idle-error listener off a client
+   * for as long as it is checked out, so without this a transport error
+   * during that window is unhandled and crashes the process.
+   */
   private async checkoutClient(pool: Pool): Promise<PoolClient> {
     const client = await pool.connect();
     if (!this.guardedClients.has(client)) {
@@ -442,6 +570,28 @@ export class NeonDatabaseAdapter implements DatabaseAdapter {
     }
   }
 
+  /**
+   * Bind a user JWT for the lifetime of the returned adapter. The original
+   * (service-context) adapter is unchanged, call this for every request
+   * scope. Subsequent `query()` / `execute()` / `transaction()` calls run
+   * `SET LOCAL request.jwt.claim.sub = $1` so RLS policies see the user.
+   *
+   * The returned adapter shares the parent's pool, calling `dispose()` on
+   * it only unbinds the per-instance state. The pool lifetime is owned by
+   * the root adapter that constructed it.
+   *
+   * @internal SECURITY: the JWT signature is NOT verified here, this method
+   * only decodes the `sub` claim. Decoding an unverified token and binding
+   * its `sub` to RLS is an impersonation footgun, so this method is
+   * DEFAULT-DENY: it throws unless the adapter was constructed with
+   * `unsafeAllowUnverifiedJwtSubject: true`. The integrator MUST verify the
+   * token's signature upstream (Clerk `verifyToken` / {@link ClerkAuthAdapter})
+   * before opting in. The live web gateway never calls this path; it derives
+   * identity from Clerk `auth()` directly.
+   *
+   * @throws DataLayerConfigError when the opt-in flag is not set, or when the
+   * JWT is malformed (handled by {@link decodeJwtSub}).
+   */
   withUser(jwt: string): DatabaseAdapter {
     if (this.config.unsafeAllowUnverifiedJwtSubject !== true) {
       throw new DataLayerConfigError(

@@ -156,6 +156,15 @@ export function stripAnthropicOnlyFields(messages: RepairMessage[]): RepairMessa
   });
 }
 
+/**
+ * Anthropic enforces a 100-media cap per request. Silently drop the
+ * oldest media items (image / image_url / document / pdf blocks)
+ * until the count is within the cap.
+ *
+ * @param messages, input list (not mutated).
+ * @param max, cap, defaults to {@link DEFAULT_MAX_MEDIA_PER_REQUEST}.
+ * @returns repaired list + count of items dropped.
+ */
 export function stripExcessMediaItems(
   messages: RepairMessage[],
   max = DEFAULT_MAX_MEDIA_PER_REQUEST,

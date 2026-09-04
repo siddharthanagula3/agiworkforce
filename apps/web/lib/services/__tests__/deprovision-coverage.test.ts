@@ -2,6 +2,13 @@ import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
+/**
+ * Resolves the app root by looking for a marker, not from `process.cwd()`.
+ *
+ * A coverage guard that resolves from the working directory fails with a wall
+ * of unreadable-file errors the moment vitest is invoked from the repo root
+ * instead of the app, noise that says nothing about the thing being guarded.
+ */
 function appRoot(): string {
   const direct = process.cwd();
   if (existsSync(join(direct, 'db/neon'))) return direct;
@@ -12,6 +19,16 @@ function appRoot(): string {
 
 const APP_ROOT = appRoot();
 
+/**
+ * Every path that removes a member must revoke their credentials.
+ *
+ * Dropping the membership row stops the NEXT request from resolving the
+ * workspace. It does nothing about the browser, desktop, mobile app or
+ * developer key already holding credentials. A removal path that skips this
+ * leaves a leaver with working access on one route while the others cut them
+ * off, which is the offboarding hole an auditor looks for, and it is invisible
+ * from the admin UI because the member does disappear from the list.
+ */
 const REMOVAL_PATHS = [
   { file: 'app/api/settings/team/[memberId]/route.ts', what: 'an admin removing a member' },
   {
@@ -48,6 +65,10 @@ describe('deprovision covers every removal path', () => {
   }
 
   it('the SCIM path covers BOTH deactivate and delete', () => {
+    // A user can leave a directory three ways: PATCH {active:false}, PUT with
+    // active:false, or DELETE. A file-wide count is false assurance, delete +
+    // replace alone satisfy "at least two calls" while patch stays unguarded, so
+    // each removal function must itself contain the revoke.
     const text = source('lib/server/scim/scim-provisioning-service.ts');
     for (const name of ['patchScimUser', 'deleteScimUser', 'replaceScimUser']) {
       expect(

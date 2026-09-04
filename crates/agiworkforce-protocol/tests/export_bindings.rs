@@ -20,8 +20,14 @@ fn export_typescript_bindings() {
     let dir = std::env::var("TS_RS_EXPORT_DIR").unwrap_or_else(|_| "bindings".to_string());
     let dir = Path::new(&dir);
 
+    // Event envelope, pulls in the bulk of the wire graph (session events,
+    // approvals, items, permissions, config views). NOTE: the client->server
+    // `Op` envelope does NOT derive TS today (only its payload types do);
+    // adding it is tracked follow-up work, not a wiring prerequisite.
     agiworkforce_protocol::protocol::EventMsg::export_all_to(dir).expect("export EventMsg graph");
 
+    // MCP wire types (Tool etc.), consumed by the agiworkforce-mcp crate
+    // plan (stage d) and by TS surfaces via the generated barrel.
     agiworkforce_protocol::mcp::Tool::export_all_to(dir).expect("export mcp Tool graph");
 
     // Local developer-session app-server envelopes. These are consumed by
@@ -66,6 +72,9 @@ fn export_typescript_bindings() {
     agiworkforce_protocol::developer_session::AcknowledgedResponse::export_all_to(dir)
         .expect("export developer-session acknowledgement graph");
 
+    // One versioned agent event envelope (W5 discipline-wave item 4), not
+    // reachable from any root above (a new, independent top-level type), so
+    // it needs its own root per this file's own doc comment.
     agiworkforce_protocol::agent_events::AgentEventEnvelope::export_all_to(dir)
         .expect("export agent event envelope graph");
 }

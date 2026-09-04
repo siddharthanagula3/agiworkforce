@@ -1,3 +1,14 @@
+//! Typed agent lifecycle events emitted on `--json-events`.
+//!
+//! This is the machine-readable counterpart to the human-friendly TUI/REPL
+//! output. Every event is one JSON object, terminated by a newline, written to
+//! stdout. No interleaved prose, no ANSI, no timestamps in the payload.
+//! callers (CI, dashboards, automation scripts) own time-keeping.
+//!
+//! Two strict guarantees:
+//!   1. Variant names are stable. Add fields, never rename them.
+//!   2. `kind` strings on errors come from [`crate::errors::CliError::kind`],
+//!      so a runbook can pattern-match without parsing prose.
 
 use std::io::Write;
 
@@ -64,6 +75,7 @@ pub enum AgentEvent {
         /// The configured cap.
         limit_dollars: f64,
     },
+    /// Error path, paired with [`CliError::kind`] and a runbook hint.
     Error {
         session_id: String,
         kind: &'static str,
@@ -84,6 +96,8 @@ impl AgentEvent {
         }
     }
 
+    /// Serialize the event to JSON and append a newline. Errors are written
+    /// to stderr, never panic on a user-driver bug.
     pub fn emit<W: Write>(&self, out: &mut W) {
         match serde_json::to_string(self) {
             Ok(json) => {

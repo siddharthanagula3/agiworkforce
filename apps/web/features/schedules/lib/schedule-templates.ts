@@ -5,6 +5,11 @@ export interface ScheduleTemplate {
   name: string;
   cadenceLabel: string;
   description: string;
+  /**
+   * Overlaid on INITIAL_SCHEDULE_DRAFT, so a template only states what it
+   * changes. Every one sets a real recurrence, a template that left the
+   * default 'once' would be a "weekly review" that runs a single time.
+   */
   draft: Partial<ScheduleDraft>;
 }
 

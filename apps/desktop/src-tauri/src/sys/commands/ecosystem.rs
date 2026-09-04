@@ -1,3 +1,7 @@
+//! Ecosystem scanner, Tauri command for detecting AI tools and IDEs.
+//!
+//! Mirrors the CLI ecosystem scanner logic so the desktop app can show
+//! what tools are installed and offer to import their configurations.
 
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -315,6 +319,9 @@ fn imported_server_to_mcp_config(
             transport: None,
         }
     } else {
+        // No command means this was a remote/HTTP entry, `json_server_entry`
+        // and `toml_server_entry` only produce an `ImportedMcpServer` at all
+        // when at least one of `command`/`url` is present.
         crate::core::mcp::McpServerConfig {
             command: String::new(),
             args: Vec::new(),
@@ -330,6 +337,18 @@ fn imported_server_to_mcp_config(
     }
 }
 
+/// Import MCP server configurations from detected ecosystem tools.
+///
+/// AUDIT-FIX (sibling of DESKTOP-MCP-DOTFILE-CONFIG-FAKE-SUCCESS-01): this
+/// used to be a pure scan-and-return function, the frontend showed
+/// "Imported N MCP server(s)" on success, but nothing was ever written
+/// anywhere and the live MCP client never learned about the scanned servers.
+/// It persists every discovered server into the shared CLI dotfile
+/// (`~/.agiworkforce/mcp.json`, via `McpServersConfig::write_dotfile_servers`
+///, the same durable store `dotfile_add_mcp_server` uses) and reloads the
+/// live MCP client's discovered configuration. Imported entries remain
+/// disabled: discovery is not approval to execute a local command or contact
+/// a remote endpoint.
 #[tauri::command]
 pub async fn import_ecosystem_mcp_servers(
     mcp_state: tauri::State<'_, crate::sys::commands::mcp::McpState>,

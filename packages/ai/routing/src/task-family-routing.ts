@@ -1,3 +1,64 @@
+/**
+ * Task-family eligibility floor + Pareto (cost-ranked) candidate ordering.
+ *
+ * Design source of truth:
+ * `docs/architecture/execution-plan-contract.md` §3.2 invariant 1
+ * ("A plan never widens admission … the plan describes the survivor"),
+ * invariant 4 ("Absent policy is not permissive"), and §5 Stage 2.
+ *
+ * THE ROUTING THESIS THIS IMPLEMENTS
+ * ----------------------------------
+ * Pick the CHEAPEST configuration that still meets a measurable, task-specific
+ * quality threshold. Hard constraints filter FIRST; cost ranks only what
+ * survives. Concretely, in this module:
+ *
+ *   1. Admission is untouched. The candidate set handed in is exactly the set
+ *      `resolveAutoRoute` already built, `auto.tasks.<task>.preferredSlots`
+ *      for the tier-clamped effective profile. This module never adds a slot,
+ *      never reads `tierAllowedSlots`, and never sees a trust mode.
+ *   2. The per-family quality floor partitions that set into `aboveFloor` and
+ *      the rest.
+ *   3. `aboveFloor` is sorted by ascending estimated request cost.
+ *   4. The result is a PERMUTATION of the input: `[...aboveFloorByCost,
+ *      ...restInAuthoredOrder]`. Same members, same length, nothing dropped.
+ *
+ * Step 4 is the whole safety argument. A filter could strand a request whose
+ * only eligible route sat below the floor; a permutation cannot. If nothing
+ * meets the floor the list is returned in its authored order and the stage is
+ * a no-op that still reports WHY (`task_family_floor_unmet`).
+ *
+ * WHAT A FLOOR MAY BE EXPRESSED AGAINST
+ * -------------------------------------
+ * Only metadata the registry already carries:
+ *  - `minimumSlotBand`, the lowest authored profile band (`economy` <
+ *    `balanced` < `premium`) whose `preferredSlots` list contains the slot, for
+ *    THIS task. This is the curator's own quality ladder, read back.
+ *  - `requiredCapabilities`, `registry.capabilities[modelKey]`.
+ *  - `minimumContextTokens`, `registry.limits[modelKey].contextTokens`.
+ *  - `minimumBenchmarkScores`, `registry.benchmarks[modelKey]`.
+ *
+ * **Benchmark coverage is thin and a floor that uses it fails closed.** At the
+ * time of writing only 10 of 31 registry models carry any benchmark scores,
+ * and the models pinned by the most-used slots (`workhorse_general`,
+ * `coding_balanced`, `flagship_general`) carry none. A model with no recorded
+ * score for a named benchmark therefore FAILS that floor, absent policy is not
+ * permissive (§3.2 invariant 4). That is why no seeded family authors a
+ * benchmark floor today: the mechanism exists, the data does not.
+ *
+ * RUST ADOPTION FOLLOWS OQ-1
+ * --------------------------
+ * This stage is TypeScript-only on purpose. `crates/agiworkforce-model-registry`
+ * carries a second, already-diverged resolver (its `AutoRoutingRequest` has no
+ * budget or capability fields, and its `UnavailableCode` has six variants to
+ * this side's eight). Design-doc **OQ-1, which resolver is canonical, is
+ * undecided**, and adding this stage to both would double the divergence
+ * surface before that question is answered. The Rust resolver is deliberately
+ * NOT modified; it adopts this stage only after OQ-1 is resolved.
+ *
+ * @module routing/task-family-routing
+ * @packageDocumentation
+ */
+
 import { modelRegistry } from '@agiworkforce/model-registry';
 import type { RoutingTaskType } from '@agiworkforce/types';
 
@@ -49,6 +110,7 @@ export type TaskFamilyStageReason =
   | 'task_family_unclassified'
   /** The operator flag is off. */
   | 'task_family_stage_disabled'
+  /** The task has no preferred slots at this profile, nothing to order. */
   | 'task_family_no_candidates';
 
 export interface TaskFamilyFloorRejection {

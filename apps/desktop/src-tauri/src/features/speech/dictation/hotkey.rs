@@ -1,3 +1,24 @@
+//! Stoppable global hotkey hook for AGI Dictation.
+//!
+//! Replaces the previous non-stoppable listener in
+//! `sys/commands/voice_global.rs`: `rdev::listen` is a blocking call with no
+//! portable termination API, returning from its callback does NOT terminate
+//! the listener, so the old "spawn a new thread per start, flip a flag on
+//! stop" design leaked a parked OS listener per restart and, once the shared
+//! flag went true again, every leaked listener emitted events (double-fire).
+//!
+//! Design (plan phase 2, `docs/plans/desktop-system-dictation.md`):
+//! - The OS listener thread is spawned AT MOST ONCE per process, guarded by a
+//!   compare-and-swap. Restarting the hook never spawns a second listener.
+//! - `start`/`stop` toggle an emission gate and install/remove the sink under
+//!   a mutex. Stopping removes the sink, so emission halts immediately even
+//!   though the OS thread stays parked (it is idle and harmless).
+//! - Key-repeat is suppressed with an edge detector: holding the key emits
+//!   exactly one `Pressed`; releasing emits exactly one `Released`.
+//!
+//! The dispatch core is separated from the OS thread so the lifecycle rules
+//! are unit-testable without an OS input hook (which is unavailable headless
+//! and permission-gated on macOS).
 
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Mutex;
@@ -85,12 +106,12 @@ impl GlobalHotkeyHook {
 
         let edge = if down {
             if self.key_down.swap(true, Ordering::SeqCst) {
-                return;
+                return; // key-repeat while held, already reported Pressed
             }
             HotkeyEdge::Pressed
         } else {
             if !self.key_down.swap(false, Ordering::SeqCst) {
-                return;
+                return; // release without a matching press, ignore
             }
             HotkeyEdge::Released
         };

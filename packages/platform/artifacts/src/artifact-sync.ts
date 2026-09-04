@@ -1,3 +1,17 @@
+/**
+ * Artifact cloud-sync merge logic (canonical, cross-surface).
+ *
+ * The pure rules every surface applies when reconciling LOCALLY-DERIVED artifacts (re-derived
+ * from message content; identical on every device) with PULLED CLOUD artifacts (the managed
+ * synced entity, edited or desktop-authored-from-scratch). Keeping this in one place means
+ * web / desktop / mobile render and push identically.
+ *
+ * See docs/plans/artifact-cloud-sync-design-2026-06-21.md §4 and the `/api/chat/sync`
+ * endpoint (migration 0039). No I/O, no platform deps, surfaces own the transport.
+ *
+ * @module artifact-sync
+ */
+
 import type { SharedArtifact } from '@agiworkforce/types';
 import type { ArtifactWireDelta } from '@agiworkforce/cloud-contracts';
 

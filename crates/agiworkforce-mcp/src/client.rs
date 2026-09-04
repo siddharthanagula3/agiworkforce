@@ -1,3 +1,7 @@
+//! The transport-agnostic MCP client: JSON-RPC framing, id correlation,
+//! per-operation timeouts, connection-error detection + one-shot tool-call
+//! reconnect, and the elicitation dispatch, all ported verbatim (behavior
+//! preserved) from the CLI's `McpConnection`.
 
 use anyhow::{Context, Result, anyhow, bail};
 use std::collections::HashMap;
@@ -105,6 +109,15 @@ impl McpClient {
         Ok(conn)
     }
 
+    /// Connect and bring up the transport WITHOUT running the MCP `initialize`
+    /// handshake. The host drives its own `initialize` /
+    /// `notifications/initialized` via [`Self::request`] / [`Self::notify`].
+    ///
+    /// Used by hosts (desktop) that own a different protocol version, client
+    /// capabilities, and `InitializeResult` capture than this crate's built-in
+    /// handshake, the exact handshake bytes stay host-controlled while the
+    /// JSON-RPC transport mechanics (framing, id correlation, timeouts,
+    /// transports, OAuth) are shared.
     pub async fn connect_without_handshake(
         server_name: &str,
         config: TransportConfig,
@@ -331,6 +344,9 @@ impl McpClient {
         Ok(())
     }
 
+    /// Send a JSON-RPC request and wait for its response. Public boundary, no
+    /// automatic reconnect (matches the CLI: only tool calls reconnect). Used
+    /// by hosts for `tools/list`, `prompts/list`, `prompts/get`, etc.
     pub async fn request(
         &mut self,
         method: &str,
@@ -364,6 +380,9 @@ impl McpClient {
         Ok(tools)
     }
 
+    /// Execute a tool and return the raw JSON-RPC `result` (or `None` for a
+    /// 202-style ack). On a connection error the transport is re-established and
+    /// the call retried exactly once, the CLI's original tool-call behavior.
     pub async fn call_tool_value(
         &mut self,
         tool_name: &str,
@@ -432,10 +451,18 @@ impl McpClient {
         })
     }
 
+    /// Take the server-notification receiver (fed by the SSE drain). Returns
+    /// `None` if already taken, the channel is single-consumer. Only the SSE
+    /// transport pushes here; stdio/http yield an idle receiver.
     pub fn notifications(&mut self) -> Option<mpsc::Receiver<McpNotification>> {
         self.notif_rx.take()
     }
 
+    /// Cheap, non-RPC liveness check. For stdio, polls the child process with
+    /// `try_wait` (no I/O on the protocol pipes); SSE/HTTP report `true`, their
+    /// failures surface on the next request. Used by hosts (desktop health
+    /// monitor) that keep a synchronous liveness snapshot; the RPC-based
+    /// [`Self::is_alive`] stays for hosts that want a real round-trip probe.
     pub fn transport_alive(&mut self) -> bool {
         match &mut self.inner {
             TransportConn::Stdio { child } => matches!(child.try_wait(), Ok(None)),
@@ -671,6 +698,7 @@ impl McpClient {
                         {
                             return Ok(matched);
                         }
+                        // Otherwise a notification or different-id response, keep draining.
                     }
                 })
                 .await
@@ -859,6 +887,9 @@ impl McpClient {
                 if let Some(sid) = session_id.as_deref() {
                     req_builder = req_builder.header("Mcp-Session-Id", sid);
                 }
+                // Attach an OAuth bearer if we have a fresh cached token.
+                // Notifications are fire-and-forget so we don't trigger the
+                // OAuth dance on 401, that happens on the next request.
                 if oauth.is_some() {
                     if let Some(tok) = token_store.get(url.as_str()) {
                         if !tok.is_expiring_soon(60) {
@@ -1008,6 +1039,7 @@ impl McpClient {
 
 impl Drop for McpClient {
     fn drop(&mut self) {
+        // Best-effort sync cleanup, Drop cannot be async.
         match &mut self.inner {
             TransportConn::Stdio { child } => {
                 #[cfg(unix)]

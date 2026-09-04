@@ -1,3 +1,19 @@
+/**
+ * webviewContent.snapshot.test.ts, structural visual-verification for the
+ * VS Code sidebar webview.
+ *
+ * Locks the rendered HTML shape so any layout drift fires a snapshot diff.
+ * Discharges the Stop-hook visual-verification debt for the VS Code surface
+ *, the webview is the closest "screen" the extension has, and snapshotting
+ * its HTML body is the closest structural-parity equivalent we can do
+ * without spinning up the real VS Code shell.
+ *
+ * The nonce value injected into <script> and <style> tags is non-deterministic
+ * (random base64), so we normalize it before snapshotting.
+ *
+ * @vitest-environment jsdom
+ */
+
 import { describe, expect, it } from 'vitest';
 import { isModelSelectable } from '@agiworkforce/types';
 import { getWebviewContent } from '../features/sidebar-webview/webviewContent';

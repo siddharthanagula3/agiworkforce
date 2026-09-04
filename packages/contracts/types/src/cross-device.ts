@@ -1,4 +1,25 @@
 /**
+ * Cross-Device Orchestration Types
+ *
+ * Types for persistent cross-device conversation threads and real-time
+ * execution streaming between surfaces. Enables a user to start a task
+ * on desktop and monitor it live from mobile, or vice versa.
+ *
+ * Core concepts:
+ * - `CrossDeviceThread`, a conversation that spans multiple devices.
+ * - `CrossDeviceMessage`, a single message within a thread, tagged with device origin.
+ * - `CrossDeviceAttachment`, a file, screenshot, or artifact attached to a message.
+ * - `DevicePairing`, a QR-code-initiated link between desktop and mobile.
+ * - `ExecutionStreamEvent`, a real-time update streamed from desktop to mobile.
+ *
+ * The signaling server (`services/signaling-server`) relays
+ * `ExecutionStreamEvent` frames over WebRTC data channels.
+ *
+ * @module cross-device
+ * @packageDocumentation
+ */
+
+/**
  * A persistent conversation thread that can be accessed from multiple devices.
  *
  * Unlike a single-surface chat session, a cross-device thread is stored in
@@ -230,6 +251,32 @@ export interface DevicePairing {
   expiresAt: string;
 }
 
+/**
+ * A real-time execution update streamed from the desktop agent to mobile.
+ *
+ * Events are sent over the WebRTC data channel established during device
+ * pairing. The mobile companion uses these events to render the live
+ * agent dashboard, showing tool calls, screenshots, and final results
+ * without storing them permanently.
+ *
+ * Event type semantics:
+ * - `progress`, textual status update (what the agent is doing).
+ * - `tool_call`, agent is about to invoke a tool; `data` contains tool name and args.
+ * - `tool_result`, tool execution finished; `data` contains the result summary.
+ * - `screenshot`, desktop screenshot captured; `data.base64` contains the image.
+ * - `completed`, task finished successfully; `data` contains the final output.
+ * - `failed`, task failed; `data.error` contains the error message.
+ *
+ * @example
+ * ```typescript
+ * const event: ExecutionStreamEvent = {
+ *   type: 'tool_call',
+ *   taskId: 'task-abc-456',
+ *   timestamp: '2026-03-19T09:02:00Z',
+ *   data: { toolName: 'bash', args: { command: 'git status' } },
+ * };
+ * ```
+ */
 export interface ExecutionStreamEvent {
   type: 'progress' | 'tool_call' | 'tool_result' | 'screenshot' | 'completed' | 'failed';
 

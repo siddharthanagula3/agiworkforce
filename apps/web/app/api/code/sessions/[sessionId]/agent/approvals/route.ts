@@ -25,6 +25,12 @@ import { SubscriptionService } from '@/lib/services/subscription-service';
 
 export const runtime = 'nodejs';
 
+/**
+ * POST resumes the same agent loop as ../route.ts, so it needs that route's
+ * budget, and, like that route, it is the outer bound that
+ * CLOUD_CODE_AGENT_TURN_BUDGET_MS in cloud-code-agent-service.ts is derived
+ * from. Keep the two literals equal.
+ */
 export const maxDuration = 300;
 
 type RouteContext = { params: Promise<{ sessionId: string }> };

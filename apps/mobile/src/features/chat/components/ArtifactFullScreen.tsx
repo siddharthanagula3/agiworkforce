@@ -41,6 +41,16 @@ interface ArtifactFullScreenProps {
   onRegenerate?: () => void;
 }
 
+/**
+ * Languages/types for which a preview pane is offered.
+ *
+ * SECURITY: `html`/`svg` render LIVE through {@link SafeArtifactPreview}, a
+ * hardened WebView (JS disabled, strict CSP `default-src 'none'`, no RN bridge,
+ * navigation blocked), safe for untrusted artifact markup. `mermaid`/`jsx`/`tsx`
+ * need JavaScript or compilation to render and therefore CANNOT be shown in the
+ * JS-disabled sandbox; they keep the preview toggle but display an honest
+ * "source only" note rather than executing anything.
+ */
 const PREVIEWABLE_LANGUAGES = new Set(['html', 'svg', 'mermaid', 'jsx', 'tsx']);
 
 function livePreviewKind(artifact: Artifact): PreviewableKind | null {

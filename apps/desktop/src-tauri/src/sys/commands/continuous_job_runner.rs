@@ -377,6 +377,12 @@ pub struct ContinuousJobRunnerRequest {
     pub persist_ledger: bool,
     #[serde(default)]
     pub reset_ledger_on_start: bool,
+    /// TRUST BOUNDARY (desktop-trust-boundary-01): the active session's
+    /// execution mode, so the agentic-fallback LLM planner call below can be
+    /// routed to the correct trust boundary instead of falling through to
+    /// the router's fail-closed Local-only default. `None` (the case for any
+    /// caller that has not been updated to send this) stays Local-only.
+    /// this job runner will not silently reach BYOK/ManagedCloud.
     #[serde(default)]
     pub execution_mode: Option<crate::sys::commands::chat::types::ChatExecutionMode>,
 }
@@ -1956,6 +1962,10 @@ async fn plan_agentic_fallback_actions(
         prefer_cloud_credits: true,
         local_only: false,
         managed_cloud_only: false,
+        // TRUST BOUNDARY (desktop-trust-boundary-01): threaded from the
+        // request's `execution_mode`. Unset stays fail-closed to Local via
+        // `effective_trust_mode`'s default, never silently falls through to
+        // BYOK/ManagedCloud.
         trust_mode: request.execution_mode.map(|mode| mode.trust_mode()),
     };
 

@@ -17,6 +17,14 @@ const FREE_SLOTS = [
   'free_workhorse_fast',
 ] as const satisfies readonly RoutingSlot[];
 
+/**
+ * Every plan tier `resolveAutoRoute` folds into the `free` ceiling.
+ *
+ * `normalizeTier` (auto.ts) maps `basic` and `hobby` onto `free`, and its
+ * default branch sends every unrecognised or absent tier there too. `basic` is
+ * a paying plan, so this set is NOT "the free plan", which is why the lane
+ * gates on `isFreePlanTier` (exact `free`) and not on the resolver's tier.
+ */
 const TIERS_FOLDED_INTO_FREE = ['basic', 'hobby', 'something-unknown', undefined] as const;
 const PAID_TIERS = ['pro', 'team', 'max', 'max_15x', 'enterprise', 'byok'] as const;
 
@@ -57,6 +65,12 @@ describe('the lane preference is derived from the pool config', () => {
   });
 });
 
+/**
+ * Requirement: the preference reaches the resolver only for an exact-`free`
+ * plan with the lane on. This is the gate that stops the `normalizeTier`
+ * default→free fold from granting free-lane preference to an unknown or absent
+ * tier, or to a paying Basic customer.
+ */
 describe('only an exact free plan with the lane on gets the preference', () => {
   const activate = (
     configuredMode: (typeof FREE_LANE_MODES)[keyof typeof FREE_LANE_MODES],
@@ -115,6 +129,12 @@ describe('without the preference the plan is unchanged for every tier', () => {
   });
 });
 
+/**
+ * Requirement: the regression pair. A paying Basic request never reaches a free
+ * slot, the :382 route test proves that end to end, while a free-plan request
+ * carrying the preference heads its plan with the free workhorse. Together they
+ * are the mechanism's proof.
+ */
 describe('with the preference, only the free plan moves', () => {
   it('heads a free-plan chat plan with the free workhorse', () => {
     const withPreference = plan('free', 'simple_chat', freeLanePreferredSlots());
@@ -128,6 +148,13 @@ describe('with the preference, only the free plan moves', () => {
     expect(after.routeIds.some((routeId) => routeId.endsWith(`/${before.head}`))).toBe(true);
   });
 
+  /**
+   * Deliberately NOT asserted: that passing the preference to a folded tier
+   * would be harmless. It would not be, at the resolver a Basic request IS
+   * free-tier, so the preference would move it, which is exactly the 502 this
+   * mechanism replaced. The resolver cannot tell the two apart; the gate above
+   * is the whole protection, which is why it is one function with its own test.
+   */
   it('moves a folded tier if the gate is bypassed, which is why the gate exists', () => {
     const bypassed = plan('basic', 'simple_chat', freeLanePreferredSlots());
     expect(bypassed.head).toBe(getRoutingSlotModel('free_workhorse'));

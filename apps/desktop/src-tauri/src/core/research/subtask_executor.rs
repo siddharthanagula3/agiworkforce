@@ -1,3 +1,9 @@
+//! Lightweight research subtask executor.
+//!
+//! When the swarm spawner encounters a subtask whose description starts with
+//! `[research_subtask]`, it delegates here instead of spinning up a full
+//! AGICore instance. This keeps per-subtask overhead minimal, no LLM call
+//! for decomposition, just the actual search.
 
 use super::agents::SearchAgentResult;
 use super::swarm_bridge::RESEARCH_SUBTASK_PREFIX;

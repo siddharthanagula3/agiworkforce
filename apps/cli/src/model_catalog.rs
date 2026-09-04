@@ -1,3 +1,17 @@
+//! Shared-first model catalog: bundled shared catalog → disk cache → remote fetch.
+//!
+//! Architecture (inspired by Aider + models.dev):
+//!
+//! Tier 1, SHARED:   `packages/contracts/types/src/models.json`, compiled into binary.
+//! Tier 2, CACHE:    ~/.agiworkforce/cache/models.json (5-min TTL, version-aware)
+//! Tier 3, REMOTE:   models.dev/api.json (104 providers, free, open-source)
+//! Tier 4, USER:     config.toml [[models]] overrides (always win)
+//!
+//! To add/update models: edit `packages/ai/model-registry/catalog/models.curation.json`, run
+//! `pnpm sync:models`, then the CLI picks up the generated shared
+//! catalog through `include_str!`. Do not maintain a separate CLI model table.
+//!
+//! Last updated: 2026-06-03
 
 #![allow(dead_code, unused_imports)]
 
@@ -180,6 +194,9 @@ const DEFAULT_CONTEXT_WINDOW: usize = 128_000;
 const DEFAULT_MAX_OUTPUT: usize = 4_096;
 const DEFAULT_PRICE: f64 = 0.0;
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Model type, shared by all tiers
+// ─────────────────────────────────────────────────────────────────────────────
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Model {
@@ -312,6 +329,7 @@ struct SharedModelMetadata {
     deprecated: Option<bool>,
     #[serde(default)]
     status: Option<String>,
+    /// "fast" | "balanced" | "best", from models.json qualityTier field.
     #[serde(default, rename = "qualityTier")]
     quality_tier: Option<String>,
     /// Optional env gate from models.json `requiresEnvironment` field.
@@ -380,6 +398,8 @@ struct SharedModelCapabilities {
 
 #[derive(Debug, Deserialize)]
 struct SharedModelReasoning {
+    /// models.json `reasoning.rejectsSamplingParameters`, the provider errors on
+    /// `temperature` / `top_p` / `top_k` for this model.
     #[serde(default, rename = "rejectsSamplingParameters")]
     rejects_sampling_parameters: Option<bool>,
 }
@@ -615,6 +635,16 @@ pub fn default_provider() -> &'static str {
         .as_str()
 }
 
+/// Return the API model ID for the `fast_completion` task slot of the named
+/// provider, as declared in `models.json`'s `providers.<name>.taskRouting.fast_completion`.
+///
+/// Resolution order:
+///   1. `taskRouting.fast_completion` canonical id → resolve to `apiModelId` if present.
+///   2. Provider `defaultModel` → resolve to `apiModelId`.
+///   3. Fail loudly if models.json is unavailable; callers must not hardcode
+///      model IDs as a fallback.
+///
+/// Do NOT hardcode model ID strings in callers, call this function instead.
 pub fn fast_completion_model(provider: &str) -> String {
     let Some(catalog) = shared_catalog() else {
         return pick_fallback_default_model();
@@ -636,6 +666,17 @@ pub fn fast_completion_model(provider: &str) -> String {
         .unwrap_or_else(pick_fallback_default_model)
 }
 
+/// Return the API model ID for the economy tier's first allowed model, as read
+/// from `models.json`'s `tierAllowedModels.economy` list.
+///
+/// This is the tier-appropriate default when the user has no explicit `--model`
+/// flag and their tier is free/hobby.  It is NOT the workhorse routing slot
+/// (that lives in `packages/contracts/types/src/model-catalog.ts` SLOT_REGISTRY), it is
+/// simply the first entry of the economy bucket so CLI users get a cheap,
+/// capable model by default without touching the TS type catalog.
+///
+/// Fails loudly if the shared catalog is unavailable; hardcoded model fallbacks
+/// would drift from the source of truth.
 pub fn economy_default_model() -> &'static str {
     static ECONOMY_MODEL_ID: OnceLock<String> = OnceLock::new();
     ECONOMY_MODEL_ID
@@ -654,6 +695,11 @@ pub fn economy_default_model() -> &'static str {
         .as_str()
 }
 
+/// Return the list of model IDs allowed for the given named tier slot.
+///
+/// Slot names: `"economy"`, `"pro_additions"`, `"flagship_additions"`.
+/// Returns an empty slice for unknown slot names, callers treat that as
+/// "allow all" so existing behavior is preserved.
 pub fn tier_allowed_models(tier_slot: &str) -> Vec<String> {
     let Some(catalog) = shared_catalog() else {
         return Vec::new();
@@ -720,6 +766,11 @@ pub fn can_access_model_for_tier(model_id: &str, tier: &crate::tier_cache::UserT
         )
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Tier 1, BUNDLED DEFAULTS (compiled into binary, works offline)
+// ─────────────────────────────────────────────────────────────────────────────
+// The embedded shared JSON catalog is the only source of model IDs. Do not add
+// Rust-side model ID fallbacks.
 
 fn bundled_models() -> Vec<Model> {
     if let Some(shared_models) = shared_bundled_models() {
@@ -839,6 +890,8 @@ fn normalize_release_date(released: Option<&str>) -> String {
     if released.len() == 4 && released.chars().all(|c| c.is_ascii_digit()) {
         return format!("{released}-01");
     }
+    // Accepts both "April 2026" and "October 15, 2025", the year is always
+    // the last whitespace token in the catalog's human-readable forms.
     let mut parts = released.split_whitespace();
     let month = parts.next().unwrap_or_default();
     let year = parts.last().unwrap_or_default();
@@ -866,6 +919,9 @@ fn normalize_release_date(released: Option<&str>) -> String {
     }
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Tier 2, DISK CACHE (version-aware, 5-min TTL)
+// ─────────────────────────────────────────────────────────────────────────────
 
 #[derive(Debug, Serialize, Deserialize)]
 struct CacheEnvelope {
@@ -947,7 +1003,11 @@ fn write_cache(models: &[Model]) {
     }
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Tier 3, REMOTE FETCH from models.dev (5s timeout, non-blocking)
+// ─────────────────────────────────────────────────────────────────────────────
 
+/// Response shape from models.dev/api.json (simplified, we only take what we need).
 #[derive(Debug, Deserialize)]
 struct ModelsDevResponse {
     #[serde(flatten)]
@@ -1130,6 +1190,9 @@ async fn fetch_remote() -> Option<Vec<Model>> {
     }
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Tier 4, USER OVERRIDES from config.toml [[models]]
+// ─────────────────────────────────────────────────────────────────────────────
 
 /// User-defined model override from config.toml.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -1185,6 +1248,9 @@ impl UserModelOverride {
     }
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Catalog Manager, merges all 4 tiers
+// ─────────────────────────────────────────────────────────────────────────────
 
 /// The resolved model catalog. Call `load()` once at startup or `refresh()` to update.
 pub struct Catalog {
@@ -1226,9 +1292,12 @@ impl Catalog {
 
         // Spawn non-blocking background refresh
         tokio::spawn(async {
+            // Check models_cache (separate from the model_catalog cache), if
+            // it has recent data, skip the network fetch entirely.
             let home = crate::config::CliConfig::config_dir().ok();
             if let Some(ref h) = home {
                 if crate::models_cache::ModelsCache::load(h).is_some() {
+                    // models_cache is fresh (within its own TTL), skip remote fetch
                     return;
                 }
             }
@@ -1346,6 +1415,9 @@ impl Catalog {
     }
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Global singleton, use catalog() to access
+// ─────────────────────────────────────────────────────────────────────────────
 
 static GLOBAL_CATALOG: OnceLock<Catalog> = OnceLock::new();
 
@@ -1530,6 +1602,13 @@ pub fn quality_tier_for_model(model_id: &str) -> Option<String> {
         .and_then(|m| m.quality_tier.clone())
 }
 
+/// True when models.json declares that this model's provider rejects sampling
+/// parameters (`temperature`, `top_p`, `top_k`).
+///
+/// Unknown models return `false`, a local or BYO endpoint gets the caller's
+/// normal sampling defaults rather than being silently stripped. Adding a model
+/// to this set is a catalog edit (`reasoning.rejectsSamplingParameters` in
+/// `models.curation.json`), never a new branch at a call site.
 pub fn model_rejects_sampling_parameters(model_id: &str) -> bool {
     let Some(catalog) = shared_catalog() else {
         return false;
@@ -1615,6 +1694,7 @@ pub fn anthropic_primary_models() -> Vec<(String, String, String)> {
 /// model ID not yet added to models.json will return `false`.
 pub fn is_known_model(model_id: &str) -> bool {
     let Some(catalog) = shared_catalog() else {
+        // Can't verify without the catalog, treat as unknown.
         return false;
     };
     let resolved = api_model_id_for_any(catalog, model_id);
@@ -1795,6 +1875,9 @@ mod tests {
 
     #[test]
     fn all_providers_represented() {
+        // nvidia_nim and open_router are supported provider slots but the
+        // 2026-07 catalog restructure zeroed out their model lists (dead
+        // free-tier entries retired), no bundled models to assert on.
         let cat = Catalog::bundled();
         for p in [
             "anthropic",
@@ -1823,6 +1906,10 @@ mod tests {
     #[test]
     fn context_window_lookup() {
         let cat = Catalog::bundled();
+        // context_window() resolves every catalog model by the id the catalog
+        // actually uses (its apiModelId) and returns that model's declared
+        // window, no hardcoded ids, so it never goes stale and it catches
+        // id-form regressions across the whole catalog.
         for m in cat.cloud_models() {
             assert!(
                 m.context_window > 0,
@@ -1880,6 +1967,8 @@ mod tests {
 
     #[test]
     fn provider_detection() {
+        // nvidia and openrouter carry no bundled models post-restructure.
+        // see all_providers_represented above.
         let cat = Catalog::bundled();
         for provider in ["anthropic", "openai", "google", "xai", "deepseek", "qwen"] {
             let model = cat

@@ -63,6 +63,11 @@ function SessionItemBase({
   const [isRenaming, setIsRenaming] = useState(false);
   const [renameValue, setRenameValue] = useState(session.title);
   const inputRef = useRef<HTMLInputElement>(null);
+  // The row this instance renders for is tied to session.id, not to its index
+  // in the list (the parent keys it by id), so a ref here keeps pointing at
+  // the right row even when a rename reorders the visible list out from
+  // under it, unlike the sidebar's own index-based keyboard-focus tracking,
+  // which is exactly what went stale and left the ring on a neighboring row.
   const selectButtonRef = useRef<HTMLButtonElement>(null);
   const returnFocusOnExitRef = useRef(false);
 
@@ -169,6 +174,12 @@ function SessionItemBase({
         </button>
 
         {/*
+         * Revealed on hover OR focus-within OR on any device that cannot hover.
+         * Keyboard users were already covered by group-focus-within, but a phone
+         * has no hover state at all: rename / pin / archive / delete were simply
+         * unreachable, while the invisible 0-opacity strip still absorbed taps
+         * meant for the conversation row. `(hover: none)` is the correct query.
+         * `pointer: coarse` also matches some hybrid laptops that DO hover.
          */}
         <div className="flex items-center gap-0.5 pr-1.5 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100 [@media(hover:none)]:opacity-100">
           {session.hasCustomInstructions && onOpenCustomInstructions && (

@@ -3,6 +3,11 @@ use std::sync::Arc;
 use tauri::State;
 use tokio::sync::RwLock;
 
+/// Managed state holding the current capability toggles synced from the frontend.
+/// Each key corresponds to a capability name (e.g. "fileOperations", "terminalAccess"),
+/// and the value indicates whether that capability is enabled.
+///
+/// Capabilities default to enabled (true), disabling is opt-in via the UI.
 #[derive(Clone)]
 pub struct CapabilityState {
     inner: Arc<RwLock<HashMap<String, bool>>>,

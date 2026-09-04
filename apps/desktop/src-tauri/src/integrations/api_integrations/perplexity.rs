@@ -184,6 +184,12 @@ impl PerplexityClient {
             .await
     }
 
+    /// Search with a specific model, restricted to `domains`.
+    ///
+    /// An empty `domains` means "search the whole web", Perplexity applies no
+    /// allowlist. A non-empty list is an ALLOWLIST: only those domains are
+    /// searched, which is what makes a typed search (code, academic, news) an
+    /// actual vertical rather than a relabelled general search.
     pub async fn search_with_model_in_domains(
         &self,
         query: &str,

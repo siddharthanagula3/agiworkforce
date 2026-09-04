@@ -112,6 +112,11 @@ impl ChatExecutionMode {
 #[derive(Debug, Serialize, Deserialize)]
 pub struct CreateConversationRequest {
     pub title: String,
+    // LOCAL-CHAT-NOINVOKE-01: TauriRuntime.ensureBackendConversation sends
+    // `userId` (camelCase); without this alias every first send in a brand
+    // new conversation fails IPC deserialization ("missing field `user_id`")
+    // before chat_send_message is ever invoked, no assistant reply, no
+    // visible error. Same pattern as ChatSendMessageRequest's per-field aliases.
     #[serde(alias = "userId")]
     pub user_id: String,
     #[serde(default, alias = "executionMode")]
@@ -226,6 +231,11 @@ pub struct ChatSendMessageRequest {
     #[serde(default, alias = "preferCloudCredits")]
     pub prefer_cloud_credits: bool,
 
+    /// The active app mode sent from the frontend toggle.
+    /// "local"  = on-device / BYOK only, ManagedCloud is NEVER used.
+    /// "cloud"  = AGI-managed cloud, local/BYOK providers are NOT used.
+    /// When absent (legacy callers) the backend falls back to the
+    /// `prefer_cloud_credits` bool for backwards compatibility.
     #[serde(default, alias = "activeMode")]
     pub active_mode: Option<String>,
 
@@ -259,9 +269,20 @@ pub struct ChatSendMessageRequest {
     #[serde(default, alias = "incognito")]
     pub incognito: Option<bool>,
 
+    /// When true (or absent, default true), offer installed skills to the model for
+    /// this turn: a name+description catalog in the system prompt plus the `skill`
+    /// tool it must call to read any body (progressive disclosure).
+    ///
+    /// The name is kept for IPC compatibility (`autoInjectSkills` is already written
+    /// by the settings store and the MCP server bridge), but nothing is auto-injected
+    /// anymore, skill bodies are never placed in the prompt, only fetched on an
+    /// explicit model tool call. `false` withholds both the catalog and the tool.
     #[serde(default = "default_auto_inject_skills", alias = "autoInjectSkills")]
     pub auto_inject_skills: Option<bool>,
 
+    /// Whether the user explicitly selected a specific model (not an auto-routed selection).
+    /// Passed through from the frontend; currently informational, the backend does not
+    /// alter routing based on this flag, but it is preserved for analytics and future use.
     #[serde(default, alias = "isExplicitModelSelection")]
     pub is_explicit_model_selection: Option<bool>,
 }
@@ -517,6 +538,7 @@ impl Validate for ChatSendMessageRequest {
             }
         }
 
+        // Validate active_mode, only "local" and "cloud" are valid values.
         if let Some(ref mode) = self.active_mode {
             if mode != "local" && mode != "cloud" {
                 return Err(ValidationError {

@@ -1,3 +1,40 @@
+//! Shared agent turn-loop engine for AGI Workforce Rust surfaces.
+//!
+//! Extracted from the CLI's `apps/cli/src/agent/chat.rs::Session::send`
+//! (Wave 5, stage e1 of `docs/plans/rust-engine-extraction-2026-07-09.md`).
+//! Holds the turn-loop MECHANICS only:
+//!
+//! - iterate first-completion → agentic tool loop until end-turn/limits;
+//! - assemble/consume the model's completion (via `agiworkforce-llm`) and drive
+//!   its stream events;
+//! - partition tool calls and SCHEDULE them: subagent/`task` batch, then a
+//!   parallel read-only batch (`futures_util::future::join_all`), then the
+//!   sequential remainder, preserving the CLI's fixed ordering;
+//! - runaway detection (identical tool-call + content-chant), iteration-limit,
+//!   and budget guards;
+//! - emit a [`TurnEvent`] at exactly the points the CLI historically mutated
+//!   observable state.
+//!
+//! Everything provider-, policy-, or presentation-specific stays app-local
+//! behind [`TurnHost`]: model completion (spec resolution, fallback/demo/retry,
+//! privacy-boundary re-validation), per-tool execution + hooks + tool-filters +
+//! plan-mode gating, subagent spawning, approval UI, message-history mutation,
+//! cost pricing, and the routing of [`TurnEvent`]s onto the host's real
+//! stdout/stderr/TUI sinks. The engine never performs I/O, reads credentials,
+//! prints, or prompts, it only orchestrates.
+//!
+//! ## Relationship to the sketched `run_turn(llm, spec, req, host)` API
+//!
+//! The plan sketched `TurnEngine::run_turn(llm, spec, req, host)`. In the real
+//! tree there is no `LlmClient` object and the CLI's streaming facade
+//! (`models::stream_completion`) resolves keys/subscription-auth/Ollama probing
+//! app-locally and returns an already-assembled outcome whose tool-call and
+//! usage accumulation is dialect-specific and NOT reconstructable from the
+//! public [`agiworkforce_llm::StreamEvent`] stream. So `llm`/`spec`/`req` fold
+//! into [`TurnHost::complete`]: the host drives `agiworkforce-llm` (directly or
+//! through its facade), forwards stream events to the engine's sink, and returns
+//! the authoritative [`Completion`]. This keeps the trust-boundary and
+//! provider-selection code app-local while the engine still owns the loop.
 
 use std::future::Future;
 use std::pin::Pin;
@@ -16,6 +53,11 @@ pub use runaway::{
     hash_tool_call,
 };
 
+// Re-export the shared LLM surface the engine speaks in. (The plan's sketched
+// `dispatch() -> &dyn ToolDispatch` is deferred to stage e2, see the Cargo.toml
+// note: the CLI's mutating/approval-gated dispatch cannot flow through
+// app-server's read-only `&self` `ToolDispatch`, so the e1 dispatch seam is
+// TurnHost's execute methods.)
 pub use agiworkforce_llm::{ChatOutcome, ContentBlock, Message, StreamEvent, ToolCall, Usage};
 
 /// Which model call within a turn produced a stream event / completion. The CLI
@@ -319,6 +361,17 @@ pub trait TurnHost: Send {
     /// the other trait methods.
     fn on_event(&mut self, event: &TurnEvent);
 
+    /// Whether the turn has been cancelled by the user mid-flight (e.g. the
+    /// desktop "stop generation" control, or the CLI's Ctrl-C flag). The engine
+    /// checks this at the top of every agentic iteration and again immediately
+    /// after committing a tool batch (before spending another model completion),
+    /// breaking cleanly with the response accumulated so far.
+    ///
+    /// Defaults to `false` so hosts that manage cancellation entirely inside
+    /// their own `complete()` (the CLI, whose stream cancellation is app-local)
+    /// keep their historical behavior with zero changes, the check is a no-op
+    /// for them. The desktop host overrides this to consult its per-conversation
+    /// stop flag so a mid-turn stop halts the loop without an extra round-trip.
     fn is_cancelled(&self) -> bool {
         false
     }

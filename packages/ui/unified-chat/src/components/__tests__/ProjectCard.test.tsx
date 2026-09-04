@@ -25,6 +25,13 @@ describe('ProjectCard, valid HTML nesting', () => {
     expect(nested.length).toBe(0);
   });
 
+  /**
+   * The previous fix for nested <button> markup made the card a
+   * `div role="button"` wrapping the star and menu buttons. That satisfies an
+   * HTML validator but is the same defect to assistive tech, a control cannot
+   * contain controls, and axe reports nested-interactive on the live page. The
+   * open action is now a sibling stretched over the card instead.
+   */
   it('never makes the open control an ancestor of the other controls', () => {
     render(<ProjectCard project={PROJECT} onDelete={vi.fn()} onEdit={vi.fn()} />);
     const open = screen.getByRole('button', { name: /open project design system/i });

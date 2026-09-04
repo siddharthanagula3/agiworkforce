@@ -11,6 +11,19 @@ import { WorkspaceConsoleShell } from '@/features/workspace-console/components/W
 
 export const dynamic = 'force-dynamic';
 
+/**
+ * The customer-facing workspace administration console.
+ *
+ * Distinct from `/admin`, which is the internal platform operator console and
+ * is gated on Clerk publicMetadata. This segment is gated on an organization
+ * role a customer grants themselves. Confusing the two would either lock an
+ * enterprise buyer out of administering their own workspace, or expose platform
+ * surfaces to them.
+ *
+ * Every page below re-derives authorization from its own API call. The role
+ * resolved here shapes the frame, which is why a member reaching a page they
+ * cannot administer sees a stated denial rather than an empty or broken panel.
+ */
 export default async function WorkspaceConsoleLayout({ children }: { children: ReactNode }) {
   const { userId } = await auth();
 

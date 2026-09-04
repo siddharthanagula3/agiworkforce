@@ -23,6 +23,11 @@ import {
 
 export type McpAuthorizationStart =
   | { status: 'redirect'; authorizationUrl: string; state: string }
+  /**
+   * Discovery ran but the server needs no authorization at all, an open MCP
+   * server. The caller connects directly instead of showing a Connect button
+   * that would send the user through a pointless consent screen.
+   */
   | { status: 'no-authorization-required' }
   | { status: 'error'; reason: McpAuthorizationFailure; message: string };
 
@@ -275,6 +280,12 @@ export type McpRefreshOutcome =
       grantedScopes: string[];
       accessTokenExpiresAt: Date | null;
     }
+  /**
+   * The MCP server now points at a DIFFERENT authorization server than the one
+   * this grant was minted by (SEP-2352). The stored credential is not merely
+   * stale, it is addressed to a party that is no longer the right audience, so
+   * it must be discarded rather than refreshed.
+   */
   | { status: 'authorization-server-changed' }
   | { status: 'failed'; message: string };
 

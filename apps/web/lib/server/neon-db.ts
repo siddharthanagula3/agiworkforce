@@ -20,6 +20,19 @@ export function getNeonDb(): DatabaseAdapter {
   return db;
 }
 
+/**
+ * A pool of its own for the Stripe webhook.
+ *
+ * The webhook opens one transaction per event and makes several Stripe API
+ * calls inside it, so it holds a checked-out client for as long as Stripe takes
+ * to answer. On the shared service pool that starves `assertAccountActive`,
+ * which runs on every cookie-authenticated request and is fail-closed, a slow
+ * Stripe hour became "Unable to verify account status" for users who never
+ * opened the billing page. Isolating it bounds the blast radius to billing.
+ *
+ * Costs nothing on instances that never receive a webhook: pg opens no
+ * connection until the first checkout.
+ */
 export function getStripeWebhookDb(): DatabaseAdapter {
   if (!webhookDb) {
     webhookDb = createDatabaseClient({

@@ -1,3 +1,79 @@
+//! c2c OLD-vs-NEW request-body identity oracle (rust-engine-extraction plan,
+//! stage c2c; the request-side mirror of `c2a_decode_oracle`).
+//!
+//! Compares, per provider, the request body the desktop sent BEFORE the c2c
+//! serializer switch against the body the shared `agiworkforce-llm` crate
+//! serializers produce for the same logical request, and holds the two to
+//! BYTE-FOR-BYTE identity of their canonical JSON (recursively key-sorted.
+//! JSON object member order is not semantic on any provider wire) modulo the
+//! declared [`Delta`] set. Exactly like c2a: every declared delta is a
+//! machine-verified structural transformation (never comparison loosening), a
+//! declared delta that does not fire FAILS the fixture (stale-exception
+//! detection), and any divergence residue not covered by a declared delta
+//! fails with a canonical diff.
+//!
+//! Per-provider status encoded by this oracle (2026-07-16):
+//!
+//! - **ollama, PROVEN + SWITCHED.** Production (`providers/ollama.rs`, both
+//!   send paths) now builds `/api/chat` bodies through the shared crate
+//!   serializers (`build_ollama_chat_body`). OLD side here is a frozen
+//!   verbatim copy of the retired local `OllamaRequest` builder
+//!   ([`old_ollama`]). Deltas: `OllamaImagesPerMessage` (the old builder sent
+//!   a TOP-LEVEL `images` field, which Ollama's `/api/chat` ignores, a real
+//!   desktop vision bug; the crate emits them per-message, the documented
+//!   native format), `OllamaAssistantEmptyContent`, `OllamaZeroNumPredict`,
+//!   `OllamaNonObjectToolArgs` (all crate-side hardening, each pinned below).
+//!   NOTE: the crate's `compact_ollama_message_values` system-prompt
+//!   compaction is deliberately NOT applied on the desktop path (the desktop
+//!   never compacted; adopting it is a separate product decision).
+//!
+//! - **anthropic, PROVEN + SWITCHED (c3, 2026-07-16).** Production
+//!   `AnthropicAdapter::adapt_request` routes crate-expressible requests
+//!   through the shared serializer (`adapt_request_via_crate`) and falls back
+//!   to the legacy arm for shapes the crate cannot express (structured
+//!   outputs, server tools, documents, explicit cache_control,
+//!   audio/background/continuity, pinned in
+//!   `anthropic_inexpressible_shapes_fall_back_to_legacy`). The former crate
+//!   gaps are FIXED: thinking omits `temperature` (was a live 400 risk, the
+//!   CLI can bundle an effort-preset temperature with a thinking budget) and
+//!   floors `max_tokens` to budget + 1024; tool_choice / effort / top_p /
+//!   top_k / metadata are crate-expressed. Intentional deltas the desktop
+//!   GAINS: prompt-cache breakpoints (system / tools / last message) and
+//!   explicit `is_error: false` on plain-path tool results.
+//!
+//! - **openai / openai-responses / gemini, DOCUMENTED, NOT switched.** OLD
+//!   side is the live production adapter; NEW side is the crate's pure body
+//!   builder. Byte-parity is proven here for the covered common feature
+//!   surface modulo the enumerated deltas, but these stay on their adapters
+//!   because the two sides are not yet feature-equivalent:
+//!     CRATE GAPS (must be fixed before any switch):
+//!       * openai: no `items:{}` normalization for array tool schemas
+//!         (OpenAI rejects with `invalid_function_parameters`;
+//!         `ArrayItemsNormalized`) and no `image_url.detail` support;
+//!       * openai-responses: no `reasoning.effort` support at all;
+//!       * gemini: always sends `generationConfig.maxOutputTokens`, emitting
+//!         a literal `0` when the caller has no cap (`AlwaysMaxOutputTokens`)
+//!         and has no `thinkingConfig` support
+//!       (pinned by `crate_builders_cannot_express_desktop_features`).
+//!     DESKTOP-ONLY FEATURES the crate cannot express on these dialects:
+//!     tool_choice (crate type exists; not yet serialized for them),
+//!     output_config/response_format, server tools, audio, background,
+//!     previous_response_id, catalog model-id mapping (`get_api_model_id`),
+//!     and the FIX-007 max-tokens clamp (the latter two stay desktop
+//!     caller-side by design, as the anthropic switch shows).
+//!     CRATE-SIDE FIXES the desktop would GAIN by switching: openai
+//!     `stream_options.include_usage`, correct openai chat-completions tool
+//!     history (the desktop adapter DROPS assistant `tool_calls` and
+//!     `tool_call_id`: see `openai_chat_tool_history_divergence`), and
+//!     correct gemini functionResponse role/name (see
+//!     `gemini_tool_result_divergence`).
+//!
+//! Model ids in fixtures are deliberately NON-CATALOG so the desktop's
+//! catalog model-id mapping (`get_api_model_id`, `get_canonicalized_id`) is
+//! the identity and the oracle does not drift with `models.json` edits. The
+//! desktop maps catalog ids to wire ids before serialization; the crate
+//! expects wire ids from its caller (the CLI already passes them), a caller
+//! contract, not serializer drift.
 
 use serde_json::{json, Value};
 
@@ -175,6 +251,10 @@ fn canonical_json(v: &Value) -> String {
 /// transformation; anything outside the fixture's declared list fails.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Delta {
+    // ---- ollama (PROVEN + switched) ----
+    /// Old sent a TOP-LEVEL `images` array (ignored by `/api/chat`, desktop
+    /// vision bug); new attaches the EXACT same base64 payloads to the last
+    /// user message (Ollama's documented native format). Fix, not a drop.
     OllamaImagesPerMessage,
     /// Old always serialized `content` (`""` on tool-call-only assistant
     /// turns); new omits the empty string. Ollama treats both identically.
@@ -182,6 +262,9 @@ enum Delta {
     /// Old forwarded `max_tokens: Some(0)` as a pathological `num_predict: 0`
     /// (a zero-token cap); new omits it so Ollama's default applies.
     OllamaZeroNumPredict,
+    /// Old passed valid-JSON-but-non-object tool-call arguments (e.g. `5`)
+    /// through verbatim; new hardens them to `{}` (mirrors the c2a decode-side
+    /// invalid-args policy, Ollama 400s non-object arguments).
     OllamaNonObjectToolArgs,
     /// Old identified a tool result with OpenAI's `tool_call_id`; new sends
     /// Ollama's documented native field, `tool_name`. Ollama's `/api/chat`
@@ -190,6 +273,10 @@ enum Delta {
     /// endpoint ignores. Validated by requiring NEW's `tool_name` to equal the
     /// name of the assistant tool_call whose id OLD referenced.
     OllamaToolNameOnToolMessage,
+    /// The crate normalizes bare array tool schemas (`items: {}` injection.
+    /// required by OpenAI-compatible servers, harmless for Ollama); the
+    /// retired desktop builder passed schemas verbatim. Validated by applying
+    /// the same rule to OLD's tools and requiring byte-equality with NEW's.
     OllamaToolSchemaNormalized,
     // ---- anthropic (documented) ----
     /// New adds the crate's last-message prompt-cache breakpoint. Validated
@@ -732,6 +819,9 @@ fn one_by_one_png() -> (Vec<u8>, String) {
     (png, b64)
 }
 
+// ---------------------------------------------------------------------------
+// ollama, PROVEN (production switched to the crate serializers)
+// ---------------------------------------------------------------------------
 
 fn ollama_request(messages: Vec<ChatMessage>) -> LLMRequest {
     LLMRequest {
@@ -923,6 +1013,19 @@ fn ollama_images_move_from_top_level_to_last_user_message() {
     verify_parity("ollama_images", old, new, &[Delta::OllamaImagesPerMessage]);
 }
 
+// ---------------------------------------------------------------------------
+// anthropic, PROVEN + SWITCHED (c3, 2026-07-16)
+//
+// Production `AnthropicAdapter::adapt_request` now routes crate-expressible
+// requests through `adapt_request_via_crate` (the shared serializer) and
+// falls back to `adapt_request_legacy` for shapes the crate cannot express
+// (structured outputs, server tools, documents, explicit cache_control,
+// audio/background/continuity). OLD side below is the legacy arm called
+// directly; each parity test ALSO asserts that production adapt_request
+// byte-equals the crate body (the switch proof). The former crate gaps
+// (temperature-with-thinking, max-tokens floor) are FIXED in the crate, so
+// the ThinkingKeepsTemperature / ThinkingMaxTokensFloor deltas are gone.
+// ---------------------------------------------------------------------------
 
 const ANTHROPIC_SYSTEM: &str =
     "You are AGI Workforce. Be terse.\n\n<environment>\nWorking directory: /repo\n</environment>";
@@ -939,6 +1042,9 @@ fn anthropic_request(messages: Vec<ChatMessage>) -> LLMRequest {
     }
 }
 
+/// OLD side for anthropic: the pre-c3 legacy adapter arm (still in production
+/// as the fallback path, unchanged code, no vendoring needed until the
+/// founder-gated twin deletion removes it).
 fn anthropic_legacy(request: &LLMRequest) -> Value {
     crate::core::llm::provider_adapter::AnthropicAdapter::adapt_request_legacy(request)
         .expect("legacy anthropic adapter builds the request")
@@ -1008,6 +1114,7 @@ fn anthropic_tools_and_tool_choice_parity() {
     );
     req.tool_choice = Some(agiworkforce_llm::ToolChoice::Auto);
     let new = agiworkforce_llm::build_anthropic_request_body(&req);
+    // tool_choice is now crate-expressed, both sides must carry it.
     assert_eq!(new["tool_choice"], json!({"type": "auto"}));
     assert_anthropic_production_routes_to_crate("anthropic_tools", &request, &new);
     verify_parity(
@@ -1059,6 +1166,9 @@ fn anthropic_tool_history_parity_modulo_is_error_and_breakpoints() {
 
 #[test]
 fn anthropic_thinking_is_byte_identical_after_crate_fixes() {
+    // Enabled(true) maps to an 8192-token budget on both sides. The legacy
+    // arm removes temperature and floors max_tokens to budget + 1024; the
+    // crate now does the same (c3 gap closure), NO thinking deltas remain.
     let request = LLMRequest {
         thinking: Some(ThinkingParameter::Enabled(true)),
         ..anthropic_request(vec![msg("user", "Think hard about this.")])
@@ -1093,6 +1203,8 @@ fn anthropic_thinking_is_byte_identical_after_crate_fixes() {
 
 #[test]
 fn anthropic_adaptive_thinking_is_byte_identical() {
+    // Adaptive: thinking {type: adaptive}, temperature omitted, NO max_tokens
+    // floor (no fixed budget), both sides.
     let request = LLMRequest {
         thinking: Some(ThinkingParameter::Adaptive {
             thinking_type: "adaptive".to_string(),
@@ -1176,6 +1288,8 @@ fn anthropic_vision_parity_modulo_cache_breakpoints() {
     );
 }
 
+/// FALLBACK PIN: request shapes the crate cannot express must still route to
+/// the legacy arm, no silent field drops through the switch.
 #[test]
 fn anthropic_inexpressible_shapes_fall_back_to_legacy() {
     // Structured outputs: the crate has no output_config; production must
@@ -1205,6 +1319,19 @@ fn anthropic_inexpressible_shapes_fall_back_to_legacy() {
     );
 }
 
+// ---------------------------------------------------------------------------
+// openai (chat completions), PROVEN + SWITCHED (c3, 2026-07-16)
+//
+// Production `OpenAIAdapter::adapt_request` routes crate-expressible CHAT
+// COMPLETIONS requests through `adapt_chat_via_crate` (Responses-model
+// routing is untouched, stage 3) and falls back to the legacy arm for
+// shapes the crate cannot express (structured outputs, server tools,
+// non-auto image detail, audio). OLD side below is the legacy arm called
+// directly; parity tests also assert production adapt_request byte-equals
+// the crate body. The array-items normalization gap is FIXED in the crate,
+// so ArrayItemsNormalized is gone; the legacy arm's tool-history drop is
+// FIXED BY THE SWITCH (see the flipped divergence pin below).
+// ---------------------------------------------------------------------------
 
 /// Third-party OpenAI-compatible arm on both sides: a non-catalog model id
 /// (desktop resolves provider → None → legacy `max_tokens`) and a non-OpenAI
@@ -1270,6 +1397,9 @@ fn openai_chat_minimal_parity_modulo_stream_options() {
 
 #[test]
 fn openai_chat_array_schema_normalization_is_byte_identical() {
+    // A tool schema with a bare `type: array` property: BOTH sides now
+    // inject `items: {}` (OpenAI 400s without it), the former crate gap is
+    // closed, so no delta. tool_choice is crate-expressed too.
     let array_schema = json!({
         "type": "object",
         "properties": { "paths": { "type": "array" } }
@@ -1398,6 +1528,15 @@ fn openai_chat_vision_parity_modulo_detail_field() {
     );
 }
 
+/// DIVERGENCE PIN, FLIPPED BY THE c3 SWITCH: the LEGACY chat-completions arm
+/// DROPS tool history, assistant `tool_calls` never serialize (the message
+/// falls into the plain `{role, content}` arm) and tool-result messages lose
+/// `tool_call_id`, so a replayed tool conversation 400s on OpenAI ("messages
+/// with role 'tool' must be a response to a preceding message with
+/// 'tool_calls'"). PRODUCTION now routes this shape through the crate
+/// serializer, which emits the CORRECT history, asserted below as the
+/// switch proof. Both shapes stay pinned exactly so either side changing
+/// fails this test.
 #[test]
 fn openai_chat_tool_history_divergence() {
     let request = openai_request(vec![
@@ -1442,6 +1581,18 @@ fn openai_chat_tool_history_divergence() {
     assert_openai_production_routes_to_crate("openai_chat_tool_history", &request, &new);
 }
 
+// ---------------------------------------------------------------------------
+// openai responses, PROVEN + SWITCHED (c3, 2026-07-16)
+//
+// Production routes crate-expressible Responses requests through
+// `adapt_responses_via_crate`; fallback (legacy arm) for structured outputs,
+// server tools, per-tool `strict`, multimodal input, and
+// audio/background/continuity. Reasoning-effort resolution (catalog thinking
+// capability + catalog metadata) stays desktop-side and feeds the crate's
+// new `reasoning_effort` field. Assistant tool-call turns
+// split into a string-content assistant item + flat function_call items.
+// exactly the legacy shapes (typed input_text parts are user-input only).
+// ---------------------------------------------------------------------------
 
 /// Resolve a current catalog-owned OpenAI reasoning model so this oracle also
 /// proves that Responses selection fails closed for unknown identifiers.
@@ -1523,6 +1674,9 @@ fn openai_responses_tool_history_is_byte_identical() {
     };
     let old = responses_legacy(&request);
 
+    // Wrapper-shaped wire messages: the assistant tool-call turn SPLITS into
+    // a text message + a ToolUse blocks message (string assistant content +
+    // flat function_call item, the legacy arm's exact shapes).
     use agiworkforce_llm::{ContentBlock, Message};
     let messages = vec![
         Message::text("system", "You are AGI Workforce."),
@@ -1606,6 +1760,20 @@ fn openai_responses_inexpressible_shapes_fall_back_to_legacy() {
     );
 }
 
+// ---------------------------------------------------------------------------
+// gemini, PROVEN + SWITCHED (c3, 2026-07-16)
+//
+// Production `GoogleAdapter::adapt_request` routes crate-expressible
+// requests through the shared serializer; fallback (legacy arm) for tool
+// schemas the legacy normalizer would change (or that need
+// `parametersJsonSchema`) and for non-crate multimodal parts. The former
+// crate gaps are FIXED: maxOutputTokens is omitted when uncapped, and
+// toolConfig / topP / topK / thinkingConfig are crate-expressed
+// (thinking-budget resolution stays desktop-side, catalog-gated, not
+// exercisable with non-catalog fixture ids; the wire shape is pinned by the
+// crate's unit tests). The legacy functionResponse role/name bug is FIXED BY
+// THE SWITCH (flipped divergence pin below).
+// ---------------------------------------------------------------------------
 
 fn gemini_request(messages: Vec<ChatMessage>) -> LLMRequest {
     LLMRequest {
@@ -1709,6 +1877,13 @@ fn gemini_unset_max_tokens_is_omitted_on_both_sides() {
     verify_parity("gemini_unset_max_tokens", old, new, &[]);
 }
 
+/// DIVERGENCE PIN, FLIPPED BY THE c3 SWITCH: tool-result turns. The LEGACY
+/// arm sends role "function" and, a real bug, puts the tool CALL ID in
+/// `functionResponse.name`; Gemini matches responses to calls BY FUNCTION
+/// NAME, so that pairing silently fails. PRODUCTION now routes this shape
+/// through the crate serializer, which resolves the real function name from
+/// the originating ToolUse and uses a "user" turn, asserted below as the
+/// switch proof. Both shapes stay pinned exactly.
 #[test]
 fn gemini_tool_result_divergence() {
     let request = gemini_request(vec![
@@ -1763,6 +1938,10 @@ fn gemini_exotic_tool_schema_falls_back_to_legacy() {
         ..gemini_request(vec![msg("user", "Read Cargo.toml")])
     };
     let body = adapt_old(Provider::Google, &request);
+    // The legacy arm routes a `$schema`-carrying definition through its
+    // `parametersJsonSchema` form (with the `$schema` key stripped), proof
+    // the request took the legacy arm, since the crate only ever emits
+    // verbatim `parameters`.
     let params = &body["tools"][0]["functionDeclarations"][0]["parametersJsonSchema"];
     assert!(
         params.is_object() && params.get("$schema").is_none(),
@@ -1782,6 +1961,13 @@ fn crate_builders_cannot_express_desktop_features() {
     let messages = vec![agiworkforce_llm::Message::text("user", "Hello")];
     let req = chat_request("gap-pin", &messages, 512, Some(0.5), None, Some(1024));
 
+    // Anthropic gaps CLOSED by c3 (tool_choice/effort/top_p/top_k/metadata
+    // are now crate-expressed; thinking omits temperature and floors
+    // max_tokens). Remaining anthropic non-crate shapes (output_config,
+    // server tools, documents, cache_control) are guarded by the production
+    // fallback, pinned in anthropic_inexpressible_shapes_fall_back_to_legacy.
+    // The crate can express the effort member of output_config, but not the
+    // typed structured-output format member guarded by that fallback.
     let anthropic = agiworkforce_llm::build_anthropic_request_body(&req);
     assert!(
         anthropic.get("output_config").is_none(),
@@ -1805,6 +1991,9 @@ fn crate_builders_cannot_express_desktop_features() {
         assert!(responses.get(key).is_none(), "responses gained {key}");
     }
 
+    // gemini: toolConfig/topP/topK/thinkingConfig are now crate-expressed
+    // (c3, via gemini_thinking_budget, None here, so absent); exotic tool
+    // schemas are guarded by the production fallback.
     let gemini = agiworkforce_llm::build_gemini_request_body(&req);
     assert!(
         gemini.pointer("/generationConfig/thinkingConfig").is_none(),

@@ -1,4 +1,28 @@
 #!/usr/bin/env tsx
+/**
+ * check-pricing.ts
+ *
+ * Weekly cron: scrape provider pricing pages, diff against the local
+ * `packages/contracts/types/src/models.json`, and (when run with `--open-pr`) open
+ * an auto-PR with the proposed pricing update.
+ *
+ * Triggered by:
+ *   - GitHub Actions cron job (weekly, Sundays 08:00 UTC) wired in
+ *     `.github/workflows/check-pricing.yml`, to be added by ops.
+ *   - Manual invocation: `pnpm tsx scripts/check-pricing.ts [--open-pr]`.
+ *
+ * Scope: ships a working scraper for the providers whose pricing pages
+ * are stable + deterministic. Providers whose pages require JS rendering
+ * or session auth are stubbed with a `manualOnly: true` marker, the cron
+ * surfaces a warning for those instead of attempting a brittle scrape.
+ *
+ * Exit codes:
+ *   0  no diffs (catalog matches scraped prices).
+ *   1  diffs found (printed to stdout).
+ *   2  scraper error (network, parse, or auth failure).
+ *
+ * @module scripts/check-pricing
+ */
 
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';

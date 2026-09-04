@@ -3,6 +3,22 @@
 import { useEffect, useState } from 'react';
 import { useAuth } from '@clerk/nextjs';
 
+/**
+ * The account-wide artifact index (migration 0121, `GET /api/artifacts/index`).
+ *
+ * The locally-derived artifact store only knows about conversations THIS device
+ * has actually rendered, because web artifacts are derived from message
+ * markdown at render time. That is fine for persistence, reopening a
+ * conversation re-derives its artifacts under the same deterministic id, but
+ * it makes the gallery under-report: on a fresh device it shows only what you
+ * happen to have opened.
+ *
+ * This hook supplies the rest: metadata rows for every artifact on the account.
+ * They carry NO content (the index stores none), so a row that is not also in
+ * the local store renders as a card without a live thumbnail and opens its
+ * source conversation, where it is re-derived in full.
+ */
+
 export interface IndexedArtifact {
   id: string;
   conversationId: string;
@@ -49,6 +65,10 @@ export function useArtifactIndex(): ArtifactIndexState {
         setState({ artifacts: body.artifacts ?? [], loaded: true });
       } catch {
         if (cancelled) return;
+        // The index is a discovery aid layered on top of what the device
+        // already derived locally. If it cannot be read, the gallery still
+        // shows every artifact from conversations this device has opened.
+        // degrade quietly rather than blanking a working surface.
         setState((prev) => ({ artifacts: prev.artifacts, loaded: true }));
       }
     })();

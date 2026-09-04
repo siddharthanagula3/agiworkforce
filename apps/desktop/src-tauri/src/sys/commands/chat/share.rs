@@ -1,3 +1,4 @@
+//! Conversation sharing command, packages local messages for upload to the web app.
 
 use crate::sys::commands::chat::AppDatabase;
 use tauri::State;
@@ -18,6 +19,18 @@ pub struct ShareResult {
     pub title: String,
 }
 
+/// Package a conversation's messages so the frontend can upload them to the web API.
+///
+/// This command is intentionally read-only, it does NOT write to cloud storage.
+/// The frontend receives `messages_json` and `token`, then calls `POST /api/shared`
+/// on the web app with those values.
+///
+/// # Parameters
+/// - `conversation_id`: the conversation's string-encoded integer ID (must be a valid i64)
+///
+/// # Errors
+/// Returns a human-readable error string if the conversation ID is invalid or the
+/// database query fails.
 #[tauri::command]
 pub async fn conversation_share(
     conversation_id: String,
@@ -41,6 +54,8 @@ pub async fn conversation_share(
             "Untitled Conversation".to_string()
         });
 
+    // Fetch messages ordered chronologically. We include only role, content,
+    // and created_at, no user_id or cost data is shared publicly.
     let mut stmt = conn
         .prepare(
             "SELECT role, content, created_at \

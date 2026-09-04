@@ -77,6 +77,16 @@ pub fn resolve_context_window(model: Option<&str>) -> Option<usize> {
 }
 
 impl CompactionConfig {
+    /// Budgets scaled to a real context window: compact at the same
+    /// `auto_compact_threshold` the automatic pass uses and target half the
+    /// window, leaving room for the reply and the turns that follow.
+    ///
+    /// Close to, but not identical to, `sys::commands::chat::context_monitor`:
+    /// that pass subtracts the caller's live `reserved_output_tokens` from the
+    /// window before applying the threshold, while `compact_messages` below
+    /// re-adds a fixed 4_096 reserve. Both exist for the same reason, a budget
+    /// derived from the model's own window instead of a flat constant that
+    /// squeezes a million-token conversation down to ~50k.
     pub fn for_context_window(context_window: usize) -> Self {
         let defaults = Self::default();
         let context_window = context_window.max(1);

@@ -1,3 +1,6 @@
+//! Phase D-B baseline insta snapshot, locks the rendered shape of
+//! `ListSelectionView<T>` so regressions in the shared overlay surface
+//! show up as a diff instead of silent visual drift.
 
 use super::list_selection_view::ListSelectionView;
 use super::model_picker::{self, ModelPickerState};
@@ -101,6 +104,8 @@ fn draw_model_picker(
 
 #[test]
 fn list_selection_view_snapshot() {
+    // Generic fixture strings on purpose, keeps the snapshot stable across
+    // models.json updates and avoids tripping the no-hardcoded-IDs rule.
     let view: ListSelectionView<String> = ListSelectionView::new(
         "Choose item",
         vec!["alpha".into(), "beta".into(), "gamma".into()],
@@ -140,6 +145,10 @@ fn render_usage_default_baseline() {
     insta::assert_snapshot!("render_usage_default_baseline", rendered);
 }
 
+// ---------------------------------------------------------------------------
+// Model picker overlay snapshots, lock the visual geometry of the picker so
+// regressions in the border/search/list/effort layout show up as a diff.
+// ---------------------------------------------------------------------------
 
 #[test]
 fn model_picker_idle_search_shows_placeholder() {
@@ -189,6 +198,10 @@ fn model_picker_current_model_marked_with_bullet() {
     insta::assert_snapshot!("model_picker_current_model_bullet", terminal.backend());
 }
 
+// ---------------------------------------------------------------------------
+// Slash-command palette (CommandPopup) snapshots, lock the border, filter
+// bar, command rows, and footer hint so regressions surface as a diff.
+// ---------------------------------------------------------------------------
 
 #[test]
 fn slash_palette_empty_filter_shows_all_commands_baseline() {

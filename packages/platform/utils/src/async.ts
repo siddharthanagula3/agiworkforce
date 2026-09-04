@@ -204,6 +204,17 @@ function toError(value: unknown): Error {
   return value instanceof Error ? value : new Error(String(value));
 }
 
+/**
+ * Retry an async operation using the shared retry policy.
+ *
+ * Caller-supplied `shouldRetry` and `abortOnErrorMessages` still decide first,
+ * so the pre-policy contract is preserved. Everything the policy adds.
+ * jittered backoff, Retry-After, idempotency awareness, budget, cancellation
+ * and telemetry, applies to every caller without opting in.
+ *
+ * @throws RetryError when every attempt fails, the caller's own error when the
+ *   caller classified it as terminal.
+ */
 export async function retry<T>(
   operation: () => Promise<T>,
   options: RetryOptions = {},

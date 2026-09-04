@@ -351,6 +351,10 @@ mod tests {
         terminal
     }
 
+    /// `slug()` is what gets written to `[ui] theme` and read back at startup.
+    /// If it ever stops round-tripping through `from_arg`, a persisted theme
+    /// silently reverts to Dark on the next launch, which is exactly the bug
+    /// this pair was added to fix.
     #[test]
     fn every_theme_slug_round_trips_through_from_arg() {
         for choice in ThemeChoice::ALL {

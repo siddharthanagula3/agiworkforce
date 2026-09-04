@@ -34,9 +34,26 @@ pub(crate) const STREAM_IDLE_TIMEOUT: std::time::Duration = std::time::Duration:
 pub enum OllamaMode {
     /// Local Ollama server (`ollama serve`, no API key).
     Local,
+    /// Hosted Ollama Cloud, requires `OLLAMA_API_KEY`.
     Cloud,
 }
 
+/// Which LLM provider to route to.
+///
+/// Three native handlers stay specialized because their API shapes differ
+/// substantially from OpenAI Chat Completions: `Anthropic` (Messages API),
+/// `Google` (Gemini), and `Ollama` (newline-delimited JSON, local or cloud).
+///
+/// Everything else, OpenAI itself, xAI, DeepSeek, Perplexity, Qwen, Moonshot,
+/// Zhipu, LM Studio, MiniMax, plus any user-defined `[providers.*]` block, flows
+/// through the `OpenAICompatible` variant. The variant carries the canonical
+/// base URL and the env var name for the API key (or `None` for unauthenticated
+/// local endpoints like LM Studio).
+///
+/// This enum is the CLI's provider-selection surface (config names, login
+/// flows, key env vars). The transport mechanics live in `agiworkforce-llm`;
+/// `streaming::stream_completion` maps each variant onto a
+/// `agiworkforce_llm::ProviderSpec` at the call boundary.
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[allow(clippy::upper_case_acronyms)]
 pub enum Provider {
@@ -50,6 +67,11 @@ pub enum Provider {
     Anthropic,
     Google,
     Ollama(OllamaMode),
+    /// OpenAI-compatible Chat Completions endpoint.
+    ///
+    /// `name`, display/log name (e.g. "openai", "xai", "lmstudio", "openrouter").
+    /// `base_url`, full chat completions URL (e.g. "https://api.openai.com/v1/chat/completions").
+    /// `api_key_env`, env var holding the API key, or `None` for keyless local endpoints.
     OpenAICompatible {
         name: &'static str,
         base_url: &'static str,
@@ -132,6 +154,7 @@ pub fn zhipu_provider() -> Provider {
     }
 }
 
+/// LM Studio, local OpenAI-compatible server, no key required.
 pub fn lmstudio_provider() -> Provider {
     Provider::OpenAICompatible {
         name: "lmstudio",
@@ -140,6 +163,7 @@ pub fn lmstudio_provider() -> Provider {
     }
 }
 
+/// MiniMax, OpenAI-compatible endpoint.
 pub fn minimax_provider() -> Provider {
     Provider::OpenAICompatible {
         name: "minimax",
@@ -148,6 +172,7 @@ pub fn minimax_provider() -> Provider {
     }
 }
 
+/// OpenRouter, OpenAI-compatible aggregator endpoint.
 pub fn openrouter_provider() -> Provider {
     Provider::OpenAICompatible {
         name: "openrouter",
@@ -156,6 +181,7 @@ pub fn openrouter_provider() -> Provider {
     }
 }
 
+/// NVIDIA NIM, OpenAI-compatible hosted endpoint.
 pub fn nvidia_provider() -> Provider {
     Provider::OpenAICompatible {
         name: "nvidia",
@@ -164,6 +190,7 @@ pub fn nvidia_provider() -> Provider {
     }
 }
 
+/// Streamed chunk callback, receives each text delta as it arrives.
 pub type StreamCallback = Box<dyn FnMut(&str) + Send>;
 
 /// Non-streaming completion result.

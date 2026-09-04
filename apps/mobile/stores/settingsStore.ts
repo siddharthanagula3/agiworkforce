@@ -8,6 +8,13 @@ import type { AutoApproveMode } from '@/types/chat';
 export type ThemeMode = 'dark' | 'light' | 'system';
 export type AccentColor = 'neutral' | 'green' | 'blue' | 'violet' | 'rose' | 'amber';
 export type FontPreference = 'default' | 'system' | 'dyslexic';
+/**
+ * Text-to-speech provider. PAR-M20 removed the Cloud TTS provider and its
+ * runtime branch, so `'system'` (on-device speech synthesis) is the only live
+ * value. A persisted `'cloud'` from an older install is a dead value and is
+ * migrated to {@link TTS_DEFAULT_PROVIDER} on load, see
+ * {@link migratePersistedSettings} (MOBILE-TTS-CLOUD-DEADSTATE-01).
+ */
 export type TTSProvider = 'system';
 
 export const TTS_DEFAULT_PROVIDER: TTSProvider = 'system';
@@ -69,6 +76,12 @@ export interface SettingsState {
   setCapability: (key: keyof Capabilities, value: boolean) => void;
 }
 
+/**
+ * Persist migration. Coerces any dead persisted `ttsProvider` value (notably
+ * the removed `'cloud'` provider, PAR-M20 / MOBILE-TTS-CLOUD-DEADSTATE-01) to
+ * {@link TTS_DEFAULT_PROVIDER}. Pure and exported so it can be unit-tested
+ * without driving the full zustand persist lifecycle.
+ */
 export function migratePersistedSettings(
   persisted: unknown,
   _version: number,

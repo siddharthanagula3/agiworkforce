@@ -1,3 +1,16 @@
+//! Writable MCP server registry, the mutation backend for `/mcp add|remove|
+//! enable|disable` and `agi mcp`.
+//!
+//! The read-only side of MCP (config discovery, connection, tool namespacing)
+//! lives in [`super`]. This module owns the *global* user registry file
+//! (`~/.agiworkforce/mcp.json`) and edits it in place. Servers live under the
+//! standard `mcpServers` object so [`super::McpManager::load_configs`] picks
+//! them up unchanged; **disabled** servers are parked under a sibling
+//! `disabledServers` object that the loader deliberately ignores, so disabling a
+//! server genuinely stops it from being loaded and connected (no fake toggle).
+//!
+//! All user-supplied server URLs and stdio commands are validated before they
+//! are written, so a malformed or option-injecting entry never lands on disk.
 
 use anyhow::{bail, Context, Result};
 use serde_json::{Map, Value};
@@ -74,6 +87,8 @@ impl McpRegistry {
         })
     }
 
+    /// Persist the registry back to disk, preserving any pre-existing top-level
+    /// keys is intentionally NOT done, the registry file is owned by this store.
     pub fn save(&self) -> Result<()> {
         if let Some(parent) = self.path.parent() {
             std::fs::create_dir_all(parent).with_context(|| {
@@ -354,6 +369,7 @@ mod tests {
         reg.add("example", entry, false).unwrap();
         reg.save().unwrap();
 
+        // list, reload from disk to prove persistence.
         let reloaded = McpRegistry::load_from(&path).unwrap();
         let rows = reloaded.list();
         assert_eq!(rows.len(), 1);

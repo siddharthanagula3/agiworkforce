@@ -1415,7 +1415,7 @@ const ChatComposerNewComponent = ({
       }
       addChatAttachments([new File([blob], `screenshot-${Date.now()}.png`, { type: 'image/png' })]);
     } catch {
-      return;
+      // noop
     } finally {
       stream?.getTracks().forEach((track) => track.stop());
       setIsCapturingScreenshot(false);

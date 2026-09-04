@@ -35,6 +35,10 @@ fn build_injection_nonce() -> String {
     format!("{:x}", bytes.as_u128())
 }
 
+/// FIX-015: wrap the catalog text in nonce-bearing sentinels. The model
+/// is instructed elsewhere (in system instructions) that legitimate tool
+/// catalogs always carry the nonce, anything purporting to be a catalog
+/// without it is treated as untrusted user content.
 fn wrap_with_nonce(nonce: &str, body: &str) -> String {
     format!(
         "\n\n<tool_catalog version=\"1\" nonce=\"{nonce}\">\n{body}\n</tool_catalog nonce=\"{nonce}\">\n"

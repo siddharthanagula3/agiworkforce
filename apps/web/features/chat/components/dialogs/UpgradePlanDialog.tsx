@@ -144,6 +144,9 @@ interface PlanCardProps {
 
 function PlanCardView({ plan, annual, isCurrent, isUpgrade, onUpgrade }: PlanCardProps) {
   const usesAnnual = annual && plan.annualAvailable;
+  // Team is a published per-seat price ($25/seat/mo, $240/seat/yr), not a
+  // negotiated one, rendering "Custom" here contradicted both the catalog and
+  // the pricing page, which sells it self-serve.
   const displayPrice =
     usesAnnual && plan.monthlyPrice > 0
       ? annualPerMonth(plan.yearlyPrice)
@@ -197,6 +200,10 @@ function PlanCardView({ plan, annual, isCurrent, isUpgrade, onUpgrade }: PlanCar
 
       <div className="mt-auto">
         {plan.perSeat ? (
+          // Per-seat checkout needs a seat quantity, and this dialog has no
+          // seat control, `onUpgrade` would send a one-seat organization.
+          // Hand off to the pricing page's Team card, which owns the seat
+          // input and the real checkout call, instead of a sales dead end.
           <a
             className="flex h-9 w-full items-center justify-center rounded-xl bg-primary px-4 text-sm font-medium text-primary-foreground"
             href="/pricing#pricing-team-title"
@@ -231,6 +238,11 @@ function PlanCardView({ plan, annual, isCurrent, isUpgrade, onUpgrade }: PlanCar
 export function UpgradePlanDialog({
   open,
   onOpenChange,
+  // NOT defaulted to 'free'. `undefined` means "the plan is not known yet"
+  // (e.g. `/api/me` is refreshing or answered 401) and must stay distinct from
+  // "the user is on Free". Defaulting here is what previously showed a Max 15x
+  // subscriber a Free card marked "Your current plan" next to an
+  // "Upgrade to Basic, $7/month" button.
   currentTier,
   targetTier = null,
   onUpgrade,

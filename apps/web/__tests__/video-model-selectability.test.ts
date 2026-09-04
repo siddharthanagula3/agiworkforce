@@ -1,6 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import { getModels, isExecutableVideoModel } from '@agiworkforce/types';
 
+/**
+ * WEB-05 said the video picker offers a preview-only model that 400s on submit.
+ * The composer builds its list from isExecutableVideoModel, which requires the
+ * catalog's availability to be live, so preview and unavailable entries are
+ * already excluded. This pins that, because the filter is what makes the claim
+ * false and a change to it would make the claim true again.
+ */
+
 describe('video model picker offers only models the route will accept', () => {
   const videoModels = getModels({ modelTypes: ['video'] });
 

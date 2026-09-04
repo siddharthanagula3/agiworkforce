@@ -76,8 +76,8 @@ export async function cancelRecording(): Promise<void> {
   await cancelCapture();
   try {
     await _activeCapturePromise;
-  } catch (err) {
-    void err;
+  } catch {
+    // noop
   }
   _activeCapturePromise = null;
   _lastResult = null;

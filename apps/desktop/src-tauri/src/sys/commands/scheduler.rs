@@ -57,7 +57,7 @@ const ALLOWED_SHELL_COMMANDS: &[&str] = &[
     "git", "node", "npm", "npx", "pnpm", "yarn", "python", "python3", "pip", "pip3", "cargo",
     "rustc", "go", "java", "javac", "make", "cmake", // Shell utilities
     "test", "true", "false", "sleep", "basename", "dirname", "realpath", "pwd", "cd", "export",
-    "set",
+    "set", // macOS specific (safe subset, docker, osascript removed for security)
     "open", "pbcopy", "pbpaste", "say",
     "sw_vers",
     // Note: bash, sh, zsh intentionally excluded from ShellCommand allowlist.
@@ -299,6 +299,10 @@ impl ProactiveScheduler {
         }
     }
 
+    /// Replace the in-memory job set with previously-persisted jobs.
+    /// Intended to be called once at startup, immediately after loading
+    /// from disk, it does not re-persist, since the jobs are already on
+    /// disk.
     pub fn hydrate(&self, jobs: HashMap<String, ScheduledJob>) -> Result<()> {
         let mut guard = self
             .jobs
@@ -529,6 +533,13 @@ impl SchedulerState {
         }
     }
 
+    /// Construct scheduler state backed by disk persistence at `db_path`,
+    /// hydrating any previously-persisted jobs into memory before
+    /// returning. Call this during app setup instead of `new()` so
+    /// schedules survive restarts; call `register_default_memory_jobs()`
+    /// afterward as usual, it is name-keyed and idempotent, so hydrated
+    /// defaults (including any user edits to them, e.g. a pause) are left
+    /// alone rather than recreated.
     pub fn new_with_store(db_path: impl AsRef<Path>) -> Result<Self> {
         let store = SchedulerStore::new(db_path);
         store.init()?;
@@ -607,6 +618,11 @@ impl SchedulerState {
         }
     }
 
+    /// Spawn a background tokio task that polls for due jobs every 30 seconds
+    /// and dispatches their actions via `dispatch_job_action`.
+    ///
+    /// This is the core scheduling loop, without it jobs are stored but never
+    /// automatically triggered. Call this once from `lib.rs` during app setup.
     pub fn start_background_loop(
         scheduler: Arc<ProactiveScheduler>,
         execution_history: Arc<RwLock<Vec<JobExecutionRecord>>>,
@@ -673,6 +689,8 @@ impl SchedulerState {
 
                     // Record to history
                     if let Ok(mut hist) = execution_history.write() {
+                        // Use timestamp_millis for monotonic IDs, hist.len() collides
+                        // after history is drained at the 500-entry cap.
                         let record_id = chrono::Utc::now().timestamp_millis();
                         hist.push(JobExecutionRecord {
                             id: record_id,
@@ -714,6 +732,13 @@ impl Default for SchedulerState {
     }
 }
 
+/// Broadcast a scheduler lifecycle change to every window.
+///
+/// `schedulerStore` treats these events as the only source of job mutations it
+/// did not itself initiate, background firings, the agent's scheduler tools,
+/// and a second window all reach the UI through here. A failed emit is logged
+/// rather than propagated so a missing webview never fails the mutation that
+/// already succeeded.
 fn emit_scheduler_event<P: serde::Serialize + Clone>(
     app_handle: &tauri::AppHandle,
     event: &str,
@@ -881,6 +906,10 @@ pub async fn scheduler_resume_job(
     Ok(resumed)
 }
 
+/// Re-read a job and broadcast it as `scheduler:job_updated`.
+///
+/// `changed` is the mutating call's own "did anything happen" answer, a no-op
+/// pause on an already-paused job must not look like a state change to the UI.
 fn emit_job_updated(
     app_handle: &tauri::AppHandle,
     state: &State<'_, SchedulerState>,
@@ -1038,6 +1067,8 @@ pub async fn scheduler_run_job_now(
             .write()
             .map_err(|e| Error::Generic(format!("Failed to acquire history write lock: {}", e)))?;
 
+        // Use timestamp_millis for monotonic IDs, history.len() collides
+        // after history is drained at the 500-entry cap.
         let record = JobExecutionRecord {
             id: chrono::Utc::now().timestamp_millis(),
             job_id: id.clone(),
@@ -1823,6 +1854,9 @@ pub async fn scheduler_get_history(
     Ok(result)
 }
 
+/// Partial update payload for a scheduled job
+///
+/// All fields are optional, only provided fields will be applied.
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ScheduledJobUpdate {
@@ -2373,9 +2407,18 @@ mod tests {
 
     #[test]
     fn test_extract_base_command_only_env_vars() {
+        // Edge case: only env vars, no command, returns empty
         assert_eq!(extract_base_command("FOO=bar"), "");
     }
 
+    // ======================================================================
+    // Persistence: restart-simulation and defaults-merge semantics
+    // ======================================================================
+    //
+    // These tests simulate an app restart by constructing a *fresh*
+    // ProactiveScheduler / SchedulerState against the same on-disk store,
+    // rather than reusing the original in-memory instance, proving jobs
+    // round-trip through disk, not just through the RwLock they started in.
 
     fn temp_db_path() -> (tempfile::TempDir, std::path::PathBuf) {
         let dir = tempfile::tempdir().unwrap();
@@ -2400,6 +2443,8 @@ mod tests {
                 )
                 .unwrap()
         };
+        // `scheduler` and its `store` are dropped here, nothing but the
+        // db file on disk survives into the next block.
 
         let restarted = {
             let store = SchedulerStore::new(&db_path);
@@ -2489,6 +2534,10 @@ mod tests {
 
     #[test]
     fn test_add_job_persist_failure_does_not_mutate_memory() {
+        // Point the store at a path whose parent directory does not exist,
+        // so opening the connection fails, proving add_job leaves the
+        // in-memory map untouched (and returns Err) rather than silently
+        // diverging from disk.
         let unwritable_path = std::path::PathBuf::from("/nonexistent-dir-for-test/scheduler.db");
         let store = SchedulerStore::new(&unwritable_path);
         let scheduler = ProactiveScheduler::with_store(Arc::new(store));
@@ -2528,6 +2577,10 @@ mod tests {
             (ids, summarization.id.clone())
         };
 
+        // "Launch 2": brand new SchedulerState against the same db file.
+        // hydration should find both defaults already present (by name),
+        // so register_default_memory_jobs() must not create duplicates or
+        // regenerate new ids, and the pause must still hold.
         let state2 = SchedulerState::new_with_store(&db_path).unwrap();
         state2.register_default_memory_jobs();
 

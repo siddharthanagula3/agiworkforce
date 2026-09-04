@@ -1,5 +1,24 @@
 'use client';
 
+/**
+ * ResearchReportsGallery
+ *
+ * Every Deep Research report this user owns, newest first, the durable
+ * counterpart to ResearchPanel's per-conversation Report tab.
+ *
+ * `GET /api/research/reports` has always supported "newest reports for the
+ * caller" (no `conversationId`), RLS-scoped through `getUserScopedDb`, but the
+ * only caller in the repo always passed a conversationId, so a user could
+ * never reach a report from an older chat. This is that missing call site; the
+ * read endpoint, the RLS isolation, and the detail renderer
+ * (`ResearchReportView`) already existed.
+ *
+ * Nothing is synthesized: the list renders exactly the rows the server returns,
+ * and the detail pane reuses the same view the Report tab does. The list
+ * response already carries the full report body, so opening one costs no second
+ * request.
+ */
+
 import { useCallback, useEffect, useState } from 'react';
 import { ChevronLeft, Telescope, TriangleAlert } from 'lucide-react';
 import type { ResearchReport } from '@agiworkforce/types';
@@ -10,6 +29,12 @@ import { toUserMessage } from '@/lib/user-error-message';
 /** How many reports the gallery asks for (endpoint caps the query at 100). */
 const GALLERY_LIMIT = 50;
 
+/**
+ * The row shape `GET /api/research/reports` returns: the `ResearchReport`
+ * contract plus the run linkage the service adds (`PersistedResearchReport`).
+ * Only the fields this list renders are declared, the service type itself is
+ * `server-only` and cannot be imported into a client component.
+ */
 type GalleryReport = ResearchReport & { query?: string; model?: string; provider?: string };
 
 /** Short absolute date; a research report is an artifact, not a live feed. */

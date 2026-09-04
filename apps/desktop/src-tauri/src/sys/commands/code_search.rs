@@ -1,3 +1,13 @@
+//! Code Search & Formatter Module
+//!
+//! Provides code search tools for the agent:
+//! - `grep_search`: regex content search across files (ripgrep-style, .gitignore-aware)
+//! - `glob_search`: find files matching a glob pattern (.gitignore-aware)
+//! - `format_file`: run language-specific formatter on a file after editing
+//! - `format_detect`: detect which formatter would be used for a file
+//!
+//! These are registered both as Tauri commands (callable from JS) and in the
+//! ToolRegistry so the LLM can invoke them directly.
 
 use glob::Pattern;
 use regex::Regex;
@@ -92,7 +102,7 @@ const DEFAULT_GREP_LIMIT: usize = 250;
 const MAX_GREP_MATCHES: usize = 1000;
 const MAX_SEARCH_OFFSET: usize = 100_000;
 const MAX_GLOB_MATCHES: usize = 1000;
-const MAX_FILE_SIZE_BYTES: u64 = 10 * 1024 * 1024;
+const MAX_FILE_SIZE_BYTES: u64 = 10 * 1024 * 1024; // 10 MB, skip binary blobs
 
 /// Directories that are always excluded from search.
 const EXCLUDED_DIRS: &[&str] = &[
@@ -204,7 +214,25 @@ fn is_likely_binary(path: &Path) -> bool {
     false
 }
 
+// ─────────────────────────────────────────────
+// grep_search, regex content search
+// ─────────────────────────────────────────────
 
+/// Search file contents using a regular expression.
+///
+/// Behaviour:
+/// - Skips excluded dirs, binary files, and files > 10 MB.
+/// - Respects an optional `include_pattern` glob (e.g. `"*.ts"`) to restrict
+///   which file extensions are searched.
+/// - Returns up to 500 matches; sets `truncated = true` if the limit is hit.
+///
+/// # Arguments
+/// * `pattern`, ECMAScript-compatible regex pattern.
+/// * `root`, Optional root directory. Defaults to project folder / cwd.
+/// * `include_pattern`, Optional glob pattern to restrict file types (e.g. `"*.rs"`).
+/// * `case_insensitive`, If true, search is case-insensitive.
+/// * `output_mode`, `"content"` (default), `"files_with_matches"`, or `"count"`.
+/// * `context_lines`, Number of lines to include before and after each match (content mode only).
 #[tauri::command]
 pub async fn grep_search(
     pattern: String,
@@ -437,7 +465,7 @@ fn grep_blocking(
                 })
                 .collect();
         }
-        _ => {}
+        _ => {} // "content", matches already populated
     }
 
     Ok(GrepSearchResult {
@@ -451,7 +479,21 @@ fn grep_blocking(
     })
 }
 
+// ─────────────────────────────────────────────
+// glob_search, file pattern search
+// ─────────────────────────────────────────────
 
+/// Find files matching a glob pattern.
+///
+/// Behaviour:
+/// - Pattern examples: `"**/*.ts"`, `"src/**/*.rs"`, `"*.json"`
+/// - Skips excluded dirs automatically.
+/// - Results are sorted by modification time (most-recently-modified first).
+///
+/// # Arguments
+/// * `pattern`, Glob pattern relative to `root`.
+/// * `root`, Optional root directory. Defaults to project folder / cwd.
+/// * `limit`, Max results (default 200, max 1000).
 #[tauri::command]
 pub async fn glob_search(
     pattern: String,
@@ -571,7 +613,37 @@ fn glob_blocking(
     })
 }
 
+// ─────────────────────────────────────────────
+// format_file, auto-formatter pipeline
+// ─────────────────────────────────────────────
 
+/// Run the appropriate code formatter for a file and return whether it changed.
+///
+/// Detects the formatter from the file extension and project configuration.
+/// Formatters attempted in order of preference (project-local first, then global).
+///
+/// Supported formatters:
+/// | Extension(s)       | Formatter         |
+/// |--------------------|-------------------|
+/// | .rs                | rustfmt           |
+/// | .ts .tsx .js .jsx  | prettier → biome  |
+/// | .py                | ruff → black      |
+/// | .go                | gofmt             |
+/// | .rb                | rubocop --autocorrect |
+/// | .java .kt          | (project fmt)     |
+/// | .c .cpp .h .hpp    | clang-format      |
+/// | .sh .bash          | shfmt             |
+/// | .toml              | taplo fmt         |
+/// | .json              | prettier → jq     |
+/// | .md                | prettier          |
+/// | .css .scss         | prettier          |
+/// | .html              | prettier          |
+/// | .zig               | zig fmt           |
+/// | .dart              | dart format       |
+///
+/// # Arguments
+/// * `path`, Absolute path to the file to format.
+/// * `project_root`, Optional project root (used to detect project-local formatters).
 #[tauri::command]
 pub async fn format_file(
     path: String,

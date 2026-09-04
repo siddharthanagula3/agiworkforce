@@ -1,3 +1,16 @@
+//! MCP elicitation, server-initiated user prompts.
+//!
+//! In the Model Context Protocol a server can call `elicitation/create` to ask
+//! the client (us) for structured user input, for example a server wrapping
+//! GitHub or Slack might ask "please provide your API key" or "choose a
+//! repository". Without elicitation support such a server simply hangs waiting
+//! for a response that never comes.
+//!
+//! This crate owns the *wire contract* (the request/response payloads and the
+//! [`ElicitationHandler`] trait the transport dispatches through) plus the one
+//! UI-agnostic default, [`AutoDeclineHandler`]. Real UI handlers (a TUI
+//! overlay, a stdin prompt, hook-firing wrappers) live in the host app and
+//! implement [`ElicitationHandler`]; the transport never needs to know which.
 
 use std::future::Future;
 use std::pin::Pin;
@@ -89,6 +102,9 @@ impl ElicitationResponse {
 /// Uses a `BoxFuture` return type instead of `async_trait` to stay
 /// dyn-compatible without adding the `async-trait` crate.
 pub trait ElicitationHandler: Send + Sync {
+    /// Handle one elicitation request from the named MCP server. The handler is
+    /// allowed to take as long as it needs (including blocking on the user).
+    /// the MCP connection layer will wait.
     fn handle<'a>(
         &'a self,
         server_name: &'a str,

@@ -2117,6 +2117,15 @@ function disarmMaintenanceAlarm(): void {
   void chrome.alarms.clear(MAINTENANCE_ALARM);
 }
 
+/**
+ * One maintenance pass: retry interrupted scheduled runs, mirror any
+ * conversation still owing a sync, and resume native reconnection.
+ *
+ * @returns whether anything is still outstanding. This is what decides if the
+ *   worker gets woken again, the two unconditional one-minute alarms this
+ *   replaced woke it every minute for the life of the browser, with no panel
+ *   open, no run active, and usually nothing to do.
+ */
 async function runMaintenancePass(): Promise<boolean> {
   let outstanding = false;
 
@@ -2721,6 +2730,12 @@ function handleMessage(
   return dispatchAuthorizedMessage(msg, sender, sendResponse);
 }
 
+/**
+ * Every gate past the site allowlist, plus dispatch. Split out so the allowlist
+ * decision can be retried asynchronously on a cold worker wake without pushing
+ * the rest, notably OPEN_SIDE_PANEL, which must open inside the synchronous
+ * turn of the user gesture, behind an await in the common case.
+ */
 function dispatchAuthorizedMessage(
   msg: ExtensionMessage,
   sender: chrome.runtime.MessageSender,

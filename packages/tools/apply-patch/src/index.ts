@@ -1,3 +1,37 @@
+/**
+ * @agiworkforce/apply-patch
+ *
+ * Lift of OpenClaw's `apply_patch` tool format, parser + applicator.
+ * with a minimal `FSBridge` abstraction so callers can target real disk,
+ * Tauri-scoped filesystems, S3, or sandbox bridges without forking the
+ * patch logic.
+ *
+ * The patch format is:
+ *
+ * ```
+ * *** Begin Patch
+ * *** Add File: path/to/new.txt
+ * +line one
+ * +line two
+ * *** Update File: path/to/edit.ts
+ * @@ optional context @@
+ * -old line
+ * +new line
+ *  unchanged context line
+ * *** Delete File: path/to/old.txt
+ * *** End Patch
+ * ```
+ *
+ * Update hunks support increasingly-relaxed line matching (exact → trimEnd
+ * → trim → unicode-punctuation-normalized) so models that quote slightly
+ * mangled context lines still match.
+ *
+ * Ported from OpenClaw `src/agents/apply-patch.ts` + `apply-patch-update.ts`
+ * (MIT, Peter Steinberger). See THIRD_PARTY_LICENSES.md at repo root.
+ *
+ * @packageDocumentation
+ */
+
 import { statSync as fsStatSync } from 'node:fs';
 import { realpath } from 'node:fs/promises';
 import { dirname, isAbsolute, resolve, sep } from 'node:path';

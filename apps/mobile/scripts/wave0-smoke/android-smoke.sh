@@ -1,4 +1,10 @@
 #!/usr/bin/env bash
+# Wave 0 smoke-test prep, Android
+# Verifies toolchain, builds a dev client via EAS, and prints install instructions.
+# Re-runnable: safe to run more than once.
+#
+# Usage: bash apps/mobile/scripts/wave0-smoke/android-smoke.sh
+#        Or from the mobile dir: bash scripts/wave0-smoke/android-smoke.sh
 
 set -euo pipefail
 

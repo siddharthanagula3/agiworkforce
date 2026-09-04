@@ -120,6 +120,8 @@ export function useUserSettings(): UseQueryResult<UserSettings, Error> {
     queryFn: async (): Promise<UserSettings> => {
       const { data, error } = await settingsService.getSettings();
       if (error) {
+        // A signed-out visitor is an expected state, not an error, don't spam
+        // the console (it surfaced as a Next dev "Issue" overlay on public routes).
         if (!/not authenticated|authentication required|unauthorized/i.test(String(error))) {
           logger.error('[SettingsQuery] Settings error:', error);
         }
@@ -183,6 +185,9 @@ export function useAPIKeys(): UseQueryResult<APIKey[], Error> {
         if (error) throw new Error(error);
         return data;
       } catch (error) {
+        // A caller abort (unmount, navigation, a new query superseding this
+        // one) is normal cancellation, not a failure, the same reasoning as
+        // the signed-out suppression above. Only a genuine timeout is an error.
         const aborted =
           error instanceof Error && error.name === 'AbortError' && !timeoutSignal.aborted;
         if (aborted) throw error;
@@ -569,6 +574,25 @@ function readDeleteAccountError(data: unknown, fallback: string): string {
   return fallback;
 }
 
+/**
+ * Delete-account mutation: the single implementation behind the account
+ * deletion flow (AccountSection is the only caller; PrivacySection used to
+ * duplicate this with its own fetch and has been collapsed onto this hook).
+ *
+ * Owns everything the duplicate PrivacySection implementation used to get
+ * wrong on its own:
+ *   - CSRF headers on the DELETE call
+ *   - parsing the server's real `{ message, scheduledFor }` body instead of
+ *     rendering a hardcoded "24 hours" string that can drift from server
+ *     policy
+ *   - the post-success sign-out sequence, so a successful deletion can never
+ *     leave a live client session behind against an account scheduled for
+ *     erasure
+ *
+ * Sign-out is exposed as a separate `signOutAfterDeletion` step rather than
+ * run automatically on mutation success, because the UI shows a confirmation
+ * dialog with a "Continue" button first, the caller decides when to sign out.
+ */
 export function useDeleteAccount(): UseMutationResult<DeleteAccountResult, Error, void> & {
   signOutAfterDeletion: () => Promise<void>;
 } {
@@ -606,6 +630,11 @@ export function useDeleteAccount(): UseMutationResult<DeleteAccountResult, Error
       await logout();
       await clerkSignOut({ redirectUrl: '/' });
     } catch (err) {
+      // The account is already deleted server-side by the time this runs
+      // (it only fires after the mutation above succeeded), if
+      // logout()/clerkSignOut() fail here (e.g. a network blip), fall back
+      // to a hard navigation instead of leaving the user stuck on a dead
+      // settings screen with no feedback and no way to reach '/'.
       console.warn('[useDeleteAccount] Post-deletion sign-out failed, forcing navigation:', err);
     } finally {
       router.replace('/');
@@ -615,6 +644,15 @@ export function useDeleteAccount(): UseMutationResult<DeleteAccountResult, Error
   return { ...mutation, signOutAfterDeletion };
 }
 
+/**
+ * Current account-deletion schedule for the signed-in user, as recorded on
+ * `profiles.deletion_requested_at` / `profiles.deletion_scheduled_for` and
+ * read back from `GET /api/user/delete-account`.
+ *
+ * `canCancel` is `false` once `scheduledFor` has passed even though `pending`
+ * stays `true`, the grace window is closed and the purge cron owns the row
+ * from here, so the UI must not offer a cancel control it cannot honour.
+ */
 export interface AccountDeletionStatus {
   pending: boolean;
   canCancel: boolean;
@@ -1737,6 +1775,13 @@ export interface OrgSharedOverview {
 
 const ORG_SHARED_QUERY_KEY = ['settings', 'organization', 'shared'] as const;
 
+/**
+ * What the caller's organization shares, and who can see it.
+ *
+ * Returns `null` when the caller belongs to no organization, the API answers
+ * 403 in that case, which is a legitimate state for a personal account, not an
+ * error worth surfacing as a red banner.
+ */
 export function useOrganizationSharedOverview(): UseQueryResult<OrgSharedOverview | null, Error> {
   return useQuery<OrgSharedOverview | null, Error>({
     queryKey: ORG_SHARED_QUERY_KEY,
@@ -1875,6 +1920,17 @@ export interface WorkspacePolicyOverview {
 
 const ORG_POLICY_QUERY_KEY = ['settings', 'organization', 'policy'] as const;
 
+/**
+ * The workspace's administrative policy.
+ *
+ * `null` means the caller belongs to no organization, or their plan does not
+ * include team administration, both are 403s and both are legitimate states
+ * for a personal account, so neither is surfaced as an error.
+ *
+ * `configured: false` means no policy row exists. The `policy` field then holds
+ * the values a first save WOULD write, not values in force: an unconfigured
+ * workspace is ungoverned. The UI must keep that distinction visible.
+ */
 export function useWorkspacePolicy(): UseQueryResult<WorkspacePolicyOverview | null, Error> {
   return useQuery<WorkspacePolicyOverview | null, Error>({
     queryKey: ORG_POLICY_QUERY_KEY,
@@ -1975,6 +2031,11 @@ export function auditQueryToParams(query: AuditQuery): URLSearchParams {
 
 const ORG_AUDIT_QUERY_KEY = ['settings', 'organization', 'audit'] as const;
 
+/**
+ * The workspace audit trail. `null` means the caller is not an owner/admin of
+ * an entitled organization, a 403, which is a legitimate state for a personal
+ * account or a plain member rather than an error worth a red banner.
+ */
 export function useWorkspaceAudit(
   query: AuditQuery,
 ): UseQueryResult<AuditPageResult | null, Error> {

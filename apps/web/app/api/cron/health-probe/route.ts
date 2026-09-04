@@ -110,6 +110,12 @@ function buildAlert(
   };
 }
 
+/**
+ * Posts the alert to a pager webhook when one is configured. Email alone waits
+ * for someone to read it; a health probe firing at 06:15 needs to wake a
+ * person. Best-effort by design, a pager that is down must not stop the email
+ * from going out, so this never throws.
+ */
 export async function pageOnCall(
   severity: AlertSeverity,
   subject: string,

@@ -4,6 +4,13 @@ import { join, resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { SWEEP_INTERVAL_MS } from '@/lib/schedules/schedule-time';
 
+/**
+ * A cron route that nothing schedules never runs, and nothing says so.
+ * expire-organization-invitations shipped and sat idle. This asserts the set
+ * of routes and the set of schedules are the same set, so the next one cannot
+ * ship unscheduled either.
+ */
+
 const REPO_ROOT = resolve(process.cwd(), '..', '..');
 
 function cronRouteNames(): string[] {
@@ -40,6 +47,26 @@ describe('cron routes and vercel.json schedules agree', () => {
     expect(dangling, `these schedules point at no route: ${dangling.join(', ')}`).toEqual([]);
   });
 
+  // A sub-daily cron is rejected on the Hobby plan, and the rejection kills the
+  // whole deployment rather than just the cron: pushes succeed and no build ever
+  // queues. The account moved to Pro on 2026-08-16, so sub-daily is permitted.
+  // but only for jobs whose cadence is a deliberate promise, not a housekeeping
+  // choice made for our own convenience. Two such promises exist:
+  //
+  //   product cadence, a customer-facing commitment to how fast something
+  //     happens. run-schedules is the cadence users are offered for scheduled
+  //     tasks; drain-audit-streams is the near-real-time delivery a SIEM
+  //     integration expects, described as streaming on the /workspace posture
+  //     page.
+  //
+  //   monitoring, a check that exists to catch a problem before a customer
+  //     does. health-probe and page-security-anomalies exist to page someone,
+  //     and a daily page is not a page. These are capped at
+  //     MONITORING_MIN_INTERVAL_MINUTES rather than left unbounded, so a
+  //     future "every minute" change still fails this test.
+  //
+  // Adding an entry to either set needs the same test: is the cadence a
+  // promise to a customer, or a choice we made for our own convenience?
   const PRODUCT_CADENCE_CRONS = new Set([
     '/api/cron/run-schedules',
     '/api/cron/drain-audit-streams',

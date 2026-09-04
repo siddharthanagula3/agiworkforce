@@ -1,3 +1,40 @@
+/**
+ * Free Auto: select the best route whose incremental cost to AGIWorkforce is $0.
+ *
+ * WHAT THIS IS, ARCHITECTURALLY
+ * ----------------------------
+ * A STAGE over the canonical resolver's output, not a router. It receives the
+ * candidate set `resolveAutoRoute` already admitted (trust mode, runtime
+ * profile, tier ceiling, lifecycle, harness allow-list, capability, context) and
+ * may only REJECT and REORDER within it. It never widens admission, never
+ * consults `tierAllowedSlots`, and never sees a trust mode.
+ *
+ * This is the same architectural slot `task-family-routing.ts` occupies, and it
+ * is deliberate: adding a `free` alias to the registry would auto-expand the
+ * 1,412-case TS/Rust conformance fixture by 220 cases per alias, which the Rust
+ * resolver would then have to reproduce, impossible, because Free Auto depends
+ * on live quota and health state that a pure function over static policy cannot
+ * see. Staying a TypeScript-only stage keeps cross-language parity intact.
+ *
+ * HOW IT DIFFERS FROM THE TASK-FAMILY STAGE
+ * -----------------------------------------
+ * That stage is a PERMUTATION: same members, nothing dropped, because stranding
+ * a request whose only route sat below a quality floor would be worse than
+ * running it. Free Auto is a FILTER THAT MAY STRAND, and that is the whole
+ * point. "No free capacity right now" is a correct, useful answer. Silently
+ * spending money because nothing free was available is not.
+ *
+ * THE INVARIANT
+ * -------------
+ * Free Auto never returns a route it has not positively verified as zero
+ * incremental cost. Not "cheap". Not "priced at zero in the catalog". Verified,
+ * unexpired, terms-checked, hard-stopping before paid overage. Every uncertainty
+ * resolves to ineligible.
+ *
+ * @module routing/free-auto
+ * @packageDocumentation
+ */
+
 import {
   effectiveRouteHealth,
   isFreeEligibilityValid,
@@ -85,6 +122,23 @@ export interface FreeAutoRequest {
 
 const DEFAULT_MIN_HEADROOM = 0.02;
 
+/**
+ * Rank surviving candidates.
+ *
+ * Ordering rationale, in priority order:
+ *
+ *  1. **Most headroom first.** Spreading load across pools is what keeps free
+ *     capacity available at all. Draining one provider to zero before touching
+ *     the next is the failure mode this explicitly avoids, it converts a
+ *     transient shortage on one provider into a total outage.
+ *  2. **Then health.** Among comparable headroom, prefer the route that has been
+ *     succeeding.
+ *  3. **Then latency.** A tie-break, not a driver.
+ *
+ * Cost is absent from the ranking on purpose: every survivor is $0 by
+ * construction, so there is nothing to trade off. This is what makes Free Auto
+ * simpler than economic Auto rather than a special case of it.
+ */
 function scoreCandidate(candidate: FreeAutoCandidate, request: FreeAutoRequest): number {
   const { state } = request;
   const eligibility = state.freeEligibility[candidate.routeId];

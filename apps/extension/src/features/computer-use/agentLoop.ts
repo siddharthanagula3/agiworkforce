@@ -456,8 +456,8 @@ async function dispatchToolCall(
   let args: Record<string, unknown> = {};
   try {
     args = JSON.parse(toolCall.function.arguments) as Record<string, unknown>;
-  } catch (err) {
-    void err;
+  } catch {
+    /* noop */
   }
 
   await assertRunOwnership(options);

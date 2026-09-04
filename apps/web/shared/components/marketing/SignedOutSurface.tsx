@@ -17,6 +17,14 @@ export interface SignedOutSurfaceProps {
   secondary?: { href: string; label: string };
 }
 
+/**
+ * A public, indexed route that happens to need an account.
+ *
+ * Several of these rendered `null` and pushed anonymous visitors to /login, so
+ * anyone arriving from a marketing CTA, and every crawler, got a blank frame
+ * and a redirect that never said what the page was. This says what the surface
+ * is, why it needs sign-in, and offers the sign-in rather than performing it.
+ */
 export function SignedOutSurface({
   eyebrow,
   heading,

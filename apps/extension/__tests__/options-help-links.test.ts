@@ -1,3 +1,16 @@
+/**
+ * The options page must offer a way out when someone is stuck.
+ *
+ * Before this test the extension had no help affordance anywhere, not in the
+ * side panel, not on the options page, so the only exit from a confusing
+ * state was to guess a URL. These assertions render the real options page and
+ * check that the Help rows exist and point at web routes that actually exist
+ * (`apps/web/app/help`, `/docs`, `/support`). A link to a route that does not
+ * exist is worse than no link, so the paths are asserted literally.
+ *
+ * @vitest-environment jsdom
+ */
+
 import { describe, expect, it, vi } from 'vitest';
 
 const clerkOpenSignIn = vi.hoisted(() => vi.fn().mockResolvedValue(undefined));

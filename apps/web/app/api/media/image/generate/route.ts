@@ -935,6 +935,13 @@ async function handleImageGeneration(request: NextRequest): Promise<NextResponse
     transparent_background,
   } = validationResult.data;
 
+  // Always-on platform safety floor, ahead of model resolution, billing
+  // reservation, and provider egress: a refused prompt must never be charged
+  // for and must never leave this process. Covers every operation the handler
+  // serves, generate and the edit paths (inpaint/outpaint/variation), which
+  // all reach a provider through this same prompt.
+  // NOTE: the helper's surface label has no 'managed-image' member yet, so
+  // these events are reported under the default surface.
   const moderation = moderateManagedPrompt({
     userId,
     segments: negative_prompt ? [prompt, negative_prompt] : [prompt],
@@ -1043,6 +1050,9 @@ async function handleImageGeneration(request: NextRequest): Promise<NextResponse
 
   const catalogModel = resolveImageCatalogModel(provider, requestedModel);
 
+  // The workspace model policy, checked on the RESOLVED catalog model rather
+  // than on what was requested, a provider default must not be a way past a
+  // rule the administrator wrote.
   if (catalogModel) {
     const modelPolicyResponse = await buildModelPolicyGateResponse(
       userId,
@@ -1195,6 +1205,11 @@ async function handleImageGeneration(request: NextRequest): Promise<NextResponse
     );
   }
 
+  // The other half of the safety floor: client-supplied image bytes. A benign
+  // prompt must not be a way to push prohibited imagery through the edit
+  // endpoints, so both refs are resolved and hash-checked here, ahead of the
+  // billing reservation and every provider call, and a refused upload is
+  // therefore never charged for and never leaves this process.
   let editContext:
     | {
         operation: ManagedMediaImageOperation;

@@ -1,4 +1,36 @@
 #!/usr/bin/env node
+/**
+ * Probe an App Store Connect API key and report what it can actually do.
+ *
+ * WHY THIS EXISTS
+ *
+ * `preflight.sh` requires three iOS submission values, `ascAppId` in
+ * `eas.json`, plus `ASC_API_KEY_ID` / `ASC_API_KEY_ISSUER_ID` and the `.p8`
+ * private key, and a wrong or under-privileged key fails LATE, during an
+ * actual `eas submit`, after a full production build has already been spent.
+ *
+ * It also answers two questions that are otherwise guesswork when several keys
+ * are sitting in `~/.appstoreconnect/private_keys/`:
+ *
+ *   1. Which key works, and does it have enough role to submit?
+ *   2. What is the numeric `ascAppId` for the bundle id we ship?
+ *
+ * Both are read straight from Apple rather than copied by hand from the App
+ * Store Connect UI, so `eas.json` cannot end up carrying a typo'd app id.
+ *
+ * USAGE
+ *
+ *   ASC_API_KEY_ID=XXXXXXXXXX \
+ *   ASC_API_KEY_ISSUER_ID=xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx \
+ *   node scripts/release/asc-probe.mjs [--key <path to .p8>]
+ *
+ * The key is resolved in this order: `--key`, `ASC_API_KEY_PATH`,
+ * `apps/mobile/secrets/asc-api-key.p8`, then
+ * `~/.appstoreconnect/private_keys/AuthKey_<ASC_API_KEY_ID>.p8`.
+ *
+ * Read-only: it performs GETs and never writes to App Store Connect. It prints
+ * app names, bundle ids and numeric ids; it never prints key material.
+ */
 
 import { createSign } from 'node:crypto';
 import { readFileSync, existsSync } from 'node:fs';

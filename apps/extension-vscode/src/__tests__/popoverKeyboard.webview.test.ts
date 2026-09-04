@@ -1,3 +1,13 @@
+/**
+ * popoverKeyboard.webview.test.ts, VSCX-14 / VSCX-15.
+ *
+ * Both composer popovers declare role="menu", which tells assistive tech that
+ * arrow keys move between items and Escape dismisses. Neither was implemented:
+ * there was no keydown handler at all, so the markup described navigation the
+ * widget did not have and keyboard users could not reach the items.
+ *
+ * @vitest-environment jsdom
+ */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { getWebviewContent } from '../features/sidebar-webview/webviewContent';
 

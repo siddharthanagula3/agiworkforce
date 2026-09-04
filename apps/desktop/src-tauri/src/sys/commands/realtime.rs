@@ -94,6 +94,12 @@ pub async fn get_user_presence(
     Ok(state.presence.get_user_presence(&user_id).await)
 }
 
+/// Pairing requests the extension opened and the user has not answered yet.
+///
+/// SEC-11: this is the only channel that carries the confirmation code. It is
+/// readable exclusively through Tauri IPC, the Desktop's own window, so the
+/// user reads the code off their screen and types it into the extension. The
+/// loopback HTTP endpoint never returns it.
 #[tauri::command]
 pub async fn bridge_pending_pair_requests(
     server_handle: State<'_, RealtimeServerHandle>,
@@ -154,6 +160,13 @@ pub async fn bridge_rotate_token(
         hex::encode(bytes)
     };
 
+    // B6 fix: swap the live in-memory token FIRST. If disk persistence
+    // fails afterwards, the worst case is that the server has a fresh
+    // token in memory but the `.ipc_token` file still contains the old
+    // value, which means after restart the OLD token resumes service.
+    // That's acceptable: the rotation is reversed by restart, and no
+    // window exists where the old token is accepted but the new one
+    // would have been "the truth".
     *state.token.write().await = new_token.clone();
 
     server_handle.0.disconnect_all_clients().await;

@@ -172,6 +172,8 @@ pub(super) fn handle_delete(arg: &str) {
         return;
     }
 
+    // Deletion is destructive and irreversible, gate it with the same
+    // confirmation contract as `agi session delete`.
     let interactive = std::io::IsTerminal::is_terminal(&std::io::stdin())
         && std::io::IsTerminal::is_terminal(&std::io::stderr());
     match crate::resolve_destructive_decision(force, interactive) {
@@ -921,6 +923,10 @@ where
 // Raw output alias
 // ---------------------------------------------------------------------------
 
+/// `/raw`, render the most recent assistant response through the same
+/// raw-output path as the headless `--raw` / `--output-format json` modes.
+/// `/raw` prints the response verbatim (no markdown); `/raw json` prints the
+/// canonical one-shot JSON result object built by `oneshot_result_json_value`.
 pub(super) fn render_raw_last_response(session: &AgentSession, arg: &str) -> String {
     let Some(last) = session
         .messages
@@ -951,6 +957,11 @@ pub(super) fn render_raw_last_response(session: &AgentSession, arg: &str) -> Str
         serde_json::to_string_pretty(&value)
             .unwrap_or_else(|e| format!("Failed to render JSON: {e}"))
     } else {
+        // Raw text: no markdown formatting and no cost footer, but terminal
+        // escapes are still stripped, this prints the assistant message
+        // straight to the terminal, so an OSC 52 the model relayed from an
+        // untrusted page would otherwise reach the clipboard one keystroke
+        // after the rendered transcript safely dropped it.
         sanitize_terminal_text(&response).into_owned()
     }
 }
@@ -1418,6 +1429,7 @@ mod tests {
             "**bold** raw payload",
         ));
 
+        // Raw text is verbatim, markdown is NOT rendered.
         let raw = render_raw_last_response(&session, "");
         assert_eq!(raw, "**bold** raw payload");
 
@@ -1430,6 +1442,10 @@ mod tests {
         assert_eq!(parsed["model"], session.model);
     }
 
+    /// `/raw` prints the assistant message straight to the terminal, so the
+    /// escape stripping the rendered transcript applies must hold here too.
+    /// otherwise one keystroke after a safely rendered turn replays an OSC 52
+    /// clipboard write the model relayed from an untrusted page.
     #[test]
     fn raw_alias_strips_terminal_escapes_from_the_assistant_message() {
         let ctx = empty_context();
@@ -1447,6 +1463,8 @@ mod tests {
         assert!(!raw.contains("52;c"), "clipboard payload survived: {raw:?}");
         assert_eq!(raw, "here it is: done");
 
+        // JSON mode must keep the bytes recoverable for machine consumers.
+        // serde encodes them as \u001b rather than emitting a live escape.
         let json = render_raw_last_response(&session, "json");
         assert!(
             !json.contains('\u{1b}'),
@@ -1464,7 +1482,7 @@ mod tests {
             .map(|s| !s.success())
             .unwrap_or(true)
         {
-            return;
+            return; // git unavailable, skip rather than fail the suite.
         }
         let tmp = tempfile::tempdir().unwrap();
         init_git_repo(tmp.path());

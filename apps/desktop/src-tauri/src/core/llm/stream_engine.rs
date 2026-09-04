@@ -1,3 +1,33 @@
+//! Desktop bridge onto the shared `agiworkforce-llm` provider engine.
+//!
+//! Wave 5 stage c2 (`docs/plans/rust-engine-extraction-2026-07-09.md`): the
+//! per-provider SSE/NDJSON *decode mechanics* now live in
+//! `crates/agiworkforce-llm`. This module is the thin desktop-side facade that
+//! keeps desktop's IPC contract byte-for-byte: it drives the crate's
+//! dialect byte-stream runners and re-projects their [`StreamEvent`] stream
+//! back into desktop's app-local [`StreamChunk`] shape that
+//! `sys/commands/chat/stream_runtime.rs` accumulates.
+//!
+//! What stays app-local (desktop concerns, by construction):
+//! - the `StreamChunk`/`TokenUsage`/`StreamingToolCall` IPC boundary types
+//!   (`crate::core::llm::sse_parser`);
+//! - request building (`provider_adapter`), auth, key resolution, base-URL
+//!   validation, and the HTTP client factory (`providers`);
+//! - idle-timeout governance, `consume_llm_stream` already wraps
+//!   `stream.next()` in desktop's configured idle timeout, so the crate
+//!   watchdog is given an effectively-unbounded budget here to preserve the
+//!   exact pre-swap behavior;
+//! - user-facing error phrasing for in-stream provider error frames and
+//!   Gemini safety-filter blocks (the crate reports these structurally; the
+//!   desktop UX strings are reproduced here so the swap is behavior-preserving).
+//!
+//! reqwest note: desktop is on reqwest 0.13 while the crate pins 0.12, so the
+//! full `stream_chat` entry (which threads a `reqwest::Client`) is not usable
+//! across the version boundary. The crate's `run_*_stream` byte-stream runners
+//! are generic over `Stream<Item = Result<Bytes, LlmError>>`, so no reqwest
+//! type crosses the boundary, desktop keeps its own 0.13 client, POSTs the
+//! request, and feeds `Response::bytes_stream()` (error-mapped) into the crate.
+//! Adopting request serialization (c2c) is deferred on the reqwest convergence.
 
 use std::error::Error;
 use std::time::Duration;
@@ -142,6 +172,10 @@ pub fn decode_direct_stream(
     decode_bytes(Box::pin(byte_stream), decoder_for(provider, model))
 }
 
+/// Project one crate [`StreamEvent`] into desktop `StreamChunk` item(s) on
+/// `tx`. This is THE swap's event-to-IPC mapping, shared by every dialect
+/// (and replayed verbatim by the c2a decode oracle), so the projection under
+/// test is exactly the projection in production.
 pub(crate) fn project_stream_event(
     event: StreamEvent,
     is_gemini: bool,
@@ -362,6 +396,9 @@ mod tests {
 
     #[tokio::test]
     async fn openai_compat_tool_call_args_accumulate_by_index() {
+        // Tool call at index 1, id+name then split arguments across two events
+        // (Bug #27 shape), the crate assembler tracks the explicit index and
+        // the desktop accumulator merges by index.
         let raw = concat!(
             "data: {\"choices\":[{\"delta\":{\"tool_calls\":[{\"index\":1,\"id\":\"call_x\",\"type\":\"function\",\"function\":{\"name\":\"read_file\",\"arguments\":\"{\\\"path\\\":\\\"src/\"}}]}}]}\n\n",
             "data: {\"choices\":[{\"delta\":{\"tool_calls\":[{\"index\":1,\"function\":{\"arguments\":\"main.rs\\\"}\"}}]}}]}\n\n",

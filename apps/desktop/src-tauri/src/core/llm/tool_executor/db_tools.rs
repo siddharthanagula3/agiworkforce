@@ -6,6 +6,27 @@ const MAX_QUERY_ROWS: usize = 1000;
 /// Maximum SQL query length to prevent abuse
 const MAX_QUERY_LENGTH: usize = 10_000;
 
+/// Tables the LLM `db_query` tool may read, and the only tables a `db_execute`
+/// subquery may select from.
+///
+/// SEV-DESK-10 fix: `settings` removed. The settings table holds encrypted API
+/// key blobs (provider keys, BYOK material) and OAuth tokens, even though the
+/// values are encrypted, returning them to the LLM means they cross the
+/// user→provider trust boundary (the provider sees the ciphertext plus adjacent
+/// metadata, expanding leak surface). The LLM has no legitimate need to read
+/// settings.
+///
+/// F26 fix: `command_history` removed for the same reason. Every interactive
+/// terminal command is persisted there (features/terminal/session_manager.rs),
+/// and its `scrub_secrets` filter is pattern-based and therefore incomplete, a
+/// bare pasted token, or any credential shape the regexes miss, lands in the
+/// table verbatim. Allowlisting it let `SELECT command FROM command_history`
+/// hand the model live credentials, which it then forwards to a BYOK or managed
+/// cloud provider. No product feature reads this table through db_query;
+/// session-scoped history has its own IPC command.
+///
+/// Sensitive tables (users, auth_sessions, api_keys, master_password, …) were
+/// never on this list.
 const ALLOWED_QUERY_TABLES: &[&str] = &[
     "conversations",
     "messages",
@@ -50,6 +71,39 @@ const ALLOWED_QUERY_TABLES: &[&str] = &[
     "autonomous_task_logs",
 ];
 
+/// Tokenize an UPPERCASED SQL string for table-allowlist checking.
+///
+/// WHY NOT `split_whitespace()`. The allowlist used to split on whitespace and
+/// look for a token exactly equal to `FROM` or `JOIN`. SQL does not require
+/// whitespace there, so every one of these produced a token that never matched
+///, and a non-match SKIPPED the table check entirely rather than failing it:
+///
+///     SELECT*FROM auth_sessions        -> token `*FROM`
+///     SELECT * FROM"settings"          -> token `FROM"SETTINGS"`
+///     SELECT * FROM/*c*/users          -> token `FROM/*C*/USERS`
+///
+/// WHY NOTHING IS CLASSIFIED OR DROPPED HERE. Earlier rounds decided, while
+/// lexing, whether a quoted run stood where a table name belongs, and ERASED it
+/// when they decided it did not. Every bypass since has been a way to fool that
+/// decision. The last one hid a clause-ending keyword inside a nested subquery:
+///
+///     SELECT c.command FROM messages m JOIN messages n
+///       ON n.id = (SELECT max(id) FROM messages WHERE id > 0),
+///          'command_history' c
+///
+/// The inner `WHERE` cleared the "still inside a FROM clause" flag while SQLite
+/// was still reading the OUTER table list, so the comma after it looked like an
+/// ordinary value comma and `'command_history'` was erased from the stream.
+/// Nothing downstream can match a name that is no longer there: the engine
+/// returned the terminal history, and the same shape against `users`,
+/// `auth_sessions` and `settings` returned a password hash, a refresh token and
+/// the encrypted key blob the SEV-DESK-10 exclusion exists for.
+///
+/// So this drops nothing. Every bare word, and the whole contents of every
+/// quoted run in all four forms whatever position it sits in, reaches the token
+/// stream tagged with the parenthesis depth it appeared at. What a token MEANS
+/// is left to the guards, and the guard that draws the boundary
+/// (`first_forbidden_mention`) reads no position at all.
 fn sql_identifier_tokens(query_upper: &str) -> Vec<SqlToken> {
     let mut tokens: Vec<SqlToken> = Vec::new();
     let mut depth: usize = 0;
@@ -156,6 +210,16 @@ impl SqlToken {
     }
 }
 
+/// A lexed run of SQL.
+///
+/// The four quoting forms collapse into ONE variant deliberately: `'x'`, `"x"`,
+/// `[x]` and `` `x` `` all name the table when they stand where SQLite expects
+/// one, and deciding which runs stand there, during lexing, with no parser.
+/// is the judgement that kept failing open. Lexing the forms rather than
+/// scanning for characters is also what keeps an apostrophe INSIDE one of them
+/// from starting a literal: `SELECT command AS [x'] FROM command_history`
+/// desynchronized a character scanner for the rest of the query, erasing the
+/// FROM clause so no table check ran at all.
 enum SqlPiece {
     Word(String),
     Comma,
@@ -173,6 +237,16 @@ fn sql_pieces(query_upper: &str) -> Vec<SqlPiece> {
         let c = chars[i];
 
         if c == '/' && chars.get(i + 1) == Some(&'*') {
+            // NOT a depth counter. SQLite does not nest block comments: it
+            // terminates at the FIRST `*/`. A counter diverges from the engine on
+            //
+            //     SELECT * FROM /* a /* b */ auth_sessions
+            //
+            // where the engine ends the comment at the single `*/` and runs
+            // against `auth_sessions`, while a nesting tokenizer stays inside the
+            // comment and swallows the table name, the scanner then finds nothing
+            // after `FROM`. Found by an independent review that executed the query
+            // against a real sqlite3 binary rather than reasoning about it.
             i += 2;
             while i < chars.len() && !(chars[i] == '*' && chars.get(i + 1) == Some(&'/')) {
                 i += 1;
@@ -294,6 +368,27 @@ impl TableRefusal {
     }
 }
 
+/// Check every table the query can reach through FROM or JOIN.
+///
+/// One scanner, used by both db_query and db_execute: the two used to carry
+/// separate copies of this loop and drifted apart, which is how a stale
+/// allowlist survived in the write path.
+///
+/// A comma inside the FROM clause is refused rather than parsed. After
+/// tokenization `FROM messages, command_history c` and `FROM messages c` are
+/// the same shape, so the members of a table list cannot be told apart from
+/// aliases; refusing the list is the only reading that fails closed.
+///
+/// The clause is delimited BY DEPTH, which is the fix for the last bypass. It
+/// ends at a clause-ending keyword standing at the FROM's own parenthesis
+/// depth, or where a closing parenthesis takes the scan out of the enclosing
+/// query, never at a `WHERE`/`GROUP`/`LIMIT` belonging to a subquery, which is
+/// what `FROM a JOIN b ON b.id = (SELECT max(id) FROM c WHERE id > 0), 'x' y`
+/// used to end the scan on while SQLite was still reading the outer table list.
+/// Commas in the select list, in `IN (...)`, in `ORDER BY a, b` and in a
+/// scalar subquery are all outside the clause and untouched. A comma in an ON
+/// predicate or a `USING (a, b)` is inside it and is refused; that is a
+/// rewrite, not a lost capability.
 fn scan_table_refs(tokens: &[SqlToken], allowed: impl Fn(&str) -> bool) -> Option<TableRefusal> {
     for (i, token) in tokens.iter().enumerate() {
         if !token.keyword("FROM") && !token.keyword("JOIN") {
@@ -329,6 +424,17 @@ fn scan_table_refs(tokens: &[SqlToken], allowed: impl Fn(&str) -> bool) -> Optio
     None
 }
 
+/// Keywords that end a FROM clause, so the comma scan may stop at them.
+///
+/// Only keywords SQLite REFUSES as a table alias belong here. It accepts
+/// `offset` and `window` as aliases (checked against sqlite3 3.50.6), so listing
+/// them let `FROM messages offset, command_history c` end the scan before the
+/// comma while the engine still read both tables. Every keyword below was
+/// re-checked against sqlite3 3.50.6: each is a syntax error in the alias
+/// position. Only `SqlToken::ends_from_clause` consults this list, it requires
+/// an unquoted token, `"where"` is an identifier, not a keyword, and
+/// `scan_table_refs` additionally requires the token to stand at the FROM's own
+/// parenthesis depth.
 const FROM_CLAUSE_END: &[&str] = &[
     "WHERE",
     "GROUP",
@@ -343,6 +449,23 @@ const FROM_CLAUSE_END: &[&str] = &[
     "SET",
 ];
 
+/// The containment boundary: refuse the query if it so much as names an
+/// existing non-allowlisted table, wherever that name appears.
+///
+/// This check reads no structure, no clause, no position, no depth, because
+/// misjudging structure is what every bypass so far has exploited. A table can
+/// only be read if the SQL names it (ATTACH, WITH, comments and semicolons are
+/// refused before this point), and `sql_identifier_tokens` keeps every name the
+/// query carries, so a syntax that hides `command_history` from the FROM/JOIN
+/// scan still cannot hide it from here.
+///
+/// The price is a refusal when a VALUE spells a forbidden table EXACTLY
+/// (`WHERE title = 'settings'`). SQLite really does read a bare string as a
+/// table name in several positions, and telling those apart by position is the
+/// judgement that kept failing open; a self-describing refusal the model can
+/// rephrase around is the cheap side of that trade. A value that merely
+/// CONTAINS the name (`LIKE '%settings%'`) is a different string and passes, as
+/// do names no table in the database carries, columns, aliases, ordinary text.
 fn first_forbidden_mention(
     conn: &rusqlite::Connection,
     tokens: &[SqlToken],
@@ -369,6 +492,9 @@ fn first_forbidden_mention(
     }))
 }
 
+/// Tables `db_execute` may write to. A write may also SELECT from anything
+/// `db_query` may read, so the write scans take the union, the two lists used
+/// to be re-typed at each call site and drifted apart.
 const ALLOWED_WRITE_TABLES: &[&str] = &[
     "conversations",
     "messages",
@@ -411,6 +537,8 @@ const BLOCKED_QUERY_KEYWORDS: &[&str] = &[
     "LOAD_EXTENSION",
 ];
 
+/// The same list for `db_execute`, minus the three statements it exists to run,
+/// plus `WITH`, a CTE can name a table the FROM/JOIN scan never reaches.
 const BLOCKED_WRITE_KEYWORDS: &[&str] = &[
     "DROP",
     "TRUNCATE",
@@ -425,6 +553,14 @@ const BLOCKED_WRITE_KEYWORDS: &[&str] = &[
     "WITH",
 ];
 
+/// The whole `db_query` refusal chain, in the order the tool applies it, with
+/// `conn` supplying the schema backstop when a database is available.
+///
+/// It sits outside the tool so a test can replay the REAL chain against a real
+/// database. Every bypass this file has shipped was a divergence between what a
+/// guard read and what SQLite reads, and a test that re-implements the chain
+/// cannot see one, `guard_verdict_matches_sqlite` executes whatever this
+/// function admits and fails if a forbidden row comes back.
 fn db_query_refusal(query: &str, conn: Option<&rusqlite::Connection>) -> Option<String> {
     if query.len() > MAX_QUERY_LENGTH {
         tracing::warn!(
@@ -487,6 +623,11 @@ fn db_query_refusal(query: &str, conn: Option<&rusqlite::Connection>) -> Option<
     None
 }
 
+/// The `db_execute` chain, same contract as `db_query_refusal`. Both paths share
+/// the tokenizer, the FROM/JOIN scan and the schema backstop: the write path is
+/// a read path with an extra step, and a bypass of one has always been a bypass
+/// of the other, a write may SELECT a forbidden table into an allowlisted one
+/// the model can then read normally.
 fn db_execute_refusal(query: &str, conn: Option<&rusqlite::Connection>) -> Option<String> {
     if query.len() > MAX_QUERY_LENGTH {
         tracing::warn!(
@@ -942,6 +1083,11 @@ mod sql_tokenizer_tests {
             .collect()
     }
 
+    /// The bypasses. Each of these used to produce a token that never equalled
+    /// "FROM", so the allowlist loop skipped the table check entirely rather
+    /// than failing it, and the tool is reachable by indirect prompt
+    /// injection against `auth_sessions` (plaintext tokens), `users` (password
+    /// hashes) and `settings` (encrypted key blobs).
     #[test]
     fn finds_the_table_when_no_space_precedes_from() {
         assert_eq!(
@@ -989,12 +1135,23 @@ mod sql_tokenizer_tests {
 
     #[test]
     fn a_qualified_name_resolves_to_the_schema_so_it_fails_closed() {
+        // `main.auth_sessions` yields MAIN, which is in no allowlist. The
+        // allowlist was never written to understand qualified names, so
+        // rejecting is correct, this pins that it rejects rather than
+        // silently accepting the table half.
         assert_eq!(
             table_after_keyword("SELECT * FROM main.auth_sessions", "FROM"),
             Some("MAIN".to_string())
         );
     }
 
+    /// SQLite does NOT nest block comments, it ends at the first `*/`, so
+    /// `auth_sessions` here is live SQL. A nesting tokenizer stays inside the
+    /// comment, swallows the table name, and the scanner then finds nothing
+    /// after FROM. Combined with the old skip-on-absent behaviour that meant NO
+    /// allowlist check ran at all. Reported by an independent reviewer who
+    /// executed the query against a real sqlite3 binary rather than reasoning
+    /// about it; the seeded `auth_sessions` row came back.
     #[test]
     fn a_nested_block_comment_does_not_hide_the_table() {
         assert_eq!(
@@ -1015,6 +1172,13 @@ mod sql_tokenizer_tests {
         );
     }
 
+    /// The comma bypass. `SELECT c.command FROM messages, command_history c` is
+    /// a cross join, so SQLite reads command_history exactly as if it had been
+    /// named after FROM, but the scanner only reads the token that follows the
+    /// keyword, and the old tokenizer erased the comma, leaving the second
+    /// table invisible to the allowlist and live for the engine. Verified by an
+    /// independent reviewer against a real sqlite3 database: the direct form was
+    /// refused, the comma form returned the history row.
     #[test]
     fn a_comma_survives_tokenization_so_a_table_list_is_visible() {
         assert_eq!(
@@ -1032,6 +1196,11 @@ mod sql_tokenizer_tests {
         );
     }
 
+    /// A quoted run is kept WHOLE and wherever it stands. Erasing the runs a
+    /// lexer judged to be values is how `'command_history'` vanished from the
+    /// stream once a nested `WHERE` fooled that judgement; keeping the whole run
+    /// rather than the words inside it is what stops `'%SETTINGS%'`, a value,
+    /// not the table, from spelling a table name.
     #[test]
     fn a_quoted_run_is_kept_whole_and_is_never_erased() {
         assert_eq!(
@@ -1064,6 +1233,13 @@ mod sql_tokenizer_tests {
         );
     }
 
+    /// SQLite accepts a quoted string where a table name belongs, `'x'`,
+    /// `"x"`, `[x]` and `` `x` `` all NAME the table there. Erasing a literal's
+    /// contents therefore hid the table from the FROM/JOIN scan and from the
+    /// schema backstop while leaving it live for the engine: an independent
+    /// reviewer ran `FROM 'command_history' messages` against sqlite3 3.50.6
+    /// and got the history row back, and `FROM 'users' conversations` returned
+    /// a password hash, the exclusions the allowlist exists for.
     #[test]
     fn a_quoted_table_name_is_read_as_an_identifier() {
         for sql in [
@@ -1126,6 +1302,10 @@ mod sql_tokenizer_tests {
         );
     }
 
+    /// A quoted run can never be a keyword, whatever it spells. SQLite reads
+    /// `"where"` as an identifier, a legal table alias, so treating it as the
+    /// WHERE keyword ended the FROM-clause scan early and hid the comma that
+    /// followed, which is the whole of the round-3 bypass.
     #[test]
     fn a_quoted_run_is_a_name_and_never_a_keyword() {
         let tokens =
@@ -1146,6 +1326,12 @@ mod sql_tokenizer_tests {
         );
     }
 
+    /// `expr IN <table-name>` is a table reference in SQLite (`'x' IN 'audit'`
+    /// runs against the table, verified against sqlite3 3.50.6), while
+    /// `IN ('audit')` is an ordinary value list, and a parenthesis was the only
+    /// thing telling them apart. Both keep the name now: a guard that has to be
+    /// right about that to stay closed is a guard that fails OPEN when it is
+    /// wrong, and being wrong is the whole history of this file.
     #[test]
     fn a_literal_after_in_keeps_its_name_with_or_without_a_value_list() {
         assert!(
@@ -1189,6 +1375,10 @@ mod sql_tokenizer_tests {
         );
     }
 
+    /// An apostrophe inside a quoted IDENTIFIER is content, not the start of a
+    /// literal. A character scan desynchronized on it and erased everything
+    /// after, including the FROM clause, so NO table check ran at all, while
+    /// sqlite3 returned command_history for the same query.
     #[test]
     fn an_apostrophe_inside_a_quoted_identifier_does_not_erase_the_query() {
         for sql in [
@@ -1315,6 +1505,9 @@ mod query_allowlist_tests {
             .contains("Comma-separated table lists are not permitted"));
     }
 
+    /// `offset` and `window` are keywords SQLite accepts as table aliases, so
+    /// ending the clause scan on them let the comma, and the table after it.
+    /// slip past while the engine still read both tables.
     #[tokio::test]
     async fn db_query_refuses_a_comma_list_hidden_behind_a_keyword_alias() {
         for sql in [
@@ -1338,6 +1531,17 @@ mod query_allowlist_tests {
         }
     }
 
+    /// F26 residual, round 4. Removing `offset`/`window` from the clause-end
+    /// list was necessary but not sufficient: QUOTING re-admits every reserved
+    /// keyword as an alias, and the tokenizer used to strip the quotes and push
+    /// the bare word, so `FROM messages "where",` ended the clause scan before
+    /// the comma and the implicit-join refusal never fired. The literal naming
+    /// the second table was erased in the same pass, so the schema backstop had
+    /// nothing to match either, the guard saw one allowlisted table while
+    /// sqlite3 3.50.6 read a two-table cross join and returned the rows:
+    /// `SELECT c.command FROM messages "where", 'command_history' c` returned a
+    /// live bearer token, `... , 'users' u` a password hash, and `... ,
+    /// 'settings' s` the SEV-DESK-10 blob the exclusion exists for.
     #[tokio::test]
     async fn db_query_refuses_a_comma_list_hidden_behind_a_quoted_alias() {
         for sql in [
@@ -1387,6 +1591,18 @@ mod query_allowlist_tests {
             .contains("Comma-separated table lists are not permitted"));
     }
 
+    /// F26 residual, round 5, the shape the round-4 guard still allowed. A
+    /// clause-ending keyword placed inside a NESTED subquery (the `WHERE` of an
+    /// ON constraint, or a `GROUP BY`) cleared the tokenizer's single
+    /// non-nesting "inside a FROM clause" flag while SQLite was still reading
+    /// the OUTER table list. The comma that followed was then read as a value
+    /// comma, so the literal naming the second table was erased from the stream
+    /// and neither the implicit-join refusal nor the schema backstop had
+    /// anything to match. An independent reviewer ran these against sqlite3
+    /// 3.50.6 on a seeded database: the first returned a live bearer token from
+    /// the terminal history, and the `users`, `settings` and `auth_sessions`
+    /// variants returned a password hash, an encrypted key blob and a refresh
+    /// token, the exclusions the allowlist exists for.
     #[tokio::test]
     async fn db_query_refuses_a_comma_list_hidden_behind_a_nested_clause_keyword() {
         for sql in [
@@ -1413,6 +1629,9 @@ mod query_allowlist_tests {
         }
     }
 
+    /// The write path shares the scanner, so the same shape let the model copy
+    /// the history, or a password hash, into an allowlisted table and read it
+    /// back with an ordinary SELECT.
     #[tokio::test]
     async fn db_execute_refuses_a_comma_list_hidden_behind_a_nested_clause_keyword() {
         for sql in [
@@ -1517,6 +1736,10 @@ mod query_allowlist_tests {
             .contains("Database not available"));
     }
 
+    /// The blocked-operation scan matches a WORD. As a substring it refused
+    /// every query naming `created_at`, `updated_at` or `deleted_at`, the
+    /// timestamp columns of the very tables this tool exists to read, and of the
+    /// rows db_execute exists to write.
     #[tokio::test]
     async fn blocked_operations_match_a_word_and_not_a_column_name() {
         let readable = executor()
@@ -1661,6 +1884,13 @@ mod query_allowlist_tests {
         );
     }
 
+    /// F26 residual, round 3: removing the table from the allowlist only holds
+    /// while the guards can see the name. SQLite reads a quoted string in a
+    /// table position as the table, so `FROM 'command_history' messages` read
+    /// the removed table, and the same shape defeated the sensitive-table
+    /// exclusions, returning a password hash for
+    /// `SELECT conversations.password_hash FROM 'users' conversations` against a
+    /// real sqlite database.
     #[tokio::test]
     async fn db_query_refuses_a_table_named_by_a_quoted_string() {
         for (sql, table) in [

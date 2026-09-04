@@ -1,3 +1,18 @@
+/**
+ * ComposerFooter · deprecation advance-warning (CLR-01 / mqp-08)
+ *
+ * `deprecation_date` is a real catalog field, but its only consumer used to
+ * be `isCurrentModel()` in model-store.ts, which filters a model out of the
+ * picker entirely once the date passes, a selected model could vanish with
+ * zero warning. model-store.ts now propagates a still-future date onto
+ * `AIModel.deprecationDate`; this file verifies ComposerFooter's row
+ * renderer actually surfaces it as a "Leaving on <date>" badge ahead of the
+ * deadline (matching ChatGPT's in-picker countdown), and stays silent
+ * outside the warning window or when the field is absent.
+ *
+ * Follows the mocking pattern established by ComposerFooter.env-gating.test.tsx.
+ */
+
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import React from 'react';
@@ -42,6 +57,7 @@ vi.mock('@shared/stores/model-store', () => ({
     return selector(state);
   },
   AVAILABLE_MODELS: [
+    // No deprecationDate at all, must show no badge.
     {
       id: 'fixture-live-model',
       name: 'Live Model',
@@ -49,6 +65,7 @@ vi.mock('@shared/stores/model-store', () => ({
       providerKey: 'openai',
       description: 'No scheduled retirement',
     },
+    // Within the 30-day warning window, must show the badge.
     {
       id: 'fixture-near-deprecation-model',
       name: 'Sunsetting Model',
@@ -57,6 +74,7 @@ vi.mock('@shared/stores/model-store', () => ({
       description: 'Retiring soon',
       deprecationDate: nearDeprecationDate,
     },
+    // Scheduled, but outside the warning window, must show no badge yet.
     {
       id: 'fixture-far-deprecation-model',
       name: 'Far Future Model',
@@ -200,6 +218,7 @@ describe('ComposerFooter · deprecation advance-warning (CLR-01 / mqp-08)', () =
     expect(row.getAttribute('aria-label')).toBe(
       `Sunsetting Model - Leaving on ${expectedFullLabel}`,
     );
+    // Still fully selectable, the warning is informational, not a lock.
     expect(row).not.toBeDisabled();
   });
 

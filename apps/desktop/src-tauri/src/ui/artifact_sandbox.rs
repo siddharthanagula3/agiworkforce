@@ -1,3 +1,52 @@
+//! `artifact://`, a dedicated origin for artifact previews inside the desktop app.
+//!
+//! # Why this exists (DES-C15, second half)
+//!
+//! Artifact previews used to render as `<iframe srcDoc=…>`. An `about:srcdoc`
+//! document **inherits** the embedder's Content-Security-Policy, and the packaged
+//! app ships `script-src 'self' 'wasm-unsafe-eval'`
+//! (`apps/desktop/src-tauri/tauri.conf.json`). The artifact's own permissive
+//! `<meta>` policy can only *intersect* with the inherited one, never widen it.
+//! so an interactive HTML artifact rendered its markup and then did nothing, and
+//! a React artifact rendered nothing at all. That affects Local as much as Cloud
+//! and is the "preview shows nothing" report.
+//!
+//! Web never had the problem because it renders artifacts on a **separate
+//! origin**: `NEXT_PUBLIC_SANDBOX_ORIGIN` + `infrastructure/sandbox/index.html`,
+//! driven by `apps/web/features/chat/components/SandboxedIframe.tsx`. A
+//! cross-origin document does not inherit the parent policy.
+//!
+//! This module gives desktop the same thing without a network dependency: the
+//! **same renderer file**, compiled into the binary and served from a dedicated
+//! URI scheme. Tauri maps that scheme to
+//!
+//! - macOS / Linux / iOS: `artifact://localhost/`
+//! - Windows / Android:   `http://artifact.localhost/`
+//!
+//! Either way it is a different origin from `tauri://localhost`, so the renderer
+//! runs under its own policy, the one in the file's `<meta>` tag, which we also
+//! echo as a real response header.
+//!
+//! # Security envelope
+//!
+//! - The served policy is **read out of the renderer file itself** at startup
+//!   (see [`RENDERER_CSP`]), so the header and the `<meta>` can never drift. If
+//!   the meta is ever removed, this handler serves `500` instead of serving an
+//!   unprotected renderer.
+//! - `connect-src 'none'` in that policy is the egress block: scripts inside an
+//!   artifact cannot `fetch`/XHR/WebSocket anywhere, including back to the app.
+//! - The renderer is cross-origin to `tauri://localhost`, so artifact scripts
+//!   cannot read the app's DOM, `localStorage`, or IPC bridge.
+//! - `frame-ancestors` is deliberately **not** sent. `artifact://localhost` is
+//!   only reachable from inside this binary's own webviews (the scheme handler is
+//!   registered on the app's webview configuration), so the directive would add
+//!   no protection while risking a hard framing failure whenever the app's own
+//!   origin differs from a hard-coded list (dev server, WDIO build, Windows).
+//!   The app side of the boundary is enforced by `frame-src` in
+//!   `tauri.conf.json`, which is the directive that actually decides what this
+//!   app is allowed to embed.
+//! - Only `GET /` (and `/index.html`) is served. Every other path 404s, so the
+//!   scheme cannot be turned into a general file reader.
 
 use std::sync::LazyLock;
 
@@ -21,6 +70,11 @@ pub const ARTIFACT_SANDBOX_SCHEME: &str = "artifact";
 /// dependency, so editing it rebuilds this crate.
 const RENDERER_HTML: &str = include_str!("../../../../../infrastructure/sandbox/index.html");
 
+/// The renderer's own Content-Security-Policy, extracted from its `<meta>` tag.
+///
+/// `None` means the file no longer carries a policy, a state in which serving
+/// the renderer would run model-generated code unprotected, so the handler
+/// refuses instead.
 static RENDERER_CSP: LazyLock<Option<String>> = LazyLock::new(|| extract_meta_csp(RENDERER_HTML));
 
 /// Collapse a CSP into one canonical line: single-spaced directives joined by
@@ -111,6 +165,11 @@ pub fn artifact_sandbox_response(request: &Request<Vec<u8>>) -> Response<Vec<u8>
         .expect("artifact renderer response is always well-formed")
 }
 
+/// Register the `artifact://` scheme on the app builder.
+///
+/// Must be called before the webviews are created (i.e. on the `Builder`, not in
+/// `setup`), Tauri wires URI scheme handlers into the webview configuration at
+/// creation time.
 #[must_use]
 pub fn register_artifact_sandbox_protocol<R: Runtime>(builder: Builder<R>) -> Builder<R> {
     builder.register_uri_scheme_protocol(
@@ -161,10 +220,14 @@ mod tests {
         assert!(csp.contains("default-src 'none'"));
         // The egress block. Artifact scripts must not be able to phone home.
         assert!(csp.contains("connect-src 'none'"));
+        // `frame-src 'self'` (never a remote origin), the renderer mounts HTML
+        // artifacts in a same-origin `srcdoc` frame so they load as real
+        // documents. That frame inherits this very policy, egress block included.
         assert!(csp.contains("frame-src 'self'"));
         assert!(csp.contains("object-src 'none'"));
         assert!(csp.contains("base-uri 'none'"));
         assert!(csp.contains("form-action 'none'"));
+        // Collapsed onto one line, no stray newlines from the multi-line meta.
         assert!(!csp.contains('\n'));
     }
 

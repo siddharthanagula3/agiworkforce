@@ -167,6 +167,7 @@ function encodingInfo(label: string): Buffer {
   ]);
 }
 
+/** RFC 8291 §3.4 to aes128gcm single-record body for a push message. */
 function encryptPayload(
   plaintext: Buffer,
   clientPublicKey: Buffer,
@@ -208,6 +209,7 @@ function encryptPayload(
   return Buffer.concat([header, serverPublicKey, ciphertext]);
 }
 
+/** RFC 8292 §2, the signed token that authorises this server to the push service. */
 function vapidAuthorization(endpoint: string, vapid: VapidCredentials): string {
   const header = base64UrlEncode(Buffer.from(JSON.stringify({ typ: 'JWT', alg: 'ES256' }), 'utf8'));
   const claims = base64UrlEncode(
@@ -301,6 +303,15 @@ async function deliverOne(
   }
 }
 
+/**
+ * Mirrors `sendPushToUser`'s discipline: it never throws, never lets one dead
+ * registration stall the rest, and removes a registration the push service says
+ * is gone, an endpoint that is not pruned is retried on every future run.
+ *
+ * Only `message.title`, `message.body` and `message.data` cross the wire, and
+ * the caller is responsible for keeping task output out of them: this payload
+ * is rendered on a locked screen.
+ */
 export async function sendWebPushToUser(
   userId: string,
   message: PushMessage,

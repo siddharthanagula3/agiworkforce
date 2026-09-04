@@ -55,6 +55,10 @@ function hsl(h: number, s: number, l: number): Rgb {
   return [f(0), f(8), f(4)].map((v) => Math.round(v * 255)) as Rgb;
 }
 
+// Mirrors the :root (light) and .dark token blocks in app/globals.css. The
+// palette is light-first there and the palette this component renders is
+// entirely semantic, so every label has to clear AA under BOTH maps, a
+// dark-only check is exactly how `text-white` on `bg-white/10` used to pass.
 type ThemeName = 'light' | 'dark';
 
 const THEME_TOKENS: Record<ThemeName, Record<string, Rgb>> = {

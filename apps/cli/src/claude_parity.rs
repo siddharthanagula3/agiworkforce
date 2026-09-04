@@ -148,6 +148,12 @@ pub fn handle_shared_command(
             ParityCommandResult::SystemMessage(handle_privacy_mode(session, arg))
         }
         "/continue-with-byok" | "/fork-byok" | "/byok" => {
+            // Draft ONLY, this must NOT flip the session out of Local here. Flipping
+            // at draft time leaked the trust boundary: an unrelated later message
+            // would silently route to BYOK even if the user never sent the reviewed
+            // draft. The Local→BYOK transition is gated on the user actually SENDING
+            // this reviewed draft (the consent moment); arming records that intent so
+            // the send path can complete the handoff and disclose it.
             let draft = continue_with_byok_draft(session, arg);
             match session.arm_byok_handoff(&draft) {
                 Ok(()) => ParityCommandResult::DraftPrompt {
@@ -776,6 +782,11 @@ pub fn render_advisor(arg: &str) -> String {
     )
 }
 
+/// Path this command reads a team's onboarding guide from.
+///
+/// It used to read `$HOME/.claude/`, which is Claude Code's directory, not
+/// ours, so on a machine with both installed AGI rendered a file it does not
+/// own, and on every other machine it named a path nothing would ever create.
 fn team_onboarding_path() -> Option<std::path::PathBuf> {
     crate::config::CliConfig::config_dir()
         .ok()
@@ -1302,6 +1313,7 @@ mod tests {
             let _ = handle_shared_command(command, "test", &mut session);
         }
 
+        // Also call the install renderer directly, it must not open either.
         for app in ["GitHub", "Slack", "github", "slack"] {
             let _ = render_install_app(app);
         }
@@ -1339,6 +1351,14 @@ mod tests {
         }
     }
 
+    /// `/chrome` is the CLI's only statement about browser control, so it must
+    /// not sell one. The CLI registers no browser tool (`features/exec/tools`
+    /// is bash/files/dirs/git/web) and no `--chrome` flag; page actions run in
+    /// the Chrome extension against the Desktop app's
+    /// `com.agiworkforce.browser` native-messaging host
+    /// (`apps/desktop/src-tauri/src/integrations/native_messaging/manifest.rs`).
+    /// The copy must therefore name the real owner and the real source path.
+    /// `apps/extension`, not the VS Code extension.
     #[test]
     fn chrome_command_does_not_claim_the_cli_can_drive_a_browser() {
         let message = render_chrome();

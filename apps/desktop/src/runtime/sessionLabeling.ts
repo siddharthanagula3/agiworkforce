@@ -1,3 +1,47 @@
+/**
+ * Desktop session labeling: the stage-2 consumer wiring for
+ * `@agiworkforce/types`'s session-taxonomy and ExecutionProfile contracts
+ * (packages/contracts/types/src/sessions/). Purely additive: this module LABELS the
+ * runtime's existing Local/BYOK/Cloud decisions with the shared contracts and
+ * asserts they agree with what the runtime actually wires, it does not
+ * change which runtime gets selected, what gets persisted, or any existing
+ * control flow.
+ *
+ * Two integration points, matching the dispatch's "persistence/bootstrap
+ * boundary" framing:
+ *
+ *   1. Composition-root agreement check (`createDesktopChatRuntimeWithLabeling`,
+ *      wraps `createDesktopChatRuntime` without modifying it): coarse
+ *      toggle-vs-concrete-class check. No per-session fields exist yet at
+ *      this point, so this checks ONLY that the ExecutionProfile implied by
+ *      the resolved (isTauriHost, appMode) pair agrees with which runtime
+ *      class was actually returned, e.g. a `local` profile must never
+ *      resolve to `CloudRuntime` (the only desktop runtime that calls the
+ *      cloud persistence client).
+ *   2. Per-conversation session labeling (`labelDesktopSession`, called from
+ *      `TauriRuntime.ensureBackendConversation` and
+ *      `CloudRuntime.createConversation`): builds the real `AppSession`
+ *      record for the conversation being created and asserts its invariants.
+ *
+ * Both assertion paths are gated on `import.meta.env.DEV` (verified true
+ * under this app's vitest run) so a violation fails loudly in dev/tests
+ * without adding a new production failure mode, production session flow is
+ * byte-for-byte unchanged. Enforcement of the trust boundary itself
+ * continues to live where it already does (runtime selection in
+ * `desktopChatRuntime.ts`, the egress chokepoint in cloud persistence); this
+ * module only checks that the label agrees with that enforcement.
+ *
+ * KNOWN GAP (flag for review, not papered over): `policySnapshot`'s
+ * `capabilityPolicyVersion` / `permissionPolicyVersion` are explicit,
+ * clearly-named placeholders (`'unversioned-pending-capability-handshake'`),
+ * not real version data, the W5 item-3 capability/permission handshake
+ * (`packages/contracts/types/src/capability-handshake/`, sibling-owned) is not
+ * consumed on desktop yet. Do not read these values as evidence a handshake
+ * ran; replace them with the real handshake output once desktop consumes it.
+ *
+ * @module runtime/sessionLabeling
+ */
+
 import type { ChatExecutionMode } from '@agiworkforce/types';
 import {
   assertExecutionProfile,

@@ -1,4 +1,4 @@
-const ANY_EM_DASH = /—|&mdash;|&#8212;|&#x2014;/gi;
+const ANY_EM_DASH = /\u2014|&mdash;|&#8212;|&#x2014;/gi;
 
 export function findEmDashes(source, file) {
   const results = [];

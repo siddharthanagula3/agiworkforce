@@ -4,6 +4,13 @@ import userEvent from '@testing-library/user-event';
 
 import { VideoGenerationPlaceholder } from '../VideoGenerationPlaceholder';
 
+/**
+ * /api/media/video/cancel was fully implemented, tested, and called by nothing.
+ * A video runs as a durable background job, so the composer's Stop button.
+ * driven by the SSE chat stream, never appears for it. There was no way to
+ * stop a generation at all.
+ */
+
 vi.mock('@/lib/client/csrf', () => ({
   addCsrfHeaders: async (headers: Record<string, string>) => headers,
 }));

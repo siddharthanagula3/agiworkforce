@@ -1,3 +1,21 @@
+// C8, BackgroundAgent unit tests.
+//
+// `BackgroundAgentManager` requires an `AppHandle` (Tauri runtime) so it
+// cannot be instantiated in a unit test.  We test everything that CAN be
+// constructed without the runtime:
+//
+//  * `BackgroundAgentStatus`, enum variants, `Display`, `From<&str>`
+//  * `AgentProgress`, `Default` and manual construction
+//  * `AgentSummary`, `Default` and manual construction
+//  * `BackgroundAgentContext`, `Default` and manual construction
+//  * `ConversationMessage`, construction and field access
+//  * `BackgroundAgent::new()`, factory method (no manager needed)
+//  * `BackgroundAgent::is_terminal()` / `can_resume()`, pure predicate methods
+//  * `BackgroundAgent` mutation methods: `start`, `complete`, `fail`, `cancel`,
+//    `pause`, `take_over`, `update_progress`
+//  * Serde JSON round-trips for all public structs
+//  * `AgentCommand` enum construction
+//  * Module-level constants: `MAX_BACKGROUND_AGENTS`, `DEFAULT_AGENT_TIMEOUT_SECS`
 #[cfg(test)]
 mod tests {
     use crate::core::agent::background_agent::{
@@ -21,6 +39,9 @@ mod tests {
         assert_eq!(DEFAULT_AGENT_TIMEOUT_SECS, 86_400);
     }
 
+    // ------------------------------------------------------------------
+    // BackgroundAgentStatus, Display
+    // ------------------------------------------------------------------
 
     #[test]
     fn test_status_display_queued() {
@@ -57,6 +78,9 @@ mod tests {
         assert_eq!(BackgroundAgentStatus::TakenOver.to_string(), "taken_over");
     }
 
+    // ------------------------------------------------------------------
+    // BackgroundAgentStatus, From<&str>
+    // ------------------------------------------------------------------
 
     #[test]
     fn test_status_from_str_queued() {
@@ -163,6 +187,9 @@ mod tests {
         );
     }
 
+    // ------------------------------------------------------------------
+    // BackgroundAgentStatus, Serde JSON
+    // ------------------------------------------------------------------
 
     #[test]
     fn test_status_serde_roundtrip_all_variants() {
@@ -425,6 +452,9 @@ mod tests {
         assert_eq!(back.content, "You are a helpful assistant.");
     }
 
+    // ------------------------------------------------------------------
+    // BackgroundAgent::new(), factory method
+    // ------------------------------------------------------------------
 
     #[test]
     fn test_background_agent_new_sets_queued_status() {
@@ -814,6 +844,9 @@ mod tests {
         assert_eq!(agent.progress.current_step_description, "Seventh");
     }
 
+    // ------------------------------------------------------------------
+    // BackgroundAgent, full lifecycle sequence
+    // ------------------------------------------------------------------
 
     #[test]
     fn test_full_lifecycle_queued_to_completed() {
@@ -916,6 +949,9 @@ mod tests {
         assert!(agent.completed_at.is_some());
     }
 
+    // ------------------------------------------------------------------
+    // BackgroundAgent, Serde JSON roundtrip
+    // ------------------------------------------------------------------
 
     #[test]
     fn test_background_agent_serde_roundtrip() {
@@ -970,6 +1006,9 @@ mod tests {
         assert!(back.summary.is_none());
     }
 
+    // ------------------------------------------------------------------
+    // AgentCommand enum, construction
+    // ------------------------------------------------------------------
 
     #[test]
     fn test_agent_command_pause_is_constructable() {

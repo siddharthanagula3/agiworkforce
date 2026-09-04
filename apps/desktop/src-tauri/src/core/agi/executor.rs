@@ -21,6 +21,16 @@ use std::sync::Arc;
 
 const AGI_TOOL_CONFIRMATION_TIMEOUT_SECS: u64 = 120;
 
+/// Ask the user before a planned tool call runs.
+///
+/// The autonomous loop plans from LLM output that untrusted content the agent
+/// read can steer, so it must clear the same human-in-the-loop gate the chat
+/// tool path clears in `core::llm::tool_executor::check_safety_tier_and_confirm`:
+/// the app-managed [`ToolConfirmationState`], its agent-mode gate, its stored
+/// choices, and its confirmation dialog. Fails closed when that state is not
+/// managed, an unanswerable prompt is a refusal, not a pass.
+///
+/// Generic over the runtime so `tauri::test::mock_app()` can drive the gate.
 pub(crate) async fn require_tool_approval<R: tauri::Runtime>(
     app_handle: &tauri::AppHandle<R>,
     tool_name: &str,
@@ -507,6 +517,9 @@ impl AGIExecutor {
         ))
         .await;
 
+        // Security validation, through the app-managed guard when there is
+        // one, so rate limits and allowed paths are shared with the chat tool
+        // path instead of being counted twice against two private guards.
         let params_json = serde_json::to_value(parameters)?;
         let validation = {
             use tauri::Manager;
@@ -674,6 +687,7 @@ impl AGIExecutor {
                 tool_name
             )),
 
+            // Common file operation aliases, redirect to the registered FileExecutor
             "read_file" | "read" | "file_read" | "open_file" => {
                 tracing::info!(
                     "[Executor] Tool '{}' is a file operation alias. Use 'file_read' via the \
@@ -702,6 +716,7 @@ impl AGIExecutor {
                 ))
             }
 
+            // Common shell/terminal aliases, redirect to the registered TerminalExecutor
             "shell_execute" | "shell" | "bash" | "run_command" | "exec" | "terminal" => {
                 tracing::info!(
                     "[Executor] Tool '{}' is a terminal alias. Use 'terminal_execute' via the \
@@ -715,6 +730,7 @@ impl AGIExecutor {
                 ))
             }
 
+            // Common code analysis aliases, redirect to the registered CodeExecutor
             "analyze_code" | "code_analysis" | "lint" => {
                 tracing::info!(
                     "[Executor] Tool '{}' is a code analysis alias. Use 'code_analyze' via the \
@@ -729,6 +745,7 @@ impl AGIExecutor {
                 ))
             }
 
+            // Common web/API aliases, redirect to the registered ApiExecutor
             "http_request" | "fetch" | "web_request" | "api_request" => {
                 tracing::info!(
                     "[Executor] Tool '{}' is an API alias. Use 'api_call' via the \
@@ -1253,6 +1270,9 @@ mod tests {
         assert_eq!(result, "step_1");
     }
 
+    // CLAUDE-SECURITY F4, the autonomous loop dispatched every planned tool
+    // call, including terminal/file/db/email/deploy actions, with no human
+    // decision anywhere between the planner's JSON and the executor.
     mod approval_gate {
         use super::*;
         use crate::sys::commands::tool_confirmation::AgentMode;

@@ -2,6 +2,14 @@ import { act, fireEvent, render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { WebAppShell } from './WebAppShell';
 
+/**
+ * WEB-APPSHELL-MOBILE-SIDEBAR-01, at narrow viewports the shell must not
+ * keep the persistent ~260px sidebar beside the content (it reduced every
+ * secondary route to a clipped strip on phones). Narrow viewports get a
+ * compact header with an "Open navigation" control and a modal drawer;
+ * desktop keeps the persistent sidebar.
+ */
+
 const routerState = vi.hoisted(() => ({
   push: vi.fn(),
   pathname: '/chat/projects',
@@ -73,6 +81,9 @@ vi.mock('@features/billing/hooks/use-upgrade-plan-flow', () => ({
   useUpgradePlanFlow: () => ({ openUpgradeDialog: vi.fn(), upgradeDialogs: null }),
 }));
 
+// Same reasoning as the upgrade flow above, the shortcuts reference dialog
+// pulls in the settings store's shortcut-preference wiring, which this
+// layout test has no reason to stand up.
 vi.mock('@/features/chat/components/dialogs/KeyboardShortcutsDialog', () => ({
   KeyboardShortcutsDialog: () => null,
 }));
@@ -164,6 +175,11 @@ vi.mock('@agiworkforce/ui', async () => {
     SheetTitle: ({ children }: { children?: React.ReactNode }) => <>{children}</>,
     DropdownMenu: ({ children }: { children?: React.ReactNode }) => <>{children}</>,
     DropdownMenuTrigger: ({ children }: { children?: React.ReactNode }) => <>{children}</>,
+    // Content and items render their children rather than returning null. The
+    // stub used to swallow both, which meant nothing inside the account menu
+    // could be asserted on, including whether the product offers any route to
+    // its own policies. `asChild` is accepted and ignored; the child is already
+    // the element we want in the tree.
     DropdownMenuContent: ({ children }: { children?: React.ReactNode }) => <>{children}</>,
     DropdownMenuItem: ({ children }: { children?: React.ReactNode }) => <>{children}</>,
     DropdownMenuLabel: () => null,
@@ -466,6 +482,12 @@ describe('WebAppShell responsive navigation', () => {
     }
   });
 
+  /**
+   * SHELL-NAV-IA-006: the chat shell offered free-tier users a "Free plan /
+   * Upgrade" pill and an Upgrade badge in the account footer; this lighter
+   * shell (/tasks, /chat/library, /chat/projects, /chat/schedules) rendered
+   * neither, so leaving /chat removed the only in-product upgrade route.
+   */
   it('free tier: offers the upgrade nudge and routes it to billing', () => {
     render(
       <WebAppShell>
@@ -494,6 +516,9 @@ describe('WebAppShell responsive navigation', () => {
   });
 
   it('unknown plan (401 from /api/me): claims no tier and sells no upgrade', async () => {
+    // The 401 path clears `subscription`, sets `initialized` and records no
+    // error, the exact state a `?? 'free'` fallback turns into an upgrade
+    // pitch aimed at a paying subscriber.
     shellState.billing.subscription = null;
     shellState.billing.unauthenticated = true;
     const { getBillingPlanPricing } = await import('@agiworkforce/types');

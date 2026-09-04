@@ -16,16 +16,26 @@
 #[cfg(target_os = "windows")]
 #[cfg(test)]
 mod windows_compat_tests {
+    // -----------------------------------------------------------------------
+    // Imports, every import below is used by at least one test.
+    // The project's Cargo.toml denies dead_code and unused_imports, so each
+    // import must be reachable from the test code.
+    // -----------------------------------------------------------------------
     use std::path::{Path, PathBuf};
 
+    // dirs crate, resolves XDG / Windows shell directories
     use dirs;
 
+    // which crate, executable lookup on PATH
     use which;
 
+    // sysinfo, OS name / version detection
     use sysinfo::System;
 
+    // arboard, cross-platform clipboard
     use arboard::Clipboard;
 
+    // xcap, cross-platform screen capture
     use xcap::Monitor;
 
     // AES-GCM encryption (same crate the app uses in encryption.rs)
@@ -35,6 +45,7 @@ mod windows_compat_tests {
         Aes256Gcm, Key, Nonce,
     };
 
+    // rusqlite, in-memory DB (same as SecretManager tests)
     use rusqlite::Connection;
     use std::sync::{Arc, Mutex};
 
@@ -101,6 +112,7 @@ mod windows_compat_tests {
 
     #[test]
     fn test_forward_slash_path_accepted_by_path() {
+        // Path accepts forward slashes on Windows, they are normalised.
         let p = Path::new("C:/Users/test");
         // Path::new must not panic.
         assert!(!p.as_os_str().is_empty());
@@ -114,6 +126,8 @@ mod windows_compat_tests {
             "Temp directory should exist: {}",
             tmp.display()
         );
+        // On Windows the temp dir is usually under %USERPROFILE%\AppData\Local\Temp
+        // or %SystemRoot%\TEMP, both are valid.
         assert!(tmp.is_dir(), "Temp path should be a directory");
     }
 
@@ -501,6 +515,7 @@ mod windows_compat_tests {
                     );
                 }
                 Err(_) => {
+                    // Not all CI environments have System32 on PATH, acceptable.
                 }
             }
         }
@@ -512,6 +527,8 @@ mod windows_compat_tests {
 
     #[test]
     fn test_cfg_target_os_windows_is_true() {
+        // This module is only compiled on Windows, so this is always true.
+        // but it also exercises the compile-time cfg path.
         assert!(
             cfg!(target_os = "windows"),
             "cfg!(target_os = \"windows\") must be true inside this module"
@@ -813,6 +830,7 @@ mod windows_compat_tests {
             .expect("set_text failed");
         clipboard.clear().expect("clear() failed");
 
+        // After clear, get_text may error (no text) or return empty, either is correct.
         match clipboard.get_text() {
             Ok(s) => assert!(
                 s.is_empty(),
@@ -931,7 +949,7 @@ mod windows_compat_tests {
             (r"C:\Windows\System32\node.exe", true),
             (r"D:\tools\uvx.exe", true),
             ("C:/tools/npx.cmd", true),        // forward slash variant
-            ("npx", false),
+            ("npx", false),                    // bare name, not absolute
             ("./bin/node", false),             // relative
             (r"\\server\share\bin.exe", true), // UNC
         ];
@@ -999,6 +1017,9 @@ mod windows_compat_tests {
         assert_eq!(candidates.len(), 5);
     }
 
+    // ===================================================================
+    // COMMAND VALIDATOR, WINDOWS-SPECIFIC INTEGRATION CHECKS
+    // ===================================================================
 
     #[test]
     fn test_windows_dir_command_is_safe() {
@@ -1045,6 +1066,9 @@ mod windows_compat_tests {
         assert!(validate_command("powershell -enc SomePayload==", &cfg).is_err());
     }
 
+    // ===================================================================
+    // SETTINGS MODELS, WINDOWS-SPECIFIC DEFAULTS
+    // ===================================================================
 
     #[test]
     fn test_app_settings_default_schema_version() {

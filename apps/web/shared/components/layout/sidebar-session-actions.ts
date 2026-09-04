@@ -1,3 +1,13 @@
+/**
+ * Confirmation copy for the sidebar's destructive session/project actions.
+ *
+ * WebChatPage and WebAppShell each mount their own Sidebar with their own
+ * handlers, and both dialogs were hand-matched strings with nothing enforcing
+ * sameness (duplication/chat-shells.md Finding 2, the sibling nav-items array
+ * had already drifted under exactly this pattern, which is why
+ * `app-nav-items.ts` exists). One definition, two call sites.
+ */
+
 export interface DestructiveConfirmCopy {
   title: string;
   description: string;
@@ -30,6 +40,12 @@ export function conversationDeleteConfirm(title: string | null | undefined) {
   } satisfies DestructiveConfirmCopy;
 }
 
+/**
+ * WEB-130: DELETE /api/projects/[id] stamps `deleted_at` on the project, moves
+ * its conversations out, and soft-deletes its knowledge files while erasing the
+ * stored source bytes, so the sources genuinely go, but the project row itself
+ * is retained rather than erased, which is why nothing here promises a purge.
+ */
 export function projectDeleteConfirm(name: string | null | undefined) {
   return {
     title: 'Delete project?',

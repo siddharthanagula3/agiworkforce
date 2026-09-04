@@ -73,6 +73,8 @@ struct SubagentEntry {
     description: String,
     status: Arc<RwLock<SubagentStatus>>,
     result: Arc<RwLock<Option<SubagentResult>>>,
+    /// OS thread handle, each subagent gets its own tokio runtime on a
+    /// dedicated thread, avoiding the `Send` constraint of `tokio::spawn`.
     handle: Option<thread::JoinHandle<()>>,
     /// Shared cancellation flag polled by the subagent.
     /// Set by cancel() and checked by the spawned thread.
@@ -410,6 +412,7 @@ impl SubagentManager {
             // status between our read and write.
             let mut status = entry.status.write().await;
             if matches!(*status, SubagentStatus::Running) {
+                // Signal cancellation, the thread will check this flag.
                 entry
                     .cancelled
                     .store(true, std::sync::atomic::Ordering::Release);
@@ -433,6 +436,19 @@ impl SubagentManager {
         }
     }
 
+    /// Wait for all running subagents to complete. Returns a summary.
+    ///
+    /// Polls `is_finished` and yields between rounds rather than blocking on
+    /// `join`, so this stays an await point. The app-server holds the session
+    /// mutex across `AgentSession::send`, and `interrupt_turn`/`shutdown` need
+    /// that mutex to reach `shutdown_all`, the call that sets the cancel flags
+    /// these threads are waiting on. A blocking join here gives `abort` nothing
+    /// to land on, so the turn task keeps the mutex, the teardown blocks on it,
+    /// and neither side can advance.
+    ///
+    /// A handle is taken only once its thread has finished, so a cancelled
+    /// `wait_all` leaves every unfinished handle in `entries` for a later
+    /// `shutdown_all` to join instead of detaching the thread.
     pub async fn wait_all(&self) -> Vec<(String, SubagentStatus)> {
         loop {
             let finished: Vec<(String, thread::JoinHandle<()>)> = {
@@ -570,6 +586,11 @@ async fn run_subagent(
     );
     tokio::pin!(send_fut);
 
+    // Race the turn against cancellation. If `cancel()` (or the parent's
+    // timeout) sets the flag, the cancel branch wins and `send_fut` is dropped
+    // on return, which aborts the in-flight provider request, so a cancelled
+    // subagent actually stops generating instead of running its turn (and any
+    // in-flight tool side effects) to completion.
     let result = tokio::select! {
         biased;
         () = wait_until_cancelled(cancelled) => {
@@ -597,6 +618,7 @@ async fn wait_until_cancelled(flag: &std::sync::atomic::AtomicBool) {
 /// (a `__modified_files` key in the last line), then falls back to regex
 /// pattern matching against tool output messages.
 fn extract_modified_files(output: &str) -> Vec<String> {
+    // Try structured JSON first, subagents can emit a trailing metadata line
     for line in output.lines().rev().take(5) {
         let trimmed = line.trim();
         if trimmed.starts_with('{') && trimmed.contains("__modified_files") {

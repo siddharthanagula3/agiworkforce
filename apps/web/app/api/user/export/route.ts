@@ -544,6 +544,10 @@ async function collectUserData(
   });
   exportData['project_knowledge_files'] = projectKnowledgeFiles;
 
+  // Files the user uploaded and media generated for them. Absent from this
+  // export until 2026-08-21, while account erasure has always deleted them.
+  // so the product could destroy this category of personal data on request but
+  // could not show it, which is half of a data-subject access right.
   const mediaAssets = await queryExportRows({
     db,
     sql: `select id, kind, mime_type, byte_size, storage_url, prompt, provider, model,

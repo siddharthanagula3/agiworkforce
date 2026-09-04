@@ -1,3 +1,12 @@
+/**
+ * LLM constants for web: consumes the generated compatibility catalog.
+ *
+ * Canonical authoring lives in packages/ai/model-registry/catalog. Its compiler
+ * emits packages/contracts/types/src/models.json, re-exported as `modelsCatalogJson` from
+ * @agiworkforce/types.
+ * This file imports it and re-exports with the same API as the desktop shim.
+ */
+
 import { FREE_TRIAL_MODEL } from '@/lib/free-trial-config';
 import {
   canAccessManualModelSelection as canAccessCatalogManualModelSelection,

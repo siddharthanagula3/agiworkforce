@@ -1,4 +1,13 @@
 #!/bin/bash
+# AGI Workforce CLI, Install Script
+# Usage: curl -fsSL https://agiworkforce.com/install.sh | bash
+#
+# Options:
+#   --version VERSION    Install a specific version (default: latest)
+#   --no-modify-path     Skip adding to PATH
+#   --install-dir DIR    Custom install directory (default: ~/.agi/bin)
+#
+# Requires `cosign` to verify the release workflow's keyless Sigstore signature.
 
 set -euo pipefail
 
@@ -116,6 +125,7 @@ download_binary() {
   fi
 
   # release-cli.yml produces archives named agiworkforce-{platform}.{ext}
+  # (no version in filename, version is in the tag/path). Match that.
   local filename="${ARCHIVE_BASENAME}-${platform}.${ext}"
   local url="https://github.com/${GITHUB_REPO}/releases/download/${version}/${filename}"
   local checksums_url="https://github.com/${GITHUB_REPO}/releases/download/${version}/SHA256SUMS"

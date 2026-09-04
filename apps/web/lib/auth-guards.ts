@@ -43,6 +43,17 @@ export async function requireAdmin(request: NextRequest): Promise<AuthResult> {
   return authResult;
 }
 
+/**
+ * Require a platform operator: a Clerk user id on the `AGI_PLATFORM_ADMIN_USER_IDS`
+ * allowlist. Use this, never `requireAdmin`, for surfaces that reach across
+ * tenants, since the org `admin`/`owner` role is self-service.
+ *
+ * A caller who is not on the allowlist gets 404, not 403: the existence of the
+ * operator surface is itself not something a customer admin should be able to
+ * confirm.
+ *
+ * @throws {AppError} 401 if not authenticated, 404 if not a platform operator
+ */
 export async function requirePlatformAdmin(request: NextRequest): Promise<AuthResult> {
   const authResult = await getClerkAuthUser(request);
   const allowlist = process.env[PLATFORM_ADMIN_ENV_VAR];

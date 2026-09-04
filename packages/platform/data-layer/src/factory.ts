@@ -1,3 +1,38 @@
+/**
+ * @file factory.ts
+ * @module @agiworkforce/data-layer/factory
+ *
+ * # Factory functions, pick an adapter from config or env
+ *
+ * Feature code never imports a concrete adapter. It calls one of the
+ * `create*Client()` functions, which read either an explicit config
+ * argument or the process environment, and return the right adapter.
+ *
+ * Switching database providers becomes a one-line env change, but the current
+ * product default is Neon for database and Clerk for auth:
+ *
+ * ```bash
+ * AGI_DATABASE_PROVIDER=neon
+ * AGI_DATABASE_URL=postgresql://...neon.tech/db?sslmode=require
+ * AGI_AUTH_PROVIDER=clerk
+ * ```
+ *
+ * ## Env vars consumed
+ *
+ * | Env var                            | Default       | Used by      |
+ * |------------------------------------|---------------|--------------|
+ * | `AGI_DATABASE_PROVIDER`            | `neon`        | DB factory   |
+ * | `AGI_AUTH_PROVIDER`                | `clerk`       | Auth factory |
+ * | `AGI_STORAGE_PROVIDER`             | explicit only | Storage      |
+ * | `AGI_REALTIME_PROVIDER`            | explicit only | Realtime     |
+ * | `AGI_DATABASE_URL` / `DATABASE_URL`|, | Neon DB      |
+ * | `CLERK_JWT_KEY` / `CLERK_SECRET_KEY`|, | Clerk auth   |
+ * | `CLERK_AUTHORIZED_PARTIES`          | app origin    | Clerk auth   |
+ *
+ * Defaults are fail-closed for anything that is not implemented on the
+ * Clerk + Neon platform boundary.
+ */
+
 import {
   type AuthAdapter,
   type DatabaseAdapter,

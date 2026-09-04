@@ -91,6 +91,9 @@ test.describe('enterprise buyer surface', () => {
       expect(response, `${route} produced no response`).not.toBeNull();
       expect(response!.status(), `${route} HTTP status`).toBeLessThan(400);
 
+      // Wait for rendered content, not just a parsed document. Reading
+      // innerText at domcontentloaded returns the pre-hydration skeleton, a
+      // 30-character "Loading" that looks exactly like a broken page.
       await page.locator('h1, h2, main').first().waitFor({ state: 'attached', timeout: 20_000 });
       await expect
         .poll(
@@ -146,6 +149,12 @@ test.describe('enterprise surface accessibility', () => {
 });
 
 test.describe('compliance claims stay consistent across pages', () => {
+  /**
+   * A reviewer reads /enterprise and /trust together. If one claims a
+   * certification the other denies, the contradiction is the finding, this is
+   * the check the product's own honesty rules exist to enforce, applied to the
+   * rendered page rather than to source.
+   */
   test('no page claims a certification we do not hold', async ({ page }) => {
     const offenders: string[] = [];
     for (const route of ['/enterprise', '/trust', '/security', '/pricing']) {
@@ -156,6 +165,10 @@ test.describe('compliance claims stay consistent across pages', () => {
           .innerText()
           .catch(() => '')) || '';
 
+      // Claiming the badge, as opposed to stating it is NOT held. The naive
+      // version of this regex matches "ISO 27001, Not certified", because
+      // "Not certified" contains "certified": the negation has to be excluded
+      // or the check reports every honest disclosure as a violation.
       const claims = (subject: RegExp, verbs: string): boolean => {
         const window = new RegExp(`${subject.source}[^.]{0,80}`, 'gi');
         for (const match of text.match(window) ?? []) {

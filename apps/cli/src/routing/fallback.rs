@@ -1,3 +1,13 @@
+//! Multi-model fallback chain.
+//!
+//! Solves Claude Code's "rate-limit cliff", when the primary model 429s, we
+//! transparently rotate to the next model in a user-specified chain instead
+//! of ending the turn on a transient provider failure.
+//!
+//! The chain is parsed once from the user's `--model` flag (comma-separated)
+//! or from `~/.agiworkforce/config.toml`'s `[routing]` section. The agent
+//! consults the chain on classified errors and emits a `FallbackTriggered`
+//! event when it rotates.
 
 use crate::errors::CliError;
 
@@ -13,6 +23,7 @@ pub enum FallbackOn {
     /// Rotate on rate-limit + network + server errors.
     #[default]
     Transient,
+    /// Rotate on every error. Use sparingly, masks bugs.
     Any,
 }
 

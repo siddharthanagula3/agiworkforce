@@ -206,6 +206,10 @@ describe('POST /api/chat/sync, threaded pushes', () => {
   });
 
   it('never chains the row behind an id the table already holds', async () => {
+    // FIRST_ID already exists, the user's own message in another conversation.
+    // The insert's on-conflict skips it, so it never becomes a row of this
+    // conversation, and chaining SECOND_ID onto it would point the tree out of
+    // the conversation and pin that row against deletion for good.
     givenDatabase([
       { match: LOCK, rows: [{ active_leaf_message_id: EXISTING_LEAF_ID }] },
       {

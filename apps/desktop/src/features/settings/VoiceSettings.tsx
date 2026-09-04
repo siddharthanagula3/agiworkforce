@@ -32,6 +32,13 @@ const HOTKEY_OPTIONS = [
   { value: 'ctrl+shift+v', label: 'Ctrl+Shift+V (hold to dictate)' },
 ] as const;
 
+/**
+ * Explicit dictation transcription modes only (fail-closed on the backend):
+ * recorded dictation is transcribed exactly where the user points it. There
+ * is deliberately NO Deepgram entry, Deepgram is streaming-only (voice
+ * mode), and the old option silently rerouted recorded audio to managed
+ * cloud. Exported for the honesty pins in VoiceSettings.test.tsx.
+ */
 export const PROVIDER_OPTIONS = [
   { value: 'local_whisper', label: 'Local Whisper (offline)' },
   { value: 'openai_whisper', label: 'OpenAI Whisper (your API key)' },

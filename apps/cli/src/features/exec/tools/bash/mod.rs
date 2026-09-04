@@ -30,6 +30,11 @@ pub(super) async fn execute_run_command(
 
     print_tool_status("run_command", &format!("Bash({})", command));
 
+    // C3 execution-policy gate: every command the string would run, including the
+    // ones after `&&`, `;`, `|` or inside `$(...)`, is evaluated before anything
+    // executes. A `Forbidden` decision is a hard block that no confirmation can
+    // override. Confirmation is only waived when EVERY segment matched an explicit
+    // allow rule.
     {
         use crate::features::exec::exec_policy::{evaluate_command, load_policy};
         use agiworkforce_execpolicy::Decision;
@@ -60,6 +65,7 @@ pub(super) async fn execute_run_command(
 
             match perms.check_command(command) {
                 Some(true) => {
+                    // Previously allowed, skip prompt
                 }
                 Some(false) => {
                     return Ok(ToolResult {

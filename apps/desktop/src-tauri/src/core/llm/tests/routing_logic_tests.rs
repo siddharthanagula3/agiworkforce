@@ -1,3 +1,20 @@
+// C6, LLMRouter routing logic tests.
+//
+// ALL tests run in CI without API keys or network access.
+//
+// Tests that exercise `suggest_for_context` with no registered providers
+// (legacy paths that fall through to preferred-provider defaults) use
+// `LLMRouter::new()`.
+//
+// Tests that exercise the *intelligent* routing paths -- where the router
+// needs `has_provider()` to return `true` in order to confirm a provider --
+// use `router_with_all_providers()` which registers a lightweight
+// `MockProvider` for every `Provider` variant.  The mock is `is_configured`
+// but never makes network calls; `suggest_for_context` only checks
+// `has_provider` (which delegates to `is_configured`), so no real API keys
+// are required.
+//
+// [H20] fix: routing-decision tests now run in CI instead of being skipped.
 #[cfg(test)]
 mod tests {
     use std::error::Error;
@@ -142,6 +159,13 @@ mod tests {
             "Local mode must never produce a ManagedCloud candidate"
         );
 
+        // Sanity: an explicit `managed_cloud_only` widens the boundary and
+        // allows ManagedCloud to appear. `local_only: false` alone is NOT
+        // sufficient post-desktop-trust-boundary-01, the router now fails
+        // closed to Local when neither `trust_mode` nor `managed_cloud_only`
+        // positively resolves a wider boundary (see
+        // `llm_router::effective_trust_mode`), so an unset/ambiguous
+        // boundary can no longer reach ManagedCloud/BYOK by omission.
         let cloud_prefs = RouterPreferences {
             prefer_cloud_credits: true,
             local_only: false,
@@ -374,6 +398,9 @@ mod tests {
         }
     }
 
+    // ------------------------------------------------------------------
+    // Provider::from_string, all variants + aliases
+    // ------------------------------------------------------------------
 
     #[test]
     fn test_provider_from_string_openai() {
@@ -468,6 +495,9 @@ mod tests {
         assert_eq!(Provider::from_string("aws"), None);
     }
 
+    // ------------------------------------------------------------------
+    // Provider::as_string, round-trip with from_string
+    // ------------------------------------------------------------------
 
     #[test]
     fn test_provider_as_string_all_variants() {
@@ -525,6 +555,9 @@ mod tests {
         }
     }
 
+    // ------------------------------------------------------------------
+    // Provider::default_model, catalog-backed providers resolve a model
+    // ------------------------------------------------------------------
 
     #[test]
     fn test_cloud_provider_default_models_are_non_empty() {
@@ -562,6 +595,9 @@ mod tests {
         }
     }
 
+    // ------------------------------------------------------------------
+    // Provider::get_model_for_task, spot-checks for key task types
+    // ------------------------------------------------------------------
 
     #[test]
     fn test_get_model_for_task_openai_fast_completion() {
@@ -645,6 +681,9 @@ mod tests {
         }
     }
 
+    // ------------------------------------------------------------------
+    // RouterContext::default, sensible zero values
+    // ------------------------------------------------------------------
 
     #[test]
     fn test_router_context_default() {
@@ -659,6 +698,9 @@ mod tests {
         assert!(ctx.selected_model.is_none());
     }
 
+    // ------------------------------------------------------------------
+    // CostPriority::default, Balanced
+    // ------------------------------------------------------------------
 
     #[test]
     fn test_cost_priority_default_is_balanced() {
@@ -666,6 +708,9 @@ mod tests {
         assert!(matches!(p, CostPriority::Balanced));
     }
 
+    // ------------------------------------------------------------------
+    // RoutingStrategy::default, Auto
+    // ------------------------------------------------------------------
 
     #[test]
     fn test_routing_strategy_default_is_auto() {
@@ -724,6 +769,10 @@ mod tests {
         }
     }
 
+    // ------------------------------------------------------------------
+    // suggest_for_context, paths that produce deterministic output without
+    // any registered providers (legacy routing falls through to preferred provider)
+    // ------------------------------------------------------------------
 
     #[test]
     fn test_routing_logic_vision_priority() {
@@ -779,6 +828,17 @@ mod tests {
         assert_eq!(suggestion.model, openai_model(TaskType::FastCompletion));
     }
 
+    // ------------------------------------------------------------------
+    // Model name → provider inference (used by intelligent routing path)
+    // These test infer_provider_from_model indirectly via suggest_for_context
+    // with a selected_model that has no provider registered, the router falls
+    // through to the legacy path and returns the correctly inferred provider.
+    //
+    // NOTE: When the preferred provider IS registered, suggest_for_context
+    //       returns it directly. When it is NOT registered, it falls to legacy.
+    //       We verify the inference logic by checking the suggestion provider
+    //       matches the model's well-known prefix.
+    // ------------------------------------------------------------------
 
     #[test]
     fn test_infer_provider_anthropic_catalog_model() {
@@ -863,6 +923,10 @@ mod tests {
         assert!(!suggestion.model.is_empty());
     }
 
+    // ------------------------------------------------------------------
+    // infer_provider_from_model, direct tests (pub(crate) visibility)
+    // These call the actual production method on LLMRouter.
+    // ------------------------------------------------------------------
 
     #[test]
     fn test_infer_provider_uses_catalog_for_every_openai_model() {

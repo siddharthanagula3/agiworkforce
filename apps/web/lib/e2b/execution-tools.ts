@@ -1,3 +1,11 @@
+/**
+ * E2B universal execution tools, the model-agnostic tool schemas + the router that
+ * runs them through the E2B sandbox. These tools REPLACE provider-native code
+ * execution: any model (GPT/Claude/Gemini/…) that wants to run code or touch the
+ * filesystem calls these, and the agentic loop executes them in the SAME E2B sandbox.
+ *
+ * Pure logic (no `server-only`), unit tested against a mocked {@link E2BExecutor}.
+ */
 import type { E2BExecutor, ExecutionResult } from './types';
 import { MAX_EXECUTION_OUTPUT_BYTES } from './types';
 
@@ -234,6 +242,13 @@ export function resolveTurnCodeExecutionTools(input: TurnCodeExecutionInput): Tu
   return { tools, unavailable: tools.length === 0 };
 }
 
+/**
+ * Cap a string returned to the model (memory/context guard). Used for BOTH the success
+ * output and the error string, an executor error can carry model-influenced content
+ * (e.g. a runtime error `value`), so it must be bounded too. Exported so other tool
+ * result paths (generic MCP tool output in tool-loop.ts) can share the same bound.
+ * see design doc §4.3 (MCP tool output is unbounded, a memory-exhaustion risk).
+ */
 export function redactSandboxVendor(text: string): string {
   return text
     .replace(/\bE2B_API_KEY\b/gi, 'the sandbox credential')

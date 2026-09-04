@@ -1,4 +1,13 @@
 #!/usr/bin/env bash
+# launch-verify.sh, Run all 6 surface verifications in parallel for launch sign-off.
+# Usage: bash scripts/launch-verify.sh [--with-builds]
+#
+# Without --with-builds: runs typecheck + lint + test per surface.
+# With --with-builds:    additionally runs production builds (slow).
+#
+# Exit code:
+#   0, all green
+#   1, at least one surface failed (output stored in /tmp/launch-verify-<surface>.log)
 
 set -uo pipefail
 

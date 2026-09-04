@@ -163,6 +163,12 @@ export interface ModelReasoning {
   rejectsSamplingParameters?: boolean;
   thinkingBudget?: ReasoningBudget;
   request?: ReasoningRequestPaths;
+  /**
+   * Authored provider capability with no transport behind it: every field below is
+   * `endpoint: 'responses'`, and no surface in this repo speaks the Responses API.
+   * chat goes out over `/chat/completions`. Nothing may read these into an outgoing
+   * request until a Responses transport exists, or the provider rejects the call.
+   */
   ultraMode?: ReasoningUltraMode | boolean;
   proMode?: { param: string; value: string; endpoint: 'responses' };
   persistentReasoning?: {
@@ -471,6 +477,12 @@ export interface ModelMetadata {
 export const MODEL_ENVIRONMENTS = ['e2b', 'local-runtime'] as const;
 export type ModelEnvironment = (typeof MODEL_ENVIRONMENTS)[number];
 
+/**
+ * Runtime availability of a model's required execution environment. Mirrors
+ * {@link ProviderHealthStatus}, env-availability is RUNTIME state ("is E2B
+ * configured + reachable?"), NOT a static tier, so it must be threaded into the
+ * pickers separately from the pure tier/access logic.
+ */
 export interface EnvironmentAvailability {
   configured: boolean;
   available?: boolean;
@@ -2064,6 +2076,7 @@ export function getDefaultModelFor(
     }
   }
 
+  // Final safety net, every tier in TIER_POLICIES allows workhorse_general,
   return getRoutingSlotModel('workhorse_general');
 }
 

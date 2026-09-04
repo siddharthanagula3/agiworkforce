@@ -132,6 +132,11 @@ export function AddCustomConnectorModal({
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={handleClose}>
       {/*
+       * KeyboardAvoidingView belongs INSIDE <Modal>, RN renders a Modal into its
+       * own native window, so an ancestor outside it does nothing. This sheet is
+       * bottom-anchored and every one of its three fields sits below the fold of
+       * an open keyboard, so without this the user could not see what they were
+       * typing nor reach the Add button, and there is no tap-outside dismiss.
        */}
       <KeyboardAvoidingView
         style={{ flex: 1, justifyContent: 'flex-end', backgroundColor: colors.scrim }}

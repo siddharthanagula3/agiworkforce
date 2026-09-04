@@ -256,6 +256,7 @@ function stopReasonToFinishReason(
       // value, and `stop` would claim the turn finished
       return 'length';
     case 'refusal':
+      // The OpenAI wire's own safety-stop vocabulary, a refusal must reach
       return 'content_filter';
     case 'end_turn':
     case 'stop_sequence':
@@ -271,6 +272,15 @@ function legacyWebFinishReason(reason: Extract<StreamChunk, { type: 'stop' }>['r
   return reason;
 }
 
+/**
+ * Ceiling on sources a single web-search tool call renders to the client,
+ * enforced here because this is the one place every provider-native search
+ * payload (Anthropic `web_search_tool_result`, OpenAI's equivalent, Google's
+ * `gemini_grounding_result`) passes through on its way to the wire, none of
+ * those providers accept a per-call result-count request parameter, so the
+ * cap can only be applied on the way out. Matches the generic (Perplexity)
+ * tool's own `WEB_SEARCH_MAX_RESULTS` in apps/web/lib/web-search/web-search-tool.ts.
+ */
 export const WEB_SEARCH_RESULT_RENDER_CAP = 5;
 
 function capSearchResultPayload(payload: unknown): unknown {

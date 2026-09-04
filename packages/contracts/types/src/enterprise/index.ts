@@ -63,6 +63,15 @@ export interface AdminPolicy {
   allowChromeCloudSync: boolean;
   auditExportEnabled: boolean;
   retentionDays: number;
+  /**
+   * Whether `retentionDays` deletes anything.
+   *
+   * False means the number is a recorded position and no sweep acts on it.
+   * the state every workspace starts in, because turning retention on
+   * permanently deletes conversations and that must be a deliberate choice.
+   * Surfaces that show retention must read this before describing it as a
+   * control.
+   */
   retentionEnforced: boolean;
   /**
    * Whether members may mint anonymous public links.

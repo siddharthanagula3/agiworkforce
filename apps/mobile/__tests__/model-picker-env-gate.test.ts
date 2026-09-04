@@ -1,3 +1,16 @@
+/**
+ * P3 Phase A: Environment-gating tests for the mobile model picker service.
+ *
+ * Verifies:
+ *  (a) A model WITHOUT requiresEnvironment is unchanged.
+ *  (b) A model WITH requiresEnvironment: 'e2b' becomes availability:'locked'
+ *      with the correct reason from evaluateModelEnvironment.
+ *  (c) The wiring test: a cloud model whose catalog entry declares
+ *      requiresEnvironment:'e2b' appears as locked (with env reason) in
+ *      getModelListForCloudAccess, even when cloudUnlocked:true.
+ *  (d) CRITICAL SAFETY: no current catalog model has its availability changed.
+ */
+
 jest.mock('../lib/mmkv', () => ({
   whenMmkvReady: jest.fn((cb) => cb()),
   rehydrateWhenMmkvReady: jest.fn(),

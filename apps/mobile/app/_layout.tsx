@@ -362,6 +362,11 @@ export default function RootLayout() {
 
     if (!isClerkLoaded) return;
 
+    // The age gate guards CLOUD, not the app. Local Mode sends nothing off the
+    // device, so gating first launch on it was friction with no subject to
+    // protect, and a wall in front of a Local user, which the locked rule
+    // below forbids. It is raised here instead: the moment a user heads for
+    // Cloud sign-in, which is the first point personal data would leave.
     if (!isClerkSignedIn && inAuthGroup && !isAgeGateConfirmed()) {
       router.replace({
         pathname: '/(public)/age-gate' as never,
@@ -377,6 +382,17 @@ export default function RootLayout() {
       } else if (onboardingDone && inOnboarding) {
         router.replace({ pathname: '/(app)' as const });
       }
+      // LOCKED RULE (Local-first): a user who is NOT signed in but has completed
+      // onboarding must land in the app in LOCAL mode, never on a forced Clerk
+      // sign-in wall. This covers both the account-less Local user (the free hook)
+      // and a previously-signed-in user whose Cloud session expired: in both cases
+      // Local stays fully usable and Cloud sign-in is reached ON DEMAND via the
+      // Cloud mode toggle. Previously this branch did
+      // `router.replace('/(auth)/login')`, which (with login.tsx's dismissible
+      // AuthView routing back to /(app)) trapped Local users in an inescapable
+      // login loop after onboarding, a locked-rule / trust-boundary violation.
+      // Root index (app/index.tsx) already routes onboarding-done users to /(app),
+      // so we intentionally do nothing here and let them stay in Local.
     } else if (isClerkSignedIn && inAuthGroup) {
       const onboardingDone = storage.getString('onboarding-done');
       if (!onboardingDone && !inOnboarding) {
@@ -405,6 +421,21 @@ export default function RootLayout() {
     }
   }, [isClerkSignedIn, isClerkLoaded, isInitialized, isMmkvReady, segments, router, authEnabled]);
 
+  // C1: Deep linking, handles agiworkforce://pair/CODE and agiworkforce://pair?code=CODE
+  // Required for QR desktop pairing when app is backgrounded or closed
+  //
+  // MOB-2 (audit 2026-05-03): the previous check validated the pairing
+  // code regex but allowed ANY URL whose path matched. On Android any
+  // app can register a custom scheme, `myapp://pair/XXXXXXXX` would
+  // satisfy the test. Universal links over `https://` were not gated at
+  // all. We now require either:
+  //   1. scheme = `agiworkforce` AND hostname = exactly `pair`, OR
+  //   2. scheme = `https` AND hostname is one of the two verified AGI
+  //      domains, with the pair route as the leading segment.
+  //
+  // #386: gated on isClerkSignedIn instead of the legacy session, which
+  // `useAuthStore.initialize()` never assigns, it is null for the life of the
+  // process, so this effect returned on its first line for every URL.
   useEffect(() => {
     if (!url || !isClerkSignedIn || !isInitialized) return;
 

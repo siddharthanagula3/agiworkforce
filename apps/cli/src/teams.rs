@@ -363,6 +363,17 @@ impl TeamManager {
 // Tool execution helpers (called from tools.rs)
 // ---------------------------------------------------------------------------
 
+/// Execute the `send_message` team tool.
+///
+/// SECURITY: when `acting_sender` is provided (the authenticated identity of the
+/// executing teammate, plumbed from `execute_team_tool`), the message sender is
+/// FORCED to that identity and a mismatching model-supplied `from` is rejected
+/// as spoofing, so a turn cannot forge a message "from" another teammate. When
+/// `acting_sender` is `None` (today's single-process, single-trust-boundary
+/// session, where every teammate is simulated by the same orchestrator agent and
+/// there is no separate principal to spoof *across*), the model-supplied `from`
+/// is used. The enforcement path is ready for when teammates become
+/// independently-executing agents.
 pub async fn execute_send_message(
     team: &TeamManager,
     args: &HashMap<String, String>,

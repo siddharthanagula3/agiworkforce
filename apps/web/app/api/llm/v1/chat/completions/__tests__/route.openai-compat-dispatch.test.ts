@@ -535,6 +535,18 @@ describe('Managed Web AGI Work dispatch', () => {
     expect(response.headers.get('X-AGI-Workflow-Run-Id')).toBeNull();
   });
 
+  /**
+   * AGI-126. The durable branch used to read `processed.managedUsage && ...`, so
+   * the DEFAULT tier was the one tier that never got durability. A free-trial
+   * turn still created a `cloud_agent_runs` row, so it LOOKED durable to the runs
+   * list and the approval APIs, then died with the client connection, and a
+   * pause it recorded could never be resumed, because the resume routes could not
+   * build a workflow input without a managed reservation.
+   */
+  // AGI Work itself is Pro-gated, so the free tier's agentic turn is an ordinary
+  // streaming chat turn that happens to have MCP tools in its catalog, which is
+  // exactly the shape that opens a `cloud_agent_runs` row and can pause on an
+  // approval.
   function arrangeFreeTrialToolTurn(): void {
     arrangePaidAgenticTurn();
     mockGetSubscription.mockResolvedValue({ ...makeSubscription(), plan_tier: 'free' });

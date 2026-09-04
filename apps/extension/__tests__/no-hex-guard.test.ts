@@ -1,3 +1,13 @@
+/**
+ * The colour-literal guard shipped green while scanning zero files: its
+ * directory walker recursed and threw the recursion's result away, so the only
+ * candidates left were two files that do not exist. A guard that passes on
+ * nothing is worse than no guard, because it is quoted as evidence.
+ *
+ * These tests pin the two properties that failure violated, it reaches real
+ * files, and a new literal turns it red.
+ */
+
 import { execFileSync } from 'node:child_process';
 import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';

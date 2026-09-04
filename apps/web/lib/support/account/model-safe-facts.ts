@@ -21,6 +21,11 @@ export function toModelSafeAccountFacts(context: SupportAccountContext): ModelSa
   };
 }
 
+/**
+ * The exact key set the projection may emit. Exported so a test can assert the
+ * output has no extra keys, a drift guard that fails if someone spreads the
+ * whole context into the return object.
+ */
 export const MODEL_SAFE_FACT_KEYS: readonly (keyof ModelSafeAccountFacts)[] = Object.freeze([
   'plan_tier',
   'effective_plan_tier',

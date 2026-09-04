@@ -1,4 +1,21 @@
+//! Skills system, progressive disclosure from SKILL.md files.
+//!
+//! Skills are markdown files with YAML frontmatter containing name and description.
+//! They are discovered from:
+//! 1. .agiworkforce/skills/ in the current project
+//! 2. ~/.agiworkforce/skills/ (global skills)
+//!
+//! The base system prompt receives only consented skill metadata. The model
+//! must call the read-only `skill` tool to load a body by exact skill name.
+//!
+//! Skill mentions: Use `$skill-name` or `@skill-name` in a query to explicitly
+//! request a skill by name (scored at 0.9).
 
+// Skills API surface mixes live items (discover_skills, Skill,
+// format_skill_catalog_for_prompt, used in agent.rs, repl.rs,
+// command_registry.rs, tui_app.rs) with auxiliary
+// helpers (match_skills, format_skills_by_category, scoring helpers) reserved for
+// future automatic-skill-injection wiring. File-level allow stays until that lands.
 #![allow(dead_code)]
 
 use anyhow::{Context, Result};
@@ -35,6 +52,8 @@ pub struct Skill {
     /// The model-invocable skill loader refuses activation when a declared tool
     /// is not present in the current engine catalog.
     pub required_tools: Vec<String>,
+    /// Optional declared version from `version:` in frontmatter. `None` when the
+    /// skill declares none, the field is additive, never required.
     pub version: Option<String>,
     /// `sha256:<hex>` over the raw bytes of the SKILL.md that produced this
     /// record, so a caller can tell that a skill changed between two loads.
@@ -75,6 +94,8 @@ fn disabled_skills_path() -> Option<std::path::PathBuf> {
         .map(|d| d.join("disabled-skills.json"))
 }
 
+/// Load the set of skill names the user has disabled. Empty (all enabled) when
+/// the file is absent or unreadable, a safe default that changes nothing.
 pub fn load_disabled_skills() -> std::collections::HashSet<String> {
     disabled_skills_path()
         .and_then(|p| std::fs::read_to_string(p).ok())
@@ -108,12 +129,23 @@ pub fn discover_skills() -> Vec<Skill> {
     skills
 }
 
+/// ALL discovered skills regardless of the disable set, used by the
+/// /skills-toggle overlay so it can list + re-enable disabled skills.
+///
+/// Sources are loaded in precedence order. Model-facing catalogs deduplicate by
+/// case-insensitive name with the first entry winning, so a project skill can
+/// intentionally override a global or plugin skill without exposing a path:
+/// 1. Project: `.agiworkforce/skills/`
+/// 2. Global: `~/.agiworkforce/skills/`
+/// 3. Plugins: every path declared in any installed plugin's manifest under
+///    `skills:` (Sprint B6), both files and dirs are accepted.
 pub fn discover_skills_all() -> Vec<Skill> {
     let mut skills = Vec::new();
 
     // Project-level skills: .agiworkforce/skills/
     if let Ok(cwd) = std::env::current_dir() {
         let project_dir = cwd.join(".agiworkforce").join("skills");
+        // AUDIT-FIX: H-9, gate auto-load behind explicit per-workspace consent file.
         if project_dir.exists() && project_skills_consented(&project_dir) {
             load_skills_from_dir(&project_dir, &mut skills);
         }
@@ -155,6 +187,7 @@ pub fn discover_skills_all() -> Vec<Skill> {
     skills
 }
 
+// AUDIT-FIX: H-9, consent gate for project skills. Returns true only if .consent matches the canonical dir.
 fn project_skills_consented(skills_dir: &Path) -> bool {
     let consent_path = skills_dir.join(".consent");
     let canonical = match skills_dir.canonicalize() {
@@ -305,6 +338,15 @@ fn load_skill_in_package(path: &Path, package_dir: Option<&Path>) -> Result<Skil
     })
 }
 
+// ---------------------------------------------------------------------------
+// Integrity, `agiskill-sha256-v1`
+// ---------------------------------------------------------------------------
+//
+// Byte-for-byte identical to `packages/tools/skills/src/integrity.ts` and
+// `scripts/verify-skills-lock.mjs`; see that TypeScript file for the normative
+// specification. All three are pinned to the same known-answer vector so a
+// divergence fails a test instead of producing two "integrity" values that
+// disagree.
 
 /// Identifier for the hashing scheme recorded in `skills-lock.json`.
 pub const SKILL_HASH_ALGORITHM: &str = "agiskill-sha256-v1";
@@ -401,6 +443,7 @@ fn parse_frontmatter(content: &str) -> Result<Frontmatter> {
     let trimmed = content.trim_start();
 
     if !trimmed.starts_with("---") {
+        // No frontmatter, use filename as name
         return Ok(Frontmatter {
             name: "untitled".to_string(),
             description: String::new(),
@@ -571,6 +614,7 @@ pub fn score_skill(skill: &Skill, query: &str) -> f64 {
         }
     }
 
+    // For non-implicit skills, stop here, keyword overlap is not allowed.
     if !skill.allow_implicit {
         return 0.0;
     }
@@ -869,6 +913,7 @@ pub fn format_skills_by_category(skills: &[Skill]) -> String {
     out
 }
 
+/// Format all skills for display (`/skills` command), flat list.
 pub fn format_skill_list(skills: &[Skill]) -> String {
     if skills.is_empty() {
         return "No skills found.\n\nSkill directories:\n  .agiworkforce/skills/ (project)\n  ~/.agiworkforce/skills/ (global)".to_string();
@@ -1150,6 +1195,7 @@ mod tests {
     #[test]
     fn test_score_proportional() {
         let s = skill("web-dev", "HTML CSS JavaScript TypeScript React");
+        // 3 of 4 words match (html, css, javascript), "python" does not
         let score = score_skill(&s, "html css javascript python");
         assert!(score > 0.3, "expected > 0.3, got {score}");
         assert!(score < 0.8, "expected < 0.8, got {score}");

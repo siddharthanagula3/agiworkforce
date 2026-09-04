@@ -2,6 +2,20 @@ import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
+/**
+ * Pins the row-level-isolation figure on /trust to what the tree actually
+ * contains.
+ *
+ * This claim is read by enterprise security reviewers and was previously
+ * allowed to go stale: it stated "22 of 170 hosted API route files" months
+ * after both numbers had moved, and deferred to /security for "the exact
+ * figure", which /security has never carried. A public isolation claim that
+ * drifts is worse than no claim, so the number is measured here rather than
+ * maintained by hand.
+ *
+ * When this fails, re-measure and update the page, do not relax the test.
+ */
+
 const API_ROOT = join(process.cwd(), 'app/api');
 const TRUST_PAGE = join(process.cwd(), 'app/trust/page.tsx');
 
@@ -35,6 +49,11 @@ function measure() {
     const source = readFileSync(file, 'utf8');
     const rls = RLS_CLIENTS.test(source);
     const owner = OWNER_CLIENT.test(source);
+    // A route that reaches for the owner connection at all is counted against
+    // us, even if it also reads under RLS. Some legitimately need both, legal
+    // holds read scoped and write privileged, but its writes still bypass
+    // policy, and a public isolation claim should be the number that cannot be
+    // argued down.
     if (owner) ownerOnly += 1;
     else if (rls) rlsScoped += 1;
     else noDatabase += 1;

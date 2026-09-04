@@ -9,6 +9,10 @@ const settingsStore = readFileSync(
 );
 const i18nInit = readFileSync(join(process.cwd(), 'app/i18n/index.ts'), 'utf8');
 
+// This page names, by category, what syncs. It previously claimed appearance,
+// language and chat preferences sync "automatically across Web and Mobile".
+// web writes and reads none of the three. A page that promises specific
+// behaviour has to be checkable against the code that would provide it.
 describe('the sync page describes what actually syncs', () => {
   it('does not claim appearance syncs while it lives in a device-local store', () => {
     expect(settingsStore).toContain('createJSONStorage(() => localStorage)');

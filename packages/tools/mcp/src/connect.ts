@@ -327,6 +327,14 @@ function thrownMessage(err: unknown): string {
   return typeof message === 'string' ? message : '';
 }
 
+// A rejection carries server bytes as surely as a result does: the SDK puts the whole HTTP response
+// body into Error.message (`Error POSTing to endpoint: ${await response.text()}`), so any non-OK
+// status hands the server a message field. No message leaves this module with an unescaped `<`,
+// which is what stops one from closing whichever fence a caller wraps it in. A tools/call rejection
+// is only ever rendered into the model's tool turn, so it also gets the result envelope; a handshake
+// or discovery failure is shown to a human by the connector-setup routes, so it stays a plain
+// sentence. Either way the thrown object is kept, prototype, code, status, name, because callers
+// classify rejections to re-authorize, drop a stale handle, or cancel.
 function fenceThrownMcpError(
   err: unknown,
   serverName: string,

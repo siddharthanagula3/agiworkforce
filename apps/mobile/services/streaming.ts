@@ -50,6 +50,7 @@ export interface StreamToolStatus {
   args?: unknown;
 }
 
+/** MCP tool result (`x_tool_result`), validated the same way as {@link StreamToolStatus}. */
 export interface StreamToolResult {
   tool_call_id: string;
   name?: string;
@@ -57,6 +58,11 @@ export interface StreamToolResult {
   is_error?: boolean;
 }
 
+/**
+ * MCP/connector approval request (`x_tool_approval_request`), emitted in
+ * manual mode when a tool call is suspended awaiting the user's decision.
+ * Validated the same way as {@link StreamToolStatus}.
+ */
 export interface StreamToolApprovalRequest {
   tool_call_id: string;
   name: string;

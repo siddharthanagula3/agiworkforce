@@ -19,6 +19,19 @@ export function getNonce(): string {
   return randomBytes(24).toString('base64url');
 }
 
+/**
+ * COLOUR POLICY: geometry and the terra brand accent are AGI-owned; surfaces,
+ * text, controls, focus, and state colours follow the host theme. The sidebar
+ * sits directly above native History, Context, and Memory views, so pinning the
+ * webview dark in a light or high-contrast host makes one product look like two
+ * unrelated extensions. `agiVsCodeCssVars` remains the fallback for hosts that
+ * omit a VS Code colour token.
+ *
+ * Stateful foreground/background pairs must still come from the same family.
+ * Warning, error, diff, button, and focus colours therefore use matching host
+ * tokens with complete AGI fallbacks rather than mixing a host background with
+ * a fixed-palette foreground.
+ */
 export function getWebviewContent(
   webview: vscode.Webview,
   extensionUri: vscode.Uri,
@@ -132,6 +145,7 @@ export function getWebviewContent(
       letter-spacing: -0.01em;
     }
 
+    /* Brand mark, the 12-spoke AGI symbol, rendered mono. */
     .brand-mark {
       width: 18px;
       height: 18px;
@@ -644,6 +658,15 @@ export function getWebviewContent(
     }
 
     #userInput {
+      /*
+       * width:100%, NOT flex:1. The parent .input-wrapper is a block box
+       * (position:relative, stacking the mention dropdown, this textarea and the
+       * hint vertically), so a flex property here has nothing to resolve against
+       * and the textarea silently falls back to its intrinsic cols width.
+       * about 150px, leaving most of the composer dead space at every panel
+       * width. Do not "fix" this by making the wrapper display:flex: that would
+       * lay its three children out in a row.
+       */
       width: 100%;
       box-sizing: border-box;
       min-width: 0;
@@ -1003,6 +1026,7 @@ export function getWebviewContent(
       text-overflow: ellipsis;
     }
     .controls-summary:hover, .model-chip:hover {
+      /* Panel palette on both sides, see .copy-btn:hover. */
       color: var(--text-primary);
       background: var(--hover);
       border-color: var(--vscode-focusBorder);
@@ -1119,6 +1143,18 @@ export function getWebviewContent(
       transition: width 0.4s var(--transition), background 0.4s var(--transition);
     }
 
+    /*
+     * The two text children MUST be allowed to shrink. They previously carried
+     * flex-shrink:0 alongside white-space:nowrap, so at any sidebar narrower than
+     * ~405px, including the 300px default, they held their full intrinsic width
+     * and pushed the Upgrade button and the collapse × clean off the right edge.
+     * That was worst in the .warn state, i.e. exactly when the upgrade CTA is the
+     * point of the banner.
+     *
+     * flex-shrink:0 belongs on the icons and the two buttons below (which have
+     * it), never on variable-length text. .usage-reset shrinks first because a
+     * truncated reset time costs less than a truncated quota figure.
+     */
     .usage-text {
       white-space: nowrap;
       min-width: 0;
@@ -1158,6 +1194,7 @@ export function getWebviewContent(
       color: var(--text-secondary);
       cursor: pointer;
       font-size: 11px;
+      /* Was padding 0 2px, giving a ~13px hit area. Pad to a 24px square.
          the minimum comfortable target, without changing the glyph size. */
       display: inline-flex;
       align-items: center;
@@ -1318,6 +1355,10 @@ export function getWebviewContent(
     .tool-call--error .tool-call__bar { color: var(--error); }
     .tool-call--error .tool-call__icon { color: var(--error); }
 
+    /* Tool names are arbitrary-length (MCP servers namespace them, e.g.
+     * "mcp__filesystem__read_text_file"). flex-shrink:0 with no ellipsis forced
+     * the whole row wider than the panel. The .progress-event variant below
+     * already had the right pattern, this is the same rule, un-drifted. */
     .tool-call__label {
       font-weight: 400;
       color: var(--text-secondary);
@@ -2594,6 +2635,7 @@ export function getWebviewContent(
       });
     }
 
+    // Upgrade button, opens pricing page via extension host
     if (upgradeBtn) {
       upgradeBtn.addEventListener('click', function() {
         vscode.postMessage({
@@ -2986,6 +3028,11 @@ export function getWebviewContent(
       focusMenuItem(modelPopoverEl, activeIndex >= 0 ? activeIndex : 0);
     }
 
+    // ── Markdown rendering, delegated to window.agiRender ────────────────
+    // The bundled out/webview/render.js defines window.agiRender(text) via
+    // markdown-it + DOMPurify. If for any reason it failed to load, fall
+    // back to plain text (no markdown), never raw innerHTML of LLM output.
+    // Audit PR-2A (F-02, F-10).
     function renderAssistant(text) {
       if (typeof window.agiRender === 'function') {
         return window.agiRender(text);
@@ -3362,6 +3409,10 @@ export function getWebviewContent(
     var attachmentBatchSeq = 0;
     var attachmentGeneration = 0;
 
+    // The host's attachFiles Zod ceiling, in decimal bytes. A larger bound
+    // here is not a looser limit, it is a dropped batch: the schema rejects
+    // the whole message, so the sibling files lose their ack and their chips
+    // never leave "uploading".
     var MAX_ATTACHMENT_BYTES = 10000000;
 
     function invalidateAttachmentBatches() {
@@ -3453,6 +3504,7 @@ export function getWebviewContent(
             pendingAttachmentCount--;
           }
         } else if (chip.classList.contains('uploading')) {
+          // No host id yet, defer the removal until attachFilesAck assigns one.
           chip.setAttribute('data-remove-requested', '1');
           return;
         }
@@ -3554,6 +3606,8 @@ export function getWebviewContent(
       });
     }
 
+    // Paste handler on the textarea, captures clipboard images (e.g. screenshot
+    // from grim/Snipping Tool) without inserting the binary blob into the input.
     userInput.addEventListener('paste', function(e) {
       var items = e.clipboardData ? e.clipboardData.items : null;
       if (!items) return;
@@ -3743,6 +3797,9 @@ export function getWebviewContent(
         // boundary. Do not carry the previous session's trust label forward
         // while that next route is unresolved.
         resetAuthoritativeSessionBoundary();
+        // Match by comparing option.value directly rather than building a CSS
+        // selector via string concat, a model id containing a quote/"]" would
+        // throw a SyntaxError and break model display (audit 218 L1726).
         let opt = null;
         for (const o of modelSelect.options) {
           if (o.value === msg.payload.model) { opt = o; break; }

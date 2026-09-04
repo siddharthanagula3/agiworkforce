@@ -85,6 +85,8 @@ pub struct SandboxManager {
     pub sandbox_type: SandboxType,
     pub policy: SandboxPolicy,
     pub workspace_dir: PathBuf,
+    /// CRIT-1: controls whether outbound network is permitted inside the sandbox.
+    /// Default is Deny, must be explicitly opted in.
     pub network_policy: NetworkPolicy,
 }
 
@@ -185,6 +187,26 @@ pub fn shell_join(args: &[String]) -> String {
         .join(" ")
 }
 
+/// Validate a workspace path before embedding it in a Seatbelt SBPL profile.
+///
+/// SECURITY (CRIT-2): the previous implementation used `to_string_lossy()` and
+/// interpolated the result raw into `format!(... "(allow file-read* (subpath \"{ws}\"))" ...)`.
+/// A workspace path `/tmp/x") (allow default) ;#` broke out of the string literal
+/// and injected an `(allow default)` rule, a complete macOS sandbox escape.
+///
+/// Apple provides no parameterised quoting mechanism for Seatbelt profiles.
+/// The only safe strategy is to reject any path character that is meaningful
+/// in SBPL or could break the string literal:
+///   - `"`, closes the string literal the path is embedded in
+///   - `(` / `)`, open/close s-expressions; could inject new rules even if `"` is intact
+///   - `\`, introduces escape sequences; the escaping strategy itself is
+///             implementation-defined and not guaranteed safe across macOS versions
+///   - Control chars (< 0x20): NUL terminates C strings; newline/CR split rules
+///   - Unicode line/paragraph separators (U+2028, U+2029): treated as newline by
+///             some parsers
+///   - Leading/trailing whitespace: would silently change the matched subpath
+///   - Root `/`: too broad (would allow write everywhere)
+///   - Empty or relative paths: rejected for correctness
 fn validate_and_escape_seatbelt_path(path: &Path) -> Result<String> {
     let canonical = path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
     let s = canonical
@@ -195,6 +217,7 @@ fn validate_and_escape_seatbelt_path(path: &Path) -> Result<String> {
         anyhow::bail!("workspace path is empty");
     }
     if s == "/" {
+        // SECURITY: root path would grant file-write* everywhere, reject.
         anyhow::bail!("workspace path '/' is too broad for sandboxed exec");
     }
     if !path.is_absolute() {
@@ -213,6 +236,7 @@ fn validate_and_escape_seatbelt_path(path: &Path) -> Result<String> {
             path
         );
     }
+    // Unicode line/paragraph separators, some SBPL parsers treat as newlines.
     if s.contains('\u{2028}') || s.contains('\u{2029}') {
         anyhow::bail!(
             "workspace path contains Unicode line/paragraph separator: {:?}",
@@ -464,6 +488,8 @@ pub(crate) async fn execute_sandboxed_with_timeout(
             "{}",
             missing_sandbox_message(std::env::consts::OS)
         )),
+        // Only reachable if a SandboxType variant was added without an exec
+        // implementation, fail loud rather than silently bypass.
         _ => Err(anyhow::anyhow!(
             "Unhandled SandboxType variant {}, sandbox config is broken; refusing exec",
             manager.sandbox_type.name()
@@ -585,6 +611,9 @@ mod tests {
 
     #[test]
     fn sbpl_rejects_leading_whitespace() {
+        // A path with a leading space is not absolute on POSIX, so it hits the
+        // absolute-path check first. Either rejection message is correct, the
+        // important property is that the path is refused.
         let msg = reject(" /tmp/ws");
         assert!(
             msg.contains("whitespace") || msg.contains("absolute"),
@@ -646,6 +675,8 @@ mod tests {
 
     #[test]
     fn profile_with_hostile_path_keeps_deny_default_intact() {
+        // The PoC from the red-team report, verify it is rejected before
+        // it can reach format!().
         let hostile = "/tmp/ws\") (allow default) ;#";
         // With the new rejection strategy the path is refused outright.
         let err = reject(hostile);

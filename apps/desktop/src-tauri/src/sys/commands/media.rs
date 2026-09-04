@@ -61,6 +61,10 @@ pub struct MediaVideoRequest {
     pub style: Option<String>,
     #[serde(default)]
     pub model: Option<String>,
+    // SECURITY: `plan` field removed, clients must NOT be able to self-upgrade
+    // their subscription tier. The plan tier is determined server-side by the
+    // web API based on authenticated user session / BillingState.
+    /// Video provider: "runway" or "veo3" (default: "runway")
     #[serde(default)]
     pub provider: Option<String>,
     /// Input image URL for catalog models that support image-to-video generation.
@@ -114,6 +118,19 @@ fn managed_media_denial_reason(managed_boundary_active: bool) -> Option<&'static
     }
 }
 
+/// TRUST-BOUNDARY: the two commands below post the user's prompt, plus whatever
+/// local context the model folded into it, to AGI Managed Cloud over their own
+/// `reqwest` client, so they sit outside the renderer's `guardedFetch` chokepoint
+/// (`apps/desktop/src/lib/egressGuard.ts`) and the boundary has to hold here or
+/// nowhere.
+///
+/// A stored access token proves only that the user signed in at some point, never
+/// that THIS execution is a Managed Cloud one: `cloudAccountAuth` persists the
+/// token natively for any live session, including one that has since returned to
+/// the Local workspace. The single native signal that a caller explicitly declared
+/// Managed Cloud is the auth boundary a `TrustMode::ManagedCloud` goal scopes
+/// around its work (`core/agi/core.rs`). Local and BYOK never scope one, so an
+/// absent boundary fails closed.
 fn ensure_managed_media_boundary() -> Result<(), String> {
     match managed_media_denial_reason(current_managed_auth_boundary().is_some()) {
         Some(reason) => Err(reason.to_string()),

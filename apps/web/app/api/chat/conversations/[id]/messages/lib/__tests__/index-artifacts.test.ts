@@ -1,3 +1,13 @@
+/**
+ * Unit tests for the artifact index writer (migration 0121).
+ *
+ * The index exists because web artifacts are DERIVED from message markdown at
+ * render time, so the client only knows about conversations it has actually
+ * opened. Verified empirically on 2026-08-15: after clearing
+ * `agi-artifacts-store`, the gallery showed 1 artifact where the account had 4.
+ * These tests pin the two properties that make the index trustworthy, it
+ * indexes exactly what the client will re-derive, and it never stores content.
+ */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 vi.mock('@/lib/logger', () => ({

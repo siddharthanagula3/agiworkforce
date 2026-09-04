@@ -1,3 +1,14 @@
+/**
+ * autofill-outcome-banner.test.ts, EXT-03.
+ *
+ * The Computer Use panel reports three different endings through one banner:
+ * the fast path escalated, the fast path completed, or it could not run. The
+ * headline was set once at build time to "Autofill stalled, switching to
+ * computer use" and never changed, so a completed autofill announced itself as
+ * a stall, under a lightning-bolt icon, in accent colour.
+ *
+ * @vitest-environment jsdom
+ */
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { buildComputerUsePanel } from '../src/features/side-panel/computerUsePanel';
 

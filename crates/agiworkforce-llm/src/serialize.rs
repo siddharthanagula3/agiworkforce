@@ -1,3 +1,10 @@
+//! Per-dialect request serialization: message conversion, tool-schema
+//! shaping, prompt-cache breakpoints, and Ollama-native request compaction.
+//!
+//! Moved verbatim from `apps/cli/src/models/{serialization,streaming}.rs`.
+//! Every function here is pure (no I/O); the golden rule is that only
+//! `name`/`description`/`input_schema` from [`ToolDefinition`] ever reach a
+//! provider payload, executor metadata stays client-side by construction.
 
 use std::collections::HashMap;
 
@@ -109,6 +116,10 @@ pub fn convert_message_to_openai(m: &Message) -> Vec<Value> {
                 }
                 vec![msg]
             } else {
+                // For user/tool messages, tool results become separate "tool" role messages.
+                // Text and Image blocks accumulate together into a single content-parts array
+                // so that mixed text+image input is sent as ONE user message with a content
+                // array (the format required by vision-capable chat models).
                 let mut msgs = Vec::new();
                 // `content_parts` accumulates text/image parts for the current user message.
                 // It holds JSON Value objects: text parts as {"type":"text","text":"..."} and
@@ -340,6 +351,8 @@ pub fn convert_message_to_gemini(m: &Message, tool_names: &HashMap<String, Strin
 // Tool schema shaping
 // ---------------------------------------------------------------------------
 
+/// Anthropic tools array. The last tool carries a `cache_control` breakpoint
+/// so the entire tools array is cacheable, tools rarely change mid-session.
 pub fn anthropic_tools_json(tool_defs: &[ToolDefinition]) -> Vec<Value> {
     let last_idx = tool_defs.len().saturating_sub(1);
     tool_defs
@@ -440,6 +453,12 @@ pub fn gemini_function_declarations_json(tool_defs: &[ToolDefinition]) -> Vec<Va
 // Anthropic prompt-cache breakpoints
 // ---------------------------------------------------------------------------
 
+/// Add a prompt-cache breakpoint to the final content block of the last message
+/// so the whole conversation prefix is cacheable on multi-turn requests, the
+/// biggest caching win after system + tools (uncached, every turn re-bills the
+/// full history). Skips `thinking`/`redacted_thinking` blocks, which can't carry
+/// `cache_control`. This is the 3rd breakpoint (system + tools + messages),
+/// within Anthropic's 4-breakpoint limit.
 pub fn add_message_cache_breakpoint(api_messages: &mut [Value]) {
     let Some(last) = api_messages.last_mut() else {
         return;
@@ -676,6 +695,8 @@ pub struct OllamaRequestOpts {
     /// field (Ollama then silently defaults to 4096 regardless of the model's
     /// real capability).
     pub num_ctx: Option<u32>,
+    /// `stream` flag, `false` for non-streaming `/api/chat` calls (the
+    /// desktop's blocking send path); the shared engine always passes `true`.
     pub stream: bool,
 }
 
@@ -818,6 +839,8 @@ mod tests {
 
     #[test]
     fn openai_mixed_text_image_produces_one_message_with_parts_array() {
+        // A user message with both text and image blocks must produce EXACTLY ONE
+        // API message with a content array of two parts, not two consecutive user messages.
         let msg = Message::blocks(
             "user",
             vec![
@@ -865,6 +888,9 @@ mod tests {
 
     #[test]
     fn openai_empty_assistant_blocks_emit_empty_content() {
+        // An assistant message whose blocks yield neither text nor tool calls
+        // must still carry a `content` field, OpenAI-compatible endpoints reject
+        // an assistant message with neither `content` nor `tool_calls` (400).
         let msg = Message::blocks("assistant", vec![]);
         let msgs = convert_message_to_openai(&msg);
         assert_eq!(msgs.len(), 1);

@@ -44,6 +44,12 @@ fn required_model_capability(tool_name: &str) -> Option<&'static str> {
         return Some("computer_use");
     }
 
+    // Only the Anthropic-native `web_search` server tool needs the native `search`
+    // capability. The generic `search_web` client tool is backed by the keyless
+    // SearchExecutor (Perplexity if configured, else DuckDuckGo + Brave HTML fallback),
+    // so it works for ANY tool-capable model and is intentionally NOT gated here.
+    // gating it turned the web-search toggle into a silent no-op (fake availability) on
+    // every non-native-search model. `search_web` falls through to the tools-only gate.
     if normalized == "web_search" {
         return Some("search");
     }
@@ -1114,6 +1120,7 @@ fn create_builtin_tool_definitions() -> Vec<ToolDefinition> {
             strict: None,
         },
 
+        // ── grep_search, regex content search ────────────────────────────────
         ToolDefinition {
             name: "grep_search".to_string(),
             description: "Search file contents using a regular expression. Returns file path, \
@@ -1164,6 +1171,7 @@ fn create_builtin_tool_definitions() -> Vec<ToolDefinition> {
             strict: None,
         },
 
+        // ── glob_search, file pattern search ─────────────────────────────────
         ToolDefinition {
             name: "glob_search".to_string(),
             description: "Find files matching a glob pattern. Examples: \"**/*.ts\", \
@@ -1197,6 +1205,7 @@ fn create_builtin_tool_definitions() -> Vec<ToolDefinition> {
             strict: None,
         },
 
+        // ── file_read_range, read with line offset ────────────────────────────
         ToolDefinition {
             name: "file_read_range".to_string(),
             description: "Read a file starting from a specific line number. Each line is \
@@ -1229,6 +1238,7 @@ fn create_builtin_tool_definitions() -> Vec<ToolDefinition> {
             strict: None,
         },
 
+        // ── format_file, auto-formatter ───────────────────────────────────────
         ToolDefinition {
             name: "format_file".to_string(),
             description: "Run the code formatter appropriate for the file extension after \
@@ -1251,6 +1261,7 @@ fn create_builtin_tool_definitions() -> Vec<ToolDefinition> {
             strict: None,
         },
 
+        // ── test_run, run tests and get structured results ────────────────────
         ToolDefinition {
             name: "test_run".to_string(),
             description: "Run the project's test suite and return structured pass/fail results. \
@@ -1348,6 +1359,12 @@ impl ChatToolResult {
     }
 }
 
+/// Execute a chat tool by name.
+///
+/// `prebuilt_registry` is an optional `Arc<ToolRegistry>` from `build_tool_definitions`.
+/// When provided it is reused directly, avoiding the cost of constructing and registering
+/// all tools again for every tool call within a loop (Fix 4, registry caching per request).
+/// When absent (e.g. called outside the main chat flow) a fresh registry is created.
 pub async fn execute_chat_tool(
     tool_name: &str,
     arguments_json: &str,
@@ -1457,6 +1474,9 @@ mod tests {
 
     #[test]
     fn skill_tool_is_read_only_and_needs_no_confirmation() {
+        // Tools missing from ToolExecutionGuard's policy table are rejected outright
+        // by validate_tool_call, so an unregistered `skill` tool would be advertised
+        // and then always fail, fake availability.
         let exposure = describe_chat_tool_exposure(crate::core::agi::tools::SKILL_TOOL_ID);
         assert_eq!(exposure.safety_tier, "safe");
         assert!(!exposure.requires_confirmation);
@@ -1482,6 +1502,8 @@ mod tests {
 
         assert!(!names.contains(&"terminal_execute"));
         assert!(names.contains(&"file_read"));
+        // search_web is the generic keyless client tool, offered to any tool-capable
+        // model regardless of the native `search` capability (no fake-availability toggle).
         assert!(names.contains(&"search_web"));
     }
 

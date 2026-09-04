@@ -1,3 +1,10 @@
+/**
+ * Edge-case modals: all 10 safety/UX nets for AGI Mobile v1.
+ *
+ * Import from the feature barrel rather than legacy component paths:
+ *   import { OfflineBanner, BatteryLowModal } from '@/src/features/edge-cases';
+ */
+
 export { OfflineBanner } from './OfflineBanner';
 export { ModelLoadingFirstRunModal } from './ModelLoadingFirstRunModal';
 export type { ModelLoadingFirstRunModalProps } from './ModelLoadingFirstRunModal';

@@ -123,6 +123,13 @@ fn escape_sql_value(value: &str) -> String {
     value.replace('\\', "\\\\").replace('\'', "''")
 }
 
+/// Validates that a value doesn't contain dangerous SQL patterns.
+///
+/// DESK-QUERY-BUILDER-CONCAT (audit 2026-05-06): tightened to reject
+/// additional bypass vectors not covered by the original list:
+///   - Backslash  (\), escape-sequence bypass in non-standard SQLite builds
+///   - NUL byte (\x00), C-string truncation bypass
+///   - Percent   (%), LIKE-injection when value lands in a LIKE clause
 fn validate_sql_value(value: &str) -> Result<()> {
     // Reject raw bytes that cannot be safely embedded even after escaping.
     if value.contains('\0') {
@@ -469,6 +476,17 @@ impl QueryBuilder {
         self
     }
 
+    /// Build the SQL string for the current query.
+    ///
+    /// # Security Warning (H5)
+    /// For `INSERT` and `UPDATE` operations this method uses string interpolation
+    /// via `escape_sql_value`. While values are validated and escaped, string-based
+    /// escaping can be bypassed by edge-case inputs or encoding tricks.
+    /// **Prefer `build_parameterized()`** for write operations, which emits
+    /// `?`-placeholder SQL and returns the parameter values separately for binding
+    /// by the SQLite driver, eliminating the injection surface entirely. Use this
+    /// method only for `SELECT` queries or for display/logging where the result is
+    /// not executed directly.
     pub fn build(&self) -> Result<String> {
         match &self.query_type {
             QueryType::Insert(query) => {

@@ -1,3 +1,22 @@
+//! The four dialect stream drivers.
+//!
+//! Each dialect has two layers:
+//!
+//! 1. an HTTP layer (`stream_chat` dispatching per [`Dialect`]) that builds
+//!    the request from a [`ProviderSpec`] + [`ChatRequest`], sends it, and
+//!    classifies non-success responses into [`LlmError`]s; and
+//! 2. a pure byte-stream runner (`run_*_stream`) that decodes SSE/NDJSON
+//!    framing, emits a [`StreamEvent`] at every observation point, and folds
+//!    the authoritative [`ChatOutcome`].
+//!
+//! The runners are public so conformance fixtures (and, in stage c2, the
+//! desktop's own HTTP stack) can replay raw byte chunks without a socket.
+//!
+//! Behavior parity note: the decode loops, accumulation rules, and error
+//! classification moved VERBATIM from `apps/cli/src/models/streaming.rs`.
+//! Event emission is additive, it happens at exactly the points where the
+//! legacy code mutated its accumulators, so byte-identical CLI behavior falls
+//! out of construction.
 
 use std::collections::HashSet;
 use std::time::Duration;
@@ -47,6 +66,7 @@ pub enum AnthropicThinking {
     Enabled {
         budget_tokens: u32,
     },
+    /// Provider-managed adaptive thinking, the model decides when/how much.
     Adaptive,
     /// Explicitly disabled (distinct from omitting the field).
     Disabled,
@@ -150,6 +170,20 @@ fn is_loopback_endpoint(url: &str) -> bool {
     }
 }
 
+/// Refuse to attach a credential to a cleartext non-loopback endpoint.
+///
+/// `base_url` is user-configurable, BYOK users point it at proxies, gateways
+/// and local runtimes, and [`apply_headers`] attaches the API key to whatever
+/// it is given. Nothing checked the scheme, so a `base_url` of
+/// `http://gateway.internal/v1` sent the key over the wire in cleartext. That
+/// is what `rust/cleartext-transmission` flagged on all three request sites,
+/// and it was a real gap rather than a false positive.
+///
+/// The sibling MCP crate has enforced exactly this rule for its own transports
+/// (`agiworkforce-mcp::security::enforce_https_for_remote`); the LLM crate,
+/// which carries provider API keys, had no equivalent. Loopback stays exempt
+/// so Ollama and other local runtimes on `http://localhost:11434` keep working
+///, the same carve-out, for the same reason.
 fn require_secure_credential_transport(url: &str, spec: &ProviderSpec) -> Result<(), LlmError> {
     // `extra_headers` is documented as non-secret (spec.rs), so `Auth` is the
     // only thing that can carry key material here.
@@ -179,6 +213,12 @@ fn require_secure_credential_transport(url: &str, spec: &ProviderSpec) -> Result
     })
 }
 
+/// Apply auth + caller extra headers. Secrets only ever come from
+/// [`Auth`], never log the returned builder's headers.
+///
+/// Takes the url so the transport check above cannot be skipped: this is the
+/// one place a credential is attached, so it is the one place that has to
+/// refuse.
 fn apply_headers(
     mut builder: reqwest::RequestBuilder,
     url: &str,
@@ -219,6 +259,9 @@ fn llm_byte_stream(resp: reqwest::Response) -> impl Stream<Item = Result<Bytes, 
 // Anthropic Messages API (streaming)
 // ---------------------------------------------------------------------------
 
+/// Build the Anthropic Messages request body for `req`. Pure, exposed so
+/// conformance/parity oracles (stage c2c) can byte-compare request bodies
+/// without a socket.
 pub fn build_anthropic_request_body(req: &ChatRequest<'_>) -> Value {
     let mut api_messages: Vec<Value> = req
         .messages
@@ -253,6 +296,7 @@ pub fn build_anthropic_request_body(req: &ChatRequest<'_>) -> Value {
         let (head, tail) = system_text.split_at(env_pos);
         let head_trimmed = head.trim_end();
         if head_trimmed.is_empty() {
+            // No stable prefix, single non-cached block.
             Some(serde_json::json!(system_text))
         } else {
             Some(serde_json::json!([
@@ -265,6 +309,8 @@ pub fn build_anthropic_request_body(req: &ChatRequest<'_>) -> Value {
             ]))
         }
     } else {
+        // No env marker, cache the whole system prompt (rare path: custom
+        // prompt with no environment injection).
         Some(serde_json::json!([
             {
                 "type": "text",
@@ -296,6 +342,10 @@ pub fn build_anthropic_request_body(req: &ChatRequest<'_>) -> Value {
         body["system"] = sys;
     }
 
+    // Anthropic requires temperature to be unset (i.e. the default 1) when
+    // thinking is active, any other value is a hard 400. Omit it for
+    // Enabled/Adaptive; Disabled/None keep the caller's temperature (c3 fix:
+    // this previously sent temperature alongside thinking).
     let thinking_active = matches!(
         thinking,
         Some(AnthropicThinking::Enabled { .. } | AnthropicThinking::Adaptive)
@@ -445,6 +495,7 @@ where
             buffer = buffer[line_end + 1..].to_string();
 
             if line.starts_with(':') {
+                // SSE comment, keepalive, no payload.
                 on_event(StreamEvent::Keepalive);
                 continue;
             }
@@ -659,6 +710,9 @@ where
 // OpenAI-compatible Chat Completions API (streaming)
 // ---------------------------------------------------------------------------
 
+/// Build the OpenAI-compatible Chat Completions request body for `req`. Pure.
+/// exposed so conformance/parity oracles (stage c2c) can byte-compare request
+/// bodies without a socket.
 pub fn build_openai_compat_request_body(req: &ChatRequest<'_>, opts: &OpenAiOpts) -> Value {
     let api_messages: Vec<Value> = req
         .messages
@@ -772,6 +826,7 @@ where
             buffer = buffer[line_end + 1..].to_string();
 
             if line.starts_with(':') {
+                // SSE comment, e.g. OpenRouter's ": OPENROUTER PROCESSING".
                 on_event(StreamEvent::Keepalive);
                 continue;
             }
@@ -866,6 +921,9 @@ where
                         });
                     }
                     if !has_choices && !has_usage {
+                        // Frame this dialect does not interpret (managed-cloud
+                        // billing frames, provider extensions). Ignored for the
+                        // outcome, surfaced for richer consumers.
                         let label = event
                             .get("object")
                             .or_else(|| event.get("type"))
@@ -900,6 +958,12 @@ where
 // OpenAI Responses API (streaming)
 // ---------------------------------------------------------------------------
 
+/// Build the canonical OpenAI Responses request body from the shared wire
+/// request. Kept pure so every Rust consumer can fixture-test request shape
+/// without opening a socket.
+/// Build the OpenAI Responses request body for `req`. Pure, exposed so
+/// conformance/parity oracles (stage c2c) can byte-compare request bodies
+/// without a socket.
 pub fn build_openai_responses_body(req: &ChatRequest<'_>) -> Value {
     let input: Vec<Value> = req
         .messages
@@ -1312,6 +1376,9 @@ where
 // Google Gemini API (streaming)
 // ---------------------------------------------------------------------------
 
+/// Build the Gemini `generateContent` request body for `req`. Pure, exposed
+/// so conformance/parity oracles (stage c2c) can byte-compare request bodies
+/// without a socket. (The model path/URL handling stays in the stream driver.)
 pub fn build_gemini_request_body(req: &ChatRequest<'_>) -> Value {
     // Gemini uses a different message format: contents with parts
     let gemini_tool_names = build_gemini_tool_name_map(req.messages);
@@ -1333,6 +1400,8 @@ pub fn build_gemini_request_body(req: &ChatRequest<'_>) -> Value {
         "generationConfig": {},
     });
 
+    // `0` means "no explicit limit": omit the field (c3; a literal 0 is
+    // rejected/meaningless, Gemini requires a positive cap when present).
     if req.max_tokens > 0 {
         body["generationConfig"]["maxOutputTokens"] = serde_json::json!(req.max_tokens);
     }
@@ -1403,6 +1472,10 @@ async fn stream_gemini(
         format!("models/{}", req.model)
     };
 
+    // Security note (CodeQL rust/cleartext-transmission): the API key is sent
+    // via the `x-goog-api-key` header (see [`Auth::Header`]) instead of the
+    // `?key=` query parameter. URL query strings are routinely logged by
+    // proxies and access logs, the header keeps the key out of those byways.
     let base = spec.base_url.trim_end_matches('/');
     let url = format!("{base}/{model_path}:streamGenerateContent?alt=sse");
 
@@ -1499,6 +1572,8 @@ where
                                         text: text.to_string(),
                                     });
                                 }
+                                // Function call, arrives complete, args
+                                // already a JSON value.
                                 if let Some(fc) = part.get("functionCall") {
                                     let name = fc
                                         .get("name")
@@ -1569,6 +1644,10 @@ where
 // Ollama native API (streaming NDJSON)
 // ---------------------------------------------------------------------------
 
+/// Build the Ollama-native `/api/chat` request body for `req` (message
+/// compaction + nativization + body shell). Pure, exposed so
+/// conformance/parity oracles (stage c2c) can byte-compare request bodies
+/// without a socket.
 pub fn build_ollama_request_body(req: &ChatRequest<'_>) -> Value {
     let mut api_messages: Vec<Value> = req
         .messages
@@ -2099,6 +2178,10 @@ mod credential_transport_tests {
 
     #[test]
     fn refuses_a_bearer_token_over_cleartext_http_to_a_remote_host() {
+        // THE GAP. `base_url` is user-configurable, BYOK users point it at
+        // proxies and gateways, and apply_headers attached the API key to
+        // whatever it was given. An http:// endpoint sent the key in the
+        // clear. rust/cleartext-transmission flagged this, correctly.
         let s = spec(
             "http://gateway.internal/v1/chat",
             Auth::Bearer("sk-secret".into()),

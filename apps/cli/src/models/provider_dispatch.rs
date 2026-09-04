@@ -165,6 +165,12 @@ pub fn resolve_selected_provider(model: &str, provider_override: Option<&str>) -
     })
 }
 
+/// Resolve the model an `exec`-style subcommand should use.
+///
+/// Precedence: subcommand-level `--model` > top-level `--model` > config
+/// default. Mirrors `selection_provider_override`'s explicit-provider
+/// fallback, without the top-level layer, `agi --model X exec "…"` silently
+/// dropped `X` and ran the config-default model.
 pub fn resolve_exec_model(
     subcommand_model: Option<&str>,
     top_level_model: Option<&str>,
@@ -387,6 +393,10 @@ pub fn provider_name(provider: &Provider) -> &'static str {
         Provider::Ollama(OllamaMode::Local) => "ollama",
         Provider::Ollama(OllamaMode::Cloud) => "ollama_cloud",
         Provider::OpenAICompatible { name, .. } => name,
+        // Custom providers have owned String names; we leak a static name only
+        // for matching against config maps. Use the first registered custom
+        // name here, callers needing the dynamic name should match on the
+        // variant directly. Falls back to "custom" as a stable label.
         Provider::Custom { .. } => "custom",
     }
 }
@@ -564,6 +574,13 @@ pub(crate) fn is_local_provider_base_url(url: &str) -> bool {
 // Subscription auth helpers
 // ---------------------------------------------------------------------------
 
+/// Try subscription auth (Copilot, ChatGPT Plus) for the given provider.
+///
+/// Returns `Some((token, url, subscription_name, account_id))` if subscription
+/// auth is available, `None` otherwise. The URL is always the one
+/// [`crate::auth::resolve_auth`] returned with the token, this function never
+/// supplies an endpoint of its own, so a subscription credential cannot be sent
+/// to a provider endpoint that did not issue it.
 pub(crate) async fn try_subscription_auth(
     provider: &Provider,
 ) -> Option<(String, String, String, Option<String>)> {
@@ -580,6 +597,14 @@ pub(crate) async fn try_subscription_auth(
         if let Ok(Some((token, base_url_override))) =
             crate::auth::resolve_auth(&mut auth_store, sub_name).await
         {
+            // The endpoint is owned by the adapter that resolved the credential:
+            // `auth::resolve_auth` hands back Copilot's chat-completions URL and
+            // ChatGPT's Codex responses URL next to the token it minted. There is
+            // deliberately no default endpoint here, this used to fall back to a
+            // second copy of the OpenAI chat-completions URL, which would have
+            // posted any future subscription's token, and the prompt with it, to
+            // OpenAI. A subscription that names no endpoint is skipped so the
+            // caller falls through to API-key auth for the selected provider.
             let Some(url) = base_url_override else {
                 continue;
             };
@@ -998,6 +1023,13 @@ mod tests {
 mod subscription_endpoint_tests {
     use crate::auth::{AuthEntry, AuthStore};
 
+    /// `try_subscription_auth` carries no endpoint of its own, the URL a
+    /// subscription request is posted to is only ever the one `resolve_auth`
+    /// returned beside the token. That is what keeps a Copilot or ChatGPT
+    /// credential from reaching a URL that did not issue it. The contract only
+    /// holds while every supported subscription names its own endpoint, so pin
+    /// it: a subscription that resolves a token with no URL is now skipped, and
+    /// the failure would otherwise be silent.
     #[tokio::test]
     async fn resolve_auth_names_an_endpoint_for_every_supported_subscription() {
         let now = chrono::Utc::now();

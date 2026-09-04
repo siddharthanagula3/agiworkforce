@@ -37,6 +37,10 @@ const actionButtonStyle = {
 
 export function ArchivedChatsSection() {
   const router = useRouter();
+  // Destructive-action confirmation (shell-nav-ia-gap-01 remainder), same
+  // shared AlertDialog wrapper as PrivacySection and WebChatPage, replacing
+  // native `window.confirm()` for both the single-chat and delete-all-archived
+  // actions below.
   const { confirm: confirmDestructive, dialog: destructiveConfirmDialog } = useConfirm();
   const [conversations, setConversations] = useState<ArchivedConversationSummary[]>([]);
   const [nextOffset, setNextOffset] = useState(0);

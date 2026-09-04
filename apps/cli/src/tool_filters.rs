@@ -55,6 +55,12 @@ pub fn ensure_tool_call_allowed(
     Ok(())
 }
 
+/// Deny semantics: the rule bites if it matches the raw call target or **any**
+/// command the target would actually run, including the speculative units the
+/// shape walk emits where a wrapper's option grammar is only partly known, so
+/// neither chaining nor re-spelling the program name (`'rm'`, `(rm ...)`,
+/// `env rm ...`, `strace -Z val rm ...`) smuggles a denied program past a rule
+/// written for it.
 fn spec_matches_tool_call(spec: &str, tool_name: &str, args: &HashMap<String, String>) -> bool {
     if !spec_matches_tool_for_schema(spec, tool_name) {
         return false;
@@ -153,6 +159,10 @@ fn unit_matches(pattern: &str, unit: &CommandUnit) -> bool {
         .any(|value| wildcard_matches(pattern, value))
 }
 
+/// Break a call target into the units a rule must be checked against. A command
+/// tool resolves to every invocation the shell would actually run, through
+/// quoting, grouping, keywords, wrappers and substitutions, so re-spelling the
+/// program name cannot dodge a rule written for it.
 fn match_units(tool_name: &str, target: &str) -> Vec<CommandUnit> {
     if !matches!(tool_name, "run_command" | "powershell") {
         return vec![CommandUnit::literal(target)];
@@ -579,6 +589,9 @@ mod tests {
 
     #[test]
     fn speculative_units_convict_but_never_clear() {
+        // The unknown `-Z val` hides the payload from the wrapper's option
+        // table, so only the speculative unit sees `cargo`, and a speculative
+        // unit must not be enough to satisfy an allowlist.
         assert!(ensure_tool_call_allowed(
             "run_command",
             &args(&[("command", "strace -Z val cargo build")]),

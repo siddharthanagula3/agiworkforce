@@ -25,7 +25,15 @@ pub enum ColorLevel {
     TrueColor,
 }
 
+/// Detect the terminal's color capability from environment variables.
+///
+/// Checks (in order):
+/// 1. `NO_COLOR`: if set (any value), returns `None`.
+/// 2. `COLORTERM`: `truecolor` or `24bit` → `TrueColor`.
+/// 3. `TERM`: contains `256color` → `Ansi256`.
+/// 4. Fallback: `Ansi16`.
 pub fn detect_color_level() -> ColorLevel {
+    // NO_COLOR spec: https://no-color.org/, presence means disable color
     if env::var("NO_COLOR").is_ok() {
         return ColorLevel::None;
     }
@@ -133,6 +141,7 @@ pub fn format_table(headers: &[&str], rows: &[Vec<String>]) -> String {
         .map(|row| row.iter().map(|c| sanitize_terminal_text(c)).collect())
         .collect();
 
+    // Compute column widths, max of header and all cell widths.
     let col_count = headers.len();
     let mut widths: Vec<usize> = headers.iter().map(|h| h.len()).collect();
 
@@ -155,6 +164,7 @@ pub fn format_table(headers: &[&str], rows: &[Vec<String>]) -> String {
     out.push_str(&header_line.join("  "));
     out.push('\n');
 
+    // Separator, sum of widths plus 2-space gaps between columns
     let sep_len: usize = widths.iter().sum::<usize>() + (col_count.saturating_sub(1)) * 2;
     for _ in 0..sep_len {
         out.push('\u{2500}'); // ─
@@ -212,6 +222,16 @@ pub fn print_assistant_chunk(text: &str) {
     flush_stdout();
 }
 
+/// Push buffered stdout out now.
+///
+/// Rust line-buffers stdout, so a `print!` with no trailing newline sits in the
+/// buffer. Streaming assistant text is exactly that: partial lines. Two things
+/// break without this flush. Streaming stops looking like streaming, a
+/// paragraph appears all at once when its newline finally arrives. Worse, the
+/// agent loop's progress banners go to stderr, which is unbuffered, so they
+/// overtake the buffered text and the transcript comes out in the wrong order:
+/// "Running `echo alpha` first" printed *after* the `[run_command]` line it was
+/// written to introduce, and two turns' text fused with no break between them.
 fn flush_stdout() {
     use std::io::Write;
     let _ = std::io::stdout().flush();
@@ -237,6 +257,9 @@ pub fn print_error(message: &str) {
     eprintln!("{} {}", ts::error_label(), sanitize_terminal_text(message));
 }
 
+/// Print an already-rendered block (a table, a listing, a raw payload) whose
+/// text came from outside this process, the model, a tool, an MCP server, or
+/// files in the checkout, with terminal escapes stripped.
 pub fn print_block(text: &str) {
     eprintln!("{}", sanitize_terminal_text(text));
 }
@@ -537,6 +560,11 @@ pub fn print_banner(model: &str, provider: &str) {
     eprintln!();
 }
 
+/// Print the user's tier to stderr if available from the on-disk cache.
+/// This is a best-effort display, it is silently skipped when no cache entry
+/// exists (e.g. first-run, BYOK, or local mode).
+///
+/// Example output: `  Pro`
 pub fn print_tier_status() {
     if let Some(cached) = crate::tier_cache::read_tier_cache() {
         eprintln!("{}", ts::muted(format!("  {}", cached.status_label())));
@@ -576,6 +604,19 @@ mod tests {
     use super::*;
     use std::sync::{Mutex, MutexGuard, OnceLock};
 
+    /// Assistant text must only reach stdout through this module, because only
+    /// this module flushes.
+    ///
+    /// The original defect was not a missing flush in one function, it was a
+    /// *second* streaming sink. `continuation_sink` printed chunks with a bare
+    /// `print!`, so the first completion streamed correctly while every
+    /// follow-up completion sat in the line buffer and lost its race with the
+    /// unbuffered stderr progress banners. The transcript came out reordered
+    /// ("Running `echo alpha` first" printed after the `[run_command]` line it
+    /// introduced) and consecutive turns fused with no break.
+    ///
+    /// Fixing the one call site does not stop a third sink appearing, so the
+    /// guard is on the shape: no `print!` of a stream chunk outside `output`.
     #[test]
     fn no_streaming_sink_bypasses_this_module() {
         let src = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
@@ -740,6 +781,7 @@ mod tests {
     #[test]
     fn test_format_cost_zero_tokens() {
         let result = format_cost("unknown-local-model", 0, 0);
+        // 0 tokens of anything is $0.00, treated as local/zero
         assert!(result.contains("no cost"));
     }
 

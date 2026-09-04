@@ -6,6 +6,11 @@ use tokio::time::sleep;
 use super::enigo_lock::lock_enigo;
 use crate::automation::computer_use::consent::consent_prompt_is_on_screen;
 
+/// F20 (audit 2026-08-21): the native computer-use consent prompt is only a
+/// decision the user makes if the app cannot answer it for them. Every command
+/// that reaches this simulator is gated on persisted consent, but the script
+/// executor reaches it without one, so the refusal also lives here, a
+/// synthesized `Return` must never be what accepts the prompt.
 fn refuse_while_consent_prompt_is_on_screen() -> Result<()> {
     if consent_prompt_is_on_screen() {
         return Err(anyhow!(

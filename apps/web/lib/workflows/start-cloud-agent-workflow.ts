@@ -97,6 +97,19 @@ export type CloudAgentTransportDegradeReason =
   | 'transport_cooling_down';
 
 export interface RunCloudAgentTurnInput extends StartCloudAgentWorkflowExecutionInput {
+  /**
+   * What to do when the durable transport is unavailable.
+   *
+   * `'inline'`, run the turn request-scoped instead: same SSE wire, same run
+   * journal, same checkpoints, same settlement. The turn is merely no longer
+   * detachable.
+   * `'fail'`, rethrow and let the caller answer for it.
+   *
+   * This degrades the TRANSPORT ONLY. Every authorization gate an entry point
+   * runs, auth, managed compute, organization policy, spend limit, checkpoint
+   * ownership, connector permissions, runs before a transport is chosen and is
+   * unaffected by which one is picked.
+   */
   onDurableUnavailable: 'inline' | 'fail';
   /**
    * The entry request's abort signal. Required, because the inline transport
@@ -120,6 +133,31 @@ export interface CloudAgentTurnTransport {
   degradedReason?: CloudAgentTransportDegradeReason;
 }
 
+/**
+ * Run one agent turn on the best transport available.
+ *
+ * This is the single execution entry every agent turn passes through, an
+ * initial turn, an approval resume, an input resume. Durability used to be
+ * decided ad hoc at each entry point, which produced the two defects this
+ * function exists to remove:
+ *
+ *  - AGI-126: the initial turn went durable only when it held a MANAGED usage
+ *    reservation, so a free-trial turn got a `cloud_agent_runs` row that LOOKED
+ *    durable, listed by the runs API, claimable by the approval APIs, and then
+ *    died with the client connection, and a pause it recorded could never be
+ *    resumed. Both reservations now cross the invocation boundary (see
+ *    `CloudAgentWorkflowBilling`), so the tier no longer decides the transport.
+ *    Durable is not unmetered: the workflow rehydrates a free-trial reservation
+ *    onto `processed.freeTrial`, so the tool loop applies the same per-step free
+ *    output-budget cap it applies inline, and settlement releases that same free
+ *    reservation row.
+ *
+ *  - AGI-39: the resume entry points always started the durable workflow with no
+ *    fallback, so a Workflow-platform outage, or the AGI_DURABLE_INITIAL_TURNS
+ *    kill-switch being engaged, turned every pending approval and input resume
+ *    into a 503, even though `runToolLoop` has always been able to run that same
+ *    resume request-scoped. `onDurableUnavailable: 'inline'` reaches that path.
+ */
 export async function runCloudAgentTurn(
   input: RunCloudAgentTurnInput,
 ): Promise<CloudAgentTurnTransport> {
@@ -204,6 +242,9 @@ function buildInlineCloudAgentTurn(input: RunCloudAgentTurnInput): ReadableStrea
       : {}),
     usage,
     signal: input.signal,
+    // The durable transport replays a resume through these same options. The
+    // inline one is not a lesser resume, it is the same resume, minus the
+    // detachment.
     ...(input.continuation
       ? {
           ...(input.continuation.resume ? { resume: input.continuation.resume } : {}),

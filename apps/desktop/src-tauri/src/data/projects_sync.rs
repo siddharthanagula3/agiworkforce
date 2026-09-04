@@ -1,3 +1,58 @@
+//! Desktop cloud projects sync engine (managed-cloud only).
+//!
+//! Delta-syncs the SQLite `projects` table with the managed-cloud
+//! `/api/projects/sync` endpoint, mirroring the memory engine in `memory_sync.rs`.
+//!
+//! MANAGED-ONLY: every entry point is gated on a valid bearer token. The mint
+//! hook (`mark_project_for_push`) guards on `app_mode = 'cloud'` so local/BYOK
+//! projects can never acquire a cloud_id or have needs_push=1. The trust boundary
+//! is the same as chat: `derive_cloud_sync_enabled` in `send_message_setup.rs`.
+//!
+//! Wire protocol:
+//!   POST /api/projects/sync  { projects: [{ id, name, description?, instructions?,
+//!                               color?, isArchived?, metadata?, baseVersion,
+//!                               deletedAt? }] }
+//!                          → { applied: [{ id, server_version }], conflicts, cursor }
+//!   GET  /api/projects/sync?since=<cursor>
+//!                          → { projects: [{ id, name, description, instructions,
+//!                               color, is_archived, metadata, created_at,
+//!                               updated_at, deleted_at, server_version }],
+//!                               cursor, hasMore }
+//!
+//! INTEGER PKs are never sent over the wire; the projects table uses TEXT PKs
+//! (UUIDv7) so `cloud_id` == `id` for origin-device rows. Pull-inserted rows
+//! use `cloud_id` as their local `id` (no surrogate needed, unlike memory).
+//!
+//! Column mapping (local ↔ wire):
+//!   custom_instructions ↔ instructions   (name differs)
+//!   metadata            ↔ metadata       (stored as JSON TEXT in local DB)
+//!   is_archived INTEGER ↔ isArchived bool (converted both directions)
+//!
+//! Local-only columns NOT synced (per the frozen contract):
+//!   files, conversation_ids, icon, icon_emoji, accent_color,
+//!   default_privacy_mode, knowledge_base_files
+//!
+//! Conflict resolution is compare-and-swap against `baseVersion`, a server-owned
+//! monotonic revision. Client timestamps never cross the wire or choose a winner.
+//!
+//! ACCOUNT SCOPING: one desktop install serves many accounts and the local DB
+//! survives sign-out, so every push, ack, conflict and pull statement is scoped
+//! to `projects.sync_user_id` the same way `cloud_sync.rs` scopes on
+//! `conversations.user_id`. Rows created before that stamp existed are adopted
+//! once, and only while no second account is known to this device
+//! (`only_account_on_device`). Residual gap: a project created in cloud mode by
+//! an account that then signs out WITHOUT ever completing a sync is still
+//! unowned, so the next account on the device adopts it. Closing that needs the
+//! owner stamped at creation in `sys/commands/projects.rs`, which is outside
+//! this engine.
+//!
+//! PUSH: `#[serde(skip_serializing_if = "Option::is_none")]` on ALL optional
+//! fields. The server Zod schema uses `.optional()` (not `.nullable()`) for
+//! description, instructions, color, isArchived, metadata, deletedAt.
+//! meaning `undefined` (key absent) is accepted but `null` (key present) fails
+//! validation. Same camelCase + skip_serializing_if discipline as memory_sync.
+//! Exception: `deletedAt` is `.nullable().optional()` on the server, so null is
+//! technically accepted, but we still skip_if_none to stay consistent.
 
 use chrono::{DateTime, SecondsFormat, Utc};
 use reqwest::Client;
@@ -7,6 +62,10 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use tracing::{debug, warn};
 use uuid::Uuid;
 
+// ---------------------------------------------------------------------------
+// Wire shapes, field names must match the server schema exactly.
+// Push uses camelCase (PushProjectSchema in route.ts); pull returns snake_case.
+// ---------------------------------------------------------------------------
 
 /// Pushed project (camelCase, matching PushProjectSchema on server).
 ///
@@ -103,6 +162,9 @@ pub struct ProjectSyncOutcome {
     pub projects_pulled: usize,
 }
 
+// ---------------------------------------------------------------------------
+// Helpers, same bigint cursor logic as memory_sync and cloud_sync.
+// ---------------------------------------------------------------------------
 
 fn bigint_greater(a: &str, b: &str) -> bool {
     let na = a.trim_start_matches('0');
@@ -178,6 +240,9 @@ fn to_z_datetime(s: &str) -> String {
 
 static PROJECT_SYNC_IN_FLIGHT: AtomicBool = AtomicBool::new(false);
 
+// ---------------------------------------------------------------------------
+// DB cursor helpers, per-user project cursor in cloud_sync_state.project_cursor.
+// ---------------------------------------------------------------------------
 
 fn read_project_cursor(conn: &Connection, user_id: &str) -> String {
     conn.query_row(
@@ -199,6 +264,9 @@ fn write_project_cursor(conn: &Connection, user_id: &str, cursor: &str) {
     );
 }
 
+// ---------------------------------------------------------------------------
+// Account scoping, which account owns a local cloud row.
+// ---------------------------------------------------------------------------
 
 /// Add the owner stamp to `projects` when the local DB predates it. The engine
 /// runs it on every cycle rather than relying on a schema migration because a
@@ -261,6 +329,12 @@ fn claim_unowned_projects(conn: &Connection, user_id: &str) -> usize {
 // Identity minting.
 // ---------------------------------------------------------------------------
 
+/// Mint a UUIDv7 cloud_id for a newly-created cloud project and mark it for push.
+/// Idempotent: COALESCE ensures a second call keeps the original cloud_id.
+/// Guard: only runs when `app_mode = 'cloud'`, local/BYOK rows are never touched.
+///
+/// Note: for projects, `id` is a TEXT PK (UUIDv7). The cloud_id is stored separately
+/// as the wire identity (which equals the local id for origin-device rows).
 pub fn mark_project_for_push(conn: &Connection, project_id: &str) -> SqlResult<()> {
     let cloud_id = Uuid::now_v7().to_string();
     let now = now_z();
@@ -433,6 +507,16 @@ fn apply_project_conflicts(
 // DB-only pull helpers.
 // ---------------------------------------------------------------------------
 
+/// Apply pulled project deltas into the local SQLite DB.
+/// Per-row failures are logged and skipped so one bad row doesn't abort the page.
+///
+/// Dedup: match on `cloud_id` (not on `id`) so the origin device finds its own
+/// row by cloud_id when pulling its own echo back. The match is also scoped to
+/// the signed-in account, so a delta can never rewrite a row left behind by a
+/// previous account on the same device.
+///
+/// For new rows from another device: `id = d.id` (the UUIDv7 cloud id) since
+/// projects use TEXT PKs, no surrogate needed unlike memory's category+topic.
 fn apply_project_deltas(conn: &Connection, user_id: &str, deltas: &[ProjectDelta]) -> usize {
     let mut applied = 0usize;
     for d in deltas {
@@ -456,6 +540,7 @@ fn apply_project_deltas(conn: &Connection, user_id: &str, deltas: &[ProjectDelta
                 );
                 applied += 1;
             }
+            // If we don't have the row, the delete already propagated, no-op.
         } else if let Some((local_id, needs_push)) = existing {
             if needs_push != 0 {
                 // A newer local edit exists. Preserve its content and only rebase
@@ -497,6 +582,8 @@ fn apply_project_deltas(conn: &Connection, user_id: &str, deltas: &[ProjectDelta
             );
             applied += 1;
         } else {
+            // New row from another device, INSERT.
+            // Use cloud id as the local TEXT PK (projects already use UUIDv7 PKs).
             let metadata_json: Option<String> = d
                 .metadata
                 .as_ref()
@@ -515,6 +602,8 @@ fn apply_project_deltas(conn: &Connection, user_id: &str, deltas: &[ProjectDelta
                 params![
                     d.id, // id = cloud_id (TEXT PK)
                     d.name,
+                    // description is NOT NULL DEFAULT '', server may send null (nullable optional),
+                    // so we must not bind NULL into a NOT NULL column.
                     d.description.as_deref().unwrap_or(""),
                     // custom_instructions mapped from wire `instructions` (NOT NULL DEFAULT '').
                     d.instructions.as_deref().unwrap_or(""),
@@ -781,6 +870,7 @@ mod tests {
         );
     }
 
+    // ── Test 2: Mint, sets cloud_id + needs_push on cloud project ────────────
 
     #[test]
     fn mint_sets_cloud_id_and_needs_push_for_cloud_project() {
@@ -1018,6 +1108,14 @@ mod tests {
         );
     }
 
+    // ── Test 7: Pull INSERT new row, null description/instructions must land ──
+    //
+    // Core cross-device scenario: device B pulls a project it has never seen.
+    // Server may send description: null (the Zod type is `string | null`).
+    // The local schema is `description TEXT NOT NULL DEFAULT ''`, so binding
+    // SQL NULL would violate the constraint and silently drop the row.
+    // After the fix (`.unwrap_or("")`) the row must be inserted and both
+    // nullable-on-wire / NOT NULL-locally fields read back as "".
 
     #[test]
     fn pull_insert_new_row_with_null_description_and_instructions() {
@@ -1039,7 +1137,7 @@ mod tests {
         let delta = ProjectDelta {
             id: "new-cloud-uuid-1".to_string(),
             name: "Remote Project".to_string(),
-            description: None,
+            description: None, // server sends null, must not 500 on NOT NULL column
             instructions: None, // same
             color: None,
             is_archived: false,
@@ -1091,9 +1189,17 @@ mod tests {
         assert_eq!(select_next_project_cursor("50", "10"), "50");
     }
 
+    // ── Test 10: Push wire shape, camelCase + omit None fields ──────────────
+    //
+    // Zod schema: description/instructions/color/isArchived/metadata/deletedAt
+    //             are all `.optional()` or `.nullable().optional()`.
+    //
+    // When None, serde MUST omit the key entirely (skip_serializing_if).
+    // Emitting `null` would fail Zod .optional() and 400 the push.
 
     #[test]
     fn push_body_serializes_to_camelcase_schema() {
+        // Case A: normal project, most optional fields absent.
         let body_normal = ProjectPushBody {
             projects: vec![PushProject {
                 id: "p1".into(),
@@ -1162,6 +1268,7 @@ mod tests {
         // user_id must not be in push body.
         assert!(p_normal.get("userId").is_none() && p_normal.get("user_id").is_none());
 
+        // Case B: tombstone, deletedAt must be present as a timestamp string.
         let body_tombstone = ProjectPushBody {
             projects: vec![PushProject {
                 id: "p2".into(),

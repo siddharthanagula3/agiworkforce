@@ -95,6 +95,18 @@ fn print_diff_preview(diff: &str) {
     }
 }
 
+/// Reached when a mutating tool needs approval, there is no TUI/approval
+/// callback installed (headless / `agi exec` context), and stdin is not a
+/// TTY, i.e. there is no way to actually obtain user consent (the
+/// `dialoguer::Confirm` prompt below would fail immediately and silently
+/// resolve to "denied").
+///
+/// Returning a normal `ToolResult { success: false, .. }` here is not enough:
+/// the denial gets reported back to the model as a routine tool result, the
+/// model narrates an apology, and the *process* still exits 0, a script
+/// driving `agi exec` gets no failure signal even though the requested
+/// mutation never happened. Hard-fail the process instead so non-interactive
+/// callers can detect the failure.
 fn abort_noninteractive_auto_deny(tool_name: &str, action: &str) -> ! {
     eprintln!(
         "{}",
@@ -283,6 +295,8 @@ pub(super) async fn execute_read_file(args: &HashMap<String, String>) -> Result<
         });
     }
 
+    // Detect image files before attempting to read as text, binary reads would
+    // return garbled data.  Return an actionable message instead.
     let extension = file_path
         .extension()
         .and_then(|e| e.to_str())
@@ -481,6 +495,10 @@ pub(super) async fn execute_write_file(
                 )
                 .await
                 {
+                    // Resolved by the TUI approval overlay (or any installed callback).
+                    // This decision is authoritative, do NOT fall through to the
+                    // dialoguer confirm below, which would double-prompt on the
+                    // alternate screen and auto-deny when stdin is not a TTY.
                     if !approval_allows(decision) {
                         return Ok(ToolResult {
                             tool_name: "write_file".to_string(),
@@ -901,6 +919,10 @@ pub(super) async fn execute_apply_patch(
             });
         }
     }
+    // Freshness gate: for every existing file the patch will touch, confirm
+    // it has been read since it was last modified on disk.  This matches the
+    // read-before-write contract enforced by write_file/edit_file/multiedit.
+    // New files (not yet on disk) are skipped, there is nothing to be stale.
     if let Ok(paths) = patch_target_paths(patch) {
         for path in &paths {
             if path.exists() {

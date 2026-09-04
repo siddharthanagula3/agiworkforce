@@ -33,12 +33,16 @@ fn any_option_matches(arg: &str, options: &[&str]) -> bool {
     options.iter().any(|option| matches_option(arg, option))
 }
 
+/// Classify `rm`, force flags make it Dangerous, otherwise Unknown.
+/// `-r`/`-R`/`--recursive` alone is Unknown (prompts user), but combined with
+/// `-f` (e.g. `-rf`, `-fr`, `-rfv`) it becomes Dangerous.
 pub(super) fn classify_rm(command: &str) -> CommandSafety {
     let args: Vec<&str> = command.split_whitespace().collect();
     for arg in &args[1..] {
         if *arg == "-f" || *arg == "--force" || *arg == "-rf" || *arg == "-fr" {
             return CommandSafety::Dangerous;
         }
+        // Combined short flags like -rfv, -fv, dangerous only if 'f' is present.
         if arg.starts_with('-') && !arg.starts_with("--") {
             let flag_chars = &arg[1..];
             if flag_chars.contains('f') {
@@ -46,9 +50,11 @@ pub(super) fn classify_rm(command: &str) -> CommandSafety {
             }
         }
     }
+    // rm without force flags is Unknown, prompts user.
     CommandSafety::Unknown
 }
 
+/// Classify `find`, dangerous if any exec/delete options are present.
 pub(super) fn classify_find(command: &str) -> CommandSafety {
     let args: Vec<&str> = command.split_whitespace().collect();
     for arg in &args[1..] {
@@ -59,6 +65,7 @@ pub(super) fn classify_find(command: &str) -> CommandSafety {
     CommandSafety::Safe
 }
 
+/// Classify `rg`, dangerous if any execution/compressed-search options are present.
 pub(super) fn classify_rg(command: &str) -> CommandSafety {
     let args: Vec<&str> = command.split_whitespace().collect();
     for arg in &args[1..] {
@@ -69,6 +76,13 @@ pub(super) fn classify_rg(command: &str) -> CommandSafety {
     CommandSafety::Safe
 }
 
+/// Classify `sed`, only safe if the *entire* argument list is the read-only print
+/// form `sed -n {N|M,N}p [file...]`.
+///
+/// Every trailing token is validated, not just the expression: `sed -n 1,999p
+/// secrets.yml > ci.yml` reads and writes arbitrary files, so an unaccounted-for
+/// flag, shell metacharacter, or second expression must fall through to Unknown
+/// (which prompts) instead of riding along on the safe-looking pattern.
 pub(super) fn classify_sed(command: &str) -> CommandSafety {
     let args: Vec<&str> = command.split_whitespace().collect();
     if args.len() < 3 || args[1] != "-n" {
@@ -140,6 +154,7 @@ pub(super) fn is_sed_readonly_print(expr: &str) -> bool {
     false
 }
 
+/// Classify `base64`, dangerous if output file options are present.
 pub(super) fn classify_base64(command: &str) -> CommandSafety {
     let args: Vec<&str> = command.split_whitespace().collect();
     for arg in &args[1..] {
@@ -150,10 +165,13 @@ pub(super) fn classify_base64(command: &str) -> CommandSafety {
     CommandSafety::Safe
 }
 
+/// Classify `git`, enhanced validation that skips global options, blocks `-c`,
+/// and validates subcommands with their flags.
 pub(super) fn classify_git(command: &str) -> CommandSafety {
     let args: Vec<&str> = command.split_whitespace().collect();
     let mut i = 1; // skip "git"
 
+    // Block `git -c` (config override injection), all forms.
     for arg in &args[1..] {
         if *arg == "-c" || arg.starts_with("-c=") || arg.starts_with("-c ") {
             return CommandSafety::Dangerous;
@@ -183,6 +201,7 @@ pub(super) fn classify_git(command: &str) -> CommandSafety {
     }
 
     if i >= args.len() {
+        // Just `git` with no subcommand, Unknown.
         return CommandSafety::Unknown;
     }
 
@@ -231,6 +250,7 @@ pub(super) fn classify_git(command: &str) -> CommandSafety {
     CommandSafety::Unknown
 }
 
+/// Classify `git branch`, safe only with read-only flags.
 pub(super) fn classify_git_branch(args: &[&str]) -> CommandSafety {
     if args.is_empty() {
         return CommandSafety::Safe;
@@ -244,6 +264,7 @@ pub(super) fn classify_git_branch(args: &[&str]) -> CommandSafety {
     CommandSafety::Safe
 }
 
+/// Classify an `mv` command, dangerous only when the target is a system path.
 pub(super) fn classify_mv(command: &str) -> CommandSafety {
     let args: Vec<&str> = command.split_whitespace().collect();
     // `mv` with a target: last positional arg (skip flags starting with '-').
@@ -266,6 +287,7 @@ mod tests {
     fn strip_matched_quotes_strips_balanced_pairs_only() {
         assert_eq!(strip_matched_quotes("'$p'"), "$p");
         assert_eq!(strip_matched_quotes("\"5p\""), "5p");
+        // No surrounding quotes, unchanged.
         assert_eq!(strip_matched_quotes("5p"), "5p");
         // Mismatched quotes must NOT be normalized into a stripped form.
         assert_eq!(strip_matched_quotes("'5p\""), "'5p\"");
@@ -351,6 +373,8 @@ mod tests {
 
     #[test]
     fn classify_sed_rejects_mixed_quote_expression() {
+        // `'5p"` must NOT be normalized into a "safe" print pattern by asymmetric
+        // quote trimming, it falls through to Unknown (which prompts the user).
         assert_eq!(
             classify_sed("sed -n '5p\" file.txt"),
             CommandSafety::Unknown

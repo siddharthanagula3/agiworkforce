@@ -73,6 +73,7 @@ pub struct TokenMultiplier {
     pub completion: f64,
 }
 
+/// Catalog `cachePolicy`, only the fields cost calculation needs.
 #[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CachePolicyEntry {
@@ -88,6 +89,12 @@ pub struct CachePolicyEntry {
 pub struct PricingEntry {
     pub input_per_million: f64,
     pub output_per_million: f64,
+    /// Absolute per-million price for a cache READ, straight from the catalog's
+    /// `cached_input`. `None` when the model prices no cache read, in which case
+    /// callers must fall back to the full input rate rather than guessing a
+    /// discount. Carrying the real number matters: the cost calculator used to
+    /// hardcode 0.5x the input rate for OpenAI and Managed Cloud, while current
+    /// catalog entries can price cache reads at 0.1x, a 5x overcharge if ignored.
     #[serde(default)]
     pub cache_read_per_million: Option<f64>,
     /// Multiplier applied to the input rate when WRITING a cache entry, from
@@ -254,6 +261,10 @@ pub struct EffectivePricing {
 }
 
 impl PricingWindowEntry {
+    /// Whether this window covers `as_of`. Both bounds are inclusive; an absent
+    /// bound is open-ended. A bound that is not a parseable `YYYY-MM-DD` date
+    /// makes the window inapplicable, an unreadable schedule must never move a
+    /// price silently.
     fn covers(&self, as_of: NaiveDate) -> bool {
         let bound = |value: &Option<String>| -> Option<Option<NaiveDate>> {
             match value {
@@ -283,6 +294,11 @@ impl ModelEntry {
             .max_by_key(|tier| tier.threshold_tokens)
     }
 
+    /// Rates that apply to this model on `as_of`.
+    ///
+    /// The first `pricingSchedule` window covering `as_of` wins; with no
+    /// schedule (the usual case) or no covering window, the model's top-level
+    /// fields, which always hold the enduring/standard price, are returned.
     pub fn effective_pricing(&self, as_of: NaiveDate) -> EffectivePricing {
         let base = EffectivePricing {
             input_cost: self.input_cost,
@@ -402,6 +418,24 @@ pub fn get_default_model(provider: &Provider) -> &'static str {
         })
 }
 
+/// Last-resort model for a cloud provider that has no `defaultModel` in the
+/// catalog (Bedrock, OpenRouter, NVIDIA NIM, and the aggregators that carry no
+/// `providers` entry at all).
+///
+/// Walks `providersInOrder`, the catalog's own preference order, and takes the
+/// first provider that declares a default. The previous code returned a literal
+/// model ID guarded by `debug_assert!`, which is compiled out of release builds,
+/// so a catalog rename would have shipped a dead ID to users with no signal.
+///
+/// Note what this does and does not buy: the result is guaranteed to be a live
+/// catalog entry, not to be servable by the provider that asked. Bedrock,
+/// OpenRouter, Together and NVIDIA NIM declare no `defaultModel` and no
+/// canonicalization, so they land on another provider's ID either way, the fix
+/// is a catalog entry for those providers, not a different literal here.
+///
+/// The empty-string arm is the `Option` the iterator forces and is unreachable
+/// while any provider declares a default; `get_default_model_returns_non_empty_for_all_providers`
+/// fails if it is ever taken.
 fn catalog_fallback_model() -> &'static str {
     CONFIG
         .providers_in_order
@@ -457,6 +491,17 @@ pub fn get_task_model(provider: &Provider, task: &str) -> &'static str {
         .unwrap_or_else(|| get_default_model(provider))
 }
 
+/// Pricing (input, output per 1M tokens) for a specific model, on `as_of`.
+///
+/// Returns the model-specific pricing if found in the catalog, otherwise
+/// falls back to the provider's default pricing.  Returns `None` when
+/// neither is available so callers can decide how to handle the gap
+/// (e.g. skip cost tracking, surface an error) instead of silently
+/// using an inaccurate placeholder.
+///
+/// `as_of` is explicit, no clock is read here, because a model may carry a
+/// dated `pricingSchedule` and the rate that applies is a function of the
+/// request's date, not of when this process happens to run.
 pub fn get_pricing(provider: &Provider, model_id: &str, as_of: NaiveDate) -> Option<PricingEntry> {
     get_pricing_for_input(provider, model_id, as_of, 0)
 }
@@ -840,6 +885,11 @@ mod tests {
 
     #[test]
     fn founder_standard_anthropic_route_prices_the_standard_rates_on_every_date() {
+        // Founder pin, Decision #22 (docs/decisions/README.md,
+        // reaffirmed 2026-08-05): Sonnet 5 bills users the standard $3/$15 per
+        // MTok (cache read $0.30, 5m write $3.75, 1h write $6.00) on EVERY date.
+        // Anthropic's introductory window is a provider-COST fact for the
+        // registry's verificationLog, never a product price.
         let standard_model = founder_standard_anthropic_model();
         assert!(
             standard_model.pricing_schedule.is_empty(),
@@ -949,6 +999,9 @@ mod tests {
         }
     }
 
+    /// The cloud-provider fallback used to be a literal guarded by
+    /// `debug_assert!`, which release builds strip, a catalog rename shipped a
+    /// dead model ID. Every cloud default must resolve in the catalog.
     #[test]
     fn get_default_model_resolves_in_catalog_for_cloud_providers() {
         for provider in [
@@ -963,6 +1016,7 @@ mod tests {
             Provider::Minimax,
             Provider::Zhipu,
             Provider::ManagedCloud,
+            // No catalog `providers` entry at all, these exercise the fallback.
             Provider::Together,
             Provider::Bedrock,
             Provider::OpenRouter,
@@ -1168,6 +1222,13 @@ mod tests {
 
     #[test]
     fn api_model_id_maps_dotted_internal_ids_to_wire_and_is_idempotent() {
+        // BUG 1 regression: the wire body must carry `apiModelId` (dash form),
+        // never the dotted internal catalog id. Anthropic returns 404 for the
+        // dotted id. Verify every catalog model whose internal id differs from
+        // its apiModelId maps correctly AND that re-running through
+        // `get_api_model_id` on the already-wire id is a no-op (idempotent), the
+        // reverse-lookup branch in `get_canonicalized_id` exists precisely to
+        // keep this idempotent, so it must not corrupt an already-wire id.
         let mut checked_any = false;
         for (internal_id, entry) in &CONFIG.models {
             let Some(api_id) = entry.api_model_id.as_deref() else {
@@ -1195,6 +1256,14 @@ mod tests {
             "expected at least one catalog model with internal_id != apiModelId"
         );
 
+        // Pin get_canonicalized_id's reverse-lookup branch directly: it maps a
+        // wire (apiModelId) id back to its dotted catalog id, and leaves the
+        // catalog id unchanged. This branch is what keeps get_provider_for_model
+        // working when handed a wire id; it must not be removed. (Note:
+        // get_api_model_id above is idempotent for the wire id with OR without
+        // this branch, the branch earns its keep via provider lookup, not
+        // idempotence, but the ADAPTER must call get_api_model_id, never
+        // get_canonicalized_id, for the wire model field.)
         for (internal_id, entry) in &CONFIG.models {
             let Some(api_id) = entry.api_model_id.as_deref() else {
                 continue;

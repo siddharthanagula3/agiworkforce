@@ -166,6 +166,11 @@ interface SendMessageOptions {
    * and the original keeps the tail it already produced.
    */
   userMessageParentId?: string | null;
+  /**
+   * Regenerate-as-sibling: the user message to answer again. No user message is
+   * created or persisted, the new answer hangs straight off this one, beside
+   * the answer that is already there.
+   */
   regenerateParentMessageId?: string;
   /**
    * The caller painted this turn under a client-generated placeholder id
@@ -288,6 +293,11 @@ function readServerQuotaRecoveries(value: unknown): readonly ServerQuotaRecovery
   return option ? [option] : NO_RECOVERY_OPTIONS;
 }
 
+/**
+ * True only for an expired or missing session. A 403 is a permission answer and
+ * a 429 is a quota answer, neither means "sign in and try that again", so
+ * neither should repopulate the composer.
+ */
 function isSessionExpiredError(error: unknown): boolean {
   if (error instanceof ChatApiError) return error.status === 401;
   return false;
@@ -357,6 +367,12 @@ async function saveMessageToDb(
     content: string;
     model?: string;
     metadata?: MessageMetadata;
+    /**
+     * Names the row this message branches from; null asks for the root sibling
+     * group. Omitted, the server chains it onto whatever the conversation's
+     * active leaf is, which is the right answer for a normal turn and the wrong
+     * one for a variant, so every sibling write states its parent explicitly.
+     */
     parentId?: string | null;
   },
   getAuthToken: AuthTokenProvider,
@@ -432,6 +448,14 @@ function isThreadedConversation(conversationId: string): boolean {
   return readConversationRows(conversationId).some((message) => message.parentId);
 }
 
+/**
+ * The parent a user message states, in the three-way distinction the write
+ * routes share (see `resolveParentId` in the messages route's message-thread
+ * lib): a uuid names the branch point, null asks for the root sibling group.
+ * which is what an edit of the opening turn is, and absent means this caller
+ * has nothing to say about the tree, so a threaded conversation continues from
+ * its leaf exactly as the server would.
+ */
 function resolveUserMessageParentId(
   conversationId: string,
   explicitParentId: string | null | undefined,
@@ -467,6 +491,15 @@ function resolveAssistantParentId(
   return isThreadedConversation(conversationId) ? userMessageId : undefined;
 }
 
+/**
+ * The conversation as the reader sees it, and the ONLY thing an LLM request is
+ * ever built from. Both context-assembly sites, the send path and the continue
+ * path, go through here, so an abandoned variant cannot reach a prompt without
+ * first becoming visible in the transcript.
+ *
+ * A conversation with no leaf resolves to its bucket by identity, so a chat that
+ * has never branched assembles exactly the array it always did.
+ */
 function readConversationMessages(conversationId: string): Message[] {
   const state = useChatStore.getState();
   return resolveVisibleThread(
@@ -684,6 +717,12 @@ const CLARIFY_ANSWERED_PREAMBLE = 'The user answered the clarifying questions:';
 const CLARIFY_DISMISSED_PREAMBLE = 'The user declined the clarifying questions and said instead:';
 const CLARIFY_DISMISSED_SILENTLY = 'The user declined the clarifying questions without answering.';
 
+/**
+ * The client default is one poll per second, 60 requests a minute against a
+ * per-minute limiter, which leaves no headroom for a second surface following
+ * the same run and buys nothing: the journal is written in coalesced batches,
+ * so a faster poll returns the same rows more often.
+ */
 const DURABLE_RUN_POLL_INTERVAL_MS = 2_500;
 
 export const REASONING_ACTIVITY_FALLBACK_THRESHOLD_MS = 1_500;
@@ -1111,6 +1150,22 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
 
   const nativeToolCallId = (name: string) => `native:${name}`;
 
+  // Google's grounded search has no separate "started" signal on the wire at
+  // all (packages/ai/providers/google/src/stream.ts yields only a single
+  // server-tool-result once grounding is already done), and the server's
+  // canonical forwarding for native search (tool-loop.ts) only pairs a
+  // start with a result, it never covers Google's result-only shape. So a
+  // Gemini turn can legitimately see OTHER real x_agent_events (lifecycle,
+  // text-delta) while never seeing one for the search itself, which is why
+  // this is its own mechanism instead of another `applyLocalAgentEvent`
+  // case gated on `sawRealAgentEvent`: it upserts the entries array
+  // directly, never touching `lastSequence`, so it stays safe to run
+  // alongside a real event stream that covers everything except this one
+  // tool. `hasCanonicalWebSearchEntry` yields to a real forwarded entry the
+  // moment one appears (a different id, since real ones carry a server
+  // toolCallId), and `reconcileNativeWebSearchEntry` drops this synthetic
+  // row if a real one lands after it already started one, so a same-call
+  // race never leaves two rows on screen.
   const nativeWebSearchEntryId = `tool:${nativeToolCallId('web_search')}`;
   const hasCanonicalWebSearchEntry = () =>
     currentAgentActivity?.entries.some(
@@ -2803,6 +2858,10 @@ export function useChatStream(): UseChatStreamReturn {
           break;
         }
       } catch (error) {
+        // CAP-040: a turn interrupted by an expired session was unrecoverable.
+        // The composer clears on send, so by the time the 401 came back the
+        // user's text survived only as a failed turn in the transcript, sign
+        // back in and you retype it.
         if (isSessionExpiredError(error)) {
           parkUnsentDraft(conversationId, content);
         }
@@ -3382,6 +3441,13 @@ interface StreamErrorContext {
   stopStreaming: (conversationId?: string) => void;
   setLoading: (loading: boolean, conversationId?: string) => void;
   updateMessage: (id: string, updates: Partial<Message>, conversationId?: string) => void;
+  /**
+   * Present only for a turn that created a sibling. A variant that produced
+   * nothing has no reason to exist: the answer it was going to sit beside is
+   * still there, so the placeholder goes and the path returns to the leaf named
+   * here rather than leaving "Error: …" behind a pager. Partial content is kept
+   *, a half-written variant is still something the reader can page back to.
+   */
   variantRestore?: { previousLeafId: string | null };
 }
 

@@ -142,11 +142,28 @@ async function settle(
   }
 }
 
+/**
+ * Which transports this notice is allowed to use.
+ *
+ * The two are consented to separately, the mobile app registers a device and
+ * carries its own per-event preferences, a browser registers itself through
+ * the settings toggle, so a caller that has checked one opt-in has not
+ * checked the other and must say which one it checked.
+ */
 export interface PushTransports {
   expo?: boolean;
   web?: boolean;
 }
 
+/**
+ * Fans one notice out to every permitted transport the account has registered.
+ *
+ * The transports are independent on purpose: a user with a phone and a browser
+ * must still hear about the run when one of the two providers is down, so a
+ * failure is folded into the returned counts rather than raised. An `error` is
+ * reported only when a transport could not even look up its registrations.
+ * an unconfigured transport is an absent one, not a failed delivery.
+ */
 export async function sendPushToUser(
   userId: string,
   message: PushMessage,

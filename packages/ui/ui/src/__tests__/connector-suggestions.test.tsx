@@ -46,6 +46,10 @@ function mount(workRole: string | null, connected: string[] = []) {
   );
 }
 
+// claude.ai shows a role-based quick-connect row above the directory. This is
+// the same idea sourced from the work description General settings already
+// collects, and deliberately labelled "Suggested", not "Popular": there are no
+// install counts in this product and inventing a ranking would be a fake metric.
 describe('connector suggestions', () => {
   it('suggests connectors for the stated role', () => {
     mount('Product management');
