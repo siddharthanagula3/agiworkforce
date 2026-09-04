@@ -1,4 +1,4 @@
--- 0168 : let the tenant audit trail survive the tenant.
+-- 0167 : let the tenant audit trail survive the tenant.
 --
 -- NOT YET APPLIED, draft only, pending explicit approval before running.
 --
