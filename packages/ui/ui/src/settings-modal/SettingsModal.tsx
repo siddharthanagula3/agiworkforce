@@ -1890,7 +1890,11 @@ export function SettingsModal({
   const { canScrollUp, canScrollDown, navRef } = useNavScrollEdges(navScrollDependency);
 
   function renderSection() {
-    if (directoryAdapter && isDirectorySection(activeSection)) {
+    if (
+      directoryAdapter &&
+      isDirectorySection(activeSection) &&
+      directoryAdapter.sections.includes(activeSection)
+    ) {
       return (
         sectionContent[activeSection] ?? (
           <DirectoryPanel section={activeSection} adapter={directoryAdapter} />

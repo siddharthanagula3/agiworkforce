@@ -13,11 +13,13 @@ import {
   INSTALL_LABEL,
   DIRECTORY_CATALOG_HEADINGS,
   DIRECTORY_INSTALLED_HEADINGS,
+  DIRECTORY_CREATE_LABEL,
   DIRECTORY_LOADING_LABEL,
   DIRECTORY_SECTION_LABELS,
   GENERIC_ERROR_COPY,
 } from './constants';
 import { DirectoryGrid } from './DirectoryGrid';
+import { DIRECTORY_CREATE_BUTTON } from './styles';
 import { DirectoryToolbar } from './DirectoryToolbar';
 import { selectDirectoryEntries, toggleFilterValue } from './filtering';
 import { PluginDetailView } from './PluginDetailView';
@@ -233,7 +235,18 @@ export function DirectoryPanel({
         <h2 className="text-base font-semibold text-foreground">
           {DIRECTORY_SECTION_LABELS[section]}
         </h2>
-        {headerActions}
+        <div className="flex shrink-0 items-center gap-2">
+          {adapter.createEntry ? (
+            <button
+              type="button"
+              onClick={() => adapter.createEntry?.(section)}
+              className={DIRECTORY_CREATE_BUTTON}
+            >
+              {adapter.createEntryLabel ?? DIRECTORY_CREATE_LABEL}
+            </button>
+          ) : null}
+          {headerActions}
+        </div>
       </div>
 
       <DirectoryToolbar

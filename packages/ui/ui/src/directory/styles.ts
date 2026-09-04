@@ -12,3 +12,6 @@ export const DIRECTORY_ICON_BUTTON =
 
 export const DIRECTORY_MENU_TRIGGER =
   'inline-flex min-h-8 items-center gap-1 rounded-md border border-border bg-background px-3 text-xs font-medium text-foreground transition-colors motion-reduce:transition-none hover:bg-muted';
+
+export const DIRECTORY_CREATE_BUTTON =
+  'inline-flex min-h-8 shrink-0 items-center rounded-lg border border-border px-3 text-xs font-medium text-foreground transition-colors motion-reduce:transition-none hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background';

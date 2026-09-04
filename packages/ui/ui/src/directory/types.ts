@@ -148,6 +148,8 @@ export interface DirectoryAdapter {
   install?: (section: DirectorySectionKey, id: string) => Promise<void> | void;
   uninstall?: (section: DirectorySectionKey, id: string) => Promise<void> | void;
   openSettings?: (section: DirectorySectionKey, id: string) => Promise<void> | void;
+  createEntry?: (section: DirectorySectionKey) => void;
+  createEntryLabel?: string;
   copyLink?: (section: DirectorySectionKey, id: string) => Promise<void> | void;
   openHref?: (href: string) => Promise<void> | void;
   copyValue?: (value: string) => Promise<void> | void;
