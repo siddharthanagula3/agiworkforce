@@ -1,4 +1,3 @@
-
 import { AlertTriangle, Terminal, WrenchIcon } from 'lucide-react';
 import { useMemo } from 'react';
 import { cn } from '../../lib/utils';
@@ -28,7 +27,6 @@ function renderMarkdown(md: string): string {
     .replace(/^\d+\. (.+)$/gm, '<li>$1</li>')
     // Blockquote
     .replace(/^> (.+)$/gm, '<blockquote>$1</blockquote>')
-    // Paragraphs — wrap double-newline separated blocks
     .split(/\n{2,}/)
     .map((block) => {
       const trimmed = block.trim();
@@ -120,6 +118,7 @@ ${content}
           <div className="h-full overflow-y-auto p-6 bg-gray-950">
             <div
               className="prose prose-sm prose-invert max-w-none"
+              /* llm-guardrail-allow: markdown html passes sanitizeMarkdownHtml before it is set */
               dangerouslySetInnerHTML={{ __html: sanitizeMarkdownHtml(markdownHtml) }}
             />
           </div>
