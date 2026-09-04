@@ -1,27 +1,26 @@
-export { DirectoryModal, type DirectoryModalProps } from './DirectoryModal';
-export { DirectoryRail } from './DirectoryRail';
+export { DirectoryPanel, type DirectoryPanelProps } from './DirectoryPanel';
 export { DirectoryToolbar } from './DirectoryToolbar';
 export { DirectoryGrid, DirectoryCard } from './DirectoryGrid';
 export { SkillDetailView } from './SkillDetailView';
+export { SkillFileTree, SkillFileBody, CodeBlock, RenderedBody } from './SkillFileViewer';
+export { highlightLine, isCodeFile, isTextFile, fileExtension, splitLines } from './highlight';
+export type { HighlightKind, HighlightToken } from './highlight';
 export { ConnectorDetailView } from './ConnectorDetailView';
 export { PluginDetailView } from './PluginDetailView';
 export { AddMarketplaceDialog } from './AddMarketplaceDialog';
 export {
-  buildDirectoryHash,
   buildFileTree,
   countActiveFilters,
   formatInstallCount,
   matchesDirectoryFilters,
   matchesDirectorySearch,
   matchesDirectorySource,
-  parseDirectoryHash,
   selectDirectoryEntries,
   sortDirectoryEntries,
   toggleFilterValue,
-  type DirectoryHashRoute,
   type DirectoryTreeNode,
 } from './filtering';
-export { DIRECTORY_HASH_PREFIX, DIRECTORY_SECTION_LABELS, INSTALL_COUNT_FLOOR } from './constants';
+export { DIRECTORY_SECTION_LABELS, INSTALL_COUNT_FLOOR, MARKETPLACE_UNAVAILABLE_COPY } from './constants';
 export type {
   DirectoryAdapter,
   DirectoryBadgeKind,
