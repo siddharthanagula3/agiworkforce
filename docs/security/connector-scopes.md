@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Platform lead
-Last updated: 2026-09-03
+Last updated: 2026-09-04
 Purpose: the per-connector maximum set of OAuth scopes this platform may ever
 request, and the enforcement point that drops anything above it. Companion to
 `docs/security/agent-authority-and-connector-scopes.md`, which owns the wider
@@ -85,10 +85,24 @@ skipping the decision entirely.
 all of this: it asserts an over-ceiling scope is dropped and an on-ceiling one
 survives, that the authorization URL carries only the survivors, that every
 `oauth2` connector in the catalog has an entry, and that no enforced ceiling
-admits a known unrestricted scope such as `admin`, `full`,
-`https://mail.google.com/`, the bare Google `drive` or `calendar` scopes,
-`Files.ReadWrite.All`, or `Sites.FullControl.All`. Removing the enforcement or
-widening a ceiling to include one of those fails CI.
+admits a scope from `FORBIDDEN_CONNECTOR_OAUTH_SCOPES` in
+`oauth-scope-allowlist.ts` (`admin`, `full`, `default`,
+`https://mail.google.com/`, the bare Google `drive`, `calendar`, or
+`cloud-platform` scopes, `Files.ReadWrite.All`, `Sites.FullControl.All`, and
+`Mail.ReadWrite`). Removing the enforcement or widening a ceiling to include
+one of those fails CI.
+
+`pnpm check:connector-scopes` (`scripts/check-connector-scopes.mjs`, wired into
+`pnpm check:llm-operability`) statically parses the manifest and
+`scope-descriptions.ts` on every run, independent of the vitest suite, and
+fails the build if a ceiling admits a forbidden scope, a ceiling scope has no
+description in `SCOPE_DESCRIPTIONS`, or a scope literal from an enforced
+ceiling is declared a second time anywhere else under
+`apps/web/lib/connectors`, `apps/web/app/api/connectors`, or
+`apps/web/lib/user-connector-tools.ts`. That last check is what keeps
+"the manifest is the only place a scope may be added" true going forward
+rather than as a one-time fact: nothing outside `oauth-scope-allowlist.ts` can
+introduce a scope string without the guard catching the duplicate.
 
 ## Ceiling table
 
@@ -151,29 +165,37 @@ entry in the catalog, none of which use an OAuth scope parameter at all.
 
 ## Desktop native scopes
 
-`apps/desktop` requests real, hardcoded OAuth scopes against Google directly,
-using the user's own OAuth client. The ceilings above are the web enforcement
-point and have no effect on the desktop client, so this table is a second,
-separate record of what the desktop app actually requests.
+`apps/desktop` requests real, hardcoded OAuth scopes directly against Google
+and Microsoft, using the user's own OAuth client. The ceilings above are the
+web enforcement point and have no effect on the desktop client, so this table
+is a second, separate record of what the desktop app actually requests.
 
-| Connector       | File                                                                                 | Scopes requested                                                     |
-| --------------- | ------------------------------------------------------------------------------------ | -------------------------------------------------------------------- |
-| Gmail           | `apps/desktop/src-tauri/src/features/communications/gmail_oauth.rs` L46-49, L122-127 | `gmail.readonly`, `gmail.send`, `userinfo.email`, `userinfo.profile` |
-| Google Calendar | `apps/desktop/src-tauri/src/features/calendar/google_calendar.rs` L15-17, L34-37     | `calendar.readonly`, `calendar.events`                               |
+| Connector        | File                                                                                 | Scopes requested                                                     |
+| ---------------- | ------------------------------------------------------------------------------------ | -------------------------------------------------------------------- |
+| Gmail            | `apps/desktop/src-tauri/src/features/communications/gmail_oauth.rs` L46-49, L122-127 | `gmail.readonly`, `gmail.send`, `userinfo.email`, `userinfo.profile` |
+| Google Calendar  | `apps/desktop/src-tauri/src/features/calendar/google_calendar.rs` L15-17, L34-37     | `calendar.readonly`, `calendar.events`                               |
+| Outlook Calendar | `apps/desktop/src-tauri/src/features/calendar/outlook_calendar.rs` L15-17, L34-37    | `User.Read`, `Calendars.Read`, `Calendars.ReadWrite`                 |
 
-As of 2026-09-03 this replaced a wider request. The Gmail client had also
-requested `gmail.modify`, which permits deleting and relabeling mail, but the
-desktop code only ever calls `users.getProfile`, `users.watch`,
-`users.history.list` and `users.stop`, all of which `gmail.readonly` alone
-authorizes. The calendar client had also requested the unrestricted
-`auth/calendar` scope, but the desktop code only ever calls `calendarList.list`
-and the events endpoints, which `calendar.readonly` plus `calendar.events`
-together authorize without granting calendar deletion or sharing changes.
-Neither client makes a message-send or event-delete call through any other
-scope; sending mail goes through a separate IMAP/SMTP path in
-`apps/desktop/src-tauri/src/sys/commands/email.rs` that does not use Google
+As of 2026-09-03 the Gmail and Google Calendar rows replaced a wider request.
+The Gmail client had also requested `gmail.modify`, which permits deleting and
+relabeling mail, but the desktop code only ever calls `users.getProfile`,
+`users.watch`, `users.history.list` and `users.stop`, all of which
+`gmail.readonly` alone authorizes. The calendar client had also requested the
+unrestricted `auth/calendar` scope, but the desktop code only ever calls
+`calendarList.list` and the events endpoints, which `calendar.readonly` plus
+`calendar.events` together authorize without granting calendar deletion or
+sharing changes. Neither client makes a message-send or event-delete call
+through any other scope; sending mail goes through a separate IMAP/SMTP path
+in `apps/desktop/src-tauri/src/sys/commands/email.rs` that does not use Google
 OAuth at all.
 
+The Outlook Calendar client requests `Calendars.ReadWrite`, not the narrower
+`Calendars.Read`, and this is not over-broad: `outlook_calendar.rs` calls
+`create_event`, `update_event`, and `delete_event` against the Graph API in
+addition to `list_calendars` and `list_events`, so the write scope is used, not
+requested speculatively. `User.Read` is Graph's standard identity baseline,
+needed to resolve the signed-in account.
+
 `docs/security/agent-authority-and-connector-scopes.md` section 3 and gap 2
-still describe the old, wider request as current. That file was out of scope
-for this change and needs a follow-up edit to match.
+carry the same three rows and the same rationale; both files were updated
+together and neither is stale relative to the other.
