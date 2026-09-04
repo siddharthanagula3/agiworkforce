@@ -1,4 +1,4 @@
-pnpm exec lint-staged
+pnpm exec lint-staged --no-stash
 pnpm check:audit-inventory
 pnpm check:executable-docs
 pnpm check:structure-conventions
