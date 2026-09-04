@@ -232,6 +232,6 @@ export function emitEscalationEvent(event: EscalationEvent): void {
   try {
     window.dispatchEvent(new CustomEvent('agi:escalate', { detail: event }));
   } catch {
-    /* noop */
+    return;
   }
 }

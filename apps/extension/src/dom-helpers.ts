@@ -52,6 +52,6 @@ export function appendSvgString(parent: Element, svgString: string): void {
       parent.appendChild(document.importNode(root, true));
     }
   } catch {
-    /* noop */
+    return;
   }
 }

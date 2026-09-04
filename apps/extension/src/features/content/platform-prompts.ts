@@ -105,8 +105,8 @@ export function getPlatformPrompt(url: string): string | null {
         return prompt;
       }
     }
-  } catch {
-    /* noop */
+  } catch (err) {
+    void err;
   }
   return null;
 }
