@@ -39,6 +39,7 @@ const MOBILE_MEDIA_QUERY = '(max-width: 768px)';
 const FOOTER_ENTRY_SELECTOR = '[data-testid^="composer-footer-entry-"]';
 const FOOTER_ENTRY_TESTID_PREFIX = 'composer-footer-entry-';
 const ACCURACY_ENTRY_TESTID = `${FOOTER_ENTRY_TESTID_PREFIX}accuracy`;
+const MODEL_ENTRY_TESTID = `${FOOTER_ENTRY_TESTID_PREFIX}model`;
 const MENU_SEND_ROUTE_TESTID = 'composer-menu-send-route';
 const DESTINATION_HOST = 'AGI managed cloud';
 
@@ -75,10 +76,12 @@ function mobileVisibleEntryKeys(container: HTMLElement): string[] {
     .map((entry) => entry.dataset['testid']?.slice(FOOTER_ENTRY_TESTID_PREFIX.length) ?? '');
 }
 
-// M11. Measured 2026-08-30: this footer ran to three rows at 390px and made the
-// resting composer 136px against ChatGPT's 87px. jsdom does not evaluate media
-// queries, so what is asserted here is the responsive CLASS contract, which is
-// the layer the defect lived in. The pixel outcome belongs to a browser run.
+// M11/parity wave 1. The footer is now exactly one quiet line: the disclaimer
+// left, the resolved model and effort right (Claude's convention); every
+// other entry (web search, memory, the send route, Privacy, Feedback) moved
+// out entirely, each with a second entry point named at its new render site.
+// jsdom does not evaluate media queries, so what is asserted here is the
+// responsive CLASS contract; the pixel outcome belongs to a browser run.
 describe('composer footer collapses at the mobile breakpoint (M11)', () => {
   beforeEach(() => {
     useBillingStore.setState({
@@ -111,59 +114,46 @@ describe('composer footer collapses at the mobile breakpoint (M11)', () => {
     expect(screen.getByTestId('ai-accuracy-disclaimer').textContent).toBe(AI_ACCURACY_DISCLAIMER);
   });
 
-  it('gates every dropped entry on the same breakpoint the shells use', () => {
+  it('gates only the resolved-model entry on the same breakpoint the shells use', () => {
     const { container } = renderComposer();
 
     const gated = Array.from(container.querySelectorAll<HTMLElement>(FOOTER_ENTRY_SELECTOR)).filter(
       (entry) => entry.className.split(/\s+/).includes('hidden'),
     );
 
-    expect(gated.map((entry) => entry.dataset['testid'])).toEqual([
-      `${FOOTER_ENTRY_TESTID_PREFIX}web-search`,
-      `${FOOTER_ENTRY_TESTID_PREFIX}send-preview`,
-      `${FOOTER_ENTRY_TESTID_PREFIX}privacy`,
-      `${FOOTER_ENTRY_TESTID_PREFIX}feedback`,
-    ]);
+    expect(gated.map((entry) => entry.dataset['testid'])).toEqual([MODEL_ENTRY_TESTID]);
     for (const entry of gated) {
-      expect(entry.className).toContain('md:inline-flex');
+      expect(entry.className).toContain('md:inline');
     }
   });
 
-  it('opens the phone row on the disclaimer instead of a dangling separator', () => {
+  it('renders the accuracy entry with no separator (the footer is a two-child row, not a joined list)', () => {
     renderComposer();
 
     const separator = screen
       .getByTestId(ACCURACY_ENTRY_TESTID)
       .querySelector<HTMLElement>('[aria-hidden="true"]');
 
-    expect(separator).not.toBeNull();
-    expect(separator?.className).toContain('hidden');
-    expect(separator?.className).toContain('md:inline');
+    expect(separator).toBeNull();
   });
 
-  it('keeps the send route reachable from the "+" menu once the footer drops it', () => {
+  it('keeps the send route reachable from the "+" menu at every width once the footer drops it', () => {
     renderComposer();
 
     fireEvent.click(screen.getByRole('button', { name: /add attachments and tools/i }));
 
     const route = screen.getByTestId(MENU_SEND_ROUTE_TESTID);
-    expect(route.className).toContain('md:hidden');
+    expect(route.className).not.toContain('md:hidden');
     expect(within(route).getByText(`Sent to ${DESTINATION_HOST}`)).toBeTruthy();
   });
 
-  it('still renders the whole line for a desktop viewport to reveal', () => {
+  it('still renders both entries for a desktop viewport to reveal', () => {
     const { container } = renderComposer();
 
     expect(
       Array.from(container.querySelectorAll<HTMLElement>(FOOTER_ENTRY_SELECTOR)).map(
         (entry) => entry.dataset['testid'],
       ),
-    ).toEqual([
-      `${FOOTER_ENTRY_TESTID_PREFIX}web-search`,
-      `${FOOTER_ENTRY_TESTID_PREFIX}send-preview`,
-      `${FOOTER_ENTRY_TESTID_PREFIX}accuracy`,
-      `${FOOTER_ENTRY_TESTID_PREFIX}privacy`,
-      `${FOOTER_ENTRY_TESTID_PREFIX}feedback`,
-    ]);
+    ).toEqual([ACCURACY_ENTRY_TESTID, MODEL_ENTRY_TESTID]);
   });
 });

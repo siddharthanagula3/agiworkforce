@@ -31,7 +31,10 @@ vi.mock('@features/chat/hooks/use-media-model-availability', () => ({
 
 vi.mock('../DragDropOverlay', () => ({ DragDropOverlay: () => null }));
 vi.mock('../SlashCommandMenu', () => ({ SlashCommandMenu: () => null }));
-vi.mock('../ComposerFooter', () => ({ ComposerFooter: () => <div /> }));
+vi.mock('../ComposerFooter', () => ({
+  ComposerFooter: () => <div />,
+  ComposerModelSummary: () => <span />,
+}));
 vi.mock('../SendButton', () => ({
   SendButton: () => <button type="button">Send</button>,
 }));
@@ -56,10 +59,12 @@ describe('composer accuracy caveat', () => {
     expect(caveat.textContent?.toLowerCase()).toContain('can make mistakes');
   });
 
-  it('keeps the in-app route to the privacy notice next to it', () => {
+  // Privacy is already reachable from Settings (PrivacySection.tsx), so the
+  // one-line footer (disclaimer left, resolved model right) no longer
+  // duplicates the link here.
+  it('does not duplicate a Privacy link in the footer (reachable from Settings)', () => {
     render(<ChatComposerNew onSend={vi.fn()} />);
 
-    const privacy = screen.getByRole('link', { name: /privacy/i });
-    expect(privacy).toHaveAttribute('href', '/privacy');
+    expect(screen.queryByRole('link', { name: /privacy/i })).not.toBeInTheDocument();
   });
 });
