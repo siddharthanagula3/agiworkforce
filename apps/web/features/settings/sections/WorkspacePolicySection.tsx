@@ -115,6 +115,7 @@ function toDraft(policy: WorkspaceAdminPolicy): PolicyDraft {
     retentionDays: policy.retentionDays,
     retentionEnforced: policy.retentionEnforced,
     externalSharingEnabled: policy.externalSharingEnabled,
+    allowMemory: policy.allowMemory,
     secretHandling: policy.secretHandling,
     requireMfa: policy.requireMfa,
     monthlySpendCapCents: policy.monthlySpendCapCents,
@@ -416,6 +417,23 @@ export function WorkspacePolicySection() {
             disabled={!canEdit}
             label="Allow public sharing"
             onChange={(next) => setDraft({ ...draft, externalSharingEnabled: next })}
+          />
+        }
+      />
+
+      <Row
+        title="Memory"
+        description={
+          draft.allowMemory
+            ? 'Members may use account memory. Each member still controls their own memory in personal settings.'
+            : 'Memory is off for the workspace until the owner turns it on. No member gets account memory while this is off, regardless of their personal setting.'
+        }
+        control={
+          <Toggle
+            checked={draft.allowMemory}
+            disabled={!canEdit}
+            label="Allow memory"
+            onChange={(next) => setDraft({ ...draft, allowMemory: next })}
           />
         }
       />

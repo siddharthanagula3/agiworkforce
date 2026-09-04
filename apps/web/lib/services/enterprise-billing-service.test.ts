@@ -345,7 +345,7 @@ describe('syncEnterpriseContractFromSubscription', () => {
       call.sql.includes('insert into public.organization_billing_contracts'),
     );
     expect(upsert!.params.slice(10)).toEqual([null, null, null, null, null, null]);
-    expect(upsert!.sql).toContain('coalesce($11, 0)');
+    expect(upsert!.sql).toContain('coalesce($11::bigint, 0)');
     expect(upsert!.sql).toContain('organization_billing_contracts.included_usage_cents_per_period');
   });
 
@@ -493,5 +493,94 @@ describe('endEnterpriseContractIfPresent', () => {
     expect(calls[0]!.sql).toContain('set ended_at = $2');
     expect(calls[0]!.sql).toContain('ended_at is null');
     expect(calls[0]!.params).toEqual(['sub_ent_1', '2026-01-01T00:00:00.000Z']);
+  });
+});
+
+function coalescedParameterCasts(sql: string): Array<{ param: string; cast: string | undefined }> {
+  return [...sql.matchAll(/coalesce\(\s*\$(\d+)(::\w+)?/gu)].map((match) => ({
+    param: match[1]!,
+    cast: match[2],
+  }));
+}
+
+describe('every nullable parameter used inside coalesce carries an explicit cast', () => {
+  it('casts every coalesced parameter in the contract upsert', async () => {
+    const { db, calls } = makeDb((sql) => {
+      if (sql.includes('from subscriptions')) return [{ user_id: 'user_1' }];
+      if (sql.includes('from public.organizations')) return [{ id: 'org_1' }];
+      return [];
+    });
+
+    await syncEnterpriseContractFromSubscription(db, fakeStripe(), subscriptionFixture());
+
+    const upsert = calls.find((call) =>
+      call.sql.includes('insert into public.organization_billing_contracts'),
+    );
+    const casts = coalescedParameterCasts(upsert!.sql);
+    expect(casts.length).toBeGreaterThan(0);
+    for (const { param, cast } of casts) {
+      expect(cast, `$${param} is used inside coalesce(...) with no explicit cast`).toBeDefined();
+    }
+  });
+
+  it('casts every coalesced parameter in the invoice upsert', async () => {
+    const { db, calls } = makeDb((sql) => {
+      if (
+        sql.includes('from public.organization_billing_contracts') &&
+        sql.includes('stripe_subscription_id')
+      ) {
+        return [{ organization_id: 'org_1' }];
+      }
+      return [];
+    });
+
+    await recordEnterpriseInvoiceEvent(db, invoiceFixture());
+
+    const upsert = calls.find((call) =>
+      call.sql.includes('insert into public.organization_billing_invoices'),
+    );
+    const casts = coalescedParameterCasts(upsert!.sql);
+    expect(casts.length).toBeGreaterThan(0);
+    for (const { param, cast } of casts) {
+      expect(cast, `$${param} is used inside coalesce(...) with no explicit cast`).toBeDefined();
+    }
+  });
+
+  it('has no bare, uncast $n reference immediately inside a coalesce(...) anywhere in this module', async () => {
+    const { db: contractDb, calls: contractCalls } = makeDb((sql) => {
+      if (sql.includes('from subscriptions')) return [{ user_id: 'user_1' }];
+      if (sql.includes('from public.organizations')) return [{ id: 'org_1' }];
+      return [];
+    });
+    await syncEnterpriseContractFromSubscription(
+      contractDb,
+      fakeStripe(),
+      subscriptionFixture({
+        metadata: {
+          included_usage_cents_per_month: '1',
+          overage_price_id: 'price_x',
+          committed_usage_block_cents: '1',
+          minimum_annual_spend_cents: '1',
+          support_tier: 'x',
+          customer_legal_entity: 'x',
+        },
+      }),
+    );
+
+    const { db: invoiceDb, calls: invoiceCalls } = makeDb((sql) => {
+      if (
+        sql.includes('from public.organization_billing_contracts') &&
+        sql.includes('stripe_subscription_id')
+      ) {
+        return [{ organization_id: 'org_1' }];
+      }
+      if (sql.includes('from public.organization_billing_invoices')) return [];
+      return [];
+    });
+    await recordEnterpriseInvoiceEvent(invoiceDb, invoiceFixture());
+
+    const allSql = [...contractCalls, ...invoiceCalls].map((call) => call.sql).join('\n---\n');
+    const uncast = coalescedParameterCasts(allSql).filter((entry) => !entry.cast);
+    expect(uncast).toEqual([]);
   });
 });

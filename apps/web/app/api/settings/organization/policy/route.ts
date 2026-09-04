@@ -53,6 +53,7 @@ const PolicyPatchSchema = z
     retentionDays: z.number().int().min(1).max(3650),
     retentionEnforced: z.boolean(),
     externalSharingEnabled: z.boolean(),
+    allowMemory: z.boolean(),
     secretHandling: SecretHandlingSchema,
     requireMfa: z.boolean(),
     monthlySpendCapCents: z.number().int().positive().nullable(),
@@ -191,6 +192,7 @@ async function handlePatch(request: NextRequest): Promise<NextResponse | Respons
     retentionEnforced: parsed.data.retentionEnforced ?? current.policy.retentionEnforced,
     externalSharingEnabled:
       parsed.data.externalSharingEnabled ?? current.policy.externalSharingEnabled,
+    allowMemory: parsed.data.allowMemory ?? current.policy.allowMemory,
     secretHandling: parsed.data.secretHandling ?? current.policy.secretHandling,
     requireMfa: parsed.data.requireMfa ?? current.policy.requireMfa,
     monthlySpendCapCents:

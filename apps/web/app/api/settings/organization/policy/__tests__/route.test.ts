@@ -48,6 +48,7 @@ const SAVED_POLICY = {
   allow_chrome_cloud_sync: false,
   audit_export_enabled: true,
   retention_days: 365,
+  allow_memory: false,
   metadata: {},
   updated_at: '2026-08-22T00:00:00.000Z',
 };
@@ -267,13 +268,23 @@ describe('PATCH /api/settings/organization/policy', () => {
     expect(event.detail.status).toBe('created');
   });
 
+  it('stores an allowMemory patch as its own column, not metadata', async () => {
+    bindCaller({ policyRow: SAVED_POLICY });
+
+    await PATCH(request({ allowMemory: true }) as never);
+
+    const params = upsertParams();
+    expect(params[13]).toBe(true);
+    expect(JSON.parse(params[14] as string)['allowMemory']).toBeUndefined();
+  });
+
   it('stores a secretHandling patch inside the metadata column', async () => {
     bindCaller({ policyRow: SAVED_POLICY });
 
     await PATCH(request({ secretHandling: 'block' }) as never);
 
     const params = upsertParams();
-    expect(JSON.parse(params[13] as string)).toMatchObject({ secretHandling: 'block' });
+    expect(JSON.parse(params[14] as string)).toMatchObject({ secretHandling: 'block' });
   });
 
   it('rejects a secretHandling value outside warn, redact, block', async () => {
@@ -291,7 +302,7 @@ describe('PATCH /api/settings/organization/policy', () => {
     await PATCH(request({ requireMfa: true, monthlySpendCapCents: 75_000 }) as never);
 
     const params = upsertParams();
-    expect(JSON.parse(params[13] as string)).toMatchObject({
+    expect(JSON.parse(params[14] as string)).toMatchObject({
       requireMfa: true,
       monthlySpendCapCents: 75_000,
     });
@@ -305,7 +316,7 @@ describe('PATCH /api/settings/organization/policy', () => {
     await PATCH(request({ monthlySpendCapCents: null }) as never);
 
     const params = upsertParams();
-    expect(JSON.parse(params[13] as string)).toMatchObject({ monthlySpendCapCents: null });
+    expect(JSON.parse(params[14] as string)).toMatchObject({ monthlySpendCapCents: null });
   });
 
   it('rejects a zero or negative spend cap', async () => {
@@ -323,7 +334,7 @@ describe('PATCH /api/settings/organization/policy', () => {
     await PATCH(request({ zeroDataRetentionOnly: true }) as never);
 
     const params = upsertParams();
-    expect(JSON.parse(params[13] as string)).toMatchObject({ zeroDataRetentionOnly: true });
+    expect(JSON.parse(params[14] as string)).toMatchObject({ zeroDataRetentionOnly: true });
   });
 
   it('stores an ipAllowList patch inside the metadata column', async () => {
@@ -337,7 +348,7 @@ describe('PATCH /api/settings/organization/policy', () => {
     );
 
     const params = upsertParams();
-    expect(JSON.parse(params[13] as string)).toMatchObject({
+    expect(JSON.parse(params[14] as string)).toMatchObject({
       ipAllowList: ['203.0.113.0/24', '2001:db8::/32'],
     });
   });
@@ -408,7 +419,7 @@ describe('PATCH /api/settings/organization/policy', () => {
     await PATCH(request({ ipAllowList: [] }) as never);
 
     const params = upsertParams();
-    expect(JSON.parse(params[13] as string)).toMatchObject({ ipAllowList: [] });
+    expect(JSON.parse(params[14] as string)).toMatchObject({ ipAllowList: [] });
   });
 
   it('deduplicates repeated modes and surfaces before writing', async () => {

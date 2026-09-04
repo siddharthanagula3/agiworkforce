@@ -76,6 +76,71 @@ describe('loadManagedMemoryPolicy', () => {
       allowToolAssistedGeneration: false,
     });
   });
+
+  it('keeps a user with no organization on the per-user switch alone', async () => {
+    const query = vi.fn().mockResolvedValue([{ capabilities: { memory: true } }]);
+
+    await expect(
+      loadManagedMemoryPolicy({ query }, { userId: 'user-1', organizationId: null }),
+    ).resolves.toMatchObject({ enabled: true });
+    expect(query).toHaveBeenCalledTimes(1);
+    expect(query.mock.calls[0]?.[0]).toMatch(/from user_settings/);
+  });
+
+  it('disables memory for an organization member when the workspace policy does not allow it', async () => {
+    const query = vi.fn().mockImplementation(async (sql: string) => {
+      if (/organization_admin_policies/.test(sql)) return [{ allow_memory: false }];
+      return [{ capabilities: { memory: true } }];
+    });
+
+    await expect(
+      loadManagedMemoryPolicy({ query }, { userId: 'user-1', organizationId: 'org-1' }),
+    ).resolves.toEqual({
+      enabled: false,
+      generateFromHistory: false,
+      allowToolAssistedGeneration: false,
+    });
+    expect(query).toHaveBeenCalledTimes(1);
+  });
+
+  it('treats no saved policy row as memory disallowed for the organization', async () => {
+    const query = vi.fn().mockResolvedValue([]);
+
+    await expect(
+      loadManagedMemoryPolicy({ query }, { userId: 'user-1', organizationId: 'org-1' }),
+    ).resolves.toMatchObject({ enabled: false });
+  });
+
+  it('falls through to the per-user setting once the organization allows memory', async () => {
+    const query = vi.fn().mockImplementation(async (sql: string) => {
+      if (/organization_admin_policies/.test(sql)) return [{ allow_memory: true }];
+      return [{ capabilities: { memory: true, allowToolAssistedGeneration: true } }];
+    });
+
+    await expect(
+      loadManagedMemoryPolicy({ query }, { userId: 'user-1', organizationId: 'org-1' }),
+    ).resolves.toEqual({
+      enabled: true,
+      generateFromHistory: true,
+      allowToolAssistedGeneration: true,
+    });
+  });
+
+  it('fails closed and logs once when the organization policy read errors', async () => {
+    const query = vi.fn().mockImplementation(async (sql: string) => {
+      if (/organization_admin_policies/.test(sql)) throw new Error('connection reset');
+      return [{ capabilities: { memory: true } }];
+    });
+
+    await expect(
+      loadManagedMemoryPolicy({ query }, { userId: 'user-1', organizationId: 'org-1' }),
+    ).resolves.toEqual({
+      enabled: false,
+      generateFromHistory: false,
+      allowToolAssistedGeneration: false,
+    });
+    expect(query).toHaveBeenCalledTimes(1);
+  });
 });
 
 describe('formatManagedMemorySystemPrompt', () => {
