@@ -10,6 +10,7 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
 const EXCLUDE_EXACT = new Set([
   'THIRD_PARTY_LICENSES.md',
+  'apps/web/AGENTS.md',
   'scripts/lib/em-dash-in-copy.mjs',
   'scripts/check-em-dash-in-copy.test.mjs',
 ]);
