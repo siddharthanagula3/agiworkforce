@@ -1,83 +1,71 @@
 #!/usr/bin/env node
 import fs from 'node:fs';
 import path from 'node:path';
+import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
-import { checkAgainstBaseline, countByFile, findEmDashes } from './lib/em-dash-in-copy.mjs';
+import { countByFile, findEmDashes } from './lib/em-dash-in-copy.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
-const ROOTS = [
-  'apps/web/app',
-  'apps/web/features',
-  'apps/web/shared',
-  'packages/ui/ui/src',
-  'packages/ui/unified-chat/src',
-];
+const EXCLUDE_EXACT = new Set([
+  'THIRD_PARTY_LICENSES.md',
+  'scripts/lib/em-dash-in-copy.mjs',
+  'scripts/check-em-dash-in-copy.test.mjs',
+]);
+const EXCLUDE_PREFIX = ['apps/web/db/neon/'];
+const EXCLUDE_SUFFIX = ['pnpm-lock.yaml', 'Cargo.lock'];
+const EXCLUDE_BASENAME = new Set(['LICENSE', 'LICENSE.md', 'LICENSE.txt']);
 
-const BASELINE_PATH = 'audit/em-dash-in-copy.json';
-
-function sourceFiles(dir) {
-  const abs = path.join(root, dir);
-  if (!fs.existsSync(abs)) return [];
-  const out = [];
-  const walk = (current) => {
-    for (const entry of fs.readdirSync(current, { withFileTypes: true })) {
-      const full = path.join(current, entry.name);
-      if (entry.isDirectory()) {
-        if (['node_modules', '.next', 'dist', '__tests__'].includes(entry.name)) continue;
-        walk(full);
-      } else if (
-        (entry.name.endsWith('.tsx') || entry.name.endsWith('.ts')) &&
-        !entry.name.includes('.test.') &&
-        !entry.name.includes('.spec.')
-      ) {
-        out.push(full);
-      }
-    }
-  };
-  walk(abs);
-  return out;
+function isExcluded(rel) {
+  if (EXCLUDE_EXACT.has(rel)) return true;
+  for (const prefix of EXCLUDE_PREFIX) if (rel.startsWith(prefix)) return true;
+  for (const suffix of EXCLUDE_SUFFIX) if (rel.endsWith(suffix)) return true;
+  if (EXCLUDE_BASENAME.has(path.basename(rel))) return true;
+  return false;
 }
 
-const found = ROOTS.flatMap((dir) =>
-  sourceFiles(dir).flatMap((file) =>
-    findEmDashes(fs.readFileSync(file, 'utf8'), path.relative(root, file)),
-  ),
-);
-const counts = countByFile(found);
-
-if (process.argv.includes('--write')) {
-  fs.writeFileSync(
-    path.join(root, BASELINE_PATH),
-    `${JSON.stringify({ total: found.length, perFile: counts }, null, 2)}\n`,
-  );
-  console.log(`Wrote baseline: ${found.length} across ${Object.keys(counts).length} files.`);
-  process.exit(0);
+function listTrackedFiles() {
+  const out = execFileSync('git', ['ls-files', '-z'], { cwd: root, maxBuffer: 1024 * 1024 * 64 });
+  return out.toString('utf8').split('\0').filter(Boolean);
 }
 
-const baselineAbs = path.join(root, BASELINE_PATH);
-if (!fs.existsSync(baselineAbs)) {
-  console.error(`Missing ${BASELINE_PATH}. Run: pnpm check:em-dash --write`);
-  process.exit(1);
+function isBinary(absPath) {
+  let buf;
+  try {
+    buf = fs.readFileSync(absPath);
+  } catch {
+    return true;
+  }
+  return buf.includes(0);
 }
 
-const baseline = JSON.parse(fs.readFileSync(baselineAbs, 'utf8'));
-const errors = checkAgainstBaseline(counts, baseline);
+const argFiles = process.argv.slice(2).filter((arg) => !arg.startsWith('--'));
+const relFiles =
+  argFiles.length > 0
+    ? argFiles.map((file) => path.relative(root, path.resolve(file)))
+    : listTrackedFiles();
 
-if (errors.length > 0) {
+const found = relFiles
+  .filter((rel) => !isExcluded(rel))
+  .flatMap((rel) => {
+    const abs = path.join(root, rel);
+    if (!fs.existsSync(abs) || isBinary(abs)) return [];
+    return findEmDashes(fs.readFileSync(abs, 'utf8'), rel);
+  });
+
+if (found.length > 0) {
   console.error(
-    'This product does not use em dashes in copy a reader sees.\n' +
-      'Rewrite instead of substituting: a colon introduces what follows, a period\n' +
-      'separates two independent clauses, and a pair of dashes is parentheses.\n' +
-      'Do not swap in a comma between two independent clauses; that is a splice.\n',
+    'This codebase does not use em dashes anywhere: not in copy, not in comments,\n' +
+      'not in test fixtures. Rewrite instead of substituting: a comma joins two\n' +
+      'clauses, a colon introduces a label, and a period closes a sentence.\n',
   );
-  for (const error of errors) console.error(`  ${error}`);
+  const counts = countByFile(found);
+  for (const [file, count] of Object.entries(counts)) {
+    console.error(`  ${file}: ${count} em dash(es)`);
+  }
+  console.error(`\n${found.length} em dash(es) across ${Object.keys(counts).length} file(s).`);
   process.exit(1);
 }
 
-const trailer =
-  found.length < baseline.total
-    ? `down from ${baseline.total}; re-baseline with --write to lock in the improvement`
-    : 'none new';
-console.log(`Em dash copy check passed (${found.length} remaining, ${trailer}).`);
+console.log('Em dash check passed: zero em dashes found.');
