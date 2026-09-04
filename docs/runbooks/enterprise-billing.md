@@ -360,6 +360,15 @@ to advance time rather than waiting real days for the 30/60/90 checkpoints.
       403 `billing_read_only` both with the personal header and without it;
       with the hold cleared the same requests passed the billing gate.
 
+- [x] The hold also binds cloud code sessions (creation and every billable
+      action on a session) and scheduled agent runs, which evaluate the same
+      workspace policy as chat through the shared managed compute gate
+      (faf0a2ee7); a scheduled run under a hold is recorded as skipped, not
+      failed. Verified 2026-09-04 over HTTP against the local server: with the
+      contract 100 days past due, creating a session on a harness that has a
+      managed credential answered 403 `billing_read_only` with the personal
+      header and without it, and no session row was written.
+
 - [x] A stale `customer.subscription.updated` delivered after
       `customer.subscription.deleted` must not revive the ended contract.
       Verified 2026-09-04 against the local database through the running
