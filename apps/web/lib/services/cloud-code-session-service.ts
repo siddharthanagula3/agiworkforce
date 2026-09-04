@@ -21,6 +21,7 @@ import {
 } from '@/lib/deadline-policy';
 import { getE2BExecutor, killE2BSession } from '@/lib/e2b/runtime';
 import { InvalidExtraEgressHostsError, normalizeExtraEgressHosts } from '@/lib/e2b/egress-hosts';
+import { assertExtraEgressHostsResolveSafely } from '@/lib/e2b/egress-host-resolution';
 import { confineWorkspacePath } from '@/lib/e2b/execution-tools';
 import type { CommandExecutionResult } from '@/lib/e2b/types';
 import {
@@ -630,6 +631,14 @@ export async function createCloudCodeSession(
   planTier: string,
 ): Promise<CloudCodeSession> {
   const validated = validateCreateCloudCodeSession(input);
+  try {
+    await assertExtraEgressHostsResolveSafely(validated.extraHosts);
+  } catch (error) {
+    if (error instanceof InvalidExtraEgressHostsError) {
+      throw new CloudCodeValidationError(error.message);
+    }
+    throw error;
+  }
   await assertRuntimeIsAvailable(validated.runtimeId);
 
   let claimed: { row: SessionRow; reused: boolean };
