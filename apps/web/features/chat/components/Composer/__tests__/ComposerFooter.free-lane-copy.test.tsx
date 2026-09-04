@@ -89,6 +89,7 @@ vi.mock('@shared/stores/thinking-store', () => ({
 }));
 
 vi.mock('@agiworkforce/ui', () => ({
+  useMenuKeyboard: () => undefined,
   Popover: ({ children }: { children: React.ReactNode }) => <>{children}</>,
   PopoverTrigger: ({ children, asChild }: { children: React.ReactNode; asChild?: boolean }) =>
     asChild ? <>{children}</> : <div>{children}</div>,
