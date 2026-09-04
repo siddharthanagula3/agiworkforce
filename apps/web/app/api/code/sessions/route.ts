@@ -3,8 +3,10 @@ import 'server-only';
 import { NextRequest, NextResponse } from 'next/server';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import {
+  CLOUD_CODE_NETWORK_ACCESS,
   effectivePlanTier,
   getPlanMaxSandboxes,
+  type CloudCodeNetworkAccess,
   type CloudCodeSession,
   type CreateCloudCodeSessionInput,
 } from '@agiworkforce/types';
@@ -12,6 +14,10 @@ import { requireCsrfToken } from '@/lib/csrf';
 import { withErrorHandler } from '@/lib/error-handler';
 import { createError } from '@/lib/errors';
 import { e2bProvisioningReady } from '@/lib/e2b/gate';
+import {
+  NETWORK_ACCESS_REQUIRES_PROXY_CODE,
+  fullNetworkNeedsProxy,
+} from '@/lib/e2b/network-policy';
 import { listCloudCodeRuntimes } from '@/lib/e2b/templates';
 import { withRateLimit } from '@/lib/rate-limit';
 import { getUserScopedDb } from '@/lib/server/rls-db';
@@ -115,6 +121,26 @@ async function handleCreate(request: NextRequest) {
   }
 
   const body = await requestObject(request);
+  const requestedNetworkAccess = (CLOUD_CODE_NETWORK_ACCESS as readonly unknown[]).includes(
+    body['networkAccess'],
+  )
+    ? (body['networkAccess'] as CloudCodeNetworkAccess)
+    : null;
+  const requestedRuntimeId =
+    typeof body['runtimeId'] === 'string' ? body['runtimeId'].trim() || null : null;
+  if (requestedNetworkAccess && fullNetworkNeedsProxy(requestedNetworkAccess, requestedRuntimeId)) {
+    return NextResponse.json(
+      {
+        error: {
+          message:
+            'Full network access is not available yet for this coding agent: its provider credentials would enter the sandbox directly. Choose Trusted hosts or No network, or pick an environment with no coding agent, until the credential proxy covers it.',
+          type: 'invalid_request_error',
+          code: NETWORK_ACCESS_REQUIRES_PROXY_CODE,
+        },
+      },
+      { status: 422 },
+    );
+  }
   const planTier = await resolvePlan(db, userId);
   try {
     const session = await createCloudCodeSession(
