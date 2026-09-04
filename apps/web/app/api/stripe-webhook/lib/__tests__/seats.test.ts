@@ -61,6 +61,16 @@ describe('buildPurchasedSeatRecord', () => {
     });
   });
 
+  it('treats the enterprise tier as per-seat even though it is not in the shared catalog', () => {
+    expect(
+      buildPurchasedSeatRecord('enterprise', { items: { data: [{ quantity: 300 }] } }),
+    ).toEqual({
+      planTier: 'enterprise',
+      seats: 300,
+      perSeat: true,
+    });
+  });
+
   it('fails closed on an unknown tier', () => {
     expect(buildPurchasedSeatRecord('not_a_tier', { items: { data: [{ quantity: 12 }] } })).toEqual(
       {
