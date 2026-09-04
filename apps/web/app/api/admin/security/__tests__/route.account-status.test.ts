@@ -20,7 +20,10 @@ const {
   mockBanUser: vi.fn(),
 }));
 
-vi.mock('@/lib/rate-limit', () => ({ withRateLimit: vi.fn(async () => null) }));
+vi.mock('@/lib/rate-limit', () => ({
+  withRateLimit: vi.fn(async () => null),
+  getSharedRedisClient: vi.fn(() => null),
+}));
 vi.mock('@/lib/csrf', () => ({ requireCsrfToken: vi.fn(async () => null) }));
 vi.mock('@/lib/logger', () => ({
   logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() },

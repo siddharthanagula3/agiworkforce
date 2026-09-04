@@ -10,6 +10,7 @@ import { isDbUnavailableError } from '@/lib/db-error';
 import { createError, isAppError, type AppError } from '@/lib/errors';
 import { requirePlatformAdmin } from '@/lib/auth-guards';
 import { readJsonBody } from '@/lib/read-json-body';
+import { setCachedAccountStatus } from '@/lib/server/request-context-cache';
 
 function errorResponse(err: AppError, headers?: Record<string, string>): NextResponse {
   return NextResponse.json(
@@ -190,6 +191,7 @@ export async function POST(request: NextRequest) {
           await db.execute("update profiles set account_status = 'suspended' where id = $1", [
             targetUserId,
           ]);
+          await setCachedAccountStatus(targetUserId, 'suspended');
         } catch (updateError) {
           logger.error({ error: updateError, targetUserId }, 'Failed to suspend user');
           return errorResponse(createError.internal('Failed to update account status'));
@@ -240,6 +242,7 @@ export async function POST(request: NextRequest) {
           await db.execute("update profiles set account_status = 'banned' where id = $1", [
             targetUserId,
           ]);
+          await setCachedAccountStatus(targetUserId, 'banned');
         } catch (updateError) {
           logger.error({ error: updateError, targetUserId }, 'Failed to ban user');
           return errorResponse(createError.internal('Failed to update account status'));
@@ -301,6 +304,7 @@ export async function POST(request: NextRequest) {
           await db.execute("update profiles set account_status = 'active' where id = $1", [
             targetUserId,
           ]);
+          await setCachedAccountStatus(targetUserId, 'active');
         } catch (updateError) {
           logger.error({ error: updateError, targetUserId }, 'Failed to reactivate user');
           return errorResponse(createError.internal('Failed to update account status'));
