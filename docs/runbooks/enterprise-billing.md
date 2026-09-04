@@ -316,26 +316,26 @@ to advance time rather than waiting real days for the 30/60/90 checkpoints.
 - [x] Confirm a seat increase is refused and audited at day 61, and that a
       seat decrease is still allowed at every stage.
       Verified 2026-09-04 in test mode: increase to 600 refused and audited, catch-up applied once the stage returned to current; a decrease was not exercised live (unit tests cover it).
-- [ ] Confirm the policy gate denies managed compute and content-creating
+- [x] Confirm the policy gate denies managed compute and content-creating
       actions once the contract reaches `read_only`, while reads, exports,
       and settings remain reachable, and that no data is deleted at any
       stage.
-      Open as of 2026-09-04: unit-tested in the evaluator and gate; the HTTP check is still to be run against a signed-in session.
-- [ ] If an overage price is configured, generate managed-usage spend past
+      Verified 2026-09-04 in test mode over HTTP: with the QA contract's `collection_stage` set to `read_only` and `oldest_open_invoice_due_at` 100 days overdue, a signed-in `POST /api/llm/v1/chat/completions` was refused (`billing_read_only`) while `GET /api/chat/conversations` still returned 200; row restored after. Exercised via a temporary `apps/web/e2e/tmp-billing-readonly.spec.ts` (deleted after the run). Found and worked around `BILLING-ENTERPRISE-CONTRACT-ENDED-AT-STICKY` (`docs/agent-context/known-flaws.md`): the contract's `ended_at` from an earlier cancel never clears on a new active subscription, which would otherwise have hidden this org from the gate entirely.
+- [x] If an overage price is configured, generate managed-usage spend past
       the included allowance and confirm the usage-metering cron reports
       overage to the correct meter exactly once per day, with no
       double-reporting on a rerun.
-      Open as of 2026-09-04: the cron ran and reported no overage for a contract without spend; real overage still to be exercised.
+      Verified 2026-09-04 in test mode: inserted a `provider_cost_events` row pushing the QA organization's month-to-date spend $500 over its $500,000 included allowance, then ran `node cron-call.mjs /api/cron/report-enterprise-usage` twice. First run reported `status: reported, reportedCents: 50000`; `stripe billing meter_event_summaries list <meter> --customer=<probe customer>` confirmed exactly one summary with `aggregated_value: 50000`. Second run reported `status: skipped_no_new_overage` with no change to the aggregated value. Probe row and contract metering metadata removed afterward. Used a clock-free probe customer (see `BILLING-ENTERPRISE-CONTRACT-ENDED-AT-STICKY`) because the QA contract's real customer carries a Stripe test clock frozen a year ahead, which put real-time meter-event timestamps outside Stripe's 35-day window; the org's real `stripe_customer_id` was restored after.
 - [x] Cancel the test subscription and confirm `ended_at` is set with the
       contract and invoice rows intact.
       Verified 2026-09-04 in test mode: ended_at set, contract and all invoice rows retained.
 - [x] Let a renewal invoice pay and confirm the contract term dates roll
       forward.
       Verified 2026-09-04 in test mode: term rolled to the next year after six two-month clock advances and the renewal invoice was paid.
-- [ ] Repeat the payment-and-collection portion of this checklist with a
+- [x] Repeat the payment-and-collection portion of this checklist with a
       test ACH Direct Debit payment and a test bank transfer, not only a
       test card, since those are the decided primary rails.
-      Open as of 2026-09-04: payments so far were recorded out of band; ACH Direct Debit and bank transfer test payments still to be exercised.
+      Verified 2026-09-04 in test mode on a fresh `send_invoice` subscription (`sub_1UBsOv0zEfO6BZMhTsYaXlTT`) for the existing test customer on the existing seat price. Invoice `in_1UBsOv0zEfO6BZMh1HwDZra4` ($144,000) paid with the ACH Direct Debit test account (`000123456789` / routing `110000000`), verified through a `SetupIntent` with the test microdeposit amounts (`32`, `45`) then `POST /v1/invoices/{id}/pay`. A second, subscription-linked invoice `in_1UBsXX0zEfO6BZMh28wvvFFC` ($1,000) was paid by bank transfer: `payment_settings.payment_method_types=[customer_balance]`, funded with `stripe test_helpers customers fund_cash_balance`, which Stripe auto-reconciled. Both invoices' resulting events were replayed through `stripe-replay.mjs`; `organization_billing_invoices` shows both rows `status = paid` with `amount_paid_cents` matching. An earlier, non-subscription-linked bank-transfer invoice was paid in Stripe but never appeared in the local ledger, because `recordEnterpriseInvoiceEvent` (`apps/web/lib/services/enterprise-billing-service.ts:443-444`) only records invoices resolvable to a `stripe_subscription_id`; that invoice was abandoned in favor of the subscription-linked one above and is not part of this evidence.
 
 Only once every box above is checked, in test mode, should any public page
 describe NET 30, purchase orders, bank transfer, or enterprise invoicing, per
