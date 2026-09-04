@@ -337,6 +337,22 @@ to advance time rather than waiting real days for the 30/60/90 checkpoints.
       test card, since those are the decided primary rails.
       Verified 2026-09-04 in test mode on a fresh `send_invoice` subscription (`sub_1UBsOv0zEfO6BZMhTsYaXlTT`) for the existing test customer on the existing seat price. Invoice `in_1UBsOv0zEfO6BZMh1HwDZra4` ($144,000) paid with the ACH Direct Debit test account (`000123456789` / routing `110000000`), verified through a `SetupIntent` with the test microdeposit amounts (`32`, `45`) then `POST /v1/invoices/{id}/pay`. A second, subscription-linked invoice `in_1UBsXX0zEfO6BZMh28wvvFFC` ($1,000) was paid by bank transfer: `payment_settings.payment_method_types=[customer_balance]`, funded with `stripe test_helpers customers fund_cash_balance`, which Stripe auto-reconciled. Both invoices' resulting events were replayed through `stripe-replay.mjs`; `organization_billing_invoices` shows both rows `status = paid` with `amount_paid_cents` matching. An earlier, non-subscription-linked bank-transfer invoice was paid in Stripe but never appeared in the local ledger, because `recordEnterpriseInvoiceEvent` (`apps/web/lib/services/enterprise-billing-service.ts:443-444`) only records invoices resolvable to a `stripe_subscription_id`; that invoice was abandoned in favor of the subscription-linked one above and is not part of this evidence.
 
+- [x] A stale `customer.subscription.updated` delivered after
+      `customer.subscription.deleted` must not revive the ended contract.
+      Verified 2026-09-04 against the local database through the running
+      server: the saved events were replayed in creation order through the
+      deletion (`evt_1UBrUX0zEfO6BZMhWTQ7KYiA`), which left `ended_at` set
+      and `last_stripe_event_at` at the deletion's timestamp; the earlier
+      update `evt_1UBrSy0zEfO6BZMhUFpVlOag` was then replayed after clearing
+      its idempotency row and changed nothing. A later
+      `customer.subscription.created` for the same customer does replace the
+      ended contract with the new subscription, which is the intended
+      re-subscription path.
+- [x] An invoice marked uncollectible keeps the collection hold; only a paid
+      or voided invoice clears it. Covered by the unit test on the oldest open
+      invoice computation (`enterprise-billing-service.test.ts`); no saved
+      test-mode event exercises `uncollectible` yet.
+
 Only once every box above is checked, in test mode, should any public page
 describe NET 30, purchase orders, bank transfer, or enterprise invoicing, per
 the founder's decision recorded in section 1.
