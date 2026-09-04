@@ -10,7 +10,7 @@ export default async function SignupCompletePage({
   searchParams: Promise<{ redirectTo?: string }>;
 }) {
   const params = await searchParams;
-  const redirectTo = getSafeRedirectUrl(params.redirectTo, getAppUrl(), '/chat');
+  const redirectTo = getSafeRedirectUrl(params.redirectTo, getAppUrl(), '/welcome');
 
   return (
     <main className="mx-auto flex min-h-[60vh] w-full max-w-md items-center justify-center p-6">
