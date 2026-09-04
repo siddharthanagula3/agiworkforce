@@ -2,10 +2,17 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { getCsrfToken } from '@/lib/client/csrf';
 import { logger } from '@shared/lib/logger';
+import { queryClient, queryKeys } from '@shared/stores/query-client';
 
 export type PermissionLevel = 'allow' | 'ask' | 'deny';
 
 export type ToolPermissionsMap = Record<string, Record<string, PermissionLevel>>;
+
+interface ServerPermission {
+  connectorId: string;
+  toolName: string;
+  level: PermissionLevel;
+}
 
 interface ToolPermissionsState {
   permissions: ToolPermissionsMap;
@@ -32,6 +39,7 @@ async function persistPermissionToServer(
       headers: { 'Content-Type': 'application/json', 'x-csrf-token': csrf },
       body: JSON.stringify({ connectorId, toolName, level }),
     });
+    await queryClient.invalidateQueries({ queryKey: queryKeys.connectors.permissions() });
   } catch (err) {
     logger.warn('[ToolPermissions] server persist failed (kept locally):', err);
   }
@@ -51,9 +59,21 @@ async function clearConnectorPermissionsOnServer(connectorId: string): Promise<v
       credentials: 'same-origin',
       headers: { 'x-csrf-token': csrf },
     });
+    await queryClient.invalidateQueries({ queryKey: queryKeys.connectors.permissions() });
   } catch (err) {
     logger.warn('[ToolPermissions] server reset failed (local cleared):', err);
   }
+}
+
+async function fetchPermissionsFromServer(): Promise<ServerPermission[]> {
+  const res = await fetch('/api/connectors/permissions', { credentials: 'same-origin' });
+  if (!res.ok) {
+    throw Object.assign(new Error(`connector permissions fetch failed: HTTP ${res.status}`), {
+      status: res.status,
+    });
+  }
+  const data = (await res.json()) as { permissions?: ServerPermission[] };
+  return data.permissions ?? [];
 }
 
 export const useToolPermissionsStore = create<ToolPermissionsState & ToolPermissionsActions>()(
@@ -93,15 +113,16 @@ export const useToolPermissionsStore = create<ToolPermissionsState & ToolPermiss
 
       hydrateFromServer: async () => {
         try {
-          const res = await fetch('/api/connectors/permissions', { credentials: 'same-origin' });
-          if (!res.ok) return;
-          const data = (await res.json()) as {
-            permissions?: Array<{ connectorId: string; toolName: string; level: PermissionLevel }>;
-          };
-          if (!data.permissions?.length) return;
+          const permissions = await queryClient.fetchQuery({
+            queryKey: queryKeys.connectors.permissions(),
+            queryFn: fetchPermissionsFromServer,
+            meta: { silent: true },
+            retry: false,
+          });
+          if (!permissions.length) return;
           set((state) => {
             const merged: ToolPermissionsMap = { ...state.permissions };
-            for (const p of data.permissions ?? []) {
+            for (const p of permissions) {
               merged[p.connectorId] = { [p.toolName]: p.level, ...merged[p.connectorId] };
             }
             return { permissions: merged };
