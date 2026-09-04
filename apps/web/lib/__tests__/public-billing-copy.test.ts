@@ -216,7 +216,7 @@ describe('App Store listing truth', () => {
       if (amounts.length === 0) continue;
       priced += 1;
 
-      const label = /^[•*-]\s*([^, ]+?)\s*, /.exec(line)?.[1]?.trim();
+      const label = /^[•*-]\s*([^,]+?)\s*, /.exec(line)?.[1]?.trim();
       const plan = label ? byLabel.get(label) : undefined;
       expect(
         plan,
