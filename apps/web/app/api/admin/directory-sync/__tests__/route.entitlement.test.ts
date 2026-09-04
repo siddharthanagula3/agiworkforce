@@ -17,6 +17,7 @@ vi.mock('@/lib/csrf', () => ({
 vi.mock('@/lib/security-audit', () => ({
   logSecurityEvent: vi.fn(async () => undefined),
   getClientIp: vi.fn(() => '203.0.113.7'),
+  recordAuditEvent: vi.fn(async () => undefined),
 }));
 
 const { mockGetClerkAuthUser } = vi.hoisted(() => ({

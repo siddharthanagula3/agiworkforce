@@ -1,7 +1,7 @@
 import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
-import { logSecurityEvent, getClientIp } from '@/lib/security-audit';
+import { logSecurityEvent, getClientIp, recordAuditEvent } from '@/lib/security-audit';
 import { withRateLimit } from '@/lib/rate-limit';
 import { logger } from '@/lib/logger';
 import { AppError } from '@/lib/errors';
@@ -176,6 +176,20 @@ export async function POST(request: NextRequest) {
       },
     });
 
+    await recordAuditEvent({
+      userId: access.userId,
+      eventType: 'directory_sync_connection_created',
+      organizationId: access.organizationId,
+      request,
+      severity: 'warning',
+      detail: {
+        resourceType: 'directory_sync_connection',
+        resourceId: connection.id,
+        resourceName: typeof display_name === 'string' ? display_name : directory_id,
+        source: provider,
+      },
+    });
+
     logger.info(
       {
         userId: access.userId,
@@ -263,6 +277,20 @@ export async function DELETE(request: NextRequest) {
         provider: existing.provider,
         directoryId: existing.directory_id,
         organizationId: access.organizationId,
+      },
+    });
+
+    await recordAuditEvent({
+      userId: access.userId,
+      eventType: 'directory_sync_connection_deleted',
+      organizationId: access.organizationId,
+      request,
+      severity: 'critical',
+      detail: {
+        resourceType: 'directory_sync_connection',
+        resourceId: connectionId,
+        resourceName: existing.directory_id,
+        source: existing.provider,
       },
     });
 
