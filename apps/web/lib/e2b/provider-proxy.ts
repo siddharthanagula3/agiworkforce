@@ -26,7 +26,8 @@ export function providerProxyDefaultBaseUrl(providerId: string): string | undefi
 }
 
 export function resolveAppOrigin(): string | null {
-  const configured = process.env['NEXT_PUBLIC_APP_URL']?.trim();
+  const configured =
+    process.env['AGI_PROVIDER_PROXY_ORIGIN']?.trim() || process.env['NEXT_PUBLIC_APP_URL']?.trim();
   if (!configured) return null;
   try {
     return new URL(configured).origin;

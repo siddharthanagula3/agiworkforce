@@ -34,6 +34,13 @@ describe('provider proxy constants', () => {
     expect(providerProxyDefaultBaseUrl('google')).toBeUndefined();
   });
 
+  it('prefers the explicit proxy origin over the public app url', () => {
+    vi.stubEnv('AGI_PROVIDER_PROXY_ORIGIN', 'https://tunnel.agiworkforce.test/');
+    expect(resolveAppOrigin()).toBe('https://tunnel.agiworkforce.test');
+    expect(providerProxyBaseUrl('sess-1')).toContain('https://tunnel.agiworkforce.test/');
+    vi.unstubAllEnvs();
+  });
+
   it('builds the proxy base URL and host from the deployment origin', () => {
     expect(resolveAppOrigin()).toBe('https://app.agiworkforce.test');
     expect(providerProxyBaseUrl('sess-1')).toBe(
