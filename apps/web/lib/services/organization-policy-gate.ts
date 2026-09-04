@@ -10,6 +10,11 @@ import { logger } from '@/lib/logger';
 import { resolveActiveOrganizationId } from '@/lib/services/active-workspace-service';
 import { readOrganizationPolicy } from '@/lib/services/organization-policy-service';
 import {
+  CURRENT_COLLECTION_STATE,
+  readOrganizationCollectionState,
+} from '@/lib/services/enterprise-collection-state';
+import {
+  evaluateBillingHold,
   evaluateOrganizationPolicy,
   UNSCOPED_POLICY_DECISION,
   type PolicyAsk,
@@ -56,6 +61,16 @@ export async function evaluateActiveWorkspacePolicy(
 
   if (!organizationId) return { ...UNSCOPED_POLICY_DECISION, organizationId: null };
 
+  let collectionState = CURRENT_COLLECTION_STATE;
+  try {
+    collectionState = await readOrganizationCollectionState(db, organizationId);
+  } catch (error) {
+    logger.error(
+      { error, userId, organizationId, resource: ask.resource },
+      '[org-policy] collection state read failed; billing hold treated as not applicable',
+    );
+  }
+
   let policy = null;
   try {
     policy = await readOrganizationPolicy(db, organizationId);
@@ -64,12 +79,30 @@ export async function evaluateActiveWorkspacePolicy(
       { error, userId, organizationId, resource: ask.resource },
       '[org-policy] policy read failed; request treated as ungoverned',
     );
+    const billingHold = evaluateBillingHold(ask, collectionState);
+    if (billingHold) {
+      logger.info(
+        { userId, organizationId, resource: ask.resource, code: billingHold.code },
+        '[org-policy] request denied by billing hold',
+      );
+      return { ...billingHold, organizationId };
+    }
     return { ...UNSCOPED_POLICY_DECISION, organizationId };
   }
 
-  if (!policy) return { ...UNSCOPED_POLICY_DECISION, organizationId };
+  if (!policy) {
+    const billingHold = evaluateBillingHold(ask, collectionState);
+    if (billingHold) {
+      logger.info(
+        { userId, organizationId, resource: ask.resource, code: billingHold.code },
+        '[org-policy] request denied by billing hold',
+      );
+      return { ...billingHold, organizationId };
+    }
+    return { ...UNSCOPED_POLICY_DECISION, organizationId };
+  }
 
-  const decision = evaluateOrganizationPolicy(policy, ask);
+  const decision = evaluateOrganizationPolicy(policy, ask, collectionState);
 
   if (!decision.allowed) {
     logger.info(
