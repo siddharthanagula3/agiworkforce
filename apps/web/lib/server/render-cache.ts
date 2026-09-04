@@ -3,6 +3,20 @@ import 'server-only';
 import { unstable_cache } from 'next/cache';
 import { DEFAULT_LANGUAGE } from '@agiworkforce/i18n';
 
+/**
+ * The locale the server actually renders in.
+ *
+ * Translation on the web surface runs entirely in the browser: `app/i18n`
+ * initialises i18next with `lng: DEFAULT_LANGUAGE` and only calls
+ * `changeLanguage()` behind a `typeof window !== 'undefined'` guard, and the
+ * root layout hardcodes `<html lang="en">`. Server output is therefore the same
+ * for every visitor regardless of their Accept-Language or language cookie.
+ *
+ * It is still a cache-key dimension, because the day server-side locale lands
+ * this constant has to become request-derived, and every key built through
+ * {@link renderCacheKey} follows it. `render-cache.locale.test.ts` fails if the
+ * invariant is broken without the keys being updated.
+ */
 export const SERVER_RENDER_LOCALE = DEFAULT_LANGUAGE;
 
 export const RENDER_CACHE_TAGS = {

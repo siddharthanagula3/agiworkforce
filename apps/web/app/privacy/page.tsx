@@ -40,15 +40,15 @@ export const metadata = buildMetadata({
 /*
  * PRIVACY POLICY
  *
- * CLAIMS REMOVED HERE — DO NOT RESTORE WITHOUT THE IMPLEMENTATION:
+ * CLAIMS REMOVED HERE, DO NOT RESTORE WITHOUT THE IMPLEMENTATION:
  *
  *  - "RLS-enforced; only you can read your rows" as an absolute. Database RLS is
  *    defined and forced on user-scoped tables, but it only bites where the
- *    request identity is bound per connection — the user-scoped sync paths.
+ *    request identity is bound per connection, the user-scoped sync paths.
  *    Migration db/neon/0037_rls_user_isolation.sql states this caveat itself.
  *    The honest claim is two layers, and that is what section 01 now says.
- *  - "Google Tag Manager" and "IP-anonymized". No GTM container is loaded — the
- *    analytics component loads gtag.js directly — and the gtag config sets no
+ *  - "Google Tag Manager" and "IP-anonymized". No GTM container is loaded, the
+ *    analytics component loads gtag.js directly, and the gtag config sets no
  *    IP-anonymisation option.
  *  - "anonymous ... via Sentry". Error reports retain a stable user id by design.
  *  - "Server logs: 30 days ... up to 180 days" and "Backups: encrypted, 30-day
@@ -59,13 +59,13 @@ export const metadata = buildMetadata({
  *  - "Org-level retention windows on Enterprise". No control reads or enforces a
  *    per-organisation conversation retention window on the conversation path.
  *  - "Material changes are announced via email". CORRECTED 2026-08-14: the
- *    original reason given here — "there is no transactional email provider in
- *    this repository" — was FALSE. lib/support/handoff/resend-client.ts calls
+ *    original reason given here, "there is no transactional email provider in
+ *    this repository", was FALSE. lib/support/handoff/resend-client.ts calls
  *    the Resend HTTP API over plain `fetch`, so no dependency grep could find
  *    it, and /subprocessors delisted the provider on that same bad reasoning
  *    while support transcripts were being emailed through it. The claim still
  *    cannot be made, for the narrower true reason: no mailing path here can
- *    reach an arbitrary list of customers. Say that, never the old sentence —
+ *    reach an arbitrary list of customers. Say that, never the old sentence,
  *    a guard in app/__tests__/legal-policy-set.test.ts enforces it.
  *
  * CLAIM ADDED: billing-record retention (BIZ-046). The retention schedule had a
@@ -85,13 +85,13 @@ export const metadata = buildMetadata({
  * window quoted in the row below is either read from that module or matches one
  * of its rules; the two tables it deliberately leaves ageless
  * (FINANCIAL_TABLES_WITHOUT_MAXIMUM_AGE) are named in the row as ageless. If a
- * rule changes, change the row — a guard in
+ * rule changes, change the row, a guard in
  * __tests__/billing-record-retention-disclosure.test.ts fails otherwise.
  *
  * CLAIM CORRECTED 2026-08-17: audit-log immutability (DOCS-17). The row on what
  * survives erasure said the application role "is blocked from writing to" both
  * audit trails. That is false for `security_audit_logs`: app_rls holds INSERT
- * and SELECT — writing the entry is its job — and only UPDATE and DELETE were
+ * and SELECT, writing the entry is its job, and only UPDATE and DELETE were
  * revoked (db/neon/0043_audit_log_immutability.sql, backstopped by the
  * non-owner trigger in 0123). It is true only of `enterprise_audit_events`,
  * where 0087 revokes INSERT too and writes go through
@@ -112,7 +112,7 @@ export const metadata = buildMetadata({
 
 /**
  * Section list for the contents block. Must stay identical to the rendered
- * eyebrows — they are one piece of copy, not two, and drift makes the contents
+ * eyebrows, they are one piece of copy, not two, and drift makes the contents
  * describe a document that is not there.
  */
 const SECTIONS = [
