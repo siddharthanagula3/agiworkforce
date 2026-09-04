@@ -1909,7 +1909,13 @@ export async function* runToolLoop(
     skillInstallOverridesPromise ??= getSkillInstallOverrides(
       getNeonDb(),
       skillInstallOverridesUserId,
-    );
+    ).catch((error: unknown) => {
+      logger.warn(
+        { error, userId: skillInstallOverridesUserId },
+        'Skill install overrides read failed; assuming none',
+      );
+      return EMPTY_SKILL_INSTALL_OVERRIDES;
+    });
     return skillInstallOverridesPromise;
   };
   const encoder = new TextEncoder();
