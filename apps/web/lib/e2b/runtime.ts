@@ -30,7 +30,11 @@
  */
 import 'server-only';
 
-import { getPlanMaxSandboxes, getPlanSandboxTtlMs } from '@agiworkforce/types';
+import {
+  getPlanMaxSandboxes,
+  getPlanSandboxTtlMs,
+  type CloudCodeNetworkAccess,
+} from '@agiworkforce/types';
 import { CLOUD_CODE_HARNESS_COMMAND_DEADLINE_MS } from '@/lib/deadline-policy';
 import { logger } from '@/lib/logger';
 import { SubscriptionService } from '@/lib/services/subscription-service';
@@ -50,7 +54,7 @@ import {
   type HarnessCredentialSpec,
 } from './templates';
 import { fullNetworkNeedsProxy } from './network-policy';
-import { providerProxyBaseUrl } from './provider-proxy';
+import { providerProxyBaseUrl, providerProxyHost } from './provider-proxy';
 import { mintProviderProxyToken } from './provider-proxy-token';
 import {
   E2B_COMPUTE_RATE_ENV,
@@ -239,7 +243,24 @@ function resolveHarnessEnvs(
   return Object.keys(envs).length > 0 ? envs : undefined;
 }
 
-function createNetworkOptions(scope: E2BSessionScope | undefined): {
+function resolveAllowOutHosts(
+  networkAccess: CloudCodeNetworkAccess,
+  extraHosts: readonly string[] | undefined,
+): string[] {
+  const hosts = new Set<string>();
+  const proxyHost = providerProxyHost();
+  if (proxyHost) hosts.add(proxyHost);
+  if (networkAccess === 'trusted') {
+    for (const host of TRUSTED_CODE_HOSTS) hosts.add(host);
+  }
+  for (const host of extraHosts ?? []) hosts.add(host);
+  return [...hosts];
+}
+
+function createNetworkOptions(
+  scope: E2BSessionScope | undefined,
+  extraHosts?: readonly string[],
+): {
   allowInternetAccess?: boolean;
   network?: { allowOut?: string[]; denyOut?: string[] };
 } {
@@ -250,30 +271,24 @@ function createNetworkOptions(scope: E2BSessionScope | undefined): {
   // still install packages while arbitrary exfiltration stays blocked.
   const networkAccess = scope?.networkAccess ?? CHAT_SANDBOX_NETWORK_ACCESS;
   if (networkAccess === 'full') return { allowInternetAccess: true };
-  if (networkAccess === 'trusted') {
-    return {
-      network: {
-        allowOut: [...TRUSTED_CODE_HOSTS],
-        denyOut: [ALL_OUTBOUND_TRAFFIC],
-      },
-    };
-  }
-  return { allowInternetAccess: false };
+  const allowOut = resolveAllowOutHosts(networkAccess, extraHosts);
+  if (allowOut.length === 0) return { allowInternetAccess: false };
+  return { network: { allowOut, denyOut: [ALL_OUTBOUND_TRAFFIC] } };
 }
 
-function updateNetworkOptions(scope: E2BSessionScope): {
+function updateNetworkOptions(
+  scope: E2BSessionScope,
+  extraHosts?: readonly string[],
+): {
   allowInternetAccess?: boolean;
   allowOut?: string[];
   denyOut?: string[];
 } {
-  if (scope.networkAccess === 'full') return { allowInternetAccess: true };
-  if (scope.networkAccess === 'trusted') {
-    return {
-      allowOut: [...TRUSTED_CODE_HOSTS],
-      denyOut: [ALL_OUTBOUND_TRAFFIC],
-    };
-  }
-  return { allowInternetAccess: false };
+  const networkAccess = scope.networkAccess ?? CHAT_SANDBOX_NETWORK_ACCESS;
+  if (networkAccess === 'full') return { allowInternetAccess: true };
+  const allowOut = resolveAllowOutHosts(networkAccess, extraHosts);
+  if (allowOut.length === 0) return { allowInternetAccess: false };
+  return { allowOut, denyOut: [ALL_OUTBOUND_TRAFFIC] };
 }
 
 function truncateUtf8(value: string, maxBytes: number): string {
@@ -471,13 +486,14 @@ export async function getE2BExecutor(scope?: E2BSessionScope): Promise<E2BExecut
     return null;
   }
   const harnessEnvs = resolveHarnessEnvs(scope, template, sandboxTimeoutMs);
+  const extraHosts = scope?.extraHosts ?? existingSession?.extraHosts;
   const createOpts = scope
     ? {
         timeoutMs: sandboxTimeoutMs,
         lifecycle: { onTimeout: 'pause' as const },
         metadata,
         ...(harnessEnvs ? { envs: harnessEnvs } : {}),
-        ...createNetworkOptions(scope),
+        ...createNetworkOptions(scope, extraHosts),
       }
     : { timeoutMs: sandboxTimeoutMs, metadata, ...createNetworkOptions(scope) };
 
@@ -562,7 +578,7 @@ export async function getE2BExecutor(scope?: E2BSessionScope): Promise<E2BExecut
 
   if (scope?.resource?.kind === 'code_session') {
     try {
-      await sandbox.updateNetwork(updateNetworkOptions(scope));
+      await sandbox.updateNetwork(updateNetworkOptions(scope, extraHosts));
     } catch (err) {
       logger.error(
         { err, userId: scope.userId, codeSessionId, networkAccess: scope.networkAccess },
@@ -584,6 +600,7 @@ export async function getE2BExecutor(scope?: E2BSessionScope): Promise<E2BExecut
       contexts,
       ...(activeSinceMs !== undefined ? { activeSinceMs } : {}),
       ...(scope.networkAccess ? { networkAccess: scope.networkAccess } : {}),
+      ...(extraHosts && extraHosts.length > 0 ? { extraHosts } : {}),
     };
     await saveE2BSession(scope, session);
   }

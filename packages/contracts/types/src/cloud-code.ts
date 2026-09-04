@@ -86,6 +86,8 @@ export interface CreateCloudCodeSessionInput {
   fullNetworkAcknowledged?: boolean;
   /** Must match a catalogue entry; omitted means the default image. */
   runtimeId?: string | null;
+  /** Extra hostnames allowed on top of networkAccess, at most a named maximum. */
+  extraHosts?: string[];
 }
 
 export interface CreateCloudCodeSessionResponse {

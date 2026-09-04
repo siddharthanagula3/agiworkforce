@@ -21,6 +21,7 @@ export interface E2BSession {
   contexts: Record<string, StoredContext>;
   activeSinceMs?: number;
   networkAccess?: CloudCodeNetworkAccess;
+  extraHosts?: readonly string[];
 }
 
 export interface E2BSessionScope {
@@ -40,6 +41,8 @@ export interface E2BSessionScope {
    * provider resolution. Wins over it when present.
    */
   explicitCredential?: { envVar: string; value: string } | null;
+  /** Extra hostnames allowed on top of the networkAccess preset. */
+  extraHosts?: readonly string[];
 }
 
 export const MANAGED_CLOUD_E2B_TENANT_ID = 'managed-cloud';
@@ -63,6 +66,7 @@ export function managedCloudCodeSessionScope(
   planTier?: string,
   templateId?: string | null,
   explicitCredential?: { envVar: string; value: string } | null,
+  extraHosts?: readonly string[],
 ): E2BSessionScope {
   return {
     tenantId: MANAGED_CLOUD_E2B_TENANT_ID,
@@ -72,6 +76,7 @@ export function managedCloudCodeSessionScope(
     ...(planTier ? { planTier } : {}),
     ...(templateId ? { templateId } : {}),
     ...(explicitCredential ? { explicitCredential } : {}),
+    ...(extraHosts && extraHosts.length > 0 ? { extraHosts } : {}),
   };
 }
 
