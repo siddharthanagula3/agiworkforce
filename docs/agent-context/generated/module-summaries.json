@@ -1,5 +1,5 @@
 {
-  "$generated": "GENERATED FILE — do not edit. Run `node scripts/generate-agent-context-indexes.mjs`; `pnpm check:agent-context-indexes` byte-compares this against a fresh render.",
+  "$generated": "GENERATED FILE, do not edit. Run `node scripts/generate-agent-context-indexes.mjs`; `pnpm check:agent-context-indexes` byte-compares this against a fresh render.",
   "generatedFrom": "docs/agent-context/repo-map.json#workspaceUnits (unit list) + each unit's package.json description / Cargo.toml description / README.md ## Purpose|Scope section",
   "units": [
     {

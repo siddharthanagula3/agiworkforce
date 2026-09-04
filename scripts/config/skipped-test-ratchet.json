@@ -7,12 +7,6 @@
       "count": 4,
       "reason": "Self-disabling settings tests: each calls test.skip() when the control it is meant to exercise (resource limits, autonomous mode) is not visible in the build, so the test reports green precisely when the feature is missing. This is the BASE-008 finding about Desktop settings tests silently skipping. Replace the visibility probe with an assertion that the control exists.",
       "trackedBy": "TEST-01"
-    },
-    {
-      "path": "apps/desktop/src/__tests__/e2e/windows.spec.ts",
-      "count": 8,
-      "reason": "Platform gates: test.skip(process.platform !== 'win32', 'Windows only') on Windows-specific tray, clipboard, terminal and theme suites. Deliberate and correct on non-Windows runners, but they mean the suite is fully exercised only in a Windows CI job; declared here so the count cannot grow unnoticed and so the absence of that job stays visible.",
-      "trackedBy": "TEST-01"
     }
   ]
 }
