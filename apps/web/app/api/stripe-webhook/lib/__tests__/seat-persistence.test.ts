@@ -82,7 +82,7 @@ describe('persistPurchasedSeatsOnOrganization', () => {
 
     await persistPurchasedSeatsOnOrganization(db, INPUT);
 
-    expect(calls[0]!.sql).toContain('$1 >= seats_consumed');
+    expect(calls[0]!.sql).toContain('$1::integer >= seats_consumed');
   });
 
   it('reports an over-subscribed downgrade instead of silently succeeding', async () => {
