@@ -55,14 +55,11 @@ describe('ComposerFooter inline, bottom row stays a single usable line', () => {
     expect(container.textContent?.toLowerCase()).not.toContain('to send');
   });
 
-  it('hides the response-style selector below sm so the model selector keeps width', () => {
+  // Response style moved into the composer's "+" menu (ChatComposerNew.tsx);
+  // ComposerFooter never mounts it, so there is no narrow-width collision to
+  // guard here any more.
+  it('does NOT render a response-style trigger (moved into the + menu)', () => {
     const { container } = renderFooter();
-    const styleBtn = container.querySelector(
-      'button[aria-label="Response style"]',
-    ) as HTMLElement | null;
-    expect(styleBtn).toBeTruthy();
-    const wrapper = styleBtn!.closest('.hidden') as HTMLElement | null;
-    expect(wrapper).toBeTruthy();
-    expect(wrapper!.className).toContain('sm:block');
+    expect(container.querySelector('button[aria-label="Response style"]')).toBeNull();
   });
 });

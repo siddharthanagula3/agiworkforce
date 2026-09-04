@@ -1,4 +1,3 @@
-
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -65,10 +64,6 @@ vi.mock('@shared/config/llm', async (importOriginal) => ({
 
 vi.mock('@/features/chat/components/Budget/BudgetTrackerDisplay', () => ({
   BudgetTrackerDisplay: () => <div data-testid="budget-tracker-display" />,
-}));
-
-vi.mock('../StyleSelector', () => ({
-  StyleSelector: () => <div data-testid="style-selector" />,
 }));
 
 vi.mock('@agiworkforce/ui', async (importOriginal) => ({
@@ -164,16 +159,18 @@ describe('ComposerFooter · layout', () => {
     expect(screen.getByTestId('budget-tracker-display')).toBeInTheDocument();
   });
 
-  it('renders StyleSelector', () => {
+  // Response style moved into the composer's "+" menu (ChatComposerNew.tsx);
+  // this component now owns only the model pill, so it never mounts
+  // StyleSelector itself.
+  it('does NOT render StyleSelector (moved into the + menu)', () => {
     render(<ComposerFooter />);
-    expect(screen.getByTestId('style-selector')).toBeInTheDocument();
+    expect(screen.queryByTestId('style-selector')).not.toBeInTheDocument();
   });
 
-  it('renders model selector and style selector in the same row', () => {
+  it('renders the model pill as a compact 32px control', () => {
     render(<ComposerFooter />);
-    const styleSelector = screen.getByTestId('style-selector');
     const modelBtn = screen.getByRole('button', { name: /change model/i });
-    expect(styleSelector).toBeInTheDocument();
-    expect(modelBtn).toBeInTheDocument();
+    expect(modelBtn.className).toContain('h-8');
+    expect(modelBtn.className).toContain('rounded-md');
   });
 });
