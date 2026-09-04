@@ -244,6 +244,9 @@
     ],
     "**/*.{json,md,css,scss,html,yml,yaml}": [
       "prettier --write"
+    ],
+    "**/*.{ts,tsx,js,jsx,cjs,mjs,json,md,css,scss,html,yml,yaml,rs,py,sh,toml,swift,kt,sql,txt,example}": [
+      "node scripts/check-em-dash-in-copy.mjs"
     ]
   },
   "dependencies": {
