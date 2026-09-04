@@ -9,6 +9,31 @@ import { selectNextCursor } from '@agiworkforce/sync';
 
 const MAX_PULL_PAGES = 100;
 const SYNC_PROTOCOL_VERSION = 2;
+const CURSOR_REJECTED_STATUS = 400;
+const CURSOR_REJECTED_ERROR_CODE = 'VALIDATION_ERROR';
+
+/**
+ * Thrown when GET /api/chat/sync rejects the `since` cursor as malformed
+ * (400 VALIDATION_ERROR from apps/web/app/api/chat/sync/route.ts). Callers
+ * persisting the cursor across mounts should treat this as a signal to
+ * discard the stored value and resync from the beginning.
+ */
+export class ArtifactSyncCursorRejectedError extends Error {
+  constructor() {
+    super('artifact sync cursor was rejected by the server');
+    this.name = 'ArtifactSyncCursorRejectedError';
+  }
+}
+
+async function isCursorRejection(response: Response): Promise<boolean> {
+  if (response.status !== CURSOR_REJECTED_STATUS) return false;
+  try {
+    const body = (await response.clone().json()) as { error?: { code?: string } };
+    return body?.error?.code === CURSOR_REJECTED_ERROR_CODE;
+  } catch {
+    return false;
+  }
+}
 
 export interface PullArtifactCloudChangesOptions {
   cursor: string;
@@ -37,6 +62,9 @@ export async function pullArtifactCloudChanges({
       ...(signal ? { signal } : {}),
     });
     if (!response.ok) {
+      if (await isCursorRejection(response)) {
+        throw new ArtifactSyncCursorRejectedError();
+      }
       throw new Error(`artifact sync pull failed with status ${response.status}`);
     }
 
