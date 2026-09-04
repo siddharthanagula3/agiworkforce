@@ -281,23 +281,31 @@ export interface ExecuteManagedSkillToolOptions extends Pick<
 > {
   availableEnvironmentVariables?: ReadonlySet<string>;
   platform?: string;
+  installOverrides?: ReadonlyMap<string, boolean>;
 }
+
+const EMPTY_INSTALL_OVERRIDES: ReadonlyMap<string, boolean> = new Map();
 
 export async function executeManagedSkillTool(
   args: Record<string, unknown>,
   options: ExecuteManagedSkillToolOptions = {},
 ): Promise<SkillToolResult> {
+  const { installOverrides, ...runtimeOptions } = options;
   const availableEnvironmentVariables =
-    options.availableEnvironmentVariables ??
+    runtimeOptions.availableEnvironmentVariables ??
     new Set(
       Object.entries(process.env)
         .filter((entry): entry is [string, string] => Boolean(entry[1]))
         .map(([name]) => name),
     );
-  return executeSkillTool(await getManagedSkillCatalog(), args, {
-    ...options,
+  const catalog = filterSkillsByInstallOverrides(
+    await getManagedSkillCatalog(),
+    installOverrides ?? EMPTY_INSTALL_OVERRIDES,
+  );
+  return executeSkillTool(catalog, args, {
+    ...runtimeOptions,
     availableEnvironmentVariables,
-    platform: options.platform ?? process.platform,
+    platform: runtimeOptions.platform ?? process.platform,
   });
 }
 
@@ -306,17 +314,22 @@ export async function executeManagedSkillToolForPlugins(
   args: Record<string, unknown>,
   options: ExecuteManagedSkillToolOptions = {},
 ): Promise<SkillToolResult> {
+  const { installOverrides, ...runtimeOptions } = options;
   const availableEnvironmentVariables =
-    options.availableEnvironmentVariables ??
+    runtimeOptions.availableEnvironmentVariables ??
     new Set(
       Object.entries(process.env)
         .filter((entry): entry is [string, string] => Boolean(entry[1]))
         .map(([name]) => name),
     );
-  return executeSkillTool(await getManagedSkillCatalogForPlugins(enabledPluginIds), args, {
-    ...options,
+  const catalog = filterSkillsByInstallOverrides(
+    await getManagedSkillCatalogForPlugins(enabledPluginIds),
+    installOverrides ?? EMPTY_INSTALL_OVERRIDES,
+  );
+  return executeSkillTool(catalog, args, {
+    ...runtimeOptions,
     availableEnvironmentVariables,
-    platform: options.platform ?? process.platform,
+    platform: runtimeOptions.platform ?? process.platform,
   });
 }
 
