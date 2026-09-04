@@ -2,6 +2,7 @@ import 'server-only';
 
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import { logger } from '@/lib/logger';
+import { recordAuditEvent } from '@/lib/security-audit';
 import { invalidateActiveOrganizationCache } from '@/lib/server/request-context-cache';
 import type {
   ScimGroupRow,
@@ -23,6 +24,7 @@ import {
 export interface ScimConnectionContext {
   connectionId: string;
   organizationId: string;
+  tokenId?: string;
 }
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -416,6 +418,50 @@ export interface MembershipOutcome {
   role: ProvisionedRole | null;
 }
 
+interface PriorMembership {
+  user_id: string;
+  role: string;
+  provisioning_source: string | null;
+}
+
+/**
+ * Mirrors the `on conflict do update` CASE in the upsert below, so an audit
+ * event can be raised from the pre-write state without a second read after
+ * the write.
+ */
+function computeUpsertedRole(
+  prior: Pick<PriorMembership, 'role' | 'provisioning_source'> | undefined,
+  mappedRole: ProvisionedRole | null,
+): string {
+  if (!prior) return mappedRole ?? 'member';
+  if (prior.role === 'owner') return prior.role;
+  if (prior.provisioning_source === 'scim') return mappedRole ?? 'member';
+  if (mappedRole === null) return prior.role;
+  return mappedRole;
+}
+
+async function recordScimMembershipAudit(
+  ctx: ScimConnectionContext,
+  eventType: 'scim_membership_granted' | 'scim_membership_revoked',
+  targetUserId: string,
+  role: ProvisionedRole | string | null,
+): Promise<void> {
+  await recordAuditEvent({
+    userId: null,
+    eventType,
+    organizationId: ctx.organizationId,
+    severity: eventType === 'scim_membership_revoked' ? 'warning' : 'info',
+    detail: {
+      resourceType: 'organization_member',
+      resourceId: targetUserId,
+      targetUserId,
+      ...(role ? { role } : {}),
+      ...(ctx.tokenId ? { subjectRef: `scim_token:${ctx.tokenId}` } : {}),
+      source: 'scim',
+    },
+  });
+}
+
 export async function reconcileMembership(
   db: DatabaseAdapter,
   ctx: ScimConnectionContext,
@@ -435,7 +481,10 @@ export async function reconcileMembership(
         [ctx.organizationId, linkedUserId],
       );
       revoked = deleted > 0;
-      if (revoked) await invalidateActiveOrganizationCache(linkedUserId);
+      if (revoked) {
+        await invalidateActiveOrganizationCache(linkedUserId);
+        await recordScimMembershipAudit(ctx, 'scim_membership_revoked', linkedUserId, null);
+      }
     }
     return { linkedUserId, membershipGranted: false, membershipRevoked: revoked, role: null };
   }
@@ -445,6 +494,13 @@ export async function reconcileMembership(
   }
 
   const mappedRole = await resolveMappedRole(db, ctx, row.id);
+
+  const priorRows = await db.query<Pick<PriorMembership, 'role' | 'provisioning_source'>>(
+    `select role, provisioning_source from organization_members
+      where organization_id = $1 and user_id = $2`,
+    [ctx.organizationId, linkedUserId],
+  );
+  const priorRow = priorRows[0];
 
   await db.execute(
     `insert into organization_members
@@ -462,6 +518,11 @@ export async function reconcileMembership(
            provisioned_at = now()`,
     [ctx.organizationId, linkedUserId, mappedRole],
   );
+
+  const resultingRole = computeUpsertedRole(priorRow, mappedRole);
+  if (resultingRole !== priorRow?.role) {
+    await recordScimMembershipAudit(ctx, 'scim_membership_granted', linkedUserId, resultingRole);
+  }
 
   return {
     linkedUserId,
@@ -935,7 +996,15 @@ export async function deleteScimUser(
       [ctx.organizationId, existing.linked_user_id],
     );
     membershipRevoked = deleted > 0;
-    if (membershipRevoked) await invalidateActiveOrganizationCache(existing.linked_user_id);
+    if (membershipRevoked) {
+      await invalidateActiveOrganizationCache(existing.linked_user_id);
+      await recordScimMembershipAudit(
+        ctx,
+        'scim_membership_revoked',
+        existing.linked_user_id,
+        null,
+      );
+    }
   }
 
   await db.execute(
@@ -1151,6 +1220,16 @@ export async function reconcileGroupMembers(
   const revoked = present
     .filter((row) => !row.active && row.linked_user_id)
     .map((row) => row.linked_user_id as string);
+  const revokedActual =
+    revoked.length === 0
+      ? []
+      : (
+          await db.query<{ user_id: string }>(
+            `select user_id from organization_members
+              where organization_id = $1 and user_id = any($2::text[]) and role <> 'owner'`,
+            [ctx.organizationId, revoked],
+          )
+        ).map((row) => row.user_id);
   for (const batch of chunkIds(revoked, MEMBER_WRITE_CHUNK)) {
     await db.execute(
       `delete from organization_members
@@ -1161,6 +1240,11 @@ export async function reconcileGroupMembers(
     );
   }
   await Promise.all(revoked.map((userId) => invalidateActiveOrganizationCache(userId)));
+  await Promise.all(
+    revokedActual.map((userId) =>
+      recordScimMembershipAudit(ctx, 'scim_membership_revoked', userId, null),
+    ),
+  );
 
   const grantable = present.filter(
     (row) => row.active && row.linked_user_id && ownsEmailDomain(row.email, domains),
@@ -1172,6 +1256,14 @@ export async function reconcileGroupMembers(
     ctx,
     grantable.map((row) => row.id),
   );
+
+  const grantableUserIds = grantable.map((row) => row.linked_user_id as string);
+  const priorMemberships = await db.query<PriorMembership>(
+    `select user_id, role, provisioning_source from organization_members
+      where organization_id = $1 and user_id = any($2::text[])`,
+    [ctx.organizationId, grantableUserIds],
+  );
+  const priorByUser = new Map(priorMemberships.map((row) => [row.user_id, row]));
 
   // Split on whether a mapped role exists, because the single-user upsert's
   // CASE behaves differently when its role parameter is null: a null leaves a
@@ -1218,6 +1310,17 @@ export async function reconcileGroupMembers(
       [ctx.organizationId, batch],
     );
   }
+
+  await Promise.all(
+    grantable.map((row) => {
+      const linkedUserId = row.linked_user_id as string;
+      const mappedRole = roles.get(row.id) ?? null;
+      const prior = priorByUser.get(linkedUserId);
+      const resultingRole = computeUpsertedRole(prior, mappedRole);
+      if (resultingRole === prior?.role) return Promise.resolve();
+      return recordScimMembershipAudit(ctx, 'scim_membership_granted', linkedUserId, resultingRole);
+    }),
+  );
 }
 
 function chunkEntries<T>(entries: readonly T[], size: number): T[][] {

@@ -1,5 +1,7 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
+
+vi.mock('@/lib/security-audit', () => ({ recordAuditEvent: vi.fn(async () => undefined) }));
 
 import {
   createScimGroup,

@@ -308,6 +308,35 @@ export function createFakeScimDb(seed: Partial<FakeScimDbState> = {}) {
           (row['role'] === 'owner' || row['role'] === 'admin'),
       );
     }
+    if (q.startsWith('select role, provisioning_source from organization_members')) {
+      return state.organization_members
+        .filter((row) => row['organization_id'] === p[0] && row['user_id'] === p[1])
+        .map((row) => ({
+          role: row['role'],
+          provisioning_source: row['provisioning_source'] ?? null,
+        }));
+    }
+    if (q.startsWith('select user_id from organization_members') && q.includes("role <> 'owner'")) {
+      const ids = p[1] as string[];
+      return state.organization_members
+        .filter(
+          (row) =>
+            row['organization_id'] === p[0] &&
+            ids.includes(String(row['user_id'])) &&
+            row['role'] !== 'owner',
+        )
+        .map((row) => ({ user_id: row['user_id'] }));
+    }
+    if (q.startsWith('select user_id, role, provisioning_source from organization_members')) {
+      const ids = p[1] as string[];
+      return state.organization_members
+        .filter((row) => row['organization_id'] === p[0] && ids.includes(String(row['user_id'])))
+        .map((row) => ({
+          user_id: row['user_id'],
+          role: row['role'],
+          provisioning_source: row['provisioning_source'] ?? null,
+        }));
+    }
     if (q.startsWith('insert into organization_members')) {
       const [organizationId, userId, mappedRole] = p as [string, string, string | null];
       const existing = state.organization_members.find(
