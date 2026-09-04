@@ -24,9 +24,14 @@ describe('provider proxy constants', () => {
     expect(providerProxyDefaultBaseUrl('anthropic')).toBe('https://api.anthropic.com');
   });
 
+  it('names the bearer header and default upstream for openai', () => {
+    expect(providerProxyAuthHeader('openai')).toBe('authorization');
+    expect(providerProxyDefaultBaseUrl('openai')).toBe('https://api.openai.com/v1');
+  });
+
   it('knows nothing about a provider it does not cover', () => {
-    expect(providerProxyAuthHeader('openai')).toBeUndefined();
-    expect(providerProxyDefaultBaseUrl('openai')).toBeUndefined();
+    expect(providerProxyAuthHeader('google')).toBeUndefined();
+    expect(providerProxyDefaultBaseUrl('google')).toBeUndefined();
   });
 
   it('builds the proxy base URL and host from the deployment origin', () => {
