@@ -6,7 +6,6 @@ import { toast } from 'sonner';
 import { Popover, PopoverTrigger, PopoverContent, Slider } from '@agiworkforce/ui';
 import { useModelStore, AVAILABLE_MODELS, type AIModel } from '@shared/stores/model-store';
 import { BudgetTrackerDisplay } from '@/features/chat/components/Budget/BudgetTrackerDisplay';
-import { StyleSelector } from './StyleSelector';
 import { Switch } from '@agiworkforce/ui';
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '@agiworkforce/ui';
 import {
@@ -55,6 +54,10 @@ import {
 const FREE_LANE_SLOT_TEXT = 'Auto (free) · community models, capacity varies';
 const TRIAL_SLOT_SUFFIX = 'is selected for the free web trial';
 const MODEL_CATALOG_ENDPOINT = '/api/models';
+
+/** Compact model pill (name plus effort), the composer's sole model control. */
+const MODEL_PILL_TRIGGER_CLASS =
+  'flex h-8 min-w-0 items-center gap-1.5 rounded-md border border-border/50 bg-muted/35 px-2.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted/55 hover:text-foreground';
 
 type ProviderAvailability = { state: 'degraded'; reason: string; until: string };
 
@@ -647,8 +650,6 @@ interface ComposerFooterProps {
   onModelChange?: (modelId: string) => Promise<boolean>;
   /** When true, render the selected model as a locked status pill instead of a dropdown. */
   lockModelSelector?: boolean;
-  /** Controls whether the response style selector is visible. */
-  showStyleSelector?: boolean;
   /**
    * Inline mode: render ONLY the model/style selector cluster (no hint, budget,
    * or usage rows) so it can be dropped directly into the composer's control
@@ -659,13 +660,49 @@ interface ComposerFooterProps {
   className?: string;
 }
 
+/**
+ * Plain-text "resolved model · effort" summary, the value the composer
+ * footer line shows on its right (matching the Claude convention). Owns its
+ * own store reads so a caller mounts it without threading the model/effort
+ * state this file already resolves for the picker itself.
+ */
+export function ComposerModelSummary({ className }: { className?: string }) {
+  useModelStore((s) => s.selectedModelId);
+  const getSelectedModel = useModelStore((s) => s.getSelectedModel);
+  const thinkingEffort = useThinkingStore((s) => s.effort);
+  const subscription = useBillingStore((s) => s.subscription);
+  const billingPolicyReady = useBillingStore(isBillingPolicyReady);
+  const billingUnauthenticated = useBillingStore((s) => s.unauthenticated === true);
+  const tier = subscription?.tier ?? 'free';
+  const knownTier = billingPolicyReady || billingUnauthenticated ? tier : null;
+
+  const selectedModel = getSelectedModel();
+  const reasoning = reasoningFor(selectedModel);
+  const supportsAdaptive = modelSupportsThinking(selectedModel);
+  const { allowed: effortChips } =
+    knownTier === null
+      ? { allowed: reasoning.supportedEfforts ?? [] }
+      : splitEffortsByEntitlement(reasoning, knownTier);
+  const hasEffortControl = supportsAdaptive && effortChips.length > 0;
+  const supportedStoreEfforts = new Set<Effort>(effortChips.map(chipToStoreEffort));
+  const effectiveEffort = supportedStoreEfforts.has(thinkingEffort)
+    ? thinkingEffort
+    : defaultStoreEffort(reasoning);
+
+  return (
+    <span className={className} data-testid="composer-model-summary">
+      {selectedModel.name}
+      {hasEffortControl ? ` · ${EFFORT_LABEL[effectiveEffort]}` : ''}
+    </span>
+  );
+}
+
 export function ComposerFooter({
   showModelSelector = true,
   showModelSearch = true,
   onUpgradeRequest,
   onModelChange,
   lockModelSelector = false,
-  showStyleSelector = true,
   inline = false,
   className,
 }: ComposerFooterProps) {
@@ -926,22 +963,14 @@ export function ComposerFooter({
             ChatComposerNew: plain Enter sends, Shift+Enter newline (ChatGPT/Claude
             convention), Cmd/Ctrl+Enter also sends. */}
         <div className="flex min-w-0 items-center gap-2">
-          {/* Response style selector · hidden below sm so the model selector keeps a
-              usable width on the narrow (mobile) composer row. Style is a secondary
-              control and, like claude.ai's mobile composer, is dropped at small widths
-              rather than crushing the model picker. */}
-          {showStyleSelector && (
-            <div className="hidden sm:block">
-              <StyleSelector />
-            </div>
-          )}
-
-          {/* Model selector */}
+          {/* Model selector: a compact pill (name plus effort), not the wide
+              text-label trigger this replaced. Response style now lives in
+              the "+" menu (ChatComposerNew.tsx), not on the composer face. */}
           {showModelSelector && lockModelSelector && (
             <button
               type="button"
               onClick={onUpgradeRequest}
-              className="flex items-center gap-1.5 rounded-md border border-border/50 bg-muted/35 px-2 py-0.5 text-xs text-muted-foreground transition-colors hover:bg-muted/55 hover:text-foreground"
+              className={MODEL_PILL_TRIGGER_CLASS}
               aria-label={lockedSlotLabel}
             >
               <ProviderLogo providerKey={selectedProviderKey} size={12} />
@@ -962,7 +991,7 @@ export function ComposerFooter({
                   ref={modelTriggerRef}
                   id="model-selector"
                   disabled={modelChangePending}
-                  className="flex min-h-6 min-w-0 items-center gap-1.5 rounded-md px-2 py-0.5 text-xs text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground"
+                  className={MODEL_PILL_TRIGGER_CLASS}
                   aria-label={modelChangePending ? 'Saving model selection' : 'Change model'}
                 >
                   <ProviderLogo providerKey={selectedProviderKey} size={12} />
