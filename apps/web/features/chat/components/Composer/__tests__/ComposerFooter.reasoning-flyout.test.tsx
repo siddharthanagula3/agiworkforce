@@ -189,6 +189,7 @@ vi.mock('@shared/stores/web-chat-store', () => ({
 vi.mock('@agiworkforce/routing', () => ({ assessModelSwitchCache: () => ({ warn: false }) }));
 
 vi.mock('@agiworkforce/ui', () => ({
+  useMenuKeyboard: () => undefined,
   Popover: ({ children }: { children: React.ReactNode }) => <>{children}</>,
   PopoverTrigger: ({ children, asChild }: { children: React.ReactNode; asChild?: boolean }) =>
     asChild ? <>{children}</> : <div>{children}</div>,
@@ -246,6 +247,9 @@ vi.mock('zustand/middleware', async () => {
 
 import { ComposerFooter } from '../ComposerFooter';
 
+const effortRow = () => screen.getByRole('button', { name: /^Effort/ });
+const expandEffort = () => fireEvent.click(effortRow());
+
 describe('ComposerFooter · reasoning/effort flyout', () => {
   beforeEach(() => {
     thinking.enabled = true;
@@ -253,9 +257,13 @@ describe('ComposerFooter · reasoning/effort flyout', () => {
     billing.tier = 'max';
   });
 
-  it('(a) Six-Level Fixture exposes its six exact levels through one compact slider', () => {
+  it('(a) Six-Level Fixture exposes its six exact levels behind the effort row', () => {
     sel.id = 'fixture-six-level';
     render(<ComposerFooter />);
+    expect(effortRow()).toHaveTextContent('Medium');
+    expect(effortRow()).toHaveAttribute('aria-expanded', 'false');
+    expandEffort();
+    expect(effortRow()).toHaveAttribute('aria-expanded', 'true');
     const slider = screen.getByRole('slider', { name: 'Reasoning effort' });
     expect(slider).toHaveAttribute('min', '0');
     expect(slider).toHaveAttribute('max', '5');
@@ -267,6 +275,7 @@ describe('ComposerFooter · reasoning/effort flyout', () => {
   it('(b) non-reasoning Non-Reasoning Fixture shows NO effort control', () => {
     sel.id = 'fixture-no-reasoning';
     render(<ComposerFooter />);
+    expect(screen.queryByRole('button', { name: /^Effort/ })).not.toBeInTheDocument();
     expect(screen.queryByRole('group', { name: /reasoning effort/i })).not.toBeInTheDocument();
     expect(screen.queryByRole('slider', { name: /reasoning effort/i })).not.toBeInTheDocument();
   });
@@ -276,36 +285,58 @@ describe('ComposerFooter · reasoning/effort flyout', () => {
     thinking.effort = 'low';
     render(<ComposerFooter />);
 
+    expect(screen.getByText('Always on for this model')).toBeInTheDocument();
+    expandEffort();
     const slider = screen.getByRole('slider', { name: 'Reasoning effort' });
     expect(slider).toHaveAttribute('max', '3');
     expect(slider).toHaveAttribute('aria-valuetext', 'Low');
-    expect(screen.getByText('Always on for this model')).toBeInTheDocument();
   });
 
   it('(c) Five-Level Fixture exposes five catalog levels through the slider', () => {
     sel.id = 'fixture-five-level';
     render(<ComposerFooter />);
+    expandEffort();
     expect(screen.getByRole('slider', { name: 'Reasoning effort' })).toHaveAttribute('max', '4');
+  });
+
+  it('(c2) Five-Level Fixture hides the effort row while extended thinking is off', () => {
+    sel.id = 'fixture-five-level';
+    thinking.enabled = false;
+    render(<ComposerFooter />);
+    expect(screen.getByTestId('switch')).toHaveAttribute('data-checked', 'false');
+    expect(screen.queryByRole('button', { name: /^Effort/ })).not.toBeInTheDocument();
   });
 
   it('(a2) Four-Level Secondary Fixture exposes its exact minimal/low/medium/high slider', () => {
     sel.id = 'fixture-four-level-secondary';
     thinking.effort = 'minimal';
     render(<ComposerFooter />);
+    expandEffort();
     const slider = screen.getByRole('slider', { name: 'Reasoning effort' });
     expect(slider).toHaveAttribute('max', '3');
     expect(slider).toHaveAttribute('aria-valuetext', 'Minimal');
   });
 
-  it('places the effort slider before the model list and updates by discrete catalog index', () => {
+  it('keeps the effort row before the model list, with the slider collapsed until asked', () => {
     sel.id = 'fixture-four-level-secondary';
     thinking.effort = 'medium';
     render(<ComposerFooter />);
 
-    const slider = screen.getByRole('slider', { name: 'Reasoning effort' });
-    const available = screen.getByText('Available');
+    expect(screen.queryByRole('slider', { name: 'Reasoning effort' })).not.toBeInTheDocument();
+    const firstModelRow = screen.getByRole('button', {
+      name: 'Four-Level Secondary Fixture',
+    });
     expect(
-      slider.compareDocumentPosition(available) & Node.DOCUMENT_POSITION_FOLLOWING,
+      effortRow().compareDocumentPosition(firstModelRow) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+
+    expandEffort();
+    const slider = screen.getByRole('slider', { name: 'Reasoning effort' });
+    expect(
+      effortRow().compareDocumentPosition(slider) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(
+      slider.compareDocumentPosition(firstModelRow) & Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy();
 
     fireEvent.change(slider, { target: { value: '3' } });
@@ -318,7 +349,8 @@ describe('ComposerFooter · reasoning/effort flyout', () => {
     render(<ComposerFooter />);
 
     expect(screen.getByText('Always on for this model')).toBeInTheDocument();
-    expect(screen.getByText('Always on')).toBeInTheDocument();
+    expect(effortRow()).toBeInTheDocument();
+    expect(screen.queryByTestId('switch')).not.toBeInTheDocument();
     expect(screen.queryByLabelText('Toggle extended thinking')).not.toBeInTheDocument();
   });
 
@@ -338,6 +370,7 @@ describe('ComposerFooter · reasoning/effort flyout', () => {
     const onUpgradeRequest = vi.fn();
     render(<ComposerFooter onUpgradeRequest={onUpgradeRequest} />);
 
+    expandEffort();
     expect(screen.getByRole('slider', { name: 'Reasoning effort' })).toHaveAttribute('max', '2');
     expect(
       screen.getByText('High, xHigh, Max effort levels are not included in your plan.'),
@@ -353,6 +386,8 @@ describe('ComposerFooter · reasoning/effort flyout', () => {
     thinking.effort = 'max';
     render(<ComposerFooter />);
 
+    expect(effortRow()).toHaveTextContent('Medium');
+    expandEffort();
     expect(screen.getByRole('slider', { name: 'Reasoning effort' })).toHaveAttribute(
       'aria-valuetext',
       'Medium',
@@ -364,7 +399,9 @@ describe('ComposerFooter · reasoning/effort flyout', () => {
     sel.id = 'fixture-six-level';
     render(<ComposerFooter />);
     fireEvent.click(screen.getByRole('button', { name: /more models/i }));
-    const row = screen.getByRole('button', { name: /future preview model.*not yet available/i });
+    const row = screen.getByRole('button', {
+      name: /future preview model.*not yet available/i,
+    });
     expect(row).toBeDisabled();
     expect(screen.getByText('Coming soon')).toBeInTheDocument();
   });
