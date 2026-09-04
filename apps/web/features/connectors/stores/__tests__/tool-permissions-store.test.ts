@@ -34,22 +34,34 @@ describe('tool-permissions-store server sync', () => {
     });
   });
 
-  it('hydrateFromServer fills gaps but local wins on conflict', async () => {
+  it('hydrateFromServer fills gaps and the server wins on conflict', async () => {
     useToolPermissionsStore.setState({ permissions: { github: { create_issue: 'allow' } } });
     fetchMock.mockResolvedValue({
       ok: true,
       json: async () => ({
         permissions: [
-          { connectorId: 'github', toolName: 'create_issue', level: 'deny' }, // conflict → local wins
+          { connectorId: 'github', toolName: 'create_issue', level: 'ask' }, // conflict → server wins
           { connectorId: 'slack', toolName: 'post', level: 'ask' }, // gap → server fills
         ],
       }),
     });
     await useToolPermissionsStore.getState().hydrateFromServer();
     expect(useToolPermissionsStore.getState().getToolPermission('github', 'create_issue')).toBe(
-      'allow',
+      'ask',
     );
     expect(useToolPermissionsStore.getState().getToolPermission('slack', 'post')).toBe('ask');
+  });
+
+  it('a stale local allow does not survive a server downgrade to ask', async () => {
+    useToolPermissionsStore.setState({ permissions: { notion: { search: 'allow' } } });
+    fetchMock.mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        permissions: [{ connectorId: 'notion', toolName: 'search', level: 'ask' }],
+      }),
+    });
+    await useToolPermissionsStore.getState().hydrateFromServer();
+    expect(useToolPermissionsStore.getState().getToolPermission('notion', 'search')).toBe('ask');
   });
 
   it('hydrateFromServer is a no-op that keeps local state on a non-ok response', async () => {
