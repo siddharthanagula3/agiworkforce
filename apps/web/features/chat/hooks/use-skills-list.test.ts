@@ -1,11 +1,18 @@
 import { renderHook, waitFor } from '@testing-library/react';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { queryClient, queryKeys } from '@shared/stores/query-client';
 import { useSkillsList } from './use-skills-list';
 
 describe('useSkillsList', () => {
+  beforeEach(() => {
+    queryClient.clear();
+    queryClient.setQueryDefaults(queryKeys.skills.catalog(), { retry: false });
+  });
+
   afterEach(() => {
     vi.unstubAllGlobals();
+    queryClient.clear();
   });
 
   it('fails closed when the server returns malformed catalog metadata', async () => {
