@@ -55,7 +55,6 @@ export const ORGANIZATION_SCOPED_TABLES: ReadonlyArray<{ table: string; column: 
   { table: 'managed_usage_requests', column: 'organization_id' },
   { table: 'usage_events', column: 'organization_id' },
   { table: 'search_history', column: 'organization_id' },
-  { table: 'enterprise_audit_events', column: 'organization_id' },
   { table: 'organization_billing_contracts', column: 'organization_id' },
   { table: 'organization_billing_invoices', column: 'organization_id' },
 ];
@@ -76,6 +75,12 @@ export const ORGANIZATION_ANONYMIZED_COLUMNS: ReadonlyArray<{
     table: 'organization_usage_ledger',
     column: 'organization_id',
     reason: 'Cost-of-goods and billing history; the row survives, the tenant does not.',
+  },
+  {
+    table: 'enterprise_audit_events',
+    column: 'organization_id',
+    reason:
+      'The tenant’s own audit trail must survive its own deletion: a legal hold or a post-deletion investigation needs the rows a hard delete would destroy. The actor id, action, resource and metadata are left exactly as recorded; only organization_id is detached, so the row retires under the platform retention policy instead of the workspace it came from. Requires 0168_retain_audit_events_after_organization_deletion.sql (drops the NOT NULL constraint) applied ahead of this running.',
   },
   {
     table: 'provider_cost_events',

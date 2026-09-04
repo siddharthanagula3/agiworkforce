@@ -203,9 +203,28 @@ describe('eraseOrganizationData', () => {
       ),
     ).toBe(true);
     expect(
+      statements.some((sql) =>
+        sql.includes('update public.enterprise_audit_events set organization_id = null'),
+      ),
+    ).toBe(true);
+    expect(
       statements.some((sql) => sql.includes('delete from public.organizations where id = $1')),
     ).toBe(true);
     expect(report.tables['organization_members']).toEqual({ deleted: true });
+  });
+
+  it('retains the tenant audit trail, detaching only the organization reference', async () => {
+    primeDb();
+
+    const report = await eraseOrganizationData('org-1');
+
+    expect(report.anonymized['enterprise_audit_events']).toEqual({ updated: true });
+    expect(report.tables['enterprise_audit_events']).toBeUndefined();
+    expect(
+      executedStatements().some((sql) =>
+        sql.includes('delete from public.enterprise_audit_events where organization_id = $1'),
+      ),
+    ).toBe(false);
   });
 
   it('never deletes organization_members directly, only through the final row cascade', async () => {
