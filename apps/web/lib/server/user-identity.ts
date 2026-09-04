@@ -41,7 +41,10 @@ async function readSettingsNamespace(
   namespace: string,
 ): Promise<Record<string, unknown>> {
   try {
-    const rows = await getNeonDb().query<{ settings: Record<string, unknown> | null }>(
+    const rows = await createClaimedUserScopedDb(getNeonDb(), {
+      userId,
+      organizationId: null,
+    }).query<{ settings: Record<string, unknown> | null }>(
       `select settings from public.user_settings where user_id = $1 limit 1`,
       [userId],
     );
@@ -60,7 +63,10 @@ async function readSettingsNamespace(
 
 async function readIdentityNamespace(userId: string): Promise<Record<string, unknown>> {
   try {
-    const rows = await getNeonDb().query<{ settings: Record<string, unknown> | null }>(
+    const rows = await createClaimedUserScopedDb(getNeonDb(), {
+      userId,
+      organizationId: null,
+    }).query<{ settings: Record<string, unknown> | null }>(
       `select settings from public.user_settings where user_id = $1 limit 1`,
       [userId],
     );
@@ -79,7 +85,10 @@ async function readIdentityNamespace(userId: string): Promise<Record<string, unk
 
 async function readProfileRow(userId: string): Promise<ProfileRow | null> {
   try {
-    const rows = await getNeonDb().query<ProfileRow>(
+    const rows = await createClaimedUserScopedDb(getNeonDb(), {
+      userId,
+      organizationId: null,
+    }).query<ProfileRow>(
       `select id, email, display_name, avatar_url, routing_preferences
          from profiles
         where id = $1
