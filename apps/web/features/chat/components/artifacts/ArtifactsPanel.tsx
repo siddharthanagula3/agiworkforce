@@ -22,6 +22,7 @@ import { downloadAllArtifacts } from '../../utils/downloadArtifacts';
 import { createWebCloudPublisher } from './publishArtifactClient';
 import { toast } from 'sonner';
 import { toUserMessage } from '@/lib/user-error-message';
+import { ArtifactPrivacyNotice } from '@/features/onboarding/components/ArtifactPrivacyNotice';
 
 function ArtifactTab({
   artifact,
@@ -478,6 +479,8 @@ export function ArtifactsPanel() {
             )}
           </div>
         </div>
+
+        <ArtifactPrivacyNotice />
 
         {artifacts.length === 0 && !streamingArtifact ? (
           <ArtifactsEmptyState />
