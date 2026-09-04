@@ -130,15 +130,15 @@ export async function persistPurchasedSeatsOnOrganization(
     `update public.organizations
         set licensed_seats = $1,
             billing_plan_tier = $2,
-            stripe_subscription_id = coalesce($3, stripe_subscription_id),
-            stripe_customer_id = coalesce($4, stripe_customer_id),
+            stripe_subscription_id = coalesce($3::text, stripe_subscription_id),
+            stripe_customer_id = coalesce($4::text, stripe_customer_id),
             seat_billing_updated_at = now()
-      where owner_user_id = $5
-        and $1 >= seats_consumed
+      where owner_user_id = $5::text
+        and $1::integer >= seats_consumed
         and (
           stripe_subscription_id is null
-          or $3 is null
-          or stripe_subscription_id = $3
+          or $3::text is null
+          or stripe_subscription_id = $3::text
         )
       returning id, licensed_seats`,
     [
