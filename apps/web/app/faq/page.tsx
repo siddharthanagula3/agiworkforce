@@ -3,7 +3,7 @@ import Link from 'next/link';
 import { Header } from '@shared/components/layout/Header';
 import { MarketingFooter } from '@/features/marketing/components/MarketingFooter';
 import { Button, ButtonRow, Prose, Section, Stack } from '@/features/marketing/components/system';
-import { PageHero } from '@/features/marketing/components/pages/surfaces/shared';
+import { FactLine, PageHero } from '@/features/marketing/components/pages/surfaces/shared';
 import { NoteList } from '@/features/marketing/components/pages/company/shared';
 import { BYOK_SURFACES, DESKTOP_LOCAL_RUNTIMES, MARKETING } from '@/lib/marketing-constants';
 import { CONTACT_EMAIL, contactMailto } from '@/lib/legal-constants';
@@ -14,6 +14,13 @@ export const metadata = buildMetadata({
     'Frequently asked questions about providers, BYOK, Local mode, AGI managed cloud, and security.',
   path: '/faq',
 });
+
+const HERO_FACTS = [
+  `Providers: ${MARKETING.providers.display}`,
+  `Models: ${MARKETING.models.display}`,
+  `BYOK: ${BYOK_SURFACES.label}`,
+  `Local runtimes: ${DESKTOP_LOCAL_RUNTIMES.names.length}`,
+];
 
 const QA: { title: string; body: string }[] = [
   {
@@ -94,6 +101,8 @@ export default function FaqPage() {
           lede={`The questions we get most often, answered the way we'd want them answered. If something below is wrong or out of date, email ${CONTACT_EMAIL} and we'll fix it.`}
           ctas={[]}
         />
+
+        <FactLine facts={HERO_FACTS} />
 
         <Section id="qa" labelledBy="agi-faq-qa-title" rule>
           <Stack gap="loose">
