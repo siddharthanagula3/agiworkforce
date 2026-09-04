@@ -25,18 +25,30 @@ import {
 const MESSAGE_INPUT_LABEL = 'Message input';
 
 /**
- * M11: the resting composer ran to ~131px at 390px against ChatGPT's ~87px, so
- * every vertical value below the `sm` breakpoint is its own step. The `sm:`
- * halves reproduce today's desktop numbers exactly, because desktop is not
- * this slice.
+ * M11, extended by the composer parity wave. The resting composer ran to
+ * ~131px at 390px against ChatGPT's ~87px, so every vertical value below the
+ * `sm` breakpoint is its own step. The row heights below feed a one-row
+ * rest state (plus, textbox, right cluster all on one flex-nowrap line): a
+ * 36px content row at `sm:` plus the card's 8px inner padding lands on the
+ * 52px rest-height target in an existing chat; the empty (home) row stays
+ * 40px, its own second row (mode toggle) absorbed separately.
  */
-export const COMPOSER_INPUT_ROW_CLASS = 'min-h-[36px] py-1 sm:min-h-[52px] sm:py-3';
+export const COMPOSER_INPUT_ROW_CLASS = 'min-h-[36px] py-1 sm:min-h-[36px] sm:py-1.5';
 export const COMPOSER_INPUT_EMPTY_ROW_CLASS = 'min-h-[36px] py-1 sm:min-h-[40px] sm:py-1.5';
 
+/**
+ * `block`: a `<textarea>` is inline-level by default, so its bottom edge in a
+ * block wrapper carries the wrapper's own font descender as phantom space
+ * (the classic "gap under an inline replaced element"). That gap silently
+ * inflated the composer's rest height once the plus/model/mic/send controls
+ * moved into the SAME row and needed the textbox's rendered height, not just
+ * its own box, to match the row's other controls.
+ */
 const INPUT_SHARED_CLASS =
-  'relative z-10 max-h-[240px] w-full resize-none overflow-y-auto border-0 bg-transparent px-2 leading-relaxed text-foreground outline-none placeholder:text-muted-foreground disabled:cursor-not-allowed disabled:opacity-50';
-const INPUT_TEXT_SIZE_CLASS = 'text-sm md:text-[15px]';
-const INPUT_EMPTY_TEXT_SIZE_CLASS = 'text-[18px] md:text-[18px]';
+  'relative z-10 block max-h-[240px] w-full resize-none overflow-y-auto border-0 bg-transparent px-2 text-foreground outline-none placeholder:text-muted-foreground disabled:cursor-not-allowed disabled:opacity-50';
+/** 16px/24px everywhere: home and chat, desktop and phone (parity target). */
+const INPUT_TEXT_SIZE_CLASS = 'text-base leading-6';
+const INPUT_EMPTY_TEXT_SIZE_CLASS = 'text-base leading-6';
 
 /**
  * The editor owns its own box through `composer-editor.css`, which is not
@@ -45,12 +57,12 @@ const INPUT_EMPTY_TEXT_SIZE_CLASS = 'text-[18px] md:text-[18px]';
  */
 const EDITOR_SHARED_CLASS = 'relative z-10 [&_.ProseMirror]:max-h-[240px]';
 const EDITOR_ROW_CLASS =
-  '[&_.ProseMirror]:min-h-[36px] [&_.ProseMirror]:py-1 sm:[&_.ProseMirror]:min-h-[52px] sm:[&_.ProseMirror]:py-3';
+  '[&_.ProseMirror]:min-h-[36px] [&_.ProseMirror]:py-1 sm:[&_.ProseMirror]:min-h-[36px] sm:[&_.ProseMirror]:py-1.5';
 const EDITOR_EMPTY_ROW_CLASS =
   '[&_.ProseMirror]:min-h-[36px] [&_.ProseMirror]:py-1 sm:[&_.ProseMirror]:min-h-[40px] sm:[&_.ProseMirror]:py-1.5';
-const EDITOR_TEXT_SIZE_CLASS = 'md:[&_.ProseMirror]:text-[15px]';
+const EDITOR_TEXT_SIZE_CLASS = '[&_.ProseMirror]:text-base [&_.ProseMirror]:leading-6';
 const EDITOR_EMPTY_TEXT_SIZE_CLASS =
-  '[&_.ProseMirror]:text-[18px] [&_.composer-editor\\_\\_placeholder]:text-[18px]';
+  '[&_.ProseMirror]:text-base [&_.ProseMirror]:leading-6 [&_.composer-editor\\_\\_placeholder]:text-base';
 
 export interface ComposerInputProps {
   /**
