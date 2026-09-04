@@ -1,7 +1,13 @@
 import { buildMetadata } from '@/lib/seo/metadata';
 import { Header } from '@shared/components/layout/Header';
 import { MarketingFooter } from '@/features/marketing/components/MarketingFooter';
-import { Ledger, Prose, Section, Stack } from '@/features/marketing/components/system';
+import {
+  Ledger,
+  Prose,
+  Section,
+  Stack,
+  SurfaceStatus,
+} from '@/features/marketing/components/system';
 import { PageHero } from '@/features/marketing/components/pages/surfaces/shared';
 import { LinkGrid } from '@/features/marketing/components/pages/features/shared';
 
@@ -12,20 +18,30 @@ export const metadata = buildMetadata({
   path: '/docs',
 });
 
+const HERO_TRANSCRIPT_LABEL = 'The commands both shipped surfaces start from';
+
+const HERO_TRANSCRIPT = [
+  { kind: 'dim', text: '# one account across cli and web' },
+  { kind: 'cmd', text: 'agi login' },
+  { kind: 'dim', text: '# local: models on this machine' },
+  { kind: 'cmd', text: 'agi models scan' },
+  { kind: 'cmd', text: 'agi --provider ollama --model <model>' },
+] as const;
+
 const LIVE_SURFACES = [
   {
-    meta: 'Terminal',
-    title: 'AGI CLI',
-    href: '/cli',
-    body: 'Rust-native agent for coding sessions, diffs, reviews, sandboxed execution, and hooks in your terminal.',
+    name: 'AGI CLI',
+    detail:
+      'Rust-native agent for coding sessions, diffs, reviews, sandboxed execution, and hooks in your terminal.',
+    action: { label: 'CLI reference', href: '/cli' },
   },
   {
-    meta: 'Browser',
-    title: 'AGI Web',
-    href: '/get-started',
-    body: 'Hosted chat with projects, artifacts, cited research, and account management. Works in any browser.',
+    name: 'AGI Web',
+    detail:
+      'Hosted chat with projects, artifacts, cited research, and account management. Works in any browser.',
+    action: { label: 'Get started on the web', href: '/get-started' },
   },
-];
+] as const;
 
 const REFERENCE_LINKS = [
   {
@@ -87,6 +103,19 @@ export default function DocsPage() {
           title="Welcome to AGI."
           lede="AGI is a multi-surface AI workspace: one account across CLI and Web today, three routing modes (Local, BYOK, and Cloud), and a consistent API for tools, memory, and connectors."
           ctas={[]}
+          visual={
+            <pre
+              className="agi-lp-terminal"
+              aria-label={HERO_TRANSCRIPT_LABEL}
+              style={{ alignSelf: 'start' }}
+            >
+              {HERO_TRANSCRIPT.map((line) => (
+                <span className="agi-lp-terminal-line" data-kind={line.kind} key={line.text}>
+                  {line.text}
+                </span>
+              ))}
+            </pre>
+          }
         />
 
         <Section id="surfaces" labelledBy="agi-docs-surfaces-title" rule>
@@ -94,7 +123,17 @@ export default function DocsPage() {
             <h2 className="agi-ds-h2" id="agi-docs-surfaces-title">
               Surfaces with a published release.
             </h2>
-            <LinkGrid items={LIVE_SURFACES} />
+            <div className="agi-ds-grid-2">
+              {LIVE_SURFACES.map((surface) => (
+                <SurfaceStatus
+                  state="live"
+                  name={surface.name}
+                  detail={surface.detail}
+                  action={surface.action}
+                  key={surface.name}
+                />
+              ))}
+            </div>
           </Stack>
         </Section>
 
