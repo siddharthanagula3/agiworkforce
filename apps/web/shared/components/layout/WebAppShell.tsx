@@ -44,6 +44,7 @@ import {
 } from '@agiworkforce/ui';
 import { useConversations } from '@/lib/hooks/useConversations';
 import { useAuthStore } from '@shared/stores/authentication-store';
+import { useUIStore } from '@shared/stores/layout-store';
 import { useBillingStore } from '@shared/stores/web-auth-store';
 import { useSettingsStore } from '@shared/stores/web-settings-store';
 import { useManagedCloudProjects, useProjectStore } from '@/features/projects';
@@ -87,7 +88,8 @@ export function WebAppShell({ children }: WebAppShellProps) {
   const isBillingInitialized = useBillingStore((s) => s.initialized);
   const billingPolicyReady = useBillingStore(isBillingPolicyReady);
 
-  const [collapsed, setCollapsed] = useState(false);
+  const collapsed = useUIStore((state) => state.sidebarCollapsed);
+  const setSidebarCollapsed = useUIStore((state) => state.setSidebarCollapsed);
   const [keyboardShortcutsOpen, setKeyboardShortcutsOpen] = useState(false);
 
   // Shared with WebChatPage's account menu (useUpgradePlanFlow) so the
@@ -404,6 +406,7 @@ export function WebAppShell({ children }: WebAppShellProps) {
     navItems: sidebarNavItems,
     footerSlot,
     collapsedFooterSlot,
+    getSessionHref: (session: SidebarSession) => `/chat/${encodeURIComponent(session.id)}`,
     onNewChat: handleNewChat,
     onSelect: handleSelectSession,
     onDelete: (id: string) => void handleDeleteSession(id),
@@ -446,7 +449,7 @@ export function WebAppShell({ children }: WebAppShellProps) {
         <Sidebar
           {...sharedSidebarProps}
           collapsed={collapsed}
-          onToggleCollapse={() => setCollapsed((c) => !c)}
+          onToggleCollapse={() => setSidebarCollapsed(!collapsed)}
         />
       )}
 
