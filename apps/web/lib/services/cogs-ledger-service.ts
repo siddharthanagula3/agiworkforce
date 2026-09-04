@@ -4,6 +4,7 @@ import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import { getNeonDb } from '@/lib/server/neon-db';
 import { logger } from '@/lib/logger';
 import { LLMCostCalculator } from '@/lib/services/llm-cost-calculator';
+import { resolveEnterpriseFundingOrganizationId } from '@/lib/services/enterprise-funding-organization';
 
 export const COGS_CAPABILITIES = [
   'chat',
@@ -44,6 +45,7 @@ export interface TokenClassDimensions {
 
 export interface ProviderCostEvent {
   userId?: string | null;
+  organizationId?: string | null;
   capability: CogsCapability;
   provider: string;
   model?: string | null;
@@ -324,8 +326,8 @@ export async function recordProviderCostEvent(
        provider_cost_cents, billed_cents, source_ref, metadata,
        cache_read_units, cache_write_units, compaction_saved_units,
        cache_savings_cents, cache_write_premium_cents,
-       task_outcome, task_ref
-     ) values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10::jsonb, $11, $12, $13, $14, $15, $16, $17)
+       task_outcome, task_ref, organization_id
+     ) values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10::jsonb, $11, $12, $13, $14, $15, $16, $17, $18)
      on conflict (source_ref) do nothing`,
     [
       event.userId ?? null,
@@ -345,6 +347,7 @@ export async function recordProviderCostEvent(
       Math.max(0, Math.round(tokenClasses.cacheWritePremiumCents)),
       event.taskOutcome ?? 'delivered',
       event.taskRef ?? null,
+      event.organizationId ?? null,
     ],
   );
 }
@@ -537,6 +540,7 @@ export function getServedRouteIdFromCostEventMetadata(
 
 export async function recordSettledProviderCost(input: {
   userId: string;
+  organizationId?: string | null;
   provider: string;
   model?: string | null;
   routeId?: string | null;
@@ -547,6 +551,7 @@ export async function recordSettledProviderCost(input: {
   usage: Record<string, unknown>;
   db?: DatabaseAdapter;
 }): Promise<void> {
+  const db = input.db ?? getNeonDb();
   const capability = resolveCogsCapability(input.usage);
   const { unitBasis, units } = resolveCogsUnits(capability, input.usage);
 
@@ -573,10 +578,28 @@ export async function recordSettledProviderCost(input: {
         }
       : input.usage;
 
+  let organizationId = input.organizationId;
+  if (organizationId === undefined) {
+    try {
+      organizationId = await resolveEnterpriseFundingOrganizationId(db, input.userId);
+    } catch (error) {
+      logger.error(
+        {
+          event: 'cogs_funding_organization_unresolved',
+          error: error instanceof Error ? error.message : String(error),
+          sourceRef: input.sourceRef,
+        },
+        'Funding organization lookup failed; cost event recorded without an organization',
+      );
+      organizationId = null;
+    }
+  }
+
   try {
     await recordProviderCostEvent(
       {
         userId: input.userId,
+        organizationId,
         capability,
         provider: input.provider,
         model: input.model ?? null,
@@ -595,7 +618,7 @@ export async function recordSettledProviderCost(input: {
           usage: input.usage,
         }),
       },
-      input.db ?? getNeonDb(),
+      db,
     );
   } catch (error) {
     logger.error(
@@ -712,18 +735,32 @@ interface OrganizationSpendRow {
   spend_cents: number | string | null;
 }
 
+export interface OrganizationSpendPeriod {
+  start: string;
+  end: string;
+}
+
+function utcMonthPeriod(now: Date): OrganizationSpendPeriod {
+  const year = now.getUTCFullYear();
+  const month = now.getUTCMonth();
+  return {
+    start: new Date(Date.UTC(year, month, 1)).toISOString(),
+    end: new Date(Date.UTC(year, month + 1, 1)).toISOString(),
+  };
+}
+
 export async function getOrganizationMonthToDateSpendCents(
   organizationId: string,
   db: DatabaseAdapter = getNeonDb(),
+  period: OrganizationSpendPeriod = utcMonthPeriod(new Date()),
 ): Promise<number> {
   const [row] = await db.query<OrganizationSpendRow>(
     `select coalesce(sum(event.provider_cost_cents), 0)::bigint as spend_cents
        from public.provider_cost_events event
-       join public.organization_members member on member.user_id = event.user_id
-      where member.organization_id = $1
-        and event.occurred_at >= date_trunc('month', now())
-        and event.occurred_at < date_trunc('month', now()) + interval '1 month'`,
-    [organizationId],
+      where event.organization_id = $1
+        and event.occurred_at >= $2::timestamptz
+        and event.occurred_at < $3::timestamptz`,
+    [organizationId, period.start, period.end],
   );
   return numberFrom(row?.spend_cents);
 }

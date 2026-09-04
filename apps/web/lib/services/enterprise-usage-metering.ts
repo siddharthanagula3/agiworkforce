@@ -184,7 +184,7 @@ export async function readEnterpriseUsageAllowance(
   if (!contract) return null;
 
   const period = resolveEnterpriseUsagePeriod(now);
-  const consumedCents = await getOrganizationMonthToDateSpendCents(organizationId, db);
+  const consumedCents = await getOrganizationMonthToDateSpendCents(organizationId, db, period);
   return computeEnterpriseUsageAllowance({
     organizationId,
     period,
@@ -223,7 +223,11 @@ export async function reportEnterpriseOverageUsage(input: {
     }
 
     try {
-      const consumedCents = await getOrganizationMonthToDateSpendCents(organizationId, input.db);
+      const consumedCents = await getOrganizationMonthToDateSpendCents(
+        organizationId,
+        input.db,
+        period,
+      );
       const allowance = computeEnterpriseUsageAllowance({
         organizationId,
         period,

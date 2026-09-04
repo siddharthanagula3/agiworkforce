@@ -256,6 +256,18 @@ storing the last reported cumulative overage in the contract's `metadata`.
 A contract with no overage price configured is skipped and logged once, not
 retried daily.
 
+`getOrganizationMonthToDateSpendCents` sums `provider_cost_events` by that
+table's own `organization_id` column, set at settlement time to the funding
+organization (resolved the same way entitlement is), never by joining
+`organization_members` on `user_id`; a user in two organizations is metered
+against exactly one of them. Both the allowance read and the overage report
+pass explicit UTC period bounds from `resolveEnterpriseUsagePeriod`, so the
+window is never truncated in the database's own session time zone. 2026-09-04:
+`organization_id` was added by migration 0166 as a nullable column, so any
+`provider_cost_events` row written before that migration applied has no
+organization and is not counted toward any organization's allowance or
+overage.
+
 Sources: [Analyze and query meter usage](https://docs.stripe.com/billing/subscriptions/usage-based/analytics); [Query billing data](https://docs.stripe.com/data/query-billing-data), "Billing meters."
 
 ## 9. Reconciliation
