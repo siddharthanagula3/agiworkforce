@@ -53,8 +53,16 @@ export interface GoogleAdapterConfig extends ProviderAdapterConfig {
   skipDiscovery?: boolean;
 }
 
+function trimTrailingSlashes(url: string): string {
+  let end = url.length;
+  while (end > 0 && url[end - 1] === '/') {
+    end -= 1;
+  }
+  return url.slice(0, end);
+}
+
 function normalizeGoogleBaseUrl(url: string): string {
-  const trimmed = url.replace(/\/+$/, '');
+  const trimmed = trimTrailingSlashes(url);
   const suffix = `/${GEMINI_API_VERSION_SEGMENT}`;
   return trimmed.toLowerCase().endsWith(suffix.toLowerCase())
     ? trimmed.slice(0, trimmed.length - suffix.length)
