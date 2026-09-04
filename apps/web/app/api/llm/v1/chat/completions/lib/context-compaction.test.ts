@@ -217,6 +217,7 @@ describe('compactContextWindow', () => {
       'Summary of earlier turns.',
       `msg-${persistableDropped}`,
       CONVERSATION_ID,
+      'user-1',
     ]);
   });
 
@@ -264,6 +265,7 @@ describe('compactContextWindow', () => {
       'Summary of earlier turns.',
       `msg-${persistableDropped}`,
       CONVERSATION_ID,
+      'user-1',
     ]);
   });
 
