@@ -16,15 +16,15 @@ import {
 
 describe('fullNetworkNeedsProxy', () => {
   it('flags full network for a harness whose managed credential would enter the sandbox unproxied', () => {
-    expect(fullNetworkNeedsProxy('full', 'codex')).toBe(true);
     expect(fullNetworkNeedsProxy('full', 'droid')).toBe(true);
     expect(fullNetworkNeedsProxy('full', 'amp')).toBe(true);
     expect(fullNetworkNeedsProxy('full', 'grok')).toBe(true);
     expect(fullNetworkNeedsProxy('full', 'opencode')).toBe(true);
   });
 
-  it('no longer flags a harness the credential proxy covers', () => {
+  it('no longer flags a harness the credential proxy covers, by env var or by config file', () => {
     expect(fullNetworkNeedsProxy('full', 'claude')).toBe(false);
+    expect(fullNetworkNeedsProxy('full', 'codex')).toBe(false);
   });
 
   it('is false outside full network', () => {
@@ -50,20 +50,21 @@ describe('fullNetworkNeedsProxy', () => {
 
 describe('egressNeedsProxy', () => {
   it('refuses extra egress hosts under trusted or none for a harness whose credential enters the sandbox', () => {
-    expect(egressNeedsProxy('trusted', 'codex', false, 1)).toBe(true);
+    expect(egressNeedsProxy('trusted', 'grok', false, 1)).toBe(true);
     expect(egressNeedsProxy('none', 'droid', false, 2)).toBe(true);
   });
 
   it('allows extra hosts for a proxied harness, an explicit credential, or no credential at all', () => {
     expect(egressNeedsProxy('trusted', 'claude', false, 3)).toBe(false);
-    expect(egressNeedsProxy('trusted', 'codex', true, 3)).toBe(false);
+    expect(egressNeedsProxy('trusted', 'codex', false, 3)).toBe(false);
+    expect(egressNeedsProxy('trusted', 'droid', true, 3)).toBe(false);
     expect(egressNeedsProxy('trusted', 'code-interpreter-v1', false, 3)).toBe(false);
   });
 
   it('leaves the presets alone when no extra hosts are added', () => {
-    expect(egressNeedsProxy('trusted', 'codex', false, 0)).toBe(false);
-    expect(egressNeedsProxy('none', 'codex', false, 0)).toBe(false);
-    expect(egressNeedsProxy('full', 'codex', false, 0)).toBe(true);
+    expect(egressNeedsProxy('trusted', 'grok', false, 0)).toBe(false);
+    expect(egressNeedsProxy('none', 'grok', false, 0)).toBe(false);
+    expect(egressNeedsProxy('full', 'grok', false, 0)).toBe(true);
   });
 });
 
@@ -86,6 +87,13 @@ describe('harnessCredentialIsAvailable', () => {
   it('allows a harness whose managed configuration has a credential for its provider', () => {
     mockHasServerProviderKey.mockReturnValue(true);
     expect(harnessCredentialIsAvailable('claude')).toBe(true);
+    expect(harnessCredentialIsAvailable('codex')).toBe(true);
+  });
+
+  it('rejects a harness the credential proxy does not cover even with a managed credential present', () => {
+    mockHasServerProviderKey.mockReturnValue(true);
+    expect(harnessCredentialIsAvailable('droid')).toBe(false);
+    expect(harnessCredentialIsAvailable('grok')).toBe(false);
   });
 
   it('is true with no runtime or a runtime that declares no credential', () => {

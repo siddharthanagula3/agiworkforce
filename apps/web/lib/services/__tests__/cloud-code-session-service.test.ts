@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('server-only', () => ({}));
 vi.mock('@/lib/logger', () => ({ logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() } }));
@@ -18,6 +18,17 @@ vi.mock('@/lib/github-app', () => ({
 vi.mock('@/lib/user-connector-tools', () => ({
   getUserGithubInstallations: vi.fn(async () => []),
 }));
+vi.mock('@/lib/e2b/templates', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/lib/e2b/templates')>();
+  return {
+    ...actual,
+    listCloudCodeRuntimes: vi.fn(async () => [
+      { id: 'claude', name: 'Claude Code' },
+      { id: 'codex', name: 'Codex' },
+      { id: 'droid', name: 'Droid' },
+    ]),
+  };
+});
 
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import { getPlanMaxSandboxes, type CreateCloudCodeSessionInput } from '@agiworkforce/types';
@@ -847,6 +858,69 @@ describe('createCloudCodeSession extra egress hosts', () => {
     await expect(
       createCloudCodeSession(db, OWNER, { ...createInput(0), extraHosts: [] }, PLAN_TIER),
     ).rejects.toBeInstanceOf(CloudCodeConflictError);
+  });
+});
+
+describe('createCloudCodeSession codex proxy bootstrap', () => {
+  const originalAppUrl = process.env['NEXT_PUBLIC_APP_URL'];
+  let writeFile: ReturnType<typeof vi.fn>;
+
+  beforeEach(() => {
+    process.env['NEXT_PUBLIC_APP_URL'] = 'https://app.agiworkforce.test';
+    writeFile = vi.fn(async () => ({ ok: true, output: '' }));
+    vi.mocked(getE2BExecutor).mockResolvedValue({
+      runCommand: vi.fn(async () => ({ ok: true, stdout: '', stderr: '', exitCode: 0 })),
+      writeFile,
+      pause: vi.fn(async () => {}),
+      dispose: vi.fn(async () => {}),
+    } as unknown as Awaited<ReturnType<typeof getE2BExecutor>>);
+  });
+
+  afterEach(() => {
+    if (originalAppUrl === undefined) delete process.env['NEXT_PUBLIC_APP_URL'];
+    else process.env['NEXT_PUBLIC_APP_URL'] = originalAppUrl;
+  });
+
+  it('writes a codex config.toml pointing at the session proxy root and the credential env var, once at creation', async () => {
+    const db = createFakeDb();
+    const session = await createCloudCodeSession(
+      db,
+      OWNER,
+      { ...createInput(0), runtimeId: 'codex' },
+      PLAN_TIER,
+    );
+
+    expect(writeFile).toHaveBeenCalledTimes(1);
+    const call = writeFile.mock.calls[0]![0] as { path: string; content: string };
+    expect(call.path).toBe('/home/user/.codex/config.toml');
+    expect(call.content).toContain(
+      `base_url = "https://app.agiworkforce.test/api/code/sessions/${session.id}/provider-proxy"`,
+    );
+    expect(call.content).toContain('env_key = "CODEX_API_KEY"');
+    expect(call.content).toContain('wire_api = "responses"');
+  });
+
+  it('does not write a config file for claude, which the proxy covers through an env var instead', async () => {
+    const db = createFakeDb();
+    await createCloudCodeSession(db, OWNER, { ...createInput(1), runtimeId: 'claude' }, PLAN_TIER);
+    expect(writeFile).not.toHaveBeenCalled();
+  });
+
+  it('does not write a config file for a harness the proxy does not cover at all', async () => {
+    const db = createFakeDb();
+    await createCloudCodeSession(db, OWNER, { ...createInput(2), runtimeId: 'droid' }, PLAN_TIER);
+    expect(writeFile).not.toHaveBeenCalled();
+  });
+
+  it('skips the config file once the caller brings an explicit harness credential', async () => {
+    const db = createFakeDb();
+    await createCloudCodeSession(
+      db,
+      OWNER,
+      { ...createInput(3), runtimeId: 'codex', harnessCredential: 'sk-user-openai-key' },
+      PLAN_TIER,
+    );
+    expect(writeFile).not.toHaveBeenCalled();
   });
 });
 

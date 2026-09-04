@@ -259,7 +259,8 @@ function resolveProxiedHarnessEnvs(
     { sessionId: scope.resource.id, userId: scope.userId, providerId: spec.providerId },
     sandboxTimeoutMs,
   );
-  return { [spec.envVar]: token, [harnessProxyBaseUrlEnv(template)!]: baseUrl };
+  const baseUrlEnvVar = harnessProxyBaseUrlEnv(template);
+  return { [spec.envVar]: token, ...(baseUrlEnvVar ? { [baseUrlEnvVar]: baseUrl } : {}) };
 }
 
 function resolveHarnessEnvs(
@@ -273,7 +274,14 @@ function resolveHarnessEnvs(
   }
   const specs = harnessCredentialSpecs(template);
   if (specs.length === 0) return undefined;
-  if (scope.resource?.kind === 'code_session' && harnessIsProxyCovered(template)) {
+  if (scope.resource?.kind === 'code_session') {
+    if (!harnessIsProxyCovered(template)) {
+      logger.warn(
+        { ...scopeLog(scope), template },
+        '[e2b] harness has no verified credential proxy; withholding the managed key rather than injecting it unproxied',
+      );
+      return undefined;
+    }
     return resolveProxiedHarnessEnvs(
       scope as E2BSessionScope & { resource: { kind: 'code_session'; id: string } },
       template,

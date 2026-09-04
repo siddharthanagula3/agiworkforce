@@ -26,9 +26,12 @@ import { confineWorkspacePath } from '@/lib/e2b/execution-tools';
 import type { CommandExecutionResult } from '@/lib/e2b/types';
 import {
   harnessCredentialSpecs,
+  harnessIsProxyCovered,
+  harnessProxyConfigFile,
   knownHarnessCommandIds,
   listCloudCodeRuntimes,
 } from '@/lib/e2b/templates';
+import { providerProxyBaseUrl } from '@/lib/e2b/provider-proxy';
 import { managedCloudCodeSessionScope } from '@/lib/e2b/session-store';
 import {
   getInstallationAccessToken,
@@ -762,6 +765,29 @@ export async function createCloudCodeSession(
 
   let disposed = false;
   try {
+    if (
+      validated.runtimeId &&
+      !validated.harnessCredential &&
+      harnessIsProxyCovered(validated.runtimeId)
+    ) {
+      const configFile = harnessProxyConfigFile(validated.runtimeId);
+      const spec = harnessCredentialSpecs(validated.runtimeId)[0];
+      if (configFile && spec) {
+        const baseUrl = providerProxyBaseUrl(sessionId);
+        if (!baseUrl) {
+          throw new CloudCodeUnavailableError('Coding agent proxy is not configured');
+        }
+        const write = await executor.writeFile({
+          path: configFile.path,
+          content: configFile.content(baseUrl, spec.envVar),
+        });
+        if (!write.ok) {
+          throw new CloudCodeUnavailableError(
+            write.error || 'Coding agent proxy configuration failed',
+          );
+        }
+      }
+    }
     if (validated.repositoryUrl) {
       if (!executor.git) {
         throw new CloudCodeUnavailableError('Managed Code environment cannot clone repositories');
