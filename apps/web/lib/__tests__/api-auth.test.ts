@@ -163,6 +163,7 @@ import { assertAccountActive, getClerkAuthUser } from '@/lib/api-auth';
 import { getSharedRedisClient } from '@/lib/rate-limit';
 import { isMfaRequiredError } from '@/lib/mfa-policy-gate';
 import { isIpNotAllowedError } from '@/lib/ip-allow-list-gate';
+import { clearIpAllowListCacheForTests } from '@/lib/services/organization-ip-allow-list-cache';
 import {
   getTenantScope,
   newSpanId,
@@ -204,6 +205,7 @@ function queriedApiKeysTable(): boolean {
 describe('getClerkAuthUser · API-key issue/verify unification', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    clearIpAllowListCacheForTests();
   });
 
   it('issue → authenticate round trip: a key from the real POST route authenticates via the real Bearer path', async () => {
@@ -553,6 +555,7 @@ describe('getClerkAuthUser · API-key issue/verify unification', () => {
                   retention_days: 365,
                   retention_enforced: false,
                   external_sharing_enabled: true,
+                  ip_allow_list: [],
                   metadata: { requireMfa },
                   updated_at: '2026-08-22T00:00:00.000Z',
                 },
@@ -620,7 +623,8 @@ describe('getClerkAuthUser · API-key issue/verify unification', () => {
                   retention_days: 365,
                   retention_enforced: false,
                   external_sharing_enabled: true,
-                  metadata: { ipAllowList },
+                  ip_allow_list: ipAllowList,
+                  metadata: {},
                   updated_at: '2026-08-22T00:00:00.000Z',
                 },
               ]
@@ -714,6 +718,7 @@ describe('getClerkAuthUser · API-key issue/verify unification', () => {
               retention_days: 365,
               retention_enforced: false,
               external_sharing_enabled: true,
+              ip_allow_list: [],
               metadata: { requireMfa },
               updated_at: '2026-08-22T00:00:00.000Z',
             },

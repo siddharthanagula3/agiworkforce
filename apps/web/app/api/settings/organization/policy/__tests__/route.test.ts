@@ -49,6 +49,7 @@ const SAVED_POLICY = {
   audit_export_enabled: true,
   retention_days: 365,
   allow_memory: false,
+  ip_allow_list: [],
   metadata: {},
   updated_at: '2026-08-22T00:00:00.000Z',
 };
@@ -275,7 +276,7 @@ describe('PATCH /api/settings/organization/policy', () => {
 
     const params = upsertParams();
     expect(params[13]).toBe(true);
-    expect(JSON.parse(params[14] as string)['allowMemory']).toBeUndefined();
+    expect(JSON.parse(params[15] as string)['allowMemory']).toBeUndefined();
   });
 
   it('stores a secretHandling patch inside the metadata column', async () => {
@@ -284,7 +285,7 @@ describe('PATCH /api/settings/organization/policy', () => {
     await PATCH(request({ secretHandling: 'block' }) as never);
 
     const params = upsertParams();
-    expect(JSON.parse(params[14] as string)).toMatchObject({ secretHandling: 'block' });
+    expect(JSON.parse(params[15] as string)).toMatchObject({ secretHandling: 'block' });
   });
 
   it('rejects a secretHandling value outside warn, redact, block', async () => {
@@ -302,7 +303,7 @@ describe('PATCH /api/settings/organization/policy', () => {
     await PATCH(request({ requireMfa: true, monthlySpendCapCents: 75_000 }) as never);
 
     const params = upsertParams();
-    expect(JSON.parse(params[14] as string)).toMatchObject({
+    expect(JSON.parse(params[15] as string)).toMatchObject({
       requireMfa: true,
       monthlySpendCapCents: 75_000,
     });
@@ -316,7 +317,7 @@ describe('PATCH /api/settings/organization/policy', () => {
     await PATCH(request({ monthlySpendCapCents: null }) as never);
 
     const params = upsertParams();
-    expect(JSON.parse(params[14] as string)).toMatchObject({ monthlySpendCapCents: null });
+    expect(JSON.parse(params[15] as string)).toMatchObject({ monthlySpendCapCents: null });
   });
 
   it('rejects a zero or negative spend cap', async () => {
@@ -334,10 +335,10 @@ describe('PATCH /api/settings/organization/policy', () => {
     await PATCH(request({ zeroDataRetentionOnly: true }) as never);
 
     const params = upsertParams();
-    expect(JSON.parse(params[14] as string)).toMatchObject({ zeroDataRetentionOnly: true });
+    expect(JSON.parse(params[15] as string)).toMatchObject({ zeroDataRetentionOnly: true });
   });
 
-  it('stores an ipAllowList patch inside the metadata column', async () => {
+  it('stores an ipAllowList patch as its own column, not metadata', async () => {
     bindCaller({ policyRow: SAVED_POLICY });
 
     await PATCH(
@@ -348,9 +349,8 @@ describe('PATCH /api/settings/organization/policy', () => {
     );
 
     const params = upsertParams();
-    expect(JSON.parse(params[14] as string)).toMatchObject({
-      ipAllowList: ['203.0.113.0/24', '2001:db8::/32'],
-    });
+    expect(params[14]).toEqual(['203.0.113.0/24', '2001:db8::/32']);
+    expect(JSON.parse(params[15] as string)['ipAllowList']).toBeUndefined();
   });
 
   it("rejects an ipAllowList that would exclude the requester's own connection", async () => {
@@ -413,13 +413,35 @@ describe('PATCH /api/settings/organization/policy', () => {
 
   it('clears a saved ip allow list when the administrator patches it to empty', async () => {
     bindCaller({
-      policyRow: { ...SAVED_POLICY, metadata: { ipAllowList: ['203.0.113.0/24'] } },
+      policyRow: { ...SAVED_POLICY, ip_allow_list: ['203.0.113.0/24'] },
     });
 
     await PATCH(request({ ipAllowList: [] }) as never);
 
     const params = upsertParams();
-    expect(JSON.parse(params[14] as string)).toMatchObject({ ipAllowList: [] });
+    expect(params[14]).toEqual([]);
+  });
+
+  it('records the before and after ip allow list ranges on the audit event', async () => {
+    bindCaller({
+      policyRow: { ...SAVED_POLICY, ip_allow_list: ['203.0.113.0/24'] },
+      upsertResult: { ...SAVED_POLICY, ip_allow_list: ['203.0.113.0/24', '2001:db8::/32'] },
+    });
+
+    await PATCH(
+      request(
+        { ipAllowList: ['203.0.113.0/24', '2001:db8::/32'] },
+        { 'x-forwarded-for': '203.0.113.5' },
+      ) as never,
+    );
+
+    const event = mockRecordAuditEvent.mock.calls[0]?.[0] as {
+      detail: { ipAllowListChange?: { from: unknown; to: unknown } };
+    };
+    expect(event.detail.ipAllowListChange).toEqual({
+      from: ['203.0.113.0/24'],
+      to: ['203.0.113.0/24', '2001:db8::/32'],
+    });
   });
 
   it('deduplicates repeated modes and surfaces before writing', async () => {

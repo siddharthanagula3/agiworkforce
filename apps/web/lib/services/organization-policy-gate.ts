@@ -15,6 +15,10 @@ import {
 } from '@/lib/services/enterprise-collection-state';
 import { resolveEnterpriseFundingOrganizationId } from '@/lib/services/enterprise-funding-organization';
 import {
+  getCachedIpAllowList,
+  setCachedIpAllowList,
+} from '@/lib/services/organization-ip-allow-list-cache';
+import {
   evaluateBillingHold,
   evaluateOrganizationPolicy,
   UNSCOPED_POLICY_DECISION,
@@ -293,9 +297,14 @@ export async function resolveIpAllowListPolicy(
 
   if (!organizationId) return { cidrs: [], organizationId: null };
 
+  const cached = getCachedIpAllowList(organizationId);
+  if (cached !== undefined) return { cidrs: cached, organizationId };
+
   try {
     const policy = await readOrganizationPolicy(db, organizationId);
-    return { cidrs: policy?.ipAllowList ?? [], organizationId };
+    const cidrs = policy?.ipAllowList ?? [];
+    setCachedIpAllowList(organizationId, cidrs);
+    return { cidrs, organizationId };
   } catch (error) {
     logger.error(
       { error, userId, organizationId },

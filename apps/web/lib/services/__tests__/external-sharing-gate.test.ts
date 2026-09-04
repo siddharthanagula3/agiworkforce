@@ -31,6 +31,7 @@ function policyRow(over: Record<string, unknown> = {}) {
     retention_days: 365,
     retention_enforced: false,
     external_sharing_enabled: true,
+    ip_allow_list: [],
     metadata: {},
     updated_at: '2026-08-23T00:00:00.000Z',
     ...over,

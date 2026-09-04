@@ -29,6 +29,7 @@ function policyRow(overrides: Record<string, unknown> = {}): AdminPolicyRow {
     retention_enforced: false,
     external_sharing_enabled: true,
     allow_memory: false,
+    ip_allow_list: [],
     metadata: {},
     updated_at: '2026-08-22T00:00:00.000Z',
     ...overrides,
@@ -91,27 +92,14 @@ describe('formatAdminPolicy, zeroDataRetentionOnly', () => {
 });
 
 describe('formatAdminPolicy, ipAllowList', () => {
-  it('defaults to an empty array when metadata carries no explicit value', () => {
+  it('defaults to an empty array when the column carries no saved value', () => {
     expect(formatAdminPolicy(policyRow()).ipAllowList).toEqual([]);
   });
 
-  it('reads a saved ipAllowList out of metadata', () => {
-    expect(
-      formatAdminPolicy(policyRow({ metadata: { ipAllowList: ['203.0.113.0/24'] } })).ipAllowList,
-    ).toEqual(['203.0.113.0/24']);
-  });
-
-  it('drops non-string entries rather than throwing', () => {
-    expect(
-      formatAdminPolicy(policyRow({ metadata: { ipAllowList: ['203.0.113.0/24', 5, null] } }))
-        .ipAllowList,
-    ).toEqual(['203.0.113.0/24']);
-  });
-
-  it('treats a non-array value as an empty list', () => {
-    expect(
-      formatAdminPolicy(policyRow({ metadata: { ipAllowList: 'not-an-array' } })).ipAllowList,
-    ).toEqual([]);
+  it('reads a saved ipAllowList off its own column, not metadata', () => {
+    expect(formatAdminPolicy(policyRow({ ip_allow_list: ['203.0.113.0/24'] })).ipAllowList).toEqual(
+      ['203.0.113.0/24'],
+    );
   });
 });
 
@@ -170,7 +158,7 @@ describe('upsertOrganizationPolicy, secretHandling', () => {
     await upsertOrganizationPolicy(db, ORGANIZATION_ID, input);
 
     const params = query.mock.calls[0]?.[1] as unknown[];
-    const writtenMetadata = JSON.parse(params[14] as string);
+    const writtenMetadata = JSON.parse(params[15] as string);
     expect(writtenMetadata).toMatchObject({ note: 'kept', secretHandling: 'block' });
   });
 });
@@ -200,7 +188,7 @@ describe('upsertOrganizationPolicy, requireMfa and monthlySpendCapCents', () => 
     await upsertOrganizationPolicy(db, ORGANIZATION_ID, input);
 
     const params = query.mock.calls[0]?.[1] as unknown[];
-    const writtenMetadata = JSON.parse(params[14] as string);
+    const writtenMetadata = JSON.parse(params[15] as string);
     expect(writtenMetadata).toMatchObject({ requireMfa: true, monthlySpendCapCents: 25_000 });
   });
 
@@ -214,7 +202,7 @@ describe('upsertOrganizationPolicy, requireMfa and monthlySpendCapCents', () => 
     await upsertOrganizationPolicy(db, ORGANIZATION_ID, input);
 
     const params = query.mock.calls[0]?.[1] as unknown[];
-    const writtenMetadata = JSON.parse(params[14] as string);
+    const writtenMetadata = JSON.parse(params[15] as string);
     expect(writtenMetadata['monthlySpendCapCents']).toBeNull();
   });
 });
@@ -238,7 +226,7 @@ describe('upsertOrganizationPolicy, zeroDataRetentionOnly', () => {
     await upsertOrganizationPolicy(db, ORGANIZATION_ID, input);
 
     const params = query.mock.calls[0]?.[1] as unknown[];
-    const writtenMetadata = JSON.parse(params[14] as string);
+    const writtenMetadata = JSON.parse(params[15] as string);
     expect(writtenMetadata).toMatchObject({ zeroDataRetentionOnly: true });
   });
 });
@@ -252,8 +240,8 @@ describe('upsertOrganizationPolicy, ipAllowList', () => {
     db = { query } as unknown as DatabaseAdapter;
   });
 
-  it('merges ipAllowList into the metadata jsonb column', async () => {
-    query.mockResolvedValueOnce([policyRow({ metadata: { ipAllowList: ['203.0.113.0/24'] } })]);
+  it('writes ipAllowList as its own column, not into metadata', async () => {
+    query.mockResolvedValueOnce([policyRow({ ip_allow_list: ['203.0.113.0/24'] })]);
 
     const input = {
       ...defaultAdminPolicyFor(ORGANIZATION_ID),
@@ -265,8 +253,9 @@ describe('upsertOrganizationPolicy, ipAllowList', () => {
     await upsertOrganizationPolicy(db, ORGANIZATION_ID, input);
 
     const params = query.mock.calls[0]?.[1] as unknown[];
-    const writtenMetadata = JSON.parse(params[14] as string);
-    expect(writtenMetadata).toMatchObject({ ipAllowList: ['203.0.113.0/24'] });
+    expect(params[14]).toEqual(['203.0.113.0/24']);
+    const writtenMetadata = JSON.parse(params[15] as string);
+    expect(writtenMetadata['ipAllowList']).toBeUndefined();
   });
 });
 
@@ -290,7 +279,7 @@ describe('upsertOrganizationPolicy, allowMemory', () => {
 
     const params = query.mock.calls[0]?.[1] as unknown[];
     expect(params[13]).toBe(true);
-    const writtenMetadata = JSON.parse(params[14] as string);
+    const writtenMetadata = JSON.parse(params[15] as string);
     expect(writtenMetadata['allowMemory']).toBeUndefined();
   });
 });

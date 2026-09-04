@@ -26,6 +26,7 @@ import {
 } from '@/lib/services/organization-policy-service';
 import type { AdminPolicy } from '@agiworkforce/types';
 import { isIpAllowed, isValidCidr } from '@/lib/services/ip-allow-list';
+import { invalidateIpAllowListCache } from '@/lib/services/organization-ip-allow-list-cache';
 import { resolveMfaEnrolled } from '@/lib/mfa-policy-gate';
 
 const MFA_GATE_EXEMPT_OWNER_OPTIONS = { mfaGateExemptForOwner: true } as const;
@@ -209,6 +210,7 @@ async function handlePatch(request: NextRequest): Promise<NextResponse | Respons
   assertPolicyCoherent(next);
 
   const policy = await upsertOrganizationPolicy(db, membership.organizationId, next);
+  invalidateIpAllowListCache(membership.organizationId);
   const changed = diffAdminPolicy(before, policy);
 
   await recordAuditEvent({
@@ -224,6 +226,7 @@ async function handlePatch(request: NextRequest): Promise<NextResponse | Respons
       role: membership.role,
       status: before ? 'updated' : 'created',
       changedKeys: Object.keys(changed),
+      ...(changed['ipAllowList'] ? { ipAllowListChange: changed['ipAllowList'] } : {}),
     },
   });
 

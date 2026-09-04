@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Repository maintainers
-Last updated: 2026-09-03
+Last updated: 2026-09-04
 
 ## Why this exists
 
@@ -13,6 +13,22 @@ policy itself. Without a safeguard, an owner who turns on `requireMfa` before
 enrolling two-factor authentication, or who narrows `ipAllowList` to exclude
 their own network, is locked out of their own workspace with no self-service
 way back in.
+
+## What the ip allow list trusts
+
+`assertIpAllowList` resolves the caller's address with the same helper the
+rest of the app uses for security decisions, `getClientIp`
+(`apps/web/lib/security-audit.ts`): the `x-real-ip` header when present,
+otherwise the last entry of `x-forwarded-for`. Both are set by the platform's
+own edge, not by the client directly, but a deployment that puts an
+additional untrusted proxy in front of that edge without stripping or
+overwriting these headers would let that proxy's client forge either one.
+There is no separate `x-vercel-forwarded-for` reader in this codebase to
+reuse or drift from. `resolveIpAllowListPolicy`
+(`apps/web/lib/services/organization-policy-gate.ts`) caches the resolved
+list in-process for up to 30 seconds per organization, so a save can take up
+to that long to take effect on an instance that already cached the old list,
+and to stop enforcing on an instance that cached a since-cleared list.
 
 ## The safeguards that exist
 
@@ -63,17 +79,17 @@ update public.organization_admin_policies
  where organization_id = '<organization-id>';
 ```
 
-**To clear `ipAllowList`:** same table, same column, different key:
+**To clear `ipAllowList`:** since migration 0167, this is its own column, not
+a metadata key:
 
 ```sql
 update public.organization_admin_policies
-   set metadata = metadata - 'ipAllowList'
+   set ip_allow_list = '{}'
  where organization_id = '<organization-id>';
 ```
 
-Both operations are additive removals of a single jsonb key. They do not
-touch `default_privacy_mode`, `retention_days`, or any other column, and they
-do not require reconstructing the rest of the policy row.
+Neither operation touches `default_privacy_mode`, `retention_days`, or any
+other column, and neither requires reconstructing the rest of the policy row.
 
 After clearing either field, tell the affected owner to sign in again. The
 next request re-evaluates the policy from the row just updated.
