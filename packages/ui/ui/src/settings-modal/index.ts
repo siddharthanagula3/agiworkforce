@@ -7,6 +7,7 @@ export {
   type CustomMcpJsonImportError,
   type CustomMcpJsonImportResult,
 } from './custom-mcp-json-import';
+export { isUnverifiedCustomConnector } from './types';
 export type {
   SettingsDataAdapter,
   SettingsConnector,

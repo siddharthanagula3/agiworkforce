@@ -4,6 +4,7 @@ import { Download, Minus, Plus, Settings as SettingsIcon } from 'lucide-react';
 
 import { cn } from '../cn';
 import { Spinner } from '../primitives/Spinner';
+import { ConnectorLogo } from '../settings-modal/ConnectorLogo';
 import {
   ADD_LABEL,
   DIRECTORY_BADGE_LABELS,
@@ -15,26 +16,50 @@ import {
   SETTINGS_LABEL,
 } from './constants';
 import { formatInstallCount } from './filtering';
-import { DIRECTORY_CARD, DIRECTORY_FOCUS_RING, DIRECTORY_ICON_BUTTON } from './styles';
+import {
+  DIRECTORY_CARD,
+  DIRECTORY_FOCUS_RING,
+  DIRECTORY_ICON_BUTTON,
+  ENTRY_ICON_SHAPE,
+  ENTRY_ICON_SIZE,
+} from './styles';
 import type { DirectoryEntry, DirectorySectionKey } from './types';
+
+function entryMonogram(entry: DirectoryEntry): string {
+  return entry.monogram ?? entry.name.slice(0, 1).toUpperCase();
+}
 
 function EntryIcon({ entry }: { entry: DirectoryEntry }) {
   if (entry.slashName) return null;
+  if (entry.brandId) {
+    return (
+      <ConnectorLogo
+        connectorId={entry.brandId}
+        fallbackText={entryMonogram(entry)}
+        size="sm"
+        className={ENTRY_ICON_SHAPE}
+      />
+    );
+  }
   if (entry.iconUrl) {
     return (
       <img
         src={entry.iconUrl}
         alt=""
-        className="size-8 shrink-0 rounded-md border border-border object-contain"
+        className={cn(ENTRY_ICON_SIZE, ENTRY_ICON_SHAPE, 'object-contain')}
       />
     );
   }
   return (
     <span
       aria-hidden
-      className="inline-flex size-8 shrink-0 items-center justify-center rounded-md border border-border bg-muted text-xs font-semibold text-muted-foreground"
+      className={cn(
+        ENTRY_ICON_SIZE,
+        ENTRY_ICON_SHAPE,
+        'inline-flex items-center justify-center bg-muted text-xs font-semibold text-muted-foreground',
+      )}
     >
-      {entry.monogram ?? entry.name.slice(0, 1).toUpperCase()}
+      {entryMonogram(entry)}
     </span>
   );
 }
@@ -53,6 +78,7 @@ export function DirectoryCard({
   onRemove?: (id: string) => void;
 }) {
   const count = formatInstallCount(entry.installCount);
+  const publisher = entry.publisher === entry.name ? undefined : entry.publisher;
   const installedAction = onOpenSettings ?? onRemove;
   const installedLabel = onOpenSettings ? SETTINGS_LABEL : REMOVE_LABEL;
   const InstalledIcon = onOpenSettings ? SettingsIcon : Minus;
@@ -95,10 +121,10 @@ export function DirectoryCard({
               </span>
             ))}
           </div>
-          {entry.publisher || count ? (
+          {publisher || count ? (
             <p className="mt-0.5 flex items-center gap-1.5 text-xs text-muted-foreground">
-              {entry.publisher ? <span className="truncate">{entry.publisher}</span> : null}
-              {entry.publisher && count ? <span aria-hidden>&middot;</span> : null}
+              {publisher ? <span className="truncate">{publisher}</span> : null}
+              {publisher && count ? <span aria-hidden>&middot;</span> : null}
               {count ? (
                 <span className="inline-flex items-center gap-1 font-mono">
                   <Download aria-hidden className="size-3" />
