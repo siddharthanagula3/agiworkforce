@@ -35,6 +35,11 @@ interface UserSkillRow {
   updated_at: string;
 }
 
+interface UserSkillSummaryRow {
+  name: string;
+  description: string;
+}
+
 function toRecord(row: UserSkillRow): UserSkillRecord {
   return {
     id: row.id,
@@ -79,16 +84,23 @@ export function toUserSkillSummary(record: UserSkillRecord): UserSkillSummary {
 export async function listUserSkills(
   db: DatabaseAdapter,
   userId: string,
-): Promise<UserSkillRecord[]> {
+): Promise<UserSkillSummary[]> {
   if (!userSkillAuthoringEnabled()) return [];
-  const rows = await db.query<UserSkillRow>(
-    `select id, name, description, body, created_at, updated_at
+  const rows = await db.query<UserSkillSummaryRow>(
+    `select name, description
        from user_skills
       where user_id = $1
       order by name asc`,
     [userId],
   );
-  return rows.map(toRecord);
+  return rows.map((row) => ({
+    name: row.name,
+    description: row.description,
+    source: 'personal',
+    lifecycle: 'included',
+    downloadable: false,
+    editable: true,
+  }));
 }
 
 export async function findUserSkillByName(

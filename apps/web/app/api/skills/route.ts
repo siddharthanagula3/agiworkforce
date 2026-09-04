@@ -34,8 +34,7 @@ async function handleListSkills(request: NextRequest) {
   const rateLimit = await withRateLimit(request, 'chat-conversation');
   if (rateLimit) return rateLimit;
   const { userId } = await getClerkAuthUser(request);
-  const wholeCatalog =
-    new URL(request.url).searchParams.get(CATALOG_PARAM) === CATALOG_ALL;
+  const wholeCatalog = new URL(request.url).searchParams.get(CATALOG_PARAM) === CATALOG_ALL;
   let skills;
   try {
     const enabledPluginIds = await listEnabledPluginIds(getNeonDb(), userId);
@@ -66,7 +65,7 @@ async function handleListSkills(request: NextRequest) {
           ? { version: s.frontmatter['version'].trim() }
           : {}),
       })),
-      ...userSkills.map(toUserSkillSummary),
+      ...userSkills,
     ],
   });
   return NextResponse.json({ ...body, canAuthorSkills });
