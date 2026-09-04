@@ -146,6 +146,15 @@ async function handlePresign(request: NextRequest): Promise<NextResponse> {
   const localKnowledgeUpload = kind === 'knowledge-file' && !isPrivateObjectStorageConfigured();
   const proxyChatAttachmentUpload =
     kind === 'chat-attachment' && needsSameOriginUploadProxy(request);
+  // Same reasoning as the chat-attachment proxy above: a direct browser PUT to
+  // R2's presigned URL needs the bucket's own CORS config to allow this
+  // origin, and that allowlist is Cloudflare-side infrastructure this route
+  // cannot reach. Chat attachments already route around it locally; knowledge
+  // files did not, so every non-CORS-safe local origin (any port but 3000)
+  // hit a same silent "Failed to fetch" the presign response itself looked
+  // fine for.
+  const proxyKnowledgeFileUpload =
+    kind === 'knowledge-file' && !localKnowledgeUpload && needsSameOriginUploadProxy(request);
   const upload = localKnowledgeUpload
     ? {
         uploadUrl: new URL(
@@ -165,28 +174,36 @@ async function handlePresign(request: NextRequest): Promise<NextResponse> {
             request.nextUrl.origin,
           ).toString(),
         }
-      : kind === 'chat-attachment' || kind === 'knowledge-file'
-        ? await getPresignedPrivateUploadUrl({
-            key,
-            contentType: mimeType,
-            contentLength: byteCount,
-            expiresInSeconds: 300,
-          })
-        : await getPresignedUploadUrl({
-            key,
-            contentType: mimeType,
-            contentLength: byteCount,
-            expiresInSeconds: 300,
-          });
+      : proxyKnowledgeFileUpload
+        ? {
+            uploadUrl: new URL(
+              `/api/uploads/knowledge-file/put?key=${encodeURIComponent(key)}`,
+              request.nextUrl.origin,
+            ).toString(),
+          }
+        : kind === 'chat-attachment' || kind === 'knowledge-file'
+          ? await getPresignedPrivateUploadUrl({
+              key,
+              contentType: mimeType,
+              contentLength: byteCount,
+              expiresInSeconds: 300,
+            })
+          : await getPresignedUploadUrl({
+              key,
+              contentType: mimeType,
+              contentLength: byteCount,
+              expiresInSeconds: 300,
+            });
 
   return NextResponse.json({
     attachmentId: randomUUID(),
     storageKey: key,
     uploadUrl: upload.uploadUrl,
     uploadMethod: 'PUT' as const,
-    uploadHeaders: proxyChatAttachmentUpload
-      ? { 'Content-Type': mimeType, 'x-csrf-token': request.headers.get('x-csrf-token') ?? '' }
-      : { 'Content-Type': mimeType },
+    uploadHeaders:
+      proxyChatAttachmentUpload || proxyKnowledgeFileUpload
+        ? { 'Content-Type': mimeType, 'x-csrf-token': request.headers.get('x-csrf-token') ?? '' }
+        : { 'Content-Type': mimeType },
     ...('publicUrl' in upload ? { publicUrl: upload.publicUrl } : {}),
     expiresAt: new Date(Date.now() + 300 * 1000).toISOString(),
   });
