@@ -293,6 +293,20 @@ describe('fetchPluginSnapshot', () => {
     expect(result.marketplaceSources).toEqual([]);
   });
 
+  it('survives a marketplace route that refuses the connection', async () => {
+    const fetchMock = vi.fn().mockImplementation((path: string) => {
+      if (path.startsWith('/api/plugins?'))
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ entries: [registry()] }) });
+      return Promise.reject(new Error('connection refused'));
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const result = await fetchPluginSnapshot();
+
+    expect(result.registry).toHaveLength(1);
+    expect(result.marketplacesAvailable).toBe(false);
+  });
+
   it('throws when the catalog itself fails', async () => {
     stubRoutes({ '/api/plugins': { ok: false } });
     await expect(fetchPluginSnapshot()).rejects.toThrow('plugin catalog failed: 500');

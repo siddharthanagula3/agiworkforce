@@ -186,11 +186,15 @@ interface OptionalJson<T> {
 }
 
 async function readJson<T>(path: string, fallback: T): Promise<OptionalJson<T>> {
-  const response = await fetch(path, { cache: 'no-store' });
-  if (!response.ok) {
-    return { value: fallback, available: !MARKETPLACE_MISSING_STATUSES.has(response.status) };
+  try {
+    const response = await fetch(path, { cache: 'no-store' });
+    if (!response.ok) {
+      return { value: fallback, available: !MARKETPLACE_MISSING_STATUSES.has(response.status) };
+    }
+    return { value: (await response.json()) as T, available: true };
+  } catch {
+    return { value: fallback, available: false };
   }
-  return { value: (await response.json()) as T, available: true };
 }
 
 export async function fetchPluginSnapshot(): Promise<PluginDirectorySnapshot> {
@@ -200,21 +204,19 @@ export async function fetchPluginSnapshot(): Promise<PluginDirectorySnapshot> {
   if (!registryResponse.ok) throw new Error(`plugin catalog failed: ${registryResponse.status}`);
   const registry = ((await registryResponse.json()) as { entries?: PluginRegistryEntry[] }).entries;
 
-  const installations = await readJson<{
-    installations?: { pluginId: string; enabled: boolean }[];
-  }>(PLUGIN_INSTALLATIONS_PATH, {});
-  const marketplaceEntries = await readJson<{ entries?: PluginMarketplaceEntry[] }>(
-    PLUGIN_MARKETPLACE_ENTRIES_PATH,
-    {},
-  );
-  const marketplaceSources = await readJson<{ sources?: PluginMarketplaceSourceSummary[] }>(
-    PLUGIN_MARKETPLACES_PATH,
-    {},
-  );
-  const marketplaceInstallations = await readJson<{ installations?: { entryId: string }[] }>(
-    PLUGIN_MARKETPLACE_INSTALLATIONS_PATH,
-    {},
-  );
+  const [installations, marketplaceEntries, marketplaceSources, marketplaceInstallations] =
+    await Promise.all([
+      readJson<{ installations?: { pluginId: string; enabled: boolean }[] }>(
+        PLUGIN_INSTALLATIONS_PATH,
+        {},
+      ),
+      readJson<{ entries?: PluginMarketplaceEntry[] }>(PLUGIN_MARKETPLACE_ENTRIES_PATH, {}),
+      readJson<{ sources?: PluginMarketplaceSourceSummary[] }>(PLUGIN_MARKETPLACES_PATH, {}),
+      readJson<{ installations?: { entryId: string }[] }>(
+        PLUGIN_MARKETPLACE_INSTALLATIONS_PATH,
+        {},
+      ),
+    ]);
 
   return {
     registry: registry ?? [],
