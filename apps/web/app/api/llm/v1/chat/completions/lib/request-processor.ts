@@ -1745,6 +1745,14 @@ export async function processRequest(
           return null;
         });
 
+  const skillInstallOverridesPromise: Promise<ReadonlyMap<string, boolean>> = scopedDbPromise
+    .then((scoped) => getSkillInstallOverrides(scoped.db, userId))
+    .catch((error: unknown) => {
+      logger.warn({ error, userId }, 'Skill install overrides read failed; assuming none');
+      return new Map<string, boolean>();
+    });
+  skillInstallOverridesPromise.catch(() => {});
+
   // safety legs so both keep seeing the caller's own words.
   const latestUserPrompt = extractTextContent(
     [...chatRequest.messages].reverse().find((message) => message.role === 'user')?.content ?? '',
@@ -1755,131 +1763,136 @@ export async function processRequest(
     .map((message) => extractTextContent(message.content))
     .filter((text) => text.length > 0);
 
-  const ownershipLeg: Promise<{ ok: true; isTemporary: boolean } | ProcessFailure> =
-    chatRequest.conversation_id
-      ? (async () => {
-          try {
-            const scoped = await scopedDbPromise;
-            if (scoped.userId !== userId) {
-              return {
-                ok: false,
-                response: NextResponse.json(
-                  {
-                    error: {
-                      message: 'Conversation not found',
-                      type: 'invalid_request_error',
-                      code: 'conversation_not_found',
-                    },
+  const ownershipLeg: Promise<
+    { ok: true; isTemporary: boolean; projectId: string | null } | ProcessFailure
+  > = chatRequest.conversation_id
+    ? (async () => {
+        try {
+          const scoped = await scopedDbPromise;
+          if (scoped.userId !== userId) {
+            return {
+              ok: false,
+              response: NextResponse.json(
+                {
+                  error: {
+                    message: 'Conversation not found',
+                    type: 'invalid_request_error',
+                    code: 'conversation_not_found',
                   },
-                  { status: 404 },
-                ),
-              };
-            }
+                },
+                { status: 404 },
+              ),
+            };
+          }
 
-            const ownedRows = await scoped.db.query<{
-              id: string;
-              project_id: string | null;
-              is_temporary: boolean;
-            }>(
-              `select id, project_id, is_temporary
+          const ownedRows = await scoped.db.query<{
+            id: string;
+            project_id: string | null;
+            is_temporary: boolean;
+          }>(
+            `select id, project_id, is_temporary
                  from web_conversations
                 where id = $1 and user_id = $2 and deleted_at is null
                 limit 1`,
-              [chatRequest.conversation_id, userId],
-            );
-            if (!ownedRows[0]) {
-              return {
-                ok: false,
-                response: NextResponse.json(
-                  {
-                    error: {
-                      message: 'Conversation not found',
-                      type: 'invalid_request_error',
-                      code: 'conversation_not_found',
-                    },
+            [chatRequest.conversation_id, userId],
+          );
+          if (!ownedRows[0]) {
+            return {
+              ok: false,
+              response: NextResponse.json(
+                {
+                  error: {
+                    message: 'Conversation not found',
+                    type: 'invalid_request_error',
+                    code: 'conversation_not_found',
                   },
-                  { status: 404 },
-                ),
-              };
-            }
+                },
+                { status: 404 },
+              ),
+            };
+          }
 
-            if (ownedRows[0].project_id) {
-              try {
-                const projectContext = await loadProjectContext(scoped.db, {
-                  projectId: ownedRows[0].project_id,
-                  userId,
-                  currentConversationId: ownedRows[0].id,
-                  currentUserQuery: latestUserPrompt,
-                });
-                if (!projectContext) {
-                  return {
-                    ok: false,
-                    response: NextResponse.json(
-                      {
-                        error: {
-                          message:
-                            'This project is archived, deleted, or unavailable. Remove the conversation from the project or restore the project before retrying.',
-                          type: 'invalid_request_error',
-                          code: 'project_context_unavailable',
-                        },
-                      },
-                      { status: 409 },
-                    ),
-                  };
-                }
-                const projectPrompt = formatProjectSystemPrompt(projectContext);
-                if (projectPrompt) {
-                  applyProjectContext(chatRequest, projectPrompt);
-                }
-              } catch (error) {
-                logger.error(
-                  {
-                    error,
-                    userId,
-                    conversationId: chatRequest.conversation_id,
-                    projectId: ownedRows[0].project_id,
-                  },
-                  'Project context load failed',
-                );
+          if (ownedRows[0].project_id) {
+            try {
+              const projectContext = await loadProjectContext(scoped.db, {
+                projectId: ownedRows[0].project_id,
+                userId,
+                currentConversationId: ownedRows[0].id,
+                currentUserQuery: latestUserPrompt,
+              });
+              if (!projectContext) {
                 return {
                   ok: false,
                   response: NextResponse.json(
                     {
                       error: {
                         message:
-                          'Project context could not be loaded. No unscoped response was generated; retry when project sources are available.',
-                        type: 'server_error',
-                        code: 'project_context_load_failed',
+                          'This project is archived, deleted, or unavailable. Remove the conversation from the project or restore the project before retrying.',
+                        type: 'invalid_request_error',
+                        code: 'project_context_unavailable',
                       },
                     },
-                    { status: 503 },
+                    { status: 409 },
                   ),
                 };
               }
-            }
-
-            return { ok: true, isTemporary: ownedRows[0].is_temporary };
-          } catch (error) {
-            logger.error(
-              { error, userId, conversationId: chatRequest.conversation_id },
-              'Managed conversation ownership lookup failed',
-            );
-            return {
-              ok: false,
-              response: NextResponse.json(
+              const projectPrompt = formatProjectSystemPrompt(projectContext);
+              if (projectPrompt) {
+                applyProjectContext(chatRequest, projectPrompt);
+              }
+            } catch (error) {
+              logger.error(
                 {
-                  error: {
-                    message: 'Conversation ownership could not be verified',
-                    type: 'server_error',
-                    code: 'conversation_lookup_unavailable',
-                  },
+                  error,
+                  userId,
+                  conversationId: chatRequest.conversation_id,
+                  projectId: ownedRows[0].project_id,
                 },
-                { status: 503 },
-              ),
-            };
+                'Project context load failed',
+              );
+              return {
+                ok: false,
+                response: NextResponse.json(
+                  {
+                    error: {
+                      message:
+                        'Project context could not be loaded. No unscoped response was generated; retry when project sources are available.',
+                      type: 'server_error',
+                      code: 'project_context_load_failed',
+                    },
+                  },
+                  { status: 503 },
+                ),
+              };
+            }
           }
-        })()
-      : Promise.resolve({ ok: true, isTemporary: false });
+
+          return {
+            ok: true,
+            isTemporary: ownedRows[0].is_temporary,
+            projectId: ownedRows[0].project_id,
+          };
+        } catch (error) {
+          logger.error(
+            { error, userId, conversationId: chatRequest.conversation_id },
+            'Managed conversation ownership lookup failed',
+          );
+          return {
+            ok: false,
+            response: NextResponse.json(
+              {
+                error: {
+                  message: 'Conversation ownership could not be verified',
+                  type: 'server_error',
+                  code: 'conversation_lookup_unavailable',
+                },
+              },
+              { status: 503 },
+            ),
+          };
+        }
+      })()
+    : Promise.resolve({ ok: true, isTemporary: false, projectId: null });
 
   const safetyLeg: Promise<{ ok: true } | ProcessFailure> = (async () => {
     const platform = moderateManagedPrompt({
@@ -1951,6 +1964,7 @@ export async function processRequest(
   if (!safety.ok) return safety;
 
   const conversationIsTemporary = ownership.isTemporary;
+  const conversationProjectId = ownership.projectId;
 
   const memoryPolicyLeg: Promise<ManagedMemoryPolicy> = conversationIsTemporary
     ? Promise.resolve(DISABLED_MANAGED_MEMORY_POLICY)
@@ -2059,23 +2073,17 @@ export async function processRequest(
   if (managedMemoryPolicy.enabled) {
     try {
       const scoped = await scopedDbPromise;
-      // A memory confined to a project must not appear in a loose chat, and a
-      // project set to exclude global memory must not see the account pool. The
-      // conversation's project is what decides both, so it is resolved here
-      // rather than defaulting to the global scope.
-      const [conversationRow] = chatRequest.conversation_id
-        ? await scoped.db.query<{ project_id: string | null }>(
-            `select project_id from web_conversations where id = $1::uuid and user_id = $2 limit 1`,
-            [chatRequest.conversation_id, userId],
-          )
-        : [];
       const preMemoryMessageCount = chatRequest.messages.length;
+      // A memory confined to a project must not appear in a loose chat, and a
+      // project set to exclude global memory must not see the account pool.
+      // `conversationProjectId` is the ownership lookup's row, not a fresh
+      // query, so the scoping answers to the same read as the 404 check above.
       await enrichManagedMemoryContext({
         db: scoped.db,
         userId,
         chatRequest,
         isTemporary: false,
-        projectId: conversationRow?.project_id ?? null,
+        projectId: conversationProjectId,
       });
       if (chatRequest.messages.length > preMemoryMessageCount) {
         dynamicSystemMessageRefs.add(chatRequest.messages[0] as object);
@@ -2345,19 +2353,15 @@ export async function processRequest(
   };
 
   const routeResolutionNowMs = Date.now();
-  const [baseRouteHealthState, routeAffinity] = await Promise.all([
+  const [baseRouteHealthState, routeAffinity, zeroDataRetentionPolicy] = await Promise.all([
     resolveRouteHealthRuntimeState(routeSelection, routeResolutionNowMs),
     chatRequest.conversation_id
       ? getServedRouteAffinity(chatRequest.conversation_id)
       : Promise.resolve(null),
+    scopedDbPromise.then((scoped) => resolveZeroDataRetentionPolicy(scoped.db, userId, request)),
   ]);
   const availableProviderIds = listAvailableManagedProviderIds();
-  const zdrScoped = await scopedDbPromise;
-  const { required: zeroDataRetentionOnly } = await resolveZeroDataRetentionPolicy(
-    zdrScoped.db,
-    userId,
-    request,
-  );
+  const { required: zeroDataRetentionOnly } = zeroDataRetentionPolicy;
   const zeroDataRetentionProviders = resolveZeroDataRetentionProviderOverrides();
 
   const baseRouteDecision = resolveWebCloudModelRoute(
@@ -2625,18 +2629,8 @@ export async function processRequest(
   }
 
   const preSkillMessageCount = chatRequest.messages.length;
-  let skillInstallOverridesPromise: Promise<ReadonlyMap<string, boolean>> | undefined;
-  const loadSkillInstallOverrides = async (): Promise<ReadonlyMap<string, boolean>> => {
-    skillInstallOverridesPromise ??= (async () => {
-      try {
-        return await getSkillInstallOverrides((await scopedDbPromise).db, userId);
-      } catch (error) {
-        logger.warn({ error, userId }, 'Skill install overrides read failed; assuming none');
-        return new Map<string, boolean>();
-      }
-    })();
-    return skillInstallOverridesPromise;
-  };
+  const loadSkillInstallOverrides = (): Promise<ReadonlyMap<string, boolean>> =>
+    skillInstallOverridesPromise;
   if (chatRequest.skill_name) {
     const requestedSkillName = chatRequest.skill_name;
     let managedSkillCatalog: Skill[];

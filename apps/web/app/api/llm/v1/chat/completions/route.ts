@@ -529,12 +529,12 @@ async function dispatchChatCompletions(
     const toolPolicyDb = modelSupportsTools
       ? (processed.managedUsage?.db ?? (await getUserScopedDb(request)).db)
       : null;
-    const connectorPermissions = toolPolicyDb
-      ? await loadConnectorToolPermissions(toolPolicyDb, userId)
-      : EMPTY_CONNECTOR_TOOL_PERMISSIONS;
-    const toolApprovalPolicy = toolPolicyDb
-      ? await loadToolApprovalPolicy(toolPolicyDb, userId)
-      : DEFAULT_TOOL_APPROVAL_POLICY;
+    const [connectorPermissions, toolApprovalPolicy] = toolPolicyDb
+      ? await Promise.all([
+          loadConnectorToolPermissions(toolPolicyDb, userId),
+          loadToolApprovalPolicy(toolPolicyDb, userId),
+        ])
+      : [EMPTY_CONNECTOR_TOOL_PERMISSIONS, DEFAULT_TOOL_APPROVAL_POLICY];
     // Per-conversation connector opt-out: connectors the client switched off
     // for THIS turn only, layered on top of the user's standing allow/ask/deny
     // verdicts. Neither replaces the other -- a connector can be off for one
