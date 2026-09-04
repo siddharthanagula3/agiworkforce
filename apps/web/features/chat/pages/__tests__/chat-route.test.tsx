@@ -7,13 +7,7 @@ const routeMocks = vi.hoisted(() => ({
   headers: vi.fn(),
   redirect: vi.fn(),
   requireCurrentTermsAcceptance: vi.fn(),
-}));
-
-vi.mock('next/dynamic', () => ({
-  default: () =>
-    function WebChatPageStub() {
-      return <div data-testid="web-chat-page">WebChatPage</div>;
-    },
+  webChatRoot: vi.fn(),
 }));
 
 vi.mock('@clerk/nextjs/server', () => ({
@@ -33,8 +27,11 @@ vi.mock('@/lib/server/require-current-terms', () => ({
     routeMocks.requireCurrentTermsAcceptance(...args),
 }));
 
-vi.mock('@features/chat/pages/WebChatPage', () => ({
-  default: () => <div data-testid="web-chat-page">WebChatPage</div>,
+vi.mock('@/features/chat/components/WebChatRoot', () => ({
+  WebChatRoot: (props: { initialWorkMode?: string }) => {
+    routeMocks.webChatRoot(props);
+    return <div data-testid="web-chat-page">WebChatPage</div>;
+  },
 }));
 
 vi.mock('@/features/chat/components/ChatStreamRuntimeProvider', () => ({
@@ -46,16 +43,35 @@ beforeEach(() => {
   routeMocks.headers.mockResolvedValue(new Headers({ 'x-agi-pathname': '/chat' }));
   routeMocks.redirect.mockReset();
   routeMocks.requireCurrentTermsAcceptance.mockResolvedValue(undefined);
+  routeMocks.webChatRoot.mockReset();
 });
 
 describe('/chat route', () => {
   it('always renders the canonical WebChatPage', async () => {
     const { default: Page } = await import('../../../../app/chat/page');
 
-    render(<Page />);
+    render(await Page());
 
     expect(screen.getByTestId('web-chat-page')).toBeDefined();
     expect(screen.queryByTestId('unified-chat-page')).toBeNull();
+  });
+
+  it('leaves the work mode unset on a plain /chat visit', async () => {
+    routeMocks.headers.mockResolvedValue(new Headers({ 'x-agi-pathname': '/chat' }));
+    const { default: Page } = await import('../../../../app/chat/page');
+
+    render(await Page());
+
+    expect(routeMocks.webChatRoot).toHaveBeenCalledWith({ initialWorkMode: undefined });
+  });
+
+  it('preselects AGI Work when the proxy rewrote a signed-in /agi-work visit here', async () => {
+    routeMocks.headers.mockResolvedValue(new Headers({ 'x-agi-pathname': '/agi-work' }));
+    const { default: Page } = await import('../../../../app/chat/page');
+
+    render(await Page());
+
+    expect(routeMocks.webChatRoot).toHaveBeenCalledWith({ initialWorkMode: 'agiwork' });
   });
 
   it('preserves the requested chat session path when redirecting signed-out users', async () => {
