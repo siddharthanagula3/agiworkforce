@@ -7,7 +7,11 @@ import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { getNeonDb } from '@/lib/server/neon-db';
-import { listMarketplaceEntriesForUser } from '@/lib/services/plugin-marketplace-service';
+import { createError } from '@/lib/errors';
+import {
+  isMissingPluginMarketplaceSchema,
+  listMarketplaceEntriesForUser,
+} from '@/lib/services/plugin-marketplace-service';
 import type { PluginMarketplaceEntryListResponse } from '@agiworkforce/cloud-contracts';
 
 export const runtime = 'nodejs';
@@ -18,9 +22,19 @@ async function handleGet(request: NextRequest): Promise<NextResponse> {
   const limited = await withRateLimit(request, 'model-catalog', `user:${userId}`);
   if (limited) return limited;
 
-  const body: PluginMarketplaceEntryListResponse = {
-    entries: await listMarketplaceEntriesForUser(getNeonDb(), userId),
-  };
+  let entries;
+  try {
+    entries = await listMarketplaceEntriesForUser(getNeonDb(), userId);
+  } catch (error) {
+    if (isMissingPluginMarketplaceSchema(error)) {
+      throw createError.serviceUnavailable(
+        'The plugin marketplace is not available yet. Please try again later.',
+      );
+    }
+    throw error;
+  }
+
+  const body: PluginMarketplaceEntryListResponse = { entries };
   return NextResponse.json(body, { headers: { 'Cache-Control': 'private, no-store' } });
 }
 
