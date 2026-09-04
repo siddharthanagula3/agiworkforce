@@ -5,7 +5,7 @@ const mocks = vi.hoisted(() => ({
   withRateLimit: vi.fn(),
   getClerkAuthUser: vi.fn(),
   getSubscription: vi.fn(),
-  resolveActiveOrganizationId: vi.fn(),
+  dbQuery: vi.fn(),
   readOrganizationCollectionState: vi.fn(),
 }));
 
@@ -32,11 +32,7 @@ vi.mock('@/lib/csrf', () => ({
 }));
 
 vi.mock('@/lib/server/neon-db', () => ({
-  getNeonDb: vi.fn(() => ({})),
-}));
-
-vi.mock('@/lib/services/active-workspace-service', () => ({
-  resolveActiveOrganizationId: mocks.resolveActiveOrganizationId,
+  getNeonDb: vi.fn(() => ({ query: mocks.dbQuery })),
 }));
 
 vi.mock('@/lib/services/enterprise-collection-state', () => ({
@@ -84,12 +80,24 @@ describe('runAuthGate rate limiting', () => {
   });
 });
 
+function makeRequestWithPersonalHeader() {
+  return new NextRequest('http://localhost/api/llm/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      authorization: 'Bearer verified-token',
+      'x-agi-surface': 'web',
+      'x-real-ip': '203.0.113.10',
+      'x-agi-organization-id': 'personal',
+    },
+  });
+}
+
 describe('runAuthGate enterprise collection grace', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.withRateLimit.mockResolvedValue(null);
     mocks.getClerkAuthUser.mockResolvedValue({ userId: 'user-123' });
-    mocks.resolveActiveOrganizationId.mockResolvedValue('org-123');
+    mocks.dbQuery.mockResolvedValue([{ organization_id: 'org-123' }]);
   });
 
   it('keeps an enterprise account entitled while past_due and not read-only', async () => {
@@ -133,7 +141,69 @@ describe('runAuthGate enterprise collection grace', () => {
     const result = await runAuthGate(makeRequest());
 
     expect(result.ok).toBe(false);
-    if (!result.ok) expect(result.response.status).toBe(403);
+    if (!result.ok) {
+      expect(result.response.status).toBe(403);
+      const body = await (result.response as Response).clone().json();
+      expect(body.error.code).toBe('billing_read_only');
+    }
+  });
+
+  it('blocks a read_only enterprise account with Stripe status still active, the send_invoice case', async () => {
+    mocks.getSubscription.mockResolvedValue({
+      id: 'subscription-123',
+      status: 'active',
+      plan_tier: 'enterprise',
+    });
+    mocks.readOrganizationCollectionState.mockResolvedValue({ readOnly: true });
+
+    const result = await runAuthGate(makeRequest());
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      const body = await (result.response as Response).clone().json();
+      expect(body.error.code).toBe('billing_read_only');
+    }
+  });
+
+  it('blocks a read_only enterprise owner even when the request carries the personal workspace header', async () => {
+    mocks.getSubscription.mockResolvedValue({
+      id: 'subscription-123',
+      status: 'active',
+      plan_tier: 'enterprise',
+    });
+    mocks.readOrganizationCollectionState.mockResolvedValue({ readOnly: true });
+
+    const result = await runAuthGate(makeRequestWithPersonalHeader());
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      const body = await (result.response as Response).clone().json();
+      expect(body.error.code).toBe('billing_read_only');
+    }
+    expect(String(mocks.dbQuery.mock.calls[0]?.[0])).toContain('owner_user_id');
+  });
+
+  it('blocks a read_only enterprise seat member even when the request carries the personal workspace header', async () => {
+    mocks.getSubscription.mockResolvedValue({
+      id: 'subscription-123',
+      status: 'active',
+      plan_tier: 'enterprise',
+    });
+    // No organization the caller owns; resolved instead through their seat membership.
+    mocks.dbQuery.mockResolvedValue([{ organization_id: 'org-member-456' }]);
+    mocks.readOrganizationCollectionState.mockResolvedValue({ readOnly: true });
+
+    const result = await runAuthGate(makeRequestWithPersonalHeader());
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      const body = await (result.response as Response).clone().json();
+      expect(body.error.code).toBe('billing_read_only');
+    }
+    expect(mocks.readOrganizationCollectionState).toHaveBeenCalledWith(
+      expect.anything(),
+      'org-member-456',
+    );
   });
 
   it('does not read collection state for a non-enterprise plan tier', async () => {
@@ -147,6 +217,7 @@ describe('runAuthGate enterprise collection grace', () => {
 
     expect(result.ok).toBe(true);
     expect(mocks.readOrganizationCollectionState).not.toHaveBeenCalled();
+    expect(mocks.dbQuery).not.toHaveBeenCalled();
   });
 
   it('fails open to entitled when the collection state read errors', async () => {
@@ -156,6 +227,19 @@ describe('runAuthGate enterprise collection grace', () => {
       plan_tier: 'enterprise',
     });
     mocks.readOrganizationCollectionState.mockRejectedValue(new Error('db unavailable'));
+
+    const result = await runAuthGate(makeRequest());
+
+    expect(result.ok).toBe(true);
+  });
+
+  it('fails open to entitled when the funding organization lookup itself errors', async () => {
+    mocks.getSubscription.mockResolvedValue({
+      id: 'subscription-123',
+      status: 'past_due',
+      plan_tier: 'enterprise',
+    });
+    mocks.dbQuery.mockRejectedValue(new Error('db unavailable'));
 
     const result = await runAuthGate(makeRequest());
 
