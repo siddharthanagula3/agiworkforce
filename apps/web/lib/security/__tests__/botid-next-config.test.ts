@@ -51,7 +51,13 @@ describe('botid rewrites in next.config', () => {
   it('keeps the api-host rewrites the app already relied on', async () => {
     const rewrites = await resolveRewrites();
 
-    expect(rewrites.some((rule) => JSON.stringify(rule.has ?? []).includes(API_HOST))).toBe(true);
+    expect(
+      rewrites.some((rule) =>
+        (rule.has ?? []).some(
+          (condition) => condition.type === 'host' && condition.value === API_HOST,
+        ),
+      ),
+    ).toBe(true);
   }, 60_000);
 
   it('frames the botid path as same-origin without loosening the global deny', async () => {
