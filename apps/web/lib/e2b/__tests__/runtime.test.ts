@@ -9,6 +9,12 @@ vi.mock('@/lib/logger', () => ({
 }));
 vi.mock('../gate', () => ({ e2bExecutionEnabled: vi.fn(() => true) }));
 
+const templateVcpuCount = vi.fn(async (_templateId: unknown) => null as number | null);
+vi.mock('../templates', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../templates')>();
+  return { ...actual, templateVcpuCount: (templateId: unknown) => templateVcpuCount(templateId) };
+});
+
 const meterSandboxComputeInterval = vi.fn(async (_interval: unknown) => 0);
 const sandboxComputeIsPriceable = vi.fn(() => true);
 vi.mock('../compute-metering', () => ({
@@ -65,18 +71,20 @@ function codeScope(
   };
 }
 
-const sessions = new Map<
-  string,
-  { sandboxId: string; contexts: Record<string, unknown>; activeSinceMs?: number }
->();
+interface TestSession {
+  sandboxId: string;
+  contexts: Record<string, unknown>;
+  activeSinceMs?: number;
+  templateId?: string;
+  extraHosts?: readonly string[];
+}
+
+const sessions = new Map<string, TestSession>();
 vi.mock('../session-store', () => ({
   CHAT_SANDBOX_NETWORK_ACCESS: 'trusted',
   getE2BSession: vi.fn(async (value: TestScope) => sessions.get(scopeKey(value)) ?? null),
   saveE2BSession: vi.fn(async (value: TestScope, session: unknown) => {
-    sessions.set(
-      scopeKey(value),
-      session as { sandboxId: string; contexts: Record<string, unknown>; activeSinceMs?: number },
-    );
+    sessions.set(scopeKey(value), session as TestSession);
   }),
   deleteE2BSession: vi.fn(async (value: TestScope) => {
     sessions.delete(scopeKey(value));
@@ -376,6 +384,14 @@ describe('getE2BExecutor, managed Code session', () => {
       exitCode: 0,
     });
     expect(sessions.has(scopeKey(codeScope('code-1', 'trusted')))).toBe(true);
+  });
+
+  it('persists the template id on the session so a later close can resolve its vCPU cost', async () => {
+    const { getE2BExecutor } = await import('../runtime');
+    await getE2BExecutor(codeScope('code-template', 'trusted', { templateId: 'claude' }));
+
+    const saved = sessions.get(scopeKey(codeScope('code-template', 'trusted')));
+    expect(saved?.templateId).toBe('claude');
   });
 
   it('fails closed when the requested network policy cannot be enforced', async () => {
@@ -960,5 +976,23 @@ describe('pauseE2BSession / killE2BSession', () => {
     expect(staticKill).toHaveBeenCalledWith('sbx-user-b');
     expect(sessions.has(scopeKey(scope('conv-6', 'user-b')))).toBe(false);
     expect(sessions.has(scopeKey(scope('conv-6', 'user-a')))).toBe(true);
+  });
+
+  it('meters with the vCPU count resolved from the sandbox session, not the caller scope', async () => {
+    templateVcpuCount.mockResolvedValueOnce(4);
+    sessions.set(scopeKey(scope('conv-vcpu')), {
+      sandboxId: 'sbx-vcpu',
+      contexts: {},
+      activeSinceMs: Date.now() - 60_000,
+      templateId: 'claude',
+    });
+
+    const { killE2BSession } = await import('../runtime');
+    await killE2BSession(scope('conv-vcpu'));
+
+    expect(templateVcpuCount).toHaveBeenCalledWith('claude');
+    expect(meterSandboxComputeInterval).toHaveBeenCalledWith(
+      expect.objectContaining({ sandboxId: 'sbx-vcpu', vcpuCount: 4 }),
+    );
   });
 });

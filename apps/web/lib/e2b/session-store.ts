@@ -22,6 +22,7 @@ export interface E2BSession {
   activeSinceMs?: number;
   networkAccess?: CloudCodeNetworkAccess;
   extraHosts?: readonly string[];
+  templateId?: string;
 }
 
 export interface E2BSessionScope {

@@ -311,6 +311,21 @@ export async function listCloudCodeRuntimes(): Promise<CloudCodeRuntime[]> {
   }
 }
 
+/**
+ * The vCPU count of a template, when the catalogue reports one. The
+ * declared coding harnesses report 0 (unknown) unless a team template of the
+ * same id overrides them; the caller decides the fallback for an unknown
+ * count.
+ */
+export async function templateVcpuCount(
+  templateId: string | null | undefined,
+): Promise<number | null> {
+  if (!templateId) return null;
+  const runtimes = await listCloudCodeRuntimes();
+  const match = runtimes.find((runtime) => runtime.id === templateId);
+  return match && match.cpuCount > 0 ? match.cpuCount : null;
+}
+
 export function harnessTemplates(): readonly { id: string; name: string; summary: string }[] {
   return CODING_HARNESSES.filter((template) => template.kind === 'harness').map((template) => ({
     id: template.id,

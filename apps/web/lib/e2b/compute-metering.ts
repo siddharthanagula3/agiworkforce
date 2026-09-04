@@ -6,50 +6,53 @@ import { CreditService } from '@/lib/services/credit-service';
 export const E2B_COMPUTE_RATE_ENV = 'AGI_E2B_COMPUTE_MICROUSD_PER_SECOND';
 
 const MICROUSD_PER_CENT = 10_000;
+const USD_TO_MICROUSD = 1_000_000;
 
 const MAX_BILLABLE_INTERVAL_MS = 24 * 60 * 60 * 1000;
 
-let missingRateWarned = false;
+/**
+ * E2B's published per-vCPU compute rate, USD per second, linear across
+ * vCPU counts. Source: https://e2b.dev/pricing, fetched 2026-09-04
+ * ($0.000014/vCPU/s, uniform across the Hobby and Pro tiers).
+ */
+const E2B_VCPU_USD_PER_SECOND_UNIT = 0.000014;
+
+/** E2B's own default sandbox size when a template does not declare one. */
+const DEFAULT_E2B_VCPU_COUNT = 2;
 
 let unbilledMs = 0;
 
-function isProductionRuntime(): boolean {
-  if (process.env['NEXT_PHASE'] === 'phase-production-build') return false;
-  const vercelEnv = process.env['VERCEL_ENV'];
-  if (vercelEnv === 'preview') return false;
-  return vercelEnv === 'production' || process.env['NODE_ENV'] === 'production';
-}
+type ConfiguredRate = { ok: true; microusdPerSecond: number } | { ok: false };
 
-function readConfiguredRate(): number | null {
+function resolveConfiguredOverride(): ConfiguredRate | null {
   const raw = process.env[E2B_COMPUTE_RATE_ENV];
-  if (typeof raw !== 'string' || raw.trim().length === 0) {
-    if (!isProductionRuntime() && !missingRateWarned) {
-      missingRateWarned = true;
-      logger.warn(
-        { env: E2B_COMPUTE_RATE_ENV },
-        '[e2b] sandbox compute metering is INERT: no per-second rate is configured, so sandbox seconds do not reach the usage ledger',
-      );
-    }
-    return null;
-  }
+  if (typeof raw !== 'string' || raw.trim().length === 0) return null;
   const parsed = Number.parseFloat(raw);
   if (!Number.isFinite(parsed) || parsed <= 0) {
     logger.error(
       { env: E2B_COMPUTE_RATE_ENV, value: raw },
-      '[e2b] invalid sandbox compute rate; sandbox compute cannot be priced',
+      '[e2b] invalid sandbox compute rate override; refusing to price sandbox compute',
     );
-    return null;
+    return { ok: false };
   }
-  return parsed;
+  return { ok: true, microusdPerSecond: parsed };
+}
+
+function tableMicrousdPerSecond(vcpuCount: number | null | undefined): number {
+  const resolvedVcpuCount =
+    typeof vcpuCount === 'number' && vcpuCount > 0 ? vcpuCount : DEFAULT_E2B_VCPU_COUNT;
+  return Math.round(resolvedVcpuCount * E2B_VCPU_USD_PER_SECOND_UNIT * USD_TO_MICROUSD);
 }
 
 export function sandboxComputeIsPriceable(): boolean {
-  if (readConfiguredRate() !== null) return true;
-  return !isProductionRuntime();
+  const override = resolveConfiguredOverride();
+  return override === null || override.ok;
 }
 
-export function getSandboxComputeMicrousdPerSecond(): number {
-  return readConfiguredRate() ?? 0;
+export function getSandboxComputeMicrousdPerSecond(vcpuCount?: number | null): number {
+  const override = resolveConfiguredOverride();
+  if (override === null) return tableMicrousdPerSecond(vcpuCount);
+  return override.ok ? override.microusdPerSecond : 0;
 }
 
 function isBillableInterval(elapsedMs: number): boolean {
@@ -68,6 +71,7 @@ export interface SandboxComputeInterval {
   sandboxId: string;
   conversationId?: string | undefined;
   codeSessionId?: string | undefined;
+  vcpuCount?: number | undefined;
   startedAtMs: number;
   endedAtMs: number;
   reason: 'pause' | 'kill' | 'reclaim';
@@ -79,8 +83,14 @@ export async function meterSandboxComputeInterval(
   const elapsedMs = interval.endedAtMs - interval.startedAtMs;
   if (!isBillableInterval(elapsedMs)) return 0;
 
-  const rate = readConfiguredRate();
-  const costCents = rate === null ? 0 : sandboxComputeCostCents(elapsedMs, rate);
+  const override = resolveConfiguredOverride();
+  const rate =
+    override === null
+      ? tableMicrousdPerSecond(interval.vcpuCount)
+      : override.ok
+        ? override.microusdPerSecond
+        : 0;
+  const costCents = sandboxComputeCostCents(elapsedMs, rate);
   if (costCents <= 0) {
     unbilledMs += elapsedMs;
     const base = {
@@ -90,10 +100,10 @@ export async function meterSandboxComputeInterval(
       elapsedMs,
       unbilledMs,
     };
-    if (rate === null) {
+    if (override?.ok === false) {
       logger.error(
         base,
-        '[e2b] sandbox compute is UNPRICED: these seconds bill nothing and move no usage cap',
+        '[e2b] sandbox compute is UNPRICED: the configured rate override is invalid, these seconds bill nothing and move no usage cap',
       );
     } else {
       logger.warn(
