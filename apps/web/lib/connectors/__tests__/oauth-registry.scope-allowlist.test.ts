@@ -15,6 +15,7 @@ import {
 } from '../oauth-registry';
 import {
   CONNECTOR_OAUTH_SCOPE_CEILINGS,
+  FORBIDDEN_CONNECTOR_OAUTH_SCOPES,
   SCOPE_REVIEW_PENDING,
   filterConnectorScopes,
   isConnectorScopeCeilingEnforced,
@@ -175,21 +176,9 @@ describe('connector OAuth scope ceiling, the table itself', () => {
   });
 
   it('never admits an administrative or unrestricted scope for an enforced connector', () => {
-    const forbidden = [
-      'admin',
-      'full',
-      'default',
-      'https://mail.google.com/',
-      'https://www.googleapis.com/auth/drive',
-      'https://www.googleapis.com/auth/calendar',
-      'https://www.googleapis.com/auth/cloud-platform',
-      'Files.ReadWrite.All',
-      'Sites.FullControl.All',
-      'Mail.ReadWrite',
-    ];
     for (const [connectorId, ceiling] of Object.entries(CONNECTOR_OAUTH_SCOPE_CEILINGS)) {
       if (ceiling === SCOPE_REVIEW_PENDING) continue;
-      const overlap = ceiling.filter((scope) => forbidden.includes(scope));
+      const overlap = ceiling.filter((scope) => FORBIDDEN_CONNECTOR_OAUTH_SCOPES.includes(scope));
       expect(overlap, `${connectorId} admits an over-broad scope`).toEqual([]);
     }
   });

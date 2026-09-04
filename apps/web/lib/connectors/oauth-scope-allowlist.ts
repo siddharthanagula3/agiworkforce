@@ -190,6 +190,24 @@ export const CONNECTOR_OAUTH_SCOPE_CEILINGS: Readonly<Record<string, ConnectorSc
 };
 
 /**
+ * Scopes no enforced ceiling may ever admit, regardless of provider. One
+ * place for what "broader than declared" means, read by both the ceiling
+ * table test and `scripts/check-connector-scopes.mjs`.
+ */
+export const FORBIDDEN_CONNECTOR_OAUTH_SCOPES: readonly string[] = [
+  'admin',
+  'full',
+  'default',
+  'https://mail.google.com/',
+  'https://www.googleapis.com/auth/drive',
+  'https://www.googleapis.com/auth/calendar',
+  'https://www.googleapis.com/auth/cloud-platform',
+  'Files.ReadWrite.All',
+  'Sites.FullControl.All',
+  'Mail.ReadWrite',
+];
+
+/**
  * Strips the Google and Microsoft Graph URL prefixes so the same scope
  * described once (`gmail.readonly`, `User.Read`) matches both the bare and
  * fully-qualified forms `graph()` emits for every Graph scope.
