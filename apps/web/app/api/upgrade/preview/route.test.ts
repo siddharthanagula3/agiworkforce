@@ -15,6 +15,11 @@ const pricingMocks = vi.hoisted(() => ({
 const dbMocks = vi.hoisted(() => ({
   query: vi.fn(),
   execute: vi.fn(),
+  transaction: vi.fn(
+    async (
+      callback: (tx: { query: typeof dbMocks.query; execute: typeof dbMocks.execute }) => unknown,
+    ) => callback({ query: dbMocks.query, execute: dbMocks.execute }),
+  ),
 }));
 
 vi.mock('server-only', () => ({}));
@@ -39,7 +44,11 @@ vi.mock('@/lib/server/localized-pricing-service', () => ({
     pricingMocks.getLocalizedPricingCatalog(...args),
 }));
 vi.mock('@/lib/server/neon-db', () => ({
-  getNeonDb: () => ({ query: dbMocks.query, execute: dbMocks.execute }),
+  getNeonDb: () => ({
+    query: dbMocks.query,
+    execute: dbMocks.execute,
+    transaction: dbMocks.transaction,
+  }),
 }));
 vi.mock('stripe', () => ({
   default: class StripeMock {
@@ -231,6 +240,36 @@ describe('POST /api/upgrade/preview', () => {
     expect(subscriptionDetails).toMatchObject({ billing_cycle_anchor: 'now' });
     // Stripe rejects proration_date alongside an anchor reset.
     expect(subscriptionDetails).not.toHaveProperty('proration_date');
+  });
+
+  it('reads the profile row through the claimed user scope when the subscription has no stored customer', async () => {
+    dbMocks.query.mockImplementation(async (sql: string) => {
+      if (sql.includes('from subscriptions')) {
+        return [
+          {
+            status: 'active',
+            plan_tier: 'max',
+            stripe_subscription_id: 'sub_live123',
+            stripe_customer_id: null,
+          },
+        ];
+      }
+      if (sql.includes('from profiles')) return [{ stripe_customer_id: 'cus_123' }];
+      return [];
+    });
+
+    await POST(makeRequest());
+
+    expect(dbMocks.transaction).toHaveBeenCalled();
+    expect(dbMocks.execute).toHaveBeenCalledWith('set local role app_rls');
+    expect(dbMocks.query).toHaveBeenCalledWith(
+      expect.stringContaining("set_config('request.jwt.claim.sub', $1, true)"),
+      ['user_123', ''],
+    );
+    expect(dbMocks.query).toHaveBeenCalledWith(
+      'select stripe_customer_id from profiles where id = $1 limit 1',
+      ['user_123'],
+    );
   });
 
   it('returns localized full-price checkout for an ended organization-managed plan', async () => {
