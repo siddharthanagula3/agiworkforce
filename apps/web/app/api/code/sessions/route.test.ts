@@ -66,14 +66,14 @@ beforeEach(() => {
 });
 
 describe('POST /api/code/sessions, the full-network interim guard', () => {
-  it('refuses full network for a harness whose managed credential would enter the sandbox', async () => {
+  it('refuses full network for a harness whose managed credential would enter the sandbox unproxied', async () => {
     const response = await POST(
       postRequest({
         requestId: 'req-12345678',
         title: 'workspace',
         networkAccess: 'full',
         fullNetworkAcknowledged: true,
-        runtimeId: 'claude',
+        runtimeId: 'droid',
       }),
     );
     expect(response.status).toBe(422);
@@ -102,6 +102,20 @@ describe('POST /api/code/sessions, the full-network interim guard', () => {
         requestId: 'req-1234567a',
         title: 'workspace',
         networkAccess: 'trusted',
+        runtimeId: 'claude',
+      }),
+    );
+    expect(response.status).toBe(201);
+    expect(mockCreateSession).toHaveBeenCalledTimes(1);
+  });
+
+  it('allows full network for a harness the credential proxy covers', async () => {
+    const response = await POST(
+      postRequest({
+        requestId: 'req-1234567b',
+        title: 'workspace',
+        networkAccess: 'full',
+        fullNetworkAcknowledged: true,
         runtimeId: 'claude',
       }),
     );

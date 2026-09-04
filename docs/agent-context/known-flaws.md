@@ -2539,13 +2539,23 @@ E2B (batch mostly DONE, see per-item status):
   backstop). Tested (6 cases).
 - DONE E2B-KILL-BEFORE-DELETE (MED): killE2BSession kills on the captured id FIRST,
   then clears the Redis mapping in finally → no orphan when kill is skipped/throws.
-- OPEN E2B-TRANSIENT-RESUME-ORPHAN (MED): a transient connect() failure creates a fresh
-  sandbox + overwrites the mapping, orphaning the still-live paused one. Cost now bounded:
-  the orphan counts against the user's concurrency quota (running+paused) and E2B auto-kills
-  it at its timeout. A precise handle-and-kill is deferred.
-- OPEN E2B-NO-ORPHAN-SWEEPER (MED): no cron reaps paused sandboxes by metadata age.
-  Deferred (cron infra; Hobby-plan cron limits + manual-deploy topology). Orphan cost is
-  bounded by the per-user quota + E2B timeout auto-kill in the meantime.
+- DONE E2B-TRANSIENT-RESUME-ORPHAN (MED, verified 2026-09-04): a resume failure now runs
+  releaseUnreachableSandbox before creating the replacement, in apps/web/lib/e2b/runtime.ts:
+  it settles the stranded sandbox's open billable interval, kills it on its captured id, and
+  deletes the Redis mapping, all before createFresh() is called. Tested in runtime.test.ts
+  ("kills the sandbox it could not reach before creating the replacement", "settles the
+  stranded sandbox open compute interval before replacing it"). The row previously described
+  this as deferred; the handle-and-kill was already implemented when checked.
+- DONE E2B-NO-ORPHAN-SWEEPER (MED, verified 2026-09-04): apps/web/app/api/cron/reclaim-sandboxes/route.ts
+  calls reclaimAbandonedE2BSandboxes (apps/web/lib/e2b/reclaim.ts), which lists every
+  running/paused sandbox, kills anything past SANDBOX_MAX_AGE_MS (24h) or whose metadata
+  scope no longer matches the live Redis mapping, and meters the closed interval first.
+  Registered in vercel.json's crons as `45 5 * * *` (daily). The row previously called this
+  deferred on Hobby-plan cron limits; the project is on the Pro plan and the cron is
+  already live. Fixed in the same pass: reclaiming an orphaned sandbox (one whose
+  metadata scope's Redis mapping already points elsewhere) unconditionally deleted that
+  scope's mapping even though it named a different, still-live sandbox; the delete is
+  now gated on the mapping still pointing at the sandbox just killed.
 - MITIGATED E2B-ABORT-NOT-THREADED (MED): @e2b/code-interpreter's RunCodeOpts exposes
   only timeoutMs/requestTimeoutMs, NO AbortSignal (verified against dist/index.d.ts@2.6.1),
   so there is no clean per-execution abort; force-killing the sandbox on abort would destroy

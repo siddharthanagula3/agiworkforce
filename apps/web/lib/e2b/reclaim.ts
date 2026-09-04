@@ -3,6 +3,7 @@ import 'server-only';
 import { logger } from '@/lib/logger';
 import { e2bExecutionEnabled } from './gate';
 import { meterSandboxComputeInterval } from './compute-metering';
+import { templateVcpuCount } from './templates';
 import {
   MANAGED_CLOUD_E2B_TENANT_ID,
   getE2BSession,
@@ -102,40 +103,35 @@ export async function reclaimAbandonedE2BSandboxes(
       const scope = scopeFromMetadata(info.metadata ?? {});
       const expired = ageMs >= maxAgeMs;
 
-      let orphaned = false;
-      if (scope) {
-        const session = await getE2BSession(scope);
-        orphaned = session?.sandboxId !== info.sandboxId;
-      } else {
-        orphaned = false;
-      }
+      const session = scope ? await getE2BSession(scope) : null;
+      const isCurrentMapping = session?.sandboxId === info.sandboxId;
+      const orphaned = scope ? !isCurrentMapping : false;
 
       if (!expired && !orphaned) {
         report.retained += 1;
         continue;
       }
 
-      if (scope) {
-        const session = await getE2BSession(scope);
-        if (session?.sandboxId === info.sandboxId && typeof session.activeSinceMs === 'number') {
-          report.meteredCents += await meterSandboxComputeInterval({
-            userId: scope.userId,
-            sandboxId: info.sandboxId,
-            ...(scope.conversationId ? { conversationId: scope.conversationId } : {}),
-            ...(scope.resource?.kind === 'code_session'
-              ? { codeSessionId: scope.resource.id }
-              : {}),
-            startedAtMs: session.activeSinceMs,
-            endedAtMs: nowMs,
-            reason: 'reclaim',
-          });
-        }
+      if (scope && isCurrentMapping && session && typeof session.activeSinceMs === 'number') {
+        report.meteredCents += await meterSandboxComputeInterval({
+          userId: scope.userId,
+          sandboxId: info.sandboxId,
+          ...(scope.conversationId ? { conversationId: scope.conversationId } : {}),
+          ...(scope.resource?.kind === 'code_session' ? { codeSessionId: scope.resource.id } : {}),
+          vcpuCount: (await templateVcpuCount(session.templateId)) ?? undefined,
+          startedAtMs: session.activeSinceMs,
+          endedAtMs: nowMs,
+          reason: 'reclaim',
+        });
       }
 
       try {
         await Sandbox.kill(info.sandboxId);
         report.reclaimed += 1;
-        if (scope) await deleteE2BSession(scope);
+        // Deleting the mapping only when it still points at the sandbox we just
+        // killed keeps an orphan's cleanup from severing a DIFFERENT, still-live
+        // sandbox's current mapping for the same scope.
+        if (scope && isCurrentMapping) await deleteE2BSession(scope);
         logger.info(
           {
             sandboxId: info.sandboxId,

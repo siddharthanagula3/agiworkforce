@@ -9,6 +9,7 @@ import {
   harnessProxyBaseUrlEnv,
   knownHarnessCommandIds,
   listCloudCodeRuntimes,
+  templateVcpuCount,
 } from '../templates';
 
 const ORIGINAL_ENV = { ...process.env };
@@ -190,6 +191,43 @@ describe('E2B template catalogue', () => {
     await listCloudCodeRuntimes();
 
     expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('templateVcpuCount', () => {
+  beforeEach(() => {
+    clearCloudCodeRuntimeCache();
+    process.env['E2B_API_KEY'] = 'e2b_test_key';
+    process.env['AGI_E2B_EXECUTION'] = '1';
+  });
+
+  afterEach(() => {
+    process.env = { ...ORIGINAL_ENV };
+    vi.restoreAllMocks();
+    clearCloudCodeRuntimeCache();
+  });
+
+  it('is null for no template id', async () => {
+    expect(await templateVcpuCount(null)).toBeNull();
+    expect(await templateVcpuCount(undefined)).toBeNull();
+  });
+
+  it('is null for a declared harness with an unknown vCPU count', async () => {
+    vi.stubGlobal('fetch', respondWith([]));
+    expect(await templateVcpuCount('claude')).toBeNull();
+  });
+
+  it('reads the vCPU count from a matching team template', async () => {
+    vi.stubGlobal(
+      'fetch',
+      respondWith([template({ templateID: 'claude', names: ['claude'], cpuCount: 6 })]),
+    );
+    expect(await templateVcpuCount('claude')).toBe(6);
+  });
+
+  it('is null for a template id not in the catalogue', async () => {
+    vi.stubGlobal('fetch', respondWith([]));
+    expect(await templateVcpuCount('not-a-template')).toBeNull();
   });
 });
 
