@@ -45,6 +45,8 @@ const queryCache = new QueryCache({
       return;
     }
 
+    if (query.meta?.['silent']) return;
+
     toast.error(errorMessage);
   },
 });
@@ -211,6 +213,21 @@ export const queryKeys = {
     health: () => ['system', 'health'] as const,
     config: () => ['system', 'config'] as const,
     features: () => ['system', 'features'] as const,
+  },
+
+  connectors: {
+    all: () => ['connectors'] as const,
+    permissions: () => ['connectors', 'permissions'] as const,
+  },
+
+  media: {
+    all: () => ['media'] as const,
+    availability: () => ['media', 'availability'] as const,
+  },
+
+  skills: {
+    all: () => ['skills'] as const,
+    catalog: () => ['skills', 'catalog'] as const,
   },
 } as const;
 
