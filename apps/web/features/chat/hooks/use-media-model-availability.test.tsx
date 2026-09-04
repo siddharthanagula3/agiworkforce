@@ -1,6 +1,17 @@
+import type { ReactNode } from 'react';
 import { act, renderHook, waitFor } from '@testing-library/react';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { QueryClientProvider } from '@tanstack/react-query';
+import { queryClient } from '@shared/stores/query-client';
 import { useMediaModelAvailability } from './use-media-model-availability';
+
+function wrapper({ children }: { children: ReactNode }) {
+  return <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>;
+}
+
+function renderAvailabilityHook() {
+  return renderHook(() => useMediaModelAvailability(), { wrapper });
+}
 
 const validResponse = {
   catalog_version: '1',
@@ -21,9 +32,27 @@ const validResponse = {
 };
 
 describe('useMediaModelAvailability', () => {
+  beforeEach(() => {
+    queryClient.clear();
+  });
+
   afterEach(() => {
     vi.useRealTimers();
     vi.unstubAllGlobals();
+  });
+
+  it('two mounted consumers within the cache window issue one request', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(new Response(JSON.stringify(validResponse), { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const first = renderAvailabilityHook();
+    const second = renderAvailabilityHook();
+
+    await waitFor(() => expect(first.result.current.status).toBe('ready'));
+    await waitFor(() => expect(second.result.current.status).toBe('ready'));
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
   it('admits only a runtime-validated server response', async () => {
@@ -31,7 +60,7 @@ describe('useMediaModelAvailability', () => {
       'fetch',
       vi.fn().mockResolvedValue(new Response(JSON.stringify(validResponse), { status: 200 })),
     );
-    const { result } = renderHook(() => useMediaModelAvailability());
+    const { result } = renderAvailabilityHook();
 
     await waitFor(() => expect(result.current.status).toBe('ready'));
     expect(result.current.admissionFor('catalog-image-fixture')?.state).toBe('enabled');
@@ -45,7 +74,7 @@ describe('useMediaModelAvailability', () => {
       )
       .mockResolvedValueOnce(new Response(JSON.stringify(validResponse), { status: 200 }));
     vi.stubGlobal('fetch', fetchMock);
-    const { result } = renderHook(() => useMediaModelAvailability());
+    const { result } = renderAvailabilityHook();
 
     await waitFor(() => expect(result.current.status).toBe('error'));
     expect(result.current.admissionFor('catalog-image-fixture')).toBeUndefined();
@@ -61,11 +90,14 @@ describe('useMediaModelAvailability', () => {
       (_input: RequestInfo | URL, _init?: RequestInit) => new Promise<Response>(() => undefined),
     );
     vi.stubGlobal('fetch', fetchMock);
-    const { result } = renderHook(() => useMediaModelAvailability());
+    const { result } = renderAvailabilityHook();
     const signal = (fetchMock.mock.calls[0]?.[1] as RequestInit | undefined)?.signal;
 
     expect(result.current.status).toBe('loading');
-    act(() => vi.advanceTimersByTime(10_000));
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(10_000);
+      await vi.runAllTimersAsync();
+    });
 
     expect(signal?.aborted).toBe(true);
     expect(result.current.status).toBe('error');
@@ -75,7 +107,7 @@ describe('useMediaModelAvailability', () => {
 
   it('surfaces plain language instead of transport or contract detail', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('boom', { status: 500 })));
-    const { result } = renderHook(() => useMediaModelAvailability());
+    const { result } = renderAvailabilityHook();
 
     await waitFor(() => expect(result.current.status).toBe('error'), { timeout: 3_000 });
     expect(result.current.error).not.toMatch(/HTTP|500|contract|schema|payload/i);
@@ -87,7 +119,7 @@ describe('useMediaModelAvailability', () => {
       (_input: RequestInfo | URL, _init?: RequestInit) => new Promise<Response>(() => undefined),
     );
     vi.stubGlobal('fetch', fetchMock);
-    const { unmount } = renderHook(() => useMediaModelAvailability());
+    const { unmount } = renderAvailabilityHook();
     const signal = (fetchMock.mock.calls[0]?.[1] as RequestInit | undefined)?.signal;
 
     expect(signal?.aborted).toBe(false);
@@ -104,7 +136,7 @@ describe('useMediaModelAvailability', () => {
       )
       .mockResolvedValueOnce(new Response(JSON.stringify(validResponse), { status: 200 }));
     vi.stubGlobal('fetch', fetchMock);
-    const { result } = renderHook(() => useMediaModelAvailability());
+    const { result } = renderAvailabilityHook();
 
     await act(async () => {
       await Promise.resolve();
@@ -113,6 +145,7 @@ describe('useMediaModelAvailability', () => {
 
     await act(async () => {
       await vi.advanceTimersByTimeAsync(1_000);
+      await vi.runAllTimersAsync();
     });
 
     expect(fetchMock).toHaveBeenCalledTimes(2);
