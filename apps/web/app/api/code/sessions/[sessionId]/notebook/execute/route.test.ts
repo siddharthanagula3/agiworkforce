@@ -43,6 +43,7 @@ import {
   CloudCodeUnavailableError,
   CloudCodeValidationError,
 } from '@/lib/services/cloud-code-session-service';
+import { SubscriptionService } from '@/lib/services/subscription-service';
 import { POST } from './route';
 
 const SESSION_ID = '22222222-2222-4222-8222-222222222222';
@@ -117,6 +118,20 @@ describe('POST /notebook/execute', () => {
     );
     const response = await POST(request, context);
     expect(response.status).toBe(400);
+    expect(mockRunCell).not.toHaveBeenCalled();
+  });
+
+  it('refuses a delinquent enterprise workspace with the billing gate code', async () => {
+    vi.mocked(SubscriptionService.getSubscription).mockResolvedValueOnce({
+      plan_tier: 'enterprise',
+      status: 'canceled',
+    } as never);
+
+    const response = await POST(postRequest({ code: 'print(1)', language: 'python' }), context);
+
+    expect(response.status).toBe(403);
+    const body = (await response.json()) as { error: { code: string } };
+    expect(body.error.code).toBe('subscription_inactive');
     expect(mockRunCell).not.toHaveBeenCalled();
   });
 
