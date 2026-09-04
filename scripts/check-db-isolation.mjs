@@ -421,6 +421,45 @@ const ALLOWLIST = [
       'organization_members row and confirmed by isOrganizationAdminRole before the statement runs',
   },
   {
+    match: /api\/settings\/organization\/route\.ts$/,
+    tables: ['organizations'],
+    functions: ['handleDelete', 'fetchOrganizationDeletionStatus'],
+    reason:
+      'handleDelete resolves activeOrganizationId from resolveActiveOrganizationId(db, userId) ' +
+      '(the caller’s own organization_members/user_settings row) and confirms the owner role ' +
+      'via requireOrganizationOwner before any statement runs, the same pattern already accepted ' +
+      "above for handlePatch. fetchOrganizationDeletionStatus's read is called only with that " +
+      "same server-resolved id, from handleGet's own membership-scoped org.id and from " +
+      'handleDelete after the owner check, never from client input.',
+  },
+  {
+    match: /api\/settings\/organization\/deletion\/cancel\/route\.ts$/,
+    tables: ['organizations'],
+    reason:
+      'handleCancel resolves activeOrganizationId from resolveActiveOrganizationId(db, userId) ' +
+      'and confirms the owner role via requireOrganizationOwner before the update and the ' +
+      'follow-up status read run, the same pattern as handleDelete in ../route.ts above',
+  },
+  {
+    match: /lib\/server\/organization-erasure\.ts$/,
+    tables: ['media_assets'],
+    reason:
+      'eraseOrganizationMedia() deletes by id from a list it just read with ' +
+      '`where organization_id = $1`, after the storage objects are gone; the id list IS the ' +
+      'owner constraint, the same precedent as account-erasure.ts above',
+  },
+  {
+    match: /lib\/server\/organization-erasure\.ts$/,
+    tables: ['organizations'],
+    functions: ['eraseOrganizationData'],
+    reason:
+      'the final row delete runs only after every scoped child table above it (including the ' +
+      'legal-hold gate) has been cleared for this exact organizationId; the sole caller today is ' +
+      'api/cron/purge-deleted-organizations, gated by verifyCronRequest against CRON_SECRET, ' +
+      'which resolves the due list itself from organizations.deletion_scheduled_for <= now(), ' +
+      'never from client input',
+  },
+  {
     match: /lib\/services\/workspace-posture-service\.ts$/,
     tables: ['organizations'],
     reason:
