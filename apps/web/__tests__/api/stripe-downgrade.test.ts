@@ -1,4 +1,3 @@
-
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { NextRequest } from 'next/server';
 import crypto from 'crypto';
@@ -79,6 +78,8 @@ vi.mock('@/lib/price-tier-mapping', () => ({
     price_max: 'max',
   })),
   isPriceIdRegistered: vi.fn(() => true),
+  getEnterpriseProductId: vi.fn(() => null),
+  isEnterpriseProductId: vi.fn(() => false),
 }));
 
 function generateStripeSignature(
