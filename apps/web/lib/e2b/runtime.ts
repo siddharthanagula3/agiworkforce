@@ -43,8 +43,15 @@ import {
   type SandboxFileEntry,
 } from './types';
 import { e2bExecutionEnabled } from './gate';
-import { harnessCredentialSpecs } from './templates';
+import {
+  harnessCredentialSpecs,
+  harnessIsProxyCovered,
+  harnessProxyBaseUrlEnv,
+  type HarnessCredentialSpec,
+} from './templates';
 import { fullNetworkNeedsProxy } from './network-policy';
+import { providerProxyBaseUrl } from './provider-proxy';
+import { mintProviderProxyToken } from './provider-proxy-token';
 import {
   E2B_COMPUTE_RATE_ENV,
   meterSandboxComputeInterval,
@@ -184,9 +191,31 @@ function resolveManagedHarnessCredentialValue(providerId: string): string | unde
   }
 }
 
+function resolveProxiedHarnessEnvs(
+  scope: E2BSessionScope & { resource: { kind: 'code_session'; id: string } },
+  template: string,
+  spec: HarnessCredentialSpec,
+  sandboxTimeoutMs: number,
+): Record<string, string> | undefined {
+  const baseUrl = providerProxyBaseUrl(scope.resource.id);
+  if (!baseUrl) {
+    logger.error(
+      { ...scopeLog(scope), template },
+      '[e2b] provider-proxy base URL is unavailable (NEXT_PUBLIC_APP_URL unset); omitting the harness credential',
+    );
+    return undefined;
+  }
+  const token = mintProviderProxyToken(
+    { sessionId: scope.resource.id, userId: scope.userId, providerId: spec.providerId },
+    sandboxTimeoutMs,
+  );
+  return { [spec.envVar]: token, [harnessProxyBaseUrlEnv(template)!]: baseUrl };
+}
+
 function resolveHarnessEnvs(
   scope: E2BSessionScope | undefined,
   template: string | null,
+  sandboxTimeoutMs: number,
 ): Record<string, string> | undefined {
   if (!scope || !template) return undefined;
   if (scope.explicitCredential) {
@@ -194,6 +223,14 @@ function resolveHarnessEnvs(
   }
   const specs = harnessCredentialSpecs(template);
   if (specs.length === 0) return undefined;
+  if (scope.resource?.kind === 'code_session' && harnessIsProxyCovered(template)) {
+    return resolveProxiedHarnessEnvs(
+      scope as E2BSessionScope & { resource: { kind: 'code_session'; id: string } },
+      template,
+      specs[0]!,
+      sandboxTimeoutMs,
+    );
+  }
   const envs: Record<string, string> = {};
   for (const spec of specs) {
     const value = resolveManagedHarnessCredentialValue(spec.providerId);
@@ -433,7 +470,7 @@ export async function getE2BExecutor(scope?: E2BSessionScope): Promise<E2BExecut
     );
     return null;
   }
-  const harnessEnvs = resolveHarnessEnvs(scope, template);
+  const harnessEnvs = resolveHarnessEnvs(scope, template, sandboxTimeoutMs);
   const createOpts = scope
     ? {
         timeoutMs: sandboxTimeoutMs,

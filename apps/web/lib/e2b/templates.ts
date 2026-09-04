@@ -187,6 +187,41 @@ export function harnessCredentialSpecs(harnessId: string): readonly HarnessCrede
   return HARNESS_CREDENTIAL_SPECS[harnessId] ?? [];
 }
 
+/**
+ * Which sandbox env var a harness CLI honours to redirect its API traffic to a
+ * custom base URL, verified against the CLI's own docs rather than assumed by
+ * symmetry with `HARNESS_CREDENTIAL_SPECS`. Confirmed 2026-09-04:
+ *   - claude: https://code.claude.com/docs/en/env-vars documents ANTHROPIC_BASE_URL.
+ * Checked and NOT added because no such env var is documented:
+ *   - codex: base URL is config.toml-only (`model_providers.<id>.base_url`).
+ *   - droid: base URL is `~/.factory/settings.json`-only (`baseUrl`).
+ *   - amp: no documented endpoint override of any kind.
+ *   - opencode: base URL is `opencode.json`-only (`provider.<id>.options.baseURL`).
+ *   - grok: base URL is `~/.grok/config.toml`-only (`base_url`).
+ * A harness without a verified env var keeps receiving its managed key
+ * directly rather than being silently left uncovered by network-policy.ts.
+ */
+const HARNESS_PROXIED_BASE_URL_ENV: Readonly<Partial<Record<string, string>>> = {
+  claude: 'ANTHROPIC_BASE_URL',
+};
+
+export function harnessProxyBaseUrlEnv(harnessId: string): string | undefined {
+  return HARNESS_PROXIED_BASE_URL_ENV[harnessId];
+}
+
+/**
+ * A harness is proxy-covered only when it has exactly one credential spec and
+ * a verified base-URL env var: the proxy forwards to one provider per
+ * session, so a harness like opencode that can auto-detect several providers
+ * cannot be safely routed without knowing at mint time which one it will use.
+ */
+export function harnessIsProxyCovered(harnessId: string): boolean {
+  return (
+    harnessCredentialSpecs(harnessId).length === 1 &&
+    harnessProxyBaseUrlEnv(harnessId) !== undefined
+  );
+}
+
 export function knownHarnessCommandIds(): ReadonlySet<string> {
   return new Set(
     CODING_HARNESSES.filter(
