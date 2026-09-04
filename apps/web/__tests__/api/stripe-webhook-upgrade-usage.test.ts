@@ -24,6 +24,8 @@ vi.mock('@/lib/price-tier-mapping', () => ({
   isValidPlanTier: vi.fn(() => true),
   getTierMapping: vi.fn(() => ({ price_max: { tier: 'max', interval: 'monthly' } })),
   isPriceIdRegistered: vi.fn(() => true),
+  getEnterpriseProductId: vi.fn(() => null),
+  isEnterpriseProductId: vi.fn(() => false),
 }));
 import { updateSubscriptionFromStripeSubscription } from '@/app/api/stripe-webhook/lib/db';
 

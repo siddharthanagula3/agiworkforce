@@ -13,6 +13,11 @@ vi.mock('@/app/api/stripe-webhook/lib/db', () => ({
   updateSubscriptionFromStripeSubscription: updateSubscription,
   CreditService: {},
 }));
+vi.mock('@/lib/services/enterprise-billing-service', () => ({
+  syncEnterpriseContractFromSubscription: vi.fn(async () => undefined),
+  recordEnterpriseInvoiceEvent: vi.fn(async () => undefined),
+  endEnterpriseContractIfPresent: vi.fn(async () => undefined),
+}));
 
 import { dispatchStripeEvent } from '@/app/api/stripe-webhook/lib/handlers';
 
