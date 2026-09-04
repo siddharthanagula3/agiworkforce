@@ -1,6 +1,12 @@
 import { BILLING_PLAN_PRICING, modelsCatalogJson } from '@agiworkforce/types';
 import { BYOK_PROVIDERS } from '@/lib/byok-providers';
-import { BYOK_SURFACES, DESKTOP_LOCAL_RUNTIMES, SURFACE_STATUS } from '@/lib/marketing-constants';
+import {
+  AVAILABLE_NOW_LABEL,
+  BYOK_SURFACES,
+  COMING_SOON_LABEL,
+  DESKTOP_LOCAL_RUNTIMES,
+  SURFACE_STATUS,
+} from '@/lib/marketing-constants';
 import { LANE_NAMES, type LaneId } from '../system/lanes';
 import { WEB_ENTRY_HREF } from '../system/nav';
 
@@ -23,25 +29,26 @@ const catalogProviders = modelsCatalogJson.providers as unknown as Record<
 const LOCAL_SUFFIX = /\s+\(Local\)$/;
 
 export const modelName = (id: string): string => catalogModels[id]?.name ?? id;
-const providerLabel = (id: string): string =>
+export const providerLabel = (id: string): string =>
   (catalogProviders[id]?.label ?? id).replace(LOCAL_SUFFIX, '');
 
 export const CLI_HREF = '/download';
 export const PRICING_HREF = '/pricing';
 export const LOCAL_HREF = '/local';
 export const BYOK_HREF = '/byok';
+export const PRODUCT_NAME = 'AGI';
+export const CLOUD_NAME = LANE_NAMES.cloud;
 
 export const HERO = {
-  eyebrow: 'One assistant. Any model. Six surfaces.',
-  lines: ['Any model.', 'Any surface.'],
-  accent: 'You pick where it runs.',
-  lede: 'AGI is one assistant for the browser, the desktop, the phone, the terminal, Chrome and VS Code. Each request runs on hardware you own, on a provider key you already pay for, or on capacity we run. The answer says which.',
+  title: 'One AI workspace. You choose where it runs.',
+  lede: 'Work with the same assistant on the web and in your terminal. Run each request locally, through a provider key you already own, or on AGI Cloud, and see the route, model, privacy boundary and cost beneath every answer.',
   primary: { label: 'Try AGI Web', href: WEB_ENTRY_HREF },
   secondary: { label: 'Install the CLI', href: CLI_HREF },
 } as const;
 
+export const CONSOLE_URL = 'agiworkforce.com/chat';
+export const CONSOLE_FILE = { name: 'msa-2026.pdf', pages: 14 } as const;
 export const CONSOLE_PROMPT = 'Summarise this contract and flag the termination clause.';
-export const CONSOLE_ACTIVITY = 'Read msa-2026.pdf, 14 pages';
 export const CONSOLE_ANSWER = [
   {
     heading: 'Summary',
@@ -90,17 +97,10 @@ function turnCost(id: string, cached: boolean): number {
   );
 }
 
-export const LANE_MARKS: Record<LaneId, string> = { local: '◆', byok: '◇', cloud: '●' };
-
 const cachePercent = `${Math.round(EXAMPLE_TURN.cacheReadShare * 100)}%`;
 const LOCAL_RUNTIME_ID = 'ollama';
 const BYOK_PROVIDER_ID = 'anthropic';
 const CLOUD_PROVIDER_ID = 'openai';
-const GOOGLE_PROVIDER_ID = 'google';
-const DEEPSEEK_PROVIDER_ID = 'deepseek';
-const MOONSHOT_PROVIDER_ID = 'moonshot';
-const ZHIPU_PROVIDER_ID = 'zhipu';
-const XAI_PROVIDER_ID = 'xai';
 const BEST_QUALITY_TIER = 'best';
 
 function providerDefaultModelId(providerId: string): string {
@@ -118,18 +118,17 @@ const CLOUD_MODEL_ID = cheapestModelId(
   (model) => model.provider === CLOUD_PROVIDER_ID && model.qualityTier === BEST_QUALITY_TIER,
 );
 const BYOK_MODEL_ID = providerDefaultModelId(BYOK_PROVIDER_ID);
-const LOCAL_MODEL_ID = cheapestModelId(
-  (model) => model.openWeight === true && model.provider === CLOUD_PROVIDER_ID,
-);
+const LOCAL_MODEL_ID = cheapestModelId((model) => model.openWeight === true);
 
-export type ConsoleLane = {
-  lane: LaneId;
-  name: string;
-  modelId: string;
-  ranOn: string;
-  receipt: readonly string[];
-  leaves: string;
-  availableOn: string;
+export type SurfaceState = 'live' | 'pending' | 'soon';
+
+const surfaceState = (status: string): SurfaceState =>
+  status === AVAILABLE_NOW_LABEL ? 'live' : status === COMING_SOON_LABEL ? 'soon' : 'pending';
+
+export const SURFACE_STATE_LABEL: Record<SurfaceState, string> = {
+  live: AVAILABLE_NOW_LABEL,
+  pending: 'Pending',
+  soon: COMING_SOON_LABEL,
 };
 
 export const SURFACES = [
@@ -137,33 +136,31 @@ export const SURFACES = [
     name: 'Web',
     kind: 'Any browser',
     status: SURFACE_STATUS.web,
-    live: true,
+    state: surfaceState(SURFACE_STATUS.web),
     href: WEB_ENTRY_HREF,
-    blurb:
-      'Chat, projects, artifacts and cited research with nothing to install. Your account and the cloud lane live here.',
+    blurb: 'Chat, projects, artifacts and cited research with nothing to install.',
   },
   {
     name: 'CLI',
     kind: 'macOS, Linux, Windows',
     status: SURFACE_STATUS.cli,
-    live: true,
+    state: surfaceState(SURFACE_STATUS.cli),
     href: '/cli',
-    blurb:
-      'A Rust agent for the shell. Sessions resume and fork, commands run in a sandbox, and local models work offline.',
+    blurb: 'A Rust agent for the shell. Sessions resume and fork, commands run in a sandbox.',
   },
   {
     name: 'Desktop',
     kind: 'Native app',
     status: SURFACE_STATUS.desktop,
-    live: false,
+    state: surfaceState(SURFACE_STATUS.desktop),
     href: '/desktop',
-    blurb: `Local runtimes (${DESKTOP_LOCAL_RUNTIMES.label}), encrypted keys, connectors and scheduled work.`,
+    blurb: `Local runtimes (${DESKTOP_LOCAL_RUNTIMES.label}), encrypted keys and scheduled work.`,
   },
   {
     name: 'Mobile',
     kind: 'iPhone, Android',
     status: SURFACE_STATUS.mobile,
-    live: false,
+    state: surfaceState(SURFACE_STATUS.mobile),
     href: '/mobile',
     blurb: 'Local mode by default. Chats and memory stay on the phone until you move them.',
   },
@@ -171,7 +168,7 @@ export const SURFACES = [
     name: 'Chrome',
     kind: 'Side panel',
     status: SURFACE_STATUS.chrome,
-    live: false,
+    state: surfaceState(SURFACE_STATUS.chrome),
     href: '/chrome-extension',
     blurb: 'Reads the page when you ask and runs the work on the paired desktop app.',
   },
@@ -179,226 +176,234 @@ export const SURFACES = [
     name: 'VS Code',
     kind: 'Editor',
     status: SURFACE_STATUS.vscode,
-    live: false,
+    state: surfaceState(SURFACE_STATUS.vscode),
     href: '/vscode-extension',
     blurb: 'Chat with the workspace in context and review diffs before they land.',
   },
 ] as const;
 
+export type SurfaceName = (typeof SURFACES)[number]['name'];
+
 const LIVE_SURFACE_NAMES = new Set<string>(
-  SURFACES.filter((surface) => surface.live).map((surface) => surface.name),
+  SURFACES.filter((surface) => surface.state === 'live').map((surface) => surface.name),
 );
 
-const listLiveSurfaces = (candidates: readonly string[]): string => {
+export const listLiveSurfaces = (candidates: readonly SurfaceName[]): string => {
   const live = candidates.filter((name) => LIVE_SURFACE_NAMES.has(name));
   if (live.length <= 1) return live[0] ?? 'Not shipped yet';
   if (live.length === 2) return `${live[0]} and ${live[1]}`;
   return `${live.slice(0, -1).join(', ')}, and ${live[live.length - 1]}`;
 };
 
+const LANE_SURFACES: Record<LaneId, readonly SurfaceName[]> = {
+  local: ['Desktop', 'CLI'],
+  byok: ['Desktop', 'CLI', 'VS Code'],
+  cloud: ['Web', 'Desktop', 'Mobile'],
+};
+
+export const RECEIPT_LABELS = {
+  route: 'Route',
+  ranOn: 'Ran on',
+  left: 'Left the device',
+  tokens: 'Tokens',
+  model: 'Provider and model',
+  cost: 'Estimated cost',
+  surfaces: 'Available on',
+} as const;
+
+export type ReceiptKey = keyof typeof RECEIPT_LABELS;
+
+export type ConsoleLane = {
+  lane: LaneId;
+  name: string;
+  modelId: string;
+  activity: string;
+  modelLine: string;
+  receipt: Record<ReceiptKey, string>;
+};
+
+const fileActivity = (destination: string) =>
+  `Sent ${CONSOLE_FILE.name} (${CONSOLE_FILE.pages} pages) to ${destination}`;
+
 export const CONSOLE_LANES: readonly ConsoleLane[] = [
   {
     lane: 'local',
     name: LANE_NAMES.local,
     modelId: LOCAL_MODEL_ID,
-    ranOn: `${providerLabel(LOCAL_RUNTIME_ID)} on this machine`,
-    receipt: [
-      'local',
-      LOCAL_RUNTIME_ID,
-      LOCAL_MODEL_ID,
-      `${tokens(EXAMPLE_TURN.promptTokens)} in`,
-      `${tokens(EXAMPLE_TURN.completionTokens)} out`,
-      usd(0),
-    ],
-    leaves: 'Nothing left the device.',
-    availableOn: listLiveSurfaces(['Desktop', 'CLI']),
+    activity: `Read ${CONSOLE_FILE.name} on this machine, ${CONSOLE_FILE.pages} pages`,
+    modelLine: `${modelName(LOCAL_MODEL_ID)} via ${providerLabel(LOCAL_RUNTIME_ID)}`,
+    receipt: {
+      route: LANE_NAMES.local,
+      model: `${providerLabel(LOCAL_RUNTIME_ID)} · ${modelName(LOCAL_MODEL_ID)}`,
+      ranOn: 'This machine',
+      left: 'Nothing',
+      tokens: `${tokens(EXAMPLE_TURN.promptTokens)} in · ${tokens(EXAMPLE_TURN.completionTokens)} out`,
+      cost: usd(0),
+      surfaces: listLiveSurfaces(LANE_SURFACES.local),
+    },
   },
   {
     lane: 'byok',
     name: LANE_NAMES.byok,
     modelId: BYOK_MODEL_ID,
-    ranOn: `${providerLabel(BYOK_PROVIDER_ID)}, on your own key`,
-    receipt: [
-      'byok',
-      BYOK_PROVIDER_ID,
-      BYOK_MODEL_ID,
-      `${tokens(EXAMPLE_TURN.promptTokens)} in`,
-      `${tokens(EXAMPLE_TURN.completionTokens)} out`,
-      `${usd(turnCost(BYOK_MODEL_ID, false))} on your ${providerLabel(BYOK_PROVIDER_ID)} bill`,
-    ],
-    leaves: `The prompt and the file went to ${providerLabel(BYOK_PROVIDER_ID)}. Nothing went to us.`,
-    availableOn: listLiveSurfaces(['Desktop', 'CLI', 'VS Code']),
+    activity: fileActivity(`${providerLabel(BYOK_PROVIDER_ID)} on your key`),
+    modelLine: `${modelName(BYOK_MODEL_ID)} on your ${providerLabel(BYOK_PROVIDER_ID)} account`,
+    receipt: {
+      route: LANE_NAMES.byok,
+      model: `${providerLabel(BYOK_PROVIDER_ID)} · ${modelName(BYOK_MODEL_ID)}`,
+      ranOn: `${providerLabel(BYOK_PROVIDER_ID)}, on your account`,
+      left: `Prompt and file, to ${providerLabel(BYOK_PROVIDER_ID)} only`,
+      tokens: `${tokens(EXAMPLE_TURN.promptTokens)} in · ${tokens(EXAMPLE_TURN.completionTokens)} out`,
+      cost: `${usd(turnCost(BYOK_MODEL_ID, false))} on your ${providerLabel(BYOK_PROVIDER_ID)} bill`,
+      surfaces: listLiveSurfaces(LANE_SURFACES.byok),
+    },
   },
   {
     lane: 'cloud',
     name: LANE_NAMES.cloud,
     modelId: CLOUD_MODEL_ID,
-    ranOn: `${providerLabel(CLOUD_PROVIDER_ID)}, on capacity we run`,
-    receipt: [
-      'cloud',
-      CLOUD_PROVIDER_ID,
-      CLOUD_MODEL_ID,
-      `cache read ${cachePercent}`,
-      `${tokens(EXAMPLE_TURN.completionTokens)} out`,
-      usd(turnCost(CLOUD_MODEL_ID, true)),
-    ],
-    leaves: 'Metered per turn and shown on the answer. Sign in and start, no waitlist.',
-    availableOn: listLiveSurfaces(['Web', 'Desktop', 'Mobile']),
+    activity: fileActivity(CLOUD_NAME),
+    modelLine: `${modelName(CLOUD_MODEL_ID)} on ${CLOUD_NAME}`,
+    receipt: {
+      route: LANE_NAMES.cloud,
+      model: `${providerLabel(CLOUD_PROVIDER_ID)} · ${modelName(CLOUD_MODEL_ID)}`,
+      ranOn: `${CLOUD_NAME}, capacity we run`,
+      left: 'Prompt and file, to the provider we route to',
+      tokens: `${tokens(EXAMPLE_TURN.promptTokens)} in (${cachePercent} cached) · ${tokens(EXAMPLE_TURN.completionTokens)} out`,
+      cost: `${usd(turnCost(CLOUD_MODEL_ID, true))} metered on your plan`,
+      surfaces: listLiveSurfaces(LANE_SURFACES.cloud),
+    },
   },
 ];
 
 export const CATALOG_MODEL_COUNT = Object.keys(catalogModels).length;
 export const PROVIDER_INTEGRATION_COUNT = Object.keys(catalogProviders).length;
 
-export const FACTS = [
-  `${CATALOG_MODEL_COUNT} models in one catalog`,
-  `${PROVIDER_INTEGRATION_COUNT} providers and local runtimes`,
-  `${SURFACES.length} surfaces, one account`,
-  'prompt cache hits priced on every route',
-  'a receipt under every answer',
-] as const;
-
-export const ROUTER = {
-  eyebrow: 'Routing',
-  title: 'Every model, one router,',
-  accent: 'your rules.',
-  policies: [
-    {
-      label: 'Exact means exact',
-      body: 'Ask for a model by name and that model answers. Nothing substitutes behind your back.',
-    },
-    {
-      label: 'Cheapest clean route',
-      body: 'Auto takes the lowest-cost route whose terms allow it, and counts prompt-cache hits before it decides.',
-    },
-    {
-      label: 'The label travels',
-      body: 'Provider, model, cost and cache hit are recorded when the answer finishes and printed under it.',
-    },
-  ],
-} as const;
-
-export const ROUTER_MODEL_IDS = [
-  CLOUD_MODEL_ID,
-  BYOK_MODEL_ID,
-  providerDefaultModelId(GOOGLE_PROVIDER_ID),
-  providerDefaultModelId(DEEPSEEK_PROVIDER_ID),
-  providerDefaultModelId(MOONSHOT_PROVIDER_ID),
-  providerDefaultModelId(ZHIPU_PROVIDER_ID),
-  providerDefaultModelId(XAI_PROVIDER_ID),
-  LOCAL_MODEL_ID,
-] as const;
-
-export type RouterRoute = {
-  modelId: string;
-  lane: LaneId;
-  via: string;
-  surface: string;
-  note: string;
-};
-
-export const ROUTER_ROUTES: readonly RouterRoute[] = [
-  {
-    modelId: CLOUD_MODEL_ID,
-    lane: 'cloud',
-    via: CLOUD_PROVIDER_ID,
-    surface: 'Web',
-    note: 'cache read 99%',
-  },
-  { modelId: BYOK_MODEL_ID, lane: 'byok', via: BYOK_PROVIDER_ID, surface: 'CLI', note: 'your key' },
-  {
-    modelId: LOCAL_MODEL_ID,
-    lane: 'local',
-    via: LOCAL_RUNTIME_ID,
-    surface: 'CLI',
-    note: 'nothing left the device',
-  },
-  {
-    modelId: providerDefaultModelId(DEEPSEEK_PROVIDER_ID),
-    lane: 'cloud',
-    via: DEEPSEEK_PROVIDER_ID,
-    surface: 'Web',
-    note: 'cache read 94%',
-  },
-  {
-    modelId: providerDefaultModelId(MOONSHOT_PROVIDER_ID),
-    lane: 'cloud',
-    via: MOONSHOT_PROVIDER_ID,
-    surface: 'Desktop',
-    note: 'metered',
-  },
-];
-
-export const LANES = {
-  eyebrow: 'Where it runs',
-  title: 'Three places.',
-  accent: 'One receipt.',
+export const ROUTES = {
+  title: 'Every answer comes with a receipt.',
+  lede: 'Three routes, one workspace. The route is recorded when the answer finishes and printed under it, so the same question answered three ways reads as three different receipts.',
   columns: [
     {
       lane: 'local' as LaneId,
-      title: 'On hardware you own',
+      title: LANE_NAMES.local,
       cta: { label: 'Run AGI locally', href: LOCAL_HREF },
     },
     {
       lane: 'byok' as LaneId,
-      title: 'On your provider account',
+      title: LANE_NAMES.byok,
       cta: { label: 'Bring your key', href: BYOK_HREF },
     },
     {
       lane: 'cloud' as LaneId,
-      title: 'On capacity we run',
+      title: LANE_NAMES.cloud,
       cta: { label: 'Start on the web', href: WEB_ENTRY_HREF },
     },
   ],
   rows: [
     {
-      label: 'What runs it',
+      label: 'Where it runs',
       values: [
-        DESKTOP_LOCAL_RUNTIMES.label,
-        `${BYOK_PROVIDERS.length} providers, from one key list`,
-        'Whatever the router picks, named on the answer',
-      ],
-    },
-    {
-      label: 'Where the key lives',
-      values: [
-        'There is no key and no account',
-        'Desktop encrypted storage, the CLI keyring, VS Code SecretStorage',
-        'With us. You never hold it',
-      ],
-    },
-    {
-      label: 'What it costs',
-      values: [
-        usd(0),
-        'Whatever your provider charges. We are not in the payment path',
-        'Metered, and shown per turn',
+        `Your hardware, through ${DESKTOP_LOCAL_RUNTIMES.label}`,
+        `Your account at one of ${BYOK_PROVIDERS.length} providers, from one key list`,
+        'Capacity we run. The router names the provider and model on the answer',
       ],
     },
     {
       label: 'What leaves the device',
       values: [
-        'Nothing, until you send it. Moving a session to another lane is an explicit fork with a preview and a secret scan',
-        'Your prompt, straight to your provider',
-        'Your prompt, to the provider we route it to',
+        'Nothing. Moving a session to another route is an explicit fork with a preview and a secret scan',
+        'Your prompt and files, straight to your provider',
+        'Your prompt and files, to the provider we route to',
       ],
     },
     {
-      label: 'Available on',
+      label: 'Who bills the usage',
       values: [
-        listLiveSurfaces(['Desktop', 'CLI']),
-        `${listLiveSurfaces(['Desktop', 'CLI', 'VS Code'])}. ${BYOK_SURFACES.exclusion}`,
-        `${listLiveSurfaces(['Web', 'Desktop', 'Mobile'])}. Auto Economy is free with no card`,
+        'No one. There is no key and no account',
+        'Your provider. We are not in the payment path',
+        'Your AGI plan, metered per turn',
+      ],
+    },
+    {
+      label: 'Surfaces today',
+      values: [
+        listLiveSurfaces(LANE_SURFACES.local),
+        `${listLiveSurfaces(LANE_SURFACES.byok)}. ${BYOK_SURFACES.exclusion}`,
+        `${listLiveSurfaces(LANE_SURFACES.cloud)}. The free plan needs no card`,
       ],
     },
   ],
 } as const;
 
+export const MODELS_SECTION = {
+  title: 'Every model. One composer.',
+  lede: `Pick any of ${CATALOG_MODEL_COUNT} models by name and that model answers, nothing substitutes behind your back. Or leave it on Auto and the router takes the lowest-cost route whose terms allow it, counting prompt-cache hits before it decides.`,
+  points: [
+    { title: 'Exact means exact', body: 'Ask for a model by name and that model answers.' },
+    {
+      title: 'Auto is priced before it routes',
+      body: 'The router weighs cost, terms and cache hits, then names its choice on the receipt.',
+    },
+    {
+      title: `${PROVIDER_INTEGRATION_COUNT} providers and local runtimes`,
+      body: 'One catalog, one price sheet, one picker that shows what each model supports.',
+    },
+  ],
+  image: {
+    dark: '/product/models-dark-landing.png',
+    alt: 'The AGI model picker open over the composer, listing models with their capabilities',
+    width: 2240,
+    height: 1400,
+    url: CONSOLE_URL,
+  },
+} as const;
+
+export const WORK = {
+  title: 'Built for work you can verify.',
+  lede: 'The parts of the workspace that make an answer checkable are product features, not promises.',
+  items: [
+    {
+      title: 'Research that cites',
+      body: 'A report with numbered sources you can open, written after the searches you can see. It is a mode on the composer, not a separate product.',
+      image: {
+        light: '/product/deep-research-report-light.png',
+        dark: '/product/deep-research-report-dark.png',
+        alt: 'A deep research report in AGI with the search plan marked done and numbered citations in the text',
+        width: 2392,
+        height: 1402,
+      },
+      url: CONSOLE_URL,
+    },
+    {
+      title: 'Agents that stop and ask',
+      body: 'Anything that writes, deletes, runs code or can move data out waits for you. Read-only actions can run on their own if you choose, and a blocked tool stays blocked.',
+      image: {
+        light: '/product/agents-tool-approvals-light.png',
+        dark: '/product/agents-tool-approvals-dark.png',
+        alt: 'The tool approvals setting in AGI, with ask before every action selected',
+        width: 1132,
+        height: 584,
+      },
+      url: 'agiworkforce.com/settings',
+    },
+    {
+      title: 'Memory you can read',
+      body: 'Every remembered fact is listed with where it came from. Edit it, delete it, or switch a whole source off.',
+      image: {
+        light: '/product/memory-settings-light.png',
+        dark: '/product/memory-settings-dark.png',
+        alt: 'The memory settings panel in AGI, listing where memories come from',
+        width: 1720,
+        height: 1360,
+      },
+      url: 'agiworkforce.com/settings',
+    },
+  ],
+} as const;
+
 export const SURFACES_SECTION = {
-  eyebrow: 'Six surfaces',
-  title: 'One workspace,',
-  accent: 'wherever the work is.',
-  lede: 'Projects, memory and artifacts follow you between surfaces. The release state printed beside each one comes from the download page, not from a claim typed here.',
+  title: 'Start here. Continue anywhere.',
+  lede: 'Projects, memory and artifacts follow your account between surfaces. The release state beside each one is the same value the download page shows.',
 } as const;
 
 export const WEB_SHOT = {
@@ -407,7 +412,7 @@ export const WEB_SHOT = {
   alt: 'AGI Web showing the projects view, with chat, code, projects, library and schedules in the sidebar',
   width: 2880,
   height: 1300,
-  url: 'agiworkforce.com/chat',
+  url: CONSOLE_URL,
 } as const;
 
 export const MOBILE_SHOT = {
@@ -422,74 +427,35 @@ export const CLI_VERSION = '1.7.1';
 export const CLI_TRANSCRIPT = [
   { kind: 'cmd', text: 'agi --version' },
   { kind: 'out', text: `agi ${CLI_VERSION}` },
-  { kind: 'cmd', text: 'agi --help' },
-  { kind: 'out', text: 'Multi-provider AI agent for your terminal.' },
-  { kind: 'dim', text: 'Usage: agi [OPTIONS] [PROMPT] [COMMAND]' },
-  { kind: 'dim', text: '  exec        Run non-interactively' },
-  { kind: 'dim', text: '  review      Non-interactive code review' },
-  { kind: 'dim', text: '  apply       Apply latest diff as git patch' },
-  { kind: 'dim', text: '  sandbox     Run commands inside a sandbox' },
-  { kind: 'dim', text: '  resume      Continue previous session' },
-  { kind: 'dim', text: '  fork        Fork a previous session' },
-  { kind: 'dim', text: '  models      Manage and inspect model configuration' },
-  { kind: 'dim', text: '  approvals   Manage command and file-operation approvals' },
-  { kind: 'dim', text: '  login       Login to AGI cloud, or an LLM provider via OAuth' },
-  { kind: 'dim', text: '  doctor      Run local preflight diagnostics' },
+  { kind: 'cmd', text: `agi -p ${LOCAL_RUNTIME_ID} -m ${LOCAL_MODEL_ID} "${CONSOLE_PROMPT}"` },
+  { kind: 'dim', text: `read ${CONSOLE_FILE.name} · ${CONSOLE_FILE.pages} pages · local` },
+  { kind: 'out', text: 'Termination: 30 days for convenience, 10 days for breach with cure.' },
   {
-    kind: 'cmd',
-    text: `agi -p ${LOCAL_RUNTIME_ID} -m ${LOCAL_MODEL_ID} "${CONSOLE_PROMPT}"`,
+    kind: 'dim',
+    text: `receipt  local · ${LOCAL_RUNTIME_ID} · ${LOCAL_MODEL_ID} · ${tokens(EXAMPLE_TURN.promptTokens)} in · ${tokens(EXAMPLE_TURN.completionTokens)} out · ${usd(0)}`,
   },
 ] as const;
 
-export const MOMENTS = {
-  eyebrow: 'The work',
-  title: 'Built for the work,',
-  accent: 'not the chat.',
-  items: [
-    {
-      title: 'Research that cites',
-      body: 'A report with sources you can check, rather than a paragraph you have to trust. It is a mode on the composer, not a separate product.',
-      image: {
-        light: '/product/deep-research-report-light.png',
-        dark: '/product/deep-research-report-dark.png',
-        alt: 'A deep research report in AGI with numbered citations and a sources panel',
-        width: 2392,
-        height: 1402,
-      },
-      caption: ['Composer', 'Deep research'],
-    },
-    {
-      title: 'Agents that stop and ask',
-      body: 'An agent is a file that names the tools it may touch. Anything that writes, deletes, runs code or can move data out waits for you, and the dialog opens with the cursor on No.',
-      image: {
-        light: '/product/agents-tool-approvals-light.png',
-        dark: '/product/agents-tool-approvals-dark.png',
-        alt: 'The tool approvals setting in AGI, with ask before every action selected',
-        width: 1132,
-        height: 584,
-      },
-      caption: ['Settings', 'Tool approvals'],
-    },
-    {
-      title: 'Memory you can read',
-      body: 'Facts come from what you wrote, what a chat captured and what you imported. Every one is listed, editable, and can be switched off by source.',
-      image: {
-        light: '/product/memory-settings-light.png',
-        dark: '/product/memory-settings-dark.png',
-        alt: 'The memory settings panel in AGI, listing where memories come from',
-        width: 1720,
-        height: 1360,
-      },
-      caption: ['Settings', 'Memory'],
-    },
-  ],
-} as const;
-
 const monthly = (value: number) => `$${value}`;
 
-export const PLANS = {
-  title: 'Pay for the cloud lane only.',
-  body: 'Local costs nothing. Your own key is billed by your provider. These plans buy capacity on ours.',
+export const PRICING = {
+  title: 'Pay only for the cloud lane.',
+  lede: 'Local runs on hardware you already own. Your key is billed by your provider at their rates. Plans buy capacity on ours.',
+  lanes: [
+    { lane: 'local' as LaneId, name: LANE_NAMES.local, value: usd(0), note: 'No account needed' },
+    {
+      lane: 'byok' as LaneId,
+      name: LANE_NAMES.byok,
+      value: 'Provider rates',
+      note: 'We are not in the payment path',
+    },
+    {
+      lane: 'cloud' as LaneId,
+      name: LANE_NAMES.cloud,
+      value: 'Plans below',
+      note: 'Metered per turn',
+    },
+  ],
   tiers: [
     {
       name: BILLING_PLAN_PRICING.free.label,
@@ -516,86 +482,6 @@ export const PLANS = {
 } as const;
 
 export const CLOSE = {
-  title: 'Start on the web.',
-  accent: 'Move the session anywhere.',
-  body: 'AGI Web needs no install. The CLI is signed and downloadable now. Whichever you open, the answer says which computer produced it.',
-} as const;
-
-export const FACT_CARDS = [
-  { value: `${CATALOG_MODEL_COUNT}`, label: 'models in one catalog, priced from one sheet.' },
-  {
-    value: `${PROVIDER_INTEGRATION_COUNT}`,
-    label: 'providers and local runtimes behind one composer.',
-  },
-  {
-    value: `${SURFACES.length}`,
-    label: 'surfaces on one account: web, CLI, desktop, mobile, Chrome, VS Code.',
-  },
-  {
-    value: cachePercent,
-    label: 'of the example turn served from prompt cache, and priced that way.',
-  },
-] as const;
-
-export const STEPS = {
-  eyebrow: 'Getting started',
-  title: 'Two commands,',
-  accent: 'then it runs.',
-  lede: 'Nothing to migrate. The CLI is a signed archive, the web app needs no install, and the first prompt works on a laptop model before you add a key.',
-  items: [
-    {
-      title: 'Get the CLI or open the web app',
-      body: `Signed archives for macOS, Linux and Windows on the download page, version ${CLI_VERSION} today.`,
-    },
-    {
-      title: 'Pick a lane',
-      body: 'A model on your hardware, your own provider key in the OS keyring, or sign in for the cloud lane.',
-    },
-    {
-      title: 'Run a prompt',
-      body: 'The answer prints with the provider, the model, the cost and the cache hit under it.',
-    },
-  ],
-} as const;
-
-export const WIDE = {
-  models: {
-    eyebrow: 'The catalog',
-    title: 'Every model',
-    accent: 'behind one composer.',
-    lede: `Search ${CATALOG_MODEL_COUNT} models by capability, see what each one supports before you pick it, and switch mid-thread without losing the conversation.`,
-    image: {
-      dark: '/product/models-dark-landing.png',
-      alt: 'The AGI model picker open over the composer, listing models with their capabilities',
-      width: 2240,
-      height: 1400,
-    },
-    caption: ['Composer', 'Model picker', 'Capabilities per model'],
-  },
-  sources: {
-    eyebrow: 'Sources',
-    title: 'Answers that',
-    accent: 'show their sources.',
-    lede: 'When a model searches, the answer carries the pages it read as chips you can open, and the footer names the model that wrote it.',
-    image: {
-      dark: '/product/sources-dark-landing.png',
-      alt: 'An AGI answer with inline source chips, a code block and a sources count',
-      width: 2360,
-      height: 870,
-    },
-    caption: ['Chat', 'Web search', 'Inline citations'],
-  },
-  code: {
-    eyebrow: 'Code',
-    title: 'A workspace',
-    accent: 'that is not your laptop.',
-    lede: 'Attach a public repository, pick the coding agent you already use, and it runs in an isolated environment that never sees your keys or local files.',
-    image: {
-      dark: '/product/code-dark-landing.png',
-      alt: 'The AGI managed code page with the new session form and the coding harness picker',
-      width: 2880,
-      height: 1400,
-    },
-    caption: ['Code', 'Isolated workspace', 'Your harness'],
-  },
+  title: 'Start on the web. Continue in the terminal.',
+  body: 'AGI Web needs no install. The CLI is signed and downloadable now. Whichever you open, the answer says where it ran.',
 } as const;

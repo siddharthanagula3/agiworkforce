@@ -1,5 +1,7 @@
 import Image from 'next/image';
 
+const DEFAULT_SIZES = '(max-width: 900px) 100vw, 50vw';
+
 export function ProductFrame({
   src,
   srcLight,
@@ -8,6 +10,7 @@ export function ProductFrame({
   height,
   caption,
   priority,
+  sizes = DEFAULT_SIZES,
 }: {
   src: string;
   srcLight?: string;
@@ -16,8 +19,8 @@ export function ProductFrame({
   height: number;
   caption?: readonly string[];
   priority?: boolean;
+  sizes?: string;
 }) {
-  const sizes = '(max-width: 900px) 100vw, 50vw';
   return (
     <figure className="agi-ds-frame" data-paired={srcLight ? 'true' : undefined}>
       <Image

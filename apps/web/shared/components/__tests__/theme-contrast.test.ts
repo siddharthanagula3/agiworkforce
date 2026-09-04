@@ -904,3 +904,74 @@ describe('foundation layer', () => {
     }
   });
 });
+
+describe('the landing page palette clears AA in both themes', () => {
+  const homeBlock = (selector: string): string => {
+    const at = globalsCss.indexOf(`${selector} {`);
+    if (at === -1) throw new Error(`globals.css declares no ${selector} block`);
+    const open = globalsCss.indexOf('{', at);
+    const close = globalsCss.indexOf('}', open);
+    return globalsCss.slice(open + 1, close);
+  };
+
+  const THEMES = {
+    dark: homeBlock("[data-design='agi'].agi-home"),
+    light: homeBlock(
+      "[data-theme='light'] [data-design='agi'].agi-home,\n[data-theme='light'][data-design='agi'].agi-home",
+    ),
+  };
+
+  const GROUNDS = ['--agi-ground', '--agi-ground-2', '--agi-ground-3'] as const;
+  const TEXTS = ['--agi-ink', '--agi-ink-2', '--agi-ink-3', '--agi-accent-text'] as const;
+  const LANES = ['local', 'byok', 'cloud'] as const;
+
+  for (const [theme, block] of Object.entries(THEMES)) {
+    for (const ground of GROUNDS) {
+      const surface = colorToken(block, ground);
+      for (const text of TEXTS) {
+        it(`${theme}: ${text} on ${ground} >= 4.5:1`, () => {
+          expect(contrastRatio(colorToken(block, text), surface)).toBeGreaterThanOrEqual(
+            WCAG_AA_NORMAL,
+          );
+        });
+      }
+      for (const lane of LANES) {
+        it(`${theme}: --agi-lane-${lane}-text on ${ground} >= 4.5:1`, () => {
+          expect(
+            contrastRatio(colorToken(block, `--agi-lane-${lane}-text`), surface),
+          ).toBeGreaterThanOrEqual(WCAG_AA_NORMAL);
+        });
+      }
+    }
+
+    for (const fill of ['--agi-accent', '--agi-accent-hover'] as const) {
+      it(`${theme}: --agi-accent-ink on ${fill} >= 4.5:1`, () => {
+        expect(
+          contrastRatio(colorToken(block, '--agi-accent-ink'), colorToken(block, fill)),
+        ).toBeGreaterThanOrEqual(WCAG_AA_NORMAL);
+      });
+    }
+
+    for (const lane of LANES) {
+      it(`${theme}: --agi-lane-${lane}-on-primary on --agi-lane-${lane} >= 4.5:1`, () => {
+        expect(
+          contrastRatio(
+            colorToken(block, `--agi-lane-${lane}-on-primary`),
+            colorToken(block, `--agi-lane-${lane}`),
+          ),
+        ).toBeGreaterThanOrEqual(WCAG_AA_NORMAL);
+      });
+
+      it(`${theme}: the --agi-lane-${lane} mark stays visible on --agi-ground (>= 3:1)`, () => {
+        expect(
+          contrastRatio(colorToken(block, `--agi-lane-${lane}`), colorToken(block, '--agi-ground')),
+        ).toBeGreaterThanOrEqual(WCAG_AA_LARGE);
+      });
+    }
+
+    it(`${theme}: the button tokens point at the accent`, () => {
+      expect(token(block, '--agi-button-bg')).toBe('var(--agi-accent)');
+      expect(token(block, '--agi-button-ink')).toBe('var(--agi-accent-ink)');
+    });
+  }
+});
