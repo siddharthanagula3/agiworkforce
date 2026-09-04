@@ -462,6 +462,40 @@ async function recordScimMembershipAudit(
   });
 }
 
+type ScimResourceEventType =
+  | 'scim_user_provisioned'
+  | 'scim_user_updated'
+  | 'scim_user_deprovisioned'
+  | 'scim_group_provisioned'
+  | 'scim_group_updated'
+  | 'scim_group_deprovisioned';
+
+async function recordScimResourceAudit(
+  ctx: ScimConnectionContext,
+  eventType: ScimResourceEventType,
+  resourceType: 'scim_provisioned_user' | 'scim_group',
+  resourceId: string,
+  resourceName: string | null,
+  status?: 'active' | 'inactive',
+): Promise<void> {
+  const deprovisioned =
+    eventType === 'scim_user_deprovisioned' || eventType === 'scim_group_deprovisioned';
+  await recordAuditEvent({
+    userId: null,
+    eventType,
+    organizationId: ctx.organizationId,
+    severity: deprovisioned || status === 'inactive' ? 'warning' : 'info',
+    detail: {
+      resourceType,
+      resourceId,
+      ...(resourceName ? { resourceName } : {}),
+      ...(status ? { status } : {}),
+      ...(ctx.tokenId ? { subjectRef: `scim_token:${ctx.tokenId}` } : {}),
+      source: 'scim',
+    },
+  });
+}
+
 export async function reconcileMembership(
   db: DatabaseAdapter,
   ctx: ScimConnectionContext,
@@ -670,6 +704,13 @@ export async function createScimUser(
       membershipGranted: outcome.membershipGranted,
     },
   });
+  await recordScimResourceAudit(
+    ctx,
+    'scim_user_provisioned',
+    'scim_provisioned_user',
+    row.id,
+    row.user_name,
+  );
 
   return (await getScimUser(db, ctx, row.id)) ?? row;
 }
@@ -747,6 +788,14 @@ export async function replaceScimUser(
       revocationWarnings,
     },
   });
+  await recordScimResourceAudit(
+    ctx,
+    'scim_user_updated',
+    'scim_provisioned_user',
+    row.id,
+    row.user_name,
+    row.active ? 'active' : 'inactive',
+  );
 
   return (await getScimUser(db, ctx, row.id)) ?? row;
 }
@@ -974,6 +1023,14 @@ export async function patchScimUser(
       revocationWarnings,
     },
   });
+  await recordScimResourceAudit(
+    ctx,
+    'scim_user_updated',
+    'scim_provisioned_user',
+    row.id,
+    row.user_name,
+    row.active ? 'active' : 'inactive',
+  );
 
   return (await getScimUser(db, ctx, row.id)) ?? row;
 }
@@ -1027,6 +1084,13 @@ export async function deleteScimUser(
       revocationWarnings,
     },
   });
+  await recordScimResourceAudit(
+    ctx,
+    'scim_user_deprovisioned',
+    'scim_provisioned_user',
+    userId,
+    existing.user_name,
+  );
 }
 
 const GROUP_COLUMNS = `id, connection_id, organization_id, external_id, display_name,
@@ -1439,6 +1503,13 @@ export async function createScimGroup(
       members: input.memberIds.length,
     },
   });
+  await recordScimResourceAudit(
+    ctx,
+    'scim_group_provisioned',
+    'scim_group',
+    row.id,
+    row.display_name,
+  );
 
   return row;
 }
@@ -1490,6 +1561,7 @@ export async function replaceScimGroup(
     eventType: 'group.updated',
     payload: { scimGroupId: groupId, members: input.memberIds.length },
   });
+  await recordScimResourceAudit(ctx, 'scim_group_updated', 'scim_group', row.id, row.display_name);
 
   return row;
 }
@@ -1624,6 +1696,7 @@ export async function patchScimGroup(
     eventType: 'group.updated',
     payload: { scimGroupId: groupId, operations: operations.length },
   });
+  await recordScimResourceAudit(ctx, 'scim_group_updated', 'scim_group', row.id, row.display_name);
 
   return row;
 }
@@ -1656,4 +1729,11 @@ export async function deleteScimGroup(
     eventType: 'group.deprovisioned',
     payload: { scimGroupId: groupId, members: members.length },
   });
+  await recordScimResourceAudit(
+    ctx,
+    'scim_group_deprovisioned',
+    'scim_group',
+    groupId,
+    existing.display_name,
+  );
 }
