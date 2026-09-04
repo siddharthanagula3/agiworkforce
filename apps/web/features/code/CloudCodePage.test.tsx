@@ -149,7 +149,7 @@ describe('CloudCodePage', () => {
     // choice is informed rather than a bare template name
     expect(
       screen.getByRole('option', {
-        name: 'codex \u2014 OpenAI\u2019s coding agent CLI. \u00b7 4 vCPU, 8 GB RAM',
+        name: 'codex, OpenAI\u2019s coding agent CLI. \u00b7 4 vCPU, 8 GB RAM',
       }),
     ).toBeInTheDocument();
     // agents and plain environments are told apart
