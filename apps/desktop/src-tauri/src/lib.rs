@@ -217,7 +217,8 @@ pub fn run() {
         .plugin(tauri_plugin_clipboard_manager::init())
         .plugin(tauri_plugin_window_state::Builder::default().build())
         .plugin(tauri_plugin_notification::init())
-        .plugin(tauri_plugin_global_shortcut::Builder::new().build());
+        .plugin(tauri_plugin_global_shortcut::Builder::new().build())
+        .plugin(tauri_plugin_autostart::Builder::new().build());
 
     // Shell plugin - disabled for App Store builds (sandbox restrictions)
     #[cfg(feature = "shell")]
@@ -1403,6 +1404,9 @@ pub fn run() {
             crate::sys::commands::window_set_fullscreen,
             crate::sys::commands::window_toggle_floating,
             crate::sys::commands::window_close_floating,
+
+            crate::sys::commands::autostart_get_enabled,
+            crate::sys::commands::autostart_set_enabled,
 
             crate::sys::commands::chat_create_conversation,
             crate::sys::commands::chat_get_conversations,

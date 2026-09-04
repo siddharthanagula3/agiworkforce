@@ -13,6 +13,10 @@ vi.mock('@agiworkforce/desktop-command-client', () => ({
     windowGetState: vi.fn(async () => ({ keepInMenuBar: true })),
     windowSetMenuBarMode: vi.fn(async () => undefined),
   },
+  autostart: {
+    autostartGetEnabled: vi.fn(async () => false),
+    autostartSetEnabled: vi.fn(async () => undefined),
+  },
 }));
 
 vi.mock('@/features/resource-monitor', () => ({ ResourceMonitor: () => <div /> }));

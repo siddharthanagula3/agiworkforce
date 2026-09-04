@@ -43,6 +43,7 @@ tauri-plugin-process = "2.3.1"
 tauri-plugin-fs = "2.5.1"
 tauri-plugin-dialog = "2.7.1"
 tauri-plugin-updater = { version = "2.10.0", optional = true }
+tauri-plugin-autostart = "2.5.1"
 # Embedded WebDriver server for WebdriverIO E2E testing (https://webdriver.io/docs/desktop-testing/tauri).
 # Cargo has no supported way to gate a *dependency* on cfg(debug_assertions), only
 # target-family cfgs are allowed there (confirmed: using it emits "will not work as

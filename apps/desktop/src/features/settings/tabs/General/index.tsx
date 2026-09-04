@@ -2,7 +2,7 @@ import { Suspense, lazy, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Cloud, Loader2, Shield } from 'lucide-react';
 import { formatChatExecutionModeLabel } from '@agiworkforce/types';
-import { window as desktopWindow } from '@agiworkforce/desktop-command-client';
+import { autostart, window as desktopWindow } from '@agiworkforce/desktop-command-client';
 import { toast } from 'sonner';
 import { isTauri, isCloudWeb, isElectronHost } from '@/lib/tauri-mock';
 import { Button } from '@/ui/Button';
@@ -231,6 +231,78 @@ export function MenuBarResidencySetting() {
   );
 }
 
+export function LaunchAtLoginSetting() {
+  const [enabled, setEnabled] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [updating, setUpdating] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    void autostart
+      .autostartGetEnabled()
+      .then((value) => {
+        if (!cancelled) setEnabled(value);
+      })
+      .catch((cause) => {
+        if (cancelled) return;
+        console.error('Failed to load launch-at-login preference', cause);
+        setError('Could not load the launch-at-login preference.');
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const handleChange = async (nextEnabled: boolean) => {
+    const previous = enabled;
+    setEnabled(nextEnabled);
+    setUpdating(true);
+    setError(null);
+    try {
+      await autostart.autostartSetEnabled(nextEnabled);
+    } catch (cause) {
+      console.error('Failed to update launch-at-login preference', cause);
+      setEnabled(previous);
+      setError('Could not update the launch-at-login preference.');
+      toast.error('Could not update the launch-at-login preference');
+    } finally {
+      setUpdating(false);
+    }
+  };
+
+  return (
+    <div
+      className="rounded-lg border border-border bg-card p-6"
+      data-setting-search-id="launch-at-login"
+      tabIndex={-1}
+    >
+      <div className="flex items-center justify-between gap-6">
+        <div className="min-w-0 space-y-0.5">
+          <Label htmlFor="launchAtLogin">Launch at login</Label>
+          <p className="text-xs text-muted-foreground">
+            Start AGI Workforce automatically when you sign in to this device.
+          </p>
+        </div>
+        <Switch
+          id="launchAtLogin"
+          checked={enabled}
+          disabled={loading || updating}
+          onCheckedChange={(value) => void handleChange(value)}
+        />
+      </div>
+      {error && (
+        <p className="mt-3 text-xs text-destructive" role="alert">
+          {error}
+        </p>
+      )}
+    </div>
+  );
+}
+
 export interface GeneralTabProps {
   resolvedWindowPreferences: { theme: string; language: string };
   resolvedGlobalHotkeyPreferences: GlobalHotkeyPreferences;
@@ -274,6 +346,7 @@ export function GeneralTab({
           </p>
           <div className="space-y-6">
             <MenuBarResidencySetting />
+            <LaunchAtLoginSetting />
 
             <div className="rounded-lg border border-border bg-card p-6 space-y-4">
               <h4 className="font-semibold">Global Hotkey</h4>

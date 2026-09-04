@@ -160,6 +160,8 @@ export const REGISTERED_COMMANDS: ReadonlySet<string> = new Set([
   'automation_set_value',
   'automation_toggle',
   'automation_type',
+  'autostart_get_enabled',
+  'autostart_set_enabled',
   'background_agent_cancel',
   'background_agent_cleanup',
   'background_agent_get',
