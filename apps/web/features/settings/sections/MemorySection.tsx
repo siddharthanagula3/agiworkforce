@@ -6,6 +6,10 @@ import { MemoryEditor, useMemoryStore, selectMemoryCount } from '@agiworkforce/u
 import { Switch, useConfirmAction } from '@agiworkforce/ui';
 
 import { MemoryExclusions } from '@/features/settings/components/MemoryExclusions';
+import {
+  ImportMemoryDialog,
+  useImportMemoryDialog,
+} from '@/features/settings/components/ImportMemoryDialog';
 import { useCapabilitiesPreferences } from '../hooks/use-capabilities-preferences';
 
 const MEMORY_EDITOR_ANCHOR_ID = 'memory-editor';
@@ -36,11 +40,17 @@ export function MemorySection() {
   const { settings, loadError, setBoolean } = useCapabilitiesPreferences();
   const memoryCount = useMemoryStore(selectMemoryCount);
   const clearAllMemories = useMemoryStore((s) => s.clear);
+  const hydrateMemories = useMemoryStore((s) => s.hydrateFromServer);
   const { confirm, dialog: confirmDialog } = useConfirmAction();
+  const importDialog = useImportMemoryDialog();
 
   const onManageMemories = useCallback(() => {
     document.getElementById(MEMORY_EDITOR_ANCHOR_ID)?.scrollIntoView({ behavior: 'smooth' });
   }, []);
+
+  const onImported = useCallback(() => {
+    void hydrateMemories();
+  }, [hydrateMemories]);
 
   const onClearAll = useCallback(() => {
     if (memoryCount === 0) return;
@@ -109,6 +119,23 @@ export function MemorySection() {
             {memoryCount} saved {memoryCount === 1 ? 'memory' : 'memories'}
           </p>
           <div style={{ display: 'flex', gap: 8 }}>
+            <button
+              type="button"
+              onClick={importDialog.open}
+              style={{
+                height: 30,
+                padding: '0 10px',
+                fontSize: 12,
+                fontWeight: 500,
+                color: 'var(--text-1)',
+                background: 'transparent',
+                border: '1px solid var(--settings-border)',
+                borderRadius: 'var(--radius-md)',
+                cursor: 'pointer',
+              }}
+            >
+              Import memories
+            </button>
             <button
               type="button"
               onClick={onManageMemories}
@@ -202,6 +229,12 @@ export function MemorySection() {
       >
         <MemoryEditor title={null} description="" hideClearAll />
       </section>
+
+      <ImportMemoryDialog
+        open={importDialog.isOpen}
+        onOpenChange={(next) => (next ? importDialog.open() : importDialog.close())}
+        onImported={onImported}
+      />
     </div>
   );
 }
