@@ -4,12 +4,38 @@ import { NextRequest } from 'next/server';
 process.env['CSRF_SECRET'] ||= 'a'.repeat(40);
 process.env['NEXT_PUBLIC_APP_URL'] ||= 'https://app.agiworkforce.test';
 
-const { mockRateLimit, mockGetE2BSession, mockBuildAdapter } = vi.hoisted(() => ({
+const {
+  mockRateLimit,
+  mockGetE2BSession,
+  mockBuildAdapter,
+  mockGetSubscription,
+  mockEvaluateManagedComputeAccess,
+  mockResolveSessionOrganizationId,
+  mockRecordSettledProviderCost,
+  mockCalculateCost,
+  mockReadCachedAccess,
+  mockWriteCachedAccess,
+  mockInvalidateCachedAccess,
+  mockAfter,
+} = vi.hoisted(() => ({
   mockRateLimit: vi.fn(),
   mockGetE2BSession: vi.fn(),
   mockBuildAdapter: vi.fn(),
+  mockGetSubscription: vi.fn(),
+  mockEvaluateManagedComputeAccess: vi.fn(),
+  mockResolveSessionOrganizationId: vi.fn(),
+  mockRecordSettledProviderCost: vi.fn(),
+  mockCalculateCost: vi.fn(),
+  mockReadCachedAccess: vi.fn(),
+  mockWriteCachedAccess: vi.fn(),
+  mockInvalidateCachedAccess: vi.fn(),
+  mockAfter: vi.fn((value: unknown) => value),
 }));
 
+vi.mock('next/server', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('next/server')>();
+  return { ...actual, after: mockAfter };
+});
 vi.mock('@/lib/logger', () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
@@ -21,11 +47,41 @@ vi.mock('@/lib/e2b/session-store', () => ({
 vi.mock('@/lib/services/provider-adapter-service', () => ({
   buildServerProviderAdapter: mockBuildAdapter,
 }));
+vi.mock('@/lib/server/neon-db', () => ({
+  getNeonDb: () => ({}),
+}));
+vi.mock('@/lib/services/subscription-service', () => ({
+  SubscriptionService: { getSubscription: mockGetSubscription },
+}));
+vi.mock('@/lib/services/managed-compute-access', () => ({
+  evaluateManagedComputeAccess: mockEvaluateManagedComputeAccess,
+}));
+vi.mock('@/lib/services/cloud-code-session-service', () => ({
+  resolveCloudCodeSessionOwnerOrganizationId: mockResolveSessionOrganizationId,
+}));
+vi.mock('@/lib/services/cogs-ledger-service', () => ({
+  recordSettledProviderCost: mockRecordSettledProviderCost,
+}));
+vi.mock('@/lib/services/llm-cost-calculator', () => ({
+  LLMCostCalculator: { calculateCost: mockCalculateCost },
+}));
+vi.mock('@/lib/e2b/provider-proxy-access-cache', () => ({
+  readCachedProviderProxyAccess: mockReadCachedAccess,
+  writeCachedProviderProxyAccess: mockWriteCachedAccess,
+  invalidateCachedProviderProxyAccess: mockInvalidateCachedAccess,
+}));
 
 import { DELETE, GET, POST } from './route';
 import { mintProviderProxyToken } from '@/lib/e2b/provider-proxy-token';
 
 const SESSION_ID = 'sess-1';
+const USER_ID = 'user-1';
+const ALLOWED_DECISION = {
+  allowed: true,
+  code: 'allowed',
+  reason: 'Subscription is entitled to managed compute.',
+  organizationId: null,
+};
 
 function request(
   init: {
@@ -51,11 +107,18 @@ function token(overrides: { sessionId?: string; userId?: string; providerId?: st
   return mintProviderProxyToken(
     {
       sessionId: overrides.sessionId ?? SESSION_ID,
-      userId: overrides.userId ?? 'user-1',
+      userId: overrides.userId ?? USER_ID,
       providerId: overrides.providerId ?? 'anthropic',
     },
     60_000,
   );
+}
+
+/** The promise the route handed to `after()` for the most recent call. */
+function lastAfterPromise(): Promise<unknown> {
+  const call = mockAfter.mock.calls.at(-1);
+  if (!call) throw new Error('after() was never called');
+  return call[0] as Promise<unknown>;
 }
 
 beforeEach(() => {
@@ -68,6 +131,15 @@ beforeEach(() => {
     }
     throw new Error(`no managed key for ${providerId}`);
   });
+  mockGetSubscription.mockResolvedValue({ plan_tier: 'pro', status: 'active' });
+  mockResolveSessionOrganizationId.mockResolvedValue(null);
+  mockEvaluateManagedComputeAccess.mockResolvedValue({ ...ALLOWED_DECISION });
+  mockReadCachedAccess.mockResolvedValue(null);
+  mockWriteCachedAccess.mockResolvedValue(undefined);
+  mockInvalidateCachedAccess.mockResolvedValue(undefined);
+  mockRecordSettledProviderCost.mockResolvedValue(undefined);
+  mockCalculateCost.mockReturnValue(7);
+  mockAfter.mockImplementation((value: unknown) => value);
 });
 
 describe('provider-proxy route', () => {
@@ -193,5 +265,246 @@ describe('provider-proxy route', () => {
     expect(response.status).toBe(204);
 
     vi.unstubAllGlobals();
+  });
+
+  describe('managed-compute gate', () => {
+    it('refuses a proxied call the gate denies, in the provider error shape, without forwarding upstream', async () => {
+      mockEvaluateManagedComputeAccess.mockResolvedValue({
+        allowed: false,
+        code: 'billing_read_only',
+        reason:
+          'Your workspace is read-only: enterprise billing collection is past the read-only threshold.',
+        organizationId: 'org-1',
+      });
+      const fetchMock = vi.fn();
+      vi.stubGlobal('fetch', fetchMock);
+
+      const { req, context } = request({ headers: { 'x-api-key': token() } });
+      const response = await POST(req, context);
+
+      expect(response.status).toBe(403);
+      const body = (await response.json()) as { error: { code: string; message: string } };
+      expect(body.error.code).toBe('billing_read_only');
+      expect(body.error.message).toContain('read-only');
+      expect(fetchMock).not.toHaveBeenCalled();
+      expect(mockInvalidateCachedAccess).toHaveBeenCalledWith(SESSION_ID);
+      expect(mockWriteCachedAccess).not.toHaveBeenCalled();
+
+      vi.unstubAllGlobals();
+    });
+
+    it('skips the subscription and gate database reads when a cached allow decision exists', async () => {
+      mockReadCachedAccess.mockResolvedValue({ ...ALLOWED_DECISION });
+      const fetchMock = vi.fn(async () => new Response('{"ok":true}', { status: 200 }));
+      vi.stubGlobal('fetch', fetchMock);
+
+      const { req, context } = request({ headers: { 'x-api-key': token() } });
+      const response = await POST(req, context);
+
+      expect(response.status).toBe(200);
+      expect(mockEvaluateManagedComputeAccess).not.toHaveBeenCalled();
+      expect(mockGetSubscription).not.toHaveBeenCalled();
+      expect(mockResolveSessionOrganizationId).not.toHaveBeenCalled();
+      expect(mockWriteCachedAccess).not.toHaveBeenCalled();
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+
+      vi.unstubAllGlobals();
+    });
+
+    it('caches a fresh allow decision after the first proxied call', async () => {
+      const fetchMock = vi.fn(async () => new Response('{"ok":true}', { status: 200 }));
+      vi.stubGlobal('fetch', fetchMock);
+
+      const { req, context } = request({ headers: { 'x-api-key': token() } });
+      await POST(req, context);
+
+      expect(mockEvaluateManagedComputeAccess).toHaveBeenCalledTimes(1);
+      expect(mockWriteCachedAccess).toHaveBeenCalledWith(SESSION_ID, ALLOWED_DECISION);
+
+      vi.unstubAllGlobals();
+    });
+  });
+
+  describe('provider spend settlement', () => {
+    it('records settled provider cost for a non-streaming JSON response', async () => {
+      mockCalculateCost.mockReturnValue(12);
+      const fetchMock = vi.fn(
+        async () =>
+          new Response(
+            JSON.stringify({
+              model: 'test-anthropic-model',
+              usage: {
+                input_tokens: 100,
+                output_tokens: 40,
+                cache_read_input_tokens: 5,
+                cache_creation_input_tokens: 2,
+                cache_creation: { ephemeral_1h_input_tokens: 1 },
+              },
+            }),
+            { status: 200, headers: { 'content-type': 'application/json' } },
+          ),
+      );
+      vi.stubGlobal('fetch', fetchMock);
+
+      const { req, context } = request({
+        headers: { 'x-api-key': token(), 'content-type': 'application/json' },
+        body: JSON.stringify({ model: 'test-anthropic-model' }),
+      });
+      const response = await POST(req, context);
+      expect(response.status).toBe(200);
+      await response.text();
+      await lastAfterPromise();
+
+      expect(mockCalculateCost).toHaveBeenCalledWith(
+        'anthropic',
+        'test-anthropic-model',
+        expect.objectContaining({
+          promptTokens: 100,
+          completionTokens: 40,
+          totalTokens: 140,
+          cacheReadInputTokens: 5,
+          cacheCreationInputTokens: 2,
+          cacheCreation1hInputTokens: 1,
+        }),
+      );
+      expect(mockRecordSettledProviderCost).toHaveBeenCalledTimes(1);
+      const call = mockRecordSettledProviderCost.mock.calls.at(0)?.[0] as
+        | {
+            userId: string;
+            provider: string;
+            model: string;
+            actualCostCents: number;
+            sourceRef: string;
+            taskOutcome: string;
+            taskRef: string;
+            usage: Record<string, number>;
+          }
+        | undefined;
+      if (!call) throw new Error('recordSettledProviderCost was not called');
+      expect(call.userId).toBe(USER_ID);
+      expect(call.provider).toBe('anthropic');
+      expect(call.model).toBe('test-anthropic-model');
+      expect(call.actualCostCents).toBe(12);
+      expect(call.taskOutcome).toBe('delivered');
+      expect(call.taskRef).toBe(SESSION_ID);
+      expect(call.sourceRef.startsWith(`provider_proxy:${SESSION_ID}:`)).toBe(true);
+      expect(call.usage).toEqual({
+        inputTokens: 100,
+        outputTokens: 40,
+        cacheReadTokens: 5,
+        cacheWriteTokens: 2,
+        cacheWrite1hTokens: 1,
+      });
+
+      vi.unstubAllGlobals();
+    });
+
+    it('records settled provider cost for a streaming SSE response, combining message_start and message_delta usage', async () => {
+      mockCalculateCost.mockReturnValue(31);
+      const sseBody =
+        'event: message_start\n' +
+        `data: ${JSON.stringify({
+          type: 'message_start',
+          message: {
+            model: 'test-anthropic-model',
+            usage: {
+              input_tokens: 300,
+              cache_read_input_tokens: 20,
+              cache_creation_input_tokens: 10,
+            },
+          },
+        })}\n\n` +
+        'event: content_block_delta\n' +
+        `data: ${JSON.stringify({
+          type: 'content_block_delta',
+          index: 0,
+          delta: { type: 'text_delta', text: 'hi' },
+        })}\n\n` +
+        'event: message_delta\n' +
+        `data: ${JSON.stringify({
+          type: 'message_delta',
+          delta: { stop_reason: 'end_turn' },
+          usage: { output_tokens: 77 },
+        })}\n\n`;
+
+      const fetchMock = vi.fn(
+        async () =>
+          new Response(sseBody, { status: 200, headers: { 'content-type': 'text/event-stream' } }),
+      );
+      vi.stubGlobal('fetch', fetchMock);
+
+      const { req, context } = request({
+        headers: { 'x-api-key': token(), 'content-type': 'application/json' },
+        body: JSON.stringify({ model: 'test-anthropic-model', stream: true }),
+      });
+      const response = await POST(req, context);
+      expect(response.status).toBe(200);
+      const text = await response.text();
+      expect(text).toBe(sseBody);
+      await lastAfterPromise();
+
+      expect(mockRecordSettledProviderCost).toHaveBeenCalledTimes(1);
+      const call = mockRecordSettledProviderCost.mock.calls.at(0)?.[0] as
+        | {
+            model: string;
+            actualCostCents: number;
+            taskOutcome: string;
+            usage: Record<string, number>;
+          }
+        | undefined;
+      if (!call) throw new Error('recordSettledProviderCost was not called');
+      expect(call.model).toBe('test-anthropic-model');
+      expect(call.actualCostCents).toBe(31);
+      expect(call.taskOutcome).toBe('delivered');
+      expect(call.usage).toEqual({
+        inputTokens: 300,
+        outputTokens: 77,
+        cacheReadTokens: 20,
+        cacheWriteTokens: 10,
+        cacheWrite1hTokens: 0,
+      });
+
+      vi.unstubAllGlobals();
+    });
+
+    it('does not record a response with no usage', async () => {
+      const fetchMock = vi.fn(async () => new Response('{"ok":true}', { status: 200 }));
+      vi.stubGlobal('fetch', fetchMock);
+
+      const { req, context } = request({ headers: { 'x-api-key': token() } });
+      const response = await POST(req, context);
+      await response.text();
+      await lastAfterPromise();
+
+      expect(mockRecordSettledProviderCost).not.toHaveBeenCalled();
+
+      vi.unstubAllGlobals();
+    });
+
+    it('does not fail the proxied response when settlement recording fails', async () => {
+      mockRecordSettledProviderCost.mockRejectedValue(new Error('ledger unavailable'));
+      const fetchMock = vi.fn(
+        async () =>
+          new Response(
+            JSON.stringify({
+              model: 'test-anthropic-model',
+              usage: { input_tokens: 5, output_tokens: 5 },
+            }),
+            { status: 200, headers: { 'content-type': 'application/json' } },
+          ),
+      );
+      vi.stubGlobal('fetch', fetchMock);
+
+      const { req, context } = request({ headers: { 'x-api-key': token() } });
+      const response = await POST(req, context);
+      expect(response.status).toBe(200);
+      const text = await response.text();
+      expect(text).toContain('test-anthropic-model');
+
+      await expect(lastAfterPromise()).resolves.toBeUndefined();
+      expect(mockRecordSettledProviderCost).toHaveBeenCalledTimes(1);
+
+      vi.unstubAllGlobals();
+    });
   });
 });
