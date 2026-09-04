@@ -16,13 +16,14 @@ import {
   type RegistryFetch,
 } from '@/lib/connectors/directory/registry-client';
 import {
-  readDirectorySnapshot,
-  writeDirectorySnapshot,
+  readSnapshotRecords,
+  readSyncState,
+  writeSnapshotRecords,
+  writeSyncState,
 } from '@/lib/connectors/directory/snapshot-cache';
 import type { DirectoryRecord } from '@/lib/connectors/directory/types';
 
 const MAX_REQUESTS_PER_RUN = 20;
-const MAX_SNAPSHOT_ENTRIES = 20_000;
 const AUTH_PROBE_BUDGET_PER_RUN = 40;
 
 export type IngestMode = 'bootstrap' | 'incremental';
@@ -36,25 +37,27 @@ export interface IngestSummary {
   authProbesRun: number;
   totalRecords: number;
   bootstrapComplete: boolean;
+  wroteSnapshot: boolean;
+}
+
+interface CrawlResult {
+  requestsUsed: number;
+  entriesSeen: number;
+  upserts: DirectoryRecord[];
+  removedIds: string[];
+  nextCursor: string | null;
+  exhausted: boolean;
 }
 
 async function crawlPages(
-  registryRecords: Map<string, DirectoryRecord>,
   cursor: string | null,
   updatedSince: string | null,
   fetchImpl: RegistryFetch,
-): Promise<{
-  requestsUsed: number;
-  entriesSeen: number;
-  entriesUpserted: number;
-  entriesRemoved: number;
-  nextCursor: string | null;
-  exhausted: boolean;
-}> {
+): Promise<CrawlResult> {
   let requestsUsed = 0;
   let entriesSeen = 0;
-  let entriesUpserted = 0;
-  let entriesRemoved = 0;
+  const upserts: DirectoryRecord[] = [];
+  const removedIds: string[] = [];
   let nextCursor = cursor;
   let exhausted = false;
 
@@ -72,16 +75,12 @@ async function crawlPages(
     for (const entry of page.servers) {
       if (!isLatestEntry(entry)) continue;
       if (isDeletedEntry(entry)) {
-        if (registryRecords.delete(entry.server.name)) entriesRemoved += 1;
+        removedIds.push(entry.server.name);
         continue;
       }
       if (!isLatestActiveEntry(entry)) continue;
       const normalized = normalizeRegistryEntry(entry);
-      if (!normalized) continue;
-      if (registryRecords.size < MAX_SNAPSHOT_ENTRIES || registryRecords.has(normalized.id)) {
-        registryRecords.set(normalized.id, normalized);
-        entriesUpserted += 1;
-      }
+      if (normalized) upserts.push(normalized);
     }
 
     if (!page.metadata.nextCursor || page.servers.length === 0) {
@@ -92,59 +91,72 @@ async function crawlPages(
     nextCursor = page.metadata.nextCursor;
   }
 
-  return { requestsUsed, entriesSeen, entriesUpserted, entriesRemoved, nextCursor, exhausted };
+  return { requestsUsed, entriesSeen, upserts, removedIds, nextCursor, exhausted };
+}
+
+function mergeRegistryBatch(
+  existing: readonly DirectoryRecord[],
+  batch: readonly DirectoryRecord[],
+  removedIds: readonly string[],
+): DirectoryRecord[] {
+  const registryOnly = existing.filter((record) => record.sourceRegistry === 'mcp-registry');
+  const registryMap = new Map(registryOnly.map((record) => [record.id, record]));
+  for (const record of batch) registryMap.set(record.id, record);
+  for (const id of removedIds) registryMap.delete(id);
+  return [...registryMap.values()];
 }
 
 export async function ingestConnectorDirectory(
   fetchImpl: RegistryFetch = fetch,
 ): Promise<IngestSummary> {
   const runStartedAt = new Date().toISOString();
-  const existing = await readDirectorySnapshot();
-  const registryRecords = new Map<string, DirectoryRecord>(
-    (existing?.records ?? [])
-      .filter((record) => record.sourceRegistry === 'mcp-registry')
-      .map((record) => [record.id, record]),
-  );
+  const syncState = await readSyncState();
 
-  const mode: IngestMode = existing?.bootstrapComplete === true ? 'incremental' : 'bootstrap';
+  const mode: IngestMode = syncState.bootstrapComplete ? 'incremental' : 'bootstrap';
   const crawl = await crawlPages(
-    registryRecords,
-    mode === 'bootstrap' ? (existing?.nextIngestCursor ?? null) : null,
-    mode === 'incremental' ? (existing?.lastSyncAt ?? null) : null,
+    mode === 'bootstrap' ? syncState.nextIngestCursor : null,
+    mode === 'incremental' ? syncState.lastSyncAt : null,
     fetchImpl,
   );
 
-  const bootstrapComplete = mode === 'incremental' || crawl.exhausted;
-  const nextIngestCursor = mode === 'bootstrap' && !crawl.exhausted ? crawl.nextCursor : null;
-  const lastSyncAt = bootstrapComplete ? runStartedAt : (existing?.lastSyncAt ?? null);
-
   let authProbesRun = 0;
-  for (const [id, record] of registryRecords) {
-    if (record.authMode !== 'unknown') continue;
-    if (authProbesRun >= AUTH_PROBE_BUDGET_PER_RUN) break;
+  const registryBatch: DirectoryRecord[] = [];
+  for (const record of crawl.upserts) {
+    if (record.authMode !== 'unknown' || authProbesRun >= AUTH_PROBE_BUDGET_PER_RUN) {
+      registryBatch.push(record);
+      continue;
+    }
     authProbesRun += 1;
-    registryRecords.set(id, await resolveAuthModeForRecord(record));
+    registryBatch.push(await resolveAuthModeForRecord(record));
   }
 
-  const internalRecords = applyFirstPartyTargets(buildInternalDirectoryRecords());
-  const merged = mergeDirectoryRecords(internalRecords, [...registryRecords.values()]);
+  const bootstrapComplete = mode === 'incremental' || crawl.exhausted;
+  const nextIngestCursor = mode === 'bootstrap' && !crawl.exhausted ? crawl.nextCursor : null;
+  const hasChanges = registryBatch.length > 0 || crawl.removedIds.length > 0;
+  const wroteSnapshot = mode === 'bootstrap' || hasChanges;
 
-  await writeDirectorySnapshot({
-    records: merged,
-    nextIngestCursor,
-    bootstrapComplete,
-    lastSyncAt,
-    updatedAt: new Date().toISOString(),
-  });
+  let totalRecords = 0;
+  if (wroteSnapshot) {
+    const existing = (await readSnapshotRecords()) ?? [];
+    const internalRecords = applyFirstPartyTargets(buildInternalDirectoryRecords());
+    const registryRecords = mergeRegistryBatch(existing, registryBatch, crawl.removedIds);
+    const merged = mergeDirectoryRecords(internalRecords, registryRecords);
+    await writeSnapshotRecords(merged);
+    totalRecords = merged.length;
+  }
+
+  const lastSyncAt = bootstrapComplete ? runStartedAt : syncState.lastSyncAt;
+  await writeSyncState({ nextIngestCursor, bootstrapComplete, lastSyncAt });
 
   return {
     mode,
     requestsUsed: crawl.requestsUsed,
     entriesSeen: crawl.entriesSeen,
-    entriesUpserted: crawl.entriesUpserted,
-    entriesRemoved: crawl.entriesRemoved,
+    entriesUpserted: registryBatch.length,
+    entriesRemoved: crawl.removedIds.length,
     authProbesRun,
-    totalRecords: merged.length,
+    totalRecords,
     bootstrapComplete,
+    wroteSnapshot,
   };
 }
