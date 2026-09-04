@@ -3,6 +3,9 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 vi.mock('server-only', () => ({}));
 vi.mock('@/lib/logger', () => ({ logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() } }));
 vi.mock('@/lib/e2b/runtime', () => ({ getE2BExecutor: vi.fn(), killE2BSession: vi.fn() }));
+vi.mock('@/lib/e2b/egress-host-resolution', () => ({
+  assertExtraEgressHostsResolveSafely: vi.fn(async () => undefined),
+}));
 const { managedCloudCodeSessionScope } = vi.hoisted(() => ({
   managedCloudCodeSessionScope: vi.fn(() => ({ scope: 'test' })),
 }));
