@@ -3,6 +3,7 @@
 import Link from 'next/link';
 
 import { useOrganizationOverview } from '@/features/settings/hooks/use-settings-queries';
+import { EnterpriseCollectionBanner } from '@/features/settings/components/EnterpriseCollectionBanner';
 import { toUserMessage } from '@/lib/user-error-message';
 
 const cardStyle = {
@@ -92,6 +93,8 @@ export function WorkspaceBillingSummary() {
 
   return (
     <div className="flex flex-col gap-6">
+      <EnterpriseCollectionBanner />
+
       <section style={cardStyle} aria-labelledby="plan-heading">
         <div className="border-b px-5 py-3.5" style={{ borderColor: 'var(--settings-border)' }}>
           <h2

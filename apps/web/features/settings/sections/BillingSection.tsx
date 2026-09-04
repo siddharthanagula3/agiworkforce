@@ -19,6 +19,7 @@ import {
 } from '@agiworkforce/types';
 import { AgiMark } from '@shared/components/agi/AgiMark';
 import { SettingsPageLink } from '../components/SettingsSectionLink';
+import { EnterpriseCollectionBanner } from '../components/EnterpriseCollectionBanner';
 import { toUserMessage } from '@/lib/user-error-message';
 
 // Real Stripe-backed shapes returned by the web billing routes.
@@ -644,6 +645,8 @@ export function BillingSection() {
           Your plan, usage, and payment details.
         </p>
       </div>
+
+      <EnterpriseCollectionBanner />
 
       {/* Current plan card */}
       <section
