@@ -11,6 +11,7 @@ import { isMfaRequiredError } from '@/lib/mfa-policy-gate';
 import { isIpNotAllowedError } from '@/lib/ip-allow-list-gate';
 import { clerkClient } from '@clerk/nextjs/server';
 import { getNeonDb } from '@/lib/server/neon-db';
+import { createClaimedUserScopedDb } from '@/lib/server/claimed-user-scope-db';
 import { eraseUserAccountData } from '@/lib/server/account-erasure';
 import { recordAuditEvent } from '@/lib/security-audit';
 import { pseudonymizeIdentifier } from '@/lib/server/pseudonymize';
@@ -76,7 +77,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401, headers: SECURITY_HEADERS });
   }
 
-  const db = getNeonDb();
+  const db = createClaimedUserScopedDb(getNeonDb(), { userId, organizationId: null });
   let row: DeletionScheduleRow | undefined;
   try {
     const rows = await db.query<DeletionScheduleRow>(
@@ -162,7 +163,7 @@ export async function DELETE(request: NextRequest) {
     );
   }
 
-  const db = getNeonDb();
+  const db = createClaimedUserScopedDb(getNeonDb(), { userId, organizationId: null });
 
   const subjectRef = pseudonymizeIdentifier(userId, 'delete-account-subject', 16);
 

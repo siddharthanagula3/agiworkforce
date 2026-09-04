@@ -353,6 +353,7 @@ describe('organization invitation lifecycle routes', () => {
 
     it('accepts by token and binds membership to the authenticated user', async () => {
       mockQuery
+        .mockResolvedValueOnce([]) // claimed-scope bind ahead of the profile lookup
         .mockResolvedValueOnce([{ id: 'invitee-user', email: 'invitee@example.com' }])
         .mockResolvedValueOnce([invitation()])
         .mockResolvedValueOnce([])
@@ -382,6 +383,7 @@ describe('organization invitation lifecycle routes', () => {
 
     it('refuses a leaked link opened by an account with a different email', async () => {
       mockQuery
+        .mockResolvedValueOnce([]) // claimed-scope bind ahead of the profile lookup
         .mockResolvedValueOnce([{ id: 'org-a-admin', email: 'someone-else@example.com' }])
         .mockResolvedValueOnce([invitation()]);
 
@@ -393,11 +395,16 @@ describe('organization invitation lifecycle routes', () => {
       );
 
       expect(response.status).toBe(403);
-      expect(mockExecute).not.toHaveBeenCalled();
+      expect(
+        mockExecute.mock.calls.some(([sql]) =>
+          String(sql).includes('insert into public.organization_members'),
+        ),
+      ).toBe(false);
     });
 
     it('declines by token and frees the seat without creating a membership', async () => {
       mockQuery
+        .mockResolvedValueOnce([]) // claimed-scope bind ahead of the profile lookup
         .mockResolvedValueOnce([{ id: 'org-a-admin', email: 'invitee@example.com' }])
         .mockResolvedValueOnce([invitation()])
         .mockResolvedValueOnce([invitation({ status: 'declined' })]);
@@ -415,11 +422,16 @@ describe('organization invitation lifecycle routes', () => {
       )!;
       expect(String(update[0])).toContain("set status = 'declined'");
       expect(update[1]).toEqual([INVITE_ID]);
-      expect(mockExecute).not.toHaveBeenCalled();
+      expect(
+        mockExecute.mock.calls.some(([sql]) =>
+          String(sql).includes('insert into public.organization_members'),
+        ),
+      ).toBe(false);
     });
 
     it('refuses a leaked decline link opened by an account with a different email', async () => {
       mockQuery
+        .mockResolvedValueOnce([]) // claimed-scope bind ahead of the profile lookup
         .mockResolvedValueOnce([{ id: 'org-a-admin', email: 'someone-else@example.com' }])
         .mockResolvedValueOnce([invitation()]);
 
@@ -434,11 +446,16 @@ describe('organization invitation lifecycle routes', () => {
       expect(
         mockQuery.mock.calls.some(([sql]) => String(sql).includes("set status = 'declined'")),
       ).toBe(false);
-      expect(mockExecute).not.toHaveBeenCalled();
+      expect(
+        mockExecute.mock.calls.some(([sql]) =>
+          String(sql).includes('insert into public.organization_members'),
+        ),
+      ).toBe(false);
     });
 
     it('404s an expired or already-used token', async () => {
       mockQuery
+        .mockResolvedValueOnce([]) // claimed-scope bind ahead of the profile lookup
         .mockResolvedValueOnce([{ id: 'org-a-admin', email: 'invitee@example.com' }])
         .mockResolvedValueOnce([]);
 
@@ -450,11 +467,16 @@ describe('organization invitation lifecycle routes', () => {
       );
 
       expect(response.status).toBe(404);
-      expect(mockExecute).not.toHaveBeenCalled();
+      expect(
+        mockExecute.mock.calls.some(([sql]) =>
+          String(sql).includes('insert into public.organization_members'),
+        ),
+      ).toBe(false);
     });
 
     it('never echoes the submitted token back to the caller', async () => {
       mockQuery
+        .mockResolvedValueOnce([]) // claimed-scope bind ahead of the profile lookup
         .mockResolvedValueOnce([{ id: 'org-a-admin', email: 'invitee@example.com' }])
         .mockResolvedValueOnce([]);
 
@@ -466,6 +488,59 @@ describe('organization invitation lifecycle routes', () => {
       );
 
       expect(await response.text()).not.toContain(token);
+    });
+
+    it('binds the profile lookup to the claimed session scope', async () => {
+      mockQuery
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([{ id: 'org-a-admin', email: 'invitee@example.com' }])
+        .mockResolvedValueOnce([]);
+
+      await ACCEPT(
+        jsonRequest('http://localhost:3000/api/settings/team/invitations/accept', 'POST', {
+          token,
+          action: 'accept',
+        }),
+      );
+
+      expect(mockExecute).toHaveBeenCalledWith('set local role app_rls');
+      expect(mockQuery).toHaveBeenCalledWith(
+        expect.stringContaining("set_config('request.jwt.claim.sub', $1, true)"),
+        ['org-a-admin', ''],
+      );
+    });
+
+    it('ignores an identity claim smuggled into the request body and binds membership to the session user', async () => {
+      mockQuery
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([{ id: 'org-a-admin', email: 'invitee@example.com' }])
+        .mockResolvedValueOnce([invitation()])
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([
+          invitation({ status: 'accepted', accepted_by_user_id: 'org-a-admin' }),
+        ]);
+
+      const response = await ACCEPT(
+        jsonRequest('http://localhost:3000/api/settings/team/invitations/accept', 'POST', {
+          token,
+          action: 'accept',
+          userId: 'attacker-controlled-user',
+          organizationId: ORG_B,
+        }),
+      );
+
+      expect(response.status).toBe(200);
+      expect(mockExecute).toHaveBeenCalledWith(
+        expect.stringContaining('insert into public.organization_members'),
+        [ORG_A, 'org-a-admin', 'member'],
+      );
+      expect(
+        mockExecute.mock.calls.some(
+          ([, params]) => Array.isArray(params) && params.includes('attacker-controlled-user'),
+        ),
+      ).toBe(false);
     });
   });
 });

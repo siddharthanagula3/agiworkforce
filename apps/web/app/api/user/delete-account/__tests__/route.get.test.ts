@@ -2,8 +2,9 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('server-only', () => ({}));
 
-const { mockQuery, mockGetClerkAuthUser } = vi.hoisted(() => ({
+const { mockQuery, mockExecute, mockGetClerkAuthUser } = vi.hoisted(() => ({
   mockQuery: vi.fn(),
+  mockExecute: vi.fn(),
   mockGetClerkAuthUser: vi.fn(),
 }));
 
@@ -35,7 +36,12 @@ vi.mock('@/lib/server/pseudonymize', () => ({
 vi.mock('@/lib/server/neon-db', () => ({
   getNeonDb: vi.fn(() => ({
     query: (...args: unknown[]) => mockQuery(...args),
-    execute: vi.fn(),
+    execute: (...args: unknown[]) => mockExecute(...args),
+    transaction: async (callback: (tx: unknown) => unknown) =>
+      callback({
+        query: (...args: unknown[]) => mockQuery(...args),
+        execute: (...args: unknown[]) => mockExecute(...args),
+      }),
   })),
 }));
 
@@ -49,8 +55,8 @@ vi.mock('@/lib/services/subscription-service', () => ({
 
 import { GET } from '../route';
 
-function statusRequest() {
-  return new Request('http://localhost:3000/api/user/delete-account', {
+function statusRequest(url = 'http://localhost:3000/api/user/delete-account') {
+  return new Request(url, {
     method: 'GET',
   }) as never;
 }
@@ -136,5 +142,32 @@ describe('GET /api/user/delete-account', () => {
     const response = await GET(statusRequest());
 
     expect(response.status).toBe(500);
+  });
+
+  it('binds the read to the claimed session scope before checking deletion status', async () => {
+    mockQuery.mockResolvedValue([{ deletion_requested_at: null, deletion_scheduled_for: null }]);
+
+    await GET(statusRequest());
+
+    expect(mockExecute).toHaveBeenCalledWith('set local role app_rls');
+    expect(mockQuery).toHaveBeenCalledWith(
+      expect.stringContaining("set_config('request.jwt.claim.sub', $1, true)"),
+      ['user_checking', ''],
+    );
+  });
+
+  it('ignores an identity smuggled into the query string and scopes to the session user', async () => {
+    mockQuery.mockResolvedValue([{ deletion_requested_at: null, deletion_scheduled_for: null }]);
+
+    await GET(statusRequest('http://localhost:3000/api/user/delete-account?userId=victim-user'));
+
+    expect(mockQuery).toHaveBeenCalledWith(expect.stringContaining('where id = $1'), [
+      'user_checking',
+    ]);
+    expect(
+      mockQuery.mock.calls.some(
+        ([, params]) => Array.isArray(params) && params.includes('victim-user'),
+      ),
+    ).toBe(false);
   });
 });
