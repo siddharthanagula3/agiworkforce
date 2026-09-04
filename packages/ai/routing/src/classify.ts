@@ -43,8 +43,11 @@ const RE_COMPUTER_USE = /\b(click|navigate|fill|submit|automate)\b/i;
 
 const RE_CODE_FENCE = /```/;
 
-const RE_CODING =
-  /\bfunction\b|\bclass\b|\bSELECT\b|\bdef\b|\bimport\b|stack ?trace|TypeError|undefined|NullPointerException/;
+const RE_CODING = /\bfunction\b|\bSELECT\b|\bdef\b|stack ?trace|TypeError|NullPointerException/;
+
+const RE_CODING_WEAK = /\bclass\b|\bimport\b|undefined/;
+
+const WEAK_SIGNAL_CONFIDENCE = 0.6;
 
 const RE_REASONING_VERB = /\b(prove|derive|solve|calculate|theorem|integral|differential)\b/i;
 
@@ -134,6 +137,10 @@ export function classifyTaskLocally(
 
   if (RE_CREATIVE_WRITING.test(message)) {
     return { type: 'creative_writing', confidence: 0.75 };
+  }
+
+  if (RE_CODING_WEAK.test(message)) {
+    return { type: 'coding', confidence: WEAK_SIGNAL_CONFIDENCE };
   }
 
   if (message.length < 80 && message.split(RE_WHITESPACE).length < 15) {
