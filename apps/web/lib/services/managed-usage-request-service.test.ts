@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import { describe, expect, it, vi } from 'vitest';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
+import { BLOCK_APPEAL_PATH } from '@/lib/security-audit';
 
 const recordSettledProviderCost = vi.hoisted(() => vi.fn());
 vi.mock('@/lib/services/cogs-ledger-service', () => ({
@@ -10,6 +11,9 @@ vi.mock('@/lib/services/cogs-ledger-service', () => ({
 import {
   MANAGED_CHAT_CONTRACT_VERSION,
   ManagedUsageRequestError,
+  TOP_UP_HREF,
+  UPGRADE_HREF,
+  USAGE_HREF,
   createManagedUsageErrorBody,
   finalizeManagedUsageRequest,
   fingerprintManagedUsageRequest,
@@ -18,6 +22,7 @@ import {
   parseManagedUsageIdempotencyKey,
   reserveManagedUsageProviderStep,
   reserveManagedUsageRequest,
+  resolveManagedQuotaRecovery,
 } from './managed-usage-request-service';
 
 function fakeDb(rows: Record<string, unknown>[]): DatabaseAdapter {
@@ -621,5 +626,67 @@ describe('getServedRouteFromUsage', () => {
       model: null,
       routeId: null,
     });
+  });
+});
+
+describe('resolveManagedQuotaRecovery', () => {
+  it('offers a top-up for a self-serve stripe-billed plan cleared by credits', () => {
+    expect(
+      resolveManagedQuotaRecovery({
+        code: 'rolling_weekly_limit_reached',
+        planTier: 'pro',
+        billedByStripe: true,
+      }),
+    ).toEqual({ action: 'top_up', href: TOP_UP_HREF });
+  });
+
+  it('offers an upgrade when the block does not clear by credits but a higher tier exists', () => {
+    expect(
+      resolveManagedQuotaRecovery({
+        code: 'free_trial_token_budget_reached',
+        planTier: 'free',
+        billedByStripe: false,
+      }),
+    ).toEqual({ action: 'upgrade', href: UPGRADE_HREF });
+  });
+
+  it('falls back to view usage when there is no upgrade path and no credits path', () => {
+    expect(
+      resolveManagedQuotaRecovery({
+        code: 'rate_limit_exceeded',
+        planTier: 'max_15x',
+        billedByStripe: true,
+      }),
+    ).toEqual({ action: 'view_usage', href: USAGE_HREF });
+  });
+
+  it('returns null for a code the catalog does not classify', () => {
+    expect(
+      resolveManagedQuotaRecovery({
+        code: 'not_a_real_code',
+        planTier: 'pro',
+        billedByStripe: true,
+      }),
+    ).toBeNull();
+  });
+
+  it('routes an enterprise contract to support instead of a self-serve top-up', () => {
+    expect(
+      resolveManagedQuotaRecovery({
+        code: 'rolling_weekly_limit_reached',
+        planTier: 'enterprise',
+        billedByStripe: true,
+      }),
+    ).toEqual({ action: 'contact_support', href: BLOCK_APPEAL_PATH });
+  });
+
+  it('routes an enterprise contract to support even when the block offers no upgrade cta', () => {
+    expect(
+      resolveManagedQuotaRecovery({
+        code: 'rate_limit_exceeded',
+        planTier: 'enterprise',
+        billedByStripe: false,
+      }),
+    ).toEqual({ action: 'contact_support', href: BLOCK_APPEAL_PATH });
   });
 });

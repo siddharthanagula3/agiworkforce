@@ -20,13 +20,13 @@ import {
 } from '@/lib/services/cogs-ledger-service';
 import { readOrganizationPolicy } from '@/lib/services/organization-policy-service';
 import { evaluateOrganizationPolicy } from '@/lib/services/organization-policy-evaluator';
-import { recordAuditEvent } from '@/lib/security-audit';
+import { BLOCK_APPEAL_PATH, recordAuditEvent } from '@/lib/security-audit';
 
 export const MANAGED_CHAT_CONTRACT_VERSION = '2026-07-15' as const;
 
-const TOP_UP_HREF = '/settings/billing';
+export const TOP_UP_HREF = '/settings/billing';
 export const UPGRADE_HREF = '/pricing';
-const USAGE_HREF = '/settings/usage';
+export const USAGE_HREF = '/settings/usage';
 
 const IDEMPOTENCY_KEY_PATTERN = /^[A-Za-z0-9._:-]{8,128}$/;
 const PROVIDER_OPERATION_KEY_PATTERN = /^provider:[1-9]\d{0,8}$/;
@@ -44,7 +44,7 @@ export class ManagedUsageRequestError extends Error {
 }
 
 export interface ManagedQuotaRecovery {
-  action: 'top_up' | 'upgrade' | 'view_usage';
+  action: 'top_up' | 'upgrade' | 'view_usage' | 'contact_support';
   href: string;
 }
 
@@ -55,12 +55,12 @@ export function resolveManagedQuotaRecovery(input: {
 }): ManagedQuotaRecovery | null {
   const block = classifyManagedQuotaErrorCode(input.code);
   if (!block) return null;
-  if (
-    block.clearedByCredits &&
-    input.billedByStripe &&
-    isSelfServePaidPlanTier(normalizeBillingPlanTier(input.planTier))
-  ) {
+  const planTier = normalizeBillingPlanTier(input.planTier);
+  if (block.clearedByCredits && input.billedByStripe && isSelfServePaidPlanTier(planTier)) {
     return { action: 'top_up', href: TOP_UP_HREF };
+  }
+  if (planTier === 'enterprise') {
+    return { action: 'contact_support', href: BLOCK_APPEAL_PATH };
   }
   if (block.showUpgradeCta && getNextUpgradeTier(input.planTier) !== null) {
     return { action: 'upgrade', href: UPGRADE_HREF };
