@@ -51,6 +51,7 @@ describe('buildOrganizationPolicyGateResponse', () => {
   it('returns a 403 naming the policy when the workspace has turned managed compute off', async () => {
     mockQuery
       .mockResolvedValueOnce([{ organization_id: ORG_ID }])
+      .mockResolvedValueOnce([])
       .mockResolvedValueOnce([policyRow({ allow_managed_compute: false })]);
 
     const response = await buildOrganizationPolicyGateResponse(
@@ -73,13 +74,16 @@ describe('buildOrganizationPolicyGateResponse', () => {
   });
 
   it('denies a developer surface the workspace has not enabled', async () => {
-    mockQuery.mockResolvedValueOnce([{ organization_id: ORG_ID }]).mockResolvedValueOnce([
-      policyRow({
-        allow_managed_compute: true,
-        allowed_privacy_modes: ['local', 'byok', 'managed'],
-        allow_cli_cloud_sync: false,
-      }),
-    ]);
+    mockQuery
+      .mockResolvedValueOnce([{ organization_id: ORG_ID }])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([
+        policyRow({
+          allow_managed_compute: true,
+          allowed_privacy_modes: ['local', 'byok', 'managed'],
+          allow_cli_cloud_sync: false,
+        }),
+      ]);
 
     const response = await buildOrganizationPolicyGateResponse('user-1', request() as never, {
       ...DESCRIPTOR,
@@ -91,12 +95,15 @@ describe('buildOrganizationPolicyGateResponse', () => {
   });
 
   it('passes a permitted request straight through', async () => {
-    mockQuery.mockResolvedValueOnce([{ organization_id: ORG_ID }]).mockResolvedValueOnce([
-      policyRow({
-        allow_managed_compute: true,
-        allowed_privacy_modes: ['local', 'byok', 'managed'],
-      }),
-    ]);
+    mockQuery
+      .mockResolvedValueOnce([{ organization_id: ORG_ID }])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([
+        policyRow({
+          allow_managed_compute: true,
+          allowed_privacy_modes: ['local', 'byok', 'managed'],
+        }),
+      ]);
 
     await expect(
       buildOrganizationPolicyGateResponse('user-1', request() as never, DESCRIPTOR),
@@ -123,6 +130,7 @@ describe('buildOrganizationPolicyGateResponse', () => {
   it('carries the caller-supplied response headers onto the denial', async () => {
     mockQuery
       .mockResolvedValueOnce([{ organization_id: ORG_ID }])
+      .mockResolvedValueOnce([])
       .mockResolvedValueOnce([policyRow()]);
 
     const response = await buildOrganizationPolicyGateResponse(
