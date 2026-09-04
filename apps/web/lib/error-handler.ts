@@ -39,6 +39,7 @@ const SAFE_TO_EXPOSE_CODES = new Set<string>([
   'INVALID_MODEL',
   'CSRF_REQUIRED',
   'CONFLICT',
+  'ORG_TRANSFER_ENTITLEMENT_REQUIRED',
   // Deliberately written for the reader; see ErrorCode.CAPABILITY_UNAVAILABLE.
   'CAPABILITY_UNAVAILABLE',
   'MFA_REQUIRED',

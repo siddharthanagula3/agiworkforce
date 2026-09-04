@@ -4,7 +4,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
-import { createError } from '@/lib/errors';
+import { createError, AppError, type ErrorCodeValue } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { getClerkAuthUser } from '@/lib/api-auth';
 import { requireCsrfToken } from '@/lib/csrf';
@@ -14,6 +14,8 @@ import { handleCorsPreflightRequest } from '@/lib/cors';
 import { recordAuditEvent } from '@/lib/security-audit';
 import { withSeatAccountingErrors } from '@/lib/services/organization-seat-service';
 import { requireTeamAdminAccess } from '@/app/api/settings/team/team-admin-access';
+import { resolveUserPersonalPlanTier } from '@/lib/services/org-entitlements';
+import { canUseBillingPlanCapability } from '@agiworkforce/types';
 
 const TransferSchema = z.object({
   organizationId: z.string().uuid('organizationId must be a UUID'),
@@ -42,7 +44,7 @@ async function handleTransfer(request: NextRequest) {
   }
 
   const db = getNeonDb();
-  await requireTeamAdminAccess(db, userId, organizationId);
+  const access = await requireTeamAdminAccess(db, userId, organizationId);
 
   await withSeatAccountingErrors(() =>
     db.transaction(async (tx) => {
@@ -78,6 +80,37 @@ async function handleTransfer(request: NextRequest) {
         throw createError.notFound(
           'That person is not a member of this organization. Add or invite them first.',
         );
+      }
+
+      if (access.seatSource !== 'billing') {
+        const successorPlan = await resolveUserPersonalPlanTier(tx, toUserId);
+        const orgNeedsEnterpriseControls = canUseBillingPlanCapability(
+          access.plan,
+          'enterprise_controls',
+        );
+        const successorGrantsTeamAdmin = canUseBillingPlanCapability(successorPlan, 'team_admin');
+        const successorGrantsEnterpriseControls = canUseBillingPlanCapability(
+          successorPlan,
+          'enterprise_controls',
+        );
+
+        if (
+          !successorGrantsTeamAdmin ||
+          (orgNeedsEnterpriseControls && !successorGrantsEnterpriseControls)
+        ) {
+          throw new AppError(
+            'ORG_TRANSFER_ENTITLEMENT_REQUIRED' as ErrorCodeValue,
+            "This organization has no subscription of its own, so team administration follows the owner's personal plan. Give the new owner a Team or Enterprise plan, or attach a subscription to the organization, before transferring ownership.",
+            409,
+            {
+              organizationId,
+              toUserId,
+              successorPlan,
+              requiredCapability: orgNeedsEnterpriseControls ? 'enterprise_controls' : 'team_admin',
+              requiredPlans: orgNeedsEnterpriseControls ? ['enterprise'] : ['team', 'enterprise'],
+            },
+          );
+        }
       }
 
       await tx.execute(
