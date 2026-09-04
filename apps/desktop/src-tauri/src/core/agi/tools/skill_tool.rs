@@ -81,12 +81,6 @@ impl SkillTool {
         self.skills.is_empty()
     }
 
-    /// Renders the metadata-only catalog for the system prompt.
-    ///
-    /// Bodies are deliberately absent: the model must call the tool to read one.
-    /// One compact line per skill (the CLI's shape) — this block ships on every
-    /// turn, so the per-skill cost stays a name, a description, and a provenance
-    /// tag instead of the multi-KB body the eager path used to paste in.
     #[must_use]
     pub fn catalog_prompt(&self) -> String {
         if self.skills.is_empty() {
@@ -96,7 +90,7 @@ impl SkillTool {
         let mut out = String::from("<available_skills>\n");
         out.push_str(
             "Skill instructions are lazy-loaded. Call the `skill` tool with action=load and an \
-             exact skill name before using one — naming a skill is not the same as having read it. \
+             exact skill name before using one, naming a skill is not the same as having read it. \
              Use action=list to re-read this catalog.\n",
         );
         out.push_str(
@@ -125,10 +119,6 @@ impl SkillTool {
         out
     }
 
-    /// Executes a `skill` tool call against this snapshot.
-    ///
-    /// `Ok` carries model-facing content; `Err` carries a model-facing error string.
-    /// No path supplied by the model is ever read — only exact catalog names resolve.
     pub fn invoke(&self, input: &SkillToolInput) -> Result<String, String> {
         match input.action.trim().to_ascii_lowercase().as_str() {
             "list" => self.list(),

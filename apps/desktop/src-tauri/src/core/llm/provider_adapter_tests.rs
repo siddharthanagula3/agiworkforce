@@ -131,9 +131,6 @@ mod tests {
 
         let adapted = result.unwrap();
         assert_eq!(adapted["model"], openai_reasoning_model());
-        // c3: the crate serializer sends a typed input item instead of the
-        // legacy compact string — wire-equivalent per the Responses API
-        // (pinned as CompactSingleTurnInput in the c2c oracle).
         assert_eq!(
             adapted["input"],
             serde_json::json!([{"role": "user", "content": "Explain quantum computing"}])
@@ -1280,11 +1277,6 @@ mod tests {
         assert_eq!(content[1]["detail"], "low");
     }
 
-    // M21 — DeepSeek adapter canonicalization test
-    // Verifies that the DeepSeek adapter delegates to models.json canonicalization
-    // (rather than passing the raw model ID through). Concrete target is sourced
-    // from `get_canonicalized_id` at runtime so tests track models.json changes
-    // without re-pinning a hardcoded ID (locked rule: never hardcode model IDs).
     #[test]
     fn test_deepseek_adapter_canonicalizes_r1_to_reasoner() {
         let adapter = ProviderAdapterFactory::create_adapter(Provider::DeepSeek);
@@ -2280,9 +2272,6 @@ mod tests {
         assert_eq!(allowed[0], "get_weather");
     }
 
-    // ────────────────────────────────────────────────────────────────
-    // Bug #46 — Gemini multimodal image conversion to inlineData format
-    // ────────────────────────────────────────────────────────────────
 
     /// Verifies that a user message carrying an image is converted to the
     /// Gemini `inlineData` parts format rather than being serialised as raw
@@ -2357,7 +2346,6 @@ mod tests {
         // First part: plain text
         assert_eq!(parts[0]["text"], "Describe this image");
 
-        // Second part: must use Gemini inlineData format — NOT raw base64 string or ChatMessage fields
         assert!(
             parts[1].get("inlineData").is_some(),
             "image must be converted to inlineData format, not passed as raw content"
@@ -2367,9 +2355,6 @@ mod tests {
         assert!(!data_str.is_empty(), "base64 data must be non-empty");
     }
 
-    // ────────────────────────────────────────────────────────────────
-    // Bug #50 — Anthropic DirectAPI: tool_calls and tool-role messages
-    // ────────────────────────────────────────────────────────────────
 
     /// Verifies that an assistant message carrying OpenAI-style `tool_calls`
     /// is converted to Anthropic's `content` block array with `type: tool_use`
@@ -2389,8 +2374,6 @@ mod tests {
                     tool_call_id: None,
                     multimodal_content: None,
                 },
-                // Assistant message with a tool_call — this is the OpenAI-style format
-                // that must be converted to Anthropic's tool_use content block.
                 ChatMessage {
                     role: "assistant".to_string(),
                     content: String::new(),
@@ -2402,8 +2385,6 @@ mod tests {
                     tool_call_id: None,
                     multimodal_content: None,
                 },
-                // Tool result — role="tool" is OpenAI style and must become
-                // role="user" with type: tool_result in Anthropic format.
                 ChatMessage {
                     role: "tool".to_string(),
                     content: "Sunny, 22°C".to_string(),
@@ -2477,9 +2458,6 @@ mod tests {
         assert_eq!(tool_result_content[0]["content"], "Sunny, 22°C");
     }
 
-    // ────────────────────────────────────────────────────────────────
-    // Bug #46 — Gemini multimodal: audio converted to inlineData
-    // ────────────────────────────────────────────────────────────────
 
     /// Verifies that audio content parts are converted to Gemini inlineData
     /// format instead of being silently dropped.
@@ -2662,9 +2640,6 @@ mod tests {
         assert_eq!(parts[0]["fileData"]["fileUri"], "gs://bucket/audio.ogg");
     }
 
-    // ────────────────────────────────────────────────────────────────
-    // Bug #46 — Gemini multimodal: video converted to inlineData/fileData
-    // ────────────────────────────────────────────────────────────────
 
     /// Verifies that video bytes are converted to Gemini inlineData format.
     #[test]
@@ -2791,9 +2766,6 @@ mod tests {
         assert_eq!(parts[0]["fileData"]["fileUri"], "gs://bucket/clip.webm");
     }
 
-    // ────────────────────────────────────────────────────────────────
-    // Bug #46 — Gemini multimodal: document converted to inlineData
-    // ────────────────────────────────────────────────────────────────
 
     /// Verifies that a PDF document is converted to Gemini inlineData format.
     #[test]
@@ -2946,9 +2918,6 @@ mod tests {
         assert_eq!(parts[2]["inlineData"]["mimeType"], "audio/wav");
     }
 
-    // ────────────────────────────────────────────────────────────────
-    // Bug #50 — Anthropic DirectAPI: tool-role messages use correct role
-    // ────────────────────────────────────────────────────────────────
 
     /// A multimodal message with role="tool" containing ToolResult content
     /// parts must be emitted with role="user" (Anthropic does not accept
@@ -2981,7 +2950,6 @@ mod tests {
                         },
                     }]),
                 },
-                // Tool result via multimodal path — role="tool" must become role="user"
                 ChatMessage {
                     role: "tool".to_string(),
                     content: String::new(),
@@ -3499,9 +3467,6 @@ mod tests {
 
     #[test]
     fn openai_compat_third_party_keeps_max_tokens() {
-        // Behavior-preserving: third-party OpenAI-compatible providers that share
-        // OpenAIAdapter (e.g. xAI/grok) must keep the classic `max_tokens` field —
-        // only OpenAI-managed models get the `max_completion_tokens` rename.
         let adapter = ProviderAdapterFactory::create_adapter(Provider::XAI);
         let request = LLMRequest {
             messages: vec![ChatMessage {

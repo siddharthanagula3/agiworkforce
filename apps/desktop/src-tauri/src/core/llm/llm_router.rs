@@ -24,32 +24,11 @@ use crate::core::llm::{
     ChatMessage, LLMProvider, LLMRequest, LLMResponse, Provider, ToolDefinition,
 };
 
-/// Streaming connection timeout: 90s base covers model load + reasoning
-/// models (60-90s) for typical prompts. Large prompts need additional
-/// prompt-eval headroom that scales with size instead of a flat ceiling —
-/// confirmed empirically (2026-07-11, docs/agent-context/known-flaws.md): a
-/// realistic 111-tool catalog injected into a small local model's system
-/// prompt (the path non-tool-native Ollama models take, see
-/// `prompt_tool_injection.rs`) measured 88.7s of prompt-eval ALONE on an
-/// idle, warm Ollama instance, already at the old flat timeout's edge before
-/// any generation started. Reuses the real injection formatter so the size
-/// estimate matches what would actually be sent, not a guess; the
-/// conservative 100 tok/s throughput assumption pads for hardware slower
-/// than the ~242 tok/s measured on the machine that produced the 88.7s
-/// figure above.
 const BASE_STREAM_TIMEOUT_SECS: u64 = 90;
 const LARGE_PROMPT_TOKEN_THRESHOLD: u64 = 4_000;
 const CONSERVATIVE_EVAL_TOKENS_PER_SEC: u64 = 100;
 const MAX_STREAM_TIMEOUT_SECS: u64 = 240;
 
-/// Computes the streaming connection timeout for a request, scaling up from
-/// `BASE_STREAM_TIMEOUT_SECS` for prompts large enough that plain prompt-eval
-/// time alone could approach it — most commonly a large injected tool
-/// catalog for a non-tool-native local model (see the module doc above).
-/// `tools` should be the request's full, uncapped tool set: any
-/// provider-specific capping (e.g. Ollama's `MAX_PROMPT_INJECTED_TOOLS`)
-/// happens deeper in the provider, so sizing the timeout off the uncapped
-/// set is a deliberately conservative (larger, never smaller) estimate.
 pub(crate) fn compute_streaming_timeout(
     messages: &[ChatMessage],
     tools: Option<&[ToolDefinition]>,
@@ -99,13 +78,6 @@ impl Default for RetryConfig {
 /// that bypass `AutonomousAgent` entirely and would otherwise have no cost ceiling.
 pub(crate) const SESSION_COST_SAFETY_CAP: f64 = 50.0;
 
-/// Refuse a request once the profile's daily spend cap is reached.
-///
-/// `SESSION_COST_SAFETY_CAP` resets whenever the router is rebuilt, so on its
-/// own it bounds one run rather than one day. This is the ceiling that
-/// persists across restarts. It is a no-op until `lib.rs::setup` installs the
-/// guard, and when SQLite cannot be read the guard reports zero spend and the
-/// call proceeds — the cap bounds runaway loops, it is not an availability gate.
 fn enforce_daily_budget() -> Result<()> {
     let Some(budget) = daily_budget::global() else {
         return Ok(());
@@ -128,10 +100,6 @@ fn record_completed_request_cost(
         return Err(anyhow!("Invalid streaming request cost"));
     }
 
-    // Every completed request — streaming and not — funnels through here, so
-    // this is where the day's spend is credited. The session cap below resets
-    // with the router; the daily cap is what survives a restart, which is the
-    // loop an injected prompt would otherwise exploit.
     if let Some(budget) = daily_budget::global() {
         if let Err(e) = budget.record_actual(daily_budget::LOCAL_PROFILE_BUDGET_KEY, request_cost) {
             tracing::warn!("Failed to record daily LLM spend: {e}");
@@ -392,8 +360,6 @@ fn is_rate_limit_error(error: &str) -> bool {
         || e.contains("tpm limit")
 }
 
-/// Determine if an error indicates an authentication or authorization failure (401/403).
-/// These errors are never retryable — the user must fix their API key.
 fn is_auth_error(error: &str) -> bool {
     let e = error.to_lowercase();
     e.contains("403")
@@ -471,8 +437,6 @@ pub struct RouterPreferences {
     pub strategy: RoutingStrategy,
     pub context: Option<RouterContext>,
     pub prefer_cloud_credits: bool, // When true, prioritize ManagedCloud for Pro/Max users
-    /// TRUST BOUNDARY: when true (pure Local mode), candidate selection must NEVER
-    /// yield `Provider::ManagedCloud` — a Local chat must not cross into AGI cloud.
     pub local_only: bool,
     /// TRUST BOUNDARY: when true, candidates must use AGI Managed Cloud and
     /// must never fall back to a direct/BYOK or local provider.
@@ -496,8 +460,8 @@ pub(crate) fn local_only_no_candidate_message(requested: Option<Provider>) -> &'
     });
     if asked_for_byok {
         return "This conversation is Local, so it will not be sent to a BYOK provider. \
-                Fork it to BYOK — which lets you choose the context, scans it for secrets and \
-                shows you the payload first — or pick a local model to keep the thread on device.";
+                Fork it to BYOK, which lets you choose the context, scans it for secrets and \
+                shows you the payload first, or pick a local model to keep the thread on device.";
     }
     "No local model provider is reachable. Ensure your local runtime (e.g. Ollama) is \
      running and a local model is installed and selected, then try again."
@@ -515,24 +479,6 @@ fn provider_matches_trust_mode(provider: Provider, trust_mode: TrustMode) -> boo
     }
 }
 
-/// TRUST BOUNDARY: resolves the canonical trust mode a candidate search must
-/// honor. This is the single chokepoint the router relies on to decide
-/// whether Byok/ManagedCloud providers are reachable at all.
-///
-/// SECURITY (desktop-trust-boundary-01): callers that omit `trust_mode` and
-/// leave both legacy booleans false used to fall through to an *unrestricted*
-/// `None`, which `provider_matches_trust_mode` / `candidates()` treated as
-/// "any provider matches" and which line ~1025 then defaulted to
-/// `TrustMode::Byok` for strategy selection. That let auxiliary call sites
-/// (intent detection, file-access/planner, computer-use, the background job
-/// runner, vision, etc.) silently egress a Local session's prompts/files to
-/// a BYOK or Managed Cloud provider with no fork/consent/redaction step.
-///
-/// Fail closed instead: an unresolved trust mode is treated as `Local`, the
-/// most restrictive boundary, so an unthreaded call site can never reach
-/// Byok/ManagedCloud by omission. Call sites that legitimately need
-/// Byok/ManagedCloud MUST set `trust_mode` (or `managed_cloud_only`)
-/// explicitly — that is the fix, not this default.
 fn effective_trust_mode(preferences: &RouterPreferences) -> Option<TrustMode> {
     // `local_only` and "unset" both resolve to the same fail-closed
     // boundary; only an explicit `managed_cloud_only` widens it.
@@ -587,10 +533,6 @@ pub struct RouterContext {
     #[serde(default)]
     pub cost_priority: CostPriority,
     #[serde(default)]
-    /// 'free', 'basic', 'pro', 'max', 'enterprise'. Legacy 'hobby' is still
-    /// accepted below — it comes from `plan_name` on subscription rows persisted
-    /// in local sqlite before the 2026-07-02 hobby→basic rename, not from the
-    /// `PlanTier` enum (which already aliases it), so it must be matched here too.
     pub plan_tier: String,
 
     // New intelligent routing fields (January 2026)
@@ -1362,10 +1304,6 @@ impl LLMRouter {
             order.extend(limited);
         }
 
-        // TRUST BOUNDARY: in pure Local mode, never offer a ManagedCloud candidate —
-        // a Local chat must not cross into AGI cloud, regardless of how candidates were
-        // assembled (prefer_cloud_credits, context signal, strategy order, default, or
-        // the fallback loop above).
         if let Some(trust_mode) = boundary {
             order.retain(|candidate| provider_matches_trust_mode(candidate.provider, trust_mode));
         }
@@ -1447,11 +1385,6 @@ impl LLMRouter {
             }
         }
 
-        // Pre-flight session cost cap check (non-streaming path).
-        // Bail out BEFORE calling the provider so the user is never charged without receiving
-        // a response.  We check the current accumulated cost — if it already exceeds the cap
-        // we refuse the request immediately.  The post-call check below remains as defence-in-depth
-        // for the accumulated delta.
         {
             let current_cost = *self.cumulative_cost.lock();
             if current_cost > SESSION_COST_SAFETY_CAP {
@@ -1497,7 +1430,7 @@ impl LLMRouter {
             if routed_request.tools.is_some() {
                 tracing::debug!(
                     provider = %candidate.provider.as_string(),
-                    "Provider does not support function calling — stripping tools from request"
+                    "Provider does not support function calling, stripping tools from request"
                 );
             }
             routed_request.tools = None;
@@ -1635,8 +1568,6 @@ impl LLMRouter {
                         "LLM request failed"
                     );
 
-                    // 403/401 auth error: rewrite to user-friendly message and
-                    // break immediately — retrying won't help with a bad API key.
                     if is_auth_error(&error_str) {
                         let friendly =
                             rewrite_auth_error(&error_str, candidate.provider.as_string());
@@ -1805,7 +1736,7 @@ impl LLMRouter {
         }
         if candidates_skipped_rate_limit > 0 && last_error.is_none() {
             return Err(anyhow!(
-                "Rate limited — please wait ~60 seconds and try again, or switch to a different model."
+                "Rate limited, please wait ~60 seconds and try again, or switch to a different model."
             ));
         }
 
@@ -2026,20 +1957,6 @@ impl LLMRouter {
         }
     }
 
-    /// Fallback candidate order for a runtime profile whose models the registry
-    /// cannot enumerate.
-    ///
-    /// A Local boundary has no catalog routes at all: a local model's identity
-    /// comes from whatever the user pulled into their own runtime, so
-    /// `resolve_auto_route` can only ever answer `Unavailable` for
-    /// `desktop/local-chat`. Without this step every Auto strategy under Local
-    /// produced an empty candidate list, which dead-ended the planner, the AGI
-    /// executors and every other caller that leaves `provider` unset.
-    ///
-    /// The order is the profile's `allowedHarnessIds` as the registry declares
-    /// them — that list is the documented fallback order, not a literal here.
-    /// TRUST BOUNDARY: `provider_matches_trust_mode` still gates every entry, so
-    /// this can only widen a boundary to providers the boundary already admits.
     fn runtime_profile_harness_candidates(
         &self,
         runtime_profile_id: &str,
@@ -2544,8 +2461,6 @@ impl LLMRouter {
             ..Default::default()
         };
 
-        // Delegate to route_with_retry so all configured providers are tried
-        // with exponential backoff — consistent with send_message_streaming_with_retry.
         let outcome = self.route_with_retry(&request, &prefs, None).await?;
         Ok(outcome.response.content)
     }
@@ -2738,11 +2653,11 @@ impl LLMRouter {
                                             model = %model_name,
                                             idle_timeout_secs = timeout_secs,
                                             "Streaming idle timeout: provider went silent \
-                                             for {timeout_secs}s with no data — closing connection"
+                                             for {timeout_secs}s with no data, closing connection"
                                         );
                                         let err: Box<dyn std::error::Error + Send + Sync> =
                                             format!(
-                                                "StreamingError::IdleTimeout — no data received \
+                                                "StreamingError::IdleTimeout, no data received \
                                                  for {timeout_secs}s (provider: {provider_name}, \
                                                  model: {model_name}). The connection has been \
                                                  closed. This is distinct from a network/connection \
@@ -2783,7 +2698,7 @@ impl LLMRouter {
         }
         if candidates_skipped_rate_limit > 0 && last_error.is_none() {
             return Err(anyhow!(
-                "Rate limited — please wait ~60 seconds and try again, or switch to a different model."
+                "Rate limited, please wait ~60 seconds and try again, or switch to a different model."
             ));
         }
 
@@ -2834,7 +2749,7 @@ impl LLMRouter {
             if routed_request.tools.is_some() {
                 tracing::debug!(
                     provider = %candidate.provider.as_string(),
-                    "Provider does not support function calling — stripping tools from streaming request"
+                    "Provider does not support function calling, stripping tools from streaming request"
                 );
             }
             routed_request.tools = None;
@@ -2931,8 +2846,6 @@ impl LLMRouter {
                         "Streaming LLM request failed"
                     );
 
-                    // 403/401 auth error: rewrite to user-friendly message and
-                    // break immediately — retrying won't help with a bad API key.
                     if is_auth_error(&error_str) {
                         let friendly =
                             rewrite_auth_error(&error_str, candidate.provider.as_string());

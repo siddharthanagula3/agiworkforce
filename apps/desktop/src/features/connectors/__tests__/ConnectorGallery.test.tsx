@@ -32,9 +32,6 @@ function resetConnectorsStore() {
     pendingOAuth: {},
     oauthStartedAt: {},
     _oauthTimers: {},
-    // CON-25: `connectorPermissions` was removed from this store — it had zero
-    // readers, and real enforcement lives behind the connector_permission_*
-    // Tauri commands.
   });
 }
 

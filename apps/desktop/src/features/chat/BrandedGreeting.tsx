@@ -1,4 +1,3 @@
-
 import React, { useMemo } from 'react';
 import { AgiMark } from '@agiworkforce/ui';
 import { cn } from '../../lib/utils';
@@ -85,7 +84,7 @@ export const BrandedGreeting: React.FC<BrandedGreetingProps> = ({
 
   return (
     <div className={cn('flex flex-col items-center gap-3 text-center', className)}>
-      {/* Animated brand icon. Token-driven like every sibling in the pane —
+      {/* Animated brand icon. Token-driven like every sibling in the pane.
           the previous violet/indigo gradient existed nowhere in the chat
           palette and did not repaint under [data-chat-theme]. */}
       <div
@@ -95,7 +94,7 @@ export const BrandedGreeting: React.FC<BrandedGreetingProps> = ({
         <AgiMark size={24} spinning className="text-[var(--chat-accent-primary)]" />
       </div>
 
-      {/* Headline — display serif, sized between web's 28px and Claude's ~40px
+      {/* Headline, display serif, sized between web's 28px and Claude's ~40px
           so it still fits one line at the desktop content measure. */}
       <h1
         className="text-[32px] leading-[40px] font-normal tracking-[-0.01em] text-[var(--chat-text-primary)]"

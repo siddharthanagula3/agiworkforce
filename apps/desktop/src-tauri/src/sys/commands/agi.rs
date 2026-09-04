@@ -17,12 +17,6 @@ use tauri::{Emitter, Manager, State};
 use tokio::sync::Mutex as TokioMutex;
 use tokio::time::{sleep, Duration};
 
-/// Wire representation of the active session's trust boundary. Deliberately
-/// narrower than `agiworkforce_model_registry::TrustMode`'s own serde repr
-/// (which also exposes `on_device`) — callers of these commands only ever
-/// mean "this device's local models", "my own API key", or "AGI Workforce's
-/// managed cloud", so the wire contract is exactly `local` | `byok` |
-/// `managed` (desktop-trust-boundary-01).
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "snake_case")]
 enum TrustModeWire {
@@ -41,13 +35,6 @@ impl From<TrustModeWire> for agiworkforce_model_registry::TrustMode {
     }
 }
 
-/// Deserializes the `trustMode` wire field (`"local" | "byok" | "managed"`,
-/// or absent) into `Option<TrustMode>`. Absent stays `None`, which
-/// `llm_router::effective_trust_mode` resolves to `TrustMode::Local`
-/// (fail-closed) — this function does not itself apply that default so the
-/// two layers don't silently drift. `pub(crate)` so sibling IPC entry points
-/// that also accept a session boundary (e.g. `swarm.rs`) share one wire
-/// contract instead of drifting copies.
 pub(crate) fn deserialize_trust_mode<'de, D>(
     deserializer: D,
 ) -> std::result::Result<Option<agiworkforce_model_registry::TrustMode>, D::Error>
@@ -148,9 +135,6 @@ fn parallel_result_output(value: &serde_json::Value) -> Option<String> {
     }
 }
 
-/// Every parallel agent costs one planning round-trip plus its own sandbox, and
-/// `Planner::create_parallel_plans` only has eight distinct strategy hints —
-/// past that the extra agents replan the same "balanced approach" at full cost.
 const MAX_PARALLEL_AGENTS: usize = 8;
 const DEFAULT_PARALLEL_AGENTS: usize = 4;
 
@@ -1234,14 +1218,6 @@ pub async fn start_agent_task(
 
     // 4. Call API
     let router_guard = router.read().await;
-    // TRUST BOUNDARY (desktop-trust-boundary-01): `start_agent_task` takes a
-    // `_mode: String` param that is unused, and its only frontend caller
-    // (apps/desktop/src/api/agent.ts `startAgentTask`) has no callers of its
-    // own — this command is currently unreachable from the UI. Fails closed
-    // to Local via `effective_trust_mode`'s default; `provider` is tier-
-    // selected (may be Anthropic/OpenAI/ManagedCloud), so this would need a
-    // real trust_mode threaded from `_mode` (with `_mode`'s semantics
-    // defined) before it could go live safely.
     let preferences = crate::core::llm::llm_router::RouterPreferences {
         provider: Some(provider),
         model: Some(model.to_string()),

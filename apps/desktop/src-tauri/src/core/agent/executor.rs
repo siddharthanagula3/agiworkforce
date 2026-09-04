@@ -269,7 +269,6 @@ impl TaskExecutor {
                 ))
             }
             Action::Scroll { direction, amount } => {
-                // BUG-03 fix: map direction to a signed delta — positive = up, negative = down
                 let delta = match direction {
                     ScrollDirection::Up => *amount,
                     ScrollDirection::Down => -(*amount),
@@ -404,7 +403,6 @@ impl TaskExecutor {
         }
     }
 
-    /// BUG-01 fix: validate a read path — must exist and must not be a protected system dir.
     pub(crate) fn validate_file_path(path: &str) -> Result<std::path::PathBuf> {
         if path.contains('\0') {
             return Err(anyhow::anyhow!("Invalid path: contains null bytes"));
@@ -415,9 +413,6 @@ impl TaskExecutor {
         Ok(canonical)
     }
 
-    /// BUG-01 fix: validate a write path — file may not exist yet, so we
-    /// canonicalize the longest existing ancestor to defeat symlink bypasses,
-    /// then re-append the non-existent tail before checking blocked prefixes.
     pub(crate) fn validate_write_path(path: &str) -> Result<std::path::PathBuf> {
         if path.contains('\0') {
             return Err(anyhow::anyhow!("Invalid path: contains null bytes"));

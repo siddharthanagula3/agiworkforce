@@ -87,7 +87,7 @@ export const useExtensionEventsStore = create<ExtensionEventsStore>((set) => ({
     const durationText =
       payload.duration != null ? `${(payload.duration / 1000).toFixed(1)}s` : 'unknown time';
     const actionSummary = payload.success
-      ? `Completed — ${actionsPerformed} action${actionsPerformed === 1 ? '' : 's'} in ${durationText}`
+      ? `Completed, ${actionsPerformed} action${actionsPerformed === 1 ? '' : 's'} in ${durationText}`
       : `Failed: ${payload.error ?? 'Unknown error'}`;
 
     set((state) => ({

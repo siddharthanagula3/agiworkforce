@@ -77,12 +77,7 @@ pub(super) fn save_assistant_message(
     let saved = repository::get_message(&conn, id)
         .map_err(|e| format!("Failed to retrieve assistant message: {e}"))?;
     if cloud_sync {
-        // Mint cloud_id and mark assistant message for push.
-        // Reuse the already-held connection guard — acquiring a second lock on the same
-        // non-reentrant std::sync::Mutex would deadlock.
         if let Err(e) = cloud_sync::mark_message_for_push(&conn, id) {
-            // Non-fatal: a chat save must never fail because cloud-marking failed.
-            // But log it — silently swallowing this previously hid a broken UPDATE.
             tracing::warn!(error = %e, message_id = id, "failed to mark message for cloud push");
         }
     }
@@ -194,8 +189,6 @@ mod tests {
         assert!((total_request_cost(&[user, assistant, system]) - 0.75).abs() < f64::EPSILON);
     }
 
-    /// (needs_push, cloud_id) of the most recent message in a conversation — the
-    /// real sync state a save leaves behind (replaces the old dead spawn counter).
     fn latest_message_sync_state(db: &AppDatabase, conv_id: i64) -> (i64, Option<String>) {
         let conn = db.connection().expect("connection");
         conn.query_row(
@@ -207,8 +200,6 @@ mod tests {
         .expect("message row")
     }
 
-    /// TRUST-BOUNDARY: with cloud_sync_enabled=false the saved message must NOT be
-    /// marked for push (needs_push stays 0, no cloud_id) — fail-closed local boundary.
     #[test]
     fn message_not_marked_for_push_when_cloud_sync_disabled() {
         let (_db_inner, db) = make_test_db();
@@ -241,9 +232,6 @@ mod tests {
         );
     }
 
-    /// Even with cloud_sync_enabled=true, a message on a LOCAL conversation is never
-    /// marked for push — the mint guard requires app_mode='cloud'. This is the
-    /// fail-closed boundary that keeps Local chats off the cloud.
     #[test]
     fn local_conversation_message_not_marked_even_when_cloud_sync_enabled() {
         let (_db_inner, db) = make_test_db();

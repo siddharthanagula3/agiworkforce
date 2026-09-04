@@ -118,8 +118,6 @@ static DANGEROUS_PATTERNS: LazyLock<Vec<&'static str>> = LazyLock::new(|| {
         "| bash",
         "|sh",
         "|bash",
-        // Code injection — bare names and absolute paths
-        // RT-02 fix: absolute-path variants bypass the bare-name checks without these.
         "eval $(",
         "base64 -d |",
         "base64 -d|",
@@ -236,12 +234,6 @@ static ONESHOT_BLOCKED_OPERATORS: LazyLock<HashSet<char>> =
 /// Maximum allowed command length
 const MAX_COMMAND_LENGTH: usize = 65536;
 
-/// Returns the first dangerous pattern contained in the command, if any.
-///
-/// Matching is substring-based on a whitespace-normalized, lowercased copy of
-/// the command — exactly the pre-filter check `validate_command` applies.
-/// Exposed so the execpolicy decision core (`exec_gate`) consults the same
-/// blocklist as its heuristics fallback; the two layers cannot drift apart.
 pub fn matches_dangerous_pattern(command: &str) -> Option<&'static str> {
     let normalized = command
         .split_whitespace()
@@ -443,14 +435,6 @@ pub fn validate_command(command: &str, config: &ValidationConfig) -> ValidationR
         }
     }
 
-    // Decision core: evaluate against the shared execpolicy engine
-    // (`exec_gate` — argv-prefix Forbidden rules + heuristics fallback). This
-    // runs AFTER the hygiene pre-filter above because execpolicy cannot model
-    // metacharacters, shell operators, or substring patterns; those checks
-    // must stay in front. A `Forbidden` here is strictly additive blocking —
-    // e.g. `rm -rf "/"`, whose quotes dodge the substring blocklist but not
-    // the shlex-tokenized argv rules. `Prompt` does not block: it routes
-    // through `requires_confirmation` into the existing confirmation flow.
     let outcome = super::exec_gate::evaluate_full(super::exec_gate::default_policy(), command);
     if outcome.decision == agiworkforce_execpolicy::Decision::Forbidden {
         let pattern = outcome
@@ -526,9 +510,6 @@ pub fn write_security_audit_log(command: &str, cwd: Option<&str>) {
 
     // Best-effort: if we can't write the log we still allow the command.
     let _ = std::fs::create_dir_all(&log_dir);
-    // I5: tighten dir to 0o700 (owner-only) — the audit log records every
-    // terminal command (potentially containing secrets in argv). Default
-    // umask leaves these world-readable on shared / multi-user systems.
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;
@@ -556,7 +537,7 @@ pub fn write_security_audit_log(command: &str, cwd: Option<&str>) {
 pub fn reject_if_root() -> ValidationResult {
     let user = std::env::var("USER").unwrap_or_default();
     if user == "root" {
-        tracing::warn!("RT-02: terminal_execute blocked — running as root");
+        tracing::warn!("RT-02: terminal_execute blocked, running as root");
         return Err(CommandValidationError::DangerousPattern {
             pattern: "root-execution".to_string(),
             command: "<rejected before parsing>".to_string(),
@@ -565,16 +546,6 @@ pub fn reject_if_root() -> ValidationResult {
     Ok(())
 }
 
-/// Check if a command should trigger additional confirmation.
-///
-/// Delegates to the execpolicy decision core (`exec_gate`): any non-`Allow`
-/// decision requires confirmation. `Prompt` routes into the existing
-/// confirmation flow (callers pass `true` to
-/// `tool_confirmation::request_confirmation_simple`) exactly as the old
-/// bulk/system pattern lists did — those lists now live in
-/// `exec_gate::PROMPT_PATTERNS`. `Forbidden` also returns `true` so a caller
-/// that only consults this gate still confirms, although forbidden commands
-/// are hard-blocked by `validate_command` before execution.
 pub fn requires_confirmation(command: &str) -> bool {
     !matches!(
         super::exec_gate::evaluate_command(command),

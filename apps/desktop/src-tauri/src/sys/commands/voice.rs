@@ -40,18 +40,6 @@ pub struct VoiceSettings {
     pub language: Option<String>,
 }
 
-/// Cloud speech-to-text model, resolved from the canonical
-/// `voice_transcription` routing slot that the CLI binary and the managed
-/// transcription route in `apps/web` also read.
-///
-/// The value is posted verbatim as the multipart `model` field, so it is the
-/// provider wire ID the registry declares for the slot's model key.
-///
-/// If the slot ever resolves to nothing this yields an empty string, which the
-/// transcription endpoint rejects with a request error — an obvious failure
-/// rather than a retired ID that looks valid. The registry crate's
-/// `the_voice_transcription_slot_resolves_to_a_live_provider_model` asserts the
-/// slot is present, so that path is not reachable with the shipped registry.
 fn default_cloud_stt_model() -> String {
     agiworkforce_model_registry::slot_model(speech::TRANSCRIPTION_ROUTING_SLOT)
         .ok()
@@ -327,13 +315,6 @@ pub async fn voice_transcribe_blob(
         return Err(format!("Invalid audio format: {}", format));
     }
 
-    // Explicit-mode adapter (plan stage 3, boundary contract): the caller's
-    // provider string is parsed fail-closed BEFORE any temp file is written —
-    // an unknown value errors, and `deepgram` (streaming-only) is refused
-    // explicitly. Previously both silently fell back to the settings
-    // provider, and a BYOK OpenAI selection without a key silently rerouted
-    // the audio to managed cloud. Audio never crosses a boundary the user did
-    // not explicitly select.
     let explicit_mode = match provider.as_deref() {
         Some(raw) => Some(
             crate::features::speech::dictation::parse_transcription_mode(raw)
@@ -399,8 +380,6 @@ pub async fn voice_transcribe_blob(
                         };
 
                         if api_key.is_empty() {
-                            // BYOK without a key fails closed — never silently
-                            // reroute the audio to managed cloud.
                             Err(crate::features::speech::dictation::missing_byok_openai_key_error())
                         } else {
                             transcribe_with_openai_direct(
@@ -680,9 +659,6 @@ fn decode_audio_to_samples(audio_bytes: &[u8]) -> Result<(Vec<f32>, u32), String
         ]) as usize;
 
         if chunk_id == b"fmt " {
-            // The loop only guarantees pos+8 bytes, but the fmt body reads up to
-            // pos+23 — bound-check before indexing or a truncated/malformed WAV
-            // (reachable via the voice_transcribe_file IPC command) panics.
             if chunk_size >= 16 && pos + 24 <= audio_bytes.len() {
                 num_channels = u16::from_le_bytes([audio_bytes[pos + 10], audio_bytes[pos + 11]]);
                 sample_rate = u32::from_le_bytes([
@@ -746,20 +722,6 @@ fn decode_audio_to_samples(audio_bytes: &[u8]) -> Result<(Vec<f32>, u32), String
 // TTS Commands
 // =============================================================================
 
-/// Whether the configured TTS provider can actually speak.
-///
-/// `TtsProvider::System` is the DEFAULT, so the previous
-/// `matches!(provider, TtsProvider::System)` test reported
-/// `tts_available: true` on every platform — including the Windows and Linux
-/// builds where `SystemTts::speak_sync` only ever returns "System TTS not
-/// implemented for this platform". Settings > Voice rendered "TTS: System" and
-/// Voice Mode entered `phase: 'speaking'` before swallowing the error, so the
-/// user was shown an available feature that produced silence.
-///
-/// `system_tts_supported` is passed in rather than read here so the false arm —
-/// the one that only occurs on Windows and Linux — stays reachable from a test
-/// running on any host. The single production caller passes
-/// `SystemTts::platform_supported()`.
 fn tts_provider_available(config: &TtsConfig, system_tts_supported: bool) -> bool {
     match config.provider {
         TtsProvider::System => system_tts_supported,
@@ -882,14 +844,6 @@ pub async fn voice_tts_configure(
 /// Wire version for `wake:event` payloads.
 pub const WAKE_EVENT_VERSION: u32 = 1;
 
-/// Whether saying a configured wake phrase can actually trigger anything in
-/// this build. Single source of truth for the refusal below.
-///
-/// Stays `false` while `features/speech/wake.rs`'s detection loop only reports
-/// voice activity: it buffers speech and emits a fixed `speech_detected`
-/// marker instead of transcribing the utterance, so no configured phrase can
-/// ever match. Flip it in the same change that makes that loop transcribe —
-/// never from UI or settings code.
 pub const fn wake_phrase_detection_available() -> bool {
     false
 }
@@ -941,7 +895,7 @@ pub async fn voice_wake_enable(
     app: AppHandle,
 ) -> Result<(), String> {
     const UNAVAILABLE: &str =
-        "Wake-phrase detection is not available in this build — the detector reports voice activity but does not yet transcribe it, so no wake phrase can match.";
+        "Wake-phrase detection is not available in this build, the detector reports voice activity but does not yet transcribe it, so no wake phrase can match.";
 
     let voice_state = state.lock().await;
     let mut wake = voice_state.wake.write().await;
@@ -2147,15 +2101,6 @@ pub async fn dictation_list_input_devices(
     crate::features::speech::dictation::list_input_devices()
 }
 
-/// Start audio recording for AGI Dictation.
-///
-/// Capture mechanics (device selection, sample-format dispatch, bounded
-/// buffering, device-loss recovery) live in
-/// `features/speech/dictation/capture.rs`. `device` selects a microphone by
-/// name; when absent — or when the preferred device no longer exists — the
-/// system default is used and the substitution is reported in the started
-/// event payload. Emits `voice:recording:started` so the frontend overlay
-/// appears.
 #[tauri::command]
 pub async fn speech_start_recording(
     _provider: String,
@@ -2210,10 +2155,6 @@ pub async fn speech_start_recording(
     Ok(())
 }
 
-/// Wait (bounded) for the capture thread to finish after its stop flag has
-/// been set. The capture thread polls every 50 ms, so this normally returns
-/// almost immediately — but a wedged audio driver must not hold a Tokio
-/// worker hostage with an unbounded join().
 async fn settle_capture_thread(handle: Option<std::thread::JoinHandle<()>>) {
     if let Some(handle) = handle {
         let mut waited_ms = 0u64;
@@ -2356,7 +2297,6 @@ pub async fn speech_stop_and_transcribe(
         wav_bytes.len()
     );
 
-    // Route through the explicitly selected mode adapter — never a fallback.
     let settings = voice_state.settings.lock().await;
     let effective_settings = VoiceSettings {
         provider: match mode {
@@ -2394,8 +2334,6 @@ pub async fn speech_stop_and_transcribe(
                 svc.get_api_key("openai").unwrap_or_default()
             };
             if api_key.is_empty() {
-                // BYOK without a key fails closed — the audio must never be
-                // silently rerouted to managed cloud.
                 Err(crate::features::speech::dictation::missing_byok_openai_key_error())
             } else {
                 transcribe_with_openai_direct(
@@ -2505,12 +2443,6 @@ mod shared_speech_contract_tests {
 mod tts_availability_tests {
     use super::*;
 
-    /// THE regression. `TtsConfig::default()` — System provider, no api key —
-    /// is what every user who never opened voice settings runs. On Windows and
-    /// Linux `SystemTts` cannot speak a word, yet `voice_get_capabilities`
-    /// reported `tts_available: true`, so Settings > Voice printed
-    /// "TTS: System". Reproducible from any host because platform support is a
-    /// parameter.
     #[test]
     fn system_provider_is_unavailable_where_the_platform_cannot_speak() {
         let config = TtsConfig::default();
@@ -2565,10 +2497,6 @@ mod tts_availability_tests {
         assert!(tts_provider_available(&elevenlabs_with_model, false));
     }
 
-    /// The production call site must pass the real platform fact. If someone
-    /// hardcodes `true` there, this test still passes — so it is pinned by the
-    /// adapter-level test in `features::speech::tts` instead. What this pins is
-    /// that the two agree for the config the command actually reads.
     #[test]
     fn production_capability_matches_the_adapter_on_this_host() {
         assert_eq!(

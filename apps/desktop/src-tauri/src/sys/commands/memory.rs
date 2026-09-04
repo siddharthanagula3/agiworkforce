@@ -1,16 +1,3 @@
-//! Tauri commands for persistent memory management
-//!
-//! These commands expose the MemoryManager to the frontend,
-//! allowing the AGI to persist and recall information across sessions.
-//!
-//! CLOUD SYNC HOOK (Requirement 4):
-//! Write commands (remember/store/forget/delete/forget_topic) accept an optional
-//! `active_mode` param. When the active mode is managed-cloud, they call
-//! `mark_memory_for_push` on the AppDatabase so the next memory sync cycle will
-//! push the change. The gate uses the same `derive_cloud_sync_enabled` function
-//! that chat sync uses — the identical trust-boundary function, not a reimplementation.
-//! `user_memory.app_mode = 'cloud'` is set on rows created in cloud mode; the WHERE
-//! guard in `mark_memory_for_push` makes it impossible to mark a local row.
 
 use chrono::Utc;
 use std::sync::Arc;
@@ -44,8 +31,6 @@ fn set_memory_cloud_mode(db: &AppDatabase, memory_id: i64) {
     }
 }
 
-/// Mark an existing cloud memory for push. Non-fatal — a failed mark is logged
-/// but must never cause the write command to fail.
 fn try_mark_memory_for_push(db: &AppDatabase, memory_id: i64) {
     if let Ok(conn) = db.connection() {
         if let Err(e) = memory_sync::mark_memory_for_push(&conn, memory_id) {
@@ -170,7 +155,6 @@ impl ConversationSummarizerState {
         use crate::core::agi::conversation_summarizer::{ConversationSummarizer, HttpSummaryLLM};
         use crate::core::agi::memory_persistence::MemoryStore;
 
-        // Use in-memory store — will not persist but won't panic either.
         let store = Arc::new(
             MemoryStore::new(":memory:")
                 .expect("in-memory MemoryStore should never fail to construct"),
@@ -297,9 +281,9 @@ pub async fn memory_forget(
         if let Ok(conn) = db.connection() {
             match memory_sync::soft_delete_memory_for_push(&conn, memory_id) {
                 Ok(true) => return Ok(true), // cloud row soft-deleted
-                Ok(false) => {}              // not a cloud row — hard-delete below
+                Ok(false) => {}
                 Err(e) => {
-                    tracing::warn!(error = %e, memory_id, "memory_forget: soft-delete failed — falling through to hard delete");
+                    tracing::warn!(error = %e, memory_id, "memory_forget: soft-delete failed, falling through to hard delete");
                 }
             }
         }
@@ -341,7 +325,7 @@ pub async fn memory_forget_topic(
                 Ok(true) => return Ok(true),
                 Ok(false) => {}
                 Err(e) => {
-                    tracing::warn!(error = %e, topic = %topic, "memory_forget_topic: soft-delete failed — falling through to hard delete");
+                    tracing::warn!(error = %e, topic = %topic, "memory_forget_topic: soft-delete failed, falling through to hard delete");
                 }
             }
         }
@@ -463,7 +447,7 @@ pub async fn memory_delete(
                 Ok(true) => return Ok(true),
                 Ok(false) => {}
                 Err(e) => {
-                    tracing::warn!(error = %e, memory_id, "memory_delete: soft-delete failed — falling through to hard delete");
+                    tracing::warn!(error = %e, memory_id, "memory_delete: soft-delete failed, falling through to hard delete");
                 }
             }
         }

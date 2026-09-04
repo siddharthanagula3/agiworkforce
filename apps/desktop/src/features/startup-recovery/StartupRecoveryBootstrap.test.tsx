@@ -35,7 +35,7 @@ describe('StartupRecoveryBootstrap', () => {
     expect(
       await screen.findByRole('heading', { name: 'AGI could not unlock local data' }),
     ).toBeInTheDocument();
-    await waitFor(() => expect(document.title).toBe('AGI — Local data recovery'));
+    await waitFor(() => expect(document.title).toBe('AGI, Local data recovery'));
     expect(screen.queryByText('Normal application')).not.toBeInTheDocument();
     expect(normalAppMounted).not.toHaveBeenCalled();
     expect(invokeCommand).toHaveBeenCalledWith('startup_get_recovery_state');

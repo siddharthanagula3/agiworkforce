@@ -1,30 +1,3 @@
-//! Desktop cloud sync engine (P2 Phase 2).
-//!
-//! Delta-syncs the SQLite chat store (`conversations` + `messages` + `artifacts`
-//! where `app_mode='cloud'`) with the managed-cloud `/api/chat/sync` endpoint:
-//! push locally-changed rows (needs_push=1), then pull everything with a
-//! `server_version` greater than our per-user cursor.
-//!
-//! MANAGED-ONLY: every entry point is gated on the caller supplying a valid
-//! bearer token (i.e. managed-cloud mode is active). The mint hooks
-//! (`mark_conversation_for_push` / `mark_message_for_push` /
-//! `mark_artifact_for_push`) are only called inside the `if cloud_sync_enabled`
-//! branch in send_message_setup.rs / persistence.rs, and that flag is forced to
-//! `false` in Local mode.
-//!
-//! Wire protocol is the live `/api/chat/sync` (Next.js route):
-//!   POST { protocolVersion: 2, conversations, messages, artifacts }
-//!        → { protocolVersion: 2, applied, conflicts, cursor }
-//!   GET  ?since=<cursor>
-//!        → { conversations, messages, artifacts, cursor, hasMore }
-//!
-//! Artifacts share the chat cursor (one shared server_version sequence for all
-//! three entity types on `/api/chat/sync`).
-//!
-//! INTEGER PKs are never sent over the wire; only `cloud_id` (UUIDv7) is.
-//! `user_id` is NEVER sent in a push body — the server derives it from the
-//! verified session and RLS WITH CHECK is the DB-level backstop.
-//!
 use chrono::{DateTime, SecondsFormat, Utc};
 use reqwest::Client;
 use rusqlite::{params, Connection, Result as SqlResult};
@@ -36,11 +9,6 @@ use uuid::Uuid;
 const MAX_PENDING_ARTIFACTS_PER_USER: usize = 2_000;
 const MAX_PENDING_ARTIFACT_CONTENT_BYTES_PER_USER: usize = 64 * 1024 * 1024;
 
-// ---------------------------------------------------------------------------
-// Public result type (kept for the existing `sync_conversations_to_cloud`
-// Tauri command signature in conversation.rs — that command is now just a
-// thin shim over `sync_now`).
-// ---------------------------------------------------------------------------
 
 /// Result from a bulk sync operation.
 #[derive(Debug, Clone, Serialize)]
@@ -91,7 +59,6 @@ impl SyncOutcome {
 // we redirect through sync_now).
 // ---------------------------------------------------------------------------
 
-/// Legacy placeholder — kept for `sync_conversations_to_cloud` command compat.
 pub struct CloudSyncClient;
 
 impl CloudSyncClient {
@@ -113,11 +80,6 @@ impl CloudSyncClient {
     }
 }
 
-// ---------------------------------------------------------------------------
-// Wire shapes — field names must exactly match the server schema.
-// Push uses camelCase (server Zod schema uses camelCase), pull returns
-// snake_case (server SQL SELECT returns snake_case column names).
-// ---------------------------------------------------------------------------
 
 /// Pushed conversation (camelCase, matching PushConversationSchema on server).
 #[derive(Debug, Serialize, Deserialize)]
@@ -153,11 +115,6 @@ struct PushMessage {
     is_deleted: Option<bool>,
 }
 
-/// Pushed artifact (camelCase, matching PushArtifactSchema on server).
-///
-/// Server Zod schema uses `.optional()` for all nullable fields, so absent keys
-/// (undefined) are accepted but JSON `null` is NOT — hence `skip_serializing_if`.
-/// `conversationId`, `artifactType`, `content`, `updatedAt`, and `id` are required.
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct PushArtifact {
@@ -182,7 +139,6 @@ struct PushArtifact {
     is_deleted: Option<bool>,
 }
 
-/// POST body — no user_id (server derives from session).
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct PushBody {
@@ -354,11 +310,6 @@ fn exec_write(conn: &Connection, op: &str, sql: &str, args: &[&dyn rusqlite::ToS
     }
 }
 
-/// Per-entity tally for one apply pass.
-///
-/// `deferred` counts rows deliberately held for a later pass (their parent is
-/// not local yet). Unlike `failed` that is normal operation, so it must not
-/// hold the cursor — only an unwritten row may.
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 struct ApplyCounts {
     applied: usize,
@@ -416,17 +367,6 @@ fn write_cursor(conn: &Connection, user_id: &str, cursor: &str) -> bool {
     )
 }
 
-// ---------------------------------------------------------------------------
-// Timestamp helpers.
-//
-// Zod `z.string().datetime()` (no options) accepts ISO-8601 with a literal `Z`
-// suffix ONLY. It rejects:
-//   - timezone offsets (+00:00)   — emitted by chrono's default to_rfc3339()
-//   - space-separated SQLite timestamps  — emitted by CURRENT_TIMESTAMP
-//
-// All timestamps that travel over the wire MUST be produced by `now_z()` or
-// normalised through `to_z_datetime()`.
-// ---------------------------------------------------------------------------
 
 /// Return the current UTC time as a Zod-safe ISO-8601 string (`...Z`).
 fn now_z() -> String {
@@ -463,7 +403,7 @@ fn to_z_datetime(s: &str) -> String {
     // Fallback: shouldn't happen in practice; use current time.
     warn!(
         raw_ts = s,
-        "to_z_datetime: unparseable timestamp — using now_z() as fallback"
+        "to_z_datetime: unparseable timestamp, using now_z() as fallback"
     );
     now_z()
 }
@@ -566,9 +506,6 @@ pub fn mark_artifact_for_push(conn: &Connection, artifact_id: &str) -> SqlResult
     Ok(())
 }
 
-// ---------------------------------------------------------------------------
-// DB-only push helpers (no HTTP — pure functions for testability).
-// ---------------------------------------------------------------------------
 
 /// Gather cloud conversations that need pushing. Returns owned data so the
 /// connection can be dropped before the HTTP await.
@@ -602,8 +539,6 @@ fn gather_push_conversations(conn: &Connection, user_id: &str) -> SqlResult<Vec<
     rows.collect()
 }
 
-/// Gather cloud messages that need pushing. Skips rows with NULL
-/// conversation_cloud_id (parent not yet minted — they stay dirty and retry).
 fn gather_push_messages(conn: &Connection, user_id: &str) -> SqlResult<Vec<PushMessage>> {
     let mut stmt = conn.prepare(
         "SELECT m.cloud_id, m.conversation_cloud_id, m.role, m.content, \
@@ -711,12 +646,6 @@ fn ack_clear_messages(conn: &Connection, acked: &[AckedRow], sent: &[PushMessage
     }
 }
 
-/// Gather cloud artifacts that need pushing.
-///
-/// Skips rows whose `conversation_cloud_id` is NULL (parent conversation not yet
-/// minted — they stay dirty and retry on the next cycle, matching message behavior).
-/// The `tags` TEXT column holds a JSON array; it is deserialized and re-serialized
-/// to produce a Vec<String> for the wire.
 fn gather_push_artifacts(conn: &Connection, user_id: &str) -> SqlResult<Vec<PushArtifact>> {
     let mut stmt = conn.prepare(
         "SELECT a.cloud_id, a.conversation_cloud_id, a.message_cloud_id, \
@@ -1229,10 +1158,6 @@ struct PendingArtifact {
     server_version: String,
 }
 
-/// Replay every pending artifact whose parent conversation now exists for the
-/// same authenticated user. The row is removed only after the delta has been
-/// durably applied — a failed or re-deferred replay keeps its journal row so
-/// the next cycle can retry it.
 fn drain_pending_artifacts(conn: &Connection, user_id: &str) -> ApplyCounts {
     let mut pending = Vec::new();
     if let Ok(mut stmt) = conn.prepare(
@@ -1332,12 +1257,11 @@ fn apply_artifact_deltas(
             Some(id) => id,
             None => {
                 let buffered = buffer_pending_artifact(conn, user_id, d);
-                debug!(cloud_id = %d.id, conv_cloud_id = %d.conversation_id, ?buffered, "artifact_sync: parent conversation not found — journaled for replay");
+                debug!(cloud_id = %d.id, conv_cloud_id = %d.conversation_id, ?buffered, "artifact_sync: parent conversation not found, journaled for replay");
                 match buffered {
                     // Retained: the replay owes this delta, so the cursor must
                     // stay behind it only until the journal row drains.
                     BufferOutcome::Written | BufferOutcome::AlreadyCurrent => counts.defer(),
-                    // Nothing holds the delta any more — treat it as a lost write.
                     BufferOutcome::Failed => counts.record(false),
                     // Malformed input is dropped on purpose, not owed a retry.
                     BufferOutcome::Rejected => {}
@@ -1377,7 +1301,6 @@ fn apply_artifact_deltas(
                     params![deleted_at, d.server_version, local_id],
                 ));
             }
-            // If not present locally, delete already propagated — no-op.
         } else if let Some((ref local_id, needs_push)) = existing {
             if needs_push != 0 {
                 counts.record(exec_write(
@@ -1421,9 +1344,6 @@ fn apply_artifact_deltas(
                 ],
             ));
         } else {
-            // New artifact from another device — INSERT.
-            // The local `artifacts` table uses a TEXT primary key; we use the cloud_id
-            // as the local id for pulled artifacts (dedup on it is already guaranteed).
             let now = now_z();
             let created_at = d
                 .created_at
@@ -1471,8 +1391,6 @@ fn apply_artifact_deltas(
                 Ok(_) => {
                     counts.applied += 1;
                 }
-                // A racing insert of the same cloud_id is a duplicate, not a
-                // loss — anything else means the row never landed.
                 Err(e) if artifact_exists(conn, &d.id) => {
                     debug!(cloud_id = %d.id, error = %e, "artifact_sync: skipping duplicate pulled artifact");
                 }
@@ -1536,14 +1454,6 @@ fn apply_conversation_deltas(
                     params![deleted_at, d.server_version, local_id],
                 ));
             }
-            // The parent is gone — drop any orphan messages buffered under it so they
-            // can't strand the buffer forever (a conversation deleted on another device
-            // would otherwise leak a pending row that never drains). Runs whether or not
-            // the conversation exists locally.
-            //
-            // These two sweeps only reclaim journal space, so a failure is logged
-            // but never held against the cursor: pausing the whole pull for a
-            // bounded, capacity-pruned leftover would strand every other row.
             exec_write(
                 conn,
                 "apply_conversation_tombstone_pending_messages",
@@ -1590,9 +1500,6 @@ fn apply_conversation_deltas(
                 ],
             ));
         } else {
-            // New row from another device — INSERT with auto INTEGER PK.
-            // Desktop conversations table has no `model` column; only columns that
-            // exist in the schema are inserted.
             let now = now_z();
             let title = d.title.clone().unwrap_or_default();
             let created_at = d.created_at.clone().unwrap_or_else(|| now.clone());
@@ -1655,10 +1562,6 @@ fn apply_message_deltas(conn: &Connection, user_id: &str, deltas: &[MessageDelta
         let local_conv_id = match local_conv_id {
             Some(id) => id,
             None => {
-                // Parent not present yet — BUFFER for replay once it lands, never drop.
-                // The parent conversation is re-versioned on every update, so it can
-                // sit above this message and arrive in a later pull page. Dropping it
-                // here (with the cursor advancing past it) would lose it permanently.
                 if buffer_pending_message(conn, user_id, d) {
                     counts.defer();
                 } else {
@@ -1943,12 +1846,6 @@ fn drain_pending_messages(conn: &Connection, user_id: &str) -> ApplyCounts {
 // Pull-page composition (pure DB; the orchestrator's HTTP is the only async part).
 // ---------------------------------------------------------------------------
 
-/// Select the next cursor from a pull response. We TRUST the server's cursor (a
-/// safe min-frontier bound across the two independently-paginated tables) and only
-/// guard against moving backwards — we must NOT recompute it from the max of per-row
-/// server_versions, which would overshoot the lagging table's frontier and skip its
-/// in-gap rows. Pure + unit-tested so this safety-critical choice can't silently
-/// regress inside the (HTTP-bound, hard-to-test) orchestrator.
 fn select_next_cursor(current: &str, resp_cursor: &Option<String>) -> String {
     match resp_cursor {
         Some(c) => max_cursor(current, std::slice::from_ref(c)),
@@ -2522,8 +2419,6 @@ mod tests {
         let conv_id: i64 = conn.last_insert_rowid();
         mark_conversation_for_push(&conn, conv_id).unwrap();
 
-        // Insert a message WITHOUT a cloud_id on the parent (simulates the parent
-        // cloud_id not yet being set — conversation_cloud_id will be NULL).
         conn.execute(
             "INSERT INTO messages (conversation_id, user_id, role, content, created_at) \
              VALUES (?1, 'u1', 'user', 'hello', CURRENT_TIMESTAMP)",
@@ -2566,11 +2461,6 @@ mod tests {
             )
             .unwrap();
 
-        // All three transcript roles are part of the synced set. (The messages table's
-        // CHECK(role IN ('user','assistant','system')) makes a 'tool' row impossible to
-        // insert, so the gather role filter is a structural backstop, not exercisable
-        // here — this test asserts the supported roles are gathered, not a false claim
-        // that an un-insertable role is skipped.)
         for (i, role) in ["user", "assistant", "system"].iter().enumerate() {
             conn.execute(
                 "INSERT INTO messages (conversation_id, user_id, role, content, created_at) \
@@ -3320,11 +3210,6 @@ mod tests {
         assert!(wire.get("updatedAt").is_none());
     }
 
-    // ── Test 10: Gating ──────────────────────────────────────────────────────
-    // (The active_mode→cloud_sync_enabled trust-boundary rule is tested directly
-    // against the real `derive_cloud_sync_enabled` fn in send_message_setup.rs. The
-    // tautological closure duplicate that lived here was removed. The mint-level
-    // gating — a local conversation never gets a cloud_id — is proven below.)
 
     #[test]
     fn local_conversation_never_gets_cloud_id() {
@@ -3899,11 +3784,6 @@ mod tests {
         );
     }
 
-    /// WIRE FORMAT: the push body must serialize to the server's camelCase zod schema
-    /// (PushConversationSchema/PushMessageSchema). A missing rename here would emit
-    /// snake_case keys, the server would see required camelCase fields missing, and
-    /// EVERY push would 400 — silently degrading desktop to pull-only. Also asserts
-    /// user_id never leaves in the body (server derives it; RLS enforces it).
     #[test]
     fn push_body_serializes_to_server_camelcase_schema() {
         let body = PushBody {
@@ -4017,10 +3897,6 @@ mod tests {
         assert_eq!(fixture.chat_push_response.conflicts.messages.len(), 1);
     }
 
-    /// TRUST BOUNDARY (CLAUDE.md locked rule): the engine must perform ZERO network
-    /// I/O without a bearer token. An empty token returns an empty outcome and leaves
-    /// dirty rows untouched — no push, no clear. (An unreachable base_url also proves
-    /// no HTTP was attempted: if the guard were removed, the connect would error.)
     #[tokio::test]
     async fn sync_now_inner_no_egress_without_token() {
         use crate::sys::commands::chat::state::AppDatabase;
@@ -4091,7 +3967,6 @@ mod tests {
             assert!(exists, "artifacts.{} should exist after v71", col);
         }
 
-        // app_mode default must be 'local' (safe default — existing rows are local-only).
         conn.execute(
             "INSERT INTO artifacts (id, artifact_type, title, content, created_at, updated_at) \
              VALUES ('test-art-id', 'code', 'T', 'content', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)",
@@ -4522,7 +4397,7 @@ mod tests {
         ] {
             assert!(
                 art.get(key).is_none(),
-                "Optional field '{}' must be absent when None — Zod .optional() rejects null",
+                "Optional field '{}' must be absent when None, Zod .optional() rejects null",
                 key
             );
         }
@@ -5579,54 +5454,6 @@ mod tests {
     }
 }
 
-// ---------------------------------------------------------------------------
-// Fixture replay (Wave 4 — shared sync-apply extraction).
-//
-// The golden fixtures under packages/client/sync/src/__fixtures__/
-// are the cross-language contract: TS's replay lives in
-// packages/client/sync/src/__tests__/fixtures.test.ts. This module
-// replays the SAME JSON against these native Rust apply fns (Rust cannot
-// import the TS module — it re-implements the rules natively) to prove the
-// two independently-written implementations agree on observable outcome.
-//
-// Fixture access — DIRECT include_str! across the workspace (not a copy):
-// `include_str!` resolves at COMPILE TIME relative to THIS source file, not
-// the `cargo test` invocation's working directory, so the relative path
-// below is stable across build environments (unlike a runtime path would
-// be). This also means these tests can never silently drift from a stale
-// copy — if the canonical fixture changes, this file picks it up on the
-// next build. The tradeoff is a compile-time dependency from this crate on
-// a sibling pnpm package's file layout: if
-// packages/client/sync/src/__fixtures__ is ever moved, this path
-// must move with it — a loud compile error, not a silent skip.
-//
-// DIVERGENCE LEDGER (cases intentionally not replayed here, or replayed
-// with different intermediate assertions than the TS side — full rationale
-// in each fixture case's own `divergenceNote` field):
-//   - "message_count_preserved_from_existing_on_update" (tagged ["ts"]
-//     only): the `conversations` table has no message_count column
-//     (desktop counts messages by SQL query, not a stored counter) — not a
-//     checkable field on this side.
-//   - "orphan_message_then_parent_conversation_arrives": SAME end state on
-//     both engines, reached differently. This module adds an INTERMEDIATE
-//     assertion after step 1 alone (message buffered, not yet a live row)
-//     that the TS side does not have — TS's port has no FK constraint, so
-//     the message is already visible after step 1 there. See
-//     packages/client/sync/src/messages.ts's module docstring for
-//     the full rationale (SQLite FK constraint vs. a plain Zustand map).
-//   - Rust's wire structs (ConversationDelta/MessageDelta/ArtifactDelta) use
-//     lenient `Option<...>` fields where the TS wire schema requires
-//     non-null strings (e.g. title, role). Every fixture delta is written
-//     to satisfy the STRICT TS schema (so it also parses as suite (a)
-//     there), which is always a valid input to Rust's lenient fields too —
-//     so this leniency never surfaces as an observable fixture difference;
-//     it is a real asymmetry worth knowing about, not a testable one.
-//   - Rust silently skips a pulled row with an unsupported role or a
-//     duplicate cloud_id (via `debug!` + continue) rather than raising. No
-//     fixture case exercises this: the TS wire schema's role enum already
-//     makes an unsupported role unconstructable from a fixture that must
-//     also satisfy suite (a) parsing on the TS side.
-// ---------------------------------------------------------------------------
 #[cfg(test)]
 mod fixture_tests {
     use super::*;
@@ -5643,12 +5470,6 @@ mod fixture_tests {
 
     const USER_ID: &str = "fixture-user";
 
-    // ── Fixture schema (mirrors packages/client/sync/src/__fixtures__) ──
-    //
-    // These structs are test-only projections, distinct from the production
-    // ConversationDelta/MessageDelta/ArtifactDelta wire structs (which are
-    // reused directly below for the `steps[].conversations/messages/artifacts`
-    // arrays — those ARE the wire shape, snake_case, no rename needed).
 
     #[derive(Debug, Deserialize)]
     #[serde(rename_all = "camelCase")]
@@ -5715,8 +5536,6 @@ mod fixture_tests {
         serde_json::from_str(raw).expect("pull-apply.json must parse into FxFile")
     }
 
-    // ── Seeding (direct SQL, NOT the apply fns — so "initial" state is
-    //    independent of the logic under test) ───────────────────────────────
 
     fn seed_conversation(conn: &Connection, rec: &FxConversation) {
         conn.execute(
@@ -5801,8 +5620,6 @@ mod fixture_tests {
         );
     }
 
-    /// Ordered by created_at (always non-null on this path — see apply_message_deltas'
-    /// insert branch), then cloud_id — the same tie-break TS's port applies.
     fn assert_live_messages(
         conn: &Connection,
         case: &str,
@@ -5913,11 +5730,6 @@ mod fixture_tests {
             }
 
             if case.name == "orphan_message_then_parent_conversation_arrives" {
-                // Exercise the Rust-side half of the documented orphan-buffering
-                // divergence: after step 1 alone (message only, no parent yet),
-                // the message must NOT be a live row — it must be buffered.
-                // Replayed via apply_pull_page (not apply_message_deltas
-                // directly) so the real conv→drain→msg ordering is exercised.
                 assert_eq!(
                     case.steps.len(),
                     2,
@@ -6024,7 +5836,7 @@ mod fixture_tests {
             assert_eq!(
                 bigint_greater(&c.a, &c.b),
                 c.expected,
-                "bigintGreater — {}",
+                "bigintGreater, {}",
                 c.name
             );
         }
@@ -6032,7 +5844,7 @@ mod fixture_tests {
             assert_eq!(
                 max_cursor(&c.base, &c.versions),
                 c.expected,
-                "maxCursor — {}",
+                "maxCursor, {}",
                 c.name
             );
         }
@@ -6040,7 +5852,7 @@ mod fixture_tests {
             assert_eq!(
                 select_next_cursor(&c.current, &c.response_cursor),
                 c.expected,
-                "selectNextCursor — {}",
+                "selectNextCursor, {}",
                 c.name
             );
         }

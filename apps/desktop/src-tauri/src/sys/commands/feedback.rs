@@ -21,10 +21,6 @@ pub struct FeedbackMetadata {
     pub user_agent: String,
 }
 
-/// Reads the application log files and returns WARN/ERROR records redacted for
-/// a support bundle. Used by the feedback dialog to attach diagnostic logs,
-/// which are then uploaded with the report — see
-/// `crate::sys::support_bundle` for exactly what survives redaction.
 #[tauri::command]
 pub async fn get_filtered_logs() -> Result<Vec<String>, String> {
     Ok(collect_bundle_lines(
@@ -106,10 +102,6 @@ mod tests {
 
     const CORRECTION: &str = "the clinic is on Rosewood Lane, and my daughter's name is Ada";
 
-    /// Runs `record_message_feedback` against a real JSON file appender in a
-    /// temp log dir — the same writer telemetry startup opens, which also
-    /// publishes the dir the bundle readers use — then returns the bundle those
-    /// readers actually produce.
     fn bundle_after_recording_feedback() -> Vec<String> {
         let dir = tempfile::tempdir().expect("temp dir");
         let appender = create_file_appender(&LogConfig {

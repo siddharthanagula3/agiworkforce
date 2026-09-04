@@ -183,7 +183,7 @@ export function MessageFeedbackButtons({
       )}
       {feedbackState === 'correction' && (
         <span className="text-xs text-blue-500">
-          Correction recorded — the AI will learn from this.
+          Correction recorded, the AI will learn from this.
         </span>
       )}
     </div>

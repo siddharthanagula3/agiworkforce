@@ -695,8 +695,6 @@ mod tests {
         );
     }
 
-    /// Only `description` is rewritten — a value that merely LOOKS like prose
-    /// (an enum member, a default) is data the tool needs intact.
     #[test]
     fn test_schema_sanitiser_leaves_non_description_values_alone() {
         let schema = serde_json::json!({

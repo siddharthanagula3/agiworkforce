@@ -396,7 +396,7 @@ export function ScheduleEditor({ isOpen, editingSchedule, onClose }: ScheduleEdi
                 className="mt-1.5 inline-flex items-center gap-1 text-xs text-[var(--chat-accent-primary)] hover:opacity-80"
               >
                 <Info className="h-3 w-3" />
-                crontab.guru — cron expression helper
+                crontab.guru, cron expression helper
               </a>
             </div>
           )}

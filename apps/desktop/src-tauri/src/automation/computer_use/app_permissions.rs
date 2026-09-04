@@ -127,26 +127,6 @@ pub fn is_always_blocked_host(host: &str) -> bool {
 /// no content, so it is the one host-less target automated navigation may reach.
 pub const BLANK_DOCUMENT_URL: &str = "about:blank";
 
-/// Reject a navigation URL that automated browsing must never open.
-///
-/// The single guard behind `CdpClient::navigate`, `PlaywrightBridge::navigate`,
-/// `ExtensionBridge::navigate` and the `browser_navigate` command, so the policy
-/// holds no matter which caller reaches the page.
-///
-/// It refuses the always-blocked broker, bank, and wallet hosts, and every
-/// scheme that is not http or https: `file:`, `data:` and `javascript:` URLs
-/// parse without a host, so until this check existed a realtime-bridge peer
-/// could point the live browser at a local file and read it back through
-/// `get_page_content`. `about:blank` stays allowed — it is the empty document a
-/// new tab is created on.
-///
-/// A URL the parser rejects is deferred to the caller's own error handling; a
-/// string that is not a URL never becomes a page. Loopback and private ranges
-/// are deliberately not refused here, because this guard also runs on the
-/// browser viewer's URL bar where reaching a dev server or a LAN device is the
-/// user's own choice. Automated navigation driven by a realtime-bridge peer,
-/// which is not the user, is held to the stricter internal-destination policy in
-/// `RealtimeServer::ensure_bridge_navigation_allowed`.
 pub fn ensure_navigation_url_allowed(url: &str) -> std::result::Result<(), String> {
     let candidate = url.trim();
     if candidate.eq_ignore_ascii_case(BLANK_DOCUMENT_URL) {

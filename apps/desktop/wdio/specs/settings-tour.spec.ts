@@ -59,7 +59,7 @@ function getContentSnapshot() {
   }>;
 }
 
-describe('AGI Desktop Settings — full live tour', () => {
+describe('AGI Desktop Settings, full live tour', () => {
   it('opens via the sidebar gear icon and shows General by default', async () => {
     await browser.pause(1500);
 
@@ -72,8 +72,8 @@ describe('AGI Desktop Settings — full live tour', () => {
     await waitForSettingsReady();
 
     const snap = await getContentSnapshot();
-    console.log('SETTINGS OPEN — active section:', snap.activeLabel);
-    console.log('SETTINGS OPEN — content preview:', snap.text);
+    console.log('SETTINGS OPEN, active section:', snap.activeLabel);
+    console.log('SETTINGS OPEN, content preview:', snap.text);
     expect(snap.hasErrorBoundary).toBe(false);
     expect(snap.activeLabel).toBe('General');
     expect(snap.text.length).toBeGreaterThan(0);
@@ -87,7 +87,7 @@ describe('AGI Desktop Settings — full live tour', () => {
       const idx = String(i + 1).padStart(2, '0');
 
       const clicked = await clickButtonWithText('nav[aria-label="Settings sections"]', label);
-      console.log(`NAV[${label}] — button found and clicked:`, clicked);
+      console.log(`NAV[${label}], button found and clicked:`, clicked);
       expect(clicked).toBe(true);
 
       await browser.waitUntil(
@@ -108,10 +108,10 @@ describe('AGI Desktop Settings — full live tour', () => {
       );
 
       const snap = await getContentSnapshot();
-      console.log(`NAV[${label}] — activeLabel:`, snap.activeLabel);
-      console.log(`NAV[${label}] — hasSpinner (still loading after 600ms):`, snap.hasSpinner);
-      console.log(`NAV[${label}] — hasErrorBoundary:`, snap.hasErrorBoundary);
-      console.log(`NAV[${label}] — text preview:`, snap.text);
+      console.log(`NAV[${label}], activeLabel:`, snap.activeLabel);
+      console.log(`NAV[${label}], hasSpinner (still loading after 600ms):`, snap.hasSpinner);
+      console.log(`NAV[${label}], hasErrorBoundary:`, snap.hasErrorBoundary);
+      console.log(`NAV[${label}], text preview:`, snap.text);
 
       await browser.saveScreenshot(
         `${SCREEN_DIR}/${idx}-${label.replace(/[^a-z0-9]+/gi, '-').toLowerCase()}.png`,
@@ -152,7 +152,7 @@ describe('AGI Desktop Settings — full live tour', () => {
     const stillOpen = await browser.execute(
       () => !!document.querySelector('nav[aria-label="Settings sections"]'),
     );
-    console.log('ESCAPE — settings nav still present after Escape:', stillOpen);
+    console.log('ESCAPE, settings nav still present after Escape:', stillOpen);
     await browser.saveScreenshot(`${SCREEN_DIR}/99-after-escape.png`);
     expect(stillOpen).toBe(false);
   });

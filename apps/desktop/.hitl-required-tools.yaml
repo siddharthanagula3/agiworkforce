@@ -1,4 +1,4 @@
-# AUDIT-FIX: CI-3 — HITL-required tools. Each entry MUST have a request_confirmation_simple
+# AUDIT-FIX: CI-3, HITL-required tools. Each entry MUST have a request_confirmation_simple
 # call site in its Rust handler. Verified by apps/desktop/check-wiring.sh in CI.
 required:
   - tool: file_write

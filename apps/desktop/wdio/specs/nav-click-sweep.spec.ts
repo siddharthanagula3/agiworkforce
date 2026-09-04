@@ -25,7 +25,7 @@ function record(result: SweepStepResult): SweepStepResult {
   );
   if (result.toasts.length) console.log(`  toasts: ${JSON.stringify(result.toasts)}`);
   if (result.errorBoundary) console.log(`  ERROR BOUNDARY: ${result.errorBoundary}`);
-  if (!result.documentAlive) console.log('  BLANK WEBVIEW — the shell rendered nothing');
+  if (!result.documentAlive) console.log('  BLANK WEBVIEW, the shell rendered nothing');
   const newKeys = result.rawKeys.filter((k) => !rawKeyBaseline.includes(k));
   if (newKeys.length) console.log(`  RAW I18N KEYS: ${JSON.stringify(newKeys)}`);
   return result;
@@ -254,7 +254,7 @@ describe('nav click sweep · every Local-mode sidebar destination is really wire
             selectorPresent: step.expectSelector,
             forbidTestId: 'agi-work-projects',
           },
-          6, // looks, not ms — lazy panels (CodeWorkspace) need several
+          6,
         ),
       );
       await shot(`${String(index + 1).padStart(2, '0')}-panel-${step.navId}`);

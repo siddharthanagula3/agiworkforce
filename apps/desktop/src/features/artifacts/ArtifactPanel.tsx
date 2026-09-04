@@ -402,9 +402,7 @@ export function ArtifactPanel({ conversationId, className, onClose }: ArtifactPa
       document.body.removeChild(a);
       setTimeout(() => URL.revokeObjectURL(url), 1000);
       if (isTauri) {
-        await shellOpen(filename).catch(() => {
-          // Silently ignore — file may not be discoverable by path alone
-        });
+        await shellOpen(filename).catch(() => {});
       }
       toast.success(`Saved and opening ${filename}`);
     } catch (err: unknown) {

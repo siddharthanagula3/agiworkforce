@@ -1,14 +1,3 @@
-/**
- * ComputerUseSettings
- *
- * Settings panel for Computer Use capabilities:
- * - Enable/disable toggle with consent dialog gate
- * - Per-app permission registry (Stream 1: backed by Tauri
- *   `app_permissions_*` commands, persists across sessions)
- * - Model picker for the OPA planner (Stream 2: lets user pick any
- *   vision-capable model — Anthropic, OpenAI, Google, xAI — instead of
- *   being locked to a single provider)
- */
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Ban, Lock, Monitor, RefreshCcw, Shield, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
@@ -47,7 +36,7 @@ const AUTO_OPTION = {
   label: 'Auto (router default)',
   provider: '',
   description:
-    "Let the router pick — typically your default vision model. Best for users who haven't customized their setup.",
+    "Let the router pick, typically your default vision model. Best for users who haven't customized their setup.",
 };
 
 const COMPUTER_USE_MODEL_OPTIONS: Array<{
@@ -314,7 +303,7 @@ export function ComputerUseSettings() {
                 </h4>
                 <p className="text-xs text-muted-foreground mt-0.5">
                   Allow / block / ask per application. The agent consults this registry on every
-                  action — apps not in the list trigger an approval prompt on first use.
+                  action, apps not in the list trigger an approval prompt on first use.
                 </p>
               </div>
               <Button
@@ -448,7 +437,7 @@ export function ComputerUseSettings() {
                 </h4>
                 <p className="text-xs text-muted-foreground mt-0.5">
                   Investment, brokerage, crypto, and banking apps are hardcoded as blocked at the
-                  agent level — matching Claude Cowork's hard-blocked categories.{' '}
+                  agent level, matching Claude Cowork's hard-blocked categories.{' '}
                   {alwaysBlocked.length} bundle IDs are on this list.
                 </p>
               </div>

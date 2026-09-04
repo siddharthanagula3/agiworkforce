@@ -154,7 +154,7 @@ function LocalRuntimeCard({ runtime }: { runtime: RuntimeConfig }) {
           <div className="flex-1 min-w-0">
             <h4 className="font-semibold mb-2">{runtime.label} (Local Runtime)</h4>
             <p className="text-sm text-muted-foreground mb-3">
-              OpenAI-compatible local server. Models run entirely on your machine — nothing leaves
+              OpenAI-compatible local server. Models run entirely on your machine, nothing leaves
               this device.
             </p>
 
@@ -198,7 +198,7 @@ function LocalRuntimeCard({ runtime }: { runtime: RuntimeConfig }) {
               </div>
             ) : (
               <p className="text-xs text-yellow-600">
-                {runtime.label} not detected{error ? ` — ${error}` : ''}. Learn more at{' '}
+                {runtime.label} not detected{error ? `, ${error}` : ''}. Learn more at{' '}
                 <a
                   href={runtime.docsUrl}
                   target="_blank"

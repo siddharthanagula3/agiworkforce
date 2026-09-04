@@ -176,16 +176,6 @@ impl NativeCapability {
         }
     }
 
-    /// The capability a native message needs before a bridge peer may run it.
-    ///
-    /// The match is exhaustive on purpose: a new `NativeMessage` variant must be
-    /// classified here before the crate compiles, so a message can never reach a
-    /// browser sink because nobody remembered to list it. `SetAttribute` needs
-    /// the script-execution grant even though it is nominally a DOM write —
-    /// `setAttribute("onmouseover", ...)`, `href`, `src`, `srcdoc` and a form's
-    /// `action` all turn one attribute write into arbitrary JavaScript in the
-    /// live tab or an off-origin submit of whatever that page holds, which is
-    /// the same power `ExecuteScript` hands out.
     pub fn required_for(message: &NativeMessage) -> Option<Self> {
         match message {
             NativeMessage::ExecuteScript { .. } | NativeMessage::SetAttribute { .. } => {
@@ -260,13 +250,6 @@ impl ExtensionCapabilities {
         }
     }
 
-    /// The most the realtime bridge may ever grant a peer.
-    ///
-    /// Presenting the loopback bridge token proves only that the caller runs as
-    /// this OS user — not that the user approved arbitrary JavaScript in their
-    /// signed-in tabs, or reads of their session cookies and local storage. Those
-    /// three stay off the ceiling until a host-side grant exists to raise them,
-    /// so a peer declaring them cannot grant them to itself.
     pub fn bridge_ceiling() -> Self {
         Self {
             version: env!("CARGO_PKG_VERSION").to_string(),

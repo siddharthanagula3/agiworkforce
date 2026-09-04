@@ -25,7 +25,7 @@ vi.mock('react-i18next', () => ({
         'sidebar.nav.design': 'Design',
         'sidebar.nav.research': 'Research',
         'canvas.sessionOnlyNotice':
-          'Sketches are session-only for now — closing the app clears the board.',
+          'Sketches are session-only for now, closing the app clears the board.',
         'sidebar.nav.tasks': 'Tasks',
         'sidebar.nav.scheduled': 'Scheduled',
         'sidebar.nav.customize': 'Customize',
@@ -154,7 +154,7 @@ describe('DesktopShellV3 real render', () => {
 
       expect(await screen.findByTestId('design-workspace')).toBeInTheDocument();
       expect(
-        screen.getByText('Sketches are session-only for now — closing the app clears the board.'),
+        screen.getByText('Sketches are session-only for now, closing the app clears the board.'),
       ).toBeInTheDocument();
     });
 

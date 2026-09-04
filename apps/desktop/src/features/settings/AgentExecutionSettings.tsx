@@ -11,13 +11,7 @@ import {
 } from '@/ui/AlertDialog';
 import { Input } from '@/ui/Input';
 import { Label } from '@/ui/Label';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/ui/Select';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/ui/Select';
 import { Slider } from '@/ui/Slider';
 import { Switch } from '@/ui/Switch';
 import {
@@ -175,7 +169,7 @@ export function AgentExecutionSettings({ onSettingsChange }: AgentExecutionSetti
 
   const POLICY_DESCRIPTIONS: Record<ApprovalTimeoutPolicy, string> = {
     'auto-deny': 'Automatically reject the tool call when time runs out (safest)',
-    'auto-approve': 'Automatically approve when time runs out — use with caution',
+    'auto-approve': 'Automatically approve when time runs out, use with caution',
     pause: 'Pause the agent and wait for you to return',
   };
 

@@ -33,14 +33,6 @@ pub async fn get_code_completion(
 ) -> Result<CompletionResponse, String> {
     let start_time = std::time::Instant::now();
 
-    // TRUST BOUNDARY (desktop-trust-boundary-01): code-completion / ghost-text
-    // helper — sends the user's in-progress code to an LLM with no
-    // active-session trust context available. `..Default::default()` leaves
-    // `trust_mode: None`, which now fails closed to Local via
-    // `effective_trust_mode`'s default (candidates() falls back to
-    // whatever local providers are configured, or returns none) instead of
-    // silently reaching a configured BYOK/ManagedCloud provider from a
-    // Local session.
     let preferences = RouterPreferences {
         strategy: RoutingStrategy::LatencyOptimized,
         ..Default::default()
@@ -149,14 +141,6 @@ Return ONLY the completion text - no explanations, no markdown, no code fences."
         context_after.chars().take(100).collect::<String>()
     );
 
-    // TRUST BOUNDARY (desktop-trust-boundary-01): code-completion / ghost-text
-    // helper — sends the user's in-progress code to an LLM with no
-    // active-session trust context available. `..Default::default()` leaves
-    // `trust_mode: None`, which now fails closed to Local via
-    // `effective_trust_mode`'s default (candidates() falls back to
-    // whatever local providers are configured, or returns none) instead of
-    // silently reaching a configured BYOK/ManagedCloud provider from a
-    // Local session.
     let preferences = RouterPreferences {
         strategy: RoutingStrategy::LatencyOptimized,
         ..Default::default()
@@ -330,15 +314,6 @@ Rules:
         ),
     };
 
-    // Use latency-optimized strategy for fast suggestions
-    // TRUST BOUNDARY (desktop-trust-boundary-01): code-completion / ghost-text
-    // helper — sends the user's in-progress code to an LLM with no
-    // active-session trust context available. `..Default::default()` leaves
-    // `trust_mode: None`, which now fails closed to Local via
-    // `effective_trust_mode`'s default (candidates() falls back to
-    // whatever local providers are configured, or returns none) instead of
-    // silently reaching a configured BYOK/ManagedCloud provider from a
-    // Local session.
     let preferences = RouterPreferences {
         strategy: RoutingStrategy::LatencyOptimized,
         ..Default::default()

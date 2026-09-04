@@ -71,7 +71,7 @@ class ErrorTrackingService {
 
       this.initialized = true;
     } catch {
-      // Sentry initialization failed — tracking will remain disabled
+      return;
     }
   }
 
@@ -104,7 +104,7 @@ class ErrorTrackingService {
         this.config.environment = environment;
       }
     } catch {
-      // Config load failed — defaults will be used
+      return;
     }
   }
 
@@ -168,7 +168,7 @@ class ErrorTrackingService {
         },
       });
     } catch {
-      // Sentry capture failed — error already tracked via analytics above
+      return;
     }
   }
 

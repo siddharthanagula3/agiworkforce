@@ -206,7 +206,6 @@ impl OAuthManager {
         Ok(OAuthAuthorizationUrl {
             url: auth_url.to_string(),
             state: csrf_state.secret().clone(),
-            // SECURITY: pkce_verifier is NOT returned to caller — it stays in pending_verifiers map
         })
     }
 

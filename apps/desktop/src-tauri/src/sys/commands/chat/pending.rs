@@ -1,4 +1,3 @@
-//! Pending user message queue — allows users to queue messages while AI is processing.
 
 use chrono::Utc;
 use tauri::Emitter;

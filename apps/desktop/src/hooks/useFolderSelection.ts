@@ -95,7 +95,7 @@ export function useFolderSelection(mode: FolderSelectionMode = 'local'): UseFold
           toast.success(`Project folder set: ${formatFolderPath(selected)}`);
         } else {
           toast.success(
-            `Folder: ${formatFolderPath(selected)} — files stay on this device until you approve them.`,
+            `Folder: ${formatFolderPath(selected)}, files stay on this device until you approve them.`,
           );
         }
         setCurrentFolder(selected);

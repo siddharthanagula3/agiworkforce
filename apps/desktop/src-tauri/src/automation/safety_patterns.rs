@@ -235,7 +235,7 @@ mod tests {
         assert!(!any_dangerous("ls /tmp"), "ls should not be flagged");
         assert!(
             !any_dangerous("cat deltree_notes.md"),
-            "file name with deltree prefix may vary — just ensure unrelated commands are clean"
+            "file name with deltree prefix may vary, just ensure unrelated commands are clean"
         );
     }
 
@@ -511,9 +511,6 @@ mod tests {
         );
     }
 
-    // =========================================================================
-    // Common safe shell commands — none should trigger any pattern
-    // =========================================================================
 
     #[test]
     fn test_common_safe_commands_not_flagged() {

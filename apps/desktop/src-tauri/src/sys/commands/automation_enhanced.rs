@@ -487,7 +487,6 @@ pub async fn save_recording_as_script(
     Ok(script)
 }
 
-/// Frontend calls `inspect_element_at` with `{ x, y }` — returns JSON element info
 #[tauri::command]
 pub fn inspect_element_at(x: f64, y: f64) -> Result<Option<serde_json::Value>, String> {
     let inspector = InspectorService::new().map_err(|e| e.to_string())?;

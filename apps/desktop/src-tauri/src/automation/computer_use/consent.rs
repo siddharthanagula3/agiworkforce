@@ -160,11 +160,6 @@ pub fn process_scope() -> &'static ConsentScope {
 
 static PROMPTS_ON_SCREEN: AtomicUsize = AtomicUsize::new(0);
 
-/// True while a native consent prompt is waiting for the user's answer.
-///
-/// The prompt is only a decision the user makes if the app cannot answer it, so
-/// every path that can synthesize a keystroke or a click has to refuse while
-/// this holds — including callers that never went through a Tauri command.
 pub fn consent_prompt_is_on_screen() -> bool {
     PROMPTS_ON_SCREEN.load(Ordering::SeqCst) > 0
 }

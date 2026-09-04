@@ -205,7 +205,7 @@ describe('errorStore', () => {
       expect(newestExists).toBe(true);
     });
 
-    it('evicts in FIFO order — second-oldest is evicted before newest', () => {
+    it('evicts in FIFO order, second-oldest is evicted before newest', () => {
       const { addError } = useErrorStore.getState();
 
       for (let i = 0; i < 100; i++) {

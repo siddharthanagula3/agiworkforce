@@ -178,7 +178,7 @@ export function AutomationPermissionsSettings() {
       {allGranted && permissions?.automationServiceReady && (
         <p className="mt-4 text-xs text-green-600 flex items-center gap-1.5">
           <Check className="h-3.5 w-3.5" />
-          All permissions granted — agent mode is ready.
+          All permissions granted, agent mode is ready.
         </p>
       )}
 

@@ -32,13 +32,6 @@ const HOTKEY_OPTIONS = [
   { value: 'ctrl+shift+v', label: 'Ctrl+Shift+V (hold to dictate)' },
 ] as const;
 
-/**
- * Explicit dictation transcription modes only (fail-closed on the backend):
- * recorded dictation is transcribed exactly where the user points it. There
- * is deliberately NO Deepgram entry — Deepgram is streaming-only (voice
- * mode), and the old option silently rerouted recorded audio to managed
- * cloud. Exported for the honesty pins in VoiceSettings.test.tsx.
- */
 export const PROVIDER_OPTIONS = [
   { value: 'local_whisper', label: 'Local Whisper (offline)' },
   { value: 'openai_whisper', label: 'OpenAI Whisper (your API key)' },
@@ -262,7 +255,7 @@ export function VoiceSettings() {
               </SelectContent>
             </Select>
             <p className="text-xs text-muted-foreground">
-              Hold this key to record — release to transcribe.
+              Hold this key to record, release to transcribe.
             </p>
           </div>
 
@@ -278,7 +271,7 @@ export function VoiceSettings() {
                   const unavailable = opt.value === 'local_whisper' && !localWhisperAvailable;
                   return (
                     <SelectItem key={opt.value} value={opt.value} disabled={unavailable}>
-                      {unavailable ? `${opt.label} — not compiled into this build` : opt.label}
+                      {unavailable ? `${opt.label}, not compiled into this build` : opt.label}
                     </SelectItem>
                   );
                 })}
@@ -558,7 +551,7 @@ export function VoiceSettings() {
             </div>
           </div>
 
-          {/* System-wide dictation — honest capability gate. The backend probe
+          {/* System-wide dictation, honest capability gate. The backend probe
               (capabilities.systemDictationAvailable) stays false until the
               release gates in docs/plans/desktop-system-dictation.md pass
               (DESKTOP-SYSTEM-DICTATION-UNWIRED-01), so this control must not

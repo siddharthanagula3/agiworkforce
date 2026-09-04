@@ -189,7 +189,7 @@ describe('useGlobalSearch', () => {
     expect(projGroup!.items.every((i) => i.id !== 'p3')).toBe(true);
   });
 
-  it('debounces the query — all 5 groups present at empty query, narrows after 200ms', () => {
+  it('debounces the query, all 5 groups present at empty query, narrows after 200ms', () => {
     const { result, rerender: rerenderHook } = renderHook(({ q }) => useGlobalSearch(q), {
       initialProps: { q: '' },
     });

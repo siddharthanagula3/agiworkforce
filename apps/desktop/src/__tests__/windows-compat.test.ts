@@ -1,8 +1,7 @@
-
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
 
-describe('Platform detection — Windows navigator mocks', () => {
+describe('Platform detection, Windows navigator mocks', () => {
   const originalPlatform = Object.getOwnPropertyDescriptor(navigator, 'platform');
   const originalUserAgent = Object.getOwnPropertyDescriptor(navigator, 'userAgent');
 
@@ -94,7 +93,7 @@ describe('Platform detection — Windows navigator mocks', () => {
   });
 });
 
-describe('Download URL construction — Windows installer', () => {
+describe('Download URL construction, Windows installer', () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
@@ -162,7 +161,7 @@ describe('Download URL construction — Windows installer', () => {
   });
 });
 
-describe('SettingsStore — Windows-relevant defaults', () => {
+describe('SettingsStore, Windows-relevant defaults', () => {
   it('has sensible default LLM provider and temperature', async () => {
     const { useSettingsStore } = await import('../stores/settingsStore');
     const state = useSettingsStore.getState();
@@ -225,7 +224,7 @@ describe('SettingsStore — Windows-relevant defaults', () => {
   });
 });
 
-describe('File path handling — Windows backslash paths', () => {
+describe('File path handling, Windows backslash paths', () => {
   it('Windows absolute path with drive letter is a valid string', () => {
     const winPath = 'C:\\Users\\nagul\\OneDrive\\Desktop\\agiworkforce';
     expect(winPath).toMatch(/^[A-Z]:\\/i);
@@ -308,7 +307,7 @@ describe('File path handling — Windows backslash paths', () => {
   });
 });
 
-describe('UpdaterStore — update notification on Windows', () => {
+describe('UpdaterStore, update notification on Windows', () => {
   it('starts in idle status', async () => {
     const { useUpdaterStore } = await import('../stores/updaterStore');
     const state = useUpdaterStore.getState();
@@ -410,7 +409,7 @@ describe('UpdaterStore — update notification on Windows', () => {
   });
 });
 
-describe('Keyboard shortcuts — Ctrl+ modifier on Windows', () => {
+describe('Keyboard shortcuts, Ctrl+ modifier on Windows', () => {
   beforeEach(() => {
     Object.defineProperty(navigator, 'platform', {
       value: 'Win32',
@@ -523,7 +522,7 @@ describe('Keyboard shortcuts — Ctrl+ modifier on Windows', () => {
   });
 });
 
-describe('Terminal — Windows shell types via useTerminal', () => {
+describe('Terminal, Windows shell types via useTerminal', () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
@@ -713,7 +712,7 @@ describe('Terminal — Windows shell types via useTerminal', () => {
   });
 });
 
-describe('Plugin mocks — Windows path integration', () => {
+describe('Plugin mocks, Windows path integration', () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });

@@ -145,7 +145,7 @@ export const useCodingCheckpointStore = create<CodingCheckpointState>()(
               undefined,
               'codingCheckpoint/rewind/done',
             );
-            toast.success(`Rewound to "${label}" — restored ${restoredPaths.length} file(s)`);
+            toast.success(`Rewound to "${label}", restored ${restoredPaths.length} file(s)`);
             return restoredPaths;
           } catch (err) {
             const msg = String(err);

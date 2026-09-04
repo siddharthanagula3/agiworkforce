@@ -661,15 +661,6 @@ impl GmailPubSubClient {
         self.last_history_id = Some(history_id);
     }
 
-    /// Modify the acknowledgement deadline for a message
-    ///
-    /// Extends or shortens the deadline for acknowledging a message.
-    /// Useful when processing takes longer than expected.
-    ///
-    /// # Arguments
-    /// * `ack_ids` - Acknowledgement IDs to modify
-    /// * `deadline_seconds` - New deadline in seconds (0 to nack)
-    // Used by: Pub/Sub message processing — extends deadline when processing is slow
     pub async fn modify_ack_deadline(
         &self,
         ack_ids: Vec<String>,

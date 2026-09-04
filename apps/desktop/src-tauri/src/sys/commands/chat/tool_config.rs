@@ -6,22 +6,6 @@ use crate::sys::commands::mcp::McpState;
 use std::sync::Arc;
 use tracing::{debug, info, warn};
 
-/// Build tool definitions for chat, including MCP tools and optional web search injection.
-///
-/// Returns `(Option<Vec<ToolDefinition>>, Option<ToolChoice>, Option<Arc<ToolRegistry>>)`.
-/// The `Arc<ToolRegistry>` is returned so callers can reuse it for tool execution without
-/// reconstructing it on every tool call.
-///
-/// `skills_offered` reflects whether this turn advertised the skill catalog. When
-/// it is false the `skill` tool is withheld too, so the model is never offered a
-/// capability whose catalog it was not shown (DESKTOP-SKILLS-EAGER-INJECTION-01).
-///
-/// TRUST-BOUNDARY: an absent `model_capabilities` payload used to skip capability
-/// filtering entirely, and the desktop renderer never sends one — so every model,
-/// including a Local one, was offered `image_generate` / `video_generate`. Those
-/// two execute against AGI Managed Cloud (`sys/commands/media.rs`), which means
-/// the prompt leaves the device the moment the model calls one. Unknown
-/// capabilities now close that gate; see `capabilities_assumed_when_unknown`.
 pub(super) fn build_tool_definitions(
     enable_tools: Option<bool>,
     tool_scope: Option<ChatToolScope>,
@@ -88,7 +72,6 @@ pub(super) fn build_tool_definitions(
     }
 
     if is_web_focus {
-        // web_search is an Anthropic server tool — only inject for Claude models
         if model.to_lowercase().contains("claude") {
             let already_has_web_search = tool_defs.iter().any(|tool| tool.name == "web_search");
             if !already_has_web_search {
@@ -126,13 +109,6 @@ pub(super) fn build_tool_definitions(
     }
 }
 
-/// Capabilities assumed for a model the caller described no capabilities for —
-/// a local Ollama build is the common case, since only catalog models carry
-/// capability metadata in the renderer.
-///
-/// Capability discovery is provider-owned. An absent or malformed payload is
-/// not evidence that a dynamic Local model supports function calls, vision,
-/// browser control, search, code execution, or agentic workflows.
 fn capabilities_assumed_when_unknown() -> ModelCapabilitiesDto {
     ModelCapabilitiesDto {
         tools: false,

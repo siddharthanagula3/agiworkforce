@@ -1,4 +1,3 @@
-
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
@@ -95,9 +94,9 @@ async function removeTestServerIfPresent() {
   try {
     const servers = await invokeTauri<McpServerInfo[]>('mcp_list_servers');
     const isConnected = servers.some((s) => s.name === SERVER_NAME);
-    console.log('CLEANUP — test server still registered before cleanup:', isConnected);
+    console.log('CLEANUP, test server still registered before cleanup:', isConnected);
   } catch (err) {
-    console.log('CLEANUP — mcp_list_servers check failed (non-fatal):', err);
+    console.log('CLEANUP, mcp_list_servers check failed (non-fatal):', err);
   }
 
   try {
@@ -111,12 +110,12 @@ async function removeTestServerIfPresent() {
       }
       return false;
     }, SERVER_NAME);
-    console.log('CLEANUP — clicked Remove in DotfileSettings UI:', removed);
+    console.log('CLEANUP, clicked Remove in DotfileSettings UI:', removed);
     if (removed) {
       await browser.pause(1500);
     }
   } catch (err) {
-    console.log('CLEANUP — UI removal attempt failed (non-fatal):', err);
+    console.log('CLEANUP, UI removal attempt failed (non-fatal):', err);
   }
 
   try {
@@ -127,11 +126,11 @@ async function removeTestServerIfPresent() {
       if (raw.mcpServers && SERVER_NAME in raw.mcpServers) {
         delete raw.mcpServers[SERVER_NAME];
         fs.writeFileSync(DOTFILE_MCP_JSON, JSON.stringify(raw, null, 2));
-        console.log('CLEANUP — scrubbed test server directly from ~/.agiworkforce/mcp.json');
+        console.log('CLEANUP, scrubbed test server directly from ~/.agiworkforce/mcp.json');
       }
     }
   } catch (err) {
-    console.log('CLEANUP — direct dotfile scrub failed:', err);
+    console.log('CLEANUP, direct dotfile scrub failed:', err);
   }
 }
 
@@ -224,7 +223,6 @@ describe('MCP dotfile config actually connects (DESKTOP-MCP-DOTFILE-CONFIG-FAKE-
     expect(ourTools.length).toBeGreaterThan(0);
     expect(ourTools.some((t) => t.name === 'echo')).toBe(true);
 
-    // does — an orthogonal, working-as-designed safety gate, not a defect in
     const echoTool = ourTools.find((t) => t.name === 'echo');
     expect(echoTool).toBeDefined();
     try {

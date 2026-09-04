@@ -183,13 +183,6 @@ pub async fn dictation_session_snapshot() -> Result<DictationSnapshot, String> {
 // Global hotkey hook commands
 // ---------------------------------------------------------------------------
 
-/// Enable the global dictation hotkey hook.
-///
-/// The hook has a real start/stop lifecycle (a single OS listener per
-/// process; see `features/speech/dictation/hotkey.rs`) and routes edges into
-/// the coordinator. While `system_dictation_available()` is false the
-/// coordinator refuses global sessions, so enabling the hook only produces
-/// honest `refused` events — it never records or injects.
 #[tauri::command]
 pub async fn voice_start_global_ptt(app: tauri::AppHandle) -> Result<(), String> {
     let app_for_sink = app.clone();
@@ -253,7 +246,7 @@ pub async fn voice_start_global_ptt(app: tauri::AppHandle) -> Result<(), String>
     if newly_enabled {
         tracing::info!("[dictation] global hotkey hook enabled");
     } else {
-        tracing::debug!("[dictation] global hotkey hook already enabled — sink refreshed");
+        tracing::debug!("[dictation] global hotkey hook already enabled, sink refreshed");
     }
     Ok(())
 }
@@ -264,7 +257,7 @@ pub async fn voice_start_global_ptt(app: tauri::AppHandle) -> Result<(), String>
 pub async fn voice_stop_global_ptt(app: tauri::AppHandle) -> Result<(), String> {
     let was_enabled = GLOBAL_HOTKEY_HOOK.stop();
     if !was_enabled {
-        tracing::debug!("[dictation] global hotkey hook not enabled — ignoring stop request");
+        tracing::debug!("[dictation] global hotkey hook not enabled, ignoring stop request");
         return Ok(());
     }
 
@@ -286,16 +279,6 @@ pub async fn voice_stop_global_ptt(app: tauri::AppHandle) -> Result<(), String> 
     Ok(())
 }
 
-/// Inject `text` into the currently OS-focused window/field.
-///
-/// Uses `enigo` with the shared `lock_enigo` mutex so all synthetic input is
-/// serialised app-wide. This is a bare typing call with no target
-/// pinning/revalidation, secure-field refusal, or clipboard transaction (plan
-/// phase 4), so it fails closed on the same capability gate as global
-/// dictation: until `system_dictation_available()` is true no caller — present
-/// or future — can reach the injection path.
-///
-/// On macOS this requires the Accessibility permission ("control this computer").
 #[tauri::command]
 pub async fn voice_inject_text(text: String) -> Result<(), String> {
     if !system_dictation_available() {
@@ -306,8 +289,6 @@ pub async fn voice_inject_text(text: String) -> Result<(), String> {
         return Ok(());
     }
 
-    // Offload to a blocking thread — enigo interacts with OS input APIs that
-    // can block briefly, and we must not block the Tokio worker threads.
     tokio::task::spawn_blocking(move || -> Result<(), String> {
         use crate::automation::input::lock_enigo;
         use enigo::{Enigo, Keyboard, Settings};

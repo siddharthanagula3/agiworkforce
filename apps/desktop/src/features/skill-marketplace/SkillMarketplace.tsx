@@ -1,20 +1,3 @@
-/**
- * SkillMarketplace — the LOCAL-mode skill browser.
- *
- * It lists SKILL.md files found on the user's own disk, read through the Tauri
- * `skill_list` / `skill_reload` commands in stores/skillMarketplaceStore. Nothing
- * it renders has left the device.
- *
- * The shared SettingsModal's DirectoryBrowse "Skills" tab looks similar but sits
- * on the other side of a trust boundary: it renders `adapter.skills`, which
- * Desktop fills from the Managed Cloud catalogue (`api/cloudSkills.listCloudSkills`
- * in DesktopCloudSettingsModal). The two lists are disjoint by design — pointing
- * this view at the adapter would put local skill names on a Cloud surface, and
- * pointing DirectoryBrowse here would leak device files into an account surface.
- * Reload, category inference, and requirement checks live only here because only
- * local skills carry bin/env/OS metadata; sort and download links live only in
- * DirectoryBrowse because only Cloud skills are downloadable.
- */
 import { LayoutGrid, List, RefreshCw, Sparkles } from 'lucide-react';
 import { useEffect } from 'react';
 import { useShallow } from 'zustand/react/shallow';

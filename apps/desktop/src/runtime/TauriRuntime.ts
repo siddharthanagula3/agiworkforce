@@ -399,11 +399,6 @@ export class TauriRuntime implements ChatRuntime {
 
   readonly supportsAgentControl = false;
 
-  // ChatInterface falls back to supportsAgentControl when this is undefined,
-  // and this runtime sets that to false, so both the effort chip and the
-  // thinking control were hidden on Tauri — while sendMessage forwarded
-  // `effort` and `thinkingEnabled` all the way to reasoningEffort on the Rust
-  // command. Declared explicitly so the two cannot disagree again.
   readonly supportsReasoningEffort = true;
 
   private readonly _stopFlags = new Map<string, boolean>();
@@ -729,7 +724,7 @@ export class TauriRuntime implements ChatRuntime {
         summary: limitReached
           ? `Agent reached iteration limit (${payload.max_iterations})`
           : `Agent iteration ${payload.iteration}/${payload.max_iterations}${
-              toolCount > 0 ? ` — ${toolCount} ${toolCount === 1 ? 'tool' : 'tools'}` : ''
+              toolCount > 0 ? `, ${toolCount} ${toolCount === 1 ? 'tool' : 'tools'}` : ''
             }`,
         ...(limitReached ? {} : { detail: 'Running local tools' }),
         status: limitReached ? 'failed' : 'running',
@@ -991,9 +986,7 @@ export class TauriRuntime implements ChatRuntime {
     this._stopFlags.set(conversationId, true);
     this._stopSettlers.get(conversationId)?.();
     const backendConversationId = uuidToDbId(conversationId);
-    void invoke('chat_stop_generation', { conversationId: backendConversationId }).catch(() => {
-      // Ignore errors — the stop flag already prevents further yields
-    });
+    void invoke('chat_stop_generation', { conversationId: backendConversationId }).catch(() => {});
   }
 
   async createConversation(title?: string, projectId?: string): Promise<Conversation> {

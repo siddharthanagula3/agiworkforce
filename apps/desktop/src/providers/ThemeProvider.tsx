@@ -42,7 +42,6 @@ export function ThemeProvider({
         applyTheme(themeDefinition);
         return;
       }
-      // Unknown ID — fall through to default dark
     }
 
     clearAppliedTheme();

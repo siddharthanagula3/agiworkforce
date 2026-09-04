@@ -577,7 +577,7 @@ export function Sidebar({
         </div>
       )}
 
-      {/* Projects — ChatGPT-style folder section (expanded only) */}
+      {/* Projects, ChatGPT-style folder section (expanded only) */}
       {!collapsed && (
         <div style={{ padding: '4px 8px 0', flexShrink: 0 }}>
           <div
@@ -643,7 +643,7 @@ export function Sidebar({
         </div>
       )}
 
-      {/* Recents (expanded only). The account menu no longer replaces this — it floats
+      {/* Recents (expanded only). The account menu no longer replaces this, it floats
           above the footer avatar (Claude/web behavior), so the list stays put. */}
       {!collapsed && (
         <div
@@ -823,7 +823,7 @@ export function Sidebar({
         </div>
       )}
 
-      {/* Update pill — shown above avatar when update is available */}
+      {/* Update pill, shown above avatar when update is available */}
       <div
         style={{
           flexShrink: 0,
@@ -833,7 +833,7 @@ export function Sidebar({
         <UpdatePill collapsed={collapsed} />
       </div>
 
-      {/* Local ↔ Cloud mode toggle — the primary mode nav, sits just above Settings */}
+      {/* Local ↔ Cloud mode toggle, the primary mode nav, sits just above Settings */}
       <div style={{ flexShrink: 0, padding: '4px 8px 6px' }}>
         <LocalCloudToggle collapsed={collapsed} />
       </div>

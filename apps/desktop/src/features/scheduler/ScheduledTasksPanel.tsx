@@ -200,7 +200,7 @@ function EmptyState({ onCreate, onUseExample }: EmptyStateProps) {
       </div>
       <h4 className="mb-1 text-sm font-semibold text-white">No scheduled tasks</h4>
       <p className="mb-5 max-w-xs text-xs text-slate-500">
-        Create recurring AI tasks that run automatically — like ChatGPT Tasks, but for any model.
+        Create recurring AI tasks that run automatically, like ChatGPT Tasks, but for any model.
       </p>
 
       <button

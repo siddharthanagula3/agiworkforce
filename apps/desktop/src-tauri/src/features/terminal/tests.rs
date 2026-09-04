@@ -124,18 +124,6 @@ mod env_injection_tests {
         assert!(set_env_command(&ShellType::PowerShell, "FOO", "a\r\nrm x").is_err());
     }
 
-    /// Quoting cannot reach these bytes: the value is typed into a LIVE line
-    /// editor, which reads control bytes as editing COMMANDS before any shell
-    /// parser sees the line. `\x18\x05` is readline's edit-and-execute-command —
-    /// it hands the rest of the value to $EDITOR as keystrokes (`cc`, ESC, `ZZ`
-    /// in vi) and then EXECUTES the edited buffer. An independent reviewer drove
-    /// exactly this payload through a bash PTY and it created the file; it holds
-    /// no newline, so the previous validator passed it straight through.
-    /// Anything above ASCII is no safer: with readline's `convert-meta` on —
-    /// its default whenever the locale is not 8-bit clean, which is what a GUI
-    /// app inherits when launched without LANG — each byte arrives as ESC + byte
-    /// and reaches meta bindings such as shell-expand-line, which performs
-    /// command substitution.
     #[test]
     fn set_env_value_cannot_smuggle_readline_keystrokes() {
         let edit_and_execute = "\u{18}\u{5}cctouch /tmp/pwned\u{1b}ZZ";

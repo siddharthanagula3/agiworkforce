@@ -161,7 +161,7 @@ export function TaskScheduleInput({ value, onChange, disabled = false }: TaskSch
                 className="mt-1 inline-flex items-center gap-1 text-xs text-teal-400 hover:text-teal-300"
               >
                 <Info className="h-3 w-3" />
-                crontab.guru — cron expression helper
+                crontab.guru, cron expression helper
               </a>
             </div>
           )}

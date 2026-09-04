@@ -233,7 +233,7 @@ fn validate_cron_interval(cron_expr: &str) -> Result<(), String> {
         let gap = window[1].signed_duration_since(window[0]).num_seconds();
         if gap < MIN_CRON_INTERVAL_SECS {
             return Err(format!(
-                "Cron expression '{}' would fire every {}s — minimum allowed interval is {}s (5 minutes)",
+                "Cron expression '{}' would fire every {}s, minimum allowed interval is {}s (5 minutes)",
                 cron_expr, gap, MIN_CRON_INTERVAL_SECS
             ));
         }
@@ -1640,25 +1640,21 @@ mod tests {
 
     #[test]
     fn test_cron_interval_every_5_min_ok() {
-        // "0 */5 * * * *" = every 5 minutes — should be accepted.
         assert!(validate_cron_interval("0 */5 * * * *").is_ok());
     }
 
     #[test]
     fn test_cron_interval_hourly_ok() {
-        // "0 0 * * * *" = every hour — should be accepted.
         assert!(validate_cron_interval("0 0 * * * *").is_ok());
     }
 
     #[test]
     fn test_cron_interval_every_second_rejected() {
-        // "* * * * * *" = every second — must be rejected.
         assert!(validate_cron_interval("* * * * * *").is_err());
     }
 
     #[test]
     fn test_cron_interval_every_minute_rejected() {
-        // "0 * * * * *" = every minute — must be rejected.
         let result = validate_cron_interval("0 * * * * *");
         assert!(result.is_err());
         assert!(result.unwrap_err().contains("minimum allowed interval"));
@@ -1670,7 +1666,7 @@ mod tests {
         let trigger = make_test_trigger(
             TriggerType::Cron,
             TriggerConfig::Cron {
-                expression: "0 * * * * *".to_string(), // every minute — too frequent
+                expression: "0 * * * * *".to_string(),
                 timezone: None,
             },
         );

@@ -75,7 +75,6 @@ fn parse_agent_file(path: &PathBuf, scope: &str) -> Result<CustomAgentConfig, St
         }
     }
 
-    // No frontmatter — treat the whole file as the system prompt, use the filename as name.
     let name = path
         .file_stem()
         .and_then(|s| s.to_str())
@@ -198,22 +197,6 @@ pub async fn list_custom_agents() -> Result<Vec<CustomAgentConfig>, String> {
     Ok(agents)
 }
 
-/// Render one agent config as the `.md` file that goes on disk.
-///
-/// The on-disk format is the interface: nothing in the desktop app runs a custom
-/// agent, so the only consumer of these files is the CLI's agent loader
-/// (`apps/cli/src/agents.rs`, `discover_agents`). Two details are therefore
-/// dictated by that reader rather than by taste:
-///
-///   * the tool allowlist key is `tools`, not `allowed_tools` — the CLI's
-///     line-based frontmatter parser matches on `tools:` only;
-///   * it is written as an INLINE list (`tools: [Read, Bash]`), because the same
-///     parser reads values off a single line and would see a YAML block sequence
-///     as an empty list, silently dropping the allowlist.
-///
-/// Tool names come from a fixed identifier set in the editor
-/// (`CustomAgentEditor.tsx`, `TOOL_OPTIONS`), so the inline form cannot be
-/// broken by a comma inside a name.
 fn build_agent_markdown(config: &CustomAgentConfig) -> String {
     let mut frontmatter = format!("name: {}\n", quote_yaml_value(config.name.trim()));
 

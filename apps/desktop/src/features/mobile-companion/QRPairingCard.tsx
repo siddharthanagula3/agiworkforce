@@ -181,7 +181,7 @@ export function QRPairingCard() {
               </button>
             </div>
             <p className="mt-2 text-center text-xs leading-4 text-slate-500">
-              Check this code matches your phone. Pairing needs the full link — scan the QR, or copy
+              Check this code matches your phone. Pairing needs the full link, scan the QR, or copy
               the pairing link and paste it into Enter code manually.
             </p>
             {expiresMessage && (

@@ -1,4 +1,3 @@
-
 import { useCallback } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 import { useSettingsStore } from '../../stores/settingsStore';
@@ -78,7 +77,7 @@ export function AgentsSettings() {
         </div>
       </div>
 
-      {/* Custom Agents — live CRUD UI */}
+      {/* Custom Agents, live CRUD UI */}
       <CustomAgentsList />
 
       {/* Auto-approve is the only approval override with a live runtime policy. */}

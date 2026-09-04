@@ -14,19 +14,19 @@ export function personalizationToPrompt(p: PersonalizationPreferences): string {
   }
 
   if (p.formality <= 2) {
-    lines.push('Keep responses casual and conversational — avoid stiff or formal language.');
+    lines.push('Keep responses casual and conversational, avoid stiff or formal language.');
   } else if (p.formality >= 4) {
     lines.push('Use a formal, professional tone in all responses.');
   }
 
   if (p.warmth <= 2) {
-    lines.push('Be direct and concise — skip pleasantries and emotional language.');
+    lines.push('Be direct and concise, skip pleasantries and emotional language.');
   } else if (p.warmth >= 4) {
     lines.push('Be warm and encouraging in responses.');
   }
 
   if (p.detail <= 2) {
-    lines.push('Keep answers concise and to the point — avoid over-explaining.');
+    lines.push('Keep answers concise and to the point, avoid over-explaining.');
   } else if (p.detail >= 4) {
     lines.push('Provide thorough, detailed explanations when answering questions.');
   }

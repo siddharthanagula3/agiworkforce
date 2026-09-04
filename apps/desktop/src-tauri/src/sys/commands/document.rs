@@ -396,7 +396,6 @@ fn resolve_output_path(output_path: &str) -> Result<String> {
                     downloads.join(rest)
                 };
             } else {
-                // Bare filename (e.g. "test.pdf") — save to Documents by default
                 let docs = dirs::document_dir()
                     .or_else(|| dirs::home_dir().map(|dir| dir.join("Documents")))
                     .ok_or_else(|| {

@@ -1,4 +1,3 @@
-
 import { test, expect, type Page } from '@playwright/test';
 
 async function injectMockAuth(page: Page): Promise<void> {
@@ -91,12 +90,7 @@ test.describe('Windows: App Launch', () => {
 });
 
 test.describe('Windows: Title Bar', () => {
-  // llm-guardrail-allow: platform gate — the predicate is the host OS, not whether a control rendered, so it cannot mask a missing feature.
-  // llm-guardrail-allow: platform gate — the predicate is the host OS, not whether a control rendered, so it cannot mask a missing feature.
-  // llm-guardrail-allow: platform gate — the predicate is the host OS, not whether a control rendered, so it cannot mask a missing feature.
-  // llm-guardrail-allow: platform gate — the predicate is the host OS, not whether a control rendered, so it cannot mask a missing feature.
-  // llm-guardrail-allow: platform gate — the predicate is the host OS, not whether a control rendered, so it cannot mask a missing feature.
-  // llm-guardrail-allow: platform gate — the predicate is the host OS, not whether a control rendered, so it cannot mask a missing feature.
+  // llm-guardrail-allow: platform gate, the predicate is the host OS, not whether a control rendered, so it cannot mask a missing feature.
   test.skip(process.platform !== 'win32', 'Windows only');
 
   test.beforeEach(async ({ page }) => {
@@ -135,6 +129,7 @@ test.describe('Windows: Title Bar', () => {
 });
 
 test.describe('Windows: System Tray', () => {
+  // llm-guardrail-allow: platform gate, the predicate is the host OS, not whether a control rendered, so it cannot mask a missing feature.
   test.skip(process.platform !== 'win32', 'Windows only');
 
   test.beforeEach(async ({ page }) => {
@@ -160,6 +155,7 @@ test.describe('Windows: System Tray', () => {
 });
 
 test.describe('Windows: File Dialogs', () => {
+  // llm-guardrail-allow: platform gate, the predicate is the host OS, not whether a control rendered, so it cannot mask a missing feature.
   test.skip(process.platform !== 'win32', 'Windows only');
 
   test.beforeEach(async ({ page }) => {
@@ -242,8 +238,6 @@ test.describe('Windows: File Dialogs', () => {
     if (importVisible) {
       await expect(importButton).toBeEnabled();
     }
-    // Import button absence is acceptable in this build — test still passes.
-    // Platform-conditional: absence of element is valid on this OS configuration
   });
 });
 
@@ -316,10 +310,7 @@ test.describe('Windows: Clipboard (Ctrl+C / Ctrl+V)', () => {
   });
 
   test('Ctrl+C copies selected text to clipboard', async ({ page, context }) => {
-    // llm-guardrail-allow: platform gate — the predicate is the host OS, not whether a control rendered, so it cannot mask a missing feature.
-    // llm-guardrail-allow: platform gate — the predicate is the host OS, not whether a control rendered, so it cannot mask a missing feature.
-    // llm-guardrail-allow: platform gate — the predicate is the host OS, not whether a control rendered, so it cannot mask a missing feature.
-    // llm-guardrail-allow: platform gate — the predicate is the host OS, not whether a control rendered, so it cannot mask a missing feature.
+    // llm-guardrail-allow: platform gate, the predicate is the host OS, not whether a control rendered, so it cannot mask a missing feature.
     test.skip(process.platform !== 'win32', 'Windows only');
 
     await context.grantPermissions(['clipboard-read', 'clipboard-write']);
@@ -344,6 +335,7 @@ test.describe('Windows: Clipboard (Ctrl+C / Ctrl+V)', () => {
   });
 
   test('Ctrl+V pastes clipboard content into chat input', async ({ page, context }) => {
+    // llm-guardrail-allow: platform gate, the predicate is the host OS, not whether a control rendered, so it cannot mask a missing feature.
     test.skip(process.platform !== 'win32', 'Windows only');
 
     await context.grantPermissions(['clipboard-read', 'clipboard-write']);
@@ -368,6 +360,7 @@ test.describe('Windows: Clipboard (Ctrl+C / Ctrl+V)', () => {
 });
 
 test.describe('Windows: Window Resize Constraints', () => {
+  // llm-guardrail-allow: platform gate, the predicate is the host OS, not whether a control rendered, so it cannot mask a missing feature.
   test.skip(process.platform !== 'win32', 'Windows only');
 
   test.beforeEach(async ({ page }) => {
@@ -479,6 +472,7 @@ test.describe('Windows: Auto-Updater', () => {
 });
 
 test.describe('Windows: Terminal Component', () => {
+  // llm-guardrail-allow: platform gate, the predicate is the host OS, not whether a control rendered, so it cannot mask a missing feature.
   test.skip(process.platform !== 'win32', 'Windows only');
 
   test.beforeEach(async ({ page }) => {
@@ -578,6 +572,7 @@ test.describe('Windows: Toast Notifications', () => {
   });
 
   test('Tauri native notification command is reachable on Windows', async ({ page }) => {
+    // llm-guardrail-allow: platform gate, the predicate is the host OS, not whether a control rendered, so it cannot mask a missing feature.
     test.skip(process.platform !== 'win32', 'Windows only');
 
     const result = await page.evaluate(async () => {
@@ -608,6 +603,7 @@ test.describe('Windows: Toast Notifications', () => {
 });
 
 test.describe('Windows: Deep Links', () => {
+  // llm-guardrail-allow: platform gate, the predicate is the host OS, not whether a control rendered, so it cannot mask a missing feature.
   test.skip(process.platform !== 'win32', 'Windows only');
 
   test.beforeEach(async ({ page }) => {
@@ -780,6 +776,7 @@ test.describe('Windows: Theme Rendering', () => {
   });
 
   test('app survives a rapid light/dark toggle without crashing', async ({ page }) => {
+    // llm-guardrail-allow: platform gate, the predicate is the host OS, not whether a control rendered, so it cannot mask a missing feature.
     test.skip(process.platform !== 'win32', 'Windows only');
 
     const errors: string[] = [];
@@ -803,7 +800,7 @@ test.describe('Windows: Theme Rendering', () => {
   });
 });
 
-test.describe('Web: Download Page — Windows Detection', () => {
+test.describe('Web: Download Page, Windows Detection', () => {
   const webBaseUrl = process.env['PLAYWRIGHT_WEB_BASE_URL'] || 'http://localhost:3000';
 
   test('Windows download button is highlighted when user agent is Windows', async ({
@@ -829,7 +826,7 @@ test.describe('Web: Download Page — Windows Detection', () => {
 
     if (!response || response.status() >= 400) {
       throw new Error(
-        `Web server not available (status ${response?.status() ?? 'no response'}) — this suite requires it`,
+        `Web server not available (status ${response?.status() ?? 'no response'}), this suite requires it`,
       );
     }
 
@@ -862,7 +859,7 @@ test.describe('Web: Download Page — Windows Detection', () => {
 
     if (!response || response.status() >= 400) {
       throw new Error(
-        `Web server not available (status ${response?.status() ?? 'no response'}) — this suite requires it`,
+        `Web server not available (status ${response?.status() ?? 'no response'}), this suite requires it`,
       );
     }
 
@@ -900,7 +897,7 @@ test.describe('Web: Download Page — Windows Detection', () => {
 
     if (!response || response.status() >= 400) {
       throw new Error(
-        `Web server not available (status ${response?.status() ?? 'no response'}) — this suite requires it`,
+        `Web server not available (status ${response?.status() ?? 'no response'}), this suite requires it`,
       );
     }
 

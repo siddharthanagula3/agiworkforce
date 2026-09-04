@@ -355,7 +355,6 @@ impl CodeExecutor {
             .and_then(|v| v.as_str())
             .ok_or_else(|| anyhow!("Missing required 'code' parameter"))?;
 
-        // Validate code length (bytes, not chars — safe for UTF-8 and prevents resource abuse)
         if code.len() > MAX_CODE_LENGTH {
             tracing::info!(
                 "[CodeExecutor] Code length violation: submitted {} bytes (max {})",
@@ -587,7 +586,6 @@ impl CodeExecutor {
             .and_then(|v| v.as_str())
             .ok_or_else(|| anyhow!("Missing required 'code' parameter"))?;
 
-        // Validate code length (bytes, not chars — safe for UTF-8)
         if code.len() > MAX_ANALYSIS_CODE_LENGTH {
             tracing::info!(
                 "[CodeExecutor] Code length violation for analysis: submitted {} bytes (max {})",

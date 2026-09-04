@@ -81,7 +81,7 @@ describe('chatStore ID mapping pruning (H51)', () => {
     });
   });
 
-  describe('pruning — FIFO eviction at 1001 entries', () => {
+  describe('pruning, FIFO eviction at 1001 entries', () => {
     it('triggers pruning when more than 1000 entries are added', () => {
       const pairs = populateMappings(1001);
 
@@ -112,7 +112,7 @@ describe('chatStore ID mapping pruning (H51)', () => {
     });
   });
 
-  describe('pruning — boundary conditions', () => {
+  describe('pruning, boundary conditions', () => {
     it('does not prune when exactly 1000 entries exist', () => {
       const pairs = populateMappings(1000);
 

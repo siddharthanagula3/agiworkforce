@@ -1,28 +1,3 @@
-//! Artifact creation tool.
-//!
-//! Lets the model create a rich, renderable artifact (code, markdown, HTML,
-//! Mermaid diagram, React component, spreadsheet/table, or presentation)
-//! during a live chat turn. This is the LLM-facing trigger for the
-//! Artifacts/Canvas feature: the model emits a normal tool call (exactly
-//! like `document_create_word`/`document_create_pdf`), we persist it via the
-//! existing `ArtifactState`/`SharedArtifactStore` (core/artifacts/store.rs),
-//! and then emit a `chat:artifact` Tauri event so `TauriRuntime.ts` can push
-//! a `{ type: 'artifact' }` stream chunk to the chat UI — reusing the exact
-//! event -> StreamChunk -> StreamEvent -> message.artifacts pipeline that
-//! already exists and works for tool calls / tool results.
-//!
-//! ## Type mapping
-//!
-//! The frontend's `ArtifactType` (packages/contracts/types/src/conversation.ts) is a
-//! richer superset (`react`, `svg`, `table`, `markdown` as distinct from
-//! `document`, etc.) than the backend's persistence-oriented `ArtifactType`
-//! (core/artifacts/types.rs: Code/Document/Spreadsheet/Diagram/Web/Chart/
-//! Presentation/Image). This tool accepts the frontend-shaped type string
-//! directly and persists it as `Artifact::render_type`, while separately
-//! mapping it to the closest coarse native `ArtifactType` + metadata for
-//! native filtering/rendering. The exact `render_type` is also emitted on
-//! the live event and reconstructed after a conversation reload, so rich
-//! types such as `react` and `svg` round-trip without being downgraded.
 
 use super::*;
 use crate::core::artifacts::{
@@ -32,12 +7,6 @@ use crate::core::artifacts::{
 use crate::sys::commands::artifacts::ArtifactState;
 use tauri::{Emitter, Manager};
 
-/// Frontend-facing artifact types this tool accepts, in the exact casing the
-/// `@agiworkforce/unified-chat` `ArtifactType` union and `ArtifactRenderer`/
-/// `ArtifactPanel` dispatch on. Keep in sync with the allow-list in
-/// `packages/ui/unified-chat/src/components/ArtifactRenderer.tsx` and
-/// `ArtifactPanel.tsx` — types outside this list either aren't rendered at
-/// all (e.g. `chart`) or have no backend persistence mapping yet.
 const SUPPORTED_FRONTEND_TYPES: &[&str] = &[
     "code",
     "markdown",

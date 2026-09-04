@@ -1,4 +1,3 @@
-
 import { appStateStore } from '@agiworkforce/client-runtime';
 import type { AppState } from '@agiworkforce/client-runtime';
 
@@ -368,9 +367,7 @@ export function bridgeLogoutCleanup(): void {
           .catch((e) => console.warn('[stateBridge] runtime import failed:', e));
       });
     })
-    .catch(() => {
-      // logoutCleanup may not export registerLogoutCleanup — that's OK
-    });
+    .catch(() => {});
 }
 
 export function bridgeNotificationStore(): void {

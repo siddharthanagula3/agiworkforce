@@ -229,7 +229,6 @@ pub struct MemoryManager {
     tfidf_index: RwLock<TfIdfIndex>,
     /// Configuration for semantic search
     semantic_config: RwLock<SemanticSearchConfig>,
-    /// BUG-09 fix: cached at construction time — schema does not change at runtime
     has_last_accessed: bool,
 }
 
@@ -275,14 +274,6 @@ impl MemoryManager {
         })
     }
 
-    /// Create a MemoryManager over an already-opened connection.
-    ///
-    /// The main database is SQLCipher-encrypted and keyed by
-    /// `MainDatabaseAccess` (Keychain-stored, or the WDIO harness key). A plain
-    /// `Connection::open` on that file opens but every query fails with "file
-    /// is not a database" — which surfaced in the UI as "Could not update
-    /// memory" on every add. Callers pointing at the main database must hand in
-    /// a connection from `MainDatabaseAccess::open_connection`.
     pub fn from_connection(conn: Connection) -> Self {
         let has_last_accessed = Self::probe_schema(&conn);
         Self {
@@ -425,7 +416,6 @@ impl MemoryManager {
         }
     }
 
-    /// Search memories by query — uses semantic search when available, LIKE fallback
     pub fn search(&self, query: &str, limit: usize) -> Result<Vec<MemoryEntry>> {
         // Try semantic search first (TF-IDF ranked results)
         match self.semantic_search(query, limit) {

@@ -2,12 +2,6 @@ use crate::core::llm::{ChatMessage, ContentPart, Provider};
 use std::sync::LazyLock;
 use tiktoken_rs::{cl100k_base, CoreBPE};
 
-/// Optional tokenizer singleton — `None` if tiktoken data failed to load.
-///
-/// Uses `LazyLock<Option<CoreBPE>>` (stable since Rust 1.80) so that
-/// initialisation failures are handled gracefully without panicking.
-/// Callers fall back to a char-ratio heuristic (~4 chars per token)
-/// when the tokenizer is unavailable.
 static TOKENIZER: LazyLock<Option<CoreBPE>> = LazyLock::new(|| match cl100k_base() {
     Ok(bpe) => Some(bpe),
     Err(e) => {

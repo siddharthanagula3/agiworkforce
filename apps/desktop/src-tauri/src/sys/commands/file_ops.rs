@@ -255,10 +255,6 @@ pub(crate) fn is_blacklisted_path(path: &str) -> bool {
 
     let path_str = path.to_string_lossy();
     let path_str_for_prefix = path_str.as_ref();
-    // Match the prefix as either `prefix`, `prefix/...`, or `prefix\...`
-    // — the Windows backslash form is needed for paths like
-    // `C:\Windows\System32\kernel32.dll`, which would otherwise slip
-    // past a `/`-only separator check on Linux/macOS callers.
     let starts_with_prefix = |hay: &str, prefix: &str| {
         hay == prefix
             || hay.starts_with(&format!("{prefix}/"))
@@ -368,17 +364,13 @@ async fn check_file_permission(
                 .map(|dir| std::fs::canonicalize(dir).unwrap_or_else(|_| PathBuf::from(dir)))
                 .collect::<Vec<_>>()
         } else {
-            // M9: SettingsState is unavailable — fail closed rather than
-            // falling back to the entire home directory. Returning false here
-            // ensures no file operation is permitted without explicit configuration.
             tracing::warn!(
-                "SettingsState unavailable for AppHandle — denying file operation as fail-safe"
+                "SettingsState unavailable for AppHandle, denying file operation as fail-safe"
             );
             return Ok(false);
         }
     } else {
-        // M9: No AppHandle at all — same fail-closed policy.
-        tracing::warn!("No AppHandle provided — denying file operation as fail-safe");
+        tracing::warn!("No AppHandle provided, denying file operation as fail-safe");
         return Ok(false);
     };
     if !is_path_allowed(&canonical_path, &allowed_dirs) {
@@ -442,7 +434,6 @@ pub async fn file_read(
 
     let canonical = validate_read_path(&path)?;
 
-    // AUDIT-FIX: H-15 — use canonical (symlink-resolved) path for all fs ops.
     match fs::symlink_metadata(&canonical) {
         Ok(metadata) => {
             if metadata.len() > 100_000_000 {
@@ -507,7 +498,6 @@ pub async fn file_write(
 
     let canonical = validate_path_security(&path)?;
     let canonical_str = canonical.to_string_lossy().to_string();
-    // AUDIT-FIX: CI-4 — centralized blocked-path denylist.
     if crate::sys::security::blocked_paths::is_blocked(&canonical) {
         return Err(format!(
             "Access denied: path is on the blocked-paths denylist: {}",
@@ -549,7 +539,6 @@ pub async fn file_write(
         return Err(error);
     }
 
-    // AUDIT-FIX: H-15 — canonicalize parent and rejoin filename so writes to nonexistent files still pin to a real dir.
     let write_target: std::path::PathBuf = if canonical.exists() {
         canonical.clone()
     } else {
@@ -584,7 +573,6 @@ pub async fn file_write(
         }
         #[cfg(not(unix))]
         {
-            // AUDIT-FIX: H-15 — Windows has no O_NOFOLLOW equivalent; accepted exception, callers must trust validate_path_security.
             fs::write(&write_target, content.as_bytes())
         }
     })();
@@ -1297,9 +1285,6 @@ pub async fn dir_traverse(
     Ok(results)
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// file_read_range — Read with line-number offset + limit
-// ─────────────────────────────────────────────────────────────────────────────
 
 /// Response for a ranged file read.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -1317,16 +1302,6 @@ pub struct FileReadRangeResult {
     pub has_more: bool,
 }
 
-/// Read a file with a line-number offset and limit.
-///
-/// Each returned line is prefixed with its 1-based line number: `"42: <content>"`.
-/// This lets the agent navigate large files without loading them entirely
-/// into context.
-///
-/// # Arguments
-/// * `path`   — Absolute or relative path to the file.
-/// * `offset` — 1-indexed line number to start from (default 1).
-/// * `limit`  — Maximum number of lines to return (default 2000, max 5000).
 #[tauri::command]
 pub async fn file_read_range(
     app: AppHandle,
@@ -1662,9 +1637,6 @@ mod fix_016_blacklist_tests {
 
     #[test]
     fn does_not_match_substring_false_positives() {
-        // The pre-FIX-016 substring check would have flagged anything
-        // containing `.env` — including `.envrc-prod` and `development/.eslintrc`
-        // (no `.env` substring there, but `.environment` is a thing).
         assert!(!is_blacklisted_path("/Users/me/dev/.envrc-prod"));
         assert!(!is_blacklisted_path("/Users/me/dev/development/file.txt"));
         assert!(!is_blacklisted_path("/Users/me/.environments/notes.md"));

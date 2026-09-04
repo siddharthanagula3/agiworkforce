@@ -1,4 +1,3 @@
-
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import {
@@ -25,8 +24,8 @@ function PresentationModeRow() {
           <p className="mt-0.5 text-xs leading-5 text-muted-foreground">
             Stripe payment windows are excluded from screen recording and conferencing, so they
             appear black to anyone watching a shared screen. Turn this on to make them capturable
-            during a demo or recorded walkthrough — your card details will be visible to whoever is
-            watching. Every other AGI window is already capturable. This device only — it is never
+            during a demo or recorded walkthrough, your card details will be visible to whoever is
+            watching. Every other AGI window is already capturable. This device only, it is never
             synced to your Cloud account.
           </p>
         </div>

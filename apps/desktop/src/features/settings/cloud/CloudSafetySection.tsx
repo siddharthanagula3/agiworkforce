@@ -107,7 +107,7 @@ export function CloudSafetySection() {
           </div>
           <p className="border-t border-border/60 p-5 text-xs leading-5 text-muted-foreground">
             This changes prompt admission for Managed Cloud only. It does not monitor conversations,
-            notify another person, or replace emergency services — and it does not apply to Local
+            notify another person, or replace emergency services, and it does not apply to Local
             Mode, which never leaves this device.
           </p>
         </div>

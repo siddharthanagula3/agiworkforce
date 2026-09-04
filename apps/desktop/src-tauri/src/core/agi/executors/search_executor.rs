@@ -57,11 +57,6 @@ impl SearchType {
         }
     }
 
-    /// Domain ALLOWLIST for this search type, sent to Perplexity as
-    /// `search_domain_filter` by `search_with_perplexity`. An empty list means
-    /// the whole web. Only the Perplexity path can honor this — the DuckDuckGo
-    /// Instant Answer fallback has no domain-filter parameter, so a fallback
-    /// search is unrestricted.
     #[must_use]
     pub fn domain_filters(self) -> Vec<String> {
         match self {

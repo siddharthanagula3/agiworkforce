@@ -1,18 +1,3 @@
-/**
- * FIX (audit 2026-05-20, §15 — test-overfit):
- *
- * The old version of this file carried a top-of-file
- * `eslint-disable @typescript-eslint/no-explicit-any` and 13 inline
- * `as any` casts on the mocked `cloudAccountAuth.getState()` return value.
- * Result: any billing-schema drift (new fields on AuthState /
- * Subscription, removed status values) would silently still typecheck
- * even though the production code path could break.
- *
- * Replaced by a typed `makeAuthState(overrides)` helper that builds a
- * real `AuthState` via Partial-merge against a known-good baseline.
- * Adding a required field to `AuthState` now fails the build here, which
- * is exactly the regression signal we want.
- */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import {
   checkAutoModeAccess,

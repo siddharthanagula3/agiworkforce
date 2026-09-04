@@ -596,7 +596,7 @@ describe('agentWorkflowEvents', () => {
 
     expect(mockInvoke).toHaveBeenCalledWith('notification_get_settings');
     expect(mockSendNotification).toHaveBeenCalledWith(
-      expect.objectContaining({ title: 'AGI Workforce — Task Completed' }),
+      expect.objectContaining({ title: 'AGI Workforce, Task Completed' }),
     );
   });
 

@@ -1304,14 +1304,6 @@ pub async fn account_list_devices() -> Result<Vec<ConnectedDevice>, String> {
     Ok(vec![current_device])
 }
 
-/// Disconnect / revoke a device session by its identifier.
-///
-/// FIX-029 (Sprint 5): the previous body validated input then returned
-/// `Ok(())` while doing nothing — callers got a green checkmark in the
-/// UI even though the device session was still live. Now we surface an
-/// explicit `not_implemented` error so the UI can render "Pending — full
-/// revocation lands with the device-management API". Once the backend
-/// exposes `/api/devices/:id/revoke`, this will forward the call.
 #[tauri::command]
 pub async fn account_disconnect_device(device_id: String) -> Result<(), String> {
     // Validate device_id looks like a hex SHA-256 digest (64 hex chars).

@@ -317,7 +317,6 @@ function deliverDeepLink(url: string): void {
   if (!url.startsWith(`${DEEP_LINK_SCHEME}://`)) return;
 
   if (!DEEP_LINK_BRIDGE_ATTACHED) {
-    // Route only — an sso-callback query carries a rotating token nonce.
     console.warn(
       `[deep-link] dropped ${DEEP_LINK_SCHEME}://${deepLinkRoute(url)}: renderer mode ` +
         `"${RENDERER_MODE}" loads ${CLOUD_APP_ORIGIN} top-level with no preload, so no IPC ` +
@@ -382,7 +381,7 @@ function configureSession(targetSession: Electron.Session): void {
 
 function offlineScreenUrl(targetUrl: string, detail: string): string {
   const html = `<!doctype html><html><head><meta charset="utf-8">
-<meta name="color-scheme" content="dark"><title>AGI — offline</title><style>
+<meta name="color-scheme" content="dark"><title>AGI, offline</title><style>
   html,body{height:100%;margin:0}
   body{background:#212121;color:#ececec;display:flex;align-items:center;justify-content:center;
     font:14px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif;-webkit-font-smoothing:antialiased}
@@ -398,7 +397,7 @@ function offlineScreenUrl(targetUrl: string, detail: string): string {
 </style></head><body><main>
   <h1>Can't reach AGI</h1>
   <p>You appear to be offline, or agiworkforce.com is unreachable. Your account
-     data is unchanged — reconnect to continue using AGI Cloud.</p>
+     data is unchanged, reconnect to continue using AGI Cloud.</p>
   <button id="retry" autofocus>Try again</button>
   <p style="margin:1.5rem 0 0"><code>${detail}</code></p>
 </main><script>
@@ -543,7 +542,7 @@ if (!hasSingleInstanceLock) {
   if (!DEEP_LINK_BRIDGE_ATTACHED) {
     console.warn(
       `[deep-link] registered as handler for ${DEEP_LINK_SCHEME}:// but renderer mode ` +
-        `"${RENDERER_MODE}" attaches no IPC bridge — incoming links will be dropped.`,
+        `"${RENDERER_MODE}" attaches no IPC bridge, incoming links will be dropped.`,
     );
   }
 

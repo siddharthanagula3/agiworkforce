@@ -304,9 +304,6 @@ impl AuthManager {
                     locked_until.format("%Y-%m-%d %H:%M:%S")
                 ));
             }
-            // FIX R-12: Lockout has expired — reset the failed attempt counter and lock
-            // so the user gets a fresh set of attempts rather than being re-locked on the
-            // very next failure.
             user.failed_login_attempts = 0;
             user.locked_until = None;
         }
@@ -357,9 +354,6 @@ impl AuthManager {
     }
 
     pub fn validate_token(&self, access_token: &str) -> Result<User, String> {
-        // SECSYS-003 fix: Rate limiting to prevent brute-force token attacks
-        // Use a digest of the full token so similar prefixes cannot rate-limit each other.
-        // Rate-limit check only — do not increment yet (only failed lookups consume quota).
         let rate_key = validation_rate_key(access_token);
 
         {
@@ -381,7 +375,6 @@ impl AuthManager {
         {
             Some(s) => s,
             None => {
-                // Token not found — record the failed attempt for rate limiting
                 let mut attempts = self.validation_attempts.write();
                 if let Some(attempt) = attempts.get_mut(&rate_key) {
                     attempt.increment();

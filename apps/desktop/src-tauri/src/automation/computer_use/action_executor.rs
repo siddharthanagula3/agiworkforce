@@ -17,11 +17,6 @@ use super::types::{
 };
 use super::window_manager::WindowCoordinator;
 
-/// Executes `ComputerUseAction` variants using the platform's input simulation.
-///
-/// Handles coordinate translation for HiDPI displays. Does NOT handle
-/// advanced wait conditions (TextAppears, ScreenStable) — those require a
-/// `VisualReasoner` and remain in the caller's responsibility.
 pub struct ActionExecutor {
     window_coordinator: WindowCoordinator,
 }
@@ -227,7 +222,7 @@ impl ActionExecutor {
                 );
                 let zoom_result = super::zoom::zoom_region(&zoom_action)?;
                 tracing::info!(
-                    "Zoomed region at ({}, {}) {}x{} with {}x magnification — zoomed image {}x{} ({} bytes base64)",
+                    "Zoomed region at ({}, {}) {}x{} with {}x magnification, zoomed image {}x{} ({} bytes base64)",
                     region.left,
                     region.top,
                     region.width,

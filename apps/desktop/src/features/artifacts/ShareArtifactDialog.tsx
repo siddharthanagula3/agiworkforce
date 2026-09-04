@@ -44,7 +44,7 @@ export function ShareArtifactDialog({ artifact, isOpen, onClose }: ShareArtifact
           <p className="text-sm leading-relaxed text-muted-foreground">
             A Local-mode artifact never leaves this device, so there is nothing for a share link to
             point at. Copy or download it here instead. The desktop app cannot publish an artifact
-            to a hosted link in any mode — only the web app can, and no account setting changes that
+            to a hosted link in any mode, only the web app can, and no account setting changes that
             here.
           </p>
         </div>

@@ -210,7 +210,7 @@ impl SecureStorage {
         // must explicitly unlock first.
         if !self.is_unlocked() {
             return Err(
-                "Vault is locked — unlock with master password before storing credentials"
+                "Vault is locked, unlock with master password before storing credentials"
                     .to_string(),
             );
         }
@@ -235,11 +235,9 @@ impl SecureStorage {
 
     /// Retrieve API key from database (decrypted)
     pub fn retrieve_api_key(&self, provider: &str) -> Result<String, String> {
-        // DESK-3 (audit 2026-05-03): see store_api_key — refuse to
-        // initialize a fallback machine-key when the vault is locked.
         if !self.is_unlocked() {
             return Err(
-                "Vault is locked — unlock with master password before reading credentials"
+                "Vault is locked, unlock with master password before reading credentials"
                     .to_string(),
             );
         }
@@ -328,14 +326,6 @@ fn decrypt_aes_gcm(key: &[u8], nonce_bytes: &[u8], ciphertext: &[u8]) -> Option<
         .ok()
 }
 
-/// Open a payload with the machine-only keys an older build derived for the
-/// same purpose as `key`.
-///
-/// The fallback is offered only for a key this process currently derives, so a
-/// caller-supplied key can never turn this into a machine-only decryption
-/// oracle. Reading such a payload does not weaken it — its key was already
-/// reproducible by any local process — and it stays reported through
-/// `machine_key::has_machine_only_secrets` until it is written again.
 fn open_with_legacy_machine_keys<T>(
     key: &[u8],
     mut open: impl FnMut(&[u8]) -> Option<T>,

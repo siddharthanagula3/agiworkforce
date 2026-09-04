@@ -118,11 +118,6 @@ pub struct SwarmResult {
     pub metrics: SwarmMetrics,
 }
 
-/// High-water mark of subtasks genuinely in flight at the same moment.
-///
-/// `DependencyGraph::stats().max_parallelism` cannot answer this: it reports
-/// the instantaneous width of the graph, which is zero once every subtask has
-/// settled — exactly when the orchestrator reads it to build the result.
 #[derive(Debug, Clone, Copy, Default)]
 struct PeakParallelism(usize);
 

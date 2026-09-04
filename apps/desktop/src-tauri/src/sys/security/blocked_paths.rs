@@ -1,6 +1,3 @@
-//! AUDIT-FIX: CI-4 — centralized blocked-path denylist.
-//! Every fs-touching tool (file_ops, listing, search) MUST call `is_blocked` before
-//! reading/writing/listing. New entries go here, not in per-tool files.
 
 use std::path::Path;
 

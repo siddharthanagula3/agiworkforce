@@ -274,11 +274,6 @@ pub struct ToolExecutor {
     project_folder: Option<String>,
     /// Per-tool timeout configuration
     timeout_config: ToolTimeoutConfig,
-    /// Backend conversation ID for the live chat turn this executor is
-    /// running under (when known). Used by tools that need to associate
-    /// created resources with the conversation — e.g. `create_artifact`
-    /// (core/llm/tool_executor/artifact_tools.rs) passes this through to
-    /// `CreateArtifactRequest.conversation_id` and the `chat:artifact` event.
     conversation_id: Option<i64>,
     /// Frontend message ID for the assistant turn in progress (when known).
     /// Forwarded on the `chat:artifact` event so `TauriRuntime.ts` can
@@ -1114,13 +1109,6 @@ impl ToolExecutor {
             .await
             .map_err(|e| anyhow!("Path validation task failed: {}", e))?;
 
-            // Fail closed if the resolved path still contains a `..` component. The
-            // fallback arms above can return an UN-canonicalized path (e.g. when an
-            // intermediate directory does not exist yet for a new-file write), and
-            // `starts_with` is component-prefix based — so `<allowed>/x/../../../etc/..`
-            // would otherwise pass the allowed-dir check and the OS would resolve the
-            // `..` at write time, escaping the sandbox. Mirrors the `..` rejection on
-            // the direct command path (sys/commands/file_ops.rs).
             if canonical_path
                 .components()
                 .any(|c| matches!(c, std::path::Component::ParentDir))
@@ -1809,15 +1797,6 @@ impl ToolExecutor {
             }
         }
 
-        // MCP connector permission gate (audit C-rank 1: "per-tool connector
-        // permissions have no runtime effect"). Runs in EVERY conversation
-        // mode, not just "manual" — the block this replaced only gated MCP
-        // tools when `conversation_mode == "manual"`, so "auto" mode (the
-        // default) executed every MCP tool with zero permission or
-        // confirmation check at all, and even the stored per-tool
-        // permission (Settings → Connectors) was consulted nowhere in this
-        // loop. Mirrors the gate in `sys::commands::mcp::mcp_call_tool` (the
-        // direct-invoke Tauri command), which this agent loop never calls.
         if tool_call.name.starts_with("mcp__") {
             if let Some(app_handle) = &self.app_handle {
                 if let Some(blocked) = self
@@ -1925,21 +1904,6 @@ impl ToolExecutor {
                 tool_call.name
             );
 
-            // Ask the user and WAIT for the answer.
-            //
-            // This used to be a fire-and-forget `emit("approval:request", …)`
-            // followed immediately by a failed `ToolResult` a few lines below,
-            // which made the whole prompt theatre: the tool call had already
-            // been refused before the user saw anything, and answering it hit
-            // `agent_resolve_approval` -> "Approval {id} not pending", because
-            // nothing had ever registered with the controller.
-            //
-            // `ApprovalController::request_approval` is the mechanism that
-            // actually works (see `core/agent/autonomous.rs`): it emits, parks
-            // on a oneshot channel, consults the trust store, and returns the
-            // user's decision. It is managed Tauri state, so it can be pulled
-            // off the app handle this executor already holds — no constructor
-            // change needed.
             if let Some(app_handle) = &self.app_handle {
                 if let Err(e) = app_handle.emit(
                     "agent:status:update",
@@ -2022,8 +1986,6 @@ impl ToolExecutor {
             }
 
             if approved_by_user {
-                // Approved — skip the blocked-result return and let the normal
-                // execution path below run the tool.
             } else {
                 let message = format!(
                     "User approval required to execute dangerous tool: {}",
@@ -2434,18 +2396,6 @@ impl ToolExecutor {
         }
     }
 
-    /// Resolve and enforce the per-tool connector permission for an MCP tool
-    /// call before it reaches `execute_mcp_tool`. Returns `Some(ToolResult)`
-    /// when the call must be short-circuited (blocked outright, the
-    /// confirmation system is unavailable, or the user declined the
-    /// dialog); returns `None` when the call is cleared to proceed (either
-    /// "always allow" or the user approved).
-    ///
-    /// Resolves `(server_name, tool_name)` via the MCP tool registry — not a
-    /// hand-rolled decode — and maps `server_name` (e.g. "connector-github")
-    /// back to the connector catalog id (e.g. "github") that
-    /// `connectorPermissionStore.ts` writes permissions under, mirroring the
-    /// same fix applied to `sys::commands::mcp::mcp_call_tool`.
     async fn enforce_mcp_connector_permission(
         &self,
         app_handle: &tauri::AppHandle,
@@ -2549,8 +2499,6 @@ impl ToolExecutor {
 
         let (server_name, tool_name) = match mcp_state.registry.resolve_tool_id(&tool_call.name) {
             Ok(pair) => pair,
-            // Unresolvable tool id — let `execute_mcp_tool` produce its own
-            // "tool not found"-shaped error instead of duplicating it here.
             Err(_) => return None,
         };
 
@@ -2809,7 +2757,7 @@ impl ToolExecutor {
             Some(state) => state,
             None => {
                 tracing::error!(
-                    "[ToolExecutor] ToolConfirmationState not available — fail-closed for '{}'",
+                    "[ToolExecutor] ToolConfirmationState not available, fail-closed for '{}'",
                     tool_name
                 );
                 return Err(anyhow!(

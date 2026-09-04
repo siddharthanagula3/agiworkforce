@@ -137,7 +137,7 @@ function StatusBannerItem({ message, onDismiss }: StatusBannerItemProps) {
         <span className="font-medium">{message.title}</span>
         {message.message && (
           <>
-            <span className="opacity-60">—</span>
+            <span className="opacity-60">, </span>
             <span className="opacity-80">{message.message}</span>
           </>
         )}

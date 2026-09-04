@@ -1,25 +1,3 @@
-//! Hook executor for the UI hooks system.
-//!
-//! # Trust Model (Security)
-//!
-//! Hook commands are passed to `sh -c` (or `cmd /C` on Windows) unattended
-//! whenever their event fires, so a hook has the same power as a command the
-//! user runs in their own terminal, minus the env vars filtered out by
-//! `sys::security::env_filter`. They reach this executor from exactly two
-//! sources: the `hooks_add` / `hooks_update` / `hooks_import` Tauri commands,
-//! and `~/.agiworkforce/hooks.yaml` via `hooks_initialize` / `hooks_reload`.
-//!
-//! Neither source is trusted to be the first-party UI, and neither is trusted
-//! to be the user: every one of those commands displays the exact command in a
-//! confirmation dialog and arms nothing without an approval for that specific
-//! request (see `sys/commands/hooks.rs`). That per-request dialog is the
-//! security boundary — it is deliberately not routed through
-//! `request_tool_confirmation*`, whose auto-approve / remembered-choice /
-//! session-approval shortcuts an IPC caller can pre-arm.
-//!
-//! [`validate_hook_command`] below is a literal-substring blocklist for
-//! accidental paste errors only — it is trivially routed around and must never
-//! be treated as the gate.
 
 use super::types::{Hook, HookEvent, HookExecutionResult};
 use anyhow::{Context, Result};

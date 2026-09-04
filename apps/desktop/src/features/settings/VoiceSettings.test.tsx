@@ -78,7 +78,7 @@ function capabilitiesWith(systemDictationAvailable: boolean): VoiceCapabilities 
   };
 }
 
-describe('VoiceSettings — honest system dictation presentation', () => {
+describe('VoiceSettings, honest system dictation presentation', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.voiceMode.capabilities = null;

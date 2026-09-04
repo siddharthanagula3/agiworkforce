@@ -99,7 +99,7 @@ function createDistinctOllamaUrl(rawUrl: string): string {
   return url.toString();
 }
 
-describe('AGI Desktop Settings — persisted native restart contract', () => {
+describe('AGI Desktop Settings, persisted native restart contract', () => {
   it('commits visible settings, reloads the renderer, and restores them from native disk', async function () {
     this.timeout(180_000);
 

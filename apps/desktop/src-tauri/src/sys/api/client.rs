@@ -16,11 +16,6 @@ use crate::sys::security::egress_policy::{
     strict_public_destination_redirect_policy,
 };
 
-/// Render an error together with everything it was caused by.
-///
-/// `reqwest` reports a refused redirect as the bare string "error following
-/// redirect" and hangs the reason off `source()`, so without this the egress
-/// policy's own explanation never reaches the caller — or the log.
 fn describe_error(error: &dyn std::error::Error) -> String {
     let mut description = error.to_string();
     let mut cause = error.source();
@@ -696,10 +691,6 @@ mod tests {
         );
     }
 
-    /// A hop that stays inside the origin it came from reaches nothing the first
-    /// check did not already allow, so it is still followed — this is what keeps
-    /// a development API server on `localhost` (which redirects for trailing
-    /// slashes) usable.
     #[tokio::test]
     async fn same_origin_redirects_are_still_followed() {
         let connections = Arc::new(AtomicUsize::new(0));

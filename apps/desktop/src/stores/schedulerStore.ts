@@ -948,5 +948,4 @@ export { useSchedulerStore as useScheduledTaskStore };
 
 /** @deprecated Use SchedulerActionType instead */
 export type ActionType = SchedulerActionType;
-/** @deprecated No longer needed — jobs use a cron string `schedule` field */
 export type ScheduleType = 'cron' | 'interval' | 'once';

@@ -99,7 +99,7 @@ export function ComposerContextControls({
           folder AND ships with the sandbox not yet configured, so rendering
           the chip unconditionally put an alarm-red "Terminal: Sandbox off"
           in every new user's composer before they had touched the terminal.
-          The full-access policy stays visible regardless — the user opted
+          The full-access policy stays visible regardless, the user opted
           into that state explicitly and should keep seeing it. */}
       {(folderPath || terminalSandbox.policy === 'danger-full-access') && (
         <button
@@ -118,7 +118,7 @@ export function ComposerContextControls({
         Temporary chat. Managed Cloud only: the flag lives on the cloud
         conversation row and is what the retention cron purges. Desktop sent
         `is_temporary: false` as a hardcoded constant, so the capability existed
-        on the wire, in the schema, and in the purge job — everywhere except a
+        on the wire, in the schema, and in the purge job, everywhere except a
         control that could turn it on.
       */}
       {mode === 'managed' && (

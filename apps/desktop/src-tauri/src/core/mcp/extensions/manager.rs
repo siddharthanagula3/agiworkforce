@@ -299,7 +299,7 @@ impl ExtensionManager {
         if Self::has_plaintext_sensitive_values(&manifest, &raw_config) {
             tracing::warn!(
                 "Extension '{}' has plaintext sensitive config values \
-                 — migrating to encrypted storage",
+                 - migrating to encrypted storage",
                 id
             );
             match Self::encrypt_sensitive_values(&manifest, raw_config.clone()) {
@@ -356,7 +356,6 @@ impl ExtensionManager {
 
     /// Check for available updates
     pub fn check_updates(&self) -> ExtensionResult<Vec<UpdateInfo>> {
-        // No remote registry configured yet — return empty list
         tracing::debug!("check_updates called but no remote registry is configured; update checking is not yet implemented");
         Ok(Vec::new())
     }

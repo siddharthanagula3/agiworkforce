@@ -14,14 +14,6 @@ use serde::{Deserialize, Serialize};
 use std::time::Duration;
 use tokio::time::sleep;
 
-/// Sanitizes a string for safe interpolation into AppleScript string literals.
-/// Removes double quotes, backslashes, single quotes, null bytes, and newlines
-/// (`\n`, `\r`) that could break out of AppleScript string literals or inject
-/// arbitrary commands. Trims to max 200 chars.
-///
-/// Only called from macOS code paths in this module — suppress dead_code on
-/// other platforms so CI's `-D dead-code` (set by setup-rust-toolchain
-/// via RUSTFLAGS=-D warnings) doesn't flag the Linux build.
 #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
 fn sanitize_applescript_string(input: &str) -> String {
     input
@@ -31,12 +23,6 @@ fn sanitize_applescript_string(input: &str) -> String {
         .collect()
 }
 
-/// Sanitizes a window title for use as a direct argument to external commands
-/// (e.g. wmctrl) where the value is passed as a separate argv element rather than
-/// through a shell. Strips null bytes (which would truncate argv), newlines
-/// (`\n`, `\r`) which could be interpreted by some tools, and enforces a length
-/// limit to prevent excessively long arguments.
-// Only used on non-Windows/non-macOS (Linux) — suppress dead_code on other platforms.
 #[cfg_attr(any(target_os = "windows", target_os = "macos"), allow(dead_code))]
 fn sanitize_window_title_arg(input: &str) -> String {
     input
@@ -62,7 +48,6 @@ fn validate_app_name(name: &str) -> Result<()> {
         ));
     }
 
-    // Reject path separators — prevents launching arbitrary binaries by path
     if name.contains('/') || name.contains('\\') {
         return Err(anyhow!(
             "Application name must not contain path separators: '{}'",
@@ -515,28 +500,12 @@ impl WindowCoordinator {
         Self::new(WindowManagerConfig::default())
     }
 
-    /// Returns the currently focused (frontmost) application's identification.
-    ///
-    /// macOS: queries NSWorkspace.frontmostApplication via AppleScript
-    /// (avoids pulling additional cocoa/objc bindings; the call is cheap
-    /// and AppleScript already handles the security boundary).
-    /// Windows: GetForegroundWindow + GetWindowThreadProcessId +
-    /// QueryFullProcessImageNameW for the executable name.
-    /// Linux: returns `None` for v1 (TODO: implement via X11/Wayland atom
-    /// queries — `_NET_ACTIVE_WINDOW` + `_NET_WM_PID`).
     pub fn get_active_window() -> Option<ActiveWindow> {
         Self::get_active_window_impl()
     }
 
     #[cfg(target_os = "macos")]
     fn get_active_window_impl() -> Option<ActiveWindow> {
-        // Use AppleScript via System Events. Returns three pipe-separated fields:
-        //   bundleId|appName|windowTitle
-        // We deliberately use AppleScript instead of cocoa/NSWorkspace bindings
-        // so we don't need to add `objc2` to Cargo.toml — AppleScript already
-        // does the right thing here, has no extra security surface (the agent
-        // is already capable of arbitrary AppleScript via existing window code),
-        // and matches the patterns used elsewhere in this module.
         let script = r#"
             try
                 tell application "System Events"
@@ -652,10 +621,6 @@ impl WindowCoordinator {
 
     #[cfg(not(any(target_os = "macos", target_os = "windows")))]
     fn get_active_window_impl() -> Option<ActiveWindow> {
-        // Use xdotool (X11) to query the active window PID and title.
-        // On Wayland or when xdotool is absent the command will fail and we
-        // return None — the permission gate then falls through to the
-        // user-prompt path, which is the safe default.
         use std::process::Command;
 
         // Step 1: get the PID of the active window's owning process.
@@ -670,8 +635,6 @@ impl WindowCoordinator {
         let pid_str = String::from_utf8_lossy(&pid_output.stdout);
         let pid = pid_str.trim().parse::<u32>().ok()?;
 
-        // Step 2: resolve the process name from /proc/<pid>/comm (single line,
-        // no symlink deref required — unlike /proc/<pid>/exe).
         let comm_path = format!("/proc/{}/comm", pid);
         let comm_raw = std::fs::read_to_string(&comm_path).ok()?;
         let app_name = comm_raw.trim().to_string();
@@ -976,9 +939,6 @@ impl WindowCoordinator {
     /// Closes a window by title (Linux).
     #[cfg(not(any(target_os = "windows", target_os = "macos")))]
     pub async fn close_window(&self, title: &str) -> Result<()> {
-        // Use sanitize_window_title_arg (not sanitize_applescript_string) since wmctrl
-        // receives the title as a direct argv element — no shell interpolation occurs.
-        // We only need to strip null bytes and enforce a length cap.
         let safe_title = sanitize_window_title_arg(title);
 
         std::process::Command::new("wmctrl")

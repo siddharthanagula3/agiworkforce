@@ -882,7 +882,7 @@ export const ProjectSettingsDialog: React.FC<ProjectSettingsDialogProps> = ({
                     )}
                     title="None"
                   >
-                    —
+                    -
                   </button>
                   {ACCENT_COLORS.map((c) => (
                     <button

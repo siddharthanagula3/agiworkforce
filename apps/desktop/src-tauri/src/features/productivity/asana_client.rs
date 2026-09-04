@@ -462,7 +462,6 @@ impl UnifiedTaskProvider for AsanaClient {
     }
 
     async fn create_task(&self, task: Task) -> Result<String> {
-        // Bug #224 fix: Remove duplicate branch — workspace is always needed as fallback
         let workspaces = self.list_workspaces().await?;
         let workspace_id = workspaces
             .first()

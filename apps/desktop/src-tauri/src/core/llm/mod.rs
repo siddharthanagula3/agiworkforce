@@ -671,11 +671,8 @@ pub enum Provider {
     NvidiaNim,
     OpenRouter,
     OllamaCloud,
-    /// LM Studio local runtime — OpenAI-compatible server, default `http://localhost:1234/v1`.
     LmStudio,
-    /// llama.cpp `llama-server` local runtime — OpenAI-compatible server, default `http://localhost:8080/v1`.
     LlamaCpp,
-    /// vLLM local/self-hosted inference server — OpenAI-compatible server, default `http://localhost:8000/v1`.
     Vllm,
 }
 

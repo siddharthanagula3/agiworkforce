@@ -1,11 +1,3 @@
-// H14 — CostCalculator tests.
-//
-// The `media_pricing_tests` module below was already testing real production
-// code and is kept intact.
-//
-// The `tests` module previously contained placeholder inline-arithmetic tests
-// that never called `CostCalculator`.  Those have been replaced with tests that
-// call `CostCalculator::calculate()` and `calculate_media_cost()` directly.
 
 /// Fixed pricing date shared by every cost assertion in this file.
 ///
@@ -20,7 +12,6 @@ fn priced_on() -> chrono::NaiveDate {
     chrono::NaiveDate::from_ymd_opt(2026, 9, 1).expect("2026-09-01 is a valid date")
 }
 
-// H46 — Media pricing calculations (uses CostCalculator directly)
 #[cfg(test)]
 mod media_pricing_tests {
     use crate::core::llm::cost_calculator::{CostCalculator, MediaType};
@@ -37,7 +28,6 @@ mod media_pricing_tests {
     #[test]
     fn test_image_hd_cost_openai() {
         let calc = CostCalculator::new();
-        // OpenAI HD image: $0.08 per image — must be more expensive than standard
         let hd_cost = calc.calculate_media_cost(Provider::OpenAI, MediaType::ImageHD, 1);
         let std_cost = calc.calculate_media_cost(Provider::OpenAI, MediaType::ImageStandard, 1);
         assert!(
@@ -156,7 +146,6 @@ mod media_pricing_tests {
     }
 }
 
-// H14 — Token-based pricing via CostCalculator::calculate()
 #[cfg(test)]
 mod tests {
     use crate::core::llm::cost_calculator::CostCalculator;
@@ -311,7 +300,6 @@ mod tests {
     #[test]
     fn test_ollama_always_free() {
         let calc = CostCalculator::new();
-        // Ollama default: $0.00/M — local models are free
         let cost = calc.calculate(
             Provider::Ollama,
             "fixture-local-model",

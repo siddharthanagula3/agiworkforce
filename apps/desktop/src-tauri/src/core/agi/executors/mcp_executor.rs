@@ -1,56 +1,3 @@
-//! MCP (Model Context Protocol) tool executor.
-//!
-//! # ⚠️ UNWIRED — must gain the connector permission gate before activation
-//!
-//! Nothing constructs this executor today: `ExecutorRegistry::with_mcp` and
-//! `set_mcp_client` (the only ways to install it) have zero callers, so every
-//! shipping `AGIExecutor` refuses `mcp__` tools instead of reaching it. That
-//! is the ONLY reason this path is currently safe: `execute` calls
-//! `self.client.call_tool(...)` directly with NO per-tool connector
-//! permission check (Blocked / Always-allow / NeedsApproval) and its own
-//! hand-rolled tool-id decode. The live, gated MCP paths are
-//! `ToolExecutor::execute_tool_call` (core/llm/tool_executor/mod.rs,
-//! `enforce_mcp_connector_permission`) and `mcp_call_tool`
-//! (sys/commands/mcp.rs). If you wire this executor up, port that same
-//! fail-closed gate (and registry-based tool-id resolution) here first —
-//! otherwise it becomes an unguarded bypass of the user's connector
-//! permissions.
-//!
-//! This module provides an executor for MCP tools that are dynamically registered
-//! from connected MCP servers. It routes tool calls through the MCP client and
-//! handles streaming results.
-//!
-//! # Tool ID Format
-//!
-//! MCP tools use the format `mcp__{server}__{tool}` where:
-//! - `mcp` is the prefix identifying MCP tools
-//! - `server` is the name of the MCP server providing the tool
-//! - `tool` is the name of the tool on that server
-//!
-//! The double underscore (`__`) delimiter is used to separate components.
-//!
-//! # Architecture
-//!
-//! ```text
-//! McpExecutor
-//!     |
-//!     v
-//! McpClient (from core/mcp)
-//!     |
-//!     v
-//! MCP Server (external process)
-//! ```
-//!
-//! # Streaming Support
-//!
-//! The executor supports streaming results by emitting progress events during
-//! tool execution. The frontend can subscribe to these events for real-time updates.
-//!
-//! # Dynamic Tool Registration
-//!
-//! Tools are dynamically discovered from connected MCP servers. The `tool_names()`
-//! method queries the MCP client for all available tools and returns them in the
-//! standard `mcp__{server}__{tool}` format.
 
 use super::{ExecutorContext, ToolExecutor};
 use crate::core::agi::ExecutionContext;
@@ -715,16 +662,6 @@ impl McpExecutor {
         serde_json::to_string_pretty(result).unwrap_or_else(|_| result.to_string())
     }
 
-    /// Validates tool arguments against the tool's JSON schema `input_schema`.
-    ///
-    /// Checks that all fields declared `required` in the schema are present in
-    /// `parameters`, and that no additional properties violate an
-    /// `additionalProperties: false` constraint if set.
-    ///
-    /// This is a lightweight structural check — it does not perform full JSON
-    /// Schema draft validation (type checking, pattern matching, etc.).  It is
-    /// intentionally lenient so that valid-but-unusual argument shapes are not
-    /// rejected; the MCP server performs authoritative validation.
     fn validate_tool_args(
         &self,
         server_name: &str,
@@ -738,14 +675,14 @@ impl McpExecutor {
                 Some(tool) => tool.input_schema,
                 None => {
                     tracing::debug!(
-                        "[McpExecutor] Tool '{}' not found in server '{}' cache — skipping schema validation",
+                        "[McpExecutor] Tool '{}' not found in server '{}' cache, skipping schema validation",
                         tool_name,
                         server_name
                     );
                     return Ok(());
                 }
             },
-            Err(_) => return Ok(()), // server not connected — skip
+            Err(_) => return Ok(()),
         };
 
         // Check required fields.

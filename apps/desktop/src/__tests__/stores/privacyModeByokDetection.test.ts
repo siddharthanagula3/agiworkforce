@@ -8,7 +8,7 @@ const setProviderMode = (pm: string) =>
     JSON.stringify({ state: { llmConfig: { providerMode: pm } }, version: 0 }),
   );
 
-describe('selectPrivacyMode — workspace boundary', () => {
+describe('selectPrivacyMode, workspace boundary', () => {
   beforeEach(() => globalThis.localStorage.removeItem(KEY));
 
   it('cloud + providerMode=cloud remains managed', () => {

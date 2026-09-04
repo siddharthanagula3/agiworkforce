@@ -52,7 +52,7 @@ describe('storageFallback', () => {
       expect(result).toBeUndefined();
     });
 
-    it('calling clear does not affect subsequent getItem — still returns null', () => {
+    it('calling clear does not affect subsequent getItem, still returns null', () => {
       storageFallback.setItem('x', '1');
       storageFallback.clear();
       expect(storageFallback.getItem('x')).toBeNull();
