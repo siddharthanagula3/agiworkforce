@@ -30,6 +30,7 @@ import {
   FolderOpen,
   Telescope,
   ListChecks,
+  Brain,
 } from '@agiworkforce/icons';
 import { cn } from '@shared/lib/utils';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@agiworkforce/ui';
@@ -81,6 +82,7 @@ import {
   type SendPreviewPresentation,
 } from '@agiworkforce/types';
 import { isWebSearchAvailable } from '@/lib/web-search-support';
+import { isMemoryCapabilityEnabled } from '@/lib/runtime/memory-capability';
 import {
   BUILT_IN_SLASH_COMMANDS,
   decideComposerPaste,
@@ -182,6 +184,7 @@ const WORK_MODE_PLACEHOLDERS: Record<ComposerWorkMode, string | null> = {
 
 const COMPOSER_FOOTER_KEYS = {
   webSearch: 'web-search',
+  memory: 'memory',
   sendPreview: 'send-preview',
   accuracy: 'accuracy',
   privacy: 'privacy',
@@ -237,6 +240,8 @@ export interface ComposerSendMeta {
   agiWorkGoal?: AgiWorkGoalInput;
   /** Connector ids switched off for this conversation; their tools are not offered to the model. */
   disabledConnectorIds?: string[];
+  /** Per-chat Memory override. False skips injecting and writing account memories for this turn. */
+  memoryEnabled?: boolean;
 }
 
 interface ChatComposerProps {
@@ -837,6 +842,29 @@ const ChatComposerNewComponent = ({
       setConnectorEnabledInStore(connectorId, enabled, conversationId),
     [setConnectorEnabledInStore, conversationId],
   );
+
+  // Per-conversation Memory opt-out (persisted, mirrors the connector opt-out
+  // above -- see `memoryDisabledByConversation` in the chat store). The
+  // settings-level switch is the global default; this overrides it for one
+  // conversation only.
+  const memoryEnabledForChat = useChatStore(
+    (s) => s.memoryDisabledByConversation[toggleBucketKey] !== true,
+  );
+  const setMemoryEnabledInStore = useChatStore((s) => s.setMemoryEnabled);
+  const setMemoryEnabledForChat = useCallback(
+    (enabled: boolean) => setMemoryEnabledInStore(enabled, conversationId),
+    [setMemoryEnabledInStore, conversationId],
+  );
+  const [memoryCapabilityEnabled, setMemoryCapabilityEnabled] = useState(false);
+  useEffect(() => {
+    let cancelled = false;
+    isMemoryCapabilityEnabled().then((enabled) => {
+      if (!cancelled) setMemoryCapabilityEnabled(enabled);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
   const connectedConnectorOptions = useMemo(
     () =>
       Array.from(connectedConnectorIds)
@@ -1570,6 +1598,10 @@ const ChatComposerNewComponent = ({
     setComposerToggles({ officeCreationEnabled: !officeCreationEnabled });
   }, [officeCreationEnabled, setComposerToggles]);
 
+  const handleMemoryToggle = useCallback(() => {
+    setMemoryEnabledForChat(!memoryEnabledForChat);
+  }, [memoryEnabledForChat, setMemoryEnabledForChat]);
+
   const closeMenu = useCallback(() => {
     setShowOverflowMenu(false);
   }, []);
@@ -2178,6 +2210,7 @@ const ChatComposerNewComponent = ({
         skillName: selectedSkillName ?? undefined,
         mcpContext: selectedMcpContext ?? undefined,
         disabledConnectorIds: disabledConnectorIds.length > 0 ? disabledConnectorIds : undefined,
+        memoryEnabled: memoryEnabledForChat,
         // CAP-048: attach the structured goal on an AGI Work send. The objective
         // is the composed message; the optional scope fields ride alongside.
         agiWorkGoal:
@@ -2230,6 +2263,7 @@ const ChatComposerNewComponent = ({
     selectedSkillName,
     selectedMcpContext,
     disabledConnectorIds,
+    memoryEnabledForChat,
     isTurnActive,
     disabled,
     hasAttachmentConflict,
@@ -3687,6 +3721,25 @@ const ChatComposerNewComponent = ({
                       }
                     />
 
+                    {/* 8b-1. Per-chat Memory toggle. On by default, mirroring the
+                        settings-level Memory switch which sets the account-wide
+                        default this overrides for one conversation only. */}
+                    <MenuToggleRow
+                      icon={Brain}
+                      label="Memory"
+                      checked={memoryCapabilityEnabled && memoryEnabledForChat}
+                      onToggle={() => {
+                        handleMemoryToggle();
+                        closeMenu();
+                      }}
+                      disabled={disabled || !memoryCapabilityEnabled}
+                      title={
+                        !memoryCapabilityEnabled
+                          ? 'Turn on Memory in Settings > Capabilities to use it here.'
+                          : undefined
+                      }
+                    />
+
                     {/* 8c. Incognito / temporary chat toggle. AUDIT-FIX CMP-3:
                         render-gated on the host actually providing a persistence
                         path, an unbacked privacy switch is worse than none. */}
@@ -4426,6 +4479,16 @@ const ChatComposerNewComponent = ({
               }
             >
               {webSearchEnabled ? 'Web search on' : 'Web search off'}
+            </span>
+          ) : null,
+          memoryCapabilityEnabled && !memoryEnabledForChat ? (
+            <span
+              key={COMPOSER_FOOTER_KEYS.memory}
+              data-testid="memory-indicator"
+              data-active="false"
+              title="Memory is off for this conversation. This turn neither reads nor saves account memories."
+            >
+              Memory off
             </span>
           ) : null,
           sendPreviewPresentation ? (
