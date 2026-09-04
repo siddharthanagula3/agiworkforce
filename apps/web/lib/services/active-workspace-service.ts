@@ -13,6 +13,21 @@ import {
 
 export const PERSONAL_WORKSPACE_KEY = MANAGED_CLOUD_PERSONAL_WORKSPACE_HEADER_VALUE;
 
+export const WORKSPACE_SETTINGS_NAMESPACE = 'workspace';
+
+/**
+ * True when a generic settings write's top-level delta would replace the
+ * `workspace` namespace (and with it `activeOrganizationId`), the row the
+ * active-organization cache is keyed on. A caller that persists such a delta
+ * outside `persistActiveWorkspaceSelection` must invalidate that user's
+ * cached entry itself; nothing here writes the row.
+ */
+export function touchesActiveOrganizationNamespace(
+  delta: Record<string, unknown> | null | undefined,
+): boolean {
+  return !!delta && Object.prototype.hasOwnProperty.call(delta, WORKSPACE_SETTINGS_NAMESPACE);
+}
+
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 export interface WorkspaceMembershipSummary {

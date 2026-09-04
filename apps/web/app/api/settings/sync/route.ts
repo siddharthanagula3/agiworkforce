@@ -1,4 +1,3 @@
-
 import { NextRequest, NextResponse } from 'next/server';
 import { ServerVersionSchema, SettingsSyncPushRequestSchema } from '@agiworkforce/cloud-contracts';
 import { withErrorHandler } from '@/lib/error-handler';
@@ -8,6 +7,8 @@ import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { getUserScopedDb } from '@/lib/server/rls-db';
 import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
+import { touchesActiveOrganizationNamespace } from '@/lib/services/active-workspace-service';
+import { invalidateActiveOrganizationCache } from '@/lib/server/request-context-cache';
 
 export const CLOUD_SAFE_SETTINGS_NAMESPACES: readonly string[] = [
   'appearance',
@@ -168,6 +169,9 @@ async function handlePost(request: NextRequest) {
     );
 
     if (rows[0]) {
+      if (touchesActiveOrganizationNamespace(safeIncoming)) {
+        await invalidateActiveOrganizationCache(userId);
+      }
       return NextResponse.json({ applied: true, cursor: rows[0].server_version });
     }
     const [current] = await db.query<{ server_version: string }>(

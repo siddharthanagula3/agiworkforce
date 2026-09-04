@@ -6,7 +6,10 @@ import {
 
 vi.mock('server-only', () => ({}));
 
-const { mockQuery } = vi.hoisted(() => ({ mockQuery: vi.fn() }));
+const { mockQuery, mockInvalidateActiveOrganizationCache } = vi.hoisted(() => ({
+  mockQuery: vi.fn(),
+  mockInvalidateActiveOrganizationCache: vi.fn(),
+}));
 
 vi.mock('@/lib/rate-limit', () => ({
   withRateLimit: vi.fn(async () => null),
@@ -25,6 +28,10 @@ vi.mock('@/lib/server/rls-db', () => ({
     db: { query: (...args: unknown[]) => mockQuery(...args) },
     userId: 'user_contract_1',
   })),
+}));
+
+vi.mock('@/lib/server/request-context-cache', () => ({
+  invalidateActiveOrganizationCache: mockInvalidateActiveOrganizationCache,
 }));
 
 import { GET, POST } from '../route';
@@ -95,5 +102,42 @@ describe('POST /api/settings/sync, shared cloud contract', () => {
     const parsed = SettingsSyncPushResponseSchema.safeParse(await res.json());
     expect(parsed.error).toBeUndefined();
     expect(parsed.success).toBe(true);
+  });
+
+  it('does not invalidate the active-org cache for an allowed namespace', async () => {
+    mockQuery.mockResolvedValueOnce([{ server_version: '14' }]);
+
+    await POST(
+      new Request('http://localhost:3000/api/settings/sync', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          settings: { appearance: { theme: 'dark' } },
+          baseVersion: '0',
+        }),
+      }) as never,
+    );
+
+    expect(mockInvalidateActiveOrganizationCache).not.toHaveBeenCalled();
+  });
+
+  it('the cloud-safe filter keeps a workspace-key payload from ever persisting or invalidating', async () => {
+    mockQuery.mockResolvedValueOnce([{ server_version: '15' }]);
+
+    const res = await POST(
+      new Request('http://localhost:3000/api/settings/sync', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          settings: { workspace: { activeOrganizationId: 'org-attacker' } },
+          baseVersion: '0',
+        }),
+      }) as never,
+    );
+
+    expect(res.status).toBe(200);
+    const persisted = JSON.parse(String(mockQuery.mock.calls[0]?.[1]?.[1]));
+    expect(persisted).not.toHaveProperty('workspace');
+    expect(mockInvalidateActiveOrganizationCache).not.toHaveBeenCalled();
   });
 });
