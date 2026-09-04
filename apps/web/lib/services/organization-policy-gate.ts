@@ -13,6 +13,7 @@ import {
   CURRENT_COLLECTION_STATE,
   readOrganizationCollectionState,
 } from '@/lib/services/enterprise-collection-state';
+import { resolveEnterpriseFundingOrganizationId } from '@/lib/services/enterprise-funding-organization';
 import {
   evaluateBillingHold,
   evaluateOrganizationPolicy,
@@ -27,40 +28,6 @@ interface ScopedRequest {
 
 export interface PolicyGateResult extends PolicyDecision {
   organizationId: string | null;
-}
-
-/**
- * The organization an enterprise billing contract actually funds: the org
- * owned by the caller (`organizations.owner_user_id`), or failing that, an
- * organization the caller holds a seat in. Used only as a billing-hold
- * backstop for personal-scope requests, never as the workspace whose
- * `AdminPolicy` governs the request, that stays `resolveActiveOrganizationId`,
- * which honors the caller's explicit workspace selection including the
- * documented `x-agi-organization-id: personal` header. A read-only
- * organization's own owner or a seat member can send that header to select
- * personal scope; the billing hold on their real, unpaid contract must not
- * disappear because of it.
- */
-async function resolveEnterpriseFundingOrganizationId(
-  db: DatabaseAdapter,
-  userId: string,
-): Promise<string | null> {
-  const [row] = await db.query<{ organization_id: string }>(
-    `select organization_id
-       from (
-         select o.id as organization_id, 0 as priority
-           from public.organizations o
-          where o.owner_user_id = $1
-         union all
-         select m.organization_id, 1 as priority
-           from public.organization_members m
-          where m.user_id = $1
-       ) funding
-      order by priority asc
-      limit 1`,
-    [userId],
-  );
-  return row?.organization_id ?? null;
 }
 
 async function evaluateFundingOrganizationBillingHold(
