@@ -19,7 +19,7 @@ function bootstrapCache(): void {
       }
     });
   } catch {
-    /* noop */
+    return;
   }
 }
 bootstrapCache();
@@ -36,7 +36,7 @@ export function getExtensionSendQueue(): MessageQueue {
         try {
           chrome.storage.local.set({ [STORAGE_KEY]: JSON.stringify(commands) });
         } catch {
-          /* noop */
+          return;
         }
       },
     },

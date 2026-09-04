@@ -74,8 +74,8 @@ async function sameOriginFetch(url: string, method: 'GET' | 'HEAD'): Promise<NLW
     if (method === 'GET' && resp.ok) {
       try {
         body = await resp.text();
-      } catch {
-        /* noop */
+      } catch (err) {
+        void err;
       }
     }
 
