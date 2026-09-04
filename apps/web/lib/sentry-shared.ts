@@ -32,7 +32,7 @@ export function setTelemetryConsentCache(value: boolean): void {
   try {
     window.localStorage.setItem(TELEMETRY_CONSENT_STORAGE_KEY, value ? 'true' : 'false');
   } catch {
-    // noop
+    return;
   }
 }
 

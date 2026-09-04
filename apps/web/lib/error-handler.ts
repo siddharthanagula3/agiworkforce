@@ -252,8 +252,8 @@ export function withErrorHandler<T extends unknown[]>(
       try {
         response.headers.set('x-request-id', requestId);
         response.headers.set('traceparent', formatTraceparent(context));
-      } catch {
-        // noop
+      } catch (err) {
+        void err;
       }
       return response;
     });
