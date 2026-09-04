@@ -314,6 +314,7 @@ export {
   type SettingsSkill,
   type SettingsPlugin,
   type SettingsSectionKey,
+  isUnverifiedCustomConnector,
   parseCustomMcpJsonConfig,
   describeCustomMcpJsonImportError,
   type ParsedCustomMcpConfig,
