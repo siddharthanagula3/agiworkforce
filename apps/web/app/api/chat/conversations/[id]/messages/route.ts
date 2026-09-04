@@ -16,7 +16,6 @@ import { CreateMessageSchema } from '@/lib/validations/chat';
 import { normalizeMessageMetadata, type ChatMessageRow } from '@/lib/server/neon-chat';
 import { getUserScopedDb } from '@/lib/server/rls-db';
 import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
-import { resolveActiveOrganizationId } from '@/lib/services/active-workspace-service';
 import { scheduleConversationTitleGeneration } from './lib/generate-title';
 import { scheduleArtifactIndexing } from './lib/index-artifacts';
 import {
@@ -33,7 +32,7 @@ import {
 type RouteContext = { params: Promise<{ id: string }> };
 
 async function handleSendMessage(request: NextRequest, context: RouteContext) {
-  const { db, userId } = await getUserScopedDb(request);
+  const { db, userId, organizationId } = await getUserScopedDb(request);
 
   // CSRF protection for state-changing POST endpoint
   const csrfError = await requireCsrfToken(request);
@@ -67,7 +66,6 @@ async function handleSendMessage(request: NextRequest, context: RouteContext) {
     parentId,
   } = validationResult.data;
 
-  const organizationId = await resolveActiveOrganizationId(db, userId, request);
   const [conversation] = await db.query<{
     id: string;
     model: string | null;

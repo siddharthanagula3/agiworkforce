@@ -9,7 +9,6 @@ import { getUserScopedDb } from '@/lib/server/rls-db';
 import { killE2BSession } from '@/lib/e2b/runtime';
 import { unpublishArtifactsForConversations } from '@/lib/services/published-artifact-service';
 import { managedCloudE2BSessionScope } from '@/lib/e2b/session-store';
-import { resolveActiveOrganizationId } from '@/lib/services/active-workspace-service';
 import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
 
 const BulkConversationActionSchema = z.object({
@@ -17,7 +16,7 @@ const BulkConversationActionSchema = z.object({
 });
 
 async function handleBulkConversationAction(request: NextRequest) {
-  const { db, userId } = await getUserScopedDb(request);
+  const { db, userId, organizationId } = await getUserScopedDb(request);
 
   const csrfResponse = await requireCsrfToken(request);
   if (csrfResponse) return csrfResponse;
@@ -43,7 +42,6 @@ async function handleBulkConversationAction(request: NextRequest) {
 
   let affected: Array<{ id: string }>;
   try {
-    const organizationId = await resolveActiveOrganizationId(db, userId);
     affected = await db.query<{ id: string }>(
       isDelete
         ? `

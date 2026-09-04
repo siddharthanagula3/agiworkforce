@@ -13,7 +13,6 @@ import { managedCloudE2BSessionScope } from '@/lib/e2b/session-store';
 import { type ChatConversationRow, type ChatMessageRow } from '@/lib/server/neon-chat';
 import { getUserScopedDb } from '@/lib/server/rls-db';
 import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
-import { resolveActiveOrganizationId } from '@/lib/services/active-workspace-service';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -23,7 +22,7 @@ async function handleGetConversation(request: NextRequest, context: RouteContext
   const rateLimitResponse = await withRateLimit(request, 'chat-conversation');
   if (rateLimitResponse) return rateLimitResponse;
 
-  const { db, userId } = await getUserScopedDb(request);
+  const { db, userId, organizationId } = await getUserScopedDb(request);
   const { id } = await context.params;
 
   if (!UUID_RE.test(id)) {
@@ -36,7 +35,6 @@ async function handleGetConversation(request: NextRequest, context: RouteContext
   const limit = Math.min(Math.max(Number.isFinite(rawLimit) ? rawLimit : 100, 1), 500);
   const offset = Number.isFinite(rawOffset) && rawOffset >= 0 ? rawOffset : 0;
 
-  const organizationId = await resolveActiveOrganizationId(db, userId, request);
   const [conversation] = await db.query<ChatConversationRow>(
     `
       select id, organization_id, title, model, project_id, pinned, starred, archived, is_temporary, active_leaf_message_id, created_at, updated_at
@@ -90,7 +88,7 @@ async function handleGetConversation(request: NextRequest, context: RouteContext
 }
 
 async function handleUpdateConversation(request: NextRequest, context: RouteContext) {
-  const { db, userId } = await getUserScopedDb(request);
+  const { db, userId, organizationId } = await getUserScopedDb(request);
 
   const csrfError = await requireCsrfToken(request);
   if (csrfError) return csrfError as NextResponse;
@@ -112,7 +110,6 @@ async function handleUpdateConversation(request: NextRequest, context: RouteCont
     throw createError.validation('Invalid request body', validationResult.error);
   }
   const body = validationResult.data;
-  const organizationId = await resolveActiveOrganizationId(db, userId, request);
 
   const updates: Record<string, unknown> = {};
   if (body['title']) updates['title'] = body['title'];
@@ -233,7 +230,7 @@ async function handleUpdateConversation(request: NextRequest, context: RouteCont
 }
 
 async function handleDeleteConversation(request: NextRequest, context: RouteContext) {
-  const { db, userId } = await getUserScopedDb(request);
+  const { db, userId, organizationId } = await getUserScopedDb(request);
 
   const csrfError = await requireCsrfToken(request);
   if (csrfError) return csrfError as NextResponse;
@@ -242,7 +239,6 @@ async function handleDeleteConversation(request: NextRequest, context: RouteCont
   if (rateLimitResponse) return rateLimitResponse;
 
   const { id } = await context.params;
-  const organizationId = await resolveActiveOrganizationId(db, userId, request);
 
   let deletedConversation: { id: string } | undefined;
   try {

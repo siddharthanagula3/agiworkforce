@@ -7,7 +7,6 @@ import { createError } from '@/lib/errors';
 import { getUserScopedDb } from '@/lib/server/rls-db';
 import { failUnboundVideoGenerationTranscript } from '@/lib/server/video-generation-transcript';
 import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
-import { resolveActiveOrganizationId } from '@/lib/services/active-workspace-service';
 import {
   collectSubtree,
   deleteMessages,
@@ -30,7 +29,7 @@ const PatchMessageSchema = z.union([
 ]);
 
 async function handlePatchMessage(request: NextRequest, context: RouteContext) {
-  const { db, userId } = await getUserScopedDb(request);
+  const { db, userId, organizationId } = await getUserScopedDb(request);
 
   const csrfError = await requireCsrfToken(request);
   if (csrfError) return csrfError as NextResponse;
@@ -53,7 +52,6 @@ async function handlePatchMessage(request: NextRequest, context: RouteContext) {
   }
   const patch = result.data;
 
-  const organizationId = await resolveActiveOrganizationId(db, userId, request);
   const [conv] = await db.query<{ id: string }>(
     `select id
        from web_conversations
@@ -111,7 +109,7 @@ async function handlePatchMessage(request: NextRequest, context: RouteContext) {
 }
 
 async function handleDeleteMessage(request: NextRequest, context: RouteContext) {
-  const { db, userId } = await getUserScopedDb(request);
+  const { db, userId, organizationId } = await getUserScopedDb(request);
 
   const csrfError = await requireCsrfToken(request);
   if (csrfError) return csrfError as NextResponse;
@@ -120,8 +118,6 @@ async function handleDeleteMessage(request: NextRequest, context: RouteContext) 
   if (rateLimitResponse) return rateLimitResponse;
 
   const { id: conversationId, messageId } = await context.params;
-
-  const organizationId = await resolveActiveOrganizationId(db, userId, request);
 
   const [conv] = await db.query<{ id: string }>(
     `select id
