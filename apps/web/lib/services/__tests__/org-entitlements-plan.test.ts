@@ -12,7 +12,10 @@ vi.mock('@/lib/services/subscription-service', () => ({
 vi.mock('@/lib/server/neon-db', () => ({ getNeonDb }));
 
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
-import { resolveOrganizationEntitlementPlan } from '../org-entitlements';
+import {
+  resolveOrganizationEntitlementPlan,
+  resolveUserPersonalPlanTier,
+} from '../org-entitlements';
 
 const ORG_A = '11111111-1111-4111-8111-111111111111';
 
@@ -100,5 +103,47 @@ describe("entitlement never depends on the caller's row visibility", () => {
     expect(getNeonDb, 'must resolve on the privileged connection').toHaveBeenCalled();
     expect(query.mock.calls.length).toBeGreaterThan(0);
     expect(getSubscription).toHaveBeenCalledWith(db, 'owner-1');
+  });
+});
+
+describe('resolveUserPersonalPlanTier', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it.each([
+    ['team', 'active', 'team'],
+    ['enterprise', 'trialing', 'enterprise'],
+    ['team', 'canceled', 'free'],
+    ['unknown-tier', 'active', 'free'],
+  ])(
+    'normalizes %s/%s to %s through the same pipeline the organization resolver uses',
+    async (planTier, status, expected) => {
+      const db = { query: vi.fn() } as unknown as DatabaseAdapter;
+      getSubscription.mockResolvedValue({ plan_tier: planTier, status });
+
+      await expect(resolveUserPersonalPlanTier(db, 'some-user')).resolves.toBe(expected);
+      expect(getSubscription).toHaveBeenCalledWith(db, 'some-user');
+    },
+  );
+
+  it('returns free when the user has no subscription row', async () => {
+    const db = { query: vi.fn() } as unknown as DatabaseAdapter;
+    getSubscription.mockResolvedValue(null);
+
+    await expect(resolveUserPersonalPlanTier(db, 'some-user')).resolves.toBe('free');
+  });
+
+  it('is the exact function the organization resolver delegates to for its owner fallback', async () => {
+    const { db } = dbWith([{ user_id: 'owner-1', plan_tier: 'enterprise', status: 'active' }]);
+    getSubscription.mockResolvedValue({ plan_tier: 'enterprise', status: 'active' });
+
+    await resolveOrganizationEntitlementPlan(ORG_A);
+    const orgResolverCall = getSubscription.mock.calls.at(-1);
+
+    getSubscription.mockClear();
+    getSubscription.mockResolvedValue({ plan_tier: 'enterprise', status: 'active' });
+    await resolveUserPersonalPlanTier(db, 'owner-1');
+    const directCall = getSubscription.mock.calls.at(-1);
+
+    expect(directCall).toEqual(orgResolverCall);
   });
 });
