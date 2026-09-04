@@ -1,6 +1,11 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
+
+vi.mock('server-only', () => ({}));
+
 import { DEFAULT_ENTERPRISE_ADMIN_POLICY, type AdminPolicy } from '@agiworkforce/types';
+import { deriveCollectionState } from '../enterprise-collection-state';
 import {
+  evaluateBillingHold,
   evaluateOrganizationPolicy,
   UNSCOPED_POLICY_DECISION,
 } from '../organization-policy-evaluator';
@@ -239,6 +244,117 @@ describe('evaluateOrganizationPolicy, obligations', () => {
         { type: 'retention_days', value: 30 },
       ]);
     }
+  });
+});
+
+const NOW_MS = Date.parse('2026-09-04T00:00:00.000Z');
+
+function collectionStateForDaysPastDue(daysPastDue: number) {
+  return deriveCollectionState(
+    NOW_MS,
+    new Date(NOW_MS - daysPastDue * 24 * 60 * 60 * 1000).toISOString(),
+  );
+}
+
+describe('evaluateBillingHold', () => {
+  it('denies managed compute once the workspace is read-only past day 90', () => {
+    const decision = evaluateBillingHold(
+      { resource: 'managed_compute', surface: 'web' },
+      collectionStateForDaysPastDue(95),
+    );
+
+    expect(decision?.allowed).toBe(false);
+    expect(decision?.code).toBe('billing_read_only');
+  });
+
+  it('does not block managed compute in the 61-90 day window, only new paid usage', () => {
+    expect(
+      evaluateBillingHold(
+        { resource: 'managed_compute', surface: 'web' },
+        collectionStateForDaysPastDue(75),
+      ),
+    ).toBeNull();
+  });
+
+  it('denies a credit top-up and a seat purchase once past day 60', () => {
+    const collectionState = collectionStateForDaysPastDue(61);
+
+    for (const ask of [{ resource: 'credit_topup' }, { resource: 'seat_purchase' }] as const) {
+      const decision = evaluateBillingHold(ask, collectionState);
+      expect(decision?.allowed).toBe(false);
+      expect(decision?.code).toBe('billing_past_due');
+    }
+  });
+
+  it('allows every resource when the workspace is current on payment', () => {
+    const collectionState = collectionStateForDaysPastDue(0);
+
+    for (const ask of [
+      { resource: 'managed_compute', surface: 'web' },
+      { resource: 'credit_topup' },
+      { resource: 'seat_purchase' },
+    ] as const) {
+      expect(evaluateBillingHold(ask, collectionState)).toBeNull();
+    }
+  });
+
+  it('never intercepts a resource that is not content-creating or a paid usage commitment', () => {
+    const readOnly = collectionStateForDaysPastDue(95);
+
+    for (const ask of [
+      { resource: 'chat_sync', surface: 'web' },
+      { resource: 'privacy_mode', mode: 'local' },
+      { resource: 'audit_export' },
+      { resource: 'external_sharing' },
+      { resource: 'mfa', mfaEnrolled: true },
+      { resource: 'spend_cap', monthToDateSpendCents: 0 },
+    ] as const) {
+      expect(evaluateBillingHold(ask, readOnly)).toBeNull();
+    }
+  });
+});
+
+describe('evaluateOrganizationPolicy, billing hold', () => {
+  it('overrides a permissive policy once the workspace is read-only for non-payment', () => {
+    const decision = evaluateOrganizationPolicy(
+      permissive,
+      { resource: 'managed_compute', surface: 'web' },
+      collectionStateForDaysPastDue(95),
+    );
+
+    expect(decision.allowed).toBe(false);
+    expect(decision.code).toBe('billing_read_only');
+  });
+
+  it('blocks a seat purchase through a saved policy once new paid usage is blocked', () => {
+    const decision = evaluateOrganizationPolicy(
+      permissive,
+      { resource: 'seat_purchase' },
+      collectionStateForDaysPastDue(65),
+    );
+
+    expect(decision.allowed).toBe(false);
+    expect(decision.code).toBe('billing_past_due');
+  });
+
+  it('leaves reads, exports and settings allowed while read-only', () => {
+    const readOnly = collectionStateForDaysPastDue(95);
+
+    expect(
+      evaluateOrganizationPolicy(permissive, { resource: 'audit_export' }, readOnly).allowed,
+    ).toBe(true);
+    expect(
+      evaluateOrganizationPolicy(permissive, { resource: 'external_sharing' }, readOnly).allowed,
+    ).toBe(true);
+  });
+
+  it('defaults to the unblocked collection state when none is passed', () => {
+    const decision = evaluateOrganizationPolicy(permissive, {
+      resource: 'managed_compute',
+      surface: 'web',
+    });
+
+    expect(decision.allowed).toBe(true);
   });
 });
 
