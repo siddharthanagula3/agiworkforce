@@ -7,12 +7,14 @@ const fetchMock = vi.fn();
 vi.stubGlobal('fetch', fetchMock);
 
 import { useToolPermissionsStore } from '../tool-permissions-store';
+import { queryClient } from '@shared/stores/query-client';
 
 const flush = () => new Promise((r) => setTimeout(r, 0));
 
 beforeEach(() => {
   useToolPermissionsStore.setState({ permissions: {} });
   fetchMock.mockReset();
+  queryClient.clear();
 });
 
 describe('tool-permissions-store server sync', () => {
@@ -56,8 +58,40 @@ describe('tool-permissions-store server sync', () => {
     await useToolPermissionsStore.getState().hydrateFromServer();
     expect(useToolPermissionsStore.getState().getToolPermission('github', 'x')).toBe('deny');
   });
-});
 
+  it('two consumers hydrating within the cache window issue one request', async () => {
+    fetchMock.mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        permissions: [{ connectorId: 'github', toolName: 'create_issue', level: 'allow' }],
+      }),
+    });
+    await Promise.all([
+      useToolPermissionsStore.getState().hydrateFromServer(),
+      useToolPermissionsStore.getState().hydrateFromServer(),
+    ]);
+    await useToolPermissionsStore.getState().hydrateFromServer();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('a permission write invalidates the cache so the next hydrate refetches', async () => {
+    fetchMock.mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        permissions: [{ connectorId: 'github', toolName: 'create_issue', level: 'allow' }],
+      }),
+    });
+    await useToolPermissionsStore.getState().hydrateFromServer();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+
+    useToolPermissionsStore.getState().setToolPermission('slack', 'post', 'deny');
+    await flush();
+
+    await useToolPermissionsStore.getState().hydrateFromServer();
+    const getCalls = fetchMock.mock.calls.filter((c) => !(c[1] as RequestInit)?.method);
+    expect(getCalls.length).toBe(2);
+  });
+});
 
 /**
  * The reset used to clear only the local map while the server kept enforcing
@@ -73,12 +107,12 @@ describe('reset revokes on the server, not just locally', () => {
     useToolPermissionsStore.getState().resetConnectorPermissions('github');
 
     // Clearing falls back to the safe default rather than to "no opinion".
-    expect(useToolPermissionsStore.getState().getToolPermission('github', 'create_issue')).toBe('ask');
+    expect(useToolPermissionsStore.getState().getToolPermission('github', 'create_issue')).toBe(
+      'ask',
+    );
     await vi.waitFor(() => {
       const calls = fetchMock.mock.calls as unknown as Array<[unknown, RequestInit | undefined]>;
-      const deleteCall = calls.find(
-        ([, init]) => init?.method === 'DELETE',
-      );
+      const deleteCall = calls.find(([, init]) => init?.method === 'DELETE');
       expect(deleteCall).toBeDefined();
       expect(String(deleteCall?.[0])).toContain('connectorId=github');
     });
@@ -86,9 +120,16 @@ describe('reset revokes on the server, not just locally', () => {
   });
 
   it('still clears locally when the server call fails, and does not throw', async () => {
-    vi.stubGlobal('fetch', vi.fn(async () => { throw new Error('offline'); }));
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => {
+        throw new Error('offline');
+      }),
+    );
     useToolPermissionsStore.setState({ permissions: { notion: { search: 'deny' } } });
-    expect(() => useToolPermissionsStore.getState().resetConnectorPermissions('notion')).not.toThrow();
+    expect(() =>
+      useToolPermissionsStore.getState().resetConnectorPermissions('notion'),
+    ).not.toThrow();
     expect(useToolPermissionsStore.getState().getToolPermission('notion', 'search')).toBe('ask');
     vi.unstubAllGlobals();
   });
