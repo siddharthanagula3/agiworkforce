@@ -1,14 +1,13 @@
 import type { ManagedSkillSummary } from '@agiworkforce/cloud-contracts';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import {
   fetchInstalledSkillNames,
+  fetchSkillCatalog,
   fetchSkillDetail,
   fetchSkillFileContent,
   installSkill,
   isAuthoredSkill,
-  mergeSkillCatalog,
-  resetSkillCatalogMemory,
   skillPublisher,
   toSkillEntry,
   toSkillSection,
@@ -16,10 +15,6 @@ import {
 } from '../services/skills-directory';
 
 const CSRF = 'token-1';
-
-beforeEach(() => {
-  resetSkillCatalogMemory();
-});
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -42,15 +37,15 @@ function jsonOnce(body: unknown) {
 
 describe('skillPublisher', () => {
   it('names the account for skills the user authored', () => {
-    expect(skillPublisher('personal')).toBe('You');
-    expect(skillPublisher('project')).toBe('You');
-    expect(skillPublisher('workspace')).toBe('You');
+    expect(skillPublisher('personal')).toBe('Yours');
+    expect(skillPublisher('project')).toBe('Yours');
+    expect(skillPublisher('workspace')).toBe('Yours');
   });
 
   it('names the managed layer and falls back to the product', () => {
     expect(skillPublisher('managed-local')).toBe('Managed');
-    expect(skillPublisher('bundled')).toBe('AGI');
-    expect(skillPublisher('extra')).toBe('AGI');
+    expect(skillPublisher('bundled')).toBe('Made by AGI');
+    expect(skillPublisher('extra')).toBe('Made by AGI');
   });
 });
 
@@ -60,7 +55,7 @@ describe('toSkillEntry', () => {
     expect(entry).toMatchObject({
       id: 'canvas-design',
       slashName: true,
-      publisher: 'AGI',
+      publisher: 'Made by AGI',
       sourceId: 'agi',
       installed: true,
       facets: { lifecycle: ['included'], status: ['installed'] },
@@ -99,7 +94,7 @@ describe('toSkillSection', () => {
       [skill(), skill({ name: 'mine', source: 'personal' })],
       installedAll,
     );
-    expect(section.sources?.map((s) => s.id)).toEqual(['agi', 'yours']);
+    expect(section.sources?.map((chip) => chip.id)).toEqual(['agi', 'yours']);
   });
 
   it('hides the lifecycle filter when every skill shares one lifecycle', () => {
@@ -128,17 +123,23 @@ describe('toSkillSection', () => {
   });
 });
 
-describe('mergeSkillCatalog', () => {
-  it('keeps a skill the listing dropped after an uninstall so it can be added back', () => {
-    mergeSkillCatalog([skill(), skill({ name: 'other' })]);
-    const merged = mergeSkillCatalog([skill()]);
-    expect(merged.map((entry) => entry.name).sort()).toEqual(['canvas-design', 'other']);
+describe('fetchSkillCatalog', () => {
+  it('asks the route for the whole catalog, not the installed view', async () => {
+    const fetchMock = jsonOnce({ skills: [skill(), skill({ name: 'other' })] });
+    vi.stubGlobal('fetch', fetchMock);
+    const catalog = await fetchSkillCatalog();
+    expect(fetchMock).toHaveBeenCalledWith('/api/skills?catalog=all', { cache: 'no-store' });
+    expect(catalog.map((entry) => entry.name)).toEqual(['canvas-design', 'other']);
   });
 
-  it('forgets everything once the memory is reset', () => {
-    mergeSkillCatalog([skill()]);
-    resetSkillCatalogMemory();
-    expect(mergeSkillCatalog([])).toEqual([]);
+  it('reports a failed catalog rather than rendering an empty grid', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 503 }));
+    await expect(fetchSkillCatalog()).rejects.toThrow('skill catalog failed: 503');
+  });
+
+  it('rejects a response that does not match the contract', async () => {
+    vi.stubGlobal('fetch', jsonOnce({ skills: [{ name: 'broken' }] }));
+    await expect(fetchSkillCatalog()).rejects.toThrow('Invalid skills response');
   });
 });
 

@@ -38,6 +38,7 @@ export interface PluginDirectorySnapshot {
   marketplaceSources: PluginMarketplaceSourceSummary[];
   installedPluginIds: Set<string>;
   installedEntryIds: Set<string>;
+  marketplacesAvailable: boolean;
 }
 
 export function isRecentlyAdded(createdAt: string | undefined, now: number): boolean {
@@ -177,10 +178,19 @@ export function toMarketplaceDetail(
   };
 }
 
-async function readJson<T>(path: string, fallback: T): Promise<T> {
+const MARKETPLACE_MISSING_STATUSES = new Set([404, 501, 503]);
+
+interface OptionalJson<T> {
+  value: T;
+  available: boolean;
+}
+
+async function readJson<T>(path: string, fallback: T): Promise<OptionalJson<T>> {
   const response = await fetch(path, { cache: 'no-store' });
-  if (!response.ok) return fallback;
-  return (await response.json()) as T;
+  if (!response.ok) {
+    return { value: fallback, available: !MARKETPLACE_MISSING_STATUSES.has(response.status) };
+  }
+  return { value: (await response.json()) as T, available: true };
 }
 
 export async function fetchPluginSnapshot(): Promise<PluginDirectorySnapshot> {
@@ -208,13 +218,16 @@ export async function fetchPluginSnapshot(): Promise<PluginDirectorySnapshot> {
 
   return {
     registry: registry ?? [],
-    marketplaceEntries: marketplaceEntries.entries ?? [],
-    marketplaceSources: marketplaceSources.sources ?? [],
+    marketplaceEntries: marketplaceEntries.value.entries ?? [],
+    marketplaceSources: marketplaceSources.value.sources ?? [],
     installedPluginIds: new Set(
-      (installations.installations ?? []).map((installation) => installation.pluginId),
+      (installations.value.installations ?? []).map((installation) => installation.pluginId),
     ),
     installedEntryIds: new Set(
-      (marketplaceInstallations.installations ?? []).map((installation) => installation.entryId),
+      (marketplaceInstallations.value.installations ?? []).map(
+        (installation) => installation.entryId,
+      ),
     ),
+    marketplacesAvailable: marketplaceSources.available && marketplaceEntries.available,
   };
 }

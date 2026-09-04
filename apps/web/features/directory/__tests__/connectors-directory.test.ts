@@ -130,16 +130,42 @@ describe('toConnectorDetail', () => {
       connected: true,
       connectable: true,
     });
-    expect(detail.href).toBeUndefined();
   });
 
-  it('prefers the documentation link and falls back to the website', () => {
-    expect(
-      toConnectorDetail(record({ documentationUrl: 'https://docs.invalid' }), new Set()).href,
-    ).toBe('https://docs.invalid');
-    expect(toConnectorDetail(record({ websiteUrl: 'https://site.invalid' }), new Set()).href).toBe(
-      'https://site.invalid',
+  it('carries the anatomy the detail view renders', () => {
+    const detail = toConnectorDetail(
+      record({
+        remotes: [{ url: 'https://mcp.invalid/v1', transport: 'streamable-http' }],
+        authorName: 'Customerscore Inc',
+        authorUrl: 'https://customerscore.invalid/about',
+        websiteUrl: 'https://customerscore.invalid',
+        documentationUrl: 'https://docs.invalid',
+        supportUrl: 'https://support.invalid',
+        privacyPolicyUrl: 'https://privacy.invalid',
+      }),
+      new Set(),
     );
+    expect(detail).toMatchObject({
+      publisher: 'Customerscore',
+      publisherUrl: 'https://customerscore.invalid',
+      authorName: 'Customerscore Inc',
+      authorUrl: 'https://customerscore.invalid/about',
+      connectorUrl: 'https://mcp.invalid/v1',
+      documentationUrl: 'https://docs.invalid',
+      supportUrl: 'https://support.invalid',
+      privacyPolicyUrl: 'https://privacy.invalid',
+      categories: ['Data'],
+    });
+  });
+
+  it('falls back to the author link when the record has no website', () => {
+    expect(
+      toConnectorDetail(record({ authorUrl: 'https://author.invalid' }), new Set()).publisherUrl,
+    ).toBe('https://author.invalid');
+  });
+
+  it('leaves the connector url null when the record lists no remote', () => {
+    expect(toConnectorDetail(record({ remotes: [] }), new Set()).connectorUrl).toBeNull();
   });
 
   it('marks a desktop only connector as not connectable from the web', () => {

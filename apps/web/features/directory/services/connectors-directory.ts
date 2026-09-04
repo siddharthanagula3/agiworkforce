@@ -131,11 +131,17 @@ export function toConnectorDetail(
     iconUrl: connectorIconHref(record),
     monogram: record.monogram,
     tools: record.toolNames,
+    categories: record.categories,
+    publisher: record.publisher,
+    publisherUrl: record.websiteUrl ?? record.authorUrl,
+    authorName: record.authorName,
+    authorUrl: record.authorUrl,
+    connectorUrl: record.remotes[0]?.url ?? null,
+    documentationUrl: record.documentationUrl,
+    supportUrl: record.supportUrl,
+    privacyPolicyUrl: record.privacyPolicyUrl,
     connected: connectedIds.has(record.id),
     connectable: !CONNECTABLE_BLOCKED.has(record.connectable),
-    ...(record.documentationUrl ?? record.websiteUrl
-      ? { href: (record.documentationUrl ?? record.websiteUrl) as string }
-      : {}),
   };
 }
 
