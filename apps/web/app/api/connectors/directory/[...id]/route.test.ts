@@ -2,8 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
 
 const mocks = vi.hoisted(() => ({
-  readDirectorySnapshot: vi.fn(),
-  upsertDirectoryRecord: vi.fn(),
+  getSnapshotRecords: vi.fn(),
   resolveAuthModeForRecord: vi.fn(async (record: unknown) => record),
   getClerkAuthUser: vi.fn(async (..._args: unknown[]): Promise<{ userId: string }> => {
     throw new Error('unauthorized');
@@ -20,9 +19,8 @@ vi.mock('@/lib/cors', () => ({
   withCorsRoute: <T>(handler: T) => handler,
   handleCorsPreflightRequest: vi.fn(() => null),
 }));
-vi.mock('@/lib/connectors/directory/snapshot-cache', () => ({
-  readDirectorySnapshot: () => mocks.readDirectorySnapshot(),
-  upsertDirectoryRecord: (...args: unknown[]) => mocks.upsertDirectoryRecord(...args),
+vi.mock('@/lib/connectors/directory/memory-cache', () => ({
+  getSnapshotRecords: () => mocks.getSnapshotRecords(),
 }));
 vi.mock('@/lib/connectors/directory/auth-probe', () => ({
   resolveAuthModeForRecord: (record: unknown) => mocks.resolveAuthModeForRecord(record),
@@ -80,14 +78,14 @@ function request(path: string): NextRequest {
 
 describe('GET /api/connectors/directory/[...id]', () => {
   it('returns 404 for an id not present in the snapshot', async () => {
-    mocks.readDirectorySnapshot.mockResolvedValueOnce({ records: [] });
+    mocks.getSnapshotRecords.mockResolvedValueOnce([]);
 
     const response = await GET(request('missing'), context('missing'));
     expect(response.status).toBe(404);
   });
 
   it('joins a multi-segment catch-all id back with a slash', async () => {
-    mocks.readDirectorySnapshot.mockResolvedValueOnce({ records: [record()] });
+    mocks.getSnapshotRecords.mockResolvedValueOnce([record()]);
 
     const response = await GET(
       request('io.github.someone/tool'),
@@ -99,8 +97,8 @@ describe('GET /api/connectors/directory/[...id]', () => {
     expect(body.entry.id).toBe('io.github.someone/tool');
   });
 
-  it('resolves and persists an unknown auth mode before returning', async () => {
-    mocks.readDirectorySnapshot.mockResolvedValueOnce({ records: [record()] });
+  it('resolves an unknown auth mode without writing anything back to the snapshot', async () => {
+    mocks.getSnapshotRecords.mockResolvedValueOnce([record()]);
     mocks.resolveAuthModeForRecord.mockResolvedValueOnce(
       record({ authMode: 'oauth', connectable: 'connect' }),
     );
@@ -112,23 +110,22 @@ describe('GET /api/connectors/directory/[...id]', () => {
     const body = await response.json();
 
     expect(body.entry.authMode).toBe('oauth');
-    expect(mocks.upsertDirectoryRecord).toHaveBeenCalledTimes(1);
   });
 
   it('skips tool discovery for an anonymous caller', async () => {
-    mocks.readDirectorySnapshot.mockResolvedValueOnce({
-      records: [record({ authMode: 'oauth', connectable: 'connect' })],
-    });
+    mocks.getSnapshotRecords.mockResolvedValueOnce([
+      record({ authMode: 'oauth', connectable: 'connect' }),
+    ]);
 
     await GET(request('io.github.someone/tool'), context('io.github.someone/tool'));
 
     expect(mocks.discoverAndCacheToolNames).not.toHaveBeenCalled();
   });
 
-  it('discovers and returns live tool names for a signed-in caller', async () => {
-    mocks.readDirectorySnapshot.mockResolvedValueOnce({
-      records: [record({ authMode: 'oauth', connectable: 'connect' })],
-    });
+  it('discovers live tool names for a signed-in caller, passing the existing list through', async () => {
+    mocks.getSnapshotRecords.mockResolvedValueOnce([
+      record({ authMode: 'oauth', connectable: 'connect', toolNames: [] }),
+    ]);
     mocks.getClerkAuthUser.mockResolvedValueOnce({ userId: 'user-1' });
     mocks.discoverAndCacheToolNames.mockResolvedValueOnce(['list_items', 'create_item']);
 
@@ -139,14 +136,17 @@ describe('GET /api/connectors/directory/[...id]', () => {
     const body = await response.json();
 
     expect(body.entry.toolNames).toEqual(['list_items', 'create_item']);
+    expect(mocks.discoverAndCacheToolNames).toHaveBeenCalledWith(
+      'user-1',
+      'io.github.someone/tool',
+      [],
+    );
   });
 
-  it('resolves and persists a pending site icon before returning', async () => {
-    mocks.readDirectorySnapshot.mockResolvedValueOnce({
-      records: [
-        record({ authMode: 'oauth', connectable: 'connect', iconSource: 'site', iconUrl: null }),
-      ],
-    });
+  it('resolves a pending site icon without writing anything back to the snapshot', async () => {
+    mocks.getSnapshotRecords.mockResolvedValueOnce([
+      record({ authMode: 'oauth', connectable: 'connect', iconSource: 'site', iconUrl: null }),
+    ]);
     mocks.resolveSiteIconForRecord.mockResolvedValueOnce(
       record({
         authMode: 'oauth',
@@ -163,13 +163,12 @@ describe('GET /api/connectors/directory/[...id]', () => {
     const body = await response.json();
 
     expect(body.entry.iconUrl).toBe('https://tool.example.com/favicon.ico');
-    expect(mocks.upsertDirectoryRecord).toHaveBeenCalledTimes(1);
   });
 
   it('never touches an already-resolved icon source', async () => {
-    mocks.readDirectorySnapshot.mockResolvedValueOnce({
-      records: [record({ authMode: 'oauth', connectable: 'connect', iconSource: 'brand' })],
-    });
+    mocks.getSnapshotRecords.mockResolvedValueOnce([
+      record({ authMode: 'oauth', connectable: 'connect', iconSource: 'brand' }),
+    ]);
 
     await GET(request('io.github.someone/tool'), context('io.github.someone/tool'));
 
@@ -177,16 +176,14 @@ describe('GET /api/connectors/directory/[...id]', () => {
   });
 
   it('carries a computed tool count and connector url in the detail response', async () => {
-    mocks.readDirectorySnapshot.mockResolvedValueOnce({
-      records: [
-        record({
-          authMode: 'oauth',
-          connectable: 'connect',
-          toolNames: ['a', 'b'],
-          remotes: [{ url: 'https://tool.example.com/mcp', transport: 'streamable-http' }],
-        }),
-      ],
-    });
+    mocks.getSnapshotRecords.mockResolvedValueOnce([
+      record({
+        authMode: 'oauth',
+        connectable: 'connect',
+        toolNames: ['a', 'b'],
+        remotes: [{ url: 'https://tool.example.com/mcp', transport: 'streamable-http' }],
+      }),
+    ]);
 
     const response = await GET(
       request('io.github.someone/tool'),
