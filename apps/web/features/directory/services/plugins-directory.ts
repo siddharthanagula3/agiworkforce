@@ -65,7 +65,6 @@ export function toRegistryEntry(
     publisher: plugin.publisher.name,
     description: plugin.description,
     monogram: plugin.name.slice(0, 1).toUpperCase(),
-    badges: [firstParty ? 'agi' : 'partner'],
     sourceId: firstParty ? DIRECTORY_SOURCE_AGI : DIRECTORY_SOURCE_PARTNERS,
     installed,
     isNew: isRecentlyAdded(plugin.createdAt, now),
