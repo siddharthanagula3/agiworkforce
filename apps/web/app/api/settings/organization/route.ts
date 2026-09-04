@@ -36,6 +36,11 @@ import {
   isMissingOrganizationDeletionColumns,
   organizationDeletionScheduledFor,
 } from '@/lib/server/organization-deletion';
+import {
+  CURRENT_COLLECTION_STATE,
+  readOrganizationCollectionState,
+  type CollectionState,
+} from '@/lib/services/enterprise-collection-state';
 
 let stripeClient: Stripe | null = null;
 function getStripe(): Stripe {
@@ -124,6 +129,18 @@ const NO_PENDING_DELETION: OrganizationDeletionStatus = {
   canCancel: false,
 };
 
+async function fetchCollectionState(
+  db: ReturnType<typeof getNeonDb>,
+  organizationId: string,
+): Promise<CollectionState> {
+  try {
+    return await readOrganizationCollectionState(db, organizationId);
+  } catch (error) {
+    logger.error({ error, organizationId }, 'Failed to read organization collection state');
+    return CURRENT_COLLECTION_STATE;
+  }
+}
+
 async function fetchOrganizationDeletionStatus(
   db: ReturnType<typeof getNeonDb>,
   organizationId: string,
@@ -182,6 +199,7 @@ async function handleGet(request: NextRequest) {
       workspaces,
       access,
       deletion: NO_PENDING_DELETION,
+      collectionState: null,
     });
   }
 
@@ -202,10 +220,14 @@ async function handleGet(request: NextRequest) {
       workspaces,
       access,
       deletion: NO_PENDING_DELETION,
+      collectionState: null,
     });
   }
 
-  const deletion = await fetchOrganizationDeletionStatus(db, org.id);
+  const [deletion, collectionState] = await Promise.all([
+    fetchOrganizationDeletionStatus(db, org.id),
+    fetchCollectionState(db, org.id),
+  ]);
 
   return NextResponse.json({
     organization: buildOrgResponse(org, membership, access),
@@ -213,6 +235,7 @@ async function handleGet(request: NextRequest) {
     workspaces,
     access,
     deletion,
+    collectionState,
   });
 }
 
