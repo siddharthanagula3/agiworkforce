@@ -1,13 +1,13 @@
--- 0161 — the presentations role bundle.
+-- 0161 : the presentations role bundle.
 --
--- NOT YET APPLIED — draft only, pending explicit approval before running.
+-- NOT YET APPLIED : draft only, pending explicit approval before running.
 --
 -- 0145 shipped four true-today role bundles (research-pack, engineering-pack,
 -- writing-pack, data-pack); this adds the fifth: presentations. Its one
 -- declared skill, presentation-creation, is checked live against
 -- GET /api/skills, the same bar 0145 applied to its own three packs, and
--- carries no plugin owner in its SKILL.md frontmatter, so — like
--- engineering-pack, writing-pack, and data-pack — installing this pack does
+-- carries no plugin owner in its SKILL.md frontmatter, so : like
+-- engineering-pack, writing-pack, and data-pack : installing this pack does
 -- not gate anything: it is a curated bundle, not an access grant.
 
 insert into public.plugin_registry_entries (

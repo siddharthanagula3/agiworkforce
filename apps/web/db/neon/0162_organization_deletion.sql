@@ -1,6 +1,6 @@
--- 0162 — the workspace decommission grace window.
+-- 0162 : the workspace decommission grace window.
 --
--- NOT YET APPLIED — draft only, pending explicit approval before running.
+-- NOT YET APPLIED : draft only, pending explicit approval before running.
 --
 -- Verification found that no route deletes an organization: settings/organization
 -- exposes GET, POST and PATCH only, and leaveOrganization refuses to let a sole

@@ -1,4 +1,4 @@
--- 0166 — give each provider cost event the organization that funds it.
+-- 0166 : give each provider cost event the organization that funds it.
 --
 -- NOT YET APPLIED, draft only, pending explicit approval before running.
 --
@@ -40,7 +40,7 @@ comment on column public.provider_cost_events.organization_id is
 commit;
 
 -- =============================================================================
--- VERIFICATION — run MANUALLY on a throwaway Neon BRANCH before production.
+-- VERIFICATION : run MANUALLY on a throwaway Neon BRANCH before production.
 -- (Commented so it never runs during apply.)
 -- =============================================================================
 -- -- 1. No existing row is retroactively attributed to an organization:

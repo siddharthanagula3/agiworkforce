@@ -1,7 +1,7 @@
--- 0160 — per-installation plugin settings: enabled skills and custom example
+-- 0160 : per-installation plugin settings: enabled skills and custom example
 -- prompts.
 --
--- NOT YET APPLIED — draft only, pending explicit approval before running.
+-- NOT YET APPLIED : draft only, pending explicit approval before running.
 --
 -- The per-plugin settings surface (GET/PATCH enabled skills, example
 -- prompts, and connector requirements with connect state) needs somewhere to
@@ -9,7 +9,7 @@
 -- which of the plugin's declared skills this user has toggled on, and
 -- whether they have overridden the plugin's default "Try asking" examples.
 -- Connector requirements stay read-only, computed at request time from
--- required_connectors joined against user_connectors — nothing to persist.
+-- required_connectors joined against user_connectors : nothing to persist.
 --
 -- enabled_skills defaults to '[]' at the column level; the install path
 -- (installWebPlugin) is the one that actually populates it with the
