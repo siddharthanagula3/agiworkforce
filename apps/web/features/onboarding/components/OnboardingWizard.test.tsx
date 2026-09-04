@@ -80,6 +80,46 @@ describe('OnboardingWizard', () => {
     expect(mocks.replace).toHaveBeenCalledWith('/chat');
   });
 
+  it('completes with the chosen prompt prefilled when a starter prompt is picked', async () => {
+    const user = userEvent.setup();
+    render(<OnboardingWizard />);
+
+    const nameInput = await screen.findByLabelText('Preferred name');
+    await user.clear(nameInput);
+    await user.type(nameInput, 'Priya');
+    await user.click(screen.getByRole('button', { name: 'Continue' }));
+
+    const firstUseCase = ONBOARDING_USE_CASES[0]!;
+    await user.click(screen.getByRole('radio', { name: new RegExp(firstUseCase.label) }));
+
+    const chosenPrompt = firstUseCase.starterPrompts[0]!;
+    await user.click(screen.getByRole('button', { name: chosenPrompt }));
+
+    await waitFor(() =>
+      expect(mocks.complete).toHaveBeenCalledWith({
+        preferredName: 'Priya',
+        workDescription: '',
+        primaryUseCase: firstUseCase.value,
+      }),
+    );
+    expect(mocks.replace).toHaveBeenCalledWith(
+      `/chat?starterPrompt=${encodeURIComponent(chosenPrompt)}`,
+    );
+  });
+
+  it('shows the default prompts before a use case has been chosen', async () => {
+    const user = userEvent.setup();
+    render(<OnboardingWizard />);
+
+    const nameInput = await screen.findByLabelText('Preferred name');
+    await user.clear(nameInput);
+    await user.type(nameInput, 'Priya');
+    await user.click(screen.getByRole('button', { name: 'Continue' }));
+    await screen.findByRole('heading', { name: 'What do you want to do first?' });
+
+    expect(screen.getByText('Start with one of these')).toBeInTheDocument();
+  });
+
   it('returns to the name step on Back without losing what was typed', async () => {
     const user = userEvent.setup();
     render(<OnboardingWizard />);

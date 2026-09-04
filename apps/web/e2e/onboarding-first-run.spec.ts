@@ -26,6 +26,15 @@ async function writeGeneralNamespace(
   expect(result.status).toBe(200);
 }
 
+async function composerValue(page: import('@playwright/test').Page): Promise<string> {
+  const composer = page.locator('[data-composer-textarea]');
+  await expect(composer).toBeVisible();
+  return composer.evaluate((el) => {
+    const withValue = el as HTMLTextAreaElement;
+    return withValue.value || el.textContent || '';
+  });
+}
+
 test.describe('first-run onboarding', () => {
   let originalGeneral: Record<string, unknown> = {};
 
@@ -44,7 +53,7 @@ test.describe('first-run onboarding', () => {
     await page.close();
   });
 
-  test('walks the two-step wizard, personalizes prompts, and gates the artifact notice', async ({
+  test('walks the two-step wizard, prefills the composer from a starter prompt, and gates the artifact notice', async ({
     page,
   }) => {
     await signIn(page);
@@ -63,14 +72,19 @@ test.describe('first-run onboarding', () => {
 
     const chosenUseCase = ONBOARDING_USE_CASES[0]!;
     await page.getByRole('radio', { name: new RegExp(chosenUseCase.label) }).click();
-    await page.getByRole('button', { name: 'Finish' }).click();
 
-    await page.waitForURL('**/chat');
+    await expect(page.getByText('Start with one of these')).toBeVisible();
+    const chosenPrompt = chosenUseCase.starterPrompts[0]!;
+    await page.getByRole('button', { name: chosenPrompt }).click();
+
+    await page.waitForURL('**/chat**');
+    await expect(async () => {
+      expect(await composerValue(page)).toContain(chosenPrompt);
+    }).toPass();
+    await page.waitForURL((url) => !url.search.includes('starterPrompt'));
 
     await page.goto('/welcome');
     await page.waitForURL('**/chat');
-
-    await expect(page.getByRole('button', { name: chosenUseCase.starterPrompts[0] })).toBeVisible();
 
     const artifactsToggle = page.getByTitle('Artifacts');
     await artifactsToggle.click();
