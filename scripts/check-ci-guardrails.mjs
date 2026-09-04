@@ -215,7 +215,10 @@ requireIncludes(
 requireNotIncludes('.github/workflows/deploy-signaling-server.yml', "github.event_name == 'push'");
 
 const vercelConfig = JSON.parse(readText('vercel.json'));
-if (vercelConfig.git?.deploymentEnabled?.main !== false) {
+const gitDeploymentsOff =
+  vercelConfig.git?.deploymentEnabled === false ||
+  vercelConfig.git?.deploymentEnabled?.main === false;
+if (!gitDeploymentsOff) {
   errors.push(
     'vercel.json must disable automatic main deployments so CI owns production promotion',
   );

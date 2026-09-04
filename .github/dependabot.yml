@@ -1,6 +1,6 @@
 version: 2
 # Dependabot is configured here so its scan results stay visible in
-# the GitHub Dependency graph, but `open-pull-requests-limit: 0` is
+# the GitHub Dependency graph, but `open-pull-requests-limit: 5` is
 # set on every ecosystem to prevent automated PR creation. The team
 # triggers updates manually via `pnpm update` / `cargo update` after
 # coordinated migration planning. Re-raise the limit on a specific
@@ -12,7 +12,7 @@ updates:
     schedule:
       interval: 'weekly'
       day: 'monday'
-    open-pull-requests-limit: 0
+    open-pull-requests-limit: 5
     labels:
       - 'dependencies'
       - 'github-actions'
@@ -33,7 +33,7 @@ updates:
     schedule:
       interval: 'weekly'
       day: 'monday'
-    open-pull-requests-limit: 0
+    open-pull-requests-limit: 5
     labels:
       - 'dependencies'
       - 'rust'
@@ -54,7 +54,7 @@ updates:
     schedule:
       interval: 'weekly'
       day: 'monday'
-    open-pull-requests-limit: 0
+    open-pull-requests-limit: 5
     labels:
       - 'dependencies'
       - 'rust'
@@ -90,7 +90,7 @@ updates:
     schedule:
       interval: 'weekly'
       day: 'monday'
-    open-pull-requests-limit: 0
+    open-pull-requests-limit: 5
     labels:
       - 'dependencies'
       - 'javascript'
@@ -122,7 +122,7 @@ updates:
     schedule:
       interval: 'weekly'
       day: 'monday'
-    open-pull-requests-limit: 0
+    open-pull-requests-limit: 5
     labels:
       - 'dependencies'
       - 'javascript'
@@ -160,7 +160,7 @@ updates:
     schedule:
       interval: 'weekly'
       day: 'monday'
-    open-pull-requests-limit: 0
+    open-pull-requests-limit: 5
     labels:
       - 'dependencies'
       - 'javascript'
@@ -190,7 +190,7 @@ updates:
     schedule:
       interval: 'weekly'
       day: 'monday'
-    open-pull-requests-limit: 0
+    open-pull-requests-limit: 5
     labels:
       - 'dependencies'
       - 'javascript'
@@ -215,7 +215,7 @@ updates:
     schedule:
       interval: 'weekly'
       day: 'monday'
-    open-pull-requests-limit: 0
+    open-pull-requests-limit: 5
     labels:
       - 'dependencies'
       - 'javascript'
@@ -240,7 +240,7 @@ updates:
     schedule:
       interval: 'weekly'
       day: 'monday'
-    open-pull-requests-limit: 0
+    open-pull-requests-limit: 5
     labels:
       - 'dependencies'
       - 'javascript'
@@ -260,7 +260,7 @@ updates:
     schedule:
       interval: 'weekly'
       day: 'monday'
-    open-pull-requests-limit: 0
+    open-pull-requests-limit: 5
     labels:
       - 'dependencies'
       - 'javascript'
@@ -280,7 +280,7 @@ updates:
     schedule:
       interval: 'weekly'
       day: 'monday'
-    open-pull-requests-limit: 0
+    open-pull-requests-limit: 5
     labels:
       - 'dependencies'
       - 'javascript'
