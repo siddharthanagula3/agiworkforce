@@ -1,9 +1,14 @@
 import { test, expect } from '@playwright/test';
 
+import { getModels } from '@agiworkforce/types';
 import { signIn } from './qa-capability-harness';
+
+const QA_MODEL_ID = process.env['QA_MODEL'];
+const QA_MODEL_LABEL = getModels().find((model) => model.id === QA_MODEL_ID)?.name;
 
 test.describe('activity pill after a stopped search', () => {
   test('a search stopped mid-flight reads as stopped, not searched', async ({ page }) => {
+    expect(QA_MODEL_LABEL, `QA_MODEL=${QA_MODEL_ID} is not a catalog model`).toBeTruthy();
     await signIn(page);
     await page.goto('/chat');
 
@@ -12,8 +17,8 @@ test.describe('activity pill after a stopped search', () => {
 
     await page.getByRole('button', { name: 'Change model' }).click();
     const modelsDialog = page.getByRole('dialog', { name: 'Models' });
-    await modelsDialog.getByRole('textbox', { name: 'Search models' }).fill('GPT-5.6 Luna');
-    await modelsDialog.getByRole('button', { name: 'GPT-5.6 Luna' }).first().click();
+    await modelsDialog.getByRole('textbox', { name: 'Search models' }).fill(QA_MODEL_LABEL!);
+    await modelsDialog.getByRole('button', { name: QA_MODEL_LABEL! }).first().click();
 
     await composer.fill(
       `Search the web for today's top technology headline and summarize it in one sentence. (ref ${Date.now()})`,
