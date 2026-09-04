@@ -7,7 +7,7 @@ const ACCESS_BADGE_LABEL: Record<'read' | 'write', string> = { read: 'Read', wri
 
 const ACCESS_BADGE_CLASS: Record<'read' | 'write', string> = {
   read: 'border-border text-muted-foreground',
-  write: 'border-amber-500/40 text-amber-700 dark:text-amber-400',
+  write: 'border-warning-fill/40 text-warning-text',
 };
 
 export function ConnectorScopeList({ connectorId }: { connectorId: string }) {
@@ -51,7 +51,7 @@ export function ConnectorScopeList({ connectorId }: { connectorId: string }) {
             <span className="text-muted-foreground">{entry.sentence}</span>
             <span
               className={cn(
-                'shrink-0 rounded-full border px-2 py-0.5 text-[11px] font-medium',
+                'shrink-0 rounded-full border px-2 py-0.5 text-xs font-medium',
                 ACCESS_BADGE_CLASS[entry.access],
               )}
             >
