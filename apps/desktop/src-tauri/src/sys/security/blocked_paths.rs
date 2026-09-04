@@ -1,4 +1,3 @@
-
 use std::path::Path;
 
 const BLOCKED_PATH_SUBSTRINGS: &[&str] = &[

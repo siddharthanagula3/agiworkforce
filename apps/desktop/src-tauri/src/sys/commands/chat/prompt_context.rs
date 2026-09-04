@@ -162,8 +162,7 @@ pub fn load_project_instructions(folder: &std::path::Path) -> Option<String> {
                     );
                     return Some(truncated);
                 }
-                Ok(_) => {
-                }
+                Ok(_) => {}
                 Err(e) => {
                     debug!("[PromptContext] Could not read {:?}: {}", path, e);
                 }

@@ -286,7 +286,6 @@ mod tests {
         }
     }
 
-
     /// Verifies that the cache key incorporates the base_url so that two
     /// Ollama instances serving the same model name are treated independently.
     #[test]
@@ -326,7 +325,6 @@ mod tests {
             "Cache keys for different model names on the same host must not collide"
         );
     }
-
 
     /// Manually insert an entry into the cache and verify that
     /// `clear_capability_cache` removes it.

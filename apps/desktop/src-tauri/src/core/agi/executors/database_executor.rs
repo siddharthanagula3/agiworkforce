@@ -715,7 +715,6 @@ mod tests {
         assert!(DatabaseExecutor::validate_query("SAVEPOINT my_savepoint").is_err());
     }
 
-
     fn write_context() -> ExecutorContext {
         ExecutorContext {
             app_handle: None,
