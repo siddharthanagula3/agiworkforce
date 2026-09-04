@@ -25,6 +25,18 @@ export interface ConsentLedger {
   getNamedProviderConsent(providerId: string): NamedProviderConsent | null;
 }
 
+/**
+ * Returns whether routing to `providerId` is allowed for the current user.
+ *
+ * The contract:
+ *   1. Providers NOT on the Chinese-HQ list are always allowed (other gates,
+ *      like billing tier or API key presence, are enforced elsewhere).
+ *   2. Chinese-HQ providers are allowed ONLY if the ledger has a matching
+ *      `NamedProviderConsent` with `accepted === true`.
+ *   3. A missing ledger entry is treated as deny, fail closed.
+ *
+ * @returns `true` if routing is permitted, `false` if blocked by R-023 gate.
+ */
 export function isProviderRoutingAllowed(providerId: string, ledger: ConsentLedger): boolean {
   if (!isChineseHqProvider(providerId)) return true;
   const consent = ledger.getNamedProviderConsent(providerId);

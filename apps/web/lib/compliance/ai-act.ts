@@ -24,6 +24,11 @@ export const ARTICLE_50_1_WEB_CARVE_OUT = Object.freeze({
   counselReviewed: false,
 });
 
+/**
+ * Article 50(2) coverage on web, per synthetic kind. A kind is either marked
+ * server-side on the response that carries the artefact, or it is a recorded
+ * gap with a stated reason, never silently absent.
+ */
 export const ARTICLE_50_2_WEB_SCOPE: Readonly<
   Record<AiActSyntheticContentKind, { readonly marked: boolean; readonly basis: string }>
 > = Object.freeze({

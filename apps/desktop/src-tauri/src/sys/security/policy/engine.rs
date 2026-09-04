@@ -322,6 +322,13 @@ impl PolicyEngine {
         cwd: &Path,
         context: &PolicyContext,
     ) -> Result<PolicyDecision> {
+        // Command-content decision core: the shared execpolicy gate
+        // (`sys/security/exec_gate`), replacing this engine's bespoke
+        // dangerous-pattern list (Wave 5a). Mapping is same-or-stricter than
+        // the old list: previously-prompted patterns still prompt (or are now
+        // denied outright when catastrophic); nothing previously blocked or
+        // prompted becomes allowed. `Allow` only means "no content-based
+        // objection", the cwd scope / trust-level checks below still apply.
         match crate::sys::security::exec_gate::evaluate_command(command) {
             agiworkforce_execpolicy::Decision::Forbidden => {
                 return Ok(PolicyDecision::Deny {

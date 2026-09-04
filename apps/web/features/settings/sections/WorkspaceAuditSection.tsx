@@ -34,6 +34,10 @@ const controlStyle = {
 const OUTCOMES = ['', 'success', 'failure', 'denied'] as const;
 const SEVERITIES = ['', 'info', 'warning', 'critical'] as const;
 
+/**
+ * Outcome carries the meaning an admin scans for, so it is encoded in form as
+ * well as text, a denial has to be findable without reading every row.
+ */
 function OutcomeChip({ outcome }: { outcome: AuditEventView['outcome'] }) {
   const tone =
     outcome === 'success'
@@ -110,6 +114,7 @@ export function WorkspaceAuditSection() {
     );
   }
 
+  // 403, a personal account, or a member without admin. Not an error state.
   if (!data) return null;
 
   const events = data.events;

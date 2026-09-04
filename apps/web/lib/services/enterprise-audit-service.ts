@@ -19,6 +19,12 @@ export interface AuditEventFilters {
   to?: string;
 }
 
+/**
+ * Keyset cursor. Ordering is (created_at DESC, id DESC), created_at alone is
+ * not unique, so an offset or a timestamp-only cursor silently skips or repeats
+ * rows when several events share a millisecond, which is exactly what a burst of
+ * activity produces. The id tiebreak makes the page boundary total.
+ */
 export interface AuditCursor {
   createdAt: string;
   id: string;
@@ -68,6 +74,12 @@ export function formatAuditEvent(row: AuditEventRow): EnterpriseAuditEvent {
   };
 }
 
+/**
+ * Builds the shared WHERE clause. Every value is a bound parameter, no filter
+ * reaches the SQL text, and `organization_id` is always pinned first so a
+ * missing filter can never widen the query past one workspace. RLS
+ * (`enterprise_audit_events_admin_read`) is the backstop, not the only gate.
+ */
 function buildPredicate(
   organizationId: string,
   filters: AuditEventFilters,

@@ -72,6 +72,18 @@ describe('resolveOrganizationEntitlementPlan', () => {
 });
 
 describe("entitlement never depends on the caller's row visibility", () => {
+  /**
+   * `public.subscriptions` has RLS forced, and entitlement resolves from the
+   * OWNER's row. Passing a caller-scoped adapter therefore returned NULL for
+   * every administrator who was not the owner, resolved to `free`, and refused
+   * all ten organization routes on a workspace holding a valid Enterprise plan.
+   *
+   * The guard is structural: the function must take an organization id alone
+   * and reach for the privileged connection itself. If someone reintroduces a
+   * `db` parameter, a scoped adapter can be threaded in again and the bug
+   * returns silently, a mocked adapter always "sees" the owner's row, so no
+   * unit test would notice.
+   */
   it('takes an organization id only, and reads on the privileged connection', async () => {
     const { db, query } = dbWith([
       { user_id: 'owner-1', plan_tier: 'enterprise', status: 'active' },

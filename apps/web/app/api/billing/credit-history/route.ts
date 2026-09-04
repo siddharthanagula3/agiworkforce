@@ -20,6 +20,15 @@ function parsePositiveInt(raw: string | null, fallback: number, max?: number): n
   return max !== undefined ? Math.min(parsed, max) : parsed;
 }
 
+// User-facing transaction kinds only. `allocation` (period credit grant) and
+// `reset` (daily flagship-cap reset) are internal bookkeeping events written
+// by every renewal/reset tick for every subscriber, real, but not something
+// a user did or was charged for, and they would drown the entries that ARE
+// meaningful (a purchase, a refund, a manual adjustment, and every per-task
+// deduction) in noise. See db/neon/0004_token_credits.sql:24-25 for the full
+// constraint and db/neon/0020_functions.sql:283-469 for what writes each type.
+// Fixed, compile-time constant, inlined into the SQL `in (...)` list below
+// rather than bound as a parameter, since it never varies per request.
 const USER_FACING_TRANSACTION_TYPES = ['purchase', 'adjustment', 'refund', 'bonus', 'deduction'];
 const TRANSACTION_TYPE_IN_LIST = USER_FACING_TRANSACTION_TYPES.map((t) => `'${t}'`).join(', ');
 
@@ -32,7 +41,21 @@ interface CreditHistoryRow {
   created_at: string;
 }
 
+/**
+ * GET /api/billing/credit-history
+ * List the current user's real per-task credit ledger: purchases, refunds,
+ * bonuses, manual adjustments, and every usage deduction.
+ * Returns an empty list if the account has no transactions yet, never
+ * fabricated rows.
+ */
 async function handleGetCreditHistory(request: NextRequest) {
+  // Reuses the 'billing-invoices' bucket (30/min, fail-open) rather than
+  // adding a new RateLimitKey entry to lib/rate-limit.ts: this is a read-only
+  // GET of comparable sensitivity/cost to that route, and RateLimitKey is a
+  // literal union sourced from that shared config file, which is outside this
+  // route's ownership. The two routes sharing a per-user bucket only matters
+  // if a caller hits both endpoints >30 times/min combined, far above normal
+  // settings-page usage. Give this route its own key if that ever changes.
   const rateLimitResponse = await withRateLimit(request, 'billing-invoices');
   if (rateLimitResponse) return rateLimitResponse;
 

@@ -17,6 +17,15 @@ const cardStyle = {
   background: 'var(--bg-elev)',
 } as const;
 
+/**
+ * What one entry resolves to, mirroring the evaluator's precedence.
+ *
+ * The console must show what a MEMBER will actually experience, not what the
+ * administrator typed. A model on the approved list whose provider is blocked
+ * is still usable, that is deliberate, so "no Provider X except this model" is
+ * expressible, and a console that showed it as blocked would send an admin
+ * hunting for a bug that is not there.
+ */
 type Effective = 'allowed' | 'blocked' | 'not-approved';
 
 function effectiveFor(model: CatalogModel, lists: ModelPolicyLists): Effective {

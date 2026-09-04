@@ -8,6 +8,18 @@ export const CODE_EXECUTION_SETTING_KEY = 'cloudCodeExecution';
 
 const PG_UNDEFINED_TABLE = '42P01';
 
+/**
+ * Whether this account allows cloud code execution.
+ *
+ * Default TRUE: the capability predates the switch, and defaulting to off would
+ * break every existing conversation that relies on it. A read failure also
+ * returns true, refusing a tool the user never opted out of, because a
+ * settings query blipped, would look like the product breaking at random.
+ *
+ * Enforced server-side because the execution tools are declared by the CLIENT
+ * in the request body. A client-side check alone would be a preference the
+ * caller could simply decline to honour.
+ */
 export async function isCloudCodeExecutionEnabled(userId: string): Promise<boolean> {
   try {
     const rows = await getNeonDb().query<{ settings: Record<string, unknown> | null }>(

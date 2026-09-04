@@ -28,6 +28,16 @@ export type LicenseVerifyResult =
     }
   | { ok: false; error: LicenseError };
 
+/**
+ * Verify an `.agilicense` file offline.
+ *
+ * @param fileBytes  raw bytes of the `.agilicense` file.
+ * @param rootPublicKeys  base64 32-byte Ed25519 root public keys baked into the
+ *   app build. Rotatable list, the signature must verify against any one of
+ *   them, so a retired key can coexist with its replacement (design §2.1).
+ * @param nowMs  the local clock in Unix epoch milliseconds (injected, keeps
+ *   this pure and testable; offline verification uses the local clock).
+ */
 export function verifyLicense(
   fileBytes: Uint8Array,
   rootPublicKeys: readonly string[],

@@ -1,3 +1,15 @@
+//! Cross-language verification tests.
+//!
+//! The primary suites REPLAY the committed cross-language fixture corpora, the
+//! SAME files the TS `@agiworkforce/licensing` suites consume. Nothing a replay
+//! needs (root keys, `nowMs`, expected verdict,
+//! license claims, baseline) is hardcoded here: it all lives in the two shared
+//! `manifest.json` files, read via a path relative to `CARGO_MANIFEST_DIR`. The
+//! fixtures are NOT copied into this crate, a discrepancy here is a real
+//! cross-language bug, not a fixture drift.
+//!
+//! Secondary suites cover the expiry/grace boundaries, key rotation, and the
+//! never-panic contract directly, minting real signatures via `test_support`.
 
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -324,6 +336,7 @@ fn accepts_any_key_in_the_rotatable_root_list() {
     let now = 1_500_000_000_000i64;
     let signed_by_new =
         make_signed_container(&rotation_claims(), &new_key, LICENSE_CONTAINER_FORMAT);
+    // Old key first, new key second, verification must try all of them.
     let result = verify_license(
         &signed_by_new,
         &[old_key.public_key_b64, new_key.public_key_b64],

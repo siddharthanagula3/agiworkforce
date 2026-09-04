@@ -24,6 +24,22 @@ function errorResponse(err: AppError, headers?: Record<string, string>): NextRes
   );
 }
 
+/**
+ * Security Monitoring API
+ *
+ * GET /api/admin/security - Get security dashboard summary
+ * GET /api/admin/security?action=metrics - Get security metrics only
+ * GET /api/admin/security?action=alerts - Check alert thresholds
+ * GET /api/admin/security?action=events&severity=critical&limit=50 - Get recent events
+ * GET /api/admin/security?action=user&userId=xxx - Get events for specific user
+ * GET /api/admin/security?action=ips - Get top IP addresses
+ * POST /api/admin/security?action=cleanup - Trigger log cleanup
+ *
+ * This surface reads and writes across every tenant, so it requires a platform
+ * operator on the AGI_PLATFORM_ADMIN_USER_IDS allowlist, not the self-service
+ * organisation admin/owner role.
+ */
+
 export async function GET(request: NextRequest) {
   try {
     const rateLimitResponse = await withRateLimit(request, 'admin-security');

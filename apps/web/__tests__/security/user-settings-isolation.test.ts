@@ -5,6 +5,22 @@ import { join } from 'node:path';
 const WEB = join(__dirname, '..', '..');
 const read = (p: string) => readFileSync(join(WEB, p), 'utf-8');
 
+/**
+ * `public.user_settings` is under RLS as of 0134_user_settings_rls.sql, and the
+ * preferences route reads it through `getUserScopedDb()` so the policy actually
+ * applies, the Neon owner role carries BYPASSRLS, so a route left on
+ * `getNeonDb()` would sail straight past it and the policy would be decorative.
+ *
+ * Both halves are pinned here, plus the `where user_id = $1` predicate that
+ * remains the first line of defence. The policy is the second, for the day
+ * someone forgets the predicate.
+ *
+ * This file previously asserted the OPPOSITE, that no policy existed and that
+ * 0042's "RLS isolates it" comment was a false claim. It was, when written.
+ * 0134 made it true, and 0042 cannot be edited to say so: it is an applied
+ * migration, and rewriting one is checksum drift the migration runner reports
+ * forever.
+ */
 describe('user_settings tenant isolation', () => {
   const route = read('app/api/settings/preferences/route.ts');
 
