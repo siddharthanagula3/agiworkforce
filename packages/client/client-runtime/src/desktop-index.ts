@@ -18,6 +18,8 @@ export { routeToCloud } from './http';
 export {
   applyAgentActivityEvent,
   finishAgentActivityLocally,
+  isGenerationProgressEntry,
+  REASONING_PROGRESS_SUMMARY,
   startAgentActivityLocally,
   withoutGenerationProgress,
 } from './agentActivity';
