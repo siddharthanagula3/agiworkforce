@@ -344,7 +344,9 @@ test('never deployed reads as null, which the caller must treat as deploy-everyt
 
 test('Vercel Git integration cannot race the CI-owned main promotion', () => {
   const config = JSON.parse(fs.readFileSync('vercel.json', 'utf8'));
-  assert.equal(config.git.deploymentEnabled.main, false);
+  const gitDeploymentsOff =
+    config.git.deploymentEnabled === false || config.git.deploymentEnabled.main === false;
+  assert.equal(gitDeploymentsOff, true);
 
   const workflow = fs.readFileSync('.github/workflows/deploy-production.yml', 'utf8');
   assert.match(workflow, /vercel deploy --prebuilt --prod/);
