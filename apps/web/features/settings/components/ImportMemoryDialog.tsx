@@ -380,7 +380,7 @@ export function ImportMemoryDialog({ open, onOpenChange, onImported }: ImportMem
                   <div className="flex flex-1 flex-col gap-1">
                     <span className="text-sm text-foreground">{item.content}</span>
                     {item.duplicate && (
-                      <span className="w-fit rounded bg-muted px-1.5 py-0.5 text-[11px] text-muted-foreground">
+                      <span className="w-fit rounded bg-muted px-1.5 py-0.5 text-xs text-muted-foreground">
                         Already saved
                       </span>
                     )}
