@@ -360,7 +360,7 @@ export function createWebStorageAdapter(
       try {
         storage.setItem(key, JSON.stringify(commands));
       } catch {
-        // noop
+        return;
       }
     },
   };
@@ -394,7 +394,7 @@ export function createKvStorageAdapter(key: string, kv: SyncKvStore): QueueStora
       try {
         kv.set(key, JSON.stringify(commands));
       } catch {
-        // noop
+        return;
       }
     },
   };
