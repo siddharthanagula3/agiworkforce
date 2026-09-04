@@ -1,9 +1,6 @@
 'use client';
 
-import {
-  MANAGED_CLOUD_SETTINGS_PREFERENCES_PATH,
-  managedCloudPreferencesNamespacePath,
-} from '@agiworkforce/cloud-contracts';
+import { MANAGED_CLOUD_SETTINGS_PREFERENCES_PATH } from '@agiworkforce/cloud-contracts';
 
 import { addCsrfHeaders } from '@/lib/client/csrf';
 
@@ -14,10 +11,13 @@ export interface PreferenceNamespaceSavedDetail {
   value: unknown;
 }
 
-export async function fetchStoredPreferenceNamespace<T extends object>(
-  namespace: string,
-): Promise<Partial<T>> {
-  const response = await fetch(managedCloudPreferencesNamespacePath(namespace), {
+const PREFERENCES_SNAPSHOT_TTL_MS = 60_000;
+
+let snapshotInFlight: Promise<Record<string, unknown>> | null = null;
+let snapshotLoadedAt = 0;
+
+async function requestPreferencesSnapshot(): Promise<Record<string, unknown>> {
+  const response = await fetch(MANAGED_CLOUD_SETTINGS_PREFERENCES_PATH, {
     credentials: 'include',
   });
   if (!response.ok) {
@@ -25,12 +25,39 @@ export async function fetchStoredPreferenceNamespace<T extends object>(
       error?: { message?: string };
       message?: string;
     };
-    throw new Error(data.error?.message ?? data.message ?? `Failed to load ${namespace} settings`);
+    throw new Error(data.error?.message ?? data.message ?? 'Failed to load settings');
   }
   const data = (await response.json()) as { settings?: unknown };
   return data.settings && typeof data.settings === 'object' && !Array.isArray(data.settings)
-    ? (data.settings as Partial<T>)
+    ? (data.settings as Record<string, unknown>)
     : {};
+}
+
+function loadPreferencesSnapshot(): Promise<Record<string, unknown>> {
+  const now = Date.now();
+  if (snapshotInFlight && now - snapshotLoadedAt < PREFERENCES_SNAPSHOT_TTL_MS) {
+    return snapshotInFlight;
+  }
+  snapshotLoadedAt = now;
+  snapshotInFlight = requestPreferencesSnapshot().catch((error: unknown) => {
+    snapshotInFlight = null;
+    snapshotLoadedAt = 0;
+    throw error;
+  });
+  return snapshotInFlight;
+}
+
+export function invalidatePreferencesSnapshot(): void {
+  snapshotInFlight = null;
+  snapshotLoadedAt = 0;
+}
+
+export async function fetchStoredPreferenceNamespace<T extends object>(
+  namespace: string,
+): Promise<Partial<T>> {
+  const snapshot = await loadPreferencesSnapshot();
+  const value = snapshot[namespace];
+  return value && typeof value === 'object' && !Array.isArray(value) ? (value as Partial<T>) : {};
 }
 
 export async function fetchPreferenceNamespace<T extends object>(
@@ -84,6 +111,8 @@ export async function savePreferenceNamespace<T extends object>(
     const data = (await response.json().catch(() => ({}))) as { error?: { message?: string } };
     throw new Error(data.error?.message ?? 'Failed to save settings');
   }
+
+  invalidatePreferencesSnapshot();
 
   if (typeof window !== 'undefined') {
     window.dispatchEvent(

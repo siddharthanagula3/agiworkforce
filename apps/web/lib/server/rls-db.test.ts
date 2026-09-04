@@ -154,6 +154,19 @@ describe('getUserScopedDb with an API-key principal', () => {
     expect(rlsWithUser).toHaveBeenCalledWith('eyJhbGciOiJIUzI1NiJ9.session.sig');
     vi.unstubAllEnvs();
   });
+
+  it('skips organization resolution when the caller opts out, scoping to no workspace', async () => {
+    mockAuth.mockResolvedValue({ userId: 'user_1', getToken: async () => 'jwt-token' });
+    const request = new NextRequest('https://example.test/api/settings/preferences');
+
+    const { resolveActiveOrganizationId } = await import('@/lib/services/active-workspace-service');
+
+    const scoped = await getUserScopedDb(request, { resolveOrganization: false });
+
+    expect(scoped.organizationId).toBeNull();
+    expect(resolveActiveOrganizationId).not.toHaveBeenCalled();
+    expect(rlsWithOrg).toHaveBeenCalledWith(null);
+  });
 });
 
 // WEB-TELEMETRY-CONSENT-NOT-CROSS-DEVICE-01: the RLS read used by Server
