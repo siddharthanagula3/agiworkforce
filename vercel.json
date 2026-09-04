@@ -81,6 +81,10 @@
     {
       "path": "/api/cron/report-enterprise-usage",
       "schedule": "10 5 * * *"
+    },
+    {
+      "path": "/api/cron/enforce-billing-collection",
+      "schedule": "20 5 * * *"
     }
   ]
 }
