@@ -38,6 +38,7 @@ const cloudModules = [
   'capability-handshake',
   'schedules',
   'skills',
+  'plugin-marketplaces',
 ];
 
 const cloudMovedFiles = [
