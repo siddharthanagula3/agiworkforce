@@ -36,6 +36,40 @@ describe('normalizeExtraEgressHosts', () => {
     expect(() => normalizeExtraEgressHosts(['1.2.3.4/32'])).toThrow(InvalidExtraEgressHostsError);
   });
 
+  it('rejects address literals and cloud metadata endpoints', () => {
+    for (const host of ['169.254.169.254', '10.0.0.1', '192.168.1.1', '127.0.0.1', '*.10.0.0']) {
+      expect(() => normalizeExtraEgressHosts([host])).toThrow(InvalidExtraEgressHostsError);
+    }
+    expect(() => normalizeExtraEgressHosts(['[fd00:ec2::254]'])).toThrow(
+      InvalidExtraEgressHostsError,
+    );
+    expect(() => normalizeExtraEgressHosts(['fd00:ec2::254'])).toThrow(
+      InvalidExtraEgressHostsError,
+    );
+  });
+
+  it('rejects reserved internal names', () => {
+    for (const host of [
+      'metadata.google.internal',
+      'api.localhost',
+      'printer.local',
+      'db.corp',
+      'nas.home',
+      'router.lan',
+      '1.0.0.10.in-addr.arpa',
+      '*.internal',
+    ]) {
+      expect(() => normalizeExtraEgressHosts([host])).toThrow(InvalidExtraEgressHostsError);
+    }
+  });
+
+  it('still accepts public hosts whose labels contain digits', () => {
+    expect(normalizeExtraEgressHosts(['s3.us-east-1.amazonaws.com', '1password.com'])).toEqual([
+      's3.us-east-1.amazonaws.com',
+      '1password.com',
+    ]);
+  });
+
   it('rejects a non-string entry', () => {
     expect(() => normalizeExtraEgressHosts([42])).toThrow(InvalidExtraEgressHostsError);
   });
