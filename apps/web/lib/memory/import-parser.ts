@@ -39,6 +39,7 @@ export function clampImportItemLength(value: string): string {
   return clamp(value, MAX_IMPORT_ITEM_CHARS);
 }
 
+// em-dash-allow: pasted memory lists from other assistants use it as a bullet
 const BULLET_PREFIX_RE = /^\s*(?:[-*•‣–]|\u2014|\d+[.)])\s+/u;
 
 function splitTextCandidates(raw: string): string[] {
