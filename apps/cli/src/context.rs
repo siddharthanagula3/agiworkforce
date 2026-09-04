@@ -463,7 +463,6 @@ mod tests {
         (dir, path)
     }
 
-
     #[test]
     fn test_gather_system_context_runs() {
         let ctx = gather_system_context();
