@@ -123,7 +123,7 @@ export const useToolPermissionsStore = create<ToolPermissionsState & ToolPermiss
           set((state) => {
             const merged: ToolPermissionsMap = { ...state.permissions };
             for (const p of permissions) {
-              merged[p.connectorId] = { [p.toolName]: p.level, ...merged[p.connectorId] };
+              merged[p.connectorId] = { ...merged[p.connectorId], [p.toolName]: p.level };
             }
             return { permissions: merged };
           });
