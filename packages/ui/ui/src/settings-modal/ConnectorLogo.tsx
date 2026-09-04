@@ -218,13 +218,16 @@ const SIZE = {
   sm: { wrapper: 'h-8 w-8 rounded-lg', svg: 16, img: 20 },
   md: { wrapper: 'h-9 w-9 rounded-lg', svg: 18, img: 22 },
   lg: { wrapper: 'h-11 w-11 rounded-xl', svg: 22, img: 28 },
+  xl: { wrapper: 'h-16 w-16 rounded-xl', svg: 32, img: 40 },
 } as const;
+
+export type ConnectorLogoSize = keyof typeof SIZE;
 
 export interface ConnectorLogoProps {
   connectorId: string;
   fallbackGradient?: string;
   fallbackText?: string;
-  size?: 'sm' | 'md' | 'lg';
+  size?: ConnectorLogoSize;
   className?: string;
 }
 

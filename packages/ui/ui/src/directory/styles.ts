@@ -18,3 +18,11 @@ export const DIRECTORY_CREATE_BUTTON =
 
 export const DIRECTORY_ADD_BUTTON =
   'inline-flex size-8 shrink-0 items-center justify-center rounded-lg border border-border text-foreground transition-colors motion-reduce:transition-none hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background';
+
+export const ENTRY_ICON_SIZE = 'size-8 shrink-0';
+
+export const ENTRY_ICON_SHAPE = 'rounded-md border border-border';
+
+export const DETAIL_LOGO_SIZE = 'size-16 shrink-0';
+
+export const DETAIL_LOGO_SHAPE = 'rounded-xl border border-border';

@@ -1,14 +1,16 @@
-import type {
-  ConnectedConnector,
-  DirectoryBadgeKind,
-  DirectoryConnectorDetail,
-  DirectoryEntry,
-  DirectoryFilterGroup,
-  DirectorySection,
-  DirectorySourceChip,
-  SettingsConnector,
+import {
+  isUnverifiedCustomConnector,
+  type ConnectedConnector,
+  type DirectoryBadgeKind,
+  type DirectoryConnectorDetail,
+  type DirectoryEntry,
+  type DirectoryFilterGroup,
+  type DirectorySection,
+  type DirectorySourceChip,
+  type SettingsConnector,
 } from '@agiworkforce/ui';
 
+import firstPartyTargets from '@/lib/connectors/directory/sources/first-party.json';
 import type { DirectoryBadge, DirectoryRecord } from '@/lib/connectors/directory/types';
 
 import {
@@ -25,10 +27,40 @@ import {
 } from '../constants';
 
 const BADGE_TO_KIND: Record<DirectoryBadge, DirectoryBadgeKind> = {
-  'first-party': 'agi',
-  registry: 'verified',
+  'first-party': 'verified',
+  registry: 'community',
   community: 'community',
 };
+
+const CURATED_BADGE: DirectoryBadgeKind = 'verified';
+const SELF_ADDED_BADGE: DirectoryBadgeKind = 'yours';
+
+function curatedBadge(connector: SettingsConnector): DirectoryBadgeKind {
+  return isUnverifiedCustomConnector(connector) ? SELF_ADDED_BADGE : CURATED_BADGE;
+}
+
+interface FirstPartyDirectoryTarget {
+  readonly connectorId: string;
+  readonly name: string;
+  readonly url: string;
+  readonly toolNames: readonly string[];
+  readonly documentationUrl: string;
+}
+
+const FIRST_PARTY_TARGETS_BY_ID: ReadonlyMap<string, FirstPartyDirectoryTarget> = new Map(
+  (firstPartyTargets as readonly FirstPartyDirectoryTarget[]).map((target) => [
+    target.connectorId,
+    target,
+  ]),
+);
+
+function originOf(url: string): string | null {
+  try {
+    return new URL(url).origin;
+  } catch {
+    return null;
+  }
+}
 
 const BADGE_CHIP_ORDER: readonly DirectoryBadge[] = ['first-party', 'registry', 'community'];
 const BADGE_CHIP_LABELS: Record<DirectoryBadge, string> = {
@@ -137,9 +169,11 @@ export function toCuratedConnectorEntry(
   return {
     id: connector.id,
     name: connector.name,
+    publisher: connector.publisher,
     description: connector.description,
+    brandId: connector.id,
     monogram: connector.iconText,
-    badges: ['agi'],
+    badges: [curatedBadge(connector)],
     sourceId: FIRST_PARTY_BADGE,
     popular: true,
     installed: connected,
@@ -180,22 +214,32 @@ export function toCuratedConnectorDetail(
   connector: SettingsConnector,
   connectedIds: ReadonlySet<string>,
 ): DirectoryConnectorDetail {
+  const target = FIRST_PARTY_TARGETS_BY_ID.get(connector.id);
+  const vendor = connector.publisher ?? connector.name;
+  const websiteUrl = target ? originOf(target.documentationUrl) : null;
   return {
     kind: 'connector',
     id: connector.id,
     name: connector.name,
     summary: connector.description,
-    badge: 'agi',
+    badge: curatedBadge(connector),
+    brandId: connector.id,
     monogram: connector.iconText,
+    tools: target?.toolNames ?? [],
     categories: [connector.category],
+    publisher: vendor,
+    publisherUrl: websiteUrl,
+    authorName: vendor,
+    authorUrl: websiteUrl,
+    connectorUrl: target?.url ?? null,
+    documentationUrl: target?.documentationUrl ?? null,
+    websiteUrl,
     connected: connectedIds.has(connector.id),
     connectable: connector.canConnect === true,
   };
 }
 
-export function connectedConnectorIds(
-  connected: readonly ConnectedConnector[],
-): Set<string> {
+export function connectedConnectorIds(connected: readonly ConnectedConnector[]): Set<string> {
   return new Set(connected.map((entry) => entry.connectorId));
 }
 
@@ -219,6 +263,7 @@ export function toConnectorDetail(
     authorUrl: record.authorUrl,
     connectorUrl: record.remotes[0]?.url ?? null,
     documentationUrl: record.documentationUrl,
+    websiteUrl: record.websiteUrl,
     supportUrl: record.supportUrl,
     privacyPolicyUrl: record.privacyPolicyUrl,
     connected: connectedIds.has(record.id),

@@ -73,6 +73,24 @@ describe('DirectoryGrid', () => {
     expect(screen.getByText('Needs setup by AGI')).toBeTruthy();
   });
 
+  it('does not repeat the name as the publisher line', () => {
+    renderGrid({
+      section: 'connectors',
+      entries: [{ id: 'slack', name: 'Slack', description: 'Chat', publisher: 'Slack' }],
+    });
+    expect(screen.getAllByText('Slack')).toHaveLength(1);
+  });
+
+  it('renders a publisher that differs from the name', () => {
+    renderGrid({
+      section: 'connectors',
+      entries: [
+        { id: 'adobe', name: 'Adobe Creative Cloud', description: 'Art', publisher: 'Adobe' },
+      ],
+    });
+    expect(screen.getByText('Adobe')).toBeTruthy();
+  });
+
   it('renders a per entry error', () => {
     renderGrid({ entries: [{ ...skill, error: 'Install failed' }] });
     expect(screen.getByText('Install failed')).toBeTruthy();
@@ -109,5 +127,76 @@ describe('DirectoryGrid', () => {
       entries: [{ id: 'slack', name: 'Slack', description: 'Chat', monogram: 'SL' }],
     });
     expect(screen.getByText('SL')).toBeTruthy();
+  });
+
+  it('prefers the brand mark over the icon url and the monogram', () => {
+    const { container } = renderGrid({
+      section: 'connectors',
+      entries: [
+        {
+          id: 'gmail',
+          name: 'Gmail',
+          description: 'Mail',
+          brandId: 'gmail',
+          iconUrl: 'https://cdn.invalid/gmail.png',
+          monogram: 'GM',
+        },
+      ],
+    });
+    expect(container.querySelector('svg[aria-label="Gmail logo"]')).toBeTruthy();
+    expect(container.querySelector('img[src="https://cdn.invalid/gmail.png"]')).toBeNull();
+    expect(screen.queryByText('GM')).toBeNull();
+  });
+
+  it('falls back to the icon url when the entry names no brand', () => {
+    const { container } = renderGrid({
+      section: 'connectors',
+      entries: [
+        {
+          id: 'customerscore',
+          name: 'Customerscore',
+          description: 'Health',
+          iconUrl: 'https://cdn.invalid/icon.png',
+          monogram: 'CU',
+        },
+      ],
+    });
+    expect(container.querySelector('img[src="https://cdn.invalid/icon.png"]')).toBeTruthy();
+    expect(screen.queryByText('CU')).toBeNull();
+  });
+
+  it('falls back to the monogram when a named brand has no mark', () => {
+    renderGrid({
+      section: 'connectors',
+      entries: [
+        {
+          id: 'nowhere',
+          name: 'Nowhere',
+          description: 'Nothing',
+          brandId: 'nowhere',
+          monogram: 'NW',
+        },
+      ],
+    });
+    expect(screen.getByText('NW')).toBeTruthy();
+  });
+
+  it('names the vendor under the connector name and drops the AGI badge', () => {
+    renderGrid({
+      section: 'connectors',
+      entries: [
+        {
+          id: 'adobe',
+          name: 'Adobe Creative Cloud',
+          publisher: 'Adobe',
+          description: 'Creative Cloud asset and font access.',
+          badges: ['verified'],
+        },
+      ],
+    });
+    expect(screen.getByRole('button', { name: 'Adobe Creative Cloud' })).toBeTruthy();
+    expect(screen.getByText('Adobe')).toBeTruthy();
+    expect(screen.getByText('Verified')).toBeTruthy();
+    expect(screen.queryByText('Made by AGI')).toBeNull();
   });
 });

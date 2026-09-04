@@ -356,10 +356,19 @@ const WEB_SETTINGS_NAV_GROUPS: SettingsNavGroupResolved[] = SETTINGS_NAV_GROUPS_
 
 const CONNECTOR_NEEDS_AGI_SETUP_LABEL = 'Needs setup by AGI';
 
-const SETTINGS_CONNECTORS = CONNECTORS.filter((c) => !c.exclusive).map((c) => ({
+const CAPABILITY_SENTENCE_END = '.';
+
+function capabilityDescription(connector: (typeof CONNECTORS)[number]): string {
+  const summary = connector.capabilitySummary;
+  if (!summary) return connector.description;
+  return `${summary.charAt(0).toUpperCase()}${summary.slice(1)}${CAPABILITY_SENTENCE_END}`;
+}
+
+export const SETTINGS_CONNECTORS = CONNECTORS.filter((c) => !c.exclusive).map((c) => ({
   id: c.id,
   name: c.name,
-  description: c.description,
+  publisher: c.name,
+  description: capabilityDescription(c),
   category: c.category,
   authType: c.authType,
   actionCount: c.actionCount,

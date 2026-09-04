@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import { SETTINGS_CONNECTORS } from '@features/settings/components/WebSettingsModal';
 import type { DirectoryRecord } from '@/lib/connectors/directory/types';
 
 import {
@@ -59,12 +60,28 @@ describe('toConnectorEntry', () => {
     expect(entry.monogram).toBe('CU');
   });
 
-  it('maps each registry badge to its directory badge', () => {
-    expect(toConnectorEntry(record({ badge: 'first-party' }), new Set()).badges).toEqual(['agi']);
-    expect(toConnectorEntry(record({ badge: 'registry' }), new Set()).badges).toEqual(['verified']);
+  it('never labels a vendor connector as made by AGI', () => {
+    for (const badge of ['first-party', 'registry', 'community'] as const) {
+      expect(toConnectorEntry(record({ badge }), new Set()).badges).not.toContain('agi');
+    }
+  });
+
+  it('maps each source tier to its directory badge', () => {
+    expect(toConnectorEntry(record({ badge: 'first-party' }), new Set()).badges).toEqual([
+      'verified',
+    ]);
+    expect(toConnectorEntry(record({ badge: 'registry' }), new Set()).badges).toEqual([
+      'community',
+    ]);
     expect(toConnectorEntry(record({ badge: 'community' }), new Set()).badges).toEqual([
       'community',
     ]);
+  });
+
+  it('never promotes a registry listing to verified', () => {
+    expect(toConnectorEntry(record({ badge: 'registry' }), new Set()).badges).not.toContain(
+      'verified',
+    );
   });
 
   it('marks a connector the account has already connected', () => {
@@ -140,16 +157,50 @@ function curated(patch: Partial<import('@agiworkforce/ui').SettingsConnector> = 
 }
 
 describe('curated first party connectors', () => {
-  it('renders a curated connector as a Popular entry made by AGI', () => {
+  it('renders a curated connector as a Popular verified entry', () => {
     const entry = toCuratedConnectorEntry(curated(), new Set());
     expect(entry).toMatchObject({
       id: 'gmail',
       popular: true,
-      badges: ['agi'],
+      badges: ['verified'],
       sourceId: 'first-party',
       installed: false,
       facets: { availability: ['connect'], category: ['Communication'] },
     });
+  });
+
+  it('never labels a vendor connector as made by AGI', () => {
+    const adobe = curated({ id: 'adobe', name: 'Adobe Creative Cloud', publisher: 'Adobe' });
+    expect(toCuratedConnectorEntry(adobe, new Set()).badges).not.toContain('agi');
+    expect(toCuratedConnectorDetail(adobe, new Set()).badge).not.toBe('agi');
+  });
+
+  it('badges a connector the account added by url as theirs, never verified', () => {
+    const custom = curated({ id: 'custom-1', name: 'My server', authType: 'custom_mcp' });
+    expect(toCuratedConnectorEntry(custom, new Set()).badges).toEqual(['yours']);
+    expect(toCuratedConnectorDetail(custom, new Set()).badge).toBe('yours');
+  });
+
+  it('names the brand so the card renders the official mark', () => {
+    expect(toCuratedConnectorEntry(curated(), new Set()).brandId).toBe('gmail');
+    expect(toCuratedConnectorDetail(curated(), new Set()).brandId).toBe('gmail');
+  });
+
+  it('carries the vendor onto the publisher line', () => {
+    const entry = toCuratedConnectorEntry(curated({ publisher: 'Google' }), new Set());
+    expect(entry.publisher).toBe('Google');
+    expect(toCuratedConnectorDetail(curated({ publisher: 'Google' }), new Set()).publisher).toBe(
+      'Google',
+    );
+  });
+
+  it('describes what the connector does rather than whether it is available', () => {
+    const entry = toCuratedConnectorEntry(
+      curated({ description: 'Email search, reading, sending, and drafts.' }),
+      new Set(),
+    );
+    expect(entry.description).toBe('Email search, reading, sending, and drafts.');
+    expect(entry.description).not.toMatch(/available|operator can connect/i);
   });
 
   it('marks a curated connector the account has connected', () => {
@@ -170,11 +221,7 @@ describe('curated first party connectors', () => {
   });
 
   it('leads the section with curated entries and drops a registry duplicate', () => {
-    const section = toConnectorSection(
-      [record({ id: 'gmail' }), record()],
-      new Set(),
-      [curated()],
-    );
+    const section = toConnectorSection([record({ id: 'gmail' }), record()], new Set(), [curated()]);
     expect(section.entries.map((entry) => entry.id)).toEqual(['gmail', 'customerscore']);
     expect(section.entries[0]?.popular).toBe(true);
   });
@@ -196,11 +243,39 @@ describe('curated first party connectors', () => {
   it('builds a detail for a curated connector with no registry record', () => {
     expect(toCuratedConnectorDetail(curated(), new Set(['gmail']))).toMatchObject({
       kind: 'connector',
-      badge: 'agi',
+      badge: 'verified',
       categories: ['Communication'],
       connected: true,
       connectable: true,
     });
+  });
+
+  it('reads the connector url, documentation and tools from the first party source', () => {
+    const detail = toCuratedConnectorDetail(curated({ publisher: 'Gmail' }), new Set());
+    expect(detail.connectorUrl).toBe('https://gmailmcp.googleapis.com/mcp/v1');
+    expect(detail.documentationUrl).toBe(
+      'https://developers.google.com/workspace/gmail/api/guides/configure-mcp-server',
+    );
+    expect(detail.websiteUrl).toBe('https://developers.google.com');
+    expect(detail.authorName).toBe('Gmail');
+    expect(detail.tools).toContain('search_threads');
+  });
+
+  it('renders fewer rows for a curated connector the first party source omits', () => {
+    const detail = toCuratedConnectorDetail(
+      curated({ id: 'adobe', name: 'Adobe Creative Cloud' }),
+      new Set(),
+    );
+    expect(detail.connectorUrl).toBeNull();
+    expect(detail.documentationUrl).toBeNull();
+    expect(detail.websiteUrl).toBeNull();
+    expect(detail.tools).toEqual([]);
+  });
+
+  it('hides tools when the first party source knows none', () => {
+    expect(
+      toCuratedConnectorDetail(curated({ id: 'slack', name: 'Slack' }), new Set()).tools,
+    ).toEqual([]);
   });
 
   it('reads the connected ids from the settings adapter rows', () => {
@@ -238,6 +313,7 @@ describe('toConnectorDetail', () => {
     expect(detail).toMatchObject({
       publisher: 'Customerscore',
       publisherUrl: 'https://customerscore.invalid',
+      websiteUrl: 'https://customerscore.invalid',
       authorName: 'Customerscore Inc',
       authorUrl: 'https://customerscore.invalid/about',
       connectorUrl: 'https://mcp.invalid/v1',
@@ -318,5 +394,28 @@ describe('connector directory requests', () => {
   it('returns null for a connector the directory does not hold', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 404 }));
     expect(await fetchConnectorRecord('missing')).toBeNull();
+  });
+});
+
+describe('settings connector projection', () => {
+  function projected(id: string) {
+    return SETTINGS_CONNECTORS.find((connector) => connector.id === id);
+  }
+
+  it('describes what a connector does rather than whether it is available', () => {
+    expect(projected('adobe')?.description).toBe('Creative Cloud asset and font access.');
+    expect(projected('gmail')?.description).toBe('Email search, reading, sending, and drafts.');
+  });
+
+  it('leaves availability to the status line', () => {
+    for (const connector of SETTINGS_CONNECTORS) {
+      expect(connector.description).not.toMatch(/^Not available by default/);
+    }
+    expect(projected('adobe')?.statusLabel).toBe('Needs setup by AGI');
+  });
+
+  it('carries the vendor name as the publisher', () => {
+    expect(projected('adobe')?.publisher).toBe('Adobe Creative Cloud');
+    expect(projected('gmail')?.publisher).toBe('Gmail');
   });
 });

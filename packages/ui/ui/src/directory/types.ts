@@ -32,6 +32,7 @@ export interface DirectoryEntry {
   slashName?: boolean;
   publisher?: string;
   description: string;
+  brandId?: string;
   iconUrl?: string | null;
   monogram?: string;
   badges?: readonly DirectoryBadgeKind[];
@@ -91,6 +92,7 @@ export interface DirectoryConnectorDetail {
   summary: string;
   description?: string;
   badge?: DirectoryBadgeKind;
+  brandId?: string;
   iconUrl?: string | null;
   monogram?: string;
   tools?: readonly string[];
@@ -102,6 +104,7 @@ export interface DirectoryConnectorDetail {
   authorUrl?: string | null;
   connectorUrl?: string | null;
   documentationUrl?: string | null;
+  websiteUrl?: string | null;
   supportUrl?: string | null;
   privacyPolicyUrl?: string | null;
   connected?: boolean;

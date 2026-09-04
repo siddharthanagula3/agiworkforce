@@ -5,6 +5,7 @@ import { useState } from 'react';
 import type { ReactNode } from 'react';
 
 import { cn } from '../cn';
+import { ConnectorLogo } from '../settings-modal/ConnectorLogo';
 import {
   CHIP_PREVIEW_COUNT,
   CONNECTED_LABEL,
@@ -21,6 +22,7 @@ import {
   CONNECTOR_TOOLS_LABEL,
   CONNECTOR_TRUST_COPY,
   CONNECTOR_URL_LABEL,
+  CONNECTOR_WEBSITE_LABEL,
   CONNECT_LABEL,
   COPY_VALUE_LABEL,
   DIRECTORY_BADGE_LABELS,
@@ -29,22 +31,45 @@ import {
   SHOW_MORE_SUFFIX,
 } from './constants';
 import { DirectoryBackLink, DirectoryDetailHeader } from './DirectoryDetailHeader';
-import { DIRECTORY_FOCUS_RING, DIRECTORY_ICON_BUTTON } from './styles';
+import {
+  DETAIL_LOGO_SHAPE,
+  DETAIL_LOGO_SIZE,
+  DIRECTORY_FOCUS_RING,
+  DIRECTORY_ICON_BUTTON,
+} from './styles';
 import type { DirectoryConnectorDetail } from './types';
 
-const LOGO_CLASS = 'size-16 shrink-0 rounded-xl border border-border object-contain';
-
 function ConnectorLogoTile({ detail }: { detail: DirectoryConnectorDetail }) {
-  if (detail.iconUrl) return <img src={detail.iconUrl} alt="" className={LOGO_CLASS} />;
+  const monogram = detail.monogram ?? detail.name.slice(0, 1).toUpperCase();
+  if (detail.brandId) {
+    return (
+      <ConnectorLogo
+        connectorId={detail.brandId}
+        fallbackText={monogram}
+        size="xl"
+        className={DETAIL_LOGO_SHAPE}
+      />
+    );
+  }
+  if (detail.iconUrl) {
+    return (
+      <img
+        src={detail.iconUrl}
+        alt=""
+        className={cn(DETAIL_LOGO_SIZE, DETAIL_LOGO_SHAPE, 'object-contain')}
+      />
+    );
+  }
   return (
     <span
       aria-hidden
       className={cn(
-        LOGO_CLASS,
+        DETAIL_LOGO_SIZE,
+        DETAIL_LOGO_SHAPE,
         'inline-flex items-center justify-center bg-muted text-lg font-semibold text-muted-foreground',
       )}
     >
-      {detail.monogram ?? detail.name.slice(0, 1).toUpperCase()}
+      {monogram}
     </span>
   );
 }
@@ -140,6 +165,7 @@ export function ConnectorDetailView({
   const connected = detail.connected === true;
   const moreInfo: { label: string; href: string }[] = [
     { label: CONNECTOR_DOCUMENTATION_LABEL, href: detail.documentationUrl ?? '' },
+    { label: CONNECTOR_WEBSITE_LABEL, href: detail.websiteUrl ?? '' },
     { label: CONNECTOR_SUPPORT_LABEL, href: detail.supportUrl ?? '' },
     { label: CONNECTOR_PRIVACY_LABEL, href: detail.privacyPolicyUrl ?? '' },
   ].filter((row) => row.href.length > 0);
@@ -183,7 +209,7 @@ export function ConnectorDetailView({
         </p>
       ) : null}
 
-      {detail.publisher ? (
+      {detail.publisher && detail.publisher !== detail.name ? (
         <div className="flex flex-col gap-1.5">
           {detail.publisherUrl ? (
             <OutboundLink href={detail.publisherUrl} onOpenHref={onOpenHref}>

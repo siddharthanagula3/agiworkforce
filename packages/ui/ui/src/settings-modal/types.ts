@@ -6,6 +6,7 @@ export interface SettingsConnector {
   id: string;
   name: string;
   description: string;
+  publisher?: string;
   category: string;
   authType: string;
   actionCount: number;
