@@ -1,6 +1,47 @@
 import 'server-only';
 import { getNeonDb } from './server/neon-db';
 import { logger } from './logger';
+import { getSharedRedisClient } from './rate-limit';
+
+/**
+ * Counts writes to `security_audit_logs` since the last anomaly check, so the
+ * page-security-anomalies cron can skip Postgres entirely when nothing new was
+ * written. Best-effort: a marker failure never blocks the audit write it rides
+ * along with.
+ */
+export const SECURITY_EVENT_ACTIVITY_REDIS_KEY = 'agi-security-audit:pending-anomaly-check';
+const SECURITY_EVENT_ACTIVITY_TTL_SECONDS = 3_600;
+
+async function markSecurityEventActivity(): Promise<void> {
+  try {
+    const redis = getSharedRedisClient();
+    if (!redis) return;
+    await redis.incr(SECURITY_EVENT_ACTIVITY_REDIS_KEY);
+    await redis.expire(SECURITY_EVENT_ACTIVITY_REDIS_KEY, SECURITY_EVENT_ACTIVITY_TTL_SECONDS);
+  } catch (error) {
+    logger.error({ error }, 'Security event activity marker update failed');
+  }
+}
+
+/**
+ * `true`: events landed since the last check, consumed by resetting the
+ * counter, so the anomaly cron should run `checkAlerts`. `false`: nothing new,
+ * safe to skip Postgres. `null`: redis could not answer, so the caller should
+ * fall through to running `checkAlerts` as it always has.
+ */
+export async function consumePendingSecurityAnomalyCheck(): Promise<boolean | null> {
+  try {
+    const redis = getSharedRedisClient();
+    if (!redis) return null;
+    const pending = await redis.get<number>(SECURITY_EVENT_ACTIVITY_REDIS_KEY);
+    if (!pending) return false;
+    await redis.del(SECURITY_EVENT_ACTIVITY_REDIS_KEY);
+    return true;
+  } catch (error) {
+    logger.error({ error }, 'Security event activity marker check failed');
+    return null;
+  }
+}
 
 export type SecurityEventType =
   | 'auth_failed'
@@ -52,6 +93,7 @@ export async function logSecurityEvent(event: SecurityAuditEvent): Promise<void>
       ],
     );
     logger.info({ eventType, severity, userId, endpoint }, 'Security event logged to audit table');
+    await markSecurityEventActivity();
   } catch (err) {
     logger.error({ error: err, eventType }, 'Exception while logging security event');
   }
@@ -380,6 +422,7 @@ export async function recordAuditEvent(event: AuditEvent): Promise<void> {
         JSON.stringify(detailsForSecurityLog),
       ],
     );
+    await markSecurityEventActivity();
   } catch (err) {
     logger.error({ error: err, eventType }, 'Failed to record audit event');
   }

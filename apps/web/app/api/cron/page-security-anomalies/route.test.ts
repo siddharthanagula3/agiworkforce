@@ -5,12 +5,16 @@ vi.mock('server-only', () => ({}));
 const mocks = vi.hoisted(() => ({
   checkAlerts: vi.fn(),
   pageOnCall: vi.fn(),
+  consumePendingSecurityAnomalyCheck: vi.fn(),
 }));
 
 vi.mock('@/lib/services/security-monitoring-service', () => ({
   SecurityMonitoringService: { checkAlerts: mocks.checkAlerts },
 }));
 vi.mock('../health-probe/route', () => ({ pageOnCall: mocks.pageOnCall }));
+vi.mock('@/lib/security-audit', () => ({
+  consumePendingSecurityAnomalyCheck: mocks.consumePendingSecurityAnomalyCheck,
+}));
 vi.mock('@/lib/logger', () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
@@ -43,6 +47,7 @@ beforeEach(() => {
   process.env = { ...savedEnv, CRON_SECRET };
   mocks.checkAlerts.mockResolvedValue([]);
   mocks.pageOnCall.mockResolvedValue('paged');
+  mocks.consumePendingSecurityAnomalyCheck.mockResolvedValue(null);
 });
 
 afterEach(() => {
@@ -140,5 +145,35 @@ describe('GET /api/cron/page-security-anomalies', () => {
 
     expect(response.status).toBe(500);
     expect(mocks.pageOnCall).not.toHaveBeenCalled();
+  });
+
+  it('skips Postgres entirely when no security events were written since the last check', async () => {
+    mocks.consumePendingSecurityAnomalyCheck.mockResolvedValue(false);
+
+    const response = await GET(req() as never);
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({ triggered: 0, paged: 'not_needed' });
+    expect(mocks.checkAlerts).not.toHaveBeenCalled();
+  });
+
+  it('runs the threshold check when security events were written since the last check', async () => {
+    mocks.consumePendingSecurityAnomalyCheck.mockResolvedValue(true);
+    mocks.checkAlerts.mockResolvedValue([alert()]);
+
+    const response = await GET(req() as never);
+
+    expect(response.status).toBe(200);
+    expect(mocks.checkAlerts).toHaveBeenCalledOnce();
+    await expect(response.json()).resolves.toMatchObject({ triggered: 1 });
+  });
+
+  it('falls through to the threshold check when the activity marker cannot be read', async () => {
+    mocks.consumePendingSecurityAnomalyCheck.mockResolvedValue(null);
+
+    const response = await GET(req() as never);
+
+    expect(response.status).toBe(200);
+    expect(mocks.checkAlerts).toHaveBeenCalledOnce();
   });
 });
