@@ -78,7 +78,7 @@
 }
 
 .cell[data-cell-status='error'] {
-  border-color: color-mix(in srgb, #ef4444 46%, var(--chat-border));
+  border-color: color-mix(in srgb, var(--destructive) 46%, var(--chat-border));
 }
 
 .cellHeader {
@@ -142,8 +142,8 @@
   resize: vertical;
   border: 0;
   padding: 12px;
-  background: #090c10;
-  color: #d7e0ea;
+  background: var(--chat-surface-base);
+  color: var(--chat-text-primary);
   font-family: var(--font-geist-mono), ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 12.5px;
   line-height: 1.6;
@@ -159,13 +159,13 @@
   gap: 8px;
   padding: 10px 12px;
   border-top: 1px solid var(--chat-border);
-  background: #090c10;
+  background: var(--chat-surface-base);
 }
 
 .outputStream {
   margin: 0;
   font: inherit;
-  color: #d7e0ea;
+  color: var(--chat-text-primary);
   font-family: var(--font-geist-mono), ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 12px;
   white-space: pre-wrap;
@@ -174,7 +174,7 @@
 
 .outputError {
   margin: 0;
-  color: #ff8e8e;
+  color: var(--destructive-text);
   font-family: var(--font-geist-mono), ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 12px;
   white-space: pre-wrap;
@@ -219,7 +219,7 @@
 }
 
 .filesError {
-  color: #ff8e8e;
+  color: var(--destructive-text);
   font-size: 12px;
   margin-bottom: 6px;
 }
