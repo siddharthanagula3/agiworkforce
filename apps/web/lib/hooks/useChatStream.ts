@@ -150,6 +150,8 @@ interface SendMessageOptions {
   mcpContext?: McpContextSelection;
   /** Connector ids switched off for this conversation; their tools are not offered to the model. */
   disabledConnectorIds?: string[];
+  /** Per-chat Memory override. False skips injecting and writing account memories for this turn. */
+  memoryEnabled?: boolean;
   research?: boolean;
   researchResume?: {
     sources: Array<{ url: string; title?: string; snippet?: string }>;
@@ -2751,6 +2753,7 @@ export function useChatStream(): UseChatStreamReturn {
               disabled_connector_ids: options.disabledConnectorIds?.length
                 ? options.disabledConnectorIds
                 : undefined,
+              memory_enabled: options.memoryEnabled === false ? false : undefined,
               mcp_context: options.mcpContext
                 ? {
                     ...(options.mcpContext.prompt ? { prompt: options.mcpContext.prompt } : {}),

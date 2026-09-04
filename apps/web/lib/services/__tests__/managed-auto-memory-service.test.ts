@@ -24,6 +24,19 @@ describe('recordManagedAutoMemoryTurn', () => {
     expect(statements.some((sql) => sql.includes('insert into user_memories'))).toBe(true);
   });
 
+  it('does not write when the per-chat Memory toggle left no facts to persist', async () => {
+    const query = vi.fn();
+
+    await recordManagedAutoMemoryTurn({
+      db: { query },
+      userId: 'user-1',
+      processed: processed([]),
+      outcome: 'completed',
+    });
+
+    expect(query).not.toHaveBeenCalled();
+  });
+
   it.each(['failed', 'cancelled'] as const)('does not write after a %s turn', async (outcome) => {
     const query = vi.fn();
 
