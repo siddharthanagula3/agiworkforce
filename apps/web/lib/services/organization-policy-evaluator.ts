@@ -66,6 +66,12 @@ function surfaceIsSyncable(policy: AdminPolicy, surface: PolicySurface): boolean
     // becoming a second, weaker API authorization path.
     case 'api':
       return true;
+    // No surface hint on the request. The per-surface switches are driven by a
+    // CLIENT-SUPPLIED header, so they are a configuration control over the
+    // clients an organization deploys, not a security boundary, and they must
+    // never be described as one. Denying here would break untagged first-party
+    // callers without closing that hole, so `allowManagedCompute` and
+    // `allowedPrivacyModes` remain the controls that bind on this path.
     case 'unknown':
       return true;
   }

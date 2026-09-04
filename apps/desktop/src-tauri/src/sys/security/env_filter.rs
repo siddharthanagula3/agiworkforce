@@ -1,6 +1,41 @@
+//! Centralized blocklist of dangerous environment variables.
+//!
+//! BATCH-5 (audit 2026-05-19): three separate `BLOCKED_ENV_VARS` lists used to
+//! live in:
+//!   - `sys/commands/code_execution.rs:14` (9 vars)
+//!   - `core/agi/sandbox.rs:282` (28 vars)
+//!   - `core/mcp/transport.rs:441` (22 vars)
+//!
+//! They drifted: the MCP transport list was the most complete (added LD_AUDIT,
+//! NODE_EXTRA_CA_CERTS, ELECTRON_RUN_AS_NODE, JAVA_TOOL_OPTIONS, ZDOTDIR,
+//! RUST_LOG) while the code-execution list was the thinnest (missing every
+//! language-specific injector and BASH_FUNC_*). A user who pivoted through
+//! `execute_code` could bypass restrictions enforced for `terminal_execute`.
+//!
+//! This module is now the single source of truth, a strict superset of every
+//! prior list so consolidation never weakens security. Each consumer calls
+//! [`is_blocked_env_var`] (for inline filter loops) or
+//! [`filter_blocked_env_vars`] (for `Option<HashMap>` shapes).
 
 use std::collections::HashMap;
 
+/// Environment variables that must never be set on child processes spawned by
+/// the desktop app. Covers:
+///
+/// - Library injection (LD_PRELOAD, LD_LIBRARY_PATH, LD_AUDIT, DYLD_*)
+/// - Language-specific code injection (PYTHONPATH, NODE_OPTIONS, RUBYOPT,
+///   PERL5OPT, JAVA_TOOL_OPTIONS, _JAVA_OPTIONS)
+/// - Shell startup hijack (BASH_ENV, ENV, ZDOTDIR, PROMPT_COMMAND)
+/// - Identity / path spoofing (USER, LOGNAME, HOME, PATH, SHELL, TMPDIR)
+/// - Debug / info disclosure (RUST_LOG, NODE_DEBUG)
+/// - Electron-specific (ELECTRON_RUN_AS_NODE)
+///
+/// Compared against caller-supplied keys via [`str::eq_ignore_ascii_case`] so
+/// case variants like `ld_preload` are also blocked.
+///
+/// **Do not add a new blocklist anywhere else in the workspace**, extend this
+/// constant instead. The clippy check enforced by `check-wiring.sh` (planned)
+/// asserts exactly one definition exists.
 pub const BLOCKED_ENV_VARS: &[&str] = &[
     // Identity / location spoofing
     "PATH",
@@ -54,6 +89,13 @@ pub const BLOCKED_ENV_VARS: &[&str] = &[
     "RUST_LOG",
 ];
 
+/// Returns `true` if `key` is on [`BLOCKED_ENV_VARS`] or matches a blocklisted
+/// prefix pattern. Case-insensitive (ASCII).
+///
+/// The one prefix-matched pattern is `BASH_FUNC_*`, bash's exported-function
+/// mechanism, where the *value* contains arbitrary shell code that bash will
+/// evaluate at child startup. Any env var name beginning with `BASH_FUNC_`
+/// (case-insensitive) is rejected regardless of suffix.
 pub fn is_blocked_env_var(key: &str) -> bool {
     let upper = key.to_ascii_uppercase();
     if upper.starts_with("BASH_FUNC_") {

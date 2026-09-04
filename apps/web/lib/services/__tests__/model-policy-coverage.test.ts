@@ -2,6 +2,13 @@ import { readFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
+/**
+ * Resolves the app root by looking for a marker, not from `process.cwd()`.
+ *
+ * A coverage guard that resolves from the working directory fails with a wall
+ * of unreadable-file errors the moment vitest is invoked from the repo root
+ * instead of the app, noise that says nothing about the thing being guarded.
+ */
 function appRoot(): string {
   const direct = process.cwd();
   if (existsSync(join(direct, 'db/neon'))) return direct;
@@ -11,6 +18,19 @@ function appRoot(): string {
 }
 
 const APP_ROOT = appRoot();
+
+/**
+ * Every route that chooses a model must ask the workspace model policy.
+ *
+ * A model rule that holds in chat but not in image generation is not a control,
+ * it is a suggestion, and it is the failure mode a security reviewer tests
+ * for, because it is the one that is easy to ship. This reads the route sources
+ * rather than mocking them, so adding a new model-serving route without wiring
+ * the gate fails here instead of quietly shipping a bypass.
+ *
+ * When this fails, wire the route. Do not add it to an exemption list without
+ * writing the reason next to it.
+ */
 
 const ROOT = APP_ROOT;
 
@@ -52,6 +72,9 @@ describe('workspace model policy covers every model-serving route', () => {
   }
 
   it('checks chat completions AFTER auto-routing resolves, not before', () => {
+    // Checking the requested model would let a blocked model be reached by
+    // asking for `auto` and having the router pick it, a bypass no amount of
+    // picker filtering closes.
     const text = source('app/api/llm/v1/chat/completions/lib/request-processor.ts');
     const resolution = text.indexOf('chatRequest.model = routeDecision.modelKey');
     const gate = text.indexOf('evaluateModelAccessForOrganization(');

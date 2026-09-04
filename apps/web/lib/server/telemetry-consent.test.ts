@@ -20,6 +20,11 @@ function scopedDb(rows: Array<{ share_telemetry: string | null }>) {
   return { db: { query: mocks.query.mockResolvedValue(rows) }, userId: 'user_1' };
 }
 
+// WEB-TELEMETRY-CONSENT-NOT-CROSS-DEVICE-01: this is the server-side source
+// the root layout renders into the document, so a brand-new device's first
+// paint reflects the account's real consent instead of a stale/absent
+// localStorage mirror. Every exit fails closed, a telemetry read must never
+// default a user into being tracked.
 describe('readServerTelemetryConsent', () => {
   beforeEach(() => {
     vi.clearAllMocks();

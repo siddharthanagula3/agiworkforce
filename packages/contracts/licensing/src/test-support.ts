@@ -1,3 +1,20 @@
+/**
+ * TEST / FIXTURE-GENERATION SUPPORT ONLY, not part of the production API.
+ *
+ * Real licenses and org policies are signed OUT OF BAND by the issuer's private
+ * key; production code only ever *verifies*. This module exists so the
+ * cross-language fixture corpus is signed with REAL Ed25519 signatures (never
+ * hand-forged bytes) and so it regenerates deterministically.
+ *
+ * It is exported under the `@agiworkforce/licensing/test-support` subpath and is
+ * deliberately kept out of the package's main entry point. Do not import it from
+ * production code paths.
+ *
+ * Determinism: an Ed25519 secret key IS its 32-byte seed, so deriving the
+ * keypair from a fixed committed seed makes fixture generation byte-reproducible
+ *, a hard requirement for a corpus the Rust crate must replay identically.
+ */
+
 import { ed25519 } from '@noble/curves/ed25519';
 
 import { bytesToBase64, utf8ToBytes } from './bytes';

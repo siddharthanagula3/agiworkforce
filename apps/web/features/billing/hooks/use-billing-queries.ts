@@ -143,6 +143,12 @@ export function useBillingData(): UseQueryResult<BillingInfo | null, Error> {
       return usage ? buildBillingInfoFromUsage(usage) : null;
     },
     enabled: !!user?.id,
+    // Zero, not "billing changes infrequently". Every upgrade path that leaves
+    // the app, 3DS authentication, the Stripe portal, Checkout, returns within
+    // seconds, and refetchOnWindowFocus does nothing while the data is still
+    // fresh. A stale window here renders the plan the user just paid to leave.
+    // gcTime is kept so the cached plan still paints instantly while it
+    // revalidates.
     staleTime: 0,
     gcTime: 10 * 60 * 1000,
     refetchOnWindowFocus: true,
@@ -293,6 +299,14 @@ interface InvoiceApiResponse {
   }>;
 }
 
+/**
+ * Fetch user invoices via /api/billing/invoices (the same real, Stripe-backed
+ * route BillingSection.tsx already uses, this hook previously returned a
+ * hardcoded [], which desynced the standalone /billing page from Settings →
+ * Billing's real invoice history).
+ *
+ * @returns UseQueryResult with array of Invoice
+ */
 export function useInvoices(): UseQueryResult<Invoice[], Error> {
   const { user } = useAuthStore();
 
@@ -382,6 +396,14 @@ interface PaymentMethodApiResponse {
   }>;
 }
 
+/**
+ * Fetch user payment methods via /api/billing/payment-methods (the same
+ * real, Stripe-backed route BillingSection.tsx already uses, this hook
+ * previously returned a hardcoded [], which desynced the standalone /billing
+ * page from Settings → Billing's real payment-method list).
+ *
+ * @returns UseQueryResult with array of PaymentMethod
+ */
 export function usePaymentMethods(): UseQueryResult<PaymentMethod[], Error> {
   const { user } = useAuthStore();
 

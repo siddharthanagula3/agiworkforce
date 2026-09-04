@@ -21,6 +21,16 @@ import { toUserMessage } from '@/lib/user-error-message';
 
 const NAMESPACE = 'privacy';
 
+// 'locationMetadata' and 'improveModelTraining' are intentionally absent from
+// TOGGLES: both persisted correctly but had zero consumers anywhere (no
+// location collection exists to gate; no training-data pipeline exists to
+// gate), a switch that saves but changes nothing is a dead control. Re-add
+// once the underlying feature ships. 'rememberChats' is also absent: it
+// currently promises the opposite of what happens (off does NOT stop
+// cloud-saving; the conversation-save path never reads this preference).
+// Fixing that means gating the save path itself, not this settings screen.
+// do not re-add the switch until that read is wired, or it goes back to
+// actively lying to privacy-conscious users.
 type ToggleKey = 'shareTelemetry';
 
 interface ToggleSpec {
@@ -114,6 +124,21 @@ export function PrivacySection() {
   const setNewChatsTemporary = useSettingsStore((state) => state.setNewChatsTemporary);
 
   const router = useRouter();
+  /**
+   * Destructive-action confirmation (shell-nav-ia-gap-01 remainder).
+   *
+   * Archive-all and delete-all-chats used native `window.confirm()`, an OS
+   * alert with browser chrome, not the product's own dialog, for the two
+   * highest-stakes bulk actions on this page (delete-all is the single
+   * highest-stakes action in the app: every active AND archived conversation,
+   * irreversibly). `useConfirm` is the shared promise-based wrapper around
+   * the styled AlertDialog primitive (packages/ui/ui/src/primitives/
+   * ConfirmDialog.tsx) already wired into WebChatPage/WebAppShell/
+   * MessageBubble for the same class of action. Same await-a-boolean shape as
+   * `window.confirm`, so the guards below read the same, but the user sees a
+   * dialog with a red confirm and copy naming the exact, specific
+   * consequence instead of a generic browser prompt.
+   */
   const { confirm: confirmDestructive, dialog: destructiveConfirmDialog } = useConfirm();
   const subscription = useBillingStore((s) => s.subscription);
   const hasHostedCloud = subscription?.status === 'active' && subscription.tier !== 'free';
@@ -163,6 +188,11 @@ export function PrivacySection() {
       const next = { ...prev, [key]: !prev[key] };
       setSavingPreferences(true);
       setPreferenceError(null);
+      // Mirror immediately, matching the optimistic setState above (this
+      // component doesn't roll UI state back on save failure, it only shows
+      // an error banner, so the cache must track what the switch displays,
+      // not server-confirmed state, or the switch and the actual gate could
+      // silently disagree).
       setTelemetryConsentCache(next.shareTelemetry);
       savePreferenceNamespace(NAMESPACE, next)
         .catch((error) => {

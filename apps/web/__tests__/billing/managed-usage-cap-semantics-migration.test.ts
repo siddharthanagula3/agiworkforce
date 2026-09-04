@@ -13,6 +13,16 @@ function numberedMigrationsInApplyOrder(): { name: string; sql: string }[] {
     .map((name) => ({ name, sql: readFileSync(resolve(MIGRATIONS_DIR, name), 'utf8') }));
 }
 
+/**
+ * The definition Postgres will actually be running: the body from the
+ * HIGHEST-numbered migration that redefines the function.
+ *
+ * Asserting against a fixed file is what let 0118 and 0119 reintroduce, twice,
+ * the exact `> 0` and reject-NULL forms migration 0070 existed to remove, the
+ * guard stayed green because it was still reading 0070. Resolving the latest
+ * definition means any future migration that regresses the contract reds this
+ * test on the file that regressed it.
+ */
 function latestDefinitionOf(functionName: string): { migration: string; body: string } {
   const opener = `create or replace function public.${functionName}(`;
   const defining = numberedMigrationsInApplyOrder().filter((migration) =>

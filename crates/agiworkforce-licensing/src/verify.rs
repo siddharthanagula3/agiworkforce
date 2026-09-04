@@ -1,3 +1,7 @@
+//! `verify_license`: the offline, pure license-verification entry point (design
+//! §2.1). Port of `packages/contracts/licensing/src/verify.ts`. No I/O, never panics,
+//! never gates data access: an invalid/expired license resolves to a structured
+//! `{ ok: false }` verdict the caller uses to degrade to the free Local tier.
 
 use crate::claims::LicenseClaims;
 use crate::container::{ContainerErrorCode, VerifiedContainer, verify_signed_container};
@@ -53,6 +57,15 @@ fn err(code: LicenseErrorCode, message: &str) -> LicenseVerifyResult {
     })
 }
 
+/// Verify an `.agilicense` file offline.
+///
+/// # Arguments
+/// * `file_bytes`, raw bytes of the `.agilicense` file.
+/// * `root_public_keys`, base64 32-byte Ed25519 root public keys baked into the
+///   app build. Rotatable list: the signature must verify against any one of
+///   them, so a retired key can coexist with its replacement (design §2.1).
+/// * `now_ms`, the local clock in Unix epoch milliseconds (injected, keeps this
+///   pure and testable; offline verification uses the local clock).
 pub fn verify_license(
     file_bytes: &[u8],
     root_public_keys: &[String],
@@ -85,6 +98,8 @@ pub fn verify_license(
     let claims: LicenseClaims = match serde_json::from_str(claims_text) {
         Ok(claims) => claims,
         Err(_) => {
+            // Covers both "not valid JSON" and "failed schema", both are a
+            // structured `malformed` verdict on the TS side, never a throw.
             return err(
                 LicenseErrorCode::Malformed,
                 "license claims are not valid JSON or schema",

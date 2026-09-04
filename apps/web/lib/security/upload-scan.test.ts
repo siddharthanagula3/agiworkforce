@@ -4,6 +4,13 @@ vi.mock('server-only', () => ({}));
 
 import { inspectUploadBytes } from './upload-scan';
 
+/**
+ * Uploads reached a publicly-servable URL after only three checks, path
+ * safety, a MIME allowlist, and a byte count, none of which open the file.
+ * These cover the shapes that are dangerous specifically because of how this
+ * product serves them.
+ */
+
 const bytes = (...values: number[]) => Uint8Array.from(values);
 const utf8 = (text: string) => new TextEncoder().encode(text);
 

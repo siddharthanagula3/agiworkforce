@@ -77,6 +77,13 @@ export interface GeneratedSecret {
   prefix: string;
 }
 
+/**
+ * Mints a signing secret.
+ *
+ * Returned in full exactly once. Only the hash and an eight-character prefix
+ * are stored, so the console can identify which secret is in use without being
+ * able to show it, a secret a UI can re-display is a secret in a screenshot.
+ */
 export function generateSigningSecret(): GeneratedSecret {
   const secret = randomBytes(32).toString('hex');
   return { secret, hash: hashSecret(secret), prefix: secret.slice(0, 8) };
@@ -202,6 +209,24 @@ interface CursorRow {
   consecutive_failures: number;
 }
 
+/**
+ * Sends one batch of new events to a workspace's destination.
+ *
+ * The cursor is (created_at, id) rather than a timestamp alone: created_at is
+ * not unique, and a burst of events sharing a millisecond is exactly what a
+ * busy workspace produces, so a timestamp-only cursor would silently skip or
+ * repeat those rows.
+ *
+ * The cursor advances ONLY on a 2xx. A failed delivery leaves it where it was
+ * so the same events are retried; an audit stream that drops events on a
+ * transient error is worse than one that repeats them, because a receiver can
+ * deduplicate on the event id and cannot recover what never arrived.
+ *
+ * `secretForDelivery` is supplied by the caller rather than read here, because
+ * the stored value is a hash and the raw secret only exists in the caller's
+ * key material. Passing the hash signs with the hash, which is a valid shared
+ * secret as long as both sides agree, the console tells the receiver which.
+ */
 export async function drainAuditDestination(
   db: DatabaseAdapter,
   organizationId: string,
@@ -231,6 +256,12 @@ export async function drainAuditDestination(
     };
   }
 
+  // The cursor is compared inside the database and never round-trips through
+  // JS. `timestamptz` holds microseconds and a JS Date holds milliseconds, so
+  // reading it out and passing it back as a parameter truncates it, and a
+  // truncated cursor is strictly LESS than the row it came from, which selects
+  // that row again on every drain. Joining the destination row in keeps the
+  // full precision on both sides of the comparison.
   const events = await db.query<StreamableEvent>(
     `select e.id, e.organization_id, e.actor_user_id, e.surface, e.action, e.resource_type,
             e.resource_id, e.outcome, e.severity, e.metadata, e.created_at
@@ -326,6 +357,15 @@ export async function drainAuditDestination(
   return { organizationId, delivered: 0, status: 'failed', error };
 }
 
+/**
+ * Stalest destination first, not lowest id first.
+ *
+ * The caller takes a fixed prefix of this list, so a stable `organization_id`
+ * ordering meant the same head drained on every run forever and every
+ * destination past the cap received total silence at its SIEM, while the
+ * console reported it healthy. Ordering by when each was last attempted makes
+ * the fixed budget rotate over the whole tenant list instead.
+ */
 export async function listStreamingOrganizations(db: DatabaseAdapter): Promise<string[]> {
   const rows = await db.query<{ organization_id: string }>(
     `select organization_id from public.organization_audit_destinations

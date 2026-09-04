@@ -1,3 +1,18 @@
+/**
+ * Audit Event Schema
+ *
+ * Platform-wide audit trail types for security, compliance, and observability.
+ * Every surface (desktop, mobile, web, CLI, VS Code) can emit audit events
+ * using these shared types and helpers.
+ *
+ * Related contracts:
+ *   - `docs/contracts/AUTH_SYNC_ERROR_TAXONOMY.md`, error codes referenced in failure outcomes
+ *   - `packages/contracts/types/src/runtime.ts`, runtime activity and approval types (finer-grained)
+ *
+ * @module audit
+ * @packageDocumentation
+ */
+
 export type AuditSurface = 'desktop' | 'mobile' | 'web' | 'cli' | 'vscode';
 
 export type AuditAction =

@@ -6,6 +6,18 @@ import type { ReactNode } from 'react';
 
 import { CANONICAL_POLICY_ROUTES, POLICY_LAST_UPDATED } from '@/lib/legal-constants';
 
+/**
+ * localStorage, not sessionStorage.
+ *
+ * The marker has to survive the OAuth round trip, which sessionStorage does,
+ * but it also has to survive the user closing the tab, which it does not. The
+ * gate therefore reappeared on every new browser session for people who had
+ * already accepted, including on /login, while the panel told them "Your
+ * agreement is recorded with your account". It is: /login/complete checks
+ * hasAcceptedCurrentTerms(userId) server-side and skips the prompt. This marker
+ * only decides whether the pre-auth clickwrap is already satisfied, and keying
+ * it to the policy version means a genuine terms update still re-prompts.
+ */
 export const TERMS_GATE_STORAGE_KEY = 'agi.terms-accepted-version';
 
 export function clearTermsGateMarker(): void {

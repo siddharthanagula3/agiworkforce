@@ -7,6 +7,17 @@ use anyhow::{bail, Context, Result};
 
 static PRIVATE_OVERRIDE_WARNED: AtomicBool = AtomicBool::new(false);
 
+/// Validate that an A2A endpoint URL is safe to contact, returning the host and
+/// the validated socket addresses it resolved to.
+///
+/// Rejects RFC1918 private ranges, link-local, loopback, unique-local, and
+/// IMDS (169.254.169.254). Set `AGI_A2A_ALLOW_PRIVATE=1` to bypass for local
+/// development, a one-time warning is printed to stderr.
+///
+/// Callers that go on to make an HTTP request MUST pin their client to the
+/// returned addresses (see [`a2a_pinned_client`]); otherwise reqwest re-resolves
+/// the host at connect time and a malicious DNS server can rebind it to a
+/// private IP *after* this check passes (check-then-use / DNS rebinding).
 pub fn validate_a2a_endpoint_resolved(url: &str) -> Result<(String, Vec<SocketAddr>)> {
     let parsed = url
         .parse::<reqwest::Url>()
@@ -114,6 +125,9 @@ pub fn is_private_ip(ip: &IpAddr) -> bool {
     }
 }
 
+/// Extract the IPv4 address carried by a v4-mapped (`::ffff:0:0/96`) or NAT64
+/// (`64:ff9b::/96`) address so the v4 blocklist applies to it too, otherwise
+/// `::ffff:169.254.169.254` reaches IMDS through the v6 branch untouched.
 fn embedded_ipv4(segments: &[u16; 8]) -> Option<std::net::Ipv4Addr> {
     let is_v4_mapped = segments[0..5] == [0, 0, 0, 0, 0] && segments[5] == 0xffff;
     let is_nat64 = segments[0] == 0x0064 && segments[1] == 0xff9b && segments[2..6] == [0, 0, 0, 0];
@@ -145,6 +159,13 @@ pub fn constant_time_eq_str(a: &str, b: &str) -> bool {
     constant_time_eq(a.as_bytes(), b.as_bytes())
 }
 
+/// Generate a cryptographically random hex token of the given byte length.
+///
+/// Draws `byte_length` bytes directly from the OS-seeded CSPRNG
+/// (`rand::rng()` / `ThreadRng`) and hex-encodes them, yielding a
+/// `byte_length * 2`-character lowercase hex string. This is the standard
+/// construction for an authentication secret, deriving the token by hashing
+/// UUID v4 bytes adds no entropy and is a non-standard, harder-to-audit shape.
 pub fn generate_random_token(byte_length: usize) -> String {
     use rand::RngCore;
 

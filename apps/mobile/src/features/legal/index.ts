@@ -4,6 +4,12 @@ import type { OssLicenseAttribution, OssLicenseGroup } from './types';
 export { OSS_LICENSES_GENERATED_AT, OSS_LICENSE_BODIES, OSS_PACKAGES };
 export type { OssLicenseAttribution, OssLicenseGroup };
 
+/**
+ * Groups packages by the license text they ship, so each body is rendered
+ * once with every package that carries it. Packages with no bundled license
+ * file are grouped by their declared SPDX id instead, they still have to be
+ * listed, and the screen says plainly that no text was bundled.
+ */
 export function groupOssPackages(
   packages: OssLicenseAttribution[] = OSS_PACKAGES,
   bodies: Record<string, string> = OSS_LICENSE_BODIES,
