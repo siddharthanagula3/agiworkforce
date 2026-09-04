@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import type { CSSProperties } from 'react';
+import type { CSSProperties, ReactNode } from 'react';
 import {
   Button,
   ButtonRow,
@@ -10,10 +10,11 @@ import {
 } from '../system';
 import { HeroConsole } from './HeroConsole';
 import { RouterBoard } from './RouterBoard';
+import { HARNESSES } from './landing-harnesses';
 import {
   CLI_TRANSCRIPT,
   CLOSE,
-  FACTS,
+  FACT_CARDS,
   HERO,
   LANES,
   LANE_MARKS,
@@ -22,12 +23,18 @@ import {
   PLANS,
   ROUTER,
   SURFACES,
+  STEPS,
   SURFACES_SECTION,
   WEB_SHOT,
+  WIDE,
 } from './landing-content';
 
 const IDS = {
   hero: 'agi-landing-hero-title',
+  steps: 'agi-landing-steps-title',
+  models: 'agi-landing-models-title',
+  sources: 'agi-landing-sources-title',
+  code: 'agi-landing-code-title',
   router: 'agi-landing-router-title',
   lanes: 'agi-landing-lanes-title',
   surfaces: 'agi-landing-surfaces-title',
@@ -57,6 +64,66 @@ function Heading({
         {title} <em className="agi-lp-accent">{accent}</em>
       </h2>
     </div>
+  );
+}
+
+type WideMoment = (typeof WIDE)[keyof typeof WIDE];
+
+function BrowserFrame({ url, children }: { url: string; children: ReactNode }) {
+  return (
+    <div className="agi-lp-browser">
+      <div className="agi-lp-browser-bar" aria-hidden="true">
+        <span className="agi-lp-browser-dots">
+          {Array.from({ length: BROWSER_DOTS }, (_, position) => (
+            <i key={position} />
+          ))}
+        </span>
+        <span>{url}</span>
+      </div>
+      {children}
+    </div>
+  );
+}
+
+function WideSection({
+  id,
+  moment,
+  url,
+  children,
+}: {
+  id: string;
+  moment: WideMoment;
+  url: string;
+  children?: ReactNode;
+}) {
+  return (
+    <section className="agi-lp-section" aria-labelledby={id}>
+      <div className="agi-ds-container">
+        <div className="agi-lp-wide-heading">
+          <p className="agi-lp-eyebrow">{moment.eyebrow}</p>
+          <h2 className="agi-lp-h2" id={id}>
+            {moment.title} <em className="agi-lp-accent">{moment.accent}</em>
+          </h2>
+          <p className="agi-lp-lede">{moment.lede}</p>
+        </div>
+        <MotionReveal>
+          <BrowserFrame url={url}>
+            <ProductFrame
+              src={moment.image.dark}
+              alt={moment.image.alt}
+              width={moment.image.width}
+              height={moment.image.height}
+            />
+          </BrowserFrame>
+        </MotionReveal>
+        <ul className="agi-lp-wide-caption">
+          {moment.caption.map((part) => (
+            <li key={part}>{part}</li>
+          ))}
+        </ul>
+        {children}
+      </div>
+    </section>
   );
 }
 
@@ -98,12 +165,50 @@ export function LandingPage() {
         </section>
 
         <div className="agi-lp-factline">
-          <ul className="agi-ds-container agi-lp-factline-list">
-            {FACTS.map((fact) => (
-              <li key={fact}>{fact}</li>
+          <ul className="agi-ds-container agi-lp-facts">
+            {FACT_CARDS.map((fact) => (
+              <li className="agi-lp-fact-card" key={fact.label}>
+                <span className="agi-lp-fact-value">{fact.value}</span>
+                <p className="agi-lp-fact-label">{fact.label}</p>
+              </li>
             ))}
           </ul>
         </div>
+
+        <section className="agi-lp-section" aria-labelledby={IDS.steps}>
+          <div className="agi-ds-container agi-lp-steps-grid">
+            <MotionReveal>
+              <pre className="agi-lp-terminal" aria-label="A real AGI CLI session">
+                {CLI_TRANSCRIPT.map((line) => (
+                  <span className="agi-lp-terminal-line" data-kind={line.kind} key={line.text}>
+                    {line.text}
+                  </span>
+                ))}
+              </pre>
+            </MotionReveal>
+            <div className="agi-lp-router-copy">
+              <Heading
+                id={IDS.steps}
+                eyebrow={STEPS.eyebrow}
+                title={STEPS.title}
+                accent={STEPS.accent}
+              />
+              <p className="agi-lp-lede">{STEPS.lede}</p>
+              <ol className="agi-lp-steps">
+                {STEPS.items.map((step) => (
+                  <li className="agi-lp-step" key={step.title}>
+                    <div>
+                      <p className="agi-lp-step-title">{step.title}</p>
+                      <p className="agi-lp-step-body">{step.body}</p>
+                    </div>
+                  </li>
+                ))}
+              </ol>
+            </div>
+          </div>
+        </section>
+
+        <WideSection id={IDS.models} moment={WIDE.models} url={WEB_SHOT.url} />
 
         <section className="agi-lp-section" aria-labelledby={IDS.router}>
           <div className="agi-ds-container agi-lp-router-grid">
@@ -126,6 +231,8 @@ export function LandingPage() {
             <RouterBoard />
           </div>
         </section>
+
+        <WideSection id={IDS.sources} moment={WIDE.sources} url={WEB_SHOT.url} />
 
         <section className="agi-lp-section" aria-labelledby={IDS.lanes}>
           <div className="agi-ds-container">
@@ -173,34 +280,17 @@ export function LandingPage() {
               />
               <p className="agi-lp-lede">{SURFACES_SECTION.lede}</p>
             </div>
-            <MotionReveal>
-              <div className="agi-lp-browser">
-                <div className="agi-lp-browser-bar" aria-hidden="true">
-                  <span className="agi-lp-browser-dots">
-                    {Array.from({ length: BROWSER_DOTS }, (_, position) => (
-                      <i key={position} />
-                    ))}
-                  </span>
-                  <span>{WEB_SHOT.url}</span>
-                </div>
-                <ProductFrame
-                  src={WEB_SHOT.dark}
-                  srcLight={WEB_SHOT.light}
-                  alt={WEB_SHOT.alt}
-                  width={WEB_SHOT.width}
-                  height={WEB_SHOT.height}
-                />
-              </div>
-            </MotionReveal>
             <div className="agi-lp-surface-row">
               <MotionReveal>
-                <pre className="agi-lp-terminal" aria-label="A real AGI CLI session">
-                  {CLI_TRANSCRIPT.map((line) => (
-                    <span className="agi-lp-terminal-line" data-kind={line.kind} key={line.text}>
-                      {line.text}
-                    </span>
-                  ))}
-                </pre>
+                <BrowserFrame url={WEB_SHOT.url}>
+                  <ProductFrame
+                    src={WEB_SHOT.dark}
+                    srcLight={WEB_SHOT.light}
+                    alt={WEB_SHOT.alt}
+                    width={WEB_SHOT.width}
+                    height={WEB_SHOT.height}
+                  />
+                </BrowserFrame>
               </MotionReveal>
               <MotionReveal delay={0.1}>
                 <div className="agi-lp-phone">
@@ -261,6 +351,17 @@ export function LandingPage() {
             </div>
           </div>
         </section>
+
+        <WideSection id={IDS.code} moment={WIDE.code} url={WEB_SHOT.url}>
+          <ul className="agi-lp-harness" aria-label="Coding harnesses the workspace can run">
+            {HARNESSES.map((harness) => (
+              <li className="agi-lp-harness-item" key={harness.id}>
+                <span className="agi-lp-harness-name">{harness.name}</span>
+                <span className="agi-lp-harness-kind">{harness.kind}</span>
+              </li>
+            ))}
+          </ul>
+        </WideSection>
 
         <section className="agi-lp-section agi-lp-plans" aria-labelledby={IDS.plans}>
           <div className="agi-ds-container agi-lp-plans-grid">

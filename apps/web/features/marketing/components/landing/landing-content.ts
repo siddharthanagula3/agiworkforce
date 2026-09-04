@@ -406,7 +406,7 @@ export const WEB_SHOT = {
   dark: '/product/projects-dark-landing.png',
   alt: 'AGI Web showing the projects view, with chat, code, projects, library and schedules in the sidebar',
   width: 2880,
-  height: 1480,
+  height: 1300,
   url: 'agiworkforce.com/chat',
 } as const;
 
@@ -519,4 +519,83 @@ export const CLOSE = {
   title: 'Start on the web.',
   accent: 'Move the session anywhere.',
   body: 'AGI Web needs no install. The CLI is signed and downloadable now. Whichever you open, the answer says which computer produced it.',
+} as const;
+
+export const FACT_CARDS = [
+  { value: `${CATALOG_MODEL_COUNT}`, label: 'models in one catalog, priced from one sheet.' },
+  {
+    value: `${PROVIDER_INTEGRATION_COUNT}`,
+    label: 'providers and local runtimes behind one composer.',
+  },
+  {
+    value: `${SURFACES.length}`,
+    label: 'surfaces on one account: web, CLI, desktop, mobile, Chrome, VS Code.',
+  },
+  {
+    value: cachePercent,
+    label: 'of the example turn served from prompt cache, and priced that way.',
+  },
+] as const;
+
+export const STEPS = {
+  eyebrow: 'Getting started',
+  title: 'Two commands,',
+  accent: 'then it runs.',
+  lede: 'Nothing to migrate. The CLI is a signed archive, the web app needs no install, and the first prompt works on a laptop model before you add a key.',
+  items: [
+    {
+      title: 'Get the CLI or open the web app',
+      body: `Signed archives for macOS, Linux and Windows on the download page, version ${CLI_VERSION} today.`,
+    },
+    {
+      title: 'Pick a lane',
+      body: 'A model on your hardware, your own provider key in the OS keyring, or sign in for the cloud lane.',
+    },
+    {
+      title: 'Run a prompt',
+      body: 'The answer prints with the provider, the model, the cost and the cache hit under it.',
+    },
+  ],
+} as const;
+
+export const WIDE = {
+  models: {
+    eyebrow: 'The catalog',
+    title: 'Every model',
+    accent: 'behind one composer.',
+    lede: `Search ${CATALOG_MODEL_COUNT} models by capability, see what each one supports before you pick it, and switch mid-thread without losing the conversation.`,
+    image: {
+      dark: '/product/models-dark-landing.png',
+      alt: 'The AGI model picker open over the composer, listing models with their capabilities',
+      width: 2240,
+      height: 1400,
+    },
+    caption: ['Composer', 'Model picker', 'Capabilities per model'],
+  },
+  sources: {
+    eyebrow: 'Sources',
+    title: 'Answers that',
+    accent: 'show their sources.',
+    lede: 'When a model searches, the answer carries the pages it read as chips you can open, and the footer names the model that wrote it.',
+    image: {
+      dark: '/product/sources-dark-landing.png',
+      alt: 'An AGI answer with inline source chips, a code block and a sources count',
+      width: 2360,
+      height: 870,
+    },
+    caption: ['Chat', 'Web search', 'Inline citations'],
+  },
+  code: {
+    eyebrow: 'Code',
+    title: 'A workspace',
+    accent: 'that is not your laptop.',
+    lede: 'Attach a public repository, pick the coding agent you already use, and it runs in an isolated environment that never sees your keys or local files.',
+    image: {
+      dark: '/product/code-dark-landing.png',
+      alt: 'The AGI managed code page with the new session form and the coding harness picker',
+      width: 2880,
+      height: 1400,
+    },
+    caption: ['Code', 'Isolated workspace', 'Your harness'],
+  },
 } as const;
