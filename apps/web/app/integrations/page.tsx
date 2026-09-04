@@ -35,6 +35,11 @@ const PATTERNS = [
   },
 ] as const;
 
+const HERO_CTAS = [
+  { href: '/apps', label: 'Browse apps and connectors', variant: 'primary' as const },
+  { href: '/providers', label: 'See providers', variant: 'secondary' as const },
+] as const;
+
 export default function IntegrationsPage() {
   return (
     <div data-design="agi" className="agi-ds-page">
@@ -54,10 +59,11 @@ export default function IntegrationsPage() {
                 permissions.
               </Prose>
               <ButtonRow>
-                <Button href="/apps">Browse apps and connectors</Button>
-                <Button href="/providers" variant="secondary">
-                  See providers
-                </Button>
+                {HERO_CTAS.map(({ href, label, variant }) => (
+                  <Button key={href} href={href} variant={variant}>
+                    {label}
+                  </Button>
+                ))}
               </ButtonRow>
             </div>
             <div className="agi-lp-hero-stage">
