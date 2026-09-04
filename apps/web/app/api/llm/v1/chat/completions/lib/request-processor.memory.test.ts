@@ -70,6 +70,21 @@ describe('enrichManagedMemoryContext', () => {
     expect(query).not.toHaveBeenCalled();
     expect(chatRequest.messages).toEqual([{ role: 'user', content: 'Plan my day.' }]);
   });
+
+  it('does not load or inject account memory when the per-chat Memory toggle is off', async () => {
+    const query = vi.fn();
+    const chatRequest = { ...makeRequest(), memory_enabled: false };
+
+    await enrichManagedMemoryContext({
+      db: { query },
+      userId: 'user-1',
+      chatRequest,
+      isTemporary: false,
+    });
+
+    expect(query).not.toHaveBeenCalled();
+    expect(chatRequest.messages).toEqual([{ role: 'user', content: 'Plan my day.' }]);
+  });
 });
 
 describe('prepareManagedAutoMemoryFacts', () => {
@@ -148,6 +163,22 @@ describe('prepareManagedAutoMemoryFacts', () => {
           generateFromHistory: false,
           allowToolAssistedGeneration: false,
         },
+      }),
+    ).toEqual([]);
+  });
+
+  it('does not learn when the per-chat Memory toggle is off', () => {
+    expect(
+      prepareManagedAutoMemoryFacts({
+        message: 'My name is Ada.',
+        isTemporary: false,
+        surface: 'mobile',
+        policy: {
+          enabled: true,
+          generateFromHistory: true,
+          allowToolAssistedGeneration: false,
+        },
+        memoryEnabled: false,
       }),
     ).toEqual([]);
   });

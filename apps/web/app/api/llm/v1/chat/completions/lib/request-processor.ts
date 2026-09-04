@@ -288,6 +288,8 @@ export const ChatCompletionRequestSchema = z
     seed: z.number().int().optional(),
     web_search: z.boolean().optional(),
     web_fetch: z.boolean().optional(),
+    /** Per-chat Memory override. False skips memory injection and memory writes for this turn. */
+    memory_enabled: z.boolean().optional(),
     research: z.boolean().optional(),
     research_resume: z
       .object({
@@ -1011,7 +1013,7 @@ export async function enrichManagedMemoryContext(params: {
   isTemporary: boolean;
   projectId?: string | null;
 }): Promise<void> {
-  if (params.isTemporary) return;
+  if (params.isTemporary || params.chatRequest.memory_enabled === false) return;
 
   const [suppressedSources, scope] = await Promise.all([
     loadSuppressedMemorySources(params.db, { userId: params.userId }),
@@ -1034,11 +1036,14 @@ export function prepareManagedAutoMemoryFacts(params: {
   isTemporary: boolean;
   surface: CloudChatSurface;
   policy: ManagedMemoryPolicy;
+  /** Per-chat Memory override; false skips learning new facts for this turn. */
+  memoryEnabled?: boolean;
 }): string[] {
   if (
     !params.policy.enabled ||
     !params.policy.generateFromHistory ||
     params.isTemporary ||
+    params.memoryEnabled === false ||
     params.surface === 'api'
   ) {
     return [];
@@ -2203,6 +2208,7 @@ export async function processRequest(
     isTemporary: conversationIsTemporary,
     surface: chatSurface,
     policy: managedMemoryPolicy,
+    memoryEnabled: chatRequest.memory_enabled,
   });
 
   const routingHistory = chatRequest.messages

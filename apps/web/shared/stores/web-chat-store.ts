@@ -612,6 +612,14 @@ interface ChatState {
    */
   disabledConnectorIdsByConversation: Record<string, string[]>;
 
+  /**
+   * Per-conversation Memory opt-out: conversation ids present with `true` have
+   * Memory switched off for that chat only, overriding the settings-level
+   * default. PERSISTED like `disabledConnectorIdsByConversation` (see
+   * `partialize` below) so the override survives a reload.
+   */
+  memoryDisabledByConversation: Record<string, boolean>;
+
   // Sidebar state
   sidebarCollapsed: boolean;
 
@@ -798,6 +806,12 @@ interface ChatState {
     conversationId?: string | null,
   ) => void;
 
+  // Actions - Per-conversation Memory opt-out
+  /** True unless this conversation has an explicit Memory opt-out recorded. */
+  getMemoryEnabled: (conversationId?: string | null) => boolean;
+  /** Switch Memory on or off for one conversation only. */
+  setMemoryEnabled: (enabled: boolean, conversationId?: string | null) => void;
+
   // Actions - Sidebar
   toggleSidebar: () => void;
   setSidebarCollapsed: (collapsed: boolean) => void;
@@ -824,6 +838,7 @@ const initialState = {
   parkedSendsByFingerprint: {} as Record<string, string>,
   composerTogglesByConversation: {} as Record<string, ComposerToggleState>,
   disabledConnectorIdsByConversation: {} as Record<string, string[]>,
+  memoryDisabledByConversation: {} as Record<string, boolean>,
   sidebarCollapsed: false,
 };
 
@@ -1024,6 +1039,9 @@ export const useChatStore = create<ChatState>()(
               // A recreated id must not resurrect a dead conversation's connector opt-outs.
               const { [id]: _removedDisabledConnectors, ...disabledConnectorIdsByConversation } =
                 state.disabledConnectorIdsByConversation;
+              // Nor its Memory opt-out.
+              const { [id]: _removedMemoryDisabled, ...memoryDisabledByConversation } =
+                state.memoryDisabledByConversation;
               // A deleted conversation's leaf dies with its transcript, or a
               // recreated id would resolve its path against a dead pointer.
               const { [id]: _removedLeaf, ...activeLeafByConversation } =
@@ -1036,6 +1054,7 @@ export const useChatStore = create<ChatState>()(
                 draftsByConversation,
                 composerTogglesByConversation,
                 disabledConnectorIdsByConversation,
+                memoryDisabledByConversation,
                 activeLeafByConversation,
                 draftContent: draftsByConversation[nextKey] ?? '',
                 activeConversationId,
@@ -1643,7 +1662,14 @@ export const useChatStore = create<ChatState>()(
               const pending = state.composerTogglesByConversation[PENDING_CONVERSATION_KEY];
               const pendingDisabledConnectors =
                 state.disabledConnectorIdsByConversation[PENDING_CONVERSATION_KEY];
-              if ((!pending && !pendingDisabledConnectors) || !conversationId) return {};
+              const pendingMemoryDisabled =
+                state.memoryDisabledByConversation[PENDING_CONVERSATION_KEY];
+              if (
+                (!pending && !pendingDisabledConnectors && !pendingMemoryDisabled) ||
+                !conversationId
+              ) {
+                return {};
+              }
               const targetKey = conversationKey(conversationId);
               const update: Partial<ChatState> = {};
               if (pending) {
@@ -1665,6 +1691,15 @@ export const useChatStore = create<ChatState>()(
                   [targetKey]: state.disabledConnectorIdsByConversation[targetKey] ?? [
                     ...pendingDisabledConnectors,
                   ],
+                };
+              }
+              if (pendingMemoryDisabled !== undefined) {
+                const { [PENDING_CONVERSATION_KEY]: _pendingMemory, ...rest } =
+                  state.memoryDisabledByConversation;
+                update.memoryDisabledByConversation = {
+                  ...rest,
+                  [targetKey]:
+                    state.memoryDisabledByConversation[targetKey] ?? pendingMemoryDisabled,
                 };
               }
               return update;
@@ -1703,6 +1738,30 @@ export const useChatStore = create<ChatState>()(
             'chat/setConnectorEnabled',
           ),
 
+        getMemoryEnabled: (conversationId) => {
+          const state = get();
+          const targetId =
+            conversationId === undefined ? state.activeConversationId : conversationId;
+          return state.memoryDisabledByConversation[conversationKey(targetId)] !== true;
+        },
+
+        setMemoryEnabled: (enabled, conversationId) =>
+          set(
+            (state) => {
+              const targetId =
+                conversationId === undefined ? state.activeConversationId : conversationId;
+              const key = conversationKey(targetId);
+              return {
+                memoryDisabledByConversation: {
+                  ...state.memoryDisabledByConversation,
+                  [key]: !enabled,
+                },
+              };
+            },
+            undefined,
+            'chat/setMemoryEnabled',
+          ),
+
         // Sidebar
         toggleSidebar: () =>
           set(
@@ -1732,6 +1791,9 @@ export const useChatStore = create<ChatState>()(
           // opt-out is a standing decision about what a chat is allowed to
           // reach, not a next-turn default -- it must survive a reload.
           disabledConnectorIdsByConversation: state.disabledConnectorIdsByConversation,
+          // Same reasoning: a per-chat Memory opt-out is a standing decision
+          // about that conversation, not a next-turn default.
+          memoryDisabledByConversation: state.memoryDisabledByConversation,
         }),
         migrate: (persisted: unknown) => {
           const next = { ...(persisted as Record<string, unknown>) };

@@ -47,6 +47,7 @@ const chatComposerMocks = vi.hoisted(() => ({
     sources: {} as Record<string, string>,
     customNames: {} as Record<string, string>,
   },
+  memoryCapabilityEnabled: true,
 }));
 
 vi.mock('next/navigation', () => ({
@@ -78,6 +79,10 @@ vi.mock('@features/chat/hooks/use-media-model-availability', () => ({
 
 vi.mock('@features/connectors/hooks/use-connectors', () => ({
   useConnectors: () => chatComposerMocks.connectors,
+}));
+
+vi.mock('@/lib/runtime/memory-capability', () => ({
+  isMemoryCapabilityEnabled: () => Promise.resolve(chatComposerMocks.memoryCapabilityEnabled),
 }));
 
 vi.mock('./DragDropOverlay', () => ({
@@ -157,6 +162,7 @@ describe('ChatComposerNew', () => {
     chatComposerMocks.connectors.connectedIds = new Set();
     chatComposerMocks.connectors.sources = {};
     chatComposerMocks.connectors.customNames = {};
+    chatComposerMocks.memoryCapabilityEnabled = true;
     originalModelId = useModelStore.getState().selectedModelId;
     originalFeatureFlags = useBillingStore.getState().featureFlags;
     originalSubscription = useBillingStore.getState().subscription;
@@ -170,6 +176,7 @@ describe('ChatComposerNew', () => {
     useChatStore.setState({
       composerTogglesByConversation: {},
       disabledConnectorIdsByConversation: {},
+      memoryDisabledByConversation: {},
       draftsByConversation: {},
       draftContent: '',
     });
@@ -188,6 +195,7 @@ describe('ChatComposerNew', () => {
     useChatStore.setState({
       composerTogglesByConversation: {},
       disabledConnectorIdsByConversation: {},
+      memoryDisabledByConversation: {},
       draftsByConversation: {},
       draftContent: '',
     });
@@ -950,6 +958,57 @@ describe('ChatComposerNew', () => {
       'aria-pressed',
       'true',
     );
+  });
+
+  it('shows the Memory + menu item on by default and persists turning it off for one conversation', async () => {
+    const conversationId = 'memory-toggle-conversation';
+    render(<ChatComposerNew onSend={vi.fn()} conversationId={conversationId} />);
+    fireEvent.click(screen.getByRole('button', { name: /add attachments and tools/i }));
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /memory/i })).toHaveAttribute(
+        'aria-pressed',
+        'true',
+      );
+    });
+    expect(screen.getByRole('button', { name: /memory/i })).toBeEnabled();
+
+    fireEvent.click(screen.getByRole('button', { name: /memory/i }));
+
+    expect(useChatStore.getState().getMemoryEnabled(conversationId)).toBe(false);
+
+    fireEvent.click(screen.getByRole('button', { name: /add attachments and tools/i }));
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /memory/i })).toHaveAttribute(
+        'aria-pressed',
+        'false',
+      );
+    });
+  });
+
+  it('disables the Memory + menu item with a settings hint when the account switch is off', async () => {
+    chatComposerMocks.memoryCapabilityEnabled = false;
+    render(<ChatComposerNew onSend={vi.fn()} />);
+    fireEvent.click(screen.getByRole('button', { name: /add attachments and tools/i }));
+
+    const memoryRow = await screen.findByRole('button', { name: /memory/i });
+    expect(memoryRow).toBeDisabled();
+    expect(memoryRow).toHaveAttribute('title', expect.stringMatching(/settings/i));
+  });
+
+  it('shows a Memory off footer indicator only once Memory is turned off for the conversation', async () => {
+    const conversationId = 'memory-indicator-conversation';
+    render(<ChatComposerNew onSend={vi.fn()} conversationId={conversationId} />);
+
+    await waitFor(() => {
+      expect(screen.queryByTestId('memory-indicator')).not.toBeInTheDocument();
+    });
+
+    act(() => {
+      useChatStore.getState().setMemoryEnabled(false, conversationId);
+    });
+
+    expect(await screen.findByTestId('memory-indicator')).toHaveTextContent('Memory off');
   });
 
   it('sends the persistent Office file-creation selection to the server', async () => {

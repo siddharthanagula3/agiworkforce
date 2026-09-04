@@ -318,3 +318,68 @@ describe('chatStore, per-conversation connector opt-out', () => {
     expect(persisted.disabledConnectorIdsByConversation).toEqual({ 'conv-a': ['notion'] });
   });
 });
+
+describe('chatStore, per-conversation Memory opt-out', () => {
+  beforeEach(() => {
+    useChatStore.getState().reset();
+  });
+
+  it('defaults to Memory enabled', () => {
+    expect(useChatStore.getState().getMemoryEnabled('conv-a')).toBe(true);
+  });
+
+  it('disables and re-enables Memory for one conversation without affecting another', () => {
+    const { setMemoryEnabled, getMemoryEnabled } = useChatStore.getState();
+
+    setMemoryEnabled(false, 'conv-a');
+
+    expect(getMemoryEnabled('conv-a')).toBe(false);
+    expect(getMemoryEnabled('conv-b')).toBe(true);
+
+    setMemoryEnabled(true, 'conv-a');
+    expect(getMemoryEnabled('conv-a')).toBe(true);
+  });
+
+  it('moves the pending new-chat opt-out onto the conversation the first send created', () => {
+    const { setMemoryEnabled, adoptPendingComposerToggles, getMemoryEnabled } =
+      useChatStore.getState();
+
+    setMemoryEnabled(false, null);
+    adoptPendingComposerToggles('conv-created');
+
+    expect(getMemoryEnabled('conv-created')).toBe(false);
+    expect(getMemoryEnabled(null)).toBe(true);
+  });
+
+  it('does not overwrite a target conversation that already has its own Memory setting', () => {
+    const { setMemoryEnabled, adoptPendingComposerToggles, getMemoryEnabled } =
+      useChatStore.getState();
+
+    setMemoryEnabled(false, null);
+    setMemoryEnabled(true, 'conv-existing');
+    adoptPendingComposerToggles('conv-existing');
+
+    expect(getMemoryEnabled('conv-existing')).toBe(true);
+  });
+
+  it('drops a deleted conversation Memory opt-out so a recreated id starts clean', () => {
+    const { setMemoryEnabled, getMemoryEnabled, deleteConversation } = useChatStore.getState();
+
+    setMemoryEnabled(false, 'conv-a');
+    deleteConversation('conv-a');
+
+    expect(getMemoryEnabled('conv-a')).toBe(true);
+  });
+
+  it('persists the per-conversation Memory opt-out (unlike the other composer toggles)', () => {
+    const partialize = useChatStore.persist.getOptions().partialize;
+    expect(partialize).toBeDefined();
+
+    useChatStore.getState().setMemoryEnabled(false, 'conv-a');
+
+    const persisted = partialize!(useChatStore.getState()) as {
+      memoryDisabledByConversation?: Record<string, boolean>;
+    };
+    expect(persisted.memoryDisabledByConversation).toEqual({ 'conv-a': true });
+  });
+});
