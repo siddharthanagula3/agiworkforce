@@ -4821,3 +4821,39 @@ rendering is right. A follow-up attempt to expand them failed to find the
 headers by accessible name (the label and the count are separate elements), so
 the second measurement did not disprove the first either - only reading
 aria-expanded and the API total together settled it.
+
+## 2026-09-04 A canceled enterprise contract's `ended_at` never clears on
+
+resubscribe (`BILLING-ENTERPRISE-CONTRACT-ENDED-AT-STICKY`, Medium, open)
+
+`syncEnterpriseContractFromSubscription`
+(`apps/web/lib/services/enterprise-billing-service.ts:264-326`) upserts
+`organization_billing_contracts` on `customer.subscription.created` /
+`.updated`, keyed on `organization_id`. The `on conflict` `set` list updates
+`stripe_subscription_id`, seats, dates and cadence from the new subscription,
+but never assigns `ended_at`. Once a contract's `ended_at` is set by
+`cancelEnterpriseContract` (the `set ended_at = $2 where ... and ended_at is
+null` at line ~536), creating a brand new active subscription for the same
+organization leaves the stale `ended_at` in place forever, even though
+`stripe_subscription_id` now points at a live, paying subscription.
+
+Both `readOrganizationCollectionState`
+(`apps/web/lib/services/enterprise-collection-state.ts:74-89`, the read-only
+billing gate) and `readActiveMeteredContracts`
+(`apps/web/lib/services/enterprise-usage-metering.ts:130-140`, the overage
+cron) filter `where ended_at is null`. With the stale timestamp still set,
+both silently stop applying to that organization: the billing gate can never
+reach `read_only` again and the overage cron never re-examines the contract,
+with no error surfaced anywhere.
+
+Reproduced 2026-09-04 in test mode while verifying enterprise-billing runbook
+section 10 item 9 and item 10 (`docs/runbooks/enterprise-billing.md`): org
+`df7a9e66-f5bc-4329-9eb4-920264f1a9ba`'s contract had `ended_at` set from an
+earlier cancel-and-verify pass; creating subscription `sub_1UBsOv0zEfO6BZMhTsYaXlTT`
+for the same org updated `stripe_subscription_id` but left `ended_at` at the
+old cancellation timestamp. Worked around for that verification by directly
+nulling `ended_at` in the database rather than through the webhook path (the
+row is left with `ended_at` null, matching the subscription's real active
+state). Fix belongs in the same upsert: clear `ended_at` to `null` whenever
+`customer.subscription.created`/`.updated` reports a non-canceled status for
+the organization's current subscription.
