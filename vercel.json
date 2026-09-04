@@ -41,6 +41,10 @@
       "schedule": "30 4 * * *"
     },
     {
+      "path": "/api/cron/purge-deleted-organizations",
+      "schedule": "40 4 * * *"
+    },
+    {
       "path": "/api/cron/expire-support-handoffs",
       "schedule": "0 2 * * *"
     },
