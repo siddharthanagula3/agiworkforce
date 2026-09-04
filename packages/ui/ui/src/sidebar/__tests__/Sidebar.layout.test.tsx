@@ -3,7 +3,7 @@ import { describe, it, expect, vi } from 'vitest';
 
 import { Sidebar } from '../Sidebar';
 
-const ROOT_SELECTOR = 'div[style*="width"]';
+const ROOT_SELECTOR = 'nav[style*="width"]';
 
 function renderSidebar() {
   return render(

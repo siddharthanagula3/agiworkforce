@@ -173,7 +173,7 @@ test.describe('chat sidebar drawer', () => {
     // Not skipped when the account has no conversations: this spec can only
     // verify the close-on-select wiring by selecting one, so a missing fixture
     // must fail loudly rather than report a green run that checked nothing.
-    const row = drawer.locator('[data-sidebar-session-index] button').first();
+    const row = drawer.locator('[data-sidebar-session-index] a').first();
     await expect(
       row,
       'no conversation in the sidebar, the account fixture this spec needs is gone',
