@@ -7,6 +7,7 @@ import { verifyCronRequest } from '@/lib/server/cron-auth';
 import { getNeonDb } from '@/lib/server/neon-db';
 import {
   drainAuditDestination,
+  hasActiveAuditStreamDestinations,
   listStreamingOrganizations,
   type DrainResult,
 } from '@/lib/services/audit-streaming-service';
@@ -28,6 +29,19 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   if (!verifyCronRequest(request)) {
     logger.warn('Unauthorized audit stream drain request');
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
+  const hasActiveDestinations = await hasActiveAuditStreamDestinations();
+  if (hasActiveDestinations === false) {
+    return NextResponse.json({
+      destinationsConsidered: 0,
+      destinationsDrained: 0,
+      destinationsDeferred: 0,
+      eventsDelivered: 0,
+      failed: 0,
+      skipped: 0,
+      skippedDatabase: true,
+    });
   }
 
   const db = getNeonDb();
