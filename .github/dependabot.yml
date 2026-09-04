@@ -1,10 +1,8 @@
 version: 2
-# Dependabot is configured here so its scan results stay visible in
-# the GitHub Dependency graph, but `open-pull-requests-limit: 5` is
-# set on every ecosystem to prevent automated PR creation. The team
-# triggers updates manually via `pnpm update` / `cargo update` after
-# coordinated migration planning. Re-raise the limit on a specific
-# ecosystem when bandwidth exists to triage that surface's PRs.
+# `open-pull-requests-limit: 5` on every ecosystem lets Dependabot open up
+# to five pull requests per ecosystem. Merging one never deploys: git
+# deployments are off in vercel.json (git.deploymentEnabled: false), and
+# production deploys go through the founder-gated CLI path.
 updates:
   # ─── GitHub Actions ──────────────────────────────────────────────────────────
   - package-ecosystem: 'github-actions'
