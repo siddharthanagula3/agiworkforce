@@ -1107,6 +1107,8 @@ const ChatMessageListComponent = ({
     key: virtualizationKey,
   });
   const virtualRowCount = groups.length + 2;
+  const virtualRowCountRef = useRef(virtualRowCount);
+  virtualRowCountRef.current = virtualRowCount;
   const [viewportHeight, setViewportHeight] = useState(DEFAULT_TRANSCRIPT_VIEWPORT_HEIGHT);
   const estimatedContentHeight = useMemo(() => {
     let height = 0;
@@ -1344,17 +1346,18 @@ const ChatMessageListComponent = ({
   const scrollToBottom = useCallback(
     (behavior: ScrollBehavior = 'smooth') => {
       const listApi = listApiRef.current;
-      if (!listApi?.element || virtualRowCount === 0) return;
+      const rowCount = virtualRowCountRef.current;
+      if (!listApi?.element || rowCount === 0) return;
       anchoringRef.current = true;
       if (anchorTimerRef.current !== null) clearTimeout(anchorTimerRef.current);
       anchorTimerRef.current = setTimeout(stopAnchoring, ANCHOR_SETTLE_TIMEOUT_MS);
       listApi.scrollToRow({
         align: 'end',
         behavior,
-        index: virtualRowCount - 1,
+        index: rowCount - 1,
       });
     },
-    [virtualRowCount, stopAnchoring],
+    [stopAnchoring],
   );
 
   const requestScrollToBottom = useCallback(
