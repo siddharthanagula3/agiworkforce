@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { withRateLimit } from '@/lib/rate-limit';
-import { logSecurityEvent } from '@/lib/security-audit';
+import { logSecurityEvent, recordAuditEvent, type AuditEventType } from '@/lib/security-audit';
 import { logger } from '@/lib/logger';
 import { requireCsrfToken } from '@/lib/csrf';
 import type { SSOConnectionRow } from '@/lib/server/neon-types';
@@ -383,6 +383,28 @@ export async function PATCH(
         organization_id: row.organization_id,
         domain: row.domain,
         is_active: effectiveActive,
+      },
+    });
+
+    const activationChanged = effectiveActive !== row.is_active;
+    const auditEventType: AuditEventType = !activationChanged
+      ? 'sso_connection_updated'
+      : effectiveActive
+        ? 'sso_connection_activated'
+        : 'sso_connection_deactivated';
+
+    await recordAuditEvent({
+      userId: principal.userId,
+      eventType: auditEventType,
+      organizationId: row.organization_id,
+      request,
+      severity: activationChanged && !effectiveActive ? 'critical' : 'warning',
+      detail: {
+        resourceType: 'sso_connection',
+        resourceId: id,
+        resourceName: row.domain,
+        status: effectiveActive ? 'active' : 'inactive',
+        changedKeys: Object.keys(update),
       },
     });
 

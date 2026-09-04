@@ -18,6 +18,7 @@ vi.mock('@/lib/logger', () => ({
 }));
 vi.mock('@/lib/security-audit', () => ({
   logSecurityEvent: (...args: unknown[]) => mockLogSecurityEvent(...args),
+  recordAuditEvent: vi.fn(async () => undefined),
 }));
 vi.mock('@/lib/api-auth', () => ({
   getClerkAuthUser: (...args: unknown[]) => mockGetClerkAuthUser(...args),
