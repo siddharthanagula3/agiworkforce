@@ -1,7 +1,7 @@
 import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
-import { getClientIp, logSecurityEvent } from '@/lib/security-audit';
+import { getClientIp, logSecurityEvent, recordAuditEvent } from '@/lib/security-audit';
 import { withRateLimit } from '@/lib/rate-limit';
 import { logger } from '@/lib/logger';
 import { AppError } from '@/lib/errors';
@@ -195,6 +195,22 @@ export async function PATCH(request: NextRequest) {
         mappedRole: nextRole,
         membersReconciled: reconciledMembers,
         organizationId: access.organizationId,
+      },
+    });
+
+    await recordAuditEvent({
+      userId: access.userId,
+      eventType: 'scim_group_role_mapping_changed',
+      organizationId: access.organizationId,
+      request,
+      severity: 'warning',
+      detail: {
+        resourceType: 'scim_group',
+        resourceId: groupId,
+        resourceName: existing.display_name,
+        ...(existing.mapped_role ? { previousRole: existing.mapped_role } : {}),
+        ...(nextRole ? { role: nextRole } : {}),
+        count: reconciledMembers,
       },
     });
 
