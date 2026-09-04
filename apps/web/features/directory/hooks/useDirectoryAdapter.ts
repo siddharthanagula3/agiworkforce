@@ -333,7 +333,6 @@ export function useDirectoryAdapter(options: DirectoryAdapterOptions = {}): Dire
       createEntry,
       onEditSkill,
       onCreateSkill,
-      createSkillLabel,
       copyLink,
       copyValue,
       downloadSkillFile,
