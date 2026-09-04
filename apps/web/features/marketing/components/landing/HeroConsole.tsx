@@ -5,24 +5,23 @@ import {
   Copy,
   GitFork,
   MoreHorizontal,
-  Pin,
   RefreshCw,
   ThumbsDown,
   ThumbsUp,
   Volume2,
 } from 'lucide-react';
 import {
-  CONSOLE_ACTIVITY,
   CONSOLE_ANSWER,
   CONSOLE_LANES,
   CONSOLE_PROMPT,
-  LANE_MARKS,
-  modelName,
+  CONSOLE_URL,
+  RECEIPT_LABELS,
+  type ReceiptKey,
 } from './landing-content';
+import { WindowBar } from './WindowBar';
 
 const ACTIONS = [
   { Icon: Copy, label: 'Copy' },
-  { Icon: Pin, label: 'Pin' },
   { Icon: Volume2, label: 'Read aloud' },
   { Icon: ThumbsUp, label: 'Good answer' },
   { Icon: ThumbsDown, label: 'Poor answer' },
@@ -35,7 +34,11 @@ const ICON_SIZE = 15;
 const ICON_STROKE = 1.75;
 const NEXT_KEYS = new Set(['ArrowRight', 'ArrowDown']);
 const PREVIOUS_KEYS = new Set(['ArrowLeft', 'ArrowUp']);
-const CONSOLE_URL = 'agiworkforce.com/chat';
+const FIRST_KEY = 'Home';
+const LAST_KEY = 'End';
+const RECEIPT_KEYS = Object.keys(RECEIPT_LABELS) as ReceiptKey[];
+const TABLIST_LABEL = 'Where this request runs';
+const RECEIPT_LABEL = 'Route receipt for this answer';
 
 export function HeroConsole() {
   const [index, setIndex] = useState(0);
@@ -44,23 +47,36 @@ export function HeroConsole() {
   const tabId = (position: number) => `${baseId}-tab-${position}`;
   const panelId = `${baseId}-panel`;
 
-  const onKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
-    const step = NEXT_KEYS.has(event.key) ? 1 : PREVIOUS_KEYS.has(event.key) ? -1 : 0;
-    if (step === 0) return;
-    event.preventDefault();
-    const target = (index + step + CONSOLE_LANES.length) % CONSOLE_LANES.length;
+  const focusTab = (target: number) => {
     setIndex(target);
     document.getElementById(tabId(target))?.focus();
   };
 
+  const onKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
+    const last = CONSOLE_LANES.length - 1;
+    if (event.key === FIRST_KEY) {
+      event.preventDefault();
+      focusTab(0);
+      return;
+    }
+    if (event.key === LAST_KEY) {
+      event.preventDefault();
+      focusTab(last);
+      return;
+    }
+    const step = NEXT_KEYS.has(event.key) ? 1 : PREVIOUS_KEYS.has(event.key) ? -1 : 0;
+    if (step === 0) return;
+    event.preventDefault();
+    focusTab((index + step + CONSOLE_LANES.length) % CONSOLE_LANES.length);
+  };
+
   return (
-    <div className="agi-lp-console" data-lane={active.lane}>
-      <div className="agi-lp-console-bar">
-        <span className="agi-lp-console-url">{CONSOLE_URL}</span>
+    <div className="agi-home-window agi-home-console" data-lane={active.lane}>
+      <WindowBar url={CONSOLE_URL}>
         <div
-          className="agi-lp-lanes"
+          className="agi-home-lanes"
           role="tablist"
-          aria-label="Where this request runs"
+          aria-label={TABLIST_LABEL}
           onKeyDown={onKeyDown}
         >
           {CONSOLE_LANES.map((lane, position) => (
@@ -72,31 +88,29 @@ export function HeroConsole() {
               aria-selected={position === index}
               aria-controls={panelId}
               tabIndex={position === index ? 0 : -1}
-              className="agi-lp-lane-tab"
+              className="agi-home-lane-tab"
               data-lane={lane.lane}
               onClick={() => setIndex(position)}
             >
-              <span className="agi-lp-lane-mark" aria-hidden="true">
-                {LANE_MARKS[lane.lane]}
-              </span>
+              <span className="agi-home-lane-mark" aria-hidden="true" />
               {lane.name}
             </button>
           ))}
         </div>
-      </div>
+      </WindowBar>
 
       <div
-        className="agi-lp-console-body"
+        className="agi-home-console-body"
         id={panelId}
         role="tabpanel"
         aria-labelledby={tabId(index)}
       >
-        <p className="agi-lp-user">{CONSOLE_PROMPT}</p>
-        <p className="agi-lp-activity">
-          <span className="agi-lp-activity-dot" aria-hidden="true" />
-          {CONSOLE_ACTIVITY}
+        <p className="agi-home-user">{CONSOLE_PROMPT}</p>
+        <p className="agi-home-activity" key={`activity-${active.lane}`}>
+          <span className="agi-home-activity-dot" aria-hidden="true" />
+          {active.activity}
         </p>
-        <div className="agi-lp-answer">
+        <div className="agi-home-answer">
           {CONSOLE_ANSWER.map((section) => (
             <section key={section.heading}>
               <h3>{section.heading}</h3>
@@ -110,11 +124,10 @@ export function HeroConsole() {
             </section>
           ))}
         </div>
-        <p className="agi-lp-modelline">
-          {modelName(active.modelId)}
-          <span> · {active.ranOn}</span>
+        <p className="agi-home-modelline" key={`model-${active.lane}`}>
+          {active.modelLine}
         </p>
-        <div className="agi-lp-actions" aria-hidden="true">
+        <div className="agi-home-actions" aria-hidden="true">
           {ACTIONS.map(({ Icon, label }) => (
             <span key={label} title={label}>
               <Icon size={ICON_SIZE} strokeWidth={ICON_STROKE} />
@@ -123,19 +136,22 @@ export function HeroConsole() {
         </div>
       </div>
 
-      <p className="agi-lp-receipt" key={active.lane}>
-        <span className="agi-lp-receipt-mark" aria-hidden="true">
-          {LANE_MARKS[active.lane]}
-        </span>
-        {active.receipt.map((part) => (
-          <span key={part} className="agi-lp-receipt-part">
-            {part}
-          </span>
+      <dl
+        className="agi-home-receipt"
+        aria-live="polite"
+        aria-label={RECEIPT_LABEL}
+        key={active.lane}
+      >
+        {RECEIPT_KEYS.map((key) => (
+          <div className="agi-home-receipt-row" key={key} data-key={key}>
+            <dt>{RECEIPT_LABELS[key]}</dt>
+            <dd>
+              {key === 'route' ? <span className="agi-home-lane-mark" aria-hidden="true" /> : null}
+              {active.receipt[key]}
+            </dd>
+          </div>
         ))}
-      </p>
-      <p className="agi-lp-console-note" aria-live="polite">
-        {active.leaves} <span>Available on {active.availableOn}.</span>
-      </p>
+      </dl>
     </div>
   );
 }
