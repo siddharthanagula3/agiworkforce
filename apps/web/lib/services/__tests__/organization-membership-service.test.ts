@@ -77,13 +77,36 @@ describe('leaveOrganization', () => {
     expect(h.query.mock.calls.at(-1)?.[1]).toEqual([ORG_A, 'user-1']);
   });
 
-  it('prevents the owner from orphaning the workspace', async () => {
+  it('points a sole owner at the workspace decommission flow instead of leaving', async () => {
     const h = harness();
     h.query
       .mockResolvedValueOnce([])
       .mockResolvedValueOnce([member('owner')])
       .mockResolvedValueOnce([])
-      .mockResolvedValueOnce([member('owner')]);
+      .mockResolvedValueOnce([member('owner')])
+      .mockResolvedValueOnce([{ count: '1' }]);
+
+    await expect(
+      leaveOrganization(h.db, { userId: 'user-1', organizationId: ORG_A }),
+    ).rejects.toMatchObject({
+      statusCode: 409,
+      message: expect.stringMatching(/sole member.*delete the workspace/i),
+    });
+    expect(
+      h.query.mock.calls.some(([sql]) =>
+        String(sql).includes('delete from public.organization_members'),
+      ),
+    ).toBe(false);
+  });
+
+  it('asks an owner with other members to choose a successor', async () => {
+    const h = harness();
+    h.query
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([member('owner')])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([member('owner')])
+      .mockResolvedValueOnce([{ count: '3' }]);
 
     await expect(
       leaveOrganization(h.db, { userId: 'user-1', organizationId: ORG_A }),

@@ -19,6 +19,28 @@ export interface LeaveOrganizationInput {
   successorUserId?: string;
 }
 
+export async function requireOrganizationOwner(
+  db: DatabaseAdapter,
+  userId: string,
+  organizationId: string,
+  action: string,
+): Promise<OrganizationMemberRow> {
+  const [membership] = await db.query<OrganizationMemberRow>(
+    `select organization_id, user_id, role, provisioning_source, provisioned_at, joined_at
+       from public.organization_members
+      where organization_id = $1 and user_id = $2
+      limit 1`,
+    [organizationId, userId],
+  );
+  if (!membership) {
+    throw createError.forbidden('You are not a member of this organization');
+  }
+  if (membership.role !== 'owner') {
+    throw createError.forbidden(`Only the workspace owner can ${action}`);
+  }
+  return membership;
+}
+
 export async function leaveOrganization(
   db: DatabaseAdapter,
   input: LeaveOrganizationInput,
@@ -62,6 +84,17 @@ export async function leaveOrganization(
       let successorPreviousRole: OrganizationMemberRow['role'] | null = null;
       if (currentMembership.role === 'owner') {
         if (!input.successorUserId || input.successorUserId === userId) {
+          const [memberCount] = await tx.query<{ count: string }>(
+            `select count(*)::text as count
+               from public.organization_members
+              where organization_id = $1`,
+            [currentMembership.organization_id],
+          );
+          if (Number(memberCount?.count ?? 0) <= 1) {
+            throw createError.conflict(
+              'You are the sole member of this workspace. Leaving is not available for a sole owner; delete the workspace from Settings > Organization instead.',
+            );
+          }
           throw createError.conflict(
             'Choose another member to become owner before leaving this workspace.',
           );
