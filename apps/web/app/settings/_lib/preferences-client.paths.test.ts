@@ -36,6 +36,8 @@ beforeEach(async () => {
   vi.mocked(getAuthToken).mockResolvedValue('test-auth-token');
   vi.mocked(getCsrfToken).mockResolvedValue('test-csrf-token');
   vi.mocked(addCsrfHeaders).mockImplementation(async (headers) => headers as HeadersInit);
+  const { invalidatePreferencesSnapshot } = await import('./preferences-client');
+  invalidatePreferencesSnapshot();
 });
 
 function requestedUrls(): string[] {
@@ -56,12 +58,28 @@ describe('settings preference paths come from the cloud contract', () => {
     await fetchStoredPreferenceNamespace('time focus');
     await savePreferenceNamespace('general', { chatFont: 'system' });
 
-    expect(requestedUrls()).toEqual([`${RELOCATED}?namespace=time%20focus`, RELOCATED]);
+    expect(requestedUrls()).toEqual([RELOCATED, RELOCATED]);
     expect(saved).toHaveBeenCalledOnce();
     expect(saved.mock.calls[0]?.[0]).toMatchObject({
       detail: { namespace: 'general', value: { chatFont: 'system' } },
     });
     window.removeEventListener(PREFERENCE_NAMESPACE_SAVED_EVENT, saved);
+  });
+
+  it('shares one snapshot fetch across namespaces until a write invalidates it', async () => {
+    const { fetchStoredPreferenceNamespace, savePreferenceNamespace } =
+      await import('./preferences-client');
+
+    await fetchStoredPreferenceNamespace('general');
+    await fetchStoredPreferenceNamespace('notifications');
+    await fetchStoredPreferenceNamespace('privacy');
+
+    expect(requestedUrls()).toEqual([RELOCATED]);
+
+    await savePreferenceNamespace('general', { chatFont: 'system' });
+    await fetchStoredPreferenceNamespace('general');
+
+    expect(requestedUrls()).toEqual([RELOCATED, RELOCATED, RELOCATED]);
   });
 
   it('routes settingsService reads and writes through the relocated contract path', async () => {

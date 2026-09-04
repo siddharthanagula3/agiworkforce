@@ -7,6 +7,7 @@ import { toUserMessage } from '@agiworkforce/unified-chat/network-error';
 import { getAuthToken } from '@shared/lib/get-auth-token';
 import { getCsrfToken } from '@/lib/client/csrf';
 import type { ApiKeyScope } from '@/lib/api-key-scopes';
+import { invalidatePreferencesSnapshot } from '@/app/settings/_lib/preferences-client';
 
 const TOTP_CONFIG = {
   ISSUER: 'AGI Platform',
@@ -468,6 +469,8 @@ class SettingsService {
           body: JSON.stringify({ namespace: 'profile', value: extPayload }),
         });
 
+        invalidatePreferencesSnapshot();
+
         if (!prefRes.ok) {
           const err = (await prefRes.json().catch(() => ({}))) as { error?: string };
           return {
@@ -559,6 +562,8 @@ class SettingsService {
         },
         body: JSON.stringify({ settings }),
       });
+
+      invalidatePreferencesSnapshot();
 
       if (!res.ok) {
         const err = (await res.json().catch(() => ({}))) as { error?: string };

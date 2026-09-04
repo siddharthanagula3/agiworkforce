@@ -45,6 +45,15 @@ describe('settings preferences reads through the RLS-scoped client', () => {
     expect(params).toEqual(['user-1']);
   });
 
+  it('reads the settings row exactly once per request and skips organization resolution', async () => {
+    await GET(new NextRequest('http://localhost:3000/api/settings/preferences'));
+
+    expect(h.query).toHaveBeenCalledTimes(1);
+    expect(h.getUserScopedDb).toHaveBeenCalledWith(expect.anything(), {
+      resolveOrganization: false,
+    });
+  });
+
   it('writes through the scoped client too', async () => {
     h.query.mockResolvedValue([{ settings: { general: {} } }]);
 
