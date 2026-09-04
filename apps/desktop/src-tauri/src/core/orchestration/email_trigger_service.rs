@@ -190,9 +190,7 @@ impl EmailTriggerService {
 
         if spawn_result.is_err() {
             self.running.store(false, Ordering::SeqCst);
-            tracing::warn!(
-                "[EmailTriggerService] Start deferred, async runtime not yet available"
-            );
+            tracing::warn!("[EmailTriggerService] Start deferred, async runtime not yet available");
         } else {
             tracing::info!("[EmailTriggerService] Background polling started");
         }

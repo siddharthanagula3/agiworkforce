@@ -66,8 +66,7 @@ impl PostgresPool {
             if let Some(client) = clients.first() {
                 // Health-check the pooled connection
                 match client.execute("SELECT 1", &[]).await {
-                    Ok(_) => {
-                    }
+                    Ok(_) => {}
                     Err(_) => {
                         // Connection is dead, will recreate below
                     }
