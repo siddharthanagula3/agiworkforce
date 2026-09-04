@@ -9,6 +9,7 @@ const {
   mockListEnabledPluginIds,
   mockListUserSkills,
   mockAuthoringEnabled,
+  mockInvalidateCache,
 } = vi.hoisted(() => ({
   mockAuthUser: vi.fn(),
   mockRateLimit: vi.fn(),
@@ -17,6 +18,7 @@ const {
   mockListEnabledPluginIds: vi.fn(),
   mockListUserSkills: vi.fn(),
   mockAuthoringEnabled: vi.fn(),
+  mockInvalidateCache: vi.fn(),
 }));
 
 vi.mock('@/lib/rate-limit', () => ({ withRateLimit: mockRateLimit }));
@@ -30,6 +32,7 @@ vi.mock('@/lib/services/plugin-installation-service', () => ({
 vi.mock('@/lib/services/skill-catalog-service', () => ({
   getManagedSkillDirectoryForPlugins: mockDirectory,
   findManagedDirectorySkillByName: vi.fn(),
+  invalidateManagedSkillCatalogCache: mockInvalidateCache,
   SkillCatalogUnavailableError: class extends Error {},
 }));
 vi.mock('@/lib/services/skill-install-service', () => ({
@@ -97,5 +100,18 @@ describe('GET /api/skills catalog parameter', () => {
     const response = await GET(get('http://localhost:3000/api/skills?catalog=all'));
     const body = (await response.json()) as { canAuthorSkills: boolean };
     expect(body.canAuthorSkills).toBe(true);
+  });
+
+  it('evicts the directory cache instead of letting a poisoned read survive a retry', async () => {
+    mockDirectory.mockResolvedValue([
+      { name: '', description: 'missing a name', source: 'bundled', frontmatter: {} },
+    ]);
+    mockResolveInstalled.mockResolvedValue([
+      { name: '', description: 'missing a name', source: 'bundled', frontmatter: {} },
+    ]);
+
+    const response = await GET(get('http://localhost:3000/api/skills'));
+    expect(response.status).toBe(400);
+    expect(mockInvalidateCache).toHaveBeenCalledTimes(1);
   });
 });
