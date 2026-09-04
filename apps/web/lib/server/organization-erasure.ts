@@ -56,6 +56,8 @@ export const ORGANIZATION_SCOPED_TABLES: ReadonlyArray<{ table: string; column: 
   { table: 'usage_events', column: 'organization_id' },
   { table: 'search_history', column: 'organization_id' },
   { table: 'enterprise_audit_events', column: 'organization_id' },
+  { table: 'organization_billing_contracts', column: 'organization_id' },
+  { table: 'organization_billing_invoices', column: 'organization_id' },
 ];
 
 /**
