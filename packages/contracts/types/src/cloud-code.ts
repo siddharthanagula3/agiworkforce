@@ -1,6 +1,13 @@
 export const CLOUD_CODE_NETWORK_ACCESS = ['none', 'trusted', 'full'] as const;
 export type CloudCodeNetworkAccess = (typeof CLOUD_CODE_NETWORK_ACCESS)[number];
 
+/**
+ * The verified E2B code-interpreter image the notebook surface runs cells on.
+ * Shared by the (server-only) template catalogue and the client notebook UI,
+ * so the id is declared once here rather than duplicated across the boundary.
+ */
+export const NOTEBOOK_TEMPLATE_ID = 'code-interpreter-v1';
+
 export const CLOUD_CODE_SESSION_STATES = [
   'provisioning',
   'ready',
@@ -104,4 +111,59 @@ export interface RunCloudCodeCommandInput {
 export interface RunCloudCodeCommandResponse {
   session: CloudCodeSession;
   terminalEntry: CloudCodeTerminalEntry;
+}
+
+/** Mirrors `@e2b/code-interpreter`'s `RunCodeLanguage` union. */
+export const NOTEBOOK_CELL_LANGUAGES = [
+  'python',
+  'javascript',
+  'typescript',
+  'r',
+  'java',
+  'bash',
+] as const;
+export type NotebookCellLanguage = (typeof NOTEBOOK_CELL_LANGUAGES)[number];
+
+/**
+ * One piece of a cell's ordered output. `stream` is stdout/stderr text,
+ * `image` and `html` are a result's richest available representation (a
+ * plot's PNG, a DataFrame's HTML table), and `error` is the interpreter
+ * traceback. Order matches the order the sandbox produced them in.
+ */
+export const NOTEBOOK_CELL_OUTPUT_KINDS = ['stream', 'html', 'image', 'error'] as const;
+export type NotebookCellOutputKind = (typeof NOTEBOOK_CELL_OUTPUT_KINDS)[number];
+
+export interface NotebookCellOutput {
+  kind: NotebookCellOutputKind;
+  /** Text for `stream`/`error`, markup for `html`, a base64 PNG for `image`. */
+  data: string;
+}
+
+export interface RunCloudCodeNotebookCellInput {
+  code: string;
+  language: NotebookCellLanguage;
+}
+
+export interface RunCloudCodeNotebookCellResponse {
+  session: CloudCodeSession;
+  ok: boolean;
+  outputs: NotebookCellOutput[];
+  error?: string;
+}
+
+export interface CloudCodeNotebookFile {
+  path: string;
+  name: string;
+  isDir: boolean;
+  byteSize: number;
+}
+
+export interface ListCloudCodeNotebookFilesResponse {
+  session: CloudCodeSession;
+  files: CloudCodeNotebookFile[];
+}
+
+export interface UploadCloudCodeNotebookFileResponse {
+  session: CloudCodeSession;
+  file: CloudCodeNotebookFile;
 }

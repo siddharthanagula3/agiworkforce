@@ -394,6 +394,23 @@ describe('getE2BExecutor, managed Code session', () => {
     expect(saved?.templateId).toBe('claude');
   });
 
+  it('persists a code context across calls so a notebook cell can see an earlier one', async () => {
+    const { getE2BExecutor } = await import('../runtime');
+    const executor = await getE2BExecutor(codeScope('code-notebook', 'trusted'));
+    await executor!.runCode({ language: 'python', code: 'x = 1' });
+    await executor!.runCode({ language: 'python', code: 'print(x)' });
+
+    const instance = await create.mock.results[0]!.value;
+    expect(instance.createCodeContext).toHaveBeenCalledTimes(1);
+    expect(instance.runCode).toHaveBeenNthCalledWith(
+      2,
+      'print(x)',
+      expect.objectContaining({ context: expect.objectContaining({ language: 'python' }) }),
+    );
+    const saved = sessions.get(scopeKey(codeScope('code-notebook', 'trusted')));
+    expect(saved?.contexts['python']).toBeDefined();
+  });
+
   it('fails closed when the requested network policy cannot be enforced', async () => {
     const broken = makeSandboxInstance('sbx-network-error');
     broken.updateNetwork.mockRejectedValueOnce(new Error('policy update failed'));
@@ -994,5 +1011,71 @@ describe('pauseE2BSession / killE2BSession', () => {
     expect(meterSandboxComputeInterval).toHaveBeenCalledWith(
       expect.objectContaining({ sandboxId: 'sbx-vcpu', vcpuCount: 4 }),
     );
+  });
+});
+
+describe('getE2BExecutor, notebook cell outputs', () => {
+  beforeEach(() => {
+    sessions.clear();
+    vi.clearAllMocks();
+    sandboxCounter = 0;
+  });
+
+  it('orders stream, image, html and text results the way the sandbox produced them', async () => {
+    const instance = makeSandboxInstance('sbx-outputs');
+    instance.runCode.mockResolvedValueOnce({
+      logs: { stdout: ['hello\n'], stderr: [] },
+      text: undefined,
+      error: undefined,
+      results: [{ png: 'ZmFrZS1wbmc=' }, { html: '<table></table>' }, { text: 'plain result' }],
+    } as unknown as Awaited<ReturnType<typeof instance.runCode>>);
+    create.mockResolvedValueOnce(instance);
+
+    const { getE2BExecutor } = await import('../runtime');
+    const executor = await getE2BExecutor();
+    const result = await executor!.runCode({ language: 'python', code: 'go()' });
+
+    expect(result.outputs).toEqual([
+      { kind: 'stream', data: 'hello\n' },
+      { kind: 'image', data: 'ZmFrZS1wbmc=' },
+      { kind: 'html', data: '<table></table>' },
+      { kind: 'stream', data: 'plain result' },
+    ]);
+    expect(result.pngResults).toEqual(['ZmFrZS1wbmc=']);
+  });
+
+  it('appends the traceback as the final error output and marks the cell failed', async () => {
+    const instance = makeSandboxInstance('sbx-error');
+    instance.runCode.mockResolvedValueOnce({
+      logs: { stdout: [], stderr: [] },
+      text: undefined,
+      error: { name: 'NameError', value: 'x is not defined', traceback: 'Traceback...' },
+      results: [],
+    } as unknown as Awaited<ReturnType<typeof instance.runCode>>);
+    create.mockResolvedValueOnce(instance);
+
+    const { getE2BExecutor } = await import('../runtime');
+    const executor = await getE2BExecutor();
+    const result = await executor!.runCode({ language: 'python', code: 'print(x)' });
+
+    expect(result.ok).toBe(false);
+    expect(result.outputs).toEqual([
+      { kind: 'error', data: 'NameError: x is not defined\nTraceback...' },
+    ]);
+  });
+
+  it('decodes base64 content into bytes before writing to the sandbox', async () => {
+    const instance = makeSandboxInstance('sbx-write');
+    create.mockResolvedValueOnce(instance);
+    const { getE2BExecutor } = await import('../runtime');
+    const executor = await getE2BExecutor();
+    const content = Buffer.from('hello').toString('base64');
+
+    await executor!.writeFile({ path: '/home/user/hi.txt', content, encoding: 'base64' });
+
+    expect(instance.files.write).toHaveBeenCalledTimes(1);
+    const [writtenPath, writtenData] = instance.files.write.mock.calls[0] as [string, ArrayBuffer];
+    expect(writtenPath).toBe('/home/user/hi.txt');
+    expect(Buffer.from(writtenData).toString('utf8')).toBe('hello');
   });
 });
