@@ -11,6 +11,18 @@ export const metadata = buildMetadata({
   path: '/api-docs',
 });
 
+const HERO_TRANSCRIPT_LABEL = 'One chat completion against the gateway';
+
+const HERO_TRANSCRIPT = [
+  { kind: 'cmd', text: 'curl https://agiworkforce.com/api/llm/v1/chat/completions \\' },
+  { kind: 'out', text: '    -H "Authorization: Bearer $YOUR_KEY" \\' },
+  { kind: 'out', text: '    -H "Content-Type: application/json" \\' },
+  {
+    kind: 'out',
+    text: '    -d \'{ "model": "auto", "messages": [{"role":"user","content":"hello"}] }\'',
+  },
+] as const;
+
 export default function ApiDocsPage() {
   return (
     <div data-design="agi" className="agi-ds-page">
@@ -22,6 +34,19 @@ export default function ApiDocsPage() {
           title="OpenAI-compatible endpoints."
           lede="Bring your own key, route to any of the wired providers, stream tokens back. The gateway is the same engine the apps use; the API just exposes it."
           ctas={[]}
+          visual={
+            <pre
+              className="agi-lp-terminal"
+              aria-label={HERO_TRANSCRIPT_LABEL}
+              style={{ alignSelf: 'start' }}
+            >
+              {HERO_TRANSCRIPT.map((line) => (
+                <span className="agi-lp-terminal-line" data-kind={line.kind} key={line.text}>
+                  {line.text}
+                </span>
+              ))}
+            </pre>
+          }
         />
 
         <Section id="quickstart" labelledBy="agi-api-docs-quickstart-title" rule>
@@ -29,16 +54,6 @@ export default function ApiDocsPage() {
             <h2 className="agi-ds-h2" id="agi-api-docs-quickstart-title">
               Quick start.
             </h2>
-            <pre
-              className="agi-ds-prose"
-              data-size="sm"
-              style={{ maxWidth: '100%', overflowX: 'auto' }}
-            >
-              {`$ curl https://agiworkforce.com/api/llm/v1/chat/completions \\
-    -H "Authorization: Bearer $YOUR_KEY" \\
-    -H "Content-Type: application/json" \\
-    -d '{ "model": "auto", "messages": [{"role":"user","content":"hello"}] }'`}
-            </pre>
             <Prose>
               Two credentials reach this API and they are not interchangeable. An AGI API key (
               <code>sk_live_…</code>, issued under Settings, API Keys) authenticates the model
