@@ -349,7 +349,11 @@ to advance time rather than waiting real days for the 30/60/90 checkpoints.
       ended contract with the new subscription, which is the intended
       re-subscription path.
 - [x] An invoice marked uncollectible keeps the collection hold; only a paid
-      or voided invoice clears it. Covered by the unit test on the oldest open
+      or voided invoice clears it. A void cancels the debt, so it restores
+      access the same way a payment does (Stripe itself returns a past due
+      subscription to active when its open invoice is voided). To keep the
+      hold while correcting an invoice, finalize the replacement before
+      voiding the original, or mark the original uncollectible. Covered by the unit test on the oldest open
       invoice computation (`enterprise-billing-service.test.ts`); no saved
       test-mode event exercises `uncollectible` yet.
 
