@@ -132,3 +132,27 @@ describe('subscription access policy · single definition of active', () => {
     expect(isActiveSubscriptionStatus('canceled')).toBe(false);
   });
 });
+
+describe('subscription access policy · enterprise collection grace', () => {
+  it('keeps an enterprise account entitled while past due and not read-only', () => {
+    const access = resolveSubscriptionAccess('past_due', 'enterprise', { readOnly: false });
+    for (const key of ACCESS_KEYS) expect(access[key]).toBe(true);
+    expect(access.effectivePlanTier).toBe('enterprise');
+  });
+
+  it('drops entitlement once the collection stage reaches read_only', () => {
+    const access = resolveSubscriptionAccess('past_due', 'enterprise', { readOnly: true });
+    for (const key of ACCESS_KEYS) expect(access[key]).toBe(false);
+    expect(access.effectivePlanTier).toBe('free');
+  });
+
+  it('leaves the ordinary rank ladder in charge when no collection state is supplied', () => {
+    const access = resolveSubscriptionAccess('past_due', 'enterprise');
+    for (const key of ACCESS_KEYS) expect(access[key]).toBe(false);
+  });
+
+  it('does not extend the grace rule to non-enterprise tiers', () => {
+    const access = resolveSubscriptionAccess('past_due', 'pro', { readOnly: false });
+    for (const key of ACCESS_KEYS) expect(access[key]).toBe(false);
+  });
+});

@@ -1,4 +1,9 @@
-import { isEntitledSubscriptionStatus } from '@agiworkforce/types';
+import {
+  isEntitledSubscriptionStatus,
+  isEntitledSubscriptionStatusForTier,
+} from '@agiworkforce/types';
+
+const ENTERPRISE_PLAN_TIER = 'enterprise';
 
 export const CHARGEBACK_STORED_STATUS = 'past_due';
 
@@ -44,13 +49,25 @@ export function subscriptionAccessRank(status: string | null | undefined): Subsc
   return RANK_BY_STATUS.get(normalize(status)) ?? 0;
 }
 
+export interface EnterpriseCollectionAccessState {
+  readOnly: boolean;
+}
+
 export function resolveSubscriptionAccess(
   status: string | null | undefined,
   planTier: string | null | undefined,
+  enterpriseCollection?: EnterpriseCollectionAccessState,
 ): SubscriptionAccess {
   const normalized = normalize(status);
+  const normalizedTier = normalize(planTier);
   const entitled =
-    subscriptionAccessRank(normalized) === 2 && isEntitledSubscriptionStatus(normalized);
+    normalizedTier === ENTERPRISE_PLAN_TIER && enterpriseCollection
+      ? isEntitledSubscriptionStatusForTier(
+          normalizedTier,
+          normalized,
+          enterpriseCollection.readOnly,
+        )
+      : subscriptionAccessRank(normalized) === 2 && isEntitledSubscriptionStatus(normalized);
 
   return {
     rank: subscriptionAccessRank(normalized),

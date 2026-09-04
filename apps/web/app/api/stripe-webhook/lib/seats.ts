@@ -5,9 +5,15 @@ import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import {
   MAX_PURCHASABLE_SEATS,
   isEntitledSubscriptionStatus,
+  isEntitledSubscriptionStatusForTier,
   isPerSeatBillingPlan,
 } from '@agiworkforce/types';
 import { logger } from '@/lib/logger';
+import { recordAuditEvent } from '@/lib/security-audit';
+import { readOrganizationCollectionState } from '@/lib/services/enterprise-collection-state';
+
+const ENTERPRISE_PLAN_TIER = 'enterprise';
+const SEAT_EXPANSION_BLOCKED_AUDIT_REASON = 'seat_expansion_blocked';
 
 export function resolveSubscriptionSeats(subscription: {
   items?: { data?: Array<{ quantity?: number | null }> } | null;
@@ -32,11 +38,15 @@ export interface PurchasedSeatRecord {
   perSeat: boolean;
 }
 
+function isEnterprisePlanTier(planTier: string): boolean {
+  return planTier.toLowerCase() === ENTERPRISE_PLAN_TIER;
+}
+
 export function buildPurchasedSeatRecord(
   planTier: string,
   subscription: Stripe.Subscription | { items?: { data?: Array<{ quantity?: number | null }> } },
 ): PurchasedSeatRecord {
-  const perSeat = isPerSeatBillingPlan(planTier);
+  const perSeat = isPerSeatBillingPlan(planTier) || isEnterprisePlanTier(planTier);
   return {
     planTier,
     seats: perSeat ? resolveSubscriptionSeats(subscription) : 1,
@@ -48,7 +58,58 @@ export type SeatPersistenceOutcome =
   | 'persisted'
   | 'no_organization'
   | 'below_consumed_seats'
-  | 'subscription_mismatch';
+  | 'subscription_mismatch'
+  | 'seat_expansion_blocked';
+
+function toLicensedSeatsNumber(value: unknown): number {
+  if (typeof value === 'number' && Number.isFinite(value)) return value;
+  if (typeof value === 'string') {
+    const parsed = Number.parseInt(value, 10);
+    if (Number.isFinite(parsed)) return parsed;
+  }
+  return 0;
+}
+
+async function guardEnterpriseSeatExpansion(
+  db: DatabaseAdapter,
+  ownerUserId: string,
+  requestedSeats: number,
+): Promise<{ blocked: boolean }> {
+  const [organization] = await db.query<{ id: string; licensed_seats: number }>(
+    `select id, licensed_seats from public.organizations where owner_user_id = $1 limit 1`,
+    [ownerUserId],
+  );
+  if (!organization) return { blocked: false };
+  if (requestedSeats <= toLicensedSeatsNumber(organization.licensed_seats))
+    return { blocked: false };
+
+  const collectionState = await readOrganizationCollectionState(db, organization.id);
+  if (!collectionState.seatExpansionBlocked) return { blocked: false };
+
+  logger.warn(
+    {
+      organizationId: organization.id,
+      ownerUserId,
+      requestedSeats,
+      licensedSeats: organization.licensed_seats,
+      stage: collectionState.stage,
+    },
+    'Refusing enterprise seat expansion while billing collection blocks new commitments',
+  );
+  await recordAuditEvent({
+    organizationId: organization.id,
+    eventType: 'plan_changed',
+    severity: 'warning',
+    surface: 'stripe_webhook',
+    detail: {
+      resourceType: 'organization',
+      resourceId: organization.id,
+      reason: SEAT_EXPANSION_BLOCKED_AUDIT_REASON,
+      status: collectionState.stage,
+    },
+  });
+  return { blocked: true };
+}
 
 export async function persistPurchasedSeatsOnOrganization(
   db: DatabaseAdapter,
@@ -60,6 +121,11 @@ export async function persistPurchasedSeatsOnOrganization(
     stripeCustomerId: string | null;
   },
 ): Promise<SeatPersistenceOutcome> {
+  if (isEnterprisePlanTier(input.planTier)) {
+    const guard = await guardEnterpriseSeatExpansion(db, input.ownerUserId, input.seats);
+    if (guard.blocked) return 'seat_expansion_blocked';
+  }
+
   const updated = await db.query<{ id: string; licensed_seats: number }>(
     `update public.organizations
         set licensed_seats = $1,
@@ -172,9 +238,21 @@ export async function resolvePurchasedSeatsForOwner(
   );
 
   if (!row?.stripe_subscription_id) return null;
-  if (!isEntitledSubscriptionStatus(row.status)) return null;
   const planTier = row.plan_tier ?? '';
-  if (!isPerSeatBillingPlan(planTier)) return null;
+
+  if (isEnterprisePlanTier(planTier)) {
+    const [organization] = await db.query<{ id: string }>(
+      `select id from public.organizations where owner_user_id = $1 limit 1`,
+      [ownerUserId],
+    );
+    const collectionReadOnly = organization
+      ? (await readOrganizationCollectionState(db, organization.id)).readOnly
+      : false;
+    if (!isEntitledSubscriptionStatusForTier(planTier, row.status, collectionReadOnly)) return null;
+  } else {
+    if (!isEntitledSubscriptionStatus(row.status)) return null;
+    if (!isPerSeatBillingPlan(planTier)) return null;
+  }
 
   const subscription = await getStripe().subscriptions.retrieve(row.stripe_subscription_id);
   const purchased = buildPurchasedSeatRecord(planTier, subscription);
