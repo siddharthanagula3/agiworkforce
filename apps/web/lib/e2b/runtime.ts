@@ -44,6 +44,7 @@ import {
 } from './types';
 import { e2bExecutionEnabled } from './gate';
 import { harnessCredentialSpecs } from './templates';
+import { fullNetworkNeedsProxy } from './network-policy';
 import {
   E2B_COMPUTE_RATE_ENV,
   meterSandboxComputeInterval,
@@ -418,6 +419,20 @@ export async function getE2BExecutor(scope?: E2BSessionScope): Promise<E2BExecut
   if (codeSessionId) metadata['codeSessionId'] = codeSessionId;
   if (scope?.userId) metadata['userId'] = scope.userId;
   const template = scope?.templateId?.trim() || null;
+  if (
+    scope &&
+    fullNetworkNeedsProxy(
+      scope.networkAccess ?? CHAT_SANDBOX_NETWORK_ACCESS,
+      template,
+      Boolean(scope.explicitCredential),
+    )
+  ) {
+    logger.warn(
+      { ...scopeLog(scope), template },
+      '[e2b] refusing full network access: a managed credential would enter the sandbox unproxied (fail-closed)',
+    );
+    return null;
+  }
   const harnessEnvs = resolveHarnessEnvs(scope, template);
   const createOpts = scope
     ? {
