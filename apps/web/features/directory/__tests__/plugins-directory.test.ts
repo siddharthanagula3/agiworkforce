@@ -96,6 +96,7 @@ function snapshot(patch: Partial<PluginDirectorySnapshot> = {}): PluginDirectory
     marketplaceSources: [],
     installedPluginIds: new Set(),
     installedEntryIds: new Set(),
+    marketplacesAvailable: true,
     ...patch,
   };
 }

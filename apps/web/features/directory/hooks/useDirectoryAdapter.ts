@@ -4,7 +4,7 @@ import { useCallback, useMemo, useRef, useState } from 'react';
 
 import type { ManagedSkillSummary } from '@agiworkforce/cloud-contracts';
 import {
-  buildDirectoryHash,
+  MARKETPLACE_UNAVAILABLE_COPY,
   type DirectoryAdapter,
   type DirectoryDetail,
   type DirectoryMarketplaceInput,
@@ -17,11 +17,10 @@ import {
   currentConnectorReturnPath,
   withConnectorReturnPath,
 } from '@features/connectors/hooks/use-connectors';
-import {
-  invalidateSkillsCatalog,
-  loadSkillsCatalog,
-} from '@features/skills/services/skills-catalog';
+import { invalidateSkillsCatalog } from '@features/skills/services/skills-catalog';
 import { getCsrfToken } from '@/lib/client/csrf';
+
+import { buildSettingsBrowseHash, skillFileDownloadHref } from '../routing';
 
 import {
   CONNECTORS_FAILED_COPY,
@@ -52,9 +51,9 @@ import {
 } from '../services/plugins-directory';
 import {
   fetchInstalledSkillNames,
+  fetchSkillCatalog,
   fetchSkillDetail,
   installSkill,
-  mergeSkillCatalog,
   toSkillSection,
   uninstallSkill,
 } from '../services/skills-directory';
@@ -89,11 +88,10 @@ export function useDirectoryAdapter(): DirectoryAdapter {
   const loadSkills = useCallback(async () => {
     setSkills((prev) => ({ ...prev, loading: true, error: null }));
     try {
-      const [listed, installed] = await Promise.all([
-        loadSkillsCatalog(),
+      const [catalog, installed] = await Promise.all([
+        fetchSkillCatalog(),
         fetchInstalledSkillNames(),
       ]);
-      const catalog = mergeSkillCatalog(listed);
       skillCache.current = catalog;
       installedSkills.current = installed;
       setSkills({ ...toSkillSection(catalog, installed), retry: loadSkills });
@@ -121,7 +119,11 @@ export function useDirectoryAdapter(): DirectoryAdapter {
     try {
       const snapshot = await fetchPluginSnapshot();
       pluginCache.current = snapshot;
-      setPlugins({ ...toPluginSection(snapshot, Date.now()), retry: loadPlugins });
+      setPlugins({
+        ...toPluginSection(snapshot, Date.now()),
+        ...(snapshot.marketplacesAvailable ? {} : { notice: MARKETPLACE_UNAVAILABLE_COPY }),
+        retry: loadPlugins,
+      });
     } catch {
       setPlugins((prev) => ({ ...prev, loading: false, error: PLUGINS_FAILED_COPY }));
     }
@@ -221,8 +223,18 @@ export function useDirectoryAdapter(): DirectoryAdapter {
 
   const copyLink = useCallback(async (section: DirectorySectionKey, id: string) => {
     if (typeof window === 'undefined') return;
-    const href = `${window.location.origin}${window.location.pathname}${buildDirectoryHash(section, id)}`;
+    const href = `${window.location.origin}${window.location.pathname}${buildSettingsBrowseHash(section, id)}`;
     await navigator.clipboard?.writeText(href);
+  }, []);
+
+  const copyValue = useCallback(async (value: string) => {
+    if (typeof window === 'undefined') return;
+    await navigator.clipboard?.writeText(value);
+  }, []);
+
+  const downloadSkillFile = useCallback((skillId: string, path: string) => {
+    if (typeof window === 'undefined') return;
+    window.open(skillFileDownloadHref(skillId, path), '_blank', 'noopener,noreferrer');
   }, []);
 
   const openHref = useCallback((href: string) => {
@@ -276,6 +288,8 @@ export function useDirectoryAdapter(): DirectoryAdapter {
       install,
       uninstall,
       copyLink,
+      copyValue,
+      downloadSkillFile,
       openHref,
       addMarketplace,
       removeMarketplace,
@@ -289,6 +303,8 @@ export function useDirectoryAdapter(): DirectoryAdapter {
       install,
       uninstall,
       copyLink,
+      copyValue,
+      downloadSkillFile,
       openHref,
       addMarketplace,
       removeMarketplace,

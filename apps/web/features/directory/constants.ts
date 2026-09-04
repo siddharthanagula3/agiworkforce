@@ -2,14 +2,14 @@ export const DIRECTORY_SOURCE_AGI = 'agi';
 export const DIRECTORY_SOURCE_YOURS = 'yours';
 export const DIRECTORY_SOURCE_PARTNERS = 'partners';
 
-export const DIRECTORY_SOURCE_LABEL_AGI = 'AGI';
+export const DIRECTORY_SOURCE_LABEL_AGI = 'Made by AGI';
 export const DIRECTORY_SOURCE_LABEL_YOURS = 'Yours';
 export const DIRECTORY_SOURCE_LABEL_PARTNERS = 'Partners';
 
 export const CONNECTOR_SOURCES_HEADING = 'AGI and partners';
 
-export const SKILL_PUBLISHER_AGI = 'AGI';
-export const SKILL_PUBLISHER_YOU = 'You';
+export const SKILL_PUBLISHER_AGI = 'Made by AGI';
+export const SKILL_PUBLISHER_YOU = 'Yours';
 export const SKILL_PUBLISHER_MANAGED = 'Managed';
 
 export const SKILL_STATUS_GROUP_ID = 'status';
@@ -61,8 +61,13 @@ export const CONNECTOR_DIRECTORY_PATH = '/api/connectors/directory';
 export const CONNECTORS_PATH = '/api/connectors';
 export const SKILLS_PATH = '/api/skills';
 export const SKILL_INSTALLS_PATH = '/api/skills/installs';
+export const SKILL_CATALOG_PARAM = 'catalog=all';
 export const PLUGINS_PATH = '/api/plugins';
 export const PLUGIN_INSTALLATIONS_PATH = '/api/plugins/installations';
 export const PLUGIN_MARKETPLACES_PATH = '/api/plugins/marketplaces';
 export const PLUGIN_MARKETPLACE_ENTRIES_PATH = '/api/plugins/marketplaces/entries';
 export const PLUGIN_MARKETPLACE_INSTALLATIONS_PATH = '/api/plugins/marketplace-installations';
+
+export const ADD_MARKETPLACE_TRIGGER_LABEL = 'Add marketplace';
+export const MARKETPLACE_TRIGGER_CLASS =
+  'inline-flex size-8 items-center justify-center rounded-md border border-border text-foreground transition-colors motion-reduce:transition-none hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background';
