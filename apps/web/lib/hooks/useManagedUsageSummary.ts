@@ -14,7 +14,7 @@ export interface ManagedUsageSummaryState {
   refresh: () => Promise<void>;
 }
 
-const REVALIDATE_INTERVAL_MS = 60_000;
+const REVALIDATE_INTERVAL_MS = 300_000;
 
 export function useManagedUsageSummary(): ManagedUsageSummaryState {
   const [usage, setUsage] = useState<ManagedUsageSummaryResponse | null>(null);
