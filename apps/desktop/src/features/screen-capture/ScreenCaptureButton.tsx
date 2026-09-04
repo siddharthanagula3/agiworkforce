@@ -137,8 +137,33 @@ export function ScreenCaptureButton({
           </TooltipContent>
         </Tooltip>
 
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant={variant}
+              size={size}
+              disabled={isCapturing || disabled}
+              onClick={handleWindowCapture}
+              className={className}
+            >
+              <Image className="h-4 w-4" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent
+            side="right"
+            align="center"
+            sideOffset={10}
+            className="pointer-events-none"
+          >
+            <p>Share window</p>
+          </TooltipContent>
+        </Tooltip>
+
         {showRegionSelector && (
           <RegionSelector onConfirm={handleRegionConfirm} onCancel={handleRegionCancel} />
+        )}
+        {showWindowSelector && (
+          <WindowSelector onConfirm={handleWindowConfirm} onCancel={handleWindowCancel} />
         )}
       </>
     );

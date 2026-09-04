@@ -84,10 +84,54 @@ describe('ScreenCaptureButton', () => {
         <ScreenCaptureButton mode="quick" />
       </TooltipProvider>,
     );
-    fireEvent.click(screen.getByRole('button'));
+    fireEvent.click(screen.getAllByRole('button')[0]!);
 
     await waitFor(() => {
       expect(screen.getByText('Click and drag to select a region')).toBeInTheDocument();
+    });
+  });
+
+  it('opens the window selector from the quick panel without a menu', async () => {
+    getAvailableWindowsMock.mockResolvedValue([
+      { handle: 'win-1', title: 'Notes', process: 'notes.app' },
+    ]);
+
+    render(
+      <TooltipProvider>
+        <ScreenCaptureButton mode="quick" />
+      </TooltipProvider>,
+    );
+
+    const buttons = screen.getAllByRole('button');
+    expect(buttons).toHaveLength(2);
+    fireEvent.click(buttons[1]!);
+
+    await waitFor(() => {
+      expect(getAvailableWindowsMock).toHaveBeenCalled();
+      expect(screen.getByText('Select Window to Capture')).toBeInTheDocument();
+    });
+  });
+
+  it('reports the capture through onCaptureComplete when a window is selected from the quick panel', async () => {
+    getAvailableWindowsMock.mockResolvedValue([
+      { handle: 'win-1', title: 'Notes', process: 'notes.app' },
+    ]);
+    const onCaptureComplete = vi.fn();
+
+    render(
+      <TooltipProvider>
+        <ScreenCaptureButton mode="quick" onCaptureComplete={onCaptureComplete} />
+      </TooltipProvider>,
+    );
+
+    fireEvent.click(screen.getAllByRole('button')[1]!);
+    const windowOption = await screen.findByText('Notes');
+    fireEvent.click(windowOption);
+    fireEvent.click(screen.getByRole('button', { name: /Capture \(Enter\)/i }));
+
+    await waitFor(() => {
+      expect(captureWindowMock).toHaveBeenCalledWith('win-1', undefined);
+      expect(onCaptureComplete).toHaveBeenCalledWith(captureResult);
     });
   });
 });
