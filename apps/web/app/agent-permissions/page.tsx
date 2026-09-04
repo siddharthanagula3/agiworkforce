@@ -269,9 +269,9 @@ export default function AgentPermissionsPage() {
                     is told the tool is blocked and instructed not to retry it.
                   </Prose>
                   <Prose>
-                    <strong>One thing a Block does not do:</strong> it does not hide the tool from
-                    the model&rsquo;s list of available tools. The model may still attempt the call.
-                    The call is refused before it runs, and nothing happens.
+                    <strong>What blocking does not do:</strong> it does not hide the tool from the
+                    model&rsquo;s list of available tools. The model may still attempt the call. The
+                    call is refused before it runs, and nothing happens.
                   </Prose>
                 </Stack>
               </Section>
