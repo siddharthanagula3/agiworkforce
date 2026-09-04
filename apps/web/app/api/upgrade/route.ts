@@ -3,6 +3,7 @@ import 'server-only';
 import { NextRequest, NextResponse } from 'next/server';
 import Stripe from 'stripe';
 import { getNeonDb } from '@/lib/server/neon-db';
+import { createClaimedUserScopedDb } from '@/lib/server/claimed-user-scope-db';
 import type { SubscriptionRow } from '@/lib/server/neon-types';
 import { requireEnv } from '@shared/utils/env';
 import { withErrorHandler } from '@/lib/error-handler';
@@ -65,6 +66,7 @@ async function handleUpgrade(request: NextRequest): Promise<NextResponse> {
   const requestedSeats = resolveCheckoutQuantity(parsed.data);
 
   const db = getNeonDb();
+  const scopedDb = createClaimedUserScopedDb(db, { userId, organizationId: null });
   const stripe = getStripe();
 
   type SubRow = Pick<
@@ -120,7 +122,7 @@ async function handleUpgrade(request: NextRequest): Promise<NextResponse> {
   if (!isStripeCustomerId(stripeCustomerId)) {
     let profileRows: Array<Pick<SubscriptionRow, 'stripe_customer_id'>>;
     try {
-      profileRows = await db.query<Pick<SubscriptionRow, 'stripe_customer_id'>>(
+      profileRows = await scopedDb.query<Pick<SubscriptionRow, 'stripe_customer_id'>>(
         'select stripe_customer_id from profiles where id = $1 limit 1',
         [userId],
       );

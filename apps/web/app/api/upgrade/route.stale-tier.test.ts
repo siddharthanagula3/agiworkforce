@@ -14,6 +14,11 @@ const pricingMocks = vi.hoisted(() => ({
 const dbMocks = vi.hoisted(() => ({
   query: vi.fn(),
   execute: vi.fn(),
+  transaction: vi.fn(
+    async (
+      callback: (tx: { query: typeof dbMocks.query; execute: typeof dbMocks.execute }) => unknown,
+    ) => callback({ query: dbMocks.query, execute: dbMocks.execute }),
+  ),
 }));
 
 vi.mock('server-only', () => ({}));
@@ -30,7 +35,11 @@ vi.mock('@/lib/server/localized-pricing-service', () => ({
     pricingMocks.getPriceSelectionForCurrency(...args),
 }));
 vi.mock('@/lib/server/neon-db', () => ({
-  getNeonDb: () => ({ query: dbMocks.query, execute: dbMocks.execute }),
+  getNeonDb: () => ({
+    query: dbMocks.query,
+    execute: dbMocks.execute,
+    transaction: dbMocks.transaction,
+  }),
 }));
 vi.mock('@/lib/price-tier-mapping', () => ({
   resolvePlanTier: (_metadata: unknown, priceId: string | null | undefined) =>
