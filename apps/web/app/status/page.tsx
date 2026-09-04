@@ -9,7 +9,11 @@ import {
   Section,
   Stack,
 } from '@/features/marketing/components/system';
-import { FactGrid, PageHero } from '@/features/marketing/components/pages/surfaces/shared';
+import {
+  FactGrid,
+  FactLine,
+  PageHero,
+} from '@/features/marketing/components/pages/surfaces/shared';
 import { getCachedHealthChecks, type HealthCheckResult } from '../../lib/server/health-check';
 import { RENDER_CACHE_SECONDS } from '@/lib/server/render-cache';
 import { contactMailto } from '@/lib/legal-constants';
@@ -84,6 +88,12 @@ const COVERED: { key: 'environment' | 'database' | 'stripe'; label: string; what
   },
 ];
 
+const HERO_FACT_LABEL = {
+  platform: 'Hosted platform',
+  checked: 'Checked',
+  scope: 'Checks in scope',
+} as const;
+
 const NOT_COVERED = [
   'Authentication (Clerk)',
   'Object storage (Cloudflare R2)',
@@ -110,6 +120,14 @@ export default async function StatusPage() {
           title="One signal, honestly checked."
           lede="No wall of evergreen badges. This page runs a real health check against AGI's hosted services at most once a minute, shows you when that check ran, and tells you exactly what it does not cover. Most of AGI does not depend on our servers at all: Local and BYOK work runs on your device."
           ctas={[]}
+        />
+
+        <FactLine
+          facts={[
+            `${HERO_FACT_LABEL.platform}: ${HEALTH_LABEL[health.state]}`,
+            `${HERO_FACT_LABEL.checked}: ${checkedLabel}`,
+            `${HERO_FACT_LABEL.scope}: ${COVERED.length}`,
+          ]}
         />
 
         <Section id="signal" labelledBy="agi-status-signal-title" rule>
