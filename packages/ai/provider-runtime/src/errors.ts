@@ -260,6 +260,15 @@ function matchesSpendingCapExhausted(lowerMessage: string): boolean {
   return lowerMessage.includes('spending cap');
 }
 
+/**
+ * A spending cap is a quota-window-exhausted signal in its own right, not
+ * merely decoration on one of the other markers below. Gating it behind an
+ * already-true `matchesQuotaExhausted` result meant a 429 that said ONLY
+ * "spending cap" (no `insufficient_quota`, no matching code) fell through to
+ * plain `rate_limit`, which is worth waiting out on the same route. A spent
+ * spending cap is not: it needs the same pool-taken-out-of-service handling
+ * as every other quota-exhausted signal, see `SPENDING_CAP_PROVIDER_HINT`.
+ */
 function matchesQuotaExhausted(e: SDKErrorLike, lowerMessage: string): boolean {
   const codes = [e.code, e.type, e.error?.type, e.error?.code, e.error?.status];
   for (const raw of codes) {
@@ -271,7 +280,8 @@ function matchesQuotaExhausted(e: SDKErrorLike, lowerMessage: string): boolean {
     lowerMessage.includes('insufficient_quota') ||
     lowerMessage.includes('exceeded your current quota') ||
     lowerMessage.includes('quota exceeded') ||
-    lowerMessage.includes('resource_exhausted')
+    lowerMessage.includes('resource_exhausted') ||
+    matchesSpendingCapExhausted(lowerMessage)
   );
 }
 
