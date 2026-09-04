@@ -53,9 +53,11 @@ function overdueContractRow(daysPastDue: number) {
 describe('evaluateActiveWorkspacePolicy', () => {
   beforeEach(() => vi.clearAllMocks());
 
-  it('leaves a personal-scope request ungoverned without reading a policy', async () => {
+  it('leaves a personal-scope request ungoverned when the caller funds no enterprise organization', async () => {
     const h = harness();
-    h.query.mockResolvedValueOnce([]); // no active workspace
+    h.query
+      .mockResolvedValueOnce([]) // no active workspace
+      .mockResolvedValueOnce([]); // no owned or member organization
 
     const decision = await evaluateActiveWorkspacePolicy(h.db, 'user-1', {
       resource: 'managed_compute',
@@ -65,7 +67,107 @@ describe('evaluateActiveWorkspacePolicy', () => {
     expect(decision.allowed).toBe(true);
     expect(decision.code).toBe('unscoped');
     expect(decision.organizationId).toBeNull();
-    expect(h.query).toHaveBeenCalledTimes(1);
+    expect(h.query).toHaveBeenCalledTimes(2);
+  });
+
+  it('denies a personal-scope request when the caller owns a read-only enterprise organization', async () => {
+    const h = harness();
+    h.query
+      .mockResolvedValueOnce([]) // no active workspace selected
+      .mockResolvedValueOnce([{ organization_id: ORGANIZATION_ID }]) // owner_user_id match
+      .mockResolvedValueOnce(overdueContractRow(95));
+
+    const decision = await evaluateActiveWorkspacePolicy(h.db, 'owner-1', {
+      resource: 'managed_compute',
+      surface: 'web',
+    });
+
+    expect(decision.allowed).toBe(false);
+    expect(decision.code).toBe('billing_read_only');
+    expect(decision.organizationId).toBe(ORGANIZATION_ID);
+  });
+
+  it('denies a personal-scope request when the caller is a seat member of a read-only enterprise organization', async () => {
+    const h = harness();
+    h.query
+      .mockResolvedValueOnce([]) // no active workspace selected
+      .mockResolvedValueOnce([{ organization_id: ORGANIZATION_ID }]) // seat membership match
+      .mockResolvedValueOnce(overdueContractRow(95));
+
+    const decision = await evaluateActiveWorkspacePolicy(h.db, 'member-1', {
+      resource: 'managed_compute',
+      surface: 'web',
+    });
+
+    expect(decision.allowed).toBe(false);
+    expect(decision.code).toBe('billing_read_only');
+    expect(decision.organizationId).toBe(ORGANIZATION_ID);
+  });
+
+  it('leaves a personal-scope request ungoverned when the funding organization is not read-only', async () => {
+    const h = harness();
+    h.query
+      .mockResolvedValueOnce([]) // no active workspace selected
+      .mockResolvedValueOnce([{ organization_id: ORGANIZATION_ID }])
+      .mockResolvedValueOnce(NO_OPEN_INVOICE);
+
+    const decision = await evaluateActiveWorkspacePolicy(h.db, 'member-1', {
+      resource: 'managed_compute',
+      surface: 'web',
+    });
+
+    expect(decision.allowed).toBe(true);
+    expect(decision.code).toBe('unscoped');
+    expect(decision.organizationId).toBeNull();
+  });
+
+  it('leaves a personal-scope request ungoverned when the funding organization lookup errors', async () => {
+    const h = harness();
+    h.query
+      .mockResolvedValueOnce([]) // no active workspace selected
+      .mockRejectedValueOnce(new Error('connection reset'));
+
+    const decision = await evaluateActiveWorkspacePolicy(h.db, 'member-1', {
+      resource: 'managed_compute',
+      surface: 'web',
+    });
+
+    expect(decision.allowed).toBe(true);
+    expect(decision.code).toBe('unscoped');
+    expect(decision.organizationId).toBeNull();
+  });
+
+  it('leaves a personal-scope request ungoverned when the funding organization collection state read errors', async () => {
+    const h = harness();
+    h.query
+      .mockResolvedValueOnce([]) // no active workspace selected
+      .mockResolvedValueOnce([{ organization_id: ORGANIZATION_ID }])
+      .mockRejectedValueOnce(new Error('connection reset'));
+
+    const decision = await evaluateActiveWorkspacePolicy(h.db, 'member-1', {
+      resource: 'managed_compute',
+      surface: 'web',
+    });
+
+    expect(decision.allowed).toBe(true);
+    expect(decision.code).toBe('unscoped');
+    expect(decision.organizationId).toBeNull();
+  });
+
+  it('does not apply the funding-organization billing hold to a resource it is not gated on', async () => {
+    const h = harness();
+    h.query
+      .mockResolvedValueOnce([]) // no active workspace selected
+      .mockResolvedValueOnce([{ organization_id: ORGANIZATION_ID }])
+      .mockResolvedValueOnce(overdueContractRow(95));
+
+    const decision = await evaluateActiveWorkspacePolicy(h.db, 'member-1', {
+      resource: 'audit_export',
+    });
+
+    expect(decision.allowed).toBe(true);
+    expect(decision.code).toBe('unscoped');
+    expect(decision.organizationId).toBeNull();
   });
 
   it('leaves an organization with no saved policy ungoverned rather than inheriting column defaults', async () => {

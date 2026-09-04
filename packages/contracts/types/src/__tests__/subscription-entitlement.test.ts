@@ -44,9 +44,17 @@ describe('isEntitledEnterpriseSubscriptionStatus', () => {
     expect(isEntitledEnterpriseSubscriptionStatus('Past_Due', false)).toBe(true);
   });
 
-  it('defers to the ordinary ladder for every other status', () => {
+  it('defers to the ordinary ladder for every other status while not read_only', () => {
     expect(isEntitledEnterpriseSubscriptionStatus('active', false)).toBe(true);
-    expect(isEntitledEnterpriseSubscriptionStatus('active', true)).toBe(true);
+    expect(isEntitledEnterpriseSubscriptionStatus('trialing', false)).toBe(true);
+  });
+
+  it('loses entitlement on an active status once the collection stage reaches read_only', () => {
+    expect(isEntitledEnterpriseSubscriptionStatus('active', true)).toBe(false);
+  });
+
+  it('loses entitlement on a trialing status once the collection stage reaches read_only', () => {
+    expect(isEntitledEnterpriseSubscriptionStatus('trialing', true)).toBe(false);
   });
 
   it('ends entitlement on a canceled status regardless of the collection stage', () => {
@@ -61,6 +69,11 @@ describe('isEntitledSubscriptionStatusForTier', () => {
     expect(isEntitledSubscriptionStatusForTier('enterprise', 'past_due', true)).toBe(false);
     expect(isEntitledSubscriptionStatusForTier('enterprise', 'unpaid', false)).toBe(true);
     expect(isEntitledSubscriptionStatusForTier('enterprise', 'unpaid', true)).toBe(false);
+  });
+
+  it('blocks an active enterprise subscription once the collection stage is read_only, regardless of Stripe status', () => {
+    expect(isEntitledSubscriptionStatusForTier('enterprise', 'active', true)).toBe(false);
+    expect(isEntitledSubscriptionStatusForTier('enterprise', 'active', false)).toBe(true);
   });
 
   it('ends entitlement for a canceled enterprise subscription even when not read_only', () => {
