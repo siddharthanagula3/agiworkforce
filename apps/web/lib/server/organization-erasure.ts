@@ -4,6 +4,7 @@ import { getNeonDb } from '@/lib/server/neon-db';
 import { logger } from '@/lib/logger';
 import { deleteStoredMediaObjects } from '@/lib/server/media-storage';
 import { invalidateActiveOrganizationCache } from '@/lib/server/request-context-cache';
+import { countActiveLegalHolds } from '@/lib/services/retention-service';
 
 /**
  * Every table whose rows belong to one organization and are erased outright
@@ -171,25 +172,23 @@ export async function eraseOrganizationMedia(
 
 export async function isOrganizationUnderActiveLegalHold(
   organizationId: string,
-): Promise<{ held: boolean; error?: string }> {
+): Promise<{ held: boolean; count: number; error?: string }> {
   try {
-    const rows = await getNeonDb().query<{ held: boolean }>(
-      `select exists (
-         select 1 from public.legal_holds
-          where organization_id = $1 and released_at is null
-       ) as held`,
-      [organizationId],
-    );
-    return { held: rows[0]?.held === true };
+    const count = await countActiveLegalHolds(getNeonDb(), organizationId);
+    return { held: count > 0, count };
   } catch (error) {
-    if (isSchemaAbsent(error)) return { held: false };
+    if (isSchemaAbsent(error)) return { held: false, count: 0 };
     // Fail closed: an unreadable hold set may be concealing an active hold,
     // and erasing under one destroys evidence that cannot be recovered.
-    return { held: true, error: error instanceof Error ? error.message : String(error) };
+    return { held: true, count: 0, error: error instanceof Error ? error.message : String(error) };
   }
 }
 
-function heldReport(organizationId: string, error: string | undefined): OrganizationErasureReport {
+function heldReport(
+  organizationId: string,
+  count: number,
+  error: string | undefined,
+): OrganizationErasureReport {
   return {
     organizationId,
     mediaObjectsDeleted: 0,
@@ -201,7 +200,7 @@ function heldReport(organizationId: string, error: string | undefined): Organiza
         retainedForRetry: true,
         error: error
           ? `Legal hold status could not be read, so nothing was erased: ${error}`
-          : 'Workspace is under an active legal hold; data preserved.',
+          : `Workspace has ${count} active legal hold${count === 1 ? '' : 's'}; data preserved.`,
       },
     },
     anonymized: {},
@@ -220,10 +219,10 @@ export async function eraseOrganizationData(
   const legalHold = await isOrganizationUnderActiveLegalHold(organizationId);
   if (legalHold.held) {
     logger.warn(
-      { organizationId, error: legalHold.error },
+      { organizationId, count: legalHold.count, error: legalHold.error },
       'Organization erasure declined: workspace is under an active legal hold',
     );
-    return heldReport(organizationId, legalHold.error);
+    return heldReport(organizationId, legalHold.count, legalHold.error);
   }
 
   const media = await eraseOrganizationMedia(organizationId);

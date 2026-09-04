@@ -41,6 +41,7 @@ import {
   readOrganizationCollectionState,
   type CollectionState,
 } from '@/lib/services/enterprise-collection-state';
+import { countActiveLegalHolds } from '@/lib/services/retention-service';
 
 let stripeClient: Stripe | null = null;
 function getStripe(): Stripe {
@@ -503,6 +504,13 @@ async function handleDelete(request: NextRequest) {
   if (parsed.data.confirm !== org.name && parsed.data.confirm !== org.slug) {
     throw createError.validation(
       'Confirmation did not match the workspace name or slug. Nothing was scheduled for deletion.',
+    );
+  }
+
+  const activeHolds = await countActiveLegalHolds(db, org.id);
+  if (activeHolds > 0) {
+    throw createError.conflict(
+      `This workspace has ${activeHolds} active legal hold${activeHolds === 1 ? '' : 's'}. Release ${activeHolds === 1 ? 'it' : 'every hold'} before deletion can be scheduled.`,
     );
   }
 
