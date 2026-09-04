@@ -20,9 +20,7 @@ import {
   ArrowLeft,
   AlertTriangle,
   ChevronDown,
-  Plus,
   Loader2,
-  Settings as SettingsIcon,
   FileJson,
   type LucideIcon,
 } from 'lucide-react';
@@ -33,18 +31,18 @@ import type {
   SettingsDataAdapter,
   SettingsConnector,
   SettingsSkill,
-  SettingsPlugin,
   ConnectedConnector,
 } from './types';
 import { CUSTOM_MCP_UNVERIFIED_NOTICE, isUnverifiedCustomConnector } from './types';
 import { SETTINGS_NAV_KEYWORDS } from '../settings-nav';
 import type { SettingsNavGroupResolved, SettingsNavKey } from '../settings-nav';
 import { ConnectorLogo } from './ConnectorLogo';
+import { DirectoryPanel } from '../directory';
+import type { DirectoryAdapter } from '../directory';
 import {
   Dialog,
   DialogContent,
   DialogDescription,
-  DialogHeader,
   DialogTitle,
 } from '../primitives/Dialog';
 import { useConfirm } from '../primitives/ConfirmDialog';
@@ -52,6 +50,14 @@ import {
   parseCustomMcpJsonConfig,
   describeCustomMcpJsonImportError,
 } from './custom-mcp-json-import';
+
+const UNKNOWN_VERSION_PLACEHOLDER = '\u2013';
+
+const DIRECTORY_SECTIONS = ['skills', 'connectors', 'plugins'] as const;
+
+function isDirectorySection(key: string): key is (typeof DIRECTORY_SECTIONS)[number] {
+  return (DIRECTORY_SECTIONS as readonly string[]).includes(key);
+}
 
 const FOCUS_RING =
   'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background';
@@ -427,762 +433,6 @@ function skillAuthorLabel(source: string): string {
   }
 }
 
-function SkillDownloadAction({
-  adapter,
-  skill,
-}: {
-  adapter?: SettingsDataAdapter;
-  skill: SettingsSkill;
-}) {
-  if (!skill.downloadHref) return null;
-  const className = cn(
-    'inline-flex min-h-6 items-center font-medium text-foreground underline underline-offset-2',
-    FOCUS_RING,
-  );
-  const label = `Download ${skill.name} SKILL.md`;
-  if (adapter?.openHref) {
-    return (
-      <button
-        type="button"
-        className={className}
-        aria-label={label}
-        onClick={() => void adapter.openHref?.(skill.downloadHref!)}
-      >
-        Download
-      </button>
-    );
-  }
-  return (
-    <a href={skill.downloadHref} download className={className} aria-label={label}>
-      Download
-    </a>
-  );
-}
-
-type BrowseTab = 'connectors' | 'skills' | 'plugins';
-type PluginSort = 'name' | 'updated' | 'popular';
-
-function DirectoryBrowse({
-  adapter,
-  initialTab,
-  onBack,
-  onOpenConnector,
-}: {
-  adapter?: SettingsDataAdapter;
-  initialTab: BrowseTab;
-  onBack: () => void;
-  /** Opens the connector detail view (gear on installed cards). Optional. */
-  onOpenConnector?: (id: string) => void;
-}) {
-  const [tab, setTab] = useState<BrowseTab>(initialTab);
-  const [search, setSearch] = useState('');
-  const [sort, setSort] = useState<'az' | 'za'>('az');
-  const [category, setCategory] = useState('All');
-  const [pluginSort, setPluginSort] = useState<PluginSort>('name');
-  const { confirm, dialog: confirmDialog } = useConfirm();
-  const [confirmingInstallPlugin, setConfirmingInstallPlugin] = useState<SettingsPlugin | null>(
-    null,
-  );
-  const { mutatingIds, errors, connect } = useConnectorMutations(adapter);
-
-  const connectors = useMemo(
-    () => (adapter?.connectors ?? []).filter((c) => !c.exclusive),
-    [adapter?.connectors],
-  );
-  const connectionById = useMemo(() => {
-    const map = new Map<string, ConnectedConnector>();
-    for (const c of adapter?.connectedConnectors ?? []) map.set(c.connectorId, c);
-    return map;
-  }, [adapter?.connectedConnectors]);
-  const skills = adapter?.skills ?? [];
-  const hasPluginDirectory =
-    adapter != null && ('pluginCatalog' in adapter || 'plugins' in adapter);
-  const plugins = useMemo(
-    () => adapter?.pluginCatalog ?? adapter?.plugins ?? [],
-    [adapter?.pluginCatalog, adapter?.plugins],
-  );
-  const connectorsLoading = adapter?.connectorsLoading ?? false;
-  const connectorsError = adapter?.connectorsError;
-  const skillsLoading = adapter?.skillsLoading ?? false;
-  const skillsError = adapter?.skillsError;
-  const pluginsLoading = adapter?.pluginsLoading ?? false;
-  const pluginsError = adapter?.pluginsError;
-
-  // Only advertise directory categories implemented by the current surface.
-  // An explicitly supplied empty plugin list is still a real plugin surface
-  // with an honest empty state; omitting plugin fields means unsupported.
-  const tabs: { key: BrowseTab; label: string }[] = [
-    { key: 'skills', label: 'Skills' },
-    { key: 'connectors', label: 'Connectors' },
-    ...(hasPluginDirectory ? [{ key: 'plugins' as const, label: 'Plugins' }] : []),
-  ];
-
-  const categories = useMemo(
-    () => ['All', ...Array.from(new Set(connectors.map((c) => c.category)))],
-    [connectors],
-  );
-  const pluginCategories = useMemo(
-    () => [
-      'All',
-      ...Array.from(
-        new Set(plugins.map((pl) => pl.category).filter((c): c is string => Boolean(c))),
-      ),
-    ],
-    [plugins],
-  );
-  const activeCategories = tab === 'plugins' ? pluginCategories : categories;
-
-  const q = search.trim().toLowerCase();
-  const byName = (a: { name: string }, b: { name: string }) =>
-    sort === 'az' ? a.name.localeCompare(b.name) : b.name.localeCompare(a.name);
-  const hasInstallCounts = useMemo(
-    () => plugins.some((pl) => typeof pl.installCount === 'number'),
-    [plugins],
-  );
-  const byPluginSort = (a: SettingsPlugin, b: SettingsPlugin) => {
-    if (pluginSort === 'updated') {
-      return new Date(b.updatedAt ?? 0).getTime() - new Date(a.updatedAt ?? 0).getTime();
-    }
-    if (pluginSort === 'popular' && hasInstallCounts) {
-      return (b.installCount ?? 0) - (a.installCount ?? 0);
-    }
-    return a.name.localeCompare(b.name);
-  };
-
-  const visibleConnectors = connectors
-    .filter((c) => (category === 'All' ? true : c.category === category))
-    .filter((c) =>
-      q ? c.name.toLowerCase().includes(q) || c.description.toLowerCase().includes(q) : true,
-    )
-    .sort(byName);
-  const visibleSkills = skills
-    .filter((s) =>
-      q ? s.name.toLowerCase().includes(q) || s.description.toLowerCase().includes(q) : true,
-    )
-    .sort(byName);
-  const visiblePlugins = plugins
-    .filter((pl) => (category === 'All' ? true : pl.category === category))
-    .filter((pl) =>
-      q ? pl.name.toLowerCase().includes(q) || pl.description.toLowerCase().includes(q) : true,
-    )
-    .sort(byPluginSort);
-
-  const isUsableHere = (connector: SettingsConnector) =>
-    connectionById.has(connector.id) || Boolean(connector.canConnect && adapter?.connectConnector);
-  const connectableConnectors = visibleConnectors.filter(isUsableHere);
-  const previewConnectors = visibleConnectors.filter((c) => !isUsableHere(c));
-
-  const renderConnectorCard = (connector: SettingsConnector) => {
-    const connection = connectionById.get(connector.id);
-    const canConnect = Boolean(connector.canConnect && adapter?.connectConnector);
-    const mutating = mutatingIds.has(connector.id);
-    const error = errors[connector.id];
-    return (
-      <div
-        key={connector.id}
-        className="flex flex-col gap-2 rounded-lg border border-border/80 bg-card/40 p-3.5 transition-colors hover:bg-card/70"
-      >
-        <div className="flex items-start justify-between gap-2">
-          <div className="flex items-center gap-2.5 min-w-0">
-            <ConnectorLogo
-              connectorId={connector.id}
-              fallbackGradient={connector.iconBg}
-              fallbackText={connector.iconText}
-              size="sm"
-            />
-            <div className="min-w-0">
-              <span className="block truncate text-sm font-medium text-foreground">
-                {connector.name}
-              </span>
-              <span className="text-[12px] text-muted-foreground">{connector.category}</span>
-            </div>
-          </div>
-          <div className="shrink-0">
-            {mutating ? (
-              <Loader2
-                className="h-4 w-4 animate-spin text-muted-foreground"
-                aria-label={`Connecting ${connector.name}`}
-              />
-            ) : connection ? (
-              onOpenConnector ? (
-                <button
-                  type="button"
-                  onClick={() => onOpenConnector(connector.id)}
-                  aria-label={`Configure ${connector.name}`}
-                  className={cn(
-                    'flex h-7 w-7 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground',
-                    FOCUS_RING,
-                  )}
-                >
-                  <SettingsIcon className="h-4 w-4" />
-                </button>
-              ) : (
-                <span className="flex h-5 w-5 items-center justify-center rounded-full bg-primary/15">
-                  <Check className="h-3 w-3 text-primary" aria-hidden="true" />
-                </span>
-              )
-            ) : canConnect ? (
-              <button
-                type="button"
-                onClick={() => connect(connector.id)}
-                aria-label={`Connect ${connector.name}`}
-                className={cn(
-                  'flex h-7 w-7 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground',
-                  FOCUS_RING,
-                )}
-              >
-                <Plus className="h-4 w-4" />
-              </button>
-            ) : (
-              <span className="text-[12px] text-muted-foreground">
-                {connector.statusLabel ?? 'Not connected'}
-              </span>
-            )}
-          </div>
-        </div>
-        <p className="text-xs leading-relaxed text-muted-foreground line-clamp-2">
-          {connector.description}
-        </p>
-        {error && (
-          <p role="alert" className="text-[12px] text-danger">
-            {error}
-          </p>
-        )}
-      </div>
-    );
-  };
-
-  const selectTab = (nextTab: BrowseTab) => {
-    setTab(nextTab);
-    setCategory('All');
-    if (nextTab === 'connectors' && adapter?.connectors === undefined && !connectorsLoading) {
-      void adapter?.retryConnectors?.();
-    }
-    if (nextTab === 'skills' && adapter?.skills === undefined && !skillsLoading) {
-      void adapter?.retrySkills?.();
-    }
-  };
-
-  return (
-    <div className="flex flex-col gap-4">
-      <button
-        type="button"
-        onClick={onBack}
-        className={cn(
-          'flex w-fit items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground',
-          FOCUS_RING,
-        )}
-      >
-        <ArrowLeft className="h-4 w-4" aria-hidden="true" />
-        Back
-      </button>
-
-      <div>
-        <h2 className="text-base font-semibold text-foreground">Browse directory</h2>
-        <p className="mt-1 text-sm text-muted-foreground">
-          {hasPluginDirectory
-            ? 'Explore the skills, connectors, and plugins in the catalog, and see which ones this environment can use today.'
-            : 'Explore the skills and connectors in the catalog, and see which ones this environment can use today.'}
-        </p>
-      </div>
-
-      {/* Tabs */}
-      <div role="tablist" aria-label="Directory sections" className="flex items-center gap-1">
-        {tabs.map((t) => (
-          <button
-            key={t.key}
-            type="button"
-            role="tab"
-            aria-selected={tab === t.key}
-            aria-controls={`settings-directory-${t.key}`}
-            onClick={() => selectTab(t.key)}
-            className={cn(
-              'rounded-full px-3 py-1 text-xs font-medium transition-colors',
-              FOCUS_RING,
-              tab === t.key
-                ? 'bg-foreground text-background'
-                : 'border border-border text-muted-foreground hover:bg-muted',
-            )}
-          >
-            {t.label}
-          </button>
-        ))}
-      </div>
-
-      {/* Search + filter + sort */}
-      <div className="flex items-center gap-2 flex-wrap">
-        <div className="relative min-w-0 flex-1">
-          <Search
-            className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground"
-            aria-hidden="true"
-          />
-          <input
-            type="search"
-            aria-label={`Search ${tab}`}
-            placeholder={tab === 'connectors' ? 'Search connectors…' : 'Search…'}
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className={cn(
-              'h-8 w-full rounded-lg border border-border bg-muted/30 pl-8 pr-3 text-xs text-foreground placeholder:text-muted-foreground',
-              FOCUS_RING,
-            )}
-          />
-        </div>
-        {(tab === 'connectors' || tab === 'plugins') && (
-          <select
-            aria-label="Filter by category"
-            value={category}
-            onChange={(e) => setCategory(e.target.value)}
-            className={cn(
-              'h-8 shrink-0 rounded-lg border border-border bg-background px-2 text-xs text-foreground',
-              FOCUS_RING,
-            )}
-          >
-            {activeCategories.map((cat) => (
-              <option key={cat} value={cat}>
-                {cat}
-              </option>
-            ))}
-          </select>
-        )}
-        {tab === 'plugins' ? (
-          <select
-            aria-label="Sort by"
-            value={pluginSort}
-            onChange={(e) => setPluginSort(e.target.value as PluginSort)}
-            className={cn(
-              'h-8 shrink-0 rounded-lg border border-border bg-background px-2 text-xs text-foreground',
-              FOCUS_RING,
-            )}
-          >
-            <option value="name">Name A-Z</option>
-            <option value="updated">Recently updated</option>
-            {hasInstallCounts && <option value="popular">Most popular</option>}
-          </select>
-        ) : (
-          <button
-            type="button"
-            onClick={() => setSort((s) => (s === 'az' ? 'za' : 'az'))}
-            aria-label={sort === 'az' ? 'Sort Z to A' : 'Sort A to Z'}
-            className={cn(
-              'h-8 shrink-0 rounded-lg border border-border bg-muted/30 px-2.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted',
-              FOCUS_RING,
-            )}
-          >
-            {sort === 'az' ? 'A-Z' : 'Z-A'}
-          </button>
-        )}
-      </div>
-
-      {/* Card grids */}
-      {tab === 'connectors' &&
-        (connectorsLoading ? (
-          <p
-            role="status"
-            aria-live="polite"
-            id="settings-directory-connectors"
-            className="flex items-center justify-center gap-2 py-8 text-sm text-muted-foreground"
-          >
-            <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
-            Loading connectors…
-          </p>
-        ) : connectorsError ? (
-          <div
-            role="alert"
-            id="settings-directory-connectors"
-            className="rounded-lg border border-destructive/30 bg-destructive/5 p-4"
-          >
-            <p className="text-sm text-danger">{connectorsError}</p>
-            {adapter?.retryConnectors ? (
-              <button
-                type="button"
-                className={cn(
-                  'mt-3 inline-flex min-h-6 items-center text-xs font-medium text-foreground underline underline-offset-2',
-                  FOCUS_RING,
-                )}
-                onClick={() => void adapter.retryConnectors?.()}
-              >
-                Try again
-              </button>
-            ) : null}
-          </div>
-        ) : visibleConnectors.length === 0 ? (
-          <p
-            id="settings-directory-connectors"
-            className="py-8 text-center text-sm text-muted-foreground"
-          >
-            No connectors match.
-          </p>
-        ) : (
-          <div id="settings-directory-connectors" className="flex flex-col gap-5">
-            {connectableConnectors.length > 0 && (
-              <section className="flex flex-col gap-2.5">
-                <h3 className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                  Available in this environment ({connectableConnectors.length})
-                </h3>
-                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                  {connectableConnectors.map(renderConnectorCard)}
-                </div>
-              </section>
-            )}
-            {previewConnectors.length > 0 && (
-              <section className="flex flex-col gap-2.5">
-                <h3 className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                  Not connectable here yet ({previewConnectors.length})
-                </h3>
-                <p className="-mt-1 text-xs text-muted-foreground">
-                  Listed so you can see what the catalog covers. This deployment cannot connect them
-                  yet.
-                </p>
-                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                  {previewConnectors.map(renderConnectorCard)}
-                </div>
-              </section>
-            )}
-          </div>
-        ))}
-
-      {tab === 'skills' &&
-        (skillsLoading ? (
-          <p
-            role="status"
-            aria-live="polite"
-            id="settings-directory-skills"
-            className="flex items-center justify-center gap-2 py-8 text-sm text-muted-foreground"
-          >
-            <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
-            Loading skills…
-          </p>
-        ) : skillsError ? (
-          <div
-            role="alert"
-            id="settings-directory-skills"
-            className="rounded-lg border border-destructive/30 bg-destructive/5 p-4"
-          >
-            <p className="text-sm text-danger">{skillsError}</p>
-            {adapter?.retrySkills ? (
-              <button
-                type="button"
-                className={cn(
-                  'mt-3 inline-flex min-h-6 items-center text-xs font-medium text-foreground underline underline-offset-2',
-                  FOCUS_RING,
-                )}
-                onClick={() => void adapter.retrySkills?.()}
-              >
-                Try again
-              </button>
-            ) : null}
-          </div>
-        ) : visibleSkills.length === 0 ? (
-          <p
-            id="settings-directory-skills"
-            className="py-8 text-center text-sm text-muted-foreground"
-          >
-            {skills.length === 0 ? 'No skills loaded in this environment.' : 'No skills match.'}
-          </p>
-        ) : (
-          <div id="settings-directory-skills" className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            {visibleSkills.map((skill) => (
-              <div
-                key={skill.id}
-                className="flex flex-col gap-1.5 rounded-lg border border-border/80 bg-card/40 p-3.5"
-              >
-                <div className="flex items-center justify-between gap-2">
-                  <span className="truncate font-mono text-sm text-foreground">/{skill.name}</span>
-                  <div className="flex shrink-0 items-center gap-2 text-[12px] text-muted-foreground">
-                    <span>{skill.statusLabel ?? skillAuthorLabel(skill.source)}</span>
-                    <SkillDownloadAction adapter={adapter} skill={skill} />
-                  </div>
-                </div>
-                <p className="text-xs leading-relaxed text-muted-foreground line-clamp-2">
-                  {skill.description || 'No description.'}
-                </p>
-              </div>
-            ))}
-          </div>
-        ))}
-
-      {tab === 'plugins' &&
-        (pluginsLoading ? (
-          <p
-            role="status"
-            aria-live="polite"
-            id="settings-directory-plugins"
-            className="flex items-center justify-center gap-2 py-8 text-sm text-muted-foreground"
-          >
-            <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
-            Loading plugins…
-          </p>
-        ) : pluginsError ? (
-          <div
-            role="alert"
-            id="settings-directory-plugins"
-            className="rounded-lg border border-destructive/30 bg-destructive/5 p-4"
-          >
-            <p className="text-sm text-danger">{pluginsError}</p>
-            {adapter?.retryPlugins ? (
-              <button
-                type="button"
-                className={cn(
-                  'mt-3 inline-flex min-h-6 items-center text-xs font-medium text-foreground underline underline-offset-2',
-                  FOCUS_RING,
-                )}
-                onClick={() => void adapter.retryPlugins?.()}
-              >
-                Try again
-              </button>
-            ) : null}
-          </div>
-        ) : visiblePlugins.length === 0 ? (
-          <p
-            id="settings-directory-plugins"
-            className="py-8 text-center text-sm text-muted-foreground"
-          >
-            {plugins.length === 0
-              ? 'No plugins available in this environment.'
-              : 'No plugins match.'}
-          </p>
-        ) : (
-          <div id="settings-directory-plugins" className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            {visiblePlugins.map((plugin) => (
-              <div
-                key={plugin.id}
-                className="flex flex-col gap-1.5 rounded-lg border border-border/80 bg-card/40 p-3.5"
-              >
-                <div className="flex items-center justify-between gap-2">
-                  <div className="min-w-0">
-                    <span className="block truncate text-sm font-medium text-foreground">
-                      {plugin.name}
-                    </span>
-                    <div className="mt-0.5 flex flex-wrap items-center gap-1.5 text-[12px] text-muted-foreground">
-                      {plugin.author && <span>{plugin.author}</span>}
-                      {plugin.category && (
-                        <span className="rounded-full bg-muted px-1.5 py-0.5 text-[12px] font-medium">
-                          {plugin.category}
-                        </span>
-                      )}
-                      {typeof plugin.installCount === 'number' && (
-                        <span>
-                          {plugin.installCount === 1
-                            ? '1 install'
-                            : `${plugin.installCount.toLocaleString()} installs`}
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                  {plugin.mutating ? (
-                    <Loader2
-                      className="h-4 w-4 animate-spin text-muted-foreground"
-                      aria-label={`Updating ${plugin.name}`}
-                    />
-                  ) : plugin.installed && plugin.installable === false ? (
-                    <span
-                      title="No longer available on this surface: installed, but the server does not run it."
-                      className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-[12px] font-semibold text-muted-foreground"
-                    >
-                      {plugin.statusLabel ?? 'Unavailable'}
-                    </span>
-                  ) : plugin.installed ? (
-                    <span
-                      className={cn(
-                        'shrink-0 rounded-full px-2 py-0.5 text-[12px] font-semibold',
-                        plugin.enabled
-                          ? 'bg-primary/15 text-primary'
-                          : 'bg-muted text-muted-foreground',
-                      )}
-                    >
-                      {plugin.enabled ? 'Enabled' : 'Disabled'}
-                    </span>
-                  ) : plugin.installable && adapter?.installPlugin ? (
-                    <button
-                      type="button"
-                      onClick={() => setConfirmingInstallPlugin(plugin)}
-                      className={cn(
-                        'shrink-0 rounded-lg bg-foreground px-2.5 py-1 text-[12px] font-medium text-background hover:bg-foreground/90',
-                        FOCUS_RING,
-                      )}
-                    >
-                      Install
-                    </button>
-                  ) : (
-                    <span className="text-[12px] text-muted-foreground">
-                      {plugin.statusLabel ?? 'Unavailable'}
-                    </span>
-                  )}
-                </div>
-                <p className="text-xs leading-relaxed text-muted-foreground line-clamp-2">
-                  {plugin.description || 'No description.'}
-                </p>
-                {plugin.detailsHref && (
-                  <a
-                    href={plugin.detailsHref}
-                    aria-label={`View ${plugin.name} details`}
-                    className={cn(
-                      'w-fit text-xs font-medium text-foreground underline-offset-4 hover:underline',
-                      FOCUS_RING,
-                    )}
-                  >
-                    View details
-                  </a>
-                )}
-                {plugin.installed && (
-                  <div className="flex items-center gap-3 pt-1 text-xs">
-                    {adapter?.setPluginEnabled ? (
-                      <button
-                        type="button"
-                        disabled={plugin.mutating}
-                        onClick={() => void adapter.setPluginEnabled?.(plugin.id, !plugin.enabled)}
-                        className={cn(
-                          'inline-flex min-h-6 items-center font-medium text-foreground underline-offset-4 hover:underline disabled:opacity-50',
-                          FOCUS_RING,
-                        )}
-                      >
-                        {plugin.enabled ? 'Disable' : 'Enable'}
-                      </button>
-                    ) : null}
-                    {adapter?.removePlugin ? (
-                      <button
-                        type="button"
-                        disabled={plugin.mutating}
-                        onClick={() =>
-                          void confirm(REMOVE_PLUGIN_CONFIRM).then((confirmed) => {
-                            if (confirmed) void adapter.removePlugin?.(plugin.id);
-                          })
-                        }
-                        className={cn(
-                          'inline-flex min-h-6 items-center font-medium text-danger underline-offset-4 hover:underline disabled:opacity-50',
-                          FOCUS_RING,
-                        )}
-                      >
-                        Remove
-                      </button>
-                    ) : null}
-                  </div>
-                )}
-                {plugin.error ? (
-                  <p role="alert" className="text-[12px] text-danger">
-                    {plugin.error}
-                  </p>
-                ) : null}
-              </div>
-            ))}
-          </div>
-        ))}
-
-      <Dialog
-        open={confirmingInstallPlugin !== null}
-        onOpenChange={(open) => {
-          if (!open) setConfirmingInstallPlugin(null);
-        }}
-      >
-        <DialogContent className="border-border bg-card sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle className="text-base font-semibold text-foreground">
-              Install {confirmingInstallPlugin?.name}?
-            </DialogTitle>
-            <DialogDescription className="text-sm leading-relaxed text-muted-foreground">
-              {confirmingInstallPlugin?.author
-                ? `Published by ${confirmingInstallPlugin.author}. `
-                : ''}
-              {confirmingInstallPlugin?.skillsRequireInstall
-                ? "Installing adds this pack's skills to your account. You can disable or remove it at any time."
-                : "This pack's skills are already available in Skills. Installing adds the pack to your account as a shortcut, together with its connectors and example prompts below. You can disable or remove it at any time."}
-            </DialogDescription>
-          </DialogHeader>
-          <div className="flex flex-col gap-3 text-xs">
-            <div>
-              <p className="font-semibold text-foreground">
-                {confirmingInstallPlugin?.skillsRequireInstall
-                  ? 'Skills it adds'
-                  : 'Skills included'}
-              </p>
-              {confirmingInstallPlugin?.declaredSkills?.length ? (
-                <div className="mt-1.5 flex flex-wrap gap-1.5">
-                  {confirmingInstallPlugin.declaredSkills.map((skill) => (
-                    <span
-                      key={skill}
-                      className="rounded-full bg-muted px-2 py-0.5 font-mono text-[12px] text-foreground"
-                    >
-                      {skill}
-                    </span>
-                  ))}
-                </div>
-              ) : (
-                <p className="mt-1 text-muted-foreground">This pack declares no skills.</p>
-              )}
-            </div>
-            <div>
-              <p className="font-semibold text-foreground">Connectors it uses</p>
-              {confirmingInstallPlugin?.requiredConnectors?.length ? (
-                <>
-                  <div className="mt-1.5 flex flex-wrap gap-1.5">
-                    {confirmingInstallPlugin.requiredConnectors.map((connector) => (
-                      <span
-                        key={connector}
-                        className="rounded-full bg-muted px-2 py-0.5 text-[12px] text-foreground"
-                      >
-                        {connector}
-                      </span>
-                    ))}
-                  </div>
-                  <p className="mt-1.5 text-[12px] text-muted-foreground">
-                    Connectors run through the OAuth/MCP connection you set up separately in
-                    Connectors. Installing this pack does not connect them for you.
-                  </p>
-                </>
-              ) : (
-                <p className="mt-1 text-muted-foreground">
-                  This pack needs no connectors. Installing it grants no new data access.
-                </p>
-              )}
-            </div>
-            {confirmingInstallPlugin?.examplePrompts?.length ? (
-              <div>
-                <p className="font-semibold text-foreground">Try asking</p>
-                <ul className="mt-1.5 flex flex-col gap-1 text-muted-foreground">
-                  {confirmingInstallPlugin.examplePrompts.map((prompt) => (
-                    <li key={prompt} className="rounded-md bg-muted/60 px-2 py-1 italic">
-                      {`“${prompt}”`}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            ) : null}
-          </div>
-          <div className="flex justify-end gap-2 pt-1">
-            <button
-              type="button"
-              onClick={() => setConfirmingInstallPlugin(null)}
-              className={cn(
-                'rounded-lg border border-border px-3 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted',
-                FOCUS_RING,
-              )}
-            >
-              Cancel
-            </button>
-            <button
-              type="button"
-              disabled={confirmingInstallPlugin?.mutating}
-              onClick={() => {
-                const target = confirmingInstallPlugin;
-                setConfirmingInstallPlugin(null);
-                if (target) void adapter?.installPlugin?.(target.id);
-              }}
-              className={cn(
-                'rounded-lg bg-foreground px-3 py-1.5 text-xs font-medium text-background transition-colors hover:bg-foreground/90 disabled:opacity-50',
-                FOCUS_RING,
-              )}
-            >
-              Install
-            </button>
-          </div>
-        </DialogContent>
-      </Dialog>
-
-      {confirmDialog}
-    </div>
-  );
-}
 
 function AddCustomConnectorForm({
   adapter,
@@ -1534,7 +784,7 @@ function ConnectorsPanel({
   const [search, setSearch] = useState('');
   const [activeTab, setActiveTab] = useState<ConnectorTab>('all');
   const [detailId, setDetailId] = useState<string | null>(null);
-  const [view, setView] = useState<'table' | 'browse' | 'add-custom'>('table');
+  const [view, setView] = useState<'table' | 'add-custom'>('table');
   const {
     mutatingIds,
     errors: rowErrors,
@@ -1609,20 +859,6 @@ function ConnectorsPanel({
       return true;
     });
   }, [connectors, connectionById, search, activeTab]);
-
-  if (view === 'browse') {
-    return (
-      <DirectoryBrowse
-        adapter={adapter}
-        initialTab="connectors"
-        onBack={() => setView('table')}
-        onOpenConnector={(id) => {
-          setView('table');
-          setDetailId(id);
-        }}
-      />
-    );
-  }
 
   if (view === 'add-custom') {
     return <AddCustomConnectorForm adapter={adapter} onBack={() => setView('table')} />;
@@ -1826,9 +1062,6 @@ function ConnectorsPanel({
               >
                 {({ close }) => (
                   <>
-                    <MenuItem close={close} onSelect={() => setView('browse')}>
-                      Browse connectors
-                    </MenuItem>
                     <MenuItem close={close} onSelect={() => setView('add-custom')}>
                       Add custom connector
                     </MenuItem>
@@ -1959,7 +1192,6 @@ function ConnectorsPanel({
 
 function SkillsPanel({ adapter }: { adapter?: SettingsDataAdapter }) {
   const [search, setSearch] = useState('');
-  const [view, setView] = useState<'table' | 'browse'>('table');
   const { confirm, dialog: confirmDialog } = useConfirm();
   const skills = useMemo(() => adapter?.skills ?? [], [adapter?.skills]);
   const loading = adapter?.skillsLoading ?? false;
@@ -1977,12 +1209,6 @@ function SkillsPanel({ adapter }: { adapter?: SettingsDataAdapter }) {
         s.source.includes(q),
     );
   }, [skills, search]);
-
-  if (view === 'browse') {
-    return (
-      <DirectoryBrowse adapter={adapter} initialTab="skills" onBack={() => setView('table')} />
-    );
-  }
 
   return (
     <div className="flex flex-col gap-4">
@@ -2014,16 +1240,6 @@ function SkillsPanel({ adapter }: { adapter?: SettingsDataAdapter }) {
             )}
           />
         </div>
-        <button
-          type="button"
-          onClick={() => setView('browse')}
-          className={cn(
-            'h-8 shrink-0 rounded-lg border border-border px-3 text-xs font-medium text-foreground transition-colors hover:bg-muted',
-            FOCUS_RING,
-          )}
-        >
-          Browse
-        </button>
         {canAuthor && (
           <button
             type="button"
@@ -2140,12 +1356,11 @@ function SkillsPanel({ adapter }: { adapter?: SettingsDataAdapter }) {
                     {skillAuthorLabel(skill.source)}
                   </td>
                   <td className="hidden px-3 py-2.5 text-xs tabular-nums text-muted-foreground sm:table-cell">
-                    {skill.version ?? ', '}
+                    {skill.version ?? UNKNOWN_VERSION_PLACEHOLDER}
                   </td>
                   <td className="px-3 py-2.5 text-xs text-muted-foreground">
                     <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
                       <span>{skill.statusLabel ?? 'Available'}</span>
-                      <SkillDownloadAction adapter={adapter} skill={skill} />
                     </div>
                   </td>
                   {hasActions && (
@@ -2205,7 +1420,6 @@ function SkillsPanel({ adapter }: { adapter?: SettingsDataAdapter }) {
 
 function PluginsPanel({ adapter }: { adapter?: SettingsDataAdapter }) {
   const [search, setSearch] = useState('');
-  const [view, setView] = useState<'table' | 'browse'>('table');
   const { confirm, dialog: confirmDialog } = useConfirm();
   const plugins = useMemo(() => adapter?.plugins ?? [], [adapter?.plugins]);
   const loading = adapter?.pluginsLoading ?? false;
@@ -2237,12 +1451,6 @@ function PluginsPanel({ adapter }: { adapter?: SettingsDataAdapter }) {
       : []),
   ];
 
-  if (view === 'browse') {
-    return (
-      <DirectoryBrowse adapter={adapter} initialTab="plugins" onBack={() => setView('table')} />
-    );
-  }
-
   return (
     <div className="flex flex-col gap-4">
       <div>
@@ -2271,16 +1479,6 @@ function PluginsPanel({ adapter }: { adapter?: SettingsDataAdapter }) {
             )}
           />
         </div>
-        <button
-          type="button"
-          onClick={() => setView('browse')}
-          className={cn(
-            'h-8 shrink-0 rounded-lg border border-border px-3 text-xs font-medium text-foreground transition-colors hover:bg-muted',
-            FOCUS_RING,
-          )}
-        >
-          Browse
-        </button>
         {addItems.length > 0 && (
           <Menu
             align="end"
@@ -2613,6 +1811,7 @@ export interface SettingsModalProps {
   navGroups?: SettingsNavGroupResolved[];
   /** Data for built-in Connectors/Skills/Plugins panels. */
   adapter?: SettingsDataAdapter;
+  directoryAdapter?: DirectoryAdapter;
   /**
    * Permission disclosure rendered in the built-in connector detail view before
    * the Connect/Disconnect control. Surface-owned so this package never
@@ -2651,6 +1850,7 @@ export function SettingsModal({
   activeKeys,
   navGroups,
   adapter,
+  directoryAdapter,
   connectorDisclosure,
   workRole,
   renderConnectorToolPermissions,
@@ -2690,6 +1890,13 @@ export function SettingsModal({
   const { canScrollUp, canScrollDown, navRef } = useNavScrollEdges(navScrollDependency);
 
   function renderSection() {
+    if (directoryAdapter && isDirectorySection(activeSection)) {
+      return (
+        sectionContent[activeSection] ?? (
+          <DirectoryPanel section={activeSection} adapter={directoryAdapter} />
+        )
+      );
+    }
     if (activeSection === 'connectors') {
       return (
         sectionContent['connectors'] ?? (
