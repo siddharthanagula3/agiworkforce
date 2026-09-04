@@ -10,8 +10,8 @@ describe('deriveAgentActivityLabel', () => {
     ['idle without a known model', { kind: 'idle' }, 'Connecting to the model'],
     [
       'idle with a known model',
-      { kind: 'idle', modelName: 'Claude Sonnet 5' },
-      'Connecting to Claude Sonnet 5',
+      { kind: 'idle', modelName: 'Harness Test Model' },
+      'Connecting to Harness Test Model',
     ],
     ['thinking', { kind: 'thinking' }, 'Thinking'],
     ['planning', { kind: 'planning' }, 'Planning'],
