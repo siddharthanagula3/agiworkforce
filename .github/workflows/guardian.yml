@@ -48,15 +48,15 @@ jobs:
     # Draft PRs are skipped until ready_for_review (config: review_drafts).
     if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
-      - uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v5
+      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
         with:
           version: 9.15.3
 
-      - uses: actions/setup-node@v6
+      - uses: actions/setup-node@v7
         with:
           node-version: 24
           cache: 'pnpm'
@@ -79,7 +79,7 @@ jobs:
 
       - name: Upload Guardian report
         if: always() && hashFiles('.guardian/guardian-report.json') != ''
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@v7.0.1
         with:
           name: guardian-report-${{ github.event.pull_request.head.sha || github.sha }}
           path: .guardian/
