@@ -1,8 +1,12 @@
-const ANY_EM_DASH = /\u2014|&mdash;|&#8212;|&#x2014;/gi;
+const ANY_EM_DASH = /\u2014|\\u2014|\\x\{2014\}|&mdash;|&#8212;|&#x2014;/gi;
+
+const ALLOW_MARKER = 'em-dash-allow:';
 
 export function findEmDashes(source, file) {
   const results = [];
-  source.split('\n').forEach((line, i) => {
+  const lines = source.split('\n');
+  lines.forEach((line, i) => {
+    if (line.includes(ALLOW_MARKER) || (i > 0 && lines[i - 1].includes(ALLOW_MARKER))) return;
     ANY_EM_DASH.lastIndex = 0;
     const matches = line.match(ANY_EM_DASH) ?? [];
     for (let n = 0; n < matches.length; n += 1) {

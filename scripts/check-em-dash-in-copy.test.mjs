@@ -67,3 +67,15 @@ test('flags the HTML entity forms as well as the character', () => {
 test('flags an entity placeholder cell', () => {
   assert.equal(findEmDashes('  <td>&mdash;</td>', 'a.tsx').length, 1);
 });
+
+test('flags an em dash written as a unicode escape', () => {
+  assert.equal(findEmDashes("const sep = ' \\u2014 ';", 'a.ts').length, 1);
+});
+
+test('skips a line the allow marker covers', () => {
+  const source = [
+    '// em-dash-allow: the forbidden character this test scans for',
+    "const forbidden = '\\u2014';",
+  ].join('\n');
+  assert.equal(findEmDashes(source, 'a.ts').length, 0);
+});
