@@ -1,8 +1,8 @@
 import { buildMetadata } from '@/lib/seo/metadata';
 import { Header } from '@shared/components/layout/Header';
 import { MarketingFooter } from '@/features/marketing/components/MarketingFooter';
-import { Button, ButtonRow, Section, Stack } from '@/features/marketing/components/system';
-import { PageHero } from '@/features/marketing/components/pages/surfaces/shared';
+import { Button, ButtonRow, Prose, Section, Stack } from '@/features/marketing/components/system';
+import { FactLine, PageHero } from '@/features/marketing/components/pages/surfaces/shared';
 import { LinkGrid } from '@/features/marketing/components/pages/features/shared';
 import {
   BYOK_SURFACES,
@@ -10,6 +10,12 @@ import {
   MARKETING,
   SURFACE_STATUS,
 } from '@/lib/marketing-constants';
+
+const HERO_FACTS = [
+  `Catalog: ${MARKETING.models.display} models, ${MARKETING.providers.display} providers`,
+  `BYOK: ${BYOK_SURFACES.label}`,
+  `VS Code: ${SURFACE_STATUS.vscode.toLowerCase()}`,
+];
 
 export const metadata = buildMetadata({
   title: 'Help: quick links into the product',
@@ -29,6 +35,8 @@ export default function HelpPage() {
           lede="The six things people ask about most, each one link away. For anything else, email contact@agiworkforce.com. A real human reads it."
           ctas={[]}
         />
+
+        <FactLine facts={HERO_FACTS} />
 
         <Section id="common" labelledBy="agi-help-common-title" rule>
           <Stack gap="loose">
@@ -83,6 +91,10 @@ export default function HelpPage() {
             <h2 className="agi-ds-h2" id="agi-help-more-title">
               Still stuck? Ask a human.
             </h2>
+            <Prose>
+              The FAQ covers the questions that come up most, and support explains what each tier
+              can expect. Email lands in the same inbox either way.
+            </Prose>
             <ButtonRow>
               <Button href="/faq">Read the FAQ</Button>
               <Button href="/support" variant="secondary">
