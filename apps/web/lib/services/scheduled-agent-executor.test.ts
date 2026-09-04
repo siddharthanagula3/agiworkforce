@@ -190,6 +190,25 @@ describe('scheduled managed agent executor', () => {
     expect(buildServerProviderAdapter).not.toHaveBeenCalled();
   });
 
+  it('skips, rather than crashes, a run for a delinquent enterprise subscription', async () => {
+    vi.mocked(SubscriptionService.getSubscription).mockResolvedValueOnce({
+      plan_tier: 'enterprise',
+      status: 'canceled',
+    } as never);
+
+    const result = await executeScheduledAgent(
+      task,
+      new AbortController().signal,
+      'run-skip',
+      executionScope,
+    );
+
+    expect(result.billingStatus).toBe('subscription_inactive');
+    expect(result.text).toContain('Scheduled execution skipped');
+    expect(reserveManagedUsageRequest).not.toHaveBeenCalled();
+    expect(buildServerProviderAdapter).not.toHaveBeenCalled();
+  });
+
   it('treats an inactive free record as free access, matching the managed chat gate', async () => {
     vi.mocked(SubscriptionService.getSubscription).mockResolvedValueOnce({
       plan_tier: 'free',

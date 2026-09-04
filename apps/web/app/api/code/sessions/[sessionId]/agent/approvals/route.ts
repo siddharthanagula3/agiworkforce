@@ -22,6 +22,11 @@ import {
 } from '@/lib/services/cloud-code-agent-approval-service';
 import { ManagedUsageRequestError } from '@/lib/services/managed-usage-request-service';
 import { SubscriptionService } from '@/lib/services/subscription-service';
+import { resolveCloudChatSurface } from '@/lib/free-chat-surface-policy';
+import {
+  buildManagedComputeAccessGateResponse,
+  evaluateManagedComputeAccess,
+} from '@/lib/services/managed-compute-access';
 
 export const runtime = 'nodejs';
 
@@ -104,6 +109,15 @@ async function handleDecideApproval(request: NextRequest, context: RouteContext)
 
   const { sessionId } = await context.params;
   const subscription = await SubscriptionService.getSubscription(db, userId);
+  const accessDecision = await evaluateManagedComputeAccess(
+    db,
+    userId,
+    subscription,
+    resolveCloudChatSurface(request),
+    { request },
+  );
+  const accessGateResponse = buildManagedComputeAccessGateResponse(accessDecision);
+  if (accessGateResponse) return accessGateResponse;
   const planTier = effectivePlanTier(subscription?.plan_tier, subscription?.status);
 
   try {
