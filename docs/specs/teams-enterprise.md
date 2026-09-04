@@ -388,29 +388,30 @@ policy denial holds identically on every one.
 
 ## Parity Target
 
-| Capability                    | Reference products         | Us today                        | Wave |
-| ----------------------------- | -------------------------- | ------------------------------- | ---- |
-| Dedicated workspace           | Both                       | SHIPPED                         | ,    |
-| Roles                         | Both, custom at Enterprise | SHIPPED, four fixed             | 6    |
-| SSO (SAML/OIDC)               | Both                       | SHIPPED, unverified live        | 5    |
-| Domain verification           | Both                       | SHIPPED                         | ,    |
-| SCIM provisioning             | Enterprise on both         | SHIPPED                         | ,    |
-| Deprovision revokes sessions  | Both                       | SHIPPED, both paths, unrun live | 5    |
-| Shared projects               | Both                       | PARTIAL, invisible in UI        | 4    |
-| Shared project conversations  | Both                       | ABSENT                          | 4    |
-| Shared agents/skills/prompts  | Both                       | ABSENT                          | 4    |
-| Admin model/provider policy   | Both                       | SHIPPED, enforced post-routing  | 1    |
-| Admin connector policy        | Both                       | SHIPPED, enforced in the loader | 1    |
-| Central admin console         | Both                       | SHIPPED, unverified as owner    | 2    |
-| Audit log read                | Both                       | SHIPPED, read + JSONL export    | 3    |
-| Compliance export / SIEM      | Enterprise on both         | SHIPPED, signed webhook drain   | 3    |
-| Custom retention + legal hold | Enterprise on both         | SHIPPED, opt-in, unrun live     | 3    |
-| Usage and cost analytics      | Both                       | SHIPPED, with enforceable caps  | 6    |
-| Central billing and seats     | Both                       | PARTIAL, live prices missing    | 6    |
-| IP allowlist / device policy  | Enterprise on both         | ABSENT                          | 7    |
-| External sharing control      | Both                       | SHIPPED, enforced on both paths | 3    |
-| Policy across Local + BYOK    | Neither                    | ABSENT                          | 1    |
-| Trust-transition governance   | Neither                    | PARTIAL, consent without policy | 1    |
+| Capability                         | Reference products         | Us today                                   | Wave |
+| ---------------------------------- | -------------------------- | ------------------------------------------ | ---- |
+| Dedicated workspace                | Both                       | SHIPPED                                    | ,    |
+| Roles                              | Both, custom at Enterprise | SHIPPED, four fixed                        | 6    |
+| SSO (SAML/OIDC)                    | Both                       | SHIPPED, unverified live                   | 5    |
+| Domain verification                | Both                       | SHIPPED                                    | ,    |
+| SCIM provisioning                  | Enterprise on both         | SHIPPED                                    | ,    |
+| Deprovision revokes sessions       | Both                       | SHIPPED, both paths, unrun live            | 5    |
+| Shared projects                    | Both                       | PARTIAL, invisible in UI                   | 4    |
+| Shared project conversations       | Both                       | ABSENT                                     | 4    |
+| Shared agents/skills/prompts       | Both                       | ABSENT                                     | 4    |
+| Admin model/provider policy        | Both                       | SHIPPED, enforced post-routing             | 1    |
+| Admin connector policy             | Both                       | SHIPPED, enforced in the loader            | 1    |
+| Central admin console              | Both                       | SHIPPED, unverified as owner               | 2    |
+| Audit log read                     | Both                       | SHIPPED, read + JSONL export               | 3    |
+| Compliance export / SIEM           | Enterprise on both         | SHIPPED, signed webhook drain              | 3    |
+| Custom retention + legal hold      | Enterprise on both         | SHIPPED, opt-in, unrun live                | 3    |
+| Usage and cost analytics           | Both                       | SHIPPED, with enforceable caps             | 6    |
+| Central billing and seats          | Both                       | PARTIAL, live prices missing               | 6    |
+| IP allowlist                       | Enterprise on both         | SHIPPED, enforced at the api-auth boundary | 7    |
+| Device policy (MDM/plist/registry) | Enterprise on both         | ABSENT                                     | 7    |
+| External sharing control           | Both                       | SHIPPED, enforced on both paths            | 3    |
+| Policy across Local + BYOK         | Neither                    | ABSENT                                     | 1    |
+| Trust-transition governance        | Neither                    | PARTIAL, consent without policy            | 1    |
 
 ## Blocked By Human
 

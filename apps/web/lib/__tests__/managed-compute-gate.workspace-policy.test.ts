@@ -35,6 +35,7 @@ function policyRow(overrides: Record<string, unknown> = {}) {
     allow_chrome_cloud_sync: false,
     audit_export_enabled: true,
     retention_days: 365,
+    ip_allow_list: [],
     metadata: {},
     updated_at: '2026-08-22T00:00:00.000Z',
     ...overrides,
