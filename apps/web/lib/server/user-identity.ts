@@ -15,8 +15,12 @@ export interface UserIdentity {
   preferredName: string | null;
   workDescription: string | null;
   instructions: string | null;
+  primaryUseCase: string | null;
+  onboardingCompletedAt: string | null;
   profile: ProfileRow | null;
 }
+
+export const MAX_PRIMARY_USE_CASE_LENGTH = 40;
 
 const PG_UNDEFINED_TABLE = '42P01';
 
@@ -113,6 +117,8 @@ export async function readUserIdentity(userId: string): Promise<UserIdentity> {
     preferredName: normalizeText(namespace['preferredName'], 60),
     workDescription: normalizeText(namespace['workDescription'], 120),
     instructions: normalizeText(namespace['instructions'], MAX_CUSTOM_INSTRUCTIONS_LENGTH),
+    primaryUseCase: normalizeText(namespace['primaryUseCase'], MAX_PRIMARY_USE_CASE_LENGTH),
+    onboardingCompletedAt: normalizeText(namespace['onboardingCompletedAt'], 40),
     profile,
   };
 }
@@ -120,6 +126,19 @@ export async function readUserIdentity(userId: string): Promise<UserIdentity> {
 export async function getUserCustomInstructions(userId: string): Promise<string | null> {
   const namespace = await readIdentityNamespace(userId);
   return normalizeText(namespace['instructions'], MAX_CUSTOM_INSTRUCTIONS_LENGTH);
+}
+
+export interface OnboardingStatus {
+  completed: boolean;
+  primaryUseCase: string | null;
+}
+
+export async function getOnboardingStatus(userId: string): Promise<OnboardingStatus> {
+  const namespace = await readIdentityNamespace(userId);
+  return {
+    completed: Boolean(normalizeText(namespace['onboardingCompletedAt'], 40)),
+    primaryUseCase: normalizeText(namespace['primaryUseCase'], MAX_PRIMARY_USE_CASE_LENGTH),
+  };
 }
 
 export const PERSONALIZATION_SETTINGS_NAMESPACE = 'personalization';

@@ -28,31 +28,16 @@ import {
 import { settingsService } from '@/features/settings/services/user-preferences';
 import { IMAGE_ATTACHMENT_MIME_TYPES, MAX_AVATAR_BYTES } from '@agiworkforce/types';
 import { toUserMessage } from '@/lib/user-error-message';
+import {
+  WORK_DESCRIPTIONS,
+  type WorkDescription,
+} from '@/features/settings/constants/work-descriptions';
 
 const THEME_OPTIONS = [
   { value: 'system' as const, icon: Monitor, label: 'System' },
   { value: 'light' as const, icon: Sun, label: 'Light' },
   { value: 'dark' as const, icon: Moon, label: 'Dark' },
 ];
-
-const WORK_DESCRIPTIONS = [
-  'Software engineering',
-  'Data science / ML',
-  'Product management',
-  'Design / UX',
-  'Marketing',
-  'Sales / Business development',
-  'Legal / Compliance',
-  'Finance / Accounting',
-  'Operations',
-  'Research / Academia',
-  'Writing / Content',
-  'Healthcare',
-  'Education',
-  'Other',
-] as const;
-
-type WorkDescription = (typeof WORK_DESCRIPTIONS)[number] | '';
 
 const PREF_NAMESPACE = 'general';
 

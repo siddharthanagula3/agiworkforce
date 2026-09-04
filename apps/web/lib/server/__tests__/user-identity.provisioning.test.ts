@@ -23,6 +23,7 @@ vi.mock('@/lib/server/neon-db', () => ({
 import {
   backfillDisplayNameFromUpstream,
   buildCustomInstructionsPreamble,
+  getOnboardingStatus,
   readUserIdentity,
 } from '../user-identity';
 
@@ -111,5 +112,42 @@ describe('buildCustomInstructionsPreamble binds the caller before reading settin
       expect.stringContaining('select settings from public.user_settings'),
       ['user-42'],
     );
+  });
+});
+
+describe('getOnboardingStatus', () => {
+  it('reports first-run incomplete when nothing has been persisted yet', async () => {
+    execute.mockClear();
+    query.mockClear();
+    query.mockImplementation(async (sql: string) =>
+      sql.includes('select settings from public.user_settings') ? [{ settings: {} }] : [],
+    );
+
+    const status = await getOnboardingStatus('user-42');
+
+    expect(status).toEqual({ completed: false, primaryUseCase: null });
+  });
+
+  it('reports completion and the chosen use case once persisted', async () => {
+    execute.mockClear();
+    query.mockClear();
+    query.mockImplementation(async (sql: string) =>
+      sql.includes('select settings from public.user_settings')
+        ? [
+            {
+              settings: {
+                general: {
+                  onboardingCompletedAt: '2026-09-04T00:00:00.000Z',
+                  primaryUseCase: 'code',
+                },
+              },
+            },
+          ]
+        : [],
+    );
+
+    const status = await getOnboardingStatus('user-42');
+
+    expect(status).toEqual({ completed: true, primaryUseCase: 'code' });
   });
 });
