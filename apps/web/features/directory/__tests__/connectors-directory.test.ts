@@ -9,6 +9,9 @@ import {
   toConnectorDetail,
   toConnectorEntry,
   toConnectorSection,
+  toCuratedConnectorDetail,
+  toCuratedConnectorEntry,
+  connectedConnectorIds,
 } from '../services/connectors-directory';
 
 afterEach(() => {
@@ -117,6 +120,93 @@ describe('toConnectorSection', () => {
 
   it('declares connectors installable so the card offers Connect', () => {
     expect(toConnectorSection([record()], new Set()).installable).toBe(true);
+  });
+});
+
+function curated(patch: Partial<import('@agiworkforce/ui').SettingsConnector> = {}) {
+  return {
+    id: 'gmail',
+    name: 'Gmail',
+    description: 'Read and send mail',
+    category: 'Communication',
+    authType: 'oauth',
+    actionCount: 0,
+    phase: 1,
+    iconBg: 'bg-red-500',
+    iconText: 'GM',
+    canConnect: true,
+    ...patch,
+  } as import('@agiworkforce/ui').SettingsConnector;
+}
+
+describe('curated first party connectors', () => {
+  it('renders a curated connector as a Popular entry made by AGI', () => {
+    const entry = toCuratedConnectorEntry(curated(), new Set());
+    expect(entry).toMatchObject({
+      id: 'gmail',
+      popular: true,
+      badges: ['agi'],
+      sourceId: 'first-party',
+      installed: false,
+      facets: { availability: ['connect'], category: ['Communication'] },
+    });
+  });
+
+  it('marks a curated connector the account has connected', () => {
+    expect(toCuratedConnectorEntry(curated(), new Set(['gmail'])).installed).toBe(true);
+  });
+
+  it('files an unconfigured curated connector under needs setup', () => {
+    const entry = toCuratedConnectorEntry(curated({ canConnect: false }), new Set());
+    expect(entry.facets?.['availability']).toEqual(['needs-setup']);
+  });
+
+  it('carries a real status label and never invents one', () => {
+    expect(toCuratedConnectorEntry(curated(), new Set()).statusLabel).toBeUndefined();
+    expect(
+      toCuratedConnectorEntry(curated({ statusLabel: 'Needs setup by AGI' }), new Set())
+        .statusLabel,
+    ).toBe('Needs setup by AGI');
+  });
+
+  it('leads the section with curated entries and drops a registry duplicate', () => {
+    const section = toConnectorSection(
+      [record({ id: 'gmail' }), record()],
+      new Set(),
+      [curated()],
+    );
+    expect(section.entries.map((entry) => entry.id)).toEqual(['gmail', 'customerscore']);
+    expect(section.entries[0]?.popular).toBe(true);
+  });
+
+  it('adds the AGI chip once a curated connector is present', () => {
+    const section = toConnectorSection([record()], new Set(), [curated()]);
+    expect(section.sources?.map((chip) => chip.id)).toEqual(['first-party', 'community']);
+  });
+
+  it('folds curated categories and availability into the filters', () => {
+    const section = toConnectorSection([record()], new Set(), [curated()]);
+    expect(section.filterGroups?.map((group) => group.id)).toEqual(['category']);
+    expect(section.filterGroups?.[0]?.options.map((option) => option.value)).toEqual([
+      'Communication',
+      'Data',
+    ]);
+  });
+
+  it('builds a detail for a curated connector with no registry record', () => {
+    expect(toCuratedConnectorDetail(curated(), new Set(['gmail']))).toMatchObject({
+      kind: 'connector',
+      badge: 'agi',
+      categories: ['Communication'],
+      connected: true,
+      connectable: true,
+    });
+  });
+
+  it('reads the connected ids from the settings adapter rows', () => {
+    expect(connectedConnectorIds([{ connectorId: 'gmail' }, { connectorId: 'slack' }])).toEqual(
+      new Set(['gmail', 'slack']),
+    );
   });
 });
 
