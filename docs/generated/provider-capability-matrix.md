@@ -13,7 +13,7 @@ says is **implemented** on that route, not what the provider is capable of.
 Routing policy, privacy claims and the ZDR position are prose in
 `docs/architecture/provider-routing.md`. This table only reports the wiring.
 
-Legend: ✅ implemented · ◐ partial · ,  unwired · · planned
+Legend: ✅ implemented · ◐ partial · - unwired · · planned
 
 | Harness | Provider | API family | Trust modes | Group | applyPatch | codeExecution | computerUse | fileSearch | hostedShell | imageGeneration | mcp | memory | skills | toolDiscovery | webSearch | webSearchInjection |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -39,9 +39,9 @@ Legend: ✅ implemented · ◐ partial · ,  unwired · · planned
 | `open-router/chat-completions-managed` | open_router | chat_completions | managed_cloud, byok | byok-text | ,  | ,  | ,  | ,  | ,  | ,  | ,  | ,  | ,  | ,  | ,  | ,  |
 | `openai/chat-completions` | openai | chat_completions | managed_cloud, byok | byok-text | ,  | ,  | ,  | ,  | ,  | ,  | ,  | ,  | ,  | ,  | ,  | ,  |
 | `openai/media` | openai | media | managed_cloud, byok | managed-media | ,  | ,  | ,  | ,  | ,  | ,  | ,  | ,  | ,  | ,  | ,  | ,  |
-| `openai/responses` | openai | responses | managed_cloud, byok | byok-text | ,  | ,  | ,  | ,  | ,  | ,  | ,  | ,  | ,  | ,  | ✅ | ✅ |
+| `openai/responses` | openai | responses | managed_cloud, byok | byok-text | - | - | - | - | - | - | - | - | - | - | ✅ | ✅ |
 | `perplexity/chat-completions` | perplexity | chat_completions | managed_cloud, byok | byok-text | ,  | ,  | ,  | ,  | ,  | ,  | ,  | ,  | ,  | ,  | ✅ | ,  |
-| `qwen/chat-completions` | qwen | chat_completions | managed_cloud, byok | byok-text | ,  | ,  | ,  | ,  | ,  | ,  | ,  | ,  | ,  | ,  | ,  | ,  |
+| `qwen/chat-completions` | qwen | chat_completions | managed_cloud, byok | byok-text | ,  | - | ,  | ,  | ,  | ,  | ,  | ,  | ,  | ,  | - | ,  |
 | `runway/media` | runway | media | managed_cloud | managed-media | ,  | ,  | ,  | ,  | ,  | ,  | ,  | ,  | ,  | ,  | ,  | ,  |
 | `vercel_gateway/chat-completions` | vercel_gateway | chat_completions | byok | ,  | ,  | ,  | ,  | ,  | ,  | ,  | ,  | ,  | ,  | ,  | ,  | ,  |
 | `xai/chat-completions` | xai | chat_completions | managed_cloud, byok | byok-text | ,  | ,  | ,  | ,  | ,  | ,  | ,  | ,  | ,  | ,  | ,  | ,  |
