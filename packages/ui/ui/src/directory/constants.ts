@@ -1,15 +1,26 @@
 import type { DirectoryBadgeKind, DirectorySectionKey, DirectorySortKey } from './types';
 
-export const DIRECTORY_TITLE = 'Directory';
-export const DIRECTORY_CLOSE_LABEL = 'Close directory';
 export const DIRECTORY_BACK_LABEL = 'Back';
-export const DIRECTORY_RAIL_LABEL = 'Directory sections';
 
 export const DIRECTORY_SECTION_LABELS: Record<DirectorySectionKey, string> = {
   skills: 'Skills',
   connectors: 'Connectors',
   plugins: 'Plugins',
 };
+
+export const DIRECTORY_INSTALLED_HEADINGS: Record<DirectorySectionKey, string> = {
+  skills: 'Installed',
+  connectors: 'Connected',
+  plugins: 'Installed',
+};
+
+export const DIRECTORY_CATALOG_HEADINGS: Record<DirectorySectionKey, string> = {
+  skills: 'All skills',
+  connectors: 'All connectors',
+  plugins: 'All plugins',
+};
+
+export const CONNECTOR_POPULAR_HEADING = 'Popular';
 
 export const DIRECTORY_SEARCH_PLACEHOLDERS: Record<DirectorySectionKey, string> = {
   skills: 'Search skills',
@@ -37,12 +48,15 @@ export const DIRECTORY_SORT_LABELS: Record<DirectorySortKey, string> = {
 };
 
 export const DIRECTORY_BADGE_LABELS: Record<DirectoryBadgeKind, string> = {
-  agi: 'AGI',
+  agi: 'Made by AGI',
   partner: 'Partner',
   verified: 'Verified',
   community: 'Community',
   yours: 'Yours',
 };
+
+export const SKILL_SOURCE_AGI_LABEL = 'Made by AGI';
+export const SKILL_SOURCE_YOURS_LABEL = 'Yours';
 
 export const NEW_BADGE_LABEL = 'New';
 
@@ -50,6 +64,7 @@ export const ADD_LABEL = 'Add';
 export const SETTINGS_LABEL = 'Settings';
 export const REMOVE_LABEL = 'Remove';
 export const INSTALL_LABEL = 'Install';
+export const UNINSTALL_LABEL = 'Uninstall';
 export const INSTALLED_LABEL = 'Installed';
 export const CONNECT_LABEL = 'Connect';
 export const CONNECTED_LABEL = 'Connected';
@@ -98,6 +113,28 @@ export const THOUSAND = 1000;
 export const MILLION = 1_000_000;
 export const COUNT_PRECISION = 1;
 
-export const DIRECTORY_HASH_PREFIX = 'directory';
 
-export const DEFAULT_DIRECTORY_SECTION: DirectorySectionKey = 'skills';
+export const SKILL_NO_PREVIEW_COPY = 'No preview. This file type cannot be previewed.';
+export const SKILL_DOWNLOAD_FILE_LABEL = 'Download file';
+
+export const CONNECTOR_COMMUNITY_NOTICE_SHORT =
+  'Community connectors have passed automated checks only. They may not meet the quality of verified connectors.';
+export const CONNECTOR_DEVELOPED_BY_PREFIX = 'Developed by';
+export const CONNECTOR_TRUST_COPY =
+  'Only use connectors from developers you trust. AGI does not control which tools a developer offers and cannot verify that they work as intended or will not change.';
+export const CONNECTOR_CATEGORIES_LABEL = 'Categories';
+export const CONNECTOR_DETAILS_LABEL = 'Details';
+export const CONNECTOR_AUTHOR_LABEL = 'Author';
+export const CONNECTOR_URL_LABEL = 'Connector URL';
+export const CONNECTOR_MORE_INFO_LABEL = 'More info';
+export const CONNECTOR_DOCUMENTATION_LABEL = 'Documentation';
+export const CONNECTOR_SUPPORT_LABEL = 'Support';
+export const CONNECTOR_PRIVACY_LABEL = 'Privacy Policy';
+export const CONNECTOR_DISCONNECT_LABEL = 'Disconnect';
+export const COPY_VALUE_LABEL = 'Copy';
+export const SHOW_MORE_PREFIX = '+';
+export const SHOW_MORE_SUFFIX = 'more';
+export const SHOW_LESS_LABEL = 'Show less';
+export const CHIP_PREVIEW_COUNT = 8;
+
+export const MARKETPLACE_UNAVAILABLE_COPY = 'Plugin marketplaces are not available yet.';
