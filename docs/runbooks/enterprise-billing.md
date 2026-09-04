@@ -55,7 +55,7 @@ price yet; contract-specific prices are created per deal in section 3.
 Record the resulting product id (`prod_...`) as the `STRIPE_PRODUCT_ENTERPRISE`
 environment value for that mode. Never print or paste the live value into a
 ticket, a chat message, or this runbook; the environment contract guard
-(`scripts/check-env-contract.mjs`) only needs the variable name registered,
+(`scripts/env-doctor.mjs`) only needs the variable name registered,
 not the value.
 
 Source: [Set up per-seat pricing](https://docs.stripe.com/subscriptions/pricing-models/per-seat-pricing).
