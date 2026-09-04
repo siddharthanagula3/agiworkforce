@@ -9,6 +9,7 @@ import { logger } from '@/lib/logger';
 import { getClerkAuthUser } from '@/lib/api-auth';
 import { requireCsrfToken } from '@/lib/csrf';
 import { getNeonDb } from '@/lib/server/neon-db';
+import { createClaimedUserScopedDb } from '@/lib/server/claimed-user-scope-db';
 import type { ProfileRow } from '@/lib/server/neon-types';
 import {
   backfillDisplayNameFromUpstream,
@@ -176,7 +177,7 @@ async function handlePatchMe(request: NextRequest) {
     throw createError.validation('At least one field is required');
   }
 
-  const db = getNeonDb();
+  const db = createClaimedUserScopedDb(getNeonDb(), { userId, organizationId: null });
 
   const insertCols: string[] = ['id', 'updated_at'];
   const insertVals: string[] = ['$1', 'now()'];

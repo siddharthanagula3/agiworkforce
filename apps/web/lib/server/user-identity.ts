@@ -1,6 +1,7 @@
 import 'server-only';
 
 import { getNeonDb } from '@/lib/server/neon-db';
+import { createClaimedUserScopedDb } from '@/lib/server/claimed-user-scope-db';
 import { logger } from '@/lib/logger';
 import type { ProfileRow } from '@/lib/server/neon-types';
 import { normalizeDisplayName } from '@agiworkforce/utils/display-name';
@@ -247,7 +248,7 @@ export async function backfillDisplayNameFromUpstream(
   const name = normalizeText(candidateName, 120);
   if (!name) return;
   try {
-    await getNeonDb().query(
+    await createClaimedUserScopedDb(getNeonDb(), { userId, organizationId: null }).query(
       `insert into public.profiles (id, display_name, updated_at)
        values ($1, $2, now())
        on conflict (id)
