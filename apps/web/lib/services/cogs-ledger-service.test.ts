@@ -125,6 +125,31 @@ describe('cogs ledger · writes', () => {
       'managed_usage:user-1:key:hash',
       '{}',
     ]);
+    expect(params.at(-1)).toBeNull();
+  });
+
+  it('writes the given organization id as the last column', async () => {
+    const db = fakeDb();
+    await recordProviderCostEvent(
+      {
+        userId: 'user-1',
+        organizationId: 'org-1',
+        capability: 'image',
+        provider: 'openai',
+        model: 'catalog-model',
+        unitBasis: 'image',
+        units: 2,
+        providerCostCents: 12,
+        billedCents: 12,
+        sourceRef: 'managed_usage:user-1:key:hash',
+        taskOutcome: 'delivered',
+      },
+      db as never,
+    );
+
+    const [sql, params] = db.execute.mock.calls[0] as unknown as [string, unknown[]];
+    expect(sql).toContain('organization_id');
+    expect(params.at(-1)).toBe('org-1');
   });
 
   it('keeps the larger amount when a cumulative adjustment is re-imported', async () => {
@@ -200,6 +225,75 @@ describe('cogs ledger · writes', () => {
     expect(getServedRouteIdFromCostEventMetadata({})).toBeNull();
     expect(getServedRouteIdFromCostEventMetadata(null)).toBeNull();
     expect(getServedRouteIdFromCostEventMetadata(undefined)).toBeNull();
+  });
+
+  it('resolves the funding organization itself when the caller does not supply one', async () => {
+    const db = fakeDb([{ organization_id: 'org-77' }]);
+    await recordSettledProviderCost({
+      userId: 'user-1',
+      provider: 'openai',
+      model: 'catalog-model',
+      actualCostCents: 9,
+      sourceRef: 'managed_usage:user-1:key:hash',
+      usage: { operation: 'image', outputCount: 1 },
+      db: db as never,
+    });
+
+    const [, params] = db.execute.mock.calls[0] as unknown as [string, unknown[]];
+    expect(params[17]).toBe('org-77');
+  });
+
+  it('threads an explicitly supplied funding organization without re-querying', async () => {
+    const db = fakeDb();
+    await recordSettledProviderCost({
+      userId: 'user-1',
+      organizationId: 'org-threaded',
+      provider: 'openai',
+      model: 'catalog-model',
+      actualCostCents: 9,
+      sourceRef: 'managed_usage:user-1:key:hash',
+      usage: { operation: 'image', outputCount: 1 },
+      db: db as never,
+    });
+
+    expect(db.query).not.toHaveBeenCalled();
+    const [, params] = db.execute.mock.calls[0] as unknown as [string, unknown[]];
+    expect(params[17]).toBe('org-threaded');
+  });
+
+  it('records a null organization when the caller has no funding organization', async () => {
+    const db = fakeDb([]);
+    await recordSettledProviderCost({
+      userId: 'user-1',
+      provider: 'openai',
+      model: 'catalog-model',
+      actualCostCents: 9,
+      sourceRef: 'managed_usage:user-1:key:hash',
+      usage: { operation: 'image', outputCount: 1 },
+      db: db as never,
+    });
+
+    const [, params] = db.execute.mock.calls[0] as unknown as [string, unknown[]];
+    expect(params[17]).toBeNull();
+  });
+
+  it('records a null organization rather than failing the settlement when the lookup errors', async () => {
+    const db = {
+      query: vi.fn(async () => Promise.reject(new Error('connection reset'))),
+      execute: vi.fn(async () => 1),
+    };
+    await recordSettledProviderCost({
+      userId: 'user-1',
+      provider: 'openai',
+      model: 'catalog-model',
+      actualCostCents: 9,
+      sourceRef: 'managed_usage:user-1:key:hash',
+      usage: { operation: 'image', outputCount: 1 },
+      db: db as never,
+    });
+
+    const [, params] = db.execute.mock.calls[0] as unknown as [string, unknown[]];
+    expect(params[17]).toBeNull();
   });
 });
 
