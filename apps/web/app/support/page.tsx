@@ -1,4 +1,5 @@
 import { buildMetadata } from '@/lib/seo/metadata';
+import Link from 'next/link';
 import { Header } from '@shared/components/layout/Header';
 import { MarketingFooter } from '@/features/marketing/components/MarketingFooter';
 import {
@@ -15,36 +16,38 @@ import { CONTACT_EMAIL, contactMailto } from '@/lib/legal-constants';
 export const metadata = buildMetadata({
   title: 'Support: how to reach us',
   description:
-    'How to reach us today, where to report bugs, and what support looks like across every tier.',
+    'How to reach us today, where to report bugs, and the support commitment for every plan, from a help centre with no response-time promise through a named Enterprise contact.',
   path: '/support',
 });
 
 const HERO_FACTS = [
-  `Channel: email ${CONTACT_EMAIL}`,
-  'Reply: best effort, from a human',
-  'Response-time SLA: not published yet',
+  `Channel: help centre and email ${CONTACT_EMAIL}`,
+  'Time zone: Central Time (America/Chicago)',
+  'Team and Enterprise carry a stated first-response target',
 ];
 
 const SUPPORT_ROWS: { label: string; value: string }[] = [
   {
     label: 'Local / BYOK',
-    value: `Available now. Email ${CONTACT_EMAIL} for a best-effort reply from a human.`,
+    value: `Help centre and email ${CONTACT_EMAIL}. No response-time commitment.`,
   },
   {
-    label: 'Free',
-    value: `Available now. Email ${CONTACT_EMAIL} for a best-effort reply from a human; no published response-time SLA yet.`,
+    label: 'Free, Basic, Pro, and Max (5x and 15x)',
+    value: `Help centre and email ${CONTACT_EMAIL}. No response-time commitment.`,
   },
   {
-    label: 'Basic and Pro',
-    value: `Available now. Email ${CONTACT_EMAIL} for a best-effort reply from a human; no published response-time SLA yet.`,
-  },
-  {
-    label: 'Max 5x, Max 15x, and Team',
-    value: `Available now. Email ${CONTACT_EMAIL} for a best-effort reply from a human; no published response-time SLA yet.`,
+    label: 'Team',
+    value: 'Email support. First response within 1 business day, Central Time.',
   },
   {
     label: 'Enterprise',
-    value: 'In scoping. A named contact and an SLA are defined per contract during scoping.',
+    value:
+      'A named contact. First response within 4 business hours (Central Time) for a service-down report, and within 1 business day otherwise. An escalation path and the status page are included.',
+  },
+  {
+    label: 'Premium support (add-on)',
+    value:
+      'Faster response and on-call availability, available only as a negotiated line on an Enterprise order form. It is not a public promise; ask your Enterprise contact.',
   },
 ];
 
@@ -56,8 +59,8 @@ export default function SupportPage() {
         <PageHero
           id="agi-support-title"
           eyebrow="Support"
-          title="We read every email."
-          lede="Email is the canonical channel today, for everyone. Paid Team and Enterprise SLAs are still firming up, so we do not publish response-time promises yet. What is planned is labeled as planned."
+          title="We read every email, and Team and Enterprise get a stated first response."
+          lede="Email is the canonical channel for everyone. Free through Max carry no response-time commitment; Team and Enterprise do, stated below in Central Time, the time zone AGI Automation LLC operates in. We do not claim 24/7 coverage, because a small team could not staff it honestly."
           ctas={[
             { href: contactMailto(), label: `Email ${CONTACT_EMAIL}` },
             { href: '/help', label: 'Browse the help index', variant: 'secondary' },
@@ -73,8 +76,13 @@ export default function SupportPage() {
                 What you can count on, by tier.
               </h2>
               <Prose>
-                One honest table. The free paths get a human on email today; commitments for paid
-                tiers arrive with the tiers themselves.
+                One honest table. Every tier reaches a human by email; Team and Enterprise carry a
+                stated first-response target on top of that. These are current commitments, not
+                targets we are building toward; the uptime and credit targets on{' '}
+                <Link href="/sla" className="agi-ds-link">
+                  /sla
+                </Link>{' '}
+                are the ones still labeled as planned.
               </Prose>
             </div>
             <Ledger caption="Support by tier" rows={SUPPORT_ROWS} />
