@@ -8,6 +8,7 @@ import { logger } from '@/lib/logger';
 import { CreditService } from './credit-service';
 import type { SubscriptionRow, ProfileRow } from '@/lib/server/neon-types';
 import { resolvePlanTier, isValidPlanTier } from '@/lib/price-tier-mapping';
+import { resolveEnterprisePlanTier } from '@/lib/services/enterprise-billing-service';
 import { getSubscriptionPeriod, getSubscriptionCouponId } from '@/lib/stripe-types';
 import { STRIPE_CLIENT_OPTIONS } from '@/lib/stripe-config';
 import { getPlanUsageBudgetCents, isPlanUsageUncapped } from '@/lib/server/managed-usage-policy';
@@ -218,24 +219,58 @@ export class SubscriptionService {
     return getPlanUsageBudgetCents(planTier, 'monthly');
   }
 
-  private static inferPlanTier(
-    metadata: Stripe.Metadata | null | undefined,
-    priceId: string | null | undefined,
-  ): string {
-    const tier = resolvePlanTier(metadata, priceId);
+  private static async readStoredPlanTier(
+    db: DatabaseAdapter,
+    userId: string,
+  ): Promise<string | null> {
+    try {
+      const [row] = await db.query<Pick<SubscriptionRow, 'plan_tier'>>(
+        'SELECT plan_tier FROM subscriptions WHERE user_id = $1 LIMIT 1',
+        [userId],
+      );
+      return row?.plan_tier ?? null;
+    } catch (error) {
+      logger.error({ error, userId }, 'Failed to read stored plan tier during self-heal sync');
+      return null;
+    }
+  }
 
+  private static async resolveSyncPlanTier(
+    stripe: Stripe,
+    db: DatabaseAdapter,
+    userId: string,
+    metadata: Stripe.Metadata | null | undefined,
+    price: Stripe.Price | null | undefined,
+  ): Promise<string> {
+    const priceId = price?.id ?? null;
+
+    const enterpriseTier = price ? await resolveEnterprisePlanTier(stripe, price) : null;
+    if (enterpriseTier) {
+      return enterpriseTier;
+    }
+
+    const tier = resolvePlanTier(metadata, priceId);
     if (tier && isValidPlanTier(tier)) {
       return tier;
     }
 
-    if (priceId && !tier) {
-      logger.warn(
-        { priceId },
-        'Price ID not found in tier mapping; defaulting to free tier. Check STRIPE_PRICE_* environment variables and PRICE_ID_OVERRIDES.',
-      );
+    if (!priceId) {
       return 'free';
     }
 
+    const storedTier = await this.readStoredPlanTier(db, userId);
+    if (storedTier && storedTier !== 'free' && isValidPlanTier(storedTier)) {
+      logger.error(
+        { priceId, userId, storedTier },
+        'Stripe price not found in tier mapping during self-heal sync; keeping the stored paid tier instead of downgrading to free',
+      );
+      return storedTier;
+    }
+
+    logger.warn(
+      { priceId },
+      'Price ID not found in tier mapping; defaulting to free tier. Check STRIPE_PRICE_* environment variables and PRICE_ID_OVERRIDES.',
+    );
     return 'free';
   }
 
@@ -367,7 +402,13 @@ export class SubscriptionService {
         );
       }
 
-      const planTier = this.inferPlanTier(stripeSubscription.metadata, stripePriceId);
+      const planTier = await this.resolveSyncPlanTier(
+        stripe,
+        db,
+        userId,
+        stripeSubscription.metadata,
+        stripeSubscription.items.data[0]?.price ?? null,
+      );
 
       logger.info(
         {
