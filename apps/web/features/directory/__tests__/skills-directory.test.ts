@@ -85,20 +85,12 @@ describe('toSkillEntry', () => {
 describe('toSkillSection', () => {
   const installedAll = new Set(['canvas-design', 'mine', 'later']);
 
-  it('offers only the sources the catalog actually has', () => {
-    expect(toSkillSection([skill()], installedAll).sources?.map((s) => s.id)).toEqual(['agi']);
-  });
 
-  it('offers both sources once the user has authored a skill', () => {
-    const section = toSkillSection(
-      [skill(), skill({ name: 'mine', source: 'personal' })],
-      installedAll,
-    );
-    expect(section.sources?.map((chip) => chip.id)).toEqual(['agi', 'yours']);
-  });
 
   it('hides the lifecycle filter when every skill shares one lifecycle', () => {
-    expect(toSkillSection([skill()], installedAll).filterGroups).toEqual([]);
+    expect(
+      toSkillSection([skill()], installedAll).filterGroups?.map((group) => group.id),
+    ).not.toContain('lifecycle');
   });
 
   it('offers the lifecycle filter once a draft skill exists', () => {
@@ -106,7 +98,7 @@ describe('toSkillSection', () => {
       [skill(), skill({ name: 'later', lifecycle: 'draft' })],
       installedAll,
     );
-    expect(section.filterGroups?.map((group) => group.id)).toEqual(['lifecycle']);
+    expect(section.filterGroups?.map((group) => group.id)).toEqual(['lifecycle', 'status']);
   });
 
   it('offers the status filter once both install states exist', () => {
@@ -223,8 +215,15 @@ describe('fetchSkillDetail', () => {
       { path: 'SKILL.md', content: '# Canvas' },
       { path: 'fonts/Bold.ttf' },
     ]);
+    expect(detail?.license).toBeUndefined();
     expect(detail?.installed).toBe(true);
     expect(typeof detail?.readFile).toBe('function');
+  });
+
+  it('names the license file when the package ships one', async () => {
+    stubDetail([{ path: 'SKILL.md' }, { path: 'LICENSE.txt' }]);
+    const detail = await fetchSkillDetail('canvas-design', [skill()], new Set());
+    expect(detail?.license).toBe('Complete terms in LICENSE.txt');
   });
 
   it('falls back to a single entry file when the file route is unavailable', async () => {

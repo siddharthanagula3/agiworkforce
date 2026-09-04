@@ -25,6 +25,7 @@ import {
   SKILL_LIFECYCLE_INCLUDED_LABEL,
   SKILL_PUBLISHER_AGI,
   SKILL_PUBLISHER_MANAGED,
+  SKILL_LICENSE_PREFIX,
   SKILL_PUBLISHER_YOU,
   SKILL_STATUS_GROUP_ID,
   SKILL_STATUS_GROUP_LABEL,
@@ -36,6 +37,7 @@ import {
 
 const OWNED_SOURCES = new Set(['personal', 'project', 'workspace']);
 const ENTRY_FILE = 'SKILL.md';
+const LICENSE_PREFIX = 'license';
 
 export function skillPublisher(source: string): string {
   if (OWNED_SOURCES.has(source)) return SKILL_PUBLISHER_YOU;
@@ -71,14 +73,11 @@ export function toSkillEntry(
   };
 }
 
-function skillSources(entries: readonly DirectoryEntry[]): DirectorySourceChip[] {
-  const present = new Set(entries.map((entry) => entry.sourceId));
-  const chips: DirectorySourceChip[] = [];
-  if (present.has(DIRECTORY_SOURCE_AGI))
-    chips.push({ id: DIRECTORY_SOURCE_AGI, label: DIRECTORY_SOURCE_LABEL_AGI });
-  if (present.has(DIRECTORY_SOURCE_YOURS))
-    chips.push({ id: DIRECTORY_SOURCE_YOURS, label: DIRECTORY_SOURCE_LABEL_YOURS });
-  return chips;
+function skillSources(): DirectorySourceChip[] {
+  return [
+    { id: DIRECTORY_SOURCE_AGI, label: DIRECTORY_SOURCE_LABEL_AGI },
+    { id: DIRECTORY_SOURCE_YOURS, label: DIRECTORY_SOURCE_LABEL_YOURS },
+  ];
 }
 
 function skillFilterGroups(
@@ -96,9 +95,7 @@ function skillFilterGroups(
       ],
     });
   }
-  const installed = entries.some((entry) => entry.installed === true);
-  const notInstalled = entries.some((entry) => entry.installed !== true);
-  if (installed && notInstalled) {
+  if (entries.length > 0) {
     groups.push({
       id: SKILL_STATUS_GROUP_ID,
       label: SKILL_STATUS_GROUP_LABEL,
@@ -119,7 +116,7 @@ export function toSkillSection(
   return {
     entries,
     installable: true,
-    sources: skillSources(entries),
+    sources: skillSources(),
     filterGroups: skillFilterGroups(skills, entries),
     sortOptions: ['name'],
   };
@@ -201,12 +198,17 @@ export async function fetchSkillDetail(
   const entry = files.find((file) => file.path === ENTRY_FILE);
   if (entry) entry.content = await fetchSkillBody(id);
 
+  const licenseFile = files.find((file) =>
+    file.path.toLowerCase().startsWith(LICENSE_PREFIX),
+  );
+
   return {
     kind: 'skill',
     id: summary.name,
     name: summary.name,
     publisher: skillPublisher(summary.source),
     description: summary.description,
+    ...(licenseFile ? { license: `${SKILL_LICENSE_PREFIX} ${licenseFile.path}` } : {}),
     files,
     readFile: (path: string) => fetchSkillFileContent(id, path),
     installed: isAuthoredSkill(summary) || installed.has(summary.name),
