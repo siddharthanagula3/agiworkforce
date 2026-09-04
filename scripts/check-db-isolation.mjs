@@ -98,6 +98,21 @@ function mentionsScopeToken(lowercasedSql) {
   return SCOPE_TOKEN_RE.test(lowercasedSql);
 }
 
+// profiles has no user_id column, its primary key IS the tenant id
+// (0037_rls_user_isolation.sql: `USING (id = public.current_app_user_id())`), so a bare
+// `id` predicate is the correct scope token for it alone. Restricted to this table so `id`
+// never silences a finding on a table where the row id is not the owner.
+const SELF_ID_TABLES = new Set(['profiles']);
+const SELF_ID_PREDICATE_RE = /\bid\s*(?:=|in\s*\()|\(\s*id\s*[,)]/i;
+
+function mentionsSelfIdPredicate(sql, tables) {
+  return (
+    tables.length > 0 &&
+    tables.every((t) => SELF_ID_TABLES.has(t)) &&
+    SELF_ID_PREDICATE_RE.test(sql)
+  );
+}
+
 const ALLOWLIST = [
   {
     match: /api\/cron\//,
@@ -253,6 +268,250 @@ const ALLOWLIST = [
       'the resume UPDATE re-states the turn id that the same function loaded earlier with a ' +
       'select carrying `and user_id = $3`; the join in listCloudCodeAgentApprovals and the ' +
       'expiry sweep both carry t.user_id and stay policed.',
+  },
+  {
+    match: /lib\/server\/video-generation-jobs\.ts$/,
+    tables: ['video_generation_jobs', 'credit_settlement_jobs'],
+    functions: [
+      'recordVideoProviderCancellationAttempt',
+      'beginVideoProviderCancellationAttempt',
+      'getVideoGenerationJobForSystem',
+      'listDueVideoGenerationJobIds',
+      'deferVideoGenerationJob',
+      'deferVideoGenerationJobFailure',
+      'nudgeVideoGenerationJobFromProviderEvent',
+      'claimVideoIncidentAlert',
+      'completeVideoIncidentAlert',
+      'listPendingVideoIncidentAlertIds',
+      'countExhaustedVideoIncidentAlerts',
+      'claimVideoSettlementIncidentByReservation',
+      'claimVideoSettlementIncidentById',
+      'completeVideoSettlementIncident',
+      'getVideoSettlementIncident',
+      'listPendingVideoSettlementIncidentIds',
+      'countExhaustedVideoSettlementIncidentAlerts',
+    ],
+    reason:
+      'background reconciliation, provider-webhook and credit-settlement workers: each targets a ' +
+      'job/settlement id already claimed from a status-based due-set (listDueVideoGenerationJobIds, ' +
+      'the listPending* scans), resolved from a provider callback keyed on (provider, ' +
+      'provider_task_id) and reached only from api/media/video/openrouter-webhook ' +
+      '(nudgeVideoGenerationJobFromProviderEvent), or passed in by a caller that already loaded ' +
+      'the job under getVideoGenerationJob(userId) (the video/cancel and video/status routes). ' +
+      'There is no request subject to constrain by. getVideoGenerationJob, ' +
+      'requestVideoGenerationCancellation, getVideoGenerationJobByIdempotencyKey and ' +
+      'createVideoGenerationJob carry user_id and stay policed.',
+  },
+  {
+    match: /lib\/services\/video-incident-alert-service\.ts$/,
+    tables: ['video_generation_jobs', 'credit_settlement_jobs'],
+    reason:
+      'the two matches are runbook SQL embedded as plain text inside an operator alert email body ' +
+      '(the "NEXT STEP" line), built from a template string and mailed via sendSupportEmail, ' +
+      'never passed to db.query/db.execute; every real statement this file issues goes through ' +
+      'the policed exports of video-generation-jobs.ts above.',
+  },
+  {
+    match: /lib\/services\/plugin-marketplace-service\.ts$/,
+    tables: ['plugin_marketplace_sources', 'plugin_marketplace_entries'],
+    functions: ['registerMarketplaceSource', 'refreshMarketplaceSource', 'replaceSourceEntries'],
+    reason:
+      'every follow-up statement targets a sourceId already ownership-verified moments earlier in ' +
+      'the same function by a `where user_id = $N` lookup (findExistingSource in ' +
+      'registerMarketplaceSource, the opening select in refreshMarketplaceSource); ' +
+      'replaceSourceEntries is private and reached only from those two.',
+  },
+  {
+    match: /lib\/services\/plugin-marketplace-installation-service\.ts$/,
+    tables: ['plugin_marketplace_installations', 'plugin_marketplace_entries'],
+    functions: ['installMarketplaceEntry', 'mapInstallation'],
+    reason:
+      'installMarketplaceEntry: the flagged select re-fetches the row by the id an ' +
+      '`on conflict (user_id, entry_id)` insert just returned earlier in the same function, so ' +
+      'it can only belong to the caller. mapInstallation: the enclosing-declaration scan ' +
+      'attributes the bare INSTALLATION_SELECT fragment (a column list plus from/join with no ' +
+      'where clause, always completed by a caller-supplied predicate) to the nearest preceding ' +
+      'function, mapInstallation, since it is a module-level const, not a function body; every ' +
+      'call site that appends a where clause (listMarketplaceInstallations, ' +
+      'setMarketplaceInstallationEnabled) carries user_id and stays policed on its own.',
+  },
+  {
+    match:
+      /lib\/services\/plugin-registry-service\.ts$|lib\/services\/plugin-installation-service\.ts$/,
+    tables: ['plugin_registry_entries'],
+    reason:
+      'plugin_registry_entries is a world-readable catalog (0096_plugin_registry.sql grants ' +
+      '`select using (true)`), has no user_id/organization_id column, and writes are service-role ' +
+      'only; there is no tenant to constrain a read by',
+  },
+  {
+    match: /lib\/services\/mobile-iap-notification-service\.ts$/,
+    tables: ['mobile_iap_transactions', 'mobile_iap_notification_receipts'],
+    reason:
+      'reached only from api/mobile/iap/apple-notifications and .../google-notifications, both of ' +
+      'which verify the provider signature (Apple JWS, or Pub/Sub OIDC plus Play server ' +
+      'verification) before calling in; every statement targets the row already resolved by the ' +
+      "provider's own transaction identifiers and checked against app_account_token. " +
+      'mobile_iap_notification_receipts has no owner column at all, a global webhook-dedup ledger.',
+  },
+  {
+    match: /lib\/services\/mobile-iap-ledger-service\.ts$/,
+    tables: ['mobile_iap_transactions'],
+    reason:
+      'reached only from api/mobile/iap/verify with userId from requireCurrentUserId (session), ' +
+      'never client input; the one unscoped read, findExistingReceipt, is a global receipt-' +
+      'uniqueness probe whose result is checked against that same userId before use',
+  },
+  {
+    match: /lib\/server\/copyright-notices\.ts$/,
+    tables: ['copyright_notices'],
+    functions: ['recordCopyrightNotice'],
+    reason:
+      'public unauthenticated DMCA-style intake (api/copyright-notice, documented at ' +
+      'route.ts:26-32); the reporter has no account to scope by',
+  },
+  {
+    match: /lib\/server\/copyright-notices\.ts$/,
+    tables: ['copyright_notices'],
+    functions: ['listCopyrightNotices', 'setCopyrightNoticeDisposition'],
+    reason:
+      "the takedown moderation queue: reading every reporter's notice and updating its " +
+      'disposition is the purpose, the same shape as the content-report-triage.ts entry above ' +
+      '(an owner filter would hide every notice but one). No route calls either export today, ' +
+      "this file is dead code ahead of the takedown admin surface the submission route's own " +
+      'comment names; whoever wires a route must gate it on requirePlatformAdmin like every other ' +
+      'admin route and then narrow this entry to cite that route.',
+  },
+  {
+    match: /lib\/services\/organization-invitation-service\.ts$/,
+    tables: ['organization_invitations'],
+    functions: ['acceptInvitation', 'declineInvitation'],
+    reason:
+      'the invitee is not yet an organization member, so there is no membership to scope by. Both ' +
+      'functions resolve the row by the single-use token_hash first ' +
+      '(apps/web/app/api/settings/team/invitations/accept/route.ts:41), and acceptInvitation ' +
+      'confirms the authenticated email matches the invitation before the accept-update reuses ' +
+      'that same row id.',
+  },
+  {
+    match: /lib\/services\/organization-invitation-service\.ts$/,
+    tables: ['organization_invitations'],
+    functions: ['expirePendingInvitations'],
+    reason:
+      'the global sweep variant with no organizationId argument, reached only from ' +
+      'api/cron/expire-organization-invitations, gated by verifyCronRequest against CRON_SECRET ' +
+      '(cron-auth.ts:55-70)',
+  },
+  {
+    match: /features\/admin\/services\/operator-metrics\.ts$/,
+    reason:
+      'only imported by app/api/operator/route.ts, which calls requirePlatformAdmin() (a deny-by-' +
+      'default AGI_PLATFORM_ADMIN_USER_IDS allowlist, route.ts:41-53) before every read and ' +
+      'write; these are deliberately platform-wide aggregate reads across every tenant, not a ' +
+      "single user's data",
+  },
+  {
+    match: /api\/settings\/organization\/route\.ts$/,
+    tables: ['organizations'],
+    functions: ['handleCreate', 'handlePatch'],
+    reason:
+      "handleCreate's insert establishes ownership itself (created_by is the authenticated " +
+      'userId, gated by requireTeamAdminAccess and a single-owner advisory lock); ' +
+      "handlePatch's update targets membership.organization_id, resolved from the caller's own " +
+      'organization_members row and confirmed by isOrganizationAdminRole before the statement runs',
+  },
+  {
+    match: /lib\/services\/workspace-posture-service\.ts$/,
+    tables: ['organizations'],
+    reason:
+      'reached only from api/settings/organization/posture, which resolves organizationId from ' +
+      "the caller's own membership and gates on isOrgAdminRole before calling in",
+  },
+  {
+    match: /lib\/services\/organization-seat-service\.ts$/,
+    tables: ['organizations'],
+    reason:
+      'reached only from api/settings/organization/seats, which verifies the caller is a member ' +
+      'of the requested organizationId (organization_members where organization_id = $1 and ' +
+      'user_id = $2) before calling in',
+  },
+  {
+    match: /api\/user\/export\/route\.ts$/,
+    tables: ['organizations'],
+    reason:
+      'orgIds is built solely from organization_members where user_id = the requesting userId, ' +
+      'fetched earlier in the same route; the export never reads an org the caller is not a ' +
+      'member of',
+  },
+  {
+    match: /lib\/services\/web-push-service\.ts$/,
+    tables: ['web_push_subscriptions'],
+    functions: ['pruneSubscriptions'],
+    reason:
+      'private, called only from sendWebPushToUser with endpoints drawn exclusively from that ' +
+      "same user's own subscriptions fetched moments earlier under a user_id filter; endpoint " +
+      'also carries a database unique constraint',
+  },
+  {
+    match: /lib\/server\/scim\/scim-provisioning-service\.ts$/,
+    tables: ['profiles'],
+    reason:
+      'the email lookups run only inside an inbound SCIM request already authenticated by a per-' +
+      'organization bearer token (scim-auth.ts:40 verifyScimToken, Argon2-verified) or, for the ' +
+      'batch variant, behind the existing api/admin/ retirement above; the token is the tenant ' +
+      'credential',
+  },
+  {
+    match: /lib\/server\/scim\/scim-token-service\.ts$/,
+    tables: ['scim_tokens'],
+    reason:
+      'stamps last_used_at on the row id resolved from the presented token prefix and confirmed ' +
+      'by Argon2 in the same function, matching the api-key-service.ts verifyKey() precedent ' +
+      'above: the credential IS the subject',
+  },
+  {
+    match: /lib\/services\/enterprise-audit-service\.ts$/,
+    tables: ['enterprise_audit_events'],
+    reason:
+      'buildPredicate binds organizationId as the first, mandatory parameter and always seeds ' +
+      'the where clause with `organization_id = $1`; callers cannot omit it, and the route ' +
+      '(api/settings/organization/audit) is additionally gated by isOrgAdminRole',
+  },
+  {
+    match: /app\/share\/\[token\]\/page\.tsx$/,
+    tables: ['shared_sessions'],
+    reason:
+      'reading a share by its unguessable token is the feature, same as the ' +
+      "api/share/[token]/route.ts entry above; the token is randomBytes(18).toString('base64url') " +
+      '(144 bits) minted in api/share/route.ts',
+  },
+  {
+    match: /chat\/conversations\/\[id\]\/messages\/lib\/index-artifacts\.ts$/,
+    tables: ['web_artifact_index'],
+    reason:
+      'message_id always comes from a row the same call chain just resolved or wrote under ' +
+      'getUserScopedDb (messages/route.ts, messages/bulk/route.ts, chat/sync/route.ts), never an ' +
+      'arbitrary caller-supplied id',
+  },
+  {
+    match: /lib\/server\/data-rights-requests\.ts$/,
+    tables: ['data_rights_requests'],
+    functions: ['readOpenDataRightsRequests'],
+    reason:
+      'the privacy review queue: reached only from api/admin/privacy/requests, gated by ' +
+      'requirePlatformAdmin(request) at route.ts:14 before the read runs; reading every open ' +
+      "request across all data subjects is the queue's purpose",
+  },
+  {
+    match: /api\/settings\/team\/route\.ts$/,
+    tables: ['profiles'],
+    functions: ['handleAddMember'],
+    reason:
+      'the email lookup runs only after requireTeamAdminAccess and an isOrganizationAdminRole ' +
+      'check (route.ts:116,136) confirm the caller administers organizationId, and only under ' +
+      'the settings-team-invite rate limit (10/min, fail-closed, rate-limit.ts:396); it returns ' +
+      'exactly the columns the invite flow needs (id, email, display_name, avatar_url) to add ' +
+      'the target as a member, nothing else',
   },
 ];
 
@@ -486,13 +745,13 @@ function enclosingDeclaration(decls, index) {
   return found;
 }
 
-function tablesIn(sql) {
+function tablesIn(sql, scannedTables) {
   const found = new Set();
   const re = /\b(?:from|into|update|join)\s+(?:public\.)?([a-z_][a-z0-9_]*)/gi;
   let m;
   while ((m = re.exec(sql))) {
     const t = m[1].toLowerCase();
-    if (USER_OWNED_TABLES.has(t)) found.add(t);
+    if (scannedTables.has(t)) found.add(t);
   }
   return [...found];
 }
@@ -539,10 +798,15 @@ function scopingInterpolations(sql, lower) {
   return names;
 }
 
+const MIGRATIONS_DIR = 'apps/web/db/neon';
+const schema = readSchema(path.join(root, MIGRATIONS_DIR));
+const SCANNED_TABLES = new Set([...USER_OWNED_TABLES, ...schema.rlsEnabled]);
+
 const errors = [];
 const files = [
-  ...walk(path.join(root, 'apps/web/app/api')),
+  ...walk(path.join(root, 'apps/web/app')),
   ...walk(path.join(root, 'apps/web/lib')),
+  ...walk(path.join(root, 'apps/web/features')),
 ];
 let scanned = 0;
 let ownerConnectionFiles = 0;
@@ -564,12 +828,13 @@ for (const file of files) {
         .filter((a) => !a.functions || (where !== null && a.functions.includes(where)))
         .flatMap((a) => a.tables),
     );
-    const tables = tablesIn(sql).filter((t) => !exemptTables.has(t));
+    const tables = tablesIn(sql, SCANNED_TABLES).filter((t) => !exemptTables.has(t));
     if (tables.length === 0) continue;
     scanned += 1;
     for (const t of tables) policedByTable.set(t, (policedByTable.get(t) ?? 0) + 1);
     const lower = sql.toLowerCase();
     if (mentionsScopeToken(lower)) continue;
+    if (mentionsSelfIdPredicate(sql, tables)) continue;
     const interpolated = scopingInterpolations(sql, lower);
     const resolvedByVariable = interpolated.some((name) => resolvesToScope(source, name, 2));
     if (resolvedByVariable) continue;
@@ -590,8 +855,6 @@ if (errors.length > 0) {
   );
   process.exit(1);
 }
-
-const MIGRATIONS_DIR = 'apps/web/db/neon';
 
 const TENANT_COLUMN =
   /^(?:[a-z0-9_]*_)?(?:user_id|owner_id|organization_id|org_id|account_id|member_id)$/;
@@ -658,7 +921,6 @@ function findUndecidedTables({ tables, rlsEnabled }, appEnforced, crossTenant) {
   return { undecided, tenantScoped };
 }
 
-const schema = readSchema(path.join(root, MIGRATIONS_DIR));
 const { undecided, tenantScoped } = findUndecidedTables(
   schema,
   USER_OWNED_TABLES,
