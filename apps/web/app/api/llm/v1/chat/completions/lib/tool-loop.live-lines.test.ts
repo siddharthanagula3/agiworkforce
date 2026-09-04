@@ -180,6 +180,37 @@ describe('runToolLoop, provider lines reach the client while the step is still r
     expect(reader.seen()).toContain('x_stream_error');
   });
 
+  it('emits a canonical reasoning-delta agent event for text inside a thinking block', async () => {
+    const provider = closedStream([
+      chunk({ content: THINKING_OPEN }),
+      chunk({ content: 'weighing the options' }),
+      chunk({ content: '</thinking>' }),
+      chunk({ content: 'the answer' }),
+      chunk({}, 'stop'),
+    ]);
+    mockBuildToolLoopStream.mockResolvedValueOnce(provider);
+
+    const reader = consume(runToolLoop(makeProcessed(), { approvalMode: 'auto' }));
+    await reader.done;
+
+    const output = reader.seen();
+    const reasoningEvents = output
+      .split('\n')
+      .filter((line) => line.startsWith('data: ') && !line.includes('[DONE]'))
+      .map((line) => JSON.parse(line.slice(6)) as Record<string, unknown>)
+      .map(
+        (frame) =>
+          (frame['choices'] as Array<{ delta?: Record<string, unknown> }> | undefined)?.[0]
+            ?.delta?.['x_agent_event'],
+      )
+      .filter((event): event is Record<string, unknown> => Boolean(event))
+      .map((envelope) => envelope['event'] as Record<string, unknown>)
+      .filter((event) => event['type'] === 'reasoning-delta');
+
+    expect(reasoningEvents.map((event) => event['delta']).join('')).toBe('weighing the options');
+    expect(output).toContain('"content":"the answer"');
+  });
+
   it('does not fail over once a citation line has shipped', async () => {
     const provider = openStream();
     mockBuildToolLoopStream

@@ -36,35 +36,35 @@ function longestTrailingTagPrefix(value: string, tag: string): number {
   return 0;
 }
 
-export function createPublicTextDeltaProjector(): PublicTextDeltaProjector {
+function createTaggedTextDeltaProjector(collectThinkingSide: boolean): PublicTextDeltaProjector {
   let buffer = '';
   let inThinking = false;
 
   const drain = (final: boolean): string => {
-    let publicText = '';
+    let collected = '';
     while (buffer) {
       const tag = inThinking ? THINKING_CLOSE_TAG : THINKING_OPEN_TAG;
       const tagIndex = buffer.indexOf(tag);
       if (tagIndex >= 0) {
-        if (!inThinking) publicText += buffer.slice(0, tagIndex);
+        if (inThinking === collectThinkingSide) collected += buffer.slice(0, tagIndex);
         buffer = buffer.slice(tagIndex + tag.length);
         inThinking = !inThinking;
         continue;
       }
 
       if (final) {
-        if (!inThinking) publicText += buffer;
+        if (inThinking === collectThinkingSide) collected += buffer;
         buffer = '';
         break;
       }
 
       const retainedPrefixLength = longestTrailingTagPrefix(buffer, tag);
       const consumableLength = buffer.length - retainedPrefixLength;
-      if (!inThinking) publicText += buffer.slice(0, consumableLength);
+      if (inThinking === collectThinkingSide) collected += buffer.slice(0, consumableLength);
       buffer = buffer.slice(consumableLength);
       break;
     }
-    return publicText;
+    return collected;
   };
 
   return {
@@ -76,6 +76,20 @@ export function createPublicTextDeltaProjector(): PublicTextDeltaProjector {
       return drain(true);
     },
   };
+}
+
+export function createPublicTextDeltaProjector(): PublicTextDeltaProjector {
+  return createTaggedTextDeltaProjector(false);
+}
+
+/**
+ * The inverse of `createPublicTextDeltaProjector`: collects the text INSIDE
+ * `<thinking>` tags instead of outside them, so a reasoning summary can be
+ * projected onto its own `reasoning-delta` agent event rather than only
+ * surviving as literal tag-wrapped `content`.
+ */
+export function createThinkingTextDeltaProjector(): PublicTextDeltaProjector {
+  return createTaggedTextDeltaProjector(true);
 }
 
 export function toAgentEventJson(value: unknown): AgentEventJson {

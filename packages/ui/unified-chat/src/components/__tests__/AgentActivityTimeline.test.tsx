@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { AgentActivityTimeline } from '../AgentActivityTimeline';
 import type { AgentActivityState } from '@agiworkforce/client-runtime';
@@ -40,6 +40,56 @@ function activity(overrides: Partial<AgentActivityState> = {}): AgentActivitySta
 }
 
 describe('AgentActivityTimeline', () => {
+  it('ticks a live Thinking label while a reasoning-delta run is in progress', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(4_000);
+    try {
+      const reasoning = activity({
+        entries: [
+          {
+            kind: 'progress',
+            id: 'progress:generation:1',
+            progressId: 'generation',
+            summary: 'Reasoning',
+            status: 'running',
+            startedAtMs: 1_000,
+          },
+        ],
+      });
+
+      render(<AgentActivityTimeline activity={reasoning} />);
+      const trigger = screen.getByRole('button', { name: /agent activity/i });
+      expect(trigger.textContent).toContain('Thinking · 3s');
+
+      act(() => {
+        vi.advanceTimersByTime(4_000);
+      });
+      expect(trigger.textContent).toContain('Thinking · 7s');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('switches off the Thinking label the moment a real content token arrives', () => {
+    const writing = activity({
+      entries: [
+        {
+          kind: 'progress',
+          id: 'progress:generation:1',
+          progressId: 'generation',
+          summary: 'Writing response',
+          status: 'running',
+          startedAtMs: 1_000,
+        },
+      ],
+    });
+
+    render(<AgentActivityTimeline activity={writing} />);
+    const trigger = screen.getByRole('button', { name: /agent activity/i });
+    expect(trigger.textContent).toContain('Writing response');
+    expect(trigger.textContent).not.toMatch(/Thinking/);
+  });
+
   it('keeps the local pre-provider status compact until real activity arrives', () => {
     render(
       <AgentActivityTimeline

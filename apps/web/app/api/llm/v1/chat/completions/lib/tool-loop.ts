@@ -147,6 +147,7 @@ import {
 import {
   createAgentEventStreamEmitter,
   createPublicTextDeltaProjector,
+  createThinkingTextDeltaProjector,
   toAgentEventJson,
 } from './agent-event-stream';
 import { executeSkillTool, SKILL_TOOL_NAME } from '@agiworkforce/skills';
@@ -1100,6 +1101,7 @@ export function serverToolResultSources(content: unknown[]): FetchedSource[] {
 export interface CollectedProviderLine {
   line: SseLine;
   publicTextDelta?: string;
+  reasoningDelta?: string;
   serverToolStart?: ServerToolStartSignal;
   serverToolResults?: ServerToolResultSignal[];
 }
@@ -1124,6 +1126,7 @@ export async function collectProviderStream(
     onLine?.(entry);
   };
   const publicTextProjector = createPublicTextDeltaProjector();
+  const reasoningTextProjector = createThinkingTextDeltaProjector();
   let buffer = '';
   let finishReason: string | null = null;
   let textContent = '';
@@ -1163,11 +1166,13 @@ export async function collectProviderStream(
         const event = JSON.parse(jsonStr);
         collectGeneratedFileRefs(event, generatedFileRefs);
         let publicTextDelta: string | undefined;
+        let reasoningDelta: string | undefined;
 
         const textDelta = event?.choices?.[0]?.delta?.content;
         if (typeof textDelta === 'string') {
           textContent += textDelta;
           publicTextDelta = publicTextProjector.push(textDelta) || undefined;
+          reasoningDelta = reasoningTextProjector.push(textDelta) || undefined;
         }
 
         let serverToolStart: ServerToolStartSignal | undefined;
@@ -1227,7 +1232,13 @@ export async function collectProviderStream(
           }
         }
 
-        pushLine({ line: raw + '\n', publicTextDelta, serverToolStart, serverToolResults });
+        pushLine({
+          line: raw + '\n',
+          publicTextDelta,
+          reasoningDelta,
+          serverToolStart,
+          serverToolResults,
+        });
 
         const toolCallDeltas: unknown[] | undefined = event?.choices?.[0]?.delta?.tool_calls;
         if (Array.isArray(toolCallDeltas)) {
@@ -2191,6 +2202,11 @@ export async function* runToolLoop(
 
   async function* emitProviderLine(entry: CollectedProviderLine): AsyncGenerator<Uint8Array> {
     yield encoder.encode(entry.line);
+    if (entry.reasoningDelta) {
+      yield encoder.encode(
+        eventStream.emit({ type: 'reasoning-delta', delta: entry.reasoningDelta }),
+      );
+    }
     if (entry.publicTextDelta) {
       yield encoder.encode(eventStream.emit({ type: 'text-delta', delta: entry.publicTextDelta }));
     }
