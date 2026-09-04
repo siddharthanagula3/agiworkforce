@@ -5,6 +5,7 @@ vi.mock('server-only', () => ({}));
 const h = vi.hoisted(() => ({
   getUserScopedDb: vi.fn(),
   query: vi.fn(),
+  invalidateActiveOrganizationCache: vi.fn(),
 }));
 
 vi.mock('@/lib/server/rls-db', () => ({ getUserScopedDb: h.getUserScopedDb }));
@@ -12,6 +13,9 @@ vi.mock('@/lib/rate-limit', () => ({ withRateLimit: vi.fn(async () => null) }));
 vi.mock('@/lib/csrf', () => ({ requireCsrfToken: vi.fn(async () => null) }));
 vi.mock('@/lib/logger', () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
+}));
+vi.mock('@/lib/server/request-context-cache', () => ({
+  invalidateActiveOrganizationCache: h.invalidateActiveOrganizationCache,
 }));
 
 import { NextRequest } from 'next/server';
@@ -99,5 +103,51 @@ describe('the migration that backs it', () => {
     expect(sql).toContain('force row level security');
     expect(sql).toContain('using (user_id = public.current_app_user_id())');
     expect(sql).toContain('with check (user_id = public.current_app_user_id())');
+  });
+});
+
+describe('a write that touches the workspace namespace invalidates the active-org cache', () => {
+  it('invalidates when the namespace patch targets workspace', async () => {
+    h.query.mockResolvedValue([{ settings: { workspace: { activeOrganizationId: 'org-1' } } }]);
+
+    await PUT(
+      new NextRequest('http://localhost:3000/api/settings/preferences', {
+        method: 'PUT',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ namespace: 'workspace', value: { activeOrganizationId: 'org-1' } }),
+      }),
+    );
+
+    expect(h.invalidateActiveOrganizationCache).toHaveBeenCalledWith('user-1');
+  });
+
+  it('does not invalidate for an unrelated namespace', async () => {
+    h.query.mockResolvedValue([{ settings: { general: { preferredName: 'Sid' } } }]);
+
+    await PUT(
+      new NextRequest('http://localhost:3000/api/settings/preferences', {
+        method: 'PUT',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ namespace: 'general', value: { preferredName: 'Sid' } }),
+      }),
+    );
+
+    expect(h.invalidateActiveOrganizationCache).not.toHaveBeenCalled();
+  });
+
+  it('invalidates for a whole-document patch that includes the workspace key', async () => {
+    h.query.mockResolvedValue([{ settings: { workspace: { activeOrganizationId: null } } }]);
+
+    await PUT(
+      new NextRequest('http://localhost:3000/api/settings/preferences', {
+        method: 'PUT',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          settings: { workspace: { activeOrganizationId: null }, general: {} },
+        }),
+      }),
+    );
+
+    expect(h.invalidateActiveOrganizationCache).toHaveBeenCalledWith('user-1');
   });
 });
