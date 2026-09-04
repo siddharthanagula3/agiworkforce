@@ -239,19 +239,19 @@ describe('resolveAutoRoute', () => {
       status: 'selected',
       modelKey: CODING_PREMIUM_MODEL_ID,
       effectiveProfile: 'premium',
-      fallbacks: [
-        {
-          modelKey: CODING_ESCALATION_MODEL_ID,
-          provider: 'zhipu',
-          harnessId: 'zhipu/chat-completions',
-        },
-        {
-          modelKey: FAST_MODEL_ID,
-          provider: 'google',
-          harnessId: 'google/generate-content',
-        },
-      ],
     });
+    expect(result.status === 'selected' ? result.fallbacks.slice(0, 2) : []).toMatchObject([
+      {
+        modelKey: CODING_ESCALATION_MODEL_ID,
+        provider: 'zhipu',
+        harnessId: 'zhipu/chat-completions',
+      },
+      {
+        modelKey: FAST_MODEL_ID,
+        provider: 'google',
+        harnessId: 'google/generate-content',
+      },
+    ]);
   });
 
   it('uses the provider-native premium research route without a duplicate fallback', () => {
@@ -265,8 +265,12 @@ describe('resolveAutoRoute', () => {
     expect(result).toMatchObject({
       status: 'selected',
       modelKey: SEARCH_PREMIUM_MODEL_ID,
-      fallbacks: [],
     });
+    const providers =
+      result.status === 'selected'
+        ? [result.provider, ...result.fallbacks.map((fallback) => fallback.provider)]
+        : [];
+    expect(new Set(providers).size).toBe(providers.length);
   });
 
   it('applies provider-exclusion overlays without hardcoded model substitutions', () => {
