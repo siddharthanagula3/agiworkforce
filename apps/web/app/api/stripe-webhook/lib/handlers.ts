@@ -14,6 +14,11 @@ import {
 import { toStoredSubscriptionStatus } from './subscription-status';
 import { readPreDebitWindow, readUnrecoverableMandateCode } from './india-mandate';
 import { isValidTopUpPurchase } from '@agiworkforce/types';
+import {
+  endEnterpriseContractIfPresent,
+  recordEnterpriseInvoiceEvent,
+  syncEnterpriseContractFromSubscription,
+} from '@/lib/services/enterprise-billing-service';
 
 function getCustomerId(customer: Stripe.PaymentIntent['customer']): string | null {
   if (typeof customer === 'string') return customer;
@@ -98,6 +103,7 @@ export async function dispatchStripeEvent(
       await updateSubscriptionFromStripeSubscription(db, stripe, subscription, {
         eventSequence: event.created,
       });
+      await syncEnterpriseContractFromSubscription(db, stripe, subscription);
       break;
     }
     case 'invoice.paid':
@@ -111,7 +117,19 @@ export async function dispatchStripeEvent(
         await updateSubscriptionFromStripeSubscription(db, stripe, subscription, {
           eventSequence: event.created,
         });
+        await syncEnterpriseContractFromSubscription(db, stripe, subscription);
       }
+      await recordEnterpriseInvoiceEvent(db, invoice);
+      break;
+    }
+    case 'invoice.created':
+    case 'invoice.finalized':
+    case 'invoice.updated':
+    case 'invoice.marked_uncollectible':
+    case 'invoice.voided':
+    case 'invoice.overdue': {
+      const invoice = event.data.object as Stripe.Invoice;
+      await recordEnterpriseInvoiceEvent(db, invoice);
       break;
     }
     case 'customer.subscription.deleted': {
@@ -140,6 +158,8 @@ export async function dispatchStripeEvent(
           where stripe_subscription_id = $1`,
         [stripeSubId],
       );
+
+      await endEnterpriseContractIfPresent(db, stripeSubId, canceledAt);
 
       await recordAuditEvent({
         userId: ownerRow?.user_id ?? null,
@@ -181,6 +201,7 @@ export async function dispatchStripeEvent(
           [stripeCustomerId],
         );
       }
+      await recordEnterpriseInvoiceEvent(db, invoice);
       break;
     }
     case 'payment_intent.processing': {

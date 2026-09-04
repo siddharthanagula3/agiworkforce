@@ -18,6 +18,8 @@ vi.mock('@/lib/price-tier-mapping', () => ({
   resolvePlanTier: () => 'pro',
   isValidPlanTier: (tier: string | null | undefined) => tier === 'pro',
   getTierMapping: () => ({ price_current: { tier: 'pro', interval: 'monthly' } }),
+  getEnterpriseProductId: () => null,
+  isEnterpriseProductId: () => false,
 }));
 
 vi.mock('@/lib/services/subscription-service', () => ({

@@ -510,3 +510,55 @@ export type ScimGroupMemberRow = {
   organization_id: string;
   created_at: string;
 };
+
+export type BillingCadence = 'annual' | 'quarterly';
+
+export type OrganizationBillingContractRow = {
+  organization_id: string;
+  stripe_customer_id: string | null;
+  stripe_subscription_id: string | null;
+  stripe_product_id: string;
+  stripe_price_id: string | null;
+  procurement_reference: string | null;
+  customer_legal_entity: string | null;
+  contract_term_start: string | null;
+  contract_term_end: string | null;
+  billing_cadence: BillingCadence;
+  committed_seats: number;
+  included_usage_cents_per_period: number;
+  overage_stripe_price_id: string | null;
+  committed_usage_block_cents: number;
+  minimum_annual_spend_cents: number;
+  support_tier: string | null;
+  oldest_open_invoice_id: string | null;
+  oldest_open_invoice_due_at: string | null;
+  collection_stage: 'current' | 'past_due_30' | 'past_due_60' | 'past_due_90' | 'read_only';
+  collection_stage_changed_at: string | null;
+  last_collection_notice_at: string | null;
+  ended_at: string | null;
+  metadata: Record<string, unknown>;
+  created_at: string;
+  updated_at: string;
+};
+
+export type OrganizationBillingInvoiceRow = {
+  stripe_invoice_id: string;
+  organization_id: string;
+  stripe_subscription_id: string | null;
+  invoice_number: string | null;
+  status: string;
+  collection_method: string | null;
+  amount_due_cents: number;
+  amount_paid_cents: number;
+  currency: string;
+  procurement_reference: string | null;
+  period_start: string | null;
+  period_end: string | null;
+  due_at: string | null;
+  paid_at: string | null;
+  voided_at: string | null;
+  hosted_invoice_url: string | null;
+  invoice_pdf_url: string | null;
+  created_at: string;
+  updated_at: string;
+};

@@ -26,6 +26,10 @@ import {
 import { isValidTopUpPurchase } from '@agiworkforce/types';
 import { describeSessionTax } from '@/lib/billing/tax-policy';
 import {
+  auditUnknownStripePriceIfEnterpriseConfigured,
+  resolveEnterprisePlanTier,
+} from '@/lib/services/enterprise-billing-service';
+import {
   buildPurchasedSeatRecord,
   persistPurchasedSeatsOnOrganization,
   resolveCheckoutSessionSeats,
@@ -882,11 +886,21 @@ export async function updateSubscriptionFromStripeSubscription(
     stripePriceId = firstSubItem.price.id;
   }
 
-  const priceIsRegistered = !stripePriceId || isPriceIdRegistered(stripePriceId);
+  const priceRegisteredByMapping = !stripePriceId || isPriceIdRegistered(stripePriceId);
+  const enterpriseTier = await resolveEnterprisePlanTier(stripe, firstSubItem?.price ?? null);
+  const priceIsRegistered = !!enterpriseTier || priceRegisteredByMapping;
+  await auditUnknownStripePriceIfEnterpriseConfigured(
+    stripe,
+    subscription,
+    firstSubItem?.price ?? null,
+    priceRegisteredByMapping,
+  );
 
-  const resolvedTier = priceIsRegistered
-    ? resolvePlanTier(subscription.metadata as Record<string, string> | null, stripePriceId)
-    : await resolveGrandfatheredPlanTier(db, stripeSubId, stripeCustomerId);
+  const resolvedTier = enterpriseTier
+    ? enterpriseTier
+    : priceIsRegistered
+      ? resolvePlanTier(subscription.metadata as Record<string, string> | null, stripePriceId)
+      : await resolveGrandfatheredPlanTier(db, stripeSubId, stripeCustomerId);
   const planTier = resolvedTier && isValidPlanTier(resolvedTier) ? resolvedTier : null;
 
   if (!planTier) {
