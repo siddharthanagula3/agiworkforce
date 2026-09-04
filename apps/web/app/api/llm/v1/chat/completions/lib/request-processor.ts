@@ -2589,7 +2589,14 @@ export async function processRequest(
   const preSkillMessageCount = chatRequest.messages.length;
   let skillInstallOverridesPromise: Promise<ReadonlyMap<string, boolean>> | undefined;
   const loadSkillInstallOverrides = async (): Promise<ReadonlyMap<string, boolean>> => {
-    skillInstallOverridesPromise ??= getSkillInstallOverrides((await scopedDbPromise).db, userId);
+    skillInstallOverridesPromise ??= (async () => {
+      try {
+        return await getSkillInstallOverrides((await scopedDbPromise).db, userId);
+      } catch (error) {
+        logger.warn({ error, userId }, 'Skill install overrides read failed; assuming none');
+        return new Map<string, boolean>();
+      }
+    })();
     return skillInstallOverridesPromise;
   };
   if (chatRequest.skill_name) {
