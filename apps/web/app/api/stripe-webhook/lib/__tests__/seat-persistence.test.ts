@@ -336,6 +336,30 @@ describe('resolvePurchasedSeatsForOwner · enterprise entitlement', () => {
     expect(result).toBeNull();
   });
 
+  it('resolves seats for an enterprise owner unpaid but not yet read-only', async () => {
+    const db = makeOwnerDb({
+      status: 'unpaid',
+      oldestOpenInvoiceDueAt: daysAgoIso(10),
+      hasOrganization: true,
+    });
+
+    const result = await resolvePurchasedSeatsForOwner(db, () => stripeReturning(75), 'user_ent');
+
+    expect(result).toEqual({ seats: 75, planTier: 'enterprise' });
+  });
+
+  it('withholds seats for an unpaid enterprise owner once read-only', async () => {
+    const db = makeOwnerDb({
+      status: 'unpaid',
+      oldestOpenInvoiceDueAt: daysAgoIso(120),
+      hasOrganization: true,
+    });
+
+    const result = await resolvePurchasedSeatsForOwner(db, () => stripeReturning(75), 'user_ent');
+
+    expect(result).toBeNull();
+  });
+
   it('resolves seats for an active enterprise owner with no collection lookup needed', async () => {
     const db = makeOwnerDb({
       status: 'active',
