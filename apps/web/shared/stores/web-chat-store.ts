@@ -620,6 +620,17 @@ interface ChatState {
    */
   memoryDisabledByConversation: Record<string, boolean>;
 
+  /**
+   * Per-conversation Chat/AGI Work override, mirrored out of
+   * `composerTogglesByConversation.workMode` for the one field of that bucket
+   * that is NOT next-turn ephemeral. PERSISTED like
+   * `disabledConnectorIdsByConversation` (see `partialize` below): which axis
+   * a conversation runs on is a standing fact about that conversation, the
+   * way claude.ai's Cowork and ChatGPT's Work stay on across a reload, not a
+   * default that should reset the instant the tab reloads.
+   */
+  workModeByConversation: Record<string, CloudWorkMode>;
+
   // Sidebar state
   sidebarCollapsed: boolean;
 
@@ -839,6 +850,7 @@ const initialState = {
   composerTogglesByConversation: {} as Record<string, ComposerToggleState>,
   disabledConnectorIdsByConversation: {} as Record<string, string[]>,
   memoryDisabledByConversation: {} as Record<string, boolean>,
+  workModeByConversation: {} as Record<string, CloudWorkMode>,
   sidebarCollapsed: false,
 };
 
@@ -1042,6 +1054,9 @@ export const useChatStore = create<ChatState>()(
               // Nor its Memory opt-out.
               const { [id]: _removedMemoryDisabled, ...memoryDisabledByConversation } =
                 state.memoryDisabledByConversation;
+              // Nor its persisted Chat/AGI Work mode.
+              const { [id]: _removedWorkMode, ...workModeByConversation } =
+                state.workModeByConversation;
               // A deleted conversation's leaf dies with its transcript, or a
               // recreated id would resolve its path against a dead pointer.
               const { [id]: _removedLeaf, ...activeLeafByConversation } =
@@ -1055,6 +1070,7 @@ export const useChatStore = create<ChatState>()(
                 composerTogglesByConversation,
                 disabledConnectorIdsByConversation,
                 memoryDisabledByConversation,
+                workModeByConversation,
                 activeLeafByConversation,
                 draftContent: draftsByConversation[nextKey] ?? '',
                 activeConversationId,
@@ -1607,11 +1623,16 @@ export const useChatStore = create<ChatState>()(
           const state = get();
           const targetId =
             conversationId === undefined ? state.activeConversationId : conversationId;
-          return (
-            state.composerTogglesByConversation[conversationKey(targetId)] ?? {
-              ...DEFAULT_COMPOSER_TOGGLES,
-            }
-          );
+          const key = conversationKey(targetId);
+          const stored = state.composerTogglesByConversation[key];
+          if (stored) return stored;
+          // A reload starts this bucket empty (composerTogglesByConversation is
+          // not persisted); the persisted workMode is the one field of it that
+          // must still come back.
+          const persistedWorkMode = state.workModeByConversation[key];
+          return persistedWorkMode
+            ? { ...DEFAULT_COMPOSER_TOGGLES, workMode: persistedWorkMode }
+            : { ...DEFAULT_COMPOSER_TOGGLES };
         },
 
         setComposerToggles: (updates, conversationId) =>
@@ -1628,6 +1649,17 @@ export const useChatStore = create<ChatState>()(
                   ...state.composerTogglesByConversation,
                   [key]: { ...current, ...updates },
                 },
+                // The pending (not-yet-created) bucket is excluded: its mode is
+                // a draft, not yet a standing fact about any real conversation,
+                // and adoptPendingComposerToggles carries it over once one exists.
+                ...(updates.workMode !== undefined && key !== PENDING_CONVERSATION_KEY
+                  ? {
+                      workModeByConversation: {
+                        ...state.workModeByConversation,
+                        [key]: updates.workMode,
+                      },
+                    }
+                  : {}),
               };
             },
             undefined,
@@ -1655,6 +1687,13 @@ export const useChatStore = create<ChatState>()(
          * Also migrates the new-chat surface's disabled-connector set for the
          * same reason: a connector switched off before the first message is
          * sent must stay off once that message creates the real conversation.
+         *
+         * And migrates the pending work mode into `workModeByConversation`,
+         * the persisted mirror `getComposerToggles` falls back to after a
+         * reload: a chat's first send is the only point a real id's mode is
+         * ever set through this path, so skipping the mirror here would leave
+         * a conversation started in AGI Work reverting to Chat on reload even
+         * though `setComposerToggles` handles every later mode switch fine.
          */
         adoptPendingComposerToggles: (conversationId) =>
           set(
@@ -1673,14 +1712,19 @@ export const useChatStore = create<ChatState>()(
               const targetKey = conversationKey(conversationId);
               const update: Partial<ChatState> = {};
               if (pending) {
+                const existingTargetToggles = state.composerTogglesByConversation[targetKey];
                 const { [PENDING_CONVERSATION_KEY]: _pending, ...rest } =
                   state.composerTogglesByConversation;
                 update.composerTogglesByConversation = {
                   ...rest,
                   [targetKey]: {
                     ...pending,
-                    ...(state.composerTogglesByConversation[targetKey] ?? {}),
+                    ...(existingTargetToggles ?? {}),
                   },
+                };
+                update.workModeByConversation = {
+                  ...state.workModeByConversation,
+                  [targetKey]: existingTargetToggles?.workMode ?? pending.workMode,
                 };
               }
               if (pendingDisabledConnectors) {
@@ -1794,7 +1838,27 @@ export const useChatStore = create<ChatState>()(
           // Same reasoning: a per-chat Memory opt-out is a standing decision
           // about that conversation, not a next-turn default.
           memoryDisabledByConversation: state.memoryDisabledByConversation,
+          // Same reasoning again: the Chat/AGI Work axis is a standing fact
+          // about a conversation, not a next-turn default, so it is mirrored
+          // out of composerTogglesByConversation and persisted on its own.
+          workModeByConversation: state.workModeByConversation,
         }),
+        // `getComposerToggles` falls back to `workModeByConversation` when the
+        // ephemeral bucket has no entry, but every component reads the toggle
+        // state directly off `composerTogglesByConversation` through a plain
+        // selector for reactivity, not through that helper. Rehydration is
+        // the one place that runs before any component mounts, so seeding the
+        // ephemeral bucket for every conversation with a persisted mode here
+        // is what makes both read paths agree, instead of duplicating the
+        // fallback into each selector.
+        merge: (persistedState, currentState) => {
+          const persisted = (persistedState ?? {}) as Partial<ChatState>;
+          const composerTogglesByConversation = { ...currentState.composerTogglesByConversation };
+          for (const [key, workMode] of Object.entries(persisted.workModeByConversation ?? {})) {
+            composerTogglesByConversation[key] ??= { ...DEFAULT_COMPOSER_TOGGLES, workMode };
+          }
+          return { ...currentState, ...persisted, composerTogglesByConversation };
+        },
         migrate: (persisted: unknown) => {
           const next = { ...(persisted as Record<string, unknown>) };
           // v2 persisted a user-controlled search default. Search is automatic
