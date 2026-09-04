@@ -1,12 +1,15 @@
 'use client';
 
+import { Plus } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 
 import { Spinner } from '../primitives/Spinner';
 import { useConfirmAction } from '../primitives/ConfirmAction';
+import { AddMarketplaceDialog } from './AddMarketplaceDialog';
 import { ConnectorDetailView } from './ConnectorDetailView';
 import {
+  ADD_MARKETPLACE_LABEL,
   CONNECTOR_POPULAR_HEADING,
   INSTALL_CONFIRM_CANCEL_LABEL,
   INSTALL_CONFIRM_TITLE_PREFIX,
@@ -18,7 +21,7 @@ import {
   GENERIC_ERROR_COPY,
 } from './constants';
 import { DirectoryGrid } from './DirectoryGrid';
-import { DIRECTORY_CREATE_BUTTON } from './styles';
+import { DIRECTORY_ADD_BUTTON, DIRECTORY_CREATE_BUTTON } from './styles';
 import { DirectoryToolbar } from './DirectoryToolbar';
 import { selectDirectoryEntries, toggleFilterValue } from './filtering';
 import { PluginDetailView } from './PluginDetailView';
@@ -61,6 +64,7 @@ export function DirectoryPanel({
   const [detailError, setDetailError] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
   const { confirm, dialog: confirmDialog } = useConfirmAction();
+  const [marketplaceOpen, setMarketplaceOpen] = useState(false);
   const openChangeRef = useRef(onOpenEntryChange);
   openChangeRef.current = onOpenEntryChange;
 
@@ -71,6 +75,8 @@ export function DirectoryPanel({
   useEffect(() => {
     openChangeRef.current?.(entryId);
   }, [entryId]);
+
+  const showAddMarketplace = section === 'plugins' && adapter.addMarketplace !== undefined;
 
   const loadSection = adapter.loadSection;
   useEffect(() => {
@@ -244,6 +250,16 @@ export function DirectoryPanel({
               {data.createLabel}
             </button>
           ) : null}
+          {showAddMarketplace ? (
+            <button
+              type="button"
+              onClick={() => setMarketplaceOpen(true)}
+              aria-label={ADD_MARKETPLACE_LABEL}
+              className={DIRECTORY_ADD_BUTTON}
+            >
+              <Plus aria-hidden className="size-4" />
+            </button>
+          ) : null}
           {headerActions}
         </div>
       </div>
@@ -314,6 +330,17 @@ export function DirectoryPanel({
     <>
       {confirmDialog}
       {renderBody()}
+      {adapter.addMarketplace ? (
+        <AddMarketplaceDialog
+          open={marketplaceOpen}
+          onClose={() => {
+            setMarketplaceOpen(false);
+            void adapter.loadSection?.('plugins');
+          }}
+          onSubmit={adapter.addMarketplace}
+          {...(adapter.removeMarketplace ? { onRemove: adapter.removeMarketplace } : {})}
+        />
+      ) : null}
     </>
   );
 }

@@ -197,6 +197,16 @@ describe('DirectoryPanel layout', () => {
     expect(screen.queryByRole('button', { name: 'New skill' })).toBeNull();
   });
 
+  it('offers add marketplace on plugins only, and opens the dialog', async () => {
+    const addMarketplace = vi.fn();
+    renderPanel('skills', { addMarketplace });
+    expect(screen.queryByRole('button', { name: 'Add marketplace' })).toBeNull();
+    cleanup();
+    renderPanel('plugins', { addMarketplace });
+    fireEvent.click(screen.getByRole('button', { name: 'Add marketplace' }));
+    expect(await screen.findByText('Add from a repository')).toBeTruthy();
+  });
+
   it('renders header actions the surface supplies', () => {
     renderPanel('plugins', {}, { headerActions: <button type="button">Add</button> });
     expect(screen.getByRole('button', { name: 'Add' })).toBeTruthy();

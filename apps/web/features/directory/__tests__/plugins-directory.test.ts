@@ -119,7 +119,6 @@ describe('toRegistryEntry', () => {
     expect(entry).toMatchObject({
       id: 'productivity',
       publisher: 'AGI',
-      badges: ['agi'],
       sourceId: 'agi',
       installCount: 2400,
       updatedAt: '2026-09-02T00:00:00.000Z',
@@ -141,7 +140,7 @@ describe('toRegistryEntry', () => {
       NOW,
     );
     expect(entry.sourceId).toBe('partners');
-    expect(entry.badges).toEqual(['partner']);
+    expect(entry.badges).toBeUndefined();
   });
 
   it('flips the status facet once installed', () => {
