@@ -3,6 +3,7 @@ import 'server-only';
 import { NextRequest, NextResponse } from 'next/server';
 import Stripe from 'stripe';
 import { getNeonDb } from '@/lib/server/neon-db';
+import { createClaimedUserScopedDb } from '@/lib/server/claimed-user-scope-db';
 import type { ProfileRow, SubscriptionRow } from '@/lib/server/neon-types';
 import { getClerkAuthUser } from '@/lib/api-auth';
 import { withErrorHandler } from '@/lib/error-handler';
@@ -150,6 +151,7 @@ async function handlePortal(request: NextRequest) {
   }
 
   const db = getNeonDb();
+  const scopedDb = createClaimedUserScopedDb(db, { userId, organizationId: null });
 
   type SubRow = Pick<
     SubscriptionRow,
@@ -186,7 +188,7 @@ async function handlePortal(request: NextRequest) {
     try {
       let profileRows: Array<Pick<ProfileRow, 'stripe_customer_id'>>;
       try {
-        profileRows = await db.query<Pick<ProfileRow, 'stripe_customer_id'>>(
+        profileRows = await scopedDb.query<Pick<ProfileRow, 'stripe_customer_id'>>(
           'select stripe_customer_id from profiles where id = $1 limit 1',
           [userId],
         );
@@ -254,7 +256,7 @@ async function handlePortal(request: NextRequest) {
         customerId = ownedCustomer.id;
 
         try {
-          await db.execute('update profiles set stripe_customer_id = $1 where id = $2', [
+          await scopedDb.execute('update profiles set stripe_customer_id = $1 where id = $2', [
             customerId,
             userId,
           ]);
