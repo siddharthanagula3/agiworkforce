@@ -177,6 +177,26 @@ describe('DirectoryPanel layout', () => {
     expect(screen.queryByRole('button', { name: '/canvas-design' })).toBeNull();
   });
 
+  it('offers the create control only where the section supports it', () => {
+    const createEntry = vi.fn();
+    renderPanel('skills', {
+      createEntry,
+      skills: {
+        installable: true,
+        entries: [],
+        createLabel: 'New skill',
+        sortOptions: ['name'],
+      },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'New skill' }));
+    expect(createEntry).toHaveBeenCalledWith('skills');
+  });
+
+  it('hides the create control on a section with no create label', () => {
+    renderPanel('plugins', { createEntry: vi.fn() });
+    expect(screen.queryByRole('button', { name: 'New skill' })).toBeNull();
+  });
+
   it('renders header actions the surface supplies', () => {
     renderPanel('plugins', {}, { headerActions: <button type="button">Add</button> });
     expect(screen.getByRole('button', { name: 'Add' })).toBeTruthy();

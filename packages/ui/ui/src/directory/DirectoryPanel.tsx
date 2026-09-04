@@ -13,7 +13,6 @@ import {
   INSTALL_LABEL,
   DIRECTORY_CATALOG_HEADINGS,
   DIRECTORY_INSTALLED_HEADINGS,
-  DIRECTORY_CREATE_LABEL,
   DIRECTORY_LOADING_LABEL,
   DIRECTORY_SECTION_LABELS,
   GENERIC_ERROR_COPY,
@@ -236,13 +235,13 @@ export function DirectoryPanel({
           {DIRECTORY_SECTION_LABELS[section]}
         </h2>
         <div className="flex shrink-0 items-center gap-2">
-          {adapter.createEntry ? (
+          {adapter.createEntry && data.createLabel ? (
             <button
               type="button"
               onClick={() => adapter.createEntry?.(section)}
               className={DIRECTORY_CREATE_BUTTON}
             >
-              {adapter.createEntryLabel ?? DIRECTORY_CREATE_LABEL}
+              {data.createLabel}
             </button>
           ) : null}
           {headerActions}
