@@ -22,6 +22,7 @@ import {
   CONNECTOR_CATEGORY_GROUP_LABEL,
   CONNECTOR_DIRECTORY_PATH,
   CONNECTOR_ICON_PATH,
+  CONNECTOR_REAUTHORIZATION_COPY,
   CONNECTOR_SOURCES_HEADING,
   DIRECTORY_PAGE_SIZE,
 } from '../constants';
@@ -306,4 +307,23 @@ export function withConnectorErrors(
     const message = errors[entry.id];
     return message ? { ...entry, error: message } : entry;
   });
+}
+
+/**
+ * The attention badge on the Connectors nav row counts connectors flagged
+ * `status: 'warning'`, but nothing carried that flag onto the connector's own
+ * card, so clicking the badge landed on a grid with no way to tell which
+ * connector it was about. This surfaces the same warning inline, through the
+ * same `error` field `withConnectorErrors` already renders.
+ */
+export function connectorReauthorizationErrors(
+  connected: readonly ConnectedConnector[],
+): Record<string, string> {
+  const errors: Record<string, string> = {};
+  for (const connector of connected) {
+    if (connector.status === 'warning') {
+      errors[connector.connectorId] = connector.warningLabel ?? CONNECTOR_REAUTHORIZATION_COPY;
+    }
+  }
+  return errors;
 }

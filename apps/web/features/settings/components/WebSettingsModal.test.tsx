@@ -36,7 +36,11 @@ vi.mock('../sections/ReflectSection', () => ({
 }));
 
 function stubFetch({
-  connectors = [] as Array<{ connectorId: string; connectedAt?: string }>,
+  connectors = [] as Array<{
+    connectorId: string;
+    connectedAt?: string;
+    needsReauthorization?: boolean;
+  }>,
   installations = [] as Array<{ installation_id: number; created_at?: string }>,
   skills = [] as Array<{
     name: string;
@@ -219,6 +223,38 @@ describe('WebSettingsModal connectors adapter (honest web semantics)', () => {
 
     fireEvent.click(await screen.findByRole('button', { name: 'Notion' }));
     expect(await screen.findByText('Connected')).toBeTruthy();
+  });
+
+  // The Connectors nav row carries a red count badge for connectors needing
+  // reauthorization (title/aria-label explain the count), but nothing named
+  // which connector it was about once you opened the panel it points at.
+  it('names the connector a reconnect badge is about, on its own card', async () => {
+    stubFetch({
+      connectors: [
+        { connectorId: 'notion', connectedAt: '2026-07-01T00:00:00Z', needsReauthorization: true },
+      ],
+    });
+    render(<WebSettingsModal open onClose={vi.fn()} initialSection="general" />);
+    await settleParentConnectorState();
+
+    const nav = screen.getByRole('navigation', { name: 'Settings navigation' });
+    const connectorsNavButton = within(nav)
+      .getByTitle('1 connector needs to be reconnected')
+      .closest('button')!;
+    expect(connectorsNavButton).toHaveTextContent('Connectors');
+
+    fireEvent.click(connectorsNavButton);
+
+    expect(await screen.findByRole('button', { name: 'Notion' })).toBeTruthy();
+    expect(await screen.findByText('Needs to be reconnected.')).toBeTruthy();
+  });
+
+  it('leaves a healthy connector without a reconnect message', async () => {
+    stubFetch({ connectors: [{ connectorId: 'notion', connectedAt: '2026-07-01T00:00:00Z' }] });
+    render(<WebSettingsModal open onClose={vi.fn()} initialSection="connectors" />);
+
+    expect(await screen.findByRole('button', { name: 'Notion' })).toBeTruthy();
+    expect(screen.queryByText('Needs to be reconnected.')).toBeNull();
   });
 
   it('keeps a no-endpoint, unconfigured connector out of the table instead of ever labeling it "Coming soon"', async () => {

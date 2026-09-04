@@ -28,7 +28,7 @@ import {
   withConnectorReturnPath,
 } from '@/features/connectors/hooks/use-connectors';
 import { getCsrfToken } from '@/lib/client/csrf';
-import { useDirectoryAdapter } from '@/features/directory';
+import { CONNECTOR_REAUTHORIZATION_COPY, useDirectoryAdapter } from '@/features/directory';
 
 const NEW_SKILL_LABEL = 'New skill';
 const TOOL_PERMISSIONS_LABEL = 'Tool permissions';
@@ -441,7 +441,7 @@ export function WebSettingsModal({
   );
 
   const [connectedConnectors, setConnectedConnectors] = useState<
-    { connectorId: string; connectedAt?: string }[]
+    { connectorId: string; connectedAt?: string; needsReauthorization?: boolean }[]
   >([]);
   // OAuth grants the server reports as expired or revoked. `/api/connectors`
   // has always returned this per row; nothing outside the Connectors page read
@@ -628,9 +628,15 @@ export function WebSettingsModal({
     // from the richer /api/connectors/custom fetch (this modal keys customs by
     // `custom-<row uuid>` because its remove flow slices the uuid back out;
     // the API's connectorId uses `custom-<shortId>`, the chat serverId).
-    const rows = connectedConnectors.filter(
-      (c) => c.connectorId !== 'github' && !c.connectorId.startsWith('custom-'),
-    );
+    const rows = connectedConnectors
+      .filter((c) => c.connectorId !== 'github' && !c.connectorId.startsWith('custom-'))
+      .map((c) => ({
+        connectorId: c.connectorId,
+        ...(c.connectedAt ? { connectedAt: c.connectedAt } : {}),
+        ...(c.needsReauthorization
+          ? { status: 'warning' as const, warningLabel: CONNECTOR_REAUTHORIZATION_COPY }
+          : {}),
+      }));
     if (githubInstallations.length > 0) {
       rows.push({ connectorId: 'github', connectedAt: githubInstallations[0]?.created_at });
     }
