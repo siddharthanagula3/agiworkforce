@@ -275,3 +275,11 @@ export async function listCloudCodeRuntimes(): Promise<CloudCodeRuntime[]> {
     return cache?.runtimes ?? merge([]);
   }
 }
+
+export function harnessTemplates(): readonly { id: string; name: string; summary: string }[] {
+  return CODING_HARNESSES.filter((template) => template.kind === 'harness').map((template) => ({
+    id: template.id,
+    name: template.name,
+    summary: template.summary,
+  }));
+}

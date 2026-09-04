@@ -168,7 +168,7 @@ export default function FeaturesHubPage() {
                   srcLight="/product/projects-light-landing.png"
                   alt="The AGI projects view listing standing instructions, files, and threads"
                   width={2880}
-                  height={1480}
+                  height={1300}
                   priority
                 />
               </div>
