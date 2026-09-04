@@ -23,7 +23,10 @@ vi.mock('@/lib/csrf', () => ({ requireCsrfToken: vi.fn(async () => null) }));
 vi.mock('@/lib/logger', () => ({
   logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() },
 }));
-vi.mock('@/lib/security-audit', () => ({ logSecurityEvent: vi.fn(async () => undefined) }));
+vi.mock('@/lib/security-audit', () => ({
+  logSecurityEvent: vi.fn(async () => undefined),
+  recordAuditEvent: vi.fn(async () => undefined),
+}));
 vi.mock('@/lib/api-auth', () => ({
   getClerkAuthUser: (...args: unknown[]) => mockGetClerkAuthUser(...args),
 }));
