@@ -15,7 +15,7 @@ const DO_NOT_EDIT = [
   '     Verify: pnpm check:doc-matrices -->',
 ].join('\n');
 
-const MARK = { implemented: '✅', partial: '◐', unwired: ', ', planned: '·' };
+const MARK = { implemented: '✅', partial: '◐', unwired: '-', planned: '·' };
 
 function mark(value) {
   return MARK[value] ?? String(value ?? ', ');

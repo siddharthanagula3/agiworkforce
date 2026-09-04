@@ -14,7 +14,7 @@ exist, and what may never cross between them, are stated in
 here disagrees with it, one of the two is a bug; decide which before changing
 either.
 
-Legend: ✅ implemented · ◐ partial · ,  unwired · · planned
+Legend: ✅ implemented · ◐ partial · - unwired · · planned
 
 | Surface | Trust mode | Status | codeExecution | imageGeneration | memory | toolDiscovery | webSearch |
 | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -26,9 +26,9 @@ Legend: ✅ implemented · ◐ partial · ,  unwired · · planned
 | `desktop/byok-chat` | byok | ✅ | ,  | ,  | ,  | ,  | ,  |
 | `desktop/cloud-chat` | managed_cloud | ✅ | ◐ | ✅ | ◐ | ◐ | ✅ |
 | `desktop/local-chat` | local | ◐ | ,  | ,  | ,  | ,  | ,  |
-| `mobile/cloud-chat` | managed_cloud | ✅ | ,  | ✅ | ◐ | ,  | ✅ |
+| `mobile/cloud-chat` | managed_cloud | ✅ | ,  | ✅ | ◐ | - | ✅ |
 | `mobile/local-chat` | on_device | ◐ | ,  | ,  | ,  | ,  | ,  |
-| `vscode/byok-chat` | byok | ,  | ,  | ,  | ,  | ,  | ,  |
-| `vscode/local-chat` | local | ,  | ,  | ,  | ,  | ,  | ,  |
+| `vscode/byok-chat` | byok | - | ,  | ,  | ,  | ,  | ,  |
+| `vscode/local-chat` | local | - | ,  | ,  | ,  | ,  | ,  |
 | `vscode/managed-chat` | managed_cloud | ✅ | ,  | ,  | ,  | ,  | ,  |
 | `web/cloud-chat` | managed_cloud | ✅ | ◐ | ✅ | ◐ | ✅ | ✅ |
