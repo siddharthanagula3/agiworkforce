@@ -44,7 +44,10 @@ async function handleGetProjects(request: NextRequest) {
   let data: Record<string, unknown>[];
   try {
     data = await getNeonDb().query<Record<string, unknown>>(
-      `select p.*,
+      `select p.id, p.user_id, p.organization_id, p.name, p.description, p.instructions,
+              p.color, p.is_archived, p.uses_global_memory, p.metadata, p.default_privacy_mode,
+              p.default_provider_mode, p.allowed_surfaces, p.default_model_id, p.last_used_at,
+              p.icon_emoji, p.accent_color, p.imported_from, p.created_at, p.updated_at,
               (p.user_id <> $1) as is_org_shared,
               (select count(*)::int
                  from web_conversations c
