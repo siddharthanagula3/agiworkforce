@@ -25,7 +25,7 @@
 import 'server-only';
 
 import { z } from 'zod';
-import type { CloudCodeRuntime } from '@agiworkforce/types';
+import { NOTEBOOK_TEMPLATE_ID, type CloudCodeRuntime } from '@agiworkforce/types';
 import { logger } from '@/lib/logger';
 import { E2B_API_KEY_ENV, e2bExecutionEnabled } from './gate';
 
@@ -136,7 +136,7 @@ const CODING_HARNESSES: readonly CloudCodeRuntime[] = [
     isPublic: true,
   },
   {
-    id: 'code-interpreter-v1',
+    id: NOTEBOOK_TEMPLATE_ID,
     name: 'Code Interpreter',
     kind: 'image',
     summary: 'Python with Jupyter, pandas, numpy and plotting.',
