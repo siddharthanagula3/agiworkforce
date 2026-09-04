@@ -330,6 +330,7 @@ describe('syncEnterpriseContractFromSubscription', () => {
       'platinum',
       'Acme Corp Ltd.',
       null,
+      false,
     ]);
   });
 
@@ -345,7 +346,7 @@ describe('syncEnterpriseContractFromSubscription', () => {
     const upsert = calls.find((call) =>
       call.sql.includes('insert into public.organization_billing_contracts'),
     );
-    expect(upsert!.params.slice(10)).toEqual([null, null, null, null, null, null, null]);
+    expect(upsert!.params.slice(10)).toEqual([null, null, null, null, null, null, null, false]);
     expect(upsert!.sql).toContain('coalesce($11::bigint, 0)');
     expect(upsert!.sql).toContain('organization_billing_contracts.included_usage_cents_per_period');
   });
@@ -411,7 +412,7 @@ describe('syncEnterpriseContractFromSubscription', () => {
     const upsert = calls.find((call) =>
       call.sql.includes('insert into public.organization_billing_contracts'),
     );
-    expect(upsert!.params.at(-1)).toBe(1_700_000_500);
+    expect(upsert!.params.at(-2)).toBe(1_700_000_500);
     expect(upsert!.sql).toMatch(
       /organization_billing_contracts\.last_stripe_event_at\s*<=\s*to_timestamp\(\$17/u,
     );
