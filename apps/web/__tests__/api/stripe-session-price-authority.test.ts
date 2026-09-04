@@ -29,6 +29,8 @@ vi.mock('@/lib/price-tier-mapping', () => ({
     price_pro_monthly: { tier: 'pro', interval: 'monthly' },
     price_max_15x_monthly: { tier: 'max_15x', interval: 'monthly' },
   }),
+  getEnterpriseProductId: () => null,
+  isEnterpriseProductId: () => false,
 }));
 
 import {
