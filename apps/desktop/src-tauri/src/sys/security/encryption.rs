@@ -101,6 +101,10 @@ pub fn encrypt_secret(key: &[u8], plaintext: &str) -> Result<EncryptedSecret, St
     })
 }
 
+/// Decrypt a secret with exactly the supplied key.
+///
+/// Use this wherever the caller needs to know which key opened the payload.
+/// for example a migration that must re-wrap legacy ciphertext.
 pub fn decrypt_secret_with_key(key: &[u8], encrypted: &EncryptedSecret) -> Result<String, String> {
     let cipher =
         Aes256Gcm::new_from_slice(key).map_err(|e| format!("Failed to create cipher: {}", e))?;
@@ -131,6 +135,15 @@ pub fn decrypt_secret_with_key(key: &[u8], encrypted: &EncryptedSecret) -> Resul
         .map_err(|e| format!("Failed to convert decrypted data to string: {}", e))
 }
 
+/// Decrypt a secret, transparently reading payloads that an older build wrapped
+/// under the machine-only key for the same purpose.
+///
+/// The fallback is only offered for a key this process currently derives, so a
+/// caller-supplied key can never turn this into a machine-only decryption
+/// oracle. Reading such a payload does not weaken it, its key was already
+/// reproducible by any local process, and the payload is reported through
+/// `machine_key::has_machine_only_secrets` until it is written back under the
+/// per-install key.
 pub fn decrypt_secret(key: &[u8], encrypted: &EncryptedSecret) -> Result<String, String> {
     let primary_error = match decrypt_secret_with_key(key, encrypted) {
         Ok(plaintext) => return Ok(plaintext),

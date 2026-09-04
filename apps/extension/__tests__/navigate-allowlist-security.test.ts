@@ -1,3 +1,24 @@
+/**
+ * navigate-allowlist-security.test.ts, P0 security fix regression tests.
+ *
+ * Covers:
+ *   1. cdpDriver.assertDestinationAllowlisted rejects off-allowlist origins.
+ *   2. cdpDriver.assertDestinationAllowlisted accepts allowlisted origins.
+ *   3. cdpDriver.assertDestinationAllowlisted rejects non-http(s) schemes.
+ *   4. agentLoop aborts (NavigationOffAllowlistError) when the post-navigate
+ *      tab URL lands on an off-allowlist origin (redirect scenario).
+ *   5. agentLoop continues normally when the post-navigate tab URL is allowlisted.
+ *
+ * THREAT MODEL:
+ *   Without this fix, a hallucinated or prompt-injected tool call of the form
+ *   { "name": "navigate", "arguments": "{\"url\":\"https://evil.com\"}" }
+ *   would drive the agent to an off-allowlist host where it could exfiltrate
+ *   cookies, session tokens, and page content. The fix enforces the same
+ *   per-origin allowlist that governs all other CDP operations.
+ *
+ * @vitest-environment jsdom
+ */
+
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const chromeMock = vi.hoisted(() => {

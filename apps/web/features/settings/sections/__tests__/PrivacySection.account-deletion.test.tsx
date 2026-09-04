@@ -1,3 +1,21 @@
+/**
+ * Account deletion used to exist twice: AccountSection's dialog-based flow
+ * (the canonical one, which signs the user out after a successful deletion)
+ * and a second, independent implementation inline in PrivacySection's Danger
+ * zone. The Privacy copy had its own fetch to DELETE /api/user/delete-account,
+ * its own hardcoded "within 24 hours" string that could drift from the real
+ * server-reported `scheduledFor`, and, critically, no `logout`/
+ * `clerkSignOut`/`useClerk` anywhere in the file, so a user who deleted their
+ * account from Privacy kept a fully authenticated client session against an
+ * account scheduled for erasure.
+ *
+ * That implementation has been removed entirely. This suite pins the
+ * invariant that PrivacySection can never again offer a delete path that
+ * ends with a live session, either by re-implementing deletion locally, or
+ * by silently regressing to a state where deletion is unreachable. It must
+ * point at Account settings (the single remaining implementation) instead.
+ */
+
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import React from 'react';

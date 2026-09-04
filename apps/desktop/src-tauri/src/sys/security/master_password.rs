@@ -41,6 +41,19 @@ use zeroize::Zeroize;
 // without the `#[allow(unsafe_code)]` block. Callers now invoke
 // `key.zeroize()` directly via the `Zeroize` trait below.
 
+/// Argon2id parameters following OWASP recommendations
+/// - Memory: 19 MiB (19456 KiB)
+/// - Iterations: 2
+/// - Parallelism: 1
+// SEV-DESK-04: bumped from t=2 to t=3 to meet OWASP 2025 high-value-secret
+// guidance. PHC strings store the parameters inline (`$argon2id$v=19$m=...,t=...,p=...$`),
+// so `Argon2::verify_password` uses the params from the *stored* hash.
+// this change does NOT invalidate existing user verifiers. New hashes
+// created via `hash_password` (signup, password change) get t=3.
+//
+// Memory is left at 19 MiB; raising it disproportionately hurts low-RAM
+// devices (older Macs, Linux laptops) without proportional security gain
+// against the realistic GPU-based threat model.
 const ARGON2_MEMORY_KIB: u32 = 19 * 1024; // 19 MiB
 const ARGON2_ITERATIONS: u32 = 3;
 const ARGON2_PARALLELISM: u32 = 1;
@@ -56,9 +69,35 @@ const DERIVED_KEY_SIZE: usize = 32;
 /// the search space past 2^60 even with character-class assumptions.
 const MIN_PASSWORD_LENGTH: usize = 12;
 
+/// SEV-DESK-11 + SEV-DESK-13 KDF migration markers.
+///
+/// `KDF_VERSION_LEGACY` (1) reproduces the original derivation bit-for-bit:
+///   - Argon2 password key uses `salt.as_str().as_bytes()` (the base64 *string*
+///     of the salt, treated as bytes, incorrect interop but preserved so
+///     existing user verifiers + wrapped credentials continue to decrypt).
+///   - HKDF-Extract uses a static, install-independent salt
+///     `b"com.agiworkforce.desktop:master_password:v1"`.
+///
+/// `KDF_VERSION_CURRENT` (2) is the corrected derivation:
+///   - Argon2 password key uses the *decoded* salt bytes.
+///   - HKDF-Extract mixes the per-install `install_id` into the salt so the
+///     extracted PRK is per-installation rather than shared across the fleet.
+///
+/// **Migration policy**: `setup()` always writes `KDF_VERSION_CURRENT`.
+/// `change()` preserves the existing version, the wrapped-credentials
+/// (`MasterPasswordEncryption::encrypt`) ciphertext stored elsewhere in the
+/// DB was sealed with the original kdf_version, and re-encrypting every
+/// credential during a password change is out of scope for this fix.
+/// Existing v1 users keep working; new installs get v2.
 const KDF_VERSION_LEGACY: u32 = 1;
 const KDF_VERSION_CURRENT: u32 = 2;
 
+/// SEV-DESK-04: lightweight complexity gate. We deliberately keep this
+/// simple, modern guidance (NIST SP 800-63B-4) discourages overly complex
+/// rules that push users toward predictable transformations ("Password1!").
+/// Length is the dominant factor; we just require *some* mixture so the
+/// tail of weak inputs ("12345678901a") gets rejected. Anything stronger
+/// (HIBP check, breach scan) belongs in the onboarding UI, not here.
 fn enforce_password_complexity(password: &str) -> Result<(), MasterPasswordError> {
     if password.chars().count() < MIN_PASSWORD_LENGTH {
         return Err(MasterPasswordError::PasswordTooShort {
@@ -201,6 +240,11 @@ impl MasterPasswordManager {
         )
         .map_err(|e| MasterPasswordError::DatabaseError(e.to_string()))?;
 
+        // SEV-DESK-11/13: idempotent ADD COLUMN for installs that already
+        // have a master_password table from before kdf_version was
+        // introduced. SQLite's ALTER TABLE returns a "duplicate column"
+        // error if the column already exists, we swallow that one
+        // specifically and re-raise anything else.
         if let Err(e) = conn.execute(
             "ALTER TABLE master_password ADD COLUMN kdf_version INTEGER NOT NULL DEFAULT 1",
             [],
@@ -423,6 +467,10 @@ impl MasterPasswordManager {
     /// Lock the app (clear cached key)
     pub fn lock(&self) {
         if let Ok(mut cache) = self.cached_key.lock() {
+            // SEV-DESK-16: zeroize via the audited `zeroize` crate. The
+            // `Zeroize` trait emits volatile writes and the compiler is
+            // forbidden from eliding them, same guarantee as the previous
+            // hand-rolled implementation, no `unsafe` required.
             if let Some(ref mut key) = *cache {
                 key.zeroize();
             }
@@ -461,6 +509,11 @@ impl MasterPasswordManager {
 
         let now = Utc::now().to_rfc3339();
 
+        // SEV-DESK-11/13: read the current `kdf_version` and PRESERVE it
+        // through the password change. Wrapped credentials elsewhere in
+        // the DB were sealed under the existing kdf_version's derive
+        // chain, bumping the version here without re-encrypting them
+        // would orphan the user's data.
         let kdf_version = self.read_kdf_version()?;
 
         // Update in database (kdf_version unchanged on rotate)
@@ -635,6 +688,12 @@ impl MasterPasswordManager {
         ))
     }
 
+    /// Derive a key from the password using Argon2.
+    ///
+    /// SEV-DESK-11: branches on `kdf_version`. Legacy (v1) keeps the
+    /// `salt.as_str().as_bytes()` behaviour bit-for-bit so existing
+    /// vaults stay decryptable. Current (v2) decodes the salt into raw
+    /// bytes via `Salt::decode_b64`, the cryptographically correct form.
     fn derive_password_key(
         &self,
         password: &str,
@@ -694,6 +753,10 @@ impl MasterPasswordManager {
     ) -> Result<Vec<u8>, MasterPasswordError> {
         use hmac::{Hmac, Mac};
 
+        // Create purpose-specific info string. Mirror the kdf_version into
+        // the HKDF info so v1 and v2 derive distinct keys even when the
+        // input_key is identical, this defends against v1↔v2 confusion
+        // attacks if a per-install upgrade mechanism is added later.
         let info = format!("agiworkforce:{}:v{}", purpose.as_str(), kdf_version);
 
         // HKDF-Extract: PRK = HMAC(salt, IKM)
@@ -737,15 +800,22 @@ pub fn derive_key_base64(
 mod tests {
     use super::*;
 
+    // SEV-DESK-04: test fixtures updated to satisfy the new
+    // `enforce_password_complexity` rule (>= 12 chars, 3-of-4 of
+    // {lowercase, uppercase, digit, symbol}).
+    // gitleaks:allow (test fixture, not a real secret)
     fn valid_test_passphrase() -> &'static str {
         "Alpha-Beta-Unique-Phrase-9"
     }
+    // gitleaks:allow (test fixture, not a real secret)
     fn alternate_test_passphrase() -> &'static str {
         "Gamma-Delta-Alt-Phrase-7"
     }
+    // gitleaks:allow (test fixture, not a real secret)
     fn invalid_test_passphrase() -> &'static str {
         "Nonmatching-Phrase-1"
     }
+    // gitleaks:allow (test fixture, not a real secret)
     fn too_short_test_passphrase() -> &'static str {
         "Tiny-1A"
     }
@@ -785,6 +855,9 @@ mod tests {
         assert_eq!(v1_a, v1_b, "v1 must be deterministic");
         assert_eq!(v2_a, v2_b, "v2 must be deterministic");
 
+        // v1 and v2 must produce different bytes, proves the salt encoding
+        // branch is actually taken and confusion attacks (using the wrong
+        // path) yield a key that cannot decrypt the other version's data.
         assert_ne!(v1_a, v2_a, "v1 and v2 must differ");
 
         // Both must be 32 bytes (AES-256 key size).
@@ -792,6 +865,11 @@ mod tests {
         assert_eq!(v2_a.len(), ARGON2_OUTPUT_LEN);
     }
 
+    /// SEV-DESK-11/13: end-to-end smoke test, a fresh `setup()` writes
+    /// the row at `KDF_VERSION_CURRENT`, and `derive_key` reads that
+    /// version back through `read_kdf_version`. This protects against a
+    /// regression where the column read returns the legacy default and
+    /// silently uses the wrong derive path on new installs.
     #[test]
     fn test_setup_writes_current_kdf_version() {
         let manager = create_test_manager();
@@ -810,6 +888,9 @@ mod tests {
         assert_eq!(k1.len(), DERIVED_KEY_SIZE);
     }
 
+    /// SEV-DESK-11/13: simulate an existing v1 install, manually flip the
+    /// stored version to legacy after setup and confirm derive_key continues
+    /// to work and produces a v1 byte stream (different from v2).
     #[test]
     fn test_legacy_v1_record_continues_working() {
         let manager = create_test_manager();

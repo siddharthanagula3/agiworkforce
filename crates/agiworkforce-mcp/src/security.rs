@@ -1,3 +1,14 @@
+//! Network hardening helpers for remote MCP transports.
+//!
+//! Ported from the desktop transport's `validate_mcp_server_url` (Wave 5 stage
+//! d2) so the SSRF posture survives the transport swap onto this crate.
+//! Transport bringup enforcement is opt-in via
+//! [`crate::McpTimeouts::validate_urls`], the CLI keeps its original behavior
+//! (LAN MCP servers reachable) unless a host turns the knob on. The OAuth flow
+//! is not opt-in: every URL it fetches is named by the remote server, so
+//! [`resolve_validated_endpoint`] runs there unconditionally, anchored on the
+//! server URL the user configured so a remote party can never widen its own
+//! reach into this machine.
 
 use anyhow::{Context, Result, anyhow, bail};
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr};
@@ -132,6 +143,25 @@ enum AddrClass {
     Forbidden(&'static str),
 }
 
+/// Validate `url`, pin its host to the addresses it resolves to right now, and
+/// refuse any address that reaches further into this machine's networks than
+/// `anchor` already does.
+///
+/// [`validate_server_url`] only inspects the literal host text, so a hostname
+/// that resolves to 127.0.0.1, 10.0.0.0/8 or 169.254.169.254 sails through it.
+/// Any caller that fetches a URL supplied by a remote party must resolve the
+/// name first, reject every address the remote party has no business naming,
+/// and hand the surviving addresses to `reqwest::ClientBuilder::resolve_to_addrs`
+///, otherwise a second lookup can rebind the name to an internal target
+/// between the check and the connect.
+///
+/// `anchor` is the trust root: the URL the *user* configured (the MCP server,
+/// or the record cached from a flow against it). A remote server may name its
+/// own authorization server, but it must not be able to name
+/// `http://127.0.0.1:9200/` and have this process fetch it. Loopback is
+/// unlocked only when `anchor` literally names the local machine, never by
+/// resolution, which a rebind could steer, and RFC 1918 / CGNAT / ULA targets
+/// only when `anchor` is itself reached at such an address.
 pub async fn resolve_validated_endpoint(url: &str, anchor: &str) -> Result<ValidatedEndpoint> {
     validate_server_url(url)?;
     enforce_https_for_remote(url)?;
@@ -174,6 +204,14 @@ pub async fn resolve_validated_endpoint(url: &str, anchor: &str) -> Result<Valid
     })
 }
 
+/// Validate a URL that is handed to the user's browser instead of being fetched
+/// here.
+///
+/// DNS pinning would prove nothing (the browser resolves the name itself), but
+/// the scheme does: anything other than http(s) turns the host's "open this
+/// URL" call into a command surface. The loopback rule is the same as
+/// [`resolve_validated_endpoint`]'s, a public authorization server must not be
+/// able to drive the browser at services listening on this machine.
 pub fn validate_browser_endpoint(url: &str, anchor: &str) -> Result<()> {
     let parsed =
         reqwest::Url::parse(url).map_err(|e| anyhow!("Invalid OAuth authorization URL: {e}"))?;
@@ -371,6 +409,29 @@ pub fn enforce_same_origin(expected: &str, candidate: &str, what: &str) -> Resul
     Ok(())
 }
 
+/// Decide whether a transport may skip TLS certificate verification.
+///
+/// WHY THIS LIVES HERE. `danger_accept_invalid_certs(true)` is called in
+/// `transport/http.rs` and `transport/sse.rs` whenever [`crate::McpTimeouts`]
+/// carries `verify_tls: false`. The only guard against that was in the DESKTOP
+/// caller (`apps/desktop/src-tauri/src/core/mcp/transport.rs`, SEV-DESK-07).
+/// far away from the code that performs the dangerous action, and invisible to
+/// any other caller. The CLI happens to pass `McpTimeouts::default()`
+/// (`verify_tls: true`), so nothing is exploitable today, but the safety
+/// property held only by luck and by a guard in a different crate. One new
+/// caller, or one new config knob, and TLS silently downgrades.
+///
+/// The policy is the desktop's, moved to where it is actually enforceable:
+///
+/// - Release builds refuse `verify_tls: false` for ANY host. A malicious or
+///   mistaken config file must not be able to downgrade TLS on a shipped
+///   binary, regardless of what it points at.
+/// - Debug builds allow it for loopback only, so a developer can run a local
+///   MCP server behind a self-signed certificate without disabling the check
+///   for the whole internet.
+///
+/// The desktop's own check stays where it is; it is now defence in depth
+/// rather than the sole barrier.
 pub fn enforce_tls_verification_policy(url: &str, verify_tls: bool) -> Result<()> {
     if verify_tls {
         return Ok(());
