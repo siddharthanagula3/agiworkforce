@@ -93,7 +93,7 @@ export class WorkspaceIndexer {
         files,
       } satisfies CacheEntry);
     } catch {
-      // noop
+      return;
     }
   }
 
