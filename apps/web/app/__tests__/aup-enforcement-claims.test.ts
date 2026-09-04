@@ -133,13 +133,14 @@ const AUP_PROSE = AUP.replace(/\s+/g, ' ');
 
 describe('Q-7 · the sandbox description matches what the runtime provisions', () => {
   const RUNTIME = readWeb('lib/e2b/runtime.ts');
+  const EGRESS_HOSTS = readWeb('lib/e2b/egress-hosts.ts');
 
   it('names the three outbound network policies the runtime actually implements', () => {
     expect(AUP).toContain('<code>none</code>');
     expect(AUP).toContain('<code>trusted</code>');
     expect(AUP).toContain('<code>full</code>');
-    expect(RUNTIME).toContain("scope.networkAccess === 'full'");
-    expect(RUNTIME).toContain("scope.networkAccess === 'trusted'");
+    expect(RUNTIME).toContain("networkAccess === 'full'");
+    expect(RUNTIME).toContain("networkAccess === 'trusted'");
     expect(RUNTIME).toContain('allowInternetAccess: false');
   });
 
@@ -153,8 +154,23 @@ describe('Q-7 · the sandbox description matches what the runtime provisions', (
     expect(AUP_PROSE).toContain(
       'a fixed allowlist of package and source hosts, everything else denied',
     );
-    expect(RUNTIME).toContain('allowOut: [...TRUSTED_CODE_HOSTS]');
+    expect(RUNTIME).toContain("if (networkAccess === 'trusted') {");
+    expect(RUNTIME).toContain('for (const host of TRUSTED_CODE_HOSTS) hosts.add(host);');
     expect(RUNTIME).toContain('denyOut: [ALL_OUTBOUND_TRAFFIC]');
+  });
+
+  it('claims a per-session extra host allowlist because extraHosts is validated and applied', () => {
+    expect(AUP_PROSE).toContain('add up to ten of your own hostnames to that allowlist');
+    expect(EGRESS_HOSTS).toContain('export const MAX_EXTRA_EGRESS_HOSTS = 10;');
+    expect(RUNTIME).toContain('for (const host of extraHosts ?? []) hosts.add(host);');
+  });
+
+  it('claims the provider-credential proxy stays reachable under none because it is always allowed', () => {
+    expect(AUP_PROSE).toContain(
+      'provider-credential proxy stays reachable at every setting, including',
+    );
+    expect(RUNTIME).toContain('const proxyHost = providerProxyHost();');
+    expect(RUNTIME).toContain('if (proxyHost) hosts.add(proxyHost);');
   });
 });
 
