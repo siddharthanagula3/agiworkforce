@@ -169,6 +169,7 @@ import {
   executeManagedSkillTool,
   executeManagedSkillToolForPlugins,
 } from '@/lib/services/skill-catalog-service';
+import { getSkillInstallOverrides } from '@/lib/services/skill-install-service';
 import { listEnabledPluginIdsForUser } from '@/lib/services/plugin-installation-service';
 import { findUserSkillByName } from '@/lib/services/user-skill-service';
 import { functionToolName } from './tool-loop-routing';
@@ -1336,6 +1337,7 @@ function toolErrorContent(err: unknown): string {
 }
 
 const SKILL_LOAD_ACTION = 'load';
+const EMPTY_SKILL_INSTALL_OVERRIDES: ReadonlyMap<string, boolean> = new Map();
 
 function skillLoadRequestedName(args: Record<string, unknown>): string | null {
   return args['action'] === SKILL_LOAD_ACTION &&
@@ -1359,6 +1361,7 @@ async function runMcpTool(
     allowInputRequired?: boolean;
     inputResponses?: Record<string, unknown>;
     requestState?: string;
+    loadSkillInstallOverrides?: () => Promise<ReadonlyMap<string, boolean>>;
   },
 ): Promise<ToolLoopToolResult> {
   if (toolCall.qualifiedName === SKILL_TOOL_NAME) {
@@ -1366,11 +1369,14 @@ async function runMcpTool(
       return { content: `Unknown tool: ${SKILL_TOOL_NAME}`, isError: true };
     }
     const userId = executionContext?.userId;
+    const installOverrides = userId
+      ? await executionContext?.loadSkillInstallOverrides?.()
+      : undefined;
     const result = userId
       ? await executeManagedSkillToolForPlugins(
           await listEnabledPluginIdsForUser(userId),
           toolCall.args,
-          { availableTools },
+          { availableTools, installOverrides },
         )
       : await executeManagedSkillTool(toolCall.args, { availableTools });
     if (result.code === 'skill_not_found' && userId) {
@@ -1896,6 +1902,16 @@ export async function* runToolLoop(
   const startedAt = now();
   const approvalMode = options.approvalMode ?? 'manual';
   const unattended = options.unattended === true;
+  const skillInstallOverridesUserId = options.userId;
+  let skillInstallOverridesPromise: Promise<ReadonlyMap<string, boolean>> | undefined;
+  const loadSkillInstallOverrides = (): Promise<ReadonlyMap<string, boolean>> => {
+    if (!skillInstallOverridesUserId) return Promise.resolve(EMPTY_SKILL_INSTALL_OVERRIDES);
+    skillInstallOverridesPromise ??= getSkillInstallOverrides(
+      getNeonDb(),
+      skillInstallOverridesUserId,
+    );
+    return skillInstallOverridesPromise;
+  };
   const encoder = new TextEncoder();
   const responseModel = processed.requestedModel;
   const turnId = options.eventTurnId ?? (processed.requestId || crypto.randomUUID());
@@ -2438,6 +2454,7 @@ export async function* runToolLoop(
           organizationId: processed.organizationId ?? null,
           model: responseModel,
           webSearchMaxResults: processed.freeTrial ? WEB_SEARCH_FREE_MAX_RESULTS : undefined,
+          loadSkillInstallOverrides,
           ...(options.signal ? { signal: options.signal } : {}),
           ...(allowConnectorInputRequired ? { allowInputRequired: true } : {}),
           ...(resumeInput ? { inputResponses: resumeInput.inputResponses } : {}),

@@ -243,3 +243,91 @@ describe('progressive-disclosure skill offer', () => {
     );
   });
 });
+
+describe('per-user skill install overrides', () => {
+  it('hides an uninstalled skill from the implicit offer', async () => {
+    mocks.scopedQuery.mockImplementation(async (sql: string) =>
+      sql.includes('user_settings')
+        ? [{ settings: { skills: { installs: { 'design-review': false } } } }]
+        : [],
+    );
+
+    const result = await processRequest(
+      chatRequestFor('skill-offer-overrides-1', 'Review the interface polish for this release.'),
+      auth(),
+    );
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const systemMessages = result.chatRequest.messages
+      .filter((message) => message.role === 'system')
+      .map((message) => String(message.content));
+    expect(systemMessages.some((content) => content.includes('<name>design-review</name>'))).toBe(
+      false,
+    );
+    expect(result.chatRequest.tools?.map((tool) => tool.function.name) ?? []).not.toContain(
+      SKILL_TOOL_NAME,
+    );
+  });
+
+  it('refuses to load an uninstalled skill by explicit name with the standard not-found response', async () => {
+    mocks.scopedQuery.mockImplementation(async (sql: string) =>
+      sql.includes('user_settings')
+        ? [{ settings: { skills: { installs: { 'design-review': false } } } }]
+        : [],
+    );
+
+    const result = await processRequest(
+      chatRequestFor('skill-offer-overrides-2', 'Review the interface polish for this release.', {
+        skill_name: 'design-review',
+      }),
+      auth(),
+    );
+
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.response.status).toBe(422);
+    const body = (await result.response.json()) as { error: { code: string; message: string } };
+    expect(body.error.code).toBe('skill_not_found');
+    expect(body.error.message).toBe('The selected skill is not available.');
+  });
+
+  it('keeps a plugin-owned skill loadable even when the entry is overridden false', async () => {
+    const pluginSkill: Skill = {
+      name: 'plugin-review',
+      description: 'Plugin-provided review helper.',
+      body: 'PLUGIN SKILL BODY',
+      contentHash: `sha256:${'1'.repeat(64)}`,
+      filePath: '/srv/private/skills/plugin-review/SKILL.md',
+      source: 'managed-local',
+      metadata: {},
+      frontmatter: { plugin: 'demo-plugin' },
+    };
+    mocks.managedSkillCatalog.mockResolvedValue([...CATALOG, pluginSkill]);
+    mocks.scopedQuery.mockImplementation(async (sql: string) =>
+      sql.includes('user_settings')
+        ? [{ settings: { skills: { installs: { 'plugin-review': false } } } }]
+        : [],
+    );
+
+    const result = await processRequest(
+      chatRequestFor('skill-offer-overrides-3', 'Use the plugin review helper.', {
+        skill_name: 'plugin-review',
+      }),
+      auth(),
+    );
+
+    expect(result.ok).toBe(true);
+  });
+
+  it('leaves a default-installed skill with no override entry unchanged', async () => {
+    const result = await processRequest(
+      chatRequestFor('skill-offer-overrides-4', 'Review the interface polish for this release.', {
+        skill_name: 'design-review',
+      }),
+      auth(),
+    );
+
+    expect(result.ok).toBe(true);
+  });
+});
