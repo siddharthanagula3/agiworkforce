@@ -41,6 +41,12 @@ describe('provider proxy constants', () => {
     vi.unstubAllEnvs();
   });
 
+  it('falls back to the public app url when the explicit origin is malformed', () => {
+    vi.stubEnv('AGI_PROVIDER_PROXY_ORIGIN', 'not a url');
+    expect(resolveAppOrigin()).toBe('https://app.agiworkforce.test');
+    vi.unstubAllEnvs();
+  });
+
   it('builds the proxy base URL and host from the deployment origin', () => {
     expect(resolveAppOrigin()).toBe('https://app.agiworkforce.test');
     expect(providerProxyBaseUrl('sess-1')).toBe(
