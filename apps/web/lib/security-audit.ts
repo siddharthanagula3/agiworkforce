@@ -231,6 +231,10 @@ export type AuditEventType =
   | 'data_exported'
   | 'account_deletion_requested'
   | 'account_deletion_cancelled'
+  | 'organization_deletion_requested'
+  | 'organization_deletion_cancelled'
+  | 'organization_deletion_blocked'
+  | 'organization_deletion_completed'
   | 'two_factor_disabled'
   | 'admin_policy_changed'
   | 'retention_sweep_completed'
@@ -491,6 +495,11 @@ function inferResourceType(eventType: AuditEventType): string {
     case 'account_deletion_requested':
     case 'account_deletion_cancelled':
       return 'account';
+    case 'organization_deletion_requested':
+    case 'organization_deletion_cancelled':
+    case 'organization_deletion_blocked':
+    case 'organization_deletion_completed':
+      return 'organization';
     case 'two_factor_disabled':
       return 'two_factor';
     case 'admin_policy_changed':
