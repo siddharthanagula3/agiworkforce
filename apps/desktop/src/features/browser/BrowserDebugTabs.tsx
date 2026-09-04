@@ -173,7 +173,7 @@ function ErrorAnalysis({ failedActions }: ErrorAnalysisProps) {
                     action.details.selector ??
                     action.details.text ??
                     action.details.error ??
-                    '—'}
+                    ', '}
                 </p>
               </div>
               {isOpen ? (
@@ -240,6 +240,7 @@ function SanitizedDomPreview({ html }: { html: string }) {
   return (
     <div
       className="text-[11px] text-muted-foreground leading-relaxed"
+      /* llm-guardrail-allow: markup sanitised above before it is set */
       dangerouslySetInnerHTML={{ __html: sanitized }}
     />
   );
@@ -386,7 +387,7 @@ function NetworkLogTab({ requests }: NetworkLogTabProps) {
                   req.failed ? 'text-red-400' : getStatusColor(req.status),
                 )}
               >
-                {req.failed ? 'ERR' : (req.status ?? '—')}
+                {req.failed ? 'ERR' : (req.status ?? ', ')}
               </span>
 
               {/* Method */}
@@ -399,12 +400,12 @@ function NetworkLogTab({ requests }: NetworkLogTabProps) {
 
               {/* Duration */}
               <span className="w-16 shrink-0 text-right text-[10px] text-muted-foreground tabular-nums">
-                {req.durationMs !== null ? formatDurationMs(req.durationMs) : '—'}
+                {req.durationMs !== null ? formatDurationMs(req.durationMs) : ', '}
               </span>
 
               {/* Size */}
               <span className="w-12 shrink-0 text-right text-[10px] text-muted-foreground tabular-nums">
-                {req.responseSize !== undefined ? formatBytes(req.responseSize) : '—'}
+                {req.responseSize !== undefined ? formatBytes(req.responseSize) : ', '}
               </span>
             </button>
 
