@@ -159,7 +159,8 @@ function makeFakeDb() {
 
 import { POST as createApiKeyRoute } from '@/app/api/settings/api-keys/route';
 import { DELETE as revokeApiKeyRoute } from '@/app/api/settings/api-keys/[keyId]/route';
-import { getClerkAuthUser } from '@/lib/api-auth';
+import { assertAccountActive, getClerkAuthUser } from '@/lib/api-auth';
+import { getSharedRedisClient } from '@/lib/rate-limit';
 import { isMfaRequiredError } from '@/lib/mfa-policy-gate';
 import { isIpNotAllowedError } from '@/lib/ip-allow-list-gate';
 import {
@@ -767,5 +768,43 @@ describe('getClerkAuthUser · API-key issue/verify unification', () => {
         }),
       ).rejects.toSatisfy((error: unknown) => isMfaRequiredError(error));
     });
+  });
+});
+
+describe('assertAccountActive, warm Redis cache', () => {
+  function fakeCacheRedis() {
+    const store = new Map<string, unknown>();
+    return {
+      get: vi.fn(async (key: string) => store.get(key) ?? null),
+      set: vi.fn(async (key: string, value: unknown) => {
+        store.set(key, value);
+        return 'OK';
+      }),
+      del: vi.fn(async (key: string) => (store.delete(key) ? 1 : 0)),
+    };
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('reads Postgres once across two consecutive calls for the same user', async () => {
+    mockNeonQuery.mockResolvedValue([{ account_status: null }]);
+    vi.mocked(getSharedRedisClient).mockReturnValue(fakeCacheRedis() as never);
+
+    await expect(assertAccountActive('user-warm-1')).resolves.toBeUndefined();
+    await expect(assertAccountActive('user-warm-1')).resolves.toBeUndefined();
+
+    expect(mockNeonQuery).toHaveBeenCalledTimes(1);
+  });
+
+  it('rejects from the cached suspended status without a second Postgres read', async () => {
+    mockNeonQuery.mockResolvedValue([{ account_status: 'suspended' }]);
+    vi.mocked(getSharedRedisClient).mockReturnValue(fakeCacheRedis() as never);
+
+    await expect(assertAccountActive('user-warm-2')).rejects.toMatchObject({ statusCode: 403 });
+    await expect(assertAccountActive('user-warm-2')).rejects.toMatchObject({ statusCode: 403 });
+
+    expect(mockNeonQuery).toHaveBeenCalledTimes(1);
   });
 });

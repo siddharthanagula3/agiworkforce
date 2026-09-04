@@ -6,6 +6,10 @@ import {
   MANAGED_CLOUD_PERSONAL_WORKSPACE_HEADER_VALUE,
 } from '@agiworkforce/cloud-contracts';
 import { createError } from '@/lib/errors';
+import {
+  getCachedActiveOrganizationId,
+  setCachedActiveOrganizationId,
+} from '@/lib/server/request-context-cache';
 
 export const PERSONAL_WORKSPACE_KEY = MANAGED_CLOUD_PERSONAL_WORKSPACE_HEADER_VALUE;
 
@@ -34,12 +38,17 @@ export async function resolveActiveOrganizationId(
     if (!UUID_RE.test(requested)) {
       throw createError.validation('Invalid Managed Cloud workspace selector');
     }
+    const cached = await getCachedActiveOrganizationId(userId);
+    if (cached === requested) return requested;
     const membershipId = await resolveOrganizationMembershipId(db, userId, requested);
     if (!membershipId) {
       throw createError.forbidden('You are not a member of that workspace');
     }
     return membershipId;
   }
+
+  const cached = await getCachedActiveOrganizationId(userId);
+  if (cached !== undefined) return cached;
 
   const [row] = await db.query<{ organization_id: string }>(
     `select m.organization_id
@@ -51,7 +60,9 @@ export async function resolveActiveOrganizationId(
       limit 1`,
     [userId],
   );
-  return row?.organization_id ?? null;
+  const organizationId = row?.organization_id ?? null;
+  await setCachedActiveOrganizationId(userId, organizationId);
+  return organizationId;
 }
 
 export async function resolveOrganizationMembershipId(
@@ -124,6 +135,8 @@ async function writeActiveWorkspaceSelection(
        updated_at = timezone('utc'::text, now())`,
     [userId, value],
   );
+
+  await setCachedActiveOrganizationId(userId, organizationId);
 }
 
 export async function persistActiveWorkspaceSelection(

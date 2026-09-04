@@ -2,6 +2,7 @@ import 'server-only';
 
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import { logger } from '@/lib/logger';
+import { invalidateActiveOrganizationCache } from '@/lib/server/request-context-cache';
 import type {
   ScimGroupRow,
   ScimProvisionedUserRow,
@@ -434,6 +435,7 @@ export async function reconcileMembership(
         [ctx.organizationId, linkedUserId],
       );
       revoked = deleted > 0;
+      if (revoked) await invalidateActiveOrganizationCache(linkedUserId);
     }
     return { linkedUserId, membershipGranted: false, membershipRevoked: revoked, role: null };
   }
@@ -933,6 +935,7 @@ export async function deleteScimUser(
       [ctx.organizationId, existing.linked_user_id],
     );
     membershipRevoked = deleted > 0;
+    if (membershipRevoked) await invalidateActiveOrganizationCache(existing.linked_user_id);
   }
 
   await db.execute(
@@ -1157,6 +1160,7 @@ export async function reconcileGroupMembers(
       [ctx.organizationId, batch],
     );
   }
+  await Promise.all(revoked.map((userId) => invalidateActiveOrganizationCache(userId)));
 
   const grantable = present.filter(
     (row) => row.active && row.linked_user_id && ownsEmailDomain(row.email, domains),
