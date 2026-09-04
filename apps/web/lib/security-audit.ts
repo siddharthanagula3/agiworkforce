@@ -284,7 +284,8 @@ export interface AuditEventDetail {
   subjectRef?: string;
   scopes?: string[];
   changedKeys?: string[];
-  ipAllowListChange?: { from: unknown; to: unknown };
+  ipAllowListBefore?: string[];
+  ipAllowListAfter?: string[];
   count?: number;
   reason?: string;
   status?: string;
@@ -325,7 +326,8 @@ const AUDIT_DETAIL_KEYS: ReadonlySet<string> = new Set<keyof AuditEventDetail & 
   'subjectRef',
   'scopes',
   'changedKeys',
-  'ipAllowListChange',
+  'ipAllowListBefore',
+  'ipAllowListAfter',
   'deleted',
   'held',
   'dryRun',

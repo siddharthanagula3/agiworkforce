@@ -31,6 +31,12 @@ import { resolveMfaEnrolled } from '@/lib/mfa-policy-gate';
 
 const MFA_GATE_EXEMPT_OWNER_OPTIONS = { mfaGateExemptForOwner: true } as const;
 
+function cidrList(value: unknown): string[] {
+  return Array.isArray(value)
+    ? value.filter((item): item is string => typeof item === 'string')
+    : [];
+}
+
 export const runtime = 'nodejs';
 
 const PrivacyModeSchema = z.enum(['local', 'byok', 'managed']);
@@ -226,7 +232,12 @@ async function handlePatch(request: NextRequest): Promise<NextResponse | Respons
       role: membership.role,
       status: before ? 'updated' : 'created',
       changedKeys: Object.keys(changed),
-      ...(changed['ipAllowList'] ? { ipAllowListChange: changed['ipAllowList'] } : {}),
+      ...(changed['ipAllowList']
+        ? {
+            ipAllowListBefore: cidrList(changed['ipAllowList'].from),
+            ipAllowListAfter: cidrList(changed['ipAllowList'].to),
+          }
+        : {}),
     },
   });
 

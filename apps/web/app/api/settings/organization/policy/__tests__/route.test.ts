@@ -439,12 +439,10 @@ describe('PATCH /api/settings/organization/policy', () => {
     );
 
     const event = mockRecordAuditEvent.mock.calls[0]?.[0] as {
-      detail: { ipAllowListChange?: { from: unknown; to: unknown } };
+      detail: { ipAllowListBefore?: string[]; ipAllowListAfter?: string[] };
     };
-    expect(event.detail.ipAllowListChange).toEqual({
-      from: ['203.0.113.0/24'],
-      to: ['203.0.113.0/24', '2001:db8::/32'],
-    });
+    expect(event.detail.ipAllowListBefore).toEqual(['203.0.113.0/24']);
+    expect(event.detail.ipAllowListAfter).toEqual(['203.0.113.0/24', '2001:db8::/32']);
   });
 
   it('deduplicates repeated modes and surfaces before writing', async () => {
