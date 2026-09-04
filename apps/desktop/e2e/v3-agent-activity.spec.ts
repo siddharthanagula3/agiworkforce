@@ -235,7 +235,8 @@ test('Desktop Cloud renders one collapsed, progressively expandable canonical ac
 
   const activityToggle = assistant.getByRole('button', { name: /show agent activity/i });
   await expect(activityToggle).toHaveAttribute('aria-expanded', 'false');
-  await expect(activityToggle).toContainText('Searching official sources');
+  await expect(activityToggle).toContainText('Searched the web · 1 source');
+  await expect(activityToggle).not.toContainText('Searching official sources');
   await expect(activityToggle).not.toContainText(/Done in|1 tool/);
   await expect(assistant.getByText('Official AGI documentation')).toHaveCount(0);
 
