@@ -29,6 +29,13 @@ import {
   persistProvenActiveWorkspaceSelection,
   resolveActiveOrganizationId,
 } from '@/lib/services/active-workspace-service';
+import { requireOrganizationOwner } from '@/lib/services/organization-membership-service';
+import { recordAuditEvent } from '@/lib/security-audit';
+import {
+  ORGANIZATION_DELETION_COOLING_PERIOD_DAYS,
+  isMissingOrganizationDeletionColumns,
+  organizationDeletionScheduledFor,
+} from '@/lib/server/organization-deletion';
 
 let stripeClient: Stripe | null = null;
 function getStripe(): Stripe {
@@ -103,6 +110,47 @@ function buildOrgResponse(
   };
 }
 
+interface OrganizationDeletionStatus {
+  pending: boolean;
+  requestedAt: string | null;
+  scheduledFor: string | null;
+  canCancel: boolean;
+}
+
+const NO_PENDING_DELETION: OrganizationDeletionStatus = {
+  pending: false,
+  requestedAt: null,
+  scheduledFor: null,
+  canCancel: false,
+};
+
+async function fetchOrganizationDeletionStatus(
+  db: ReturnType<typeof getNeonDb>,
+  organizationId: string,
+): Promise<OrganizationDeletionStatus> {
+  try {
+    const [row] = await db.query<{
+      deletion_requested_at: string | null;
+      deletion_scheduled_for: string | null;
+    }>(
+      `select deletion_requested_at, deletion_scheduled_for
+         from public.organizations
+        where id = $1`,
+      [organizationId],
+    );
+    const scheduledFor = row?.deletion_scheduled_for ?? null;
+    return {
+      pending: scheduledFor !== null,
+      requestedAt: scheduledFor !== null ? (row?.deletion_requested_at ?? null) : null,
+      scheduledFor,
+      canCancel: scheduledFor !== null && new Date(scheduledFor).getTime() > Date.now(),
+    };
+  } catch (error) {
+    if (isMissingOrganizationDeletionColumns(error)) return NO_PENDING_DELETION;
+    throw error;
+  }
+}
+
 async function handleGet(request: NextRequest) {
   const rateLimitResponse = await withRateLimit(request, 'settings-org');
   if (rateLimitResponse) return rateLimitResponse;
@@ -133,6 +181,7 @@ async function handleGet(request: NextRequest) {
       activeOrganizationId: null,
       workspaces,
       access,
+      deletion: NO_PENDING_DELETION,
     });
   }
 
@@ -152,14 +201,18 @@ async function handleGet(request: NextRequest) {
       activeOrganizationId: null,
       workspaces,
       access,
+      deletion: NO_PENDING_DELETION,
     });
   }
+
+  const deletion = await fetchOrganizationDeletionStatus(db, org.id);
 
   return NextResponse.json({
     organization: buildOrgResponse(org, membership, access),
     activeOrganizationId: org.id,
     workspaces,
     access,
+    deletion,
   });
 }
 
@@ -389,9 +442,106 @@ async function handlePatch(request: NextRequest) {
   });
 }
 
+const DeleteSchema = z.object({
+  confirm: z.string().trim().min(1).max(120),
+});
+
+async function handleDelete(request: NextRequest) {
+  const rateLimitResponse = await withRateLimit(request, 'settings-org-delete');
+  if (rateLimitResponse) return rateLimitResponse;
+
+  const csrfError = await requireCsrfToken(request);
+  if (csrfError) return csrfError as NextResponse;
+
+  const { userId } = await getClerkAuthUser(request);
+  const db = getNeonDb();
+
+  const activeOrganizationId = await resolveActiveOrganizationId(db, userId);
+  if (!activeOrganizationId) {
+    throw createError.notFound('Select a workspace before deleting it');
+  }
+
+  await requireOrganizationOwner(db, userId, activeOrganizationId, 'schedule its deletion');
+
+  const body = await request.json().catch(() => ({}));
+  const parsed = DeleteSchema.safeParse(body);
+  if (!parsed.success) {
+    throw createError.validation('Invalid request body', parsed.error.issues);
+  }
+
+  const [org] = await db.query<{ id: string; name: string; slug: string }>(
+    `select id, name, slug from public.organizations where id = $1`,
+    [activeOrganizationId],
+  );
+  if (!org) {
+    throw createError.notFound('Workspace not found');
+  }
+
+  if (parsed.data.confirm !== org.name && parsed.data.confirm !== org.slug) {
+    throw createError.validation(
+      'Confirmation did not match the workspace name or slug. Nothing was scheduled for deletion.',
+    );
+  }
+
+  const existing = await fetchOrganizationDeletionStatus(db, org.id);
+  if (existing.pending && existing.canCancel) {
+    return NextResponse.json({
+      message: `Workspace deletion is already scheduled for ${existing.scheduledFor}.`,
+      scheduledFor: existing.scheduledFor,
+      coolingPeriodDays: ORGANIZATION_DELETION_COOLING_PERIOD_DAYS,
+    });
+  }
+
+  const scheduledFor = organizationDeletionScheduledFor();
+
+  try {
+    const updated = await db.execute(
+      `update public.organizations
+          set deletion_requested_at = now(),
+              deletion_scheduled_for = $2,
+              deletion_requested_by = $3
+        where id = $1`,
+      [org.id, scheduledFor.toISOString(), userId],
+    );
+    if (updated === 0) {
+      throw createError.notFound('Workspace not found');
+    }
+  } catch (error) {
+    if (isMissingOrganizationDeletionColumns(error)) {
+      throw createError.serviceUnavailable(
+        'Workspace deletion is not available yet. Please try again later.',
+      );
+    }
+    throw error;
+  }
+
+  logger.warn({ userId, orgId: org.id }, 'Workspace deletion scheduled');
+
+  await recordAuditEvent({
+    userId,
+    eventType: 'organization_deletion_requested',
+    request,
+    organizationId: org.id,
+    severity: 'critical',
+    detail: {
+      resourceType: 'organization',
+      resourceId: org.id,
+      resourceName: org.name,
+      status: 'scheduled',
+    },
+  });
+
+  return NextResponse.json({
+    message: `Workspace deletion scheduled. Everything in this workspace will be permanently deleted in ${ORGANIZATION_DELETION_COOLING_PERIOD_DAYS} days. Cancel from Settings > Organization any time before then to keep it.`,
+    scheduledFor: scheduledFor.toISOString(),
+    coolingPeriodDays: ORGANIZATION_DELETION_COOLING_PERIOD_DAYS,
+  });
+}
+
 export const GET = withErrorHandler(handleGet);
 export const POST = withErrorHandler(handleCreate);
 export const PATCH = withErrorHandler(handlePatch);
+export const DELETE = withErrorHandler(handleDelete);
 
 export async function OPTIONS(request: NextRequest) {
   const preflightResponse = handleCorsPreflightRequest(request);
