@@ -50,6 +50,8 @@ export const USER_SCOPED_TABLES: ReadonlyArray<{ table: string; column: string }
   { table: 'messaging_connections', column: 'user_id' },
   { table: 'github_installations', column: 'user_id' },
   { table: 'plugin_installations', column: 'user_id' },
+  { table: 'plugin_marketplace_sources', column: 'user_id' },
+  { table: 'plugin_marketplace_installations', column: 'user_id' },
   { table: 'agent_tool_executions', column: 'user_id' },
   { table: 'agent_tools', column: 'user_id' },
   { table: 'agent_approval_requests', column: 'user_id' },
