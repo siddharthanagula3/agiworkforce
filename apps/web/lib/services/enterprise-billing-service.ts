@@ -143,6 +143,8 @@ const ENDED_SUBSCRIPTION_STATUSES: ReadonlySet<Stripe.Subscription.Status> = new
   'incomplete_expired',
 ]);
 
+const BLOCKING_INVOICE_STATUSES: readonly string[] = ['open', 'uncollectible'];
+
 async function resolveOrganizationIdForSubscriptionOwner(
   db: DatabaseAdapter,
   stripeSubscriptionId: string,
@@ -376,10 +378,10 @@ async function recomputeOldestOpenInvoice(
     `select stripe_invoice_id, due_at
        from public.organization_billing_invoices
       where organization_id = $1
-        and status = 'open'
+        and status = any($2::text[])
       order by due_at asc nulls last
       limit 1`,
-    [organizationId],
+    [organizationId, BLOCKING_INVOICE_STATUSES],
   );
 
   if (oldest) {
@@ -542,13 +544,17 @@ export async function endEnterpriseContractIfPresent(
   db: DatabaseAdapter,
   stripeSubscriptionId: string,
   endedAtIso: string,
+  eventCreatedAt: number,
 ): Promise<void> {
   await db.execute(
     `update public.organization_billing_contracts
-        set ended_at = $2::timestamptz
+        set ended_at = $2::timestamptz,
+            last_stripe_event_at = to_timestamp($3::double precision)
       where stripe_subscription_id = $1::text
-        and ended_at is null`,
-    [stripeSubscriptionId, endedAtIso],
+        and ended_at is null
+        and (last_stripe_event_at is null
+             or last_stripe_event_at <= to_timestamp($3::double precision))`,
+    [stripeSubscriptionId, endedAtIso, eventCreatedAt],
   );
 }
 
