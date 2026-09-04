@@ -291,8 +291,8 @@ describe('cloud agent workflow input', () => {
 
     // The metering proof for AGI-126. `tool-loop.ts` reads `processed.freeTrial`
     // to apply the free output-budget cap and `processed.managedUsage` to reserve
-    // per provider step. Rehydrating a free reservation onto `managedUsage` — as
-    // the unconditional `{ db, ...input.billing }` spread did — makes a durable
+    // per provider step. Rehydrating a free reservation onto `managedUsage`, as
+    // the unconditional `{ db, ...input.billing }` spread did, makes a durable
     // free turn skip the free cap entirely: durable AND unmetered.
     it('puts a free-trial reservation back on processed.freeTrial only', () => {
       const processed = makeProcessed();

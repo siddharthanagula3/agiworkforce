@@ -80,7 +80,7 @@ function streamErrorFrom(output: string): { message: string; code?: string; retr
   return JSON.parse(line!.replace(/^data: /, '')).choices[0].delta.x_stream_error;
 }
 
-describe('runToolLoop — a clean but empty provider step', () => {
+describe('runToolLoop, a clean but empty provider step', () => {
   beforeEach(() => {
     mockBuildToolLoopStream.mockReset();
   });

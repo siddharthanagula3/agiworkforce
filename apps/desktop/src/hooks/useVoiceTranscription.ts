@@ -556,8 +556,8 @@ export function useVoiceTranscription(
       speechRecognitionRef.current = null;
       try {
         recognition.stop();
-      } catch {
-        // noop
+      } catch (err) {
+        void err;
       }
       const final = speechFinalTranscriptRef.current.trim();
       isRecordingRef.current = false;
