@@ -483,6 +483,29 @@ describe('recordEnterpriseInvoiceEvent', () => {
     ).toBe(false);
   });
 
+  it('keeps uncollectible invoices in the oldest open computation', async () => {
+    const { db, calls } = makeDb((sql) => {
+      if (sql.includes('insert into public.organization_billing_invoices')) {
+        return [{ stripe_invoice_id: 'in_bad_1' }];
+      }
+      if (
+        sql.includes('from public.organization_billing_contracts') &&
+        sql.includes('stripe_subscription_id')
+      ) {
+        return [{ organization_id: 'org_1' }];
+      }
+      return [];
+    });
+    await recordEnterpriseInvoiceEvent(db, invoiceFixture({ status: 'uncollectible' }));
+    const oldest = calls.find(
+      (call) =>
+        call.sql.includes('from public.organization_billing_invoices') &&
+        call.sql.includes('order by due_at'),
+    );
+    expect(oldest?.sql).toContain('status = any($2::text[])');
+    expect(oldest?.params).toEqual(['org_1', ['open', 'uncollectible']]);
+  });
+
   it('upserts the invoice row and recomputes the oldest open invoice', async () => {
     const { db, calls } = makeDb((sql) => {
       if (sql.includes('insert into public.organization_billing_invoices')) {
@@ -653,13 +676,20 @@ describe('recordEnterpriseInvoiceEvent', () => {
 });
 
 describe('endEnterpriseContractIfPresent', () => {
-  it('sets ended_at only while it is still null', async () => {
+  it('sets ended_at only while it is still null and stamps the event time', async () => {
     const { db, calls } = makeDb(() => []);
-    await endEnterpriseContractIfPresent(db, 'sub_ent_1', '2026-01-01T00:00:00.000Z');
+    await endEnterpriseContractIfPresent(
+      db,
+      'sub_ent_1',
+      '2026-01-01T00:00:00.000Z',
+      1_767_225_600,
+    );
 
     expect(calls[0]!.sql).toContain('set ended_at = $2');
+    expect(calls[0]!.sql).toContain('last_stripe_event_at = to_timestamp($3::double precision)');
     expect(calls[0]!.sql).toContain('ended_at is null');
-    expect(calls[0]!.params).toEqual(['sub_ent_1', '2026-01-01T00:00:00.000Z']);
+    expect(calls[0]!.sql).toContain('last_stripe_event_at <= to_timestamp($3::double precision)');
+    expect(calls[0]!.params).toEqual(['sub_ent_1', '2026-01-01T00:00:00.000Z', 1_767_225_600]);
   });
 });
 

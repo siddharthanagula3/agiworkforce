@@ -188,6 +188,7 @@ describe('enterprise billing event wiring', () => {
       expect.anything(),
       'sub_cancel',
       new Date(NOW * 1000).toISOString(),
+      NOW,
     );
   });
 });
