@@ -35,10 +35,12 @@ function bind({
   role = 'member' as 'owner' | 'admin' | 'member' | 'viewer' | null,
   deletionRequestedAtIsMissingColumn = false,
   existingScheduledFor = null as string | null,
+  activeLegalHolds = 0,
 }: {
   role?: 'owner' | 'admin' | 'member' | 'viewer' | null;
   deletionRequestedAtIsMissingColumn?: boolean;
   existingScheduledFor?: string | null;
+  activeLegalHolds?: number;
 } = {}) {
   mockQuery.mockImplementation(async (sql: string) => {
     const text = String(sql);
@@ -50,6 +52,9 @@ function bind({
     }
     if (/select id, name, slug from public\.organizations/i.test(text)) {
       return [organizationRow()];
+    }
+    if (/count\(\*\)::int as count\s+from public\.legal_holds/i.test(text)) {
+      return [{ count: activeLegalHolds }];
     }
     if (/select deletion_requested_at/i.test(text)) {
       if (deletionRequestedAtIsMissingColumn) {
@@ -172,5 +177,27 @@ describe('DELETE /api/settings/organization', () => {
     bind({ role: 'owner', deletionRequestedAtIsMissingColumn: true });
     const res = await DELETE(req({ confirm: 'acme' }) as never);
     expect(res.status).toBe(503);
+  });
+
+  it('refuses to schedule deletion while a legal hold is active, naming the hold count', async () => {
+    bind({ role: 'owner', activeLegalHolds: 2 });
+    const res = await DELETE(req({ confirm: 'acme' }) as never);
+
+    expect(res.status).toBe(409);
+    const body = (await res.json()) as { error: { message: string } };
+    expect(body.error.message).toContain('2');
+    expect(mockExecute).not.toHaveBeenCalled();
+    expect(mockRecordAuditEvent).not.toHaveBeenCalled();
+  });
+
+  it('schedules deletion once every legal hold has been released', async () => {
+    bind({ role: 'owner', activeLegalHolds: 0 });
+    const res = await DELETE(req({ confirm: 'acme' }) as never);
+
+    expect(res.status).toBe(200);
+    expect(mockExecute).toHaveBeenCalledWith(
+      expect.stringContaining('deletion_scheduled_for'),
+      expect.arrayContaining([ORG, expect.any(String), 'user-1']),
+    );
   });
 });
