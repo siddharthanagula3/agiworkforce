@@ -17,6 +17,7 @@ import { apiKeyHasScope, type ApiKeyScope } from '@/lib/api-key-scopes';
 import { ApiKeyScopeError } from '@/lib/api-key-scope-error';
 import { getClerkAuthorizedParties } from '@/lib/clerk-authorized-parties';
 import { resolveOrgMembership } from '@/lib/services/org-sharing-service';
+import { getCachedAccountStatus, setCachedAccountStatus } from '@/lib/server/request-context-cache';
 
 export { getClerkAuthorizedParties } from '@/lib/clerk-authorized-parties';
 
@@ -88,6 +89,14 @@ async function withDeadline<T>(
 }
 
 export async function assertAccountActive(userId: string): Promise<void> {
+  const cachedStatus = await getCachedAccountStatus(userId);
+  if (cachedStatus !== undefined) {
+    if (cachedStatus === 'suspended' || cachedStatus === 'banned') {
+      throw createError.forbidden('Your account has been suspended. Please contact support.');
+    }
+    return;
+  }
+
   let lastError: unknown;
   for (let attempt = 0; attempt < ACCOUNT_STATUS_ATTEMPTS; attempt++) {
     let rows: { account_status: string | null }[];
@@ -108,7 +117,8 @@ export async function assertAccountActive(userId: string): Promise<void> {
       lastError = lookupError;
       continue;
     }
-    const status = rows[0]?.account_status;
+    const status = rows[0]?.account_status ?? null;
+    await setCachedAccountStatus(userId, status);
     if (status === 'suspended' || status === 'banned') {
       throw createError.forbidden('Your account has been suspended. Please contact support.');
     }

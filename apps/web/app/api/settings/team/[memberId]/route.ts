@@ -16,6 +16,7 @@ import { recordAuditEvent } from '@/lib/security-audit';
 import { clerkClient } from '@clerk/nextjs/server';
 import { deprovisionMember } from '@/lib/services/deprovision-service';
 import { withSeatAccountingErrors } from '@/lib/services/organization-seat-service';
+import { invalidateActiveOrganizationCache } from '@/lib/server/request-context-cache';
 import { requireTeamAdminAccess } from '../team-admin-access';
 
 const MEMBER_ID_RE = /^([0-9a-f-]{36}):(.+)$/;
@@ -135,6 +136,8 @@ async function handleRemove(
     }),
   );
 
+  await invalidateActiveOrganizationCache(targetUserId);
+
   logger.info({ requesterId, organizationId, targetUserId }, 'Team member removed');
 
   // Dropping the membership row stops the NEXT request from resolving this
@@ -245,6 +248,8 @@ async function handleUpdateRole(
       return targetRow.role;
     }),
   );
+
+  await invalidateActiveOrganizationCache(targetUserId);
 
   logger.info({ requesterId, organizationId, targetUserId, newRole }, 'Team member role updated');
 

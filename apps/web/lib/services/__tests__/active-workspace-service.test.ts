@@ -2,6 +2,9 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('server-only', () => ({}));
 
+const mocks = vi.hoisted(() => ({ getSharedRedisClient: vi.fn() }));
+vi.mock('@/lib/rate-limit', () => ({ getSharedRedisClient: mocks.getSharedRedisClient }));
+
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import {
   persistActiveWorkspaceSelection,
@@ -9,6 +12,18 @@ import {
   resolveActiveOrganizationId,
   resolveOrganizationMembershipId,
 } from '../active-workspace-service';
+
+function fakeCacheRedis() {
+  const store = new Map<string, unknown>();
+  return {
+    get: vi.fn(async (key: string) => store.get(key) ?? null),
+    set: vi.fn(async (key: string, value: unknown) => {
+      store.set(key, value);
+      return 'OK';
+    }),
+    del: vi.fn(async (key: string) => (store.delete(key) ? 1 : 0)),
+  };
+}
 
 const ORGANIZATION_ID = '11111111-1111-4111-8111-111111111111';
 
@@ -128,5 +143,32 @@ describe('active workspace persistence', () => {
 
     expect(h.query).not.toHaveBeenCalled();
     expect(h.execute).toHaveBeenCalledWith(expect.any(String), ['user-1', ORGANIZATION_ID]);
+  });
+});
+
+describe('active workspace persistence, warm Redis cache', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it('resolves the active organization from Postgres once across two consecutive calls', async () => {
+    const h = harness();
+    h.query.mockResolvedValue([{ organization_id: ORGANIZATION_ID }]);
+    mocks.getSharedRedisClient.mockReturnValue(fakeCacheRedis());
+
+    await expect(resolveActiveOrganizationId(h.db, 'user-1')).resolves.toBe(ORGANIZATION_ID);
+    await expect(resolveActiveOrganizationId(h.db, 'user-1')).resolves.toBe(ORGANIZATION_ID);
+
+    expect(h.query).toHaveBeenCalledTimes(1);
+  });
+
+  it('refreshes the cache immediately when the selection is written', async () => {
+    const h = harness();
+    h.query.mockResolvedValueOnce([{ organization_id: ORGANIZATION_ID }]);
+    mocks.getSharedRedisClient.mockReturnValue(fakeCacheRedis());
+
+    await persistActiveWorkspaceSelection(h.db, 'user-1', ORGANIZATION_ID);
+    h.query.mockClear();
+
+    await expect(resolveActiveOrganizationId(h.db, 'user-1')).resolves.toBe(ORGANIZATION_ID);
+    expect(h.query).not.toHaveBeenCalled();
   });
 });

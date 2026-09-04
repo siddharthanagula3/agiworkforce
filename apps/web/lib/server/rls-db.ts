@@ -16,6 +16,7 @@ import {
   resolveActiveOrganizationId,
   resolveOrganizationMembershipId,
 } from '@/lib/services/active-workspace-service';
+import { getCachedActiveOrganizationId } from '@/lib/server/request-context-cache';
 
 let rlsDb: DatabaseAdapter | null = null;
 
@@ -60,7 +61,10 @@ async function resolveRequestOrganizationId(
 ): Promise<string | null> {
   const explicit = readExplicitActiveOrgId(request);
   if (explicit !== undefined) {
-    return explicit ? resolveOrganizationMembershipId(getNeonDb(), userId, explicit) : null;
+    if (!explicit) return null;
+    const cached = await getCachedActiveOrganizationId(userId);
+    if (cached === explicit) return explicit;
+    return resolveOrganizationMembershipId(getNeonDb(), userId, explicit);
   }
   return resolveActiveOrganizationId(getNeonDb(), userId);
 }
