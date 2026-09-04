@@ -86,6 +86,7 @@ interface ErasureFixture {
   mediaRows?: Array<{ id: string; storage_pathname: string | null }>;
   failStatementMatching?: string;
   underLegalHold?: boolean;
+  activeLegalHolds?: number;
   legalHoldError?: Error;
   members?: Array<{ user_id: string }>;
 }
@@ -94,7 +95,7 @@ function primeDb(fixture: ErasureFixture = {}): void {
   mocks.query.mockImplementation(async (sql: string) => {
     if (sql.includes('public.legal_holds')) {
       if (fixture.legalHoldError) throw fixture.legalHoldError;
-      return [{ held: fixture.underLegalHold ?? false }];
+      return [{ count: fixture.activeLegalHolds ?? (fixture.underLegalHold ? 1 : 0) }];
     }
     if (sql.includes('select user_id from public.organization_members')) {
       return fixture.members ?? [];

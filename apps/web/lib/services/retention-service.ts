@@ -110,6 +110,19 @@ export async function listLegalHolds(
   return rows.map(formatHold);
 }
 
+export async function countActiveLegalHolds(
+  db: DatabaseAdapter,
+  organizationId: string,
+): Promise<number> {
+  const rows = await db.query<{ count: number | string }>(
+    `select count(*)::int as count
+       from public.legal_holds
+      where organization_id = $1 and released_at is null`,
+    [organizationId],
+  );
+  return Number(rows[0]?.count ?? 0);
+}
+
 export async function createLegalHold(
   db: DatabaseAdapter,
   input: {
