@@ -788,7 +788,8 @@ mod tests {
     /// repinned this model's rate before (most recently 2026-09-03) and the
     /// synced catalog is the single source of truth for what it is today.
     fn founder_standard_anthropic_model() -> &'static ModelEntry {
-        active_catalog_model("anthropic", |entry| entry.id == "claude-sonnet-5")
+        let default_id = get_default_model(&Provider::Anthropic);
+        active_catalog_model("anthropic", |entry| entry.id == default_id)
     }
 
     /// SYNTHETIC test-only entry with a dated schedule on arbitrary dates.

@@ -741,7 +741,8 @@ mod tests {
     /// Anthropic made its former introductory rate permanent) and the catalog
     /// sync is the single source of truth for what that rate is today.
     fn founder_standard_anthropic_model() -> &'static ModelEntry {
-        active_catalog_model(Provider::Anthropic, |entry| entry.id == "claude-sonnet-5")
+        let default_id = Provider::Anthropic.default_model();
+        active_catalog_model(Provider::Anthropic, |entry| entry.id == default_id)
     }
 
     /// Pick a prompt size that remains on the catalog's base tier. The exact

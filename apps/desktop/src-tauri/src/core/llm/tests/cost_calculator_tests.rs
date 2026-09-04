@@ -182,11 +182,11 @@ mod tests {
     }
 
     /// A prompt size that stays on `model`'s base pricing tier. Long-context
-    /// tiers get added to catalog entries over time (grok-4.5 gained one on
-    /// 2026-09-03), so a fixed round-number token count that predates a tier
-    /// can silently cross into it; the tier's own lowest threshold is itself
-    /// still base-priced (`input_token_pricing_tier` requires strictly more
-    /// tokens than the threshold before the higher rate applies).
+    /// tiers get added to catalog entries over time, so a fixed round-number
+    /// token count that predates a tier can silently cross into it; the
+    /// tier's own lowest threshold is itself still base-priced
+    /// (`input_token_pricing_tier` requires strictly more tokens than the
+    /// threshold before the higher rate applies).
     fn base_tier_token_count(model: &ModelEntry) -> u32 {
         model
             .input_token_pricing_tiers
@@ -247,7 +247,8 @@ mod tests {
         // from the catalog's current fields rather than a number that would go
         // stale on the next repricing.
         let calc = CostCalculator::new();
-        let model = catalog_model(Provider::Anthropic, |entry| entry.id == "claude-sonnet-5");
+        let default_id = Provider::Anthropic.default_model();
+        let model = catalog_model(Provider::Anthropic, |entry| entry.id == default_id);
         let tokens = base_tier_token_count(model);
         let cost = calc.calculate(
             Provider::Anthropic,
@@ -372,15 +373,16 @@ mod tests {
 
     #[test]
     fn test_xai_catalog_cost() {
-        // A million prompt and completion tokens used to stay on grok-4.5's
-        // base rate; a long-context tier was added above 200,000 tokens on
-        // 2026-09-03, so a fixed 1M/1M request now prices at the higher tier
-        // instead. base_tier_token_count keeps this test on whichever tier is
-        // currently the base one, and the expectation is computed from that
-        // tier's own catalog rate rather than a number that would go stale on
-        // the next tier or price change.
+        // A million prompt and completion tokens used to stay on this
+        // model's base rate; a long-context tier was later added above
+        // 200,000 tokens, so a fixed 1M/1M request now prices at the higher
+        // tier instead. base_tier_token_count keeps this test on whichever
+        // tier is currently the base one, and the expectation is computed
+        // from that tier's own catalog rate rather than a number that would
+        // go stale on the next tier or price change.
         let calc = CostCalculator::new();
-        let model = catalog_model(Provider::XAI, |entry| entry.id == "grok-4.5");
+        let default_id = Provider::XAI.default_model();
+        let model = catalog_model(Provider::XAI, |entry| entry.id == default_id);
         let tokens = base_tier_token_count(model);
         let cost = calc.calculate(Provider::XAI, &model.id, tokens, tokens, super::priced_on());
         let expected = (model.input_cost + model.output_cost) * f64::from(tokens) / MILLION;
