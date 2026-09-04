@@ -5,8 +5,12 @@ import { LANE_NAMES, type LaneId } from '../system/lanes';
 import { WEB_ENTRY_HREF } from '../system/nav';
 
 type CatalogModel = {
+  id: string;
+  provider: string;
+  qualityTier?: string;
+  openWeight?: boolean;
   name: string;
-  inputCost?: number;
+  inputCost: number;
   outputCost?: number;
   cached_input?: number;
 };
@@ -14,7 +18,7 @@ type CatalogModel = {
 const catalogModels = modelsCatalogJson.models as unknown as Record<string, CatalogModel>;
 const catalogProviders = modelsCatalogJson.providers as unknown as Record<
   string,
-  { label: string }
+  { label: string; defaultModel?: string }
 >;
 const LOCAL_SUFFIX = /\s+\(Local\)$/;
 
@@ -89,12 +93,34 @@ function turnCost(id: string, cached: boolean): number {
 export const LANE_MARKS: Record<LaneId, string> = { local: '◆', byok: '◇', cloud: '●' };
 
 const cachePercent = `${Math.round(EXAMPLE_TURN.cacheReadShare * 100)}%`;
-const LOCAL_MODEL_ID = 'gpt-oss-20b';
-const BYOK_MODEL_ID = 'claude-sonnet-5';
-const CLOUD_MODEL_ID = 'gpt-5.6-luna';
 const LOCAL_RUNTIME_ID = 'ollama';
 const BYOK_PROVIDER_ID = 'anthropic';
 const CLOUD_PROVIDER_ID = 'openai';
+const GOOGLE_PROVIDER_ID = 'google';
+const DEEPSEEK_PROVIDER_ID = 'deepseek';
+const MOONSHOT_PROVIDER_ID = 'moonshot';
+const ZHIPU_PROVIDER_ID = 'zhipu';
+const XAI_PROVIDER_ID = 'xai';
+const BEST_QUALITY_TIER = 'best';
+
+function providerDefaultModelId(providerId: string): string {
+  return catalogProviders[providerId]?.defaultModel ?? '';
+}
+
+function cheapestModelId(filter: (model: CatalogModel) => boolean): string {
+  const [first] = Object.values(catalogModels)
+    .filter(filter)
+    .sort((a, b) => a.inputCost - b.inputCost || a.id.localeCompare(b.id));
+  return first?.id ?? '';
+}
+
+const CLOUD_MODEL_ID = cheapestModelId(
+  (model) => model.provider === CLOUD_PROVIDER_ID && model.qualityTier === BEST_QUALITY_TIER,
+);
+const BYOK_MODEL_ID = providerDefaultModelId(BYOK_PROVIDER_ID);
+const LOCAL_MODEL_ID = cheapestModelId(
+  (model) => model.openWeight === true && model.provider === CLOUD_PROVIDER_ID,
+);
 
 export type ConsoleLane = {
   lane: LaneId;
@@ -253,14 +279,14 @@ export const ROUTER = {
 } as const;
 
 export const ROUTER_MODEL_IDS = [
-  'gpt-5.6-luna',
-  'claude-sonnet-5',
-  'gemini-3.8-flash',
-  'deepseek-v4-flash',
-  'kimi-k3',
-  'glm-5.3',
-  'grok-4.5',
-  'gpt-oss-20b',
+  CLOUD_MODEL_ID,
+  BYOK_MODEL_ID,
+  providerDefaultModelId(GOOGLE_PROVIDER_ID),
+  providerDefaultModelId(DEEPSEEK_PROVIDER_ID),
+  providerDefaultModelId(MOONSHOT_PROVIDER_ID),
+  providerDefaultModelId(ZHIPU_PROVIDER_ID),
+  providerDefaultModelId(XAI_PROVIDER_ID),
+  LOCAL_MODEL_ID,
 ] as const;
 
 export type RouterRoute = {
@@ -272,23 +298,35 @@ export type RouterRoute = {
 };
 
 export const ROUTER_ROUTES: readonly RouterRoute[] = [
-  { modelId: 'gpt-5.6-luna', lane: 'cloud', via: 'openai', surface: 'Web', note: 'cache read 99%' },
-  { modelId: 'claude-sonnet-5', lane: 'byok', via: 'anthropic', surface: 'CLI', note: 'your key' },
   {
-    modelId: 'gpt-oss-20b',
+    modelId: CLOUD_MODEL_ID,
+    lane: 'cloud',
+    via: CLOUD_PROVIDER_ID,
+    surface: 'Web',
+    note: 'cache read 99%',
+  },
+  { modelId: BYOK_MODEL_ID, lane: 'byok', via: BYOK_PROVIDER_ID, surface: 'CLI', note: 'your key' },
+  {
+    modelId: LOCAL_MODEL_ID,
     lane: 'local',
-    via: 'ollama',
+    via: LOCAL_RUNTIME_ID,
     surface: 'CLI',
     note: 'nothing left the device',
   },
   {
-    modelId: 'deepseek-v4-flash',
+    modelId: providerDefaultModelId(DEEPSEEK_PROVIDER_ID),
     lane: 'cloud',
-    via: 'deepseek',
+    via: DEEPSEEK_PROVIDER_ID,
     surface: 'Web',
     note: 'cache read 94%',
   },
-  { modelId: 'kimi-k3', lane: 'cloud', via: 'moonshot', surface: 'Desktop', note: 'metered' },
+  {
+    modelId: providerDefaultModelId(MOONSHOT_PROVIDER_ID),
+    lane: 'cloud',
+    via: MOONSHOT_PROVIDER_ID,
+    surface: 'Desktop',
+    note: 'metered',
+  },
 ];
 
 export const LANES = {
