@@ -104,7 +104,8 @@ import {
   buildFreeCapacityUnavailableResponse,
   resolveFreeLaneOutcome,
 } from '@/lib/services/free-lane/stage';
-import { trimMessagesToContextWindow, type ContextTrimResult } from './context-window';
+import type { ContextTrimResult } from './context-window';
+import { compactContextWindow } from './context-compaction';
 import { buildInterimRoutePlanId } from '@/lib/cpst-telemetry';
 import type { AuthGateSuccess } from './auth-gate';
 import { resolveAuthenticatedSurface } from './request-surface';
@@ -3336,7 +3337,19 @@ export async function processRequest(
     usePromptCache: chatRequest.use_prompt_cache,
   };
 
-  const contextTrim = trimMessagesToContextWindow(internalMessages, chatRequest.model, maxTokens);
+  const scopedForCompaction = await scopedDbPromise;
+  const contextTrim = await compactContextWindow({
+    messages: internalMessages,
+    model: chatRequest.model,
+    maxOutputTokens: maxTokens,
+    db: scopedForCompaction.db,
+    userId,
+    organizationId: scopedForCompaction.organizationId,
+    conversationId: chatRequest.conversation_id ?? null,
+    isTemporary: conversationIsTemporary,
+    planTier: subscription.plan_tier,
+    resolveEconomyRoute: () => resolveWebCloudModelRoute('auto', 'free', 'simple_chat'),
+  });
 
   if (freeTrialEnabled) {
     const trialReservationResult = await beginFreeTrialRequest({ userId, requestId });
@@ -3355,7 +3368,7 @@ export async function processRequest(
     maxTokens = llmRequest.max_tokens;
   }
 
-  const { organizationId } = await scopedDbPromise;
+  const organizationId = scopedForCompaction.organizationId;
 
   return {
     ok: true,
