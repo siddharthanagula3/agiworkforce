@@ -64,11 +64,23 @@ function VerifyDeviceBody({ code }: { code: string }) {
         </div>
         <Prose>
           A device is requesting to sign in to your account. Approve it only if you started this
-          sign-in. The request code is <strong>{code}</strong>. If you did not initiate this
-          request, choose Deny.
+          sign-in. The request code is <strong>{code}</strong>.
         </Prose>
 
         <VerifyDeviceClient code={code} />
+
+        <div>
+          <h2 className="agi-ds-h3">Security notice.</h2>
+          <Prose size="sm">
+            If you did not initiate this request, choose Deny and do not approve. Approving grants
+            the requesting device access to your account.
+          </Prose>
+        </div>
+        <ButtonRow>
+          <Button href="/" variant="secondary">
+            Cancel
+          </Button>
+        </ButtonRow>
       </div>
     </Section>
   );
