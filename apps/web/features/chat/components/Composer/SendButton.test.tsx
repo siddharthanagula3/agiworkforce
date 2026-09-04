@@ -79,16 +79,20 @@ describe('SendButton · stop mode', () => {
     expect(onClick).toHaveBeenCalledTimes(1);
   });
 
-  it('applies red-500 background class', () => {
+  it('uses a neutral fill, never a solid red button', () => {
     const { container } = renderButton({ mode: 'stop', onClick: vi.fn() });
     const btn = container.querySelector('button');
-    expect(btn?.className).toContain('bg-red-500');
+    expect(btn?.className).toContain('bg-foreground');
+    expect(btn?.className).not.toContain('bg-red-500');
+    expect(btn?.className).not.toContain('shadow-red-500');
   });
 
-  it('applies red shadow', () => {
+  it('matches the send control shape: rounded-full, same padding, a square glyph', () => {
     const { container } = renderButton({ mode: 'stop', onClick: vi.fn() });
     const btn = container.querySelector('button');
-    expect(btn?.className).toContain('shadow-red-500/25');
+    expect(btn?.className).toContain('rounded-full');
+    expect(btn?.className).toContain('p-2');
+    expect(container.querySelector('svg')).not.toBeNull();
   });
 
   it('has title "Stop generation"', () => {

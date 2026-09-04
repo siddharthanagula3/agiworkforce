@@ -29,7 +29,7 @@ export function SendButton({
         type="button"
         onClick={onClick}
         className={cn(
-          'rounded-full p-2 bg-red-500 text-white shadow-lg shadow-red-500/25 hover:bg-red-600 transition-all duration-200',
+          'rounded-full p-2 bg-foreground text-background hover:bg-foreground/90 transition-all duration-200',
           className,
         )}
         title="Stop generation"
