@@ -601,6 +601,38 @@ describe('ChatMessageList auto-scroll', () => {
     });
   });
 
+  it('does not throw when the row count shrinks before a coalesced scroll fires', () => {
+    const rafCallbacks: FrameRequestCallback[] = [];
+    const rafSpy = vi
+      .spyOn(window, 'requestAnimationFrame')
+      .mockImplementation((callback: FrameRequestCallback) => {
+        rafCallbacks.push(callback);
+        return rafCallbacks.length;
+      });
+
+    const grownMessages = [
+      makeMessage({ id: 'u1', role: 'user', content: 'first question' }),
+      makeMessage({ id: 'a1', role: 'assistant', content: 'partial', isStreaming: true }),
+    ];
+    const shrunkMessages = [makeMessage({ id: 'u1', role: 'user', content: 'first question' })];
+
+    const { rerender } = render(<ChatMessageList messages={grownMessages} />);
+    expect(rafCallbacks.length).toBeGreaterThan(0);
+    const pendingCallback = rafCallbacks[rafCallbacks.length - 1]!;
+
+    act(() => {
+      rerender(<ChatMessageList messages={shrunkMessages} />);
+    });
+
+    expect(() => {
+      act(() => {
+        pendingCallback(performance.now());
+      });
+    }).not.toThrow();
+
+    rafSpy.mockRestore();
+  });
+
   it('recycles a long transcript while keeping the newest history scroll-reachable', async () => {
     const messages = Array.from({ length: 120 }, (_, index) =>
       makeMessage({
