@@ -6,6 +6,7 @@ import type { ResearchStep } from '@agiworkforce/types';
 import { ToolCallResponseSchema } from '@/lib/validations/tool-calls';
 import { modelSupportsResearch } from '@/features/chat/lib/research-capability-gate';
 import { AgiWorkGoalSchema } from './agiwork-plan';
+import { demoteLowConfidencePremiumSelection } from './route-selection';
 import { MAX_MESSAGE_LENGTH, ToolChoiceSchema, ToolDefinitionSchema } from '@/lib/validations/llm';
 import { logger } from '@/lib/logger';
 import { resolveTurnCodeExecutionTools, providerRoutesToE2B } from '@/lib/e2b/execution-tools';
@@ -1359,6 +1360,10 @@ export async function resolveRouteHealthRuntimeState(
 }
 
 const MANAGED_WEB_CLOUD_TRUST_MODE = 'managed_cloud';
+const AUTO_ROUTE_UNAVAILABLE_MESSAGE =
+  'Auto could not find a model for this request on your plan. Choose a model from the picker or upgrade your plan.';
+const EXPLICIT_ROUTE_UNAVAILABLE_MESSAGE =
+  'The selected model is not available for this task in Managed Web chat.';
 
 export function resolveWebCloudModelRoute(
   model: string,
@@ -2261,6 +2266,27 @@ export async function processRequest(
     planTier: subscription.plan_tier,
   });
   resolvedTaskType = resolveToolAwareTaskType(resolvedTaskType, chatRequest);
+  const routeSelection =
+    resolvedTaskType === classifierResult.type
+      ? demoteLowConfidencePremiumSelection(
+          chatRequest.model,
+          resolvedTaskType,
+          classifierResult.confidence,
+        )
+      : chatRequest.model;
+  if (routeSelection !== chatRequest.model) {
+    logger.info(
+      {
+        userId,
+        requestId,
+        requestedModel,
+        routeSelection,
+        taskType: resolvedTaskType,
+        taskConfidence: classifierResult.confidence,
+      },
+      'Auto selection demoted below the premium profile on a weak classification',
+    );
+  }
 
   const indicResult = detectIndicScript(lastUserText);
   if (indicResult.isIndic && indicResult.dominantScript) {
@@ -2316,7 +2342,7 @@ export async function processRequest(
 
   const routeResolutionNowMs = Date.now();
   const [baseRouteHealthState, routeAffinity] = await Promise.all([
-    resolveRouteHealthRuntimeState(chatRequest.model, routeResolutionNowMs),
+    resolveRouteHealthRuntimeState(routeSelection, routeResolutionNowMs),
     chatRequest.conversation_id
       ? getServedRouteAffinity(chatRequest.conversation_id)
       : Promise.resolve(null),
@@ -2331,7 +2357,7 @@ export async function processRequest(
   const zeroDataRetentionProviders = resolveZeroDataRetentionProviderOverrides();
 
   const baseRouteDecision = resolveWebCloudModelRoute(
-    chatRequest.model,
+    routeSelection,
     subscription.plan_tier,
     resolvedTaskType,
     routeUsage,
@@ -2413,7 +2439,9 @@ export async function processRequest(
       response: NextResponse.json(
         {
           error: {
-            message: 'The selected model is not available for this task in Managed Web chat.',
+            message: isAutoModeModelId(requestedModel)
+              ? AUTO_ROUTE_UNAVAILABLE_MESSAGE
+              : EXPLICIT_ROUTE_UNAVAILABLE_MESSAGE,
             type: 'invalid_request_error',
             code: 'model_route_unavailable',
           },
