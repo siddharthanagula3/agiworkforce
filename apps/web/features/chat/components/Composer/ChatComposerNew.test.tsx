@@ -888,6 +888,43 @@ describe('ChatComposerNew', () => {
     expect(document.querySelector('.chat-composer-mode-in-menu')).not.toBeNull();
   });
 
+  it('clicking AGI Work flips both buttons pressed state and rewrites the placeholder', () => {
+    render(
+      <ChatComposerNew
+        onSend={vi.fn()}
+        placeholder="How can I help you today?"
+        projectPicker={{
+          projects: [{ id: 'proj-1', name: 'Website Redesign' }],
+          activeProjectId: null,
+          onSelectProject: vi.fn(),
+          onCreateProject: vi.fn(),
+        }}
+      />,
+    );
+    const chatButton = screen.getByRole('button', { name: 'Chat' });
+    const agiWorkButton = screen.getByRole('button', { name: 'AGI Work' });
+    const textarea = screen.getByRole('textbox', { name: /message input/i });
+
+    expect(chatButton).toHaveAttribute('aria-pressed', 'true');
+    expect(agiWorkButton).toHaveAttribute('aria-pressed', 'false');
+    expect(textarea).toHaveAttribute('placeholder', 'How can I help you today?');
+
+    fireEvent.click(agiWorkButton);
+
+    expect(agiWorkButton).toHaveAttribute('aria-pressed', 'true');
+    expect(chatButton).toHaveAttribute('aria-pressed', 'false');
+    expect(textarea).toHaveAttribute(
+      'placeholder',
+      'Describe a multi-step task and what it should deliver',
+    );
+
+    fireEvent.click(chatButton);
+
+    expect(chatButton).toHaveAttribute('aria-pressed', 'true');
+    expect(agiWorkButton).toHaveAttribute('aria-pressed', 'false');
+    expect(textarea).toHaveAttribute('placeholder', 'How can I help you today?');
+  });
+
   it('keeps only explicit task modes inside the + menu', () => {
     render(<ChatComposerNew onSend={vi.fn()} />);
     fireEvent.click(screen.getByRole('button', { name: /add attachments and tools/i }));

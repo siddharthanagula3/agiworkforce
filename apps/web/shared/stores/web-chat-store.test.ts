@@ -5,6 +5,7 @@ import {
   selectIsActiveConversationStreaming,
   selectIsConversationLoading,
   selectIsConversationStreaming,
+  PENDING_CONVERSATION_KEY,
 } from './web-chat-store';
 
 const conversationFixture = (id: string) => ({
@@ -102,6 +103,99 @@ describe('chatStore, new-conversation composer toggles', () => {
     expect(useChatStore.getState().getComposerToggles('conv-existing')).toMatchObject({
       imageMode: true,
       videoMode: false,
+    });
+  });
+});
+
+describe('chatStore, per-conversation work mode persistence', () => {
+  beforeEach(() => {
+    useChatStore.getState().reset();
+  });
+
+  it('mirrors a direct mode switch on an existing conversation into the persisted map', () => {
+    useChatStore.getState().setComposerToggles({ workMode: 'agiwork' }, 'conv-a');
+
+    expect(useChatStore.getState().workModeByConversation['conv-a']).toBe('agiwork');
+  });
+
+  it('does not mirror a mode switch made on the pending, not-yet-created bucket', () => {
+    useChatStore.getState().setComposerToggles({ workMode: 'agiwork' }, null);
+
+    expect(useChatStore.getState().workModeByConversation).not.toHaveProperty(
+      PENDING_CONVERSATION_KEY,
+    );
+  });
+
+  it('mirrors the pending mode onto the conversation the first send created', () => {
+    const { setComposerToggles, adoptPendingComposerToggles } = useChatStore.getState();
+
+    setComposerToggles({ workMode: 'agiwork' }, null);
+    adoptPendingComposerToggles('conv-created');
+
+    expect(useChatStore.getState().workModeByConversation['conv-created']).toBe('agiwork');
+  });
+
+  it('survives a reload: getComposerToggles falls back to the persisted mode once the ephemeral bucket is gone', () => {
+    const { setComposerToggles, adoptPendingComposerToggles } = useChatStore.getState();
+
+    setComposerToggles({ workMode: 'agiwork' }, null);
+    adoptPendingComposerToggles('conv-created');
+    // A reload rehydrates only the persisted slice: composerTogglesByConversation
+    // is not part of partialize, so it comes back empty, same as a fresh tab.
+    useChatStore.setState({ composerTogglesByConversation: {} });
+
+    expect(useChatStore.getState().getComposerToggles('conv-created').workMode).toBe('agiwork');
+  });
+
+  it('drops a deleted conversation persisted mode so a recreated id starts on Chat', () => {
+    const { setComposerToggles, deleteConversation } = useChatStore.getState();
+
+    setComposerToggles({ workMode: 'agiwork' }, 'conv-a');
+    deleteConversation('conv-a');
+
+    expect(useChatStore.getState().workModeByConversation).not.toHaveProperty('conv-a');
+    expect(useChatStore.getState().getComposerToggles('conv-a').workMode).toBe('chat');
+  });
+
+  it('persists the per-conversation work mode, unlike the rest of composerTogglesByConversation', () => {
+    const partialize = useChatStore.persist.getOptions().partialize;
+    expect(partialize).toBeDefined();
+
+    useChatStore.getState().setComposerToggles({ workMode: 'agiwork' }, 'conv-a');
+
+    const persisted = partialize!(useChatStore.getState()) as {
+      workModeByConversation?: Record<string, string>;
+    };
+    expect(persisted.workModeByConversation).toEqual({ 'conv-a': 'agiwork' });
+  });
+
+  it('seeds the ephemeral toggle bucket on rehydration, so the reactive composer selector also survives a reload', () => {
+    const merge = useChatStore.persist.getOptions().merge;
+    expect(merge).toBeDefined();
+
+    const rehydrated = merge!(
+      { workModeByConversation: { 'conv-a': 'agiwork' } },
+      useChatStore.getState(),
+    );
+
+    expect(rehydrated.composerTogglesByConversation['conv-a']).toMatchObject({
+      workMode: 'agiwork',
+    });
+  });
+
+  it('does not overwrite an already-live ephemeral toggle bucket during rehydration', () => {
+    const merge = useChatStore.persist.getOptions().merge;
+    expect(merge).toBeDefined();
+
+    useChatStore.getState().setComposerToggles({ workMode: 'chat', imageMode: true }, 'conv-a');
+    const rehydrated = merge!(
+      { workModeByConversation: { 'conv-a': 'agiwork' } },
+      useChatStore.getState(),
+    );
+
+    expect(rehydrated.composerTogglesByConversation['conv-a']).toMatchObject({
+      workMode: 'chat',
+      imageMode: true,
     });
   });
 });
