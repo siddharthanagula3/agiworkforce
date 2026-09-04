@@ -1639,7 +1639,6 @@ mod tests {
         assert!(result.is_err());
     }
 
-
     #[test]
     fn test_truncate_string_short_unchanged() {
         let s = "hello";

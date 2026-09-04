@@ -67,6 +67,13 @@ use crate::sys::commands::chat::message_context::{
     append_history_messages, emit_stream_failure, inject_mcp_server_instructions,
     inject_memory_context,
 };
+pub use crate::sys::commands::chat::pending::{
+    chat_add_pending_message, chat_clear_pending_messages, chat_get_pending_messages,
+    chat_pop_pending_message, has_pending_messages, has_pending_messages_for_conversation,
+    peek_pending_messages, peek_pending_messages_for_conversation, pending_messages_count,
+    pop_pending_message_for_conversation, AddPendingMessageRequest, PendingUserMessage,
+    PopPendingMessageRequest,
+};
 use crate::sys::commands::chat::persistence::{
     compute_or_skip_stats, save_or_skip_assistant_message,
 };
@@ -78,6 +85,9 @@ use crate::sys::commands::chat::provider_access::{
     ensure_managed_cloud_provider, ensure_ollama_provider, ensure_vllm_provider,
     request_uses_managed_cloud,
 };
+use crate::sys::commands::chat::state::{
+    DEFAULT_MAX_TOKENS, DEFAULT_TEMPERATURE, PENDING_MESSAGES, STREAM_CHUNK_IDLE_TIMEOUT_SECS,
+};
 use crate::sys::commands::chat::stream_runtime::consume_llm_stream;
 use crate::sys::commands::chat::tool_config::{
     build_tool_definitions, filter_advertised_tool_calls, normalize_tool_calls,
@@ -88,16 +98,6 @@ use crate::sys::commands::chat::tool_timeouts::{
     is_media_generation_tool, resolve_followup_invoke_timeout_secs,
     resolve_followup_total_timeout_secs, resolve_streaming_tool_loop_max_iterations,
     resolve_streaming_tool_loop_max_secs,
-};
-pub use crate::sys::commands::chat::pending::{
-    chat_add_pending_message, chat_clear_pending_messages, chat_get_pending_messages,
-    chat_pop_pending_message, has_pending_messages, has_pending_messages_for_conversation,
-    peek_pending_messages, peek_pending_messages_for_conversation, pending_messages_count,
-    pop_pending_message_for_conversation, AddPendingMessageRequest, PendingUserMessage,
-    PopPendingMessageRequest,
-};
-use crate::sys::commands::chat::state::{
-    DEFAULT_MAX_TOKENS, DEFAULT_TEMPERATURE, PENDING_MESSAGES, STREAM_CHUNK_IDLE_TIMEOUT_SECS,
 };
 
 // Pending Messages API commands and helpers live in pending.rs (imported above).

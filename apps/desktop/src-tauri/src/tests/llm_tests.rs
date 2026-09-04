@@ -238,7 +238,6 @@ mod llm_test_cases {
         assert!(tc.id.is_empty());
     }
 
-
     #[test]
     fn test_parse_openai_sse_basic_content() {
         let event =
@@ -354,7 +353,6 @@ mod llm_test_cases {
         assert_eq!(chunk.content.len(), 50_000);
     }
 
-
     #[test]
     fn test_parse_openai_sse_api_error_returns_err() {
         let event = r#"data: {"error":{"message":"Invalid API key","type":"invalid_request_error","code":"invalid_api_key"}}"#;
@@ -379,10 +377,6 @@ mod llm_test_cases {
         assert!(chunk.content.is_empty());
         assert!(!chunk.done);
     }
-
-
-
-
 
     #[test]
     fn test_parse_ollama_sse_basic_content() {
@@ -434,7 +428,6 @@ mod llm_test_cases {
         assert!(tcs[0].arguments.contains("url"));
     }
 
-
     #[test]
     fn test_parse_ollama_sse_error_field_returns_err() {
         let event = r#"{"error":"model not found: fixture-unknown-local-model"}"#;
@@ -450,7 +443,6 @@ mod llm_test_cases {
         let result = parse_sse_event(event, Provider::Ollama);
         assert!(result.is_err());
     }
-
 
     #[test]
     fn test_perplexity_uses_openai_format() {

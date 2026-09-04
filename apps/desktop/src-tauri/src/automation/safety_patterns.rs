@@ -511,7 +511,6 @@ mod tests {
         );
     }
 
-
     #[test]
     fn test_common_safe_commands_not_flagged() {
         let safe_commands = vec![

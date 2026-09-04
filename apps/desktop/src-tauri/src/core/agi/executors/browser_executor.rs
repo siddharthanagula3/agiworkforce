@@ -1694,7 +1694,6 @@ mod tests {
         assert!(names.contains(&"browser_get_dom_snapshot"));
     }
 
-
     fn create_test_context() -> ExecutorContext {
         ExecutorContext {
             app_handle: None,
