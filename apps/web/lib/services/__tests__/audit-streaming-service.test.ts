@@ -11,12 +11,20 @@ vi.mock('@/lib/egress-policy', () => ({
   pinnedPublicFetch: vi.fn(),
 }));
 
+const { mockGetSharedRedisClient } = vi.hoisted(() => ({
+  mockGetSharedRedisClient: vi.fn(() => null as unknown),
+}));
+vi.mock('@/lib/rate-limit', () => ({ getSharedRedisClient: mockGetSharedRedisClient }));
+
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import {
+  AUDIT_STREAM_ACTIVE_ORGS_REDIS_KEY,
   AUDIT_STREAM_BATCH,
   AUDIT_STREAM_FAILURE_CEILING,
+  deleteAuditDestination,
   drainAuditDestination,
   generateSigningSecret,
+  hasActiveAuditStreamDestinations,
   signPayload,
   upsertAuditDestination,
   verifySignature,
@@ -86,6 +94,7 @@ function harness({
 beforeEach(() => {
   vi.clearAllMocks();
   mockAssertPublic.mockResolvedValue(undefined);
+  mockGetSharedRedisClient.mockReturnValue(null);
 });
 
 describe('signing', () => {
@@ -132,6 +141,115 @@ describe('upsertAuditDestination', () => {
     ).rejects.toThrow();
 
     expect(h.query).not.toHaveBeenCalled();
+  });
+});
+
+describe('audit stream active-org redis marker', () => {
+  function redisMock() {
+    return { sadd: vi.fn(), srem: vi.fn(), scard: vi.fn() };
+  }
+
+  const insertRow = {
+    organization_id: ORG,
+    endpoint_url: 'https://siem.example.test/hook',
+    secret_prefix: 'abcd1234',
+    enabled: true,
+    last_delivered_at: null,
+    last_delivered_id: null,
+    last_attempt_at: null,
+    last_status: null,
+    consecutive_failures: 0,
+    created_at: NOW.toISOString(),
+  };
+
+  function upsertHarness() {
+    const query = vi.fn(async () => [insertRow]);
+    return { db: { query, execute: vi.fn() } as unknown as DatabaseAdapter, query };
+  }
+
+  it('marks the organization active in redis when enabling a destination', async () => {
+    const redis = redisMock();
+    mockGetSharedRedisClient.mockReturnValue(redis);
+    const h = upsertHarness();
+
+    await upsertAuditDestination(h.db, ORG, {
+      endpointUrl: 'https://siem.example.test/hook',
+      enabled: true,
+      createdByUserId: 'user-1',
+    });
+
+    expect(redis.sadd).toHaveBeenCalledWith(AUDIT_STREAM_ACTIVE_ORGS_REDIS_KEY, ORG);
+    expect(redis.srem).not.toHaveBeenCalled();
+  });
+
+  it('clears the organization from redis when disabling a destination', async () => {
+    const redis = redisMock();
+    mockGetSharedRedisClient.mockReturnValue(redis);
+    const h = upsertHarness();
+
+    await upsertAuditDestination(h.db, ORG, {
+      endpointUrl: 'https://siem.example.test/hook',
+      enabled: false,
+      createdByUserId: 'user-1',
+    });
+
+    expect(redis.srem).toHaveBeenCalledWith(AUDIT_STREAM_ACTIVE_ORGS_REDIS_KEY, ORG);
+    expect(redis.sadd).not.toHaveBeenCalled();
+  });
+
+  it('clears the organization from redis on delete', async () => {
+    const redis = redisMock();
+    mockGetSharedRedisClient.mockReturnValue(redis);
+    const query = vi.fn(async () => [{ organization_id: ORG }]);
+    const db = { query, execute: vi.fn() } as unknown as DatabaseAdapter;
+
+    const removed = await deleteAuditDestination(db, ORG);
+
+    expect(removed).toBe(true);
+    expect(redis.srem).toHaveBeenCalledWith(AUDIT_STREAM_ACTIVE_ORGS_REDIS_KEY, ORG);
+  });
+
+  it('does not block the save when redis is unavailable', async () => {
+    mockGetSharedRedisClient.mockReturnValue(null);
+    const h = upsertHarness();
+
+    await expect(
+      upsertAuditDestination(h.db, ORG, {
+        endpointUrl: 'https://siem.example.test/hook',
+        enabled: true,
+        createdByUserId: 'user-1',
+      }),
+    ).resolves.toBeDefined();
+  });
+
+  it('reports true when the active set is non-empty', async () => {
+    const redis = redisMock();
+    redis.scard.mockResolvedValue(2);
+    mockGetSharedRedisClient.mockReturnValue(redis);
+
+    await expect(hasActiveAuditStreamDestinations()).resolves.toBe(true);
+  });
+
+  it('reports false when the active set is empty', async () => {
+    const redis = redisMock();
+    redis.scard.mockResolvedValue(0);
+    mockGetSharedRedisClient.mockReturnValue(redis);
+
+    await expect(hasActiveAuditStreamDestinations()).resolves.toBe(false);
+  });
+
+  it('reports null when redis is unavailable, so the caller falls through to Postgres', async () => {
+    mockGetSharedRedisClient.mockReturnValue(null);
+
+    await expect(hasActiveAuditStreamDestinations()).resolves.toBeNull();
+  });
+
+  it('reports null instead of throwing when redis errors', async () => {
+    const redis = redisMock();
+    redis.scard.mockRejectedValue(new Error('redis down'));
+    mockGetSharedRedisClient.mockReturnValue(redis);
+
+    await expect(hasActiveAuditStreamDestinations()).resolves.toBeNull();
   });
 });
 

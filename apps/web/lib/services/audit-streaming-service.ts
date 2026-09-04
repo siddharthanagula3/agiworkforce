@@ -5,6 +5,47 @@ import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 
 import { logger } from '@/lib/logger';
 import { assertResolvedPublicHostname, pinnedPublicFetch } from '@/lib/egress-policy';
+import { getSharedRedisClient } from '@/lib/rate-limit';
+
+/**
+ * Membership marks which organisations currently have an enabled destination,
+ * so the drain cron can check membership and skip Postgres entirely when the
+ * set is empty. Best-effort: a write here never blocks the destination save,
+ * and a miss just means the next drain falls through to querying Postgres.
+ */
+export const AUDIT_STREAM_ACTIVE_ORGS_REDIS_KEY = 'agi-audit-stream:active-organizations';
+
+async function markAuditStreamActive(organizationId: string): Promise<void> {
+  try {
+    const redis = getSharedRedisClient();
+    if (!redis) return;
+    await redis.sadd(AUDIT_STREAM_ACTIVE_ORGS_REDIS_KEY, organizationId);
+  } catch (error) {
+    logger.error({ error, organizationId }, 'Audit stream active-org marker set failed');
+  }
+}
+
+async function markAuditStreamInactive(organizationId: string): Promise<void> {
+  try {
+    const redis = getSharedRedisClient();
+    if (!redis) return;
+    await redis.srem(AUDIT_STREAM_ACTIVE_ORGS_REDIS_KEY, organizationId);
+  } catch (error) {
+    logger.error({ error, organizationId }, 'Audit stream active-org marker clear failed');
+  }
+}
+
+export async function hasActiveAuditStreamDestinations(): Promise<boolean | null> {
+  try {
+    const redis = getSharedRedisClient();
+    if (!redis) return null;
+    const count = await redis.scard(AUDIT_STREAM_ACTIVE_ORGS_REDIS_KEY);
+    return count > 0;
+  } catch (error) {
+    logger.error({ error }, 'Audit stream active-org membership check failed');
+    return null;
+  }
+}
 
 export interface AuditDestination {
   organizationId: string;
@@ -140,6 +181,11 @@ export async function upsertAuditDestination(
   if (!row) {
     throw new Error(`organization_audit_destinations upsert returned no row for ${organizationId}`);
   }
+  if (input.enabled) {
+    await markAuditStreamActive(organizationId);
+  } else {
+    await markAuditStreamInactive(organizationId);
+  }
   return { destination: format(row), secret: minted.secret };
 }
 
@@ -147,6 +193,7 @@ export async function deleteAuditDestination(
   db: DatabaseAdapter,
   organizationId: string,
 ): Promise<boolean> {
+  await markAuditStreamInactive(organizationId);
   const rows = await db.query<{ organization_id: string }>(
     `delete from public.organization_audit_destinations
       where organization_id = $1 returning organization_id`,
