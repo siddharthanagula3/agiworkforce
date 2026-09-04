@@ -462,7 +462,7 @@ describe('recordEnterpriseInvoiceEvent', () => {
     expect(recompute!.params).toEqual(['org_1', 'in_open_1', '2023-11-26T00:00:00.000Z']);
   });
 
-  it('clears the oldest open invoice when nothing is open any more', async () => {
+  it('clears the oldest open invoice when nothing is open any more and the stage is already current', async () => {
     const { db, calls } = makeDb((sql) => {
       if (
         sql.includes('from public.organization_billing_contracts') &&
@@ -471,6 +471,7 @@ describe('recordEnterpriseInvoiceEvent', () => {
         return [{ organization_id: 'org_1' }];
       }
       if (sql.includes('from public.organization_billing_invoices')) return [];
+      if (sql.includes('select collection_stage')) return [{ collection_stage: 'current' }];
       return [];
     });
 
@@ -481,7 +482,44 @@ describe('recordEnterpriseInvoiceEvent', () => {
         call.sql.includes('update public.organization_billing_contracts') &&
         call.sql.includes('oldest_open_invoice_id'),
     );
-    expect(recompute!.params).toEqual(['org_1', null, null]);
+    expect(recompute!.params).toEqual(['org_1']);
+    expect(recompute!.sql).not.toContain('collection_stage');
+    expect(recordAuditEvent).not.toHaveBeenCalled();
+  });
+
+  it('restores collection_stage to current, audits, and clears the notice throttle once the last invoice is paid', async () => {
+    const { db, calls } = makeDb((sql) => {
+      if (
+        sql.includes('from public.organization_billing_contracts') &&
+        sql.includes('stripe_subscription_id')
+      ) {
+        return [{ organization_id: 'org_1' }];
+      }
+      if (sql.includes('from public.organization_billing_invoices')) return [];
+      if (sql.includes('select collection_stage')) return [{ collection_stage: 'read_only' }];
+      return [];
+    });
+
+    await recordEnterpriseInvoiceEvent(db, invoiceFixture({ status: 'paid' }));
+
+    const restore = calls.find(
+      (call) =>
+        call.sql.includes('update public.organization_billing_contracts') &&
+        call.sql.includes('collection_stage ='),
+    );
+    expect(restore).toBeDefined();
+    expect(restore!.sql).toContain('last_collection_notice_at = null');
+    expect(restore!.params).toEqual(['org_1', 'current', expect.any(String)]);
+    expect(recordAuditEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        organizationId: 'org_1',
+        detail: expect.objectContaining({
+          reason: 'collection_stage_changed',
+          status: 'current',
+          previousPlanTier: 'read_only',
+        }),
+      }),
+    );
   });
 });
 

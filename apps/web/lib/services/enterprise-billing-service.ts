@@ -28,6 +28,8 @@ const CONTRACT_METADATA_KEY_CUSTOMER_LEGAL_ENTITY = 'customer_legal_entity';
 const AUDIT_ENDPOINT = '/api/stripe-webhook';
 const AUDIT_SURFACE = 'stripe_webhook';
 const UNMAPPED_ENTERPRISE_PRICE_AUDIT_REASON = 'unmapped_stripe_price';
+const COLLECTION_STAGE_CHANGED_AUDIT_REASON = 'collection_stage_changed';
+const RESTORED_COLLECTION_STAGE = 'current';
 
 function extractProductId(
   product: string | Stripe.Product | Stripe.DeletedProduct | null | undefined,
@@ -344,13 +346,61 @@ async function recomputeOldestOpenInvoice(
     [organizationId],
   );
 
+  if (oldest) {
+    await db.execute(
+      `update public.organization_billing_contracts
+          set oldest_open_invoice_id = $2::text,
+              oldest_open_invoice_due_at = $3::timestamptz
+        where organization_id = $1::uuid`,
+      [organizationId, oldest.stripe_invoice_id, oldest.due_at],
+    );
+    return;
+  }
+
+  const [contract] = await db.query<{ collection_stage: string }>(
+    `select collection_stage
+       from public.organization_billing_contracts
+      where organization_id = $1::uuid`,
+    [organizationId],
+  );
+
+  if (!contract || contract.collection_stage === RESTORED_COLLECTION_STAGE) {
+    await db.execute(
+      `update public.organization_billing_contracts
+          set oldest_open_invoice_id = null,
+              oldest_open_invoice_due_at = null
+        where organization_id = $1::uuid`,
+      [organizationId],
+    );
+    return;
+  }
+
+  const nowIso = new Date().toISOString();
   await db.execute(
     `update public.organization_billing_contracts
-        set oldest_open_invoice_id = $2::text,
-            oldest_open_invoice_due_at = $3::timestamptz
+        set oldest_open_invoice_id = null,
+            oldest_open_invoice_due_at = null,
+            collection_stage = $2::text,
+            collection_stage_changed_at = $3::timestamptz,
+            last_collection_notice_at = null
       where organization_id = $1::uuid`,
-    [organizationId, oldest?.stripe_invoice_id ?? null, oldest?.due_at ?? null],
+    [organizationId, RESTORED_COLLECTION_STAGE, nowIso],
   );
+
+  await recordAuditEvent({
+    organizationId,
+    eventType: 'plan_changed',
+    severity: 'info',
+    endpoint: AUDIT_ENDPOINT,
+    surface: AUDIT_SURFACE,
+    detail: {
+      resourceType: 'organization_billing_contract',
+      resourceId: organizationId,
+      reason: COLLECTION_STAGE_CHANGED_AUDIT_REASON,
+      status: RESTORED_COLLECTION_STAGE,
+      previousPlanTier: contract.collection_stage,
+    },
+  });
 }
 
 function resolveInvoiceProcurementReference(invoice: Stripe.Invoice): string | null {
