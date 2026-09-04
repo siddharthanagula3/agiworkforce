@@ -1,6 +1,7 @@
 import 'server-only';
 
 import { getNeonDb } from '@/lib/server/neon-db';
+import { createClaimedUserScopedDb } from '@/lib/server/claimed-user-scope-db';
 import { logger } from '@/lib/logger';
 import type { SubscriptionInfo } from '@/lib/services/subscription-service';
 import { getModelMetadataById } from '@agiworkforce/types';
@@ -294,7 +295,10 @@ export async function beginFreeTrialRequest(params: {
   userId: string;
   requestId: string;
 }): Promise<ReserveResult> {
-  const db = getNeonDb();
+  const db = createClaimedUserScopedDb(getNeonDb(), {
+    userId: params.userId,
+    organizationId: null,
+  });
   const {
     fiveHourBudgetMicrousd,
     fiveHourWindowHours,
