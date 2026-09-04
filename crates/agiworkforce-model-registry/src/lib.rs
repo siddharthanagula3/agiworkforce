@@ -928,6 +928,53 @@ fn selected_decision(
     })
 }
 
+const MAX_FALLBACK_ROUTES: usize = 4;
+
+/// Every slot a fallback may draw on, best first, one entry per slot: the
+/// request's own ordering, then the task's slots at every other profile in
+/// policy order, then the policy fallback slot, then the tier's allowed slots
+/// in their authored order restricted to slots some task policy names. A slot
+/// no task lists is reachable only through a caller preference, and a failover
+/// must not open that door. Admission is unchanged; this only decides how far
+/// a failover may walk.
+fn fallback_candidate_slots<'a>(
+    policy: &'a AutoPolicy,
+    task: &'a AutoTaskPolicy,
+    preferred_slots: &'a [String],
+    tier_slot_order: &'a [String],
+) -> Vec<&'a str> {
+    let policy_reachable = policy
+        .tasks
+        .values()
+        .flat_map(|entry| entry.preferred_slots.values())
+        .flatten()
+        .map(String::as_str)
+        .collect::<HashSet<_>>();
+    let mut seen = HashSet::new();
+    let mut ordered = Vec::new();
+    let ladder = preferred_slots
+        .iter()
+        .chain(policy.profile_order.iter().flat_map(|profile| {
+            task.preferred_slots
+                .get(profile.as_key())
+                .map(Vec::as_slice)
+                .unwrap_or_default()
+                .iter()
+        }))
+        .chain(std::iter::once(&policy.fallback_slot))
+        .chain(
+            tier_slot_order
+                .iter()
+                .filter(|slot_id| policy_reachable.contains(slot_id.as_str())),
+        );
+    for slot_id in ladder {
+        if seen.insert(slot_id.as_str()) {
+            ordered.push(slot_id.as_str());
+        }
+    }
+    ordered
+}
+
 #[allow(clippy::too_many_arguments)]
 fn build_provider_fallbacks(
     registry: &Registry,
@@ -937,17 +984,12 @@ fn build_provider_fallbacks(
     policy: &AutoPolicy,
     allowed_slots: &HashSet<String>,
     preferred_slots: &[String],
+    tier_slot_order: &[String],
     selected_model_key: &str,
     selected_provider: &str,
     selected_model_routes: &[RankedRoute<'_>],
 ) -> Vec<AutoFallbackRoute> {
-    let mut candidate_slots = preferred_slots
-        .iter()
-        .map(String::as_str)
-        .collect::<Vec<_>>();
-    if !preferred_slots.contains(&policy.fallback_slot) {
-        candidate_slots.push(policy.fallback_slot.as_str());
-    }
+    let candidate_slots = fallback_candidate_slots(policy, task, preferred_slots, tier_slot_order);
 
     let mut seen_models = HashSet::from([selected_model_key.to_owned()]);
     let mut seen_providers = HashSet::from([selected_provider.to_owned()]);
@@ -989,6 +1031,7 @@ fn build_provider_fallbacks(
         });
     }
 
+    fallbacks.truncate(MAX_FALLBACK_ROUTES);
     fallbacks
 }
 
@@ -1136,13 +1179,12 @@ fn resolve_against(registry: &Registry, request: &AutoRoutingRequest<'_>) -> Aut
     };
     let effective_profile =
         clamp_profile(requested_profile, maximum_profile, &policy.profile_order);
-    let allowed_slots = policy
+    let tier_slot_order = policy
         .tier_allowed_slots
         .get(tier)
         .cloned()
-        .unwrap_or_else(|| vec![policy.fallback_slot.clone()])
-        .into_iter()
-        .collect::<HashSet<_>>();
+        .unwrap_or_else(|| vec![policy.fallback_slot.clone()]);
+    let allowed_slots = tier_slot_order.iter().cloned().collect::<HashSet<_>>();
     let preferred_slots = task
         .preferred_slots
         .get(effective_profile.as_key())
@@ -1174,6 +1216,7 @@ fn resolve_against(registry: &Registry, request: &AutoRoutingRequest<'_>) -> Aut
                 policy,
                 &allowed_slots,
                 preferred_slots,
+                &tier_slot_order,
                 current_model_key,
                 &selected_provider,
                 &eligibility.ranked_routes,
@@ -1220,6 +1263,7 @@ fn resolve_against(registry: &Registry, request: &AutoRoutingRequest<'_>) -> Aut
                 policy,
                 &allowed_slots,
                 preferred_slots,
+                &tier_slot_order,
                 model_key,
                 &selected_provider,
                 &eligibility.ranked_routes,
@@ -1258,6 +1302,7 @@ fn resolve_against(registry: &Registry, request: &AutoRoutingRequest<'_>) -> Aut
                 policy,
                 &allowed_slots,
                 preferred_slots,
+                &tier_slot_order,
                 model_key,
                 &selected_provider,
                 &eligibility.ranked_routes,

@@ -2,7 +2,7 @@
 
 Status: Current
 Owner role: Platform lead
-Last updated: 2026-07-15
+Last updated: 2026-09-04
 Kind: ts-package
 Criticality: high
 
@@ -78,6 +78,38 @@ Add tests for routing decisions, fallbacks, privacy-mode blocks, and cost/capabi
 ## Release / Deployment Notes
 
 Routing changes are user-trust sensitive. Surface routing explanations should stay aligned.
+
+## Failover plan and live health
+
+`resolveAutoRoute` returns a primary route plus a fallback plan of at most
+four entries, one provider each: the selected model's other providers first,
+then other models drawn from a ladder that never widens admission (the
+request's own slot ordering, the task's slots at every other profile in policy
+order, the policy fallback slot, then the tier's allowed slots in authored
+order). Every entry still passes the same tier, lifecycle, harness, trust-mode
+and capability gates as the primary. Before 2026-09-04 an economy-profile task
+on a paid tier had no fallback at all, so one provider outage failed every
+simple chat; the ladder is what gives it another provider. The Rust resolver
+mirrors the ladder and the cap, and the conformance fixture pins both.
+
+When the caller passes `runtimeState` or `availableProviderIds`, a slot whose
+best route is parked (circuit open, provider unhealthy) or has no managed
+credential yields to the next dispatchable slot, walking the same ladder, and
+the parked routes move to the end of the plan; the decision then carries
+`reason: 'health_fallback'`. If every candidate is parked the first parked
+model is still selected rather than stranding the request. Without live state
+the walk is unchanged, which is why the fixture never sets it.
+
+Model continuity (`currentModelKey` and `previousTaskType`) is implemented
+here and in Rust but deliberately not wired from the web request processor:
+after a transient outage it would pin a conversation to the failover model,
+which is usually the pricier one, for the rest of the conversation. Route
+affinity (`preferredRouteId`) covers the prompt-cache case within one model.
+
+The classifier's bare prose words for coding (`class`, `import`,
+`undefined`) return a weak 0.6 confidence: they cannot pivot a running
+conversation, and the web layer routes a weakly classified premium-profile
+task at the balanced profile instead.
 
 ## Known Caveats
 

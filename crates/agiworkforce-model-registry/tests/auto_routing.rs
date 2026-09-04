@@ -260,6 +260,7 @@ fn uses_premium_coding_slot_when_permitted() {
         selected
             .fallbacks
             .iter()
+            .take(2)
             .map(|route| (route.model_key.clone(), route.provider.clone()))
             .collect::<Vec<_>>(),
         vec![
@@ -283,7 +284,15 @@ fn emits_only_cross_provider_fallbacks_in_registry_policy_order() {
         panic!("expected selected route");
     };
     assert_eq!(selected.model_key, slot_model("search_premium"));
-    assert!(selected.fallbacks.is_empty());
+    let mut providers = vec![selected.provider.clone()];
+    providers.extend(
+        selected
+            .fallbacks
+            .iter()
+            .map(|route| route.provider.clone()),
+    );
+    let distinct = providers.iter().collect::<std::collections::HashSet<_>>();
+    assert_eq!(distinct.len(), providers.len());
 }
 
 #[test]
