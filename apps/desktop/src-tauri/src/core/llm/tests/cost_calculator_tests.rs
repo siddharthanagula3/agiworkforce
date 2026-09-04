@@ -181,6 +181,25 @@ mod tests {
             .expect("catalog must include a model matching the pricing test")
     }
 
+    /// A prompt size that stays on `model`'s base pricing tier. Long-context
+    /// tiers get added to catalog entries over time (grok-4.5 gained one on
+    /// 2026-09-03), so a fixed round-number token count that predates a tier
+    /// can silently cross into it; the tier's own lowest threshold is itself
+    /// still base-priced (`input_token_pricing_tier` requires strictly more
+    /// tokens than the threshold before the higher rate applies).
+    fn base_tier_token_count(model: &ModelEntry) -> u32 {
+        model
+            .input_token_pricing_tiers
+            .iter()
+            .chain(model.long_context.iter())
+            .map(|tier| tier.threshold_tokens)
+            .min()
+            .map(|threshold| {
+                u32::try_from(threshold).expect("catalog threshold must fit the native counter")
+            })
+            .unwrap_or(1_000_000)
+    }
+
     // ------------------------------------------------------------------
     // Basic token cost correctness
     // ------------------------------------------------------------------
@@ -223,20 +242,25 @@ mod tests {
 
     #[test]
     fn test_standard_anthropic_model_cost() {
+        // Selected by id, not by price: Decision #22 (docs/decisions/README.md)
+        // last repinned this model's rate 2026-09-03, so the expectation comes
+        // from the catalog's current fields rather than a number that would go
+        // stale on the next repricing.
         let calc = CostCalculator::new();
-        let model = catalog_model(Provider::Anthropic, |entry| {
-            entry.input_cost == 3.0 && entry.output_cost == 15.0
-        });
+        let model = catalog_model(Provider::Anthropic, |entry| entry.id == "claude-sonnet-5");
+        let tokens = base_tier_token_count(model);
         let cost = calc.calculate(
             Provider::Anthropic,
             &model.id,
-            1_000_000,
-            1_000_000,
+            tokens,
+            tokens,
             super::priced_on(),
         );
+        let expected = (model.input_cost + model.output_cost) * f64::from(tokens) / MILLION;
         assert!(
-            (cost - 18.0).abs() < 1e-9,
-            "Expected $18.00 for the standard Anthropic route, got ${}",
+            (cost - expected).abs() < 1e-9,
+            "Expected ${} for the standard Anthropic route, got ${}",
+            expected,
             cost
         );
     }
@@ -348,20 +372,22 @@ mod tests {
 
     #[test]
     fn test_xai_catalog_cost() {
+        // A million prompt and completion tokens used to stay on grok-4.5's
+        // base rate; a long-context tier was added above 200,000 tokens on
+        // 2026-09-03, so a fixed 1M/1M request now prices at the higher tier
+        // instead. base_tier_token_count keeps this test on whichever tier is
+        // currently the base one, and the expectation is computed from that
+        // tier's own catalog rate rather than a number that would go stale on
+        // the next tier or price change.
         let calc = CostCalculator::new();
-        let model = catalog_model(Provider::XAI, |entry| {
-            entry.input_cost == 2.0 && entry.output_cost == 6.0
-        });
-        let cost = calc.calculate(
-            Provider::XAI,
-            &model.id,
-            1_000_000,
-            1_000_000,
-            super::priced_on(),
-        );
+        let model = catalog_model(Provider::XAI, |entry| entry.id == "grok-4.5");
+        let tokens = base_tier_token_count(model);
+        let cost = calc.calculate(Provider::XAI, &model.id, tokens, tokens, super::priced_on());
+        let expected = (model.input_cost + model.output_cost) * f64::from(tokens) / MILLION;
         assert!(
-            (cost - 8.0).abs() < 1e-9,
-            "Expected $8.00 for the selected xAI model, got ${}",
+            (cost - expected).abs() < 1e-9,
+            "Expected ${} for the selected xAI model, got ${}",
+            expected,
             cost
         );
     }

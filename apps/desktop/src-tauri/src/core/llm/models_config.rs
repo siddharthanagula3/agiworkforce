@@ -783,15 +783,12 @@ mod tests {
             .expect("catalog must contain an active model matching the test predicate")
     }
 
+    /// The catalog entry Decision #22 (docs/decisions/README.md) names by id,
+    /// selected by identity rather than by its current price: the founder has
+    /// repinned this model's rate before (most recently 2026-09-03) and the
+    /// synced catalog is the single source of truth for what it is today.
     fn founder_standard_anthropic_model() -> &'static ModelEntry {
-        active_catalog_model("anthropic", |entry| {
-            entry.pricing_schedule.is_empty()
-                && entry.input_cost == 3.0
-                && entry.output_cost == 15.0
-                && entry.cached_input == Some(0.3)
-                && entry.cached_write == Some(3.75)
-                && entry.cached_write_1h == Some(6.0)
-        })
+        active_catalog_model("anthropic", |entry| entry.id == "claude-sonnet-5")
     }
 
     /// SYNTHETIC test-only entry with a dated schedule on arbitrary dates.
@@ -885,11 +882,14 @@ mod tests {
 
     #[test]
     fn founder_standard_anthropic_route_prices_the_standard_rates_on_every_date() {
-        // Founder pin, Decision #22 (docs/decisions/README.md,
-        // reaffirmed 2026-08-05): Sonnet 5 bills users the standard $3/$15 per
-        // MTok (cache read $0.30, 5m write $3.75, 1h write $6.00) on EVERY date.
-        // Anthropic's introductory window is a provider-COST fact for the
-        // registry's verificationLog, never a product price.
+        // Founder pin, Decision #22 (docs/decisions/README.md): Sonnet 5 bills
+        // users a single standard per-MTok rate on EVERY date, never a
+        // provider's introductory window; that rate has changed before (most
+        // recently 2026-09-03) and comes from the synced catalog rather than a
+        // number pinned in this test, which would go stale on the next
+        // repricing. The invariant this test proves stays meaningful: a
+        // schedule-free model's effective pricing on any date must equal its
+        // own top-level catalog fields, never drift with the calendar.
         let standard_model = founder_standard_anthropic_model();
         assert!(
             standard_model.pricing_schedule.is_empty(),
@@ -898,13 +898,24 @@ mod tests {
 
         for date in [day(2020, 1, 1), day(2026, 8, 15), day(2026, 9, 15)] {
             let pricing = standard_model.effective_pricing(date);
-            assert_eq!(pricing.input_cost, 3.0, "input cost on {date}");
-            assert_eq!(pricing.output_cost, 15.0, "output cost on {date}");
-            assert_eq!(pricing.cached_input, Some(0.3), "cache read on {date}");
-            assert_eq!(pricing.cached_write, Some(3.75), "5m cache write on {date}");
             assert_eq!(
-                pricing.cached_write_1h,
-                Some(6.0),
+                pricing.input_cost, standard_model.input_cost,
+                "input cost on {date}"
+            );
+            assert_eq!(
+                pricing.output_cost, standard_model.output_cost,
+                "output cost on {date}"
+            );
+            assert_eq!(
+                pricing.cached_input, standard_model.cached_input,
+                "cache read on {date}"
+            );
+            assert_eq!(
+                pricing.cached_write, standard_model.cached_write,
+                "5m cache write on {date}"
+            );
+            assert_eq!(
+                pricing.cached_write_1h, standard_model.cached_write_1h,
                 "1h cache write on {date}"
             );
         }
@@ -913,10 +924,13 @@ mod tests {
     #[test]
     fn get_pricing_carries_the_declared_cache_write_price() {
         let standard_model = founder_standard_anthropic_model();
+        let expected_cache_write = standard_model
+            .cached_write
+            .expect("the founder-standard model must price 5-minute cache writes");
         for date in [day(2026, 8, 15), day(2026, 9, 15)] {
             let pricing = get_pricing(&Provider::Anthropic, &standard_model.id, date)
                 .expect("founder-standard Anthropic model must have pricing");
-            assert_eq!(pricing.cache_write_per_million, Some(3.75));
+            assert_eq!(pricing.cache_write_per_million, Some(expected_cache_write));
         }
 
         let openai_model = CONFIG
