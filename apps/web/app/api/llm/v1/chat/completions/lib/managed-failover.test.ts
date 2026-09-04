@@ -112,6 +112,14 @@ describe('rotation eligibility (gateway parity)', () => {
     ['server_error (500)', httpError(500)],
     ['server_overload (529)', httpError(529, '{"type":"overloaded_error"}')],
     ['rate limit (429)', httpError(429, 'rate limit exceeded')],
+    [
+      'quota exhausted (429 insufficient_quota)',
+      httpError(429, 'insufficient_quota: exceeded your current quota'),
+    ],
+    [
+      'spending cap (429, no other quota marker)',
+      httpError(429, 'You have hit your spending cap for this project'),
+    ],
     ['api_timeout', Object.assign(new Error('request timeout'), {})],
     ['credential failure (401)', httpError(401, 'authentication error (401)')],
     ['forbidden (403)', httpError(403, 'permission denied')],
@@ -178,6 +186,22 @@ describe('rotation eligibility (gateway parity)', () => {
   it('never rotates an explicit selection: the resolver emits an empty plan (structural, not a conditional)', () => {
     const processed = makeProcessed({ fallbackModels: [] });
     expect(makePlan(processed).next(httpError(503))).toBeNull();
+  });
+
+  it('leaves an explicit selection on a quota-exhausted answer for its own normalized error', () => {
+    const processed = makeProcessed({ fallbackModels: [] });
+    const attempt = makePlan(processed).next(
+      httpError(429, 'insufficient_quota: exceeded your current quota'),
+    );
+    expect(attempt).toBeNull();
+  });
+
+  it('walks the whole auto ladder once on quota exhaustion, then stops', () => {
+    const plan = makePlan(makeProcessed());
+    const quotaExhausted = () => httpError(429, 'insufficient_quota: exceeded your current quota');
+    expect(plan.next(quotaExhausted())?.model).toBe('candidate-a');
+    expect(plan.next(quotaExhausted())?.model).toBe('candidate-b');
+    expect(plan.next(quotaExhausted())).toBeNull();
   });
 
   it('does not rotate a tool-bearing request across providers', () => {
