@@ -40,7 +40,22 @@ vi.mock('@/lib/server/neon-db', () => ({
   getNeonDb: vi.fn(() => ({
     query: mockDbQuery,
     execute: vi.fn().mockResolvedValue(1),
-    transaction: vi.fn((fn: (db: unknown) => unknown) => fn({})),
+    transaction: vi.fn(async (fn: (db: unknown) => unknown) =>
+      fn({
+        query: (sql: string, params: unknown[]) => {
+          if (typeof sql === 'string' && sql.includes('set_config')) {
+            return Promise.resolve([]);
+          }
+          return mockDbQuery(sql, params);
+        },
+        execute: (sql: string) => {
+          if (sql === 'set local role app_rls') {
+            return Promise.resolve(0);
+          }
+          return Promise.resolve(1);
+        },
+      }),
+    ),
     withUser: vi.fn(() => ({})),
     dispose: vi.fn(),
   })),
