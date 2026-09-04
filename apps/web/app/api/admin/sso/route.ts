@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { withRateLimit } from '@/lib/rate-limit';
-import { logSecurityEvent } from '@/lib/security-audit';
+import { logSecurityEvent, recordAuditEvent } from '@/lib/security-audit';
 import { logger } from '@/lib/logger';
 import { requireCsrfToken } from '@/lib/csrf';
 import type { SSOConnectionRow } from '@/lib/server/neon-types';
@@ -269,6 +269,20 @@ export async function POST(request: NextRequest): Promise<Response> {
       },
     });
 
+    await recordAuditEvent({
+      userId: principal.userId,
+      eventType: 'sso_connection_created',
+      organizationId: organization_id,
+      request,
+      severity: 'warning',
+      detail: {
+        resourceType: 'sso_connection',
+        resourceId: created.id,
+        resourceName: normalized.domain,
+        source: provider_type,
+      },
+    });
+
     return NextResponse.json(
       {
         connection: toConnectionView(created),
@@ -367,6 +381,20 @@ export async function DELETE(request: NextRequest): Promise<Response> {
         connectionId,
         domain: conn.domain,
         organization_id: conn.organization_id,
+      },
+    });
+
+    await recordAuditEvent({
+      userId: principal.userId,
+      eventType: hardDelete ? 'sso_connection_deleted' : 'sso_connection_deactivated',
+      organizationId: conn.organization_id,
+      request,
+      severity: 'critical',
+      detail: {
+        resourceType: 'sso_connection',
+        resourceId: connectionId,
+        resourceName: conn.domain,
+        status: hardDelete ? undefined : 'inactive',
       },
     });
 
