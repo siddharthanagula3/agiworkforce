@@ -4,9 +4,13 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 
 import { Spinner } from '../primitives/Spinner';
+import { useConfirmAction } from '../primitives/ConfirmAction';
 import { ConnectorDetailView } from './ConnectorDetailView';
 import {
   CONNECTOR_POPULAR_HEADING,
+  INSTALL_CONFIRM_CANCEL_LABEL,
+  INSTALL_CONFIRM_TITLE_PREFIX,
+  INSTALL_LABEL,
   DIRECTORY_CATALOG_HEADINGS,
   DIRECTORY_INSTALLED_HEADINGS,
   DIRECTORY_LOADING_LABEL,
@@ -55,6 +59,7 @@ export function DirectoryPanel({
   const [detailLoading, setDetailLoading] = useState(false);
   const [detailError, setDetailError] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
+  const { confirm, dialog: confirmDialog } = useConfirmAction();
   const openChangeRef = useRef(onOpenEntryChange);
   openChangeRef.current = onOpenEntryChange;
 
@@ -123,11 +128,28 @@ export function DirectoryPanel({
     [section],
   );
 
+  const requestInstall = useCallback(
+    (id: string) => {
+      const entry = data.entries.find((candidate) => candidate.id === id);
+      if (!entry?.installNotice) {
+        void runAction(id, adapter.install);
+        return;
+      }
+      confirm({
+        title: `${INSTALL_CONFIRM_TITLE_PREFIX} ${entry.name}?`,
+        description: entry.installNotice,
+        confirmLabel: INSTALL_LABEL,
+        cancelLabel: INSTALL_CONFIRM_CANCEL_LABEL,
+        destructive: false,
+        onConfirm: () => runAction(id, adapter.install),
+      });
+    },
+    [data.entries, adapter.install, confirm, runAction],
+  );
+
   const gridActions = {
     onOpen: setEntryId,
-    ...(adapter.install && data.installable
-      ? { onInstall: (id: string) => void runAction(id, adapter.install) }
-      : {}),
+    ...(adapter.install && data.installable ? { onInstall: requestInstall } : {}),
     ...(adapter.openSettings && data.installable
       ? { onOpenSettings: (id: string) => void adapter.openSettings?.(section, id) }
       : {}),
@@ -136,7 +158,8 @@ export function DirectoryPanel({
       : {}),
   };
 
-  if (entryId) {
+  function renderBody() {
+    if (!entryId) return renderCatalog();
     if (detailLoading) {
       return (
         <div className="flex justify-center py-16">
@@ -156,9 +179,7 @@ export function DirectoryPanel({
       const openSettings = adapter.openSettings
         ? () => void adapter.openSettings?.(section, detail.id)
         : undefined;
-      const install = adapter.install
-        ? () => void runAction(detail.id, adapter.install)
-        : undefined;
+      const install = adapter.install ? () => requestInstall(detail.id) : undefined;
       const remove = adapter.uninstall
         ? () => void runAction(detail.id, adapter.uninstall)
         : undefined;
@@ -202,9 +223,11 @@ export function DirectoryPanel({
         />
       );
     }
+    return renderCatalog();
   }
 
-  return (
+  function renderCatalog() {
+    return (
     <div className="flex flex-col gap-5">
       <div className="flex items-start justify-between gap-3">
         <h2 className="text-base font-semibold text-foreground">
@@ -272,5 +295,13 @@ export function DirectoryPanel({
         />
       </section>
     </div>
+    );
+  }
+
+  return (
+    <>
+      {confirmDialog}
+      {renderBody()}
+    </>
   );
 }

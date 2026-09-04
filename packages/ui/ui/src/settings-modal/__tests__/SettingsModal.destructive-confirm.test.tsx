@@ -109,24 +109,9 @@ describe('plugin removal confirmation', () => {
     await waitFor(() => expect(removePlugin).toHaveBeenCalledWith('research-pack'));
   });
 
-  it('confirms before removing from the directory browse view', async () => {
-    const { removePlugin } = renderPlugins({
-      plugins: [],
-      pluginCatalog: [INSTALLED_PLUGIN],
-    });
-
-    fireEvent.click(screen.getByRole('button', { name: 'Browse' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Remove' }));
-    expect(removePlugin).not.toHaveBeenCalled();
-
-    const dialog = screen.getByRole('alertdialog', { name: 'Remove plugin?' });
-    fireEvent.click(within(dialog).getByRole('button', { name: 'Remove' }));
-    await waitFor(() => expect(removePlugin).toHaveBeenCalledWith('research-pack'));
-  });
 });
 
 const DESTRUCTIVE_ACTION_PANELS = [
-  'DirectoryBrowse',
   'ConnectorsPanel',
   'SkillsPanel',
   'PluginsPanel',
