@@ -432,10 +432,46 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Dependency audit (JS), critical (blocking)
-        run: pnpm audit --audit-level=critical
+        shell: bash
+        env:
+          npm_config_fetch_timeout: '300000'
+          npm_config_fetch_retries: '5'
+        run: |
+          set -uo pipefail
+          for attempt in 1 2 3; do
+            output=$(pnpm audit --audit-level=critical 2>&1)
+            status=$?
+            printf '%s\n' "$output"
+            if [ "$status" -eq 0 ]; then exit 0; fi
+            if ! printf '%s' "$output" | grep -Eq 'ERR_SOCKET_TIMEOUT|ERR_PNPM_FETCH|ECONNRESET|ETIMEDOUT|Socket timeout'; then
+              exit "$status"
+            fi
+            echo "registry audit endpoint unreachable on attempt $attempt; retrying"
+            sleep 60
+          done
+          echo "registry audit endpoint unreachable after 3 attempts"
+          exit 1
 
       - name: Dependency audit (JS), high (blocking, FIX-043)
-        run: pnpm audit --audit-level=high
+        shell: bash
+        env:
+          npm_config_fetch_timeout: '300000'
+          npm_config_fetch_retries: '5'
+        run: |
+          set -uo pipefail
+          for attempt in 1 2 3; do
+            output=$(pnpm audit --audit-level=high 2>&1)
+            status=$?
+            printf '%s\n' "$output"
+            if [ "$status" -eq 0 ]; then exit 0; fi
+            if ! printf '%s' "$output" | grep -Eq 'ERR_SOCKET_TIMEOUT|ERR_PNPM_FETCH|ECONNRESET|ETIMEDOUT|Socket timeout'; then
+              exit "$status"
+            fi
+            echo "registry audit endpoint unreachable on attempt $attempt; retrying"
+            sleep 60
+          done
+          echo "registry audit endpoint unreachable after 3 attempts"
+          exit 1
 
       - name: Semgrep (security audit)
         id: semgrep
