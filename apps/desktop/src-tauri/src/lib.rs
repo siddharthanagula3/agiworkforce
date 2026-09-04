@@ -186,6 +186,8 @@ pub fn run() {
         }
     };
 
+    crate::sys::crash_reporter::init();
+
     std::panic::set_hook(Box::new(|info| {
         let location = info
             .location()
@@ -200,6 +202,7 @@ pub fn run() {
         };
         tracing::error!("Application Panic at {}: {:?}", location, message);
         eprintln!("PANIC at {}: {}", location, message);
+        crate::sys::crash_reporter::capture_panic(&location, &message);
     }));
 
     #[allow(unused_mut)]
@@ -601,7 +604,7 @@ pub fn run() {
             app.manage(TelemetryState::new(telemetry_collector, analytics_metrics));
 
             {
-                let granted = db_conn_arc
+                let privacy_preferences = db_conn_arc
                     .lock()
                     .ok()
                     .and_then(|conn| {
@@ -617,10 +620,29 @@ pub fn run() {
                             &raw,
                         )
                         .ok()
+                    });
+                crate::sys::telemetry::process_consent().set(
+                    privacy_preferences
+                        .as_ref()
+                        .map(|prefs| prefs.telemetry_enabled)
+                        .unwrap_or(false),
+                );
+
+                let crash_reporting_enabled = db_conn_arc
+                    .lock()
+                    .ok()
+                    .and_then(|conn| {
+                        conn.query_row(
+                            "SELECT value FROM user_preferences WHERE key = 'crash_reporting_enabled'",
+                            [],
+                            |row| row.get::<_, String>(0),
+                        )
+                        .ok()
                     })
-                    .map(|prefs| prefs.telemetry_enabled)
+                    .map(|value| value == "true")
+                    .or_else(|| privacy_preferences.map(|prefs| prefs.crash_reporting_enabled))
                     .unwrap_or(false);
-                crate::sys::telemetry::process_consent().set(granted);
+                crate::sys::crash_reporter::set_enabled(crash_reporting_enabled);
             }
 
             let llm_state = tauri::async_runtime::block_on(LLMState::with_cache(db_conn_arc.clone()));
