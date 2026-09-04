@@ -185,6 +185,11 @@ describe('readEnterpriseUsageAllowance', () => {
       consumedCents: 75_000,
       overageCents: 15_000,
     });
+    expect(getOrganizationMonthToDateSpendCents).toHaveBeenCalledWith(
+      'org_1',
+      db,
+      resolveEnterpriseUsagePeriod(FEBRUARY),
+    );
   });
 });
 
@@ -246,6 +251,11 @@ describe('reportEnterpriseOverageUsage', () => {
       identifier: 'enterprise-overage:org_1:2026-02-15',
       timestamp: Math.floor(FEBRUARY.getTime() / 1000),
     });
+    expect(getOrganizationMonthToDateSpendCents).toHaveBeenCalledWith(
+      'org_1',
+      db,
+      resolveEnterpriseUsagePeriod(FEBRUARY),
+    );
     const persistCall = (db.query as ReturnType<typeof vi.fn>).mock.calls.find(([sql]) =>
       sql.includes('update public.organization_billing_contracts'),
     );
