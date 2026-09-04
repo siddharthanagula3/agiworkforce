@@ -1,6 +1,6 @@
--- 0159 — user-registered plugin marketplace sources.
+-- 0159 : user-registered plugin marketplace sources.
 --
--- NOT YET APPLIED — draft only, pending explicit approval before running.
+-- NOT YET APPLIED : draft only, pending explicit approval before running.
 --
 -- Web could only ever install from the curated, first-party
 -- plugin_registry_entries catalogue. This migration adds the self-serve path:
@@ -8,7 +8,7 @@
 -- manifest (packages/contracts/cloud-contracts/src/plugin-marketplaces.ts,
 -- PLUGIN_MARKETPLACE_MANIFEST_PATH), pins its content hash, and caches the
 -- plugins it declares. Registration is scoped to github.com repositories only
--- — the launch surface for "sync a marketplace from a git repository" — the
+-- : the launch surface for "sync a marketplace from a git repository" : the
 -- same URL-shape restriction that keeps the server's outbound fetch target a
 -- fixed, known host rather than an arbitrary caller-supplied one.
 --
