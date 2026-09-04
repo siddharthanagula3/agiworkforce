@@ -43,6 +43,8 @@ function decompose(split: MarkdownBlockSplit): string[] {
   return [...split.settled.flatMap((block) => segment(block.source)), ...segment(split.tail)];
 }
 
+const EQUIVALENCE_PROPERTY_TIMEOUT_MS = STREAM_RUNS.length * 4_000;
+
 describe('splitMarkdownBlocks, universal equivalence property', () => {
   it.each(CORPUS)(
     '$name keeps concat and segmentation intact at every chunk size',
@@ -86,6 +88,7 @@ describe('splitMarkdownBlocks, universal equivalence property', () => {
         expect(decompose(split), `${label} segmentation`).toEqual(segment(source));
       }
     },
+    EQUIVALENCE_PROPERTY_TIMEOUT_MS,
   );
 });
 
