@@ -70,6 +70,7 @@ describe('applyResearchMode', () => {
   });
 
   it('RESEARCH_SYSTEM_PROMPT contains no em-dashes', () => {
+    // em-dash-allow: the character this assertion forbids in the prompt
     expect(RESEARCH_SYSTEM_PROMPT).not.toContain('\u2014');
   });
 

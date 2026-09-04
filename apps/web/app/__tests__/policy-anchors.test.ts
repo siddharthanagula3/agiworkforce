@@ -61,6 +61,7 @@ const HTML_ENTITIES: Readonly<Record<string, string>> = {
   '&lsquo;': '\u2018',
   '&ldquo;': '\u201c',
   '&rdquo;': '\u201d',
+  // em-dash-allow: the forbidden character this test scans the policy pages for
   ', ': '\u2014',
   '&ndash;': '\u2013',
   '&amp;': '&',
