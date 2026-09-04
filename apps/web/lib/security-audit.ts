@@ -253,7 +253,14 @@ export type AuditEventType =
   | 'directory_sync_connection_created'
   | 'directory_sync_connection_deleted'
   | 'scim_membership_granted'
-  | 'scim_membership_revoked';
+  | 'scim_membership_revoked'
+  | 'scim_user_provisioned'
+  | 'scim_user_updated'
+  | 'scim_user_deprovisioned'
+  | 'scim_group_provisioned'
+  | 'scim_group_updated'
+  | 'scim_group_deprovisioned'
+  | 'scim_group_role_mapping_changed';
 
 export type AuditOutcome = 'success' | 'failure' | 'denied';
 
@@ -519,6 +526,15 @@ function inferResourceType(eventType: AuditEventType): string {
     case 'scim_membership_granted':
     case 'scim_membership_revoked':
       return 'organization_member';
+    case 'scim_user_provisioned':
+    case 'scim_user_updated':
+    case 'scim_user_deprovisioned':
+      return 'scim_provisioned_user';
+    case 'scim_group_provisioned':
+    case 'scim_group_updated':
+    case 'scim_group_deprovisioned':
+    case 'scim_group_role_mapping_changed':
+      return 'scim_group';
     default:
       return 'unknown';
   }
