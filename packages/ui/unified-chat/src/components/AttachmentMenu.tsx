@@ -351,7 +351,7 @@ export function AttachmentMenu({
       }, 'image/png');
       onOpenChange(false);
     } catch {
-      // noop
+      return;
     } finally {
       setScreenshotting(false);
     }
