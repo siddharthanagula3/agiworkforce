@@ -14,6 +14,7 @@ import {
   harnessIsProxyCovered,
   harnessNeedsUserCredential,
   harnessProxyBaseUrlEnv,
+  harnessProxyConfigFile,
   knownHarnessCommandIds,
   listCloudCodeRuntimes,
   templateVcpuCount,
@@ -281,25 +282,64 @@ describe('harness proxy coverage', () => {
     expect(harnessProxyBaseUrlEnv('opencode')).toBeUndefined();
   });
 
-  it('covers only a single-provider harness with a verified base-URL override', () => {
+  it('names a config file to write only for a harness with a verified config override', () => {
+    const codexFile = harnessProxyConfigFile('codex');
+    expect(codexFile?.path).toBe('/home/user/.codex/config.toml');
+    expect(harnessProxyConfigFile('claude')).toBeUndefined();
+    expect(harnessProxyConfigFile('droid')).toBeUndefined();
+    expect(harnessProxyConfigFile('opencode')).toBeUndefined();
+  });
+
+  it('renders a codex config.toml with the proxy base URL and env_key, no /v1 suffix', () => {
+    const codexFile = harnessProxyConfigFile('codex');
+    const content = codexFile!.content(
+      'https://app.example.com/api/code/sessions/s1/provider-proxy',
+      'CODEX_API_KEY',
+    );
+    expect(content).toContain('wire_api = "responses"');
+    expect(content).toContain(
+      'base_url = "https://app.example.com/api/code/sessions/s1/provider-proxy"',
+    );
+    expect(content).toContain('env_key = "CODEX_API_KEY"');
+    expect(content).not.toContain('/v1"');
+  });
+
+  it('covers a single-provider harness with a verified base-URL or config-file override', () => {
     expect(harnessIsProxyCovered('claude')).toBe(true);
-    expect(harnessIsProxyCovered('codex')).toBe(false);
+    expect(harnessIsProxyCovered('codex')).toBe(true);
     expect(harnessIsProxyCovered('opencode')).toBe(false);
+    expect(harnessIsProxyCovered('droid')).toBe(false);
+    expect(harnessIsProxyCovered('amp')).toBe(false);
+    expect(harnessIsProxyCovered('grok')).toBe(false);
     expect(harnessIsProxyCovered('openclaw')).toBe(false);
     expect(harnessIsProxyCovered('not-a-harness')).toBe(false);
   });
 });
 
 describe('harnessNeedsUserCredential', () => {
-  it('is true only for a harness with no managed credential for its provider', () => {
+  it('is true for a harness with no managed credential for its provider', () => {
     mockHasServerProviderKey.mockReturnValue(false);
     expect(harnessNeedsUserCredential('droid')).toBe(true);
     expect(harnessNeedsUserCredential('amp')).toBe(true);
   });
 
-  it('is false once the managed configuration covers the provider', () => {
+  it('is true for a harness the credential proxy does not cover, even with a managed key', () => {
+    mockHasServerProviderKey.mockReturnValue(true);
+    expect(harnessNeedsUserCredential('droid')).toBe(true);
+    expect(harnessNeedsUserCredential('amp')).toBe(true);
+    expect(harnessNeedsUserCredential('grok')).toBe(true);
+    expect(harnessNeedsUserCredential('opencode')).toBe(true);
+  });
+
+  it('is false once a proxy-covered harness has a managed credential', () => {
     mockHasServerProviderKey.mockReturnValue(true);
     expect(harnessNeedsUserCredential('claude')).toBe(false);
+    expect(harnessNeedsUserCredential('codex')).toBe(false);
+  });
+
+  it('is true for a proxy-covered harness with no managed credential', () => {
+    mockHasServerProviderKey.mockReturnValue(false);
+    expect(harnessNeedsUserCredential('codex')).toBe(true);
   });
 
   it('is false for a harness with no declared credential', () => {

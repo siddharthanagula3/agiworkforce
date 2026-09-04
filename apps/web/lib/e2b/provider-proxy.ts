@@ -6,12 +6,14 @@ export const PROVIDER_PROXY_PATH_SEGMENT = 'provider-proxy';
 
 /**
  * The HTTP header each provider's SDK sends its API key in. Anthropic's SDK
- * authenticates with `x-api-key`; a provider added here without this header
- * name being verified against its SDK/docs must not be marked proxy-covered
- * in templates.ts.
+ * authenticates with `x-api-key`; OpenAI's (and Codex's Responses-API client)
+ * with `Authorization: Bearer <key>`. A provider added here without this
+ * header name being verified against its SDK/docs must not be marked
+ * proxy-covered in templates.ts.
  */
 const PROVIDER_PROXY_AUTH_HEADER: Readonly<Record<string, string>> = {
   anthropic: 'x-api-key',
+  openai: 'authorization',
 };
 
 export function providerProxyAuthHeader(providerId: string): string | undefined {

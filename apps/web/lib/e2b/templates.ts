@@ -194,13 +194,16 @@ export function harnessCredentialSpecs(harnessId: string): readonly HarnessCrede
  * symmetry with `HARNESS_CREDENTIAL_SPECS`. Confirmed 2026-09-04:
  *   - claude: https://code.claude.com/docs/en/env-vars documents ANTHROPIC_BASE_URL.
  * Checked and NOT added because no such env var is documented:
- *   - codex: base URL is config.toml-only (`model_providers.<id>.base_url`).
+ *   - codex: base URL is config.toml-only (`model_providers.<id>.base_url`),
+ *     covered instead by `HARNESS_PROXY_CONFIG_FILE` below.
  *   - droid: base URL is `~/.factory/settings.json`-only (`baseUrl`).
  *   - amp: no documented endpoint override of any kind.
  *   - opencode: base URL is `opencode.json`-only (`provider.<id>.options.baseURL`).
  *   - grok: base URL is `~/.grok/config.toml`-only (`base_url`).
- * A harness without a verified env var keeps receiving its managed key
- * directly rather than being silently left uncovered by network-policy.ts.
+ * A harness with neither a verified env var nor a config-file override is not
+ * proxy-covered: `resolveHarnessEnvs` in runtime.ts withholds its managed key
+ * rather than injecting it unproxied, and network-policy.ts refuses managed
+ * mode for it outright.
  */
 const HARNESS_PROXIED_BASE_URL_ENV: Readonly<Partial<Record<string, string>>> = {
   claude: 'ANTHROPIC_BASE_URL',
@@ -210,22 +213,78 @@ export function harnessProxyBaseUrlEnv(harnessId: string): string | undefined {
   return HARNESS_PROXIED_BASE_URL_ENV[harnessId];
 }
 
+export interface HarnessProxyConfigFile {
+  readonly path: string;
+  readonly content: (baseUrl: string, envVarName: string) => string;
+}
+
+const CODEX_PROXY_MODEL_PROVIDER_ID = 'agiworkforce-proxy';
+
+/**
+ * A harness with no base-URL env var but a documented config-file override:
+ * the sandbox bootstrap writes this file once, at session creation, instead
+ * of relying on an env var to carry the base URL.
+ *
+ * Verified 2026-09-04 against github.com/openai/codex via Context7
+ * (/openai/codex): `codex-rs/core/src/config/config_tests.rs` shows
+ * `[model_providers.<id>]` taking `name`, `base_url`, `env_key` and
+ * `wire_api = "responses"`, selected by a top-level `model_provider = "<id>"`;
+ * `codex-rs/utils/home-dir/src/lib.rs` puts the file at
+ * `$CODEX_HOME/config.toml` (default `~/.codex/config.toml`).
+ *
+ * `base_url` carries no `/v1`: `codex-rs/responses-api-proxy/README.md`
+ * documents Codex posting exactly `{base_url}/responses`, and this route
+ * forwards a call's path onto `resolveProviderApiRoot('openai')`, which
+ * already ends in `/v1`, so appending another `/v1` here would double it.
+ */
+const HARNESS_PROXY_CONFIG_FILE: Readonly<Partial<Record<string, HarnessProxyConfigFile>>> = {
+  codex: {
+    path: '/home/user/.codex/config.toml',
+    content: (baseUrl, envVarName) =>
+      [
+        `model_provider = "${CODEX_PROXY_MODEL_PROVIDER_ID}"`,
+        '',
+        `[model_providers.${CODEX_PROXY_MODEL_PROVIDER_ID}]`,
+        `name = "AGI Workforce Proxy"`,
+        `base_url = "${baseUrl}"`,
+        `env_key = "${envVarName}"`,
+        `wire_api = "responses"`,
+        '',
+      ].join('\n'),
+  },
+};
+
+export function harnessProxyConfigFile(harnessId: string): HarnessProxyConfigFile | undefined {
+  return HARNESS_PROXY_CONFIG_FILE[harnessId];
+}
+
 /**
  * A harness is proxy-covered only when it has exactly one credential spec and
- * a verified base-URL env var: the proxy forwards to one provider per
- * session, so a harness like opencode that can auto-detect several providers
- * cannot be safely routed without knowing at mint time which one it will use.
+ * a verified way to redirect its traffic through the proxy, an env var or a
+ * config file: the proxy forwards to one provider per session, so a harness
+ * like opencode that can auto-detect several providers cannot be safely
+ * routed without knowing at mint time which one it will use.
  */
 export function harnessIsProxyCovered(harnessId: string): boolean {
   return (
     harnessCredentialSpecs(harnessId).length === 1 &&
-    harnessProxyBaseUrlEnv(harnessId) !== undefined
+    (harnessProxyBaseUrlEnv(harnessId) !== undefined ||
+      harnessProxyConfigFile(harnessId) !== undefined)
   );
 }
 
+/**
+ * True whenever a caller who brings no explicit credential cannot safely run
+ * this harness in managed mode: either the platform has no configured key
+ * for its provider, or it does but the harness has no verified way to carry
+ * that key through the credential proxy, so a raw managed key would have to
+ * enter the sandbox unproxied instead.
+ */
 export function harnessNeedsUserCredential(harnessId: string): boolean {
   const specs = harnessCredentialSpecs(harnessId);
-  return specs.length > 0 && !specs.some((spec) => hasServerProviderKey(spec.providerId));
+  if (specs.length === 0) return false;
+  if (!harnessIsProxyCovered(harnessId)) return true;
+  return !specs.some((spec) => hasServerProviderKey(spec.providerId));
 }
 
 export function knownHarnessCommandIds(): ReadonlySet<string> {

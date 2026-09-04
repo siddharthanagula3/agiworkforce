@@ -10,7 +10,7 @@ function sseFrame(event: string, data: unknown): string {
 
 describe('provider-proxy usage parser', () => {
   it('has no parser registered for an unsupported provider', () => {
-    expect(getProviderProxyUsageParser('openai')).toBeNull();
+    expect(getProviderProxyUsageParser('google')).toBeNull();
   });
 
   describe('anthropic non-streaming bodies', () => {
@@ -157,6 +157,187 @@ describe('provider-proxy usage parser', () => {
       );
       accumulator.push('event: ping\ndata: not json\n\n');
       expect(accumulator.finish()).toBeNull();
+    });
+  });
+});
+
+const openaiParser = getProviderProxyUsageParser('openai');
+if (!openaiParser) throw new Error('openai provider-proxy usage parser is not registered');
+
+function rawSseData(data: unknown): string {
+  return `data: ${JSON.stringify(data)}\n\n`;
+}
+
+describe('openai provider-proxy usage parser', () => {
+  describe('non-streaming bodies', () => {
+    it('extracts usage and model from a Responses API body', () => {
+      expect(
+        openaiParser.parseJsonBody({
+          model: 'test-openai-model',
+          usage: {
+            input_tokens: 100,
+            output_tokens: 40,
+            input_tokens_details: { cached_tokens: 20, cache_write_tokens: 5 },
+          },
+        }),
+      ).toEqual({
+        model: 'test-openai-model',
+        inputTokens: 100,
+        outputTokens: 40,
+        cacheReadTokens: 20,
+        cacheWriteTokens: 5,
+        cacheWrite1hTokens: 0,
+      });
+    });
+
+    it('extracts usage and model from a Chat Completions body', () => {
+      expect(
+        openaiParser.parseJsonBody({
+          model: 'test-openai-model',
+          usage: {
+            prompt_tokens: 80,
+            completion_tokens: 30,
+            prompt_tokens_details: { cached_tokens: 15 },
+          },
+        }),
+      ).toEqual({
+        model: 'test-openai-model',
+        inputTokens: 80,
+        outputTokens: 30,
+        cacheReadTokens: 15,
+        cacheWriteTokens: 0,
+        cacheWrite1hTokens: 0,
+      });
+    });
+
+    it('returns null when the body has no recognizable usage', () => {
+      expect(openaiParser.parseJsonBody({ model: 'test-openai-model' })).toBeNull();
+      expect(openaiParser.parseJsonBody(null)).toBeNull();
+      expect(openaiParser.parseJsonBody('not an object')).toBeNull();
+    });
+  });
+
+  describe('Responses API streaming', () => {
+    it('takes the model from response.created and the usage from response.completed', () => {
+      const accumulator = openaiParser.createStreamAccumulator();
+      accumulator.push(
+        rawSseData({
+          type: 'response.created',
+          response: { id: 'resp_1', status: 'in_progress', model: 'test-openai-model' },
+        }),
+      );
+      accumulator.push(
+        rawSseData({
+          type: 'response.output_text.delta',
+          item_id: 'item_1',
+          output_index: 0,
+          content_index: 0,
+          delta: 'hi',
+        }),
+      );
+      accumulator.push(
+        rawSseData({
+          type: 'response.completed',
+          response: {
+            id: 'resp_1',
+            status: 'completed',
+            usage: {
+              input_tokens: 100,
+              output_tokens: 40,
+              input_tokens_details: { cached_tokens: 20, cache_write_tokens: 0 },
+            },
+          },
+        }),
+      );
+
+      expect(accumulator.finish()).toEqual({
+        model: 'test-openai-model',
+        inputTokens: 100,
+        outputTokens: 40,
+        cacheReadTokens: 20,
+        cacheWriteTokens: 0,
+        cacheWrite1hTokens: 0,
+      });
+    });
+
+    it('handles a frame split across multiple push() calls', () => {
+      const accumulator = openaiParser.createStreamAccumulator();
+      const created = rawSseData({
+        type: 'response.created',
+        response: { id: 'resp_2', status: 'in_progress', model: 'test-openai-model' },
+      });
+      accumulator.push(created.slice(0, 10));
+      accumulator.push(created.slice(10));
+      accumulator.push(
+        rawSseData({
+          type: 'response.completed',
+          response: {
+            id: 'resp_2',
+            status: 'completed',
+            usage: { input_tokens: 5, output_tokens: 1 },
+          },
+        }),
+      );
+
+      expect(accumulator.finish()).toEqual({
+        model: 'test-openai-model',
+        inputTokens: 5,
+        outputTokens: 1,
+        cacheReadTokens: 0,
+        cacheWriteTokens: 0,
+        cacheWrite1hTokens: 0,
+      });
+    });
+
+    it('returns null when no usage-bearing event was seen', () => {
+      const accumulator = openaiParser.createStreamAccumulator();
+      accumulator.push(
+        rawSseData({
+          type: 'response.created',
+          response: { id: 'resp_3', status: 'in_progress', model: 'test-openai-model' },
+        }),
+      );
+      accumulator.push('data: not json\n\n');
+      expect(accumulator.finish()).toBeNull();
+    });
+  });
+
+  describe('Chat Completions streaming', () => {
+    it('takes model and usage from the final untyped chunk, ignoring [DONE]', () => {
+      const accumulator = openaiParser.createStreamAccumulator();
+      accumulator.push(
+        rawSseData({
+          id: 'chatcmpl_1',
+          object: 'chat.completion.chunk',
+          created: 1,
+          model: 'test-openai-model',
+          choices: [{ index: 0, delta: { role: 'assistant', content: 'hi' } }],
+        }),
+      );
+      accumulator.push(
+        rawSseData({
+          id: 'chatcmpl_1',
+          object: 'chat.completion.chunk',
+          created: 1,
+          model: 'test-openai-model',
+          choices: [],
+          usage: {
+            prompt_tokens: 80,
+            completion_tokens: 30,
+            prompt_tokens_details: { cached_tokens: 15 },
+          },
+        }),
+      );
+      accumulator.push('data: [DONE]\n\n');
+
+      expect(accumulator.finish()).toEqual({
+        model: 'test-openai-model',
+        inputTokens: 80,
+        outputTokens: 30,
+        cacheReadTokens: 15,
+        cacheWriteTokens: 0,
+        cacheWrite1hTokens: 0,
+      });
     });
   });
 });

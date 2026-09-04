@@ -169,7 +169,7 @@ async function handleCreate(request: NextRequest) {
     return NextResponse.json(
       {
         error: {
-          message: `${harnessName} has no managed provider credential configured. Bring your own key for ${harnessName}, or choose a different coding agent.`,
+          message: `${harnessName} has no managed provider credential available for a sandbox. Bring your own key for ${harnessName}, or choose a coding agent whose provider is proxied.`,
           type: 'invalid_request_error',
           code: HARNESS_CREDENTIAL_UNAVAILABLE_CODE,
         },

@@ -105,6 +105,64 @@ describe('POST /api/code/sessions, the full-network interim guard', () => {
     expect(mockCreateSession).not.toHaveBeenCalled();
   });
 
+  it('refuses a harness the proxy does not cover under trusted network with no extra hosts (D28: whatever the network preset)', async () => {
+    const response = await POST(
+      postRequest({
+        requestId: 'req-12345692',
+        title: 'workspace',
+        networkAccess: 'trusted',
+        runtimeId: 'droid',
+      }),
+    );
+    expect(response.status).toBe(422);
+    const body = (await response.json()) as { error: { code: string; message: string } };
+    expect(body.error.code).toBe('harness_credential_unavailable');
+    expect(body.error.message).toContain('Droid');
+    expect(mockCreateSession).not.toHaveBeenCalled();
+  });
+
+  it('refuses a harness the proxy does not cover with no network access at all', async () => {
+    const response = await POST(
+      postRequest({
+        requestId: 'req-12345693',
+        title: 'workspace',
+        networkAccess: 'none',
+        runtimeId: 'droid',
+      }),
+    );
+    expect(response.status).toBe(422);
+    const body = (await response.json()) as { error: { code: string } };
+    expect(body.error.code).toBe('harness_credential_unavailable');
+    expect(mockCreateSession).not.toHaveBeenCalled();
+  });
+
+  it('allows a harness the proxy does not cover once an explicit credential is supplied, under any network preset', async () => {
+    const response = await POST(
+      postRequest({
+        requestId: 'req-12345694',
+        title: 'workspace',
+        networkAccess: 'trusted',
+        runtimeId: 'droid',
+        harnessCredential: 'user-supplied-factory-key',
+      }),
+    );
+    expect(response.status).toBe(201);
+    expect(mockCreateSession).toHaveBeenCalledTimes(1);
+  });
+
+  it('allows managed mode for codex now that the credential proxy covers it', async () => {
+    const response = await POST(
+      postRequest({
+        requestId: 'req-12345695',
+        title: 'workspace',
+        networkAccess: 'trusted',
+        runtimeId: 'codex',
+      }),
+    );
+    expect(response.status).toBe(201);
+    expect(mockCreateSession).toHaveBeenCalledTimes(1);
+  });
+
   it('allows extra egress hosts under trusted network for a proxied harness', async () => {
     const response = await POST(
       postRequest({
@@ -228,5 +286,22 @@ describe('POST /api/code/sessions, the managed-credential availability guard', (
     );
     expect(response.status).toBe(201);
     expect(mockCreateSession).toHaveBeenCalledTimes(1);
+  });
+
+  it('rejects codex when the platform has no managed OpenAI key, even though the proxy covers it', async () => {
+    mockHasServerProviderKey.mockReturnValue(false);
+    const response = await POST(
+      postRequest({
+        requestId: 'req-2234567d',
+        title: 'workspace',
+        networkAccess: 'trusted',
+        runtimeId: 'codex',
+      }),
+    );
+    expect(response.status).toBe(422);
+    const body = (await response.json()) as { error: { code: string; message: string } };
+    expect(body.error.code).toBe('harness_credential_unavailable');
+    expect(body.error.message).toContain('Codex');
+    expect(mockCreateSession).not.toHaveBeenCalled();
   });
 });
