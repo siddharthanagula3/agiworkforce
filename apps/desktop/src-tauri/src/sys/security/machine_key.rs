@@ -61,6 +61,10 @@ pub enum KeyPurpose {
     CalendarCredentials,
     /// For encrypting cloud sync payloads
     CloudEncryption,
+    /// For encrypting Slack/WhatsApp/Teams credentials (FIX-002).
+    /// Single flat variant intentionally, all three platforms ride on the
+    /// same master-password-derived key; per-platform separation is theatre
+    /// when one master key controls every purpose anyway.
     Messaging,
     /// For encrypting per-tool connector permission records stored at
     /// `~/.agiworkforce/connector-permissions.json` (Desktop P0, audit C-rank 1).
@@ -424,6 +428,10 @@ impl MachineKeyManager {
             .unwrap_or(false)
     }
 
+    /// Set the non-secret installation identifier.
+    ///
+    /// This value labels the installation (local user id, master-password
+    /// salt). It carries no entropy of its own, see [`set_install_secret`].
     pub fn set_install_id(&self, id: String) {
         if let Ok(mut state) = self.state.safe_write() {
             if state.install_id.as_ref() != Some(&id) {
@@ -544,6 +552,7 @@ impl MachineKeyManager {
 }
 
 fn hkdf_sha256(salt: &[u8], input_key: &[u8], info: &[u8]) -> [u8; KEY_SIZE] {
+    // SAFETY: HMAC-SHA256 accepts any key size per RFC 2104, new_from_slice cannot fail.
     let mut extract = <Hmac<Sha256> as Mac>::new_from_slice(salt)
         .expect("HMAC-SHA256 accepts any key size (RFC 2104)");
     extract.update(input_key);

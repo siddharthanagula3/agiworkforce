@@ -2,6 +2,13 @@ import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
+/**
+ * Resolves the app root by looking for a marker, not from `process.cwd()`.
+ *
+ * A coverage guard that resolves from the working directory fails with a wall
+ * of unreadable-file errors the moment vitest is invoked from the repo root
+ * instead of the app, noise that says nothing about the thing being guarded.
+ */
 function appRoot(): string {
   const direct = process.cwd();
   if (existsSync(join(direct, 'db/neon'))) return direct;
@@ -12,6 +19,15 @@ function appRoot(): string {
 
 const APP_ROOT = appRoot();
 
+/**
+ * Connector governance is enforced where the tool catalog is assembled, which
+ * is the single path chat, scheduled tasks, and cloud agent runs all share.
+ *
+ * Enforcing per caller instead would mean a connector blocked in chat that a
+ * scheduled task can still reach, a rule that holds in one place and not
+ * another is not a control. This reads the source so that property cannot be
+ * quietly undone.
+ */
 const LOADER = 'lib/user-connector-tools.ts';
 
 function source(): string {

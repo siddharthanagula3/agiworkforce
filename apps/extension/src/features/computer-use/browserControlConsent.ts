@@ -59,6 +59,14 @@ function chromePermissions(): BrowserControlPermissions {
   };
 }
 
+/**
+ * Whether Chrome itself has granted this extension host access to `origin`.
+ *
+ * `chrome.debugger.attach` takes a bare tab id and needs no host permission, so
+ * without this check the only thing standing between the DevTools Protocol and
+ * an arbitrary origin is a record in the extension's own storage, invisible to
+ * Chrome, to chrome://extensions, and to a Web Store reviewer. Fails closed.
+ */
 export async function hasBrowserControlHostPermission(
   origin: string,
   permissions: BrowserControlPermissions = chromePermissions(),
@@ -72,6 +80,11 @@ export async function hasBrowserControlHostPermission(
   }
 }
 
+/**
+ * Asks Chrome for host access to `origin`. Must be called from a foreground
+ * extension page inside a user gesture, and must be the first await in that
+ * handler, an earlier await spends the gesture and Chrome refuses.
+ */
 export async function requestBrowserControlHostPermission(
   origin: string,
   permissions: BrowserControlPermissions = chromePermissions(),

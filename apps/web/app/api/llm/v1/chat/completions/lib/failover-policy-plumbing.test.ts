@@ -4,6 +4,24 @@ import { join } from 'node:path';
 import { NextRequest } from 'next/server';
 import { getDefaultModelFor, getModelMetadataById } from '@agiworkforce/types';
 
+/**
+ * DEFECT B: the failover policy enforcement was dead code in production.
+ *
+ * `routeRetryAttempt` in managed-failover.ts refuses an OpenRouter route-retry
+ * the workspace forbids, correct, and covered by managed-failover.policy.test
+ *, but it reads the policy from `options.modelPolicy`, and no production
+ * caller ever passed one. `ProcessedRequest` had no field to carry the
+ * snapshot, and all four `createFailoverPlan` calls in route.ts passed only
+ * `{ signal, isProviderDispatchable }`. At runtime the option was `undefined`,
+ * which the evaluator reads as ungoverned, which allows. The enforcement
+ * existed and never ran.
+ *
+ * Two halves, because the hole had two:
+ *
+ *   1. The processor must PUT the snapshot it already read on the request.
+ *   2. route.ts must HAND it to every failover plan it builds.
+ */
+
 const PRO_CHAT_MODEL = getDefaultModelFor('pro', 'chat');
 
 const mocks = vi.hoisted(() => ({

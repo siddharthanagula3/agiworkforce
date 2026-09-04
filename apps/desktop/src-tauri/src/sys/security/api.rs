@@ -271,6 +271,13 @@ impl CspBuilder {
         self
     }
 
+    // AUDIT-FIX: CI-2, `style-src 'unsafe-inline'` is retained in
+    // apps/desktop/src-tauri/tauri.conf.json:35 because the desktop SPA emits
+    // ~580 React `style={{...}}` inline attributes (grep `style={{` under
+    // apps/desktop/src/). Replacing with nonces/hashes requires either
+    // migrating every dynamic style to CSS classes or attaching per-render
+    // nonces via a CSP middleware Tauri does not natively expose. Tracked as
+    // an open issue; tightening is gated on a SPA-wide refactor.
     pub fn style_src(mut self, sources: Vec<&str>) -> Self {
         self.directives.insert(
             "style-src".to_string(),
@@ -339,6 +346,7 @@ mod tests {
 
     #[test]
     fn test_hmac_signature() {
+        // Test-only placeholder values, not real secrets
         let secret = &format!("test_{}_key", "secret");
         let payload = "test_payload_data";
 

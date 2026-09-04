@@ -2,6 +2,25 @@ import { describe, expect, it, vi, beforeEach, afterAll } from 'vitest';
 import { NextRequest } from 'next/server';
 import { getAllowedModelsForTier, listCanonicalModels } from '@agiworkforce/types';
 
+/**
+ * DEFECT A: routed-provider collapse in the PRIMARY policy gate.
+ *
+ * `resolveProviderFromModel` returns `"openrouter"` for every model belonging
+ * to the aggregator-routed vendors (MiniMax, Qwen, Zhipu, see
+ * lib/services/aggregator-routing.ts) whenever `OPENROUTER_API_KEY` is set.
+ * The primary gate fed exactly that value to a policy written about VENDORS,
+ * so with the key present the gate failed in both directions at once:
+ *
+ *   blockedProviders: ['zhipu'] was INERT, the ask arrived as "openrouter",
+ *   matched nothing, and an administrator who blocked the vendor still ran it.
+ *
+ *   allowedProviders: ['zhipu'] OVER-BLOCKED, the ask arrived as "openrouter",
+ *   was not on the approved list, and the administrator's own approval was
+ *   refused.
+ *
+ * Both are exercised below against the real `processRequest`, with the key set.
+ */
+
 const PRO_SEAT_MODELS = new Set(getAllowedModelsForTier('pro_additions'));
 const ROUTED_MODEL = listCanonicalModels()
   .filter(

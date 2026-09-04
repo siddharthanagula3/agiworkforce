@@ -90,6 +90,13 @@ function prepare(text: string): string {
   return normalizeText(text).replace(/[^a-z0-9+]+/g, ' ');
 }
 
+/**
+ * Returns the first matching hard-abstain category, or null.
+ *
+ * Exported so the widget can pre-empt a pointless round trip, but the server
+ * classifies again regardless. A client-side check is a latency optimization,
+ * never the gate.
+ */
 export function classifyHardAbstain(text: string): HardAbstainCategory | null {
   if (!text) return null;
   const prepared = prepare(text);

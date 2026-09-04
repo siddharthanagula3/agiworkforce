@@ -36,6 +36,7 @@ function format(row: Row): OrganizationConnectorPolicy {
   };
 }
 
+/** `null` means ungoverned, no row, which is not the same as an empty policy. */
 export async function readConnectorPolicy(
   db: DatabaseAdapter,
   organizationId: string,
@@ -50,6 +51,15 @@ export async function readConnectorPolicy(
   return row ? format(row) : null;
 }
 
+/**
+ * Reads the policy without letting a database fault stop a member working.
+ *
+ * Connector governance is a deployment control over which approved
+ * integrations staff use, not a containment barrier, the tenancy layer is what
+ * stops cross-workspace access, and that fails closed. Denying every connector
+ * because the policy table blipped would break every member's tools for an
+ * infrastructure reason no administrator chose.
+ */
 export async function readConnectorPolicySafely(
   db: DatabaseAdapter,
   organizationId: string | null,

@@ -40,6 +40,11 @@ interface Invoice {
   invoice_pdf: string | null;
 }
 
+// Real per-task credit ledger rows from apps/web/app/api/billing/credit-history
+// (backed by public.credit_transactions, settings-12-gap). `deduction` is
+// the per-task debit every managed-cloud request writes; the other four are
+// the money-affecting events (top-up, refund, bonus grant, manual
+// adjustment). See that route for why `allocation`/`reset` are excluded.
 type CreditTransactionType = 'purchase' | 'adjustment' | 'refund' | 'bonus' | 'deduction';
 
 interface CreditHistoryEntry {
@@ -59,6 +64,14 @@ const CREDIT_TRANSACTION_LABELS: Record<string, string> = {
   adjustment: 'Adjustment',
 };
 
+/**
+ * `credit_transactions.amount_cents` is stored positive for `deduction` (an
+ * "amount spent" magnitude, see db/neon/0020_functions.sql:643-657) but as a
+ * signed balance delta for every other type (positive = credited, negative =
+ * revoked, see the `refund` caller at db/neon/0020_functions.sql:355). Flip
+ * only the verified case so a per-task debit reads as a debit instead of a
+ * false "credit added" row; every other type is shown exactly as stored.
+ */
 function signedCreditCents(entry: CreditHistoryEntry): number {
   return entry.transaction_type === 'deduction'
     ? -Math.abs(entry.amount_cents)
@@ -258,6 +271,11 @@ export function BillingSection() {
   const billingUnauthenticated = useBillingStore((s) => s.unauthenticated);
   const refreshUser = useBillingStore((s) => s.refreshUser);
 
+  // "Manage billing" and "Update payment method" are Stripe Customer Portal
+  // actions, but both were `<Link href="/billing">`, the old duplicate billing
+  // dashboard. Now that `/billing` redirects here, following them would land
+  // the user back on the screen they clicked from: two dead controls. They
+  // open the portal, which is what their labels have always claimed.
   const [portalPending, setPortalPending] = useState(false);
   const [portalError, setPortalError] = useState<string | null>(null);
   const [topUpAmountUsd, setTopUpAmountUsd] = useState(MIN_TOP_UP_AMOUNT_USD);
@@ -269,6 +287,12 @@ export function BillingSection() {
   const [overagePending, setOveragePending] = useState(false);
   const [overageError, setOverageError] = useState<string | null>(null);
 
+  /**
+   * Optimistic, then reconciled against the server's answer rather than the
+   * value that was requested, the response also carries the spendable balance,
+   * and a toggle that claims to be on while the server has it off would be a
+   * silent promise to spend money.
+   */
   async function setOverage(next: boolean) {
     if (overagePending) return;
     setOveragePending(true);
@@ -381,6 +405,8 @@ export function BillingSection() {
     }
   }
 
+  // Real Stripe data (empty for free/unbilled users, the routes return [] when
+  // there is no Stripe customer, which we render as an honest empty state).
   const [paymentMethods, setPaymentMethods] = useState<BillingListState<PaymentMethod>>({
     status: 'idle',
     items: [],
@@ -524,6 +550,11 @@ export function BillingSection() {
     );
   }
 
+  // A 401 clears `subscription` without recording an error, so before this
+  // guard the render fell straight through to `tier = 'free'` and offered a
+  // paying customer an upgrade to the plan they already have, with the usage
+  // panel beside it still correctly reading Max 15x from its own request.
+  // "We could not read your plan" is the honest thing to say when we could not.
   if (billingUnauthenticated && !subscription) {
     return (
       <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
@@ -567,6 +598,13 @@ export function BillingSection() {
     );
   }
 
+  // Any absent subscription, not just the 401 and error cases above. When
+  // /api/me succeeds the store always writes one, and a genuinely free account
+  // carries tier 'free' from the server, so null only ever means we did not
+  // get an answer. The two guards above each named a specific cause, which left
+  // every other cause falling through to `tier = 'free'`: observed 2026-08-17
+  // with a Basic account shown "Free plan" and an Upgrade button, beside a
+  // Usage panel correctly reading Basic from its own request.
   if (!subscription) {
     return (
       <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>

@@ -2,6 +2,20 @@ import { describe, expect, it } from 'vitest';
 
 import { evaluateModelAccess, type ModelAccessPolicy } from '@/lib/services/model-policy-evaluator';
 
+/**
+ * Vendor versus transport.
+ *
+ * `resolveProviderFromModel` answers a DISPATCH question, and for the
+ * aggregator-routed vendors (MiniMax, Qwen, Zhipu) it returns `"openrouter"`
+ * once `OPENROUTER_API_KEY` is set, collapsing the vendor away. Handing that
+ * one string to a policy written about vendors broke the gate in BOTH
+ * directions: a MiniMax block matched nothing and a MiniMax allow matched
+ * nothing either.
+ *
+ * The rule under test: a BLOCK matches either identity, an ALLOWLIST is
+ * satisfied by the vendor alone.
+ */
+
 function policy(overrides: Partial<ModelAccessPolicy> = {}): ModelAccessPolicy {
   return {
     allowedProviders: [],

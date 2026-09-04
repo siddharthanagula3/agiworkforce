@@ -1,3 +1,23 @@
+/**
+ * @agiworkforce/licensing
+ *
+ * Pure, offline-verifiable enterprise licensing primitives (retention boundary:
+ * `docs/decisions/2026-07-30-enterprise-local-verifier-retention.md`). No I/O, no network, no
+ * throwing: `verifyLicense` returns a structured verdict so callers degrade to
+ * the free Local tier on any failure and NEVER block data access.
+ *
+ * This is the verifiable primitive only. It is NOT wired into any app runtime,
+ * UI, or enforcement path, that is a later, separately-scoped step. Product
+ * feature-flag semantics, editions, pricing, and activation (design §4) are
+ * founder-gated and intentionally absent here.
+ *
+ * The `@agiworkforce/licensing/test-support` subpath (fixture signing) is
+ * exported separately and is NOT re-exported here, production code verifies
+ * only; issuers sign out of band.
+ *
+ * @packageDocumentation
+ */
+
 export { EditionSchema, LicenseClaimsSchema } from './claims';
 export type { Edition, LicenseClaims } from './claims';
 
