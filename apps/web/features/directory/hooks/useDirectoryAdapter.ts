@@ -65,7 +65,7 @@ import {
 } from '../services/skills-directory';
 
 const EMPTY: DirectorySection = { entries: [] };
-const SECTIONS: readonly DirectorySectionKey[] = ['skills', 'connectors', 'plugins'];
+const SECTIONS: readonly DirectorySectionKey[] = ['skills', 'plugins'];
 
 interface ConnectStartBody {
   message?: string;
@@ -102,16 +102,16 @@ export function useDirectoryAdapter(options: DirectoryAdapterOptions = {}): Dire
     onConnectConnector,
     onDisconnectConnector,
   } = options;
-  const curatedRef = useRef<readonly SettingsConnector[]>([]);
-  curatedRef.current = curatedConnectors ?? [];
   const [skills, setSkills] = useState<DirectorySection>(EMPTY);
   const [connectors, setConnectors] = useState<DirectorySection>(EMPTY);
   const [plugins, setPlugins] = useState<DirectorySection>(EMPTY);
   const skillCache = useRef<readonly ManagedSkillSummary[]>([]);
   const installedSkills = useRef<ReadonlySet<string>>(new Set<string>());
   const connectedIds = useRef<ReadonlySet<string>>(new Set<string>());
-  const local = useRef<readonly ConnectedConnector[]>([]);
-  local.current = connectedConnectors ?? [];
+  const curatedRef = useRef<readonly SettingsConnector[]>([]);
+  const connectedRef = useRef<readonly ConnectedConnector[]>([]);
+  curatedRef.current = curatedConnectors ?? [];
+  connectedRef.current = connectedConnectors ?? [];
   const pluginCache = useRef<PluginDirectorySnapshot | null>(null);
 
   const loadSkills = useCallback(async () => {
@@ -140,7 +140,7 @@ export function useDirectoryAdapter(options: DirectoryAdapterOptions = {}): Dire
         fetchConnectorRecords().catch(() => [] as DirectoryRecord[]),
         fetchConnectedConnectorIds(),
       ]);
-      const merged = new Set([...connected, ...connectedConnectorIds(local.current)]);
+      const merged = new Set([...connected, ...connectedConnectorIds(connectedRef.current)]);
       connectedIds.current = merged;
       setConnectors({
         ...toConnectorSection(records, merged, curatedRef.current),
