@@ -145,6 +145,11 @@ async function handleSendMessage(request: NextRequest, context: RouteContext) {
     throw createError.internal('Failed to save message');
   }
 
+  // Index any artifacts this assistant message produces, so the gallery can
+  // list them without this (or any other) device having opened the
+  // conversation. Metadata only, the content stays in the message and is
+  // re-derived on demand. Fire-and-forget: the index is a discovery aid, so it
+  // must never delay or fail saving the message.
   if (role === 'assistant' && message?.id) {
     scheduleArtifactIndexing({
       db,
@@ -155,6 +160,11 @@ async function handleSendMessage(request: NextRequest, context: RouteContext) {
     });
   }
 
+  // Auto-title conversation from first user message. Two stages: an
+  // immediate character truncation (below, synchronous, the row must never
+  // sit blank), then a short LLM-generated title that replaces it in the
+  // background once ready (agentic-modes-gap-06). Generation is fire-and-forget
+  // so a slow or failing provider can never delay or break this response.
   if (role === 'user') {
     const [row] = await db.query<{ count: string }>(
       'select count(*)::text as count from web_messages where conversation_id = $1',
