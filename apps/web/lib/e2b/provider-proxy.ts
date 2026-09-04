@@ -1,5 +1,7 @@
 import 'server-only';
 
+import { isManagedProviderId, resolveProviderApiRoot } from '@/lib/server/provider-endpoints';
+
 export const PROVIDER_PROXY_PATH_SEGMENT = 'provider-proxy';
 
 /**
@@ -12,22 +14,13 @@ const PROVIDER_PROXY_AUTH_HEADER: Readonly<Record<string, string>> = {
   anthropic: 'x-api-key',
 };
 
-/**
- * The base URL a provider's SDK talks to when no override is configured.
- * https://api.anthropic.com is Anthropic's own default (also in
- * ALLOWED_MANAGED_PROVIDER_HOSTS), used when ANTHROPIC_BASE_URL is unset for
- * the server's own managed credential.
- */
-const PROVIDER_PROXY_DEFAULT_BASE_URL: Readonly<Record<string, string>> = {
-  anthropic: 'https://api.anthropic.com',
-};
-
 export function providerProxyAuthHeader(providerId: string): string | undefined {
   return PROVIDER_PROXY_AUTH_HEADER[providerId];
 }
 
 export function providerProxyDefaultBaseUrl(providerId: string): string | undefined {
-  return PROVIDER_PROXY_DEFAULT_BASE_URL[providerId];
+  if (!providerProxyAuthHeader(providerId) || !isManagedProviderId(providerId)) return undefined;
+  return resolveProviderApiRoot(providerId);
 }
 
 export function resolveAppOrigin(): string | null {
