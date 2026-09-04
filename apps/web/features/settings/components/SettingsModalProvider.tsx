@@ -3,6 +3,8 @@
 import React, { createContext, useCallback, useContext, useEffect, useState } from 'react';
 import dynamic from 'next/dynamic';
 
+import { parseSettingsDirectoryHash } from '@/features/directory';
+
 const WebSettingsModal = dynamic(
   () => import('./WebSettingsModal').then((m) => ({ default: m.WebSettingsModal })),
   { ssr: false },
@@ -31,6 +33,18 @@ export function SettingsModalProvider({ children }: { children: React.ReactNode 
 
   const closeSettings = useCallback(() => {
     setIsOpen(false);
+  }, []);
+
+  useEffect(() => {
+    const sync = () => {
+      const route = parseSettingsDirectoryHash(window.location.hash);
+      if (!route) return;
+      setInitialSection(route.section);
+      setIsOpen(true);
+    };
+    sync();
+    window.addEventListener('hashchange', sync);
+    return () => window.removeEventListener('hashchange', sync);
   }, []);
 
   /**

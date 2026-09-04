@@ -1,6 +1,6 @@
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 const dynamicState = vi.hoisted(() => ({
   renderCount: 0,
@@ -92,5 +92,43 @@ describe('SettingsModalProvider, background is hidden from assistive tech', () =
 
     await user.click(screen.getByRole('button', { name: /open settings/i }));
     expect(await screen.findByTestId('web-settings-modal')).toBeInTheDocument();
+  });
+});
+
+describe('SettingsModalProvider settings hash', () => {
+  function setHash(hash: string) {
+    window.history.replaceState(null, '', `/chat${hash}`);
+  }
+
+  afterEach(() => setHash(''));
+
+  it('opens the customize section a deep link names', () => {
+    setHash('#settings/customize-skills');
+    render(
+      <SettingsModalProvider>
+        <Harness />
+      </SettingsModalProvider>,
+    );
+    expect(screen.getByTestId('web-settings-modal')).toBeVisible();
+  });
+
+  it('opens from a browse deep link', () => {
+    setHash('#settings/customize-connectors/browse/slack');
+    render(
+      <SettingsModalProvider>
+        <Harness />
+      </SettingsModalProvider>,
+    );
+    expect(screen.getByTestId('web-settings-modal')).toBeVisible();
+  });
+
+  it('stays closed for a hash the directory does not own', () => {
+    setHash('#chat/thread-1');
+    render(
+      <SettingsModalProvider>
+        <Harness />
+      </SettingsModalProvider>,
+    );
+    expect(screen.queryByTestId('web-settings-modal')).toBeNull();
   });
 });
