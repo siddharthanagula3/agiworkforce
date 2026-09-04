@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { WebSettingsModal } from './WebSettingsModal';
 import { invalidateSkillsCatalog } from '@features/skills/services/skills-catalog';
 
@@ -188,6 +188,23 @@ function stubFetch({
   return fetchMock;
 }
 
+// The directory adapter snapshots the parent's connector state (canConnect,
+// connected ids, connectorsError/Notice) the moment its section first mounts.
+// Mounting straight on "connectors" races WebSettingsModal's own
+// /api/connectors + /api/github/installations + /api/connectors/custom
+// fetch against the directory panel's own fetch, and the loser's snapshot is
+// never retaken. Settling here first, then navigating, avoids that race.
+async function settleParentConnectorState() {
+  await act(async () => {
+    await new Promise<void>((resolve) => setTimeout(resolve, 0));
+  });
+}
+
+function openConnectorsSection() {
+  const nav = screen.getByRole('navigation', { name: 'Settings navigation' });
+  fireEvent.click(within(nav).getByRole('button', { name: 'Connectors' }));
+}
+
 describe('WebSettingsModal connectors adapter (honest web semantics)', () => {
   beforeEach(() => {
     vi.unstubAllGlobals();
@@ -200,19 +217,17 @@ describe('WebSettingsModal connectors adapter (honest web semantics)', () => {
     stubFetch({ connectors: [{ connectorId: 'notion', connectedAt: '2026-07-01T00:00:00Z' }] });
     render(<WebSettingsModal open onClose={vi.fn()} initialSection="connectors" />);
 
-    const table = await screen.findByRole('table');
-    const notionRow = within(table).getByText('Notion').closest('tr') as HTMLElement;
-    await waitFor(() => expect(within(notionRow).getByText('Connected')).toBeTruthy());
+    fireEvent.click(await screen.findByText('Notion'));
+    expect(await screen.findByText('Connected')).toBeTruthy();
   });
 
   it('keeps a no-endpoint, unconfigured connector out of the table instead of ever labeling it "Coming soon"', async () => {
     stubFetch({ connectors: [{ connectorId: 'notion', connectedAt: '2026-07-01T00:00:00Z' }] });
     render(<WebSettingsModal open onClose={vi.fn()} initialSection="connectors" />);
 
-    const table = await screen.findByRole('table');
-    expect(within(table).getByText('Notion')).toBeTruthy();
-    expect(screen.queryByText('Slack')).toBeNull();
-    expect(screen.queryByText('Google Sheets')).toBeNull();
+    expect(await screen.findByRole('button', { name: 'Remove Notion' })).toBeTruthy();
+    expect(await screen.findByText('Slack')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Add Slack' })).toBeNull();
     expect(screen.queryByText('Coming soon')).toBeNull();
   });
 
@@ -225,10 +240,11 @@ describe('WebSettingsModal connectors adapter (honest web semantics)', () => {
         },
       ],
     });
-    render(<WebSettingsModal open onClose={vi.fn()} initialSection="connectors" />);
+    render(<WebSettingsModal open onClose={vi.fn()} initialSection="general" />);
+    await settleParentConnectorState();
+    openConnectorsSection();
 
-    const table = await screen.findByRole('table');
-    expect(within(table).getByText('Notion')).toBeTruthy();
+    expect(await screen.findByRole('button', { name: 'Remove Notion' })).toBeTruthy();
     expect(
       await screen.findByText(
         'Some connector data could not be read. Valid connectors remain available; retry to refresh.',
@@ -239,22 +255,25 @@ describe('WebSettingsModal connectors adapter (honest web semantics)', () => {
 
   it('marks GitHub Connected from real GitHub App installations (not user_connectors)', async () => {
     stubFetch({ installations: [{ installation_id: 42, created_at: '2026-06-01T00:00:00Z' }] });
-    render(<WebSettingsModal open onClose={vi.fn()} initialSection="connectors" />);
+    render(<WebSettingsModal open onClose={vi.fn()} initialSection="general" />);
+    await settleParentConnectorState();
+    openConnectorsSection();
 
-    const table = await screen.findByRole('table');
-    const githubRow = within(table).getByText('GitHub').closest('tr') as HTMLElement;
-    await waitFor(() => expect(within(githubRow).getByText('Connected')).toBeTruthy());
+    fireEvent.click(await screen.findByText('GitHub'));
+    expect(await screen.findByText('Connected')).toBeTruthy();
   });
 
   it('renders no Connect buttons when the server reports nothing connectable, and hides local-only connectors', async () => {
     stubFetch();
     render(<WebSettingsModal open onClose={vi.fn()} initialSection="connectors" />);
 
-    await screen.findByText('Connect your first tool');
-    expect(screen.getByRole('button', { name: 'Connect remote MCP server' })).toBeTruthy();
+    expect(await screen.findByRole('button', { name: 'Add custom connector' })).toBeTruthy();
+    expect(await screen.findByPlaceholderText('Search connectors')).toBeTruthy();
     expect(screen.queryByRole('table')).toBeNull();
-    expect(screen.queryByPlaceholderText('Search connectors...')).toBeNull();
-    expect(screen.queryByText('Notion')).toBeNull();
+    expect(await screen.findByText('Notion')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Add Notion' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Add GitHub' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Add Slack' })).toBeNull();
     expect(screen.queryByText('Coming soon')).toBeNull();
     expect(screen.queryByText('Local Filesystem')).toBeNull();
     expect(screen.queryByText('Terminal / Shell')).toBeNull();
@@ -262,13 +281,11 @@ describe('WebSettingsModal connectors adapter (honest web semantics)', () => {
 
   it('renders a Connect button for GitHub when the server reports it available', async () => {
     stubFetch({ available: ['github'] });
-    render(<WebSettingsModal open onClose={vi.fn()} initialSection="connectors" />);
+    render(<WebSettingsModal open onClose={vi.fn()} initialSection="general" />);
+    await settleParentConnectorState();
+    openConnectorsSection();
 
-    const table = await screen.findByRole('table');
-    const githubRow = within(table).getByText('GitHub').closest('tr') as HTMLElement;
-    await waitFor(() =>
-      expect(within(githubRow).getByRole('button', { name: /^Connect/ })).toBeTruthy(),
-    );
+    expect(await screen.findByRole('button', { name: 'Add GitHub' })).toBeTruthy();
   });
 
   it('shows a secure-storage configuration failure on the connector row', async () => {
@@ -282,17 +299,18 @@ describe('WebSettingsModal connectors adapter (honest web semantics)', () => {
       }
       return readResponse(input);
     });
-    render(<WebSettingsModal open onClose={vi.fn()} initialSection="connectors" />);
+    render(<WebSettingsModal open onClose={vi.fn()} initialSection="general" />);
+    await settleParentConnectorState();
+    openConnectorsSection();
 
-    const { act, fireEvent } = await import('@testing-library/react');
-    const connectButton = await screen.findByRole('button', { name: 'Connect Notion' });
+    const connectButton = await screen.findByRole('button', { name: 'Add Notion' });
     await act(async () => {
       fireEvent.click(connectButton);
     });
 
     expect(await screen.findByText(message)).toBeTruthy();
-    expect(screen.getByRole('button', { name: 'Connect Notion' })).toBeEnabled();
-    expect(screen.getByRole('tab', { name: /^Connected\s*0$/ })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Add Notion' })).toBeEnabled();
+    expect(screen.queryByRole('button', { name: 'Remove Notion' })).toBeNull();
   });
 
   it('names the real cause instead of blaming the connection for a server fault', async () => {
@@ -300,22 +318,28 @@ describe('WebSettingsModal connectors adapter (honest web semantics)', () => {
     // "check your connection" sends them to fix something that is not broken.
     stubFetch({ connectorFailuresBeforeSuccess: 1, connectorFailureStatus: 500 });
     const { unmount } = render(
-      <WebSettingsModal open onClose={vi.fn()} initialSection="connectors" />,
+      <WebSettingsModal open onClose={vi.fn()} initialSection="general" />,
     );
+    await settleParentConnectorState();
+    openConnectorsSection();
     expect(await screen.findByText(/the server returned an error/)).toBeTruthy();
     expect(screen.queryByText(/Check your connection/)).toBeNull();
     unmount();
 
     // A 4xx that is not an auth failure is a rejected request, not a server fault.
     stubFetch({ connectorFailuresBeforeSuccess: 1, connectorFailureStatus: 400 });
-    render(<WebSettingsModal open onClose={vi.fn()} initialSection="connectors" />);
+    render(<WebSettingsModal open onClose={vi.fn()} initialSection="general" />);
+    await settleParentConnectorState();
+    openConnectorsSection();
     expect(await screen.findByText(/the server rejected the request/)).toBeTruthy();
     expect(screen.queryByText(/the server returned an error/)).toBeNull();
   });
 
   it('shows a connector loading failure and retries instead of pretending the directory is empty', async () => {
     stubFetch({ connectorFailuresBeforeSuccess: 1 });
-    render(<WebSettingsModal open onClose={vi.fn()} initialSection="connectors" />);
+    render(<WebSettingsModal open onClose={vi.fn()} initialSection="general" />);
+    await settleParentConnectorState();
+    openConnectorsSection();
 
     expect(
       await screen.findByText(
@@ -323,10 +347,9 @@ describe('WebSettingsModal connectors adapter (honest web semantics)', () => {
       ),
     ).toBeTruthy();
 
-    const { fireEvent } = await import('@testing-library/react');
     fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
 
-    expect(await screen.findByText('Connect your first tool')).toBeTruthy();
+    expect(await screen.findByText('Notion')).toBeTruthy();
     expect(
       screen.queryByText(
         'Connectors could not be loaded because the server returned an error. This is not a problem with your connection, retry, or contact support if it persists.',
@@ -341,15 +364,12 @@ describe('WebSettingsModal connectors adapter (honest web semantics)', () => {
       installationsFailuresBeforeSuccess: Infinity,
       installationsFailureStatus: 500,
     });
-    render(<WebSettingsModal open onClose={vi.fn()} initialSection="connectors" />);
+    render(<WebSettingsModal open onClose={vi.fn()} initialSection="general" />);
+    await settleParentConnectorState();
+    openConnectorsSection();
 
-    const table = await screen.findByRole('table');
-    expect(within(table).getByText('Notion')).toBeTruthy();
-    const notionRow = within(table).getByText('Notion').closest('tr') as HTMLElement;
-    await waitFor(() => expect(within(notionRow).getByText('Connected')).toBeTruthy());
-
-    const githubRow = within(table).getByText('GitHub').closest('tr') as HTMLElement;
-    expect(within(githubRow).getByRole('button', { name: /^Connect/ })).toBeTruthy();
+    expect(await screen.findByRole('button', { name: 'Remove Notion' })).toBeTruthy();
+    expect(await screen.findByRole('button', { name: 'Add GitHub' })).toBeTruthy();
 
     expect(
       await screen.findByText(
@@ -373,10 +393,11 @@ describe('WebSettingsModal connectors adapter (honest web semantics)', () => {
       installationsFailuresBeforeSuccess: Infinity,
       installationsFailureMode: mode,
     });
-    render(<WebSettingsModal open onClose={vi.fn()} initialSection="connectors" />);
+    render(<WebSettingsModal open onClose={vi.fn()} initialSection="general" />);
+    await settleParentConnectorState();
+    openConnectorsSection();
 
-    const table = await screen.findByRole('table');
-    expect(within(table).getByText('Notion')).toBeTruthy();
+    expect(await screen.findByRole('button', { name: 'Remove Notion' })).toBeTruthy();
     expect(
       await screen.findByText(
         'GitHub app installations could not be loaded. GitHub may show as not connected here until this is retried.',
@@ -395,9 +416,11 @@ describe('WebSettingsModal connectors adapter (honest web semantics)', () => {
       installationsFailuresBeforeSuccess: Infinity,
       installationsFailureStatus: 401,
     });
-    render(<WebSettingsModal open onClose={vi.fn()} initialSection="connectors" />);
+    render(<WebSettingsModal open onClose={vi.fn()} initialSection="general" />);
+    await settleParentConnectorState();
+    openConnectorsSection();
 
-    await screen.findByRole('table');
+    expect(await screen.findByRole('button', { name: 'Add Notion' })).toBeTruthy();
     expect(
       await screen.findByText(
         'GitHub app installations could not be loaded. GitHub may show as not connected here until this is retried.',
@@ -412,7 +435,9 @@ describe('WebSettingsModal connectors adapter (honest web semantics)', () => {
 
   it('still shows the global error when the core /api/connectors call itself fails, even if installations succeeds', async () => {
     stubFetch({ connectorFailuresBeforeSuccess: 1, connectorFailureStatus: 500 });
-    render(<WebSettingsModal open onClose={vi.fn()} initialSection="connectors" />);
+    render(<WebSettingsModal open onClose={vi.fn()} initialSection="general" />);
+    await settleParentConnectorState();
+    openConnectorsSection();
 
     expect(
       await screen.findByText(
@@ -428,10 +453,8 @@ describe('WebSettingsModal connectors adapter (honest web semantics)', () => {
   it('persists custom connectors and their optional bearer token through the real custom MCP endpoint', async () => {
     const fetchMock = stubFetch();
     render(<WebSettingsModal open onClose={vi.fn()} initialSection="connectors" />);
-    await screen.findByText('Connect your first tool');
 
-    const { fireEvent } = await import('@testing-library/react');
-    fireEvent.click(screen.getByRole('button', { name: 'Connect remote MCP server' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Add custom connector' }));
     fireEvent.change(screen.getByPlaceholderText('My connector'), {
       target: { value: 'My MCP' },
     });
@@ -472,12 +495,8 @@ describe('WebSettingsModal connectors adapter (honest web semantics)', () => {
     });
     render(<WebSettingsModal open onClose={vi.fn()} initialSection="connectors" />);
 
-    const table = await screen.findByRole('table');
-    const { fireEvent } = await import('@testing-library/react');
-    fireEvent.click(within(table).getByText('Notion'));
+    fireEvent.click(await screen.findByText('Notion'));
 
-    // The control only appears for a connector the user actually connected,
-    // because there are no tools to govern until then.
     const trigger = await screen.findByText('Tool permissions');
     expect(trigger).toBeTruthy();
   });
@@ -488,10 +507,7 @@ describe('WebSettingsModal connectors adapter (honest web semantics)', () => {
     });
     render(<WebSettingsModal open onClose={vi.fn()} initialSection="connectors" />);
 
-    const table = await screen.findByRole('table');
-    const { fireEvent } = await import('@testing-library/react');
-    fireEvent.click(within(table).getByText('GitHub'));
-
+    fireEvent.click(await screen.findByText('GitHub'));
     fireEvent.click(await screen.findByText('Tool permissions'));
 
     const dialog = await screen.findByRole('dialog');
@@ -522,7 +538,9 @@ describe('WebSettingsModal connectors adapter (honest web semantics)', () => {
 
   it('names an expired session instead of blaming the network when connectors 401', async () => {
     stubFetch({ connectorFailuresBeforeSuccess: 1, connectorFailureStatus: 401 });
-    render(<WebSettingsModal open onClose={vi.fn()} initialSection="connectors" />);
+    render(<WebSettingsModal open onClose={vi.fn()} initialSection="general" />);
+    await settleParentConnectorState();
+    openConnectorsSection();
 
     expect(
       await screen.findByText(
@@ -540,7 +558,7 @@ describe('WebSettingsModal connectors adapter (honest web semantics)', () => {
     const fetchMock = stubFetch({});
     render(<WebSettingsModal open onClose={vi.fn()} initialSection="connectors" />);
 
-    await screen.findByText('Connect your first tool');
+    await screen.findByText('Notion');
     for (const path of ['/api/connectors', '/api/github/installations', '/api/connectors/custom']) {
       expect(fetchMock).toHaveBeenCalledWith(
         path,
