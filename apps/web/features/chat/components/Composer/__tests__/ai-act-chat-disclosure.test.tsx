@@ -20,6 +20,15 @@ vi.mock('@features/chat/hooks/use-skills-list', () => ({
   useSkillsList: () => ({ skills: [], loading: false, error: null }),
 }));
 
+vi.mock('@features/chat/hooks/use-media-model-availability', () => ({
+  useMediaModelAvailability: () => ({
+    status: 'ready',
+    error: null,
+    admissionFor: () => undefined,
+    retry: vi.fn(),
+  }),
+}));
+
 vi.mock('../DragDropOverlay', () => ({ DragDropOverlay: () => null }));
 vi.mock('../SlashCommandMenu', () => ({ SlashCommandMenu: () => null }));
 vi.mock('../ComposerFooter', () => ({ ComposerFooter: () => <div /> }));
