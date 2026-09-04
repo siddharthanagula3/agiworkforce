@@ -32,6 +32,7 @@ export function DirectoryDetailHeader({
   name,
   primaryLabel,
   primaryDone,
+  primarySecondary,
   onPrimary,
   onOpenSettings,
   onRemove,
@@ -46,6 +47,7 @@ export function DirectoryDetailHeader({
   name: string;
   primaryLabel: string;
   primaryDone: boolean;
+  primarySecondary?: boolean;
   onPrimary?: () => void;
   onOpenSettings?: () => void;
   onRemove?: () => void;
@@ -106,7 +108,10 @@ export function DirectoryDetailHeader({
             onClick={onPrimary}
             disabled={busy}
             className={cn(
-              'inline-flex min-h-9 items-center gap-2 rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground transition-colors motion-reduce:transition-none hover:bg-primary/90 disabled:opacity-50',
+              'inline-flex min-h-9 items-center gap-2 rounded-md px-4 text-sm font-medium transition-colors motion-reduce:transition-none disabled:opacity-50',
+              primarySecondary
+                ? 'border border-border text-foreground hover:bg-muted'
+                : 'bg-primary text-primary-foreground hover:bg-primary/90',
               DIRECTORY_FOCUS_RING,
             )}
           >

@@ -11,6 +11,7 @@ export const CONNECTOR_SOURCES_HEADING = 'AGI and partners';
 export const SKILL_PUBLISHER_AGI = 'Made by AGI';
 export const SKILL_PUBLISHER_YOU = 'Yours';
 export const SKILL_PUBLISHER_MANAGED = 'Managed';
+export const SKILL_LICENSE_PREFIX = 'Complete terms in';
 
 export const SKILL_STATUS_GROUP_ID = 'status';
 export const SKILL_STATUS_GROUP_LABEL = 'Status';

@@ -69,12 +69,12 @@ export function DirectoryCard({
       <div className="flex items-start gap-3">
         <EntryIcon entry={entry} />
         <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex min-w-0 items-center gap-2">
             <button
               type="button"
               onClick={() => onOpen(entry.id)}
               className={cn(
-                'truncate text-sm font-semibold text-foreground after:absolute after:inset-0 after:content-[""]',
+                'min-w-0 truncate text-sm font-semibold text-foreground after:absolute after:inset-0 after:content-[""]',
                 entry.slashName && 'font-mono',
                 DIRECTORY_FOCUS_RING,
               )}
@@ -82,12 +82,14 @@ export function DirectoryCard({
               {entry.slashName ? `/${entry.name}` : entry.name}
             </button>
             {entry.isNew ? (
-              <span className="text-xs font-medium text-muted-foreground">{NEW_BADGE_LABEL}</span>
+              <span className="shrink-0 text-xs font-medium text-muted-foreground">
+                {NEW_BADGE_LABEL}
+              </span>
             ) : null}
             {(entry.badges ?? []).map((badge) => (
               <span
                 key={badge}
-                className="rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground"
+                className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground"
               >
                 {DIRECTORY_BADGE_LABELS[badge]}
               </span>
