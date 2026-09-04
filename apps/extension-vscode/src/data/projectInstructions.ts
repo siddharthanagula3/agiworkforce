@@ -33,8 +33,8 @@ export async function loadProjectInstructionSources(): Promise<ProjectInstructio
           `\n\n[...truncated, file is ${raw.length} chars, showing first ${MAX_FILE_BYTES}]`
         : raw;
       sources.push({ fileName, uri, content, truncated });
-    } catch {
-      // noop
+    } catch (err) {
+      void err;
     }
   }
 
