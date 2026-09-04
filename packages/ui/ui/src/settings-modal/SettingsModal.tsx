@@ -265,7 +265,7 @@ function ConnectorDetail({
                 </span>
               )}
               {isUnverifiedCustomConnector(connector) && (
-                <span className="shrink-0 rounded-full bg-warning-fill/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-warning-text">
+                <span className="shrink-0 rounded-full bg-warning-fill/10 px-2 py-0.5 text-xs font-semibold uppercase tracking-wider text-warning-text">
                   Unverified
                 </span>
               )}
@@ -1149,7 +1149,7 @@ function ConnectorsPanel({
                                   {connector.name}
                                 </button>
                                 {isUnverifiedCustomConnector(connector) && (
-                                  <span className="shrink-0 rounded-full bg-warning-fill/10 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-warning-text">
+                                  <span className="shrink-0 rounded-full bg-warning-fill/10 px-1.5 py-0.5 text-xs font-semibold uppercase tracking-wider text-warning-text">
                                     Unverified
                                   </span>
                                 )}
