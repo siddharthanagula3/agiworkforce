@@ -1,7 +1,7 @@
 import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
-import { getClientIp, logSecurityEvent } from '@/lib/security-audit';
+import { getClientIp, logSecurityEvent, recordAuditEvent } from '@/lib/security-audit';
 import { withRateLimit } from '@/lib/rate-limit';
 import { logger } from '@/lib/logger';
 import { AppError } from '@/lib/errors';
@@ -127,6 +127,20 @@ export async function POST(request: NextRequest) {
         tokenPrefix: token.token_prefix,
         connectionId,
         organizationId: access.organizationId,
+      },
+    });
+
+    await recordAuditEvent({
+      userId: access.userId,
+      eventType: 'scim_token_created',
+      organizationId: access.organizationId,
+      request,
+      severity: 'warning',
+      detail: {
+        resourceType: 'scim_token',
+        resourceId: token.id,
+        resourceName: token.name,
+        subjectRef: connectionId,
       },
     });
 

@@ -1,7 +1,7 @@
 import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
-import { getClientIp, logSecurityEvent } from '@/lib/security-audit';
+import { getClientIp, logSecurityEvent, recordAuditEvent } from '@/lib/security-audit';
 import { withRateLimit } from '@/lib/rate-limit';
 import { logger } from '@/lib/logger';
 import { requireCsrfToken } from '@/lib/csrf';
@@ -55,6 +55,18 @@ export async function DELETE(request: NextRequest, routeContext: RouteContext) {
         action: 'scim_token_revoked',
         tokenId,
         organizationId: access.organizationId,
+      },
+    });
+
+    await recordAuditEvent({
+      userId: access.userId,
+      eventType: 'scim_token_revoked',
+      organizationId: access.organizationId,
+      request,
+      severity: 'warning',
+      detail: {
+        resourceType: 'scim_token',
+        resourceId: tokenId,
       },
     });
 
