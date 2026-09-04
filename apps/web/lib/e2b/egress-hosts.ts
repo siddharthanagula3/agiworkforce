@@ -8,6 +8,23 @@ const EXTRA_EGRESS_HOST_RE = new RegExp(
   'i',
 );
 const MAX_HOSTNAME_LENGTH = 253;
+const NUMERIC_LABEL_RE = /^[0-9]+$/;
+const RESERVED_TOP_LEVEL_LABELS = new Set([
+  'localhost',
+  'local',
+  'internal',
+  'arpa',
+  'home',
+  'lan',
+  'corp',
+  'onion',
+]);
+
+function isAddressLiteralOrReservedName(host: string): boolean {
+  const labels = host.replace(/^\*\./, '').split('.');
+  const topLevel = labels[labels.length - 1] ?? '';
+  return NUMERIC_LABEL_RE.test(topLevel) || RESERVED_TOP_LEVEL_LABELS.has(topLevel);
+}
 
 export class InvalidExtraEgressHostsError extends Error {}
 
@@ -35,6 +52,11 @@ export function normalizeExtraEgressHosts(value: unknown): string[] {
     ) {
       throw new InvalidExtraEgressHostsError(
         `"${raw}" is not a valid hostname (a single leading "*." wildcard is allowed)`,
+      );
+    }
+    if (isAddressLiteralOrReservedName(host)) {
+      throw new InvalidExtraEgressHostsError(
+        `"${raw}" is an address literal or a reserved internal name; name a public DNS host`,
       );
     }
     if (!seen.has(host)) {
