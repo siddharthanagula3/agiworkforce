@@ -119,7 +119,6 @@ import { ChatLoadingState } from '../components/messages/ChatLoadingState';
 import { ImageTranscriptRecoveryNotice } from '../components/ImageTranscriptRecoveryNotice';
 import { ChatComposerNew } from '../components/Composer/ChatComposerNew';
 import { GreetingBanner } from '../components/GreetingBanner/GreetingBanner';
-import { StarterPrompts } from '@/features/onboarding/components/StarterPrompts';
 import { SidebarWordmark } from '@shared/components/agi/SidebarWordmark';
 import { buildAppNavItems } from '@shared/components/layout/app-nav-items';
 import {
@@ -752,6 +751,7 @@ export default function WebChatPage() {
   const urlConversationId = params?.['sessionId'] as string | undefined;
   const highlightMessageId = searchParams?.get('highlightMessage') ?? null;
   const openSearchParam = searchParams?.get('search') ?? null;
+  const starterPromptParam = searchParams?.get('starterPrompt') ?? null;
 
   const sidebarCollapsed = useUIStore((state) => state.sidebarCollapsed);
   const setSidebarCollapsed = useUIStore((state) => state.setSidebarCollapsed);
@@ -812,6 +812,18 @@ export default function WebChatPage() {
 
   const [composerPrefill, setComposerPrefill] = useState<string | undefined>(undefined);
   const handleComposerPrefillConsumed = useCallback(() => setComposerPrefill(undefined), []);
+
+  // /welcome hands off the chosen starter prompt through this query param
+  // rather than component state, since the wizard and the composer live on
+  // different pages. Consumed once, then stripped so it never lingers on
+  // reload, back navigation, or a shared link.
+  useEffect(() => {
+    if (!starterPromptParam) return;
+    setComposerPrefill(starterPromptParam);
+    const url = new URL(window.location.href);
+    url.searchParams.delete('starterPrompt');
+    router.replace(url.pathname + url.search);
+  }, [starterPromptParam, router]);
 
   const pendingEditRollbackRef = useRef<PendingEditRollback | null>(null);
   const sendReplacingMessagesRef = useRef<
@@ -4821,7 +4833,6 @@ export default function WebChatPage() {
                     }}
                   />
                 </div>
-                <StarterPrompts onSelect={setComposerPrefill} />
               </div>
             </div>
           ) : (

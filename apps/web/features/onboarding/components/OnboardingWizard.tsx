@@ -29,6 +29,7 @@ import {
   loadOnboardingSeed,
   skipOnboarding,
 } from '../lib/onboarding-preferences';
+import { StarterPrompts } from './StarterPrompts';
 
 const TOTAL_STEPS = 2;
 const CHAT_PATH = '/chat';
@@ -66,12 +67,14 @@ export function OnboardingWizard() {
   }, [seeded, step]);
 
   const finish = useCallback(
-    async (useCase: string | null) => {
+    async (useCase: string | null, prompt?: string) => {
       setSubmitting(true);
       setError(null);
       try {
         await completeOnboarding({ preferredName, workDescription, primaryUseCase: useCase });
-        router.replace(CHAT_PATH);
+        router.replace(
+          prompt ? `${CHAT_PATH}?starterPrompt=${encodeURIComponent(prompt)}` : CHAT_PATH,
+        );
       } catch (caught) {
         setError(toUserMessage(caught, 'Failed to save your preferences'));
         setSubmitting(false);
@@ -204,6 +207,10 @@ export function OnboardingWizard() {
                   ))}
                 </RadioGroup>
               </fieldset>
+              <StarterPrompts
+                useCase={primaryUseCase || null}
+                onSelect={(prompt) => void finish(primaryUseCase || null, prompt)}
+              />
               <div className="mt-2 flex items-center justify-between gap-3">
                 <Button
                   type="button"
