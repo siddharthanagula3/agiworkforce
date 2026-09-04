@@ -32,11 +32,26 @@ function daysAgoIso(days: number): string {
   return new Date(NOW - days * MS_PER_DAY).toISOString();
 }
 
-function makeDb(rows: unknown[]) {
+interface MakeDbOptions {
+  organizationRow?: Record<string, unknown> | null;
+  seatUpdateResult?: unknown[] | ((params: unknown[]) => unknown[]);
+}
+
+function makeDb(rows: unknown[], options: MakeDbOptions = {}) {
   const calls: Array<{ sql: string; params: unknown[] }> = [];
   const query = vi.fn(async (sql: string, params: unknown[] = []) => {
     calls.push({ sql, params });
     if (sql.includes('from public.organization_billing_contracts')) return rows;
+    if (sql.includes('update public.organizations')) {
+      const result =
+        typeof options.seatUpdateResult === 'function'
+          ? options.seatUpdateResult(params)
+          : options.seatUpdateResult;
+      return result ?? [];
+    }
+    if (sql.includes('licensed_seats') && sql.includes('from public.organizations')) {
+      return options.organizationRow ? [options.organizationRow] : [];
+    }
     return [];
   });
   const execute = vi.fn(async (sql: string, params: unknown[] = []) => {
@@ -53,6 +68,9 @@ function contractRow(overrides: Record<string, unknown> = {}) {
     collection_stage: 'current',
     last_collection_notice_at: null,
     owner_email: 'owner@example.com',
+    committed_seats: 500,
+    stripe_subscription_id: 'sub_ent_1',
+    stripe_customer_id: 'cus_ent_1',
     ...overrides,
   };
 }
@@ -227,6 +245,111 @@ describe('enforceBillingCollection · internal escalation', () => {
     await expect(enforceBillingCollection(db, NOW)).resolves.toHaveLength(1);
     expect(sendTransactionalEmail).not.toHaveBeenCalledWith(
       expect.objectContaining({ to: expect.stringContaining('billing-alerts') }),
+    );
+  });
+});
+
+describe('enforceBillingCollection · seat catch-up once collection returns to current', () => {
+  it('raises licensed_seats to the committed seat count once the hold lifts', async () => {
+    const { db, calls } = makeDb(
+      [
+        contractRow({
+          oldest_open_invoice_due_at: null,
+          collection_stage: 'past_due_90',
+          committed_seats: 600,
+        }),
+      ],
+      {
+        organizationRow: {
+          licensed_seats: 500,
+          seats_consumed: 200,
+          stripe_subscription_id: 'sub_ent_1',
+          owner_user_id: 'user_ent_1',
+        },
+        seatUpdateResult: (params) => [{ id: 'org_1', licensed_seats: params[0] }],
+      },
+    );
+
+    const outcomes = await enforceBillingCollection(db, NOW);
+
+    expect(outcomes[0]).toMatchObject({
+      organizationId: 'org_1',
+      stage: 'current',
+      seatCatchUp: 'persisted',
+    });
+    const seatUpdate = calls.find(
+      (call) =>
+        call.sql.includes('update public.organizations') && call.sql.includes('licensed_seats'),
+    );
+    expect(seatUpdate).toBeDefined();
+    expect(seatUpdate!.params[0]).toBe(600);
+    expect(seatUpdate!.params.at(-1)).toBe('user_ent_1');
+  });
+
+  it('does not raise seats while the collection hold is still active', async () => {
+    const { db, calls } = makeDb(
+      [
+        contractRow({
+          oldest_open_invoice_due_at: daysAgoIso(75),
+          collection_stage: 'past_due_90',
+          committed_seats: 600,
+        }),
+      ],
+      {
+        organizationRow: {
+          licensed_seats: 500,
+          seats_consumed: 200,
+          stripe_subscription_id: 'sub_ent_1',
+          owner_user_id: 'user_ent_1',
+        },
+      },
+    );
+
+    const outcomes = await enforceBillingCollection(db, NOW);
+
+    expect(outcomes[0]).toMatchObject({ stage: 'past_due_90', seatCatchUp: null });
+    expect(
+      calls.some(
+        (call) =>
+          call.sql.includes('update public.organizations') && call.sql.includes('licensed_seats'),
+      ),
+    ).toBe(false);
+  });
+
+  it('does nothing when committed_seats does not exceed licensed_seats', async () => {
+    const { db, calls } = makeDb(
+      [contractRow({ oldest_open_invoice_due_at: null, committed_seats: 500 })],
+      {
+        organizationRow: {
+          licensed_seats: 500,
+          seats_consumed: 200,
+          stripe_subscription_id: 'sub_ent_1',
+          owner_user_id: 'user_ent_1',
+        },
+      },
+    );
+
+    const outcomes = await enforceBillingCollection(db, NOW);
+
+    expect(outcomes[0]!.seatCatchUp).toBeNull();
+    expect(
+      calls.some(
+        (call) =>
+          call.sql.includes('update public.organizations') && call.sql.includes('licensed_seats'),
+      ),
+    ).toBe(false);
+  });
+
+  it('queries a contract with no open invoice but a stale non-current stage, not only open-invoice contracts', async () => {
+    const { db, calls } = makeDb([]);
+
+    await enforceBillingCollection(db, NOW);
+
+    const contractsQuery = calls.find((call) =>
+      call.sql.includes('from public.organization_billing_contracts'),
+    );
+    expect(contractsQuery!.sql).toMatch(
+      /oldest_open_invoice_id is not null\s+or\s+c\.collection_stage\s*<>/u,
     );
   });
 });
