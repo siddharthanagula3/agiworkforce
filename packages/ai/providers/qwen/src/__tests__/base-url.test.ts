@@ -13,6 +13,13 @@ describe('QWEN_DEFAULT_BASE_URL', () => {
     expect(QWEN_DEFAULT_BASE_URL).not.toContain('/api/v1');
   });
 
+  /**
+   * A Model Studio key is valid in exactly one of the two deployments, and the
+   * wrong one answers `401 Incorrect API key provided`, indistinguishable from
+   * a bad key. Pointing the default at mainland took Qwen down in production
+   * with an error that named no region; this pins the region so the next
+   * provider migration cannot silently pick the other half.
+   */
   it('points at the international deployment the accounts are issued against', () => {
     expect(QWEN_DEFAULT_BASE_URL).toBe('https://dashscope-intl.aliyuncs.com/compatible-mode/v1');
   });

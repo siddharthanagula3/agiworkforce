@@ -2,6 +2,25 @@ import 'server-only';
 
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 
+/**
+ * Workspace usage, read from `managed_usage_requests`.
+ *
+ * NOT from `organization_usage_ledger`, which is the table this looks like it
+ * should use. Nothing writes to that table, only account erasure and financial
+ * retention reference it, so a dashboard built on it would report zero forever
+ * while looking authoritative. `managed_usage_requests` is where a managed turn
+ * actually lands.
+ *
+ * WHAT IS DELIBERATELY NOT HERE: prompts, completions, conversation titles, or
+ * anything a member typed. An administrator gets spend and volume, which is
+ * operational insight they need to run a budget. Reading what their staff asked
+ * the model is a different power and this surface must not become a way to
+ * acquire it.
+ *
+ * `gross_margin_usd` on the ledger is OUR margin, not the customer's cost. If
+ * this ever does read that table, those columns stay out of the response.
+ */
+
 export interface UsageTotals {
   requests: number;
   inputTokens: number;
@@ -79,6 +98,11 @@ function toRow(row: AggregateRow): UsageBreakdownRow {
  */
 const SETTLED = `status = 'completed'`;
 
+/**
+ * Token counts live in the `usage` jsonb rather than in columns. Coalesced to
+ * zero so a provider that reported no usage lowers nothing but the token count
+ *, its cost still counts.
+ */
 const TOKENS = `
   coalesce((usage->>'input_tokens')::numeric, (usage->>'prompt_tokens')::numeric, 0)`;
 const OUT_TOKENS = `

@@ -202,6 +202,10 @@ impl LlmExecutor {
             multimodal_content: None,
         });
 
+        // Determine provider and model from explicit overrides only. Without
+        // overrides, leave both unset so the trust-aware Auto strategy picks
+        // a boundary-appropriate provider, a hardcoded ManagedCloud default
+        // is rejected by the router for Local/BYOK goals.
         let (default_provider, default_model) = match (&provider_override, &model_override) {
             (Some(p), Some(m)) => (Some(*p), Some(m.clone())),
             (Some(p), None) => (Some(*p), Some(self.default_model_for_provider(*p))),

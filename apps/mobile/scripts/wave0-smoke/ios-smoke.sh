@@ -1,4 +1,10 @@
 #!/usr/bin/env bash
+# Wave 0 smoke-test prep, iOS
+# Verifies toolchain, builds a dev client via EAS, and prints install instructions.
+# Re-runnable: safe to run more than once (EAS skips builds that are already queued).
+#
+# Usage: bash apps/mobile/scripts/wave0-smoke/ios-smoke.sh
+#        Or from the mobile dir: bash scripts/wave0-smoke/ios-smoke.sh
 
 set -euo pipefail
 

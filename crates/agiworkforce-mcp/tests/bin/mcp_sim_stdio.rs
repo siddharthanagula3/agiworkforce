@@ -1,3 +1,14 @@
+//! Scripted fake stdio MCP server for the integration sim harness.
+//!
+//! Speaks JSON-RPC over stdin/stdout, line-delimited, per a mode selected by
+//! argv[1]:
+//!   * `normal` (default), initialize + tools/list + tools/call + prompts/list.
+//!   * `stale`: handshake, then never answers the next request (client times out).
+//!   * `elicit`: on tools/list, first sends `elicitation/create`, reads the
+//!     client's reply, then answers tools/list. Mirrors the CLI's stdio
+//!     elicitation ordering test without requiring python3.
+//!
+//! Kept deliberately dependency-light (std io + serde_json) so it starts fast.
 
 use std::io::{BufRead, Write};
 
@@ -41,10 +52,13 @@ fn main() {
                 );
                 answered_handshake = true;
             }
+            // Notification, no id, no reply.
             "notifications/initialized" => {}
             "notifications/cancelled" => {}
             "tools/list" => {
                 if mode == "stale" {
+                    // Never answer, block until the child is killed. The client
+                    // times out on this request.
                     for l in lines.by_ref() {
                         if l.is_err() {
                             break;

@@ -130,6 +130,12 @@ function parseSteps(content: string): ParsedSteps {
 
 const DESCRIPTION_CHAR_BUDGET = 180;
 
+/**
+ * A CSS `line-clamp` cuts wherever the line happens to end, which lands the
+ * ellipsis mid-phrase ("…if you hit any…"). The preamble is bounded here
+ * instead so the visible text always stops on a sentence, or, failing that, on
+ * a whole word.
+ */
 export function clampToSentence(text: string, budget = DESCRIPTION_CHAR_BUDGET): string {
   const full = text.trim();
   if (full.length <= budget) return full;
@@ -156,7 +162,21 @@ interface StepsCardProps {
   messageId?: string;
 }
 
+/**
+ * Ticking a step is a user edit, not a render detail, so it has to outlive the
+ * component. It previously lived in `useState` alone, which meant every reload
+ * or navigation silently reset a half-finished checklist back to 0/N.
+ *
+ * The assistant message id is client-generated and sent to the API as
+ * `assistant_message_id`, so the persisted row keeps the same id the browser
+ * used while streaming, which makes it a stable per-card key across reloads.
+ * The content hash remains only for callers that render a card outside a
+ * message (previews, tests); it cannot tell two byte-identical checklists in
+ * one conversation apart, which is exactly why the id is preferred.
+ */
 function hashContent(input: string): string {
+  // FNV-1a, 32-bit. Only needs to be stable and collision-resistant enough to
+  // separate cards within one conversation, not cryptographic.
   let h = 0x811c9dc5;
   for (let i = 0; i < input.length; i++) {
     h ^= input.charCodeAt(i);

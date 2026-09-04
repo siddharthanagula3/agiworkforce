@@ -1,3 +1,18 @@
+/**
+ * ReportFlagButton: per-turn in-app report/flag control.
+ *
+ * Google Play GenAI policy requires a report/flag mechanism on every
+ * assistant turn. This button renders as a small flag icon below assistant
+ * messages and opens a modal for category selection + optional support email.
+ *
+ * Reports are submitted to the server trust-and-safety intake route (see
+ * services/contentReport.ts), with an on-device copy kept as an offline / Local
+ * Mode fallback. The confirmation reports the outcome the service actually
+ * produced (ReportDelivery), it must never read as "submitted" for a report
+ * that never left the phone.
+ *
+ * Usage: rendered inside MessageBubble for assistant turns only.
+ */
 import { useState, useCallback } from 'react';
 import {
   View,

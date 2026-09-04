@@ -126,6 +126,16 @@ export function getPlanTierFromPriceId(priceId: string | null | undefined): stri
   return tier;
 }
 
+/**
+ * Resolve a subscription tier from its registered Stripe Price.
+ *
+ * Subscription metadata is advisory and can become stale when a customer
+ * changes price through Stripe's portal. It must never override, or stand in
+ * for, the purchased Price when provisioning entitlements.
+ * @param _metadata - Stripe metadata retained for call-site compatibility
+ * @param priceId - Stripe price ID
+ * @returns The registered Price tier, or null when the Price is not configured
+ */
 export function resolvePlanTier(
   _metadata: Record<string, string> | null | undefined,
   priceId: string | null | undefined,

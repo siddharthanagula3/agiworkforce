@@ -1,3 +1,24 @@
+/**
+ * Single-definition contract for the site-allowlist storage key.
+ *
+ * The allowlist under `chrome.storage.local.agi_site_allowlist` is the origin
+ * set every trust decision in the extension derives from, and the key was
+ * spelled by hand in six modules. A hand-spelled storage key never throws when
+ * it is wrong: the reader gets `undefined`, treats the user's allowlist as
+ * empty, and the options page keeps showing trust the gates no longer grant.
+ *
+ * So: one exported constant in `src/background/policy.ts`, and no other module
+ * may spell the key by hand. Two distinct failures are checked, because the
+ * exact-literal scan alone would be a duplication detector, not a typo
+ * detector, a misspelled key is invisible to it:
+ *
+ *   1. duplication, another module quotes the key correctly, so a future
+ *      rename has to find every copy;
+ *   2. near-miss, another module quotes something one or two characters off
+ *      (`agi_site_allow_list`, `agi_site_allowlst`), which is the silent
+ *      trust-revoking bug above.
+ */
+
 import { readFileSync, readdirSync } from 'node:fs';
 import { join, relative, resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';

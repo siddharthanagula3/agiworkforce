@@ -1,3 +1,11 @@
+/**
+ * api.test.ts, Tests for API utility functions
+ *
+ * Tests the exported AgiWorkforceApiError class, secret storage wrappers,
+ * retry logic, and request structure patterns.
+ * Imports real source code via the vscode mock alias in vitest.config.ts.
+ */
+
 import { afterEach, describe, it, expect, vi, beforeEach } from 'vitest';
 import { EventEmitter } from 'events';
 import * as https from 'https';

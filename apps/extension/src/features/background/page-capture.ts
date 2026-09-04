@@ -7,6 +7,11 @@ export interface PageCaptureDelivery {
 
 export const PAGE_CAPTURE_UNDELIVERED_TITLE = 'Page capture not sent';
 
+/**
+ * Shown instead of capturing when AGI Desktop is not paired. The capture has
+ * exactly one destination, the native messaging host, so photographing the
+ * user's screen first and discarding the bytes afterwards buys nothing.
+ */
 export const PAGE_CAPTURE_UNAVAILABLE_MESSAGE =
   'Page capture needs AGI Desktop. Install and pair it from the extension options, ' +
   'then try the shortcut again. Nothing was captured.';

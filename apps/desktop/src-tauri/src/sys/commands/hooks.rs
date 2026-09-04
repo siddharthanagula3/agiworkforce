@@ -53,6 +53,15 @@ fn hook_grant_request(
     }
 }
 
+/// Point-of-use consent for arming a shell command.
+///
+/// Deliberately does not reuse `request_tool_confirmation*`: those helpers
+/// return early on `auto_approve_all`, on a remembered choice, or on a
+/// session approval, and any IPC caller can pre-arm a remembered "always
+/// allow" for an arbitrary tool name through `set_tool_approval_policy`. A
+/// hook is a standing grant to run a shell command unattended, so, like
+/// folder consent, it prompts every time and no standing approval is ever
+/// stored for it.
 async fn confirm_shell_grant<R: tauri::Runtime>(
     app: &tauri::AppHandle<R>,
     confirmation_state: &ToolConfirmationState,

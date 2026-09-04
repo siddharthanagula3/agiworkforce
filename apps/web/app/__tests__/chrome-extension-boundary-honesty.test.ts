@@ -2,6 +2,14 @@ import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
+/**
+ * /chrome-extension used to say "Inference in Chrome: None" and "AGI in Chrome
+ * never runs models", while cloudAgentClient POSTs the whole conversation.
+ * base64 screenshots included, straight to the Managed Cloud gateway. The
+ * sibling /agent-permissions page already described that correctly, so the two
+ * public pages contradicted each other about the same boundary.
+ */
+
 const APP_ROOT = join(__dirname, '..');
 const EXTENSION_CLIENT = join(
   APP_ROOT,

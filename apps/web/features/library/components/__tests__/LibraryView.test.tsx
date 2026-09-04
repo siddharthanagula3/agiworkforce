@@ -10,6 +10,10 @@ vi.mock('@clerk/nextjs', () => ({
   useAuth: mockUseAuth,
 }));
 
+// Mocked at the module boundary LibraryView actually imports through
+// (@features/chat/services/document-export-service is the real, shared
+// export service used elsewhere in chat, this proves LibraryView calls it,
+// not a second exporter, without exercising jsPDF/docx internals here).
 vi.mock('@features/chat/services/document-export-service', () => ({ exportDocument }));
 
 import { LibraryView, iconKindFor, generatedFileFromLibraryItem } from '../LibraryView';

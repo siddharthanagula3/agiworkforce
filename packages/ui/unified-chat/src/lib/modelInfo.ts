@@ -60,6 +60,12 @@ export function getModelPresentationLabel(modelId: string | null | undefined): s
 const UNAVAILABLE_MODEL_LABEL = 'Unavailable model';
 const FREE_POOL_SUFFIX = ' · via free pool';
 
+/**
+ * How the turn was paid for, in the only terms a surface-neutral renderer may
+ * hold: a shared zero-cost pool answered instead of the caller's own allowance.
+ * Named for the disclosure, not for any one surface's lane vocabulary, the
+ * host maps its own routing answer onto this before calling.
+ */
 export interface ManagedModelPresentation {
   freePool?: boolean;
 }

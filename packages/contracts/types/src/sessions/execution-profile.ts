@@ -1,3 +1,39 @@
+/**
+ * ExecutionProfile: the single visible Local/Cloud toggle that deterministically
+ * resolves five internal execution planes (identity, data, inference, tools,
+ * workflow), per the R5 adjudication recorded in
+ * `docs/plans/target-structure-finalization-2026-07-15.md` §4.5 and
+ * `docs/plans/restructure-execution-program-2026-07-15.md` W5 item 2:
+ *
+ * > ExecutionProfile, one visible Local/Cloud toggle resolving five internal
+ * > planes (identity, data, inference, tools, workflow), ADOPT as a contract
+ * > in packages/contracts/types/src/sessions/ during discipline wave 1. Desktop's
+ * > runtime composition root and Mobile's appMode-plus-egress-guard stack are
+ * > the existing implementations; the contract names what they already do and
+ * > extends it to every surface.
+ *
+ * The toggle is 2-way (`'local' | 'cloud'`), not 3-way: BYOK is a sub-mode of
+ * the local position, not a third top-level value.
+ * `apps/desktop/src/runtime/desktopChatRuntime.ts` already encodes this
+ * ("Local-only and BYOK conversations both live here"; only `appMode ===
+ * 'cloud'` selects the managed runtime). `resolveExecutionProfile` is the
+ * deterministic resolver a host calls with the visible toggle plus the one
+ * sub-choice that is NOT determined by the toggle alone (which local
+ * inference path, which cloud routing path); every other field is fully
+ * determined by the toggle, matching "resolving" in the phrase above.
+ *
+ * Composes with, does not fork, the trust kernel in `../suite-contracts`:
+ * `ProviderMode` and `StorageScope` are reused directly, and the cloud sync
+ * default reuses `SYNCED_APP_SURFACES` rather than a parallel list.
+ *
+ * Scope note: only the identity/tools/workflow planes needed new types here.
+ * The data and inference planes are expressed directly in kernel terms
+ * (`StorageScope`, `SessionSyncPolicy`, `ProviderMode`) rather than being
+ * reinvented.
+ *
+ * @module sessions/execution-profile
+ */
+
 import type { ProviderMode, StorageScope } from '../suite-contracts';
 import { SYNCED_APP_SURFACES } from '../suite-contracts';
 import { getSessionKindDefaults, type SessionKind, type SessionSyncPolicy } from './taxonomy';

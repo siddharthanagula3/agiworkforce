@@ -1,3 +1,31 @@
+//! Desktop adoption of the shared `agiworkforce-agent-core` turn engine for the
+//! non-streaming local-chat tool loop (Wave 5 stage e2 of
+//! `docs/plans/rust-engine-extraction-2026-07-09.md`).
+//!
+//! This is the thin, behavior-preserving facade that replaces the inline
+//! `while let Some(tool_calls) = outcome.response.tool_calls` loop that used to
+//! live in `run_nonstreaming_chat`. The loop MECHANICS, first completion, then
+//! iterate: dispatch the tool batch, feed results back, request a continuation,
+//! stop on empty tool calls / iteration limit / user cancellation, now live in
+//! `agiworkforce_agent_core::run_turn`, driven through [`LocalChatTurnHost`].
+//!
+//! Everything provider-, IPC-, or persistence-specific stays desktop-local
+//! behind the host: model completion via `LLMRouter::invoke_candidate` (with the
+//! same per-followup timeout, `pause_turn` logging, and followup-failure
+//! graceful-stop the inline loop had), per-tool execution + Tauri tool events
+//! via `execute_tool_calls_batch`, the `chat:agent-progress` / `chat:tool-calls`
+//! emits, message-history accrual, and cost/token accounting. The engine never
+//! performs I/O, prints, or resolves credentials.
+//!
+//! ## Scope note (why non-streaming only)
+//!
+//! Only the non-streaming path (`stream_mode == false`) is adopted here. The
+//! streaming path (`spawn_streaming_chat`) carries behavior the engine's
+//! `TurnEvent` set cannot express 1:1 (the `agentic:loop-ended` reason taxonomy,
+//! per-iteration dynamic max, wall-clock loop timeout, mid-loop pending-message
+//! injection, tool-loop compaction, and the `pause_turn`→continue-with-empty-
+//! tools branch), so forcing it through the engine would not be behavior-
+//! preserving. It stays on its inline loop as a tracked follow-up.
 
 use std::time::Duration;
 
@@ -32,6 +60,8 @@ impl RequestCostAccumulator {
 /// tail reads (which the inline loop tracked in locals).
 pub(super) struct LocalChatTurnResult {
     pub final_content: String,
+    /// The last successful completion, carries provider/model/cost/tokens/
+    /// credits for `save_or_skip_assistant_message` and the final `stream-end`.
     pub last_outcome: RouteOutcome,
     /// Sum of the router-authoritative cost for every successful provider
     /// completion in this turn. Request pricing is nonlinear, so this must be
@@ -100,6 +130,9 @@ pub(super) async fn run_local_chat_tool_loop(
 
     let params = TurnParams {
         effective_max: MAX_TOOL_ITERATIONS,
+        // The non-streaming loop had no spend cap of its own (the router enforces
+        // its session safety cap internally), so the engine's budget guard stays
+        // disabled, behavior-preserving.
         max_budget_usd: None,
     };
     let mut tracker = RunawayTracker::new();
@@ -147,6 +180,9 @@ struct LocalChatTurnHost {
     /// 1-based prefix index for `normalize_tool_calls`, mirroring the inline
     /// loop's `tool_iteration` (`tool_call_1`, `tool_call_2`, …).
     next_prefix_index: usize,
+    /// This iteration's normalized tool calls, used both for the `chat:tool-calls`
+    /// emit and to recover the exact `StreamingToolCall` (arguments string) for
+    /// execution, so bytes are never round-tripped through `serde_json::Value`.
     pending_calls: Vec<StreamingToolCall>,
     last_outcome: RouteOutcome,
     request_cost: RequestCostAccumulator,
@@ -311,6 +347,9 @@ impl TurnHost for LocalChatTurnHost {
     }
 
     async fn prepare_tool(&mut self, call: &CoreToolCall, _mode: DispatchMode) -> Prepared {
+        // The non-streaming loop had no per-tool pre-checks (availability, hooks,
+        // plan-mode), normalization already happened in `absorb`. Proceed with
+        // the call's arguments verbatim.
         Prepared::Proceed {
             args: call.arguments.clone(),
         }
@@ -408,6 +447,8 @@ impl TurnHost for LocalChatTurnHost {
         _tracker: &mut RunawayTracker,
         _calls: &[CoreToolCall],
     ) -> LoopControl {
+        // The non-streaming loop had no identical-tool-call runaway guard; only
+        // the iteration limit. Never break here, preserve that behavior.
         LoopControl::Continue
     }
 
@@ -427,6 +468,10 @@ impl TurnHost for LocalChatTurnHost {
     }
 
     fn on_event(&mut self, event: &TurnEvent) {
+        // Reproduce the inline loop's per-iteration IPC emits. Every other event
+        // (ToolStarted/ToolFinished, the desktop tool events come from
+        // `execute_tool_calls_batch`; TurnComplete, the caller saves after the
+        // loop; parallel/budget, never fire here) is intentionally a no-op.
         if let TurnEvent::IterationStarted {
             tool_count,
             iteration,
@@ -461,6 +506,9 @@ impl TurnHost for LocalChatTurnHost {
 }
 
 impl LocalChatTurnHost {
+    /// A continuation failure/timeout is not fatal: keep the last good content
+    /// and end the loop (empty tool calls) so the caller persists the partial.
+    /// exactly the inline loop's `break` on a failed follow-up.
     fn graceful_stop(&mut self) -> Completion {
         self.pending_calls.clear();
         Completion {
@@ -621,6 +669,22 @@ fn parse_args(raw: &str) -> serde_json::Value {
 
 #[cfg(test)]
 mod tests {
+    //! Smoke of the adopted turn path from the desktop crate. Because the real
+    //! `LocalChatTurnHost` executes tools through `execute_tool_calls_batch`,
+    //! which is typed to the concrete Wry `tauri::AppHandle` (tauri's mock
+    //! runtime is a different, incompatible `AppHandle<MockRuntime>`), the full
+    //! production host cannot be driven in a unit test without a real Tauri
+    //! window, that path is covered by the live app / WDIO. What IS unit-
+    //! testable here, and is what this smoke asserts:
+    //!
+    //! - the REAL production conversion (`chat_outcome_from_route`) that turns a
+    //!   desktop `RouteOutcome` into the engine's `ChatOutcome` + normalized tool
+    //!   calls;
+    //! - that the shared `agiworkforce_agent_core::run_turn` engine, driven from
+    //!   the desktop crate with those converted outcomes and desktop-shaped tool
+    //!   results, produces the expected transcript: user turn → assistant text →
+    //!   tool call dispatched → tool result → final text;
+    //! - that `TurnHost::is_cancelled` halts the loop mid-turn.
 
     use std::collections::VecDeque;
 

@@ -734,6 +734,18 @@ function effortLabel(level: EffortLevel): string {
   return level === 'xhigh' ? 'Extra high' : level.charAt(0).toUpperCase() + level.slice(1);
 }
 
+/**
+ * CAP-020. The composer's effort picker has always split levels by entitlement
+ * (ComposerFooter, via splitEffortsByEntitlement) and this one offered all five
+ * unconditionally, the same setting, two pickers, one of them lying. The
+ * server clamps anything above the plan's cap in resolveRequestEffort, so
+ * picking "Max" on a tier without manual model selection silently produced the
+ * default while Settings kept displaying Max.
+ *
+ * Gated levels stay VISIBLE and disabled rather than being hidden: a level that
+ * vanishes reads as unsupported by the product, which is a different and wrong
+ * message from "your plan does not include this".
+ */
 function ReasoningEffortRow() {
   const enabled = useThinkingStore((state) => state.enabled);
   const effort = useThinkingStore((state) => state.effort);
@@ -924,6 +936,10 @@ function ChatFontRow() {
   const chatFont = useSettingsStore((state) => state.chatFont) ?? 'default';
   const setChatFont = useSettingsStore((state) => state.setChatFont);
 
+  // Only families layout.tsx and globals.css actually load. 'dyslexic' is
+  // self-hosted under public/fonts/opendyslexic/, the control this replaces
+  // pointed at a CDN font the CSP blocked, so it fell back silently and
+  // looked broken.
   const options = [
     { value: 'default' as const, label: 'Default' },
     { value: 'sans' as const, label: 'Sans' },

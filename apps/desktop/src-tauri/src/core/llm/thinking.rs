@@ -189,6 +189,13 @@ impl ThinkingConfig {
         }
     }
 
+    /// Convert this thinking config into a `ThinkingParameter` suitable for `LLMRequest`.
+    ///
+    /// Returns `None` when thinking is disabled. For catalog models that expose
+    /// adaptive reasoning with tool use, the caller should prefer
+    /// `ThinkingParameter::Adaptive`, this
+    /// method produces `Budget` or `Enabled` variants which are correct for all other
+    /// thinking-capable models.
     #[must_use]
     pub fn to_thinking_parameter(&self) -> Option<super::ThinkingParameter> {
         if !self.enabled {

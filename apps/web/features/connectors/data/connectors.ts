@@ -33,6 +33,14 @@ export interface Connector {
   capabilitySummary: string;
   category: ConnectorCategory;
   authType: AuthType;
+  /**
+   * @deprecated Nothing renders this. It is derived from the capability record
+   * rather than hand-written, 3 for `github`, 0 for everything else, and a 0
+   * means "nothing declared up front", not "does nothing"; ask
+   * `getConnectorActionSource` for that distinction instead. It survives only
+   * because `packages/ui/ui/src/settings-modal/types.ts` still requires the
+   * field on the shared settings row shape.
+   */
   actionCount: number;
   phase: Phase;
   iconBg: string;
@@ -42,6 +50,13 @@ export interface Connector {
   riskClass: ConnectorRiskClass;
 }
 
+/**
+ * A ceiling, not an inventory: what a remote-MCP provider actually exposes is
+ * unknown until its server is asked, so no sentence here may say a connector
+ * *does* something, and none may promise an approval the tool loop does not
+ * enforce, `tool-loop.ts` auto-allows any tool with no saved permission row
+ * whenever the run's approval mode is 'auto' (every scheduled agent run).
+ */
 export const RISK_CLASS_COPY: Record<ConnectorRiskClass, string> = {
   'read-only': 'Reading, at most. Nothing here can create, change, or delete anything.',
   'read-write':

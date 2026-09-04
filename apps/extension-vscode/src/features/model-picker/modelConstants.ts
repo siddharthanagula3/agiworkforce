@@ -54,6 +54,12 @@ function codiconForProvider(providerId: ProviderId): string {
 
 export const MODEL_LOCKED_HINT = 'Sign in or add a provider key';
 
+/**
+ * Auto is reachable when the canonical resolver can actually resolve it for
+ * this tier, not when some representative model happens to be tier-allowed.
+ * The plan gates below mirror `isModelReachableForTier` exactly; only the
+ * routing half changed.
+ */
 export function isAutoReachableForTier(autoId: string, tier: string | undefined): boolean {
   if (tier === undefined) return true;
   if (tier === 'byok') return true;
@@ -203,6 +209,18 @@ export function getModelProviderInfo(modelId: string): ModelProviderInfo {
 
 const DEFAULT_CONTEXT_LIMIT = 128_000;
 
+/**
+ * The capability envelope Auto can guarantee on this surface.
+ *
+ * Previously a single representative model id from `resolveAutoModeModel`, a
+ * parallel routing walk that skipped the canonical resolver's admission checks.
+ * The envelope asks `resolveAutoRoute` what it would really select across every
+ * task type and reports the intersection, so the context limit below is a floor
+ * Auto can honour rather than one route's best case.
+ *
+ * Computed at the `pro` tier to preserve the previous module-level constant's
+ * shape; these tables are not tier-parameterised.
+ */
 const AUTO_ENVELOPE = getAutoCapabilityEnvelope({
   selection: 'auto',
   subscriptionTier: 'pro',
@@ -252,6 +270,16 @@ export const MODEL_PICKER_OPTIONS: ModelPickerOption[] = [
   })),
 ];
 
+/**
+ * VSCODE-PICKER-TIER-01. Tier-aware view of {@link MODEL_PICKER_OPTIONS} for the
+ * sidebar webview `<select>`, which renders from the static array rather than
+ * through {@link buildGroupedQuickPickItems}. Without this the webview picker
+ * kept listing the whole managed-cloud catalog as selectable while signed out.
+ *
+ * `reachable: false` rows are rendered disabled (same treatment as non-live
+ * `coming_soon` rows) instead of being removed, see isModelReachableForTier for
+ * why removal would empty the picker.
+ */
 export function getModelPickerOptionsForTier(
   tier?: string,
 ): Array<ModelPickerOption & { reachable: boolean }> {

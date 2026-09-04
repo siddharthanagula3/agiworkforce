@@ -1,5 +1,21 @@
 import 'server-only';
 
+/**
+ * Lightweight, async conversation-title generation.
+ *
+ * Two-stage title, same pattern ChatGPT uses:
+ *   Stage 1 (synchronous, in route.ts), the first user message is truncated
+ *   to ~50 chars and saved immediately, so the sidebar never shows a blank row.
+ *   Stage 2 (this module, fire-and-forget), a single cheap, non-streaming LLM
+ *   call turns that same message into a short human title and overwrites the
+ *   truncated one.
+ *
+ * `scheduleConversationTitleGeneration` is never awaited by the request that
+ * saves the message: a slow or failing provider must not delay or break
+ * sending a message. Every failure path here is caught and logged at `warn`;
+ * the stage-1 truncated title simply stands.
+ */
+
 import { after } from 'next/server';
 import { openAIWireRequestToChatRequest } from '@agiworkforce/provider-protocol';
 import { resolveAutoRoute } from '@agiworkforce/routing';
@@ -61,6 +77,12 @@ export interface ScheduleTitleGenerationInput {
   organizationId: string | null;
   /** The first user message's raw content (pre-truncation). */
   content: string;
+  /**
+   * Only overwrite the title while it still holds this exact stage-1 value.
+   * a user who has since manually renamed the conversation (or a retried
+   * request that scheduled generation twice) must never be clobbered by a
+   * stale background result.
+   */
   expectedCurrentTitle: string;
 }
 
@@ -111,6 +133,12 @@ async function generateAndPersistTitle(input: ScheduleTitleGenerationInput): Pro
     return;
   }
 
+  // Cheapest capable route for a one-line utility completion. 'free' tier +
+  // 'simple_chat' always resolves to the workhorse economy slot regardless of
+  // the requester's actual plan, this is an internal utility call, not a
+  // user-facing chat turn, so it must not ride the user's paid model access.
+  // Same selection primitive lib/support/agent/answer/model-route.ts uses for
+  // its own bounded utility call; no model id is hardcoded here.
   const route = resolveAutoRoute({
     selection: 'auto',
     taskType: 'simple_chat',
@@ -241,6 +269,17 @@ async function generateAndPersistTitle(input: ScheduleTitleGenerationInput): Pro
   }
 }
 
+/**
+ * Kick off title generation without making the message-save request wait for
+ * it. `after` is the framework's own way of keeping background work alive past
+ * the response, it holds the invocation open until the task settles, which a
+ * detached promise does not: the platform can suspend the instance at flush and
+ * the title is simply never written.
+ *
+ * This previously read a `waitUntil` member off the request, which NextRequest
+ * does not declare and never carries, so the fallback was the only branch ever
+ * taken.
+ */
 export function scheduleConversationTitleGeneration(input: ScheduleTitleGenerationInput): void {
   after(
     generateAndPersistTitle(input).catch((error: unknown) => {

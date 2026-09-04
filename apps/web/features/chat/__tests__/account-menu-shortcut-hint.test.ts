@@ -8,6 +8,10 @@ import { KEYBOARD_SHORTCUT_DOCS } from '../hooks/use-keyboard-shortcuts';
 const CHAT_DIR = path.resolve(__dirname, '..');
 const read = (relative: string) => readFileSync(path.join(CHAT_DIR, relative), 'utf8');
 
+// The keyboard-shortcuts item lives in the shared AccountMenuItems component
+// (apps/web/shared/components/layout/AccountMenuItems.tsx), not on this page
+// directly, WebChatPage's and WebAppShell's account menus both render it
+// from there so the two cannot drift into different menus.
 const ACCOUNT_MENU_ITEMS = readFileSync(
   path.resolve(CHAT_DIR, '../../shared/components/layout/AccountMenuItems.tsx'),
   'utf8',

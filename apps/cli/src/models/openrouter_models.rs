@@ -1,3 +1,10 @@
+//! OpenRouter live model catalog.
+//!
+//! OpenRouter is a BYOK gateway that proxies hundreds of models, so they can't
+//! be hand-curated into `models.json`. Instead we fetch OpenRouter's public
+//! `/models` list at runtime and map recent models into catalog [`Model`]s the
+//! BYOK picker can list. Only *new* models are surfaced, legacy/old models are
+//! dropped, and the result is cached on disk so the picker reads it instantly.
 
 use std::path::PathBuf;
 use std::time::Duration;
@@ -41,7 +48,7 @@ fn parse_price_per_million(pricing: Option<&serde_json::Value>, key: &str) -> f6
 fn map_entry(entry: &serde_json::Value, cutoff_unix: i64) -> Option<Model> {
     let created = entry.get("created").and_then(|c| c.as_i64()).unwrap_or(0);
     if created != 0 && created < cutoff_unix {
-        return None;
+        return None; // old model, skip
     }
     let id = entry.get("id").and_then(|v| v.as_str())?.trim().to_string();
     if id.is_empty() {
@@ -84,6 +91,9 @@ fn map_entry(entry: &serde_json::Value, cutoff_unix: i64) -> Option<Model> {
         .unwrap_or(0) as usize;
     let input_price_per_1m = parse_price_per_million(pricing, "prompt");
     let output_price_per_1m = parse_price_per_million(pricing, "completion");
+    // OpenRouter uses a negative sentinel (-1) for its internal variable-priced
+    // router models (e.g. "openrouter/fusion"). Those aren't standard selectable
+    // models and would render as negative cost, drop them.
     if input_price_per_1m < 0.0 || output_price_per_1m < 0.0 {
         return None;
     }
@@ -238,6 +248,7 @@ mod tests {
         assert!(map_entry(&no_id, 0).is_none());
     }
 
+    // Network test, run with `cargo test -- --ignored openrouter_live`.
     #[tokio::test]
     #[ignore = "live network test; run with: cargo test -- --ignored openrouter_live"]
     async fn openrouter_live_fetch_returns_new_models() {

@@ -379,6 +379,10 @@ impl McpState {
                         Ok(true)
                     }
                     Err(e) => {
+                        // Log as a warning, the config has been updated in memory so the
+                        // next explicit connect attempt will use the new roots.  A spawn
+                        // failure (e.g. `npx` not found on this machine) is non-fatal; the
+                        // rest of the app continues to work without MCP filesystem tools.
                         tracing::warn!(
                             "[MCP] Filesystem server could not be restarted (non-fatal): {}. \
                              The directory configuration has been saved and will take effect \
@@ -395,6 +399,7 @@ impl McpState {
                 Ok(true)
             }
         } else {
+            // Config entry missing, treat as a warning, not a hard failure.
             tracing::warn!("[MCP] Filesystem server entry not found in config; skipping restart.");
             Ok(false)
         }
@@ -921,6 +926,15 @@ pub async fn mcp_call_tool(
         "MCP tool call started"
     );
 
+    // 1a. Per-tool connector permission gate (audit C-rank 1).
+    // The permission store is keyed by connector *catalog* id (e.g.
+    // "github"), written by
+    // packages/ui/unified-chat/src/lib/connectorPermissionStore.ts, while
+    // `server_name` here is the MCP server name (e.g. "connector-github").
+    // those two strings never matched, so a saved "Always allow" or
+    // "Blocked" choice had no effect. Map back to the catalog id via the
+    // same table `get_connector_mcp_mapping` uses; fall back to the raw
+    // server name for non-catalog (custom/user-added) MCP servers.
     let connector_id = crate::sys::commands::mcp_oauth::connector_id_for_server_name(&server_name)
         .map(|s| s.to_string())
         .unwrap_or_else(|| server_name.clone());
@@ -1080,6 +1094,10 @@ pub async fn mcp_get_config(state: State<'_, McpState>) -> Result<Value, String>
             }
         }
 
+        // SECURITY: redact HTTP transport credentials too, they were previously
+        // sent to the renderer in plaintext. api_key / bearer_token / all header
+        // values are replaced with the sentinel; restore_redacted_env_values puts
+        // the real values back on mcp_update_config so editing never wipes them.
         if let Some(crate::core::mcp::transport::TransportConfig::Http(http_config)) =
             server_config.transport.as_mut()
         {

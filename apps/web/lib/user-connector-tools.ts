@@ -556,6 +556,9 @@ async function mcpResultToConnectorExec(params: {
   result: McpCallToolResult;
 }): Promise<ConnectorExecResult> {
   const text = mcpResultToText(params.result);
+  // An input_required pause is not a completed call: surface the bounded,
+  // UNTRUSTED input requests to the tool loop and persist nothing (no task
+  // binding, no app payload), the same call resumes once input is collected.
   if (params.result.inputRequired) {
     return {
       handled: true,
@@ -1495,6 +1498,19 @@ export interface LoadUserConnectorToolOptions {
   isToolDenied?: (connectorId: string, toolName: string) => boolean;
 }
 
+/**
+ * Removes connectors the workspace does not permit from an offered catalog.
+ *
+ * Filtering the catalog is the enforcement, not a cosmetic hide: a tool the
+ * model is never told about cannot be called, and every caller, chat,
+ * scheduled tasks, cloud agent runs, loads its catalog through here.
+ *
+ * Ungoverned on a read failure, deliberately. Connector governance decides
+ * which approved integrations staff use; it is not the barrier that stops
+ * cross-workspace access, which is the tenancy layer and fails closed. Denying
+ * every connector because the policy table blipped would break every member's
+ * tools for a reason no administrator chose.
+ */
 async function applyConnectorPolicy(
   defs: WebMcpToolDef[],
   organizationId: string | null,

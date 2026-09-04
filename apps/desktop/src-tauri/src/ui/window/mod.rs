@@ -190,6 +190,12 @@ pub fn apply_dock(
     Ok(())
 }
 
+/// Dock the main window to the right edge to make room for the browser.
+///
+/// Called automatically after a successful `browser_navigate` command so the
+/// desktop app tiles to the right while the browser occupies the left half of
+/// the screen. Safe to call even when the window is already docked, it is a
+/// no-op if the window is already at `DockPosition::Right`.
 pub fn auto_tile_for_browser(app: &tauri::AppHandle) -> Result<()> {
     if let Some(window) = app.get_webview_window("main") {
         let app_state = window.state::<AppState>().clone();

@@ -748,7 +748,7 @@ function setupDataChannel(channel: RTCDataChannelType): void {
       const parsed = JSON.parse(String(event.data));
       handleControlMessage(parsed);
     } catch {
-      return;
+      // noop
     }
   };
 
@@ -793,7 +793,7 @@ async function handleSignalingMessage(kind: SignalKind, payload: unknown): Promi
         break;
     }
   } catch {
-    return;
+    // noop
   }
 }
 

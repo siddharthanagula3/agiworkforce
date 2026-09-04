@@ -176,6 +176,16 @@ fn unix_seconds() -> i64 {
         .unwrap_or(0)
 }
 
+/// `AgentInstance::status.status` is seeded at spawn time and only ever moved by
+/// the orchestrator's own pause/resume/cancel calls, the engine that actually
+/// runs the goal reports its lifecycle through `AGICore`'s task state instead.
+/// Without this fold-back nothing ever writes `Completed`, so every reader that
+/// waits on it (the chat poll loop, `wait_for_all`, `cleanup_completed`) waits
+/// forever on a run that has already finished.
+///
+/// Only terminal engine states are adopted: non-terminal ones are left to the
+/// orchestrator's setters, whose `Paused` marker can legitimately lead the
+/// engine by an iteration boundary.
 fn sync_terminal_state(agent: &mut AgentInstance) {
     if matches!(
         agent.status.status,
@@ -750,6 +760,7 @@ impl AgentOrchestrator {
         'poll: for _ in 0..max_attempts {
             if let Some(status) = self.get_agent_status(&agent_id).await {
                 if status.status == AgentState::Completed {
+                    // Build summary from tool results, drop the lock before breaking
                     let summary = {
                         let agents = self.agents.lock().await;
                         if let Some(agent) = agents.get(&agent_id) {
@@ -780,6 +791,7 @@ impl AgentOrchestrator {
                         } else {
                             "Task completed successfully.".to_string()
                         }
+                        // MutexGuard dropped here, safe to remove agent below
                     };
                     result = OrchestratorResult {
                         success: true,

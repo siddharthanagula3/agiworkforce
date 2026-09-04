@@ -1,3 +1,25 @@
+/**
+ * LibraryView: the Library surface body: browse the user's cataloged files
+ * (`media_assets` via `GET /api/library`) with origin/kind filter chips, a
+ * filename/prompt search box, a card grid, and offset "Show more" paging.
+ *
+ * Parity of concept with mobile's LibraryScreen (grid + filter chips + honest
+ * empty state) and ChatGPT's Library; presentation reuses the shared
+ * `GeneratedFileCard` from `@agiworkforce/unified-chat`, no forked card.
+ *
+ * Host-agnostic: every network call and the preview gesture arrive through the
+ * injected {@link LibraryTransport}, so web can use same-origin cookies + CSRF
+ * while desktop uses its bearer-token cloudFetch. Neither copy of this view
+ * exists, that duplication is what the shared package prevents.
+ *
+ * Downloads and image previews go through the host's authed route. Failures
+ * surface as an inline error with Retry; empty states never fake content.
+ *
+ * Origin-conversation links are intentionally absent: `media_assets.metadata`
+ * carries no conversation id today (verified against every writer), so there
+ * is nothing truthful to link to.
+ */
+
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { toUserMessageWithStatus } from '../../lib/network-error';
 import { FolderOpen, Loader2, RotateCcw, Search, Trash2 } from 'lucide-react';

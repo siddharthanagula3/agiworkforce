@@ -1,3 +1,24 @@
+//! Tauri commands for per-tool connector permission storage (Desktop P0, audit C-rank 1).
+//!
+//! Permissions are stored in `~/.agiworkforce/connector-permissions.json` encrypted
+//! via the existing [`MasterPasswordEncryption`] vault (AES-256-GCM, purpose:
+//! [`KeyPurpose::ConnectorPermissions`]). When the vault is locked or not yet
+//! configured the file falls back to machine-key encryption so read/write never
+//! fails silently, the caller gets a clear error only when neither key is usable.
+//!
+//! # Storage layout
+//! ```json
+//! {
+//!   "<connector_id>": {
+//!     "<tool_name>": { "level": "always-allow" | "needs-approval" | "blocked",
+//!                      "destructive": bool }
+//!   }
+//! }
+//! ```
+//! The file is re-read on every `get` / `list` to survive concurrent writers
+//! (e.g. settings UI + background agent running simultaneously).  Writes do a
+//! read-modify-write with a naïve in-process `Mutex` guard; cross-process
+//! safety is acceptable at desktop tier.
 
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -72,6 +93,10 @@ fn encrypt_json(json: &str, enc: &MasterPasswordEncryption) -> Result<String, St
         enc.encrypt(KeyPurpose::ConnectorPermissions, json)
             .map_err(|e| format!("vault encrypt: {e}"))
     } else {
+        // Machine-key fallback: XOR-free path, use the same AES helper via
+        // the public `machine_key::derive_key_base64` and do raw AES-256-GCM
+        // in one shot.  We reuse `MasterPasswordEncryption` with a temporary
+        // in-memory manager seeded from the machine key.
         machine_key_encrypt(json)
     }
 }
@@ -183,6 +208,9 @@ fn save_file(data: &PermissionsFile, enc: &MasterPasswordEncryption) -> Result<(
 
 // ── Tauri commands ────────────────────────────────────────────────────────────
 
+/// Get the permission level for a specific tool on a connector.
+/// Returns `None` (null in JS) when no explicit permission has been saved.
+/// the frontend should apply `defaultPermissionForTool(destructive)` in that case.
 #[tauri::command]
 pub async fn connector_permission_get(
     mp_state: State<'_, MasterPasswordState>,

@@ -271,6 +271,11 @@ impl ToolExecutor {
         }
     }
 
+    /// Edit an existing spreadsheet in place, preserving its current data.
+    ///
+    /// Only Excel gets an edit tool. `WordEditor` cannot parse an existing
+    /// .docx and would silently replace the document with just the edits, see
+    /// docs/decisions/wire-or-cut.md.
     pub(crate) async fn execute_document_edit_excel_tool(
         &self,
         args: &HashMap<String, Value>,

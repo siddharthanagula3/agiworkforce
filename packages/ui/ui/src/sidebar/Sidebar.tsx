@@ -267,6 +267,10 @@ export function Sidebar(props: SidebarProps) {
       pendingFocusRef.current = false;
       rowButtonAt(activeRowIndex)?.focus();
     }
+    // `focusedIndex` is a dependency even though `activeRowIndex` is derived
+    // from it: -1 -> 0 leaves `activeRowIndex` at 0 (its no-selection default),
+    // so without it the FIRST ArrowDown would update the highlight but never
+    // move real focus, exactly the divergence this fix exists to remove.
   }, [activeRowIndex, focusedIndex, visible, rowButtonAt]);
 
   useEffect(() => {

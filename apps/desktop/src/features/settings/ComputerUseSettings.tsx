@@ -1,3 +1,14 @@
+/**
+ * ComputerUseSettings
+ *
+ * Settings panel for Computer Use capabilities:
+ * - Enable/disable toggle with consent dialog gate
+ * - Per-app permission registry (Stream 1: backed by Tauri
+ *   `app_permissions_*` commands, persists across sessions)
+ * - Model picker for the OPA planner (Stream 2: lets user pick any
+ *   vision-capable model, Anthropic, OpenAI, Google, xAI, instead of
+ *   being locked to a single provider)
+ */
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Ban, Lock, Monitor, RefreshCcw, Shield, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';

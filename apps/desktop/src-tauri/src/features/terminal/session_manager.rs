@@ -528,6 +528,15 @@ pub(crate) fn scrub_secrets(command: &str) -> String {
     scrubbed.into_owned()
 }
 
+/// Re-mask stored history rows the current scrubber would catch.
+///
+/// Scrubbing on write only protects rows written after the scrubber learned a
+/// shape. Header, `-u user:pass`, attached short-flag and URL credentials typed
+/// before that are still on disk in cleartext, where anything running as the
+/// user reads them straight out of the sqlite file, masking them on the way out
+/// of `get_command_history` keeps them off the wire but leaves the file. This
+/// rewrites the stored text instead, and is idempotent: a row already equal to
+/// its scrubbed form is not touched.
 pub(crate) fn rescrub_stored_history(conn: &rusqlite::Connection) -> rusqlite::Result<usize> {
     use rusqlite::params;
 

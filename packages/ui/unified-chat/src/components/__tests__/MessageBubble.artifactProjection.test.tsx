@@ -1,3 +1,14 @@
+/**
+ * MessageBubble.artifactProjection.test.tsx, DES-C05 / DES-C06.
+ *
+ * Desktop Cloud could not show an artifact because the transcript only ever
+ * rendered `message.artifacts`, and the managed completions wire never attaches
+ * any. The bubble now accepts a host-derived projection; these tests pin the two
+ * properties that make it safe to swap in: the artifact's fenced block leaves
+ * the BODY but not the CLIPBOARD, and a host that wires nothing sees no change.
+ *
+ * @vitest-environment jsdom
+ */
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, render, screen } from '@testing-library/react';
 import { MessageBubble } from '../MessageBubble';

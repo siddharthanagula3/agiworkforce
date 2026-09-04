@@ -4,6 +4,17 @@ import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 
 import { getEffectiveOrganizationPolicy } from '@/lib/services/organization-policy-service';
 
+/**
+ * Whether a signal's value actually binds at runtime.
+ *
+ * The distinction is the whole point of this surface. A buyer's security team
+ * reads a posture dashboard as a list of controls, so a row that is merely
+ * recorded must not sit next to a row that denies requests wearing the same
+ * styling. `retentionDays`, for instance, is stored and swept by nothing
+ * (ORGPOLICY-03), and per-surface sync resolves from a client-supplied header
+ * (ORGPOLICY-02), both are positions this workspace has taken, not boundaries
+ * an attacker meets.
+ */
 export type PostureEnforcement = 'enforced' | 'stated' | 'unconfigured';
 
 export type PostureState = 'ok' | 'attention' | 'off';
@@ -110,6 +121,13 @@ function plural(n: number, one: string, many: string): string {
   return `${n} ${n === 1 ? one : many}`;
 }
 
+/**
+ * Reads what is actually true of one workspace, from the tables that hold it.
+ *
+ * Every query is bound to `organizationId`. Callers must have already proven the
+ * caller's membership and admin role, this function does not re-authorize, and
+ * is only ever reached through a route that does.
+ */
 export async function readWorkspacePosture(
   db: DatabaseAdapter,
   organizationId: string,

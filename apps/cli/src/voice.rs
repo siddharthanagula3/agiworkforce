@@ -1,3 +1,11 @@
+//! Voice input module, push-to-talk with Whisper STT.
+//!
+//! Supports two transcription backends:
+//! 1. **OpenAI Whisper API**: used when `OPENAI_API_KEY` is set.
+//! 2. **Local `whisper` binary**: used as fallback when the binary is on `$PATH`.
+//!
+//! Audio is captured from the default input device using `cpal`, recorded as
+//! 16 kHz mono PCM, then encoded to WAV via `hound` before transcription.
 
 use agiworkforce_llm::{speech, TranscriptionRequest, TranscriptionResponseFormat};
 use anyhow::{bail, Context, Result};
@@ -21,6 +29,7 @@ use crate::voice_languages::language_name;
 // Constants
 // ---------------------------------------------------------------------------
 
+/// Sample rate for audio capture (16 kHz, Whisper's native rate).
 const SAMPLE_RATE: u32 = 16_000;
 
 /// Maximum recording duration (seconds) to prevent runaway captures.
@@ -69,6 +78,9 @@ pub async fn run_voice_mode(
 ) -> Result<()> {
     let privacy_mode = session.privacy_mode;
 
+    // Read the cloud opt-in from the environment.  This must NOT be a
+    // function parameter, keeping the decision here prevents callers from
+    // accidentally widening the gate.
     let voice_cloud_opt_in = std::env::var("AGIWORKFORCE_VOICE_ALLOW_CLOUD")
         .map(|v| v.trim() == "1")
         .unwrap_or(false);
@@ -316,6 +328,9 @@ fn detect_backend() -> TranscriptionBackend {
     TranscriptionBackend::None
 }
 
+// ---------------------------------------------------------------------------
+// Privacy gate, HARD LOCK: no silent Local→cloud egress
+// ---------------------------------------------------------------------------
 
 /// Assert that cloud egress is permitted given the current privacy context.
 ///
@@ -353,6 +368,7 @@ fn gate_cloud_egress(
             }
             Ok(())
         }
+        // Local binary runs entirely on-device, no egress regardless of mode.
         TranscriptionBackend::LocalBinary(_) | TranscriptionBackend::None => Ok(()),
     }
 }
@@ -929,6 +945,9 @@ async fn transcribe_local(
 // cpal re-export for the check function
 use cpal::traits::{DeviceTrait, HostTrait};
 
+// ---------------------------------------------------------------------------
+// Tests, privacy-gate invariant
+// ---------------------------------------------------------------------------
 
 #[cfg(test)]
 mod tests {
@@ -939,6 +958,9 @@ mod tests {
         TranscriptionBackend::LocalBinary(PathBuf::from("/usr/local/bin/whisper"))
     }
 
+    // -----------------------------------------------------------------------
+    // gate_cloud_egress, the authoritative no-silent-egress invariant
+    // -----------------------------------------------------------------------
 
     /// INVARIANT: Local session + OpenAI backend + no explicit opt-in MUST fail.
     /// This is the core P1-PRIVACY-01 assertion.
@@ -960,6 +982,8 @@ mod tests {
         );
     }
 
+    /// INVARIANT: Local session + OpenAI backend + explicit opt-in is permitted.
+    /// (User made an informed choice, egress is intentional and visible.)
     #[test]
     fn local_session_cloud_backend_with_opt_in_is_allowed() {
         let result = gate_cloud_egress(
@@ -1019,9 +1043,19 @@ mod tests {
         );
     }
 
+    // -----------------------------------------------------------------------
+    // transcribe, the call path invariant
+    //
+    // These tests verify that the gate is actually consulted inside transcribe()
+    // itself, not just in the pure predicate.  Deleting the gate_cloud_egress
+    // call from transcribe() must break this test.
+    // -----------------------------------------------------------------------
 
+    /// INVARIANT (call-path): A Local session never REACHES the cloud
+    /// transcription call, transcribe() returns Err before encode_wav/network.
     #[tokio::test]
     async fn transcribe_blocks_local_cloud_before_any_io() {
+        // A zero-sample recording is fine, the gate fires before encode_wav.
         let recording = AudioRecording { samples: vec![] };
         let result = transcribe(
             &TranscriptionBackend::OpenAiApi,
@@ -1050,6 +1084,8 @@ mod tests {
         let recording = AudioRecording {
             samples: vec![0i16; 10],
         };
+        // Use a path that doesn't exist, we only care that the gate does NOT
+        // block (it will fail later at the subprocess call, not at the gate).
         let result = transcribe(
             &TranscriptionBackend::LocalBinary(PathBuf::from("/nonexistent/whisper")),
             &recording,
@@ -1058,6 +1094,8 @@ mod tests {
             false,
         )
         .await;
+        // The gate must NOT fire, any error here should be from encode_wav or
+        // the subprocess, not from Privacy boundary blocked.
         if let Err(ref e) = result {
             let msg = format!("{:#}", e);
             assert!(
@@ -1067,10 +1105,17 @@ mod tests {
         }
     }
 
+    // -----------------------------------------------------------------------
+    // gate_backend, downgrade behaviour
+    // -----------------------------------------------------------------------
 
+    /// gate_backend must downgrade OpenAiApi to None when Local + no opt-in
+    /// and no local binary is available.  We cannot control PATH in tests so
+    /// we assert the output is either None or LocalBinary, never OpenAiApi.
     #[test]
     fn gate_backend_suppresses_openai_for_local_no_opt_in() {
         let effective = gate_backend(TranscriptionBackend::OpenAiApi, &PrivacyMode::Local, false);
+        // Must NOT be OpenAiApi, any other variant is acceptable.
         assert!(
             !matches!(effective, TranscriptionBackend::OpenAiApi),
             "gate_backend must not return OpenAiApi for Local + no opt-in"
@@ -1107,6 +1152,14 @@ mod tests {
         );
     }
 
+    // -----------------------------------------------------------------------
+    // Shared speech contract, DESK-17
+    //
+    // The endpoint, the multipart fields, and the transcription model used to
+    // be retyped here and again in the desktop Tauri binary, so a provider
+    // change could land in one and miss the other. Both now read
+    // `agiworkforce_llm::speech` and the `voice_transcription` routing slot.
+    // -----------------------------------------------------------------------
 
     #[test]
     fn the_transcription_endpoint_is_not_retyped_in_this_binary() {

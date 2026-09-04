@@ -1,3 +1,10 @@
+/**
+ * The gallery is the FIRST call site in the repo for `GET
+ * /api/research/reports` without a `conversationId`, the "newest reports for
+ * the caller" branch the endpoint always had and nothing ever reached. These
+ * tests pin that request shape, because losing it silently turns the gallery
+ * back into a per-conversation view.
+ */
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';

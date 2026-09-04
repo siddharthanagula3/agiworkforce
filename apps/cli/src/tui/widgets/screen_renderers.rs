@@ -50,6 +50,21 @@ fn frame(title_line: String, body_lines: &[String], footer: &str) -> String {
     out
 }
 
+/// True when `text` looks like a `frame()`-rendered slash-command "dialog"
+/// (an ASCII box opening with the `divider()` rule and closing with a footer
+/// hint that mentions `Esc`), as opposed to a plain system message.
+///
+/// These renderers pre-date the M8 Ratatui overlay state machine (see module
+/// docs above): every one of them is dispatched as a plain
+/// `SlashResult::SystemMessage` chat entry rather than a real overlay
+/// registered with `TuiApp::open_overlay`, so the global key handler has no
+/// overlay to intercept `Esc` and instead falls through to the app-quit
+/// binding, even though the rendered footer tells the user "Esc to
+/// cancel"/"Esc to close"/"Esc to back". Until the real overlay lands, the
+/// TUI's `Esc` handler uses this check to dismiss the dialog message instead
+/// of quitting. Structural (shape-based) rather than string-matching a
+/// specific footer so it covers every `frame()` caller, not just `/mcp` and
+/// `/plugin`.
 pub fn is_dialog_frame(text: &str) -> bool {
     let mut lines = text.lines();
     match lines.next() {
@@ -93,6 +108,9 @@ mod dialog_frame_tests {
     }
 }
 
+// ---------------------------------------------------------------------------
+// /mcp, scoped server list with status glyphs (captures 602, 603)
+// ---------------------------------------------------------------------------
 
 /// One server entry in the rendered list.
 #[derive(Debug, Clone)]
@@ -166,6 +184,9 @@ pub fn render_mcp_list(scopes: &[McpScope]) -> String {
     )
 }
 
+/// MCP detail view (capture 603, single server, e.g. "Apify MCP Server").
+/// Wired from a future `/mcp <server-name>` arg; currently exercised only by
+/// the snapshot tests in this module.
 #[allow(dead_code)]
 pub fn render_mcp_detail(
     server_name: &str,
@@ -222,6 +243,9 @@ fn capitalize_first(s: &str) -> String {
     }
 }
 
+// ---------------------------------------------------------------------------
+// /agents, Agents / Running / Library tabs (captures 619, 620)
+// ---------------------------------------------------------------------------
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AgentsTab {
@@ -342,6 +366,9 @@ pub fn render_agents(
     )
 }
 
+// ---------------------------------------------------------------------------
+// /skills, single screen with project + plugin discovery (capture 621)
+// ---------------------------------------------------------------------------
 
 #[derive(Debug, Clone)]
 pub struct SkillSummary {
@@ -376,6 +403,9 @@ pub fn render_skills(skills: &[SkillSummary]) -> String {
     )
 }
 
+// ---------------------------------------------------------------------------
+// /permissions, 5-tab overlay (capture 627)
+// ---------------------------------------------------------------------------
 
 #[allow(dead_code)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -436,6 +466,9 @@ pub fn render_permissions(
     frame(title_line, &body, "←/→ tab switch · ↓ return · Esc cancel")
 }
 
+// ---------------------------------------------------------------------------
+// /plugin, 4-tab overlay (captures 622–625)
+// ---------------------------------------------------------------------------
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PluginTab {
@@ -558,6 +591,9 @@ pub fn render_plugin(tab: PluginTab, installed: &[PluginSummary], errors: &[Stri
 // AGI CLI", plus a hardcoded "Status: Enabled / Extension: Installed" and
 // `agi --chrome` flags that do not exist.
 
+// ---------------------------------------------------------------------------
+// /ide, IDE selection dialog (capture 601)
+// ---------------------------------------------------------------------------
 
 pub fn render_ide(available_ides: &[String]) -> String {
     let body = if available_ides.is_empty() {
@@ -584,6 +620,9 @@ pub fn render_ide(available_ides: &[String]) -> String {
     )
 }
 
+// ---------------------------------------------------------------------------
+// /usage, token + cost summary (M11, audit-driven Claude Code parity)
+// ---------------------------------------------------------------------------
 
 #[derive(Debug, Clone, Default)]
 pub struct UsageSummary {
@@ -639,6 +678,9 @@ fn fmt_number(n: u64) -> String {
     out
 }
 
+// ---------------------------------------------------------------------------
+// /sandbox, sandbox-policy mode display (M11)
+// ---------------------------------------------------------------------------
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SandboxMode {
@@ -689,6 +731,9 @@ pub fn render_sandbox(mode: SandboxMode) -> String {
     frame("Sandbox".to_string(), &body, "Esc to close")
 }
 
+// ---------------------------------------------------------------------------
+// /doctor, diagnostic health check (M11)
+// ---------------------------------------------------------------------------
 
 #[derive(Debug, Clone)]
 pub struct DoctorCheck {
@@ -749,6 +794,9 @@ pub fn render_doctor(checks: &[DoctorCheck]) -> String {
     )
 }
 
+// ---------------------------------------------------------------------------
+// /recap, recent turn summary (M11)
+// ---------------------------------------------------------------------------
 
 #[derive(Debug, Clone)]
 pub struct RecapEntry {
@@ -782,6 +830,9 @@ pub fn render_recap(entries: &[RecapEntry], turn_count: u32, recent_edits: &[Str
     frame("Session recap".to_string(), &body, "Esc to close")
 }
 
+// ---------------------------------------------------------------------------
+// /release-notes, show CHANGELOG entry for the current version (M11)
+// ---------------------------------------------------------------------------
 
 pub fn render_release_notes(version: &str, notes: &str) -> String {
     let mut body: Vec<String> = vec![format!("    Version: {}", version), String::new()];
@@ -795,6 +846,9 @@ pub fn render_release_notes(version: &str, notes: &str) -> String {
     frame("Release notes".to_string(), &body, "Esc to close")
 }
 
+// ---------------------------------------------------------------------------
+// /keybindings, static reference (M11)
+// ---------------------------------------------------------------------------
 
 pub fn render_keybindings() -> String {
     let body = vec![
@@ -1117,6 +1171,7 @@ mod tests {
         assert!(render_keybindings().contains(&divider));
     }
 
+    // M11, audit-driven parity additions
 
     #[test]
     fn usage_renders_tokens_cost_and_model() {

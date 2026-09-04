@@ -1,3 +1,12 @@
+/**
+ * OpenAI's wire `content_filter` finish reason means the provider's safety
+ * layer stopped the response, the same honest concept as Anthropic's
+ * `stop_reason: 'refusal'`. Both translators must surface it as the
+ * first-class StreamChunkStop `'refusal'` member (mirroring the agent event
+ * envelope's Refusal stop), never as `'error'` (transport/provider failure)
+ * and never as a silent normal completion.
+ */
+
 import { describe, expect, it } from 'vitest';
 import type { StreamChunk } from '@agiworkforce/types';
 

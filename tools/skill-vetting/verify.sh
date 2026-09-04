@@ -1,4 +1,13 @@
 #!/usr/bin/env bash
+# INC-0.5 verification: stand-up proof for the skill-vetting service.
+#
+# Asserts the adopted SkillSpector scanner blocks a malicious skill and clears a
+# safe one. Provisions an isolated Python 3.12 venv via uv, installs the vendored
+# package, scans both sample fixtures with --no-llm (offline analyzers only), and
+# checks the verdicts. Exits non-zero on any mismatch, no theater.
+#
+# Usage:  ./verify.sh
+# Requires: uv (https://docs.astral.sh/uv/), network for first dep install.
 set -euo pipefail
 
 cd "$(dirname "$0")"

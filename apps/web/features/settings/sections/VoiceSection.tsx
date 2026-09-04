@@ -1,5 +1,15 @@
 'use client';
 
+/**
+ * Voice settings section.
+ *
+ * AUDIT-FIX settings-27: apps/web/app/settings/voice/page.tsx already carries
+ * real, honest content, but 'voice' was missing from SETTINGS_NAV_GROUPS_WEB
+ * so nothing in the Settings modal linked to it. This mirrors that page's
+ * copy inside the modal rail so the section is actually reachable, no new
+ * claims about what Web voice can do, same honesty boundary as the route.
+ */
+
 import { formatPrivacyModeLabel } from '@agiworkforce/types';
 import { SettingsPageLink } from '../components/SettingsSectionLink';
 

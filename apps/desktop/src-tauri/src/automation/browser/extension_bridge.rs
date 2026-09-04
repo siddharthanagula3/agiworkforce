@@ -122,6 +122,10 @@ pub struct ExtensionBridge {
 }
 
 impl ExtensionBridge {
+    /// Test / internal-only constructor. Methods that gate on
+    /// `require_confirmation` will fail-closed when called on an instance
+    /// produced by `new()`, production code paths must use
+    /// `with_app_handle`.
     pub fn new() -> Self {
         Self {
             connected: Arc::new(Mutex::new(false)),
@@ -177,6 +181,13 @@ impl ExtensionBridge {
         )
     }
 
+    /// SEV-DESK-02 helper. Drives the same `tool_confirmation` dialog that
+    /// gates `computer_use_*` IPC commands. Truncates `args` to keep the
+    /// prompt readable when the action is `execute_script` with a long body.
+    ///
+    /// Without an `app_handle` (i.e. `ExtensionBridge::new()` from tests),
+    /// the method fails closed, refusing the action with an error rather
+    /// than silently bypassing the gate.
     async fn require_confirmation(&self, action: &'static str, args: Value) -> Result<()> {
         let app_handle = match self.app_handle.as_ref() {
             Some(h) => h,
@@ -205,6 +216,18 @@ impl ExtensionBridge {
     }
 
     pub async fn execute_script(&self, script: &str) -> Result<Value> {
+        // SEV-DESK-02: zero-click prompt-injection chain (Chrome ext page-context
+        // auto-sync → desktop LLM → extension_bridge.execute_script → arbitrary
+        // JS in the active browser tab) is mitigated here. The gate prompts the
+        // user with a truncated preview of the script. Refusing the prompt
+        // returns an Err that propagates back to the LLM tool call so the model
+        // gets explicit "denied" feedback rather than hanging.
+        //
+        // CLAUDE-SECURITY F2: a 200-character preview is not a content check.
+        // the exfiltration fits in the first line, and asking about a script
+        // the guard would refuse anyway teaches the user to click through. The
+        // screen runs first so only a script that could legitimately run is
+        // ever put in front of them.
         Self::screen_script(script)?;
 
         let preview: String = script.chars().take(200).collect();
@@ -230,6 +253,9 @@ impl ExtensionBridge {
     }
 
     pub async fn get_cookies(&self) -> Result<Vec<Cookie>> {
+        // SEV-DESK-02: returning the entire cookie jar to the LLM is a primary
+        // exfiltration vector, banking, email, GitHub session cookies all
+        // become available to the model and any downstream provider. Gate it.
         self.require_confirmation("extension_bridge.get_cookies", json!({}))
             .await?;
 
@@ -275,6 +301,7 @@ impl ExtensionBridge {
     }
 
     pub async fn clear_cookies(&self) -> Result<()> {
+        // SEV-DESK-02: destructive, clears all cookies for the active site.
         self.require_confirmation("extension_bridge.clear_cookies", json!({}))
             .await?;
 

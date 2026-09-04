@@ -11,6 +11,11 @@ pub(super) const SAFE_COMMANDS: &[&str] = &[
     "which",
     "echo",
     "file",
+    // SEV-CLI-LOW-1 fix: `env` and `printenv` previously auto-approved as
+    // read-only. They aren't, both dump every environment variable in the
+    // process, including ANTHROPIC_API_KEY / OPENAI_API_KEY etc., into the
+    // tool output that is then fed back to the model and may be persisted in
+    // logs. Downgraded to Unknown so the user is prompted before running.
     "whoami",
     "uname",
     "date",

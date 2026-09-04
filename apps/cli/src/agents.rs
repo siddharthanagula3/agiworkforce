@@ -1,3 +1,14 @@
+//! Agent definitions, custom agent personas loaded from markdown files.
+//!
+//! Agent definitions are markdown files with YAML frontmatter containing
+//! name, description, model override, tool restrictions, and other config.
+//! They are discovered from:
+//! 1. `.agiworkforce/agents/*.md` in the current project
+//! 2. `~/.agiworkforce/agents/*.md` (global agents)
+//!
+//! When loaded via `--agent <name>`, an agent definition overrides session
+//! defaults: model, max_turns, permission_mode, tool filtering, and
+//! system prompt.
 
 // Module API surface is intentionally broad: used by the REPL /agents command
 // and the --agent CLI flag. Tests exercise all public items.
@@ -22,6 +33,7 @@ pub struct AgentDefinition {
     pub max_turns: Option<usize>,
     /// Permission mode override (default, accept-edits, plan, bypass-permissions).
     pub permission_mode: Option<String>,
+    /// The markdown body after frontmatter, used as the system prompt.
     pub system_prompt: String,
     /// Source file path.
     pub path: PathBuf,
@@ -722,6 +734,7 @@ fn parse_agent_frontmatter(content: &str) -> Result<AgentFrontmatter> {
     let trimmed = content.trim_start();
 
     if !trimmed.starts_with("---") {
+        // No frontmatter, use "untitled" as name, whole content as body
         return Ok(AgentFrontmatter {
             name: "untitled".to_string(),
             description: String::new(),
@@ -802,6 +815,7 @@ fn parse_agent_frontmatter(content: &str) -> Result<AgentFrontmatter> {
             body: body.to_string(),
         })
     } else {
+        // Malformed frontmatter, treat entire content as body
         Ok(AgentFrontmatter {
             name: "untitled".to_string(),
             description: String::new(),
@@ -862,6 +876,7 @@ pub fn format_agent_list(agents: &[AgentDefinition]) -> String {
                 .to_string_lossy()
                 .contains("/.agiworkforce/agents")
             {
+                // Could be project or global, check if under home dir
                 let is_global = dirs::home_dir()
                     .map(|h| agent.path.starts_with(h.join(".agiworkforce")))
                     .unwrap_or(false);
@@ -1227,6 +1242,10 @@ You are a research specialist. Your job is to analyze topics deeply."#;
 
     #[test]
     fn test_format_agent_validation_orders_duplicate_names_deterministically() {
+        // Regression guard: duplicate-name issues must be emitted in a stable,
+        // name-sorted order, not HashMap iteration order, which is randomized per
+        // process. Input order is zebra-before-alpha; output must still list alpha
+        // before zebra so `agents validate|doctor|check` is reproducible across runs.
         let mk = |name: &str, path: &str| AgentDefinition {
             name: name.to_string(),
             description: "d".to_string(),

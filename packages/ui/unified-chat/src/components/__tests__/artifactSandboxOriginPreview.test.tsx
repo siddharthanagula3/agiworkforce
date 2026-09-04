@@ -1,3 +1,23 @@
+/**
+ * artifactSandboxOriginPreview.test.tsx, DES-C15, the origin half, at the UI.
+ *
+ * `artifactPreviewScriptsBlocked.test.tsx` pins the HONEST DEGRADATION: when a
+ * preview is a same-document `srcdoc` frame under a CSP that forbids inline
+ * scripts, say so. This file pins the other half, that once a dedicated
+ * artifact ORIGIN exists, the panel stops apologising and actually renders the
+ * artifact there:
+ *
+ *   - the HTML preview frames the sandbox origin instead of a srcdoc document,
+ *   - the "scripts are blocked" notice disappears, because on a cross-origin
+ *     document it is FALSE, the artifact's own policy applies, not the app's,
+ *   - a React artifact mounts the sandbox frame rather than the "can't run
+ *     here" panel,
+ *   - and if that origin fails its handshake, the warning comes straight back
+ *     rather than leaving a silent blank frame.
+ *
+ * @vitest-environment jsdom
+ */
+
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { act, cleanup, render, screen } from '@testing-library/react';
 

@@ -16,6 +16,15 @@ use crate::lsp::types::Diagnostic;
 const LSP_REQUEST_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(30);
 const LSP_SHUTDOWN_GRACE: std::time::Duration = std::time::Duration::from_secs(2);
 
+/// Build a well-formed `file://` URI from a filesystem path.
+///
+/// Naive `format!("file://{}", path)` produces malformed URIs for paths
+/// containing spaces, `#`, `?`, or other reserved characters, and does not
+/// handle Windows drive letters / backslashes, so LSP requests for such files
+/// silently target the wrong (or no) document. This helper percent-encodes each
+/// path segment (preserving `/` as the separator), normalizes Windows
+/// backslashes to `/`, and emits the canonical `file:///C:/...` drive form on
+/// Windows.
 fn path_to_file_uri(path: &Path) -> String {
     // Normalize separators: on Windows a path may contain backslashes; LSP
     // file URIs always use forward slashes.
@@ -29,6 +38,9 @@ fn path_to_file_uri(path: &Path) -> String {
         && bytes[1] == b':'
         && (bytes.len() == 2 || bytes[2] == b'/');
 
+    // Percent-encode each path segment individually so `/` stays a separator
+    // but spaces, `#`, `?`, etc. inside a segment are escaped. A leading drive
+    // letter segment (`C:`) is preserved verbatim, the colon is valid there.
     let encode_segment = |seg: &str, idx: usize| -> String {
         if has_drive && idx == 0 {
             // Keep the `C:` drive designator literal.
@@ -56,6 +68,10 @@ fn path_to_file_uri(path: &Path) -> String {
     }
 }
 
+/// In-memory buffer for LSP publishDiagnostics notifications.
+// Real push-diagnostics requires a dedicated async notification reader loop
+// running concurrently with the request channel, out of scope for M36 MVP.
+// The buffer API is in place so callers compile; it stays empty until wired.
 #[derive(Default, Clone)]
 pub struct DiagnosticsBuffer {
     inner: Arc<RwLock<Vec<(String, Vec<Diagnostic>)>>>,
@@ -126,6 +142,8 @@ impl LspClient {
         stdin.write_all(header.as_bytes()).await?;
         stdin.write_all(body.as_bytes()).await?;
         stdin.flush().await?;
+        // Don't block waiting for the response here, many tests will mock; the
+        // returned client lets the caller drive further requests.
         Ok(Self {
             child,
             next_id: AtomicI64::new(2),
@@ -235,6 +253,11 @@ impl LspClient {
         self.request("textDocument/formatting", params).await
     }
 
+    // Diagnostics are server-pushed (textDocument/publishDiagnostics). The
+    // request() method blocks on the next Content-Length frame, interleaved
+    // notifications would deadlock. A real push-diagnostics loop requires a
+    // separate concurrent reader task (M-future). For now, expose the empty
+    // buffer so the lsp_diagnostics tool compiles and returns a useful hint.
     pub fn diagnostics(&self) -> Vec<Diagnostic> {
         Vec::new()
     }

@@ -1,3 +1,8 @@
+// H20, TokenCounter tests.
+//
+// All functions on `TokenCounter` are pure (no network, no DB) so every test
+// runs in CI without any ignore attribute.  We call the production functions
+// directly instead of reimplementing the arithmetic locally.
 #[cfg(test)]
 mod tests {
     use crate::core::llm::token_counter::{ImageDetail, TokenCounter};
@@ -328,6 +333,7 @@ mod tests {
         let (ollama_p, _) =
             TokenCounter::estimate_for_provider(Provider::Ollama, &msgs, completion);
 
+        // Ollama has 1.10× multiplier, must be >= OpenAI
         assert!(
             ollama_p >= openai_p,
             "Ollama ({ollama_p}) must be >= OpenAI ({openai_p})"
@@ -344,6 +350,7 @@ mod tests {
         let (google_p, _) =
             TokenCounter::estimate_for_provider(Provider::Google, &msgs, completion);
 
+        // Google has 0.95× multiplier, must be <= OpenAI
         assert!(
             google_p <= openai_p,
             "Google ({google_p}) must be <= OpenAI ({openai_p})"

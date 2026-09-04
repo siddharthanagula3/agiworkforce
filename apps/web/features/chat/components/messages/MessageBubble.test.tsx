@@ -128,6 +128,7 @@ describe('MessageBubble', () => {
 
     it('renders assistant content flat (no user bubble)', () => {
       const { container } = render(<MessageBubble message={assistantMsg()} />);
+      // Assistant messages are flat left-aligned prose, never wrapped in .user-bubble.
       expect(container.querySelector('.user-bubble')).not.toBeInTheDocument();
       expect(screen.getByText('I can help')).toBeInTheDocument();
     });
@@ -361,6 +362,12 @@ describe('MessageBubble', () => {
       );
     });
 
+    /**
+     * Observed against the live route (503, no video provider key is
+     * configured today): the failed turn kept shimmering forever directly
+     * above its own failure text, because "no videoUrl" is true for a dead
+     * task as well as a live one. The in-flight signal is `isStreaming`.
+     */
     it('stops the shimmer once a failed video turn settles', () => {
       render(
         <MessageBubble
@@ -778,6 +785,10 @@ describe('MessageBubble', () => {
       expect(onSwitch).toHaveBeenCalledWith('conversation-branch');
     });
 
+    // shell-nav-ia-gap-08: Branch is a PERSISTENT icon in the action row beside
+    // copy/regenerate (Manus's "Continue in new task" placement), not a
+    // dropdown entry. It must not be in both places, a duplicated control is
+    // its own defect, so these assert the row and the menu's absence.
     it('creates a branch from the persistent action row, not the overflow menu', async () => {
       const user = userEvent.setup();
       const onBranch = vi.fn();
@@ -1044,6 +1055,12 @@ describe('MessageBubble', () => {
     });
   });
 
+  // Regression: a non-renderable fenced code block (python/csv/json/generic) must
+  // render EXACTLY ONCE. It used to render twice, once via <MarkdownContent> and
+  // again via an inline <ArtifactBlock content={cleanedContent}> that re-parsed the
+  // same body, producing the visible stacked duplicate ("PYTHON" skeleton over the
+  // final "python" block). ArtifactBlock was removed from the message body; assert
+  // the code text appears only once.
   describe('code block de-duplication', () => {
     it('renders a python code block exactly once (no ArtifactBlock duplicate)', () => {
       const sentinel = 'UNIQUE_PY_SENTINEL_42';
@@ -1170,6 +1187,7 @@ describe('MessageBubble', () => {
         />,
       );
       const img = screen.getByAltText('chart.png') as HTMLImageElement;
+      // Same-origin authenticated serve route, the renderable url shape.
       expect(img.getAttribute('src')).toBe('/api/files/gf-1');
       fireEvent.click(screen.getByRole('button', { name: /view chart\.png full size/i }));
       expect(screen.getByRole('dialog', { name: /image preview/i })).toBeTruthy();

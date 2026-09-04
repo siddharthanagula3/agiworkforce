@@ -63,6 +63,13 @@ export function formatUsageResetIn(
     return `Resets in ${minutes} min`;
   }
   if (remaining < DAY_MS) {
+    // Hours AND minutes, floored, not hours rounded.
+    //
+    // Rounding turned 3h54m into "4 hours" and 3h29m into "3 hours", the
+    // second understates the wait by half an hour, and someone planning around
+    // a quota reset comes back to find it has not happened. Flooring can only
+    // understate by under a minute, and the extra precision is what a person
+    // deciding whether to wait actually needs.
     const hours = Math.floor(remaining / HOUR_MS);
     const minutes = Math.floor((remaining % HOUR_MS) / MINUTE_MS);
     // Whole hours keep their existing wording so nothing that reads fine today

@@ -1,4 +1,17 @@
 /**
+ * Shared reasoning/thinking-block presentation logic.
+ *
+ * Used by the web, desktop, and mobile chat surfaces' collapsible reasoning
+ * UI (apps/web ThinkingBlock.tsx, apps/mobile ThinkingChip.tsx) so the status
+ * copy, duration formatting and the live "Analyzing / Searching / Writing…"
+ * verb-phrase inference, stays identical across surfaces instead of being
+ * reimplemented (and drifting) per app.
+ *
+ * @module reasoning
+ * @packageDocumentation
+ */
+
+/**
  * Format seconds as "Xs" (under a minute) or "Xm Ys" (a minute or more).
  *
  * @example

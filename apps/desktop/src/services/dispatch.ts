@@ -99,6 +99,21 @@ export function setDispatchCallbacks(callbacks: DispatchListenerCallbacks): void
   _callbacks = { ..._callbacks, ...callbacks };
 }
 
+/**
+ * Initialise the desktop dispatch session key.
+ *
+ * Called from the connection store when `peer_ready` metadata contains a
+ * `dispatchSalt`. The keying material is `pairingSecret`, 32 random bytes
+ * this desktop generated and published only in the QR / pairing-link payload,
+ * never to the signaling relay. The relay-visible pairing code and salt are
+ * mixed in to bind the key to one session but are not sufficient to derive it.
+ *
+ * @param pairingCode - The 8+ char pairing code shared between devices.
+ * @param dispatchSalt - Hex salt from `peer_ready` metadata.
+ * @param pairingSecret - 64-char hex out-of-band secret from the QR payload.
+ * @param mobileVersion - Optional mobile app version string for mismatch check.
+ * @returns hex-encoded 64-char derived key (diagnostic only; do not persist).
+ */
 export async function initDispatchSession(
   pairingCode: string,
   dispatchSalt: string,

@@ -143,6 +143,14 @@ export interface MemoryScope {
 
 export const GLOBAL_MEMORY_SCOPE: MemoryScope = { projectId: null, usesGlobalMemory: true };
 
+/**
+ * Which memories a conversation may see.
+ *
+ * Outside a project only global rows (`project_id is null`) are visible, a
+ * memory confined to a project must never surface anywhere else, or the
+ * confinement means nothing. Inside a project the project's own rows are always
+ * visible, and global rows join them unless the project opted out.
+ */
 function scopePredicate(scope: MemoryScope, projectParamIndex: number): string {
   if (!scope.projectId) return 'and project_id is null';
   if (!scope.usesGlobalMemory) return `and project_id = $${projectParamIndex}::uuid`;

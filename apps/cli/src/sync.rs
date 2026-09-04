@@ -96,6 +96,9 @@ pub struct SyncReport {
 // ConfigSync
 // ---------------------------------------------------------------------------
 
+/// True only when `candidate` is a relative path built entirely from ordinary
+/// names, no `..`, no root, no drive prefix, no bare `.`. Everything a sync
+/// bundle is allowed to write must satisfy this before it is joined onto home.
 pub fn is_contained_relative_path(candidate: &str) -> bool {
     if candidate.is_empty() || candidate.contains('\0') {
         return false;
@@ -278,9 +281,21 @@ impl ConfigSync {
             conflicts: Vec::new(),
         };
 
+        // Canonicalize home once, on macOS /var is a symlink to /private/var,
+        // so we need a stable prefix for starts_with checks.
         let canonical_home = home.canonicalize().unwrap_or_else(|_| home.to_path_buf());
 
         for (rel_path, synced) in &bundle.files {
+            // Validate that rel_path doesn't escape the home directory (path traversal).
+            // Build abs_path from the canonical home so both paths share the same
+            // symlink-resolved prefix, avoids false positives when the target file
+            // doesn't exist yet (canonicalize would fail on a non-existent path).
+            // `starts_with` is a lexical component compare and `canonicalize`
+            // fails on a target that does not exist yet, so the old guard let
+            // `.agiworkforce/../Library/LaunchAgents/x.plist` through: its
+            // components literally begin with home's. Reject anything that is
+            // not a plain relative name before the join, so no `..`, no root
+            // and no Windows prefix can reach the filesystem at all.
             if !is_contained_relative_path(rel_path) {
                 anyhow::bail!(
                     "Sync bundle contains path traversal: '{}' is not a relative path inside the home directory",
@@ -312,6 +327,7 @@ impl ConfigSync {
                 continue;
             }
 
+            // File exists locally, check if it changed since last sync
             let local_data = fs::read(&abs_path)
                 .with_context(|| format!("failed to read local {}", rel_path))?;
             let local_hash = Self::sha256_hex(&local_data);
@@ -404,6 +420,7 @@ impl ConfigSync {
                     // Not in manifest and doesn't exist -> skip silently
                 }
                 None => {
+                    // No manifest yet, everything that exists is new
                     if exists {
                         result.push((rel_path.to_string(), ChangeType::New));
                     }
@@ -442,8 +459,10 @@ impl ConfigSync {
                     // If types differ, keep local
                 }
                 Some(_) => {
+                    // Key exists in local, keep local value
                 }
                 None => {
+                    // Key missing in local, add from remote
                     local.insert(key.clone(), remote_val.clone());
                 }
             }
@@ -516,6 +535,9 @@ mod tests {
         fs::create_dir_all(&outside).unwrap();
         setup_home(&home);
 
+        // The target does not exist, so canonicalize() fails and the old
+        // fallback compared the raw join, whose components do start with
+        // home's, so the lexical starts_with check passed.
         let escape = "../outside/pwned.plist";
         let result = ConfigSync::import(&home, &bundle_with(escape, "payload"));
 

@@ -299,6 +299,12 @@ function hasAnyArchMarker(name: string): boolean {
 function updaterBinaryMatches(platform: DesktopReleasePlatform, name: string): boolean {
   if (name.endsWith('.sig')) return false;
   switch (platform) {
+    // macOS ships ONE universal artifact: release-desktop.yml builds
+    // `--target universal-apple-darwin`, and that triple lands in the output
+    // directory, never in the artifact name, so the stem carries no arch token at
+    // all. Requiring one here is why both darwin selectors matched nothing. An
+    // untagged archive is the universal build and serves both architectures, which
+    // is what MACOS_RELEASE_RUNBOOK.md means by ingesting one URL for both.
     case 'darwin-aarch64':
       return (
         name.endsWith('.app.tar.gz') &&
@@ -311,6 +317,10 @@ function updaterBinaryMatches(platform: DesktopReleasePlatform, name: string): b
       );
     case 'darwin-universal':
       return name.endsWith('.app.tar.gz') && /universal/i.test(name);
+    // `createUpdaterArtifacts: true` (tauri.conf.json) emits the v2 artifact, a
+    // bare NSIS `.exe` plus its `.sig`. `.nsis.zip` is the v1Compatible shape,
+    // which this pipeline does not build. The updater sniffs the downloaded bytes
+    // rather than the filename, so a raw PE is a valid update payload.
     case 'windows-x86_64':
       return name.endsWith('.exe') && hasX64Marker(name);
     case 'linux-x86_64':

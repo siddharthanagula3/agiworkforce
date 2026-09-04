@@ -25,6 +25,10 @@ use crate::hooks::{ClientHooks, OAuthToken};
 use crate::jsonrpc::{JsonRpcRequest, extract_matching_response, find_subsequence};
 use crate::oauth::flow::{parse_insufficient_scope, perform_full_oauth, refresh_token};
 
+/// Build a Streamable-HTTP transport. Synchronous, the `initialize` handshake
+/// (which goes through `send_request` → POST) is run by the caller. Sticky
+/// `Mcp-Session-Id` capture happens inside [`send_request_http`] on every
+/// response, so the first POST response populates it.
 pub(crate) fn connect(
     url: &str,
     headers: &HashMap<String, String>,
@@ -36,10 +40,19 @@ pub(crate) fn connect(
     }
     refuse_cleartext_credentials(url, headers_carry_credentials(headers) || oauth.is_some())
         .context("[mcp http]")?;
+    // No global `.timeout()` on the client, POSTs are wrapped per-call, and the
+    // optional GET stream is long-lived.
     let builder = reqwest::Client::builder().redirect(pinned_redirect_policy(url));
     // Release builds refuse this outright; debug builds allow loopback only.
     crate::security::enforce_tls_verification_policy(url, timeouts.verify_tls)
         .context("[mcp http]")?;
+    // The policy above already bails in release, so this is unreachable there.
+    // Gating the call site as well keeps `danger_accept_invalid_certs` out of
+    // the release binary entirely, so the guarantee survives someone later
+    // dropping the policy call, and it is what `rust/disabled-certificate-check`
+    // flagged, since the query cannot see the early-return guard. Shadowing
+    // rather than `mut`: the gated block is the only mutation here, so `mut`
+    // would be an unused-mut error in release under `-D warnings`.
     #[cfg(debug_assertions)]
     let builder = if timeouts.verify_tls {
         builder
@@ -248,6 +261,7 @@ async fn send_once(
 
     let status = resp.status();
     if status == reqwest::StatusCode::ACCEPTED {
+        // Fire-and-forget, server accepted the request but won't reply.
         return Ok(SendOutcome::Done(None));
     }
 
@@ -279,6 +293,7 @@ async fn send_once(
         .to_string();
 
     if ct.starts_with("text/event-stream") {
+        // SSE-upgrade response, drain frames until the matching id arrives.
         let expected_id = body.id;
         let mut stream = resp.bytes_stream();
         let mut buf: Vec<u8> = Vec::new();
@@ -328,6 +343,7 @@ async fn send_once(
                 if let Some(matched) = extract_matching_response(&v, expected_id, server_name)? {
                     return Ok(SendOutcome::Done(matched));
                 }
+                // Otherwise a notification / different-id response, keep draining.
             }
         }
     }
@@ -343,6 +359,7 @@ async fn send_once(
     match extract_matching_response(&value, body.id, server_name)? {
         Some(matched) => Ok(SendOutcome::Done(matched)),
         None => {
+            // Body had no matching id, treat like 202.
             Ok(SendOutcome::Done(None))
         }
     }
@@ -398,6 +415,17 @@ pub(crate) fn headers_carry_credentials(headers: &HashMap<String, String>) -> bo
 /// policy replaces reqwest's own limit, so it has to carry one.
 const MAX_REDIRECT_HOPS: usize = 5;
 
+/// Redirect policy for a transport client: follow a hop only while it stays on
+/// the origin the user configured.
+///
+/// reqwest's default policy follows up to 10 hops to any origin and strips only
+/// `Authorization`/`Cookie`/`Proxy-Authorization`. So without this, a server
+/// that answers the same-origin, HTTPS-checked POST with
+/// `307 Location: http://attacker.example/` gets the whole JSON-RPC body
+/// replayed to it along with every other configured credential header
+/// (`X-Api-Key`, `X-Auth-Token`, …), walking straight past the same-origin and
+/// cleartext checks that guard the request URL, and reaching link-local
+/// metadata services that `validate_server_url` refused.
 pub(crate) fn pinned_redirect_policy(url: &str) -> reqwest::redirect::Policy {
     let pinned = url.to_string();
     reqwest::redirect::Policy::custom(move |attempt| {
@@ -448,6 +476,9 @@ pub(crate) async fn read_text_capped(mut resp: reqwest::Response) -> String {
     String::from_utf8_lossy(&out).into_owned()
 }
 
+/// Look up a cached token for `url` and refresh it if within 60s of expiry.
+/// Returns the access token to attach as a Bearer (or `None` if no cached token
+/// exists yet, first-use case).
 async fn prepare_bearer(url: &str, cfg: &OAuthConfig, hooks: &ClientHooks) -> Option<String> {
     let cached = hooks.token_store.get(url)?;
 

@@ -1,3 +1,11 @@
+//! Generic `ListSelectionView<T>`, reusable vertical-list base widget.
+//!
+//! Four of the overlay modules in this package (`memories_settings`,
+//! `skills_toggle`, `statusline_setup`, `terminal_title_setup`) build on this
+//! base rather than duplicating list semantics. The type parameter `T` must be
+//! `Clone + Display` so that render can format items without additional context.
+//!
+//! Wiring into `tui_app.rs` is a follow-up milestone.
 
 #![allow(dead_code)]
 

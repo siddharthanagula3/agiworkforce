@@ -1,3 +1,70 @@
+/**
+ * dispatchHmac.test.ts
+ *
+ * Unit tests for HIGH-MOB-05 (v2 nonce scheme, 2026-05-05):
+ * Application-layer HMAC authentication for Dispatch WebRTC control messages.
+ *
+ * Test scenarios:
+ *
+ *  Key Derivation
+ *   - deriveDispatchSecret produces a 64-char hex string (32 bytes)
+ *   - Same inputs produce the same key (deterministic)
+ *   - Different pairingCode produces a different key
+ *   - Different sessionSalt produces a different key
+ *   - Relay-visible code + salt alone do not determine the key
+ *   - Derivation refuses a missing or malformed out-of-band pairing secret
+ *   - Derivation matches the desktop Rust vector byte for byte
+ *
+ *  Wire protocol version
+ *   - signMessage stamps DISPATCH_ENVELOPE_VERSION
+ *   - A v2 envelope is rejected as protocol_version_unsupported
+ *   - A newer claimed version is rejected as protocol_version_unsupported
+ *
+ *  HMAC Sign / Verify: round-trip
+ *   - signMessage returns a valid envelope with all required fields
+ *   - signMessage produces hmac, nonce, payload, ts, type fields
+ *   - nonce is a base64-encoded 16-byte value (24 chars)
+ *   - ts is approximately Date.now() (within 1s tolerance)
+ *   - verifyMessage returns ok:true for a valid signed envelope
+ *   - round-trip: sign then verify succeeds
+ *   - two consecutive sign calls produce different nonces
+ *
+ *  HMAC Reject: invalid HMAC
+ *   - verifyMessage returns hmac_mismatch for tampered hmac field
+ *   - verifyMessage returns hmac_mismatch for tampered payload
+ *   - verifyMessage returns hmac_mismatch for tampered type field
+ *   - verifyMessage returns hmac_mismatch for tampered ts field
+ *   - hmac_mismatch uses constant-time comparison (proof via timing-invariant result)
+ *
+ *  Replay: timestamp window
+ *   - verifyMessage returns timestamp_expired for ts > 30s in the past
+ *   - verifyMessage returns timestamp_expired for ts > 30s in the future
+ *   - verifyMessage accepts ts within ±30s window
+ *   - verifyMessage accepts ts at exactly the boundary (29 999 ms old)
+ *
+ *  Replay: nonce cache / sliding window
+ *   - verifyMessage returns nonce_replay for a duplicate nonce
+ *   - Different nonces are accepted even for same payload/ts
+ *   - Nonce cache is pruned: entries older than 60s are evicted
+ *   - After eviction, a previously seen (now-expired) nonce is accepted again
+ *
+ *  Malformed messages
+ *   - verifyMessage returns malformed for non-object input
+ *   - verifyMessage returns malformed for null
+ *   - verifyMessage returns malformed for envelope missing nonce when hmac present
+ *   - verifyMessage returns malformed for envelope missing ts when hmac present
+ *   - verifyMessage returns malformed for envelope missing type when hmac present
+ *
+ *  Unsigned messages
+ *   - unsigned message (no hmac field) returns unsigned_transitional before cutoff
+ *   - unsigned message (no hmac field) returns unsigned_transitional after cutoff
+ *   - unsigned message never logs legacy acceptance warnings
+ *
+ *  Wire format
+ *   - canonical signing input has keys in alphabetical order: nonce < payload < ts < type
+ *   - DISPATCH_HMAC_REQUIRED_AFTER is exported and is a valid ISO 8601 date string
+ */
+
 jest.mock('expo-crypto', () => {
   // eslint-disable-next-line @typescript-eslint/no-require-imports
   const nodeCrypto = require('crypto');

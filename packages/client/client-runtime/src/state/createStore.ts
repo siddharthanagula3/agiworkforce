@@ -8,6 +8,13 @@ export interface Store<T> {
   subscribe: (listener: Listener) => () => void;
 }
 
+/**
+ * Create a minimal reactive store.
+ *
+ * @param initialState, Initial state snapshot (must be immutable after passing in).
+ * @param onChange, Optional side-effect hook; called synchronously before
+ *                       React re-renders so effects see settled state.
+ */
 export function createStore<T>(initialState: T, onChange?: OnChange<T>): Store<T> {
   let state = initialState;
   const listeners = new Set<Listener>();

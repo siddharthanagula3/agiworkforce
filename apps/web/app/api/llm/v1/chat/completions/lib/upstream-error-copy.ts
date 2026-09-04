@@ -142,6 +142,11 @@ export function mapClassifiedUpstreamError(
           'This model is temporarily unavailable because of a service configuration problem. Choose another model, or try again shortly.',
       };
 
+    // Distinct from `auth` on purpose: the credential is valid, the account is
+    // out of funds. Surfaced as 503 rather than 402 because it is OUR billing
+    // problem, not the caller's, a user who has paid for their plan must not be
+    // shown a payment-required error for an operator-side shortfall, and must
+    // not be quietly served from a different paid provider instead.
     case 'billing_exhausted':
       return {
         status: 503,

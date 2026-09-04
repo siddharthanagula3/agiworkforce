@@ -61,6 +61,15 @@ describe('matchSkillsForPrompt', () => {
   });
 });
 
+/**
+ * Trigger rate against the real bundled catalogue, measured rather than assumed.
+ *
+ * The previous Jaccard scoring failed every one of these: it divided by the
+ * union, so a longer and more specific prompt scored LOWER. "here is a csv of
+ * Q3 signups by channel, which channel actually converted best?" scored 0.000
+ * against data-analysis. Coverage asks the directional question instead, how
+ * much of the skill's own vocabulary the prompt hits.
+ */
 describe('trigger rate on realistic prompts', () => {
   const bundled = [
     skill(

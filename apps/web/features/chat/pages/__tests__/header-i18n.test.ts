@@ -35,6 +35,13 @@ describe('WebChatPage header copy', () => {
     expect(SOURCE).not.toContain('aria-label="Open navigation"');
   });
 
+  /**
+   * The drawer is the shared Sheet (Radix dialog), not a hand-rolled overlay.
+   * the same primitive WebAppShell uses. Radix owns role/aria-modal, the focus
+   * trap, Escape and the scroll lock, so what this page still has to get right
+   * is the trigger's relationship to the panel and the focus hand-back that
+   * Radix cannot do on its own (the trigger lives outside the sheet).
+   */
   it('renders the mobile drawer through the shared Sheet rather than a hand-rolled overlay', () => {
     expect(SOURCE).toContain('<Sheet open={mobileNavOpen} onOpenChange={setMobileNavOpen}>');
     expect(SOURCE).toContain('id={MOBILE_NAV_DRAWER_ID}');

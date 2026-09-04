@@ -338,6 +338,11 @@ mod mcp_integration_tests {
             None => std::env::remove_var("HOME"),
         }
 
+        // Release before the first await. The lock exists only to serialise the
+        // HOME mutation above, which is now undone, holding a std MutexGuard
+        // across an await is what `clippy::await_holding_lock` refuses, and it
+        // would also block any future HOME-touching test in this binary for the
+        // whole duration of a real MCP server connect.
         drop(env_guard);
 
         let server_config = config

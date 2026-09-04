@@ -1,3 +1,15 @@
+//! Explicit transcription-mode selection for AGI Dictation.
+//!
+//! Plan stage 3 (`docs/plans/desktop-system-dictation.md`) and the boundary
+//! contract: audio is transcribed ONLY through the mode the user explicitly
+//! selected, Local (on-device Whisper), BYOK (the user's own provider key),
+//! or Managed Cloud. There is no silent fallback between modes:
+//!
+//! - Before this module, an unknown provider string fell back to the settings
+//!   provider, a `deepgram` selection was silently rerouted to managed cloud,
+//!   and a BYOK OpenAI selection without a stored key silently sent the audio
+//!   to managed cloud instead. Every one of those crossed a trust boundary
+//!   without consent; they now fail closed with actionable errors.
 
 use std::fmt;
 
@@ -14,6 +26,8 @@ pub enum TranscriptionMode {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ModeParseError {
+    /// The provider string is not a known dictation mode. Fail closed.
+    /// never guess or substitute a different boundary.
     Unknown(String),
     /// The provider exists but only supports real-time streaming, not blob
     /// dictation. Refuse explicitly instead of rerouting the audio.
@@ -35,6 +49,11 @@ impl fmt::Display for ModeParseError {
     }
 }
 
+/// Parse an explicit provider string from the frontend into a mode.
+///
+/// Accepts the aliases the desktop clients have historically sent. Anything
+/// else is an error, the caller must NOT substitute the settings provider or
+/// any other destination for an unrecognized selection.
 pub fn parse_transcription_mode(raw: &str) -> Result<TranscriptionMode, ModeParseError> {
     match raw {
         "local" | "local_whisper" => Ok(TranscriptionMode::Local),

@@ -44,6 +44,27 @@ pub trait McpTransport: Send + Sync {
 /// Interval for the stdio liveness snapshot + stderr drain in the engine actor.
 const STDIO_LIVENESS_POLL_SECS: u64 = 5;
 
+/// stdio MCP transport, a thin facade over the shared
+/// [`agiworkforce_mcp::McpClient`] engine (Wave 5 stage d2 of
+/// `docs/plans/rust-engine-extraction-2026-07-09.md`).
+///
+/// The engine owns the child process, JSON-RPC framing, id correlation, and
+/// per-request timeouts. Desktop-side POLICY stays here in [`StdioTransport::new`]:
+/// the executor allowlist + metachar validation, PATH augmentation/resolution
+/// for Finder-launched apps, and the canonical env blocklist filter.
+///
+/// A background actor task exclusively owns the engine client; the
+/// [`McpTransport`] methods talk to it over a FIFO command channel, which
+/// preserves the notification/request ordering guarantees of the old
+/// writer-task design (`notifications/initialized` is written before any
+/// later request). Requests are serialized through the engine (the old
+/// transport could interleave concurrent requests, but no production caller
+/// issues concurrent RPCs on one session, verified during the d2 swap).
+///
+/// The engine's connection is host-handshake-driven
+/// ([`agiworkforce_mcp::McpClient::connect_without_handshake`]): `McpSession`
+/// keeps building the exact `initialize` wire frames (protocolVersion
+/// 2025-11-25, desktop clientInfo) it always sent.
 pub struct StdioTransport {
     /// FIFO command channel into the engine actor.
     tx: mpsc::UnboundedSender<EngineCommand>,
@@ -85,6 +106,17 @@ enum EngineCommand {
 fn map_engine_error(e: agiworkforce_mcp::McpError) -> McpError {
     let msg = format!("{:#}", e.as_anyhow());
     if msg.contains("MCP error ") {
+        // A server that speaks only the 2026-07-28 stateless revision rejects
+        // our legacy `initialize` with -32022 and, per spec, names the
+        // revisions it does support. That message exists precisely because a
+        // legacy client cannot fall forward, it may be the only diagnostic the
+        // user ever gets, so it is worth classifying rather than folding into
+        // the generic server-error bucket where it reads as a transient fault.
+        //
+        // Matched on the rendered code because the engine flattens JSON-RPC
+        // error frames to a string before this point; the structured
+        // `data.supported` list does not survive that conversion, so the
+        // versions reach the user only as part of the message text.
         if msg.contains(&format!(
             "MCP error {}",
             crate::core::mcp::protocol::UNSUPPORTED_PROTOCOL_VERSION_CODE
@@ -97,6 +129,8 @@ fn map_engine_error(e: agiworkforce_mcp::McpError) -> McpError {
     }
 }
 
+/// Drain buffered child stderr lines into the desktop per-server log store.
+/// the same `[stderr]`-prefixed stream the old dedicated stderr task produced.
 fn drain_engine_stderr(server_name: &str, client: &agiworkforce_mcp::McpClient) {
     for line in client.drain_stderr() {
         tracing::debug!("[MCP Server stderr] {}", line);
@@ -104,6 +138,11 @@ fn drain_engine_stderr(server_name: &str, client: &agiworkforce_mcp::McpClient) 
     }
 }
 
+/// Host hooks handed to the shared engine, common to both desktop transports.
+/// Elicitation auto-declines (desktop's transport never surfaced
+/// server-initiated requests), the browser gate denies (no OAuth on these
+/// paths, desktop resolves credentials app-side), and engine lifecycle logs
+/// route to tracing.
 fn engine_hooks(server_name: &str) -> agiworkforce_mcp::ClientHooks {
     agiworkforce_mcp::ClientHooks {
         token_store: Arc::new(agiworkforce_mcp::hooks::InMemoryTokenStore::new()),
@@ -122,6 +161,10 @@ fn engine_hooks(server_name: &str) -> agiworkforce_mcp::ClientHooks {
     }
 }
 
+/// The engine actor shared by both transports: exclusively owns the engine
+/// client, processes commands in FIFO order, keeps the liveness snapshot
+/// fresh, and streams child stderr into the per-server log store (stdio only.
+/// remote transports have no stderr).
 #[allow(clippy::too_many_arguments)]
 fn spawn_engine_actor(
     server_name: String,
@@ -409,6 +452,7 @@ fn is_absolute_command(command: &str) -> bool {
 /// On Windows, executables have `.exe`, `.cmd`, and `.bat` extensions that
 /// must be tried when searching PATH entries.
 fn resolve_command_path(command: &str) -> String {
+    // Already an absolute path, use as-is.
     if is_absolute_command(command) {
         return command.to_string();
     }
@@ -741,6 +785,30 @@ impl Default for HttpSseConfig {
 /// Separate from request timeout because SSE streams are open-ended.
 const SSE_CONNECT_TIMEOUT_SECS: u64 = 30;
 
+/// HTTP/SSE (legacy split-endpoint) MCP transport, a thin facade over the
+/// shared [`agiworkforce_mcp::McpClient`] engine speaking
+/// `TransportConfig::SseLegacy` (Wave 5 stage d2 of
+/// `docs/plans/rust-engine-extraction-2026-07-09.md`).
+///
+/// Wire convention (unchanged): outbound JSON-RPC goes via POST to
+/// `{url}/message`; a best-effort long-lived `GET {url}/sse` carries
+/// server-initiated frames, with reconnect (5 consecutive connect failures
+/// max, linear 1s backoff, attempts reset on success) and a 60s stalled-stream
+/// read timeout, all now inside the engine. Responses may arrive inline on
+/// the POST or via the SSE stream (dual delivery); the engine correlates both
+/// on the JSON-RPC id. This transport is legacy-convention only (it never
+/// spoke streamable-HTTP 2025-06-18; the engine's `Http` config is available
+/// when desktop adds that).
+///
+/// Desktop-side POLICY stays here in [`HttpSseTransport::new`]: SSRF URL
+/// validation + the 50 MB response cap + the 30s connect / 60s read timeouts
+/// (as engine hardening knobs), the SEV-DESK-07 `verify_ssl` policy (refused
+/// in release builds; debug builds localhost-only), the credential-over-
+/// cleartext refusal, and the api-key/bearer/custom header mapping with
+/// build-time validation.
+///
+/// Same actor model as [`StdioTransport`]: a background task exclusively owns
+/// the engine client behind a FIFO command channel.
 pub struct HttpSseTransport {
     /// Server name for logging.
     server_name: String,
@@ -748,6 +816,9 @@ pub struct HttpSseTransport {
     /// FIFO command channel into the engine actor.
     tx: mpsc::UnboundedSender<EngineCommand>,
 
+    /// Liveness snapshot maintained by the actor. Remote transports report
+    /// alive until shutdown (matching the old `!is_shutdown` semantics.
+    /// connection failures surface on the next request).
     alive: Arc<AtomicBool>,
 
     /// Set by [`McpTransport::shutdown`]; rejects new requests immediately.
@@ -818,6 +889,10 @@ impl HttpSseTransport {
             config.url
         );
 
+        // SEV-DESK-07 (defence-in-depth), preserved verbatim from the old
+        // transport: in release builds, refuse `verify_ssl: false` regardless
+        // of host, a malicious config file must not be able to downgrade TLS.
+        // Debug builds may disable verification for localhost only.
         if !config.verify_ssl {
             #[cfg(not(debug_assertions))]
             {
@@ -866,6 +941,13 @@ impl HttpSseTransport {
             }
         }
 
+        // CWE-319: refuse to attach a caller-supplied header unless the
+        // configured URL is HTTPS or loopback. Every such header counts, not
+        // just recognisably-named ones, a name-based denylist misses
+        // conventions like `apikey`, `x-access-key` or `authentication`, and
+        // the config file an attacker can write picks the name. This gates the
+        // configured URL only; a 3xx downgrade mid-flight is the engine
+        // client's redirect policy to enforce.
         let sends_caller_headers =
             config.api_key.is_some() || config.bearer_token.is_some() || !config.headers.is_empty();
         if sends_caller_headers {
@@ -940,6 +1022,9 @@ impl HttpSseTransport {
         .await
         .map_err(map_engine_error)?;
 
+        // Forward server-initiated SSE notifications into the per-server log
+        // store, the same `[sse notification]` line the old event processor
+        // produced.
         if let Some(mut notifications) = client.notifications() {
             let notif_server = server_name.clone();
             tokio::spawn(async move {
@@ -985,6 +1070,12 @@ impl HttpSseTransport {
         })
     }
 
+    /// Kept for API compatibility with the pre-engine transport: the SSE
+    /// listener (with reconnect) now attaches automatically inside the engine
+    /// at connect time, so there is nothing left to start here. Both callers
+    /// (`McpSession::connect{,_with_transport}`) pass `None`; a custom
+    /// `sse_endpoint` was never used and is no longer supported, the legacy
+    /// convention fixes the stream at `{url}/sse`.
     pub async fn start_sse_listener(&self, sse_endpoint: Option<&str>) -> McpResult<()> {
         if let Some(endpoint) = sse_endpoint {
             tracing::warn!(

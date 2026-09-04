@@ -136,6 +136,12 @@ export const CHAT_COMPOSER_EDITOR_MODES = {
 export type ChatComposerEditorMode =
   (typeof CHAT_COMPOSER_EDITOR_MODES)[keyof typeof CHAT_COMPOSER_EDITOR_MODES];
 
+/**
+ * `composer-editor.css` sizes the editor for web's composer box. These reproduce
+ * the textarea arm's own geometry, `min-h-[28px]` and the `px-4 pt-3 pb-1`
+ * padding, on the content node and on the placeholder, so the two arms rest at
+ * the same height and their first line starts on the same pixel.
+ */
 const COMPOSER_EDITOR_ARM_CLASS =
   'w-full [&_.ProseMirror]:min-h-[28px] [&_.ProseMirror]:px-4 [&_.ProseMirror]:pt-3 [&_.ProseMirror]:pb-1 [&_.composer-editor\\_\\_placeholder]:px-4 [&_.composer-editor\\_\\_placeholder]:pt-3';
 
@@ -947,6 +953,12 @@ export function ChatInput({
     handle.focus();
   }, []);
 
+  /**
+   * The editor owns its own text, so every store write that did not come from a
+   * keystroke, a conversation switch, a voice transcript, a consumed skill
+   * mention, the clear on send, has to be pushed back into it. Comparing the
+   * text first is what keeps typing out of this path.
+   */
   useEffect(() => {
     const handle = composerEditorRef.current;
     if (!handle || handle.getText() === draftContent) return;

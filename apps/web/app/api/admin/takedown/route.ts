@@ -15,6 +15,15 @@ import { shareRef } from '@/lib/share-ref';
 
 import { findPublicTarget, normalizeToken } from './lib/public-target';
 
+// Operator-side revocation of publicly reachable content. DELETE
+// /api/share/[token] and DELETE /api/artifacts/publish/[token] stay owner-only
+// on purpose, a rights-holder notice must not be answered by loosening the
+// owner guard, so takedown is a separate, platform-operator-gated, audited path.
+//
+// The public intake that feeds it is POST /api/copyright-notice, which records
+// and forwards a notice but never removes anything: an allegation from an
+// anonymous caller must not be able to unpublish a stranger's content.
+
 const TakedownSchema = z.object({
   token: z.string().trim().min(1).max(2048),
   reason: z.string().trim().min(1).max(1000),

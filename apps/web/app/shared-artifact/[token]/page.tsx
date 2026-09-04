@@ -32,6 +32,11 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 export default async function PublishedArtifactPage({ params }: Props) {
   const { token } = await params;
 
+  // notFound() would render the global 404, "the page you're looking for
+  // doesn't exist or has been moved", which misdescribes both cases below and
+  // blames the recipient for a link somebody else sent them. A malformed token
+  // and a revoked one are indistinguishable to the person holding the link, so
+  // they get the same honest answer.
   if (!PUBLISHED_TOKEN_REGEX.test(token)) {
     return <UnavailableArtifact />;
   }

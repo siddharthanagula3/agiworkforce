@@ -43,6 +43,11 @@ test.describe('authenticated routes stay quiet when signed out', () => {
     await page.waitForLoadState('networkidle');
 
     await expect(page).toHaveURL(/\/login(?:\?|$)/);
+    // AuthShell's own card wrapper, not Clerk's. Clerk's UI mounts only once
+    // its frontend API responds, so asserting on it made this test a probe of
+    // a third party, and it never held on a runner with no reachable Clerk
+    // instance. What is being checked here is that the redirect landed on our
+    // login page, which this proves without leaving it.
     await expect(page.locator('.agi-ds-auth-card').first()).toBeVisible();
     expect(unauthorized).toEqual([]);
   });

@@ -63,6 +63,11 @@ function request(body: Record<string, unknown>) {
 describe('POST /api/upgrade, stale plan_tier vs the live Stripe price', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    // The window this test exists for. /api/upgrade does not write plan_tier.
+    // the webhook does, so the column lags Stripe. Here the DB still says
+    // `basic` while Stripe is already on max_15x. `basic -> pro` passes the
+    // early DB check as a genuine upgrade, which is exactly why the live price
+    // has to be re-checked: against it this is max_15x -> pro, a downgrade.
     dbMocks.query.mockImplementation(async (sql: string) => {
       if (sql.includes('from subscriptions')) {
         return [

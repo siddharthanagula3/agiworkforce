@@ -424,6 +424,17 @@ export function getSettingsWebviewContent(
         /* 168px could not hold an input AND a button; 220px can. */
         grid-template-columns: minmax(0, 1fr) minmax(220px, 42%);
         align-items: center;
+        /*
+         * One right edge for every control in the second column.
+         *
+         * Controls are placed inconsistently: some wrapped in .control-stack
+         * (which right-aligns via flex-end), some dropped straight into the grid
+         * cell. A bare toggle or button in a cell aligns LEFT, a width:100% input
+         * fills the cell, and a max-width input stops short, so toggles, number
+         * inputs, selects and buttons each landed on a different edge inside the
+         * same card. justify-items:end normalises them; the label column below
+         * opts back out.
+         */
         justify-items: end;
         gap: 22px;
         padding: 15px 18px;
@@ -452,6 +463,14 @@ export function getSettingsWebviewContent(
       }
 
       .setting-description.danger {
+        /*
+         * Fallback chain, because inputValidation.warningForeground is NOT
+         * defined by the default Dark+ and Light+ themes. With a single
+         * undefined variable the property is invalid-at-computed-value and the
+         * text inherits the ordinary description colour, so a safety warning
+         * rendered as plain body copy and lost the one signal that marks it as a
+         * warning. editorWarning.foreground is defined everywhere.
+         */
         color: var(
           --vscode-inputValidation-warningForeground,
           var(--vscode-editorWarning-foreground, var(--agi-vscode-warning))
@@ -467,6 +486,13 @@ export function getSettingsWebviewContent(
         width: 100%;
       }
 
+      /*
+       * An input sharing a stack with a button must take the remaining space, not
+       * compete with it. width:100% on the input plus an intrinsic-width button
+       * left Model preference about 103px wide, narrower than the model ids it
+       * exists to display (including long catalog IDs), so the field truncated its
+       * own value. min-width:0 is what allows the flex child to shrink at all.
+       */
       .control-stack > .text-input,
       .control-stack > .select-input {
         flex: 1 1 auto;
@@ -1870,6 +1896,10 @@ ${capabilityAvailabilityRows}
             var selected = button.getAttribute('data-section') === section;
             if (selected) {
               button.setAttribute('aria-current', 'page');
+              // Below 760px the nav becomes a horizontal scroller wider than its
+              // box, so a section selected from anywhere other than a click.
+              // restored state, a deep link, keyboard navigation, left its own
+              // tab off-screen with no indication of where you were.
               if (typeof button.scrollIntoView === 'function') {
                 button.scrollIntoView({ block: 'nearest', inline: 'nearest' });
               }
@@ -2160,6 +2190,10 @@ ${capabilityAvailabilityRows}
           });
         });
 
+        // Delegated, not bound per element. querySelectorAll runs once at init,
+        // so any [data-command] control created later, the override notice's
+        // inline "Open raw settings" action, for one, silently did nothing when
+        // clicked. Delegation covers every present and future command button.
         document.addEventListener('click', function (event) {
           var target = event.target;
           if (!(target instanceof Element)) return;

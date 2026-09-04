@@ -13,6 +13,17 @@ const RESERVED_LABEL = new Set(['test', 'invalid', 'example', 'localhost', 'loca
 const EXAMPLE_TLD = new Set(['com', 'net', 'org']);
 const DOC_IP = /^(?:192\.0\.2|198\.51\.100|203\.0\.113)\.\d{1,3}$/;
 
+// Group 1 is the issued secret material, captured open-ended so that anything a contributor writes
+// against the key is judged as part of it rather than falling outside the match. `floor` is the
+// shortest that material could be and still be a working key of the vendor, so material under it
+// cannot be a key at all. A pattern with no group carries no secret inside its own match, so only
+// a reviewed allowlist entry can exempt that.
+// AWS and Supabase material is matched wider than the vendor issues (letters of either case) so a
+// marker written between the prefix and the key is captured with it instead of ending the match
+// short of it. The alphabets without `-` and `_` cannot be widened that way, `xai-` and `ghp_`
+// begin ordinary kebab- and snake-case identifiers, so `xai-EXAMPLE-<key>` stays past what a
+// prefix-anchored pattern sees. That value no longer authenticates as written; one written verbatim
+// does, and is always reported, whatever a contributor writes around it.
 const PATTERNS = [
   { name: 'PEM private key', re: /-----BEGIN (?:RSA |EC |DSA |OPENSSH |PGP )?PRIVATE KEY-----/g },
   { name: 'Anthropic API key', re: /sk-ant-([A-Za-z0-9_-]{20,})/g, floor: 20 },
@@ -58,6 +69,9 @@ const SKIP_FILE =
 // is deliberately not exempt, so a credential pasted there is still caught.
 const SELF = new Set(['scripts/check-secrets.mjs']);
 
+// A stretch whose character codes step by a constant -1, 0 or +1 ignoring case, `abcdef`,
+// `XXXXXX`, `987654`, `AbCdEf`, is what people type when a value has to look like a key, and so
+// is any spelled-out marker word. Both are masked off the material as fake.
 const FILLER_RUN = 6;
 
 const PASSWORD_FLOOR = 8;
@@ -106,6 +120,13 @@ function maskParts(value) {
   return { mask, runs };
 }
 
+// How much of the value could still be issued material. A marker word masks only the characters it
+// spells, so key material written beside one is counted in full. A counting run is not like that:
+// it is completed by arithmetic, so a few characters continuing a key's last character form a run
+// that masks the key's own tail along with them. Every run edge meeting material that is not itself
+// masked is therefore charged back FILLER_RUN - 1 characters, the most a contributor's filler can
+// hide there. Without that charge, one appended character exempts a live key of any format whose
+// floor is its exact length (AWS, Google, GitHub, Supabase).
 function realLength(value) {
   const { mask, runs } = maskParts(value);
   let real = 0;
@@ -119,6 +140,9 @@ function realLength(value) {
   return real;
 }
 
+// Nothing at all outlives the mask: the value is spelled entirely out of markers and filler, so
+// there is no character left for a credential to be made of. Punctuation counts, a password of
+// nothing but symbols is unreadable, not fake.
 function fullyMasked(value) {
   const { mask } = maskParts(value);
   return value.length > 0 && mask.every(Boolean);
@@ -140,6 +164,9 @@ function connectionParts(span) {
   };
 }
 
+// Reserved names are stripped label by label: what is left has to be a bare label, so
+// `db.example.com` and `db.example.invalid` are documentation while `prod-db.internal.test`.
+// a routable name wearing a reserved suffix, is not.
 function documentationHost(host) {
   if (DOC_IP.test(host)) return true;
   const labels = host.split('.');
@@ -312,6 +339,10 @@ function scanSource(rel, src, { useAllowlist }) {
         exempted += 1;
         continue;
       }
+      // Judged on the credential alone, the issued key material, or a connection string's
+      // password and target host. Reading the surrounding line, or any window that grows with the
+      // match, hands the decision to text the key's owner never had to touch: that is how a live
+      // key rode into main behind a trailing "// sample".
       if (documentedFixture(pattern, match)) continue;
       findings.push({
         rel,

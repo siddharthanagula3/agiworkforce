@@ -1,5 +1,15 @@
 export const API_URL = process.env.EXPO_PUBLIC_API_URL ?? 'https://agiworkforce.com';
 
+/**
+ * Express api-gateway base URL.
+ *
+ * STB-8 fix: some routes live ONLY on the gateway (`services/api-gateway`), not
+ * on the Next.js app, and no rewrite bridges them, `next.config.ts` and
+ * `vercel.json` only rewrite `/v1/*` for the api host. Calling a gateway-only
+ * route against {@link API_URL} therefore 404s. Point those call sites here.
+ *
+ * Both hosts are ours, so `egressGuard` blocks them identically in Local mode.
+ */
 export const GATEWAY_URL = process.env.EXPO_PUBLIC_GATEWAY_URL ?? 'https://api.agiworkforce.com';
 
 export const WS_URL = process.env.EXPO_PUBLIC_WS_URL ?? 'wss://signaling.agiworkforce.com';

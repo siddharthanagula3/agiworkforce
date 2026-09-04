@@ -19,6 +19,18 @@ fn parse_optional_usize_arg(args: &HashMap<String, Value>, key: &str) -> Result<
 }
 
 impl ToolExecutor {
+    /// Execute an AST-aware code symbol search using ripgrep with language-specific patterns.
+    ///
+    /// Builds a regex pattern based on the requested symbol type (function, class, import,
+    /// type, variable, or any) and optional language hint. Delegates to ripgrep for fast,
+    /// gitignore-aware searching.
+    ///
+    /// # Parameters
+    /// - `query` (required), The symbol name or pattern to search for.
+    /// - `type` (optional), Symbol type filter: "function", "class", "import", "type",
+    ///   "variable", or "any" (default: "any").
+    /// - `language` (optional), Language hint for pattern specialization (e.g. "rust", "typescript").
+    /// - `root` (optional), Root directory to search in. Falls back to project folder or cwd.
     pub(crate) async fn execute_code_search_tool(
         &self,
         args: &HashMap<String, Value>,
@@ -139,6 +151,19 @@ impl ToolExecutor {
         })
     }
 
+    /// Execute a regex content search across files using the pure-Rust grep engine.
+    ///
+    /// Delegates to `crate::sys::commands::code_search::grep_search` which walks
+    /// the file tree with walkdir, respects `.gitignore`-style exclusions, and
+    /// supports three output modes (`content`, `files_with_matches`, `count`).
+    ///
+    /// # Parameters
+    /// - `pattern` (required), Regex pattern to search for.
+    /// - `root` (optional), Root directory. Falls back to project folder or cwd.
+    /// - `include_pattern` (optional), Glob to restrict searched files (e.g. `"*.rs"`).
+    /// - `case_insensitive` (optional), Case-insensitive search when true.
+    /// - `output_mode` (optional), `"content"` (default), `"files_with_matches"`, or `"count"`.
+    /// - `context_lines` (optional), Lines of context around each match (content mode only).
     pub(crate) async fn execute_grep_search_tool(
         &self,
         args: &HashMap<String, Value>,
@@ -268,6 +293,16 @@ impl ToolExecutor {
         }
     }
 
+    /// Execute a glob-pattern file search using the pure-Rust glob engine.
+    ///
+    /// Delegates to `crate::sys::commands::code_search::glob_search` which walks
+    /// the file tree with walkdir, skips excluded directories, and returns results
+    /// sorted by modification time (most recent first).
+    ///
+    /// # Parameters
+    /// - `pattern` (required), Glob pattern (e.g. `"**/*.ts"`, `"src/**/*.rs"`).
+    /// - `root` (optional), Root directory. Falls back to project folder or cwd.
+    /// - `limit` (optional), Maximum number of results (default 200, max 1000).
     pub(crate) async fn execute_glob_search_tool(
         &self,
         args: &HashMap<String, Value>,
@@ -415,6 +450,7 @@ fn build_search_pattern(query: &str, symbol_type: &str, language: Option<&str>) 
             )
         }
 
+        // ── "any" or unknown, literal search ─────────────────────────────
         _ => escaped,
     }
 }

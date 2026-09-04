@@ -1,3 +1,18 @@
+/**
+ * The support agent's system prompt.
+ *
+ * A plain `const` string with NO interpolation and NO arguments. Neither user
+ * text nor retrieved document text can reach it, which is the structural half of
+ * the injection defence, `system-prompt.test.ts` asserts the exported builder
+ * takes zero parameters and that the constant contains no placeholder syntax.
+ *
+ * Note what is NOT in here: the abstention rules and the action allowlist are
+ * enforced in code (`policy/hard-abstain.ts`, `answer/synthesize.ts`), not
+ * stated here as something a document could talk the model out of. The prompt
+ * only describes the OUTPUT SHAPE. Every safety property is enforced after the
+ * model returns.
+ */
+
 export const SUPPORT_SYSTEM_PROMPT = `You are the AGI Workforce product support assistant.
 
 You answer ONLY from the documentation excerpts supplied in the user message. You have no other knowledge of this product and you must not use any.

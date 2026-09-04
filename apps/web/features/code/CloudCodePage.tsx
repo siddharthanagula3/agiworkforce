@@ -158,6 +158,8 @@ export function CloudCodePage({ api = cloudCodeApi }: CloudCodePageProps) {
   const [repositoryUrl, setRepositoryUrl] = useState('');
   const [repositoryBranch, setRepositoryBranch] = useState('');
   const [networkAccess, setNetworkAccess] = useState<CloudCodeNetworkAccess>('none');
+  // Empty string is "the default image", the catalogue never contains one, so
+  // it cannot collide with a real template id.
   const [runtimeId, setRuntimeId] = useState('');
   const [taskGoal, setTaskGoal] = useState('');
   const taskFieldId = useId();
@@ -395,6 +397,13 @@ export function CloudCodePage({ api = cloudCodeApi }: CloudCodePageProps) {
     );
   }
 
+  /**
+   * Shared by the task box on the create form and the one in an open session, so
+   * a turn started either way reports progress and failure identically.
+   *
+   * `restoreGoal` puts the text back where the reader typed it when the turn is
+   * refused, losing what they wrote is worse than the failure itself.
+   */
   async function startAgentTurnForSession(
     session: CloudCodeSession,
     submitted: string,

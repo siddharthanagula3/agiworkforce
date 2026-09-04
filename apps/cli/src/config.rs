@@ -379,7 +379,7 @@ impl CliConfig {
         let host = if let Some(stripped) = rest.strip_prefix('[') {
             match stripped.find(']') {
                 Some(end) => format!("[{}]", &stripped[..end]).to_ascii_lowercase(),
-                None => return true,
+                None => return true, // malformed, treat as remote (safer)
             }
         } else {
             rest.split(['/', ':', '?', '#'])
@@ -438,6 +438,14 @@ impl CliConfig {
         }
     }
 
+    /// Consent-gate any project-config provider whose `base_url` is a non-loopback
+    /// endpoint. Such a provider would route the user's prompts (and API key) to a
+    /// server the *cloned repo* chose, the credential-exfiltration vector in MED-1.
+    ///
+    /// The decision is remembered per `(project, provider, url)` in
+    /// `~/.agiworkforce/trusted_project_providers.json`. On denial, or in a
+    /// non-interactive session where we cannot prompt, the provider's `base_url`
+    /// is dropped so nothing routes there. User-global config is never gated here.
     fn consent_gate_project_providers(project: &mut CliConfig) {
         use std::io::IsTerminal;
         let project_path = project
@@ -459,7 +467,7 @@ impl CliConfig {
                 continue;
             };
             if !Self::base_url_is_remote(&base_url) {
-                continue;
+                continue; // loopback/local, no consent needed
             }
             let fp = Self::provider_trust_fingerprint(&project_path, &name, &base_url);
             if trusted.contains(&fp) {
@@ -796,6 +804,11 @@ impl CliConfig {
         out
     }
 
+    /// Output budget for a single request against `model`.
+    ///
+    /// `default.max_tokens` is one number for every model, effort presets and
+    /// `--max-tokens` both write it, so it has to be trimmed to whatever the
+    /// model at hand can actually emit before it reaches a provider.
     pub fn effective_max_tokens(&self, model: &str) -> u32 {
         match stated_max_output_tokens(model) {
             Some(limit) => self.default.max_tokens.min(limit),
@@ -1056,6 +1069,11 @@ mod tests {
     use super::*;
     use std::sync::Mutex;
 
+    /// Tests that mutate process environment variables must hold this mutex.
+    /// Cargo runs tests in parallel by default, and AGIWORKFORCE_* env vars
+    /// are process-global, without serialization, set/remove from one test
+    /// can race the assertions in another. (Was producing intermittent
+    /// failures in test_merge_env_no_vars_keeps_defaults.)
     static ENV_MUTEX: Mutex<()> = Mutex::new(());
 
     #[test]
@@ -2117,6 +2135,7 @@ model = "fixture-config-model"
     #[test]
     fn project_config_no_providers_not_sensitive() {
         let mut project = CliConfig::default();
+        // Strip all providers, a project config with no providers is safe.
         project.providers.clear();
         assert!(!CliConfig::has_sensitive_project_overrides(&project));
     }

@@ -1,3 +1,20 @@
+//! Infinite Chats, automatic context compaction during the chat message flow.
+//!
+//! When a conversation's assembled LLM messages approach the model's context
+//! window limit, this module transparently compacts older messages into a
+//! summary so the conversation can continue indefinitely.
+//!
+//! The trigger is **95 % of the model's context window** (configurable via
+//! `CompactionConfig::auto_compact_threshold`).  When triggered the module:
+//!
+//! 1. Emits a `compaction:auto-triggered` Tauri event so the frontend can
+//!    show a progress indicator immediately.
+//! 2. Uses the existing [`ContextCompactor`] to generate a summary of older
+//!    messages and splice it into the message list.
+//! 3. Persists the compacted state to the database so future loads start
+//!    with the already-compacted history.
+//! 4. Emits a `compaction:completed` Tauri event so the frontend can
+//!    dismiss the progress indicator.
 
 use crate::core::agent::context_compactor::{
     resolve_context_window, should_auto_compact, CompactionConfig, ContextCompactor,
@@ -49,6 +66,30 @@ pub struct CompactionCompletedEvent {
     pub savings_percent: f32,
 }
 
+/// Check whether the assembled LLM messages exceed the context threshold and,
+/// if so, compact the conversation's persisted history and rewrite the
+/// in-memory message list.
+///
+/// This function is designed to be called from `prepare_send_message` after
+/// the full message list (system prompts + history + user message) has been
+/// assembled but before the `LLMRequest` is constructed.
+///
+/// Uses [`should_auto_compact`] with `CompactionConfig` defaults (95%
+/// threshold, 120 s cooldown) to decide whether to trigger.
+///
+/// # Arguments
+///
+/// * `llm_messages`, the mutable vec of chat messages about to be sent to
+///   the LLM.  On compaction this is rewritten in-place.
+/// * `model`, the model ID string used to look up the context window size.
+/// * `reserved_output_tokens`, response capacity excluded from the input budget.
+/// * `db`, database handle for reading/writing conversation messages.
+/// * `conversation_id`, the current conversation ID (skipped for incognito
+///   conversations with id <= 0).
+/// * `user_id`, used for database authorization.
+/// * `app_handle`, Tauri app handle for emitting frontend events.
+///
+/// Returns `Ok(true)` if compaction was performed, `Ok(false)` otherwise.
 pub async fn maybe_compact_context(
     llm_messages: &mut Vec<ChatMessage>,
     model: &str,
@@ -139,6 +180,8 @@ pub async fn maybe_compact_context(
         },
     );
 
+    // Configure the compactor, target half the context window so there is
+    // plenty of room for the model's reply and future messages.
     let threshold =
         (usable_input_tokens as f64 * auto_config.auto_compact_threshold as f64) as usize;
     let compaction_config = CompactionConfig {
@@ -362,7 +405,9 @@ mod tests {
     fn should_auto_compact_triggers_above_threshold() {
         let config = CompactionConfig::default(); // threshold = 0.95
         let max_tokens = 128_000;
+        // 96% usage, should trigger
         assert!(should_auto_compact(122_880, max_tokens, &config, None));
+        // 90% usage, below 95% threshold
         assert!(!should_auto_compact(115_200, max_tokens, &config, None));
     }
 
@@ -380,6 +425,7 @@ mod tests {
     fn should_auto_compact_respects_cooldown() {
         let config = CompactionConfig::default(); // cooldown = 120s
         let max_tokens = 128_000;
+        // Just compacted 1 second ago, cooldown not elapsed
         let recent = Instant::now() - std::time::Duration::from_secs(1);
         assert!(!should_auto_compact(
             128_000,
@@ -387,6 +433,7 @@ mod tests {
             &config,
             Some(recent)
         ));
+        // Compacted 200 seconds ago, cooldown elapsed
         let old = Instant::now() - std::time::Duration::from_secs(200);
         assert!(should_auto_compact(128_000, max_tokens, &config, Some(old)));
     }

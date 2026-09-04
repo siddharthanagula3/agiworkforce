@@ -1258,6 +1258,10 @@ function buildPage(): void {
   consentGrantBtn.addEventListener('click', async () => {
     const origin = normalizeApprovedSiteOrigin(currentSiteOrigin);
     if (!origin) return;
+    // Chrome spends the user gesture on the first await, so the site-access
+    // prompt has to be raised before any storage read. Nothing is recorded
+    // unless Chrome itself grants the host, the extension's own record must
+    // never be the only thing authorizing DevTools-Protocol reach.
     const hostGranted = await requestBrowserControlHostPermission(origin);
     consentGrantBtn.disabled = true;
     if (!hostGranted) {

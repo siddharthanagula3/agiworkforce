@@ -1,33 +1,54 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { checkAgainstBaseline, countByFile, findEmDashes } from './lib/em-dash-in-copy.mjs';
+import { countByFile, findEmDashes } from './lib/em-dash-in-copy.mjs';
+
+const EM_DASH = '\u2014';
 
 test('flags an em dash in a rendered string', () => {
-  const found = findEmDashes("const a = 'Not applicable — we use our own keys';", 'a.tsx');
+  const found = findEmDashes(`const a = 'Not applicable ${EM_DASH} we use our own keys';`, 'a.tsx');
   assert.equal(found.length, 1);
   assert.equal(found[0].line, 1);
 });
 
 test('flags an em dash in JSX text', () => {
-  assert.equal(findEmDashes('  <p>Reports are read — but not paid</p>', 'a.tsx').length, 1);
+  assert.equal(
+    findEmDashes(`  <p>Reports are read ${EM_DASH} but not paid</p>`, 'a.tsx').length,
+    1,
+  );
 });
 
-test('ignores a line comment', () => {
-  assert.deepEqual(findEmDashes('  // the loop — as measured — is fine', 'a.tsx'), []);
+test('flags an em dash in a line comment', () => {
+  assert.equal(
+    findEmDashes(`  // the loop ${EM_DASH} as measured ${EM_DASH} is fine`, 'a.tsx').length,
+    2,
+  );
 });
 
-test('ignores a docblock line', () => {
-  assert.deepEqual(findEmDashes(' * the loop — as measured — is fine', 'a.tsx'), []);
+test('flags an em dash in a docblock line', () => {
+  assert.equal(
+    findEmDashes(` * the loop ${EM_DASH} as measured ${EM_DASH} is fine`, 'a.tsx').length,
+    2,
+  );
 });
 
-test('ignores the standalone placeholder for an absent value', () => {
-  assert.deepEqual(findEmDashes("  if (!value) return '—';", 'a.tsx'), []);
+test('flags a standalone em dash placeholder', () => {
+  assert.equal(findEmDashes(`  if (!value) return '${EM_DASH}';`, 'a.tsx').length, 1);
 });
 
 test('counts every em dash on a line, not just the first', () => {
-  const found = findEmDashes("const a = 'six groups — chat, billing — are checked';", 'a.tsx');
+  const found = findEmDashes(
+    `const a = 'six groups ${EM_DASH} chat, billing ${EM_DASH} are checked';`,
+    'a.tsx',
+  );
   assert.equal(found.length, 2);
+});
+
+test('ignores a line with no em dash', () => {
+  assert.deepEqual(
+    findEmDashes("const a = 'six groups, chat, billing, are checked';", 'a.tsx'),
+    [],
+  );
 });
 
 test('counts per file', () => {
@@ -37,29 +58,12 @@ test('counts per file', () => {
   });
 });
 
-test('a file over its ceiling fails', () => {
-  assert.deepEqual(checkAgainstBaseline({ 'a.tsx': 3 }, { perFile: { 'a.tsx': 2 } }), [
-    'a.tsx: 3 em dash(es) in copy (baseline allows 2)',
-  ]);
-});
-
-test('a file at or under its ceiling passes', () => {
-  assert.deepEqual(checkAgainstBaseline({ 'a.tsx': 2 }, { perFile: { 'a.tsx': 2 } }), []);
-  assert.deepEqual(checkAgainstBaseline({ 'a.tsx': 1 }, { perFile: { 'a.tsx': 2 } }), []);
-});
-
-test('a file absent from the baseline may not introduce any', () => {
-  assert.deepEqual(checkAgainstBaseline({ 'new.tsx': 1 }, { perFile: {} }), [
-    'new.tsx: 1 em dash(es) in copy (baseline allows 0)',
-  ]);
-});
-
-test('flags the HTML entity as well as the character', () => {
+test('flags the HTML entity forms as well as the character', () => {
   assert.equal(findEmDashes('  <p>sent by a person &mdash; nothing here</p>', 'a.tsx').length, 1);
   assert.equal(findEmDashes('  <p>a &#8212; b</p>', 'a.tsx').length, 1);
   assert.equal(findEmDashes('  <p>a &#x2014; b</p>', 'a.tsx').length, 1);
 });
 
-test('ignores an entity placeholder cell', () => {
-  assert.deepEqual(findEmDashes('  <td>&mdash;</td>', 'a.tsx'), []);
+test('flags an entity placeholder cell', () => {
+  assert.equal(findEmDashes('  <td>&mdash;</td>', 'a.tsx').length, 1);
 });

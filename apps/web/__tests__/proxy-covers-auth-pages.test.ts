@@ -2,6 +2,22 @@ import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
+/**
+ * Every page that calls `auth()` must be covered by the proxy matcher.
+ *
+ * `auth()` in a server component resolves from the session the Clerk proxy
+ * established. On a route the proxy does not match, it cannot resolve, and the
+ * `redirect()` the page meant to issue becomes an unhandled error instead, the
+ * page answers 200 with an error boundary rather than sending the visitor to
+ * sign in.
+ *
+ * That is not theoretical: `/operator`, the platform console that can read
+ * every account, shipped missing from this list. It still refused access
+ * because the page re-checks the operator allowlist, so nothing leaked, but a
+ * signed-out visitor got a broken page instead of the sign-in gate, and the
+ * proxy's session and CSP handling never ran for it.
+ */
+
 const APP = join(process.cwd(), 'app');
 
 /**
@@ -41,6 +57,14 @@ function matcherPatterns(name: string): string[] {
 
 const WILDCARD = '\u0000';
 
+/**
+ * Escapes every regex metacharacter, not a hand-picked few.
+ *
+ * The previous version escaped `/` and nothing else, which left `\`, and
+ * every other metacharacter, to be reinterpreted. `/` never needed escaping
+ * here at all: these patterns are compiled with the RegExp constructor, not
+ * written as literals.
+ */
 function patternToRegExp(pattern: string): RegExp {
   const escaped = pattern
     .replaceAll('(.*)', WILDCARD)

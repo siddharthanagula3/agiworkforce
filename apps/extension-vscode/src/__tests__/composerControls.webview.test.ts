@@ -1,3 +1,9 @@
+/**
+ * composerControls.webview.test.ts, compact, persistent mode/effort controls.
+ *
+ * @vitest-environment jsdom
+ */
+
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { getWebviewContent } from '../features/sidebar-webview/webviewContent';
 

@@ -135,6 +135,12 @@ pub fn list_conversations(
     Ok(conversations)
 }
 
+/// List conversations scoped to a specific app mode ("local" or "cloud").
+///
+/// This is the PREFERRED query for all UI-facing conversation list calls.
+/// It enforces the hard Local/Cloud boundary so each mode shows only its own
+/// history, conversations created in Local mode never appear in Cloud mode
+/// and vice-versa.
 pub fn list_conversations_by_mode(
     conn: &Connection,
     limit: i64,
@@ -247,6 +253,14 @@ pub fn create_message(conn: &Connection, message: &Message) -> Result<i64> {
     Ok(last_id)
 }
 
+/// Fetches a single message by its primary key.
+///
+/// # Security Note (H4, IDOR risk for multi-user deployments)
+/// AGI Workforce is a single-user desktop application; there is no concept of
+/// separate user sessions in the current data model, so a `user_id` guard is not
+/// enforced here. If this codebase is ever adapted for a multi-tenant server
+/// deployment, an additional `AND user_id = ?2` predicate **must** be added and
+/// the caller must supply the authenticated user's ID to prevent cross-user IDOR.
 pub fn get_message(conn: &Connection, id: i64) -> Result<Message> {
     conn.query_row(
         "SELECT id, conversation_id, user_id, role, content, tokens, cost, provider, model, created_at, parent_message_id, branch_id
@@ -291,6 +305,12 @@ pub fn list_messages_by_branch(
     }
 }
 
+/// Deletes a message by its primary key.
+///
+/// # Security Note (H4, IDOR risk for multi-user deployments)
+/// Same caveat as `get_message`: no user_id ownership check is performed because
+/// the desktop app is single-user. A multi-tenant adaptation must add
+/// `AND user_id = ?2` with the authenticated caller's ID.
 pub fn delete_message(conn: &Connection, id: i64) -> Result<()> {
     conn.execute("DELETE FROM messages WHERE id = ?1", params![id])?;
     Ok(())

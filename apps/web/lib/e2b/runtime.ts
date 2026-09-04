@@ -1,3 +1,33 @@
+/**
+ * E2B executor factory: the live @e2b/code-interpreter binding.
+ *
+ * Gated + fail-closed: returns null unless E2B is configured (see ./gate.ts). When
+ * configured, creates a resource-bounded sandbox session and returns an E2BExecutor
+ * that proxies runCode / file ops to it. A failure at any step (SDK missing, sandbox
+ * create error, op error) fails CLOSED, the router surfaces an explicit error to the
+ * model, never a silent no-op and never a provider-native fallback.
+ *
+ * VERIFICATION NOTE: there is no E2B key in this environment, so the live sandbox
+ * round-trip is unverified here, that step is the operator's once `E2B_API_KEY` is
+ * set. The binding is typed against @e2b/code-interpreter@2.6.1 (confirmed against the
+ * installed package's `dist/index.d.ts`, not assumed from docs/training data) and
+ * defensive (optional chaining + try/catch) so an API-shape surprise degrades to
+ * fail-closed.
+ *
+ * Session scope: when an authenticated tenant/user/conversation scope is passed, ONE
+ * sandbox + one code-context per language is reused across every execution-tool call in
+ * that owned conversation (state persists, variables/imports survive across turns).
+ * The scoped mapping lives in Redis (./session-store.ts) so it survives across serverless
+ * invocations without allowing a conversation id alone to resume another user's sandbox.
+ * `pauseE2BSession()` (called by the tool loop at turn end)
+ * stops billing while preserving state; the next request's `getE2BExecutor()` resumes
+ * it via `Sandbox.connect()`, which auto-resumes a paused sandbox. `killE2BSession()`
+ * (called on conversation delete, or as a safety net) releases it for good.
+ *
+ * Without a `conversationId` (e.g. a bare API caller with no conversation), the
+ * executor is ephemeral: one sandbox per call, killed by the caller's `dispose()`.
+ * byte-for-byte the original Phase-B-scaffold behavior.
+ */
 import 'server-only';
 
 import { getPlanMaxSandboxes, getPlanSandboxTtlMs } from '@agiworkforce/types';
@@ -712,6 +742,10 @@ export async function getE2BExecutor(scope?: E2BSessionScope): Promise<E2BExecut
       } catch (err) {
         logger.warn({ err }, '[e2b] sandbox kill failed');
       }
+      // GOV-5: an ephemeral sandbox has no authenticated scope, so its seconds
+      // cannot be attributed to a ledger. It is instead bounded to
+      // E2B_SANDBOX_TIMEOUT_MS and killed here, the exposure is one minute of
+      // compute per bare-API call, not an open-ended meter.
     },
   };
 }

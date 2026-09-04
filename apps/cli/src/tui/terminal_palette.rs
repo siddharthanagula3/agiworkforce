@@ -4,6 +4,9 @@ use std::sync::atomic::AtomicU64;
 use std::sync::atomic::AtomicU8;
 use std::sync::atomic::Ordering;
 
+// ─────────────────────────────────────────────────────────────────────────────
+// v3 brand palette, mirrors packages/ui/design-tokens/src/tokens.ts
+// ─────────────────────────────────────────────────────────────────────────────
 
 /// AGI v3 teal accent (#21808d)
 pub const V3_TEAL: (u8, u8, u8) = (0x21, 0x80, 0x8d);
@@ -136,6 +139,7 @@ const PALETTE_ANSI: Palette = Palette {
     on_light: (0, 0, 0),
 };
 
+/// Solarized (Ethan Schoonover), dark variant.
 const PALETTE_SOLARIZED_DARK: Palette = Palette {
     accent: (38, 139, 210),
     muted: (88, 110, 117),
@@ -149,6 +153,7 @@ const PALETTE_SOLARIZED_DARK: Palette = Palette {
     on_light: (0, 43, 54),
 };
 
+/// Solarized, light variant (light base, same accents).
 const PALETTE_SOLARIZED_LIGHT: Palette = Palette {
     accent: (38, 139, 210),
     muted: (101, 123, 131),
@@ -378,6 +383,11 @@ fn ansi16_to_rgb(idx: u8) -> (u8, u8, u8) {
     }
 }
 
+/// Parse a `COLORFGBG` value into default fg/bg colors. The variable (set by
+/// rxvt/konsole/some tmux configs) is `"fg;bg"` or `"fg;default;bg"`; the last
+/// field is the background index. Returns `None` when absent or malformed.
+/// most modern terminals (iTerm2, Terminal.app) don't set it, so this is a
+/// best-effort fallback now that crossterm 0.28 removed the OSC color query.
 fn colorfgbg_to_default(raw: &str) -> Option<DefaultColors> {
     let parts: Vec<&str> = raw.split(';').collect();
     if parts.len() < 2 {
@@ -709,12 +719,14 @@ mod colorfgbg_tests {
 
     #[test]
     fn parses_dark_and_light_backgrounds() {
+        // "fg;bg", white fg on black bg → dark background.
         let dark = colorfgbg_to_default("15;0").expect("parse dark");
         assert_eq!(dark.bg, (0, 0, 0));
         // black fg on white bg → light background.
         let light = colorfgbg_to_default("0;15").expect("parse light");
         assert_eq!(light.bg, (255, 255, 255));
         assert!(light.bg.0 as u16 + light.bg.1 as u16 + light.bg.2 as u16 > dark.bg.0 as u16);
+        // 3-field form "fg;default;bg", last field is bg.
         let three = colorfgbg_to_default("0;default;15").expect("parse 3-field");
         assert_eq!(three.bg, (255, 255, 255));
     }
@@ -757,6 +769,8 @@ mod theme_tests {
 
     #[test]
     fn every_theme_index_resolves_to_a_distinct_dark_or_light_base() {
+        // Dark/Ansi/SolarizedDark/Colorblind are dark-based; Light/SolarizedLight
+        // are light-based, their status-bar backgrounds must differ accordingly.
         set_active_theme(1); // Light
         let light_bar = active_palette().status_bar_bg;
         set_active_theme(0); // Dark

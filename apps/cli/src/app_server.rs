@@ -1,3 +1,13 @@
+//! CLI-side app-server wiring.
+//!
+//! This module provides:
+//!
+//! 1. `CliDeveloperSessionHost`: the full CLI agent engine used by both the
+//!    typed stdio and authenticated WebSocket developer-session transports.
+//!
+//! 2. `run_mcp_server`: a CLI-local MCP-protocol stdio handler. It advertises
+//!    only tools that are actually callable from this context. Until agent exec
+//!    is wired for stdio MCP, the tool list is intentionally empty.
 
 mod developer_host;
 

@@ -999,6 +999,16 @@ export async function updateSubscriptionFromStripeSubscription(
         return;
       }
 
+      // Normalized because the two sides arrive in different shapes. The row is
+      // TYPED `string | null` but the driver hands back a Date for a timestamptz
+      // column, while updateData.current_period_start is built as an ISO string
+      // (`new Date(periodStart * 1000).toISOString()`). Comparing them directly
+      // was `Date !== string`, i.e. ALWAYS true, so every subscription and
+      // invoice webhook took the isNewPeriod branch and called
+      // resetCreditsForNewPeriod, zeroing credits_used_cents mid-period and
+      // handing back a full allocation. Any benign event did it: a card swap, a
+      // seat change, a cancel-and-resume. The allocateCreditsForPeriod branch
+      // below was unreachable.
       const isNewPeriod =
         toIsoTimestamp(existingSub.current_period_start) !==
         toIsoTimestamp(updateData.current_period_start);

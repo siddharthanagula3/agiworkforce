@@ -20,8 +20,20 @@ export const metadata = buildMetadata({
   path: '/enterprise',
 });
 
+/**
+ * When the enterprise control and compliance rows below were last reviewed
+ * against the codebase. Rendered on the page, an undated "honest as of today"
+ * is the same defect /trust was rewritten to remove (it promised "claims with
+ * dates" and rendered none). Change this when you change a row.
+ */
 const STATUS_AS_OF = '23 August 2026';
 
+/**
+ * Field order is what `formatAuditEvent` emits; the metadata keys are the ones
+ * the sanitiser in lib/security-audit.ts admits; the denial row is what the
+ * export route records before it throws; newest-first matches the iterator.
+ * Every value here is format, never a measurement, do not add counts.
+ */
 const AUDIT_EXPORT_FILENAME = 'agi-audit-<workspace-id>-2026-08-23.jsonl';
 
 const AUDIT_EXPORT_LINE_BREAK = '\n\n';

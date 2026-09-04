@@ -38,6 +38,15 @@ describe('sitemap-indexed client routes carry their own title', () => {
   });
 });
 
+/**
+ * The signed-in rail is noindex, so the sitemap check above never covered it.
+ * and /chat/projects and /chat/library both shipped showing the marketing
+ * title in the browser tab, history and bookmarks while /tasks and /chat/code
+ * beside them showed their own.
+ *
+ * Derived from the rail rather than a second hand-maintained list, so adding a
+ * destination cannot forget this.
+ */
 describe('every rail destination carries its own title', () => {
   /**
    * `/chat` is the one destination whose title is not static: it shows the open

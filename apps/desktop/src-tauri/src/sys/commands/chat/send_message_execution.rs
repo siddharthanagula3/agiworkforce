@@ -90,6 +90,12 @@ pub(super) async fn handle_nonstreaming_message(
         return run_nonstreaming_agent(runtime, prepared).await;
     }
 
+    // Only attempt to initialize ManagedCloud when the request is explicitly
+    // in cloud mode. Local-mode requests must never touch ManagedCloud even
+    // for provider-initialization purposes, they lazily register Ollama, LM
+    // Studio, llama.cpp, and vLLM instead so a fresh session isn't silently
+    // dropped before `/api/chat`, and so any of the four local runtimes the user
+    // has configured/selected can be routed to (not just Ollama).
     if !prepared.flags.is_local_mode {
         ensure_managed_cloud_provider(&runtime.router).await;
     } else {
@@ -1695,6 +1701,9 @@ async fn run_nonstreaming_chat(
     };
 
     if candidates.is_empty() {
+        // TRUST-BOUNDARY RULE: when the frontend is in Local mode, inference MUST
+        // NOT be redirected to ManagedCloud under any circumstances, not even as a
+        // fallback.  Local stays local.  Return a clear user-facing error instead.
         if flags.is_local_mode {
             return Err(
                 "No local or BYOK providers are configured for this request. \

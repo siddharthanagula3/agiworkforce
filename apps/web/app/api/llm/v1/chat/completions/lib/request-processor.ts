@@ -690,6 +690,20 @@ export type ProcessedRequest = {
   fallbackReason: string | undefined;
   originalModel: string;
   fallbackModels?: string[];
+  /**
+   * The workspace model policy snapshot this request was admitted against,
+   * read ONCE by the processor and carried on the request so every later hop
+   * answers to the same row.
+   *
+   * `managed-failover.ts`'s OpenRouter route-retry is not drawn from
+   * `fallbackModels`, so the policy filtering applied to that plan never
+   * governed it; it needs the snapshot itself. Without this field there was
+   * nowhere for `route.ts` to get one, and its `createFailoverPlan` calls
+   * passed nothing, leaving that enforcement permanently ungoverned.
+   *
+   * `null` means UNGOVERNED, matching the evaluator's contract: personal
+   * scope, no policy row, or a read that deliberately failed open.
+   */
   modelPolicy?: ModelAccessPolicy | null;
   zeroDataRetentionOnly?: boolean;
   secretRedactionCount?: number;
@@ -721,6 +735,12 @@ export type ProcessedRequest = {
   indicResult: ReturnType<typeof detectIndicScript>;
   freeTrial?: FreeTrialReservation;
   contextTrim?: ContextTrimResult | null;
+  /**
+   * The route already warm for this conversation's cache, if any. Set once
+   * per turn from the affinity store and read back by the dispatch layer to
+   * decide whether to pin an OpenRouter upstream provider, never to steer
+   * which route is selected, which `resolveWebCloudModelRoute` already owns.
+   */
   routeAffinity?: ServedRouteAffinity;
   llmRequest: {
     model: string;
@@ -1115,6 +1135,35 @@ export function applyResearchMode(
   );
 }
 
+/**
+ * Append the provider-native web-search server tool to `tools` when the caller has
+ * requested web search and the resolved model supports search. Pure and exported so
+ * the injection is unit-testable across every provider. This handles ONLY the native
+ * path (anthropic/google/openai). Providers without a native branch (xai/qwen/zhipu/
+ * deepseek/mistral/…) are NOT gated out of web search, when the model is tools-capable
+ * and the generic backend is configured (`PERPLEXITY_API_KEY`, surfaced as the
+ * `generic_web_search` feature flag), the composer offers web search via
+ * `isWebSearchAvailable`, and the request routes through the generic fallback tool
+ * (`shouldOfferGenericWebSearchTool` → `webSearchToolDef`, executed in the tool loop)
+ * rather than this native injection. The old failure mode (a lit toggle producing no
+ * search tool, so the model answered "I can't browse the internet") only applied to
+ * the retired inline block; the two-path design above closes it for every provider.
+ *
+ * Providers WITH a branch (kept in sync with `WEB_SEARCH_INJECTION_PROVIDERS` in
+ * `@agiworkforce/search`):
+ *   - anthropic: `web_search_20260209` with `allowed_callers:['direct']` (verified
+ *     against platform.claude.com, the current dynamic-filtering tool version;
+ *     `allowed_callers:['direct']` is required to call it without code execution).
+ *   - google:    `{ google_search: {} }`.
+ *   - openai:    stable Responses `{ type: 'web_search' }`, with complete
+ *     source metadata requested by the provider adapter.
+ * `caps.search ?? true` keeps unknown/missing catalog entries permissive (a missing
+ * entry never silently drops the tool for a provider that does support it).
+ *
+ * OpenAI uses the Responses API for catalog-known native OpenAI models. The
+ * provider adapter passes this server tool through verbatim and translates
+ * its activity/citations into AGI's canonical stream.
+ */
 export function appendWebSearchTool(
   providerLower: string,
   tools: unknown[] | undefined,
@@ -1174,6 +1223,20 @@ export function resolveWebFetchTools({
   return stream ? [...(tools ?? []), urlFetchToolDef()] : tools;
 }
 
+/**
+ * WP4: should the generic platform-executed `web_search` function tool be offered
+ * for this request? Pure and exported (same reason as `appendWebSearchTool`: unit
+ * testable without invoking the rest of `processRequest`).
+ *
+ * True when: the provider has no working native search path on this route
+ * (`webSearchNeedsGenericTool` reports that fallback requirement), the
+ * resolved model is tools-capable (unknown models
+ * default to allowed), the request is streaming (offer ⊆ run, only that path
+ * enters the tool loop in route.ts, mirrors url_fetch/E2B below), and
+ * a search backend is actually configured (`backendConfigured`.
+ * `webSearchBackendConfigured()` in production, so the tool is never offered as a
+ * promise the server can't back up).
+ */
 export function shouldOfferGenericWebSearchTool({
   providerLower,
   toolsCapable,
@@ -1247,6 +1310,16 @@ export function buildTaskFamilySignals(
   };
 }
 
+/**
+ * Every route id reachable from a selection, for a routeHealthSnapshots
+ * fetch, never for admission, which stays `resolveAutoRoute`'s alone.
+ *
+ * An exact model selection scopes to that model's own routes
+ * (`getRoutePricingForModel`). An alias (`auto`, `auto-economy`, ...) cannot
+ * be resolved to one model without duplicating the policy's slot/profile/task
+ * logic, so it gets the full set of routes any Auto slot could ever reach.
+ * a safe superset a ranker only ever reads by exact route id.
+ */
 const AUTO_POLICY_ROUTE_IDS: readonly string[] = [
   ...new Set(
     Object.values(modelRegistry.policies.auto.slots).flatMap((slot) =>
@@ -1348,6 +1421,29 @@ function checkModelTierAccess(model: string, subscriptionTier: string): boolean 
   return allowed;
 }
 
+/**
+ * Names both provider identities of a model for the policy evaluator.
+ *
+ * `resolveProviderFromModel` answers a DISPATCH question, which adapter will
+ * carry this request, and for the aggregator-routed vendors (MiniMax, Qwen,
+ * Zhipu; see lib/services/aggregator-routing.ts) it collapses the vendor away
+ * and returns `"openrouter"` the moment `OPENROUTER_API_KEY` is set. Feeding
+ * that alone to a policy written about VENDORS broke the gate in both
+ * directions at once: `blockedProviders: ['minimax']` matched nothing and
+ * MiniMax kept running, while `allowedProviders: ['minimax']` matched nothing
+ * and MiniMax was refused. Normalization cannot repair that, the two strings
+ * name different things, not the same thing spelled twice.
+ *
+ * So the ask carries both, sourced from the two places that actually know:
+ * the VENDOR from the canonical catalog (`getModelMetadataById(...).provider`,
+ * the same field a policy row is written against), the TRANSPORT from the
+ * dispatch layer. The evaluator's documented rule decides what each one may do
+ *, a block matches either, an allowlist is about the vendor.
+ *
+ * A model the catalog cannot resolve is asked about with a null vendor rather
+ * than skipped: a model rule still decides, and an allowlisted-provider policy
+ * denies the unknown id instead of waving it through.
+ */
 function resolveProviderIdentities(
   model: string,
   routeId?: string,
@@ -1372,6 +1468,13 @@ function modelAccessAskFor(model: string): ModelAccessAsk {
   return { provider: vendor, modelId: model, transportProvider: transport };
 }
 
+/**
+ * Asks the workspace model policy about a model this request might rotate onto.
+ *
+ * Same pure evaluator the primary gate uses, against a policy snapshot read
+ * once per request, never a second policy read and never a second copy of the
+ * precedence rules.
+ */
 function evaluateCandidateModelAccess(
   policy: ModelAccessPolicy | null,
   model: string,
@@ -1604,6 +1707,7 @@ export async function processRequest(
     };
   }
 
+  // round trips, scoped-db handshake, ownership lookup, safety preference,
   const scopedDbPromise = getUserScopedDb(request, { apiKeyScope: 'inference:write' });
   scopedDbPromise.catch(() => {});
 
@@ -2242,6 +2346,10 @@ export async function processRequest(
     isFreePlan: isFreePlanTier(subscription.plan_tier),
   });
   const freeLaneMode = freeLane.mode;
+  // The slot preference rides this branch and no other, so it reaches the
+  // resolver only for an exact-`free` plan with the lane switched on. The base
+  // decision above never receives it, which is what keeps every other tier.
+  // including the ones `normalizeTier` folds into `free`, byte-identical.
   const freeLaneRouteDecision = freeLaneObserves(freeLaneMode)
     ? resolveWebCloudModelRoute(
         FREE_LANE_SELECTION,
@@ -2325,6 +2433,13 @@ export async function processRequest(
 
   chatRequest.model = routeDecision.modelKey;
 
+  // The workspace administrator's model policy, checked AFTER auto-routing has
+  // resolved. Checking the requested model instead would let a blocked model be
+  // reached by asking for `auto` and having the router pick it, a bypass that
+  // no amount of picker filtering closes.
+  // The scoped handle resolved the active workspace back at line ~1300,
+  // including the x-agi-organization-id override. Re-resolving here would add a
+  // second round trip to the hot path for an answer already in hand.
   const scopedForPolicy = await scopedDbPromise;
   // Both provider identities, spelled out at the call site: the VENDOR the
   // catalog says owns this model and, separately, the TRANSPORT the dispatch
@@ -2344,6 +2459,19 @@ export async function processRequest(
     return { ok: false, response: modelPolicyDenialResponse(modelAccess) };
   }
 
+  // The gate above covers only the router's FIRST pick. Two later hops choose a
+  // DIFFERENT model inside this same request, the cheaper-model downgrade when
+  // credits run short (below), and the managed-failover rotation that consumes
+  // the `fallbackModels` plan (managed-failover.ts), and a policy enforced only
+  // on the happy path is not a policy. Read the row ONCE here and evaluate every
+  // candidate against that one snapshot, so each hop answers to exactly the
+  // policy the primary model answered to.
+  //
+  // `ungoverned` above already means there is nothing to enforce: personal
+  // scope, no policy row, or a read that failed, which model-policy-gate
+  // deliberately treats as allow, so that a briefly unreachable policy table
+  // does not stop every member's chat. Every candidate is ungoverned for the
+  // same reason, so only a genuinely governed workspace pays the extra read.
   let workspaceModelPolicy: ModelAccessPolicy | null = null;
   if (modelAccess.code !== 'ungoverned' && scopedForPolicy.organizationId) {
     try {

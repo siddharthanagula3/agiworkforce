@@ -1,3 +1,22 @@
+//! Tool-call delta assembly.
+//!
+//! Providers stream tool calls three different ways:
+//!
+//! - **OpenAI-compatible**: indexed deltas, `id`/`name` arrive once,
+//!   `arguments` accumulates as string fragments, possibly interleaved across
+//!   indexes and out of order. Finalized at end-of-stream ([`ToolCallAssembler::finish`]).
+//! - **Anthropic**: sequential content blocks, `id`/`name` at
+//!   `content_block_start`, `input_json_delta` fragments, finalized at
+//!   `content_block_stop` ([`ToolCallAssembler::finalize_block`]). A truncated
+//!   stream that never delivers the stop MUST NOT surface the partial call
+//!   ([`ToolCallAssembler::into_completed`] drops unfinalized buffers).
+//! - **Gemini / Ollama-native**: complete calls in a single event
+//!   ([`ToolCallAssembler::push_completed`]).
+//!
+//! Argument parsing is centralized in [`parse_tool_arguments_json`]: malformed
+//! or non-object arguments never reach an executor raw, they are wrapped in a
+//! marker object ([`INVALID_TOOL_ARGS_MARKER`]) the agent loop converts into a
+//! tool error the model can react to.
 
 use std::collections::HashMap;
 
@@ -136,6 +155,9 @@ impl ToolCallAssembler {
         }
     }
 
+    /// Record a fully-formed call (Gemini / Ollama-native complete calls).
+    /// `arguments` must already be an object or a marker payload, see
+    /// [`normalize_tool_arguments_value`].
     pub fn push_completed(&mut self, call: ToolCall) {
         self.completed.push(call);
     }
@@ -280,7 +302,7 @@ mod tests {
         let mut a = ToolCallAssembler::new();
         a.update(0, Some("id0"), Some(""), Some("{}"));
         a.finalize_block(0);
-        a.finalize_block(7);
+        a.finalize_block(7); // absent, no-op
         assert_eq!(a.into_completed().len(), 0);
     }
 }

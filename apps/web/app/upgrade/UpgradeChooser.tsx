@@ -53,6 +53,11 @@ export function UpgradeChooser() {
   const subscription = useBillingStore((s) => s.subscription);
   const billingPolicyReady = useBillingStore(isBillingPolicyReady);
 
+  // Both hooks have to have settled before anything here is trustworthy. A
+  // failed or still-in-flight /api/me read is not proof the account is on
+  // Free, treating it that way is how a Max 15x subscriber previously saw
+  // "Your current plan: Free" next to a $7 "upgrade" that was really a
+  // downgrade. See shared/stores/billing-policy.ts.
   const ready = !isLoading && billingPolicyReady;
   const currentPlan = billing?.plan;
   const hasActivePaidPlan =
@@ -68,6 +73,9 @@ export function UpgradeChooser() {
     ? nextDisplay.features.filter((feature) => !currentDisplay.features.includes(feature))
     : [];
 
+  // Max 5x and Max 15x are one product at two capacities, chosen on the order
+  // screen where the difference is priced against what the account already
+  // paid, so 15x never appears as its own skip-ahead link here.
   const nextIndex = nextTier ? WEB_PAID_PLAN_ORDER.indexOf(nextTier) : -1;
   const secondaryTiers: readonly SelectablePaidPlan[] =
     nextIndex === -1

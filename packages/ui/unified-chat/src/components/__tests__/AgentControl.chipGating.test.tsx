@@ -14,6 +14,16 @@ const effortModel = requireCatalogModel(
   'a live model with medium and high reasoning efforts',
 );
 
+/**
+ * Desktop honours reasoning effort but NOT agent-mode enforcement, so the two
+ * chips must be independently switchable.
+ *
+ * Both previously sat behind a single `supportsAgentControl` flag. Desktop sets
+ * that false because Managed Cloud owns approval policy, which silently cost it
+ * the effort control as well. These pin both halves: effort can render without
+ * mode, and, the part that matters for safety, turning effort on must never
+ * surface the Ask/Auto/Plan/Bypass permission chip.
+ */
 describe('AgentControl chip gating', () => {
   beforeEach(() => {
     globalThis.ResizeObserver = class ResizeObserver {

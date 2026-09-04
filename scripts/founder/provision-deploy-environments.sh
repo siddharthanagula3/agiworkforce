@@ -1,4 +1,25 @@
 #!/usr/bin/env bash
+# INFRA-60, populate the production-web GitHub environment the deploy workflow
+# reads. Until this runs, .github/workflows/deploy-production.yml cannot deploy:
+# its first step fails closed on any of the four values below being empty.
+#
+# The environment already exists and already holds VERCEL_ORG_ID,
+# VERCEL_PROJECT_ID and the PRODUCTION_WEB_URL var. What is missing is
+# VERCEL_TOKEN and AGI_DATABASE_URL. Re-setting the ones already present is
+# harmless, so this script sets the whole set.
+#
+# Values are read from your shell environment, never typed as arguments, so no
+# secret lands in shell history or in a transcript. Export them, run this, then
+# `unset` them.
+#
+# Requires: gh auth login  (the CLI must hold a token with repo admin scope)
+#
+#   export VERCEL_TOKEN=...        # vercel.com/account/tokens
+#   export VERCEL_ORG_ID=...       # .vercel/project.json after `vercel link`
+#   export VERCEL_PROJECT_ID=...   # same file
+#   export AGI_DATABASE_URL=...    # Neon production connection string
+#   export PAGER_WEBHOOK_URL=...   # incident webhook the deploy pages on failure
+#   export PRODUCTION_WEB_URL=https://agiworkforce.com
 
 set -euo pipefail
 

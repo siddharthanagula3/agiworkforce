@@ -2,6 +2,16 @@
 mod tests {
     use crate::core::llm::sse_parser::{StreamChunk, TokenUsage};
 
+    /// c4 PIN (2026-07-16): WHY ManagedCloud stays on `parse_sse_stream`
+    /// while every direct provider decodes through the shared
+    /// `agiworkforce-llm` engine, the managed gateway's SSE envelope is NOT
+    /// plain OpenAI-compatible: it carries a per-chunk `credits` billing
+    /// object (cost/remaining/daily caps) that the desktop billing UI
+    /// consumes via `StreamChunk.credits`. The crate decoder has no vendor-
+    /// extension channel, so migrating ManagedCloud onto it TODAY would
+    /// silently drop live billing telemetry. This test pins the extraction;
+    /// any future ManagedCloud decode migration must carry `credits` (or add
+    /// a vendor-meta event to the crate) and will trip here if it forgets.
     #[test]
     fn c4_pin_managed_cloud_credits_extraction_from_openai_shaped_sse() {
         let event = concat!(
@@ -184,6 +194,13 @@ mod tests {
     }
 }
 
+// =============================================================================
+// C5, Production SSE parser function tests
+//
+// These tests call the actual `parse_sse_event` dispatcher (and through it the
+// provider-specific parse functions: parse_openai_sse, parse_anthropic_sse,
+// parse_google_sse, parse_ollama_sse) with realistic SSE event strings.
+// =============================================================================
 #[cfg(test)]
 mod production_parser_tests {
     use crate::core::llm::sse_parser::parse_sse_event;
@@ -538,6 +555,15 @@ mod production_parser_tests {
     }
 }
 
+// H23, SSE parser stream-level tests
+//
+// SseStreamParser is private (requires a real reqwest::Response), so these tests
+// exercise the same buffer-management and chunk-boundary logic by:
+//   1. Simulating split-chunk reassembly via multiple parse_sse_event calls
+//   2. Verifying data field accumulation across multi-line SSE events
+//   3. Testing the process_buffer delimiter logic (double-newline for most
+//      providers, single-newline for Ollama) through the public parse_sse_event
+//      entry point which is the core of process_buffer's per-event dispatch.
 #[cfg(test)]
 mod stream_buffer_tests {
     use crate::core::llm::sse_parser::{parse_sse_event, StreamChunk};
@@ -681,6 +707,9 @@ mod stream_buffer_tests {
     }
 }
 
+// H47, SSE parser keepalive edge cases
+// These tests verify the `is_keepalive_event` logic by inspecting `StreamChunk.keepalive`
+// on chunks that are constructed the same way `SseStreamParser::process_buffer` does.
 #[cfg(test)]
 mod keepalive_tests {
     use crate::core::llm::sse_parser::StreamChunk;
@@ -792,6 +821,8 @@ mod keepalive_tests {
 
     #[test]
     fn test_keepalive_chunk_has_correct_fields() {
+        // The chunk emitted for a keepalive must have empty content, done=false,
+        // and keepalive=true, so the idle timeout is reset without advancing state.
         let chunk = keepalive_chunk();
         assert!(chunk.keepalive, "keepalive field must be true");
         assert!(!chunk.done, "keepalive chunk must not signal stream end");
@@ -853,6 +884,8 @@ mod keepalive_tests {
 
     #[test]
     fn test_malformed_keepalive_anthropic_ping_with_data() {
+        // An Anthropic ping event carries `data: {}`, the parser treats it as
+        // keepalive (not as a content chunk) because `event: ping` takes priority.
         let event_with_data = "event: ping\ndata: {}";
         assert!(
             classify_keepalive(event_with_data),

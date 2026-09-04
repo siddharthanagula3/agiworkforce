@@ -245,6 +245,10 @@ fn render_list(frame: &mut ratatui::Frame, area: Rect, state: &AgentPickerState)
         .map(|(i, agent)| {
             let is_cursor = i == state.cursor;
             let cursor_marker = if is_cursor { "\u{276f}" } else { " " };
+            // Still English: `agent_scope_label` computes `global`/`user`/
+            // `project` from where the file lives, so it is prose, not a
+            // frontmatter identifier, it belongs in the catalogs, and moving it
+            // there means changing `crate::agents`, outside this widget.
             let scope = agent_scope_label(agent);
             let desc = if agent.description.is_empty() {
                 t(keys::AGENT_PICKER_NO_DESCRIPTION)
@@ -334,6 +338,7 @@ pub enum AgentPickerAction {
     Nothing,
     /// Close without selecting.
     Close,
+    /// User confirmed selection, host should invoke the agent.
     Invoke(String),
 }
 

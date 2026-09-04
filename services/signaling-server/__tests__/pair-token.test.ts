@@ -14,6 +14,10 @@ describe('pair token', () => {
     expect(verifyPairToken(SECRET, token, CODE, 'mobile', CREATED_AT)).toBe(true);
   });
 
+  // The session's expiry moves from 5 minutes to 24 hours the moment both peers
+  // connect. A token signed over expiry stopped verifying at that instant, so
+  // every reconnect after a successful pair was rejected as pairing_not_found.
+  // with no restart involved.
   it('survives the expiry extension that happens when both peers connect', () => {
     const token = issuePairToken(SECRET, CODE, 'desktop', CREATED_AT);
     expect(verifyPairToken(SECRET, token, CODE, 'desktop', CREATED_AT)).toBe(true);

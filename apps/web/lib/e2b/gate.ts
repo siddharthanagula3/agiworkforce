@@ -27,6 +27,11 @@ export function e2bProvisioningReady(): boolean {
   );
 }
 
+/**
+ * Managed-compute private-beta status, a SEPARATE, broader gate (used by the
+ * route-level managed-compute enforcement). Re-exported here for callers that need to
+ * reason about both gates together. Not required for `e2bExecutionEnabled()`.
+ */
 export function managedComputeBetaEnabled(): boolean {
   return isManagedComputePrivateBetaEnabled();
 }

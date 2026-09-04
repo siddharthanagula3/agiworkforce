@@ -3,6 +3,9 @@ use std::fmt;
 use std::sync::LazyLock;
 use std::time::Duration;
 
+// ---------------------------------------------------------------------------
+// Context overflow detection, 17 regex patterns covering every major provider
+// ---------------------------------------------------------------------------
 
 /// Compiled regex patterns that detect context/token overflow errors across
 /// all major LLM providers. Each pattern is case-insensitive.
@@ -99,6 +102,12 @@ pub enum CliError {
         message: String,
         is_retryable: bool,
     },
+    /// AGI Workforce managed-cloud paywall, user's tier cap reached.
+    ///
+    /// HTTP 429 + `{"kind":"paywall", "feature":..., "requiredTier":..., "reason":...}`
+    /// returned by `api/llm/v1/chat/completions` when the user has consumed
+    /// 150 % of their monthly token quota.  Exit code 78 (EX_CONFIG per
+    /// sysexits.h, "configuration error requiring user action").
     Paywall {
         feature: String,
         required_tier: String,
@@ -106,6 +115,9 @@ pub enum CliError {
     },
 }
 
+// ---------------------------------------------------------------------------
+// Display, user-facing messages
+// ---------------------------------------------------------------------------
 
 impl fmt::Display for CliError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -170,6 +182,9 @@ impl fmt::Display for CliError {
 
 impl std::error::Error for CliError {}
 
+// ---------------------------------------------------------------------------
+// Deterministic error classification, for `--json-events` and CI
+// ---------------------------------------------------------------------------
 
 impl CliError {
     /// Stable, machine-readable kind. Never localized, never reformatted; safe
@@ -189,6 +204,9 @@ impl CliError {
         }
     }
 
+    /// Actionable runbook hint for the user. One sentence, imperative voice,
+    /// always present. No "please" or vague language, we tell the user
+    /// exactly what to try next.
     pub fn hint(&self) -> String {
         match self {
             CliError::Api {
@@ -355,6 +373,9 @@ impl CliError {
         matches!(self, CliError::Paywall { .. })
     }
 
+    /// Exit code for this error. Uses sysexits.h values where applicable.
+    /// - 78 (EX_CONFIG) for paywall, the user's configuration (tier) needs updating.
+    /// - 1 for all other errors.
     pub fn exit_code(&self) -> i32 {
         match self {
             CliError::Paywall { .. } => 78,
@@ -381,6 +402,13 @@ const RETRYABLE_API_STATUSES: &[u16] = &[429, 500, 502, 503, 504];
 
 #[allow(dead_code)]
 impl CliError {
+    /// Returns `true` if the error is transient and the request can be retried.
+    ///
+    /// Retryable errors:
+    /// - `RateLimited` (always)
+    /// - `Network` (always, transient by nature)
+    /// - `Api` with status 429, 500, 502, 503, or 504
+    /// - `StreamError` when `is_retryable` is set
     pub fn is_retryable(&self) -> bool {
         match self {
             CliError::RateLimited { .. } | CliError::Network { .. } => true,

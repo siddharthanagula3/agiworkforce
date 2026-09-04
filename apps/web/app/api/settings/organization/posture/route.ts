@@ -25,6 +25,11 @@ export interface WorkspacePostureResponse {
   posture: WorkspacePosture;
 }
 
+/**
+ * Admin-only. The posture enumerates a workspace's identity, provisioning, and
+ * data configuration, which is reconnaissance for a member who should not be
+ * administering it, so the role check is a real gate, not a UI hint.
+ */
 async function handleGet(request: NextRequest): Promise<NextResponse> {
   const rateLimitResponse = await withRateLimit(request, 'settings-org');
   if (rateLimitResponse) return rateLimitResponse;

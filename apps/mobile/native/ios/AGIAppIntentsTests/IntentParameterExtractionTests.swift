@@ -1,6 +1,10 @@
 import XCTest
 @testable import AGIAppIntents
 
+// Tests verifying each Intent's parameter extraction logic.
+// These tests inspect the URL produced by the dispatch helper rather than
+// calling `perform()` (which requires UIApplication), isolating the
+// parameter-mapping logic that is under our control.
 @available(iOS 16.0, *)
 final class IntentParameterExtractionTests: XCTestCase {
 

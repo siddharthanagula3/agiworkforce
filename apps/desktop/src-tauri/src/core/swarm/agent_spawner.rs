@@ -22,6 +22,11 @@ use std::time::{Duration, Instant};
 use tokio::sync::{mpsc, oneshot, OwnedSemaphorePermit, Semaphore};
 use uuid::Uuid;
 
+/// How often a sub-agent samples its goal's lifecycle state while waiting for
+/// it to finish. `AGICore` publishes completion through `get_task_state` and
+/// offers no subscription or join point to a caller outside its module, so the
+/// wait is a poll, bounded by the sub-agent's `operation_timeout`, which
+/// cancels the goal when the budget is spent.
 const GOAL_COMPLETION_POLL_INTERVAL: Duration = Duration::from_millis(100);
 
 /// Configuration for a sub-agent.
@@ -155,6 +160,15 @@ pub struct SpawnedAgent {
 }
 
 impl SpawnedAgent {
+    /// Checks if the agent can accept new tasks.
+    ///
+    /// A busy agent is excluded because sub-agents run one subtask at a time
+    /// and a subtask now holds its agent until the engine finishes the goal.
+    /// A tripped agent is not excluded forever: the breaker itself decides when
+    /// the open window is over and lets a trial through, and the task loop
+    /// restores `Healthy` when that trial succeeds. Gating on `health` instead
+    /// would strand the agent, and the capacity permit it holds, for the life
+    /// of the process, because nothing else ever clears `CircuitOpen`.
     pub fn can_accept_task(&self) -> bool {
         *self.health.read() != AgentHealth::Terminated
             && self.circuit_breaker.allow_request()
@@ -387,6 +401,8 @@ impl AgentSpawner {
             _permit: permit,
         });
 
+        // Start the agent's task processing loop and retain the handle for abort-based
+        // termination, drop of `_handle` is intentionally avoided here.
         let handle = self.start_agent_loop(
             agent_id.clone(),
             task_receiver,
@@ -411,6 +427,10 @@ impl AgentSpawner {
         Ok(agent)
     }
 
+    /// Drops agents whose task loop has ended so the capacity permits they
+    /// still hold return to the pool. Without it an agent that will never run
+    /// another subtask, its loop returned, panicked or was aborted, would
+    /// occupy a `max_agents` slot until the whole swarm is torn down.
     fn reclaim_finished_agents(&self) {
         let finished: Vec<String> = {
             let agents = self.agents.read();

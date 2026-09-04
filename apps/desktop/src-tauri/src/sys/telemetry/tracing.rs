@@ -5,6 +5,15 @@ use tracing_subscriber::{fmt, layer::SubscriberExt, util::SubscriberInitExt, Env
 use super::logging::{create_file_appender, LogConfig};
 use super::redaction::RedactingWriter;
 
+/// Both `WorkerGuard`s must be kept alive for the life of the process, dropping
+/// either one shuts down its non-blocking writer's flush thread, and every
+/// `tracing::` call made afterward is silently discarded (not buffered, not
+/// errored, just gone). Previously these were locals inside this function and
+/// dropped the instant it returned, so only the two `info!` calls below.
+/// emitted before the guards went out of scope, ever reached the file or
+/// stdout. Every other `tracing::` call in the app, at any level, from that
+/// point until process exit, was a no-op. Return both guards so the caller
+/// (TelemetryGuard) can hold them for the process lifetime.
 pub fn init_tracing(config: LogConfig) -> Result<(WorkerGuard, WorkerGuard)> {
     let file_appender = create_file_appender(&config)?;
     let (file_writer, file_guard) = tracing_appender::non_blocking(file_appender);

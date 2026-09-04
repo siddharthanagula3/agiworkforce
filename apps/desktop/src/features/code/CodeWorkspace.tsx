@@ -654,6 +654,13 @@ export function CodeWorkspace({ className }: CodeWorkspaceProps) {
             <div className="min-w-0 space-y-1">
               <h2 className="text-lg font-semibold">Unsaved changes</h2>
               {/*
+               * The path is interpolated into the sentence and file paths have no
+               * break opportunities, so a long absolute path formed one unbreakable
+               * token. That widened the dialog's grid column and pushed the action
+               * row, including "Save &amp; Close", outside the clipped box, leaving
+               * the user unable to act on their own unsaved file. Lead with the
+               * basename so the answer to "which file?" is readable at a glance,
+               * and let the full path wrap anywhere.
                */}
               {pendingCloseFile?.path ? (
                 <div className="space-y-1">

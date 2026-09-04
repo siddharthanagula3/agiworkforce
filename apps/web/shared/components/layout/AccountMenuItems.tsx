@@ -34,6 +34,18 @@ export interface AccountMenuItemsProps {
   onLogout: () => void;
 }
 
+/**
+ * The one account menu, shared by WebChatPage's and WebAppShell's expanded
+ * footer and collapsed-rail triggers alike. A product has one account menu.
+ * this is the single place its contents and order are decided, so the two
+ * shells cannot drift into different menus again.
+ *
+ * The three legal-reachability links are unconditional: an audit found the
+ * signed-in shell rendered no route to any policy (every legal link lived on
+ * the marketing footer, which a signed-in user never sees), and the DPDP
+ * grievance route in particular has to be reachable from the page that made
+ * someone want to use it. They stay on every surface this menu renders on.
+ */
 export function AccountMenuItems({
   email,
   onManageWorkspace,

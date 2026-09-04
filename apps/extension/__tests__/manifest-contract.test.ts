@@ -9,6 +9,12 @@ const manifest = JSON.parse(readFileSync(join(APP_ROOT, 'manifest.json'), 'utf8'
   unknown
 >;
 
+/**
+ * Frozen because `debugger` is the most heavily scrutinised permission in Web
+ * Store review and every entry here has to be defensible in the store listing.
+ * Adding one is a deliberate act with a justification to write, not a diff that
+ * slips through, see docs/chrome-web-store-listing.md.
+ */
 const EXPECTED_PERMISSIONS = [
   'activeTab',
   'tabs',

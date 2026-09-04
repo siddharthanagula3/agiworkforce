@@ -5,6 +5,14 @@ import path from 'node:path';
 import process from 'node:process';
 import { fileURLToPath } from 'node:url';
 
+/**
+ * The webview inspector must not reach a shipped binary. The previous guard
+ * grepped the `tauri = ` dependency line, which cannot express this crate's
+ * `devtools = ["tauri/devtools"]` feature and is blind to a `--features` flag
+ * on the bundler command line, the exact route by which the Windows installer
+ * shipped inspectable. This resolves the feature graph instead, so a feature
+ * that reaches devtools through any number of hops is still caught.
+ */
 const FORBIDDEN_FEATURE = 'devtools';
 const FORBIDDEN_DEPENDENCY_FEATURE = 'tauri/devtools';
 const DEFAULT_FEATURE = 'default';
