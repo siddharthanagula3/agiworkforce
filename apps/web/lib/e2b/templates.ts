@@ -27,6 +27,7 @@ import 'server-only';
 import { z } from 'zod';
 import { NOTEBOOK_TEMPLATE_ID, type CloudCodeRuntime } from '@agiworkforce/types';
 import { logger } from '@/lib/logger';
+import { hasServerProviderKey } from '@/lib/services/provider-adapter-service';
 import { E2B_API_KEY_ENV, e2bExecutionEnabled } from './gate';
 
 const E2B_DOMAIN_ENV = 'E2B_DOMAIN';
@@ -222,6 +223,11 @@ export function harnessIsProxyCovered(harnessId: string): boolean {
   );
 }
 
+export function harnessNeedsUserCredential(harnessId: string): boolean {
+  const specs = harnessCredentialSpecs(harnessId);
+  return specs.length > 0 && !specs.some((spec) => hasServerProviderKey(spec.providerId));
+}
+
 export function knownHarnessCommandIds(): ReadonlySet<string> {
   return new Set(
     CODING_HARNESSES.filter(
@@ -287,7 +293,10 @@ async function fetchTemplates(apiKey: string): Promise<CloudCodeRuntime[]> {
 /** Team templates win on a name collision, their own build is the one they mean. */
 function merge(teamTemplates: readonly CloudCodeRuntime[]): CloudCodeRuntime[] {
   const claimed = new Set(teamTemplates.map((runtime) => runtime.id));
-  return [...CODING_HARNESSES.filter((harness) => !claimed.has(harness.id)), ...teamTemplates];
+  return [...CODING_HARNESSES.filter((harness) => !claimed.has(harness.id)), ...teamTemplates].map(
+    (runtime) =>
+      harnessNeedsUserCredential(runtime.id) ? { ...runtime, needsUserCredential: true } : runtime,
+  );
 }
 
 export async function listCloudCodeRuntimes(): Promise<CloudCodeRuntime[]> {

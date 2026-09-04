@@ -65,6 +65,7 @@ describe('cloud-code-session-service validation', () => {
       runtimeId: null,
       repositoryBranch: null,
       extraHosts: [],
+      harnessCredential: null,
     });
   });
 

@@ -14,8 +14,13 @@ import { requireCsrfToken } from '@/lib/csrf';
 import { withErrorHandler } from '@/lib/error-handler';
 import { createError } from '@/lib/errors';
 import { e2bProvisioningReady } from '@/lib/e2b/gate';
-import { NETWORK_ACCESS_REQUIRES_PROXY_CODE, egressNeedsProxy } from '@/lib/e2b/network-policy';
-import { listCloudCodeRuntimes } from '@/lib/e2b/templates';
+import {
+  HARNESS_CREDENTIAL_UNAVAILABLE_CODE,
+  NETWORK_ACCESS_REQUIRES_PROXY_CODE,
+  egressNeedsProxy,
+  harnessCredentialIsAvailable,
+} from '@/lib/e2b/network-policy';
+import { harnessTemplates, listCloudCodeRuntimes } from '@/lib/e2b/templates';
 import { withRateLimit } from '@/lib/rate-limit';
 import { getUserScopedDb } from '@/lib/server/rls-db';
 import {
@@ -126,9 +131,16 @@ async function handleCreate(request: NextRequest) {
   const requestedRuntimeId =
     typeof body['runtimeId'] === 'string' ? body['runtimeId'].trim() || null : null;
   const requestedExtraHostCount = Array.isArray(body['extraHosts']) ? body['extraHosts'].length : 0;
+  const hasExplicitHarnessCredential =
+    typeof body['harnessCredential'] === 'string' && body['harnessCredential'].trim().length > 0;
   if (
     requestedNetworkAccess &&
-    egressNeedsProxy(requestedNetworkAccess, requestedRuntimeId, false, requestedExtraHostCount)
+    egressNeedsProxy(
+      requestedNetworkAccess,
+      requestedRuntimeId,
+      hasExplicitHarnessCredential,
+      requestedExtraHostCount,
+    )
   ) {
     return NextResponse.json(
       {
@@ -137,6 +149,24 @@ async function handleCreate(request: NextRequest) {
             'Full network access and extra egress hosts are not available yet for this coding agent: its provider credentials would enter the sandbox directly. Choose Trusted hosts or No network without extra hosts, or pick an environment with no coding agent, until the credential proxy covers it.',
           type: 'invalid_request_error',
           code: NETWORK_ACCESS_REQUIRES_PROXY_CODE,
+        },
+      },
+      { status: 422 },
+    );
+  }
+  if (
+    requestedRuntimeId &&
+    !harnessCredentialIsAvailable(requestedRuntimeId, hasExplicitHarnessCredential)
+  ) {
+    const harnessName =
+      harnessTemplates().find((harness) => harness.id === requestedRuntimeId)?.name ??
+      requestedRuntimeId;
+    return NextResponse.json(
+      {
+        error: {
+          message: `${harnessName} has no managed provider credential configured. Bring your own key for ${harnessName}, or choose a different coding agent.`,
+          type: 'invalid_request_error',
+          code: HARNESS_CREDENTIAL_UNAVAILABLE_CODE,
         },
       },
       { status: 422 },
