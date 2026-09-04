@@ -258,14 +258,17 @@ export async function syncEnterpriseContractFromSubscription(
         procurement_reference, contract_term_start, contract_term_end, billing_cadence, committed_seats,
         included_usage_cents_per_period, overage_stripe_price_id, committed_usage_block_cents,
         minimum_annual_spend_cents, support_tier, customer_legal_entity)
-     values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, coalesce($11, 0), $12, coalesce($13, 0), coalesce($14, 0), $15, $16)
+     values (
+       $1::uuid, $2::text, $3::text, $4::text, $5::text, $6::text, $7::date, $8::date, $9::text, $10::integer,
+       coalesce($11::bigint, 0), $12::text, coalesce($13::bigint, 0), coalesce($14::bigint, 0), $15::text, $16::text
+     )
      on conflict (organization_id) do update set
        stripe_customer_id = excluded.stripe_customer_id,
        stripe_subscription_id = excluded.stripe_subscription_id,
        stripe_product_id = excluded.stripe_product_id,
        stripe_price_id = excluded.stripe_price_id,
        procurement_reference = coalesce(
-         excluded.procurement_reference,
+         $6::text,
          organization_billing_contracts.procurement_reference
        ),
        contract_term_start = excluded.contract_term_start,
@@ -273,24 +276,24 @@ export async function syncEnterpriseContractFromSubscription(
        billing_cadence = excluded.billing_cadence,
        committed_seats = excluded.committed_seats,
        included_usage_cents_per_period = coalesce(
-         $11,
+         $11::bigint,
          organization_billing_contracts.included_usage_cents_per_period
        ),
        overage_stripe_price_id = coalesce(
-         excluded.overage_stripe_price_id,
+         $12::text,
          organization_billing_contracts.overage_stripe_price_id
        ),
        committed_usage_block_cents = coalesce(
-         $13,
+         $13::bigint,
          organization_billing_contracts.committed_usage_block_cents
        ),
        minimum_annual_spend_cents = coalesce(
-         $14,
+         $14::bigint,
          organization_billing_contracts.minimum_annual_spend_cents
        ),
-       support_tier = coalesce(excluded.support_tier, organization_billing_contracts.support_tier),
+       support_tier = coalesce($15::text, organization_billing_contracts.support_tier),
        customer_legal_entity = coalesce(
-         excluded.customer_legal_entity,
+         $16::text,
          organization_billing_contracts.customer_legal_entity
        )`,
     [
@@ -343,9 +346,9 @@ async function recomputeOldestOpenInvoice(
 
   await db.execute(
     `update public.organization_billing_contracts
-        set oldest_open_invoice_id = $2,
-            oldest_open_invoice_due_at = $3
-      where organization_id = $1`,
+        set oldest_open_invoice_id = $2::text,
+            oldest_open_invoice_due_at = $3::timestamptz
+      where organization_id = $1::uuid`,
     [organizationId, oldest?.stripe_invoice_id ?? null, oldest?.due_at ?? null],
   );
 }
@@ -380,7 +383,11 @@ export async function recordEnterpriseInvoiceEvent(
        (stripe_invoice_id, organization_id, stripe_subscription_id, invoice_number, status, collection_method,
         amount_due_cents, amount_paid_cents, currency, procurement_reference, period_start, period_end, due_at,
         paid_at, voided_at, hosted_invoice_url, invoice_pdf_url)
-     values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
+     values (
+       $1::text, $2::uuid, $3::text, $4::text, $5::text, $6::text, $7::bigint, $8::bigint, $9::text,
+       $10::text, $11::timestamptz, $12::timestamptz, $13::timestamptz, $14::timestamptz, $15::timestamptz,
+       $16::text, $17::text
+     )
      on conflict (stripe_invoice_id) do update set
        organization_id = excluded.organization_id,
        stripe_subscription_id = excluded.stripe_subscription_id,
@@ -391,7 +398,7 @@ export async function recordEnterpriseInvoiceEvent(
        amount_paid_cents = excluded.amount_paid_cents,
        currency = excluded.currency,
        procurement_reference = coalesce(
-         excluded.procurement_reference,
+         $10::text,
          organization_billing_invoices.procurement_reference
        ),
        period_start = excluded.period_start,
@@ -432,8 +439,8 @@ export async function endEnterpriseContractIfPresent(
 ): Promise<void> {
   await db.execute(
     `update public.organization_billing_contracts
-        set ended_at = $2
-      where stripe_subscription_id = $1
+        set ended_at = $2::timestamptz
+      where stripe_subscription_id = $1::text
         and ended_at is null`,
     [stripeSubscriptionId, endedAtIso],
   );

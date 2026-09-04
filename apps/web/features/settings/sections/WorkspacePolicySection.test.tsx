@@ -32,6 +32,7 @@ function policy(overrides: Partial<AdminPolicy> = {}): AdminPolicy {
     retentionDays: 365,
     retentionEnforced: false,
     externalSharingEnabled: true,
+    allowMemory: false,
     secretHandling: 'redact',
     requireMfa: false,
     monthlySpendCapCents: null,
@@ -95,6 +96,21 @@ describe('WorkspacePolicySection security controls', () => {
     await user.click(screen.getByRole('button', { name: /save policy/i }));
 
     expect(mockUpdate).toHaveBeenCalledWith(expect.objectContaining({ requireMfa: true }));
+  });
+
+  it('turns workspace memory on and saves it', async () => {
+    const user = userEvent.setup();
+    mockOverview.mockReturnValue(overview({ policy: policy({ allowMemory: false }) }));
+    renderSection();
+
+    const toggle = screen.getByLabelText('Allow memory');
+    expect(toggle).not.toBeChecked();
+    expect(screen.getByText(/memory is off for the workspace/i)).toBeInTheDocument();
+
+    await user.click(toggle);
+    await user.click(screen.getByRole('button', { name: /save policy/i }));
+
+    expect(mockUpdate).toHaveBeenCalledWith(expect.objectContaining({ allowMemory: true }));
   });
 
   it('reports no spend cap when the policy has none', () => {

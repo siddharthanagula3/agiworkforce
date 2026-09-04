@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import { classifyMemoryCategory, normalizeMemoryKey } from '@agiworkforce/agent-core';
 import { fenceUntrustedMemoryContent } from '@agiworkforce/utils';
 import { withSpan } from '@/lib/observability/span';
+import { logger } from '@/lib/logger';
 import type { ChatCompletionRequest } from '@/app/api/llm/v1/chat/completions/lib/request-processor';
 
 export interface ManagedMemoryContextDb {
@@ -35,10 +36,42 @@ function truncate(value: string, maxChars: number): string {
   return value.length > maxChars ? `${value.slice(0, Math.max(0, maxChars - 1))}…` : value;
 }
 
+/**
+ * Whether the caller's active organization has turned memory on for its
+ * members. Absent a policy row, or one this read failed to reach, memory
+ * stays off: D9 gates workspace memory closed until an owner or admin
+ * explicitly enables it, and a read failure must not silently open that
+ * gate for every member.
+ */
+async function organizationAllowsMemory(
+  db: ManagedMemoryContextDb,
+  organizationId: string,
+): Promise<boolean> {
+  try {
+    const [row] = await db.query<{ allow_memory: boolean }>(
+      `select allow_memory
+         from organization_admin_policies
+        where organization_id = $1
+        limit 1`,
+      [organizationId],
+    );
+    return row?.allow_memory === true;
+  } catch (error) {
+    logger.error(
+      { error, organizationId },
+      '[managed-memory] organization policy read failed; memory disabled for this organization',
+    );
+    return false;
+  }
+}
+
 export async function loadManagedMemoryPolicy(
   db: ManagedMemoryContextDb,
-  params: { userId: string },
+  params: { userId: string; organizationId?: string | null },
 ): Promise<ManagedMemoryPolicy> {
+  if (params.organizationId && !(await organizationAllowsMemory(db, params.organizationId))) {
+    return DISABLED_MANAGED_MEMORY_POLICY;
+  }
   const [row] = await db.query<{ capabilities: unknown }>(
     `select coalesce(settings -> 'capabilities', '{}'::jsonb) as capabilities
        from user_settings
