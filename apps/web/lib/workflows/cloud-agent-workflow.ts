@@ -176,6 +176,7 @@ const CollectedProviderLineSchema = z
   .object({
     line: z.string(),
     publicTextDelta: z.string().optional(),
+    reasoningDelta: z.string().optional(),
     serverToolStart: ServerToolStartSignalSchema.optional(),
     serverToolResults: z.array(ServerToolResultSignalSchema).optional(),
   })

@@ -14,10 +14,12 @@ import {
   PauseCircle,
 } from 'lucide-react';
 import type { AgentEventToolCategory } from '@agiworkforce/types/protocol';
-import type {
-  AgentActivityEntry,
-  AgentActivityState,
-  AgentActivityToolEntry,
+import {
+  isGenerationProgressEntry,
+  REASONING_PROGRESS_SUMMARY,
+  type AgentActivityEntry,
+  type AgentActivityState,
+  type AgentActivityToolEntry,
 } from '@agiworkforce/client-runtime';
 import { cn } from '../lib/utils';
 import { ToolCallCard, type ToolCallStatus } from './ToolCallCard';
@@ -86,7 +88,12 @@ function finalSummary(activity: AgentActivityState): string | undefined {
   return undefined;
 }
 
-function labelForActivity(activity: AgentActivityState): string | undefined {
+function thinkingLabel(startedAtMs: number, nowMs: number): string {
+  const elapsedSeconds = Math.max(0, Math.round((nowMs - startedAtMs) / 1000));
+  return elapsedSeconds > 0 ? `Thinking · ${elapsedSeconds}s` : 'Thinking';
+}
+
+function labelForActivity(activity: AgentActivityState, nowMs: number): string | undefined {
   for (let index = activity.entries.length - 1; index >= 0; index -= 1) {
     const entry = activity.entries[index];
     if (!entry) continue;
@@ -101,13 +108,16 @@ function labelForActivity(activity: AgentActivityState): string | undefined {
         }
         return entry.summary || 'Searching the web';
       }
+      if (isGenerationProgressEntry(entry) && entry.summary === REASONING_PROGRESS_SUMMARY) {
+        return thinkingLabel(entry.startedAtMs, nowMs);
+      }
       return entry.summary;
     }
   }
   return undefined;
 }
 
-export function buildAgentActivitySummary(activity: AgentActivityState): string {
+export function buildAgentActivitySummary(activity: AgentActivityState, nowMs: number): string {
   const active = latestActiveSummary(activity);
   if (activity.status === 'awaiting-approval') {
     return active ? `Needs approval · ${active}` : 'Needs approval';
@@ -117,7 +127,7 @@ export function buildAgentActivitySummary(activity: AgentActivityState): string 
   if (activity.status === 'partial') return finalSummary(activity) ?? 'Finished with errors';
   if (activity.status === 'cancelled') return finalSummary(activity) ?? 'Cancelled';
   if (activity.status === 'completed') return finalSummary(activity) ?? 'Done';
-  return labelForActivity(activity) ?? 'Working…';
+  return labelForActivity(activity, nowMs) ?? 'Working…';
 }
 
 function buildAgentActivityAnnouncement(activity: AgentActivityState): string {
@@ -130,7 +140,7 @@ function buildAgentActivityAnnouncement(activity: AgentActivityState): string {
   if (activity.status === 'partial') return 'Agent activity finished with errors';
   if (activity.status === 'cancelled') return 'Agent activity cancelled';
   if (activity.status === 'completed') return 'Agent activity completed';
-  const running = labelForActivity(activity);
+  const running = labelForActivity(activity, Date.now());
   return running ? `Agent working: ${running}` : 'Agent working';
 }
 
@@ -518,7 +528,20 @@ export function AgentActivityTimeline({
     }
   };
 
-  const summary = useMemo(() => buildAgentActivitySummary(activity), [activity]);
+  const isReasoning = activity.entries.some(
+    (entry) =>
+      isGenerationProgressEntry(entry) &&
+      entry.status === 'running' &&
+      entry.summary === REASONING_PROGRESS_SUMMARY,
+  );
+  const [nowMs, setNowMs] = useState(() => Date.now());
+  useEffect(() => {
+    if (!isReasoning) return;
+    const id = setInterval(() => setNowMs(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, [isReasoning]);
+
+  const summary = useMemo(() => buildAgentActivitySummary(activity, nowMs), [activity, nowMs]);
   const announcement = buildAgentActivityAnnouncement(activity);
   const visibleEntryCount =
     entryVisibility.turnId === activity.turnId ? entryVisibility.count : ACTIVITY_PAGE_SIZE;
