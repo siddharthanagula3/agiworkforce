@@ -687,8 +687,8 @@ export default function CloudConnectorsScreen({
         void (async () => {
           try {
             await WebBrowser.openBrowserAsync(getGitHubInstallWebUrl());
-          } catch {
-            // noop
+          } catch (err) {
+            void err;
           }
           if (isConnectorActionCurrent(account)) void load();
         })();

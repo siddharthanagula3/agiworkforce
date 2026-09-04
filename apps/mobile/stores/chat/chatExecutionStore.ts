@@ -769,7 +769,7 @@ export function captureArtifactsFromMessage(
       useArtifactStore.getState().addArtifacts(mobileArtifacts);
     }
   } catch {
-    // noop
+    return;
   }
 }
 

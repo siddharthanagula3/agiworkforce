@@ -490,7 +490,7 @@ export function ChatInput({
           }
         }
       } catch {
-        // noop
+        return;
       } finally {
         if (transcriptionRunRef.current === run) {
           setIsTranscribing(false);

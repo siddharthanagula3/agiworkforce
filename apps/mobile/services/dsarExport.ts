@@ -41,8 +41,8 @@ let _compliance: ComplianceModule = {};
 try {
   // eslint-disable-next-line @typescript-eslint/no-require-imports
   _compliance = require('@agiworkforce/compliance') as ComplianceModule;
-} catch {
-  // noop
+} catch (err) {
+  void err;
 }
 
 export function buildMarkedTranscript(
