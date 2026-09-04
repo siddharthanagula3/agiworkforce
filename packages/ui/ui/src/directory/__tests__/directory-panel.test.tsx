@@ -239,9 +239,7 @@ describe('DirectoryPanel install consent', () => {
     });
     fireEvent.click(screen.getByRole('button', { name: 'Add Productivity' }));
     expect(await screen.findByText('Install Productivity?')).toBeTruthy();
-    expect(
-      screen.getByText("Installing adds this pack's skills to your account."),
-    ).toBeTruthy();
+    expect(screen.getByText("Installing adds this pack's skills to your account.")).toBeTruthy();
     expect(install).not.toHaveBeenCalled();
   });
 
@@ -304,6 +302,25 @@ describe('DirectoryPanel detail', () => {
     expect(onOpenEntryChange).toHaveBeenCalledWith(null);
     fireEvent.click(screen.getByRole('button', { name: '/canvas-design' }));
     await waitFor(() => expect(onOpenEntryChange).toHaveBeenLastCalledWith('canvas-design'));
+  });
+
+  it('does not repeat the connector name as its author or publisher', async () => {
+    renderPanel(
+      'connectors',
+      {
+        loadDetail: () =>
+          Promise.resolve({
+            ...DETAILS.connectors,
+            publisher: 'Customerscore',
+            authorName: 'Customerscore',
+            name: 'Customerscore',
+          } as DirectoryDetail),
+      },
+      { openEntryId: 'customerscore' },
+    );
+    expect(await screen.findByRole('heading', { name: 'Customerscore' })).toBeTruthy();
+    expect(screen.queryByText(/Developed by Customerscore/)).toBeNull();
+    expect(screen.queryByText('Author')).toBeNull();
   });
 
   it('opens the entry a deep link names', async () => {

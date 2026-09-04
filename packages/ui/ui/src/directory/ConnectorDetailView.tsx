@@ -163,6 +163,7 @@ export function ConnectorDetailView({
   busy?: boolean;
 }) {
   const connected = detail.connected === true;
+  const authorName = detail.authorName === detail.name ? null : detail.authorName;
   const moreInfo: { label: string; href: string }[] = [
     { label: CONNECTOR_DOCUMENTATION_LABEL, href: detail.documentationUrl ?? '' },
     { label: CONNECTOR_WEBSITE_LABEL, href: detail.websiteUrl ?? '' },
@@ -227,22 +228,22 @@ export function ConnectorDetailView({
       <ChipList label={CONNECTOR_TOOLS_LABEL} values={detail.tools ?? []} />
       <ChipList label={CONNECTOR_CATEGORIES_LABEL} values={detail.categories ?? []} />
 
-      {detail.authorName || detail.connectorUrl ? (
+      {authorName || detail.connectorUrl ? (
         <>
           <hr className="border-border" />
           <section className="flex flex-col gap-2">
             <h4 className="text-sm font-semibold text-foreground">{CONNECTOR_DETAILS_LABEL}</h4>
             <dl className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              {detail.authorName ? (
+              {authorName ? (
                 <div className="flex flex-col gap-1">
                   <dt className="text-xs text-muted-foreground">{CONNECTOR_AUTHOR_LABEL}</dt>
                   <dd>
                     {detail.authorUrl ? (
                       <OutboundLink href={detail.authorUrl} onOpenHref={onOpenHref}>
-                        {detail.authorName}
+                        {authorName}
                       </OutboundLink>
                     ) : (
-                      <span className="text-sm text-foreground">{detail.authorName}</span>
+                      <span className="text-sm text-foreground">{authorName}</span>
                     )}
                   </dd>
                 </div>
