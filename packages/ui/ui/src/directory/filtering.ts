@@ -1,16 +1,8 @@
-import {
-  COUNT_PRECISION,
-  DEFAULT_DIRECTORY_SECTION,
-  DIRECTORY_HASH_PREFIX,
-  INSTALL_COUNT_FLOOR,
-  MILLION,
-  THOUSAND,
-} from './constants';
+import { COUNT_PRECISION, INSTALL_COUNT_FLOOR, MILLION, THOUSAND } from './constants';
 import type {
   DirectoryDetailFile,
   DirectoryEntry,
   DirectoryFilterSelection,
-  DirectorySectionKey,
   DirectorySortKey,
 } from './types';
 
@@ -144,27 +136,4 @@ export function buildFileTree(files: readonly DirectoryDetailFile[]): DirectoryT
     });
   }
   return [...nodes.values()];
-}
-
-export interface DirectoryHashRoute {
-  section: DirectorySectionKey;
-  id: string | null;
-}
-
-const SECTION_KEYS: readonly DirectorySectionKey[] = ['skills', 'connectors', 'plugins'];
-
-export function parseDirectoryHash(hash: string): DirectoryHashRoute | null {
-  const raw = hash.startsWith('#') ? hash.slice(1) : hash;
-  const segments = raw.split('/').filter(Boolean);
-  if (segments[0] !== DIRECTORY_HASH_PREFIX) return null;
-  const section = segments[1] as DirectorySectionKey | undefined;
-  if (!section || !SECTION_KEYS.includes(section))
-    return { section: DEFAULT_DIRECTORY_SECTION, id: null };
-  const id = segments.slice(2).join('/');
-  return { section, id: id ? decodeURIComponent(id) : null };
-}
-
-export function buildDirectoryHash(section: DirectorySectionKey, id?: string | null): string {
-  const tail = id ? `/${encodeURIComponent(id)}` : '';
-  return `#${DIRECTORY_HASH_PREFIX}/${section}${tail}`;
 }

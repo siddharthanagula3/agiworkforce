@@ -36,6 +36,7 @@ export interface DirectoryEntry {
   isNew?: boolean;
   installCount?: number;
   installed?: boolean;
+  popular?: boolean;
   sourceId?: string;
   updatedAt?: string;
   facets?: Readonly<Record<string, readonly string[]>>;
@@ -48,6 +49,7 @@ export interface DirectorySection {
   installable?: boolean;
   loading?: boolean;
   error?: string | null;
+  notice?: string | null;
   sources?: readonly DirectorySourceChip[];
   sourcesHeading?: string;
   filterGroups?: readonly DirectoryFilterGroup[];
@@ -58,6 +60,8 @@ export interface DirectorySection {
 export interface DirectoryDetailFile {
   path: string;
   content?: string;
+  previewable?: boolean;
+  downloadHref?: string;
 }
 
 export interface DirectorySkillDetail {
@@ -84,10 +88,18 @@ export interface DirectoryConnectorDetail {
   iconUrl?: string | null;
   monogram?: string;
   tools?: readonly string[];
+  categories?: readonly string[];
   permissions?: readonly string[];
+  publisher?: string;
+  publisherUrl?: string | null;
+  authorName?: string | null;
+  authorUrl?: string | null;
+  connectorUrl?: string | null;
+  documentationUrl?: string | null;
+  supportUrl?: string | null;
+  privacyPolicyUrl?: string | null;
   connected?: boolean;
   connectable?: boolean;
-  href?: string;
 }
 
 export interface DirectoryPluginDetail {
@@ -137,6 +149,8 @@ export interface DirectoryAdapter {
   openSettings?: (section: DirectorySectionKey, id: string) => Promise<void> | void;
   copyLink?: (section: DirectorySectionKey, id: string) => Promise<void> | void;
   openHref?: (href: string) => Promise<void> | void;
+  copyValue?: (value: string) => Promise<void> | void;
+  downloadSkillFile?: (skillId: string, path: string) => Promise<void> | void;
   addMarketplace?: (input: DirectoryMarketplaceInput) => Promise<DirectoryMarketplaceResult>;
   removeMarketplace?: (id: string) => Promise<void>;
   browseMarketplaceSources?: () => Promise<void> | void;

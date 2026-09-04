@@ -1,14 +1,12 @@
 import { describe, expect, it } from 'vitest';
 
 import {
-  buildDirectoryHash,
   buildFileTree,
   countActiveFilters,
   formatInstallCount,
   matchesDirectoryFilters,
   matchesDirectorySearch,
   matchesDirectorySource,
-  parseDirectoryHash,
   selectDirectoryEntries,
   sortDirectoryEntries,
   toggleFilterValue,
@@ -177,33 +175,5 @@ describe('buildFileTree', () => {
 
   it('returns a single row for a one file skill', () => {
     expect(buildFileTree([{ path: 'SKILL.md', content: 'body' }])).toHaveLength(1);
-  });
-});
-
-describe('directory hash routing', () => {
-  it('ignores a hash that is not a directory link', () => {
-    expect(parseDirectoryHash('#settings/skills')).toBeNull();
-  });
-
-  it('parses a section link', () => {
-    expect(parseDirectoryHash('#directory/skills')).toEqual({ section: 'skills', id: null });
-  });
-
-  it('parses a detail link and decodes the id', () => {
-    expect(parseDirectoryHash('#directory/connectors/io.github%2Fslack')).toEqual({
-      section: 'connectors',
-      id: 'io.github/slack',
-    });
-  });
-
-  it('falls back to the default section for an unknown one', () => {
-    expect(parseDirectoryHash('#directory/widgets')).toEqual({ section: 'skills', id: null });
-  });
-
-  it('round trips through buildDirectoryHash', () => {
-    const hash = buildDirectoryHash('connectors', 'io.github/slack');
-    expect(hash).toBe('#directory/connectors/io.github%2Fslack');
-    expect(parseDirectoryHash(hash)).toEqual({ section: 'connectors', id: 'io.github/slack' });
-    expect(buildDirectoryHash('plugins')).toBe('#directory/plugins');
   });
 });

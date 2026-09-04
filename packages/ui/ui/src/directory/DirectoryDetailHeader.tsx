@@ -35,6 +35,7 @@ export function DirectoryDetailHeader({
   onPrimary,
   onOpenSettings,
   onRemove,
+  removeLabel,
   onCopyLink,
   busy,
 }: {
@@ -48,6 +49,7 @@ export function DirectoryDetailHeader({
   onPrimary?: () => void;
   onOpenSettings?: () => void;
   onRemove?: () => void;
+  removeLabel?: string;
   onCopyLink?: () => void;
   busy?: boolean;
 }) {
@@ -94,7 +96,7 @@ export function DirectoryDetailHeader({
                   DIRECTORY_FOCUS_RING,
                 )}
               >
-                {REMOVE_LABEL}
+                {removeLabel ?? REMOVE_LABEL}
               </button>
             ) : null}
           </>
