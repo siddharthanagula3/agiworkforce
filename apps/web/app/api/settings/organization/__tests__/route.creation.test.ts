@@ -163,6 +163,9 @@ describe('organization creation and plan response', () => {
       if (text.includes('from public.organizations')) {
         return [{ ...organization, member_count: '1' }];
       }
+      if (text.includes('from public.organization_billing_contracts')) {
+        return [];
+      }
       throw new Error(`Unexpected query: ${text}`);
     });
 
@@ -172,6 +175,7 @@ describe('organization creation and plan response', () => {
     const body = (await response.json()) as {
       organization: { plan: string; maxMembers: number | null };
       access: { plan: string; canManageTeam: boolean; maxMembers: number | null };
+      collectionState: { stage: string; readOnly: boolean } | null;
     };
 
     expect(response.status).toBe(200);
@@ -181,5 +185,6 @@ describe('organization creation and plan response', () => {
       canManageTeam: true,
       maxMembers: null,
     });
+    expect(body.collectionState).toMatchObject({ stage: 'current', readOnly: false });
   });
 });
