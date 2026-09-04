@@ -1778,6 +1778,96 @@ html[data-contrast='more'] *:focus-visible {
   flex-direction: column;
   gap: 6px;
 }
+[data-design='agi'].agi-home {
+  --agi-ground: #0e1013;
+  --agi-ground-2: #14171c;
+  --agi-ground-3: #1c2027;
+  --agi-bg: var(--agi-ground);
+  --agi-bg-2: var(--agi-ground-2);
+  --agi-bg-3: var(--agi-ground-3);
+  --agi-card: #121519;
+  --agi-ink: #f3f4f6;
+  --agi-ink-2: #a3abb8;
+  --agi-ink-3: #848d9b;
+  --agi-ink-quiet: #848d9b;
+  --agi-ink-faint: #848d9b;
+  --agi-rule: rgba(255, 255, 255, 0.08);
+  --agi-rule-strong: rgba(255, 255, 255, 0.14);
+  --agi-frame: rgba(255, 255, 255, 0.14);
+  --agi-accent: #2f6fe4;
+  --agi-accent-hover: #2a63d0;
+  --agi-accent-ink: #ffffff;
+  --agi-accent-text: #6ea3ff;
+  --agi-accent-soft: rgba(110, 163, 255, 0.12);
+  --agi-lane-local: #d9a441;
+  --agi-lane-local-text: #d9a441;
+  --agi-lane-local-on-primary: #1a1300;
+  --agi-lane-byok: #b39cff;
+  --agi-lane-byok-text: #b39cff;
+  --agi-lane-byok-on-primary: #160a33;
+  --agi-lane-cloud: #6ea3ff;
+  --agi-lane-cloud-text: #6ea3ff;
+  --agi-lane-cloud-on-primary: #04142e;
+  --agi-button-bg: var(--agi-accent);
+  --agi-button-bg-hover: var(--agi-accent-hover);
+  --agi-button-ink: var(--agi-accent-ink);
+  --agi-terminal: #0a0c0f;
+  --agi-terminal-ink: #d7dbe2;
+  --agi-terminal-dim: #848d9b;
+  --agi-shadow: rgba(0, 0, 0, 0.6);
+  --agi-shadow-lift: 0 24px 48px -32px rgba(0, 0, 0, 0.6);
+  --agi-home-shadow: 0 24px 48px -32px rgba(0, 0, 0, 0.6);
+  --agi-code-bg: rgba(255, 255, 255, 0.05);
+  --agi-selection-bg: rgba(110, 163, 255, 0.3);
+  --agi-font: var(--font-geist-sans), 'Helvetica Neue', system-ui, sans-serif;
+  --agi-font-display: var(--font-geist-sans), 'Helvetica Neue', system-ui, sans-serif;
+  --agi-container: 75rem;
+}
+
+[data-theme='light'] [data-design='agi'].agi-home,
+[data-theme='light'][data-design='agi'].agi-home {
+  --agi-ground: #ffffff;
+  --agi-ground-2: #f5f7fa;
+  --agi-ground-3: #e9edf3;
+  --agi-bg: var(--agi-ground);
+  --agi-bg-2: var(--agi-ground-2);
+  --agi-bg-3: var(--agi-ground-3);
+  --agi-card: #ffffff;
+  --agi-ink: #111827;
+  --agi-ink-2: #4b5563;
+  --agi-ink-3: #5f6b7a;
+  --agi-ink-quiet: #5f6b7a;
+  --agi-ink-faint: #5f6b7a;
+  --agi-rule: rgba(17, 24, 39, 0.09);
+  --agi-rule-strong: rgba(17, 24, 39, 0.16);
+  --agi-frame: rgba(17, 24, 39, 0.14);
+  --agi-accent: #1d5fd6;
+  --agi-accent-hover: #174fb5;
+  --agi-accent-ink: #ffffff;
+  --agi-accent-text: #1d5fd6;
+  --agi-accent-soft: rgba(29, 95, 214, 0.08);
+  --agi-lane-local: #8a5d00;
+  --agi-lane-local-text: #8a5d00;
+  --agi-lane-local-on-primary: #ffffff;
+  --agi-lane-byok: #6d3fd6;
+  --agi-lane-byok-text: #6d3fd6;
+  --agi-lane-byok-on-primary: #ffffff;
+  --agi-lane-cloud: #1d5fd6;
+  --agi-lane-cloud-text: #1d5fd6;
+  --agi-lane-cloud-on-primary: #ffffff;
+  --agi-button-bg: var(--agi-accent);
+  --agi-button-bg-hover: var(--agi-accent-hover);
+  --agi-button-ink: var(--agi-accent-ink);
+  --agi-terminal: #0e1013;
+  --agi-terminal-ink: #d7dbe2;
+  --agi-terminal-dim: #9aa3b0;
+  --agi-shadow: rgba(17, 24, 39, 0.1);
+  --agi-shadow-lift: 0 16px 40px -28px rgba(17, 24, 39, 0.25);
+  --agi-home-shadow: none;
+  --agi-code-bg: rgba(17, 24, 39, 0.05);
+  --agi-selection-bg: rgba(29, 95, 214, 0.2);
+}
+
 [data-design='agi'] .agi-msg-role {
   font-size: 12px;
   font-weight: 500;
