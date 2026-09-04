@@ -73,6 +73,30 @@ describe('stateless MCP persistent cache', () => {
     await expect(store.get({ method: 'tools/list' })).resolves.toBeUndefined();
   });
 
+  it('reads only the stamp column, not the value', async () => {
+    mocks.query.mockResolvedValueOnce([{ stamp: '7' }]);
+    const store = new NeonMcpResponseCacheStore();
+
+    await expect(store.getStamp({ method: 'tools/list', params: 'v1' })).resolves.toBe(7);
+    expect(String(mocks.query.mock.calls[0]?.[0])).not.toContain('value');
+  });
+
+  it('returns null for a stamp on a missing key', async () => {
+    mocks.query.mockResolvedValueOnce([]);
+    const store = new NeonMcpResponseCacheStore();
+
+    await expect(store.getStamp({ method: 'tools/list', params: 'v1' })).resolves.toBeNull();
+  });
+
+  it('treats a missing table as no stamp rather than an error', async () => {
+    mocks.query.mockRejectedValueOnce(
+      Object.assign(new Error('relation does not exist'), { code: '42P01' }),
+    );
+    const store = new NeonMcpResponseCacheStore();
+
+    await expect(store.getStamp({ method: 'tools/list', params: 'v1' })).resolves.toBeNull();
+  });
+
   it('partitions persisted discovery by a hash of both endpoint and authorization context', async () => {
     mocks.execute.mockResolvedValue(undefined);
     const discover = {

@@ -45,6 +45,23 @@ interface CacheRow {
 }
 
 export class NeonMcpResponseCacheStore implements ResponseCacheStore {
+  async getStamp(key: CacheKey): Promise<number | null> {
+    const db = getNeonDb();
+    try {
+      const rows = await db.query<{ stamp: string | number }>(
+        `select stamp
+           from public.mcp_response_cache
+          where method = $1 and params_key = $2 and partition_key = $3`,
+        normalizedKey(key),
+      );
+      const row = rows[0];
+      return row ? Number(row.stamp) : null;
+    } catch (error) {
+      if (isCacheSchemaUnavailable(error)) return null;
+      throw error;
+    }
+  }
+
   async get(key: CacheKey): Promise<CacheEntry | undefined> {
     const db = getNeonDb();
     try {
