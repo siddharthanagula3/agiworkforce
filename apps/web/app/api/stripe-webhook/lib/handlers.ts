@@ -163,7 +163,7 @@ export async function dispatchStripeEvent(
         [stripeSubId],
       );
 
-      await endEnterpriseContractIfPresent(db, stripeSubId, canceledAt);
+      await endEnterpriseContractIfPresent(db, stripeSubId, canceledAt, event.created);
 
       await recordAuditEvent({
         userId: ownerRow?.user_id ?? null,
