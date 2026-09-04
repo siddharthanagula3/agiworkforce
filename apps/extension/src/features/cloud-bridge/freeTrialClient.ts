@@ -198,8 +198,8 @@ export async function getAuthToken(forceRefresh = false): Promise<string | null>
         const token = local[DEV_TOKEN_KEY];
         if (typeof token === 'string' && token.length > 0) return token;
       }
-    } catch {
-      /* noop */
+    } catch (err) {
+      void err;
     }
   }
 

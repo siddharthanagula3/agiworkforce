@@ -683,8 +683,8 @@ async function readSiteAllowlist(): Promise<ReadonlySet<string>> {
     if (Array.isArray(list)) {
       return new Set(list as string[]);
     }
-  } catch {
-    /* noop */
+  } catch (err) {
+    void err;
   }
   return new Set<string>();
 }
