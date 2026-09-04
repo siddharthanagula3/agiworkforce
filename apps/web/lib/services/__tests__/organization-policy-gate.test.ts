@@ -38,6 +38,18 @@ function policyRow(overrides: Record<string, unknown> = {}) {
   };
 }
 
+const NO_OPEN_INVOICE: [] = [];
+
+function overdueContractRow(daysPastDue: number) {
+  return [
+    {
+      oldest_open_invoice_due_at: new Date(
+        Date.now() - daysPastDue * 24 * 60 * 60 * 1000,
+      ).toISOString(),
+    },
+  ];
+}
+
 describe('evaluateActiveWorkspacePolicy', () => {
   beforeEach(() => vi.clearAllMocks());
 
@@ -58,7 +70,10 @@ describe('evaluateActiveWorkspacePolicy', () => {
 
   it('leaves an organization with no saved policy ungoverned rather than inheriting column defaults', async () => {
     const h = harness();
-    h.query.mockResolvedValueOnce([{ organization_id: ORGANIZATION_ID }]).mockResolvedValueOnce([]); // no policy row
+    h.query
+      .mockResolvedValueOnce([{ organization_id: ORGANIZATION_ID }])
+      .mockResolvedValueOnce(NO_OPEN_INVOICE)
+      .mockResolvedValueOnce([]); // no policy row
 
     const decision = await evaluateActiveWorkspacePolicy(h.db, 'user-1', {
       resource: 'managed_compute',
@@ -74,6 +89,7 @@ describe('evaluateActiveWorkspacePolicy', () => {
     const h = harness();
     h.query
       .mockResolvedValueOnce([{ organization_id: ORGANIZATION_ID }])
+      .mockResolvedValueOnce(NO_OPEN_INVOICE)
       .mockResolvedValueOnce([policyRow({ allow_managed_compute: false })]);
 
     const decision = await evaluateActiveWorkspacePolicy(h.db, 'user-1', {
@@ -88,12 +104,15 @@ describe('evaluateActiveWorkspacePolicy', () => {
 
   it('binds a saved policy: an enabled workspace allows the turn', async () => {
     const h = harness();
-    h.query.mockResolvedValueOnce([{ organization_id: ORGANIZATION_ID }]).mockResolvedValueOnce([
-      policyRow({
-        allow_managed_compute: true,
-        allowed_privacy_modes: ['local', 'byok', 'managed'],
-      }),
-    ]);
+    h.query
+      .mockResolvedValueOnce([{ organization_id: ORGANIZATION_ID }])
+      .mockResolvedValueOnce(NO_OPEN_INVOICE)
+      .mockResolvedValueOnce([
+        policyRow({
+          allow_managed_compute: true,
+          allowed_privacy_modes: ['local', 'byok', 'managed'],
+        }),
+      ]);
 
     const decision = await evaluateActiveWorkspacePolicy(h.db, 'user-1', {
       resource: 'managed_compute',
@@ -106,13 +125,16 @@ describe('evaluateActiveWorkspacePolicy', () => {
 
   it('denies a disabled surface even when managed compute is on', async () => {
     const h = harness();
-    h.query.mockResolvedValueOnce([{ organization_id: ORGANIZATION_ID }]).mockResolvedValueOnce([
-      policyRow({
-        allow_managed_compute: true,
-        allowed_privacy_modes: ['local', 'byok', 'managed'],
-        allow_cli_cloud_sync: false,
-      }),
-    ]);
+    h.query
+      .mockResolvedValueOnce([{ organization_id: ORGANIZATION_ID }])
+      .mockResolvedValueOnce(NO_OPEN_INVOICE)
+      .mockResolvedValueOnce([
+        policyRow({
+          allow_managed_compute: true,
+          allowed_privacy_modes: ['local', 'byok', 'managed'],
+          allow_cli_cloud_sync: false,
+        }),
+      ]);
 
     const decision = await evaluateActiveWorkspacePolicy(h.db, 'user-1', {
       resource: 'managed_compute',
@@ -127,6 +149,7 @@ describe('evaluateActiveWorkspacePolicy', () => {
     const h = harness();
     h.query
       .mockResolvedValueOnce([{ organization_id: ORGANIZATION_ID }])
+      .mockResolvedValueOnce(NO_OPEN_INVOICE)
       .mockRejectedValueOnce(new Error('connection reset'));
 
     const decision = await evaluateActiveWorkspacePolicy(h.db, 'user-1', {
@@ -144,6 +167,7 @@ describe('evaluateActiveWorkspacePolicy', () => {
     const request = { headers: new Headers({ 'x-agi-organization-id': ORGANIZATION_ID }) };
     h.query
       .mockResolvedValueOnce([{ organization_id: ORGANIZATION_ID }]) // membership proof
+      .mockResolvedValueOnce(NO_OPEN_INVOICE)
       .mockResolvedValueOnce([policyRow({ allow_managed_compute: false })]);
 
     const decision = await evaluateActiveWorkspacePolicy(
@@ -155,6 +179,83 @@ describe('evaluateActiveWorkspacePolicy', () => {
 
     expect(decision.allowed).toBe(false);
     expect(String(h.query.mock.calls[0]?.[0])).toContain('organization_members');
+  });
+
+  it('denies managed compute once the workspace is read-only for non-payment, even without a saved policy', async () => {
+    const h = harness();
+    h.query
+      .mockResolvedValueOnce([{ organization_id: ORGANIZATION_ID }])
+      .mockResolvedValueOnce(overdueContractRow(95))
+      .mockResolvedValueOnce([]); // no policy row
+
+    const decision = await evaluateActiveWorkspacePolicy(h.db, 'user-1', {
+      resource: 'managed_compute',
+      surface: 'web',
+    });
+
+    expect(decision.allowed).toBe(false);
+    expect(decision.code).toBe('billing_read_only');
+    expect(decision.organizationId).toBe(ORGANIZATION_ID);
+  });
+
+  it('denies a credit top-up once new paid usage is blocked at day 61, even without a saved policy', async () => {
+    const h = harness();
+    h.query
+      .mockResolvedValueOnce([{ organization_id: ORGANIZATION_ID }])
+      .mockResolvedValueOnce(overdueContractRow(61))
+      .mockResolvedValueOnce([]); // no policy row
+
+    const decision = await evaluateActiveWorkspacePolicy(h.db, 'user-1', {
+      resource: 'credit_topup',
+    });
+
+    expect(decision.allowed).toBe(false);
+    expect(decision.code).toBe('billing_past_due');
+  });
+
+  it('denies a seat purchase once new paid usage is blocked, binding through a saved policy too', async () => {
+    const h = harness();
+    h.query
+      .mockResolvedValueOnce([{ organization_id: ORGANIZATION_ID }])
+      .mockResolvedValueOnce(overdueContractRow(75))
+      .mockResolvedValueOnce([policyRow()]);
+
+    const decision = await evaluateActiveWorkspacePolicy(h.db, 'user-1', {
+      resource: 'seat_purchase',
+    });
+
+    expect(decision.allowed).toBe(false);
+    expect(decision.code).toBe('billing_past_due');
+  });
+
+  it('keeps a read-only-eligible resource that is not content-creating allowed, such as audit export', async () => {
+    const h = harness();
+    h.query
+      .mockResolvedValueOnce([{ organization_id: ORGANIZATION_ID }])
+      .mockResolvedValueOnce(overdueContractRow(95))
+      .mockResolvedValueOnce([policyRow({ audit_export_enabled: true })]);
+
+    const decision = await evaluateActiveWorkspacePolicy(h.db, 'user-1', {
+      resource: 'audit_export',
+    });
+
+    expect(decision.allowed).toBe(true);
+  });
+
+  it('fails open on a collection state read failure, treating the workspace as not on billing hold', async () => {
+    const h = harness();
+    h.query
+      .mockResolvedValueOnce([{ organization_id: ORGANIZATION_ID }])
+      .mockRejectedValueOnce(new Error('connection reset'))
+      .mockResolvedValueOnce([]); // no policy row
+
+    const decision = await evaluateActiveWorkspacePolicy(h.db, 'user-1', {
+      resource: 'managed_compute',
+      surface: 'web',
+    });
+
+    expect(decision.allowed).toBe(true);
+    expect(decision.code).toBe('unscoped');
   });
 });
 
