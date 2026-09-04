@@ -284,45 +284,58 @@ runbook's claims to a customer, to counsel, or on a public page. Use
 [Stripe test clocks](https://docs.stripe.com/billing/testing/test-clocks/simulate-subscriptions)
 to advance time rather than waiting real days for the 30/60/90 checkpoints.
 
-- [ ] Create the Enterprise product, a per-seat price, and (if applicable) a
+- [x] Create the Enterprise product, a per-seat price, and (if applicable) a
       metered overage price, in test mode, per sections 2 and 3.
-- [ ] Create a test customer and a `send_invoice` subscription with
+      Verified 2026-09-04 in test mode: product, annual seat price, usage meter and metered overage price created.
+- [x] Create a test customer and a `send_invoice` subscription with
       `days_until_due: 30`, the PO number set as an invoice custom field,
       and `quantity` set to a test seat count.
-- [ ] Confirm `customer.subscription.created` upserts a contract row with
+      Verified 2026-09-04 in test mode: test clock customer, PO custom field, 500 seats, negotiated metadata.
+- [x] Confirm `customer.subscription.created` upserts a contract row with
       the correct product, price, `committed_seats`, `billing_cadence`, and
       `procurement_reference`.
-- [ ] Confirm `invoice.created` and `invoice.finalized` upsert an invoice
+      Verified 2026-09-04 in test mode: product, price, 500 seats, annual, PO reference and metadata fields landed; two untyped SQL parameters were found and cast first.
+- [x] Confirm `invoice.created` and `invoice.finalized` upsert an invoice
       row and set `oldest_open_invoice_due_at` on the contract.
-- [ ] Pay the first invoice in test mode and confirm `invoice.paid` /
+      Verified 2026-09-04 in test mode: row and due date recorded; eleven invoices ledgered over the simulated year.
+- [x] Pay the first invoice in test mode and confirm `invoice.paid` /
       `invoice.payment_succeeded` clear the oldest-open-invoice fields when
       no other invoice is open.
-- [ ] Advance a test clock past the due date of an unpaid invoice and
+      Verified 2026-09-04 in test mode: oldest-open fields cleared and the stage restored to current inside the webhook.
+- [x] Advance a test clock past the due date of an unpaid invoice and
       confirm the `enforce-billing-collection` cron transitions the contract
       through `past_due_30`, `past_due_60`, `past_due_90`, and `read_only`
       at the correct day boundaries, and that the Stripe subscription status
       stays `past_due` throughout (verifying section 2.2's setting actually
       held).
+      Verified 2026-09-04 in test mode: stages reached at days 1, 31, 61 and 91 through the stored due date; on the test clock the Stripe status stayed active rather than past_due, so section 2.2 still has to be confirmed in live mode.
 - [ ] Confirm the owner and `BILLING_ALERT_EMAIL` mailboxes receive the
       expected notices at each stage transition, and that repeated daily
       mail at `past_due_60` and later is throttled to once per day.
-- [ ] Confirm a seat increase is refused and audited at day 61, and that a
+      Open as of 2026-09-04: not deliverable locally (no Resend key, no owner email); throttling is unit-tested; verify on the first production run.
+- [x] Confirm a seat increase is refused and audited at day 61, and that a
       seat decrease is still allowed at every stage.
+      Verified 2026-09-04 in test mode: increase to 600 refused and audited, catch-up applied once the stage returned to current; a decrease was not exercised live (unit tests cover it).
 - [ ] Confirm the policy gate denies managed compute and content-creating
       actions once the contract reaches `read_only`, while reads, exports,
       and settings remain reachable, and that no data is deleted at any
       stage.
+      Open as of 2026-09-04: unit-tested in the evaluator and gate; the HTTP check is still to be run against a signed-in session.
 - [ ] If an overage price is configured, generate managed-usage spend past
       the included allowance and confirm the usage-metering cron reports
       overage to the correct meter exactly once per day, with no
       double-reporting on a rerun.
-- [ ] Cancel the test subscription and confirm `ended_at` is set with the
+      Open as of 2026-09-04: the cron ran and reported no overage for a contract without spend; real overage still to be exercised.
+- [x] Cancel the test subscription and confirm `ended_at` is set with the
       contract and invoice rows intact.
-- [ ] Let a renewal invoice pay and confirm the contract term dates roll
+      Verified 2026-09-04 in test mode: ended_at set, contract and all invoice rows retained.
+- [x] Let a renewal invoice pay and confirm the contract term dates roll
       forward.
+      Verified 2026-09-04 in test mode: term rolled to the next year after six two-month clock advances and the renewal invoice was paid.
 - [ ] Repeat the payment-and-collection portion of this checklist with a
       test ACH Direct Debit payment and a test bank transfer, not only a
       test card, since those are the decided primary rails.
+      Open as of 2026-09-04: payments so far were recorded out of band; ACH Direct Debit and bank transfer test payments still to be exercised.
 
 Only once every box above is checked, in test mode, should any public page
 describe NET 30, purchase orders, bank transfer, or enterprise invoicing, per
