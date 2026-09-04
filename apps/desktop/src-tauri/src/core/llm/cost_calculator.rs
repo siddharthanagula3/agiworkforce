@@ -735,15 +735,13 @@ mod tests {
             .expect("catalog must contain an active model matching the test capability")
     }
 
-    fn founder_standard_anthropic_model() -> &'static str {
-        &active_catalog_model(Provider::Anthropic, |entry| {
-            entry.pricing_schedule.is_empty()
-                && entry.input_cost == 3.0
-                && entry.output_cost == 15.0
-                && entry.cached_input == Some(0.3)
-                && entry.cached_write == Some(3.75)
-        })
-        .id
+    /// The catalog entry Decision #22 (docs/decisions/README.md) names by id,
+    /// selected by identity rather than by its current price: the founder has
+    /// changed this model's pinned rate before (most recently 2026-09-03, when
+    /// Anthropic made its former introductory rate permanent) and the catalog
+    /// sync is the single source of truth for what that rate is today.
+    fn founder_standard_anthropic_model() -> &'static ModelEntry {
+        active_catalog_model(Provider::Anthropic, |entry| entry.id == "claude-sonnet-5")
     }
 
     /// Pick a prompt size that remains on the catalog's base tier. The exact
@@ -1283,35 +1281,54 @@ mod tests {
 
     #[test]
     fn sonnet_5_bills_the_founder_standard_rate_on_every_date() {
-        // Founder pin, Decision #22 (docs/decisions/README.md,
-        // reaffirmed 2026-08-05): Sonnet 5 bills users the standard $3/$15 per
-        // MTok (cache read $0.30, 5m write $3.75) on EVERY date. Anthropic's
-        // introductory window is a provider-COST fact for the registry's
-        // verificationLog, never a product price. Fixed dates on both sides of
-        // that retired 2026-09-01 boundary.
+        // Founder pin, Decision #22 (docs/decisions/README.md): Sonnet 5 bills
+        // users a single standard per-MTok rate on EVERY date, never a
+        // provider's introductory window. What that rate currently is comes
+        // from the synced catalog (it changed 2026-09-03, from the earlier
+        // $3/$15 to Anthropic's now-permanent $2/$10), so this test derives
+        // its expectation from the catalog entry instead of pinning a number
+        // that goes stale on the next repricing; it still fails if the
+        // calculator misapplies whatever the catalog currently declares.
         let calc = CostCalculator::new();
         let model = founder_standard_anthropic_model();
+        assert!(
+            model.pricing_schedule.is_empty(),
+            "the founder-standard model must not carry a dated pricing schedule"
+        );
+        let cached_input = model
+            .cached_input
+            .expect("the founder-standard model must price cache reads");
+        let cached_write = model
+            .cached_write
+            .expect("the founder-standard model must price 5-minute cache writes");
+        let expected_cost = model.input_cost + model.output_cost;
+        let expected_cached = cached_input + cached_write;
+
         for date in [day(2020, 1, 1), day(2026, 8, 15), day(2026, 9, 15)] {
-            let cost = calc.calculate(Provider::Anthropic, model, 1_000_000, 1_000_000, date);
+            let cost = calc.calculate(Provider::Anthropic, &model.id, 1_000_000, 1_000_000, date);
             assert!(
-                (cost - 18.0).abs() < 1e-9,
-                "Sonnet 5 must bill the standard $18.00 for 1M+1M on {}, got ${}",
+                (cost - expected_cost).abs() < 1e-9,
+                "Sonnet 5 must bill the standard ${} for 1M+1M on {}, got ${}",
+                expected_cost,
                 date,
                 cost
             );
 
             let cached = calc.calculate_with_cache(
                 Provider::Anthropic,
-                model,
+                &model.id,
                 0, // ordinary prompt tokens; cache buckets are disjoint
                 0,
-                1_000_000, // cache_read_tokens  @ $0.30/M
-                1_000_000, // cache_creation_tokens @ $3.75/M
+                1_000_000, // cache_read_tokens @ the catalog's cached_input rate
+                1_000_000, // cache_creation_tokens @ the catalog's cached_write rate
                 date,
             );
             assert!(
-                (cached - 4.05).abs() < 1e-9,
-                "Sonnet 5 cache rates must bill $0.30 + $3.75 = $4.05 on {}, got ${}",
+                (cached - expected_cached).abs() < 1e-9,
+                "Sonnet 5 cache rates must bill ${} + ${} = ${} on {}, got ${}",
+                cached_input,
+                cached_write,
+                expected_cached,
                 date,
                 cached
             );
