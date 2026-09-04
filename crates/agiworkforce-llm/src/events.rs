@@ -39,10 +39,14 @@ pub struct Usage {
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum StreamEvent {
     /// User-visible assistant text.
-    TextDelta { text: String },
+    TextDelta {
+        text: String,
+    },
     /// Extended-thinking / chain-of-thought text. Never merged into the
     /// user-visible answer.
-    ReasoningDelta { text: String },
+    ReasoningDelta {
+        text: String,
+    },
     /// A tool call started (or was first observed) at `index`. `id`/`name`
     /// carry whatever the wire delivered at that point and may be empty for
     /// pathological streams; [`crate::ToolCallAssembler`] output is
@@ -53,9 +57,14 @@ pub enum StreamEvent {
         name: String,
     },
     /// A fragment of the JSON arguments for the call at `index`.
-    ToolCallArgsDelta { index: usize, fragment: String },
+    ToolCallArgsDelta {
+        index: usize,
+        fragment: String,
+    },
     /// Usage snapshot as of this point in the stream (cumulative, not delta).
-    Usage { usage: Usage },
+    Usage {
+        usage: Usage,
+    },
     Keepalive,
     /// Provider-specific event this crate does not interpret (e.g. Anthropic
     /// `message_stop`, managed-cloud billing frames). `event` is the vendor's
@@ -65,7 +74,9 @@ pub enum StreamEvent {
         data: serde_json::Value,
     },
     /// Stream finished. Carries the final stop reason, if any was reported.
-    End { stop_reason: Option<String> },
+    End {
+        stop_reason: Option<String>,
+    },
 }
 
 /// The assembled result of one streamed completion.
