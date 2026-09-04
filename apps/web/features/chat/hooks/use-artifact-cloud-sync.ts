@@ -5,10 +5,16 @@ import { useAuth } from '@clerk/nextjs';
 import { logger } from '@shared/lib/logger';
 
 import {
+  ArtifactSyncCursorRejectedError,
   pullArtifactCloudChanges,
   pushArtifactCloudChanges,
 } from '../services/artifact-cloud-sync';
 import { _sharedArtifactStore, useArtifactsStore } from '../stores/artifacts-store';
+import {
+  clearArtifactSyncCursor,
+  readArtifactSyncCursor,
+  writeArtifactSyncCursor,
+} from '../lib/artifact-sync-cursor-storage';
 
 const SYNC_INTERVAL_MS = 30_000;
 const LOCAL_EDIT_PUSH_DELAY_MS = 2_000;
@@ -26,9 +32,10 @@ export function useArtifactCloudSync(): void {
     clearCloudArtifacts();
     if (!isLoaded || !userId) return;
 
+    const activeUserId = userId;
     let stopped = false;
     let inFlight = false;
-    let cursor = '0';
+    let cursor = readArtifactSyncCursor(activeUserId);
     let failureCount = 0;
     let timer: ReturnType<typeof setTimeout> | undefined;
     const abortController = new AbortController();
@@ -61,6 +68,7 @@ export function useArtifactCloudSync(): void {
           signal: abortController.signal,
         });
         if (stopped) return;
+        writeArtifactSyncCursor(activeUserId, cursor);
 
         const pending = collectArtifactPushBatch();
         const pushResult = await pushArtifactCloudChanges({
@@ -76,6 +84,10 @@ export function useArtifactCloudSync(): void {
         schedule(SYNC_INTERVAL_MS);
       } catch (error) {
         if (stopped || abortController.signal.aborted) return;
+        if (error instanceof ArtifactSyncCursorRejectedError) {
+          clearArtifactSyncCursor(activeUserId);
+          cursor = readArtifactSyncCursor(activeUserId);
+        }
         failureCount += 1;
         const message = error instanceof Error ? error.message : 'Artifact sync failed';
         logger.warn('[artifact-cloud-sync] sync failed; retry scheduled', error);

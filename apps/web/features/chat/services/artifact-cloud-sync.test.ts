@@ -6,7 +6,11 @@ import type {
   ChatSyncPushResponse,
 } from '@agiworkforce/cloud-contracts';
 
-import { pullArtifactCloudChanges, pushArtifactCloudChanges } from './artifact-cloud-sync';
+import {
+  ArtifactSyncCursorRejectedError,
+  pullArtifactCloudChanges,
+  pushArtifactCloudChanges,
+} from './artifact-cloud-sync';
 
 function artifact(serverVersion: string): ArtifactWireDelta {
   return {
@@ -83,6 +87,39 @@ describe('pullArtifactCloudChanges', () => {
       }),
     ).rejects.toThrow('invalid artifact sync response');
     expect(applyDeltas).not.toHaveBeenCalled();
+  });
+
+  it('signals a stored cursor is invalid instead of a generic failure', async () => {
+    const rejection = {
+      error: { code: 'VALIDATION_ERROR', message: 'Invalid chat sync cursor' },
+      requestId: 'req-1',
+    };
+
+    await expect(
+      pullArtifactCloudChanges({
+        cursor: 'not-a-real-cursor',
+        getToken: async () => 'test-token',
+        applyDeltas: vi.fn(),
+        fetchImpl: vi
+          .fn<(input: string, init?: RequestInit) => Promise<Response>>()
+          .mockResolvedValue(new Response(JSON.stringify(rejection), { status: 400 })),
+      }),
+    ).rejects.toBeInstanceOf(ArtifactSyncCursorRejectedError);
+  });
+
+  it('treats a plain 400 without the validation code as a generic failure', async () => {
+    await expect(
+      pullArtifactCloudChanges({
+        cursor: '0',
+        getToken: async () => 'test-token',
+        applyDeltas: vi.fn(),
+        fetchImpl: vi
+          .fn<(input: string, init?: RequestInit) => Promise<Response>>()
+          .mockResolvedValue(
+            new Response(JSON.stringify({ error: { code: 'RATE_LIMITED' } }), { status: 400 }),
+          ),
+      }),
+    ).rejects.toThrow('artifact sync pull failed with status 400');
   });
 
   it('stops a saturated page loop whose safe cursor did not advance', async () => {

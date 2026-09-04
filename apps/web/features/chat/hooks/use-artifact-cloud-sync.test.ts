@@ -12,20 +12,30 @@ const authState = vi.hoisted(() => ({
 const pullArtifactCloudChanges = vi.hoisted(() => vi.fn());
 const pushArtifactCloudChanges = vi.hoisted(() => vi.fn(async () => null));
 
+const ArtifactSyncCursorRejectedError = vi.hoisted(
+  () => class ArtifactSyncCursorRejectedError extends Error {},
+);
+
 vi.mock('@clerk/nextjs', () => ({
   useAuth: () => authState,
 }));
 
 vi.mock('../services/artifact-cloud-sync', () => ({
+  ArtifactSyncCursorRejectedError,
   pullArtifactCloudChanges,
   pushArtifactCloudChanges,
 }));
 
 import { useArtifactCloudSync } from './use-artifact-cloud-sync';
+import {
+  readArtifactSyncCursor,
+  writeArtifactSyncCursor,
+} from '../lib/artifact-sync-cursor-storage';
 
 describe('useArtifactCloudSync', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    window.localStorage.clear();
     authState.isLoaded = true;
     authState.userId = 'user-1';
     useArtifactsStore.getState().clearArtifacts();
@@ -114,6 +124,48 @@ describe('useArtifactCloudSync', () => {
 
     await waitFor(() => expect(useArtifactsStore.getState().cloudSyncStatus).toBe('error'));
     expect(useArtifactsStore.getState().cloudSyncError).toBe('network unavailable');
+
+    act(() => unmount());
+  });
+
+  it('persists the pulled cursor and resumes from it on the next mount', async () => {
+    pullArtifactCloudChanges.mockResolvedValueOnce('12');
+    const first = renderHook(() => useArtifactCloudSync());
+    await waitFor(() => expect(pullArtifactCloudChanges).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(readArtifactSyncCursor('user-1')).toBe('12'));
+    act(() => first.unmount());
+
+    pullArtifactCloudChanges.mockResolvedValueOnce('12');
+    const second = renderHook(() => useArtifactCloudSync());
+    await waitFor(() => expect(pullArtifactCloudChanges).toHaveBeenCalledTimes(2));
+    expect(pullArtifactCloudChanges).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({ cursor: '12' }),
+    );
+
+    act(() => second.unmount());
+  });
+
+  it('does not reuse a cursor persisted for a different signed-in user', async () => {
+    writeArtifactSyncCursor('user-1', '99');
+    authState.userId = 'user-2';
+    pullArtifactCloudChanges.mockResolvedValueOnce('5');
+
+    const { unmount } = renderHook(() => useArtifactCloudSync());
+    await waitFor(() => expect(pullArtifactCloudChanges).toHaveBeenCalledTimes(1));
+    expect(pullArtifactCloudChanges).toHaveBeenCalledWith(expect.objectContaining({ cursor: '0' }));
+
+    act(() => unmount());
+  });
+
+  it('discards a rejected cursor and retries from the beginning', async () => {
+    writeArtifactSyncCursor('user-1', '999999999999999');
+    pullArtifactCloudChanges.mockRejectedValueOnce(new ArtifactSyncCursorRejectedError());
+    pullArtifactCloudChanges.mockResolvedValueOnce('3');
+
+    const { unmount } = renderHook(() => useArtifactCloudSync());
+    await waitFor(() => expect(useArtifactsStore.getState().cloudSyncStatus).toBe('error'));
+    expect(readArtifactSyncCursor('user-1')).toBe('0');
 
     act(() => unmount());
   });
