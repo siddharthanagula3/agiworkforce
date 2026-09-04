@@ -19,6 +19,8 @@ vi.mock('@/lib/price-tier-mapping', () => ({
   resolvePlanTier: () => 'pro',
   isValidPlanTier: () => true,
   getTierMapping: () => ({}),
+  getEnterpriseProductId: () => null,
+  isEnterpriseProductId: () => false,
 }));
 
 vi.mock('@/lib/services/subscription-service', () => ({

@@ -28,6 +28,8 @@ vi.mock('@/lib/price-tier-mapping', () => ({
   isValidPlanTier: (tier: unknown) => tier === 'pro',
   isPriceIdRegistered: () => true,
   getTierMapping: () => ({ price_pro_monthly: { tier: 'pro', interval: 'monthly' } }),
+  getEnterpriseProductId: () => null,
+  isEnterpriseProductId: () => false,
 }));
 
 import { upsertSubscriptionFromSession } from '../db';

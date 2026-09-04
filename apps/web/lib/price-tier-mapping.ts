@@ -163,6 +163,17 @@ export function isPriceIdRegistered(priceId: string | null | undefined): boolean
   return normalizePriceId(priceId) in getTierMapping();
 }
 
+export function getEnterpriseProductId(): string | null {
+  const raw = process.env['STRIPE_PRODUCT_ENTERPRISE'];
+  const trimmed = raw?.trim();
+  return trimmed ? trimmed : null;
+}
+
+export function isEnterpriseProductId(productId: string | null | undefined): boolean {
+  const enterpriseProductId = getEnterpriseProductId();
+  return !!enterpriseProductId && !!productId && productId === enterpriseProductId;
+}
+
 export function getMappingStatus(): {
   totalMapped: number;
   tiers: Record<string, string[]>;

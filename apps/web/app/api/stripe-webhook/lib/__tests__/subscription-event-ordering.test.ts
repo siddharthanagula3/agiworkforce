@@ -22,6 +22,8 @@ vi.mock('@/lib/price-tier-mapping', () => ({
   isValidPlanTier: (tier: string | null | undefined) =>
     !!tier && ['free', 'basic', 'pro', 'max', 'max_15x', 'team', 'enterprise'].includes(tier),
   getTierMapping: () => ({ price_current: { tier: 'pro', interval: 'monthly' } }),
+  getEnterpriseProductId: () => null,
+  isEnterpriseProductId: () => false,
 }));
 
 const subscriptionServiceMocks = vi.hoisted(() => ({
