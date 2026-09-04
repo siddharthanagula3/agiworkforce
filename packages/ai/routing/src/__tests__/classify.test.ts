@@ -361,6 +361,27 @@ describe('classifyTaskLocally, coding', () => {
     expect(classify('write a function').confidence).toBe(0.85);
   });
 
+  it('treats a bare prose word as a weak coding signal', () => {
+    expect(classify('refactor this class').confidence).toBe(0.6);
+    expect(classify('import statement issue').confidence).toBe(0.6);
+    expect(classify('value is undefined here').confidence).toBe(0.6);
+  });
+
+  it('lets a stronger signal win over a weak coding word', () => {
+    expect(classify('import tariffs in the latest budget').type).toBe('research');
+    expect(classify('write a poem about a class reunion').type).toBe('creative_writing');
+  });
+
+  it('does not let a weak coding word pivot a running conversation', () => {
+    const local = classify('what did the class think of it');
+    expect(local).toEqual({ type: 'coding', confidence: 0.6 });
+    const result = applyConversationContext(local, {
+      cumulativeTokens: 0,
+      recentTaskTypes: ['creative_writing', 'creative_writing', 'creative_writing'],
+    });
+    expect(result.type).toBe('creative_writing');
+  });
+
   it('does NOT match generic prose without code keywords', () => {
     expect(classify('tell me a joke').type).not.toBe('coding');
   });
