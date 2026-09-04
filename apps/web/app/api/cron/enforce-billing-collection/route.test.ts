@@ -349,7 +349,7 @@ describe('enforceBillingCollection · seat catch-up once collection returns to c
       call.sql.includes('from public.organization_billing_contracts'),
     );
     expect(contractsQuery!.sql).toMatch(
-      /oldest_open_invoice_id is not null\s+or\s+c\.collection_stage\s*<>/u,
+      /oldest_open_invoice_due_at is not null\s+or\s+c\.collection_stage\s*<>/u,
     );
   });
 });
