@@ -17,6 +17,8 @@ vi.mock('@/lib/server/neon-db', () => ({
   getNeonDb: () => getDb.current,
 }));
 
+vi.mock('@/lib/security-audit', () => ({ recordAuditEvent: vi.fn(async () => undefined) }));
+
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import { createFakeScimDb, type FakeScimDbState } from './fake-scim-db';
 import { createScimToken } from '@/lib/server/scim/scim-token-service';
