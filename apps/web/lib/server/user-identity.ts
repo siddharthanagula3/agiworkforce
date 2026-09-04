@@ -123,6 +123,11 @@ const RESPONSE_STYLE_GUIDANCE: Readonly<Record<Exclude<ResponseStyle, 'default'>
   formal: 'Use a formal register. Avoid contractions and casual phrasing.',
 };
 
+/**
+ * The four sliders mobile ships run 0-100 with 50 as neutral. Only a clear
+ * departure from neutral is worth a sentence, nudging the model on a 55 would
+ * spend prompt on noise and make the control feel arbitrary.
+ */
 const TRAIT_BAND = 20;
 
 interface TraitCopy {
