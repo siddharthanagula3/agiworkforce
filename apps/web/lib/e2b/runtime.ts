@@ -34,6 +34,7 @@ import {
   getPlanMaxSandboxes,
   getPlanSandboxTtlMs,
   type CloudCodeNetworkAccess,
+  type NotebookCellOutput,
 } from '@agiworkforce/types';
 import { CLOUD_CODE_HARNESS_COMMAND_DEADLINE_MS } from '@/lib/deadline-policy';
 import { logger } from '@/lib/logger';
@@ -161,6 +162,50 @@ async function countUserSandboxes(
     count += page.length;
   }
   return count;
+}
+
+interface NotebookResultLike {
+  text?: string;
+  html?: string;
+  png?: string;
+}
+
+interface NotebookErrorLike {
+  name: string;
+  value: string;
+  traceback?: string;
+}
+
+function base64ToArrayBuffer(base64: string): ArrayBuffer {
+  const buffer = Buffer.from(base64, 'base64');
+  return buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.byteLength);
+}
+
+/**
+ * Ordered outputs for a notebook cell: stdout/stderr first, then one output
+ * per result (its richest representation - image over table over text), then
+ * the error last if the cell raised. Mirrors how a Jupyter client renders a
+ * cell's stream and display-data messages in the order they arrived.
+ */
+function notebookOutputs(
+  stdout: string,
+  stderr: string,
+  results: readonly NotebookResultLike[],
+  error?: NotebookErrorLike,
+): NotebookCellOutput[] {
+  const outputs: NotebookCellOutput[] = [];
+  if (stdout) outputs.push({ kind: 'stream', data: stdout });
+  if (stderr) outputs.push({ kind: 'stream', data: stderr });
+  for (const result of results) {
+    if (result?.png) outputs.push({ kind: 'image', data: result.png });
+    else if (result?.html) outputs.push({ kind: 'html', data: result.html });
+    else if (result?.text) outputs.push({ kind: 'stream', data: result.text });
+  }
+  if (error) {
+    const traceback = error.traceback ? `\n${error.traceback}` : '';
+    outputs.push({ kind: 'error', data: `${error.name}: ${error.value}${traceback}` });
+  }
+  return outputs;
 }
 
 const fail = (err: unknown): ExecutionResult => ({
@@ -626,7 +671,10 @@ export async function getE2BExecutor(scope?: E2BSessionScope): Promise<E2BExecut
     async runCode({ language, code }): Promise<ExecutionResult> {
       try {
         const lang = mapLanguage(language);
-        const context = conversationId ? await getContext(lang) : undefined;
+        // A notebook cell needs the variables a prior cell defined, so a code
+        // session's own id persists a context exactly as a chat conversation's
+        // id already did; only a scope-less bare-API call stays stateless.
+        const context = conversationId || codeSessionId ? await getContext(lang) : undefined;
         const execution = context
           ? await sandbox.runCode(code, {
               context: { id: context.id, language: context.language, cwd: context.cwd },
@@ -640,24 +688,30 @@ export async function getE2BExecutor(scope?: E2BSessionScope): Promise<E2BExecut
             ok: false,
             output: stdout,
             error: `${execution.error.name}: ${execution.error.value}${traceback}`,
+            outputs: notebookOutputs(stdout, stderr, [], execution.error),
           };
         }
         const output = [stdout, stderr, execution.text ?? ''].filter(Boolean).join('\n');
-        const pngResults = ((execution.results ?? []) as Array<{ png?: unknown }>)
+        const results = (execution.results ?? []) as NotebookResultLike[];
+        const pngResults = results
           .map((r) => r?.png)
           .filter((png): png is string => typeof png === 'string' && png.length > 0);
         return {
           ok: true,
           output: output || '(no output)',
           ...(pngResults.length > 0 ? { pngResults } : {}),
+          outputs: notebookOutputs(stdout, stderr, results),
         };
       } catch (err) {
         return fail(err);
       }
     },
-    async writeFile({ path, content }): Promise<ExecutionResult> {
+    async writeFile({ path, content, encoding }): Promise<ExecutionResult> {
       try {
-        await sandbox.files.write(path, content);
+        await sandbox.files.write(
+          path,
+          encoding === 'base64' ? base64ToArrayBuffer(content) : content,
+        );
         return { ok: true, output: `Wrote ${path}` };
       } catch (err) {
         return fail(err);

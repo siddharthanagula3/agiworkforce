@@ -1,8 +1,11 @@
+import type { NotebookCellOutput } from '@agiworkforce/types';
+
 export interface ExecutionResult {
   ok: boolean;
   output: string;
   error?: string;
   pngResults?: string[];
+  outputs?: NotebookCellOutput[];
 }
 
 export interface SandboxFileEntry {
@@ -47,7 +50,11 @@ export interface E2BGitExecutor {
 
 export interface E2BExecutor {
   runCode(input: { language: string; code: string }): Promise<ExecutionResult>;
-  writeFile(input: { path: string; content: string }): Promise<ExecutionResult>;
+  writeFile(input: {
+    path: string;
+    content: string;
+    encoding?: 'utf8' | 'base64';
+  }): Promise<ExecutionResult>;
   createFolder(input: { path: string }): Promise<ExecutionResult>;
   runCommand?(input: {
     command: string;

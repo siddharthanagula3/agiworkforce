@@ -4,11 +4,15 @@ import { randomUUID } from 'node:crypto';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import {
   CLOUD_CODE_NETWORK_ACCESS,
+  NOTEBOOK_CELL_LANGUAGES,
   getPlanMaxSandboxes,
   type CloudCodeNetworkAccess,
+  type CloudCodeNotebookFile,
   type CloudCodeSession,
   type CloudCodeTerminalEntry,
   type CreateCloudCodeSessionInput,
+  type NotebookCellLanguage,
+  type NotebookCellOutput,
 } from '@agiworkforce/types';
 import { logger } from '@/lib/logger';
 import {
@@ -17,6 +21,7 @@ import {
 } from '@/lib/deadline-policy';
 import { getE2BExecutor, killE2BSession } from '@/lib/e2b/runtime';
 import { InvalidExtraEgressHostsError, normalizeExtraEgressHosts } from '@/lib/e2b/egress-hosts';
+import { confineWorkspacePath } from '@/lib/e2b/execution-tools';
 import type { CommandExecutionResult } from '@/lib/e2b/types';
 import { knownHarnessCommandIds, listCloudCodeRuntimes } from '@/lib/e2b/templates';
 import { managedCloudCodeSessionScope } from '@/lib/e2b/session-store';
@@ -31,6 +36,8 @@ const MAX_TITLE_LENGTH = 120;
 const MAX_COMMAND_LENGTH = 2_000;
 const MAX_ERROR_LENGTH = 2_000;
 const MAX_COMMIT_MESSAGE_LENGTH = 2_000;
+const MAX_NOTEBOOK_CELL_CODE_LENGTH = 50_000;
+const MAX_NOTEBOOK_UPLOAD_BYTES = 10 * 1024 * 1024;
 const GITHUB_INSTALLATION_TOKEN_USERNAME = 'x-access-token';
 const GITHUB_REPOSITORY_URL_RE = /^https:\/\/github\.com\/([^/]+)\/([^/]+)\.git$/;
 const DEFAULT_WORKSPACE_PATH = '/home/user';
@@ -900,6 +907,333 @@ export async function runCloudCodeCommand(
       session: mapCloudCodeSession(rows.session),
     };
   } catch (error) {
+    await failSessionIfOpen(
+      db,
+      owner,
+      sessionId,
+      error instanceof Error ? error.message : String(error),
+      claim.leaseToken,
+    );
+    throw error;
+  } finally {
+    await executor.pause?.();
+    await executor.dispose();
+  }
+}
+
+function validateNotebookCell(value: unknown): { code: string; language: NotebookCellLanguage } {
+  const record =
+    typeof value === 'object' && value !== null ? (value as Record<string, unknown>) : {};
+  const code = typeof record['code'] === 'string' ? record['code'] : '';
+  if (!code.trim() || code.length > MAX_NOTEBOOK_CELL_CODE_LENGTH || code.includes('\0')) {
+    throw new CloudCodeValidationError(
+      `Cell code must be 1–${MAX_NOTEBOOK_CELL_CODE_LENGTH} characters and contain no null bytes`,
+    );
+  }
+  const language = typeof record['language'] === 'string' ? record['language'].trim() : 'python';
+  if (!NOTEBOOK_CELL_LANGUAGES.includes(language as NotebookCellLanguage)) {
+    throw new CloudCodeValidationError(
+      `language must be one of ${NOTEBOOK_CELL_LANGUAGES.join(', ')}`,
+    );
+  }
+  return { code, language: language as NotebookCellLanguage };
+}
+
+/** Returns the validated path relative to the session workspace; never a root-joined one. */
+function confineNotebookPath(raw: unknown): string {
+  const value = typeof raw === 'string' ? raw : '';
+  const confined = confineWorkspacePath(value);
+  if (!confined) {
+    throw new CloudCodeValidationError('path must be workspace-relative with no traversal');
+  }
+  return confined;
+}
+
+function notebookFileEntry(path: string, byteSize: number): CloudCodeNotebookFile {
+  return { path, name: path.split('/').pop() || path, isDir: false, byteSize };
+}
+
+export async function runCloudCodeNotebookCell(
+  db: DatabaseAdapter,
+  owner: CloudCodeOwner,
+  sessionId: string,
+  cellValue: unknown,
+  planTier: string,
+): Promise<{
+  session: CloudCodeSession;
+  ok: boolean;
+  outputs: NotebookCellOutput[];
+  error?: string;
+}> {
+  const { code, language } = validateNotebookCell(cellValue);
+
+  const session = await getCloudCodeSession(db, owner, sessionId);
+  if (session.state === 'closed') {
+    throw new CloudCodeConflictError('Closed Code sessions cannot run cells');
+  }
+  if (session.state === 'provisioning') {
+    throw new CloudCodeConflictError('Code session is busy; wait and try again');
+  }
+  if (session.state === 'failed') {
+    throw new CloudCodeConflictError('Failed Code sessions must be closed and recreated');
+  }
+
+  const claim = await claimCloudCodeSessionForRun(db, owner, sessionId);
+  if (!claim) {
+    throw new CloudCodeConflictError('Code session is busy; wait and try again');
+  }
+  const scope = managedCloudCodeSessionScope(
+    owner.userId,
+    sessionId,
+    claim.session.networkAccess,
+    planTier,
+    claim.session.runtimeId,
+    null,
+    claim.session.extraHosts,
+  );
+  const executor = await getE2BExecutor(scope);
+  if (!executor) {
+    await failSessionIfOpen(
+      db,
+      owner,
+      sessionId,
+      'Managed Code environment could not be attached',
+      claim.leaseToken,
+    );
+    throw new CloudCodeUnavailableError('Managed Code environment could not be attached');
+  }
+
+  try {
+    const result = await executor.runCode({ language, code });
+    const released = await releaseCloudCodeSessionAfterRun(db, owner, sessionId, claim.leaseToken);
+    if (!released) throw new CloudCodeNotFoundError();
+    return {
+      session: released,
+      ok: result.ok,
+      outputs: result.outputs ?? [],
+      ...(result.error ? { error: result.error } : {}),
+    };
+  } catch (error) {
+    await failSessionIfOpen(
+      db,
+      owner,
+      sessionId,
+      error instanceof Error ? error.message : String(error),
+      claim.leaseToken,
+    );
+    throw error;
+  } finally {
+    await executor.pause?.();
+    await executor.dispose();
+  }
+}
+
+export async function writeCloudCodeNotebookFile(
+  db: DatabaseAdapter,
+  owner: CloudCodeOwner,
+  sessionId: string,
+  pathValue: unknown,
+  base64Content: string,
+  planTier: string,
+): Promise<{ session: CloudCodeSession; file: CloudCodeNotebookFile }> {
+  const decoded = Buffer.from(base64Content, 'base64');
+  if (decoded.length === 0 || decoded.length > MAX_NOTEBOOK_UPLOAD_BYTES) {
+    throw new CloudCodeValidationError(
+      `Uploaded file must be 1–${MAX_NOTEBOOK_UPLOAD_BYTES} bytes`,
+    );
+  }
+
+  const session = await getCloudCodeSession(db, owner, sessionId);
+  if (session.state === 'closed') {
+    throw new CloudCodeConflictError('Closed Code sessions cannot accept files');
+  }
+  if (session.state === 'provisioning') {
+    throw new CloudCodeConflictError('Code session is busy; wait and try again');
+  }
+  if (session.state === 'failed') {
+    throw new CloudCodeConflictError('Failed Code sessions must be closed and recreated');
+  }
+  const relativePath = confineNotebookPath(pathValue);
+  const absolutePath = `${session.workspacePath.replace(/\/+$/, '')}/${relativePath}`;
+
+  const claim = await claimCloudCodeSessionForRun(db, owner, sessionId);
+  if (!claim) {
+    throw new CloudCodeConflictError('Code session is busy; wait and try again');
+  }
+  const scope = managedCloudCodeSessionScope(
+    owner.userId,
+    sessionId,
+    claim.session.networkAccess,
+    planTier,
+    claim.session.runtimeId,
+    null,
+    claim.session.extraHosts,
+  );
+  const executor = await getE2BExecutor(scope);
+  if (!executor) {
+    await failSessionIfOpen(
+      db,
+      owner,
+      sessionId,
+      'Managed Code environment could not be attached',
+      claim.leaseToken,
+    );
+    throw new CloudCodeUnavailableError('Managed Code environment could not be attached');
+  }
+
+  try {
+    const result = await executor.writeFile({
+      path: absolutePath,
+      content: base64Content,
+      encoding: 'base64',
+    });
+    if (!result.ok) {
+      throw new CloudCodeUnavailableError(result.error || 'File upload failed');
+    }
+    const released = await releaseCloudCodeSessionAfterRun(db, owner, sessionId, claim.leaseToken);
+    if (!released) throw new CloudCodeNotFoundError();
+    return { session: released, file: notebookFileEntry(relativePath, decoded.length) };
+  } catch (error) {
+    await failSessionIfOpen(
+      db,
+      owner,
+      sessionId,
+      error instanceof Error ? error.message : String(error),
+      claim.leaseToken,
+    );
+    throw error;
+  } finally {
+    await executor.pause?.();
+    await executor.dispose();
+  }
+}
+
+export async function listCloudCodeNotebookFiles(
+  db: DatabaseAdapter,
+  owner: CloudCodeOwner,
+  sessionId: string,
+  planTier: string,
+): Promise<{ session: CloudCodeSession; files: CloudCodeNotebookFile[] }> {
+  const session = await getCloudCodeSession(db, owner, sessionId);
+  if (session.state === 'closed') {
+    throw new CloudCodeConflictError('Closed Code sessions have no files to list');
+  }
+  if (session.state === 'provisioning') {
+    throw new CloudCodeConflictError('Code session is busy; wait and try again');
+  }
+  if (session.state === 'failed') {
+    throw new CloudCodeConflictError('Failed Code sessions must be closed and recreated');
+  }
+
+  const claim = await claimCloudCodeSessionForRun(db, owner, sessionId);
+  if (!claim) {
+    throw new CloudCodeConflictError('Code session is busy; wait and try again');
+  }
+  const scope = managedCloudCodeSessionScope(
+    owner.userId,
+    sessionId,
+    claim.session.networkAccess,
+    planTier,
+    claim.session.runtimeId,
+    null,
+    claim.session.extraHosts,
+  );
+  const executor = await getE2BExecutor(scope);
+  if (!executor?.listFiles) {
+    await failSessionIfOpen(
+      db,
+      owner,
+      sessionId,
+      'Managed Code environment could not be attached',
+      claim.leaseToken,
+    );
+    throw new CloudCodeUnavailableError('Managed Code environment could not be attached');
+  }
+
+  try {
+    const entries = await executor.listFiles(claim.session.workspacePath);
+    const released = await releaseCloudCodeSessionAfterRun(db, owner, sessionId, claim.leaseToken);
+    if (!released) throw new CloudCodeNotFoundError();
+    const workspacePrefix = `${claim.session.workspacePath.replace(/\/+$/, '')}/`;
+    const files = (entries ?? [])
+      .filter((entry) => !entry.isDir)
+      .map((entry) => ({
+        path: entry.path.startsWith(workspacePrefix)
+          ? entry.path.slice(workspacePrefix.length)
+          : entry.name,
+        name: entry.name,
+        isDir: entry.isDir,
+        byteSize: entry.byteSize,
+      }));
+    return { session: released, files };
+  } catch (error) {
+    await failSessionIfOpen(
+      db,
+      owner,
+      sessionId,
+      error instanceof Error ? error.message : String(error),
+      claim.leaseToken,
+    );
+    throw error;
+  } finally {
+    await executor.pause?.();
+    await executor.dispose();
+  }
+}
+
+export async function readCloudCodeNotebookFile(
+  db: DatabaseAdapter,
+  owner: CloudCodeOwner,
+  sessionId: string,
+  pathValue: unknown,
+  planTier: string,
+): Promise<{ session: CloudCodeSession; bytes: Uint8Array }> {
+  const session = await getCloudCodeSession(db, owner, sessionId);
+  if (session.state === 'closed') {
+    throw new CloudCodeConflictError('Closed Code sessions have no files to read');
+  }
+  if (session.state === 'provisioning') {
+    throw new CloudCodeConflictError('Code session is busy; wait and try again');
+  }
+  if (session.state === 'failed') {
+    throw new CloudCodeConflictError('Failed Code sessions must be closed and recreated');
+  }
+  const relativePath = confineNotebookPath(pathValue);
+  const absolutePath = `${session.workspacePath.replace(/\/+$/, '')}/${relativePath}`;
+
+  const claim = await claimCloudCodeSessionForRun(db, owner, sessionId);
+  if (!claim) {
+    throw new CloudCodeConflictError('Code session is busy; wait and try again');
+  }
+  const scope = managedCloudCodeSessionScope(
+    owner.userId,
+    sessionId,
+    claim.session.networkAccess,
+    planTier,
+    claim.session.runtimeId,
+    null,
+    claim.session.extraHosts,
+  );
+  const executor = await getE2BExecutor(scope);
+  if (!executor?.readFileBytes) {
+    await failSessionIfOpen(
+      db,
+      owner,
+      sessionId,
+      'Managed Code environment could not be attached',
+      claim.leaseToken,
+    );
+    throw new CloudCodeUnavailableError('Managed Code environment could not be attached');
+  }
+
+  try {
+    const bytes = await executor.readFileBytes(absolutePath);
+    const released = await releaseCloudCodeSessionAfterRun(db, owner, sessionId, claim.leaseToken);
+    if (!released) throw new CloudCodeNotFoundError();
+    if (!bytes) throw new CloudCodeNotFoundError();
+    return { session: released, bytes };
+  } catch (error) {
+    if (error instanceof CloudCodeNotFoundError) throw error;
     await failSessionIfOpen(
       db,
       owner,

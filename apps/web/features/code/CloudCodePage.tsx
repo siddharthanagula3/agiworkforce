@@ -27,7 +27,7 @@ import type {
   CloudCodeSession,
   CloudCodeTerminalEntry,
 } from '@agiworkforce/types';
-import { getRoutingSlotModel } from '@agiworkforce/types';
+import { getRoutingSlotModel, NOTEBOOK_TEMPLATE_ID } from '@agiworkforce/types';
 import { WebAppShell } from '@shared/components/layout/WebAppShell';
 import {
   cloudCodeApi,
@@ -38,6 +38,7 @@ import styles from './CloudCodePage.module.css';
 import { toUserMessage } from '@/lib/user-error-message';
 import { selectHarnessRunner } from '@/lib/e2b/harnesses/registry';
 import { HARNESS_MAX_TURNS, HARNESS_RUN_DEADLINE_MS } from '@/lib/e2b/harnesses/budget';
+import { NotebookPanel } from '@/features/notebook/NotebookPanel';
 
 const AGENT_MODEL_ID = getRoutingSlotModel('coding_balanced');
 const HARNESS_HINT_TASK_PLACEHOLDER = 'your task';
@@ -218,6 +219,7 @@ export function CloudCodePage({ api = cloudCodeApi }: CloudCodePageProps) {
     () => sessions.find((session) => session.id === selectedId) ?? null,
     [selectedId, sessions],
   );
+  const isNotebookSession = selectedSession?.runtimeId === NOTEBOOK_TEMPLATE_ID;
 
   const replaceSession = useCallback((next: CloudCodeSession) => {
     setSessions((current) => {
@@ -995,6 +997,14 @@ export function CloudCodePage({ api = cloudCodeApi }: CloudCodePageProps) {
                           {running ? <Loader2 className={styles['spin']} size={14} /> : 'Run'}
                         </button>
                       </form>
+
+                      {isNotebookSession && (
+                        <NotebookPanel
+                          sessionId={selectedSession.id}
+                          sessionReady={selectedSession.state === 'ready'}
+                          onSession={replaceSession}
+                        />
+                      )}
 
                       <section
                         aria-label="Agent turn"

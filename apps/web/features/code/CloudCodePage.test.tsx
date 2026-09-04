@@ -1,7 +1,11 @@
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { getRoutingSlotModel, type CloudCodeSession } from '@agiworkforce/types';
+import {
+  getRoutingSlotModel,
+  NOTEBOOK_TEMPLATE_ID,
+  type CloudCodeSession,
+} from '@agiworkforce/types';
 import { CloudCodePage } from './CloudCodePage';
 import type { CloudCodeApi } from './services/cloud-code-api';
 
@@ -14,6 +18,12 @@ vi.mock('next/navigation', () => ({
 vi.mock('@shared/components/layout/WebAppShell', () => ({
   WebAppShell: ({ children }: { children: React.ReactNode }) => (
     <div data-testid="web-app-shell">{children}</div>
+  ),
+}));
+
+vi.mock('@/features/notebook/NotebookPanel', () => ({
+  NotebookPanel: ({ sessionId }: { sessionId: string }) => (
+    <div data-testid="notebook-panel">{sessionId}</div>
   ),
 }));
 
@@ -698,5 +708,47 @@ describe('CloudCodePage', () => {
 
     expect(await screen.findByText('Deleting files is destructive.')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Reject' })).toBeEnabled();
+  });
+
+  it('shows the notebook panel for a code-interpreter session', async () => {
+    const notebookSession: CloudCodeSession = { ...session, runtimeId: NOTEBOOK_TEMPLATE_ID };
+    const api = createApi({
+      list: vi.fn(async () => ({
+        availability: {
+          deploymentEnabled: true,
+          storageReady: true,
+          planEntitled: true,
+          planTier: 'pro',
+          maxSessions: 5,
+        },
+        sessions: [notebookSession],
+        runtimes: [],
+      })),
+    });
+
+    render(<CloudCodePage api={api} />);
+
+    expect(await screen.findByTestId('notebook-panel')).toHaveTextContent(notebookSession.id);
+  });
+
+  it('does not show the notebook panel for a harness session', async () => {
+    const api = createApi({
+      list: vi.fn(async () => ({
+        availability: {
+          deploymentEnabled: true,
+          storageReady: true,
+          planEntitled: true,
+          planTier: 'pro',
+          maxSessions: 5,
+        },
+        sessions: [session],
+        runtimes: [],
+      })),
+    });
+
+    render(<CloudCodePage api={api} />);
+
+    await screen.findByRole('textbox', { name: 'Terminal command' });
+    expect(screen.queryByTestId('notebook-panel')).not.toBeInTheDocument();
   });
 });
