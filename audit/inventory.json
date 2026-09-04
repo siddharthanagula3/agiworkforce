@@ -21,7 +21,7 @@
     "item": "url-routing",
     "surface": "apps/web",
     "status": "built",
-    "evidence": "Next.js App Router segments: apps/web/app/chat/page.tsx (new chat), apps/web/app/chat/[sessionId]/page.tsx (conversation), apps/web/app/chat/projects, /library, /schedules, /customize \u2014 all real routed pages."
+    "evidence": "Next.js App Router segments: apps/web/app/chat/page.tsx (new chat), apps/web/app/chat/[sessionId]/page.tsx (conversation), apps/web/app/chat/projects, /library, /schedules, /customize, all real routed pages."
   },
   {
     "item": "route-guard",
@@ -45,13 +45,13 @@
     "item": "multi-tab-sync",
     "surface": "apps/web",
     "status": "missing",
-    "evidence": "Grepped whole repo for BroadcastChannel, SharedWorker, cross-tab/multiTab, and storage-event chat sync \u2014 zero hits for chat state. The only cross-tab storage event listener is for idle-logout activity sync (apps/web/shared/hooks/useSessionTimeout.ts:300-314) and the offline mutation queue (apps/web/lib/offline/offlineQueue.ts:64), neither syncs conversations/messages. A related but distinct 30s poll exists only for cross-surface (desktop\u2194web) artifact sync (apps/web/features/chat/hooks/use-artifact-cloud-sync.ts:10-45), not general chat state across browser tabs."
+    "evidence": "Grepped whole repo for BroadcastChannel, SharedWorker, cross-tab/multiTab, and storage-event chat sync, zero hits for chat state. The only cross-tab storage event listener is for idle-logout activity sync (apps/web/shared/hooks/useSessionTimeout.ts:300-314) and the offline mutation queue (apps/web/lib/offline/offlineQueue.ts:64), neither syncs conversations/messages. A related but distinct 30s poll exists only for cross-surface (desktop\u2194web) artifact sync (apps/web/features/chat/hooks/use-artifact-cloud-sync.ts:10-45), not general chat state across browser tabs."
   },
   {
     "item": "composer",
     "surface": "apps/web",
     "status": "built",
-    "evidence": "apps/web/features/chat/components/Composer/ChatComposerNew.tsx (2894 lines) \u2014 attachments, slash commands, model/skill pickers, image/video gen options, mode toggles; mounted at WebChatPage.tsx:2960-2963 with onSend/onStop/isLoading wired to the real send pipeline."
+    "evidence": "apps/web/features/chat/components/Composer/ChatComposerNew.tsx (2894 lines), attachments, slash commands, model/skill pickers, image/video gen options, mode toggles; mounted at WebChatPage.tsx:2960-2963 with onSend/onStop/isLoading wired to the real send pipeline."
   },
   {
     "item": "streaming-response",
@@ -243,7 +243,7 @@
     "item": "artifact-inline-targeted-edit",
     "surface": "apps/web",
     "status": "missing",
-    "evidence": "Grepped apps/web (features/chat/components/artifacts/*, ArtifactBlock.tsx, artifacts-store.ts) for contentEditable, onEdit, editArtifact, str_replace/search_replace/apply-patch, and 'inline edit' \u2014 no hits. packages/platform/artifacts/src/artifacts.ts:43 states outright: 'Inline editor / edit-in-place is not wired; the panel accepts content as-is from the artifact store.' The only apply-patch/diff tooling in the repo (packages/tools/apply-patch/src) is the agent's own file-edit tool for coding sessions, not an artifact-panel targeted-edit capability on web."
+    "evidence": "Grepped apps/web (features/chat/components/artifacts/*, ArtifactBlock.tsx, artifacts-store.ts) for contentEditable, onEdit, editArtifact, str_replace/search_replace/apply-patch, and 'inline edit', no hits. packages/platform/artifacts/src/artifacts.ts:43 states outright: 'Inline editor / edit-in-place is not wired; the panel accepts content as-is from the artifact store.' The only apply-patch/diff tooling in the repo (packages/tools/apply-patch/src) is the agent's own file-edit tool for coding sessions, not an artifact-panel targeted-edit capability on web."
   },
   {
     "item": "artifact-persistent-storage",
@@ -261,7 +261,7 @@
     "item": "sandboxed-iframe",
     "surface": "apps/web",
     "status": "built",
-    "evidence": "apps/web/features/chat/components/SandboxedIframe.tsx:148-320 \u2014 cross-origin sandbox.agiworkforce.com iframe with postMessage handshake (sandbox-ready/render-error) and 3s connect timeout, falling back to a same-origin `sandbox=\"allow-scripts allow-modals\"` (no allow-same-origin) srcDoc iframe with an injected error-reporting bootstrap (lines 47-102). Wired from ArtifactPreview.tsx:1328-1337."
+    "evidence": "apps/web/features/chat/components/SandboxedIframe.tsx:148-320, cross-origin sandbox.agiworkforce.com iframe with postMessage handshake (sandbox-ready/render-error) and 3s connect timeout, falling back to a same-origin `sandbox=\"allow-scripts allow-modals\"` (no allow-same-origin) srcDoc iframe with an injected error-reporting bootstrap (lines 47-102). Wired from ArtifactPreview.tsx:1328-1337."
   },
   {
     "item": "csp-policy",
@@ -273,7 +273,7 @@
     "item": "dependency-allowlist",
     "surface": "apps/web",
     "status": "built",
-    "evidence": "apps/web/shared/utils/html-sanitizer.ts:580-585 ARTIFACT_SCRIPT_CDN_HOSTS = [unpkg.com, cdn.jsdelivr.net, cdnjs.cloudflare.com, esm.sh] is the fixed script-src allowlist folded into buildArtifactCspContent (line 597) \u2014 an artifact can only load executable code from these hosts."
+    "evidence": "apps/web/shared/utils/html-sanitizer.ts:580-585 ARTIFACT_SCRIPT_CDN_HOSTS = [unpkg.com, cdn.jsdelivr.net, cdnjs.cloudflare.com, esm.sh] is the fixed script-src allowlist folded into buildArtifactCspContent (line 597), an artifact can only load executable code from these hosts."
   },
   {
     "item": "code-interpreter-panel",
@@ -333,7 +333,7 @@
     "item": "remote-session-attach",
     "surface": "apps/web",
     "status": "missing",
-    "evidence": "Grepped apps/web (features/chat, app) for attach/resumeSession/reattach/reconnectSession/remote session \u2014 only hits are UI copy about attaching FILES to a message (DropZoneOverlay.tsx:37, DragDropOverlay.tsx:129) and device pairing/auth (apps/web/app/connect/[deviceType]/page.tsx, a sign-in approval flow, not a session viewer). No mechanism exists for the web client to attach to / view a live session running on another surface (CLI/desktop). Trust-boundary types (packages/contracts/types/src/sessions/taxonomy.ts:220-317) confine developer-session origin surfaces to cli/desktop, reinforcing that web has no attach path by design."
+    "evidence": "Grepped apps/web (features/chat, app) for attach/resumeSession/reattach/reconnectSession/remote session, only hits are UI copy about attaching FILES to a message (DropZoneOverlay.tsx:37, DragDropOverlay.tsx:129) and device pairing/auth (apps/web/app/connect/[deviceType]/page.tsx, a sign-in approval flow, not a session viewer). No mechanism exists for the web client to attach to / view a live session running on another surface (CLI/desktop). Trust-boundary types (packages/contracts/types/src/sessions/taxonomy.ts:220-317) confine developer-session origin surfaces to cli/desktop, reinforcing that web has no attach path by design."
   },
   {
     "item": "session-live-log",
@@ -393,19 +393,19 @@
     "item": "pwa-manifest",
     "surface": "apps/web",
     "status": "built",
-    "evidence": "apps/web/app/manifest.ts:6-34 \u2014 Next.js App Router manifest file convention, served at /manifest.webmanifest with name/icons/start_url/display:'standalone'/theme_color, auto-linked into <head> per Next.js metadata file conventions."
+    "evidence": "apps/web/app/manifest.ts:6-34, Next.js App Router manifest file convention, served at /manifest.webmanifest with name/icons/start_url/display:'standalone'/theme_color, auto-linked into <head> per Next.js metadata file conventions."
   },
   {
     "item": "web-service-worker",
     "surface": "apps/web",
     "status": "missing",
-    "evidence": "Grepped apps/web/public for sw.js/*worker*, and the whole app tree for serviceWorker/next-pwa/workbox registrations \u2014 no hits outside node_modules/.next build artifacts. No service worker file or registration code exists in the web app."
+    "evidence": "Grepped apps/web/public for sw.js/*worker*, and the whole app tree for serviceWorker/next-pwa/workbox registrations, no hits outside node_modules/.next build artifacts. No service worker file or registration code exists in the web app."
   },
   {
     "item": "web-push",
     "surface": "apps/web",
     "status": "missing",
-    "evidence": "Grepped for PushManager/web-push/VAPID/Notification.requestPermission across apps/web \u2014 only hits are apps/web/features/chat/pages/WebChatPage.tsx and apps/web/shared/stores/notification-store.ts, which implement an in-app toast/notification list (addNotification/showSuccess/showError, lines 16-106), not browser Push API subscriptions. There is no service worker (required to receive push events) and no VAPID/subscription code anywhere in apps/web."
+    "evidence": "Grepped for PushManager/web-push/VAPID/Notification.requestPermission across apps/web, only hits are apps/web/features/chat/pages/WebChatPage.tsx and apps/web/shared/stores/notification-store.ts, which implement an in-app toast/notification list (addNotification/showSuccess/showError, lines 16-106), not browser Push API subscriptions. There is no service worker (required to receive push events) and no VAPID/subscription code anywhere in apps/web."
   },
   {
     "item": "indexeddb-cache",
@@ -429,7 +429,7 @@
     "item": "error-boundary",
     "surface": "apps/web",
     "status": "built",
-    "evidence": "apps/web/app/global-error.tsx and apps/web/app/error.tsx plus 25+ route-segment error.tsx boundaries (e.g. app/chat/error.tsx, app/billing/error.tsx, app/share/error.tsx, app/auth/error.tsx) \u2014 Next.js App Router error-boundary file convention, present across nearly every top-level route."
+    "evidence": "apps/web/app/global-error.tsx and apps/web/app/error.tsx plus 25+ route-segment error.tsx boundaries (e.g. app/chat/error.tsx, app/billing/error.tsx, app/share/error.tsx, app/auth/error.tsx), Next.js App Router error-boundary file convention, present across nearly every top-level route."
   },
   {
     "item": "unsaved-changes-guard",
@@ -483,7 +483,7 @@
     "item": "single-instance-lock",
     "surface": "apps/desktop",
     "status": "missing",
-    "evidence": "Grepped apps/desktop/src-tauri (Cargo.toml, lib.rs, main.rs) and the whole repo for 'single-instance', 'single_instance', 'SingleInstance', 'AlreadyRunning', 'flock', 'named_lock' \u2014 no tauri-plugin-single-instance dependency in Cargo.toml, no manual lock-file/OS mutex implementation anywhere in apps/desktop. apps/desktop/src-tauri/src/lib.rs:178-209 lists all registered plugins (deep-link, process, dialog, fs, clipboard-manager, window-state, notification, global-shortcut, shell, updater, wdio) \u2014 single-instance is absent."
+    "evidence": "Grepped apps/desktop/src-tauri (Cargo.toml, lib.rs, main.rs) and the whole repo for 'single-instance', 'single_instance', 'SingleInstance', 'AlreadyRunning', 'flock', 'named_lock', no tauri-plugin-single-instance dependency in Cargo.toml, no manual lock-file/OS mutex implementation anywhere in apps/desktop. apps/desktop/src-tauri/src/lib.rs:178-209 lists all registered plugins (deep-link, process, dialog, fs, clipboard-manager, window-state, notification, global-shortcut, shell, updater, wdio), single-instance is absent."
   },
   {
     "item": "ipc-bridge",
@@ -519,7 +519,7 @@
     "item": "delta-update",
     "surface": "apps/desktop",
     "status": "missing",
-    "evidence": "Grepped apps/desktop for 'delta update', 'delta_update', 'bsdiff', 'zsync', 'binary diff', 'incremental update' \u2014 no matches related to update patching (the only 'delta' hits are unrelated: a bundled diagram-vendor JS chunk, thinking.rs reasoning-delta streaming, and schedulerStore.ts scheduling deltas). tauri_plugin_updater (features/updater.rs) always downloads the full update artifact via `update.download()`/`download_and_install()` \u2014 no differential/patch mechanism."
+    "evidence": "Grepped apps/desktop for 'delta update', 'delta_update', 'bsdiff', 'zsync', 'binary diff', 'incremental update', no matches related to update patching (the only 'delta' hits are unrelated: a bundled diagram-vendor JS chunk, thinking.rs reasoning-delta streaming, and schedulerStore.ts scheduling deltas). tauri_plugin_updater (features/updater.rs) always downloads the full update artifact via `update.download()`/`download_and_install()`, no differential/patch mechanism."
   },
   {
     "item": "code-signing",
@@ -567,7 +567,7 @@
     "item": "quick-entry-transcription",
     "surface": "apps/desktop",
     "status": "built",
-    "evidence": "QuickQuery's voice button calls onRequestVoice, wired in App.tsx:1793-1795 to handleVoiceInputRequest (App.tsx:1189-1203), which routes to the chat surface and calls useVoiceInputStore.getState().startListening() (apps/desktop/src/stores/settings/voice.ts:272, 1094). The voice store wraps real Tauri STT commands (speechStartRecording/speechStopAndTranscribe, voiceDeepgramConfigure/StartDeepgramStream, voiceListWhisperModels \u2014 voice.ts:44-49) rather than a stub."
+    "evidence": "QuickQuery's voice button calls onRequestVoice, wired in App.tsx:1793-1795 to handleVoiceInputRequest (App.tsx:1189-1203), which routes to the chat surface and calls useVoiceInputStore.getState().startListening() (apps/desktop/src/stores/settings/voice.ts:272, 1094). The voice store wraps real Tauri STT commands (speechStartRecording/speechStopAndTranscribe, voiceDeepgramConfigure/StartDeepgramStream, voiceListWhisperModels, voice.ts:44-49) rather than a stub."
   },
   {
     "item": "menu-bar-app",
@@ -585,7 +585,7 @@
     "item": "launch-at-login",
     "surface": "apps/desktop",
     "status": "missing",
-    "evidence": "Grepped apps/desktop (src-tauri and src) for 'launch_at_login', 'LaunchAtLogin', 'auto_launch', 'autostart', 'open_at_login', 'SMAppService', 'register_login_item', 'launch on login', 'start at login', 'run at startup' \u2014 no matches anywhere. Cargo.toml has no tauri-plugin-autostart dependency, and apps/desktop/src/features/settings/GeneralSettings.tsx / tabs/General/index.tsx contain no login/startup/autostart UI."
+    "evidence": "Grepped apps/desktop (src-tauri and src) for 'launch_at_login', 'LaunchAtLogin', 'auto_launch', 'autostart', 'open_at_login', 'SMAppService', 'register_login_item', 'launch on login', 'start at login', 'run at startup', no matches anywhere. Cargo.toml has no tauri-plugin-autostart dependency, and apps/desktop/src/features/settings/GeneralSettings.tsx / tabs/General/index.tsx contain no login/startup/autostart UI."
   },
   {
     "item": "window-management",
@@ -633,7 +633,7 @@
     "item": "local-file-access-grant",
     "surface": "apps/desktop",
     "status": "built",
-    "evidence": "apps/desktop/src-tauri/src/sys/commands/project_context.rs:122-226 `project_context_set_folder` pushes the chosen path into `settings.allowed_directories` and persists settings.json (see comment at project_context.rs referencing AUDIT-CONFIG-051), then reloads MCP filesystem-server scope. Invoked from apps/desktop/src/hooks/useFolderSelection.ts:83 (local mode) after the native dialog resolves a path \u2014 reachable from the composer's 'Select folder' action per the hook's module docstring."
+    "evidence": "apps/desktop/src-tauri/src/sys/commands/project_context.rs:122-226 `project_context_set_folder` pushes the chosen path into `settings.allowed_directories` and persists settings.json (see comment at project_context.rs referencing AUDIT-CONFIG-051), then reloads MCP filesystem-server scope. Invoked from apps/desktop/src/hooks/useFolderSelection.ts:83 (local mode) after the native dialog resolves a path, reachable from the composer's 'Select folder' action per the hook's module docstring."
   },
   {
     "item": "folder-scope-picker",
@@ -801,7 +801,7 @@
     "item": "readability-extraction",
     "surface": "apps/chrome-extension",
     "status": "missing",
-    "evidence": "No Mozilla-Readability-style boilerplate-stripping extractor exists in apps/extension: repo-wide case-insensitive grep for 'readability' finds zero hits under apps/extension (only in apps/web/lib/url-fetch/url-fetch-tool.ts, a different app/surface). apps/extension/src/content.ts:88-113 extractPageHtmlSafely() only does document.body.innerText plus whitespace collapsing \u2014 no <article>/<main> preference, no boilerplate/nav stripping algorithm. apps/extension/src/page-metadata.ts's extractPageMetadata() (structured OG/JSON-LD/schema extraction) exists but is itself unwired (only referenced by a type import in types.ts:416/419 and by its own test file)."
+    "evidence": "No Mozilla-Readability-style boilerplate-stripping extractor exists in apps/extension: repo-wide case-insensitive grep for 'readability' finds zero hits under apps/extension (only in apps/web/lib/url-fetch/url-fetch-tool.ts, a different app/surface). apps/extension/src/content.ts:88-113 extractPageHtmlSafely() only does document.body.innerText plus whitespace collapsing, no <article>/<main> preference, no boilerplate/nav stripping algorithm. apps/extension/src/page-metadata.ts's extractPageMetadata() (structured OG/JSON-LD/schema extraction) exists but is itself unwired (only referenced by a type import in types.ts:416/419 and by its own test file)."
   },
   {
     "item": "selection-capture",
@@ -837,25 +837,25 @@
     "item": "click-action",
     "surface": "apps/chrome-extension",
     "status": "built",
-    "evidence": "Two independent wired paths: (1) CDP path \u2014 cdpDriver.ts:353-382 click() using Input.dispatchMouseEvent, dispatched from agentLoop.ts 'click' case (~lines 194-224), reachable from background.ts:2038. (2) content-script path \u2014 content.ts:428-434 executePlannedAction 'click' case calls handleClick() (defined content.ts:755), dispatched via 'RUN_PAGE_ACTIONS' message (content.ts:289), sent from background.ts:895 and features/background/shortcuts.ts for shortcut replay."
+    "evidence": "Two independent wired paths: (1) CDP path, cdpDriver.ts:353-382 click() using Input.dispatchMouseEvent, dispatched from agentLoop.ts 'click' case (~lines 194-224), reachable from background.ts:2038. (2) content-script path, content.ts:428-434 executePlannedAction 'click' case calls handleClick() (defined content.ts:755), dispatched via 'RUN_PAGE_ACTIONS' message (content.ts:289), sent from background.ts:895 and features/background/shortcuts.ts for shortcut replay."
   },
   {
     "item": "type-action",
     "surface": "apps/chrome-extension",
     "status": "built",
-    "evidence": "CDP path \u2014 cdpDriver.ts:414-430 type() using Input.insertText, dispatched from agentLoop.ts 'type' case (~lines 233-262). Content-script path \u2014 content.ts:436-445 executePlannedAction 'type'/'input' case calls handleType() (defined content.ts:854), reachable via 'RUN_PAGE_ACTIONS' same as click-action."
+    "evidence": "CDP path, cdpDriver.ts:414-430 type() using Input.insertText, dispatched from agentLoop.ts 'type' case (~lines 233-262). Content-script path, content.ts:436-445 executePlannedAction 'type'/'input' case calls handleType() (defined content.ts:854), reachable via 'RUN_PAGE_ACTIONS' same as click-action."
   },
   {
     "item": "scroll-action",
     "surface": "apps/chrome-extension",
     "status": "built",
-    "evidence": "CDP path \u2014 cdpDriver.ts:387-408 scroll() (wheel event or scrollIntoView), dispatched from agentLoop.ts 'scroll' case (~lines 226-232). Content-script path \u2014 content.ts:448-467 executePlannedAction 'scroll' case does window.scrollTo or element.scrollIntoView, reachable via 'RUN_PAGE_ACTIONS'."
+    "evidence": "CDP path, cdpDriver.ts:387-408 scroll() (wheel event or scrollIntoView), dispatched from agentLoop.ts 'scroll' case (~lines 226-232). Content-script path, content.ts:448-467 executePlannedAction 'scroll' case does window.scrollTo or element.scrollIntoView, reachable via 'RUN_PAGE_ACTIONS'."
   },
   {
     "item": "navigate-action",
     "surface": "apps/chrome-extension",
     "status": "built",
-    "evidence": "CDP path \u2014 cdpDriver.ts:665-671 navigate() (allowlist-checked via assertDestinationAllowlisted at line 640-653) using Page.navigate, dispatched from agentLoop.ts 'navigate' case (~lines 291-315), with post-navigation allowlist re-verification. Content-script path \u2014 content.ts:399-421 executePlannedAction 'navigate' case sets window.location.href after scheme validation, reachable via 'RUN_PAGE_ACTIONS'."
+    "evidence": "CDP path, cdpDriver.ts:665-671 navigate() (allowlist-checked via assertDestinationAllowlisted at line 640-653) using Page.navigate, dispatched from agentLoop.ts 'navigate' case (~lines 291-315), with post-navigation allowlist re-verification. Content-script path, content.ts:399-421 executePlannedAction 'navigate' case sets window.location.href after scheme validation, reachable via 'RUN_PAGE_ACTIONS'."
   },
   {
     "item": "form-fill",
@@ -885,7 +885,7 @@
     "item": "alarms-scheduling",
     "surface": "apps/chrome-extension",
     "status": "built",
-    "evidence": "'alarms' permission declared manifest.json:14. apps/extension/src/background.ts:3133-3137 chrome.alarms.create('keep-alive', {periodInMinutes:1.0}); chrome.alarms.onAlarm.addListener at line 3138 handles both the keep-alive tick and scheduled-task alarms prefixed TASK_ALARM_PREFIX (lines 3147-3163), which execute via executeScheduledTask() \u2014 the scheduling side is also implemented in apps/extension/src/features/background/tasks.ts."
+    "evidence": "'alarms' permission declared manifest.json:14. apps/extension/src/background.ts:3133-3137 chrome.alarms.create('keep-alive', {periodInMinutes:1.0}); chrome.alarms.onAlarm.addListener at line 3138 handles both the keep-alive tick and scheduled-task alarms prefixed TASK_ALARM_PREFIX (lines 3147-3163), which execute via executeScheduledTask(), the scheduling side is also implemented in apps/extension/src/features/background/tasks.ts."
   },
   {
     "item": "web-navigation-listener",
@@ -897,7 +897,7 @@
     "item": "native-messaging-client",
     "surface": "apps/chrome-extension",
     "status": "built",
-    "evidence": "apps/extension/manifest.json:12 declares \"nativeMessaging\"; apps/extension/src/background.ts:183 NATIVE_HOST_NAME='com.agiworkforce.browser', :437-470 connectToNativeHost() calls chrome.runtime.connectNative(NATIVE_HOST_NAME) with handshake/session-secret negotiation, :2681 sendNativeMessage() and :2404/:1459 call sites. Desktop side host manifest at apps/desktop/src-tauri/src/integrations/native_messaging/manifest.rs:6,289 registers the same host name \u2014 real cross-app native messaging channel."
+    "evidence": "apps/extension/manifest.json:12 declares \"nativeMessaging\"; apps/extension/src/background.ts:183 NATIVE_HOST_NAME='com.agiworkforce.browser', :437-470 connectToNativeHost() calls chrome.runtime.connectNative(NATIVE_HOST_NAME) with handshake/session-secret negotiation, :2681 sendNativeMessage() and :2404/:1459 call sites. Desktop side host manifest at apps/desktop/src-tauri/src/integrations/native_messaging/manifest.rs:6,289 registers the same host name, real cross-app native messaging channel."
   },
   {
     "item": "host-permissions",
@@ -957,7 +957,7 @@
     "item": "pdf-tab-handling",
     "surface": "apps/chrome-extension",
     "status": "missing",
-    "evidence": "apps/extension/src/inPagePanel/setup.ts:42 comment says 'Protocol guard \u2014 don't inject on extension / devtools / pdf pages' but the actual guard at :42 only checks `!/^https?:/.test(location.protocol)`, which does not detect or special-case PDF content (a PDF served over https still passes this check). Repo-wide grep for '.pdf'/'application/pdf' in apps/extension/src hits only unrelated resume/cover-letter filename strings (jobAutofill.runtime.js:479,488)."
+    "evidence": "apps/extension/src/inPagePanel/setup.ts:42 comment says 'Protocol guard, don't inject on extension / devtools / pdf pages' but the actual guard at :42 only checks `!/^https?:/.test(location.protocol)`, which does not detect or special-case PDF content (a PDF served over https still passes this check). Repo-wide grep for '.pdf'/'application/pdf' in apps/extension/src hits only unrelated resume/cover-letter filename strings (jobAutofill.runtime.js:479,488)."
   },
   {
     "item": "iframe-injection",
@@ -1251,19 +1251,19 @@
     "item": "health-data-integration",
     "surface": "apps/mobile",
     "status": "missing",
-    "evidence": "Grepped whole apps/mobile tree for HealthKit, HKHealthStore, HealthConnect, Health Connect, androidx.health, HealthConnectClient, health-data, health_data \u2014 zero implementation hits. No app.config.js HealthKit plugin, no NSHealthShareUsageDescription, no healthKitQuery.ts file exists."
+    "evidence": "Grepped whole apps/mobile tree for HealthKit, HKHealthStore, HealthConnect, Health Connect, androidx.health, HealthConnectClient, health-data, health_data, zero implementation hits. No app.config.js HealthKit plugin, no NSHealthShareUsageDescription, no healthKitQuery.ts file exists."
   },
   {
     "item": "homescreen-widget",
     "surface": "apps/mobile",
     "status": "missing",
-    "evidence": "No WidgetKit extension (.swift widget target) or Android AppWidgetProvider anywhere in the repo. apps/mobile/src/features/widget-setup/index.tsx:26-31 explicitly documents: 'this screen previously advertised Quick Actions, Control Center tiles, and home-screen widgets that had no native target' \u2014 i.e. it was removed as dishonest UI copy, confirming no widget ships."
+    "evidence": "No WidgetKit extension (.swift widget target) or Android AppWidgetProvider anywhere in the repo. apps/mobile/src/features/widget-setup/index.tsx:26-31 explicitly documents: 'this screen previously advertised Quick Actions, Control Center tiles, and home-screen widgets that had no native target', i.e. it was removed as dishonest UI copy, confirming no widget ships."
   },
   {
     "item": "widget-mic-shortcut",
     "surface": "apps/mobile",
     "status": "missing",
-    "evidence": "No widget extension exists at all (see homescreen-widget); consequently no mic-launch widget shortcut. Grepped for 'widget' across the mobile app/native trees \u2014 only the /widget-setup instructional screen (apps/mobile/src/features/widget-setup/index.tsx) exists, which is a Siri-actions explainer, not an actual OS widget."
+    "evidence": "No widget extension exists at all (see homescreen-widget); consequently no mic-launch widget shortcut. Grepped for 'widget' across the mobile app/native trees, only the /widget-setup instructional screen (apps/mobile/src/features/widget-setup/index.tsx) exists, which is a Siri-actions explainer, not an actual OS widget."
   },
   {
     "item": "lock-screen-widget",
@@ -1275,7 +1275,7 @@
     "item": "live-activity",
     "surface": "apps/mobile",
     "status": "missing",
-    "evidence": "Grepped repo-wide for ActivityKit, Live Activity, DynamicIsland \u2014 zero hits in apps/mobile. No Widget/ActivityKit extension target exists in apps/mobile/ios or native/ios."
+    "evidence": "Grepped repo-wide for ActivityKit, Live Activity, DynamicIsland, zero hits in apps/mobile. No Widget/ActivityKit extension target exists in apps/mobile/ios or native/ios."
   },
   {
     "item": "deep-link",
@@ -1293,7 +1293,7 @@
     "item": "deferred-deeplink",
     "surface": "apps/mobile",
     "status": "missing",
-    "evidence": "Grepped for Branch.io, AppsFlyer, Adjust, install referrer, deferredDeepLink across apps/mobile \u2014 no attribution/deferred-deep-link SDK or logic present (only unrelated false-positive matches on the word 'adjust' in comments/keyboard code, verified by reading each hit)."
+    "evidence": "Grepped for Branch.io, AppsFlyer, Adjust, install referrer, deferredDeepLink across apps/mobile, no attribution/deferred-deep-link SDK or logic present (only unrelated false-positive matches on the word 'adjust' in comments/keyboard code, verified by reading each hit)."
   },
   {
     "item": "biometric-lock",
@@ -1335,7 +1335,7 @@
     "item": "force-upgrade-prompt",
     "surface": "apps/mobile",
     "status": "missing",
-    "evidence": "Grepped apps/mobile for forceUpdate, ForceUpgrade, minimumVersion, min_version, MinVersion, 'update required', 'please update' \u2014 zero hits anywhere in app/src."
+    "evidence": "Grepped apps/mobile for forceUpdate, ForceUpgrade, minimumVersion, min_version, MinVersion, 'update required', 'please update', zero hits anywhere in app/src."
   },
   {
     "item": "over-the-air-update",
@@ -1347,13 +1347,13 @@
     "item": "app-attest",
     "surface": "apps/mobile",
     "status": "missing",
-    "evidence": "Grepped for DeviceCheck, AppAttest, App Attest across apps/mobile; the only hits are apps/mobile/ios/Pods/AppCheckCore/**/*.m \u2014 a transitive third-party CocoaPod pulled in by Clerk's Google Sign-In dependency chain (GoogleSignIn/GIDAppCheck), not first-party AGI code. No app code calls DCAppAttestService or any App Attest API."
+    "evidence": "Grepped for DeviceCheck, AppAttest, App Attest across apps/mobile; the only hits are apps/mobile/ios/Pods/AppCheckCore/**/*.m, a transitive third-party CocoaPod pulled in by Clerk's Google Sign-In dependency chain (GoogleSignIn/GIDAppCheck), not first-party AGI code. No app code calls DCAppAttestService or any App Attest API."
   },
   {
     "item": "play-integrity",
     "surface": "apps/mobile",
     "status": "missing",
-    "evidence": "Grepped for PlayIntegrity, Play Integrity, com.google.android.play.core.integrity, IntegrityManager across apps/mobile (ts/tsx/kt/gradle/json) \u2014 zero hits anywhere."
+    "evidence": "Grepped for PlayIntegrity, Play Integrity, com.google.android.play.core.integrity, IntegrityManager across apps/mobile (ts/tsx/kt/gradle/json), zero hits anywhere."
   },
   {
     "item": "dynamic-type",
@@ -1413,7 +1413,7 @@
     "item": "json-output",
     "surface": "apps/cli",
     "status": "built",
-    "evidence": "apps/cli/src/lib.rs:445-452 `OutputFormat::Json`; lib.rs:3223-3260 `OneShotOutputMode::JsonPretty` branch of `run_oneshot()` builds a single pretty JSON object (`type`,`model`,`response`,`cost`,`is_error`, etc.) via `serde_json::to_string_pretty` and prints it \u2014 a fully non-streaming JSON response mode reachable via `--json` or `--output-format json`."
+    "evidence": "apps/cli/src/lib.rs:445-452 `OutputFormat::Json`; lib.rs:3223-3260 `OneShotOutputMode::JsonPretty` branch of `run_oneshot()` builds a single pretty JSON object (`type`,`model`,`response`,`cost`,`is_error`, etc.) via `serde_json::to_string_pretty` and prints it, a fully non-streaming JSON response mode reachable via `--json` or `--output-format json`."
   },
   {
     "item": "stream-json-output",
@@ -1449,7 +1449,7 @@
     "item": "pager",
     "surface": "apps/cli",
     "status": "missing",
-    "evidence": "Repo-wide grep for `\\bpager\\b` (excluding node_modules/target/dist/out/.next) returns only apps/cli/src/safety/mod.rs:1125, which is a *command-safety classifier test* recognizing `git -c core.pager=less status` as a git subcommand \u2014 not an implementation of output paging. No `Command::new(\"less\")`/`Command::new(\"more\")`/PAGER-env invocation exists anywhere in apps/cli. Long CLI output (history, doctor, --help, etc.) is always printed directly to stdout with no pager integration."
+    "evidence": "Repo-wide grep for `\\bpager\\b` (excluding node_modules/target/dist/out/.next) returns only apps/cli/src/safety/mod.rs:1125, which is a *command-safety classifier test* recognizing `git -c core.pager=less status` as a git subcommand, not an implementation of output paging. No `Command::new(\"less\")`/`Command::new(\"more\")`/PAGER-env invocation exists anywhere in apps/cli. Long CLI output (history, doctor, --help, etc.) is always printed directly to stdout with no pager integration."
   },
   {
     "item": "shell-completion",
@@ -1473,7 +1473,7 @@
     "item": "tmux-synchronized-output",
     "surface": "apps/cli",
     "status": "missing",
-    "evidence": "Repo-wide grep for synchronized-output escape sequences (`2026h`/`2026l`, 'SynchronizedUpdate', 'BeginSynchronizedUpdate') and the term 'synchroniz(s)ed output' returns zero matches in any .rs file. ratatui-0.29.0's own CHANGELOG.md (vendored at ~/.cargo/registry/src/index.crates.io-*/ratatui-0.29.0/CHANGELOG.md) has no synchronized-output terminal feature either \u2014 only an unrelated 'synchronized initialization' code-review comment. No DECSET 2026 begin/end wrapping exists around `terminal.draw()` calls in apps/cli/src/tui/tui_app.rs."
+    "evidence": "Repo-wide grep for synchronized-output escape sequences (`2026h`/`2026l`, 'SynchronizedUpdate', 'BeginSynchronizedUpdate') and the term 'synchroniz(s)ed output' returns zero matches in any .rs file. ratatui-0.29.0's own CHANGELOG.md (vendored at ~/.cargo/registry/src/index.crates.io-*/ratatui-0.29.0/CHANGELOG.md) has no synchronized-output terminal feature either, only an unrelated 'synchronized initialization' code-review comment. No DECSET 2026 begin/end wrapping exists around `terminal.draw()` calls in apps/cli/src/tui/tui_app.rs."
   },
   {
     "item": "cjk-render-correctness",
@@ -1485,7 +1485,7 @@
     "item": "screen-reader-output-mode",
     "surface": "apps/cli",
     "status": "missing",
-    "evidence": "Repo-wide grep for 'screen reader'/'screenreader'/'accessib' inside apps/cli returns zero hits; the term only appears in apps/web, apps/desktop, apps/mobile, apps/extension-vscode (packages/ui, apps/web/shared/components/accessibility/*, apps/web/shared/hooks/useAccessibility.ts, etc.) \u2014 none of which apply to the terminal CLI. No dedicated accessible/plain-sequential output mode or flag exists in apps/cli/src/lib.rs's Cli struct or elsewhere in the CLI."
+    "evidence": "Repo-wide grep for 'screen reader'/'screenreader'/'accessib' inside apps/cli returns zero hits; the term only appears in apps/web, apps/desktop, apps/mobile, apps/extension-vscode (packages/ui, apps/web/shared/components/accessibility/*, apps/web/shared/hooks/useAccessibility.ts, etc.), none of which apply to the terminal CLI. No dedicated accessible/plain-sequential output mode or flag exists in apps/cli/src/lib.rs's Cli struct or elsewhere in the CLI."
   },
   {
     "item": "signal-handling",
@@ -1497,7 +1497,7 @@
     "item": "cancel-interrupt",
     "surface": "apps/cli",
     "status": "built",
-    "evidence": "apps/cli/src/lib.rs:1477-1524 `tokio::select!` races `session.send(...)` against `tokio::signal::ctrl_c()` in `Command::Exec`, finalizing the cancelled turn and exiting 130. apps/cli/src/tui/tui_app.rs:4103-4124 polls for Esc or Ctrl-C during an in-flight turn (every 80ms tick) and `break None`s to drop `send_fut`, cancelling the stream \u2014 mirrored in the streaming footer hint 'Esc or Ctrl-C to cancel' at tui_app.rs:958."
+    "evidence": "apps/cli/src/lib.rs:1477-1524 `tokio::select!` races `session.send(...)` against `tokio::signal::ctrl_c()` in `Command::Exec`, finalizing the cancelled turn and exiting 130. apps/cli/src/tui/tui_app.rs:4103-4124 polls for Esc or Ctrl-C during an in-flight turn (every 80ms tick) and `break None`s to drop `send_fut`, cancelling the stream, mirrored in the streaming footer hint 'Esc or Ctrl-C to cancel' at tui_app.rs:958."
   },
   {
     "item": "background-task-ctrl-b",
@@ -1557,7 +1557,7 @@
     "item": "undo-edit",
     "surface": "apps/cli",
     "status": "missing",
-    "evidence": "Grep for 'undo' (case-insensitive) across apps/cli/src returns only unrelated hits in apps/cli/src/memory.rs ('undocumented legacy location', not the word 'undo'). Repo-wide grep for 'undo' across all .rs files shows extensive undo/change-tracking infrastructure in apps/desktop/src-tauri (undo_tools.rs, undo_manager.rs, change_tracker.rs, form_undo.rs, sys/commands/undo.rs) but none of it is shared with or reachable from apps/cli \u2014 the CLI's Cargo.toml (apps/cli/Cargo.toml:40-49) depends only on agiworkforce-agent-core/app-server/llm/model-registry/mcp/protocol/sandbox-policy/execpolicy/command-registry/utils-image, none of which contain undo logic (`grep -rln undo crates/agiworkforce-agent-core/src` returns nothing). apps/cli's file-edit tools (features/exec/tools) keep no pre-edit backup/original_content anywhere (grepped for 'backup'/'.bak'/'original_content'/'pre_edit', zero hits), so there is no mechanism to revert a single file edit independent of git; only whole-conversation `rewind` (see above) exists."
+    "evidence": "Grep for 'undo' (case-insensitive) across apps/cli/src returns only unrelated hits in apps/cli/src/memory.rs ('undocumented legacy location', not the word 'undo'). Repo-wide grep for 'undo' across all .rs files shows extensive undo/change-tracking infrastructure in apps/desktop/src-tauri (undo_tools.rs, undo_manager.rs, change_tracker.rs, form_undo.rs, sys/commands/undo.rs) but none of it is shared with or reachable from apps/cli, the CLI's Cargo.toml (apps/cli/Cargo.toml:40-49) depends only on agiworkforce-agent-core/app-server/llm/model-registry/mcp/protocol/sandbox-policy/execpolicy/command-registry/utils-image, none of which contain undo logic (`grep -rln undo crates/agiworkforce-agent-core/src` returns nothing). apps/cli's file-edit tools (features/exec/tools) keep no pre-edit backup/original_content anywhere (grepped for 'backup'/'.bak'/'original_content'/'pre_edit', zero hits), so there is no mechanism to revert a single file edit independent of git; only whole-conversation `rewind` (see above) exists."
   },
   {
     "item": "context-compaction",
@@ -1617,7 +1617,7 @@
     "item": "doctor-command",
     "surface": "apps/cli",
     "status": "built",
-    "evidence": "apps/cli/src/lib.rs:2081 'agi doctor' -> doctor::run_doctor(&app_config, json) (apps/cli/src/doctor.rs:53); '/doctor'|'/diagnose'|'/health' -> claude_parity::render_doctor (apps/cli/src/claude_parity.rs:826-836) which itself calls doctor::collect_doctor_report \u2014 same real diagnostic engine reachable from both surfaces."
+    "evidence": "apps/cli/src/lib.rs:2081 'agi doctor' -> doctor::run_doctor(&app_config, json) (apps/cli/src/doctor.rs:53); '/doctor'|'/diagnose'|'/health' -> claude_parity::render_doctor (apps/cli/src/claude_parity.rs:826-836) which itself calls doctor::collect_doctor_report, same real diagnostic engine reachable from both surfaces."
   },
   {
     "item": "login-logout-command",
@@ -1641,7 +1641,7 @@
     "item": "mcp-add-command",
     "surface": "apps/cli",
     "status": "missing",
-    "evidence": "No 'agi mcp add' verb or slash-command form exists. Command enum only has Command::McpServer (lib.rs:560,1714) which makes agi itself act as an MCP server; McpManager::load_configs (apps/cli/src/mcp/mod.rs:831-853) only reads existing .mcp.json/global config files. The only related capability is `agi ecosystem import` (EcosystemSubcommand::Import, lib.rs:770-771; ecosystem.rs:427-517) which auto-imports MCP servers detected from OTHER tools' (Claude Desktop, Cline, Zed, Codex) configs \u2014 not a way to register a single new custom server by name/command."
+    "evidence": "No 'agi mcp add' verb or slash-command form exists. Command enum only has Command::McpServer (lib.rs:560,1714) which makes agi itself act as an MCP server; McpManager::load_configs (apps/cli/src/mcp/mod.rs:831-853) only reads existing .mcp.json/global config files. The only related capability is `agi ecosystem import` (EcosystemSubcommand::Import, lib.rs:770-771; ecosystem.rs:427-517) which auto-imports MCP servers detected from OTHER tools' (Claude Desktop, Cline, Zed, Codex) configs, not a way to register a single new custom server by name/command."
   },
   {
     "item": "agents-command",
@@ -1689,7 +1689,7 @@
     "item": "opentelemetry-export",
     "surface": "apps/cli",
     "status": "missing",
-    "evidence": "Repo-wide grep for 'opentelemetry'/'otlp' (excluding node_modules/target/dist/out/.next) finds zero hits in apps/cli or crates/agiworkforce-llm; the only repo hits are in apps/web/lib/cost-tracker.ts and packages/ui/unified-chat, which explicitly state 'No opentelemetry package dependency' and merely format attribute names using OTel naming conventions \u2014 no actual OTLP exporter anywhere, and none in the CLI at all."
+    "evidence": "Repo-wide grep for 'opentelemetry'/'otlp' (excluding node_modules/target/dist/out/.next) finds zero hits in apps/cli or crates/agiworkforce-llm; the only repo hits are in apps/web/lib/cost-tracker.ts and packages/ui/unified-chat, which explicitly state 'No opentelemetry package dependency' and merely format attribute names using OTel naming conventions, no actual OTLP exporter anywhere, and none in the CLI at all."
   },
   {
     "item": "git-integration",
@@ -1725,7 +1725,7 @@
     "item": "gateway-base-url-support",
     "surface": "apps/cli",
     "status": "built",
-    "evidence": "apps/cli/src/config.rs:104-109 ProviderConfig.base_url is settable per named provider in the TOML config; apps/cli/src/models/provider_dispatch.rs:433-520 build_custom_provider() reads pc.base_url, validates via is_safe_provider_base_url (blocks non-loopback plain-http/SSRF targets but allows any https:// gateway), and appends it to real OpenAI-compatible chat-completions requests \u2014 actually used for outbound API calls, not just stored config."
+    "evidence": "apps/cli/src/config.rs:104-109 ProviderConfig.base_url is settable per named provider in the TOML config; apps/cli/src/models/provider_dispatch.rs:433-520 build_custom_provider() reads pc.base_url, validates via is_safe_provider_base_url (blocks non-loopback plain-http/SSRF targets but allows any https:// gateway), and appends it to real OpenAI-compatible chat-completions requests, actually used for outbound API calls, not just stored config."
   },
   {
     "item": "gateway-model-list-discovery",
@@ -1743,7 +1743,7 @@
     "item": "service-tier-env",
     "surface": "apps/cli",
     "status": "missing",
-    "evidence": "ServiceTier enum (Fast/Flex) exists only in crates/agiworkforce-protocol/src/config_types.rs:357-360 and is referenced in protocol.rs Op/Event variants (lines 507,568,645,3600) for an app-server-style config surface. apps/cli depends on agiworkforce-protocol (Cargo.toml:45) but grep for 'service_tier'/'ServiceTier' inside apps/cli/src returns zero hits \u2014 nothing in the CLI reads an env var to populate it or sends it on a real request; it is dead/unused from the CLI's perspective."
+    "evidence": "ServiceTier enum (Fast/Flex) exists only in crates/agiworkforce-protocol/src/config_types.rs:357-360 and is referenced in protocol.rs Op/Event variants (lines 507,568,645,3600) for an app-server-style config surface. apps/cli depends on agiworkforce-protocol (Cargo.toml:45) but grep for 'service_tier'/'ServiceTier' inside apps/cli/src returns zero hits, nothing in the CLI reads an env var to populate it or sends it on a real request; it is dead/unused from the CLI's perspective."
   },
   {
     "item": "vscode-extension-manifest",
@@ -1761,7 +1761,7 @@
     "item": "contribution-points",
     "surface": "apps/ide-extensions",
     "status": "built",
-    "evidence": "apps/extension-vscode/package.json:63-878 contributes commands (63-399), chatParticipants (400-461), viewsContainers/views (462-500), menus (501-628), configuration (629-797), keybindings (798-878) \u2014 all consumed in apps/extension-vscode/src/core/commandSetup.ts and providerSetup.ts."
+    "evidence": "apps/extension-vscode/package.json:63-878 contributes commands (63-399), chatParticipants (400-461), viewsContainers/views (462-500), menus (501-628), configuration (629-797), keybindings (798-878), all consumed in apps/extension-vscode/src/core/commandSetup.ts and providerSetup.ts."
   },
   {
     "item": "when-clause-context",
@@ -1779,7 +1779,7 @@
     "item": "draggable-view-location",
     "surface": "apps/ide-extensions",
     "status": "built",
-    "evidence": "apps/extension-vscode/package.json:471-499 registers agi-workforce.sidebar/conversations/contextPanel/memory as standard contributed views under a normal viewsContainer, which VS Code's built-in 'Move View' UI allows dragging to any sidebar/panel location \u2014 this is inherent VS Code behavior for any such contribution, no opt-out present in the manifest."
+    "evidence": "apps/extension-vscode/package.json:471-499 registers agi-workforce.sidebar/conversations/contextPanel/memory as standard contributed views under a normal viewsContainer, which VS Code's built-in 'Move View' UI allows dragging to any sidebar/panel location, this is inherent VS Code behavior for any such contribution, no opt-out present in the manifest."
   },
   {
     "item": "parallel-conversation-tabs",
@@ -1797,13 +1797,13 @@
     "item": "bundled-cli",
     "surface": "apps/ide-extensions",
     "status": "missing",
-    "evidence": "apps/extension-vscode/.vscodeignore excludes scripts/**, docs/**, etc. and apps/extension-vscode/scripts/vsce-package.js contains no binary-copy step; grepped esbuild.js and vsce-package.js for 'bundled|binaries|vendor.*cli|copy.*cli' \u2014 no matches. apps/extension-vscode/src/platform/config.ts:48 DEFAULTS.cliPath = 'agi' (a bare command name, not a path into the extension's own storage), confirming the CLI binary itself is never packaged into the VSIX."
+    "evidence": "apps/extension-vscode/.vscodeignore excludes scripts/**, docs/**, etc. and apps/extension-vscode/scripts/vsce-package.js contains no binary-copy step; grepped esbuild.js and vsce-package.js for 'bundled|binaries|vendor.*cli|copy.*cli', no matches. apps/extension-vscode/src/platform/config.ts:48 DEFAULTS.cliPath = 'agi' (a bare command name, not a path into the extension's own storage), confirming the CLI binary itself is never packaged into the VSIX."
   },
   {
     "item": "cli-discovery-on-path",
     "surface": "apps/ide-extensions",
     "status": "built",
-    "evidence": "apps/extension-vscode/src/platform/config.ts:48,159-165 cliPath() defaults to the bare string 'agi' (DEFAULTS.cliPath) resolved via configuration; apps/extension-vscode/src/integrations/localRuntimeClient.ts:644-645 'const spawnRuntime = this.options.spawn ?? (nodeSpawn as SpawnLocalRuntime); const child = spawnRuntime(this.options.cliPath, [\"app-server\"], ...)' \u2014 Node's child_process.spawn resolves a bare command name via the OS PATH."
+    "evidence": "apps/extension-vscode/src/platform/config.ts:48,159-165 cliPath() defaults to the bare string 'agi' (DEFAULTS.cliPath) resolved via configuration; apps/extension-vscode/src/integrations/localRuntimeClient.ts:644-645 'const spawnRuntime = this.options.spawn ?? (nodeSpawn as SpawnLocalRuntime); const child = spawnRuntime(this.options.cliPath, [\"app-server\"], ...)', Node's child_process.spawn resolves a bare command name via the OS PATH."
   },
   {
     "item": "three-way-diff-editor",
@@ -1827,7 +1827,7 @@
     "item": "accept-hunk",
     "surface": "apps/ide-extensions",
     "status": "built",
-    "evidence": "apps/extension-vscode/src/core/commandSetup.ts:190-191 register('agi-workforce.acceptDiff', ...) calls diffDecorationProvider.acceptDiff(sessionId), implemented at apps/extension-vscode/src/providers/diffDecorationProvider.ts:326 acceptDiff(sessionId) \u2014 each DiffSession corresponds to one SEARCH/REPLACE hunk from patchEngine.ts."
+    "evidence": "apps/extension-vscode/src/core/commandSetup.ts:190-191 register('agi-workforce.acceptDiff', ...) calls diffDecorationProvider.acceptDiff(sessionId), implemented at apps/extension-vscode/src/providers/diffDecorationProvider.ts:326 acceptDiff(sessionId), each DiffSession corresponds to one SEARCH/REPLACE hunk from patchEngine.ts."
   },
   {
     "item": "inline-decoration",
@@ -1875,7 +1875,7 @@
     "item": "clickable-filepath-line",
     "surface": "apps/ide-extensions",
     "status": "missing",
-    "evidence": "Grepped apps/extension-vscode/src for TerminalLinkProvider, registerTerminalLinkProvider, DocumentLinkProvider, registerDocumentLinkProvider \u2014 zero matches. No 'openFile'-with-line-jump webview message type exists (only 'openFilePicker' at apps/extension-vscode/src/protocol/webviewMessages.ts:49)."
+    "evidence": "Grepped apps/extension-vscode/src for TerminalLinkProvider, registerTerminalLinkProvider, DocumentLinkProvider, registerDocumentLinkProvider, zero matches. No 'openFile'-with-line-jump webview message type exists (only 'openFilePicker' at apps/extension-vscode/src/protocol/webviewMessages.ts:49)."
   },
   {
     "item": "workspace-index",
@@ -1893,13 +1893,13 @@
     "item": "workspace-trust",
     "surface": "apps/ide-extensions",
     "status": "built",
-    "evidence": "apps/extension-vscode/package.json:44-56 declares capabilities.untrustedWorkspaces with restrictedConfigurations; vscode.workspace.isTrusted is checked at apps/extension-vscode/src/core/commandSetup.ts:720,735,785,801, apps/extension-vscode/src/core/runInlineCommand.ts:95-96, apps/extension-vscode/src/providers/terminalProvider.ts:212, apps/extension-vscode/src/platform/config.ts:161, apps/extension-vscode/src/features/chat-participant/chatParticipant.ts:192, apps/extension-vscode/src/features/sidebar-webview/ChatStateManager.ts:793 \u2014 gating writes/terminal/config in untrusted workspaces."
+    "evidence": "apps/extension-vscode/package.json:44-56 declares capabilities.untrustedWorkspaces with restrictedConfigurations; vscode.workspace.isTrusted is checked at apps/extension-vscode/src/core/commandSetup.ts:720,735,785,801, apps/extension-vscode/src/core/runInlineCommand.ts:95-96, apps/extension-vscode/src/providers/terminalProvider.ts:212, apps/extension-vscode/src/platform/config.ts:161, apps/extension-vscode/src/features/chat-participant/chatParticipant.ts:192, apps/extension-vscode/src/features/sidebar-webview/ChatStateManager.ts:793, gating writes/terminal/config in untrusted workspaces."
   },
   {
     "item": "secret-storage",
     "surface": "apps/ide-extensions",
     "status": "built",
-    "evidence": "apps/extension-vscode/src/utils/api.ts:146,154,161 secrets.get/store/delete(SECRET_KEY) for the API key; lines 173-200 same pattern for ACCOUNT_TOKEN_KEY/ACCOUNT_TOKEN_EXPIRES_AT_KEY, using vscode.SecretStorage (context.secrets) \u2014 the standard OS-keychain-backed VS Code secret store."
+    "evidence": "apps/extension-vscode/src/utils/api.ts:146,154,161 secrets.get/store/delete(SECRET_KEY) for the API key; lines 173-200 same pattern for ACCOUNT_TOKEN_KEY/ACCOUNT_TOKEN_EXPIRES_AT_KEY, using vscode.SecretStorage (context.secrets), the standard OS-keychain-backed VS Code secret store."
   },
   {
     "item": "global-and-workspace-state",
@@ -1941,7 +1941,7 @@
     "item": "remote-dev-ssh-wsl-support",
     "surface": "apps/ide-extensions",
     "status": "unclear",
-    "evidence": "apps/extension-vscode/package.json has no explicit 'extensionKind' override, and the extension uses only Node-based APIs (child_process via localRuntimeClient.ts:644, vscode.SecretStorage, workspaceState) with no browser entry point \u2014 by default VS Code installs/runs such extensions on the remote (SSH/WSL/Codespaces) host automatically, which would make it work under Remote Development without extra code."
+    "evidence": "apps/extension-vscode/package.json has no explicit 'extensionKind' override, and the extension uses only Node-based APIs (child_process via localRuntimeClient.ts:644, vscode.SecretStorage, workspaceState) with no browser entry point, by default VS Code installs/runs such extensions on the remote (SSH/WSL/Codespaces) host automatically, which would make it work under Remote Development without extra code."
   },
   {
     "item": "fork-compatibility-cursor-kiro",
@@ -1953,7 +1953,7 @@
     "item": "shared-settings-json-resolution",
     "surface": "apps/ide-extensions",
     "status": "built",
-    "evidence": "apps/extension-vscode/src/platform/config.ts:52 'return vscode.workspace.getConfiguration(\"agiWorkforce\").get<T>(key) ?? fallback;' and :159-165 use vscode.workspace.getConfiguration(...).inspect(...) \u2014 this is the standard VS Code API that auto-merges User/Workspace/Folder-scoped settings.json, giving every agiWorkforce.* setting (package.json:629-797, 30 properties) shared/team-resolvable settings.json behavior by construction."
+    "evidence": "apps/extension-vscode/src/platform/config.ts:52 'return vscode.workspace.getConfiguration(\"agiWorkforce\").get<T>(key) ?? fallback;' and :159-165 use vscode.workspace.getConfiguration(...).inspect(...), this is the standard VS Code API that auto-merges User/Workspace/Folder-scoped settings.json, giving every agiWorkforce.* setting (package.json:629-797, 30 properties) shared/team-resolvable settings.json behavior by construction."
   },
   {
     "item": "jetbrains-plugin-xml",
@@ -1965,7 +1965,7 @@
     "item": "jetbrains-tool-window",
     "surface": "apps/ide-extensions",
     "status": "missing",
-    "evidence": "Same whole-repo grep as jetbrains-plugin-xml \u2014 no JetBrains plugin module, hence no ToolWindow implementation exists."
+    "evidence": "Same whole-repo grep as jetbrains-plugin-xml, no JetBrains plugin module, hence no ToolWindow implementation exists."
   },
   {
     "item": "jetbrains-diff-viewer-bridge",
@@ -1989,7 +1989,7 @@
     "item": "extension-signing",
     "surface": "apps/ide-extensions",
     "status": "missing",
-    "evidence": "apps/extension-vscode/package.json devDependencies (lines ~908-921) include @vscode/vsce but no @vscode/vsce-sign package; grepped apps/extension-vscode and .github/workflows for 'vsce-sign|sigstore|codesign' \u2014 the only hits (build-windows-release.yml:292 Get-AuthenticodeSignature, release-cli.yml:249-260 cosign) are for the Windows desktop installer and CLI binary respectively, unrelated to the .vsix."
+    "evidence": "apps/extension-vscode/package.json devDependencies (lines ~908-921) include @vscode/vsce but no @vscode/vsce-sign package; grepped apps/extension-vscode and .github/workflows for 'vsce-sign|sigstore|codesign', the only hits (build-windows-release.yml:292 Get-AuthenticodeSignature, release-cli.yml:249-260 cosign) are for the Windows desktop installer and CLI binary respectively, unrelated to the .vsix."
   },
   {
     "item": "app-manifest",
@@ -2007,13 +2007,13 @@
     "item": "org-wide-install",
     "surface": "apps/slack-app",
     "status": "missing",
-    "evidence": "Grepped whole repo for org_wide, enterprise_grid, enterprise_install, is_enterprise_install \u2014 zero hits outside this task's own search."
+    "evidence": "Grepped whole repo for org_wide, enterprise_grid, enterprise_install, is_enterprise_install, zero hits outside this task's own search."
   },
   {
     "item": "enterprise-grid-support",
     "surface": "apps/slack-app",
     "status": "missing",
-    "evidence": "Grepped whole repo for enterprise_grid/EnterpriseGrid/enterprise_id \u2014 zero hits."
+    "evidence": "Grepped whole repo for enterprise_grid/EnterpriseGrid/enterprise_id, zero hits."
   },
   {
     "item": "signing-secret-verification",
@@ -2025,7 +2025,7 @@
     "item": "events-api",
     "surface": "apps/slack-app",
     "status": "missing",
-    "evidence": "Grepped whole repo for url_verification/event_callback/challenge in Slack context \u2014 the only 'challenge' hits are unrelated PKCE OAuth code (apps/cli/src/oauth.rs, apps/desktop/src-tauri/src/core/mcp/oauth.rs) and Cloudflare Turnstile (apps/web/proxy.ts:84). No HTTP route anywhere accepts POSTed Slack event payloads."
+    "evidence": "Grepped whole repo for url_verification/event_callback/challenge in Slack context, the only 'challenge' hits are unrelated PKCE OAuth code (apps/cli/src/oauth.rs, apps/desktop/src-tauri/src/core/mcp/oauth.rs) and Cloudflare Turnstile (apps/web/proxy.ts:84). No HTTP route anywhere accepts POSTed Slack event payloads."
   },
   {
     "item": "socket-mode",
@@ -2037,19 +2037,19 @@
     "item": "app-mention-handler",
     "surface": "apps/slack-app",
     "status": "missing",
-    "evidence": "Grepped whole repo for 'app_mention' \u2014 only hit is a doc-comment example in packages/contracts/types/src/event-triggers.ts:89,99 inside SlackTriggerConfig, a type-only contract. The actual Rust trigger engine's TriggerType enum (apps/desktop/src-tauri/src/core/agent/triggers.rs:78-83) implements only Cron/Webhook/FileWatcher \u2014 no Slack variant \u2014 confirming SlackTriggerConfig is unimplemented."
+    "evidence": "Grepped whole repo for 'app_mention', only hit is a doc-comment example in packages/contracts/types/src/event-triggers.ts:89,99 inside SlackTriggerConfig, a type-only contract. The actual Rust trigger engine's TriggerType enum (apps/desktop/src-tauri/src/core/agent/triggers.rs:78-83) implements only Cron/Webhook/FileWatcher, no Slack variant, confirming SlackTriggerConfig is unimplemented."
   },
   {
     "item": "thread-reply",
     "surface": "apps/slack-app",
     "status": "missing",
-    "evidence": "SlackMessage struct (apps/desktop/src-tauri/src/features/messaging/slack.rs:459-464) has fields ts/channel/text/user only \u2014 no thread_ts field anywhere in the file; grepped whole repo for 'thread_ts' in a Slack context with zero hits."
+    "evidence": "SlackMessage struct (apps/desktop/src-tauri/src/features/messaging/slack.rs:459-464) has fields ts/channel/text/user only, no thread_ts field anywhere in the file; grepped whole repo for 'thread_ts' in a Slack context with zero hits."
   },
   {
     "item": "ephemeral-message",
     "surface": "apps/slack-app",
     "status": "missing",
-    "evidence": "Grepped whole repo for 'postEphemeral'/'chat.postEphemeral'/'ephemeral' in a Slack context \u2014 zero hits; the remaining 'ephemeral' hits are unrelated cache-control, temporary-session, and OS-assigned-port concepts."
+    "evidence": "Grepped whole repo for 'postEphemeral'/'chat.postEphemeral'/'ephemeral' in a Slack context, zero hits; the remaining 'ephemeral' hits are unrelated cache-control, temporary-session, and OS-assigned-port concepts."
   },
   {
     "item": "block-kit-blocks",
@@ -2061,31 +2061,31 @@
     "item": "interactive-components",
     "surface": "apps/slack-app",
     "status": "missing",
-    "evidence": "Grepped whole repo for 'block_actions' \u2014 zero hits anywhere."
+    "evidence": "Grepped whole repo for 'block_actions', zero hits anywhere."
   },
   {
     "item": "modal-view-submission",
     "surface": "apps/slack-app",
     "status": "missing",
-    "evidence": "Grepped whole repo for 'views.open'/'view_submission' \u2014 zero hits."
+    "evidence": "Grepped whole repo for 'views.open'/'view_submission', zero hits."
   },
   {
     "item": "app-home-tab",
     "surface": "apps/slack-app",
     "status": "missing",
-    "evidence": "Grepped whole repo for 'views.publish'/'app_home' \u2014 zero hits."
+    "evidence": "Grepped whole repo for 'views.publish'/'app_home', zero hits."
   },
   {
     "item": "message-shortcut",
     "surface": "apps/slack-app",
     "status": "missing",
-    "evidence": "Grepped whole repo for 'message_action' and Slack 'shortcut' payload handling \u2014 zero hits (only unrelated UI keyboard-shortcut components matched the generic word 'shortcut', e.g. packages/ui/unified-chat/src/index.ts:388-395)."
+    "evidence": "Grepped whole repo for 'message_action' and Slack 'shortcut' payload handling, zero hits (only unrelated UI keyboard-shortcut components matched the generic word 'shortcut', e.g. packages/ui/unified-chat/src/index.ts:388-395)."
   },
   {
     "item": "global-shortcut",
     "surface": "apps/slack-app",
     "status": "missing",
-    "evidence": "Same search as message-shortcut \u2014 no Slack global_shortcut payload handling anywhere; only unrelated app keyboard shortcuts matched."
+    "evidence": "Same search as message-shortcut, no Slack global_shortcut payload handling anywhere; only unrelated app keyboard shortcuts matched."
   },
   {
     "item": "slash-command-handler",
@@ -2109,7 +2109,7 @@
     "item": "link-unfurling",
     "surface": "apps/slack-app",
     "status": "missing",
-    "evidence": "Grepped whole repo for 'unfurl' \u2014 only hits are apps/web/app/api/og/route.tsx:5 and apps/web/lib/seo/site.ts:28/metadata.ts:33, which describe this product's own Open Graph preview card being unfurled BY Slack/X/etc when its own links are shared, not the product unfurling links posted inside Slack."
+    "evidence": "Grepped whole repo for 'unfurl', only hits are apps/web/app/api/og/route.tsx:5 and apps/web/lib/seo/site.ts:28/metadata.ts:33, which describe this product's own Open Graph preview card being unfurled BY Slack/X/etc when its own links are shared, not the product unfurling links posted inside Slack."
   },
   {
     "item": "emoji-reaction-trigger",
@@ -2127,31 +2127,31 @@
     "item": "channel-membership-event",
     "surface": "apps/slack-app",
     "status": "missing",
-    "evidence": "Grepped whole repo for 'member_joined_channel'/'channel_left' \u2014 zero hits."
+    "evidence": "Grepped whole repo for 'member_joined_channel'/'channel_left', zero hits."
   },
   {
     "item": "agent-service-identity",
     "surface": "apps/slack-app",
     "status": "missing",
-    "evidence": "Grepped whole repo for 'auth.test', 'bot_user_id', 'bot_id' in Slack context \u2014 zero hits. The bot_token in SlackConfig (apps/desktop/src-tauri/src/features/messaging/slack.rs:10-14) is used as a generic bearer credential on every API call with no identity-resolution step."
+    "evidence": "Grepped whole repo for 'auth.test', 'bot_user_id', 'bot_id' in Slack context, zero hits. The bot_token in SlackConfig (apps/desktop/src-tauri/src/features/messaging/slack.rs:10-14) is used as a generic bearer credential on every API call with no identity-resolution step."
   },
   {
     "item": "per-channel-scoping",
     "surface": "apps/slack-app",
     "status": "missing",
-    "evidence": "Grepped whole repo for channel_scope/perChannel/per-channel \u2014 zero hits; SlackConfig (slack.rs:10-14) and the messaging_connections table (apps/desktop/src-tauri/src/sys/commands/messaging.rs:145-159) scope credentials at the workspace/connection level only, with no per-channel restriction field anywhere."
+    "evidence": "Grepped whole repo for channel_scope/perChannel/per-channel, zero hits; SlackConfig (slack.rs:10-14) and the messaging_connections table (apps/desktop/src-tauri/src/sys/commands/messaging.rs:145-159) scope credentials at the workspace/connection level only, with no per-channel restriction field anywhere."
   },
   {
     "item": "channel-allowlist",
     "surface": "apps/slack-app",
     "status": "missing",
-    "evidence": "Grepped whole repo for allowed_channels/channel_allowlist/allowlist \u2014 zero hits."
+    "evidence": "Grepped whole repo for allowed_channels/channel_allowlist/allowlist, zero hits."
   },
   {
     "item": "channel-scoped-memory",
     "surface": "apps/slack-app",
     "status": "missing",
-    "evidence": "Grepped whole repo for channel-keyed memory/context stores tied to Slack \u2014 zero hits; messaging_history table (referenced at apps/desktop/src-tauri/src/sys/commands/messaging.rs:410-425) stores raw sent messages per connection/channel_id but is not consumed as agent memory/context anywhere."
+    "evidence": "Grepped whole repo for channel-keyed memory/context stores tied to Slack, zero hits; messaging_history table (referenced at apps/desktop/src-tauri/src/sys/commands/messaging.rs:410-425) stores raw sent messages per connection/channel_id but is not consumed as agent memory/context anywhere."
   },
   {
     "item": "channel-history-ingestion",
@@ -2163,31 +2163,31 @@
     "item": "multiplayer-shared-session",
     "surface": "apps/slack-app",
     "status": "missing",
-    "evidence": "Grepped whole repo for multiplayer/shared-session/sharedSession in a messaging/Slack context \u2014 zero relevant hits."
+    "evidence": "Grepped whole repo for multiplayer/shared-session/sharedSession in a messaging/Slack context, zero relevant hits."
   },
   {
     "item": "handoff-between-users",
     "surface": "apps/slack-app",
     "status": "missing",
-    "evidence": "Grepped whole repo for 'handoff' \u2014 the only hits are RealtimeHandoffRequested (crates/agiworkforce-protocol/src/protocol.rs:332-384, crates/agiworkforce-protocol/bindings/RealtimeHandoffRequested.ts), which is part of the voice/realtime session subsystem and unrelated to Slack or any messaging channel."
+    "evidence": "Grepped whole repo for 'handoff', the only hits are RealtimeHandoffRequested (crates/agiworkforce-protocol/src/protocol.rs:332-384, crates/agiworkforce-protocol/bindings/RealtimeHandoffRequested.ts), which is part of the voice/realtime session subsystem and unrelated to Slack or any messaging channel."
   },
   {
     "item": "ambient-proactive-mode",
     "surface": "apps/slack-app",
     "status": "missing",
-    "evidence": "Grepped whole repo for 'proactive' in a Slack context \u2014 the only real implementation is ProactiveScheduler (apps/desktop/src-tauri/src/core/scheduler, referenced apps/desktop/src-tauri/src/lib.rs:742,2107), a generic cron-based task scheduler with no Slack trigger type (confirmed via TriggerType enum at apps/desktop/src-tauri/src/core/agent/triggers.rs:78-83, which has no Slack variant)."
+    "evidence": "Grepped whole repo for 'proactive' in a Slack context, the only real implementation is ProactiveScheduler (apps/desktop/src-tauri/src/core/scheduler, referenced apps/desktop/src-tauri/src/lib.rs:742,2107), a generic cron-based task scheduler with no Slack trigger type (confirmed via TriggerType enum at apps/desktop/src-tauri/src/core/agent/triggers.rs:78-83, which has no Slack variant)."
   },
   {
     "item": "self-scheduled-followup",
     "surface": "apps/slack-app",
     "status": "missing",
-    "evidence": "Grepped whole repo for self_scheduled/selfScheduled/self-scheduled-followup \u2014 zero hits."
+    "evidence": "Grepped whole repo for self_scheduled/selfScheduled/self-scheduled-followup, zero hits."
   },
   {
     "item": "parallel-task-fanout",
     "surface": "apps/slack-app",
     "status": "missing",
-    "evidence": "Grepped whole repo for fanout/fan_out/fan-out tied to Slack or messaging \u2014 zero hits."
+    "evidence": "Grepped whole repo for fanout/fan_out/fan-out tied to Slack or messaging, zero hits."
   },
   {
     "item": "admin-tool-grant",
@@ -2199,31 +2199,31 @@
     "item": "admin-spend-limit",
     "surface": "apps/slack-app",
     "status": "missing",
-    "evidence": "Same search as admin-tool-grant \u2014 apps/web/app/admin and apps/web/app/api/admin have no Slack references at all."
+    "evidence": "Same search as admin-tool-grant, apps/web/app/admin and apps/web/app/api/admin have no Slack references at all."
   },
   {
     "item": "admin-app-approval",
     "surface": "apps/slack-app",
     "status": "missing",
-    "evidence": "Same search as admin-tool-grant \u2014 no Slack references in the admin surface."
+    "evidence": "Same search as admin-tool-grant, no Slack references in the admin surface."
   },
   {
     "item": "retry-after-rate-limit",
     "surface": "apps/slack-app",
     "status": "missing",
-    "evidence": "Every SlackClient method in apps/desktop/src-tauri/src/features/messaging/slack.rs (e.g. send_message:31-67, send_interactive_message:69-105, get_conversation_history:107-134) only checks the JSON body's 'ok' field and returns a generic error string on failure \u2014 none inspect HTTP status 429 or a Retry-After header, and there is no retry/backoff wrapper around the reqwest client."
+    "evidence": "Every SlackClient method in apps/desktop/src-tauri/src/features/messaging/slack.rs (e.g. send_message:31-67, send_interactive_message:69-105, get_conversation_history:107-134) only checks the JSON body's 'ok' field and returns a generic error string on failure, none inspect HTTP status 429 or a Retry-After header, and there is no retry/backoff wrapper around the reqwest client."
   },
   {
     "item": "app-directory-listing",
     "surface": "apps/slack-app",
     "status": "missing",
-    "evidence": "Grepped whole repo for app_directory/slack directory/marketplace listing tied to Slack \u2014 zero hits."
+    "evidence": "Grepped whole repo for app_directory/slack directory/marketplace listing tied to Slack, zero hits."
   },
   {
     "item": "github-app-manifest",
     "surface": "apps/github-app",
     "status": "missing",
-    "evidence": "Grepped whole repo for 'app manifest'/'manifest flow'/'/settings/apps/new' \u2014 no hits outside unrelated Chrome-extension manifest text (apps/web/app/chrome-extension/page.tsx:13). The app's identity is configured purely via env vars (GITHUB_APP_ID, GITHUB_APP_PRIVATE_KEY_BASE64, GITHUB_APP_SLUG, GITHUB_APP_CLIENT_ID/SECRET in apps/web/lib/github-app.ts:33-40); no code implements the GitHub App Manifest creation flow."
+    "evidence": "Grepped whole repo for 'app manifest'/'manifest flow'/'/settings/apps/new', no hits outside unrelated Chrome-extension manifest text (apps/web/app/chrome-extension/page.tsx:13). The app's identity is configured purely via env vars (GITHUB_APP_ID, GITHUB_APP_PRIVATE_KEY_BASE64, GITHUB_APP_SLUG, GITHUB_APP_CLIENT_ID/SECRET in apps/web/lib/github-app.ts:33-40); no code implements the GitHub App Manifest creation flow."
   },
   {
     "item": "installation-token",
@@ -2259,25 +2259,25 @@
     "item": "pull-request-event",
     "surface": "apps/github-app",
     "status": "missing",
-    "evidence": "Grepped apps/web/app/api/github/ and lib/github-app.ts for 'pull_request' as an x-github-event value \u2014 the only match is the payload.issue.pull_request key check (route.ts:86), which just detects that an issue_comment was made on a PR."
+    "evidence": "Grepped apps/web/app/api/github/ and lib/github-app.ts for 'pull_request' as an x-github-event value, the only match is the payload.issue.pull_request key check (route.ts:86), which just detects that an issue_comment was made on a PR."
   },
   {
     "item": "review-comment-event",
     "surface": "apps/github-app",
     "status": "missing",
-    "evidence": "Grepped for pull_request_review_comment / pull_request_review across apps/web (excluding tests) \u2014 no hits in webhook route or github-app.ts. (.github/workflows/agiworkforce-bot.yml:6-7 subscribes to pull_request_review_comment, but that is this repo's own CI bot via actions/github-script, not the shipped product's webhook handler.)"
+    "evidence": "Grepped for pull_request_review_comment / pull_request_review across apps/web (excluding tests), no hits in webhook route or github-app.ts. (.github/workflows/agiworkforce-bot.yml:6-7 subscribes to pull_request_review_comment, but that is this repo's own CI bot via actions/github-script, not the shipped product's webhook handler.)"
   },
   {
     "item": "push-event",
     "surface": "apps/github-app",
     "status": "missing",
-    "evidence": "Grepped apps/web/app/api/github and lib/github-app.ts for a 'push' event branch \u2014 none found; the only 'push' references are in apps/web/__tests__/api/coverage-wave2-github-webhook.test.ts:105,188 asserting a push event is ignored (falls through to `{received:true}` at route.ts:69)."
+    "evidence": "Grepped apps/web/app/api/github and lib/github-app.ts for a 'push' event branch, none found; the only 'push' references are in apps/web/__tests__/api/coverage-wave2-github-webhook.test.ts:105,188 asserting a push event is ignored (falls through to `{received:true}` at route.ts:69)."
   },
   {
     "item": "check-run",
     "surface": "apps/github-app",
     "status": "missing",
-    "evidence": "Grepped whole repo (apps/, packages/, services/, crates/) for check_run/check-run/checks.create \u2014 only unrelated match is a Rust helper `check_runtime_exception` in apps/desktop/src-tauri/src/automation/browser/playwright_bridge.rs:902 (browser automation, unrelated). .github/workflows/agiworkforce-bot.yml:164-181 only *reads* check runs (checks.listForRef) for this repo's own `/agi check` command; never creates/updates a check run."
+    "evidence": "Grepped whole repo (apps/, packages/, services/, crates/) for check_run/check-run/checks.create, only unrelated match is a Rust helper `check_runtime_exception` in apps/desktop/src-tauri/src/automation/browser/playwright_bridge.rs:902 (browser automation, unrelated). .github/workflows/agiworkforce-bot.yml:164-181 only *reads* check runs (checks.listForRef) for this repo's own `/agi check` command; never creates/updates a check run."
   },
   {
     "item": "check-suite",
@@ -2289,79 +2289,79 @@
     "item": "annotations",
     "surface": "apps/github-app",
     "status": "missing",
-    "evidence": "Grepped for 'github.*annotation' / 'annotation.*github' across apps/, packages/, services/ \u2014 zero hits. Checks-API annotations are not implemented anywhere."
+    "evidence": "Grepped for 'github.*annotation' / 'annotation.*github' across apps/, packages/, services/, zero hits. Checks-API annotations are not implemented anywhere."
   },
   {
     "item": "job-summary",
     "surface": "apps/github-app",
     "status": "missing",
-    "evidence": "Grepped .github/workflows/*.yml for GITHUB_STEP_SUMMARY \u2014 zero hits across all 13 workflow files. No product-side equivalent exists either."
+    "evidence": "Grepped .github/workflows/*.yml for GITHUB_STEP_SUMMARY, zero hits across all 13 workflow files. No product-side equivalent exists either."
   },
   {
     "item": "suggested-change",
     "surface": "apps/github-app",
     "status": "missing",
-    "evidence": "Grepped for 'suggested_change'/'suggestion' blocks in apps/web and packages/ \u2014 no hits. postPrReview (apps/web/lib/github-app.ts:437-462) posts a plain review body/event only; it never emits a `comments` array with fenced ```suggestion blocks."
+    "evidence": "Grepped for 'suggested_change'/'suggestion' blocks in apps/web and packages/, no hits. postPrReview (apps/web/lib/github-app.ts:437-462) posts a plain review body/event only; it never emits a `comments` array with fenced ```suggestion blocks."
   },
   {
     "item": "batch-review-comments",
     "surface": "apps/github-app",
     "status": "missing",
-    "evidence": "apps/web/lib/github-app.ts postPrReview() (lines 437-462) signature is (token, owner, repo, prNumber, body, event) \u2014 no `comments` array parameter for multiple inline/path-scoped review comments in one POST to /pulls/{n}/reviews, and no caller ever builds one."
+    "evidence": "apps/web/lib/github-app.ts postPrReview() (lines 437-462) signature is (token, owner, repo, prNumber, body, event), no `comments` array parameter for multiple inline/path-scoped review comments in one POST to /pulls/{n}/reviews, and no caller ever builds one."
   },
   {
     "item": "auto-fix-commit",
     "surface": "apps/github-app",
     "status": "missing",
-    "evidence": "Grepped for 'auto.?fix'/'autofix'/commit-creation logic in apps/web/lib/github-app.ts and app/api/github/ \u2014 no hits. No code calls PUT /repos/{owner}/{repo}/contents/{path} or the git data API to write a fix commit."
+    "evidence": "Grepped for 'auto.?fix'/'autofix'/commit-creation logic in apps/web/lib/github-app.ts and app/api/github/, no hits. No code calls PUT /repos/{owner}/{repo}/contents/{path} or the git data API to write a fix commit."
   },
   {
     "item": "branch-create",
     "surface": "apps/github-app",
     "status": "missing",
-    "evidence": "Grepped for 'git/refs'/'createRef'/'create.*branch' in apps/web/lib/github-app.ts and app/api/github/ \u2014 no hits. No POST /repos/{owner}/{repo}/git/refs call exists in the product."
+    "evidence": "Grepped for 'git/refs'/'createRef'/'create.*branch' in apps/web/lib/github-app.ts and app/api/github/, no hits. No POST /repos/{owner}/{repo}/git/refs call exists in the product."
   },
   {
     "item": "pr-open-update",
     "surface": "apps/github-app",
     "status": "missing",
-    "evidence": "Grepped for 'pulls.create'/'createPullRequest' across apps/web (excluding tests) \u2014 no hits. github-app.ts only reads a PR's diff (getPrDiff, line 407) and posts comments/reviews; it never creates or updates (PATCH) a pull request."
+    "evidence": "Grepped for 'pulls.create'/'createPullRequest' across apps/web (excluding tests), no hits. github-app.ts only reads a PR's diff (getPrDiff, line 407) and posts comments/reviews; it never creates or updates (PATCH) a pull request."
   },
   {
     "item": "draft-pr",
     "surface": "apps/github-app",
     "status": "missing",
-    "evidence": "Grepped github-app.ts and app/api/github/ for 'draft' \u2014 zero hits. (The repo-CI-only agiworkforce-bot.yml workflow reads `pr.draft` at line 148 for its `/agi stats` output, but that's a read of an existing PR's draft flag in this repo's own CI, not the product creating a draft PR.)"
+    "evidence": "Grepped github-app.ts and app/api/github/ for 'draft', zero hits. (The repo-CI-only agiworkforce-bot.yml workflow reads `pr.draft` at line 148 for its `/agi stats` output, but that's a read of an existing PR's draft flag in this repo's own CI, not the product creating a draft PR.)"
   },
   {
     "item": "label-and-assignee-management",
     "surface": "apps/github-app",
     "status": "missing",
-    "evidence": "Grepped github-app.ts, app/api/github/, and user-connector-tools.ts GITHUB_TOOL_DEFS (apps/web/lib/user-connector-tools.ts:180-238, only get_pull_request_diff/post_issue_comment/post_pull_request_review) for 'labels'/'assignee' \u2014 zero hits anywhere in the product surface."
+    "evidence": "Grepped github-app.ts, app/api/github/, and user-connector-tools.ts GITHUB_TOOL_DEFS (apps/web/lib/user-connector-tools.ts:180-238, only get_pull_request_diff/post_issue_comment/post_pull_request_review) for 'labels'/'assignee', zero hits anywhere in the product surface."
   },
   {
     "item": "repo-content-api",
     "surface": "apps/github-app",
     "status": "missing",
-    "evidence": "Grepped github-app.ts and app/api/github/ for 'contents/' (the GET/PUT /repos/{owner}/{repo}/contents/{path} endpoint) \u2014 zero hits. getPrDiff (github-app.ts:407-430) fetches the PR diff via the Accept: application/vnd.github.diff media type on the PR endpoint, not the general repo Contents API."
+    "evidence": "Grepped github-app.ts and app/api/github/ for 'contents/' (the GET/PUT /repos/{owner}/{repo}/contents/{path} endpoint), zero hits. getPrDiff (github-app.ts:407-430) fetches the PR diff via the Accept: application/vnd.github.diff media type on the PR endpoint, not the general repo Contents API."
   },
   {
     "item": "tree-and-blob-fetch",
     "surface": "apps/github-app",
     "status": "missing",
-    "evidence": "Grepped for 'git/trees'/'git/blobs' across github-app.ts and app/api/github/ \u2014 zero hits. No Git Data API (trees/blobs) usage anywhere."
+    "evidence": "Grepped for 'git/trees'/'git/blobs' across github-app.ts and app/api/github/, zero hits. No Git Data API (trees/blobs) usage anywhere."
   },
   {
     "item": "monorepo-path-filter",
     "surface": "apps/github-app",
     "status": "missing",
-    "evidence": "Grepped for 'path.?filter'/'monorepo' in github-app.ts and app/api/github/ \u2014 zero hits. There is no path-scoping/filtering logic limiting review scope by directory."
+    "evidence": "Grepped for 'path.?filter'/'monorepo' in github-app.ts and app/api/github/, zero hits. There is no path-scoping/filtering logic limiting review scope by directory."
   },
   {
     "item": "repo-allowlist",
     "surface": "apps/github-app",
     "status": "missing",
-    "evidence": "Grepped github-app.ts, app/api/github/, and both github_installations migrations (apps/web/db/neon/0017_github.sql, 0072_github_installation_ownership.sql) for 'allowlist'/'allowed.*repo' \u2014 zero hits. The github_installations table (0017_github.sql:1-13) has no repo-scoping column; scoping is entirely delegated to whatever repos the user selected in GitHub's own install UI."
+    "evidence": "Grepped github-app.ts, app/api/github/, and both github_installations migrations (apps/web/db/neon/0017_github.sql, 0072_github_installation_ownership.sql) for 'allowlist'/'allowed.*repo', zero hits. The github_installations table (0017_github.sql:1-13) has no repo-scoping column; scoping is entirely delegated to whatever repos the user selected in GitHub's own install UI."
   },
   {
     "item": "org-installation-scope",
@@ -2379,7 +2379,7 @@
     "item": "workflow-dispatch",
     "surface": "apps/github-app",
     "status": "built",
-    "evidence": "workflow_dispatch trigger present in .github/workflows/deploy-signaling-server.yml, release-desktop.yml, e2e-tests.yml, build-windows-release.yml \u2014 repo-internal release/deploy CI, not a customer-facing product feature (noted per instructions to also check repo CI)."
+    "evidence": "workflow_dispatch trigger present in .github/workflows/deploy-signaling-server.yml, release-desktop.yml, e2e-tests.yml, build-windows-release.yml, repo-internal release/deploy CI, not a customer-facing product feature (noted per instructions to also check repo CI)."
   },
   {
     "item": "action-inputs-outputs",
@@ -2397,25 +2397,25 @@
     "item": "artifact-upload",
     "surface": "apps/github-app",
     "status": "built",
-    "evidence": "actions/upload-artifact is used in .github/workflows/release-desktop.yml, build-windows-release.yml, e2e-tests.yml, release-cli.yml, ci.yml \u2014 repo CI build-artifact handling."
+    "evidence": "actions/upload-artifact is used in .github/workflows/release-desktop.yml, build-windows-release.yml, e2e-tests.yml, release-cli.yml, ci.yml, repo CI build-artifact handling."
   },
   {
     "item": "actions-cache",
     "surface": "apps/github-app",
     "status": "built",
-    "evidence": "actions/cache is used in .github/workflows/test-l3-l4.yml and test-l1-l2.yml (plus Swatinem/rust-cache in codeql.yml:44-47) \u2014 repo CI dependency caching."
+    "evidence": "actions/cache is used in .github/workflows/test-l3-l4.yml and test-l1-l2.yml (plus Swatinem/rust-cache in codeql.yml:44-47), repo CI dependency caching."
   },
   {
     "item": "sarif-upload",
     "surface": "apps/github-app",
     "status": "missing",
-    "evidence": "Grepped all .github/workflows/*.yml for 'sarif' and 'codeql-action'/'upload-sarif' \u2014 zero hits in any workflow, including codeql.yml which runs cargo-audit/clippy but never uploads a SARIF file; JS/TS CodeQL is delegated to GitHub's own default setup per the comment at codeql.yml:3, which is not code in this repo."
+    "evidence": "Grepped all .github/workflows/*.yml for 'sarif' and 'codeql-action'/'upload-sarif', zero hits in any workflow, including codeql.yml which runs cargo-audit/clippy but never uploads a SARIF file; JS/TS CodeQL is delegated to GitHub's own default setup per the comment at codeql.yml:3, which is not code in this repo."
   },
   {
     "item": "graphql-client",
     "surface": "apps/github-app",
     "status": "missing",
-    "evidence": "Grepped apps/web/lib/github-app.ts, apps/web/app/api/github/, and packages/ for 'graphql' \u2014 zero hits. All GitHub API calls use plain REST fetch() against api.github.com (buildGitHubApiUrl, github-app.ts:27-31); no GraphQL endpoint is ever called."
+    "evidence": "Grepped apps/web/lib/github-app.ts, apps/web/app/api/github/, and packages/ for 'graphql', zero hits. All GitHub API calls use plain REST fetch() against api.github.com (buildGitHubApiUrl, github-app.ts:27-31); no GraphQL endpoint is ever called."
   },
   {
     "item": "rest-pagination",
@@ -2427,19 +2427,19 @@
     "item": "secondary-rate-limit-handling",
     "surface": "apps/github-app",
     "status": "missing",
-    "evidence": "Grepped apps/web/lib/github-app.ts for '429'/'rate.?limit'/'Retry-After' \u2014 zero hits. Every GitHub API call simply throws `Error(...: ${res.status})` on !res.ok (e.g. lines 226,391,401,428,460) with no special-casing for 403/429 secondary rate-limit responses, no Retry-After honoring, and no backoff/retry logic."
+    "evidence": "Grepped apps/web/lib/github-app.ts for '429'/'rate.?limit'/'Retry-After', zero hits. Every GitHub API call simply throws `Error(...: ${res.status})` on !res.ok (e.g. lines 226,391,401,428,460) with no special-casing for 403/429 secondary rate-limit responses, no Retry-After honoring, and no backoff/retry logic."
   },
   {
     "item": "gitlab-bitbucket-parity",
     "surface": "apps/github-app",
     "status": "missing",
-    "evidence": "No first-party GitLab or Bitbucket app parity exists. Neither provider appears in the live Desktop ConnectorGallery catalog plus get_connector_mcp_mapping backend allowlist, and neither has a Web API route, webhook, installation store, review lifecycle, or customer-installable app. The former Rust-only 86-item connector manifest catalog contained a GitLab community-package row, but its IPC result was only assigned by two never-called Zustand actions and no component read it; that dead catalog, IPC command, mock, and state were removed rather than counting unreachable metadata as implementation. Web catalogue rows remain phase-tagged marketing data. Current official provider options are separate remote MCP products\u2014GitLab's beta MCP endpoint and Atlassian Rovo MCP (whose Bitbucket tools require scoped API-token auth)\u2014that users may add through the existing custom MCP flow; they are not AGI-owned GitHub App parity."
+    "evidence": "No first-party GitLab or Bitbucket app parity exists. Neither provider appears in the live Desktop ConnectorGallery catalog plus get_connector_mcp_mapping backend allowlist, and neither has a Web API route, webhook, installation store, review lifecycle, or customer-installable app. The former Rust-only 86-item connector manifest catalog contained a GitLab community-package row, but its IPC result was only assigned by two never-called Zustand actions and no component read it; that dead catalog, IPC command, mock, and state were removed rather than counting unreachable metadata as implementation. Web catalogue rows remain phase-tagged marketing data. Current official provider options are separate remote MCP products,GitLab's beta MCP endpoint and Atlassian Rovo MCP (whose Bitbucket tools require scoped API-token auth),that users may add through the existing custom MCP flow; they are not AGI-owned GitHub App parity."
   },
   {
     "item": "marketplace-listing",
     "surface": "apps/github-app",
     "status": "missing",
-    "evidence": "Grepped whole repo for 'github.*marketplace'/'marketplace.*listing' across apps/, packages/, services/, .github/ \u2014 zero hits. No GitHub Marketplace listing metadata, pricing plan config, or marketplace webhook handler (marketplace_purchase event) exists anywhere."
+    "evidence": "Grepped whole repo for 'github.*marketplace'/'marketplace.*listing' across apps/, packages/, services/, .github/, zero hits. No GitHub Marketplace listing metadata, pricing plan config, or marketplace webhook handler (marketplace_purchase event) exists anywhere."
   },
   {
     "item": "agentic-loop",
@@ -2565,7 +2565,7 @@
     "item": "workflow-tool",
     "surface": "packages/core-agent",
     "status": "missing",
-    "evidence": "No model-callable \"workflow\" tool exists in the CLI tool catalog or executor. The former inert task-registry kind label was removed with that placeholder lifecycle. A separate, unrelated visual workflow-automation engine exists in apps/desktop/src-tauri/src/core/orchestration/workflow_engine.rs (WorkflowDefinition/AgentNodeData/ToolNodeData, SQLite-backed CRUD, Tauri commands registered at apps/desktop/src-tauri/src/lib.rs:2162) with a frontend (apps/desktop/src/features/workflows/WorkflowBuilder.tsx, WorkflowPanel.tsx) \u2014 but it is not an agent-loop tool call, and its frontend is never imported outside its own directory (grep -rl WorkflowPanel apps/desktop/src outside features/workflows returns nothing), so it is unreachable regardless."
+    "evidence": "No model-callable \"workflow\" tool exists in the CLI tool catalog or executor. The former inert task-registry kind label was removed with that placeholder lifecycle. A separate, unrelated visual workflow-automation engine exists in apps/desktop/src-tauri/src/core/orchestration/workflow_engine.rs (WorkflowDefinition/AgentNodeData/ToolNodeData, SQLite-backed CRUD, Tauri commands registered at apps/desktop/src-tauri/src/lib.rs:2162) with a frontend (apps/desktop/src/features/workflows/WorkflowBuilder.tsx, WorkflowPanel.tsx), but it is not an agent-loop tool call, and its frontend is never imported outside its own directory (grep -rl WorkflowPanel apps/desktop/src outside features/workflows returns nothing), so it is unreachable regardless."
   },
   {
     "item": "subagent-orchestrator",
@@ -2577,7 +2577,7 @@
     "item": "nested-spawn-depth-limit",
     "surface": "packages/core-agent",
     "status": "missing",
-    "evidence": "apps/cli/src/subagent.rs `run_subagent` (lines 386-433) constructs a fresh `AgentSession` for the spawned subagent with no depth counter, no exclusion of the `task` tool, and no propagation of a \"spawn depth\" \u2014 so a subagent's own turn loop can call `task` again unbounded. Repo-wide grep for spawn_depth/nesting_depth/agent_depth/recursion_depth/MAX_SPAWN_DEPTH (excluding target/node_modules) found zero hits. apps/desktop/src-tauri/src/core/swarm/mod.rs:264 declares `MAX_DECOMPOSITION_DEPTH: usize = 5` but it is never read/enforced anywhere in that module."
+    "evidence": "apps/cli/src/subagent.rs `run_subagent` (lines 386-433) constructs a fresh `AgentSession` for the spawned subagent with no depth counter, no exclusion of the `task` tool, and no propagation of a \"spawn depth\", so a subagent's own turn loop can call `task` again unbounded. Repo-wide grep for spawn_depth/nesting_depth/agent_depth/recursion_depth/MAX_SPAWN_DEPTH (excluding target/node_modules) found zero hits. apps/desktop/src-tauri/src/core/swarm/mod.rs:264 declares `MAX_DECOMPOSITION_DEPTH: usize = 5` but it is never read/enforced anywhere in that module."
   },
   {
     "item": "background-subagent-execution",
@@ -2595,7 +2595,7 @@
     "item": "subagent-scoped-permissions",
     "surface": "packages/core-agent",
     "status": "missing",
-    "evidence": "apps/cli/src/subagent.rs:394-407 (`run_subagent`) sets `session.skip_permissions = skip_permissions` \u2014 the exact same permission mode inherited from the parent session \u2014 with no independent tool allowlist/denylist per spawned subagent. The Task tool schema has no field to request a restricted (e.g. read-only) subagent (tool_catalog.rs:393-409), and AgentDefinition's `tools`/`disallowed_tools` scoping (agents.rs:28-31) is never consulted during subagent spawn. Desktop's `AgentTask.trust_mode` (agent_spawner.rs:218-222) only threads the SAME trust boundary through, it does not narrow tool access either."
+    "evidence": "apps/cli/src/subagent.rs:394-407 (`run_subagent`) sets `session.skip_permissions = skip_permissions`, the exact same permission mode inherited from the parent session, with no independent tool allowlist/denylist per spawned subagent. The Task tool schema has no field to request a restricted (e.g. read-only) subagent (tool_catalog.rs:393-409), and AgentDefinition's `tools`/`disallowed_tools` scoping (agents.rs:28-31) is never consulted during subagent spawn. Desktop's `AgentTask.trust_mode` (agent_spawner.rs:218-222) only threads the SAME trust boundary through, it does not narrow tool access either."
   },
   {
     "item": "dynamic-workflow-planner",
@@ -2619,7 +2619,7 @@
     "item": "usage-attribution-per-agent",
     "surface": "packages/core-agent",
     "status": "missing",
-    "evidence": "apps/cli/src/subagent.rs:44-48 (`SubagentResult{id, output, files_modified}`) carries no token/cost usage at all. apps/cli/src/cost_ledger.rs:53-60 (`CostLedger{total_usd, by_model, turns}`) only breaks cost down by model, never by agent/subagent identity, and a spawned subagent's own AgentSession (with its own discarded CostLedger, created inside `run_subagent`) is never merged back into the parent's ledger \u2014 subagent token spend isn't even aggregated into the parent total, let alone attributed per agent."
+    "evidence": "apps/cli/src/subagent.rs:44-48 (`SubagentResult{id, output, files_modified}`) carries no token/cost usage at all. apps/cli/src/cost_ledger.rs:53-60 (`CostLedger{total_usd, by_model, turns}`) only breaks cost down by model, never by agent/subagent identity, and a spawned subagent's own AgentSession (with its own discarded CostLedger, created inside `run_subagent`) is never merged back into the parent's ledger, subagent token spend isn't even aggregated into the parent total, let alone attributed per agent."
   },
   {
     "item": "fallback-model-chain",
@@ -2637,7 +2637,7 @@
     "item": "effort-level-control",
     "surface": "packages/core-agent",
     "status": "built",
-    "evidence": "apps/cli/src/tui/tui_app.rs:3001-3025 \u2014 `/effort`|`/e` sets `app.effort` to Low/Medium/High/Max (crate::design_system::Effort) directly or via an interactive picker; applied at tui_app.rs:4027 (`app.session.thinking_budget_tokens = app.effort.thinking_budget_for_anthropic()`) and consumed by request building (apps/cli/src/agent/chat.rs:983, 1027, 1119, 1159, 1190)."
+    "evidence": "apps/cli/src/tui/tui_app.rs:3001-3025, `/effort`|`/e` sets `app.effort` to Low/Medium/High/Max (crate::design_system::Effort) directly or via an interactive picker; applied at tui_app.rs:4027 (`app.session.thinking_budget_tokens = app.effort.thinking_budget_for_anthropic()`) and consumed by request building (apps/cli/src/agent/chat.rs:983, 1027, 1119, 1159, 1190)."
   },
   {
     "item": "thinking-budget",
@@ -2691,7 +2691,7 @@
     "item": "skill-frontmatter-globs",
     "surface": "packages/extensibility",
     "status": "missing",
-    "evidence": "Grepped every skill implementation for a glob-pattern frontmatter field: packages/tools/skills/src/types.ts SkillMetadata (always/skillKey/primaryEnv/emoji/homepage/os/requires{bins,anyBins,tools,env,config}) \u2014 no globs; apps/cli/src/skills.rs Skill struct (name/description/allow_implicit/category/required_env_vars/required_tools) \u2014 no globs; apps/desktop/src-tauri/src/core/skills/skill.rs Skill struct (requires_bins/requires_env/supported_os) \u2014 no globs. A repo-wide grep for glob across the three skill loaders and for `globs:` in *.md returned zero hits tied to skills."
+    "evidence": "Grepped every skill implementation for a glob-pattern frontmatter field: packages/tools/skills/src/types.ts SkillMetadata (always/skillKey/primaryEnv/emoji/homepage/os/requires{bins,anyBins,tools,env,config}), no globs; apps/cli/src/skills.rs Skill struct (name/description/allow_implicit/category/required_env_vars/required_tools), no globs; apps/desktop/src-tauri/src/core/skills/skill.rs Skill struct (requires_bins/requires_env/supported_os), no globs. A repo-wide grep for glob across the three skill loaders and for `globs:` in *.md returned zero hits tied to skills."
   },
   {
     "item": "builtin-slash-command-discovery",
@@ -2745,7 +2745,7 @@
     "item": "plugin-dir-flag",
     "surface": "packages/extensibility",
     "status": "missing",
-    "evidence": "Grepped apps/cli/src/lib.rs's clap definitions in full: Command::Plugin{action: PluginSubcommand} (line 601), PluginSubcommand::{List, Install{source,name,integrity,unsafe_no_integrity}} (749-763), MarketplaceSubcommand::{Search,Install{source,scope},Uninstall} (789-808) \u2014 no `--plugin-dir` (or any dev/ad-hoc plugin-directory override) flag exists. PluginsManager::load_all (plugins.rs:305-317) always reads exactly the hardcoded global (~/.agiworkforce/plugins) and project (<cwd>/.agiworkforce/plugins) paths with no caller-supplied override anywhere in the repo."
+    "evidence": "Grepped apps/cli/src/lib.rs's clap definitions in full: Command::Plugin{action: PluginSubcommand} (line 601), PluginSubcommand::{List, Install{source,name,integrity,unsafe_no_integrity}} (749-763), MarketplaceSubcommand::{Search,Install{source,scope},Uninstall} (789-808), no `--plugin-dir` (or any dev/ad-hoc plugin-directory override) flag exists. PluginsManager::load_all (plugins.rs:305-317) always reads exactly the hardcoded global (~/.agiworkforce/plugins) and project (<cwd>/.agiworkforce/plugins) paths with no caller-supplied override anywhere in the repo."
   },
   {
     "item": "plugin-marketplace-client",
@@ -2763,7 +2763,7 @@
     "item": "plugin-worktree-resolution",
     "surface": "packages/extensibility",
     "status": "missing",
-    "evidence": "Every real call site of PluginsManager::load_all (apps/cli/src/agents.rs:151, lib.rs:1780,3002, skills.rs:157, command_registry.rs:96, doctor.rs:482, tui_app.rs:2899, features/hooks/hooks.rs:762 \u2014 plus claude_parity.rs:763 and tui_app.rs:3202 which pass None) uses raw `std::env::current_dir()` directly; none resolve up to the git/worktree root first. The repo's one project-root-walking helper that correctly treats a linked worktree's `.git` FILE marker as valid, project_scope::resolve_project_scope() (apps/cli/src/project_scope.rs:9-19), is used only for trust/session-scope decisions (apps/cli/src/lib.rs:2121) \u2014 it is never threaded into plugin discovery."
+    "evidence": "Every real call site of PluginsManager::load_all (apps/cli/src/agents.rs:151, lib.rs:1780,3002, skills.rs:157, command_registry.rs:96, doctor.rs:482, tui_app.rs:2899, features/hooks/hooks.rs:762, plus claude_parity.rs:763 and tui_app.rs:3202 which pass None) uses raw `std::env::current_dir()` directly; none resolve up to the git/worktree root first. The repo's one project-root-walking helper that correctly treats a linked worktree's `.git` FILE marker as valid, project_scope::resolve_project_scope() (apps/cli/src/project_scope.rs:9-19), is used only for trust/session-scope decisions (apps/cli/src/lib.rs:2121), it is never threaded into plugin discovery."
   },
   {
     "item": "rules-loader",
@@ -2781,7 +2781,7 @@
     "item": "memory-file-imports",
     "surface": "packages/extensibility",
     "status": "missing",
-    "evidence": "apps/cli/src/memory.rs MemoryManager::load_all/read_if_exists (135-188) reads CLAUDE.md files verbatim via plain std::fs::read_to_string with no `@path` reference expansion \u2014 grepped memory.rs and memory_pipeline.rs for '@' or 'import' and got zero relevant hits. Repo-wide grep for CLAUDE.md/AGENTS.md import syntax across apps/cli, apps/desktop (InstructionFilesSettings.tsx, CustomInstructionsSettings.tsx) and packages/ found no `@file` inclusion handling anywhere."
+    "evidence": "apps/cli/src/memory.rs MemoryManager::load_all/read_if_exists (135-188) reads CLAUDE.md files verbatim via plain std::fs::read_to_string with no `@path` reference expansion, grepped memory.rs and memory_pipeline.rs for '@' or 'import' and got zero relevant hits. Repo-wide grep for CLAUDE.md/AGENTS.md import syntax across apps/cli, apps/desktop (InstructionFilesSettings.tsx, CustomInstructionsSettings.tsx) and packages/ found no `@file` inclusion handling anywhere."
   },
   {
     "item": "output-style-definitions",
@@ -2865,7 +2865,7 @@
     "item": "server-instruction-cap",
     "surface": "packages/tools/mcp",
     "status": "missing",
-    "evidence": "apps/desktop/src-tauri/src/core/mcp/protocol.rs:128-135 InitializeResult struct only carries protocolVersion/capabilities/serverInfo \u2014 it does not even parse the MCP spec's server-supplied `instructions` field. Grepped apps/desktop, apps/cli/src/mcp, crates/agiworkforce-mcp, packages/tools/mcp for 'instructions' in an MCP context; no parsing, truncation, or cap logic found anywhere."
+    "evidence": "apps/desktop/src-tauri/src/core/mcp/protocol.rs:128-135 InitializeResult struct only carries protocolVersion/capabilities/serverInfo, it does not even parse the MCP spec's server-supplied `instructions` field. Grepped apps/desktop, apps/cli/src/mcp, crates/agiworkforce-mcp, packages/tools/mcp for 'instructions' in an MCP context; no parsing, truncation, or cap logic found anywhere."
   },
   {
     "item": "connector-directory-client",
@@ -3063,7 +3063,7 @@
     "item": "summarization-threshold-by-plan",
     "surface": "packages/sessions",
     "status": "missing",
-    "evidence": "Grepped repo-wide for plan/tier-gated compaction: crates/agiworkforce-agent-core/src/context.rs:64-77 ContextCompactionConfig::default() uses fixed constants (warning_fraction 0.70, compaction_fraction 0.80, target_fraction 0.65) with no tier/plan parameter anywhere in the struct or call sites (apps/cli/src/agent/chat.rs:434-494). apps/cli/src/tier_cache.rs implements subscription-tier resolution (used for model-access gating, e.g. apps/cli/src/model_catalog.rs:629 can_access_model_for_tier) but is never referenced from compaction.rs or context.rs. Grepped 'summarization.*plan', 'plan.*threshold', 'compaction.*tier', 'tier.*compaction' across apps/, packages/, crates/ (excluding node_modules/target) \u2014 the only two hits (apps/desktop/src-tauri/src/core/agi/tests/failure_recovery_tests.rs, apps/cli/src/agent/chat.rs) refer to unrelated 'plan mode' (task planning), not subscription plans."
+    "evidence": "Grepped repo-wide for plan/tier-gated compaction: crates/agiworkforce-agent-core/src/context.rs:64-77 ContextCompactionConfig::default() uses fixed constants (warning_fraction 0.70, compaction_fraction 0.80, target_fraction 0.65) with no tier/plan parameter anywhere in the struct or call sites (apps/cli/src/agent/chat.rs:434-494). apps/cli/src/tier_cache.rs implements subscription-tier resolution (used for model-access gating, e.g. apps/cli/src/model_catalog.rs:629 can_access_model_for_tier) but is never referenced from compaction.rs or context.rs. Grepped 'summarization.*plan', 'plan.*threshold', 'compaction.*tier', 'tier.*compaction' across apps/, packages/, crates/ (excluding node_modules/target), the only two hits (apps/desktop/src-tauri/src/core/agi/tests/failure_recovery_tests.rs, apps/cli/src/agent/chat.rs) refer to unrelated 'plan mode' (task planning), not subscription plans."
   },
   {
     "item": "context-window-accounting",
@@ -3237,13 +3237,13 @@
     "item": "magic-link",
     "surface": "packages/auth",
     "status": "unclear",
-    "evidence": "Clerk's <SignIn routing=\"hash\">/<SignUp> components (apps/web/app/login/page.tsx, apps/web/app/signup/page.tsx) natively support an email-link (magic-link) strategy purely via Clerk Dashboard configuration \u2014 no code change is required to enable/disable it, and no custom magic-link code (createEmailLinkFlow, useSignIn email-link handling) exists anywhere in the repo (grep for magicLink/email_link returned nothing)."
+    "evidence": "Clerk's <SignIn routing=\"hash\">/<SignUp> components (apps/web/app/login/page.tsx, apps/web/app/signup/page.tsx) natively support an email-link (magic-link) strategy purely via Clerk Dashboard configuration, no code change is required to enable/disable it, and no custom magic-link code (createEmailLinkFlow, useSignIn email-link handling) exists anywhere in the repo (grep for magicLink/email_link returned nothing)."
   },
   {
     "item": "google-sso",
     "surface": "packages/auth",
     "status": "unclear",
-    "evidence": "apps/web/app/auth/clerkAppearance.ts:28-31 configures `socialButtonsVariant`/`socialButtonsPlacement`, i.e. the UI is built to show whatever social connections Clerk's dashboard enables, but no Google-specific OAuth code (oauth_google strategy calls, client IDs) exists in-repo \u2014 Clerk brokers this entirely server-side."
+    "evidence": "apps/web/app/auth/clerkAppearance.ts:28-31 configures `socialButtonsVariant`/`socialButtonsPlacement`, i.e. the UI is built to show whatever social connections Clerk's dashboard enables, but no Google-specific OAuth code (oauth_google strategy calls, client IDs) exists in-repo, Clerk brokers this entirely server-side."
   },
   {
     "item": "apple-sso",
@@ -3327,13 +3327,13 @@
     "item": "service-account-identity",
     "surface": "packages/auth",
     "status": "missing",
-    "evidence": "Whole-repo grep (excluding node_modules/target/dist/.next) for 'service account', 'service-account', 'serviceAccount', 'machine token', 'bot token', 'non-human identity' found no AGI-product machine/service-principal identity model \u2014 the only 'service account' hit is Google Cloud IAP receipt verification (apps/web/lib/server/iap-verify-google.ts:6-7), which is AGI's backend acting as a GCP service account to call Google Play APIs, unrelated to a product-facing service-account identity. API keys (apps/web/app/api/settings/api-keys/route.ts) are personal, user_id-scoped tokens, not a distinct org-level service-account entity."
+    "evidence": "Whole-repo grep (excluding node_modules/target/dist/.next) for 'service account', 'service-account', 'serviceAccount', 'machine token', 'bot token', 'non-human identity' found no AGI-product machine/service-principal identity model, the only 'service account' hit is Google Cloud IAP receipt verification (apps/web/lib/server/iap-verify-google.ts:6-7), which is AGI's backend acting as a GCP service account to call Google Play APIs, unrelated to a product-facing service-account identity. API keys (apps/web/app/api/settings/api-keys/route.ts) are personal, user_id-scoped tokens, not a distinct org-level service-account entity."
   },
   {
     "item": "agent-identity-vs-user-identity",
     "surface": "packages/auth",
     "status": "missing",
-    "evidence": "Whole-repo grep for 'agent identity', 'actor_type', 'on-behalf-of', 'agent-actor', 'AGENT_ACTOR', 'impersonat' found nothing. Tool/connector permissions are keyed purely on user_id (apps/web/db/neon/0008_connectors.sql:1-11, connector_tool_permissions) and security/audit logging tables (apps/web/db/neon/0014_security.sql:3,21,29) also only carry user_id \u2014 there is no separate principal type distinguishing an autonomous agent's actions from the human user's own actions."
+    "evidence": "Whole-repo grep for 'agent identity', 'actor_type', 'on-behalf-of', 'agent-actor', 'AGENT_ACTOR', 'impersonat' found nothing. Tool/connector permissions are keyed purely on user_id (apps/web/db/neon/0008_connectors.sql:1-11, connector_tool_permissions) and security/audit logging tables (apps/web/db/neon/0014_security.sql:3,21,29) also only carry user_id, there is no separate principal type distinguishing an autonomous agent's actions from the human user's own actions."
   },
   {
     "item": "api-key-scoping",
@@ -3405,7 +3405,7 @@
     "item": "shared-settings-across-cli-and-ide",
     "surface": "packages/settings",
     "status": "built",
-    "evidence": "Desktop\u2194CLI: apps/desktop/src-tauri/src/sys/commands/dotfile.rs:58-89 (`shared_config_path()`, `read_shared_config`/`write_shared_config`) reads/writes the identical `~/.agiworkforce/config.toml` the CLI uses, registered as Tauri commands at apps/desktop/src-tauri/src/lib.rs:2856-2857, and surfaced in the UI via apps/desktop/src/features/settings/DotfileSettings.tsx (ConfigEditorSection, calling `dotfiles.readSharedConfig/writeSharedConfig` from packages/client/desktop-command-client/src/dotfiles.ts:44-48), mounted at apps/desktop/src/features/settings/tabs/Developer/index.tsx and reachable via SettingsPanel.tsx:55,706. CLI\u2194IDE(VS Code): apps/extension-vscode/src/integrations/localRuntimeClient.ts:645 spawns the configured `cliPath` with `app-server` as a subprocess; apps/cli/src/lib.rs:1294 loads `config::CliConfig::load_merged()` and passes it at line 1727 into `CliDeveloperSessionHost::new(app_config.clone(), ...)` for the `agi app-server` command \u2014 so the VS Code extension's backend session runs under the exact same merged global+project+env config as the standalone CLI."
+    "evidence": "Desktop\u2194CLI: apps/desktop/src-tauri/src/sys/commands/dotfile.rs:58-89 (`shared_config_path()`, `read_shared_config`/`write_shared_config`) reads/writes the identical `~/.agiworkforce/config.toml` the CLI uses, registered as Tauri commands at apps/desktop/src-tauri/src/lib.rs:2856-2857, and surfaced in the UI via apps/desktop/src/features/settings/DotfileSettings.tsx (ConfigEditorSection, calling `dotfiles.readSharedConfig/writeSharedConfig` from packages/client/desktop-command-client/src/dotfiles.ts:44-48), mounted at apps/desktop/src/features/settings/tabs/Developer/index.tsx and reachable via SettingsPanel.tsx:55,706. CLI\u2194IDE(VS Code): apps/extension-vscode/src/integrations/localRuntimeClient.ts:645 spawns the configured `cliPath` with `app-server` as a subprocess; apps/cli/src/lib.rs:1294 loads `config::CliConfig::load_merged()` and passes it at line 1727 into `CliDeveloperSessionHost::new(app_config.clone(), ...)` for the `agi app-server` command, so the VS Code extension's backend session runs under the exact same merged global+project+env config as the standalone CLI."
   },
   {
     "item": "appearance-settings",
@@ -3453,7 +3453,7 @@
     "item": "theming-engine",
     "surface": "packages/platform",
     "status": "built",
-    "evidence": "Web: next-themes via apps/web/shared/components/ThemeProvider.tsx and packages/ui/ui/src/primitives/ThemeToggle.tsx:15-26 (useTheme/setTheme cycle). Desktop: custom theme registry apps/desktop/src/providers/ThemeProvider.tsx:27-40 (own context, not next-themes \u2014 ThemeToggle.tsx:13 comment notes desktop doesn't render that shared component). Mobile: apps/mobile/src/ui/theme/useTheme.ts."
+    "evidence": "Web: next-themes via apps/web/shared/components/ThemeProvider.tsx and packages/ui/ui/src/primitives/ThemeToggle.tsx:15-26 (useTheme/setTheme cycle). Desktop: custom theme registry apps/desktop/src/providers/ThemeProvider.tsx:27-40 (own context, not next-themes, ThemeToggle.tsx:13 comment notes desktop doesn't render that shared component). Mobile: apps/mobile/src/ui/theme/useTheme.ts."
   },
   {
     "item": "shared-api-client",
@@ -3501,13 +3501,13 @@
     "item": "sync-engine",
     "surface": "packages/platform",
     "status": "built",
-    "evidence": "packages/client/sync/src/{index,conversations,messages,memory,projects,settings,cursor}.ts \u2014 pure delta-apply/CAS logic. Real wiring: apps/mobile/services/cloudSyncEngine.ts (1109 lines) imports and calls it against /api/chat/sync, /api/memory/sync, /api/settings/sync. Rust-native reimplementation for desktop at apps/desktop/src-tauri/src/data/cloud_sync.rs, kept in sync via golden-fixture replay per that file's module doc."
+    "evidence": "packages/client/sync/src/{index,conversations,messages,memory,projects,settings,cursor}.ts, pure delta-apply/CAS logic. Real wiring: apps/mobile/services/cloudSyncEngine.ts (1109 lines) imports and calls it against /api/chat/sync, /api/memory/sync, /api/settings/sync. Rust-native reimplementation for desktop at apps/desktop/src-tauri/src/data/cloud_sync.rs, kept in sync via golden-fixture replay per that file's module doc."
   },
   {
     "item": "conflict-resolution",
     "surface": "packages/platform",
     "status": "built",
-    "evidence": "Compare-and-swap on server_version/baseVersion with tombstone deletes: packages/client/sync/src/conversations.ts:59-92 (applyConversationDeltas \u2014 remote tombstone wins, dirty local mutation preserved while CAS base revision advances) and apps/desktop/src-tauri/src/data/cloud_sync.rs:577-630 (UPDATE ... SET server_version = ?1 on push ack, retry-on-conflict comments at lines 611,630)."
+    "evidence": "Compare-and-swap on server_version/baseVersion with tombstone deletes: packages/client/sync/src/conversations.ts:59-92 (applyConversationDeltas, remote tombstone wins, dirty local mutation preserved while CAS base revision advances) and apps/desktop/src-tauri/src/data/cloud_sync.rs:577-630 (UPDATE ... SET server_version = ?1 on push ack, retry-on-conflict comments at lines 611,630)."
   },
   {
     "item": "feature-flags",
@@ -3525,25 +3525,25 @@
     "item": "kill-switch",
     "surface": "packages/platform",
     "status": "built",
-    "evidence": "apps/web/lib/managed-compute-gate.ts:28-36 (isManagedComputePrivateBetaEnabled \u2014 env AGI_MANAGED_COMPUTE_PRIVATE_BETA=0 re-gates managed compute for incident response) and :38-78 (buildManagedComputeGateResponse returns 403 public_launch_blocked when tripped). Wired into apps/web/app/api/llm/v1/chat/completions/route.ts, .../approve/route.ts, .../audio/transcriptions/route.ts, .../media/video/generate/route.ts, .../media/image/generate/route.ts, api/github/webhook/route.ts."
+    "evidence": "apps/web/lib/managed-compute-gate.ts:28-36 (isManagedComputePrivateBetaEnabled, env AGI_MANAGED_COMPUTE_PRIVATE_BETA=0 re-gates managed compute for incident response) and :38-78 (buildManagedComputeGateResponse returns 403 public_launch_blocked when tripped). Wired into apps/web/app/api/llm/v1/chat/completions/route.ts, .../approve/route.ts, .../audio/transcriptions/route.ts, .../media/video/generate/route.ts, .../media/image/generate/route.ts, api/github/webhook/route.ts."
   },
   {
     "item": "entitlement-service",
     "surface": "packages/platform",
     "status": "built",
-    "evidence": "packages/contracts/types/src/subscription-entitlement.ts:7-21 (ENTITLED_SUBSCRIPTION_STATUSES, isEntitledSubscriptionStatus, effectivePlanTier \u2014 plan tier only unlocks capabilities if Stripe status is active/trialing). apps/web/lib/entitlement.ts wires this into apps/web/app/api/me/route.ts and apps/web/app/api/llm/v1/models/route.ts."
+    "evidence": "packages/contracts/types/src/subscription-entitlement.ts:7-21 (ENTITLED_SUBSCRIPTION_STATUSES, isEntitledSubscriptionStatus, effectivePlanTier, plan tier only unlocks capabilities if Stripe status is active/trialing). apps/web/lib/entitlement.ts wires this into apps/web/app/api/me/route.ts and apps/web/app/api/llm/v1/models/route.ts."
   },
   {
     "item": "usage-metering",
     "surface": "packages/platform",
     "status": "built",
-    "evidence": "apps/web/lib/e2b/compute-metering.ts:1-60 \u2014 closes sandbox-second intervals into the same credit_transactions ledger provider calls use (deduct_credits), operator-configured rate via AGI_E2B_COMPUTE_MICROUSD_PER_SECOND env var. Wired into apps/web/lib/e2b/runtime.ts and apps/web/lib/e2b/reclaim.ts. Desktop mirror: apps/desktop/src/stores/billing/usageSlice.ts."
+    "evidence": "apps/web/lib/e2b/compute-metering.ts:1-60, closes sandbox-second intervals into the same credit_transactions ledger provider calls use (deduct_credits), operator-configured rate via AGI_E2B_COMPUTE_MICROUSD_PER_SECOND env var. Wired into apps/web/lib/e2b/runtime.ts and apps/web/lib/e2b/reclaim.ts. Desktop mirror: apps/desktop/src/stores/billing/usageSlice.ts."
   },
   {
     "item": "spend-limit-enforcement",
     "surface": "packages/platform",
     "status": "built",
-    "evidence": "Server-side hard limit: apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:1565-1583 (reads CreditService balance to bias routing) with the durable reservation enforced elsewhere in the same file (lines 996-1030 handleCreditError returns 402 insufficient_quota) and response-builder.ts:463-470 (402 -> insufficient_credits). Client-side desktop budget (apps/desktop/src/stores/billing/budgetSlice.ts:1-284) is alert-only \u2014 dismissable warning/danger/exceeded alerts (lines 182-240) with no evidence it blocks message send (no consumer in apps/desktop/src/stores/chat/ or features/chat gates sending on budget.currentUsage), so desktop enforcement is advisory only; the hard limit lives server-side."
+    "evidence": "Server-side hard limit: apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:1565-1583 (reads CreditService balance to bias routing) with the durable reservation enforced elsewhere in the same file (lines 996-1030 handleCreditError returns 402 insufficient_quota) and response-builder.ts:463-470 (402 -> insufficient_credits). Client-side desktop budget (apps/desktop/src/stores/billing/budgetSlice.ts:1-284) is alert-only, dismissable warning/danger/exceeded alerts (lines 182-240) with no evidence it blocks message send (no consumer in apps/desktop/src/stores/chat/ or features/chat gates sending on budget.currentUsage), so desktop enforcement is advisory only; the hard limit lives server-side."
   },
   {
     "item": "rate-limit-client-backoff",
@@ -3561,7 +3561,7 @@
     "item": "opentelemetry",
     "surface": "packages/platform",
     "status": "missing",
-    "evidence": "No direct OpenTelemetry SDK dependency anywhere: grep for \"@opentelemetry\" across every package.json (apps, packages, services) returns zero hits, and no OTEL_EXPORTER/collector config exists in apps/web or services/api-gateway. @sentry/nextjs transitively bundles @sentry/opentelemetry (visible only inside apps/web/.next build output, e.g. apps/web/.next/dev/server/chunks/0_e0_@sentry_opentelemetry_build_cjs_*.js) purely as Sentry's own internal tracing implementation detail \u2014 the app never imports the OTel API or configures a standard OTel exporter/collector itself."
+    "evidence": "No direct OpenTelemetry SDK dependency anywhere: grep for \"@opentelemetry\" across every package.json (apps, packages, services) returns zero hits, and no OTEL_EXPORTER/collector config exists in apps/web or services/api-gateway. @sentry/nextjs transitively bundles @sentry/opentelemetry (visible only inside apps/web/.next build output, e.g. apps/web/.next/dev/server/chunks/0_e0_@sentry_opentelemetry_build_cjs_*.js) purely as Sentry's own internal tracing implementation detail, the app never imports the OTel API or configures a standard OTel exporter/collector itself."
   },
   {
     "item": "error-monitoring",
@@ -3579,7 +3579,7 @@
     "item": "i18n",
     "surface": "packages/platform",
     "status": "built",
-    "evidence": "packages/ui/i18n/src/index.ts:26-38 (12 SUPPORTED_LANGUAGES incl. Arabic rtl:true) and resources.ts. Consumed by apps/web/app/i18n/index.ts, apps/desktop/src/i18n/index.ts:14-46 (i18next.init with baseInitOptions), apps/mobile/src/i18n/index.ts \u2014 each wraps the shared corpus with its own detector as documented in packages/ui/i18n/src/index.ts:1-9."
+    "evidence": "packages/ui/i18n/src/index.ts:26-38 (12 SUPPORTED_LANGUAGES incl. Arabic rtl:true) and resources.ts. Consumed by apps/web/app/i18n/index.ts, apps/desktop/src/i18n/index.ts:14-46 (i18next.init with baseInitOptions), apps/mobile/src/i18n/index.ts, each wraps the shared corpus with its own detector as documented in packages/ui/i18n/src/index.ts:1-9."
   },
   {
     "item": "rtl-support",
@@ -3603,7 +3603,7 @@
     "item": "screen-reader-support",
     "surface": "packages/platform",
     "status": "built",
-    "evidence": "Distinct from the unwired a11y-kit above: real aria-live usage is wired directly into the chat surface \u2014 apps/web/features/chat/components/AgentStatusBar.tsx, ThinkingBlock.tsx, ImageGenerationCard.tsx, messages/{MessageBubble,ChatLoadingState,ToolTimeline,ChatMessageList}.tsx all contain aria-live regions in the live, rendered chat tree. packages/ui/ui/src/primitives/AccessibleDialog.tsx:161-178 sets aria-modal/aria-label on the dialog primitive, itself Radix-based and consumed across 99 web files."
+    "evidence": "Distinct from the unwired a11y-kit above: real aria-live usage is wired directly into the chat surface, apps/web/features/chat/components/AgentStatusBar.tsx, ThinkingBlock.tsx, ImageGenerationCard.tsx, messages/{MessageBubble,ChatLoadingState,ToolTimeline,ChatMessageList}.tsx all contain aria-live regions in the live, rendered chat tree. packages/ui/ui/src/primitives/AccessibleDialog.tsx:161-178 sets aria-modal/aria-label on the dialog primitive, itself Radix-based and consumed across 99 web files."
   },
   {
     "item": "keyboard-navigation",
@@ -3615,7 +3615,7 @@
     "item": "reduced-motion",
     "surface": "packages/platform",
     "status": "built",
-    "evidence": "@media (prefers-reduced-motion: reduce) present in live, non-archived stylesheets: apps/web/app/globals.css:1019,1636,1699,2075,3812 and apps/desktop/src/styles/globals.css:433,468. Component-level checks in apps/web/features/chat/components/{ThinkingBlock,messages/MessageBubble,messages/ToolTimeline,messages/ChatMessageList}.tsx. Mobile uses react-native-reanimated's useReducedMotion \u2014 apps/mobile/src/features/voice/components/RecordingOverlay.tsx:6,41."
+    "evidence": "@media (prefers-reduced-motion: reduce) present in live, non-archived stylesheets: apps/web/app/globals.css:1019,1636,1699,2075,3812 and apps/desktop/src/styles/globals.css:433,468. Component-level checks in apps/web/features/chat/components/{ThinkingBlock,messages/MessageBubble,messages/ToolTimeline,messages/ChatMessageList}.tsx. Mobile uses react-native-reanimated's useReducedMotion, apps/mobile/src/features/voice/components/RecordingOverlay.tsx:6,41."
   },
   {
     "item": "high-contrast",
@@ -3633,7 +3633,7 @@
     "item": "capability-based-model-routing",
     "surface": "packages/safety",
     "status": "built",
-    "evidence": "packages/ai/routing/src/auto.ts:407-416 filters candidate models by intrinsic capability (registry.capabilities[modelKey][capability] !== true is rejected) and by request.trustMode (auto.ts:392-397, only routes matching request.trustMode survive), plus session capability-handshake admission at auto.ts:270-322 (evaluateSessionCapabilityAdmission). @agiworkforce/routing is imported and used in apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts, apps/desktop/src/runtime/CloudRuntime.ts, apps/extension/src/features/cloud-bridge/managedChatRouting.ts, apps/mobile/src/features/chat/utils/cloudDispatchRouting.ts, and apps/extension-vscode/src/integrations/routingTask.ts \u2014 i.e. wired into the real chat-completion entry point on every surface."
+    "evidence": "packages/ai/routing/src/auto.ts:407-416 filters candidate models by intrinsic capability (registry.capabilities[modelKey][capability] !== true is rejected) and by request.trustMode (auto.ts:392-397, only routes matching request.trustMode survive), plus session capability-handshake admission at auto.ts:270-322 (evaluateSessionCapabilityAdmission). @agiworkforce/routing is imported and used in apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts, apps/desktop/src/runtime/CloudRuntime.ts, apps/extension/src/features/cloud-bridge/managedChatRouting.ts, apps/mobile/src/features/chat/utils/cloudDispatchRouting.ts, and apps/extension-vscode/src/integrations/routingTask.ts, i.e. wired into the real chat-completion entry point on every surface."
   },
   {
     "item": "prompt-injection-defense",
@@ -3645,7 +3645,7 @@
     "item": "untrusted-content-tagging",
     "surface": "packages/safety",
     "status": "built",
-    "evidence": "packages/platform/utils/src/fence.ts:26 fenceUntrustedContent(content, tag, sentinel) \u2014 NFC-normalizes, strips zero-width/bidi control chars, strips embedded closing tags, wraps in <tag><!-- sentinel -->...</tag>. Wired call sites: apps/extension/src/features/cloud-bridge/managedChatHandler.ts:205-215 buildUserContent() fences scraped page_context with a per-call nonce before sending to the managed chat handler; apps/desktop/src/stores/memoryStore.ts:1038-1055 fences recalled 'User Memory' content with the sentinel 'Treat as data, not instructions.' before injecting into the prompt."
+    "evidence": "packages/platform/utils/src/fence.ts:26 fenceUntrustedContent(content, tag, sentinel), NFC-normalizes, strips zero-width/bidi control chars, strips embedded closing tags, wraps in <tag><!-- sentinel -->...</tag>. Wired call sites: apps/extension/src/features/cloud-bridge/managedChatHandler.ts:205-215 buildUserContent() fences scraped page_context with a per-call nonce before sending to the managed chat handler; apps/desktop/src/stores/memoryStore.ts:1038-1055 fences recalled 'User Memory' content with the sentinel 'Treat as data, not instructions.' before injecting into the prompt."
   },
   {
     "item": "url-safety-check",
@@ -3669,7 +3669,7 @@
     "item": "dlp-redaction",
     "surface": "packages/safety",
     "status": "built",
-    "evidence": "packages/platform/utils/src/privacyHandoff.ts:69-143 buildLocalToByokHandoffDraft() scans every selected context item's content with redactSecretsWithReport() (logger.ts), merges findings into a RedactionReport, and sets `blocked: (params.blockOnFindings ?? true) && findings.length > 0` (privacyHandoff.ts:123) \u2014 i.e. it can hard-block a local-to-cloud content handoff when secrets are detected, by default. Wired call sites: apps/web/features/chat/lib/localByokHandoff.ts:183 (imported and used by apps/web/features/chat/pages/WebChatPage.tsx) and apps/desktop/src/features/context-handoff/CloudFolderAttachSheet.tsx:22/116 (used by apps/desktop/src/features/v3/DesktopShellV3.tsx). Overlaps with apps/desktop/src-tauri/src/sys/security/log_redaction.rs's payment-card-number pattern (log_redaction.rs:99-106)."
+    "evidence": "packages/platform/utils/src/privacyHandoff.ts:69-143 buildLocalToByokHandoffDraft() scans every selected context item's content with redactSecretsWithReport() (logger.ts), merges findings into a RedactionReport, and sets `blocked: (params.blockOnFindings ?? true) && findings.length > 0` (privacyHandoff.ts:123), i.e. it can hard-block a local-to-cloud content handoff when secrets are detected, by default. Wired call sites: apps/web/features/chat/lib/localByokHandoff.ts:183 (imported and used by apps/web/features/chat/pages/WebChatPage.tsx) and apps/desktop/src/features/context-handoff/CloudFolderAttachSheet.tsx:22/116 (used by apps/desktop/src/features/v3/DesktopShellV3.tsx). Overlaps with apps/desktop/src-tauri/src/sys/security/log_redaction.rs's payment-card-number pattern (log_redaction.rs:99-106)."
   },
   {
     "item": "egress-controls",
@@ -3681,7 +3681,7 @@
     "item": "refusal-and-appeal-surface",
     "surface": "packages/safety",
     "status": "built",
-    "evidence": "The web chat now provides both halves of the flow. apps/web/features/chat/components/messages/ChatMessageList.tsx:947-955 detects completed assistant turns whose finishReason is 'refusal'/'content_filter' and :1236-1270 renders the honest safety notice with always-available 'Report issue' plus conditional Retry. apps/web/features/chat/components/Composer/ComposerFeedbackDialog.tsx:37-226 switches into a focused 'Report an incorrect refusal' form, discloses exactly what is attached, and submits only the user-authored explanation plus bounded conversation/message IDs and finish reason \u2014 never prompt or response content. apps/web/app/api/feedback/route.ts:39-108 validates those refusal identifiers and persists the report to public.feedback with soft authentication, CSRF protection, and rate limiting. Route/component regression tests cover the complete contract, including privacy boundaries and the no-Retry state; production rendering was browser-verified at desktop and 390px viewport widths."
+    "evidence": "The web chat now provides both halves of the flow. apps/web/features/chat/components/messages/ChatMessageList.tsx:947-955 detects completed assistant turns whose finishReason is 'refusal'/'content_filter' and :1236-1270 renders the honest safety notice with always-available 'Report issue' plus conditional Retry. apps/web/features/chat/components/Composer/ComposerFeedbackDialog.tsx:37-226 switches into a focused 'Report an incorrect refusal' form, discloses exactly what is attached, and submits only the user-authored explanation plus bounded conversation/message IDs and finish reason, never prompt or response content. apps/web/app/api/feedback/route.ts:39-108 validates those refusal identifiers and persists the report to public.feedback with soft authentication, CSRF protection, and rate limiting. Route/component regression tests cover the complete contract, including privacy boundaries and the no-Retry state; production rendering was browser-verified at desktop and 390px viewport widths."
   },
   {
     "item": "report-content",
@@ -3711,7 +3711,7 @@
     "item": "seat-assignment",
     "surface": "admin-and-billing",
     "status": "built",
-    "evidence": "Licensed seats are persisted and enforced. public.organizations carries licensed_seats, seats_consumed, and seat_billing_updated_at with three CHECK constraints; organizations_seats_within_license (seats_consumed <= licensed_seats) was observed rejecting an overfill against a real Postgres, so capacity is enforced by the database rather than by application code alone. apps/web/app/api/settings/team/team-admin-access.ts returns maxMembers, seatsConsumed, seatsAvailable, and seatSource from getOrganizationSeatState whenever an organization is in scope, so the capacity branch in the team route is reachable \u2014 the previous evidence's claim that it always returns maxMembers: null is no longer true. Self-serve seat PURCHASE remains absent and is tracked separately as seat-billing."
+    "evidence": "Licensed seats are persisted and enforced. public.organizations carries licensed_seats, seats_consumed, and seat_billing_updated_at with three CHECK constraints; organizations_seats_within_license (seats_consumed <= licensed_seats) was observed rejecting an overfill against a real Postgres, so capacity is enforced by the database rather than by application code alone. apps/web/app/api/settings/team/team-admin-access.ts returns maxMembers, seatsConsumed, seatsAvailable, and seatSource from getOrganizationSeatState whenever an organization is in scope, so the capacity branch in the team route is reachable, the previous evidence's claim that it always returns maxMembers: null is no longer true. Self-serve seat PURCHASE remains absent and is tracked separately as seat-billing."
   },
   {
     "item": "roles-owner-admin-member-guest",
@@ -3723,7 +3723,7 @@
     "item": "group-and-domain-capture",
     "surface": "admin-and-billing",
     "status": "partial",
-    "evidence": "Groups are provisioned; domain capture is not. SCIM 2.0 group endpoints are live and complete \u2014 apps/web/app/api/scim/v2/Groups/route.ts exposes list and create, and Groups/[groupId]/route.ts exposes GET, PUT, PATCH, and DELETE \u2014 so an IdP can create, rename, re-member, and delete groups, gated on the enterprise_controls entitlement. What remains absent is DOMAIN capture: apps/web/app/api/settings/organization/route.ts still lists settings in UNSUPPORTED_PATCH_FIELDS, so allowedDomains is accepted by the schema and then refused, and no verified-domain ownership or auto-join rule is persisted anywhere. Split status rather than a single verdict, because the previous evidence's 'no group mapping, capture, or provisioning endpoint' is now false for groups and still true for domains."
+    "evidence": "Groups are provisioned; domain capture is not. SCIM 2.0 group endpoints are live and complete, apps/web/app/api/scim/v2/Groups/route.ts exposes list and create, and Groups/[groupId]/route.ts exposes GET, PUT, PATCH, and DELETE, so an IdP can create, rename, re-member, and delete groups, gated on the enterprise_controls entitlement. What remains absent is DOMAIN capture: apps/web/app/api/settings/organization/route.ts still lists settings in UNSUPPORTED_PATCH_FIELDS, so allowedDomains is accepted by the schema and then refused, and no verified-domain ownership or auto-join rule is persisted anywhere. Split status rather than a single verdict, because the previous evidence's 'no group mapping, capture, or provisioning endpoint' is now false for groups and still true for domains."
   },
   {
     "item": "sso-enforcement",
@@ -3765,13 +3765,13 @@
     "item": "training-opt-out",
     "surface": "admin-and-billing",
     "status": "missing",
-    "evidence": "apps/web/features/settings/sections/PrivacySection.tsx:16-24 explicitly documents removal: \"'improveModelTraining' [is] intentionally absent from TOGGLES: ... persisted correctly but had zero consumers anywhere (no training-data pipeline exists to gate) \u2014 a switch that saves but changes nothing is a dead control.\" The marketing copy at apps/web/app/privacy/page.tsx:23,97 states AGI does not train on customer data by default (so there is nothing to 'opt out' of), and PrivacySection.tsx:288 mentions training only third-party models 'with your explicit opt-in' (opt-in, not the requested opt-out control), with no corresponding UI toggle."
+    "evidence": "apps/web/features/settings/sections/PrivacySection.tsx:16-24 explicitly documents removal: \"'improveModelTraining' [is] intentionally absent from TOGGLES: ... persisted correctly but had zero consumers anywhere (no training-data pipeline exists to gate), a switch that saves but changes nothing is a dead control.\" The marketing copy at apps/web/app/privacy/page.tsx:23,97 states AGI does not train on customer data by default (so there is nothing to 'opt out' of), and PrivacySection.tsx:288 mentions training only third-party models 'with your explicit opt-in' (opt-in, not the requested opt-out control), with no corresponding UI toggle."
   },
   {
     "item": "config-defaults-push",
     "surface": "admin-and-billing",
     "status": "missing",
-    "evidence": "Admin-to-client defaults push is absent. A policy MUTATION route now exists \u2014 PATCH /api/settings/organization/policy writes organization_admin_policies and is enforced server-side on managed-compute routes \u2014 so the missing piece is narrower than it was: there is still no signed distribution channel, no client subscription or pull, and no precedence resolver, so Desktop, CLI, and IDE clients do not receive workspace defaults. requireLocalToByokPreview is the concrete casualty: the web endpoint serves the obligation and no client reads it. The Rust/TypeScript signed-policy verifiers remain zero-consumer contract fixtures per docs/decisions/2026-07-30-enterprise-local-verifier-retention.md. The prior evidence cited services/api-gateway/src/routes/enterprise.ts, which was deleted on 2026-08-17."
+    "evidence": "Admin-to-client defaults push is absent. A policy MUTATION route now exists, PATCH /api/settings/organization/policy writes organization_admin_policies and is enforced server-side on managed-compute routes, so the missing piece is narrower than it was: there is still no signed distribution channel, no client subscription or pull, and no precedence resolver, so Desktop, CLI, and IDE clients do not receive workspace defaults. requireLocalToByokPreview is the concrete casualty: the web endpoint serves the obligation and no client reads it. The Rust/TypeScript signed-policy verifiers remain zero-consumer contract fixtures per docs/decisions/2026-07-30-enterprise-local-verifier-retention.md. The prior evidence cited services/api-gateway/src/routes/enterprise.ts, which was deleted on 2026-08-17."
   },
   {
     "item": "departmental-spend-allocation",
@@ -3831,7 +3831,7 @@
     "item": "credits-prepaid",
     "surface": "admin-and-billing",
     "status": "missing",
-    "evidence": "apps/web/shared/components/modals/CreditAlertModal.tsx:41-43 states the explicit product rule in code: 'No top-up purchases (locked product rule: no credit top-ups). Max is already the highest self-serve tier...' \u2014 and that modal itself is never imported/rendered anywhere else in the app (grep for 'CreditAlertModal' outside its own file returns nothing). apps/web/app/api/stripe-webhook/lib/handlers.ts:29 contains a dead branch checking `session.metadata?.['type'] === 'credit_topup'`, but nothing anywhere in the repo ever creates a checkout session with that metadata type (grep for 'credit_topup' repo-wide finds only that one handler line)."
+    "evidence": "apps/web/shared/components/modals/CreditAlertModal.tsx:41-43 states the explicit product rule in code: 'No top-up purchases (locked product rule: no credit top-ups). Max is already the highest self-serve tier...', and that modal itself is never imported/rendered anywhere else in the app (grep for 'CreditAlertModal' outside its own file returns nothing). apps/web/app/api/stripe-webhook/lib/handlers.ts:29 contains a dead branch checking `session.metadata?.['type'] === 'credit_topup'`, but nothing anywhere in the repo ever creates a checkout session with that metadata type (grep for 'credit_topup' repo-wide finds only that one handler line)."
   },
   {
     "item": "budget-alert",
