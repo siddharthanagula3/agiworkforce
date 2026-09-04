@@ -39,6 +39,11 @@ export interface CloudCodeRuntime {
   diskSizeMB: number;
   /** Public E2B templates as opposed to the team's own. */
   isPublic: boolean;
+  /**
+   * True when this harness's provider has no managed credential configured,
+   * so a session needs the caller's own key or a different harness.
+   */
+  needsUserCredential?: boolean;
 }
 
 export interface CloudCodeSession {
@@ -97,6 +102,11 @@ export interface CreateCloudCodeSessionInput {
   runtimeId?: string | null;
   /** Extra hostnames allowed on top of networkAccess, at most a named maximum. */
   extraHosts?: string[];
+  /**
+   * Caller-supplied provider credential for a harness with no managed key
+   * for its provider. Wins over managed resolution when present.
+   */
+  harnessCredential?: string | null;
 }
 
 export interface CreateCloudCodeSessionResponse {

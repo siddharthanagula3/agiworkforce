@@ -23,7 +23,11 @@ import { getE2BExecutor, killE2BSession } from '@/lib/e2b/runtime';
 import { InvalidExtraEgressHostsError, normalizeExtraEgressHosts } from '@/lib/e2b/egress-hosts';
 import { confineWorkspacePath } from '@/lib/e2b/execution-tools';
 import type { CommandExecutionResult } from '@/lib/e2b/types';
-import { knownHarnessCommandIds, listCloudCodeRuntimes } from '@/lib/e2b/templates';
+import {
+  harnessCredentialSpecs,
+  knownHarnessCommandIds,
+  listCloudCodeRuntimes,
+} from '@/lib/e2b/templates';
 import { managedCloudCodeSessionScope } from '@/lib/e2b/session-store';
 import {
   getInstallationAccessToken,
@@ -33,6 +37,7 @@ import {
 import { getUserGithubInstallations } from '@/lib/user-connector-tools';
 
 const MAX_TITLE_LENGTH = 120;
+const MAX_HARNESS_CREDENTIAL_LENGTH = 4_000;
 const MAX_COMMAND_LENGTH = 2_000;
 const MAX_ERROR_LENGTH = 2_000;
 const MAX_COMMIT_MESSAGE_LENGTH = 2_000;
@@ -186,6 +191,7 @@ interface ValidatedCreateInput {
   runtimeId: string | null;
   repositoryBranch: string | null;
   extraHosts: string[];
+  harnessCredential: { envVar: string; value: string } | null;
 }
 
 function iso(value: string | Date): string {
@@ -299,6 +305,29 @@ function validateRepositoryBranch(value: string | null | undefined): string | nu
   return branch;
 }
 
+function resolveExplicitHarnessCredential(
+  runtimeId: string | null,
+  rawCredential: CreateCloudCodeSessionInput['harnessCredential'],
+): { envVar: string; value: string } | null {
+  if (rawCredential === undefined || rawCredential === null) return null;
+  const value = typeof rawCredential === 'string' ? rawCredential.trim() : '';
+  if (!value || value.length > MAX_HARNESS_CREDENTIAL_LENGTH) {
+    throw new CloudCodeValidationError(
+      `harnessCredential must be 1–${MAX_HARNESS_CREDENTIAL_LENGTH} characters`,
+    );
+  }
+  if (!runtimeId) {
+    throw new CloudCodeValidationError('harnessCredential requires a runtimeId');
+  }
+  const specs = harnessCredentialSpecs(runtimeId);
+  if (specs.length !== 1) {
+    throw new CloudCodeValidationError(
+      'harnessCredential is only supported for a coding agent with exactly one provider credential',
+    );
+  }
+  return { envVar: specs[0]!.envVar, value };
+}
+
 export function validateCreateCloudCodeSession(
   input: CreateCloudCodeSessionInput,
 ): ValidatedCreateInput {
@@ -336,17 +365,19 @@ export function validateCreateCloudCodeSession(
     }
     throw error;
   }
+  // Checked against the live catalogue in createCloudCodeSession, which can
+  // await; this stays synchronous for the callers that only shape-check.
+  const runtimeId = typeof input.runtimeId === 'string' ? input.runtimeId.trim() || null : null;
   return {
     requestId: input.requestId,
     title,
     repositoryUrl,
     networkAccess: input.networkAccess,
     workspacePath: repositoryUrl ? REPOSITORY_WORKSPACE_PATH : DEFAULT_WORKSPACE_PATH,
-    // Checked against the live catalogue in createCloudCodeSession, which can
-    // await; this stays synchronous for the callers that only shape-check.
-    runtimeId: typeof input.runtimeId === 'string' ? input.runtimeId.trim() || null : null,
+    runtimeId,
     repositoryBranch,
     extraHosts,
+    harnessCredential: resolveExplicitHarnessCredential(runtimeId, input.harnessCredential),
   };
 }
 
@@ -681,7 +712,7 @@ export async function createCloudCodeSession(
     validated.networkAccess,
     planTier,
     validated.runtimeId,
-    null,
+    validated.harnessCredential,
     validated.extraHosts,
   );
   const executor = await getE2BExecutor(scope);

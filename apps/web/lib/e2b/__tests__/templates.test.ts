@@ -2,10 +2,17 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('@/lib/logger', () => ({ logger: { warn: vi.fn(), info: vi.fn(), error: vi.fn() } }));
 
+const mockHasServerProviderKey = vi.hoisted(() => vi.fn());
+
+vi.mock('@/lib/services/provider-adapter-service', () => ({
+  hasServerProviderKey: mockHasServerProviderKey,
+}));
+
 import {
   clearCloudCodeRuntimeCache,
   harnessCredentialSpecs,
   harnessIsProxyCovered,
+  harnessNeedsUserCredential,
   harnessProxyBaseUrlEnv,
   knownHarnessCommandIds,
   listCloudCodeRuntimes,
@@ -13,6 +20,10 @@ import {
 } from '../templates';
 
 const ORIGINAL_ENV = { ...process.env };
+
+beforeEach(() => {
+  mockHasServerProviderKey.mockReturnValue(true);
+});
 
 function template(overrides: Record<string, unknown> = {}) {
   return {
@@ -276,6 +287,55 @@ describe('harness proxy coverage', () => {
     expect(harnessIsProxyCovered('opencode')).toBe(false);
     expect(harnessIsProxyCovered('openclaw')).toBe(false);
     expect(harnessIsProxyCovered('not-a-harness')).toBe(false);
+  });
+});
+
+describe('harnessNeedsUserCredential', () => {
+  it('is true only for a harness with no managed credential for its provider', () => {
+    mockHasServerProviderKey.mockReturnValue(false);
+    expect(harnessNeedsUserCredential('droid')).toBe(true);
+    expect(harnessNeedsUserCredential('amp')).toBe(true);
+  });
+
+  it('is false once the managed configuration covers the provider', () => {
+    mockHasServerProviderKey.mockReturnValue(true);
+    expect(harnessNeedsUserCredential('claude')).toBe(false);
+  });
+
+  it('is false for a harness with no declared credential', () => {
+    mockHasServerProviderKey.mockReturnValue(false);
+    expect(harnessNeedsUserCredential('openclaw')).toBe(false);
+    expect(harnessNeedsUserCredential('not-a-harness')).toBe(false);
+  });
+});
+
+describe('listCloudCodeRuntimes credential flag', () => {
+  beforeEach(() => {
+    clearCloudCodeRuntimeCache();
+    process.env['E2B_API_KEY'] = 'e2b_test_key';
+    process.env['AGI_E2B_EXECUTION'] = '1';
+  });
+
+  afterEach(() => {
+    process.env = { ...ORIGINAL_ENV };
+    vi.restoreAllMocks();
+    clearCloudCodeRuntimeCache();
+  });
+
+  it('marks a harness with no managed credential as needing the caller to bring one', async () => {
+    mockHasServerProviderKey.mockReturnValue(false);
+    vi.stubGlobal('fetch', respondWith([]));
+    const runtimes = await listCloudCodeRuntimes();
+    const droid = runtimes.find((runtime) => runtime.id === 'droid');
+    expect(droid?.needsUserCredential).toBe(true);
+  });
+
+  it('leaves a harness with a managed credential unmarked', async () => {
+    mockHasServerProviderKey.mockReturnValue(true);
+    vi.stubGlobal('fetch', respondWith([]));
+    const runtimes = await listCloudCodeRuntimes();
+    const claude = runtimes.find((runtime) => runtime.id === 'claude');
+    expect(claude?.needsUserCredential).toBeUndefined();
   });
 });
 
