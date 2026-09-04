@@ -15,8 +15,36 @@ import {
 import { isApiKeyScopeError } from '@/lib/api-key-scope-error';
 import { isMfaRequiredError } from '@/lib/mfa-policy-gate';
 import { isIpNotAllowedError } from '@/lib/ip-allow-list-gate';
-import { resolveSubscriptionAccess } from '@/lib/services/subscription-access-policy';
+import { logger } from '@/lib/logger';
+import { getNeonDb } from '@/lib/server/neon-db';
+import { resolveActiveOrganizationId } from '@/lib/services/active-workspace-service';
+import { readOrganizationCollectionState } from '@/lib/services/enterprise-collection-state';
+import {
+  resolveSubscriptionAccess,
+  type EnterpriseCollectionAccessState,
+} from '@/lib/services/subscription-access-policy';
 import { resolveAuthenticatedSurface } from './request-surface';
+
+const ENTERPRISE_PLAN_TIER = 'enterprise';
+
+async function resolveEnterpriseCollectionAccessState(
+  userId: string,
+  request: NextRequest,
+): Promise<EnterpriseCollectionAccessState> {
+  try {
+    const db = getNeonDb();
+    const organizationId = await resolveActiveOrganizationId(db, userId, request);
+    if (!organizationId) return { readOnly: false };
+    const state = await readOrganizationCollectionState(db, organizationId);
+    return { readOnly: state.readOnly };
+  } catch (error) {
+    logger.error(
+      { error, userId },
+      '[auth-gate] enterprise collection state read failed; entitlement decided without it',
+    );
+    return { readOnly: false };
+  }
+}
 
 export type AuthGateSuccess = {
   ok: true;
@@ -177,7 +205,15 @@ export async function runAuthGate(request: NextRequest): Promise<AuthGateResult>
     });
   }
 
-  if (!resolveSubscriptionAccess(subscription.status, subscription.plan_tier).managedExecution) {
+  const enterpriseCollection =
+    subscription.plan_tier?.toLowerCase() === ENTERPRISE_PLAN_TIER
+      ? await resolveEnterpriseCollectionAccessState(userId, request)
+      : undefined;
+
+  if (
+    !resolveSubscriptionAccess(subscription.status, subscription.plan_tier, enterpriseCollection)
+      .managedExecution
+  ) {
     if (isFreePlanTier(subscription.plan_tier)) {
       return enforceManagedCloudSurface(request, {
         ok: true,
