@@ -181,7 +181,7 @@ describe('eraseOrganizationData', () => {
 
     const statements = executedStatements();
     for (const { table } of ORGANIZATION_SCOPED_TABLES) {
-      if (table === 'media_assets') continue;
+      if (table === 'media_assets' || table === 'organization_members') continue;
       expect(
         statements.some((sql) =>
           sql.includes(`delete from public.${table} where organization_id = $1`),
@@ -196,6 +196,22 @@ describe('eraseOrganizationData', () => {
     expect(
       statements.some((sql) => sql.includes('delete from public.organizations where id = $1')),
     ).toBe(true);
+    expect(report.tables['organization_members']).toEqual({ deleted: true });
+  });
+
+  it('never deletes organization_members directly, only through the final row cascade', async () => {
+    // assert_organization_has_owner() (0085_organization_seats_lifecycle) fails
+    // a direct delete of the last owner while the organizations row still
+    // exists; membership must go only when the row itself does.
+    primeDb();
+
+    await eraseOrganizationData('org-1');
+
+    expect(
+      executedStatements().some((sql) =>
+        sql.includes('delete from public.organization_members where organization_id = $1'),
+      ),
+    ).toBe(false);
   });
 
   it('deletes storage-backed media bytes before the row, and reports failures', async () => {

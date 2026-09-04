@@ -221,6 +221,13 @@ export async function eraseOrganizationData(
       tables[table] = { deleted: true };
       continue;
     }
+    if (table === 'organization_members') {
+      // assert_organization_has_owner() (0085_organization_seats_lifecycle)
+      // refuses to leave an organization without an owner UNLESS the
+      // organizations row itself is already gone, so membership is deleted by
+      // the cascade off the final row delete below, not by this loop.
+      continue;
+    }
     try {
       await db.execute(`delete from public.${table} where ${column} = $1`, [organizationId]);
       tables[table] = { deleted: true };
@@ -270,13 +277,17 @@ export async function eraseOrganizationData(
     try {
       await db.execute(`delete from public.organizations where id = $1`, [organizationId]);
       organizationRetained = false;
+      tables['organization_members'] = { deleted: true };
     } catch (error) {
       complete = false;
+      tables['organization_members'] = { deleted: false, retainedForRetry: true };
       logger.error(
         { organizationId, error },
         'Organization erasure failed to delete the organization row',
       );
     }
+  } else {
+    tables['organization_members'] = { deleted: false, retainedForRetry: true };
   }
 
   return {
