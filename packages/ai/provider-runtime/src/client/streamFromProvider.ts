@@ -167,7 +167,7 @@ export async function* streamFromProvider<TRequest = unknown, TChunk = StreamChu
             return;
           }
         } catch {
-          // noop
+          return;
         }
       }
 

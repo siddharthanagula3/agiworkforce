@@ -49,7 +49,7 @@ export function withStreamIdleWatchdog<T>(
                   try {
                     hooks.onHalfTimeWarning?.(Date.now() - start);
                   } catch {
-                    // noop
+                    return;
                   }
                 }, warningMs);
               }
@@ -86,8 +86,8 @@ export function withStreamIdleWatchdog<T>(
         if (typeof iterator.return === 'function') {
           try {
             void iterator.return().catch(() => undefined);
-          } catch {
-            // noop
+          } catch (err) {
+            void err;
           }
         }
       }
