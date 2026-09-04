@@ -1077,7 +1077,7 @@ const ChatMessageListComponent = ({
 
   const scrolledConversationRef = useRef<string | null>(conversationId);
   const scrolledLeafRef = useRef<string | null>(activeLeafId);
-  const lastMessageIdRef = useRef<string | null>(null);
+  const lastUserMessageIdRef = useRef<string | null>(null);
   useEffect(() => {
     if (scrolledConversationRef.current === conversationId) return;
     scrolledConversationRef.current = conversationId;
@@ -1118,6 +1118,14 @@ const ChatMessageListComponent = ({
   const topSpacerHeight = Math.max(1, viewportHeight - estimatedContentHeight);
 
   const lastMessage = useMemo(() => messages[messages.length - 1], [messages]);
+
+  const lastUserMessageId = useMemo(() => {
+    for (let index = messages.length - 1; index >= 0; index -= 1) {
+      const candidate = messages[index];
+      if (candidate?.role === 'user') return candidate.id;
+    }
+    return null;
+  }, [messages]);
 
   const [pastIncompleteTurnGrace, setPastIncompleteTurnGrace] = useState(
     () => !isWithinIncompleteTurnGracePeriod(lastMessage, Date.now()),
@@ -1429,12 +1437,10 @@ const ChatMessageListComponent = ({
     // moved by the turn that is streaming stays on the normal path below.
     const leafChanged = scrolledLeafRef.current !== activeLeafId;
     scrolledLeafRef.current = activeLeafId;
-    const previousLastMessageId = lastMessageIdRef.current;
-    lastMessageIdRef.current = lastMessage?.id ?? null;
+    const previousLastUserMessageId = lastUserMessageIdRef.current;
+    lastUserMessageIdRef.current = lastUserMessageId;
     const isFreshUserTurn =
-      lastMessage?.role === 'user' &&
-      previousLastMessageId !== null &&
-      previousLastMessageId !== lastMessage.id;
+      previousLastUserMessageId !== null && previousLastUserMessageId !== lastUserMessageId;
     if (leafChanged && !isStreamingNow && variantAnchorMessageId) {
       const anchorGroupIndex = groups.findIndex((group) =>
         group.messages.some((message) => message.id === variantAnchorMessageId),
@@ -1466,6 +1472,7 @@ const ChatMessageListComponent = ({
     variantAnchorMessageId,
     messages.length,
     lastMessage,
+    lastUserMessageId,
     lastMessageFingerprint,
     isLoading,
     isStreamingNow,

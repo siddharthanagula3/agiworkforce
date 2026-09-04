@@ -891,6 +891,47 @@ describe('ChatMessageList auto-scroll', () => {
       expect(screen.queryByLabelText('Scroll to bottom')).not.toBeInTheDocument();
     });
   });
+
+  it('re-engages follow-output when the sent message and its assistant placeholder land in the same update', async () => {
+    const scrollTo = window.HTMLElement.prototype.scrollTo as ReturnType<typeof vi.fn>;
+    const messages = [
+      makeMessage({ id: '1', role: 'user', content: 'msg 1' }),
+      makeMessage({ id: '2', role: 'assistant', content: 'msg 2' }),
+    ];
+    const { rerender } = render(<ChatMessageList messages={messages} />);
+
+    const scrollContainer = screen.getByRole('log');
+    Object.defineProperty(scrollContainer, 'scrollHeight', { value: 1000, configurable: true });
+    Object.defineProperty(scrollContainer, 'clientHeight', { value: 300, configurable: true });
+    Object.defineProperty(scrollContainer, 'scrollTop', { value: 0, configurable: true });
+
+    act(() => {
+      fireEvent.scroll(scrollContainer);
+    });
+    await waitFor(() => {
+      expect(screen.getByLabelText('Scroll to bottom')).toBeInTheDocument();
+    });
+
+    const callsBefore = scrollTo.mock.calls.length;
+    act(() => {
+      rerender(
+        <ChatMessageList
+          messages={[
+            ...messages,
+            makeMessage({ id: '3', role: 'user', content: 'follow-up' }),
+            makeMessage({ id: '4', role: 'assistant', content: '', isStreaming: true }),
+          ]}
+        />,
+      );
+    });
+
+    await waitFor(() => {
+      expect(scrollTo.mock.calls.length).toBeGreaterThan(callsBefore);
+    });
+    await waitFor(() => {
+      expect(screen.queryByLabelText('Scroll to bottom')).not.toBeInTheDocument();
+    });
+  });
 });
 
 describe('ChatMessageList message grouping', () => {
