@@ -1,10 +1,12 @@
 import type {
+  ConnectedConnector,
   DirectoryBadgeKind,
   DirectoryConnectorDetail,
   DirectoryEntry,
   DirectoryFilterGroup,
   DirectorySection,
   DirectorySourceChip,
+  SettingsConnector,
 } from '@agiworkforce/ui';
 
 import type { DirectoryBadge, DirectoryRecord } from '@/lib/connectors/directory/types';
@@ -36,6 +38,9 @@ const BADGE_CHIP_LABELS: Record<DirectoryBadge, string> = {
 };
 
 const CONNECTABLE_BLOCKED = new Set(['desktop-and-cli', 'needs-setup']);
+const FIRST_PARTY_BADGE: DirectoryBadge = 'first-party';
+const CONNECTABLE_MODE = 'connect';
+const NEEDS_SETUP_MODE = 'needs-setup';
 
 export interface ConnectorDirectoryResponse {
   entries: DirectoryRecord[];
@@ -65,6 +70,7 @@ export function toConnectorEntry(
     badges: [BADGE_TO_KIND[record.badge]],
     sourceId: record.badge,
     installed: connectedIds.has(record.id),
+    installable: !CONNECTABLE_BLOCKED.has(record.connectable),
     facets: {
       [CONNECTOR_AVAILABILITY_GROUP_ID]: [record.connectable],
       [CONNECTOR_CATEGORY_GROUP_ID]: record.categories,
@@ -72,17 +78,36 @@ export function toConnectorEntry(
   };
 }
 
-function connectorSources(records: readonly DirectoryRecord[]): DirectorySourceChip[] {
-  const present = new Set(records.map((record) => record.badge));
+function connectorSources(
+  records: readonly DirectoryRecord[],
+  hasCurated: boolean,
+): DirectorySourceChip[] {
+  const present = new Set<DirectoryBadge>(records.map((record) => record.badge));
+  if (hasCurated) present.add(FIRST_PARTY_BADGE);
   return BADGE_CHIP_ORDER.filter((badge) => present.has(badge)).map((badge) => ({
     id: badge,
     label: BADGE_CHIP_LABELS[badge],
   }));
 }
 
-function connectorFilterGroups(records: readonly DirectoryRecord[]): DirectoryFilterGroup[] {
-  const modes = [...new Set(records.map((record) => record.connectable))].sort();
-  const categories = [...new Set(records.flatMap((record) => record.categories))].sort();
+function connectorFilterGroups(
+  records: readonly DirectoryRecord[],
+  curated: readonly SettingsConnector[],
+): DirectoryFilterGroup[] {
+  const modes = [
+    ...new Set([
+      ...records.map((record) => record.connectable),
+      ...curated.map((connector) =>
+        connector.canConnect === true ? CONNECTABLE_MODE : NEEDS_SETUP_MODE,
+      ),
+    ]),
+  ].sort();
+  const categories = [
+    ...new Set([
+      ...records.flatMap((record) => record.categories),
+      ...curated.map((connector) => connector.category),
+    ]),
+  ].sort();
   const groups: DirectoryFilterGroup[] = [];
   if (modes.length > 1) {
     groups.push({
@@ -104,18 +129,74 @@ function connectorFilterGroups(records: readonly DirectoryRecord[]): DirectoryFi
   return groups;
 }
 
+export function toCuratedConnectorEntry(
+  connector: SettingsConnector,
+  connectedIds: ReadonlySet<string>,
+): DirectoryEntry {
+  const connected = connectedIds.has(connector.id);
+  return {
+    id: connector.id,
+    name: connector.name,
+    description: connector.description,
+    monogram: connector.iconText,
+    badges: ['agi'],
+    sourceId: FIRST_PARTY_BADGE,
+    popular: true,
+    installed: connected,
+    installable: connector.canConnect === true,
+    ...(connector.statusLabel ? { statusLabel: connector.statusLabel } : {}),
+    facets: {
+      [CONNECTOR_AVAILABILITY_GROUP_ID]: [
+        connector.canConnect === true ? CONNECTABLE_MODE : NEEDS_SETUP_MODE,
+      ],
+      [CONNECTOR_CATEGORY_GROUP_ID]: [connector.category],
+    },
+  };
+}
+
 export function toConnectorSection(
   records: readonly DirectoryRecord[],
   connectedIds: ReadonlySet<string>,
+  curated: readonly SettingsConnector[] = [],
 ): DirectorySection {
+  const curatedEntries = curated.map((connector) =>
+    toCuratedConnectorEntry(connector, connectedIds),
+  );
+  const curatedIds = new Set(curatedEntries.map((entry) => entry.id));
+  const registryEntries = records
+    .filter((record) => !curatedIds.has(record.id))
+    .map((record) => toConnectorEntry(record, connectedIds));
   return {
-    entries: records.map((record) => toConnectorEntry(record, connectedIds)),
+    entries: [...curatedEntries, ...registryEntries],
     installable: true,
     sourcesHeading: CONNECTOR_SOURCES_HEADING,
-    sources: connectorSources(records),
-    filterGroups: connectorFilterGroups(records),
+    sources: connectorSources(records, curatedEntries.length > 0),
+    filterGroups: connectorFilterGroups(records, curated),
     sortOptions: ['name'],
   };
+}
+
+export function toCuratedConnectorDetail(
+  connector: SettingsConnector,
+  connectedIds: ReadonlySet<string>,
+): DirectoryConnectorDetail {
+  return {
+    kind: 'connector',
+    id: connector.id,
+    name: connector.name,
+    summary: connector.description,
+    badge: 'agi',
+    monogram: connector.iconText,
+    categories: [connector.category],
+    connected: connectedIds.has(connector.id),
+    connectable: connector.canConnect === true,
+  };
+}
+
+export function connectedConnectorIds(
+  connected: readonly ConnectedConnector[],
+): Set<string> {
+  return new Set(connected.map((entry) => entry.connectorId));
 }
 
 export function toConnectorDetail(

@@ -57,7 +57,11 @@ export function DirectoryCard({
   const installedLabel = onOpenSettings ? SETTINGS_LABEL : REMOVE_LABEL;
   const InstalledIcon = onOpenSettings ? SettingsIcon : Minus;
   const trailingLabel = entry.installed ? installedLabel : ADD_LABEL;
-  const trailingAction = entry.installed ? installedAction : onInstall;
+  const trailingAction = entry.installed
+    ? installedAction
+    : entry.installable === false
+      ? undefined
+      : onInstall;
   const TrailingIcon = entry.installed ? InstalledIcon : Plus;
 
   return (
@@ -119,6 +123,9 @@ export function DirectoryCard({
         ) : null}
       </div>
       <p className="line-clamp-2 text-xs text-muted-foreground">{entry.description}</p>
+      {entry.statusLabel ? (
+        <p className="text-xs text-muted-foreground">{entry.statusLabel}</p>
+      ) : null}
       {entry.error ? <p className="text-xs text-danger">{entry.error}</p> : null}
     </div>
   );

@@ -40,6 +40,8 @@ export interface DirectoryEntry {
   sourceId?: string;
   updatedAt?: string;
   facets?: Readonly<Record<string, readonly string[]>>;
+  installable?: boolean;
+  statusLabel?: string;
   installNotice?: string;
   mutating?: boolean;
   error?: string;

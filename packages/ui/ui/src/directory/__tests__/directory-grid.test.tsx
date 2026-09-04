@@ -63,6 +63,16 @@ describe('DirectoryGrid', () => {
     expect((control as HTMLButtonElement).disabled).toBe(true);
   });
 
+  it('offers no add control for an entry the surface cannot install', () => {
+    renderGrid({ entries: [{ ...skill, installable: false }], onInstall: vi.fn() });
+    expect(screen.queryByRole('button', { name: 'Add canvas-design' })).toBeNull();
+  });
+
+  it('renders a status label the surface supplies', () => {
+    renderGrid({ entries: [{ ...skill, statusLabel: 'Needs setup by AGI' }] });
+    expect(screen.getByText('Needs setup by AGI')).toBeTruthy();
+  });
+
   it('renders a per entry error', () => {
     renderGrid({ entries: [{ ...skill, error: 'Install failed' }] });
     expect(screen.getByText('Install failed')).toBeTruthy();

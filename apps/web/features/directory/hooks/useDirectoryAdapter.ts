@@ -3,14 +3,18 @@
 import { useCallback, useMemo, useRef, useState } from 'react';
 
 import type { ManagedSkillSummary } from '@agiworkforce/cloud-contracts';
+import type { DirectoryRecord } from '@/lib/connectors/directory/types';
+
 import {
   MARKETPLACE_UNAVAILABLE_COPY,
+  type ConnectedConnector,
   type DirectoryAdapter,
   type DirectoryDetail,
   type DirectoryMarketplaceInput,
   type DirectoryMarketplaceResult,
   type DirectorySection,
   type DirectorySectionKey,
+  type SettingsConnector,
 } from '@agiworkforce/ui';
 
 import {
@@ -36,11 +40,13 @@ import {
   SKILLS_FAILED_COPY,
 } from '../constants';
 import {
+  connectedConnectorIds,
   fetchConnectedConnectorIds,
   fetchConnectorRecord,
   fetchConnectorRecords,
   toConnectorDetail,
   toConnectorSection,
+  toCuratedConnectorDetail,
 } from '../services/connectors-directory';
 import {
   fetchPluginSnapshot,
@@ -59,7 +65,7 @@ import {
 } from '../services/skills-directory';
 
 const EMPTY: DirectorySection = { entries: [] };
-const SECTIONS: readonly DirectorySectionKey[] = ['skills', 'plugins'];
+const SECTIONS: readonly DirectorySectionKey[] = ['skills', 'connectors', 'plugins'];
 
 interface ConnectStartBody {
   message?: string;
@@ -80,16 +86,32 @@ export interface DirectoryAdapterOptions {
   onCreateSkill?: () => void;
   onEditSkill?: (name: string) => void;
   createSkillLabel?: string;
+  curatedConnectors?: readonly SettingsConnector[];
+  connectedConnectors?: readonly ConnectedConnector[];
+  onConnectConnector?: (id: string) => Promise<void> | void;
+  onDisconnectConnector?: (id: string) => Promise<void> | void;
 }
 
 export function useDirectoryAdapter(options: DirectoryAdapterOptions = {}): DirectoryAdapter {
-  const { onCreateSkill, onEditSkill, createSkillLabel } = options;
+  const {
+    onCreateSkill,
+    onEditSkill,
+    createSkillLabel,
+    curatedConnectors,
+    connectedConnectors,
+    onConnectConnector,
+    onDisconnectConnector,
+  } = options;
+  const curatedRef = useRef<readonly SettingsConnector[]>([]);
+  curatedRef.current = curatedConnectors ?? [];
   const [skills, setSkills] = useState<DirectorySection>(EMPTY);
   const [connectors, setConnectors] = useState<DirectorySection>(EMPTY);
   const [plugins, setPlugins] = useState<DirectorySection>(EMPTY);
   const skillCache = useRef<readonly ManagedSkillSummary[]>([]);
   const installedSkills = useRef<ReadonlySet<string>>(new Set<string>());
   const connectedIds = useRef<ReadonlySet<string>>(new Set<string>());
+  const local = useRef<readonly ConnectedConnector[]>([]);
+  local.current = connectedConnectors ?? [];
   const pluginCache = useRef<PluginDirectorySnapshot | null>(null);
 
   const loadSkills = useCallback(async () => {
@@ -115,11 +137,15 @@ export function useDirectoryAdapter(options: DirectoryAdapterOptions = {}): Dire
     setConnectors((prev) => ({ ...prev, loading: true, error: null }));
     try {
       const [records, connected] = await Promise.all([
-        fetchConnectorRecords(),
+        fetchConnectorRecords().catch(() => [] as DirectoryRecord[]),
         fetchConnectedConnectorIds(),
       ]);
-      connectedIds.current = connected;
-      setConnectors({ ...toConnectorSection(records, connected), retry: loadConnectors });
+      const merged = new Set([...connected, ...connectedConnectorIds(local.current)]);
+      connectedIds.current = merged;
+      setConnectors({
+        ...toConnectorSection(records, merged, curatedRef.current),
+        retry: loadConnectors,
+      });
     } catch {
       setConnectors((prev) => ({ ...prev, loading: false, error: CONNECTORS_FAILED_COPY, retry: loadConnectors }));
     }
@@ -154,6 +180,8 @@ export function useDirectoryAdapter(options: DirectoryAdapterOptions = {}): Dire
       if (section === 'skills')
         return fetchSkillDetail(id, skillCache.current, installedSkills.current);
       if (section === 'connectors') {
+        const curated = curatedRef.current.find((entry) => entry.id === id);
+        if (curated) return toCuratedConnectorDetail(curated, connectedIds.current);
         const record = await fetchConnectorRecord(id);
         return record ? toConnectorDetail(record, connectedIds.current) : null;
       }
@@ -173,6 +201,11 @@ export function useDirectoryAdapter(options: DirectoryAdapterOptions = {}): Dire
 
   const connect = useCallback(
     async (id: string) => {
+      if (onConnectConnector) {
+        await onConnectConnector(id);
+        await loadConnectors();
+        return;
+      }
       const response = await postJson(CONNECTORS_PATH, { connectorId: id, authType: 'oauth2' });
       if (response.ok) {
         await loadConnectors();
@@ -188,7 +221,7 @@ export function useDirectoryAdapter(options: DirectoryAdapterOptions = {}): Dire
       }
       throw new Error(body.message ?? CONNECT_FAILED_COPY);
     },
-    [loadConnectors],
+    [loadConnectors, onConnectConnector],
   );
 
   const installPlugin = useCallback(
@@ -225,11 +258,14 @@ export function useDirectoryAdapter(options: DirectoryAdapterOptions = {}): Dire
   );
 
   const uninstall = useCallback(
-    (section: DirectorySectionKey, id: string) => {
-      if (section !== 'skills') return Promise.resolve();
-      return runSkillInstall(id, false);
+    async (section: DirectorySectionKey, id: string) => {
+      if (section === 'skills') return runSkillInstall(id, false);
+      if (section === 'connectors' && onDisconnectConnector) {
+        await onDisconnectConnector(id);
+        await loadConnectors();
+      }
     },
-    [runSkillInstall],
+    [runSkillInstall, onDisconnectConnector, loadConnectors],
   );
 
   const copyLink = useCallback(async (section: DirectorySectionKey, id: string) => {

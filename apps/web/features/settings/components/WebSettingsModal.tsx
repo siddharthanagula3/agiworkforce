@@ -1197,15 +1197,19 @@ export function WebSettingsModal({
     removePlugin,
   };
 
-  const directoryAdapter = useDirectoryAdapter(
-    canAuthorSkills
+  const directoryAdapter = useDirectoryAdapter({
+    ...(canAuthorSkills
       ? {
           onCreateSkill,
           onEditSkill: (name: string) => editSkill({ name } as SettingsSkill),
           createSkillLabel: NEW_SKILL_LABEL,
         }
-      : {},
-  );
+      : {}),
+    curatedConnectors: mergedSettingsConnectors,
+    connectedConnectors: mergedConnectedConnectors,
+    onConnectConnector: connectConnector,
+    onDisconnectConnector: disconnectConnector,
+  });
 
   const sectionContent: Record<WebSettingsContentSection, React.ReactNode> = {
     general: <GeneralSection />,
