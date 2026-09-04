@@ -27,15 +27,22 @@ import { getUserScopedDb } from '@/lib/server/rls-db';
 
 export const runtime = 'nodejs';
 
+const CATALOG_PARAM = 'catalog';
+const CATALOG_ALL = 'all';
+
 async function handleListSkills(request: NextRequest) {
   const rateLimit = await withRateLimit(request, 'chat-conversation');
   if (rateLimit) return rateLimit;
   const { userId } = await getClerkAuthUser(request);
+  const wholeCatalog =
+    new URL(request.url).searchParams.get(CATALOG_PARAM) === CATALOG_ALL;
   let skills;
   try {
     const enabledPluginIds = await listEnabledPluginIds(getNeonDb(), userId);
     const directory = await getManagedSkillDirectoryForPlugins(enabledPluginIds);
-    skills = await resolveInstalledManagedSkills(getNeonDb(), userId, directory);
+    skills = wholeCatalog
+      ? directory
+      : await resolveInstalledManagedSkills(getNeonDb(), userId, directory);
   } catch (error) {
     if (error instanceof SkillCatalogUnavailableError) {
       throw createError.internal('Failed to load skills');
