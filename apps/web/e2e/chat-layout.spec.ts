@@ -55,19 +55,24 @@ test.describe('chat surface layout', () => {
     await composer.press('Enter');
     await expect(page.locator('.message-inner').first()).toBeVisible({ timeout: 30000 });
 
-    const edges = await page.evaluate(() => {
-      const input = document.querySelector('#chat-composer [role="textbox"]');
-      const composerColumn = input?.closest('.max-w-3xl') as HTMLElement | null;
-      const messageColumn = document.querySelector('.message-inner') as HTMLElement | null;
-      const rect = (el: HTMLElement | null) =>
-        el
+    const edges = {
+      composer: await composer.evaluate((el: HTMLElement) => {
+        const column = el.closest('.max-w-3xl') as HTMLElement | null;
+        return column
           ? {
-              left: Math.round(el.getBoundingClientRect().left),
-              right: Math.round(el.getBoundingClientRect().right),
+              left: Math.round(column.getBoundingClientRect().left),
+              right: Math.round(column.getBoundingClientRect().right),
             }
           : null;
-      return { composer: rect(composerColumn), message: rect(messageColumn) };
-    });
+      }),
+      message: await page
+        .locator('.message-inner')
+        .first()
+        .evaluate((el: HTMLElement) => ({
+          left: Math.round(el.getBoundingClientRect().left),
+          right: Math.round(el.getBoundingClientRect().right),
+        })),
+    };
 
     expect(edges.composer).not.toBeNull();
     expect(edges.message).not.toBeNull();
