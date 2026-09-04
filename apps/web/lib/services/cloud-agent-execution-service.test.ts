@@ -515,10 +515,10 @@ describe('cloud agent execution service', () => {
       cacheWrite1hTokens: 0,
       reasoningTokens: 0,
       provider: 'google',
-      model: 'gemini-3.8-flash',
+      model: 'fixture-flash-model',
       costDollars: 0.002,
       costSource: 'estimated',
-      routeId: 'google/gemini-3.8-flash',
+      routeId: 'google/fixture-flash-model',
       upstreamProvider: 'anthropic',
       providerReportedCostUsd: 0.0019,
     };
