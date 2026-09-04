@@ -10,6 +10,11 @@ const stripeMocks = vi.hoisted(() => ({
 const dbMocks = vi.hoisted(() => ({
   query: vi.fn(),
   execute: vi.fn(),
+  transaction: vi.fn(
+    async (
+      callback: (tx: { query: typeof dbMocks.query; execute: typeof dbMocks.execute }) => unknown,
+    ) => callback({ query: dbMocks.query, execute: dbMocks.execute }),
+  ),
 }));
 
 vi.mock('server-only', () => ({}));
@@ -41,7 +46,11 @@ vi.mock('@/lib/server/localized-pricing-service', () => ({
   })),
 }));
 vi.mock('@/lib/server/neon-db', () => ({
-  getNeonDb: () => ({ query: dbMocks.query, execute: dbMocks.execute }),
+  getNeonDb: () => ({
+    query: dbMocks.query,
+    execute: dbMocks.execute,
+    transaction: dbMocks.transaction,
+  }),
 }));
 vi.mock('stripe', () => ({
   default: class StripeMock {
@@ -88,6 +97,26 @@ describe('POST /api/checkout', () => {
       id: 'cs_test_123',
       url: 'https://checkout.stripe.test/cs_test_123',
     });
+  });
+
+  it('reads and writes the profile row through the claimed user scope, never the bare pool', async () => {
+    const response = await POST(makeRequest());
+
+    expect(response.status).toBe(200);
+    expect(dbMocks.transaction).toHaveBeenCalled();
+    expect(dbMocks.execute).toHaveBeenCalledWith('set local role app_rls');
+    expect(dbMocks.query).toHaveBeenCalledWith(
+      expect.stringContaining("set_config('request.jwt.claim.sub', $1, true)"),
+      ['user_123', ''],
+    );
+    expect(dbMocks.query).toHaveBeenCalledWith(
+      'select stripe_customer_id from profiles where id = $1 limit 1',
+      ['user_123'],
+    );
+    expect(dbMocks.execute).toHaveBeenCalledWith(
+      'update profiles set stripe_customer_id = $1 where id = $2',
+      ['cus_123', 'user_123'],
+    );
   });
 
   it('returns successful checkout to billing so subscription state can refresh', async () => {
