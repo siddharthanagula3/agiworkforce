@@ -1,4 +1,7 @@
-import type { ManagedSkillSummary } from '@agiworkforce/cloud-contracts';
+import {
+  ManagedSkillsResponseSchema,
+  type ManagedSkillSummary,
+} from '@agiworkforce/cloud-contracts';
 import type {
   DirectoryDetailFile,
   DirectoryEntry,
@@ -14,6 +17,7 @@ import {
   DIRECTORY_SOURCE_LABEL_YOURS,
   DIRECTORY_SOURCE_YOURS,
   SKILLS_PATH,
+  SKILL_CATALOG_PARAM,
   SKILL_INSTALLS_PATH,
   SKILL_LIFECYCLE_DRAFT_LABEL,
   SKILL_LIFECYCLE_GROUP_ID,
@@ -121,20 +125,12 @@ export function toSkillSection(
   };
 }
 
-export interface SkillCatalogSnapshot {
-  skills: ManagedSkillSummary[];
-  installed: Set<string>;
-}
-
-const seen = new Map<string, ManagedSkillSummary>();
-
-export function resetSkillCatalogMemory(): void {
-  seen.clear();
-}
-
-export function mergeSkillCatalog(fetched: readonly ManagedSkillSummary[]): ManagedSkillSummary[] {
-  for (const skill of fetched) seen.set(skill.name, skill);
-  return [...seen.values()];
+export async function fetchSkillCatalog(): Promise<ManagedSkillSummary[]> {
+  const response = await fetch(`${SKILLS_PATH}?${SKILL_CATALOG_PARAM}`, { cache: 'no-store' });
+  if (!response.ok) throw new Error(`skill catalog failed: ${response.status}`);
+  const parsed = ManagedSkillsResponseSchema.safeParse(await response.json());
+  if (!parsed.success) throw new Error('Invalid skills response');
+  return parsed.data.skills;
 }
 
 export async function fetchInstalledSkillNames(): Promise<Set<string>> {

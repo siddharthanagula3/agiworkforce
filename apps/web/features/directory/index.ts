@@ -1,3 +1,9 @@
-export { DirectoryModalProvider, useDirectoryModal } from './components/DirectoryModalProvider';
-export { WebDirectoryModal } from './components/WebDirectoryModal';
+export { DirectorySettingsPanel } from './components/DirectorySettingsPanel';
 export { useDirectoryAdapter } from './hooks/useDirectoryAdapter';
+export {
+  buildSettingsBrowseHash,
+  parseSettingsDirectoryHash,
+  skillFileDownloadHref,
+  SETTINGS_SECTION_SLUGS,
+  type SettingsDirectoryRoute,
+} from './routing';
