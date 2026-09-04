@@ -113,7 +113,6 @@ export const THOUSAND = 1000;
 export const MILLION = 1_000_000;
 export const COUNT_PRECISION = 1;
 
-
 export const SKILL_NO_PREVIEW_COPY = 'No preview. This file type cannot be previewed.';
 export const SKILL_DOWNLOAD_FILE_LABEL = 'Download file';
 
@@ -128,6 +127,7 @@ export const CONNECTOR_AUTHOR_LABEL = 'Author';
 export const CONNECTOR_URL_LABEL = 'Connector URL';
 export const CONNECTOR_MORE_INFO_LABEL = 'More info';
 export const CONNECTOR_DOCUMENTATION_LABEL = 'Documentation';
+export const CONNECTOR_WEBSITE_LABEL = 'Website';
 export const CONNECTOR_SUPPORT_LABEL = 'Support';
 export const CONNECTOR_PRIVACY_LABEL = 'Privacy Policy';
 export const CONNECTOR_DISCONNECT_LABEL = 'Disconnect';

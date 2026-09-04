@@ -217,7 +217,7 @@ describe('WebSettingsModal connectors adapter (honest web semantics)', () => {
     stubFetch({ connectors: [{ connectorId: 'notion', connectedAt: '2026-07-01T00:00:00Z' }] });
     render(<WebSettingsModal open onClose={vi.fn()} initialSection="connectors" />);
 
-    fireEvent.click(await screen.findByText('Notion'));
+    fireEvent.click(await screen.findByRole('button', { name: 'Notion' }));
     expect(await screen.findByText('Connected')).toBeTruthy();
   });
 
@@ -226,7 +226,7 @@ describe('WebSettingsModal connectors adapter (honest web semantics)', () => {
     render(<WebSettingsModal open onClose={vi.fn()} initialSection="connectors" />);
 
     expect(await screen.findByRole('button', { name: 'Remove Notion' })).toBeTruthy();
-    expect(await screen.findByText('Slack')).toBeTruthy();
+    expect(await screen.findByRole('button', { name: 'Slack' })).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Add Slack' })).toBeNull();
     expect(screen.queryByText('Coming soon')).toBeNull();
   });
@@ -259,7 +259,7 @@ describe('WebSettingsModal connectors adapter (honest web semantics)', () => {
     await settleParentConnectorState();
     openConnectorsSection();
 
-    fireEvent.click(await screen.findByText('GitHub'));
+    fireEvent.click(await screen.findByRole('button', { name: 'GitHub' }));
     expect(await screen.findByText('Connected')).toBeTruthy();
   });
 
@@ -270,7 +270,7 @@ describe('WebSettingsModal connectors adapter (honest web semantics)', () => {
     expect(await screen.findByRole('button', { name: 'Add custom connector' })).toBeTruthy();
     expect(await screen.findByPlaceholderText('Search connectors')).toBeTruthy();
     expect(screen.queryByRole('table')).toBeNull();
-    expect(await screen.findByText('Notion')).toBeTruthy();
+    expect(await screen.findByRole('button', { name: 'Notion' })).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Add Notion' })).toBeNull();
     expect(screen.queryByRole('button', { name: 'Add GitHub' })).toBeNull();
     expect(screen.queryByRole('button', { name: 'Add Slack' })).toBeNull();
@@ -349,7 +349,7 @@ describe('WebSettingsModal connectors adapter (honest web semantics)', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
 
-    expect(await screen.findByText('Notion')).toBeTruthy();
+    expect(await screen.findByRole('button', { name: 'Notion' })).toBeTruthy();
     expect(
       screen.queryByText(
         'Connectors could not be loaded because the server returned an error. This is not a problem with your connection, retry, or contact support if it persists.',
@@ -495,7 +495,7 @@ describe('WebSettingsModal connectors adapter (honest web semantics)', () => {
     });
     render(<WebSettingsModal open onClose={vi.fn()} initialSection="connectors" />);
 
-    fireEvent.click(await screen.findByText('Notion'));
+    fireEvent.click(await screen.findByRole('button', { name: 'Notion' }));
 
     const trigger = await screen.findByText('Tool permissions');
     expect(trigger).toBeTruthy();
@@ -507,7 +507,7 @@ describe('WebSettingsModal connectors adapter (honest web semantics)', () => {
     });
     render(<WebSettingsModal open onClose={vi.fn()} initialSection="connectors" />);
 
-    fireEvent.click(await screen.findByText('GitHub'));
+    fireEvent.click(await screen.findByRole('button', { name: 'GitHub' }));
     fireEvent.click(await screen.findByText('Tool permissions'));
 
     const dialog = await screen.findByRole('dialog');
@@ -558,7 +558,7 @@ describe('WebSettingsModal connectors adapter (honest web semantics)', () => {
     const fetchMock = stubFetch({});
     render(<WebSettingsModal open onClose={vi.fn()} initialSection="connectors" />);
 
-    await screen.findByText('Notion');
+    await screen.findByRole('button', { name: 'Notion' });
     for (const path of ['/api/connectors', '/api/github/installations', '/api/connectors/custom']) {
       expect(fetchMock).toHaveBeenCalledWith(
         path,
