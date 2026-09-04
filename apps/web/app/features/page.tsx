@@ -164,11 +164,11 @@ export default function FeaturesHubPage() {
                   <span>agiworkforce.com/chat/projects</span>
                 </div>
                 <ProductFrame
-                  src="/product/projects-dark.png"
-                  srcLight="/product/projects-light.png"
+                  src="/product/projects-dark-landing.png"
+                  srcLight="/product/projects-light-landing.png"
                   alt="The AGI projects view listing standing instructions, files, and threads"
                   width={2880}
-                  height={1800}
+                  height={1480}
                   priority
                 />
               </div>
