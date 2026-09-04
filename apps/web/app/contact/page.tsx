@@ -87,7 +87,7 @@ export default function ContactPage() {
                 </Stack>
               </div>
             ) : (
-              <form onSubmit={onSubmit} className="agi-ds-form">
+              <form onSubmit={onSubmit} className="agi-ds-form agi-ds-full">
                 <div className="agi-ds-field">
                   <label htmlFor="contact-name" className="agi-ds-field-label">
                     Name
