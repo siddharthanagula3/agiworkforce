@@ -121,9 +121,10 @@ export default function AiChatFeaturePage() {
                     Drag files and images straight into the composer; each becomes a preview you can
                     inspect or remove before sending. The voice button transcribes speech into
                     editable text. Search-capable models reach the live web on their own when an
-                    answer should not come from model memory alone. The footer names the model in
-                    use, reaching {MARKETING.models.display} models across{' '}
-                    {MARKETING.providers.display} providers.
+                    answer should not come from model memory alone. The composer states whether
+                    search is on for the model you picked. The footer names the model in use,
+                    reaching {MARKETING.models.display} models across {MARKETING.providers.display}{' '}
+                    providers.
                   </p>
                 </div>
                 <ProductFrame
