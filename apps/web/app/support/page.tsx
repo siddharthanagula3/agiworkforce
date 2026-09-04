@@ -9,7 +9,7 @@ import {
   Section,
   Stack,
 } from '@/features/marketing/components/system';
-import { PageHero } from '@/features/marketing/components/pages/surfaces/shared';
+import { FactLine, PageHero } from '@/features/marketing/components/pages/surfaces/shared';
 import { CONTACT_EMAIL, contactMailto } from '@/lib/legal-constants';
 
 export const metadata = buildMetadata({
@@ -18,6 +18,12 @@ export const metadata = buildMetadata({
     'How to reach us today, where to report bugs, and what support looks like across every tier.',
   path: '/support',
 });
+
+const HERO_FACTS = [
+  `Channel: email ${CONTACT_EMAIL}`,
+  'Reply: best effort, from a human',
+  'Response-time SLA: not published yet',
+];
 
 const SUPPORT_ROWS: { label: string; value: string }[] = [
   {
@@ -57,6 +63,8 @@ export default function SupportPage() {
             { href: '/help', label: 'Browse the help index', variant: 'secondary' },
           ]}
         />
+
+        <FactLine facts={HERO_FACTS} />
 
         <Section id="tiers" labelledBy="agi-support-tiers-title" rule>
           <Stack gap="loose">
