@@ -18,7 +18,7 @@ const mocks = vi.hoisted(() => ({
 const db = {
   execute: mocks.execute,
   query: mocks.query,
-  transaction: vi.fn(),
+  transaction: vi.fn((run: (tx: unknown) => Promise<unknown>) => run(db)),
   withUser: vi.fn(),
   dispose: vi.fn(),
 };

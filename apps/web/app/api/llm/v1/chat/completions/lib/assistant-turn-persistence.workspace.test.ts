@@ -2,9 +2,14 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({ execute: vi.fn(), query: vi.fn(async () => [] as unknown[]) }));
 
-vi.mock('@/lib/server/neon-db', () => ({
-  getNeonDb: () => ({ execute: mocks.execute, query: mocks.query }),
-}));
+vi.mock('@/lib/server/neon-db', () => {
+  const pool = {
+    execute: mocks.execute,
+    query: mocks.query,
+    transaction: (run: (tx: unknown) => Promise<unknown>) => run(pool),
+  };
+  return { getNeonDb: () => pool };
+});
 vi.mock('@/lib/logger', () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
@@ -16,6 +21,7 @@ const ORGANIZATION_ID = '11111111-1111-4111-8111-111111111111';
 
 describe('assistant turn workspace persistence', () => {
   beforeEach(() => {
+    vi.clearAllMocks();
     mocks.execute.mockResolvedValue(1);
     // A conversation that has never branched: the single-statement path.
     mocks.query.mockResolvedValue([{ active_leaf_message_id: null }]);
@@ -43,7 +49,9 @@ describe('assistant turn workspace persistence', () => {
         },
       });
 
-      const [sql, params] = mocks.execute.mock.calls[0] as [string, unknown[]];
+      const [sql, params] = mocks.execute.mock.calls.find(([text]) =>
+        String(text).includes('insert into web_messages'),
+      ) as [string, unknown[]];
       expect(sql).toContain('c.organization_id is not distinct from $10::uuid');
       expect(params[9]).toBe(organizationId);
     },
