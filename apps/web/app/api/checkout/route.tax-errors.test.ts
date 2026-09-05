@@ -77,12 +77,16 @@ vi.mock('@/lib/server/localized-pricing-service', () => ({
     amountMinor: 20_000,
   })),
 }));
-vi.mock('@/lib/server/neon-db', () => ({
-  getNeonDb: () => ({
-    query: dbMocks.query,
-    execute: dbMocks.execute,
-    transaction: dbMocks.transaction,
-  }),
+vi.mock('@/lib/server/rls-db', () => ({
+  getUserScopedDb: vi.fn(async () => ({
+    db: {
+      query: dbMocks.query,
+      execute: dbMocks.execute,
+      transaction: dbMocks.transaction,
+    },
+    userId: 'user_123',
+    organizationId: null,
+  })),
 }));
 vi.mock('stripe', () => {
   class StripeMock {

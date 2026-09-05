@@ -36,29 +36,24 @@ vi.mock('@clerk/nextjs/server', () => ({
   auth: vi.fn(() => ({ userId: 'test-user-id' })),
 }));
 
-vi.mock('@/lib/server/neon-db', () => ({
-  getNeonDb: vi.fn(() => ({
-    query: mockDbQuery,
-    execute: vi.fn().mockResolvedValue(1),
-    transaction: vi.fn(async (fn: (db: unknown) => unknown) =>
-      fn({
-        query: (sql: string, params: unknown[]) => {
-          if (typeof sql === 'string' && sql.includes('set_config')) {
-            return Promise.resolve([]);
-          }
-          return mockDbQuery(sql, params);
-        },
-        execute: (sql: string) => {
-          if (sql === 'set local role app_rls') {
-            return Promise.resolve(0);
-          }
-          return Promise.resolve(1);
-        },
-      }),
-    ),
-    withUser: vi.fn(() => ({})),
-    dispose: vi.fn(),
-  })),
+vi.mock('@/lib/server/rls-db', () => ({
+  getUserScopedDb: vi.fn(async () => {
+    const { auth } = await import('@clerk/nextjs/server');
+    const { userId } = (await auth()) as unknown as { userId: string | null };
+    if (!userId) {
+      const { createError } = await import('@/lib/errors');
+      throw createError.unauthorized();
+    }
+    return {
+      db: {
+        query: mockDbQuery,
+        execute: vi.fn().mockResolvedValue(1),
+        transaction: vi.fn(async (fn: (db: unknown) => unknown) => fn({ query: mockDbQuery })),
+      },
+      userId,
+      organizationId: null,
+    };
+  }),
 }));
 
 vi.mock('stripe', () => {
