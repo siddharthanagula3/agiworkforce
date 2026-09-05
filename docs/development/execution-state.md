@@ -48,8 +48,8 @@ behaviour inspected by the lead, not tests.
 | Cmd K did nothing on the chat page                                   | fixed 6a49ffc35                               |
 | Stop lost the attempt and showed a toast                             | fixed fce4fc435                               |
 | Sandbox refusal repeated three times per turn                        | fixed 6329a6bd5                               |
-| Share project missing on the main chat page                          | fix in flight (nav slice)                     |
-| Chat row menu drawn at the viewport corner                           | fix in flight, approved                       |
+| Share project missing on the main chat page                          | fixed e0979d2f0                               |
+| Chat row menu drawn at the viewport corner                           | fixed 01fd497c7                               |
 | Search notice blamed the tool on a code question                     | fixed 33f517c90                               |
 | Code request answered without running code                           | fixed 81be75123, live recheck pending         |
 | Provider billing exhaustion shown as raw JSON with a dead Retry      | found live 21:46; D-14; fix in flight         |

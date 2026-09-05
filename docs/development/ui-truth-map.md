@@ -89,7 +89,7 @@ routes).
 | Web search toggle                    | /chat               | persistent preference          | verified; notice rule fixed    |
 | Chat dock (In this chat, Sources)    | /chat/[id]          | turn metadata                  | verified                       |
 | Command palette                      | all                 | conversations, actions         | verified                       |
-| Chat row menu                        | sidebar             | conversation actions, projects | approved, commit pending       |
+| Chat row menu                        | sidebar             | conversation actions, projects | verified, 01fd497c7            |
 | Project row and card menus           | sidebar, projects   | project actions                | approved                       |
 | Project icon and colour picker       | /chat/projects/[id] | PUT /api/projects/:id          | approved                       |
 | Schedule row menu                    | /chat/schedules     | schedule actions               | approved                       |
