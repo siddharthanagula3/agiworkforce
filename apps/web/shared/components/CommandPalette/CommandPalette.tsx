@@ -343,7 +343,7 @@ export function CommandPalette({ open, onOpenChange }: Props) {
             name="command-palette-search"
             autoComplete="off"
             spellCheck={false}
-            className="flex-1 bg-transparent text-foreground placeholder:text-muted-foreground text-sm outline-none"
+            className="chat-quiet-field flex-1 text-foreground placeholder:text-muted-foreground text-sm"
             aria-label="Command palette search"
             role="combobox"
             aria-expanded={open}
