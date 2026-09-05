@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   INTERACTIVE_CARD_IDENTITY_GUARD,
   KNOWN_INTERACTIVE_CARD_KINDS,
+  interactiveCardRendersBeforeProse,
   isKnownInteractiveCardKind,
   isResolvedPlace,
   type InteractiveCard,
@@ -148,7 +149,16 @@ describe('kind allowlist', () => {
       'itinerary.v1',
       'map-search.v1',
       'mcp-app.v1',
+      'places.v1',
     ]);
+  });
+
+  it('leads the turn with the places map and trails with every other kind', () => {
+    expect(interactiveCardRendersBeforeProse('places.v1')).toBe(true);
+    for (const kind of KNOWN_INTERACTIVE_CARD_KINDS) {
+      if (kind === 'places.v1') continue;
+      expect(interactiveCardRendersBeforeProse(kind)).toBe(false);
+    }
   });
 
   it('treats anything else as unknown rather than throwing', () => {
