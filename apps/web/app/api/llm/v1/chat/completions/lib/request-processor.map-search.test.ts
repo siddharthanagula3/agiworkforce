@@ -26,6 +26,7 @@ describe('map search card capability', () => {
     applyMapSearchCardCapability(parsed, {
       surface: 'web',
       toolsCapable: true,
+      placesSearchOffered: false,
       userMessage: 'Show coffee shops on a map.',
     });
 
@@ -44,6 +45,7 @@ describe('map search card capability', () => {
     applyMapSearchCardCapability(parsed, {
       surface: 'mobile',
       toolsCapable: true,
+      placesSearchOffered: false,
       userMessage: 'Plan a driving route from Austin to Marfa.',
     });
 
@@ -63,6 +65,7 @@ describe('map search card capability', () => {
     applyMapSearchCardCapability(parsed, {
       surface: 'chrome',
       toolsCapable: true,
+      placesSearchOffered: false,
       userMessage: 'Show coffee shops near me on a map.',
     });
 
@@ -80,6 +83,7 @@ describe('map search card capability', () => {
     applyMapSearchCardCapability(parsed, {
       surface: 'mobile',
       toolsCapable: true,
+      placesSearchOffered: false,
       userMessage: 'Show coffee shops on a map.',
     });
 
@@ -93,28 +97,49 @@ describe('map search card capability', () => {
       {
         surface: 'desktop' as const,
         toolsCapable: true,
+        placesSearchOffered: false,
         userMessage: 'Show this on a map.',
       },
       {},
     ],
     [
       'tool-incapable model',
-      { surface: 'web' as const, toolsCapable: false, userMessage: 'Show this on a map.' },
+      {
+        surface: 'web' as const,
+        toolsCapable: false,
+        placesSearchOffered: false,
+        userMessage: 'Show this on a map.',
+      },
       {},
     ],
     [
       'missing capability',
-      { surface: 'web' as const, toolsCapable: true, userMessage: 'Show this on a map.' },
+      {
+        surface: 'web' as const,
+        toolsCapable: true,
+        placesSearchOffered: false,
+        userMessage: 'Show this on a map.',
+      },
       { x_interactive_cards: undefined },
     ],
     [
       'non-stream request',
-      { surface: 'web' as const, toolsCapable: true, userMessage: 'Show this on a map.' },
+      {
+        surface: 'web' as const,
+        toolsCapable: true,
+        placesSearchOffered: false,
+        userMessage: 'Show this on a map.',
+      },
       { stream: false },
     ],
     [
       'ordinary chat without map intent',
-      { surface: 'web' as const, toolsCapable: true, userMessage: 'Explain compound interest.' },
+      {
+        surface: 'web' as const,
+        toolsCapable: true,
+        placesSearchOffered: false,
+        userMessage: 'Explain compound interest.',
+      },
       {},
     ],
     [
@@ -122,6 +147,7 @@ describe('map search card capability', () => {
       {
         surface: 'web' as const,
         toolsCapable: true,
+        placesSearchOffered: false,
         userMessage: 'Explain what a hash map is.',
       },
       {},
@@ -132,12 +158,27 @@ describe('map search card capability', () => {
     expect(parsed.tools).toBeUndefined();
   });
 
+  it('stands down when the places tool has taken the turn', () => {
+    const parsed = request();
+
+    applyMapSearchCardCapability(parsed, {
+      surface: 'web',
+      toolsCapable: true,
+      placesSearchOffered: true,
+      userMessage: 'best coffee near Union Square San Francisco open now',
+    });
+
+    expect(parsed.tools).toBeUndefined();
+    expect(parsed.tool_choice).toBeUndefined();
+  });
+
   it('still offers the tool for a nearby-place search naming a proper noun', () => {
     const parsed = request();
 
     applyMapSearchCardCapability(parsed, {
       surface: 'web',
       toolsCapable: true,
+      placesSearchOffered: false,
       userMessage: 'find coffee shops near Union Square',
     });
 
