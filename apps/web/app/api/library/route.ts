@@ -73,6 +73,7 @@ async function handleListLibrary(request: NextRequest): Promise<NextResponse> {
   const sp = request.nextUrl.searchParams;
   const parsed = LibraryListQuerySchema.safeParse({
     kind: sp.get('kind') ?? undefined,
+    sort: sp.get('sort') ?? undefined,
     surface: sp.get('surface') ?? undefined,
     origin: sp.get('origin') ?? undefined,
     q: sp.get('q') ?? undefined,
@@ -82,13 +83,14 @@ async function handleListLibrary(request: NextRequest): Promise<NextResponse> {
   if (!parsed.success) {
     throw createError.validation(parsed.error.issues[0]?.message ?? 'Invalid query parameters');
   }
-  const { kind, surface, origin, q, limit, offset } = parsed.data;
+  const { kind, sort, surface, origin, q, limit, offset } = parsed.data;
   const deleted = sp.get('deleted') === 'true';
 
   const rows = await listLibraryAssets(
     userId,
     {
-      kind,
+      ...(kind ? { kinds: kind } : {}),
+      sort,
       surface,
       origin,
       search: q,
