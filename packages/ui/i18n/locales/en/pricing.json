@@ -186,7 +186,7 @@
   "max15xFeature2": "Everything in Max 5x",
   "max15xFeature3": "Video generation",
   "max15xCta": "Get Max 15x",
-  "heroLede": "See pricing for individual, team, and enterprise plans.",
+  "heroLede": "Free to start. Local and BYOK cost nothing from AGI, and managed cloud is priced per plan below.",
   "freeLocalByok": "Local models and your own API keys, always free",
   "seatTotal_one": "{{count}} seat · {{total}}/mo",
   "seatTotal_other": "{{count}} seats · {{total}}/mo",
