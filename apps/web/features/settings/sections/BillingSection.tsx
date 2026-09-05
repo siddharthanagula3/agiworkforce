@@ -181,17 +181,6 @@ function formatMoney(minorUnits: number, currency: string): string {
   }
 }
 
-const FREE_PLAN_FEATURES = [
-  'Use limited managed Cloud chat on Web and supported app surfaces',
-  'Generate code and visualize data',
-  'Write, edit, and create content',
-  'Analyze text and images',
-  'Ability to search the web',
-  'Create files and execute code',
-  'Use Local mode without an AGI subscription on supported native surfaces',
-  'Use provider BYOK without an AGI subscription on Desktop, CLI, and VS Code',
-];
-
 function PlanIcon({ tier }: { tier: string }) {
   const isPaid = !isFreeBillingPlanTier(tier);
   return (
@@ -228,26 +217,6 @@ function SectionHeader({ title }: { title: string }) {
     >
       {title}
     </div>
-  );
-}
-
-function CheckIcon() {
-  return (
-    <svg
-      width="16"
-      height="16"
-      viewBox="0 0 16 16"
-      fill="none"
-      style={{ flexShrink: 0, marginTop: 1 }}
-    >
-      <path
-        d="M3 8l3.5 3.5L13 5"
-        stroke="var(--chat-accent-primary, #c8892a)"
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
   );
 }
 
@@ -549,8 +518,25 @@ export function BillingSection() {
 
   if (!billingInitialized || billingLoading) {
     return (
-      <div role="status" aria-live="polite" style={{ color: 'var(--text-3)', fontSize: 14 }}>
-        Loading your billing account…
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+        <span role="status" aria-live="polite" className="sr-only">
+          Loading your billing account…
+        </span>
+        <div aria-hidden="true" className="flex items-center gap-4">
+          <div className="h-12 w-12 shrink-0 animate-pulse rounded-full bg-foreground/10" />
+          <div className="flex flex-col gap-2">
+            <div className="h-4 w-40 animate-pulse rounded bg-foreground/10" />
+            <div className="h-3 w-56 animate-pulse rounded bg-foreground/[0.07]" />
+          </div>
+        </div>
+        <div
+          aria-hidden="true"
+          className="h-20 w-full animate-pulse rounded bg-foreground/[0.07]"
+        />
+        <div
+          aria-hidden="true"
+          className="h-20 w-full animate-pulse rounded bg-foreground/[0.07]"
+        />
       </div>
     );
   }
@@ -652,152 +638,40 @@ export function BillingSection() {
 
       <EnterpriseCollectionBanner />
 
-      {/* Current plan card */}
-      <section
-        style={{
-          border: '1px solid var(--settings-border)',
-          borderRadius: 'var(--radius-lg)',
-          background: 'var(--bg-elev)',
-          overflow: 'hidden',
-        }}
-      >
-        <SectionHeader title="Current plan" />
-
-        <div style={{ padding: '20px 20px 0' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 16 }}>
+      {/* Current plan: icon, name, one line, Adjust plan at the right */}
+      <div>
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: 16,
+            padding: '14px 0',
+            borderBottom: '1px solid var(--settings-border)',
+            flexWrap: 'wrap',
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
             <PlanIcon tier={tier} />
             <div>
-              <div style={{ fontSize: 18, fontWeight: 600, color: 'var(--text-1)' }}>
+              <div style={{ fontSize: 16, fontWeight: 600, color: 'var(--text-1)' }}>
                 {/* The catalog label first: `display_name` carries the raw tier
                     key from the subscription row, which rendered as
                     "Max_15x plan" instead of "Max 15x". */}
                 {isFreeTier ? 'Free plan' : `${planLabel ?? subscription?.display_name ?? ''} plan`}
               </div>
-              {isFreeTier && (
-                <div style={{ fontSize: 13, color: 'var(--text-3)', marginTop: 2 }}>Try AGI</div>
-              )}
+              <div style={{ fontSize: 13, color: 'var(--text-3)', marginTop: 2 }}>
+                {isFreeTier
+                  ? 'Try AGI'
+                  : (badgeText ?? humanizeStatus(subscription?.status ?? 'none'))}
+              </div>
             </div>
-            {badgeText && (
-              <span
-                style={{
-                  marginLeft: 'auto',
-                  padding: '4px 10px',
-                  fontSize: 12,
-                  fontWeight: 600,
-                  color: 'var(--chat-accent-primary-text)',
-                  background: 'rgba(200,137,42,0.12)',
-                  borderRadius: 'var(--radius-md)',
-                  border: '1px solid rgba(200,137,42,0.25)',
-                  whiteSpace: 'nowrap',
-                }}
-              >
-                {badgeText}
-              </span>
-            )}
           </div>
-
-          {isFreeTier && (
-            <ul
-              style={{
-                listStyle: 'none',
-                margin: '0 0 16px',
-                padding: 0,
-                display: 'flex',
-                flexDirection: 'column',
-                gap: 8,
-              }}
-            >
-              {FREE_PLAN_FEATURES.map((feat) => (
-                <li
-                  key={feat}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'flex-start',
-                    gap: 8,
-                    fontSize: 13,
-                    color: 'var(--text-2)',
-                  }}
-                >
-                  <CheckIcon />
-                  {feat}
-                </li>
-              ))}
-            </ul>
-          )}
-
-          {!isFreeTier && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 16 }}>
-              <Row label="Status">
-                <span style={{ fontSize: 14, color: 'var(--text-2)' }}>
-                  {humanizeStatus(subscription?.status ?? 'none')}
-                </span>
-              </Row>
-              {billingSource && billingSource !== 'none' && (
-                <Row label="Billed through">
-                  <span style={{ fontSize: 14, color: 'var(--text-2)' }}>
-                    {BILLING_SOURCE_LABEL[billingSource] ?? billingSource}
-                  </span>
-                </Row>
-              )}
-              {subscription?.status === 'past_due' || subscription?.status === 'unpaid' ? (
-                <div
-                  role="alert"
-                  style={{
-                    margin: '0 0 12px',
-                    padding: '10px 12px',
-                    borderRadius: 'var(--radius-md)',
-                    border: '1px solid var(--settings-destructive-text)',
-                    color: 'var(--settings-destructive-text)',
-                    fontSize: 13,
-                  }}
-                >
-                  Your last payment did not go through, so this subscription is{' '}
-                  {subscription.status === 'unpaid' ? 'unpaid' : 'past due'}. Access can be
-                  suspended until it is settled.{' '}
-                  <a
-                    href="/payment-failure"
-                    style={{ color: 'inherit', textDecoration: 'underline' }}
-                  >
-                    What to check and how to fix it
-                  </a>
-                </div>
-              ) : null}
-              {subscription?.current_period_end && (
-                <Row
-                  label={
-                    subscription.cancel_at_period_end
-                      ? 'Cancels on'
-                      : isManagedPaid
-                        ? 'Renews on'
-                        : 'Current period ends'
-                  }
-                >
-                  <span style={{ fontSize: 14, color: 'var(--text-2)' }}>
-                    {formatDate(subscription.current_period_end)}
-                  </span>
-                </Row>
-              )}
-              {planPriceLabel !== null && (
-                <Row label="Price">
-                  <span style={{ fontSize: 14, color: 'var(--text-2)' }}>{planPriceLabel}</span>
-                </Row>
-              )}
-            </div>
-          )}
-        </div>
-
-        <div
-          style={{
-            padding: '12px 20px',
-            borderTop: '1px solid var(--settings-border)',
-            display: 'flex',
-            gap: 8,
-          }}
-        >
           {canAdjustPlan ? (
             <SettingsPageLink
               href="/upgrade"
               style={{
+                flexShrink: 0,
                 padding: '7px 14px',
                 background: isFreeTier ? 'var(--text-1)' : 'var(--chat-accent-primary, #c8892a)',
                 border: 'none',
@@ -814,169 +688,242 @@ export function BillingSection() {
           ) : (
             <span
               role="status"
-              style={{
-                alignSelf: 'center',
-                color: 'var(--text-3)',
-                fontSize: 13,
-                lineHeight: 1.4,
-              }}
+              style={{ flexShrink: 0, color: 'var(--text-3)', fontSize: 13, lineHeight: 1.4 }}
             >
               {planChangeBlockedCopy}
             </span>
           )}
-          {/* A store-owned subscription cannot be managed in the Stripe portal.
-              send the user to the store that actually holds it. */}
-          {!isFreeTier && isStoreBilled && (
-            <a
-              href={storeManagementUrl as string}
-              target="_blank"
-              rel="noopener noreferrer"
-              style={{
-                padding: '7px 14px',
-                background: 'transparent',
-                border: '1px solid var(--settings-border)',
-                borderRadius: 'var(--radius)',
-                color: 'var(--text-2)',
-                fontSize: 13,
-                textDecoration: 'none',
-              }}
-            >
-              {billingSource === 'apple' ? 'Manage in the App Store' : 'Manage on Google Play'}
-            </a>
-          )}
-          {hasStripeBilling && (
-            <button
-              type="button"
-              onClick={() => void openPortal()}
-              disabled={portalPending}
-              style={{
-                padding: '7px 14px',
-                background: 'transparent',
-                border: '1px solid var(--settings-border)',
-                borderRadius: 'var(--radius)',
-                color: 'var(--text-2)',
-                fontSize: 13,
-                cursor: portalPending ? 'progress' : 'pointer',
-              }}
-            >
-              {portalPending ? 'Opening…' : 'Manage billing'}
-            </button>
-          )}
-          {hasStripeBilling && isManagedPaid && (
-            <button
-              type="button"
-              onClick={() => void openPortal('cancel')}
-              disabled={portalPending}
-              style={{
-                padding: '7px 14px',
-                background: 'transparent',
-                border: '1px solid var(--settings-border)',
-                borderRadius: 'var(--radius)',
-                color: 'var(--settings-destructive-text)',
-                fontSize: 13,
-                cursor: portalPending ? 'progress' : 'pointer',
-              }}
-            >
-              Cancel plan
-            </button>
-          )}
         </div>
-        {portalError && (
+
+        {!isFreeTier && (
           <div
+            style={{
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 12,
+              padding: '14px 0',
+              borderBottom: '1px solid var(--settings-border)',
+            }}
+          >
+            <Row label="Status">
+              <span style={{ fontSize: 14, color: 'var(--text-2)' }}>
+                {humanizeStatus(subscription?.status ?? 'none')}
+              </span>
+            </Row>
+            {billingSource && billingSource !== 'none' && (
+              <Row label="Billed through">
+                <span style={{ fontSize: 14, color: 'var(--text-2)' }}>
+                  {BILLING_SOURCE_LABEL[billingSource] ?? billingSource}
+                </span>
+              </Row>
+            )}
+            {subscription?.status === 'past_due' || subscription?.status === 'unpaid' ? (
+              <div
+                role="alert"
+                style={{
+                  padding: '10px 12px',
+                  borderRadius: 'var(--radius-md)',
+                  border: '1px solid var(--settings-destructive-text)',
+                  color: 'var(--settings-destructive-text)',
+                  fontSize: 13,
+                }}
+              >
+                Your last payment did not go through, so this subscription is{' '}
+                {subscription.status === 'unpaid' ? 'unpaid' : 'past due'}. Access can be suspended
+                until it is settled.{' '}
+                <a
+                  href="/payment-failure"
+                  style={{ color: 'inherit', textDecoration: 'underline' }}
+                >
+                  What to check and how to fix it
+                </a>
+              </div>
+            ) : null}
+            {subscription?.current_period_end && (
+              <Row
+                label={
+                  subscription.cancel_at_period_end
+                    ? 'Cancels on'
+                    : isManagedPaid
+                      ? 'Renews on'
+                      : 'Current period ends'
+                }
+              >
+                <span style={{ fontSize: 14, color: 'var(--text-2)' }}>
+                  {formatDate(subscription.current_period_end)}
+                </span>
+              </Row>
+            )}
+            {planPriceLabel !== null && (
+              <Row label="Price">
+                <span style={{ fontSize: 14, color: 'var(--text-2)' }}>{planPriceLabel}</span>
+              </Row>
+            )}
+          </div>
+        )}
+
+        {!isFreeTier && (isStoreBilled || hasStripeBilling) ? (
+          <div style={{ padding: '14px 0', display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+            {/* A store-owned subscription cannot be managed in the Stripe portal.
+                send the user to the store that actually holds it. */}
+            {!isFreeTier && isStoreBilled && (
+              <a
+                href={storeManagementUrl as string}
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{
+                  padding: '7px 14px',
+                  background: 'transparent',
+                  border: '1px solid var(--settings-border)',
+                  borderRadius: 'var(--radius)',
+                  color: 'var(--text-2)',
+                  fontSize: 13,
+                  textDecoration: 'none',
+                }}
+              >
+                {billingSource === 'apple' ? 'Manage in the App Store' : 'Manage on Google Play'}
+              </a>
+            )}
+            {hasStripeBilling && (
+              <button
+                type="button"
+                onClick={() => void openPortal()}
+                disabled={portalPending}
+                style={{
+                  padding: '7px 14px',
+                  background: 'transparent',
+                  border: '1px solid var(--settings-border)',
+                  borderRadius: 'var(--radius)',
+                  color: 'var(--text-2)',
+                  fontSize: 13,
+                  cursor: portalPending ? 'progress' : 'pointer',
+                }}
+              >
+                {portalPending ? 'Opening…' : 'Manage billing'}
+              </button>
+            )}
+            {hasStripeBilling && isManagedPaid && (
+              <button
+                type="button"
+                onClick={() => void openPortal('cancel')}
+                disabled={portalPending}
+                style={{
+                  padding: '7px 14px',
+                  background: 'transparent',
+                  border: '1px solid var(--settings-border)',
+                  borderRadius: 'var(--radius)',
+                  color: 'var(--settings-destructive-text)',
+                  fontSize: 13,
+                  cursor: portalPending ? 'progress' : 'pointer',
+                }}
+              >
+                Cancel plan
+              </button>
+            )}
+          </div>
+        ) : null}
+        {portalError && (
+          <p
             role="alert"
             style={{
-              padding: '0 20px 16px',
+              margin: 0,
+              padding: '0 0 14px',
               fontSize: 13,
               color: 'var(--settings-destructive-text)',
             }}
           >
             {portalError}
-          </div>
+          </p>
         )}
-      </section>
+      </div>
 
-      {/* Payment section (Stripe-billed users only, a store-billed plan's card
+      {/* Payment row (Stripe-billed users only, a store-billed plan's card
           is held by Apple or Google and is not readable or editable here) */}
       {hasStripeBilling && (
-        <section
-          style={{
-            border: '1px solid var(--settings-border)',
-            borderRadius: 'var(--radius-lg)',
-            background: 'var(--bg-elev)',
-            overflow: 'hidden',
-          }}
-        >
-          <SectionHeader title="Payment" />
-          <div
-            style={{
-              padding: '16px 20px',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              gap: 16,
-            }}
-          >
-            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-              <div
-                style={{
-                  width: 36,
-                  height: 24,
-                  borderRadius: 4,
-                  background: 'var(--bg-hover)',
-                  border: '1px solid var(--settings-border)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  fontSize: 12,
-                  fontWeight: 700,
-                  color: 'var(--text-3)',
-                  fontFamily: 'var(--mono)',
-                  textTransform: 'uppercase',
-                }}
-              >
-                {defaultCard ? defaultCard.brand.slice(0, 4) : 'CARD'}
-              </div>
-              {/* Truthful copy: show the real card when Stripe returns one, an
-                  honest "no method on file" line while loading is null, and a
-                  neutral prompt when the account genuinely has none. */}
-              <span style={{ fontSize: 13, color: 'var(--text-2)' }}>
-                {paymentMethods.status === 'loading' || paymentMethods.status === 'idle'
-                  ? 'Loading payment method…'
-                  : paymentMethods.status === 'error'
+        <div>
+          <p style={{ margin: '0 0 8px', fontSize: 13, fontWeight: 600, color: 'var(--text-2)' }}>
+            Payment
+          </p>
+          {paymentMethods.status === 'loading' || paymentMethods.status === 'idle' ? (
+            <div
+              aria-hidden="true"
+              className="flex items-center gap-3 border-b border-[var(--settings-border)] py-3.5"
+            >
+              <div className="h-6 w-9 shrink-0 animate-pulse rounded bg-foreground/10" />
+              <div className="h-3 w-40 animate-pulse rounded bg-foreground/[0.07]" />
+            </div>
+          ) : (
+            <div
+              style={{
+                padding: '14px 0',
+                borderBottom: '1px solid var(--settings-border)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                gap: 16,
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                <div
+                  style={{
+                    width: 36,
+                    height: 24,
+                    borderRadius: 4,
+                    background: 'var(--bg-hover)',
+                    border: '1px solid var(--settings-border)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    fontSize: 12,
+                    fontWeight: 700,
+                    color: 'var(--text-3)',
+                    fontFamily: 'var(--mono)',
+                    textTransform: 'uppercase',
+                  }}
+                >
+                  {defaultCard ? defaultCard.brand.slice(0, 4) : 'CARD'}
+                </div>
+                {/* Truthful copy: show the real card when Stripe returns one, an
+                    honest error line when the read failed, and a neutral prompt
+                    when the account genuinely has none. */}
+                <span style={{ fontSize: 13, color: 'var(--text-2)' }}>
+                  {paymentMethods.status === 'error'
                     ? 'Payment method unavailable'
                     : defaultCard
                       ? `${defaultCard.brand.charAt(0).toUpperCase() + defaultCard.brand.slice(1)} •••• ${defaultCard.last4} · expires ${String(defaultCard.exp_month).padStart(2, '0')}/${defaultCard.exp_year}`
                       : 'No card on file'}
-              </span>
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={() => void openPortal()}
+                disabled={portalPending}
+                style={{
+                  padding: '6px 14px',
+                  background: 'transparent',
+                  border: '1px solid var(--settings-border)',
+                  borderRadius: 'var(--radius-md)',
+                  color: 'var(--text-2)',
+                  fontSize: 13,
+                  cursor: portalPending ? 'progress' : 'pointer',
+                }}
+              >
+                {portalPending
+                  ? 'Opening…'
+                  : paymentMethods.status === 'error'
+                    ? 'Open billing portal'
+                    : defaultCard
+                      ? 'Update'
+                      : 'Add payment method'}
+              </button>
             </div>
-            <button
-              type="button"
-              onClick={() => void openPortal()}
-              disabled={portalPending}
-              style={{
-                padding: '6px 14px',
-                background: 'transparent',
-                border: '1px solid var(--settings-border)',
-                borderRadius: 'var(--radius-md)',
-                color: 'var(--text-2)',
-                fontSize: 13,
-                cursor: portalPending ? 'progress' : 'pointer',
-              }}
-            >
-              {portalPending
-                ? 'Opening…'
-                : paymentMethods.status === 'error'
-                  ? 'Open billing portal'
-                  : defaultCard
-                    ? 'Update'
-                    : 'Add payment method'}
-            </button>
-          </div>
+          )}
           {paymentMethods.status === 'error' && (
-            <div
+            <p
               role="alert"
               style={{
-                padding: '0 20px 16px',
+                margin: 0,
+                padding: '8px 0 0',
                 color: 'var(--settings-destructive-text)',
                 fontSize: 13,
               }}
@@ -985,9 +932,9 @@ export function BillingSection() {
               <button type="button" onClick={() => setBillingDetailsRefresh((value) => value + 1)}>
                 Try again
               </button>
-            </div>
+            </p>
           )}
-        </section>
+        </div>
       )}
 
       {canBuyTopUps && (
@@ -1275,17 +1222,18 @@ export function BillingSection() {
         )}
       </section>
 
-      {/* Invoices section */}
-      <section
-        style={{
-          border: '1px solid var(--settings-border)',
-          borderRadius: 'var(--radius-lg)',
-          background: 'var(--bg-elev)',
-          overflow: 'hidden',
-        }}
-      >
-        <SectionHeader title="Invoices" />
-        {invoices.status === 'ready' && invoices.items.length > 0 ? (
+      {/* Invoices table */}
+      <div>
+        <p style={{ margin: '0 0 8px', fontSize: 13, fontWeight: 600, color: 'var(--text-2)' }}>
+          Invoices
+        </p>
+        {invoices.status === 'loading' || invoices.status === 'idle' ? (
+          <div aria-hidden="true" className="flex flex-col gap-2 py-1">
+            {[0, 1, 2].map((row) => (
+              <div key={row} className="h-8 w-full animate-pulse rounded bg-foreground/[0.07]" />
+            ))}
+          </div>
+        ) : invoices.status === 'ready' && invoices.items.length > 0 ? (
           <div style={{ overflowX: 'auto' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
               <thead>
@@ -1373,35 +1321,27 @@ export function BillingSection() {
             </table>
           </div>
         ) : invoices.status === 'error' ? (
-          <div
+          <p
             role="alert"
-            style={{
-              padding: '16px 20px',
-              color: 'var(--settings-destructive-text)',
-              fontSize: 13,
-            }}
+            style={{ margin: 0, color: 'var(--settings-destructive-text)', fontSize: 13 }}
           >
             {invoices.message}{' '}
             <button type="button" onClick={() => setBillingDetailsRefresh((value) => value + 1)}>
               Try again
             </button>
-          </div>
+          </p>
         ) : (
-          <div style={{ padding: '16px 20px' }}>
-            <p style={{ fontSize: 13, color: 'var(--text-3)', margin: 0 }}>
-              {invoices.status === 'loading' || invoices.status === 'idle'
-                ? 'Loading invoices…'
-                : isStoreBilled
-                  ? `Receipts for this plan are issued by ${BILLING_SOURCE_LABEL[billingSource as string]} and are not available here.`
-                  : billingSource === 'manual'
-                    ? 'Invoices for this plan are provided by your organization and are not available here.'
-                    : isFreeTier
-                      ? 'Invoices appear here once you are billed on a paid plan.'
-                      : 'No invoices yet. Invoices appear here once your first billing cycle closes.'}
-            </p>
-          </div>
+          <p style={{ fontSize: 13, color: 'var(--text-3)', margin: 0 }}>
+            {isStoreBilled
+              ? `Receipts for this plan are issued by ${BILLING_SOURCE_LABEL[billingSource as string]} and are not available here.`
+              : billingSource === 'manual'
+                ? 'Invoices for this plan are provided by your organization and are not available here.'
+                : isFreeTier
+                  ? 'Invoices appear here once you are billed on a paid plan.'
+                  : 'No invoices yet. Invoices appear here once your first billing cycle closes.'}
+          </p>
         )}
-      </section>
+      </div>
     </div>
   );
 }
