@@ -15,6 +15,20 @@ import {
   MAP_SEARCH_MAX_ZOOM,
   MAP_SEARCH_MIN_ZOOM,
   MAP_SEARCH_QUERY_MAX_LENGTH,
+  PLACES_CARD_ADDRESS_MAX_LENGTH,
+  PLACES_CARD_ATTRIBUTION_MAX_LENGTH,
+  PLACES_CARD_CATEGORY_MAX_LENGTH,
+  PLACES_CARD_LOCAL_TIME_MAX_LENGTH,
+  PLACES_CARD_MAX_PHOTOS_PER_PLACE,
+  PLACES_CARD_MAX_PLACES,
+  PLACES_CARD_MAX_RATING,
+  PLACES_CARD_MIN_RATING,
+  PLACES_CARD_NAME_MAX_LENGTH,
+  PLACES_CARD_PHOTO_REFERENCE_MAX_LENGTH,
+  PLACES_CARD_PLACE_ID_MAX_LENGTH,
+  PLACES_SEARCH_NEAR_MAX_LENGTH,
+  PLACES_SEARCH_QUERY_MAX_LENGTH,
+  PLACE_PRICE_LEVELS,
   isKnownInteractiveCardKind,
   type InteractiveCard,
   type MapSearchAction,
@@ -392,6 +406,43 @@ export const MapSearchCardBodySchema = z
     }
   });
 
+const PlacesCardPhotoSchema = z
+  .object({
+    reference: z.string().min(1).max(PLACES_CARD_PHOTO_REFERENCE_MAX_LENGTH),
+    attribution: z.string().min(1).max(PLACES_CARD_ATTRIBUTION_MAX_LENGTH).optional(),
+  })
+  .strict();
+
+const PlacesCardPlaceSchema = z
+  .object({
+    placeId: z.string().min(1).max(PLACES_CARD_PLACE_ID_MAX_LENGTH),
+    name: z.string().min(1).max(PLACES_CARD_NAME_MAX_LENGTH),
+    latitude: LatitudeSchema,
+    longitude: LongitudeSchema,
+    address: z.string().min(1).max(PLACES_CARD_ADDRESS_MAX_LENGTH).optional(),
+    rating: z.number().finite().min(PLACES_CARD_MIN_RATING).max(PLACES_CARD_MAX_RATING).optional(),
+    reviewCount: z.number().int().nonnegative().optional(),
+    category: z.string().min(1).max(PLACES_CARD_CATEGORY_MAX_LENGTH).optional(),
+    priceLevel: z.enum(PLACE_PRICE_LEVELS).optional(),
+    openNow: z.boolean().optional(),
+    directionsUrl: HttpsUrlSchema.optional(),
+    websiteUrl: HttpsUrlSchema.optional(),
+    photos: z.array(PlacesCardPhotoSchema).max(PLACES_CARD_MAX_PHOTOS_PER_PLACE).optional(),
+  })
+  .strict();
+
+export const PlacesCardBodySchema = z
+  .object({
+    query: z.string().min(1).max(PLACES_SEARCH_QUERY_MAX_LENGTH),
+    near: z.string().min(1).max(PLACES_SEARCH_NEAR_MAX_LENGTH).optional(),
+    openNowRequested: z.boolean(),
+    localTime: z.string().min(1).max(PLACES_CARD_LOCAL_TIME_MAX_LENGTH).optional(),
+    attribution: z.string().min(1).max(PLACES_CARD_ATTRIBUTION_MAX_LENGTH),
+    termsUrl: HttpsUrlSchema.optional(),
+    places: z.array(PlacesCardPlaceSchema).max(PLACES_CARD_MAX_PLACES),
+  })
+  .strict();
+
 export const McpAppCardBodySchema = z
   .object({
     payloadId: z.string().uuid(),
@@ -426,7 +477,9 @@ export function parseInteractiveCardDelta(payload: unknown): InteractiveCard | n
         ? ItineraryCardBodySchema.safeParse(rawBody)
         : kind === 'map-search.v1'
           ? MapSearchCardBodySchema.safeParse(rawBody)
-          : McpAppCardBodySchema.safeParse(rawBody);
+          : kind === 'places.v1'
+            ? PlacesCardBodySchema.safeParse(rawBody)
+            : McpAppCardBodySchema.safeParse(rawBody);
   if (!parsed.success) return { ...common, recognized: false, kind };
 
   return { ...common, recognized: true, kind, body: parsed.data } as InteractiveCard;

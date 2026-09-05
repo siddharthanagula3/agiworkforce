@@ -184,6 +184,7 @@ import {
   MANAGED_OFFICE_FILE_TOOL_NAME,
 } from '@/lib/services/managed-office-file-service';
 import { executeMapSearchTool, isMapSearchTool } from '@/lib/services/map-search-tool-service';
+import { buildPlacesCard } from '@/lib/places/places-card';
 import {
   executePlacesSearch,
   formatPlacesResultForModel,
@@ -1487,7 +1488,10 @@ async function runMcpTool(
       timeZone: executionContext?.clientTimeZone,
       signal: executionContext?.signal,
     });
-    return { content: formatPlacesResultForModel(outcome), isError: !outcome.ok };
+    const content = formatPlacesResultForModel(outcome);
+    if (!outcome.ok) return { content, isError: true };
+    const card = buildPlacesCard(outcome.payload, { toolCallId: toolCall.id });
+    return card ? { content, isError: false, interactiveCard: card } : { content, isError: false };
   }
 
   if (isClarifyTool(toolCall.qualifiedName)) {
