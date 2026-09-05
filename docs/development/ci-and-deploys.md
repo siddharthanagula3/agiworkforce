@@ -124,7 +124,20 @@ state and scheduling durability ticket passes its two-replica proof.
 
 ## Local fast gate
 
-`.husky/pre-push` runs:
+`.husky/pre-push` delegates to `scripts/prepush-clean-worktree.sh`, which judges
+the commits being pushed rather than the shared working tree. It creates a
+detached linked worktree of `HEAD` under a temp directory
+(`AGI_PREPUSH_WORKTREE_PARENT` to override, default
+`${TMPDIR:-/tmp}/agi-prepush-worktree`), symlinks each workspace package's
+`node_modules` contents into it, runs the guard chain there, then removes the
+worktree on every exit path. A guard that reads `git ls-files -co
+--exclude-standard` (AGENTS.md §12) sees only what is in `HEAD`, so an
+uncommitted or untracked file elsewhere in the shared tree can no longer block
+someone else's push; CI enforces the same chain against the same commits.
+
+The chain and diff commands are overridable
+(`AGI_PREPUSH_CHAIN_CMD`, `AGI_PREPUSH_DIFF_CMD`, `AGI_PREPUSH_DIFF_CACHED_CMD`)
+for testing; the real hook runs the defaults:
 
 ```bash
 pnpm check:llm-operability
@@ -132,5 +145,7 @@ git diff --check
 git diff --cached --check
 ```
 
-`SKIP_PRE_PUSH=1` remains an emergency-only escape hatch and must be disclosed
-in the pull request or handoff.
+`AGI_PREPUSH_ON_TREE=1` restores the previous behavior, running the same three
+commands directly against the working tree. `SKIP_PRE_PUSH=1` remains an
+emergency-only escape hatch and must be disclosed in the pull request or
+handoff.
