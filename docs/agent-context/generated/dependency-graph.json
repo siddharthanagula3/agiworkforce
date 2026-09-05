@@ -27,6 +27,7 @@
       "@agiworkforce/mobile",
       "@agiworkforce/model-registry",
       "@agiworkforce/object-storage",
+      "@agiworkforce/observability",
       "@agiworkforce/provider-protocol",
       "@agiworkforce/provider-runtime",
       "@agiworkforce/providers-anthropic",
@@ -177,6 +178,10 @@
       {
         "from": "@agiworkforce/extension",
         "to": "@agiworkforce/design-tokens"
+      },
+      {
+        "from": "@agiworkforce/extension",
+        "to": "@agiworkforce/observability"
       },
       {
         "from": "@agiworkforce/extension",
@@ -753,6 +758,10 @@
       {
         "from": "agi-workforce",
         "to": "@agiworkforce/design-tokens"
+      },
+      {
+        "from": "agi-workforce",
+        "to": "@agiworkforce/observability"
       },
       {
         "from": "agi-workforce",

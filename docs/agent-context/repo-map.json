@@ -936,6 +936,21 @@
       ]
     },
     {
+      "path": "packages/platform/observability",
+      "kind": "package",
+      "canonicalOwner": "Backend and data",
+      "consumers": ["apps/extension", "apps/extension-vscode"],
+      "deployability": "client-library",
+      "trustBoundary": "error reporting behind an adapter port, gated by user consent and scrubbed of message text, file paths and urls before send",
+      "status": "active",
+      "action": "keep",
+      "evidence": [
+        "packages/platform/observability/src/client.ts",
+        "packages/platform/observability/src/index.ts",
+        "packages/platform/observability/src/scrub.ts"
+      ]
+    },
+    {
       "path": "packages/platform/key-value",
       "kind": "package",
       "canonicalOwner": "Backend and data",
