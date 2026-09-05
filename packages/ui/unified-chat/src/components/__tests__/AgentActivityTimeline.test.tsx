@@ -176,13 +176,23 @@ describe('AgentActivityTimeline', () => {
     expect(trigger.getAttribute('aria-expanded')).toBe('true');
     expect(trigger.textContent).toContain('Reading 1 source');
     expect(trigger.textContent).not.toMatch(/Working for|\bs\b · |Done in/i);
-    expect(screen.getByText('Official agent documentation')).toBeTruthy();
-    expect(screen.getByText('example.com')).toBeTruthy();
+    expect(screen.getByText(/Searching official sources · agent documentation/)).toBeTruthy();
+    expect(screen.queryByText('Official agent documentation')).toBeNull();
+    expect(screen.queryByText('example.com')).toBeNull();
 
     fireEvent.click(trigger);
     const collapsed = screen.getByRole('button', { name: /show agent activity/i });
     expect(collapsed.getAttribute('aria-expanded')).toBe('false');
+    expect(screen.queryByText(/Searching official sources · agent documentation/)).toBeNull();
+  });
+
+  it('keeps search results out of the transcript, naming the query on the trace row', () => {
+    render(<AgentActivityTimeline activity={activity()} />);
+
+    expect(screen.getByText(/Searching official sources · agent documentation/)).toBeTruthy();
     expect(screen.queryByText('Official agent documentation')).toBeNull();
+    expect(screen.queryByRole('link', { name: /Official agent documentation/ })).toBeNull();
+    expect(screen.queryByLabelText('Sources')).toBeNull();
   });
 
   it('collapses a completed run to its summary pill', () => {
@@ -791,5 +801,169 @@ describe('AgentActivityTimeline · connector authorization required', () => {
     });
     render(<AgentActivityTimeline activity={forged} />);
     expect(screen.queryByTestId('connector-connect-card')).toBeNull();
+  });
+});
+
+describe('AgentActivityTimeline height reservation', () => {
+  const ROWS_HEIGHT_PX = 180;
+
+  function stubRowHeight(height: number) {
+    return vi.spyOn(HTMLElement.prototype, 'offsetHeight', 'get').mockImplementation(function (
+      this: HTMLElement,
+    ) {
+      return this.dataset['testid'] === 'agent-activity-rows' ? height : 0;
+    });
+  }
+
+  it('keeps the tallest measured height while the run is live', () => {
+    const spy = stubRowHeight(ROWS_HEIGHT_PX);
+    try {
+      render(<AgentActivityTimeline activity={activity()} />);
+      const rows = screen.getByTestId('agent-activity-rows');
+      expect(rows.style.minHeight).toBe(`${ROWS_HEIGHT_PX}px`);
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  it('releases the reserved height once the run has finished', () => {
+    const spy = stubRowHeight(ROWS_HEIGHT_PX);
+    try {
+      const { rerender } = render(<AgentActivityTimeline activity={activity()} />);
+      expect(screen.getByTestId('agent-activity-rows').style.minHeight).toBe(`${ROWS_HEIGHT_PX}px`);
+
+      rerender(
+        <AgentActivityTimeline
+          activity={activity({ status: 'completed', completedAtMs: 2_000 })}
+          defaultExpanded
+        />,
+      );
+      const trigger = screen.getByRole('button', { name: /show agent activity/i });
+      fireEvent.click(trigger);
+      expect(screen.getByTestId('agent-activity-rows').style.minHeight).toBe('');
+    } finally {
+      spy.mockRestore();
+    }
+  });
+});
+
+describe('AgentActivityTimeline failure row', () => {
+  const REASON = 'the provider is over its spending cap for this project';
+
+  function failed() {
+    return activity({
+      status: 'failed',
+      completedAtMs: 3_000,
+      entries: [
+        {
+          kind: 'progress',
+          id: 'progress:generation:1',
+          progressId: 'generation',
+          summary: 'Response failed',
+          status: 'failed',
+          startedAtMs: 1_000,
+          completedAtMs: 3_000,
+        },
+      ],
+    });
+  }
+
+  it('carries the reason on the run summary line, not on a row of its own', () => {
+    render(
+      <AgentActivityTimeline
+        activity={failed()}
+        failureReason={REASON}
+        failureActions={<button type="button">Retry</button>}
+      />,
+    );
+
+    const trigger = screen.getByRole('button', { name: /agent activity/i });
+    expect(trigger.textContent).toContain(`Response failed: ${REASON}`);
+    expect(screen.getByRole('button', { name: 'Retry' })).toBeTruthy();
+  });
+
+  it('keeps the actions outside the disclosure button', () => {
+    render(
+      <AgentActivityTimeline
+        activity={failed()}
+        failureReason={REASON}
+        failureActions={<button type="button">Retry</button>}
+      />,
+    );
+
+    const disclosure = screen.getByRole('button', { name: /agent activity/i });
+    expect(disclosure.querySelector('button')).toBeNull();
+  });
+
+  it('omits the chevron when there is nothing to expand', () => {
+    const lone = activity({
+      status: 'running',
+      entries: [
+        {
+          kind: 'progress',
+          id: 'progress:generation:1',
+          progressId: 'generation',
+          summary: 'Writing response',
+          status: 'running',
+          startedAtMs: 1_000,
+        },
+      ],
+    });
+
+    render(<AgentActivityTimeline activity={lone} />);
+
+    const trigger = screen.getByRole('button', { name: /agent activity/i });
+    expect(trigger.getAttribute('aria-expanded')).toBeNull();
+    expect(trigger.querySelector('svg.rotate-90')).toBeNull();
+  });
+
+  it('does not repeat the header as its only child row', () => {
+    const lone = activity({
+      status: 'running',
+      entries: [
+        {
+          kind: 'progress',
+          id: 'progress:generation:1',
+          progressId: 'generation',
+          summary: 'Writing response',
+          status: 'running',
+          startedAtMs: 1_000,
+        },
+      ],
+    });
+
+    render(<AgentActivityTimeline activity={lone} />);
+
+    expect(screen.getAllByText('Writing response')).toHaveLength(1);
+  });
+
+  it('still shows a child row when the run has more than one step', () => {
+    const two = activity({
+      status: 'running',
+      entries: [
+        {
+          kind: 'progress',
+          id: 'progress:step-1',
+          progressId: 'step-1',
+          summary: 'Reading the brief',
+          status: 'completed',
+          startedAtMs: 1_000,
+          completedAtMs: 1_500,
+        },
+        {
+          kind: 'progress',
+          id: 'progress:generation:1',
+          progressId: 'generation',
+          summary: 'Writing response',
+          status: 'running',
+          startedAtMs: 1_600,
+        },
+      ],
+    });
+
+    render(<AgentActivityTimeline activity={two} />);
+
+    expect(screen.getByText('Reading the brief')).toBeTruthy();
+    expect(screen.getAllByText('Writing response').length).toBeGreaterThanOrEqual(1);
   });
 });
