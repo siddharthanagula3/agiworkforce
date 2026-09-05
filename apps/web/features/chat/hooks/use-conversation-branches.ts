@@ -18,6 +18,8 @@ import { toast } from 'sonner';
 
 type BranchGroupsByMessageId = Readonly<Record<string, ManagedCloudConversationBranchGroup>>;
 
+const CONVERSATION_ABSENT_STATUS = 404;
+
 export interface UseConversationBranchesResult {
   groupsByMessageId: BranchGroupsByMessageId;
   branchingMessageId: string | null;
@@ -44,9 +46,22 @@ export function useConversationBranches(
     };
   }, [getToken, isLoaded, isSignedIn]);
 
+  // Branch groups only exist for a conversation the server has stored. Asking
+  // about one the store has not seen yet, which is every chat between routing
+  // to it and its first save, spends a request to be told 404 and leaves that
+  // 404 in the browser's own network log. A conversation the store does not
+  // list at all is still asked about, because that is what a fresh deep link
+  // looks like before the list arrives.
+  const conversationIsPending = useChatStore((state) =>
+    conversationId === null
+      ? false
+      : state.conversations.length > 0 &&
+        !state.conversations.some((conversation) => conversation.id === conversationId),
+  );
+
   useEffect(() => {
     setGroups([]);
-    if (!conversationId || !isLoaded || !isSignedIn) return;
+    if (!conversationId || !isLoaded || !isSignedIn || conversationIsPending) return;
 
     const controller = new AbortController();
     void getHeaders()
@@ -57,6 +72,11 @@ export function useConversationBranches(
         }),
       )
       .then(async (response) => {
+        // A conversation the server has not persisted yet, which is every brand
+        // new chat for the moment between routing to it and its first save,
+        // answers 404. It has no branches, which is an answer rather than a
+        // fault, so it is not worth an error in the console on every new chat.
+        if (response.status === CONVERSATION_ABSENT_STATUS) return null;
         if (!response.ok) {
           const body = await response.json().catch(() => ({}));
           throw new Error(body.error?.message || 'Could not load conversation branches');
@@ -64,7 +84,8 @@ export function useConversationBranches(
         return ManagedCloudConversationBranchesResponseSchema.parse(await response.json());
       })
       .then((response) => {
-        if (!controller.signal.aborted) setGroups(response.groups);
+        if (controller.signal.aborted) return;
+        setGroups(response?.groups ?? []);
       })
       .catch((error: unknown) => {
         if (controller.signal.aborted) return;
@@ -72,7 +93,7 @@ export function useConversationBranches(
       });
 
     return () => controller.abort();
-  }, [conversationId, getHeaders, isLoaded, isSignedIn]);
+  }, [conversationId, conversationIsPending, getHeaders, isLoaded, isSignedIn]);
 
   const groupsByMessageId = useMemo<BranchGroupsByMessageId>(
     () => Object.fromEntries(groups.map((group) => [group.messageId, group])),
