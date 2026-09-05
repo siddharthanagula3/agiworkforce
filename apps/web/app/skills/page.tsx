@@ -1,12 +1,12 @@
 'use client';
 
 import { Suspense } from 'react';
-import { useAuth } from '@clerk/nextjs';
+import { useSession } from '@/lib/identity/client';
 import { SettingsModalRedirect } from '@/features/settings/components/SettingsModalRedirect';
 import { SignedOutSkills } from './SignedOutSkills';
 
 function SkillsRoute() {
-  const { isSignedIn, isLoaded } = useAuth();
+  const { isSignedIn, isLoaded } = useSession();
 
   if (!isLoaded) return null;
   if (!isSignedIn) return <SignedOutSkills />;

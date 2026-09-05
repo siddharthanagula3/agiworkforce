@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { useClerk } from '@clerk/nextjs';
+import { useSignOut } from '@/lib/identity/client';
 
 /**
  * Breaks the sign-in redirect loop.
@@ -30,7 +30,7 @@ export function StaleSessionRecovery({
   loginUrl: string;
   alreadyRetried: boolean;
 }) {
-  const { signOut } = useClerk();
+  const signOut = useSignOut();
   const started = useRef(false);
   const [failed, setFailed] = useState(false);
 

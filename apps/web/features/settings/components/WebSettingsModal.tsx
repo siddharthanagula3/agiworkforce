@@ -6,7 +6,7 @@ import {
   skillAuthoringCapability,
 } from '@features/skills/services/skills-catalog';
 import { usePathname } from 'next/navigation';
-import { useAuth } from '@clerk/nextjs';
+import { useSession } from '@/lib/identity/client';
 import { useBillingStore } from '@shared/stores/web-auth-store';
 import { z } from 'zod';
 import { Brain, Mic } from 'lucide-react';
@@ -431,7 +431,7 @@ export function WebSettingsModal({
   // can refresh through Clerk's handshake redirect. A fetch that relies on it
   // alone starts 401ing as soon as it goes stale, so mint a fresh token the
   // way the chat sync client does and send it explicitly.
-  const { getToken } = useAuth();
+  const { getToken } = useSession();
   const authedHeaders = useCallback(
     async (base?: Record<string, string>): Promise<Record<string, string>> => {
       const token = await getToken();

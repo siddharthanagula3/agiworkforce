@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useAuth } from '@clerk/nextjs';
+import { useSession } from '@/lib/identity/client';
 
 /**
  * The account-wide artifact index (migration 0121, `GET /api/artifacts/index`).
@@ -36,7 +36,7 @@ interface ArtifactIndexState {
 }
 
 export function useArtifactIndex(): ArtifactIndexState {
-  const { isLoaded, isSignedIn, getToken } = useAuth();
+  const { isLoaded, isSignedIn, getToken } = useSession();
   const [state, setState] = useState<ArtifactIndexState>({ artifacts: [], loaded: false });
 
   useEffect(() => {

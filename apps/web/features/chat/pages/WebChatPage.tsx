@@ -5,7 +5,7 @@ import { retryableUserMessageId } from '@/features/chat/lib/retryable-turn';
 import { putActiveLeafMessageId } from '@/features/chat/lib/activeLeafSelection';
 import { readChatMutationError } from '@/features/chat/lib/chatMutationError';
 import { useTranslation } from 'react-i18next';
-import { useAuth, useClerk, useUser } from '@clerk/nextjs';
+import { useCurrentUser, useSession, useSignOut } from '@/lib/identity/client';
 import { useRouter, useParams, useSearchParams, usePathname } from 'next/navigation';
 import { ToolApprovalProvider, InteractiveCardResumeProvider } from '@/lib/hooks/useChatStream';
 import { interactiveCardNeedsResume } from '@/app/api/interactive-cards/response-contract';
@@ -384,9 +384,9 @@ interface ChatAccountIdentity {
 export function resolveChatAccountUser(
   canonicalUser: ChatAccountIdentity | null,
   compatibilityUser: ChatAccountIdentity | null,
-  clerkUser: ChatAccountIdentity | null = null,
+  providerUser: ChatAccountIdentity | null = null,
 ): ChatAccountIdentity | null {
-  return canonicalUser ?? compatibilityUser ?? clerkUser;
+  return canonicalUser ?? compatibilityUser ?? providerUser;
 }
 
 export function resolveChatAccountDisplay(
@@ -741,7 +741,7 @@ export default function WebChatPage({ initialWorkMode }: WebChatPageProps) {
   // is chosen in Settings → General, which states that coverage honestly
   // instead of implying the whole chat UI switches language.
   const { t } = useTranslation(['chat', 'common']);
-  const { getToken, isLoaded: authLoaded, userId } = useAuth();
+  const { getToken, isLoaded: authLoaded, userId } = useSession();
   const router = useRouter();
   const params = useParams();
   const searchParams = useSearchParams();
@@ -942,26 +942,25 @@ export default function WebChatPage({ initialWorkMode }: WebChatPageProps) {
   const [projectSettingsId, setProjectSettingsId] = useState<string | null>(null);
 
   // Web-specific hooks for the sidebar footer slot.
-  const { signOut: clerkSignOut } = useClerk();
-  const { user: clerkUser } = useUser();
+  const identitySignOut = useSignOut();
+  const { user: identityUser } = useCurrentUser();
   const isWorkspaceAdmin = useIsWorkspaceAdmin();
   const { user: compatibilityUser, logout } = useAuthStore();
   const canonicalUser = useBillingStore((s) => s.user);
   const clerkAccountUser = useMemo<ChatAccountIdentity | null>(() => {
-    if (!clerkUser) return null;
+    if (!identityUser) return null;
     const name =
-      clerkUser.fullName ||
-      [clerkUser.firstName, clerkUser.lastName].filter(Boolean).join(' ') ||
-      clerkUser.username ||
+      identityUser.fullName ||
+      [identityUser.firstName, identityUser.lastName].filter(Boolean).join(' ') ||
+      identityUser.username ||
       undefined;
-    const email =
-      clerkUser.primaryEmailAddress?.emailAddress ?? clerkUser.emailAddresses[0]?.emailAddress;
+    const email = identityUser.email ?? identityUser.emails[0];
     return {
-      id: clerkUser.id,
+      id: identityUser.id,
       ...(name ? { name } : {}),
       ...(email ? { email } : {}),
     };
-  }, [clerkUser]);
+  }, [identityUser]);
   const user = resolveChatAccountUser(canonicalUser, compatibilityUser, clerkAccountUser);
   const subscription = useBillingStore((s) => s.subscription);
   // Skills, Plugins, and Connectors live in the Settings modal (single home).
@@ -4537,8 +4536,8 @@ export default function WebChatPage({ initialWorkMode }: WebChatPageProps) {
 
   const handleLogout = useCallback(async () => {
     await logout();
-    await clerkSignOut({ redirectUrl: '/login' });
-  }, [clerkSignOut, logout]);
+    await identitySignOut({ redirectUrl: '/login' });
+  }, [identitySignOut, logout]);
 
   const currentTier = subscription?.tier;
   const {

@@ -1,6 +1,6 @@
 'use client';
 
-import { useAuth } from '@clerk/nextjs';
+import { useSession } from '@/lib/identity/client';
 import { Header } from '@shared/components/layout/Header';
 import { MarketingFooter } from '@/features/marketing/components/MarketingFooter';
 import { Button, ButtonRow, Eyebrow, Prose, Stack } from '@/features/marketing/components/system';
@@ -9,7 +9,7 @@ const RETURN_PATH = '/auth/chrome-extension';
 const SIGN_IN_PATH = `/login?redirectTo=${encodeURIComponent(RETURN_PATH)}`;
 
 export default function ChromeExtensionAuthCompletePage() {
-  const { isLoaded, isSignedIn } = useAuth();
+  const { isLoaded, isSignedIn } = useSession();
 
   return (
     <div data-design="agi" className="agi-ds-page">

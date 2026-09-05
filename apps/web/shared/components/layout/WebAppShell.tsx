@@ -22,7 +22,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
-import { useClerk } from '@clerk/nextjs';
+import { useSignOut } from '@/lib/identity/client';
 import { ChevronUp, Menu } from '@agiworkforce/icons';
 import {
   Sheet,
@@ -86,7 +86,7 @@ export function WebAppShell({ children, narrowHeaderSlot }: WebAppShellProps) {
   const router = useRouter();
   const pathname = usePathname();
   const { openSettings } = useSettingsModal();
-  const { signOut: clerkSignOut } = useClerk();
+  const identitySignOut = useSignOut();
   const { user, logout, isLoading: isAuthLoading, initialized: isAuthInitialized } = useAuthStore();
   const isWorkspaceAdmin = useIsWorkspaceAdmin();
   const subscription = useBillingStore((s) => s.subscription);
@@ -305,8 +305,8 @@ export function WebAppShell({ children, narrowHeaderSlot }: WebAppShellProps) {
 
   const handleLogout = useCallback(async () => {
     await logout();
-    await clerkSignOut({ redirectUrl: '/login' });
-  }, [clerkSignOut, logout]);
+    await identitySignOut({ redirectUrl: '/login' });
+  }, [identitySignOut, logout]);
 
   const isAccountLoading =
     !isAuthInitialized || isAuthLoading || !isBillingInitialized || isBillingLoading;

@@ -1,6 +1,6 @@
 'use client';
 
-import { useClerk, useUser } from '@clerk/nextjs';
+import { useCurrentUser, useSignOut } from '@/lib/identity/client';
 import { Suspense, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
@@ -104,8 +104,8 @@ function parseDeviceAuthorizationDetails(body: unknown): DeviceAuthorizationDeta
 function DeviceForm() {
   const searchParams = useSearchParams();
   const { t, i18n } = useTranslation(['auth', 'common']);
-  const { isLoaded, isSignedIn, user } = useUser();
-  const { signOut } = useClerk();
+  const { isLoaded, isSignedIn, user } = useCurrentUser();
+  const signOut = useSignOut();
   const isDesktopSurface = searchParams.get('surface') === 'desktop';
   const [code, setCode] = useState(formatUserCode(searchParams.get('user_code') || ''));
   const [details, setDetails] = useState<DeviceAuthorizationDetails | null>(null);
@@ -125,12 +125,11 @@ function DeviceForm() {
   const signInHref = isDesktopSurface
     ? `/login?surface=desktop&redirectTo=${encodeURIComponent(redirectPath)}`
     : `/login?redirectTo=${encodeURIComponent(redirectPath)}`;
-  const accountEmail =
-    user?.primaryEmailAddress?.emailAddress ?? user?.emailAddresses[0]?.emailAddress ?? null;
+  const accountEmail = user?.email ?? user?.emails[0] ?? null;
   const accountName =
-    user?.fullName?.trim() ||
+    user?.fullName ||
     [user?.firstName, user?.lastName].filter(Boolean).join(' ').trim() ||
-    user?.username?.trim() ||
+    user?.username ||
     null;
   const hasCompleteCode = /^[A-Z0-9]{4}-[A-Z0-9]{4}$/.test(code);
 

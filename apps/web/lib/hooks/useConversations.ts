@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { toUserMessage } from '@/lib/user-error-message';
-import { useAuth } from '@clerk/nextjs';
+import { useSession } from '@/lib/identity/client';
 import { useChatProjectStore } from '@agiworkforce/unified-chat';
 import { useChatStore, type Conversation, type Message } from '@shared/stores/web-chat-store';
 import { addCsrfHeaders } from '@/lib/client/csrf';
@@ -70,7 +70,7 @@ function parseRetryAfterMs(header: string | null): number | null {
 // getToken is not reference-stable across renders while Clerk settles; a ref
 // keeps getAuthHeaders (and everything derived from it) stable instead.
 function useConversationAuthHeaders() {
-  const { getToken, isLoaded, isSignedIn } = useAuth();
+  const { getToken, isLoaded, isSignedIn } = useSession();
   const getTokenRef = useRef(getToken);
   getTokenRef.current = getToken;
   const getAuthHeaders = useCallback(async () => {

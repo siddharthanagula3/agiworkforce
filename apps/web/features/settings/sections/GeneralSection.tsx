@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Check, Monitor, Sun, Moon } from 'lucide-react';
 import { useAppTheme as useTheme } from '@shared/hooks/useAppTheme';
 import { useBillingStore } from '@shared/stores/web-auth-store';
-import { useUser } from '@clerk/nextjs';
+import { useCurrentUser } from '@/lib/identity/client';
 import { LanguageSelector } from '@/features/settings/components/LanguageSelector';
 import { useTTS } from '@/lib/hooks/useTTS';
 import { useModelStore } from '@shared/stores/model-store';
@@ -105,13 +105,13 @@ export function GeneralSection() {
   const { theme: nextTheme, setTheme: setNextTheme } = useTheme();
   const user = useBillingStore((s) => s.user);
   const billingInitialized = useBillingStore((s) => s.initialized);
-  const { user: clerkUser, isLoaded: clerkLoaded } = useUser();
+  const { user: identityUser, isLoaded: identityLoaded } = useCurrentUser();
 
   const [mounted, setMounted] = useState(false);
   const [preferencesLoaded, setPreferencesLoaded] = useState(false);
 
   const serverProfile = user?.profile;
-  const accountEmail = user?.email ?? clerkUser?.primaryEmailAddress?.emailAddress ?? '';
+  const accountEmail = user?.email ?? identityUser?.email ?? '';
 
   const [displayName, setDisplayName] = useState('');
   const [preferredName, setPreferredName] = useState('');
@@ -144,11 +144,14 @@ export function GeneralSection() {
     const fallbackFullName =
       serverProfile?.display_name ??
       user?.name ??
-      clerkUser?.fullName ??
+      identityUser?.fullName ??
       accountEmail.split('@')[0] ??
       '';
     const fallbackPreferredName =
-      serverProfile?.preferred_name ?? clerkUser?.firstName ?? fallbackFullName.split(' ')[0] ?? '';
+      serverProfile?.preferred_name ??
+      identityUser?.firstName ??
+      fallbackFullName.split(' ')[0] ??
+      '';
 
     setPreferencesLoaded(false);
     setLoadError(null);
@@ -183,14 +186,14 @@ export function GeneralSection() {
     } finally {
       setPreferencesLoaded(true);
     }
-  }, [accountEmail, clerkUser?.firstName, clerkUser?.fullName, serverProfile, user?.name]);
+  }, [accountEmail, identityUser?.firstName, identityUser?.fullName, serverProfile, user?.name]);
 
   useEffect(() => {
     if (hydratedRef.current) return;
-    if (!clerkLoaded || !billingInitialized) return;
+    if (!identityLoaded || !billingInitialized) return;
     hydratedRef.current = true;
     void hydrateProfilePreferences();
-  }, [billingInitialized, clerkLoaded, hydrateProfilePreferences]);
+  }, [billingInitialized, identityLoaded, hydrateProfilePreferences]);
 
   const profilePreferencesReady = preferencesLoaded && loadError === null;
 

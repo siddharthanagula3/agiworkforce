@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useAuth } from '@clerk/nextjs';
+import { useSession } from '@/lib/identity/client';
 import { useState } from 'react';
 import { Button } from '@agiworkforce/ui';
 import { toUserMessage } from '@/lib/user-error-message';
@@ -17,7 +17,7 @@ function getErrorMessage(data: { error?: unknown } | null): string {
 }
 
 export function VerifyDeviceClient({ code }: { code: string }) {
-  const { isLoaded, isSignedIn } = useAuth();
+  const { isLoaded, isSignedIn } = useSession();
   const [loading, setLoading] = useState<'approve' | 'deny' | null>(null);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const signInHref = `/login?redirectTo=${encodeURIComponent(`/verify?code=${encodeURIComponent(code)}`)}`;

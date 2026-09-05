@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
-import { useAuth } from '@clerk/nextjs';
+import { useSession } from '@/lib/identity/client';
 import { X, Code, Layers, Plus } from 'lucide-react';
 import {
   useArtifactsStore,
@@ -1129,7 +1129,7 @@ export function GalleryClient({ chrome = 'marketing' }: GalleryClientProps) {
     setMounted(true);
   }, []);
 
-  const { isLoaded: authLoaded, isSignedIn } = useAuth();
+  const { isLoaded: authLoaded, isSignedIn } = useSession();
   const artifacts = useArtifactsStore((s) => s.artifacts);
   const { artifacts: indexedArtifacts, loaded: indexLoaded } = useArtifactIndex();
 

@@ -2,7 +2,7 @@
 
 import { useMemo } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { useAuth } from '@clerk/nextjs';
+import { useSession } from '@/lib/identity/client';
 import {
   LibraryView as SharedLibraryView,
   type LibraryTransport,
@@ -18,7 +18,7 @@ function surfaceFromParam(value: string | null): SurfaceFilter {
 }
 
 export function LibraryView() {
-  const { isLoaded, isSignedIn } = useAuth();
+  const { isLoaded, isSignedIn } = useSession();
   const searchParams = useSearchParams();
   const initialSurface = surfaceFromParam(searchParams?.get('surface') ?? null);
 
