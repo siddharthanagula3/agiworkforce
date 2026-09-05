@@ -61,13 +61,28 @@ if (fs.existsSync(path.join(root, CLAUDE))) {
 }
 
 const KNOWN_SCOPED = new Set(['apps/web/AGENTS.md', 'apps/web/CLAUDE.md']);
+
+function vendoredSkillPrefixes() {
+  try {
+    const lock = JSON.parse(fs.readFileSync(path.join(root, 'skills-lock.json'), 'utf8'));
+    const skills = lock.skills && typeof lock.skills === 'object' ? lock.skills : {};
+    return Object.values(skills)
+      .filter((skill) => skill?.sourceType && skill.sourceType !== 'first-party')
+      .map((skill) => `${skill.path}/`);
+  } catch {
+    return [];
+  }
+}
+
+const VENDORED_PREFIXES = vendoredSkillPrefixes();
+const isVendored = (file) => VENDORED_PREFIXES.some((prefix) => file.startsWith(prefix));
 const scoped = execFileSync('git', ['ls-files', '*AGENTS.md', '*CLAUDE.md'], {
   cwd: root,
   encoding: 'utf8',
 })
   .split('\n')
   .filter(Boolean)
-  .filter((file) => file.includes('/') && !KNOWN_SCOPED.has(file));
+  .filter((file) => file.includes('/') && !KNOWN_SCOPED.has(file) && !isVendored(file));
 
 for (const file of scoped) {
   errors.push(
