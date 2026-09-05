@@ -12,7 +12,8 @@ vi.mock('@/lib/rate-limit', () => ({
   withRateLimit: vi.fn().mockResolvedValue(null),
 }));
 
-vi.mock('@/lib/server/key-value', () => ({
+vi.mock('@/lib/server/key-value', async (importOriginal) => ({
+  ...(await importOriginal()),
   getKeyValueStore: vi.fn(() => null),
 }));
 

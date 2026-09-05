@@ -15,7 +15,8 @@ vi.mock('../api-auth', () => ({
 }));
 
 const mockGetUser = vi.fn();
-vi.mock('@/lib/server/identity', () => ({
+vi.mock('@/lib/server/identity', async (importOriginal) => ({
+  ...(await importOriginal()),
   getIdentityUser: (...args: unknown[]) => mockGetUser(...args),
 }));
 

@@ -30,7 +30,12 @@ vi.mock('@/lib/logger', () => ({
 }));
 vi.mock('@/lib/rate-limit', () => ({ withRateLimit: vi.fn(async () => null) }));
 vi.mock('@/lib/csrf', () => ({ requireCsrfToken: vi.fn(async () => null) }));
-vi.mock('@/lib/security-audit', () => ({ recordAuditEvent: vi.fn(async () => undefined) }));
+vi.mock('@/lib/security-audit', () => ({
+  recordAuditEvent: vi.fn(async () => undefined),
+  BLOCK_APPEAL_PATH: '/support',
+  getClientIp: vi.fn(),
+  logRateLimitExceeded: vi.fn(async () => undefined),
+}));
 vi.mock('@/lib/api-auth', () => ({ getClerkAuthUser: vi.fn(async () => ({ userId: 'user-1' })) }));
 vi.mock('@/lib/cors', () => ({
   withCorsRoute: <T>(handler: T) => handler,
@@ -45,7 +50,8 @@ vi.mock('@/lib/github-app', () => ({
   postIssueComment: vi.fn(),
   postPrReview: vi.fn(),
 }));
-vi.mock('@/lib/egress-policy', () => ({
+vi.mock('@/lib/egress-policy', async (importOriginal) => ({
+  ...(await importOriginal()),
   assertResolvedPublicHostname: vi.fn(async () => undefined),
   EgressPolicyError: class EgressPolicyError extends Error {},
 }));

@@ -46,6 +46,8 @@ vi.mock('@/lib/connectors/oauth-store', () => ({
   getConnectorOAuthGrant: (...a: unknown[]) => mocks.getGrant(...a),
   updateConnectorOAuthGrantTokens: (...a: unknown[]) => mocks.updateTokens(...a),
   revokeConnectorOAuthGrant: (...a: unknown[]) => mocks.revokeGrant(...a),
+  createPendingAuthorization: vi.fn(),
+  upsertConnectorOAuthGrant: vi.fn(),
 }));
 
 vi.mock('@/lib/connectors/oauth-client', () => ({
