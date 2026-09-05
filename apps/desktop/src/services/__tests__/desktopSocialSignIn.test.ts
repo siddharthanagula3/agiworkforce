@@ -1,4 +1,3 @@
-
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('../../lib/runtimeEnvironment', () => ({
@@ -29,7 +28,8 @@ vi.mock('../clerkNativeAuth', async () => {
 import { open as shellOpen } from '@tauri-apps/plugin-shell';
 import { ClerkAuthError, type ClerkSignIn } from '../clerkNativeAuth';
 import {
-  SOCIAL_PROVIDERS,
+  configuredSocialProviders,
+  socialSignInStrategy,
   SSO_REDIRECT_URL,
   beginSocialSignIn,
   completeSocialSignIn,
@@ -60,13 +60,21 @@ describe('desktopSocialSignIn', () => {
     vi.restoreAllMocks();
   });
 
-  it('offers the three providers that forbid embedded-webview OAuth', () => {
-    expect(SOCIAL_PROVIDERS.map((provider) => provider.strategy)).toEqual([
-      'oauth_google',
-      'oauth_microsoft',
-      'oauth_apple',
-    ]);
+  it('reads the provider catalogue the web surface uses, not a second list', () => {
+    const providers = configuredSocialProviders();
+
+    expect(providers.length).toBeGreaterThan(0);
+    expect(providers.map((provider) => socialSignInStrategy(provider.id))).toEqual(
+      providers.map((provider) => `oauth_${provider.id}`),
+    );
     expect(SSO_REDIRECT_URL).toBe('agiworkforce://sso-callback');
+  });
+
+  it('keeps every provider on the system browser, which is why the list is shared', () => {
+    for (const provider of configuredSocialProviders()) {
+      expect(socialSignInStrategy(provider.id)).toMatch(/^oauth_/);
+      expect(provider.label.length).toBeGreaterThan(0);
+    }
   });
 
   it('opens the provider URL in the system browser, not a child webview', async () => {

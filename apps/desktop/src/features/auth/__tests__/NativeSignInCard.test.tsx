@@ -1,4 +1,3 @@
-
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -12,7 +11,7 @@ vi.mock('../../../lib/runtimeEnvironment', () => ({
 }));
 
 const clerk = {
-  createPasswordSignIn: vi.fn(),
+  attemptPassword: vi.fn(),
   createIdentifierSignIn: vi.fn(),
   prepareEmailCode: vi.fn(),
   attemptEmailCode: vi.fn(),
@@ -28,7 +27,7 @@ vi.mock('../../../services/clerkNativeAuth', async () => {
   );
   return {
     ...actual,
-    createPasswordSignIn: (...args: unknown[]) => clerk.createPasswordSignIn(...args),
+    attemptPassword: (...args: unknown[]) => clerk.attemptPassword(...args),
     createIdentifierSignIn: (...args: unknown[]) => clerk.createIdentifierSignIn(...args),
     prepareEmailCode: (...args: unknown[]) => clerk.prepareEmailCode(...args),
     attemptEmailCode: (...args: unknown[]) => clerk.attemptEmailCode(...args),
@@ -92,11 +91,24 @@ function signIn(overrides: Partial<ClerkSignIn> = {}): ClerkSignIn {
   };
 }
 
-function typeCredentials(email = 'demo@example.com', password = 'hunter2') {
-  fireEvent.change(screen.getByLabelText('Email'), { target: { value: email } });
-  if (password) {
-    fireEvent.change(screen.getByLabelText('Password'), { target: { value: password } });
-  }
+const CONTINUE = /^continue$/i;
+
+function submitEmail(email = 'demo@example.com') {
+  fireEvent.change(screen.getByLabelText('Email address'), { target: { value: email } });
+  fireEvent.click(screen.getByRole('button', { name: CONTINUE }));
+}
+
+async function submitPassword(password = 'hunter2') {
+  fireEvent.change(await screen.findByLabelText('Password'), { target: { value: password } });
+  fireEvent.click(screen.getByRole('button', { name: CONTINUE }));
+}
+
+function passwordAccount() {
+  return signIn({
+    status: 'needs_first_factor',
+    createdSessionId: null,
+    supportedFirstFactors: [{ strategy: 'password' }],
+  });
 }
 
 describe('NativeSignInCard', () => {
@@ -127,12 +139,12 @@ describe('NativeSignInCard', () => {
     vi.restoreAllMocks();
   });
 
-  it('renders an inline email + password form with no child window and no device code', () => {
+  it('asks for the email first, inline, with no child window and no device code', () => {
     render(<NativeSignInCard />);
 
-    expect(screen.getByLabelText('Email')).toBeInTheDocument();
-    expect(screen.getByLabelText('Password')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /^sign in$/i })).toBeInTheDocument();
+    expect(screen.getByLabelText('Email address')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: CONTINUE })).toBeInTheDocument();
+    expect(screen.queryByLabelText('Password')).not.toBeInTheDocument();
     expect(screen.queryByText(/checking/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/device code/i)).not.toBeInTheDocument();
     expect(
@@ -140,17 +152,27 @@ describe('NativeSignInCard', () => {
     ).toBeInTheDocument();
   });
 
+  it('asks for a password only when the account has one', async () => {
+    clerk.createIdentifierSignIn.mockResolvedValue(passwordAccount());
+
+    render(<NativeSignInCard />);
+    submitEmail();
+
+    expect(await screen.findByLabelText('Password')).toBeInTheDocument();
+    expect(clerk.createIdentifierSignIn).toHaveBeenCalledWith('demo@example.com');
+    expect(screen.getByText('demo@example.com')).toBeInTheDocument();
+  });
+
   it('signs in with a password and adopts the exchanged credential', async () => {
-    clerk.createPasswordSignIn.mockResolvedValue(signIn());
+    clerk.createIdentifierSignIn.mockResolvedValue(passwordAccount());
+    clerk.attemptPassword.mockResolvedValue(signIn());
     const onSuccess = vi.fn();
 
     render(<NativeSignInCard onSuccess={onSuccess} />);
-    typeCredentials();
-    fireEvent.click(screen.getByRole('button', { name: /^sign in$/i }));
+    submitEmail();
+    await submitPassword();
 
-    await waitFor(() =>
-      expect(clerk.createPasswordSignIn).toHaveBeenCalledWith('demo@example.com', 'hunter2'),
-    );
+    await waitFor(() => expect(clerk.attemptPassword).toHaveBeenCalledWith('sia_1', 'hunter2'));
     await waitFor(() => expect(clerk.createSessionToken).toHaveBeenCalledWith('sess_1'));
     await waitFor(() => expect(exchange).toHaveBeenCalledWith('clerk.session.jwt'));
     await waitFor(() =>
@@ -163,7 +185,7 @@ describe('NativeSignInCard', () => {
   });
 
   it('shows a wrong-password failure as a password problem', async () => {
-    clerk.createPasswordSignIn.mockRejectedValue(
+    clerk.attemptPassword.mockRejectedValue(
       new ClerkAuthError(
         'invalid_credentials',
         'That password is not correct for this email address.',
@@ -174,9 +196,11 @@ describe('NativeSignInCard', () => {
       ),
     );
 
+    clerk.createIdentifierSignIn.mockResolvedValue(passwordAccount());
+
     render(<NativeSignInCard />);
-    typeCredentials();
-    fireEvent.click(screen.getByRole('button', { name: /^sign in$/i }));
+    submitEmail();
+    await submitPassword();
 
     const alert = await screen.findByTestId('native-sign-in-error');
     expect(alert).toHaveTextContent(/password is not correct/i);
@@ -184,7 +208,7 @@ describe('NativeSignInCard', () => {
   });
 
   it('presents a Clerk 5xx as a service fault, never as an account rejection', async () => {
-    clerk.createPasswordSignIn.mockRejectedValue(
+    clerk.attemptPassword.mockRejectedValue(
       new ClerkAuthError(
         'server_error',
         'The AGI account service failed while signing you in (HTTP 500). This is a fault on the service, not a problem with your account or password. Please try again in a moment.',
@@ -192,9 +216,11 @@ describe('NativeSignInCard', () => {
       ),
     );
 
+    clerk.createIdentifierSignIn.mockResolvedValue(passwordAccount());
+
     render(<NativeSignInCard />);
-    typeCredentials();
-    fireEvent.click(screen.getByRole('button', { name: /^sign in$/i }));
+    submitEmail();
+    await submitPassword();
 
     const alert = await screen.findByTestId('native-sign-in-error');
     expect(alert).toHaveTextContent(/HTTP 500/);
@@ -203,7 +229,8 @@ describe('NativeSignInCard', () => {
   });
 
   it('presents an exchange 5xx as a service fault, never as an account rejection', async () => {
-    clerk.createPasswordSignIn.mockResolvedValue(signIn());
+    clerk.createIdentifierSignIn.mockResolvedValue(passwordAccount());
+    clerk.attemptPassword.mockResolvedValue(signIn());
     exchange.mockRejectedValue(
       new NativeSignInExchangeError(
         'server_error',
@@ -212,9 +239,11 @@ describe('NativeSignInCard', () => {
       ),
     );
 
+    clerk.createIdentifierSignIn.mockResolvedValue(passwordAccount());
+
     render(<NativeSignInCard />);
-    typeCredentials();
-    fireEvent.click(screen.getByRole('button', { name: /^sign in$/i }));
+    submitEmail();
+    await submitPassword();
 
     const alert = await screen.findByTestId('native-sign-in-error');
     expect(alert).toHaveTextContent(/HTTP 503/);
@@ -222,20 +251,22 @@ describe('NativeSignInCard', () => {
   });
 
   it('shows a network failure as a connectivity problem', async () => {
-    clerk.createPasswordSignIn.mockRejectedValue(
+    clerk.attemptPassword.mockRejectedValue(
       new ClerkAuthError('network', 'Could not reach the AGI account service: offline'),
     );
 
+    clerk.createIdentifierSignIn.mockResolvedValue(passwordAccount());
+
     render(<NativeSignInCard />);
-    typeCredentials();
-    fireEvent.click(screen.getByRole('button', { name: /^sign in$/i }));
+    submitEmail();
+    await submitPassword();
 
     const alert = await screen.findByTestId('native-sign-in-error');
     expect(alert).toHaveTextContent(/could not reach the agi account service/i);
   });
 
   it('tells an unverified account to use the email code path', async () => {
-    clerk.createPasswordSignIn.mockRejectedValue(
+    clerk.attemptPassword.mockRejectedValue(
       new ClerkAuthError(
         'email_unverified',
         'This email address has not been verified yet. Use "Email me a sign-in code" to verify it and sign in.',
@@ -243,30 +274,36 @@ describe('NativeSignInCard', () => {
       ),
     );
 
+    clerk.createIdentifierSignIn.mockResolvedValue(passwordAccount());
+
     render(<NativeSignInCard />);
-    typeCredentials();
-    fireEvent.click(screen.getByRole('button', { name: /^sign in$/i }));
+    submitEmail();
+    await submitPassword();
 
     const alert = await screen.findByTestId('native-sign-in-error');
     expect(alert).toHaveTextContent(/has not been verified/i);
-    expect(screen.getByRole('button', { name: /email me a sign-in code/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /email me a code instead/i })).toBeInTheDocument();
   });
 
-  it('validates locally before calling Clerk', async () => {
+  it('validates each step locally before calling the account service', async () => {
+    clerk.createIdentifierSignIn.mockResolvedValue(passwordAccount());
+
     render(<NativeSignInCard />);
-    fireEvent.click(screen.getByRole('button', { name: /^sign in$/i }));
+    fireEvent.click(screen.getByRole('button', { name: CONTINUE }));
 
     expect(await screen.findByTestId('native-sign-in-error')).toHaveTextContent(
       /enter the email address/i,
     );
-    expect(clerk.createPasswordSignIn).not.toHaveBeenCalled();
+    expect(clerk.createIdentifierSignIn).not.toHaveBeenCalled();
 
-    fireEvent.change(screen.getByLabelText('Email'), { target: { value: 'demo@example.com' } });
-    fireEvent.click(screen.getByRole('button', { name: /^sign in$/i }));
+    submitEmail();
+    await screen.findByLabelText('Password');
+    fireEvent.click(screen.getByRole('button', { name: CONTINUE }));
+
     expect(await screen.findByTestId('native-sign-in-error')).toHaveTextContent(
       /enter your password/i,
     );
-    expect(clerk.createPasswordSignIn).not.toHaveBeenCalled();
+    expect(clerk.attemptPassword).not.toHaveBeenCalled();
   });
 
   it('runs the email-code flow inline', async () => {
@@ -285,14 +322,13 @@ describe('NativeSignInCard', () => {
     clerk.attemptEmailCode.mockResolvedValue(signIn());
 
     render(<NativeSignInCard />);
-    fireEvent.change(screen.getByLabelText('Email'), { target: { value: 'demo@example.com' } });
-    fireEvent.click(screen.getByRole('button', { name: /email me a sign-in code/i }));
+    submitEmail();
 
     await waitFor(() => expect(clerk.prepareEmailCode).toHaveBeenCalledWith('sia_1', 'idn_1'));
     expect(await screen.findByTestId('native-sign-in-notice')).toHaveTextContent(/d\*\*\*@e\.com/);
 
-    fireEvent.change(await screen.findByLabelText('Sign-in code'), { target: { value: '424242' } });
-    fireEvent.click(screen.getByRole('button', { name: /verify and sign in/i }));
+    fireEvent.change(await screen.findByLabelText('Code'), { target: { value: '424242' } });
+    fireEvent.click(screen.getByRole('button', { name: CONTINUE }));
 
     await waitFor(() => expect(clerk.attemptEmailCode).toHaveBeenCalledWith('sia_1', '424242'));
     await waitFor(() => expect(completeNativeSignIn).toHaveBeenCalled());
@@ -317,20 +353,19 @@ describe('NativeSignInCard', () => {
     );
 
     render(<NativeSignInCard />);
-    fireEvent.change(screen.getByLabelText('Email'), { target: { value: 'demo@example.com' } });
-    fireEvent.click(screen.getByRole('button', { name: /email me a sign-in code/i }));
+    submitEmail();
 
-    fireEvent.change(await screen.findByLabelText('Sign-in code'), { target: { value: '000000' } });
-    fireEvent.click(screen.getByRole('button', { name: /verify and sign in/i }));
+    fireEvent.change(await screen.findByLabelText('Code'), { target: { value: '000000' } });
+    fireEvent.click(screen.getByRole('button', { name: CONTINUE }));
 
     expect(await screen.findByTestId('native-sign-in-error')).toHaveTextContent(
       /code is not correct/i,
     );
-    expect(screen.getByLabelText('Sign-in code')).toBeInTheDocument();
+    expect(screen.getByLabelText('Code')).toBeInTheDocument();
   });
 
   it('says so plainly when an account offers no password and no email code', async () => {
-    clerk.createPasswordSignIn.mockResolvedValue(
+    clerk.createIdentifierSignIn.mockResolvedValue(
       signIn({
         status: 'needs_first_factor',
         createdSessionId: null,
@@ -339,8 +374,7 @@ describe('NativeSignInCard', () => {
     );
 
     render(<NativeSignInCard />);
-    typeCredentials();
-    fireEvent.click(screen.getByRole('button', { name: /^sign in$/i }));
+    submitEmail();
 
     expect(await screen.findByTestId('native-sign-in-error')).toHaveTextContent(
       /cannot be signed in with a password or an email code/i,
@@ -348,7 +382,8 @@ describe('NativeSignInCard', () => {
   });
 
   it('collects a TOTP second factor inline', async () => {
-    clerk.createPasswordSignIn.mockResolvedValue(
+    clerk.createIdentifierSignIn.mockResolvedValue(passwordAccount());
+    clerk.attemptPassword.mockResolvedValue(
       signIn({
         status: 'needs_second_factor',
         createdSessionId: null,
@@ -358,13 +393,13 @@ describe('NativeSignInCard', () => {
     clerk.attemptSecondFactor.mockResolvedValue(signIn());
 
     render(<NativeSignInCard />);
-    typeCredentials();
-    fireEvent.click(screen.getByRole('button', { name: /^sign in$/i }));
+    submitEmail();
+    await submitPassword();
 
-    fireEvent.change(await screen.findByLabelText('Authenticator app code'), {
+    fireEvent.change(await screen.findByLabelText('Authenticator code'), {
       target: { value: '123456' },
     });
-    fireEvent.click(screen.getByRole('button', { name: /verify and sign in/i }));
+    fireEvent.click(screen.getByRole('button', { name: CONTINUE }));
 
     await waitFor(() =>
       expect(clerk.attemptSecondFactor).toHaveBeenCalledWith('sia_1', 'totp', '123456'),
@@ -373,7 +408,8 @@ describe('NativeSignInCard', () => {
   });
 
   it('sends the SMS code automatically when phone_code is the only second factor', async () => {
-    clerk.createPasswordSignIn.mockResolvedValue(
+    clerk.createIdentifierSignIn.mockResolvedValue(passwordAccount());
+    clerk.attemptPassword.mockResolvedValue(
       signIn({
         status: 'needs_second_factor',
         createdSessionId: null,
@@ -387,8 +423,8 @@ describe('NativeSignInCard', () => {
     );
 
     render(<NativeSignInCard />);
-    typeCredentials();
-    fireEvent.click(screen.getByRole('button', { name: /^sign in$/i }));
+    submitEmail();
+    await submitPassword();
 
     await waitFor(() =>
       expect(clerk.prepareSecondFactor).toHaveBeenCalledWith('sia_1', {
@@ -401,7 +437,8 @@ describe('NativeSignInCard', () => {
   });
 
   it('refuses an unsupported second factor instead of showing a dead code box', async () => {
-    clerk.createPasswordSignIn.mockResolvedValue(
+    clerk.createIdentifierSignIn.mockResolvedValue(passwordAccount());
+    clerk.attemptPassword.mockResolvedValue(
       signIn({
         status: 'needs_second_factor',
         createdSessionId: null,
@@ -410,23 +447,24 @@ describe('NativeSignInCard', () => {
     );
 
     render(<NativeSignInCard />);
-    typeCredentials();
-    fireEvent.click(screen.getByRole('button', { name: /^sign in$/i }));
+    submitEmail();
+    await submitPassword();
 
     expect(await screen.findByTestId('native-sign-in-error')).toHaveTextContent(
       /second factor agi desktop cannot collect yet/i,
     );
-    expect(screen.queryByLabelText(/code/i)).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Authenticator code')).not.toBeInTheDocument();
   });
 
   it('refuses password reset visibly and hands it to the browser', async () => {
-    clerk.createPasswordSignIn.mockResolvedValue(
+    clerk.createIdentifierSignIn.mockResolvedValue(passwordAccount());
+    clerk.attemptPassword.mockResolvedValue(
       signIn({ status: 'needs_new_password', createdSessionId: null }),
     );
 
     render(<NativeSignInCard />);
-    typeCredentials();
-    fireEvent.click(screen.getByRole('button', { name: /^sign in$/i }));
+    submitEmail();
+    await submitPassword();
 
     const panel = await screen.findByTestId('password-reset-required');
     expect(panel).toHaveTextContent(/does not run password resets in the app/i);

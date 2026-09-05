@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ArrowLeft, ExternalLink, Loader2, Lock, LogIn, Mail, ShieldCheck } from 'lucide-react';
-import { Button } from '@/ui/Button';
-import { Input } from '@/ui/Input';
+import type { AuthProviderId } from '@agiworkforce/client-runtime';
+import { Spinner } from '@/ui/Spinner';
 import { WEB_APP_URL } from '../../api/config';
 import { supportsLocalAppMode } from '../../lib/runtimeEnvironment';
 import { openExternalUrl } from '../../utils/navigation';
@@ -10,9 +9,9 @@ import { selectAuthError, useAuthStore } from '../../stores/auth';
 import {
   ClerkAuthError,
   attemptEmailCode,
+  attemptPassword,
   attemptSecondFactor,
   createIdentifierSignIn,
-  createPasswordSignIn,
   createSessionToken,
   findEmailCodeFactor,
   isNativeClerkSignInConfigured,
@@ -27,12 +26,32 @@ import {
   exchangeClerkSessionForCloudCredential,
 } from '../../services/desktopNativeSignIn';
 import {
-  SOCIAL_PROVIDERS,
   beginSocialSignIn,
   completeSocialSignIn,
+  configuredSocialProviders,
+  socialSignInStrategy,
 } from '../../services/desktopSocialSignIn';
+import { AuthDivider } from './AuthDivider';
+import { AuthField } from './AuthField';
+import { AuthLegalFooter } from './AuthLegalFooter';
+import { AuthPasswordField } from './AuthPasswordField';
+import { AuthProviderButtons } from './AuthProviderButtons';
+import { AuthStepFrame } from './AuthStepFrame';
+import { AuthSubmitButton } from './AuthSubmitButton';
+import {
+  AUTH_ASIDE_CLASS,
+  AUTH_DETAIL_ROW_CLASS,
+  AUTH_ERROR_CLASS,
+  AUTH_FOOTER_LINK_CLASS,
+  AUTH_QUIET_BUTTON_CLASS,
+  AUTH_QUIET_LINKS_CLASS,
+  AUTH_STEP_LINKS_CLASS,
+  AUTH_SWITCH_CLASS,
+} from './authStyles';
 
-type Step = 'credentials' | 'email_code' | 'second_factor' | 'password_reset_required';
+type Step = 'email' | 'password' | 'email_code' | 'second_factor' | 'password_reset_required';
+
+type Busy = null | 'email' | 'password' | 'code' | 'send_code' | 'mfa' | 'browser';
 
 interface NativeSignInCardProps {
   onSuccess?: () => void;
@@ -44,11 +63,27 @@ interface SsoPending {
 }
 
 const SUPPORTED_SECOND_FACTORS = new Set(['totp', 'phone_code', 'backup_code']);
+const PASSWORD_FACTOR = 'password';
+const WEB_SIGNUP_PATH = '/signup';
+const DESKTOP_SURFACE_QUERY = 'surface=desktop';
+
+const HEADINGS: Readonly<Record<Step, string>> = {
+  email: 'Welcome back',
+  password: 'Enter your password',
+  email_code: 'Check your inbox',
+  second_factor: 'Confirm it is you',
+  password_reset_required: 'Set a new password',
+};
+
+const EMAIL_FIELD_LABEL = 'Email address';
+const PASSWORD_FIELD_LABEL = 'Password';
+const CODE_FIELD_LABEL = 'Code';
+const CONTINUE_LABEL = 'Continue';
 
 function secondFactorLabel(factor: ClerkSecondFactor): string {
   switch (factor.strategy) {
     case 'totp':
-      return 'Authenticator app code';
+      return 'Authenticator code';
     case 'phone_code':
       return factor.safeIdentifier
         ? `Text message to ${factor.safeIdentifier}`
@@ -64,9 +99,7 @@ function describeFailure(error: unknown): string {
   if (error instanceof ClerkAuthError || error instanceof NativeSignInExchangeError) {
     return error.message;
   }
-  if (error instanceof Error && error.message) {
-    return error.message;
-  }
+  if (error instanceof Error && error.message) return error.message;
   return 'AGI Desktop hit an unexpected problem while signing you in.';
 }
 
@@ -77,24 +110,24 @@ export function NativeSignInCard({ onSuccess }: NativeSignInCardProps) {
   const storeAuthError = useAuthStore(selectAuthError);
   const setMode = useAppModeStore((state) => state.setMode);
 
-  const [step, setStep] = useState<Step>('credentials');
+  const [step, setStep] = useState<Step>('email');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [code, setCode] = useState('');
   const [signIn, setSignIn] = useState<ClerkSignIn | null>(null);
   const [secondFactor, setSecondFactor] = useState<ClerkSecondFactor | null>(null);
-  const [busy, setBusy] = useState<null | 'password' | 'code' | 'send_code' | 'mfa' | 'browser'>(
-    null,
-  );
+  const [busy, setBusy] = useState<Busy>(null);
   const [ssoPending, setSsoPending] = useState<SsoPending | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const nativeConfigured = isNativeClerkSignInConfigured();
+  const providers = configuredSocialProviders();
   const ssoPendingRef = useRef<SsoPending | null>(null);
   ssoPendingRef.current = ssoPending;
 
   const displayedError = error ?? storeAuthError;
+  const isBusy = busy !== null;
 
   useEffect(() => {
     return () => {
@@ -124,6 +157,22 @@ export function NativeSignInCard({ onSuccess }: NativeSignInCardProps) {
       onSuccess?.();
     },
     [completeNativeSignIn, onSuccess],
+  );
+
+  const sendEmailCodeFor = useCallback(
+    async (created: ClerkSignIn) => {
+      const emailFactor = findEmailCodeFactor(created);
+      if (!emailFactor?.emailAddressId) {
+        setError('This account does not support email sign-in codes. Use your password instead.');
+        return;
+      }
+      const prepared = await prepareEmailCode(created.id, emailFactor.emailAddressId);
+      setSignIn(prepared);
+      setCode('');
+      setStep('email_code');
+      setNotice(`We sent a code to ${emailFactor.safeIdentifier ?? email.trim()}.`);
+    },
+    [email],
   );
 
   const applySignInState = useCallback(
@@ -163,18 +212,18 @@ export function NativeSignInCard({ onSuccess }: NativeSignInCardProps) {
       }
 
       if (next.status === 'needs_first_factor') {
-        const emailFactor = findEmailCodeFactor(next);
-        if (!emailFactor?.emailAddressId) {
+        if (next.supportedFirstFactors.some((factor) => factor.strategy === PASSWORD_FACTOR)) {
+          setPassword('');
+          setStep('password');
+          return;
+        }
+        if (!findEmailCodeFactor(next)) {
           setError(
             'This account cannot be signed in with a password or an email code. Use a provider button above, or sign in through your browser.',
           );
           return;
         }
-        const prepared = await prepareEmailCode(next.id, emailFactor.emailAddressId);
-        setSignIn(prepared);
-        setCode('');
-        setStep('email_code');
-        setNotice(`We sent a sign-in code to ${emailFactor.safeIdentifier ?? email}.`);
+        await sendEmailCodeFor(next);
         return;
       }
 
@@ -182,35 +231,49 @@ export function NativeSignInCard({ onSuccess }: NativeSignInCardProps) {
         'The AGI account service returned a sign-in state AGI Desktop does not handle. Use browser sign-in below.',
       );
     },
-    [adoptClerkSession, email],
+    [adoptClerkSession, sendEmailCodeFor],
   );
 
-  const submitPassword = useCallback(async () => {
-    if (busy) return;
+  const submitEmail = useCallback(async () => {
+    if (isBusy) return;
     if (!email.trim()) {
       setError('Enter the email address for your AGI account.');
       return;
     }
+
+    beginAttempt();
+    setBusy('email');
+    try {
+      await applySignInState(await createIdentifierSignIn(email.trim()));
+    } catch (attemptError) {
+      setError(describeFailure(attemptError));
+    } finally {
+      setBusy(null);
+    }
+  }, [applySignInState, beginAttempt, email, isBusy]);
+
+  const submitPassword = useCallback(async () => {
+    if (isBusy || !signIn) return;
     if (!password) {
-      setError('Enter your password, or use "Email me a sign-in code" instead.');
+      setError('Enter your password, or ask for an email code instead.');
       return;
     }
 
     beginAttempt();
     setBusy('password');
     try {
-      const created = await createPasswordSignIn(email.trim(), password);
+      const attempted = await attemptPassword(signIn.id, password);
       setPassword('');
-      await applySignInState(created);
+      await applySignInState(attempted);
     } catch (attemptError) {
       setError(describeFailure(attemptError));
     } finally {
       setBusy(null);
     }
-  }, [applySignInState, beginAttempt, busy, email, password]);
+  }, [applySignInState, beginAttempt, isBusy, password, signIn]);
 
   const sendEmailCode = useCallback(async () => {
-    if (busy) return;
+    if (isBusy) return;
     if (!email.trim()) {
       setError('Enter the email address for your AGI account.');
       return;
@@ -219,26 +282,16 @@ export function NativeSignInCard({ onSuccess }: NativeSignInCardProps) {
     beginAttempt();
     setBusy('send_code');
     try {
-      const created = signIn ?? (await createIdentifierSignIn(email.trim()));
-      const emailFactor = findEmailCodeFactor(created);
-      if (!emailFactor?.emailAddressId) {
-        setError('This account does not support email sign-in codes. Use your password instead.');
-        return;
-      }
-      const prepared = await prepareEmailCode(created.id, emailFactor.emailAddressId);
-      setSignIn(prepared);
-      setCode('');
-      setStep('email_code');
-      setNotice(`We sent a sign-in code to ${emailFactor.safeIdentifier ?? email.trim()}.`);
+      await sendEmailCodeFor(signIn ?? (await createIdentifierSignIn(email.trim())));
     } catch (attemptError) {
       setError(describeFailure(attemptError));
     } finally {
       setBusy(null);
     }
-  }, [beginAttempt, busy, email, signIn]);
+  }, [beginAttempt, email, isBusy, sendEmailCodeFor, signIn]);
 
   const submitEmailCode = useCallback(async () => {
-    if (busy || !signIn) return;
+    if (isBusy || !signIn) return;
     if (!code.trim()) {
       setError('Enter the code we emailed you.');
       return;
@@ -247,17 +300,16 @@ export function NativeSignInCard({ onSuccess }: NativeSignInCardProps) {
     beginAttempt();
     setBusy('code');
     try {
-      const attempted = await attemptEmailCode(signIn.id, code.trim());
-      await applySignInState(attempted);
+      await applySignInState(await attemptEmailCode(signIn.id, code.trim()));
     } catch (attemptError) {
       setError(describeFailure(attemptError));
     } finally {
       setBusy(null);
     }
-  }, [applySignInState, beginAttempt, busy, code, signIn]);
+  }, [applySignInState, beginAttempt, code, isBusy, signIn]);
 
   const submitSecondFactor = useCallback(async () => {
-    if (busy || !signIn || !secondFactor) return;
+    if (isBusy || !signIn || !secondFactor) return;
     if (!code.trim()) {
       setError('Enter your verification code.');
       return;
@@ -266,28 +318,29 @@ export function NativeSignInCard({ onSuccess }: NativeSignInCardProps) {
     beginAttempt();
     setBusy('mfa');
     try {
-      const attempted = await attemptSecondFactor(signIn.id, secondFactor.strategy, code.trim());
-      await applySignInState(attempted);
+      await applySignInState(
+        await attemptSecondFactor(signIn.id, secondFactor.strategy, code.trim()),
+      );
     } catch (attemptError) {
       setError(describeFailure(attemptError));
     } finally {
       setBusy(null);
     }
-  }, [applySignInState, beginAttempt, busy, code, secondFactor, signIn]);
+  }, [applySignInState, beginAttempt, code, isBusy, secondFactor, signIn]);
 
   const startSocial = useCallback(
-    async (strategy: string, label: string) => {
-      if (busy || ssoPending) return;
+    async (provider: AuthProviderId, label: string) => {
+      if (isBusy || ssoPending) return;
       beginAttempt();
       try {
-        const handle = await beginSocialSignIn(strategy);
+        const handle = await beginSocialSignIn(socialSignInStrategy(provider));
         setSsoPending({ providerLabel: label, signIn: handle.signIn });
         setNotice(`Finish signing in with ${label} in your browser, then return here.`);
       } catch (attemptError) {
         setError(describeFailure(attemptError));
       }
     },
-    [beginAttempt, busy, ssoPending],
+    [beginAttempt, isBusy, ssoPending],
   );
 
   const cancelSocial = useCallback(() => {
@@ -303,7 +356,7 @@ export function NativeSignInCard({ onSuccess }: NativeSignInCardProps) {
       if (!pending || !detail?.rotatingTokenNonce) return;
 
       void (async () => {
-        setNotice(`Completing ${pending.providerLabel} sign-in…`);
+        setNotice(`Completing ${pending.providerLabel} sign-in...`);
         try {
           const clerkSessionToken = await completeSocialSignIn(
             pending.signIn,
@@ -350,7 +403,7 @@ export function NativeSignInCard({ onSuccess }: NativeSignInCardProps) {
   }, [completeNativeSignIn, onSuccess]);
 
   const signInThroughBrowser = useCallback(async () => {
-    if (busy) return;
+    if (isBusy) return;
     beginAttempt();
     setBusy('browser');
     try {
@@ -365,10 +418,10 @@ export function NativeSignInCard({ onSuccess }: NativeSignInCardProps) {
     } finally {
       setBusy(null);
     }
-  }, [beginAttempt, browserFallbackSignIn, busy, onSuccess]);
+  }, [beginAttempt, browserFallbackSignIn, isBusy, onSuccess]);
 
   const restart = useCallback(() => {
-    setStep('credentials');
+    setStep('email');
     setSignIn(null);
     setSecondFactor(null);
     setCode('');
@@ -378,367 +431,300 @@ export function NativeSignInCard({ onSuccess }: NativeSignInCardProps) {
     resetClerkClient();
   }, []);
 
-  const isBusy = busy !== null;
+  const detail =
+    step === 'password' || step === 'email_code' ? (
+      <div className={AUTH_DETAIL_ROW_CLASS}>
+        <span>{step === 'email_code' ? `We sent a code to ${email.trim()}` : email.trim()}</span>
+        <button type="button" className={AUTH_QUIET_BUTTON_CLASS} onClick={restart}>
+          Edit
+        </button>
+      </div>
+    ) : step === 'second_factor' && secondFactor ? (
+      <p className="text-center">{secondFactorLabel(secondFactor)}</p>
+    ) : undefined;
 
-  return (
-    <div className="w-full max-w-md rounded-2xl border border-border bg-card p-6 shadow-xl shadow-black/5">
-      {/* The AuthPage header carries the brand mark; repeating it here made
-          the column read as two stacked logos. Keep the card content-first,
-          matching the web embedded auth card. */}
-      <h1 className="text-xl font-semibold tracking-tight text-foreground">Sign in to AGI Cloud</h1>
-      <p className="mt-2 text-sm leading-6 text-muted-foreground">
-        {step === 'credentials'
-          ? supportsLocalAppMode
-            ? 'Sign in right here. Local Mode keeps working without an account.'
-            : 'Sign in right here to continue to AGI Cloud.'
-          : step === 'email_code'
-            ? 'Enter the code we emailed you.'
-            : step === 'second_factor'
-              ? 'One more step to confirm it is you.'
-              : 'Your password needs to be reset before you can sign in.'}
-      </p>
-
+  const messages = (
+    <>
       {displayedError ? (
-        <div
-          role="alert"
-          data-testid="native-sign-in-error"
-          className="mt-5 rounded-lg border border-destructive/25 bg-destructive/8 px-3.5 py-3 text-sm text-destructive"
-        >
+        <p role="alert" data-testid="native-sign-in-error" className={AUTH_ERROR_CLASS}>
           {displayedError}
-        </div>
+        </p>
       ) : null}
-
       {notice && !displayedError ? (
-        <p
-          role="status"
-          data-testid="native-sign-in-notice"
-          className="mt-5 rounded-lg border border-border bg-muted/35 px-3.5 py-3 text-sm text-muted-foreground"
-        >
+        <p role="status" data-testid="native-sign-in-notice" className={AUTH_ASIDE_CLASS}>
           {notice}
         </p>
       ) : null}
+    </>
+  );
 
-      {!nativeConfigured ? (
-        <div className="mt-5 rounded-lg border border-border bg-muted/35 px-3.5 py-3 text-sm text-muted-foreground">
-          In-app sign-in is not configured in this build, so AGI Desktop will sign you in through
-          your browser instead.
+  const footer = (
+    <>
+      <AuthLegalFooter />
+      <div className={AUTH_QUIET_LINKS_CLASS}>
+        <button
+          type="button"
+          className={AUTH_FOOTER_LINK_CLASS}
+          disabled={isBusy}
+          aria-busy={busy === 'browser' || undefined}
+          onClick={() => void signInThroughBrowser()}
+        >
+          {busy === 'browser'
+            ? 'Waiting for browser approval...'
+            : 'Sign in through your browser instead'}
+        </button>
+        {supportsLocalAppMode ? (
+          <button type="button" className={AUTH_FOOTER_LINK_CLASS} onClick={() => setMode('local')}>
+            Use Local Mode
+          </button>
+        ) : null}
+      </div>
+      {supportsLocalAppMode ? (
+        <p className={AUTH_ASIDE_CLASS}>Local Mode stays available without an account.</p>
+      ) : null}
+    </>
+  );
+
+  if (!nativeConfigured) {
+    return (
+      <AuthStepFrame heading={HEADINGS.email} footer={footer}>
+        <p className={AUTH_ASIDE_CLASS}>
+          In-app sign-in is not configured in this build, so AGI Desktop signs you in through your
+          browser instead.
+        </p>
+        {messages}
+      </AuthStepFrame>
+    );
+  }
+
+  if (ssoPending) {
+    return (
+      <div data-testid="sso-pending">
+        <AuthStepFrame
+          heading={`Waiting for ${ssoPending.providerLabel}`}
+          detail={
+            <p className="text-center">
+              {ssoPending.providerLabel} does not allow sign-in inside an app window, so it opened
+              in your browser. AGI Desktop finishes when you come back.
+            </p>
+          }
+          footer={footer}
+        >
+          <div className="flex justify-center">
+            <Spinner size="default" />
+          </div>
+          {messages}
+          <div className={AUTH_STEP_LINKS_CLASS}>
+            <button type="button" className={AUTH_QUIET_BUTTON_CLASS} onClick={cancelSocial}>
+              Cancel
+            </button>
+          </div>
+        </AuthStepFrame>
+      </div>
+    );
+  }
+
+  if (step === 'password_reset_required') {
+    return (
+      <AuthStepFrame heading={HEADINGS[step]} detail={detail} footer={footer}>
+        <div data-testid="password-reset-required">
+          <p className={AUTH_ASIDE_CLASS}>
+            AGI Desktop does not run password resets in the app. Resetting one proves you own the
+            email, so it happens on the account service itself.
+          </p>
+          {messages}
+          <button
+            type="button"
+            className={AUTH_QUIET_BUTTON_CLASS}
+            onClick={() => void openExternalUrl(`${WEB_APP_URL}/login`)}
+          >
+            Reset your password in your browser
+          </button>
         </div>
-      ) : null}
-
-      {ssoPending ? (
-        <div
-          className="mt-5 rounded-xl border border-border bg-muted/35 p-4"
-          data-testid="sso-pending"
-        >
-          <div className="flex items-start gap-3">
-            <Loader2 className="mt-0.5 h-4 w-4 shrink-0 animate-spin" aria-hidden="true" />
-            <div className="min-w-0">
-              <p className="text-sm font-medium text-foreground">
-                Waiting for {ssoPending.providerLabel}
-              </p>
-              <p className="mt-1 text-xs leading-5 text-muted-foreground">
-                {ssoPending.providerLabel} does not allow sign-in inside an app window, so it opened
-                in your browser. AGI Desktop finishes automatically when you come back.
-              </p>
-            </div>
-          </div>
-          <Button
-            type="button"
-            variant="outline"
-            className="mt-3 h-9 w-full"
-            onClick={cancelSocial}
-          >
-            Cancel
-          </Button>
+        <div className={AUTH_STEP_LINKS_CLASS}>
+          <button type="button" className={AUTH_QUIET_BUTTON_CLASS} onClick={restart}>
+            Use a different email
+          </button>
         </div>
-      ) : null}
+      </AuthStepFrame>
+    );
+  }
 
-      {nativeConfigured && !ssoPending && step === 'credentials' ? (
+  if (step === 'second_factor' && secondFactor) {
+    return (
+      <AuthStepFrame heading={HEADINGS[step]} detail={detail} footer={footer}>
         <form
-          className="mt-5 space-y-3"
-          onSubmit={(event) => {
-            event.preventDefault();
-            void submitPassword();
-          }}
-        >
-          <div className="space-y-1.5">
-            <label htmlFor="agi-email" className="text-sm font-medium text-foreground">
-              Email
-            </label>
-            <Input
-              id="agi-email"
-              type="email"
-              autoComplete="username"
-              autoFocus
-              value={email}
-              disabled={isBusy}
-              onChange={(event) => setEmail(event.target.value)}
-              placeholder="you@example.com"
-            />
-          </div>
-
-          <div className="space-y-1.5">
-            <label htmlFor="agi-password" className="text-sm font-medium text-foreground">
-              Password
-            </label>
-            <Input
-              id="agi-password"
-              type="password"
-              autoComplete="current-password"
-              value={password}
-              disabled={isBusy}
-              onChange={(event) => setPassword(event.target.value)}
-              placeholder="Your password"
-            />
-          </div>
-
-          <Button
-            type="submit"
-            className="h-11 w-full"
-            disabled={isBusy}
-            aria-busy={busy === 'password'}
-          >
-            {busy === 'password' ? (
-              <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
-            ) : (
-              <LogIn className="h-4 w-4" aria-hidden="true" />
-            )}
-            {busy === 'password' ? 'Signing in…' : 'Sign in'}
-          </Button>
-
-          <Button
-            type="button"
-            variant="outline"
-            className="h-10 w-full"
-            disabled={isBusy}
-            aria-busy={busy === 'send_code'}
-            onClick={() => void sendEmailCode()}
-          >
-            {busy === 'send_code' ? (
-              <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
-            ) : (
-              <Mail className="h-4 w-4" aria-hidden="true" />
-            )}
-            {busy === 'send_code' ? 'Sending code…' : 'Email me a sign-in code'}
-          </Button>
-        </form>
-      ) : null}
-
-      {nativeConfigured && !ssoPending && step === 'email_code' ? (
-        <form
-          className="mt-5 space-y-3"
-          onSubmit={(event) => {
-            event.preventDefault();
-            void submitEmailCode();
-          }}
-        >
-          <div className="space-y-1.5">
-            <label htmlFor="agi-email-code" className="text-sm font-medium text-foreground">
-              Sign-in code
-            </label>
-            <Input
-              id="agi-email-code"
-              inputMode="numeric"
-              autoComplete="one-time-code"
-              autoFocus
-              value={code}
-              disabled={isBusy}
-              onChange={(event) => setCode(event.target.value)}
-              placeholder="6-digit code"
-            />
-          </div>
-          <Button
-            type="submit"
-            className="h-11 w-full"
-            disabled={isBusy}
-            aria-busy={busy === 'code'}
-          >
-            {busy === 'code' ? (
-              <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
-            ) : null}
-            {busy === 'code' ? 'Verifying…' : 'Verify and sign in'}
-          </Button>
-          <Button
-            type="button"
-            variant="ghost"
-            className="h-9 w-full"
-            disabled={isBusy}
-            onClick={() => void sendEmailCode()}
-          >
-            Send a new code
-          </Button>
-        </form>
-      ) : null}
-
-      {nativeConfigured && !ssoPending && step === 'second_factor' && secondFactor ? (
-        <form
-          className="mt-5 space-y-3"
           onSubmit={(event) => {
             event.preventDefault();
             void submitSecondFactor();
           }}
         >
-          <div className="space-y-1.5">
-            <label htmlFor="agi-mfa-code" className="text-sm font-medium text-foreground">
-              {secondFactorLabel(secondFactor)}
-            </label>
-            <Input
-              id="agi-mfa-code"
-              inputMode={secondFactor.strategy === 'backup_code' ? 'text' : 'numeric'}
-              autoComplete="one-time-code"
-              autoFocus
-              value={code}
-              disabled={isBusy}
-              onChange={(event) => setCode(event.target.value)}
-              placeholder={secondFactor.strategy === 'backup_code' ? 'Backup code' : '6-digit code'}
-            />
-          </div>
-          <Button
-            type="submit"
-            className="h-11 w-full"
+          <AuthField
+            label={secondFactorLabel(secondFactor)}
+            inputMode={secondFactor.strategy === 'backup_code' ? 'text' : 'numeric'}
+            autoComplete="one-time-code"
+            autoFocus
+            value={code}
             disabled={isBusy}
-            aria-busy={busy === 'mfa'}
-          >
-            {busy === 'mfa' ? (
-              <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
-            ) : null}
-            {busy === 'mfa' ? 'Verifying…' : 'Verify and sign in'}
-          </Button>
-          {signIn && signIn.supportedSecondFactors.length > 1 ? (
-            <div className="flex flex-wrap gap-2">
-              {signIn.supportedSecondFactors
-                .filter(
-                  (factor) =>
-                    SUPPORTED_SECOND_FACTORS.has(factor.strategy) &&
-                    factor.strategy !== secondFactor.strategy,
-                )
-                .map((factor) => (
-                  <Button
-                    key={factor.strategy}
-                    type="button"
-                    variant="ghost"
-                    className="h-8 px-2 text-xs"
-                    disabled={isBusy}
-                    onClick={() => {
-                      setSecondFactor(factor);
-                      setCode('');
-                      setNotice(null);
-                      if (factor.strategy === 'phone_code' && signIn) {
-                        void prepareSecondFactor(signIn.id, factor)
-                          .then((prepared) => {
-                            setSignIn(prepared);
-                            setNotice('We sent a code to your phone.');
-                          })
-                          .catch((prepareError: unknown) =>
-                            setError(describeFailure(prepareError)),
-                          );
-                      }
-                    }}
-                  >
-                    Use {secondFactorLabel(factor).toLowerCase()}
-                  </Button>
-                ))}
-            </div>
-          ) : null}
+            onChange={(event) => setCode(event.target.value)}
+          />
+          {messages}
+          <AuthSubmitButton label={CONTINUE_LABEL} busy={busy === 'mfa'} disabled={isBusy} />
         </form>
-      ) : null}
-
-      {nativeConfigured && !ssoPending && step === 'password_reset_required' ? (
-        <div className="mt-5 space-y-3" data-testid="password-reset-required">
-          <p className="text-sm leading-6 text-muted-foreground">
-            AGI Cloud requires a new password for this account. AGI Desktop does not run password
-            resets in the app, resetting a password proves ownership of your email, and that has to
-            happen on the account service itself.
-          </p>
-          <Button
-            type="button"
-            className="h-10 w-full"
-            onClick={() => void openExternalUrl(`${WEB_APP_URL}/login`)}
-          >
-            <ExternalLink className="h-4 w-4" aria-hidden="true" />
-            {'Reset your password in your browser'}
-          </Button>
-          <Button type="button" variant="ghost" className="h-9 w-full" onClick={restart}>
-            Back to sign in
-          </Button>
-        </div>
-      ) : null}
-
-      {nativeConfigured && !ssoPending && step === 'credentials' ? (
-        <>
-          <div className="my-5 flex items-center gap-3">
-            <span className="h-px flex-1 bg-border" />
-            <span className="text-xs uppercase tracking-wide text-muted-foreground">or</span>
-            <span className="h-px flex-1 bg-border" />
-          </div>
-
-          <div className="space-y-2">
-            {SOCIAL_PROVIDERS.map((provider) => (
-              <Button
-                key={provider.id}
+        <div className={AUTH_STEP_LINKS_CLASS}>
+          {signIn?.supportedSecondFactors
+            .filter(
+              (factor) =>
+                SUPPORTED_SECOND_FACTORS.has(factor.strategy) &&
+                factor.strategy !== secondFactor.strategy,
+            )
+            .map((factor) => (
+              <button
+                key={factor.strategy}
                 type="button"
-                variant="outline"
-                className="h-10 w-full"
+                className={AUTH_QUIET_BUTTON_CLASS}
                 disabled={isBusy}
-                onClick={() => void startSocial(provider.strategy, provider.label)}
+                onClick={() => {
+                  setSecondFactor(factor);
+                  setCode('');
+                  setNotice(null);
+                  if (factor.strategy === 'phone_code' && signIn) {
+                    void prepareSecondFactor(signIn.id, factor)
+                      .then((prepared) => {
+                        setSignIn(prepared);
+                        setNotice('We sent a code to your phone.');
+                      })
+                      .catch((prepareError: unknown) => setError(describeFailure(prepareError)));
+                  }
+                }}
               >
-                Continue with {provider.label}
-              </Button>
+                Use {secondFactorLabel(factor).toLowerCase()}
+              </button>
             ))}
-          </div>
-          <p className="mt-2 text-center text-xs leading-5 text-muted-foreground">
-            {SOCIAL_PROVIDERS.map((provider) => provider.label).join(', ')} require their own
-            sign-in page, so these open your browser and return here.
-          </p>
-        </>
-      ) : null}
-
-      {step !== 'credentials' && step !== 'password_reset_required' ? (
-        <Button type="button" variant="ghost" className="mt-3 h-9 w-full" onClick={restart}>
-          <ArrowLeft className="h-3.5 w-3.5" aria-hidden="true" />
-          {'Use a different email'}
-        </Button>
-      ) : null}
-
-      <div className="mt-6 space-y-2 border-t border-border pt-5">
-        <div className="flex items-start gap-3">
-          <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-emerald-500" aria-hidden="true" />
-          <p className="text-xs leading-5 text-muted-foreground">
-            Your password goes only to the AGI account service. AGI Desktop stores a short-lived,
-            revocable session in your system credential vault, never your password.
-          </p>
+          <button type="button" className={AUTH_QUIET_BUTTON_CLASS} onClick={restart}>
+            Use a different email
+          </button>
         </div>
+      </AuthStepFrame>
+    );
+  }
 
-        <Button
-          type="button"
-          variant="ghost"
-          className="h-9 w-full"
-          disabled={isBusy}
-          aria-busy={busy === 'browser'}
-          onClick={() => void signInThroughBrowser()}
+  if (step === 'email_code') {
+    return (
+      <AuthStepFrame heading={HEADINGS[step]} detail={detail} footer={footer}>
+        <form
+          onSubmit={(event) => {
+            event.preventDefault();
+            void submitEmailCode();
+          }}
         >
-          {busy === 'browser' ? (
-            <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
-          ) : (
-            <Lock className="h-3.5 w-3.5" aria-hidden="true" />
-          )}
-          {busy === 'browser'
-            ? 'Waiting for browser approval…'
-            : 'Sign in through your browser instead'}
-        </Button>
-
-        {supportsLocalAppMode ? (
+          <AuthField
+            label={CODE_FIELD_LABEL}
+            inputMode="numeric"
+            autoComplete="one-time-code"
+            autoFocus
+            value={code}
+            disabled={isBusy}
+            onChange={(event) => setCode(event.target.value)}
+          />
+          {messages}
+          <AuthSubmitButton label={CONTINUE_LABEL} busy={busy === 'code'} disabled={isBusy} />
+        </form>
+        <div className={AUTH_STEP_LINKS_CLASS}>
           <button
             type="button"
-            onClick={() => setMode('local')}
-            className="flex w-full items-center justify-center gap-1.5 rounded-md py-2 text-sm text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            className={AUTH_QUIET_BUTTON_CLASS}
+            disabled={isBusy}
+            onClick={() => void sendEmailCode()}
           >
-            <ArrowLeft className="h-3.5 w-3.5" aria-hidden="true" />
-            Use Local Mode
+            Send a new code
           </button>
-        ) : null}
-      </div>
-    </div>
+        </div>
+      </AuthStepFrame>
+    );
+  }
+
+  if (step === 'password') {
+    return (
+      <AuthStepFrame heading={HEADINGS[step]} detail={detail} footer={footer}>
+        <form
+          onSubmit={(event) => {
+            event.preventDefault();
+            void submitPassword();
+          }}
+        >
+          <AuthPasswordField
+            label={PASSWORD_FIELD_LABEL}
+            value={password}
+            disabled={isBusy}
+            autoComplete="current-password"
+            onChange={setPassword}
+          />
+          {messages}
+          <AuthSubmitButton label={CONTINUE_LABEL} busy={busy === 'password'} disabled={isBusy} />
+        </form>
+        <div className={AUTH_STEP_LINKS_CLASS}>
+          <button
+            type="button"
+            className={AUTH_QUIET_BUTTON_CLASS}
+            disabled={isBusy}
+            aria-busy={busy === 'send_code' || undefined}
+            onClick={() => void sendEmailCode()}
+          >
+            Email me a code instead
+          </button>
+        </div>
+      </AuthStepFrame>
+    );
+  }
+
+  return (
+    <AuthStepFrame heading={HEADINGS.email} footer={footer}>
+      <AuthProviderButtons
+        providers={providers}
+        pending={null}
+        disabled={isBusy}
+        onStart={(provider) => {
+          const chosen = providers.find((candidate) => candidate.id === provider);
+          if (chosen) void startSocial(chosen.id, chosen.label);
+        }}
+      />
+
+      <AuthDivider />
+
+      <form
+        onSubmit={(event) => {
+          event.preventDefault();
+          void submitEmail();
+        }}
+      >
+        <AuthField
+          label={EMAIL_FIELD_LABEL}
+          type="email"
+          inputMode="email"
+          autoComplete="username"
+          autoFocus
+          value={email}
+          disabled={isBusy}
+          onChange={(event) => setEmail(event.target.value)}
+        />
+        {messages}
+        <AuthSubmitButton label={CONTINUE_LABEL} busy={busy === 'email'} disabled={isBusy} />
+      </form>
+
+      <p className={AUTH_SWITCH_CLASS}>
+        Don&apos;t have an account?{' '}
+        <button
+          type="button"
+          className={AUTH_QUIET_BUTTON_CLASS}
+          onClick={() =>
+            void openExternalUrl(`${WEB_APP_URL}${WEB_SIGNUP_PATH}?${DESKTOP_SURFACE_QUERY}`)
+          }
+        >
+          Sign up
+        </button>
+      </p>
+    </AuthStepFrame>
   );
 }
 

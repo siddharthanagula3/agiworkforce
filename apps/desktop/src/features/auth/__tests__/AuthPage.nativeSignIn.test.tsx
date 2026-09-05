@@ -1,4 +1,3 @@
-
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -9,6 +8,12 @@ vi.mock('../../../lib/runtimeEnvironment', () => ({
   supportsLocalAppMode: true,
   isCloudWeb: false,
   isElectronHost: false,
+}));
+
+const openExternalUrl = vi.fn();
+vi.mock('../../../utils/navigation', () => ({
+  openExternalUrl: (...args: unknown[]) => openExternalUrl(...args),
+  openPricingPage: vi.fn(),
 }));
 
 import { useAppModeStore } from '../../../stores/appModeStore';
@@ -36,10 +41,27 @@ describe('Desktop Cloud sign-in shell', () => {
   it('renders the native form inline instead of a device-approval prompt', () => {
     render(<AuthPage />);
 
-    expect(screen.getByLabelText('Email')).toBeInTheDocument();
-    expect(screen.getByLabelText('Password')).toBeInTheDocument();
+    expect(screen.getByLabelText('Email address')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Welcome back' })).toBeInTheDocument();
     expect(screen.queryByText(/checking/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/enter this code/i)).not.toBeInTheDocument();
+  });
+
+  it('sends sign-up to the web surface in the system browser, marked as desktop', async () => {
+    render(<AuthPage />);
+
+    fireEvent.click(screen.getByRole('button', { name: /^sign up$/i }));
+
+    await waitFor(() => expect(openExternalUrl).toHaveBeenCalledOnce());
+    expect(String(openExternalUrl.mock.calls[0]?.[0])).toMatch(/\/signup\?surface=desktop$/);
+  });
+
+  it('carries the brand mark once, in the page corner rather than above the heading', () => {
+    render(<AuthPage />);
+
+    expect(screen.getAllByText('AGI')).toHaveLength(1);
+    expect(screen.queryByText('AGI Desktop')).not.toBeInTheDocument();
+    expect(screen.queryByText(/secure cloud sign-in/i)).not.toBeInTheDocument();
   });
 
   it('keeps browser approval reachable as an explicit fallback', async () => {
@@ -55,9 +77,6 @@ describe('Desktop Cloud sign-in shell', () => {
   it('keeps Local Mode claims and the return control on a native host', () => {
     render(<AuthPage />);
 
-    expect(
-      screen.getByText('Sign in right here. Local Mode keeps working without an account.'),
-    ).toBeInTheDocument();
     expect(screen.getByText('Local Mode stays available without an account.')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: /use local mode/i }));
     expect(useAppModeStore.getState().mode).toBe('local');
