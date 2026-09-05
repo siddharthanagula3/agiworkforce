@@ -31,26 +31,10 @@ const READINESS_TONE_CLASS: Record<ReadinessTone, string> = {
   warn: 'border-amber-600/30 bg-amber-500/10 text-amber-800 dark:border-amber-400/30 dark:bg-amber-400/10 dark:text-amber-100',
 };
 
-export const READINESS_ATTESTED_AS_OF = '2026-08-16';
-
-type ReadinessSource = 'config' | 'attested';
-
-const READINESS_SOURCE_LABEL: Record<ReadinessSource, string> = {
-  config: 'Live config',
-  attested: `Self-attested ${READINESS_ATTESTED_AS_OF}`,
-};
-
-const READINESS_SOURCE_CLASS: Record<ReadinessSource, string> = {
-  config:
-    'border-sky-600/30 bg-sky-500/10 text-sky-800 dark:border-sky-300/20 dark:bg-sky-300/10 dark:text-sky-100',
-  attested: 'border-border bg-muted text-muted-foreground',
-};
-
 interface ReadinessRow {
   area: string;
   status: string;
   tone: ReadinessTone;
-  source: ReadinessSource;
   owner: string;
   evidence: string;
 }
@@ -61,7 +45,6 @@ function buildReadinessRows(managedComputeOpen: boolean): ReadinessRow[] {
       area: 'Privacy modes',
       status: 'Per-workspace policy',
       tone: 'ok',
-      source: 'config',
       owner: 'Platform',
       evidence: `Each workspace sets its own in organization_admin_policies and is enforced server-side; a workspace with no saved policy is unrestricted. Shipped default on first save: ${DEFAULT_ENTERPRISE_ADMIN_POLICY.allowedPrivacyModes.join(', ')}.`,
     },
@@ -69,37 +52,10 @@ function buildReadinessRows(managedComputeOpen: boolean): ReadinessRow[] {
       area: 'Managed compute',
       status: managedComputeStatusLabel(managedComputeOpen),
       tone: managedComputeOpen ? 'ok' : 'warn',
-      source: 'config',
       owner: 'Billing',
       evidence: managedComputeOpen
         ? `Open by default since 2026-06-27. Hard review at ${MANAGED_COMPUTE_MARGIN_POLICY.hardStopAtRevenueShare * 100}% provider-cost share.`
         : `${MANAGED_COMPUTE_PRIVATE_BETA_ENV} is engaged as an incident-response kill-switch.`,
-    },
-    {
-      area: 'Identity',
-      status: 'Implemented, entitlement-gated',
-      tone: 'ok',
-      source: 'attested',
-      owner: 'Enterprise',
-      evidence:
-        'Migration 0076 owns SSO and directory-sync configuration with RLS. First-party SSO sign-in (lib/server/sso/clerk-enterprise-connections.ts, /api/admin/sso) and SCIM provisioning (/api/scim/v2) are implemented and gated on the enterprise_controls capability by lib/server/sso/sso-route-guard.ts, which is a capability check rather than a tier comparison',
-    },
-    {
-      area: 'Audit logs',
-      status: 'Append-only, no export',
-      tone: 'warn',
-      source: 'attested',
-      owner: 'Security',
-      evidence:
-        'Enterprise audit events are written to a table app_rls cannot update or delete (migration 0087) and are separated from support logs. No self-serve read or export surface exists; extracts are supplied on request',
-    },
-    {
-      area: 'Support loop',
-      status: 'Routed',
-      tone: 'ok',
-      source: 'attested',
-      owner: 'Support',
-      evidence: 'Support cases, feedback cases, and release fix links have shared tables',
     },
   ];
 }
@@ -294,29 +250,26 @@ export default function AdminConsolePage() {
                 aria-hidden="true"
               />
               <h2 id="readiness-ledger-title" className="text-sm font-medium text-foreground">
-                Enterprise readiness ledger
+                Live policy state
               </h2>
             </div>
             <p
               data-testid="readiness-ledger-disclaimer"
               className="text-xs leading-5 text-muted-foreground"
             >
-              Not a live health check. Rows marked{' '}
-              <span className="text-foreground">{READINESS_SOURCE_LABEL.config}</span> are read from
-              this deployment&apos;s policy constants and environment on page load. Rows marked{' '}
-              <span className="text-foreground">Self-attested</span> are a written claim reviewed on{' '}
-              <time dateTime={READINESS_ATTESTED_AS_OF}>{READINESS_ATTESTED_AS_OF}</time> and are
-              not queried from running systems. Use the security operations panel above for live
-              state.
+              Not a live health check. Every row is read from this deployment&apos;s policy
+              constants and environment on page load, so it says what this build is configured to
+              do, not what any running system is currently doing. Rows that were a written
+              self-attestation rather than a read were removed. Use the security operations panel
+              above for live state.
             </p>
           </div>
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[760px] border-collapse text-left text-sm">
+            <table className="w-full min-w-[640px] border-collapse text-left text-sm">
               <thead className="bg-muted text-xs uppercase text-muted-foreground">
                 <tr>
                   <th className="px-4 py-3 font-medium">Area</th>
                   <th className="px-4 py-3 font-medium">Status</th>
-                  <th className="px-4 py-3 font-medium">Source</th>
                   <th className="px-4 py-3 font-medium">Owner</th>
                   <th className="px-4 py-3 font-medium">Evidence</th>
                 </tr>
@@ -328,17 +281,9 @@ export default function AdminConsolePage() {
                     <td className="px-4 py-3">
                       <span
                         data-tone={row.tone}
-                        className={`rounded-md border px-2 py-1 text-xs ${READINESS_TONE_CLASS[row.tone]}`}
+                        className={`inline-block whitespace-nowrap rounded-md border px-2 py-1 text-xs ${READINESS_TONE_CLASS[row.tone]}`}
                       >
                         {row.status}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3">
-                      <span
-                        data-source={row.source}
-                        className={`whitespace-nowrap rounded-md border px-2 py-1 text-xs ${READINESS_SOURCE_CLASS[row.source]}`}
-                      >
-                        {READINESS_SOURCE_LABEL[row.source]}
                       </span>
                     </td>
                     <td className="px-4 py-3 text-foreground">{row.owner}</td>
