@@ -21,6 +21,7 @@ import { useProjectConversations } from '@/lib/hooks/useConversations';
 import { SourcesPanel } from '@/features/projects/components/SourcesPanel';
 import { ProjectSettingsDialog } from '@/features/projects/components/ProjectSettingsDialog';
 import { useManagedCloudProjects } from '@/features/projects';
+import { webManagedCloudProjects } from '@/features/projects/services/managed-cloud-projects';
 import { saveProjectChatHandoff } from '@/features/projects/lib/project-chat-handoff';
 import { SchedulesPage } from '@/features/schedules';
 import { WebAppShell } from '@shared/components/layout/WebAppShell';
@@ -36,6 +37,30 @@ const VALID_ACCENT_COLORS = new Set<ProjectAccentColor>([
   'violet',
   'zinc',
 ]);
+
+const PROJECT_ICON_OPTIONS: readonly string[] = [
+  '📁',
+  '💻',
+  '📝',
+  '🔬',
+  '📚',
+  '🎨',
+  '💼',
+  '🏠',
+  '🚀',
+  '⭐️',
+  '🛠️',
+  '🌱',
+];
+
+const PROJECT_ACCENT_HEX: Record<ProjectAccentColor, string> = {
+  emerald: '#10b981',
+  sky: '#0ea5e9',
+  amber: '#f59e0b',
+  rose: '#f43f5e',
+  violet: '#8b5cf6',
+  zinc: '#71717a',
+};
 
 function normalizeAccent(value: string | undefined): ProjectAccentColor | null {
   if (!value) return null;
@@ -109,6 +134,49 @@ export default function ProjectDetailPage() {
   });
 
   const [settingsOpen, setSettingsOpen] = useState(false);
+
+  const [appearancePickerOpen, setAppearancePickerOpen] = useState(false);
+  const appearanceRef = useRef<HTMLDivElement>(null);
+  const appearanceTriggerRef = useRef<HTMLButtonElement>(null);
+
+  const handleUpdateAppearance = useCallback(
+    async (patch: { iconEmoji?: string; accentColor?: ProjectAccentColor }) => {
+      if (!project) return;
+      setAppearancePickerOpen(false);
+      updateProject(project.id, patch);
+      try {
+        await webManagedCloudProjects.updateProject(project.id, patch);
+      } catch (error) {
+        updateProject(project.id, {
+          iconEmoji: project.iconEmoji ?? undefined,
+          accentColor: project.accentColor ?? undefined,
+        });
+        toast.error(toUserMessage(error, 'Could not update the project appearance'));
+      }
+    },
+    [project, updateProject],
+  );
+
+  useEffect(() => {
+    if (!appearancePickerOpen) return;
+    function handleClick(e: MouseEvent) {
+      if (appearanceRef.current && !appearanceRef.current.contains(e.target as Node)) {
+        setAppearancePickerOpen(false);
+      }
+    }
+    function handleKey(e: KeyboardEvent) {
+      if (e.key === 'Escape') {
+        setAppearancePickerOpen(false);
+        appearanceTriggerRef.current?.focus();
+      }
+    }
+    document.addEventListener('mousedown', handleClick);
+    document.addEventListener('keydown', handleKey);
+    return () => {
+      document.removeEventListener('mousedown', handleClick);
+      document.removeEventListener('keydown', handleKey);
+    };
+  }, [appearancePickerOpen]);
 
   useEffect(() => {
     if (!menuOpen) return;
@@ -518,21 +586,152 @@ export default function ProjectDetailPage() {
               flexShrink: 0,
             }}
           >
-            {project.iconEmoji ? (
-              <span style={{ fontSize: 40, lineHeight: 1, marginBottom: 12 }} aria-hidden="true">
-                {project.iconEmoji}
-              </span>
-            ) : (
-              <FolderOpen
+            <div ref={appearanceRef} style={{ position: 'relative', marginBottom: 12 }}>
+              <button
+                ref={appearanceTriggerRef}
+                type="button"
+                onClick={() => setAppearancePickerOpen((open) => !open)}
+                aria-label="Change project icon and colour"
+                aria-expanded={appearancePickerOpen}
+                aria-haspopup="true"
+                data-testid="project-appearance-trigger"
                 style={{
-                  width: 40,
-                  height: 40,
-                  color: 'var(--agi-amber)',
-                  marginBottom: 12,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  width: 56,
+                  height: 56,
+                  borderRadius: 16,
+                  border: 'none',
+                  background: project.accentColor
+                    ? `${PROJECT_ACCENT_HEX[project.accentColor]}22`
+                    : 'var(--agi-bg-3)',
+                  cursor: 'pointer',
                 }}
-                aria-hidden="true"
-              />
-            )}
+              >
+                {project.iconEmoji ? (
+                  <span style={{ fontSize: 28, lineHeight: 1 }} aria-hidden="true">
+                    {project.iconEmoji}
+                  </span>
+                ) : (
+                  <FolderOpen
+                    style={{
+                      width: 28,
+                      height: 28,
+                      color: project.accentColor
+                        ? PROJECT_ACCENT_HEX[project.accentColor]
+                        : 'var(--agi-amber)',
+                    }}
+                    aria-hidden="true"
+                  />
+                )}
+              </button>
+
+              {appearancePickerOpen && (
+                <div
+                  role="dialog"
+                  aria-label="Project icon and colour"
+                  data-testid="project-appearance-picker"
+                  style={{
+                    position: 'absolute',
+                    top: 'calc(100% + 8px)',
+                    left: '50%',
+                    transform: 'translateX(-50%)',
+                    width: 240,
+                    padding: 12,
+                    borderRadius: 12,
+                    border: '1px solid var(--agi-rule-strong)',
+                    background: 'var(--agi-bg)',
+                    boxShadow: '0 8px 28px rgba(0,0,0,0.22)',
+                    zIndex: 'var(--z-popover)',
+                    textAlign: 'left',
+                  }}
+                >
+                  <p
+                    style={{
+                      margin: '0 0 6px',
+                      fontSize: 11,
+                      fontWeight: 700,
+                      letterSpacing: '0.06em',
+                      textTransform: 'uppercase',
+                      color: 'var(--agi-ink-2)',
+                    }}
+                  >
+                    Icon
+                  </p>
+                  <div
+                    role="listbox"
+                    aria-label="Project icon"
+                    style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginBottom: 10 }}
+                  >
+                    {PROJECT_ICON_OPTIONS.map((emoji) => (
+                      <button
+                        key={emoji}
+                        type="button"
+                        role="option"
+                        aria-selected={project.iconEmoji === emoji}
+                        onClick={() => void handleUpdateAppearance({ iconEmoji: emoji })}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          width: 30,
+                          height: 30,
+                          fontSize: 16,
+                          border: 'none',
+                          borderRadius: 8,
+                          cursor: 'pointer',
+                          background:
+                            project.iconEmoji === emoji ? 'var(--agi-bg-3)' : 'transparent',
+                        }}
+                      >
+                        {emoji}
+                      </button>
+                    ))}
+                  </div>
+
+                  <p
+                    style={{
+                      margin: '0 0 6px',
+                      fontSize: 11,
+                      fontWeight: 700,
+                      letterSpacing: '0.06em',
+                      textTransform: 'uppercase',
+                      color: 'var(--agi-ink-2)',
+                    }}
+                  >
+                    Colour
+                  </p>
+                  <div
+                    role="listbox"
+                    aria-label="Project colour"
+                    style={{ display: 'flex', gap: 6 }}
+                  >
+                    {(Object.keys(PROJECT_ACCENT_HEX) as ProjectAccentColor[]).map((color) => (
+                      <button
+                        key={color}
+                        type="button"
+                        role="option"
+                        aria-selected={project.accentColor === color}
+                        aria-label={color}
+                        onClick={() => void handleUpdateAppearance({ accentColor: color })}
+                        style={{
+                          width: 24,
+                          height: 24,
+                          borderRadius: '50%',
+                          cursor: 'pointer',
+                          background: PROJECT_ACCENT_HEX[color],
+                          border:
+                            project.accentColor === color
+                              ? '2px solid var(--agi-ink)'
+                              : '2px solid transparent',
+                        }}
+                      />
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
             <h1
               style={{
                 fontFamily: 'var(--sans)',
