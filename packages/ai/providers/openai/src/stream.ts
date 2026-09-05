@@ -40,6 +40,7 @@ export async function* translateOpenAIStream(
       yield {
         type: 'response-meta',
         ...(chunk.id !== undefined ? { id: chunk.id } : {}),
+        ...(chunk.model !== undefined ? { model: chunk.model } : {}),
         ...(chunk.created !== undefined ? { created: chunk.created } : {}),
         ...(chunk.system_fingerprint !== undefined
           ? { systemFingerprint: chunk.system_fingerprint }

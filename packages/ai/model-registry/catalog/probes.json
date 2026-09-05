@@ -1,0 +1,294 @@
+{
+  "schemaVersion": 1,
+  "lastRunOn": "2026-09-05",
+  "probes": {
+    "claude-fable-5-1": {
+      "routeId": "anthropic/claude-fable-5-1",
+      "probedOn": "2026-09-05",
+      "outcome": "no_credential",
+      "ttfbMs": null,
+      "echoedModelId": null,
+      "detail": "no value for ANTHROPIC_API_KEY"
+    },
+    "claude-haiku-4-5": {
+      "routeId": "anthropic/claude-haiku-4-5",
+      "probedOn": "2026-09-05",
+      "outcome": "no_credential",
+      "ttfbMs": null,
+      "echoedModelId": null,
+      "detail": "no value for ANTHROPIC_API_KEY"
+    },
+    "claude-opus-5": {
+      "routeId": "anthropic/claude-opus-5",
+      "probedOn": "2026-09-05",
+      "outcome": "no_credential",
+      "ttfbMs": null,
+      "echoedModelId": null,
+      "detail": "no value for ANTHROPIC_API_KEY"
+    },
+    "claude-sonnet-5": {
+      "routeId": "anthropic/claude-sonnet-5",
+      "probedOn": "2026-09-05",
+      "outcome": "no_credential",
+      "ttfbMs": null,
+      "echoedModelId": null,
+      "detail": "no value for ANTHROPIC_API_KEY"
+    },
+    "deepseek-v4-flash": {
+      "routeId": "deepseek/deepseek-v4-flash",
+      "probedOn": "2026-09-05",
+      "outcome": "no_credential",
+      "ttfbMs": null,
+      "echoedModelId": null,
+      "detail": "no value for DEEPSEEK_API_KEY"
+    },
+    "deepseek-v4-flash-vision-exp": {
+      "routeId": "deepseek/deepseek-v4-flash-vision-exp",
+      "probedOn": "2026-09-05",
+      "outcome": "no_credential",
+      "ttfbMs": null,
+      "echoedModelId": null,
+      "detail": "no value for DEEPSEEK_API_KEY"
+    },
+    "deepseek-v4-pro": {
+      "routeId": "deepseek/deepseek-v4-pro",
+      "probedOn": "2026-09-05",
+      "outcome": "no_credential",
+      "ttfbMs": null,
+      "echoedModelId": null,
+      "detail": "no value for DEEPSEEK_API_KEY"
+    },
+    "gemini-3.1-flash-lite": {
+      "routeId": "google/gemini-3.1-flash-lite",
+      "probedOn": "2026-09-05",
+      "outcome": "no_credential",
+      "ttfbMs": null,
+      "echoedModelId": null,
+      "detail": "no value for GOOGLE_API_KEY"
+    },
+    "gemini-3.1-pro-preview": {
+      "routeId": "google/gemini-3.1-pro-preview",
+      "probedOn": "2026-09-05",
+      "outcome": "no_credential",
+      "ttfbMs": null,
+      "echoedModelId": null,
+      "detail": "no value for GOOGLE_API_KEY"
+    },
+    "gemini-3.5-flash-lite": {
+      "routeId": "google/gemini-3.5-flash-lite",
+      "probedOn": "2026-09-05",
+      "outcome": "no_credential",
+      "ttfbMs": null,
+      "echoedModelId": null,
+      "detail": "no value for GOOGLE_API_KEY"
+    },
+    "gemini-3.6-flash": {
+      "routeId": "google/gemini-3.6-flash",
+      "probedOn": "2026-09-05",
+      "outcome": "no_credential",
+      "ttfbMs": null,
+      "echoedModelId": null,
+      "detail": "no value for GOOGLE_API_KEY"
+    },
+    "gemini-3.8-flash": {
+      "routeId": "google/gemini-3.8-flash",
+      "probedOn": "2026-09-05",
+      "outcome": "no_credential",
+      "ttfbMs": null,
+      "echoedModelId": null,
+      "detail": "no value for GOOGLE_API_KEY"
+    },
+    "glm-5.3": {
+      "routeId": "zhipu/glm-5.3",
+      "probedOn": "2026-09-05",
+      "outcome": "no_credential",
+      "ttfbMs": null,
+      "echoedModelId": null,
+      "detail": "no value for ZHIPU_API_KEY"
+    },
+    "glm-5.3-flash": {
+      "routeId": "zhipu/glm-5.3-flash",
+      "probedOn": "2026-09-05",
+      "outcome": "no_credential",
+      "ttfbMs": null,
+      "echoedModelId": null,
+      "detail": "no value for ZHIPU_API_KEY"
+    },
+    "gpt-4o-mini-transcribe": {
+      "routeId": "openai/gpt-4o-mini-transcribe",
+      "probedOn": "2026-09-05",
+      "outcome": "no_credential",
+      "ttfbMs": null,
+      "echoedModelId": null,
+      "detail": "no value for OPENAI_API_KEY"
+    },
+    "gpt-4o-transcribe": {
+      "routeId": "openai/gpt-4o-transcribe",
+      "probedOn": "2026-09-05",
+      "outcome": "no_credential",
+      "ttfbMs": null,
+      "echoedModelId": null,
+      "detail": "no value for OPENAI_API_KEY"
+    },
+    "gpt-5.6-luna": {
+      "routeId": "openai/gpt-5.6-luna",
+      "probedOn": "2026-09-05",
+      "outcome": "no_credential",
+      "ttfbMs": null,
+      "echoedModelId": null,
+      "detail": "no value for OPENAI_API_KEY"
+    },
+    "gpt-5.6-sol": {
+      "routeId": "openai/gpt-5.6-sol",
+      "probedOn": "2026-09-05",
+      "outcome": "no_credential",
+      "ttfbMs": null,
+      "echoedModelId": null,
+      "detail": "no value for OPENAI_API_KEY"
+    },
+    "gpt-5.6-terra": {
+      "routeId": "openai/gpt-5.6-terra",
+      "probedOn": "2026-09-05",
+      "outcome": "no_credential",
+      "ttfbMs": null,
+      "echoedModelId": null,
+      "detail": "no value for OPENAI_API_KEY"
+    },
+    "gpt-oss-120b": {
+      "routeId": "groq/gpt-oss-120b",
+      "probedOn": "2026-09-05",
+      "outcome": "no_credential",
+      "ttfbMs": null,
+      "echoedModelId": null,
+      "detail": "no value for GROQ_API_KEY"
+    },
+    "gpt-oss-20b": {
+      "routeId": "groq/gpt-oss-20b",
+      "probedOn": "2026-09-05",
+      "outcome": "no_credential",
+      "ttfbMs": null,
+      "echoedModelId": null,
+      "detail": "no value for GROQ_API_KEY"
+    },
+    "grok-4.6": {
+      "routeId": "xai/grok-4.6",
+      "probedOn": "2026-09-05",
+      "outcome": "no_credential",
+      "ttfbMs": null,
+      "echoedModelId": null,
+      "detail": "no value for XAI_API_KEY"
+    },
+    "kimi-k2.6": {
+      "routeId": "moonshot/kimi-k2.6",
+      "probedOn": "2026-09-05",
+      "outcome": "no_credential",
+      "ttfbMs": null,
+      "echoedModelId": null,
+      "detail": "no value for MOONSHOT_API_KEY"
+    },
+    "kimi-k2.7-code": {
+      "routeId": "moonshot/kimi-k2.7-code",
+      "probedOn": "2026-09-05",
+      "outcome": "no_credential",
+      "ttfbMs": null,
+      "echoedModelId": null,
+      "detail": "no value for MOONSHOT_API_KEY"
+    },
+    "kimi-k3": {
+      "routeId": "moonshot/kimi-k3",
+      "probedOn": "2026-09-05",
+      "outcome": "no_credential",
+      "ttfbMs": null,
+      "echoedModelId": null,
+      "detail": "no value for MOONSHOT_API_KEY"
+    },
+    "minimax-m2.7": {
+      "routeId": "minimax/minimax-m2.7",
+      "probedOn": "2026-09-05",
+      "outcome": "no_credential",
+      "ttfbMs": null,
+      "echoedModelId": null,
+      "detail": "no value for MINIMAX_API_KEY"
+    },
+    "minimax-m3": {
+      "routeId": "minimax/minimax-m3",
+      "probedOn": "2026-09-05",
+      "outcome": "no_credential",
+      "ttfbMs": null,
+      "echoedModelId": null,
+      "detail": "no value for MINIMAX_API_KEY"
+    },
+    "openrouter-auto": {
+      "routeId": "open_router/openrouter-auto",
+      "probedOn": "2026-09-05",
+      "outcome": "no_credential",
+      "ttfbMs": null,
+      "echoedModelId": null,
+      "detail": "no value for OPENROUTER_API_KEY"
+    },
+    "openrouter-free": {
+      "routeId": "open_router/openrouter-free",
+      "probedOn": "2026-09-05",
+      "outcome": "no_credential",
+      "ttfbMs": null,
+      "echoedModelId": null,
+      "detail": "no value for OPENROUTER_API_KEY"
+    },
+    "qwen-3.5-flash": {
+      "routeId": "qwen/qwen-3.5-flash",
+      "probedOn": "2026-09-05",
+      "outcome": "no_credential",
+      "ttfbMs": null,
+      "echoedModelId": null,
+      "detail": "no value for QWEN_API_KEY"
+    },
+    "qwen-3.7-plus": {
+      "routeId": "qwen/qwen-3.7-plus",
+      "probedOn": "2026-09-05",
+      "outcome": "no_credential",
+      "ttfbMs": null,
+      "echoedModelId": null,
+      "detail": "no value for QWEN_API_KEY"
+    },
+    "qwen-3.8-flash": {
+      "routeId": "qwen/qwen-3.8-flash",
+      "probedOn": "2026-09-05",
+      "outcome": "no_credential",
+      "ttfbMs": null,
+      "echoedModelId": null,
+      "detail": "no value for QWEN_API_KEY"
+    },
+    "sonar": {
+      "routeId": "perplexity/sonar",
+      "probedOn": "2026-09-05",
+      "outcome": "no_credential",
+      "ttfbMs": null,
+      "echoedModelId": null,
+      "detail": "no value for PERPLEXITY_API_KEY"
+    },
+    "sonar-deep-research": {
+      "routeId": "perplexity/sonar-deep-research",
+      "probedOn": "2026-09-05",
+      "outcome": "no_credential",
+      "ttfbMs": null,
+      "echoedModelId": null,
+      "detail": "no value for PERPLEXITY_API_KEY"
+    },
+    "sonar-pro": {
+      "routeId": "perplexity/sonar-pro",
+      "probedOn": "2026-09-05",
+      "outcome": "no_credential",
+      "ttfbMs": null,
+      "echoedModelId": null,
+      "detail": "no value for PERPLEXITY_API_KEY"
+    },
+    "sonar-reasoning-pro": {
+      "routeId": "perplexity/sonar-reasoning-pro",
+      "probedOn": "2026-09-05",
+      "outcome": "no_credential",
+      "ttfbMs": null,
+      "echoedModelId": null,
+      "detail": "no value for PERPLEXITY_API_KEY"
+    }
+  }
+}
