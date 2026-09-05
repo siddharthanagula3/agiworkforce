@@ -4,12 +4,14 @@ import { Sidebar, type SidebarProps } from '../Sidebar';
 import type { SidebarProject, SidebarSession } from '../types';
 
 /**
- * Slice E item 2: the chat row menu must carry Share, Rename, Pin, Archive,
- * Delete and Move to project in that order (ChatGPT), with Copy link and
- * Mark as unread folded in (Claude). `Menu.keyboard.test.tsx` already covers
- * the arrow/Home/End/Escape contract every `role="menu"` panel inherits from
- * the shared `Menu` primitive; this file only checks this menu's own
- * entries and their order.
+ * Slice E item 2: the chat row menu must carry Share, Rename, then Pin,
+ * Mark as unread, Archive, Delete, then Move to project last as a flyout
+ * (both leaders), with Star and Copy link dropped (Claude's mark-as-unread
+ * kept) and no inline per-project list (which grew the panel past the
+ * viewport and broke its own anchoring).
+ * `Menu.keyboard.test.tsx` already covers the arrow/Home/End/Escape contract
+ * every `role="menu"` panel inherits from the shared `Menu` primitive; this
+ * file only checks this menu's own entries, order, and the submenu.
  */
 
 const session: SidebarSession = {
@@ -18,7 +20,10 @@ const session: SidebarSession = {
   updatedAt: new Date(2026, 8, 1).toISOString(),
 };
 
-const projects: SidebarProject[] = [{ id: 'p1', name: 'agiworkforce' }];
+const projects: SidebarProject[] = [
+  { id: 'p1', name: 'agiworkforce' },
+  { id: 'p2', name: 'Marketing launch' },
+];
 
 function renderRowMenu(overrides: Partial<SidebarProps> = {}) {
   render(
@@ -33,8 +38,8 @@ function renderRowMenu(overrides: Partial<SidebarProps> = {}) {
       onStar={vi.fn()}
       onArchive={vi.fn()}
       onShare={vi.fn()}
-      onMoveToProject={vi.fn()}
       onMarkUnread={vi.fn()}
+      onMoveToProject={vi.fn()}
       getSessionHref={(s) => `/chat/${s.id}`}
       {...overrides}
     />,
@@ -50,46 +55,69 @@ function itemLabels(menu: HTMLElement): string[] {
 }
 
 describe('chat row menu (Sidebar > SessionItem)', () => {
-  it('lists every entry in the leader-matched order', () => {
+  it('lists Share, Rename, Pin, Mark as unread, Archive, Delete, Move to project in that order', () => {
     const menu = renderRowMenu();
     expect(itemLabels(menu)).toEqual([
       'Share',
-      'Copy link',
       'Rename',
       'Pin',
-      'Star',
       'Mark as unread',
       'Archive',
       'Delete',
-      'agiworkforce',
+      'Move to project',
     ]);
   });
 
-  it('shows the Move to project group last, labelled and separated', () => {
+  it('never shows Star or Copy link', () => {
     const menu = renderRowMenu();
-    const groupLabel = within(menu).getByText('Move to project');
-    const items = within(menu).getAllByRole('menuitem');
-    const deleteIndex = items.findIndex((el) => el.textContent?.trim() === 'Delete');
-    const projectIndex = items.findIndex((el) => el.textContent?.trim() === 'agiworkforce');
-    expect(projectIndex).toBeGreaterThan(deleteIndex);
-    expect(
-      groupLabel.compareDocumentPosition(items[projectIndex]!) & Node.DOCUMENT_POSITION_FOLLOWING,
-    ).toBeTruthy();
-  });
-
-  it('omits Copy link when the caller supplies no href', () => {
-    const menu = renderRowMenu({ getSessionHref: undefined });
+    expect(itemLabels(menu)).not.toContain('Star');
     expect(itemLabels(menu)).not.toContain('Copy link');
   });
 
-  it('flips the unread entry to "Mark as read" once the session is unread', () => {
-    const menu = renderRowMenu({ sessions: [{ ...session, unread: true }] });
-    expect(itemLabels(menu)).toContain('Mark as read');
-    expect(itemLabels(menu)).not.toContain('Mark as unread');
+  it('calls onMarkUnread with the session id', () => {
+    const onMarkUnread = vi.fn();
+    const menu = renderRowMenu({ onMarkUnread });
+    fireEvent.click(within(menu).getByRole('menuitem', { name: 'Mark as unread' }));
+    expect(onMarkUnread).toHaveBeenCalledWith('s1');
   });
 
-  it('omits Mark as unread entirely when the host supplies no handler', () => {
-    const menu = renderRowMenu({ onMarkUnread: undefined });
-    expect(itemLabels(menu)).not.toContain('Mark as unread');
+  it('shows Mark as read once the session is unread', () => {
+    const menu = renderRowMenu({ sessions: [{ ...session, unread: true }] });
+    expect(within(menu).getByRole('menuitem', { name: 'Mark as read' })).toBeTruthy();
+  });
+
+  it('keeps the panel to a fixed set of rows regardless of project count', () => {
+    const manyProjects = Array.from({ length: 30 }, (_, i) => ({
+      id: `p${i}`,
+      name: `Project ${i}`,
+    }));
+    const menu = renderRowMenu({ projects: manyProjects });
+    expect(itemLabels(menu)).toEqual([
+      'Share',
+      'Rename',
+      'Pin',
+      'Mark as unread',
+      'Archive',
+      'Delete',
+      'Move to project',
+    ]);
+  });
+
+  it('opens the Move to project flyout on click and lists the projects there, not inline', () => {
+    const onMoveToProject = vi.fn();
+    const menu = renderRowMenu({ onMoveToProject });
+
+    expect(within(menu).queryByRole('menuitem', { name: 'agiworkforce' })).toBeNull();
+
+    fireEvent.click(within(menu).getByRole('menuitem', { name: 'Move to project' }));
+    const submenu = screen.getByRole('menu', { name: 'Move to project' });
+    fireEvent.click(within(submenu).getByRole('menuitem', { name: 'agiworkforce' }));
+
+    expect(onMoveToProject).toHaveBeenCalledWith('s1', 'p1');
+  });
+
+  it('omits Move to project entirely when there are no projects', () => {
+    const menu = renderRowMenu({ projects: [] });
+    expect(itemLabels(menu)).not.toContain('Move to project');
   });
 });

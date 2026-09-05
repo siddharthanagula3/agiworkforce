@@ -128,11 +128,10 @@
     "unstar": "별표 해제",
     "untitled": "제목 없음",
     "untitledChat": "제목 없는 채팅",
-    "navLabel": "채팅 기록",
-    "toggleSidebar": "사이드바 전환",
-    "copyLink": "링크 복사",
     "markUnread": "읽지 않음으로 표시",
-    "markRead": "읽음으로 표시"
+    "markRead": "읽음으로 표시",
+    "navLabel": "채팅 기록",
+    "toggleSidebar": "사이드바 전환"
   },
   "composer": {
     "addAttachment": "첨부 파일 추가",
