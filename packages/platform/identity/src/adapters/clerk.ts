@@ -1,5 +1,4 @@
-import { auth, clerkClient, clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server';
-import type { NextMiddleware, NextRequest } from 'next/server';
+import * as clerkServer from '@clerk/nextjs/server';
 
 import { APP_URL_ENV, resolveDeploymentOrigin } from '../deployment-origin';
 import { clerkHasBrowserSessionCookie } from '../session-cookie';
@@ -7,6 +6,7 @@ import {
   IdentityConfigError,
   type IdentityClaims,
   type IdentityCspOrigins,
+  type IdentityEmailVerification,
   type IdentityMembership,
   type IdentityMiddlewareSupport,
   type IdentityProvider,
@@ -14,6 +14,7 @@ import {
   type IdentitySession,
   type IdentitySessionActivity,
   type IdentitySessionPage,
+  type IdentitySessionMiddleware,
   type IdentitySignInRoute,
   type IdentityUser,
   type ListUserSessionsOptions,
@@ -39,7 +40,7 @@ const CLERK_TELEMETRY_ORIGIN = 'https://clerk-telemetry.com';
 const SIGN_IN_PATH = '/login';
 const SIGN_IN_REDIRECT_PARAM = 'redirectTo';
 
-type ClerkClient = Awaited<ReturnType<typeof clerkClient>>;
+type ClerkClient = Awaited<ReturnType<typeof clerkServer.clerkClient>>;
 type ClerkUser = Awaited<ReturnType<ClerkClient['users']['getUser']>>;
 type ClerkSession = Awaited<ReturnType<ClerkClient['sessions']['getSession']>>;
 type ClerkSessionActivity = NonNullable<ClerkSession['latestActivity']>;
@@ -91,11 +92,21 @@ export function clerkFrontendApiOrigin(publishableKey: string | undefined): stri
   return `https://${host}`;
 }
 
+const VERIFIED_STATUS = 'verified';
+
+function toEmailVerification(primary: ClerkUser['primaryEmailAddress']): IdentityEmailVerification {
+  const status = primary?.verification?.status ?? null;
+  if (status === VERIFIED_STATUS) return 'verified';
+  if (status === null) return 'unknown';
+  return 'unverified';
+}
+
 function toUser(user: ClerkUser): IdentityUser {
   const emails = user.emailAddresses.map((address) => address.emailAddress).filter(Boolean);
   return {
     id: user.id,
     primaryEmail: optional(user.primaryEmailAddress?.emailAddress) ?? emails[0] ?? null,
+    primaryEmailVerification: toEmailVerification(user.primaryEmailAddress),
     emails,
     firstName: optional(user.firstName),
     lastName: optional(user.lastName),
@@ -137,7 +148,7 @@ function toSession(session: ClerkSession): IdentitySession {
   };
 }
 
-export class ClerkIdentityProvider implements IdentityProvider {
+export class ClerkIdentityProvider<Request = unknown> implements IdentityProvider<Request> {
   readonly name = CLERK_PROVIDER_NAME;
 
   private client: Promise<ClerkClient> | null = null;
@@ -146,6 +157,10 @@ export class ClerkIdentityProvider implements IdentityProvider {
 
   private secretKey(): string | null {
     return optional(this.config.secretKey ?? readEnv(CLERK_SECRET_KEY_ENV));
+  }
+
+  canVerifySessionTokens(): boolean {
+    return this.secretKey() !== null;
   }
 
   /**
@@ -173,7 +188,7 @@ export class ClerkIdentityProvider implements IdentityProvider {
   }
 
   private apiClient(): Promise<ClerkClient> {
-    this.client ??= clerkClient();
+    this.client ??= clerkServer.clerkClient();
     return this.client;
   }
 
@@ -215,7 +230,7 @@ export class ClerkIdentityProvider implements IdentityProvider {
   }
 
   async currentRequestAuth(): Promise<IdentityRequestAuth> {
-    const session = await auth();
+    const session = await clerkServer.auth();
     return {
       subject: session.userId ?? null,
       sessionId: session.sessionId ?? null,
@@ -272,16 +287,21 @@ export class ClerkIdentityProvider implements IdentityProvider {
     }));
   }
 
-  readonly middleware: IdentityMiddlewareSupport = {
-    createRouteMatcher: (patterns: readonly string[]): ((request: NextRequest) => boolean) =>
-      createRouteMatcher([...patterns]),
+  /**
+   * The two casts here are the whole reason the port keeps the request type
+   * abstract: Clerk types these against the Next request, and naming that type
+   * in the port would bind this package to a second copy of Next's types.
+   */
+  readonly middleware: IdentityMiddlewareSupport<Request> = {
+    createRouteMatcher: (patterns: readonly string[]): ((request: Request) => boolean) =>
+      clerkServer.createRouteMatcher([...patterns]) as unknown as (request: Request) => boolean,
     withSession: (
-      handler: SessionMiddlewareHandler,
+      handler: SessionMiddlewareHandler<Request>,
       options: SessionMiddlewareOptions,
-    ): NextMiddleware =>
-      clerkMiddleware((_session, request) => handler(request), {
+    ): IdentitySessionMiddleware<Request> =>
+      clerkServer.clerkMiddleware((_session, request) => handler(request as Request), {
         authorizedParties: [...options.authorizedParties],
-      }),
+      }) as unknown as IdentitySessionMiddleware<Request>,
     contentSecurityPolicyOrigins: (): IdentityCspOrigins => {
       const frontendApi = clerkFrontendApiOrigin(this.publishableKey());
       const shared = frontendApi
