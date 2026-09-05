@@ -9,17 +9,17 @@ import type {
 import { useConfirm } from '@agiworkforce/ui';
 import { addCsrfHeaders } from '@/lib/client/csrf';
 import { toUserMessage } from '@/lib/user-error-message';
+import ContentTakedownPanel from '../components/ContentTakedownPanel';
+import OperatorCostsPanel from '../components/OperatorCostsPanel';
+import PrivacyRequestsPanel from '../components/PrivacyRequestsPanel';
+import RoutingHealthPanel from '../components/RoutingHealthPanel';
+import { formatCents, formatDateTime, NOT_RECORDED } from '../lib/operator-format';
 
-type Tab = 'overview' | 'feedback' | 'users';
+const TABS = ['overview', 'feedback', 'users', 'costs', 'routing', 'content', 'privacy'] as const;
 
-function formatCents(cents: number | null): string {
-  if (cents === null) return ', ';
-  return `$${(cents / 100).toFixed(2)}`;
-}
+type Tab = (typeof TABS)[number];
 
-function formatDate(iso: string): string {
-  return new Date(iso).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
-}
+const DATABASE_VIEWS: readonly Tab[] = ['overview', 'feedback', 'users'];
 
 /**
  * A 30-day signup sparkline drawn from the series the API returns. Inline SVG
@@ -92,7 +92,10 @@ export function OperatorDashboardPage() {
   const { confirm: confirmDestructive, dialog: destructiveConfirmDialog } = useConfirm();
 
   const load = useCallback(async (view: Tab) => {
+    // Cleared for every view, not only the ones that fetch here: a failure from
+    // the last tab must not sit above a panel that owns its own error surface.
     setError(null);
+    if (!DATABASE_VIEWS.includes(view)) return;
     try {
       const response = await fetch(`/api/operator?view=${view}`, { cache: 'no-store' });
       if (!response.ok) throw new Error(`Request failed (${response.status})`);
@@ -246,7 +249,7 @@ export function OperatorDashboardPage() {
       </div>
 
       <div role="tablist" aria-label="Dashboard views" className="flex gap-2">
-        {(['overview', 'feedback', 'users'] as const).map((value) => (
+        {TABS.map((value) => (
           <button
             key={value}
             role="tab"
@@ -269,23 +272,6 @@ export function OperatorDashboardPage() {
         </p>
       ) : null}
       {destructiveConfirmDialog}
-
-      <div className="flex flex-wrap items-center gap-3 rounded-lg border border-destructive/30 bg-destructive/5 p-3">
-        <div className="min-w-0 flex-1">
-          <p className="text-sm font-medium">Clear usage for everyone</p>
-          <p className="text-xs text-muted-foreground">
-            Goodwill reset after an incident. Shows the exact blast radius first, then asks you to
-            type the confirmation. Allocation is untouched; only consumption is cleared.
-          </p>
-        </div>
-        <button
-          onClick={() => void resetEveryone()}
-          disabled={bulkBusy}
-          className="rounded-full border border-destructive/50 px-4 py-1.5 text-xs font-medium text-danger transition-colors hover:bg-destructive/10 disabled:opacity-50"
-        >
-          {bulkBusy ? 'Working…' : 'Reset all usage'}
-        </button>
-      </div>
 
       {notice ? (
         <p role="status" className="text-sm text-muted-foreground">
@@ -341,7 +327,7 @@ export function OperatorDashboardPage() {
                   <div className="flex flex-wrap items-baseline justify-between gap-2">
                     <span className="text-sm font-medium">{row.subject || 'No subject'}</span>
                     <span className="text-xs text-muted-foreground">
-                      {formatDate(row.createdAt)}
+                      {formatDateTime(row.createdAt)}
                     </span>
                   </div>
                   <p className="mt-1 text-xs text-muted-foreground">
@@ -355,6 +341,33 @@ export function OperatorDashboardPage() {
         ) : (
           <p className="text-sm text-muted-foreground">Loading…</p>
         )
+      ) : null}
+
+      {tab === 'costs' ? <OperatorCostsPanel /> : null}
+
+      {tab === 'routing' ? <RoutingHealthPanel /> : null}
+
+      {tab === 'content' ? <ContentTakedownPanel /> : null}
+
+      {tab === 'privacy' ? <PrivacyRequestsPanel /> : null}
+
+      {tab === 'users' ? (
+        <div className="flex flex-wrap items-center gap-3 rounded-lg border border-destructive/30 bg-destructive/5 p-3">
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-medium">Clear usage for everyone</p>
+            <p className="text-xs text-muted-foreground">
+              Goodwill reset after an incident. Shows the exact blast radius first, then asks you to
+              type the confirmation. Allocation is untouched; only consumption is cleared.
+            </p>
+          </div>
+          <button
+            onClick={() => void resetEveryone()}
+            disabled={bulkBusy}
+            className="rounded-full border border-destructive/50 px-4 py-1.5 text-xs font-medium text-danger transition-colors hover:bg-destructive/10 disabled:opacity-50"
+          >
+            {bulkBusy ? 'Working…' : 'Reset all usage'}
+          </button>
+        </div>
       ) : null}
 
       {tab === 'users' ? (
@@ -374,7 +387,7 @@ export function OperatorDashboardPage() {
                 {users.map((user) => (
                   <tr key={user.id} className="border-t border-border">
                     <td className="p-3">
-                      <div>{user.email ?? ', '}</div>
+                      <div>{user.email ?? NOT_RECORDED}</div>
                       <div className="text-xs text-muted-foreground">
                         {user.displayName ?? user.id}
                       </div>
@@ -390,7 +403,7 @@ export function OperatorDashboardPage() {
                       {formatCents(user.creditsAllocatedCents)}
                     </td>
                     <td className="p-3 text-xs text-muted-foreground">
-                      {formatDate(user.createdAt)}
+                      {formatDateTime(user.createdAt)}
                     </td>
                     <td className="p-3">
                       <button
