@@ -25,6 +25,7 @@
       "@agiworkforce/mcp",
       "@agiworkforce/mobile",
       "@agiworkforce/model-registry",
+      "@agiworkforce/object-storage",
       "@agiworkforce/provider-protocol",
       "@agiworkforce/provider-runtime",
       "@agiworkforce/providers-anthropic",
@@ -671,6 +672,10 @@
       {
         "from": "@agiworkforce/web",
         "to": "@agiworkforce/mcp"
+      },
+      {
+        "from": "@agiworkforce/web",
+        "to": "@agiworkforce/object-storage"
       },
       {
         "from": "@agiworkforce/web",
