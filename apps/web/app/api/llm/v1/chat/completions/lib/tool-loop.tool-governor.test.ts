@@ -49,6 +49,8 @@ import type { ProcessedRequest } from './request-processor';
 import { webSearchToolDef, WEB_SEARCH_TOOL } from '@/lib/web-search/web-search-tool';
 import { e2bExecutionToolDefs, EXECUTE_CODE_TOOL } from '@/lib/e2b/execution-tools';
 import { functionToolName } from './tool-loop-routing';
+import { nativeSearchToolName } from '@/lib/web-search/required-search';
+import { resolveNativeSearchMaxUses } from './request-processor';
 
 const REPEATED_QUERY = 'best crm 2026';
 const NEAR_IDENTICAL_QUERY = 'Best CRM, 2026?';
@@ -146,7 +148,37 @@ function offeredToolNames(callIndex: number): string[] {
   const request = factoryMocks.streamRequest.mock.calls[callIndex]?.[2] as
     | { tools?: unknown[] }
     | undefined;
-  return (request?.tools ?? []).map(functionToolName).filter(Boolean);
+  return (request?.tools ?? [])
+    .map((tool) => functionToolName(tool) || nativeSearchToolName(tool))
+    .filter(Boolean);
+}
+
+const NATIVE_SEARCH_TOOL = { type: 'web_search_20260209', name: 'web_search', max_uses: 3 };
+
+/** One provider step that grounds `count` times before it answers. */
+function groundedStream(count: number): ReadableStream<Uint8Array> {
+  const events: unknown[] = [];
+  for (let i = 0; i < count; i += 1) {
+    events.push({
+      choices: [
+        {
+          delta: {
+            x_tool_status: {
+              type: 'server_tool_use',
+              name: 'web_search',
+              status: 'searching',
+              tool_use_id: `srv_${i}`,
+            },
+          },
+          index: 0,
+        },
+      ],
+      model: 'test-model',
+    });
+  }
+  events.push({ choices: [{ delta: { content: 'Done.' }, index: 0 }], model: 'test-model' });
+  events.push({ choices: [{ delta: {}, finish_reason: 'stop', index: 0 }], model: 'test-model' });
+  return sseStream(events);
 }
 
 beforeEach(() => {
@@ -241,5 +273,40 @@ describe('tool loop · unavailable tool withdrawal', () => {
 
     expect(offeredToolNames(1)).toHaveLength(0);
     expect(requestAt(1)?.tool_choice).toBeUndefined();
+  });
+});
+
+describe('tool loop · native search cap', () => {
+  it('reports the limit once the turn has grounded its allowance', async () => {
+    const cap = resolveNativeSearchMaxUses(false);
+    factoryMocks.streamRequest.mockResolvedValueOnce(groundedStream(cap));
+
+    const output = await collect(
+      runToolLoop(makeProcessed([NATIVE_SEARCH_TOOL]), { approvalMode: 'auto' }),
+    );
+
+    expect(offeredToolNames(0)).toContain('anthropic-server');
+    expect(output).toContain('Search limit reached');
+    // Reported once for the turn, however many groundings tripped it.
+    expect(output.match(/native-search-cap:/g)).toHaveLength(1);
+  });
+
+  it('says nothing while the turn is still inside its allowance', async () => {
+    const cap = resolveNativeSearchMaxUses(false);
+    factoryMocks.streamRequest.mockResolvedValueOnce(groundedStream(cap - 1));
+
+    const output = await collect(
+      runToolLoop(makeProcessed([NATIVE_SEARCH_TOOL]), { approvalMode: 'auto' }),
+    );
+
+    expect(output).not.toContain('Search limit reached');
+  });
+
+  it('leaves grounding on offer for a turn that never grounded', async () => {
+    factoryMocks.streamRequest.mockResolvedValue(finalAnswerStream('Answered from memory.'));
+
+    await collect(runToolLoop(makeProcessed([NATIVE_SEARCH_TOOL]), { approvalMode: 'auto' }));
+
+    expect(offeredToolNames(0)).toContain('anthropic-server');
   });
 });

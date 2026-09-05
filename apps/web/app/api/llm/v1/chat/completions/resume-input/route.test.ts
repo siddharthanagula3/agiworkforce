@@ -28,6 +28,7 @@ const mockProcessRequest = vi.fn();
 vi.mock('../lib/request-processor', () => ({
   processRequest: (...args: unknown[]) => mockProcessRequest(...args),
   toManagedSkillFromUserSkill: vi.fn(),
+  resolveNativeSearchMaxUses: () => 3,
 }));
 
 const mockRunToolLoop = vi.fn();
