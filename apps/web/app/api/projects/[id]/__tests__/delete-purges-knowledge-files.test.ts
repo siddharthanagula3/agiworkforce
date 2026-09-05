@@ -31,6 +31,13 @@ vi.mock('@/lib/server/rls-db', () => ({
 }));
 vi.mock('@/lib/server/object-storage', () => ({
   objectKeyFromStorageUri: (value: string) => value,
+  StoredObjectTooLargeError: class StoredObjectTooLargeError extends Error {},
+  deleteObject: vi.fn(),
+  deletePrivateObject: vi.fn(),
+  getBoundedObject: vi.fn(),
+  getBoundedPrivateObject: vi.fn(),
+  isObjectStorageConfigured: vi.fn(),
+  isPrivateObjectStorageConfigured: vi.fn(),
 }));
 vi.mock('@/lib/server/project-knowledge-object-storage', () => ({
   deleteProjectKnowledgeObject: mocks.deleteProjectKnowledgeObject,
