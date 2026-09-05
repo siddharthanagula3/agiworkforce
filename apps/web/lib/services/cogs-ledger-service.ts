@@ -735,6 +735,47 @@ export async function summarizeTaskEconomics(
   };
 }
 
+interface CogsAccountAttributionRow {
+  active_accounts: number | string | null;
+  attributed_cost_cents: number | string | null;
+  unattributed_cost_cents: number | string | null;
+}
+
+export interface CogsAccountAttribution {
+  activeAccounts: number;
+  attributedCostCents: number;
+  unattributedCostCents: number;
+}
+
+/**
+ * `user_id` is nullable on the ledger, so a cost per account taken over the
+ * whole period total would divide money nobody can be attributed by a count of
+ * accounts that never carried it. This returns both halves separately so the
+ * quotient is exact and the remainder is visible rather than absorbed.
+ */
+export async function summarizeCogsAccountAttribution(
+  periodStart: Date,
+  periodEnd: Date,
+  db: DatabaseAdapter = getNeonDb(),
+): Promise<CogsAccountAttribution> {
+  const [row] = await db.query<CogsAccountAttributionRow>(
+    `select count(distinct event.user_id)::bigint as active_accounts,
+            coalesce(sum(event.provider_cost_cents)
+              filter (where event.user_id is not null), 0)::bigint as attributed_cost_cents,
+            coalesce(sum(event.provider_cost_cents)
+              filter (where event.user_id is null), 0)::bigint as unattributed_cost_cents
+       from public.provider_cost_events event
+      where event.occurred_at >= $1::timestamptz
+        and event.occurred_at < $2::timestamptz`,
+    [periodStart.toISOString(), periodEnd.toISOString()],
+  );
+  return {
+    activeAccounts: numberFrom(row?.active_accounts),
+    attributedCostCents: numberFrom(row?.attributed_cost_cents),
+    unattributedCostCents: numberFrom(row?.unattributed_cost_cents),
+  };
+}
+
 interface OrganizationSpendRow {
   spend_cents: number | string | null;
 }
