@@ -132,6 +132,13 @@ export {
   isPromoExpired,
   tokenizerDriftFactor,
 } from './pricing';
+export { canonicalProvider, evaluateModelAccess, policyRestrictsAnything } from './model-policy';
+export type {
+  ModelAccessAsk,
+  ModelAccessCode,
+  ModelAccessDecision,
+  ModelAccessPolicy,
+} from './model-policy';
 export { assessModelSwitchCache } from './model-switch-cache';
 export type { ModelSwitchCacheAssessment, ModelSwitchCacheInput } from './model-switch-cache';
 export {

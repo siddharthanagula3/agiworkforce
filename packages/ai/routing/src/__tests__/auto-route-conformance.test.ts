@@ -25,6 +25,7 @@ import { modelRegistry } from '@agiworkforce/model-registry';
 import { describe, expect, it } from 'vitest';
 
 import { resolveAutoRoute, type ObservedRouteHealth, type RoutingTrustMode } from '../auto';
+import type { ModelAccessPolicy } from '../model-policy';
 import type { RoutingTaskType } from '../types';
 
 const FIXTURE_INDENT = 2;
@@ -46,6 +47,18 @@ const FIXTURE_PATH = fileURLToPath(
  */
 const OBSERVED_HEALTH_FIXTURE_PATH = fileURLToPath(
   new URL('./fixtures/auto-route-observed-health.json', import.meta.url),
+);
+
+/**
+ * Organization policy is a TypeScript-only admission input, for the same reason
+ * observed health is: its evaluator carries a hand-maintained provider-synonym
+ * table, and mirroring that table into the crate would duplicate exactly the
+ * data the no-hardcoding rule forbids duplicating. The Rust resolver has no
+ * workspace to be governed by, so its cases live here rather than in the shared
+ * file. Every ungoverned case is asserted equal to the shared fixture.
+ */
+const POLICY_FIXTURE_PATH = fileURLToPath(
+  new URL('./fixtures/auto-route-policy.json', import.meta.url),
 );
 
 const OBSERVED_TRUST_MODE: RoutingTrustMode = 'managed_cloud';
@@ -220,6 +233,93 @@ function computeObservedCases(): Record<string, string> {
   return cases;
 }
 
+interface PolicyScenario {
+  suffix: string;
+  policy: (vendor: string, modelKey: string) => ModelAccessPolicy | null;
+}
+
+const POLICY_SCENARIOS: readonly PolicyScenario[] = [
+  { suffix: 'ungoverned', policy: () => null },
+  {
+    suffix: 'blocked_vendor',
+    policy: (vendor) => ({
+      allowedProviders: [],
+      blockedProviders: [vendor],
+      allowedModels: [],
+      blockedModels: [],
+    }),
+  },
+  {
+    suffix: 'blocked_model',
+    policy: (_vendor, modelKey) => ({
+      allowedProviders: [],
+      blockedProviders: [],
+      allowedModels: [],
+      blockedModels: [modelKey],
+    }),
+  },
+  {
+    suffix: 'vendor_allowlist',
+    policy: (vendor) => ({
+      allowedProviders: [vendor],
+      blockedProviders: [],
+      allowedModels: [],
+      blockedModels: [],
+    }),
+  },
+  {
+    suffix: 'model_allow_over_vendor_block',
+    policy: (vendor, modelKey) => ({
+      allowedProviders: [],
+      blockedProviders: [vendor],
+      allowedModels: [modelKey],
+      blockedModels: [],
+    }),
+  },
+];
+
+function policyCaseKey(
+  selection: string,
+  taskType: RoutingTaskType,
+  subscriptionTier: string,
+  suffix: string,
+): string {
+  return `policy|${selection}|${taskType}|${subscriptionTier}|${OBSERVED_TRUST_MODE}|${suffix}`;
+}
+
+/**
+ * Every policy is written against whatever the ungoverned decision picked, so
+ * the cases stay catalog-driven: no provider or model id is named here.
+ */
+function computePolicyCases(): Record<string, string> {
+  const cases: Record<string, string> = {};
+  for (const selection of aliases) {
+    for (const taskType of TASK_TYPES) {
+      for (const subscriptionTier of TIERS) {
+        const request = {
+          selection,
+          taskType,
+          subscriptionTier,
+          trustMode: OBSERVED_TRUST_MODE,
+          enableTaskFamilyStage: false,
+        } as const;
+        const base = resolveAutoRoute(request);
+        if (base.status !== 'selected') continue;
+        const vendor = base.routeId.slice(0, base.routeId.indexOf('/'));
+        for (const scenario of POLICY_SCENARIOS) {
+          cases[policyCaseKey(selection, taskType, subscriptionTier, scenario.suffix)] = encode(
+            resolveAutoRoute({
+              ...request,
+              organizationPolicy: scenario.policy(vendor, base.modelKey),
+            }),
+          );
+        }
+      }
+    }
+  }
+  return cases;
+}
+
 describe('auto-route cross-language conformance', () => {
   const computed = computeCases();
 
@@ -229,6 +329,10 @@ describe('auto-route cross-language conformance', () => {
       writeFileSync(
         OBSERVED_HEALTH_FIXTURE_PATH,
         `${JSON.stringify(computeObservedCases(), null, FIXTURE_INDENT)}\n`,
+      );
+      writeFileSync(
+        POLICY_FIXTURE_PATH,
+        `${JSON.stringify(computePolicyCases(), null, FIXTURE_INDENT)}\n`,
       );
       expect(Object.keys(computed).length).toBeGreaterThan(0);
     });
@@ -283,6 +387,70 @@ describe('auto-route cross-language conformance', () => {
         return observedRecorded[key.replace(FLAG_ON_SUFFIX, FLAG_OFF_SUFFIX)] !== value;
       });
       expect(moved.length).toBeGreaterThan(0);
+    });
+  });
+
+  describe('organization policy conformance', () => {
+    const policyComputed = computePolicyCases();
+    const policyRecorded = JSON.parse(readFileSync(POLICY_FIXTURE_PATH, 'utf8')) as Record<
+      string,
+      string
+    >;
+
+    it('covers the same cases the fixture records', () => {
+      expect(Object.keys(policyComputed).sort()).toEqual(Object.keys(policyRecorded).sort());
+    });
+
+    it('reaches the recorded decision for every case', () => {
+      const drifted = Object.entries(policyComputed).filter(
+        ([key, value]) => policyRecorded[key] !== value,
+      );
+      expect(drifted).toEqual([]);
+    });
+
+    it('reproduces the shared fixture byte for byte when ungoverned', () => {
+      const drifted = Object.entries(policyRecorded)
+        .filter(([key]) => key.endsWith('ungoverned'))
+        .map(([key, value]) => {
+          const [, selection, taskType, subscriptionTier] = key.split('|');
+          return [
+            key,
+            value,
+            recorded[sharedCaseKey(selection!, taskType as RoutingTaskType, subscriptionTier!)],
+          ] as const;
+        })
+        .filter(([, governed, sharedValue]) => governed !== sharedValue);
+      expect(drifted).toEqual([]);
+    });
+
+    it('never serves a route the workspace blocked', () => {
+      const served = Object.entries(policyRecorded).filter(
+        ([key, value]) => key.endsWith('blocked_vendor') && value.startsWith('selected'),
+      );
+      const leaked = served.filter(([key, value]) => {
+        const ungoverned = policyRecorded[key.replace('blocked_vendor', 'ungoverned')] ?? '';
+        const blockedVendor = ungoverned.split(';')[2]?.split('/')[0];
+        return value.split(';')[2]?.startsWith(`${blockedVendor}/`);
+      });
+      expect(leaked).toEqual([]);
+    });
+
+    /**
+     * The HEAD only. An allowlist naming one model makes every other model
+     * `model_not_allowed`, so the fallback tail correctly empties out; what must
+     * survive is the model the administrator explicitly approved.
+     */
+    it('lets an explicit model allow survive a block on its vendor', () => {
+      const head = (decision: string | undefined): string =>
+        (decision ?? '').split(';').slice(0, 3).join(';');
+      const drifted = Object.entries(policyRecorded)
+        .filter(([key]) => key.endsWith('model_allow_over_vendor_block'))
+        .filter(
+          ([key, value]) =>
+            head(policyRecorded[key.replace('model_allow_over_vendor_block', 'ungoverned')]) !==
+            head(value),
+        );
+      expect(drifted).toEqual([]);
     });
   });
 });
