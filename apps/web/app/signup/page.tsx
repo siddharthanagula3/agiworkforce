@@ -1,10 +1,17 @@
-import { SignUp } from '@clerk/nextjs';
-import { AuthShell } from '@/features/marketing/components/AuthShell';
+import { AuthFlow } from '@/features/auth/AuthFlow';
+import { AuthLayout } from '@/features/auth/AuthLayout';
+import { configuredAuthProviders } from '@/features/auth/authProviderConfig';
+import {
+  buildLoginUrl,
+  buildSignUpCompleteUrl,
+  buildSsoCallbackUrl,
+  readAuthRouteContext,
+} from '@/features/auth/authRoutes';
 import { getSafeRedirectUrl } from '../../lib/safe-redirect';
-import { agiClerkAppearance } from '../auth/clerkAppearance';
-import { TermsNotice } from './TermsNotice';
 
 const getAppUrl = () => process.env['NEXT_PUBLIC_APP_URL'] ?? 'https://agiworkforce.com';
+
+const SIGNUP_FALLBACK_REDIRECT = '/chat';
 
 export default async function SignupPage({
   searchParams,
@@ -12,26 +19,24 @@ export default async function SignupPage({
   searchParams: Promise<{ redirectTo?: string; next?: string; surface?: string }>;
 }) {
   const params = await searchParams;
-  const redirectTo = getSafeRedirectUrl(params.redirectTo ?? params.next, getAppUrl(), '/chat');
-  const isDesktopSurface = params.surface === 'desktop';
-  const signInUrl = isDesktopSurface
-    ? `/login?surface=desktop&redirectTo=${encodeURIComponent(redirectTo)}`
-    : '/login';
-
-  const completeUrl = `/signup/complete?redirectTo=${encodeURIComponent(redirectTo)}`;
+  const redirectTo = getSafeRedirectUrl(
+    params.redirectTo ?? params.next,
+    getAppUrl(),
+    SIGNUP_FALLBACK_REDIRECT,
+  );
+  const context = readAuthRouteContext(params, redirectTo);
 
   return (
-    <AuthShell embedded={isDesktopSurface}>
-      <div className="flex flex-col gap-4">
-        <SignUp
-          routing="hash"
-          signInUrl={signInUrl}
-          forceRedirectUrl={completeUrl}
-          signInFallbackRedirectUrl={redirectTo}
-          appearance={agiClerkAppearance}
-        />
-        <TermsNotice action="creating an account" />
-      </div>
-    </AuthShell>
+    <AuthLayout embedded={context.desktopSurface}>
+      <AuthFlow
+        mode="signup"
+        providers={configuredAuthProviders()}
+        redirects={{
+          completeUrl: buildSignUpCompleteUrl(context),
+          switchUrl: buildLoginUrl(context),
+          ssoCallbackUrl: buildSsoCallbackUrl(context),
+        }}
+      />
+    </AuthLayout>
   );
 }

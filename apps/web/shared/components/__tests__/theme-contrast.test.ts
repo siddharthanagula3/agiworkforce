@@ -196,6 +196,31 @@ const DARK_POPOVER = colorToken(web.dark, '--popover');
 
 const SWATCHES = ['default', 'green', 'blue', 'violet', 'rose'] as const;
 
+const BRAND_MARK_TOKENS = [
+  '--brand-google-blue',
+  '--brand-google-red',
+  '--brand-google-yellow',
+  '--brand-google-green',
+  '--brand-microsoft-red',
+  '--brand-microsoft-green',
+  '--brand-microsoft-blue',
+  '--brand-microsoft-yellow',
+];
+
+describe('brand mark colours belong to the brand, not to a theme', () => {
+  it('declares each one once and never re-tunes it for dark', () => {
+    for (const name of BRAND_MARK_TOKENS) {
+      const declaration = new RegExp(`^\\s*${name}:\\s*#[0-9a-f]{6};`, 'm');
+      expect(foundationLight, `${name} missing from the foundation root block`).toMatch(
+        declaration,
+      );
+      expect(foundationDark, `${name} re-declared for dark`).not.toMatch(
+        new RegExp(`^\\s*${name}:`, 'm'),
+      );
+    }
+  });
+});
+
 describe('the logo tile is fixed light in both themes', () => {
   for (const [theme, block] of [
     ['light', web.light],
