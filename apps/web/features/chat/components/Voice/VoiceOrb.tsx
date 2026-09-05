@@ -67,19 +67,16 @@ function paintOrb(
   context.clearRect(0, 0, ORB_CANVAS_SIZE, ORB_CANVAS_SIZE);
   if (radius <= 0) return;
 
-  const halo = context.createRadialGradient(
-    centre,
-    centre,
-    radius,
-    centre,
-    centre,
-    radius * HALO_RATIO,
-  );
+  // Clamped to the canvas: at the focused diameter the unclamped halo runs
+  // past 204px and the gradient's transparent stop lands outside the bitmap,
+  // which paints the halo as a visible square.
+  const haloRadius = Math.min(radius * HALO_RATIO, centre);
+  const halo = context.createRadialGradient(centre, centre, radius, centre, centre, haloRadius);
   halo.addColorStop(0, colours.halo);
   halo.addColorStop(1, 'transparent');
   context.fillStyle = halo;
   context.beginPath();
-  context.arc(centre, centre, radius * HALO_RATIO, 0, FULL_TURN);
+  context.arc(centre, centre, haloRadius, 0, FULL_TURN);
   context.fill();
 
   context.save();

@@ -104,6 +104,7 @@ export function VoiceModeSurface({
       growIn
       reducedMotion={session.reducedMotion}
       onClick={toggleFocusMode}
+      className={focusMode ? 'pointer-events-auto' : undefined}
     />
   );
 
@@ -163,13 +164,17 @@ export function VoiceModeSurface({
         variant === VOICE_SURFACE_VARIANT.chat && 'pb-12',
       )}
     >
-      {focusMode ? (
-        <div className="pointer-events-none fixed inset-0 z-[var(--z-overlay,250)] flex items-center justify-center">
-          <div className="pointer-events-auto">{orb}</div>
-        </div>
-      ) : (
-        orb
-      )}
+      {/* One node in both states. Moving the orb into an overlay instead
+          remounted it, and a remount restarts the grow-in, so the focus
+          toggle shrank the sphere to a pinprick before it doubled. */}
+      <div
+        className={cn(
+          'flex items-center justify-center',
+          focusMode && 'pointer-events-none fixed inset-0 z-[var(--z-overlay,250)]',
+        )}
+      >
+        {orb}
+      </div>
 
       {notice}
       {sendingChip}
