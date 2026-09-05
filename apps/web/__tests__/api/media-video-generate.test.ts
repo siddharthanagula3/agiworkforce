@@ -154,6 +154,10 @@ vi.mock('@/lib/services/managed-usage-request-service', async (importOriginal) =
 
 vi.mock('@/lib/server/media-storage', () => ({
   isVideoStorageConfigured: vi.fn(() => true),
+  authenticatedMediaUrl: vi.fn(),
+  deleteStoredMedia: vi.fn(),
+  storeMediaFile: vi.fn(),
+  videoStoragePathname: vi.fn(),
 }));
 
 vi.mock('@/lib/services/tier-unit-quota-service', () => ({
@@ -171,6 +175,27 @@ vi.mock('@/lib/server/video-generation-jobs', () => ({
     durableJobMocks.failBeforeProviderStart(...args),
   releaseVideoGenerationAdmission: (...args: unknown[]) =>
     durableJobMocks.releaseAdmission(...args),
+  attachVideoGenerationWorkflow: vi.fn(),
+  beginVideoProviderCancellationAttempt: vi.fn(),
+  claimVideoGenerationJob: vi.fn(),
+  claimVideoIncidentAlert: vi.fn(),
+  claimVideoSettlementIncidentById: vi.fn(),
+  claimVideoSettlementIncidentByReservation: vi.fn(),
+  completeVideoIncidentAlert: vi.fn(),
+  completeVideoSettlementIncident: vi.fn(),
+  countExhaustedVideoIncidentAlerts: vi.fn(),
+  countExhaustedVideoSettlementIncidentAlerts: vi.fn(),
+  deferVideoGenerationJob: vi.fn(),
+  deferVideoGenerationJobFailure: vi.fn(),
+  finalizeVideoGenerationJob: vi.fn(),
+  getVideoGenerationJob: vi.fn(),
+  getVideoGenerationJobForSystem: vi.fn(),
+  getVideoSettlementIncident: vi.fn(),
+  listDueVideoGenerationJobIds: vi.fn(),
+  listPendingVideoIncidentAlertIds: vi.fn(),
+  listPendingVideoSettlementIncidentIds: vi.fn(),
+  markVideoGenerationOutcomeUnknown: vi.fn(),
+  recordVideoProviderCancellationAttempt: vi.fn(),
 }));
 vi.mock('@/lib/server/video-job-store-readiness', () => ({
   isVideoJobStoreReady: (...args: unknown[]) => durableJobMocks.storeReady(...args),

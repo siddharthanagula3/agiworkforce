@@ -34,6 +34,7 @@ vi.mock('@/lib/rate-limit', () => ({
 }));
 vi.mock('@/lib/services/active-workspace-service', () => ({
   resolveActiveOrganizationId: vi.fn(async () => null),
+  resolveOrganizationMembershipId: vi.fn(async () => null),
 }));
 
 vi.mock('@/lib/logger', () => ({

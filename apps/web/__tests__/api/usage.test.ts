@@ -68,7 +68,7 @@ vi.mock('@/lib/server/rolling-usage', () => ({
   getRollingUsage: (...args: unknown[]) => mockGetRollingUsage(...args),
 }));
 
-vi.mock('@/lib/errors', () => {
+vi.mock('@/lib/errors', async (importOriginal) => {
   class AppError extends Error {
     code: string;
     statusCode: number;
@@ -81,6 +81,7 @@ vi.mock('@/lib/errors', () => {
     }
   }
   return {
+    ...(await importOriginal()),
     createError: {
       unauthorized: (msg: string) => new AppError(msg, 'UNAUTHORIZED', 401),
       badRequest: (msg: string) => new AppError(msg, 'BAD_REQUEST', 400),

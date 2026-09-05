@@ -46,6 +46,25 @@ vi.mock('@/lib/server/rls-db', () => ({
 }));
 vi.mock('@/lib/server/video-generation-jobs', () => ({
   getVideoGenerationJob: (...args: unknown[]) => durableMocks.get(...args),
+  beginVideoProviderCancellationAttempt: vi.fn(),
+  claimVideoGenerationJob: vi.fn(),
+  claimVideoIncidentAlert: vi.fn(),
+  claimVideoSettlementIncidentById: vi.fn(),
+  claimVideoSettlementIncidentByReservation: vi.fn(),
+  completeVideoIncidentAlert: vi.fn(),
+  completeVideoSettlementIncident: vi.fn(),
+  countExhaustedVideoIncidentAlerts: vi.fn(),
+  countExhaustedVideoSettlementIncidentAlerts: vi.fn(),
+  deferVideoGenerationJob: vi.fn(),
+  deferVideoGenerationJobFailure: vi.fn(),
+  finalizeVideoGenerationJob: vi.fn(),
+  getVideoGenerationJobForSystem: vi.fn(),
+  getVideoSettlementIncident: vi.fn(),
+  listDueVideoGenerationJobIds: vi.fn(),
+  listPendingVideoIncidentAlertIds: vi.fn(),
+  listPendingVideoSettlementIncidentIds: vi.fn(),
+  markVideoGenerationOutcomeUnknown: vi.fn(),
+  recordVideoProviderCancellationAttempt: vi.fn(),
 }));
 vi.mock('@/lib/services/video-job-reconciliation-service', () => ({
   reconcileVideoGenerationJob: (...args: unknown[]) => durableMocks.reconcile(...args),
