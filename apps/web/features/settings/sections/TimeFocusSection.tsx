@@ -36,15 +36,6 @@ function browserTimezone(): string {
   return Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
 }
 
-function panelStyle(): React.CSSProperties {
-  return {
-    border: '1px solid var(--settings-border)',
-    borderRadius: 'var(--radius-lg)',
-    background: 'var(--bg-elev)',
-    overflow: 'hidden',
-  };
-}
-
 export function TimeFocusSection() {
   const timezone = useMemo(() => browserTimezone(), []);
   const defaults = useMemo(() => defaultTimeFocusPreferences(timezone), [timezone]);
@@ -128,7 +119,7 @@ export function TimeFocusSection() {
         ? `${message.prefix ? `${message.prefix}: ` : ''}${message.text}`
         : dirty
           ? 'Unsaved changes'
-          : 'Synced to your account';
+          : 'Saved';
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
@@ -152,76 +143,75 @@ export function TimeFocusSection() {
         </p>
       </header>
 
-      <section style={panelStyle()} aria-labelledby="break-reminder-heading">
-        <div style={{ padding: '16px 20px' }}>
-          <h2
-            id="break-reminder-heading"
-            style={{ margin: 0, fontSize: 15, fontWeight: 600, color: 'var(--text-1)' }}
-          >
-            Break reminder
-          </h2>
-          <p style={{ margin: '4px 0 14px', fontSize: 12, color: 'var(--text-3)' }}>
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: 16,
+          padding: '14px 0',
+          borderBottom: '1px solid var(--settings-border)',
+          flexWrap: 'wrap',
+        }}
+      >
+        <div>
+          <div style={{ fontSize: 14, color: 'var(--text-1)' }}>Break reminder</div>
+          <div style={{ fontSize: 12, color: 'var(--text-3)', marginTop: 2 }}>
             Get one gentle nudge after this much visible time in AGI each day.
-          </p>
-          <label style={{ display: 'grid', gap: 6, maxWidth: 280 }}>
-            <span style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-2)' }}>
-              Break reminder
-            </span>
-            <select
-              aria-label="Break reminder"
-              value={draft.breakReminderMinutes ?? ''}
-              disabled={loading || saving}
-              onChange={(event) => {
-                const value = event.target.value;
-                update({
-                  ...draft,
-                  breakReminderMinutes: value
-                    ? (Number(value) as TimeFocusPreferences['breakReminderMinutes'])
-                    : null,
-                });
-              }}
-              style={{
-                height: 38,
-                borderRadius: 8,
-                border: '1px solid var(--settings-border)',
-                background: 'var(--bg-base)',
-                color: 'var(--text-1)',
-                padding: '0 10px',
-              }}
-            >
-              <option value="">Off</option>
-              {BREAK_REMINDER_MINUTES.map((minutes) => (
-                <option key={minutes} value={minutes}>
-                  {minutes < 60
-                    ? `${minutes} minutes`
-                    : `${minutes / 60} ${minutes === 60 ? 'hour' : 'hours'}`}
-                </option>
-              ))}
-            </select>
-          </label>
+          </div>
         </div>
-      </section>
+        <select
+          aria-label="Break reminder"
+          value={draft.breakReminderMinutes ?? ''}
+          disabled={loading || saving}
+          onChange={(event) => {
+            const value = event.target.value;
+            update({
+              ...draft,
+              breakReminderMinutes: value
+                ? (Number(value) as TimeFocusPreferences['breakReminderMinutes'])
+                : null,
+            });
+          }}
+          style={{
+            height: 32,
+            borderRadius: 'var(--radius-md)',
+            border: '1px solid var(--settings-border)',
+            background: 'var(--bg-base)',
+            color: 'var(--text-1)',
+            fontSize: 13,
+            padding: '0 8px',
+          }}
+        >
+          <option value="">Off</option>
+          {BREAK_REMINDER_MINUTES.map((minutes) => (
+            <option key={minutes} value={minutes}>
+              {minutes < 60
+                ? `${minutes} minutes`
+                : `${minutes / 60} ${minutes === 60 ? 'hour' : 'hours'}`}
+            </option>
+          ))}
+        </select>
+      </div>
 
-      <section style={panelStyle()} aria-labelledby="quiet-hours-heading">
+      <section aria-labelledby="quiet-hours-heading">
         <div
           style={{
             display: 'flex',
             alignItems: 'flex-start',
             justifyContent: 'space-between',
             gap: 16,
-            padding: '16px 20px',
+            padding: '14px 0',
+            borderBottom: '1px solid var(--settings-border)',
           }}
         >
           <div>
-            <h2
-              id="quiet-hours-heading"
-              style={{ margin: 0, fontSize: 15, fontWeight: 600, color: 'var(--text-1)' }}
-            >
+            <div id="quiet-hours-heading" style={{ fontSize: 14, color: 'var(--text-1)' }}>
               Quiet hours
-            </h2>
-            <p style={{ margin: '4px 0 0', fontSize: 12, color: 'var(--text-3)' }}>
+            </div>
+            <div style={{ fontSize: 12, color: 'var(--text-3)', marginTop: 2 }}>
               Add light friction when you open AGI during time you set aside.
-            </p>
+            </div>
           </div>
           <Switch
             aria-label="Enable quiet hours"
@@ -236,10 +226,10 @@ export function TimeFocusSection() {
         <div
           aria-disabled={!draft.quietHours.enabled}
           style={{
-            borderTop: '1px solid var(--settings-border)',
+            borderBottom: '1px solid var(--settings-border)',
             display: 'grid',
             gap: 16,
-            padding: '16px 20px',
+            padding: '14px 0',
             opacity: draft.quietHours.enabled ? 1 : 0.5,
           }}
         >
