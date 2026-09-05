@@ -65,7 +65,8 @@ async function handleGetSchedules(request: NextRequest) {
     MANAGED_CLOUD_SCHEDULES_MAX_PAGE_SIZE,
   );
   const offset = clampSchedulePageOffset(integerQueryValue(url.searchParams.get('offset'), 0));
-  const schedules = await listSchedules(db, userId, { limit, offset });
+  const projectId = url.searchParams.get('projectId');
+  const schedules = await listSchedules(db, userId, { limit, offset, projectId });
   return NextResponse.json({ schedules, pagination: { limit, offset } });
 }
 

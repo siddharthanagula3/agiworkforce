@@ -83,6 +83,7 @@ const taskRow = {
   id: 'task-1',
   user_id: 'user-1',
   organization_id: '11111111-1111-4111-8111-111111111111',
+  project_id: null,
   name: 'Daily briefing',
   description: null,
   schedule_type: 'cron',
@@ -150,6 +151,21 @@ describe('schedule service persistence', () => {
     expect(params).toEqual(['user-1', 100, 0]);
   });
 
+  it('filters the owner schedule list to one project when scoped', async () => {
+    const query = vi.fn().mockResolvedValue([{ ...taskRow, project_id: 'project-1' }]);
+
+    const schedules = await listSchedules(database(query), 'user-1', {
+      limit: 50,
+      offset: 0,
+      projectId: 'project-1',
+    });
+
+    expect(schedules).toEqual([expect.objectContaining({ projectId: 'project-1' })]);
+    const [sql, params] = query.mock.calls[0] as [string, unknown[]];
+    expect(sql).toMatch(/where user_id = \$1 and project_id = \$2/i);
+    expect(params).toEqual(['user-1', 'project-1', 50, 0]);
+  });
+
   it('gets a schedule through an object-level owner predicate', async () => {
     const query = vi.fn().mockResolvedValue([taskRow]);
 
@@ -184,6 +200,55 @@ describe('schedule service persistence', () => {
     expect(sql).not.toMatch(/recurrence|time_of_day|is_active|next_run_at/i);
     expect(params).toContain('0 12 * * *');
     expect(params).toContain('2026-07-15T12:00:00.000Z');
+  });
+
+  it('verifies project ownership before persisting a project-scoped schedule', async () => {
+    const query = vi
+      .fn()
+      .mockResolvedValueOnce([{ id: 'project-1' }])
+      .mockResolvedValueOnce([{ ...taskRow, project_id: 'project-1' }]);
+
+    const schedule = await createSchedule(
+      database(query),
+      'user-1',
+      {
+        name: 'Daily briefing',
+        prompt: 'Brief me',
+        model: 'auto-balanced',
+        recurrence: 'daily',
+        timeOfDay: '12:00',
+        timezone: 'UTC',
+        isActive: true,
+        projectId: 'project-1',
+      },
+      { now: new Date('2026-07-15T11:00:00.000Z') },
+    );
+
+    expect(schedule.projectId).toBe('project-1');
+    const [ownershipSql, ownershipParams] = query.mock.calls[0] as [string, unknown[]];
+    expect(ownershipSql).toMatch(/user_projects/i);
+    expect(ownershipParams).toEqual(['project-1', 'user-1']);
+    const [insertSql, insertParams] = query.mock.calls[1] as [string, unknown[]];
+    expect(insertSql).toMatch(/project_id/i);
+    expect(insertParams).toContain('project-1');
+  });
+
+  it('rejects a schedule scoped to a project the account does not own', async () => {
+    const query = vi.fn().mockResolvedValueOnce([]);
+
+    await expect(
+      createSchedule(database(query), 'user-1', {
+        name: 'Daily briefing',
+        prompt: 'Brief me',
+        model: 'auto-balanced',
+        recurrence: 'daily',
+        timeOfDay: '12:00',
+        timezone: 'UTC',
+        isActive: true,
+        projectId: 'someone-elses-project',
+      }),
+    ).rejects.toBeInstanceOf(ScheduleValidationError);
+    expect(query).toHaveBeenCalledOnce();
   });
 
   it('rejects invalid timezone and cron input before persistence', async () => {
@@ -353,6 +418,21 @@ describe('schedule service persistence', () => {
     expect(query.mock.calls[0]?.[0]).toMatch(/for update/i);
     expect(sql).toMatch(/where id = \$1 and user_id = \$2/i);
     expect(params.slice(0, 2)).toEqual(['task-1', 'user-1']);
+  });
+
+  it('re-verifies project ownership when moving a schedule to a different project', async () => {
+    const query = vi.fn().mockResolvedValueOnce([taskRow]).mockResolvedValueOnce([]);
+
+    await expect(
+      updateSchedule(
+        database(query),
+        'user-1',
+        'task-1',
+        { projectId: 'someone-elses-project' },
+        { now: new Date('2026-07-15T11:00:00.000Z') },
+      ),
+    ).rejects.toBeInstanceOf(ScheduleValidationError);
+    expect(query).toHaveBeenCalledTimes(2);
   });
 
   it('preserves an interval anchor when editing non-scheduling fields', async () => {
