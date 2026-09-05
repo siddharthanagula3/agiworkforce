@@ -5,11 +5,36 @@ import bundleAnalyzer from '@next/bundle-analyzer';
 import { withBotId } from 'botid/next/config';
 import { withWorkflow } from 'workflow/next';
 import { API_HOST_REWRITE_ROUTES } from './lib/api-host-route-contract';
+import { BOT_PROTECTION_MODES, resolveBotProtectionMode } from './lib/security/bot-protection';
+import { isPlatformHosted } from './lib/server/hosting';
 
 const configDir = path.dirname(fileURLToPath(import.meta.url));
 const workspaceRoot = path.resolve(configDir, '../..');
 
+const STANDALONE_ENV_VAR = 'AGI_WEB_STANDALONE';
+const STANDALONE_ENABLED_VALUE = '1';
+const STANDALONE_OUTPUT = 'standalone';
+
+const standaloneEnabled = process.env[STANDALONE_ENV_VAR]?.trim() === STANDALONE_ENABLED_VALUE;
+
+const standaloneOutput = standaloneEnabled ? ({ output: STANDALONE_OUTPUT } as const) : {};
+
+const TRACED_ROUTE_GLOB = '/**';
+
+const TRACED_RUNTIME_FILES = [
+  '../../.agents/skills/**',
+  '../../skills-lock.json',
+  '../../node_modules/.pnpm/argon2@*/node_modules/argon2/prebuilds/**',
+];
+
+const TRACED_STANDALONE_FILES = ['../../node_modules/.pnpm/pg@*/node_modules/pg/**'];
+
+const botProtectionEnabled =
+  resolveBotProtectionMode(process.env, isPlatformHosted(process.env)) ===
+  BOT_PROTECTION_MODES.platform;
+
 const nextConfig: NextConfig = {
+  ...standaloneOutput,
   devIndicators: false,
   poweredByHeader: false,
   outputFileTracingRoot: workspaceRoot,
@@ -26,16 +51,21 @@ const nextConfig: NextConfig = {
     },
   },
   outputFileTracingIncludes: {
-    '/**': [
-      '../../.agents/skills/**',
-      '../../skills-lock.json',
-      '../../node_modules/.pnpm/argon2@*/node_modules/argon2/prebuilds/**',
-    ],
+    [TRACED_ROUTE_GLOB]: standaloneEnabled
+      ? [...TRACED_RUNTIME_FILES, ...TRACED_STANDALONE_FILES]
+      : TRACED_RUNTIME_FILES,
   },
   typescript: {
     ignoreBuildErrors: false,
   },
-  serverExternalPackages: ['undici'],
+  serverExternalPackages: [
+    'undici',
+    '@opentelemetry/api',
+    '@opentelemetry/exporter-trace-otlp-http',
+    '@opentelemetry/resources',
+    '@opentelemetry/sdk-node',
+    '@opentelemetry/sdk-trace-base',
+  ],
   experimental: {
     turbopackFileSystemCacheForBuild: false,
     turbopackFileSystemCacheForDev: false,
@@ -145,4 +175,7 @@ const withBundleAnalyzer = bundleAnalyzer({
   enabled: process.env['ANALYZE'] === 'true',
 });
 
-export default withWorkflow(withBotId(withBundleAnalyzer(nextConfig)));
+const withOptionalBotId = (config: NextConfig): NextConfig =>
+  botProtectionEnabled ? withBotId(config) : config;
+
+export default withWorkflow(withOptionalBotId(withBundleAnalyzer(nextConfig)));
