@@ -44,6 +44,10 @@ import {
   type ManagedUsageRequestReservation,
 } from '@/lib/services/managed-usage-request-service';
 import { assertTierUnitAllowance } from '@/lib/services/tier-unit-quota-service';
+import {
+  buildManagedComputeAccessGateResponse,
+  evaluateManagedComputeSubscriptionAccess,
+} from '@/lib/services/managed-compute-access';
 
 function isLikelyAudio(head: Uint8Array): boolean {
   if (head.length < 4) return false;
@@ -431,6 +435,18 @@ async function handleTranscriptions(request: NextRequest) {
         ? `agi.transcription.${randomUUID()}`
         : parseManagedUsageIdempotencyKey(idempotencyHeader);
     const subscription = await SubscriptionService.getSubscription(scoped.db, userId);
+    const subscriptionAccess = await evaluateManagedComputeSubscriptionAccess(
+      scoped.db,
+      userId,
+      subscription,
+    );
+    if (!subscriptionAccess.allowed) {
+      const gateResponse = buildManagedComputeAccessGateResponse(subscriptionAccess, {
+        ...getCorsHeaders(request),
+        ...getSecurityHeaders(),
+      });
+      if (gateResponse) return gateResponse;
+    }
     await assertTierUnitAllowance({
       db: scoped.db,
       userId,

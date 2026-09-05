@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "entries": [
+    {
+      "path": "apps/web/app/api/llm/v1/embeddings/route.ts",
+      "reason": "workspace policy and spend limit are already checked via buildOrganizationPolicyGateResponse and buildSpendLimitGateResponse from managed-compute-gate.ts before reservation; subscription entitlement is checked via evaluateManagedComputeSubscriptionAccess directly, the same underlying decision evaluateManagedComputeAccess would reach, calling the full composed evaluator here would re-run the policy and spend checks a second time."
+    },
+    {
+      "path": "apps/web/app/api/llm/v1/audio/transcriptions/route.ts",
+      "reason": "workspace policy and spend limit are already checked via buildOrganizationPolicyGateResponse and buildSpendLimitGateResponse from managed-compute-gate.ts before reservation; subscription entitlement is checked via evaluateManagedComputeSubscriptionAccess directly, the same underlying decision evaluateManagedComputeAccess would reach, calling the full composed evaluator here would re-run the policy and spend checks a second time."
+    },
+    {
+      "path": "apps/web/app/api/media/video/generate/route.ts",
+      "reason": "workspace policy and spend limit are already checked via buildOrganizationPolicyGateResponse and buildSpendLimitGateResponse from managed-compute-gate.ts before reservation; subscription entitlement is checked via evaluateManagedComputeSubscriptionAccess directly, replacing an ad-hoc active-status set that missed the enterprise read-only billing hold, calling the full composed evaluator here would re-run the policy and spend checks a second time."
+    },
+    {
+      "path": "apps/web/app/api/media/image/generate/route.ts",
+      "reason": "workspace policy and spend limit are already checked via buildOrganizationPolicyGateResponse and buildSpendLimitGateResponse from managed-compute-gate.ts before reservation; subscription entitlement is checked via evaluateManagedComputeSubscriptionAccess directly, replacing an ad-hoc active-status set that missed the enterprise read-only billing hold, calling the full composed evaluator here would re-run the policy and spend checks a second time."
+    }
+  ]
+}

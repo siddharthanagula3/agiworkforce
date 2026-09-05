@@ -114,7 +114,7 @@
     "check:agent-context-indexes": "node scripts/check-agent-context-indexes.mjs",
     "check:repo-organization": "node scripts/check-repo-organization.mjs",
     "check:workspace-scripts": "node scripts/check-workspace-scripts.mjs",
-    "check:boundaries": "node scripts/check-boundaries.mjs",
+    "check:boundaries": "node --test scripts/check-boundaries.test.mjs && node scripts/check-boundaries.mjs",
     "check:cloud-contract-ownership": "node scripts/check-cloud-contract-ownership.mjs",
     "check:artifact-sync-ownership": "node scripts/check-artifact-sync-ownership.mjs",
     "check:service-domain-ownership": "node scripts/check-service-domain-ownership.mjs",

@@ -38,6 +38,10 @@ import {
   type ManagedUsageRequestReservation,
 } from '@/lib/services/managed-usage-request-service';
 import { SubscriptionService } from '@/lib/services/subscription-service';
+import {
+  buildManagedComputeAccessGateResponse,
+  evaluateManagedComputeSubscriptionAccess,
+} from '@/lib/services/managed-compute-access';
 
 function managedUsageErrorResponse(
   request: NextRequest,
@@ -212,6 +216,18 @@ async function handleEmbeddings(request: NextRequest): Promise<Response> {
       throw new ManagedUsageRequestError('Managed usage tenant mismatch.', 403, 'tenant_mismatch');
     }
     const subscription = await SubscriptionService.getSubscription(scoped.db, userId);
+    const subscriptionAccess = await evaluateManagedComputeSubscriptionAccess(
+      scoped.db,
+      userId,
+      subscription,
+    );
+    if (!subscriptionAccess.allowed) {
+      const gateResponse = buildManagedComputeAccessGateResponse(subscriptionAccess, {
+        ...getCorsHeaders(request),
+        ...getSecurityHeaders(),
+      });
+      if (gateResponse) return gateResponse;
+    }
     reservation = await reserveManagedUsageRequest({
       db: scoped.db,
       userId,
