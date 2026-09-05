@@ -42,10 +42,15 @@ inside a route get their own rows once the route has been exercised.
 
 ## Workspace and admin routes
 
-| Route                         | Status     | Evidence or gap                                     |
-| ----------------------------- | ---------- | --------------------------------------------------- |
-| /workspace and nine sub pages | unverified | QA account has no workspace; every page shows empty |
-| /admin, /admin/directory-sync | unverified | same; recon in flight                               |
+| Route                                    | Status     | Evidence or gap                                                                                                                                                                |
+| ---------------------------------------- | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| /workspace and nine sub pages            | unverified | QA account has no workspace; every page shows empty                                                                                                                            |
+| /admin, /admin/directory-sync            | partial    | org admin or platform admin gate; readiness ledger rows self attested, not live; its control list omits three built admin APIs                                                 |
+| /operator                                | partial    | platform admin allowlist (env of user ids); users, signups, subscriptions, feedback tab, reset usage and grant credits with audit; no cost, margin, route health or error view |
+| GET /api/admin/observability, /explain   | dead       | cost and route breakdown service with no UI caller                                                                                                                             |
+| POST and DELETE /api/admin/takedown      | dead       | audited takedown action with no button                                                                                                                                         |
+| /api/admin/privacy requests and erasures | dead       | data rights workflow with no page                                                                                                                                              |
+| COGS summaries in cogs-ledger-service    | dead       | ledger written everywhere, summarizeCogs never rendered                                                                                                                        |
 
 ## Auth routes
 
