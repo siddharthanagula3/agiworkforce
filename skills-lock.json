@@ -16,7 +16,7 @@
       "source": "AGI Workforce repository",
       "sourceType": "first-party",
       "declaredVersion": "1.0.0",
-      "computedHash": "sha256-tree-v1:c0b622c56ac6d94baa0db3f673e11a81e5b3e71cfb1f4a00bf9c06c1b4fbbb43"
+      "computedHash": "sha256-tree-v1:77657948a71db9c95311f4fab653d8d116c2679b72c00f3b0f096b1079edde4d"
     },
     "antislop": {
       "path": ".agents/skills/antislop",
