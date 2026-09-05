@@ -132,7 +132,12 @@ export function createOpenRouterAdapter(config: OpenRouterAdapterConfig = {}): P
       });
 
       applyOpenRouterAnthropicCacheControl(params, anthropicCacheRetention, req);
-      applyOpenRouterProviderRouting(params, config.providerRouting, req.metadata);
+      applyOpenRouterProviderRouting(
+        params,
+        config.providerRouting,
+        req.metadata,
+        req.zeroDataRetentionOnly,
+      );
 
       params.stream_options = { include_usage: true };
 

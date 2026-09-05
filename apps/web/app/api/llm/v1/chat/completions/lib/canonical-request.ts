@@ -57,26 +57,6 @@ function wireModelId(modelId: string, provider: string | undefined): string {
   return openRouterSlugFor(apiModelId) ?? openRouterFailoverSlugFor(apiModelId) ?? apiModelId;
 }
 
-const OPEN_ROUTER_PROVIDER_ROUTING_METADATA_KEY = 'openRouterProviderRouting';
-const OPEN_ROUTER_DATA_COLLECTION_DENY = 'deny';
-
-function applyZeroDataRetentionMetadata(
-  chatRequest: ChatRequest,
-  processed: ProcessedRequest,
-): void {
-  if (!processed.zeroDataRetentionOnly) return;
-  if (processed.provider !== 'openrouter' && processed.provider !== 'open_router') return;
-  chatRequest.metadata = {
-    ...chatRequest.metadata,
-    [OPEN_ROUTER_PROVIDER_ROUTING_METADATA_KEY]: {
-      ...(chatRequest.metadata?.[OPEN_ROUTER_PROVIDER_ROUTING_METADATA_KEY] as
-        | Record<string, unknown>
-        | undefined),
-      dataCollection: OPEN_ROUTER_DATA_COLLECTION_DENY,
-    },
-  };
-}
-
 export function toCanonicalChatRequest(processed: ProcessedRequest): ChatRequest {
   const { llmRequest } = processed;
   const { functionTools, rawVendorTools } = splitTools(llmRequest.tools);
@@ -95,7 +75,7 @@ export function toCanonicalChatRequest(processed: ProcessedRequest): ChatRequest
 
   const chatRequest = openAIWireRequestToChatRequest(wireRequest);
   if (rawVendorTools.length > 0) chatRequest.rawVendorTools = rawVendorTools;
-  applyZeroDataRetentionMetadata(chatRequest, processed);
+  if (processed.zeroDataRetentionOnly) chatRequest.zeroDataRetentionOnly = true;
   return chatRequest;
 }
 
