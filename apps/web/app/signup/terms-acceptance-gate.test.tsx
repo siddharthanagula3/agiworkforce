@@ -1,79 +1,141 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
-import type { ReactNode } from 'react';
+import { render, screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 
-const signUpProps = vi.hoisted(() => vi.fn());
+import { POLICY_LAST_UPDATED } from '@/lib/legal-constants';
+import { TERMS_GATE_STORAGE_KEY } from './TermsGate';
+
+const signUpState = vi.hoisted(() => ({
+  status: 'missing_requirements',
+  create: vi.fn(),
+  verifications: { sendEmailCode: vi.fn(), verifyEmailCode: vi.fn() },
+  sso: vi.fn(),
+  finalize: vi.fn(),
+  reset: vi.fn(),
+}));
+
+const signInState = vi.hoisted(() => ({
+  status: 'needs_identifier',
+  identifier: null,
+  supportedFirstFactors: [],
+  supportedSecondFactors: [],
+  create: vi.fn(),
+  password: vi.fn(),
+  emailCode: { sendCode: vi.fn(), verifyCode: vi.fn() },
+  resetPasswordEmailCode: { sendCode: vi.fn(), verifyCode: vi.fn(), submitPassword: vi.fn() },
+  mfa: {
+    sendPhoneCode: vi.fn(),
+    verifyTOTP: vi.fn(),
+    verifyPhoneCode: vi.fn(),
+    verifyBackupCode: vi.fn(),
+  },
+  sso: vi.fn(),
+  finalize: vi.fn(),
+  reset: vi.fn(),
+}));
 
 vi.mock('@clerk/nextjs', () => ({
-  SignUp: (props: Record<string, unknown>) => {
-    signUpProps(props);
-    return <div data-testid="clerk-sign-up" />;
-  },
+  AuthenticateWithRedirectCallback: () => null,
+  useClerk: () => ({ loaded: true }),
+  useSignIn: () => ({ signIn: signInState, errors: null, fetchStatus: 'idle' }),
+  useSignUp: () => ({ signUp: signUpState, errors: null, fetchStatus: 'idle' }),
 }));
 
-vi.mock('@/features/marketing/components/AuthShell', () => ({
-  AuthShell: ({ children }: { embedded?: boolean; children: ReactNode }) => (
-    <div data-testid="auth-shell">{children}</div>
-  ),
-}));
+import { AuthFlow } from '@/features/auth/AuthFlow';
 
-import SignupPage from './page';
+const REDIRECTS = {
+  completeUrl: '/signup/complete?redirectTo=%2Fchat',
+  switchUrl: '/login',
+  ssoCallbackUrl: '/auth/sso-callback?redirectTo=%2Fchat',
+};
 
-async function renderSignup(redirectTo = '/chat') {
-  render(await SignupPage({ searchParams: Promise.resolve({ redirectTo }) }));
+const PROVIDERS = [{ id: 'google' as const, label: 'Google' }];
+
+function renderSignup() {
+  render(<AuthFlow mode="signup" providers={PROVIDERS} redirects={REDIRECTS} />);
 }
 
 /**
- * Founder decision 2026-08-17: no clickwrap above the form. The checkbox blocked
- * the auth widget until ticked, which met people with a consent wall before
- * anything identified them and re-appeared whenever the stored marker was gone.
- * Assent now sits against the button being pressed, and the durable record is
- * still written server-side by /signup/complete, which is what makes "what did
- * they agree to, and when" answerable at all.
+ * Founder decision 2026-08-17: no consent wall above the form. The clickwrap is
+ * one line against the button being pressed, which is where the deliberate act
+ * happens, and no account can be created until it is ticked. The durable record
+ * is still written server-side by /signup/complete, which is what makes "what
+ * did they agree to, and when" answerable at all.
  */
-describe('/signup terms assent', () => {
+describe('/signup terms clickwrap', () => {
   beforeEach(() => {
     window.localStorage.clear();
-    signUpProps.mockClear();
+    signUpState.create.mockReset().mockResolvedValue({ error: null });
+    signUpState.verifications.sendEmailCode.mockReset().mockResolvedValue({ error: null });
+    signUpState.sso.mockReset().mockResolvedValue({ error: null });
   });
 
-  it('mounts account creation immediately, with no checkbox in the way', async () => {
-    await renderSignup();
+  it('will not create an account until the terms are accepted', async () => {
+    renderSignup();
 
-    expect(screen.getByTestId('clerk-sign-up')).toBeInTheDocument();
-    expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
-    expect(screen.queryByTestId('terms-gate-blocked')).not.toBeInTheDocument();
-  });
+    await userEvent.type(screen.getByLabelText('Email address'), 'person@example.com');
+    await userEvent.click(screen.getByRole('button', { name: 'Continue' }));
 
-  it('states the agreement against the action, naming the clauses that need it', async () => {
-    await renderSignup();
-
-    // The arbitration clause and class-action waiver are the terms that most
-    // need to have been shown; a bare "see our terms" link would not name them.
-    const notice = screen.getByText(/by creating an account/i);
-    expect(notice).toHaveTextContent(/arbitration clause and class-action waiver/i);
-    expect(screen.getByRole('link', { name: /terms of service/i })).toHaveAttribute(
-      'href',
-      '/terms',
+    await waitFor(() =>
+      expect(screen.getByRole('alert')).toHaveTextContent('Accept the terms to create an account'),
     );
-    expect(screen.getByRole('link', { name: /privacy policy/i })).toHaveAttribute(
-      'href',
-      '/privacy',
+    expect(signUpState.create).not.toHaveBeenCalled();
+  });
+
+  it('will not hand an unaccepted sign-up to a provider either', async () => {
+    renderSignup();
+
+    await userEvent.click(screen.getByRole('button', { name: 'Continue with Google' }));
+
+    await waitFor(() =>
+      expect(screen.getByRole('alert')).toHaveTextContent('Accept the terms to create an account'),
+    );
+    expect(signUpState.sso).not.toHaveBeenCalled();
+  });
+
+  it('creates the account with the accepted terms recorded once the box is ticked', async () => {
+    renderSignup();
+
+    await userEvent.click(screen.getByRole('checkbox'));
+    await userEvent.type(screen.getByLabelText('Email address'), 'person@example.com');
+    await userEvent.click(screen.getByRole('button', { name: 'Continue' }));
+
+    await waitFor(() =>
+      expect(signUpState.create).toHaveBeenCalledWith({
+        emailAddress: 'person@example.com',
+        legalAccepted: true,
+      }),
     );
   });
 
-  it('routes the new account through the recorder that stores the accepted version', async () => {
-    await renderSignup('/chat');
+  it('marks acceptance against the policy version so the provider round trip keeps it', async () => {
+    renderSignup();
 
-    expect(signUpProps).toHaveBeenCalledWith(
-      expect.objectContaining({ forceRedirectUrl: '/signup/complete?redirectTo=%2Fchat' }),
-    );
+    await userEvent.click(screen.getByRole('checkbox'));
+
+    expect(window.localStorage.getItem(TERMS_GATE_STORAGE_KEY)).toBe(POLICY_LAST_UPDATED.terms);
   });
 
-  it('sends the new account to the recorder with a prop search params cannot override', async () => {
-    await renderSignup('/chat');
+  it('restores an acceptance recorded before a provider round trip', async () => {
+    window.localStorage.setItem(TERMS_GATE_STORAGE_KEY, POLICY_LAST_UPDATED.terms);
+    renderSignup();
 
-    const props = signUpProps.mock.calls[0]?.[0] as Record<string, unknown>;
-    expect(props['fallbackRedirectUrl']).toBeUndefined();
+    await waitFor(() => expect(screen.getByRole('checkbox')).toBeChecked());
+  });
+
+  it('re-asks when the recorded acceptance is for an older policy version', async () => {
+    window.localStorage.setItem(TERMS_GATE_STORAGE_KEY, '1970-01-01');
+    renderSignup();
+
+    expect(screen.getByRole('checkbox')).not.toBeChecked();
+  });
+
+  it('clears the marker when the box is un-ticked', async () => {
+    renderSignup();
+
+    await userEvent.click(screen.getByRole('checkbox'));
+    await userEvent.click(screen.getByRole('checkbox'));
+
+    expect(window.localStorage.getItem(TERMS_GATE_STORAGE_KEY)).toBeNull();
   });
 });

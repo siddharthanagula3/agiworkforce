@@ -93,3 +93,11 @@ export type {
   DeviceAuthorizationPost,
   DeviceAuthorizationRequest,
 } from './deviceAuthorization';
+
+export {
+  AUTH_PROVIDER_IDS,
+  DEFAULT_AUTH_PROVIDER_IDS,
+  parseAuthProviderIds,
+  resolveAuthProviders,
+} from './authProviders';
+export type { AuthProvider, AuthProviderId } from './authProviders';
