@@ -180,6 +180,8 @@ import {
 } from '@/lib/services/managed-content-safety-service';
 import { loadSelectedMcpContext, McpContextError } from '@/lib/connectors/mcp-context-service';
 import { moderateManagedPrompt } from '@/lib/moderation';
+import { timePhase } from '@/lib/observability/phase-timer';
+import { CHAT_TURN_PHASE } from './turn-phases';
 
 export const ChatCompletionRequestSchema = z
   .object({
@@ -1649,7 +1651,7 @@ export async function processRequest(
 
   let body: unknown;
   try {
-    const rawBody = await request.arrayBuffer();
+    const rawBody = await timePhase(CHAT_TURN_PHASE.bodyParse, () => request.arrayBuffer());
     if (rawBody.byteLength > MAX_BODY_BYTES) {
       return {
         ok: false,
@@ -1959,7 +1961,9 @@ export async function processRequest(
     }
   })();
 
-  const [ownership, safety] = await Promise.all([ownershipLeg, safetyLeg]);
+  const [ownership, safety] = await timePhase(CHAT_TURN_PHASE.ownershipAndSafety, () =>
+    Promise.all([ownershipLeg, safetyLeg]),
+  );
   if (!ownership.ok) return ownership;
   if (!safety.ok) return safety;
 
@@ -1989,13 +1993,17 @@ export async function processRequest(
         return DISABLED_MANAGED_MEMORY_POLICY;
       });
 
-  const [hydrationFailure, managedMemoryPolicy] = await Promise.all([
-    hydrateChatAttachments(chatRequest.messages, userId).then(
-      () => null,
-      (error: unknown) => ({ error }),
-    ),
-    memoryPolicyLeg,
-  ]);
+  const [hydrationFailure, managedMemoryPolicy] = await timePhase(
+    CHAT_TURN_PHASE.attachmentsAndMemoryPolicy,
+    () =>
+      Promise.all([
+        hydrateChatAttachments(chatRequest.messages, userId).then(
+          () => null,
+          (error: unknown) => ({ error }),
+        ),
+        memoryPolicyLeg,
+      ]),
+  );
 
   if (hydrationFailure) {
     const { error } = hydrationFailure;
@@ -2078,13 +2086,15 @@ export async function processRequest(
       // project set to exclude global memory must not see the account pool.
       // `conversationProjectId` is the ownership lookup's row, not a fresh
       // query, so the scoping answers to the same read as the 404 check above.
-      await enrichManagedMemoryContext({
-        db: scoped.db,
-        userId,
-        chatRequest,
-        isTemporary: false,
-        projectId: conversationProjectId,
-      });
+      await timePhase(CHAT_TURN_PHASE.memoryEnrichment, () =>
+        enrichManagedMemoryContext({
+          db: scoped.db,
+          userId,
+          chatRequest,
+          isTemporary: false,
+          projectId: conversationProjectId,
+        }),
+      );
       if (chatRequest.messages.length > preMemoryMessageCount) {
         dynamicSystemMessageRefs.add(chatRequest.messages[0] as object);
       }
@@ -2353,13 +2363,19 @@ export async function processRequest(
   };
 
   const routeResolutionNowMs = Date.now();
-  const [baseRouteHealthState, routeAffinity, zeroDataRetentionPolicy] = await Promise.all([
-    resolveRouteHealthRuntimeState(routeSelection, routeResolutionNowMs),
-    chatRequest.conversation_id
-      ? getServedRouteAffinity(chatRequest.conversation_id)
-      : Promise.resolve(null),
-    scopedDbPromise.then((scoped) => resolveZeroDataRetentionPolicy(scoped.db, userId, request)),
-  ]);
+  const [baseRouteHealthState, routeAffinity, zeroDataRetentionPolicy] = await timePhase(
+    CHAT_TURN_PHASE.routeSelection,
+    () =>
+      Promise.all([
+        resolveRouteHealthRuntimeState(routeSelection, routeResolutionNowMs),
+        chatRequest.conversation_id
+          ? getServedRouteAffinity(chatRequest.conversation_id)
+          : Promise.resolve(null),
+        scopedDbPromise.then((scoped) =>
+          resolveZeroDataRetentionPolicy(scoped.db, userId, request),
+        ),
+      ]),
+  );
   const availableProviderIds = listAvailableManagedProviderIds();
   const { required: zeroDataRetentionOnly } = zeroDataRetentionPolicy;
   const zeroDataRetentionProviders = resolveZeroDataRetentionProviderOverrides();
@@ -2411,13 +2427,16 @@ export async function processRequest(
       )
     : null;
   const freeLaneNowMs = Date.now();
-  const freeLaneOutcome = await resolveFreeLaneOutcome({
-    mode: freeLaneMode,
-    requestId,
-    nowMs: freeLaneNowMs,
-    freeRouteDecision: freeLaneRouteDecision?.status === 'selected' ? freeLaneRouteDecision : null,
-    dispatchedRouteId: baseRouteDecision.status === 'selected' ? baseRouteDecision.routeId : null,
-  });
+  const freeLaneOutcome = await timePhase(CHAT_TURN_PHASE.routeSelection, () =>
+    resolveFreeLaneOutcome({
+      mode: freeLaneMode,
+      requestId,
+      nowMs: freeLaneNowMs,
+      freeRouteDecision:
+        freeLaneRouteDecision?.status === 'selected' ? freeLaneRouteDecision : null,
+      dispatchedRouteId: baseRouteDecision.status === 'selected' ? baseRouteDecision.routeId : null,
+    }),
+  );
 
   if (freeLaneOutcome.kind === 'stranded') {
     return {
@@ -2490,14 +2509,12 @@ export async function processRequest(
   // layer resolved. See `resolveProviderIdentities` for why one string was not
   // enough, and the evaluator for what each identity is allowed to decide.
   const primaryIdentities = resolveProviderIdentities(chatRequest.model, routeDecision.routeId);
-  const modelAccess = await evaluateModelAccessForOrganization(
-    scopedForPolicy.db,
-    scopedForPolicy.organizationId,
-    {
+  const modelAccess = await timePhase(CHAT_TURN_PHASE.modelPolicy, () =>
+    evaluateModelAccessForOrganization(scopedForPolicy.db, scopedForPolicy.organizationId, {
       provider: primaryIdentities.vendor,
       transportProvider: primaryIdentities.transport,
       modelId: chatRequest.model,
-    },
+    }),
   );
   if (!modelAccess.allowed) {
     return { ok: false, response: modelPolicyDenialResponse(modelAccess) };
@@ -2519,9 +2536,8 @@ export async function processRequest(
   let workspaceModelPolicy: ModelAccessPolicy | null = null;
   if (modelAccess.code !== 'ungoverned' && scopedForPolicy.organizationId) {
     try {
-      workspaceModelPolicy = await readModelPolicy(
-        scopedForPolicy.db,
-        scopedForPolicy.organizationId,
+      workspaceModelPolicy = await timePhase(CHAT_TURN_PHASE.modelPolicy, () =>
+        readModelPolicy(scopedForPolicy.db, scopedForPolicy.organizationId),
       );
     } catch (error) {
       logger.error(
@@ -2635,8 +2651,8 @@ export async function processRequest(
     const requestedSkillName = chatRequest.skill_name;
     let managedSkillCatalog: Skill[];
     try {
-      managedSkillCatalog = await getManagedSkillCatalogForPlugins(
-        await listEnabledPluginIdsForUser(userId),
+      managedSkillCatalog = await timePhase(CHAT_TURN_PHASE.skillCatalog, async () =>
+        getManagedSkillCatalogForPlugins(await listEnabledPluginIdsForUser(userId)),
       );
     } catch (error) {
       if (error instanceof SkillCatalogUnavailableError) {
@@ -2676,10 +2692,11 @@ export async function processRequest(
         ),
       };
     }
-    const skillCatalogForSelection = await resolveManagedSkillCatalogWithUserFallback(
-      requestedSkillName,
-      managedSkillCatalog,
-      { db: (await scopedDbPromise).db, userId },
+    const skillCatalogForSelection = await timePhase(CHAT_TURN_PHASE.skillCatalog, async () =>
+      resolveManagedSkillCatalogWithUserFallback(requestedSkillName, managedSkillCatalog, {
+        db: (await scopedDbPromise).db,
+        userId,
+      }),
     );
     const selection = applyManagedSkillSelection(chatRequest, skillCatalogForSelection);
     if (!selection.ok) {
@@ -2699,16 +2716,18 @@ export async function processRequest(
       };
     }
   } else {
-    const offeredSkills = await applyImplicitManagedSkillOffer(chatRequest, {
-      prompt: lastUserText,
-      surface: chatSurface,
-      toolsCapable: resolvedModelCaps?.tools !== false,
-      loadCatalog: async () =>
-        filterSkillsByInstallOverrides(
-          await getManagedSkillCatalog(),
-          await loadSkillInstallOverrides(),
-        ),
-    });
+    const offeredSkills = await timePhase(CHAT_TURN_PHASE.skillCatalog, () =>
+      applyImplicitManagedSkillOffer(chatRequest, {
+        prompt: lastUserText,
+        surface: chatSurface,
+        toolsCapable: resolvedModelCaps?.tools !== false,
+        loadCatalog: async () =>
+          filterSkillsByInstallOverrides(
+            await getManagedSkillCatalog(),
+            await loadSkillInstallOverrides(),
+          ),
+      }),
+    );
     if (offeredSkills.length > 0) {
       logger.info(
         { requestId, userId, offeredSkills },
@@ -2979,7 +2998,10 @@ export async function processRequest(
   if (freeTrialEnabled) {
     estimatedCostCents = 0;
   } else {
-    let existingBalance = await (creditBalancePromise ?? CreditService.getBalance(userId));
+    let existingBalance = await timePhase(
+      CHAT_TURN_PHASE.creditCheck,
+      () => creditBalancePromise ?? CreditService.getBalance(userId),
+    );
 
     logger.debug(
       {
@@ -3033,7 +3055,9 @@ export async function processRequest(
       }
     }
 
-    const hasCredits = await CreditService.checkAvailable(userId, estimatedCostCents);
+    const hasCredits = await timePhase(CHAT_TURN_PHASE.creditCheck, () =>
+      CreditService.checkAvailable(userId, estimatedCostCents),
+    );
 
     logger.debug(
       {
@@ -3132,20 +3156,22 @@ export async function processRequest(
           });
         }
       }
-      managedUsage = await reserveManagedUsageRequest({
-        db: scoped.db,
-        userId,
-        organizationId: scoped.organizationId,
-        idempotencyKey: requestId,
-        requestHash: managedRequestHash,
-        provider,
-        model: chatRequest.model,
-        estimatedCostCents,
-        leaseSeconds: resolveManagedUsageLeaseSeconds(chatRequest),
-        planTier: subscription.plan_tier,
-        isFlagship: isFlagshipRequest,
-        quotaFeature,
-      });
+      managedUsage = await timePhase(CHAT_TURN_PHASE.usageReservation, () =>
+        reserveManagedUsageRequest({
+          db: scoped.db,
+          userId,
+          organizationId: scoped.organizationId,
+          idempotencyKey: requestId,
+          requestHash: managedRequestHash,
+          provider,
+          model: chatRequest.model,
+          estimatedCostCents,
+          leaseSeconds: resolveManagedUsageLeaseSeconds(chatRequest),
+          planTier: subscription.plan_tier,
+          isFlagship: isFlagshipRequest,
+          quotaFeature,
+        }),
+      );
       estimatedCostCents = managedUsage.estimatedCostCents;
     } catch (error) {
       const managedError =
@@ -3253,7 +3279,10 @@ export async function processRequest(
       codeExecutionUnavailable,
     });
 
-    const customInstructionsPreamble = await customInstructionsPromise;
+    const customInstructionsPreamble = await timePhase(
+      CHAT_TURN_PHASE.customInstructions,
+      () => customInstructionsPromise,
+    );
     const preamble = composeManagedSystemPreamble({
       capabilityPreamble,
       customInstructionsPreamble,
@@ -3332,18 +3361,20 @@ export async function processRequest(
   };
 
   const scopedForCompaction = await scopedDbPromise;
-  const contextTrim = await compactContextWindow({
-    messages: internalMessages,
-    model: chatRequest.model,
-    maxOutputTokens: maxTokens,
-    db: scopedForCompaction.db,
-    userId,
-    organizationId: scopedForCompaction.organizationId,
-    conversationId: chatRequest.conversation_id ?? null,
-    isTemporary: conversationIsTemporary,
-    planTier: subscription.plan_tier,
-    resolveEconomyRoute: () => resolveWebCloudModelRoute('auto', 'free', 'simple_chat'),
-  });
+  const contextTrim = await timePhase(CHAT_TURN_PHASE.contextCompaction, () =>
+    compactContextWindow({
+      messages: internalMessages,
+      model: chatRequest.model,
+      maxOutputTokens: maxTokens,
+      db: scopedForCompaction.db,
+      userId,
+      organizationId: scopedForCompaction.organizationId,
+      conversationId: chatRequest.conversation_id ?? null,
+      isTemporary: conversationIsTemporary,
+      planTier: subscription.plan_tier,
+      resolveEconomyRoute: () => resolveWebCloudModelRoute('auto', 'free', 'simple_chat'),
+    }),
+  );
 
   if (freeTrialEnabled) {
     const trialReservationResult = await beginFreeTrialRequest({ userId, requestId });

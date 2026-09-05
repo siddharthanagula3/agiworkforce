@@ -87,6 +87,9 @@ import type {
   CloudAgentWorkMode,
 } from '@agiworkforce/cloud-contracts';
 import { getUserScopedDb } from '@/lib/server/rls-db';
+import { runWithPhaseTimer, timePhase } from '@/lib/observability/phase-timer';
+import { withSpan } from '@/lib/observability/span';
+import { CHAT_TURN_PHASE, CHAT_TURN_SPAN } from './lib/turn-phases';
 import type { CloudChatSurface } from '@/lib/free-chat-surface-policy';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import { recordManagedAutoMemoryTurn } from '@/lib/services/managed-auto-memory-service';
@@ -292,31 +295,41 @@ async function dispatchChatCompletions(
 
   // The workspace administrator's decision, evaluated before `processRequest`
   // so a denied turn never reserves credits it will not spend.
-  const policyGateResponse = await buildOrganizationPolicyGateResponse(
-    userId,
-    request,
-    {
-      provider: 'managed',
-      model: 'chat-completions',
-      feature: 'llm_v1_chat_completions',
-      surface: resolveAuthenticatedSurface(request, authResult),
-    },
-    getSecurityHeaders(),
-  );
+  // Runs with the spend gate, which reads a different row and consults nothing
+  // this one decides. The policy verdict is still reported first, so a
+  // workspace that blocks a model says so even when the budget is also spent.
+  const [policyGateResponse, spendGateResponse] = await Promise.all([
+    timePhase(CHAT_TURN_PHASE.policyGate, () =>
+      buildOrganizationPolicyGateResponse(
+        userId,
+        request,
+        {
+          provider: 'managed',
+          model: 'chat-completions',
+          feature: 'llm_v1_chat_completions',
+          surface: resolveAuthenticatedSurface(request, authResult),
+        },
+        getSecurityHeaders(),
+      ),
+    ),
+    // The workspace budget, checked before any credit is reserved so a turn
+    // that a spend cap will refuse never spends anything first.
+    timePhase(CHAT_TURN_PHASE.spendGate, () => buildSpendLimitGateResponse(userId, request)),
+  ]);
   if (policyGateResponse) return policyGateResponse;
-
-  // The workspace budget, checked before any credit is reserved so a turn
-  // that a spend cap will refuse never spends anything first.
-  const spendGateResponse = await buildSpendLimitGateResponse(userId, request);
   if (spendGateResponse) return spendGateResponse;
 
   // 2. Parse body, validate, run classifier, resolve model, quota gate, reserve credits
-  const processResult = await processRequest(request, authResult);
+  const processResult = await timePhase(CHAT_TURN_PHASE.processRequest, () =>
+    processRequest(request, authResult),
+  );
   if (!processResult.ok) return processResult.response;
 
   const processed = processResult;
 
-  const secretHandling = await applySecretHandlingToRequest(userId, request, processed);
+  const secretHandling = await timePhase(CHAT_TURN_PHASE.secretGate, () =>
+    applySecretHandlingToRequest(userId, request, processed),
+  );
   if (secretHandling.action === 'blocked') {
     await refundFailedReservation(userId, processed, 'request_failure');
     return NextResponse.json(
@@ -338,9 +351,12 @@ async function dispatchChatCompletions(
   // Persist the external-side-effect boundary before any provider/tool loop
   // starts. A crash after this point is recovered customer-favorably by 0056;
   // a concurrent retry cannot acquire a second lease.
-  if (processed.managedUsage) {
+  const managedUsageToMark = processed.managedUsage;
+  if (managedUsageToMark) {
     try {
-      await markManagedUsageProviderStarted(processed.managedUsage);
+      await timePhase(CHAT_TURN_PHASE.providerStartMark, () =>
+        markManagedUsageProviderStarted(managedUsageToMark),
+      );
     } catch (error) {
       await refundFailedReservation(userId, processed, 'request_failure');
       const managedError =
@@ -530,10 +546,12 @@ async function dispatchChatCompletions(
       ? (processed.managedUsage?.db ?? (await getUserScopedDb(request)).db)
       : null;
     const [connectorPermissions, toolApprovalPolicy] = toolPolicyDb
-      ? await Promise.all([
-          loadConnectorToolPermissions(toolPolicyDb, userId),
-          loadToolApprovalPolicy(toolPolicyDb, userId),
-        ])
+      ? await timePhase(CHAT_TURN_PHASE.toolPermissions, () =>
+          Promise.all([
+            loadConnectorToolPermissions(toolPolicyDb, userId),
+            loadToolApprovalPolicy(toolPolicyDb, userId),
+          ]),
+        )
       : [EMPTY_CONNECTOR_TOOL_PERMISSIONS, DEFAULT_TOOL_APPROVAL_POLICY];
     // Per-conversation connector opt-out: connectors the client switched off
     // for THIS turn only, layered on top of the user's standing allow/ask/deny
@@ -548,26 +566,31 @@ async function dispatchChatCompletions(
     // rather than only logged, a "Connected" connector whose tools were
     // silently dropped is indistinguishable from a broken one.
     const [operatorTools, connectorCatalog] = modelSupportsTools
-      ? await Promise.all([
-          loadMcpToolDefs(),
-          loadUserConnectorToolCatalog(userId, {
-            customConnectorLimit: getCustomRemoteMcpLimit(processed.subscriptionTier) ?? undefined,
-            planTier: processed.subscriptionTier,
-            organizationId: processed.organizationId,
-            isToolDenied: turnConnectorPermissions.isConnectorToolDenied,
-          }),
-        ])
+      ? await timePhase(CHAT_TURN_PHASE.toolCatalog, () =>
+          Promise.all([
+            loadMcpToolDefs(),
+            loadUserConnectorToolCatalog(userId, {
+              customConnectorLimit:
+                getCustomRemoteMcpLimit(processed.subscriptionTier) ?? undefined,
+              planTier: processed.subscriptionTier,
+              organizationId: processed.organizationId,
+              isToolDenied: turnConnectorPermissions.isConnectorToolDenied,
+            }),
+          ]),
+        )
       : [[], { tools: [], dropped: [], limit: null }];
     const connectorTools = connectorCatalog.tools;
     const mcpTools = [...operatorTools, ...connectorTools];
     const loopInputs = classifyToolLoopInputs(mcpTools, processed.llmRequest.tools);
 
     if (loopInputs.shouldRun || processed.chatRequest.work_mode === 'agiwork') {
-      const startedRun = await beginCloudAgentRun(
-        request,
-        userId,
-        processed,
-        processed.chatRequest.work_mode === 'agiwork' ? 'agiwork' : 'chat',
+      const startedRun = await timePhase(CHAT_TURN_PHASE.agentRunStart, () =>
+        beginCloudAgentRun(
+          request,
+          userId,
+          processed,
+          processed.chatRequest.work_mode === 'agiwork' ? 'agiwork' : 'chat',
+        ),
       );
       if (startedRun instanceof NextResponse) return startedRun;
       const { run, db: runDb } = startedRun;
@@ -651,17 +674,21 @@ async function dispatchChatCompletions(
       // durable attach fails).
       if (areDurableInitialTurnsEnabled() && !isDurableTransportCoolingDown()) {
         try {
-          const workflow = await startCloudAgentWorkflowExecution({
-            db: runDb,
-            runId: run.id,
-            userId,
-            processed,
-            mcpTools,
-            approvalMode: loopInputs.approvalMode,
-            toolApprovalPolicy,
-            connectorPermissions: turnConnectorPermissions,
-          });
-          const live = await claimLiveDurableStream(workflow.readable);
+          const workflow = await timePhase(CHAT_TURN_PHASE.durableStart, () =>
+            startCloudAgentWorkflowExecution({
+              db: runDb,
+              runId: run.id,
+              userId,
+              processed,
+              mcpTools,
+              approvalMode: loopInputs.approvalMode,
+              toolApprovalPolicy,
+              connectorPermissions: turnConnectorPermissions,
+            }),
+          );
+          const live = await timePhase(CHAT_TURN_PHASE.durableFirstEvent, () =>
+            claimLiveDurableStream(workflow.readable),
+          );
           if (!live) {
             await workflow.cancel().catch(() => undefined);
             throw new DurableStreamStalledError();
@@ -834,11 +861,13 @@ async function dispatchChatCompletions(
         try {
           const adapter = attemptAdapterProvider.buildAdapter(attemptProcessed);
           const chatRequest = attemptAdapterProvider.buildChatRequest(attemptProcessed);
-          chunks = await startProviderStream(
-            adapter,
-            chatRequest,
-            request.signal,
-            attemptAdapterProvider.mapError,
+          chunks = await timePhase(CHAT_TURN_PHASE.providerStream, () =>
+            startProviderStream(
+              adapter,
+              chatRequest,
+              request.signal,
+              attemptAdapterProvider.mapError,
+            ),
           );
         } catch (error) {
           const nextAttempt = failover.next(error);
@@ -1076,15 +1105,29 @@ function isEventStreamResponse(response: NextResponse | Response): boolean {
  * `finally` here, streaming responses via `attachTurnSlotToStream` above.
  */
 async function handleChatCompletions(request: NextRequest): Promise<NextResponse | Response> {
+  return runWithPhaseTimer((timer) =>
+    withSpan(CHAT_TURN_SPAN, { kind: 'server', domain: 'model' }, async (span) => {
+      try {
+        return await admitAndDispatchTurn(request);
+      } finally {
+        span.setAttributes(timer.attributes());
+      }
+    }),
+  );
+}
+
+async function admitAndDispatchTurn(request: NextRequest): Promise<NextResponse | Response> {
   // 1. Auth + rate-limit + CSRF + subscription gate
-  const authResult = await runAuthGate(request);
+  const authResult = await timePhase(CHAT_TURN_PHASE.authGate, () => runAuthGate(request));
   if (!authResult.ok) return authResult.response;
 
-  const turnSlot = await acquireManagedTurnSlot({
-    userId: authResult.userId,
-    planTier: authResult.subscription.plan_tier,
-    turnId: crypto.randomUUID(),
-  });
+  const turnSlot = await timePhase(CHAT_TURN_PHASE.turnSlot, () =>
+    acquireManagedTurnSlot({
+      userId: authResult.userId,
+      planTier: authResult.subscription.plan_tier,
+      turnId: crypto.randomUUID(),
+    }),
+  );
   if (!turnSlot.admitted) {
     logger.info(
       {
