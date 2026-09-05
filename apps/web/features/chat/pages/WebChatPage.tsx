@@ -3928,8 +3928,9 @@ export default function WebChatPage({ initialWorkMode }: WebChatPageProps) {
   }, [displayedMessages, isStreaming]);
 
   const handleRegenerateMessage = useCallback(
-    async (id: string) => {
+    async (id: string, modelOverride?: string) => {
       if (!displayedConversationId || isStreaming) return;
+      const targetModelId = modelOverride ?? activeModelId;
       const targetMsg = displayedMessages.find((m) => m.id === id);
       if (
         targetMsg?.role === 'assistant' &&
@@ -3972,14 +3973,14 @@ export default function WebChatPage({ initialWorkMode }: WebChatPageProps) {
       }
       // Same trust boundary as `handleSend`, reached by a different control:
       // Regenerate resends the whole on-device transcript under
-      // `activeModelId`, so a user who switched to a BYOK model and pressed
+      // `targetModelId`, so a user who switched to a BYOK model and pressed
       // Regenerate would cross Local → BYOK with no ceremony. Fails closed with
       // a visible reason (see resolveRegenerateBoundaryRefusal for why this
       // path refuses instead of forking).
       const boundaryRefusal = resolveRegenerateBoundaryRefusal({
         conversation: displayedConversation,
         messages: displayedMessages,
-        targetModelId: activeModelId,
+        targetModelId,
       });
       if (boundaryRefusal) {
         setChatError(boundaryRefusal, displayedConversationId);
@@ -3992,14 +3993,14 @@ export default function WebChatPage({ initialWorkMode }: WebChatPageProps) {
         const conversationId = displayedConversationId;
         deleteMessage(userMsg.id, conversationId);
         await sendMessage(userMsg.content, {
-          model: activeModelId,
+          model: targetModelId,
           conversationId,
           attachments: userMsg.attachments,
           ...replayOptions,
           ensureConversationId: async () => {
             const created = await createConversation(
               NEW_CHAT_TITLE,
-              activeModelId,
+              targetModelId,
               activeProjectId,
             );
             if (!created) return null;
@@ -4020,7 +4021,7 @@ export default function WebChatPage({ initialWorkMode }: WebChatPageProps) {
       if (variantsEnabled) {
         setVariantAnchorMessageId(null);
         await sendMessage(userMsg.content, {
-          model: activeModelId,
+          model: targetModelId,
           conversationId: displayedConversationId,
           attachments: userMsg.attachments,
           ...replayOptions,
@@ -4031,7 +4032,7 @@ export default function WebChatPage({ initialWorkMode }: WebChatPageProps) {
 
       await sendReplacingMessages(plan.rollbackIds, (onTurnCommitted) =>
         sendMessage(userMsg.content, {
-          model: activeModelId,
+          model: targetModelId,
           conversationId: displayedConversationId,
           attachments: userMsg.attachments,
           ...replayOptions,
@@ -4061,6 +4062,22 @@ export default function WebChatPage({ initialWorkMode }: WebChatPageProps) {
       variantsEnabled,
       resumeInteractiveCardTurn,
     ],
+  );
+
+  const regenerateModelOptions = useMemo(
+    () =>
+      availableModels
+        .filter((model) => resolveSelectableModelId(model.id) === model.id)
+        .map(({ id, name }) => ({ id, name })),
+    [availableModels],
+  );
+
+  const handleRegenerateWithModel = useCallback(
+    async (id: string, modelId: string) => {
+      if (!(await handleConversationModelChange(modelId))) return;
+      await handleRegenerateMessage(id, modelId);
+    },
+    [handleConversationModelChange, handleRegenerateMessage],
   );
 
   const lastAssistantMessage = useMemo(
@@ -4937,6 +4954,8 @@ export default function WebChatPage({ initialWorkMode }: WebChatPageProps) {
                         onSendMessage={setComposerPrefill}
                         onPaywallUpgrade={handlePaywallRecovery}
                         onPaywallDismiss={handlePaywallDismiss}
+                        onRegenerateWithModel={handleRegenerateWithModel}
+                        regenerateModelOptions={regenerateModelOptions}
                       />
                     </InteractiveCardResumeProvider>
                   </MessageInlineEditProvider>
