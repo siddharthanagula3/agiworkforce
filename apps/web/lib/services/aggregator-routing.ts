@@ -3,6 +3,7 @@ import 'server-only';
 import {
   getModelMetadataById,
   getRegistryRoute,
+  isModelLive,
   listCanonicalModels,
   type ModelMetadata,
   type RouteCommercialStatus,
@@ -21,7 +22,10 @@ function providerApiModelId(model: ModelMetadata): string {
 }
 
 function isCatalogChatModel(model: ModelMetadata): boolean {
-  return !new Set(['image', 'video', 'audio', 'embedding', 'tts', 'stt']).has(model.modelType);
+  return (
+    isModelLive(model) &&
+    !new Set(['image', 'video', 'audio', 'embedding', 'tts', 'stt']).has(model.modelType)
+  );
 }
 
 function isPermanentOpenRouterRoute(model: ModelMetadata): boolean {
