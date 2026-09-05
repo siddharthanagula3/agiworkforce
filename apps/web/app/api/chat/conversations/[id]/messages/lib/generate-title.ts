@@ -19,6 +19,7 @@ import 'server-only';
 import { after } from 'next/server';
 import { openAIWireRequestToChatRequest } from '@agiworkforce/provider-protocol';
 import { resolveAutoRoute } from '@agiworkforce/routing';
+import { resolveWireMode } from '@/app/api/llm/v1/chat/completions/lib/adapter-providers';
 import { drainToLlmResponse } from '@/app/api/llm/v1/chat/completions/lib/adapter-response';
 import {
   buildServerProviderAdapter,
@@ -164,10 +165,7 @@ async function generateAndPersistTitle(input: ScheduleTitleGenerationInput): Pro
     temperature: 0,
     stream: false,
   });
-  const wireMode =
-    route.provider === 'anthropic' || route.provider === 'google'
-      ? 'legacy-web'
-      : 'openai-passthrough';
+  const wireMode = resolveWireMode(route.provider);
 
   const cacheFields: ExactResponseCacheKeyFields = {
     callType: 'conversation-title-generation',

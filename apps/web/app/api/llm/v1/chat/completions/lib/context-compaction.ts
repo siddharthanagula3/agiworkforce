@@ -9,6 +9,7 @@ import {
   buildServerProviderAdapter,
   toGenericUpstreamError,
 } from '@/lib/services/provider-adapter-service';
+import { resolveWireMode } from './adapter-providers';
 import { LLMCostCalculator } from '@/lib/services/llm-cost-calculator';
 import {
   fingerprintManagedUsageRequest,
@@ -121,10 +122,7 @@ async function generateCompactionSummary(params: {
     temperature: 0,
     stream: false,
   });
-  const wireMode =
-    route.provider === 'anthropic' || route.provider === 'google'
-      ? 'legacy-web'
-      : 'openai-passthrough';
+  const wireMode = resolveWireMode(route.provider);
 
   const idempotencyKey = `context-compaction:${params.conversationId}:${params.boundaryMessageId}`;
   const requestHash = fingerprintManagedUsageRequest({
