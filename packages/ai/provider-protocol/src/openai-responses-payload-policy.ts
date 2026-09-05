@@ -1,3 +1,9 @@
+import {
+  REGISTRY_ENDPOINT_HOST_RULES,
+  REGISTRY_LOCAL_ENDPOINT_HOSTS,
+  REGISTRY_LOCAL_ENDPOINT_HOST_SUFFIXES,
+  type EndpointHostRule,
+} from '@agiworkforce/types';
 
 import { readStringValue } from './lib/string-utils';
 import { supportsOpenAIReasoningEffort } from './openai-reasoning-effort';
@@ -60,17 +66,7 @@ type OpenAIResponsesPayloadCapabilities = {
 
 const OPENAI_RESPONSES_APIS = new Set(['openai-responses', 'openai-codex-responses']);
 const OPENAI_RESPONSES_PROVIDERS = new Set(['openai']);
-const LOCAL_ENDPOINT_HOSTS = new Set(['localhost', '127.0.0.1', '::1', '[::1]']);
-const MODELSTUDIO_NATIVE_BASE_URLS = new Set([
-  'https://coding-intl.dashscope.aliyuncs.com/v1',
-  'https://coding.dashscope.aliyuncs.com/v1',
-  'https://dashscope.aliyuncs.com/compatible-mode/v1',
-  'https://dashscope-intl.aliyuncs.com/compatible-mode/v1',
-]);
-const MOONSHOT_NATIVE_BASE_URLS = new Set([
-  'https://api.moonshot.ai/v1',
-  'https://api.moonshot.cn/v1',
-]);
+const LOCAL_ENDPOINT_HOSTS = new Set(REGISTRY_LOCAL_ENDPOINT_HOSTS);
 
 function normalizeLowercaseString(value: unknown): string | undefined {
   const stringValue = readStringValue(value)?.trim().toLowerCase();
@@ -123,10 +119,28 @@ function hostMatchesSuffix(host: string, suffix: string): boolean {
 function isLocalEndpointHost(host: string): boolean {
   return (
     LOCAL_ENDPOINT_HOSTS.has(host) ||
-    host.endsWith('.localhost') ||
-    host.endsWith('.local') ||
-    host.endsWith('.internal')
+    REGISTRY_LOCAL_ENDPOINT_HOST_SUFFIXES.some((suffix) => host.endsWith(suffix))
   );
+}
+
+function endpointRuleMatches(
+  rule: EndpointHostRule,
+  host: string,
+  comparableBaseUrl: string | undefined,
+): boolean {
+  switch (rule.match) {
+    case 'host':
+      return host === rule.pattern;
+    case 'hostSuffix':
+      return (
+        host.endsWith(rule.pattern) &&
+        (rule.hostPattern === undefined || new RegExp(rule.hostPattern, 'u').test(host))
+      );
+    case 'domain':
+      return hostMatchesSuffix(host, rule.pattern);
+    case 'baseUrl':
+      return comparableBaseUrl === rule.pattern;
+  }
 }
 
 export function resolveBundledOpenAIResponsesEndpointClass(
@@ -142,50 +156,12 @@ export function resolveBundledOpenAIResponsesEndpointClass(
   }
   const comparableBaseUrl = normalizeComparableBaseUrl(trimmed);
 
-  switch (host) {
-    case 'api.anthropic.com':
-      return 'anthropic-public';
-    case 'llm.chutes.ai':
-      return 'chutes-native';
-    case 'api.deepseek.com':
-      return 'deepseek-native';
-    case 'api.groq.com':
-      return 'groq-native';
-    case 'api.mistral.ai':
-      return 'mistral-public';
-    case 'api.openai.com':
-      return 'openai-public';
-    case 'chatgpt.com':
-      return 'openai-codex';
-    case 'generativelanguage.googleapis.com':
-      return 'google-generative-ai';
-    case 'aiplatform.googleapis.com':
-      return 'google-vertex';
-    case 'api.x.ai':
-    case 'api.grok.x.ai':
-      return 'xai-native';
-    case 'api.z.ai':
-      return 'zai-native';
+  for (const rule of REGISTRY_ENDPOINT_HOST_RULES) {
+    if (endpointRuleMatches(rule, host, comparableBaseUrl)) {
+      return rule.endpointClass as OpenAIResponsesEndpointClass;
+    }
   }
 
-  if (hostMatchesSuffix(host, '.githubcopilot.com')) {
-    return 'github-copilot-native';
-  }
-  if (hostMatchesSuffix(host, 'openrouter.ai')) {
-    return 'openrouter';
-  }
-  if (hostMatchesSuffix(host, 'opencode.ai')) {
-    return 'opencode-native';
-  }
-  if (hostMatchesSuffix(host, '-aiplatform.googleapis.com')) {
-    return 'google-vertex';
-  }
-  if (comparableBaseUrl && MOONSHOT_NATIVE_BASE_URLS.has(comparableBaseUrl)) {
-    return 'moonshot-native';
-  }
-  if (comparableBaseUrl && MODELSTUDIO_NATIVE_BASE_URLS.has(comparableBaseUrl)) {
-    return 'modelstudio-native';
-  }
   if (isLocalEndpointHost(host)) {
     return 'local';
   }

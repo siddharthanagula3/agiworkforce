@@ -114,16 +114,6 @@ const BUDGETS = [
     why: 'Certificate-pinning host table, pins are declared per literal host by definition.',
   },
   {
-    file: 'packages/ai/provider-protocol/src/anthropic-payload-policy.ts',
-    max: 1,
-    why: 'Wire-policy host check: the vendor host gates a vendor-only payload field.',
-  },
-  {
-    file: 'packages/ai/provider-protocol/src/openai-responses-payload-policy.ts',
-    max: 14,
-    why: 'Wire-policy table of OpenAI-compatible endpoints and their capability profiles.',
-  },
-  {
     file: 'apps/desktop/src-tauri/src/core/llm/providers/direct_api_provider.rs',
     max: 14,
     why: "Desktop's default_base_url() provider table plus RETIRED_PROVIDER_HOSTS, the canonical desktop declaration.",

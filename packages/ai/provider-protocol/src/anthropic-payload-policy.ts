@@ -1,3 +1,4 @@
+import { REGISTRY_ENDPOINT_HOST_RULES, type EndpointHostRule } from '@agiworkforce/types';
 
 import { resolveProviderRequestCapabilities } from './provider-attribution';
 import {
@@ -35,21 +36,30 @@ function resolveBaseUrlHostname(baseUrl: string): string | undefined {
   }
 }
 
-const VERTEX_REGION_HOST_REGEX =
-  /^[a-z0-9]{1,32}(?:-[a-z0-9]{1,32}){0,4}-aiplatform\.googleapis\.com$/;
+function longTtlRuleMatches(rule: EndpointHostRule, hostname: string): boolean {
+  if (rule.match === 'host') {
+    return hostname === rule.pattern;
+  }
+  if (rule.match === 'hostSuffix') {
+    return (
+      hostname.endsWith(rule.pattern) &&
+      (rule.hostPattern === undefined || new RegExp(rule.hostPattern, 'u').test(hostname))
+    );
+  }
+  return false;
+}
 
 function isLongTtlEligibleEndpoint(baseUrl: string | undefined): boolean {
   if (typeof baseUrl !== 'string') {
     return false;
   }
-  const hostname = resolveBaseUrlHostname(baseUrl);
+  const hostname = resolveBaseUrlHostname(baseUrl)?.toLowerCase();
   if (!hostname) {
     return false;
   }
-  if (hostname === 'api.anthropic.com' || hostname === 'aiplatform.googleapis.com') {
-    return true;
-  }
-  return VERTEX_REGION_HOST_REGEX.test(hostname);
+  return REGISTRY_ENDPOINT_HOST_RULES.some(
+    (rule) => rule.longTtlPromptCache && longTtlRuleMatches(rule, hostname),
+  );
 }
 
 function resolveAnthropicEphemeralCacheControl(
