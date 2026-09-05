@@ -2,13 +2,34 @@
 
 Status: Current
 Owner role: Tooling/security owner
-Last updated: 2026-08-09
+Last updated: 2026-09-05
 Kind: ts-package
 Criticality: high
 
 ## Purpose
 
 Shared browser automation primitives backed by Playwright Core.
+
+## Not wired
+
+**This package is not wired. Nothing in the product executes any code in it,
+and changing its policy changes nothing a user can reach.** The two live
+computer-use drivers are the Chrome extension's `cdpDriver.ts`
+(`apps/extension/src/features/computer-use/cdpDriver.ts`) and the desktop's
+`BrowserExecutor` (`apps/desktop/src-tauri/src/core/agi/executors/browser_executor.rs`).
+Both carry their own destination allowlist, consent gate, and injection
+handling; neither imports this package.
+
+`isRunnableComputerAction` in `src/index.ts` reads like the shared safety gate
+and is not one. Approval for a live computer-use call is decided by the web
+tool loop's `resolveToolCallGate`
+(`apps/web/app/api/llm/v1/chat/completions/lib/tool-loop.ts`), so a change made
+only here silently does not apply.
+
+Decision D-P5-1 is that this package becomes the shared action contract that
+both drivers import (action schema, approval status, destination policy), with
+no driver code in it. Until that lands, treat this README section as the
+package's status. Recorded in `docs/decisions/wire-or-cut.md`.
 
 ## Consumers
 
