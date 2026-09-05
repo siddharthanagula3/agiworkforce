@@ -71,6 +71,9 @@ import { isHighConfidenceSecretName } from '@/lib/security/secret-patterns';
 import type { McpInputRequiredState } from '@agiworkforce/mcp';
 import { getRoutePricing } from '@agiworkforce/model-registry';
 import type { RouteOutcomeClass } from '@agiworkforce/routing';
+import { toolInvocationIdempotencyKey } from '@agiworkforce/provider-runtime';
+
+import { runToolCallOnce } from './tool-idempotency';
 import {
   recordRouteOutcome,
   recordServedRouteAffinity,
@@ -394,7 +397,10 @@ export interface ToolLoopToolResult {
 }
 
 export interface ToolLoopToolExecution {
+  /** Names this step inside one durable run. */
   operationKey: string;
+  /** Identifies the same invocation ACROSS requests that share a request key. */
+  idempotencyKey: string;
   retrySafety: CloudAgentToolRetrySafety;
   toolCall: PendingToolCall;
   execute: () => Promise<ToolLoopToolResult>;
@@ -2579,18 +2585,37 @@ export async function* runToolLoop(
         });
       // Each MRTR round is a distinct durable operation: re-running the same
       // paused call must not return the cached input_required receipt, so the
-      // resume round scopes the idempotency key.
+      // resume round scopes both keys below.
+      //
+      // `operationKey` names the step inside ONE durable run, which the run id
+      // already scopes. `idempotencyKey` is derived from the request's own key,
+      // so a client retry with the same Idempotency-Key produces the same key
+      // and a settled call is recognised as settled across requests, which a
+      // provider-minted tool call id alone cannot do.
+      const retrySafety = resolveToolRetrySafety(tc.qualifiedName);
       const operationKey = resumeInput
         ? `tool:${tc.id}:input:${resumeInput.round}`
         : `tool:${tc.id}`;
+      const idempotencyKey = toolInvocationIdempotencyKey({
+        requestKey: processed.managedUsage?.idempotencyKey ?? processed.requestId,
+        step: suspendContext.completedSteps,
+        toolCallId: tc.id,
+        ...(resumeInput ? { resumeRound: resumeInput.round } : {}),
+      });
       const run = options.toolExecutor
         ? options.toolExecutor({
             operationKey,
-            retrySafety: resolveToolRetrySafety(tc.qualifiedName),
+            idempotencyKey,
+            retrySafety,
             toolCall: tc,
             execute,
           })
-        : execute();
+        : runToolCallOnce({
+            idempotencyKey,
+            retrySafety,
+            toolName: tc.qualifiedName,
+            execute,
+          });
       return withToolTimeout(
         run,
         tc.qualifiedName,

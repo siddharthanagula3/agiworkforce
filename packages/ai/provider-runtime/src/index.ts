@@ -66,6 +66,13 @@ export {
 } from './base-url';
 
 export {
+  deriveIdempotencyKey,
+  meteredStepIdempotencyKey,
+  toolInvocationIdempotencyKey,
+  type IdempotencyKeyInput,
+} from './idempotency';
+
+export {
   CredentialFailoverState,
   isCredentialFailureCategory,
   type CredentialFailoverStateOptions,
