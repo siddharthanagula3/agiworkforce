@@ -110,10 +110,17 @@ const FAILOVER_ELIGIBLE_CATEGORIES: ReadonlySet<string> = new Set([
  * valid credential; running out of money is an operator problem, not a routing
  * problem, and hiding it by spending elsewhere is the worst possible response.
  *
+ * `isBillingRotationAllowed` below is the ONE exception, and it is narrow: an
+ * Auto request may cross to another paid provider exactly once, because the
+ * user never asked for the unfunded route by name and the turn's spend is
+ * already bounded by the reservation ceiling the request processor took before
+ * the first attempt. What the original rule forbids, unbounded shopping of an
+ * unfunded account across every paid provider in the plan, is still forbidden.
+ *
  * `safety` is here for a different reason: a policy refusal must never be
  * shopped around providers until one accepts the content. `content_blocked`
  * is the same refusal observed through a clean stream instead of a thrown
- * error, and must never rotate for the same reason.
+ * error, and must never rotate for the same reason. Neither has an exception.
  */
 const NEVER_ROTATE_CATEGORIES: ReadonlySet<string> = new Set([
   'billing_exhausted',
@@ -121,12 +128,32 @@ const NEVER_ROTATE_CATEGORIES: ReadonlySet<string> = new Set([
   'content_blocked',
 ]);
 
+const BILLING_EXHAUSTED_CATEGORY = 'billing_exhausted';
+
 const REQUEST_REJECTION_CATEGORY = 'client_error';
 const REQUEST_REJECTION_STATUS = 400;
 const FIRST_PROVIDER_STEP = 1;
 
 export function isNeverRotateCategory(category: string): boolean {
   return NEVER_ROTATE_CATEGORIES.has(category);
+}
+
+/**
+ * An explicit selection is rotation-free here as well as structurally.
+ *
+ * The resolver already emits an empty fallback plan for a pinned model, so this
+ * predicate is the second of two independent reasons a pinned model cannot
+ * cross to another provider on an unfunded account. Two are deliberate: the
+ * plan is data that a future caller could populate, this is the rule.
+ */
+function isBillingRotationAllowed(
+  processed: ProcessedRequest,
+  category: string,
+  alreadyUsed: boolean,
+): boolean {
+  if (category !== BILLING_EXHAUSTED_CATEGORY) return false;
+  if (alreadyUsed) return false;
+  return isAutoModeModelId(processed.requestedModel);
 }
 
 export interface FailoverStepContext {
@@ -286,6 +313,7 @@ export function createFailoverPlan(
   const freeLaneAttempted: string[] = freeLane ? [freeLane.dispatchedRouteId] : [];
   let latestView: ProcessedRequest = processed;
   let latestRouteId: string | null = freeLane ? freeLane.dispatchedRouteId : null;
+  let billingRotationUsed = false;
 
   const nextAdmissibleCandidate = (): FailoverAttempt | null => {
     while (remaining.length > 0) {
@@ -530,7 +558,8 @@ export function createFailoverPlan(
       // must not be able to re-open a class we have decided may never rotate.
       // This is the guard that stops an exhausted paid account from quietly
       // spending through a different paid provider.
-      if (isNeverRotateCategory(category)) {
+      const billingRotation = isBillingRotationAllowed(processed, category, billingRotationUsed);
+      if (isNeverRotateCategory(category) && !billingRotation) {
         logger.warn(
           {
             requestId: processed.requestId,
@@ -543,9 +572,23 @@ export function createFailoverPlan(
         );
         return null;
       }
+      if (billingRotation) {
+        billingRotationUsed = true;
+        logger.warn(
+          {
+            requestId: processed.requestId,
+            provider: latestView.provider,
+            model: latestView.chatRequest.model,
+            category,
+            code: classified.code,
+          },
+          'Managed failover: spending the one Auto rotation an unfunded account is allowed',
+        );
+      }
       const credentialRotation = credentialFailover.recordFailure(latestView.provider, category);
       if (
         !credentialRotation &&
+        !billingRotation &&
         !isFailoverEligibleError(error, options.signal) &&
         !isRotatableRequestRejection(processed, classified, context)
       ) {

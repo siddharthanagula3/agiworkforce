@@ -1,4 +1,8 @@
-import { SPENDING_CAP_PROVIDER_HINT, type ClassifiedError } from '@agiworkforce/provider-runtime';
+import {
+  classifyError,
+  SPENDING_CAP_PROVIDER_HINT,
+  type ClassifiedError,
+} from '@agiworkforce/provider-runtime';
 import { markProviderDegraded } from '@/lib/services/provider-availability-service';
 
 export interface UpstreamErrorShape {
@@ -6,6 +10,24 @@ export interface UpstreamErrorShape {
   type: string;
   code: string;
   message: string;
+}
+
+/**
+ * The boundary a thrown provider failure crosses to become text a reader sees.
+ *
+ * Every caller that reports a failure to the client goes through here, because
+ * an upstream SDK's `message` is not copy: at least one provider formats it as
+ * the HTTP status followed by the verbatim JSON error body, and emitting that
+ * put a provider's raw payload in the transcript. A failure that is not an
+ * upstream refusal classifies as `unknown` and still gets taxonomy copy rather
+ * than an exception's internals.
+ */
+export function upstreamFailureCopy(
+  error: unknown,
+  provider: string,
+): { message: string; code: string } {
+  const mapped = mapClassifiedUpstreamError(classifyError(error), provider);
+  return { message: mapped.message, code: mapped.code };
 }
 
 export function mapClassifiedUpstreamError(
@@ -153,7 +175,7 @@ export function mapClassifiedUpstreamError(
         type: 'service_unavailable',
         code: 'provider_billing_exhausted',
         message:
-          'This model is temporarily unavailable. Choose another model, or try again shortly.',
+          'This model is unavailable right now because of a problem on our side, not with your request. Choose another model, or try again shortly.',
       };
 
     // The quota WINDOW is spent, as opposed to a momentary rate limit. Same

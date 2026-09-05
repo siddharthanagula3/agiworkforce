@@ -137,15 +137,32 @@ describe('rotation eligibility (gateway parity)', () => {
     expect(isNeverRotateCategory('content_blocked')).toBe(true);
   });
 
-  it('never rotates on an exhausted credit balance', () => {
-    // Inverted deliberately. This case used to sit in the list above, because
-    // "credit balance is too low" classified as `auth` and every `auth` is a
-    // rotation trigger. That meant an account which had merely run out of money
-    // was pushed onto a DIFFERENT PAID provider and spent more there. An
-    // unfunded credential is a valid credential: the failure is an operator
-    // problem and must surface, not be paid around.
-    const attempt = makePlan(makeProcessed()).next(new Error('Your credit balance is too low'));
-    expect(attempt).toBeNull();
+  it('rotates an Auto request exactly once on an exhausted credit balance, then stops', () => {
+    // The narrow D-14 exception. Unbounded rotation is what the original rule
+    // forbade: an account that had merely run out of money would walk the whole
+    // paid ladder spending on every provider in it. One hop is different, the
+    // user never named the unfunded route and the turn's spend is already
+    // capped by the reservation taken before the first attempt, so the goal
+    // completes instead of failing on a problem the user cannot act on.
+    const plan = makePlan(makeProcessed());
+    const unfunded = new Error('Your credit balance is too low');
+
+    expect(plan.next(unfunded)?.model).toBe('candidate-a');
+    expect(plan.next(unfunded)).toBeNull();
+  });
+
+  it('never rotates a pinned model on an exhausted credit balance, even with a plan to walk', () => {
+    // `fallbackModels` is deliberately populated: the resolver empties it for an
+    // explicit selection, so an empty plan would prove nothing about the rule.
+    const processed = makeProcessed({ requestedModel: 'primary-model' });
+    expect(makePlan(processed).next(new Error('Your credit balance is too low'))).toBeNull();
+  });
+
+  it('never rotates a refusal for an Auto request: the billing exception is not a general one', () => {
+    const plan = makePlan(makeProcessed());
+    expect(
+      plan.next(Object.assign(new Error('content was blocked by safety'), { status: 400 })),
+    ).toBeNull();
   });
 
   it('skips the rejected provider’s own remaining routes rather than replaying the same key', () => {
@@ -577,13 +594,22 @@ describe('shared breakers consulted before dispatch', () => {
     expect(observations).toEqual(['model']);
   });
 
-  it('never reports a scope for a class that must never rotate', () => {
-    const observations: string[] = [];
+  it('reports the credential scope for an unfunded account, so the operator learns of it', () => {
+    const observations: { scope: string; category: string }[] = [];
     planWithBreakers({
-      onResilienceObservation: ({ scope }) => observations.push(scope),
+      onResilienceObservation: ({ scope, category }) => observations.push({ scope, category }),
     }).next(
       Object.assign(new Error('Your credit balance is too low to access the API'), { status: 400 }),
     );
+
+    expect(observations).toEqual([{ scope: 'credential', category: 'billing_exhausted' }]);
+  });
+
+  it('never reports a scope for a refusal: a policy stop is not a health signal', () => {
+    const observations: string[] = [];
+    planWithBreakers({
+      onResilienceObservation: ({ scope }) => observations.push(scope),
+    }).next(Object.assign(new Error('content was blocked by safety'), { status: 400 }));
 
     expect(observations).toEqual([]);
   });

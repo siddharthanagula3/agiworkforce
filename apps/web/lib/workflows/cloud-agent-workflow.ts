@@ -52,8 +52,7 @@ import {
   type WorkflowTerminalOutcome,
 } from './steps/settle-workflow-invocation';
 import { connectorToolPermissionsFromEntries } from '@/app/api/llm/v1/chat/completions/lib/connector-tool-permissions';
-import { mapClassifiedUpstreamError } from '@/app/api/llm/v1/chat/completions/lib/upstream-error-copy';
-import { classifyError } from '@agiworkforce/provider-runtime';
+import { upstreamFailureCopy } from '@/app/api/llm/v1/chat/completions/lib/upstream-error-copy';
 
 const CLOUD_AGENT_WORKFLOW_FAILED_MESSAGE = 'The durable agent workflow failed.';
 const CLOUD_AGENT_WORKFLOW_FAILED_CODE = 'cloud_agent_workflow_failed';
@@ -542,7 +541,7 @@ export async function cloudAgentWorkflow(rawInput: CloudAgentWorkflowInput): Pro
       return;
     }
   } catch (error) {
-    const failure = describeCloudAgentWorkflowFailure(error, input.processed.provider);
+    const failure = upstreamFailureCopy(error, input.processed.provider);
     await failCloudAgentWorkflow(input, failure.message, failure.code);
     await closeCloudAgentWorkflowStream();
     throw error;
