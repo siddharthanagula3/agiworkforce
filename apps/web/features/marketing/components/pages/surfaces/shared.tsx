@@ -100,13 +100,17 @@ export function FactGrid({ items }: { items: readonly FactItem[] }) {
 
         if (spanLastItem && index === lastIndex) {
           return (
-            <div className="agi-ds-stack" style={{ gridColumn: '1 / -1' }} key={item.title}>
+            <div className="agi-ds-card" style={{ gridColumn: '1 / -1' }} key={item.title}>
               {fact}
             </div>
           );
         }
 
-        return <Stack key={item.title}>{fact}</Stack>;
+        return (
+          <div className="agi-ds-card" key={item.title}>
+            {fact}
+          </div>
+        );
       })}
     </div>
   );
