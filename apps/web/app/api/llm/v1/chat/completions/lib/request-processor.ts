@@ -95,6 +95,7 @@ import {
   detectIndicScript,
   emptyRuntimeState,
   estimateTokens,
+  observedRouteHealthFromSnapshots,
   resolveAutoRoute,
   taskFamilyRoutingStageEnabled,
 } from '@agiworkforce/routing';
@@ -1438,7 +1439,14 @@ export function resolveWebCloudModelRoute(
       ? { estimatedOutputTokens: usage.estimatedOutputTokens }
       : {}),
     ...(usage?.taskFamily !== undefined ? { taskFamily: usage.taskFamily } : {}),
-    ...(routeHealth?.runtimeState ? { runtimeState: routeHealth.runtimeState } : {}),
+    ...(routeHealth?.runtimeState
+      ? {
+          runtimeState: routeHealth.runtimeState,
+          observedRouteHealth: observedRouteHealthFromSnapshots(
+            routeHealth.runtimeState.routeHealthSnapshots,
+          ),
+        }
+      : {}),
     ...(routeHealth?.preferredRouteId ? { preferredRouteId: routeHealth.preferredRouteId } : {}),
     ...(availableProviderIds && availableProviderIds.size > 0 ? { availableProviderIds } : {}),
     ...(zeroDataRetentionOnly ? { zeroDataRetentionOnly } : {}),

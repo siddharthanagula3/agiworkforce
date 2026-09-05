@@ -24,7 +24,7 @@ import { fileURLToPath } from 'node:url';
 import { modelRegistry } from '@agiworkforce/model-registry';
 import { describe, expect, it } from 'vitest';
 
-import { resolveAutoRoute, type RoutingTrustMode } from '../auto';
+import { resolveAutoRoute, type ObservedRouteHealth, type RoutingTrustMode } from '../auto';
 import type { RoutingTaskType } from '../types';
 
 const FIXTURE_INDENT = 2;
@@ -32,6 +32,27 @@ const FIXTURE_INDENT = 2;
 const FIXTURE_PATH = fileURLToPath(
   new URL('./fixtures/auto-route-conformance.json', import.meta.url),
 );
+
+/**
+ * Observed-health ranking is a TypeScript-only stage, for the same reason
+ * `runtimeState`, `preferSlots` and `preferredRouteId` are: it consumes live
+ * measurements the Rust resolver has no store to read. Pinning it in the shared
+ * fixture would make the crate replay a decision it cannot compute, so it gets
+ * its own file rather than one side's behaviour recorded as a cross-language
+ * contract.
+ *
+ * What IS pinned across both: every flag-off case here must equal the shared
+ * fixture's case for the same request, byte for byte.
+ */
+const OBSERVED_HEALTH_FIXTURE_PATH = fileURLToPath(
+  new URL('./fixtures/auto-route-observed-health.json', import.meta.url),
+);
+
+const OBSERVED_TRUST_MODE: RoutingTrustMode = 'managed_cloud';
+const PENALISED_FAILURE_RATE = 0.9;
+const PENALISED_LATENCY_MS = 4_000;
+const FLAG_ON_SUFFIX = 'flag_on';
+const FLAG_OFF_SUFFIX = 'flag_off';
 
 const TASK_TYPES: readonly RoutingTaskType[] = [
   'simple_chat',
@@ -137,12 +158,78 @@ function computeCases(): Record<string, string> {
   return cases;
 }
 
+function observedCaseKey(
+  selection: string,
+  taskType: RoutingTaskType,
+  subscriptionTier: string,
+  suffix: string,
+): string {
+  return `observed|${selection}|${taskType}|${subscriptionTier}|${OBSERVED_TRUST_MODE}|${suffix}`;
+}
+
+function sharedCaseKey(
+  selection: string,
+  taskType: RoutingTaskType,
+  subscriptionTier: string,
+): string {
+  return `alias|${selection}|${taskType}|${subscriptionTier}|${OBSERVED_TRUST_MODE}|any`;
+}
+
+/**
+ * Penalise whatever route the flag-off decision chose, then record what the
+ * ranker does with that. A model with a second admissible route moves; one
+ * without keeps its route, which is the correct answer and worth pinning too.
+ */
+function computeObservedCases(): Record<string, string> {
+  const cases: Record<string, string> = {};
+  for (const selection of aliases) {
+    for (const taskType of TASK_TYPES) {
+      for (const subscriptionTier of TIERS) {
+        const request = {
+          selection,
+          taskType,
+          subscriptionTier,
+          trustMode: OBSERVED_TRUST_MODE,
+          enableTaskFamilyStage: false,
+        } as const;
+        const base = resolveAutoRoute(request);
+        if (base.status !== 'selected') continue;
+        const observedRouteHealth: Record<string, ObservedRouteHealth> = {
+          [base.routeId]: {
+            failureRate: PENALISED_FAILURE_RATE,
+            latencyP50Ms: PENALISED_LATENCY_MS,
+          },
+        };
+        cases[observedCaseKey(selection, taskType, subscriptionTier, FLAG_ON_SUFFIX)] = encode(
+          resolveAutoRoute({
+            ...request,
+            observedRouteHealth,
+            enableObservedHealthRanking: true,
+          }),
+        );
+        cases[observedCaseKey(selection, taskType, subscriptionTier, FLAG_OFF_SUFFIX)] = encode(
+          resolveAutoRoute({
+            ...request,
+            observedRouteHealth,
+            enableObservedHealthRanking: false,
+          }),
+        );
+      }
+    }
+  }
+  return cases;
+}
+
 describe('auto-route cross-language conformance', () => {
   const computed = computeCases();
 
   if (process.env.AGI_UPDATE_ROUTING_CONFORMANCE === '1') {
     it('regenerates the conformance fixture', () => {
       writeFileSync(FIXTURE_PATH, `${JSON.stringify(computed, null, FIXTURE_INDENT)}\n`);
+      writeFileSync(
+        OBSERVED_HEALTH_FIXTURE_PATH,
+        `${JSON.stringify(computeObservedCases(), null, FIXTURE_INDENT)}\n`,
+      );
       expect(Object.keys(computed).length).toBeGreaterThan(0);
     });
     return;
@@ -157,5 +244,45 @@ describe('auto-route cross-language conformance', () => {
   it('reaches the recorded decision for every case', () => {
     const drifted = Object.entries(computed).filter(([key, value]) => recorded[key] !== value);
     expect(drifted).toEqual([]);
+  });
+
+  describe('observed-health ranking conformance', () => {
+    const observedComputed = computeObservedCases();
+    const observedRecorded = JSON.parse(
+      readFileSync(OBSERVED_HEALTH_FIXTURE_PATH, 'utf8'),
+    ) as Record<string, string>;
+    it('covers the same cases the fixture records', () => {
+      expect(Object.keys(observedComputed).sort()).toEqual(Object.keys(observedRecorded).sort());
+    });
+
+    it('reaches the recorded decision for every case', () => {
+      const drifted = Object.entries(observedComputed).filter(
+        ([key, value]) => observedRecorded[key] !== value,
+      );
+      expect(drifted).toEqual([]);
+    });
+
+    it('reproduces the shared fixture byte for byte with the flag off', () => {
+      const drifted = Object.entries(observedRecorded)
+        .filter(([key]) => key.endsWith(FLAG_OFF_SUFFIX))
+        .map(([key, value]) => {
+          const [, selection, taskType, subscriptionTier] = key.split('|');
+          return [
+            key,
+            value,
+            recorded[sharedCaseKey(selection!, taskType as RoutingTaskType, subscriptionTier!)],
+          ] as const;
+        })
+        .filter(([, observed, sharedValue]) => observed !== sharedValue);
+      expect(drifted).toEqual([]);
+    });
+
+    it('changes at least one head route when the flag is on', () => {
+      const moved = Object.entries(observedRecorded).filter(([key, value]) => {
+        if (!key.endsWith(FLAG_ON_SUFFIX)) return false;
+        return observedRecorded[key.replace(FLAG_ON_SUFFIX, FLAG_OFF_SUFFIX)] !== value;
+      });
+      expect(moved.length).toBeGreaterThan(0);
+    });
   });
 });

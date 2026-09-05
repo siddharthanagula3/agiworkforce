@@ -42,6 +42,10 @@ export const MODEL_ID_OWNER_PATHS = Object.freeze([
   // `AGI_UPDATE_ROUTING_CONFORMANCE=1` from the catalog, and replayed verbatim by
   // the Rust resolver so the two implementations cannot silently disagree.
   'packages/ai/routing/src/__tests__/fixtures/auto-route-conformance.json',
+  // Same generator, TypeScript-only half: observed-health ranking consumes live
+  // measurements the Rust resolver has no store to read, so its cases are not a
+  // cross-language contract and live beside the shared file rather than in it.
+  'packages/ai/routing/src/__tests__/fixtures/auto-route-observed-health.json',
   'crates/agiworkforce-model-registry/src/generated/model_registry.json',
   'crates/agiworkforce-model-registry/src/generated/model_registry.rs',
   'crates/agiworkforce-protocol/src/generated/model_registry.json',
