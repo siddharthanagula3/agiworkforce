@@ -38,6 +38,10 @@
       "reason": "pending scoped migration"
     },
     {
+      "path": "apps/web/app/api/chat/conversations/[id]/messages/lib/generate-title.ts",
+      "reason": "pending scoped migration"
+    },
+    {
       "path": "apps/web/app/api/checkout/route.ts",
       "reason": "pending scoped migration"
     },
@@ -64,6 +68,10 @@
     {
       "path": "apps/web/app/api/cron/purge-deleted-media/route.ts",
       "reason": "cron route gated by verifyCronRequest against CRON_SECRET, platform-scoped by design"
+    },
+    {
+      "path": "apps/web/app/api/cron/purge-temporary-chats/route.ts",
+      "reason": "cron sweep of expired temporary chats across every owner, runs with no request user"
     },
     {
       "path": "apps/web/app/api/cron/reset-credits/route.ts",
@@ -100,6 +108,10 @@
     {
       "path": "apps/web/app/api/github/webhook/route.ts",
       "reason": "GitHub webhook verified by HMAC signature, resolves its own installation subject from the signed payload"
+    },
+    {
+      "path": "apps/web/app/api/interactive-cards/respond/route.ts",
+      "reason": "pending scoped migration"
     },
     {
       "path": "apps/web/app/api/llm/v1/chat/completions/lib/assistant-turn-persistence.ts",

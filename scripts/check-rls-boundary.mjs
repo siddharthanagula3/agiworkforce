@@ -14,7 +14,8 @@ const IGNORED_DIRECTORY_NAMES = new Set(['node_modules', '.next', '__tests__']);
 const ALLOWED_TOP_LEVEL_KEYS = new Set(['schemaVersion', 'entries']);
 const ALLOWED_ENTRY_KEYS = new Set(['path', 'reason']);
 
-const GET_NEON_DB_RE = /\bgetNeonDb\b/;
+const UNSCOPED_HANDLE_IDENTIFIERS = ['getNeonDb', 'getNeonChatDb', 'getStripeWebhookDb'];
+const GET_NEON_DB_RE = new RegExp(`\\b(?:${UNSCOPED_HANDLE_IDENTIFIERS.join('|')})\\b`);
 const TABLE_PATTERNS = new Map(
   [...USER_OWNED_TABLES].map((table) => [table, new RegExp(`\\b${table}\\b`)]),
 );
