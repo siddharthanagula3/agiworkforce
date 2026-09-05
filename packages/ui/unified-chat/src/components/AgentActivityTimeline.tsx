@@ -14,6 +14,7 @@ import {
   PauseCircle,
 } from 'lucide-react';
 import type { AgentEventToolCategory } from '@agiworkforce/types/protocol';
+import type { CloudWorkMode } from '@agiworkforce/types';
 import {
   isGenerationProgressEntry,
   isLocalPlaceholderActivityEntry,
@@ -29,6 +30,7 @@ import {
   readConnectorConnectRequest,
   type ConnectorConnectRequest,
 } from '../lib/connector-connect-required';
+import { agiWorkPlanSentence, isAgiWorkPlanEntry } from '../lib/agi-work-progress';
 import { ConnectorConnectCard } from './ConnectorConnectCard';
 
 const ACTIVITY_PAGE_SIZE = 40;
@@ -38,9 +40,19 @@ const GENERIC_START_WINDOW_MS = 1_000;
 const LABEL_HOLD_MS = 400;
 const SECONDS_PER_MINUTE = 60;
 const MIN_REPORTED_DURATION_SECONDS = 1;
+const RUN_TICK_INTERVAL_MS = 1_000;
+const AGI_WORK_MODE: CloudWorkMode = 'agiwork';
+const AGI_WORK_RUNNING_PREFIX = 'Working for';
+const AGI_WORK_COMPLETED_PREFIX = 'Worked for';
 
 export interface AgentActivityTimelineProps {
   activity: AgentActivityState;
+  /**
+   * The mode the turn was sent in. In AGI Work the collapsed line is a live
+   * elapsed counter rather than the latest step label, which is what both
+   * leaders show for an autonomous run.
+   */
+  workMode?: CloudWorkMode;
   className?: string;
   defaultExpanded?: boolean;
   onApprove?: (toolCallId: string) => void;
@@ -145,15 +157,21 @@ function totalSearchSources(entries: readonly AgentActivityEntry[]): number {
   }, 0);
 }
 
-function formatRunDuration(activity: AgentActivityState): string {
-  const endedAtMs = activity.completedAtMs ?? activity.updatedAtMs;
+function formatElapsedDuration(startedAtMs: number, endedAtMs: number): string {
   const totalSeconds = Math.max(
     MIN_REPORTED_DURATION_SECONDS,
-    Math.round((endedAtMs - activity.startedAtMs) / 1000),
+    Math.round((endedAtMs - startedAtMs) / 1000),
   );
   const minutes = Math.floor(totalSeconds / SECONDS_PER_MINUTE);
   const seconds = totalSeconds % SECONDS_PER_MINUTE;
   return minutes > 0 ? `${minutes}m ${seconds}s` : `${seconds}s`;
+}
+
+function formatRunDuration(activity: AgentActivityState): string {
+  return formatElapsedDuration(
+    activity.startedAtMs,
+    activity.completedAtMs ?? activity.updatedAtMs,
+  );
 }
 
 function hasReportableWork(entries: readonly AgentActivityEntry[]): boolean {
@@ -164,10 +182,15 @@ function collapsedCompletionSummary(activity: AgentActivityState): string {
   if (isSearchOnlyRun(activity.entries)) {
     return webSearchCompletedLabel(totalSearchSources(activity.entries));
   }
-  return `Worked for ${formatRunDuration(activity)}`;
+  return `${AGI_WORK_COMPLETED_PREFIX} ${formatRunDuration(activity)}`;
 }
 
-export function buildAgentActivitySummary(activity: AgentActivityState, nowMs: number): string {
+export function buildAgentActivitySummary(
+  activity: AgentActivityState,
+  nowMs: number,
+  workMode?: CloudWorkMode,
+): string {
+  const isAgiWork = workMode === AGI_WORK_MODE;
   const active = latestActiveSummary(activity);
   if (activity.status === 'awaiting-approval') {
     return active ? `Needs approval · ${active}` : 'Needs approval';
@@ -176,7 +199,14 @@ export function buildAgentActivitySummary(activity: AgentActivityState, nowMs: n
   if (activity.status === 'failed') return finalSummary(activity) ?? 'Failed';
   if (activity.status === 'partial') return finalSummary(activity) ?? 'Finished with errors';
   if (activity.status === 'cancelled') return finalSummary(activity) ?? 'Cancelled';
-  if (activity.status === 'completed') return collapsedCompletionSummary(activity);
+  if (activity.status === 'completed') {
+    return isAgiWork
+      ? `${AGI_WORK_COMPLETED_PREFIX} ${formatRunDuration(activity)}`
+      : collapsedCompletionSummary(activity);
+  }
+  if (isAgiWork) {
+    return `${AGI_WORK_RUNNING_PREFIX} ${formatElapsedDuration(activity.startedAtMs, nowMs)}`;
+  }
   const liveLabel = labelForActivity(activity, nowMs);
   const withinGenericWindow = nowMs - activity.startedAtMs < GENERIC_START_WINDOW_MS;
   if (withinGenericWindow || liveLabel === undefined) return GENERIC_START_LABEL;
@@ -556,8 +586,17 @@ function useHeldRunningSummary(
   return isRunningPhase && !bypassHold ? committed : rawSummary;
 }
 
-function RunStatusIcon({ status }: { status: AgentActivityState['status'] }) {
+function RunStatusIcon({
+  status,
+  spinnerless,
+}: {
+  status: AgentActivityState['status'];
+  spinnerless: boolean;
+}) {
   if (status === 'running') {
+    // An AGI Work run reports progress with the live counter beside this slot;
+    // both leaders show no spinner glyph there.
+    if (spinnerless) return null;
     return (
       <Loader2 className="h-4 w-4 animate-spin motion-reduce:animate-none" aria-hidden="true" />
     );
@@ -574,6 +613,7 @@ function RunStatusIcon({ status }: { status: AgentActivityState['status'] }) {
 
 export function AgentActivityTimeline({
   activity,
+  workMode,
   className,
   defaultExpanded = false,
   onApprove,
@@ -590,6 +630,7 @@ export function AgentActivityTimeline({
     count: ACTIVITY_PAGE_SIZE,
   }));
 
+  const isAgiWork = workMode === AGI_WORK_MODE;
   const isActive = activity.status === 'running' || activity.status === 'awaiting-approval';
   const isLocalStartingActivity =
     activity.lastSequence === -1 &&
@@ -629,26 +670,43 @@ export function AgentActivityTimeline({
       entry.status === 'running' &&
       entry.summary === REASONING_PROGRESS_SUMMARY,
   );
+  // The AGI Work counter has to advance every second on its own; a run that
+  // emits no events for a minute would otherwise freeze at the last render.
+  const ticksLive = isReasoning || (isAgiWork && activity.status === 'running');
   const [nowMs, setNowMs] = useState(() => Date.now());
   useEffect(() => {
-    if (!isReasoning) return;
-    const id = setInterval(() => setNowMs(Date.now()), 1000);
+    if (!ticksLive) return;
+    const id = setInterval(() => setNowMs(Date.now()), RUN_TICK_INTERVAL_MS);
     return () => clearInterval(id);
-  }, [isReasoning]);
+  }, [ticksLive]);
   useGenericStartWindowExpiry(activity.startedAtMs, activity.status, setNowMs);
 
-  const rawSummary = useMemo(() => buildAgentActivitySummary(activity, nowMs), [activity, nowMs]);
+  const rawSummary = useMemo(
+    () => buildAgentActivitySummary(activity, nowMs, workMode),
+    [activity, nowMs, workMode],
+  );
   const summary = useHeldRunningSummary(
     activity.turnId,
     activity.status === 'running',
-    isReasoning,
+    ticksLive,
     rawSummary,
   );
+  const planSentence = useMemo(
+    () => (isAgiWork ? agiWorkPlanSentence(activity.entries) : undefined),
+    [isAgiWork, activity.entries],
+  );
   const announcement = buildAgentActivityAnnouncement(activity, summary);
+  // The first plan step renders as the plan line above the rows, so the row it
+  // would otherwise occupy is dropped rather than printed twice.
+  const planLineEntryIndex = planSentence ? activity.entries.findIndex(isAgiWorkPlanEntry) : -1;
+  const rowEntries =
+    planLineEntryIndex >= 0
+      ? activity.entries.filter((_, index) => index !== planLineEntryIndex)
+      : activity.entries;
   const visibleEntryCount =
     entryVisibility.turnId === activity.turnId ? entryVisibility.count : ACTIVITY_PAGE_SIZE;
-  const hiddenEntryCount = Math.max(0, activity.entries.length - visibleEntryCount);
-  const visibleEntries = activity.entries.slice(hiddenEntryCount);
+  const hiddenEntryCount = Math.max(0, rowEntries.length - visibleEntryCount);
+  const visibleEntries = rowEntries.slice(hiddenEntryCount);
 
   if (activity.status === 'completed' && !hasReportableWork(activity.entries)) return null;
 
@@ -664,7 +722,7 @@ export function AgentActivityTimeline({
         aria-label={`${isOpen ? 'Hide' : 'Show'} agent activity: ${summary}`}
         className="group flex w-full min-w-0 touch-manipulation items-center gap-2 rounded-md py-1.5 text-left text-sm text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
       >
-        <RunStatusIcon status={activity.status} />
+        <RunStatusIcon status={activity.status} spinnerless={isAgiWork} />
         <span className="min-w-0 flex-1 truncate">{summary}</span>
         <ChevronRight
           className={cn(
@@ -674,6 +732,12 @@ export function AgentActivityTimeline({
           aria-hidden="true"
         />
       </button>
+
+      {planSentence && (
+        <p data-testid="agi-work-plan-sentence" className="mb-1 ml-2 text-sm text-foreground">
+          {planSentence}
+        </p>
+      )}
 
       {isOpen && (
         <div className="relative ml-2 mt-1 space-y-0.5 border-l border-border/70 pl-4">
