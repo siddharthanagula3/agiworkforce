@@ -41,6 +41,7 @@
     "@agiworkforce/browser-tool": "workspace:*",
     "@agiworkforce/cloud-contracts": "workspace:*",
     "@agiworkforce/design-tokens": "workspace:*",
+    "@agiworkforce/observability": "workspace:*",
     "@agiworkforce/provider-runtime": "workspace:*",
     "@agiworkforce/routing": "workspace:*",
     "@agiworkforce/client-runtime": "workspace:*",

@@ -178,6 +178,9 @@ import {
 } from './features/cloud-bridge/managedCloudAuthority';
 import { normalizeShortcutStartUrl } from './features/shortcuts/origin';
 import { withTimeout } from './utils';
+import { installSidePanelErrorReporting } from './features/observability/errorReporting';
+
+installSidePanelErrorReporting();
 
 const extensionSendQueue = getExtensionSendQueue();
 
