@@ -22,6 +22,7 @@ vi.mock('@/lib/e2b/runtime', () => ({
 }));
 vi.mock('@/lib/server/generated-file-persist', () => ({
   persistGeneratedFileBytes: vi.fn(),
+  MAX_GENERATED_FILE_BYTES: 20 * 1024 * 1024,
 }));
 
 const userSkillService = vi.hoisted(() => ({ findUserSkillByName: vi.fn() }));

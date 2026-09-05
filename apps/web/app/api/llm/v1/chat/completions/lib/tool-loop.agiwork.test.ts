@@ -11,6 +11,7 @@ vi.mock('@/lib/e2b/runtime', () => ({
 }));
 vi.mock('@/lib/server/generated-file-persist', () => ({
   persistGeneratedFileBytes: vi.fn(),
+  MAX_GENERATED_FILE_BYTES: 20 * 1024 * 1024,
 }));
 vi.mock('@/lib/server/container-files', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/lib/server/container-files')>();

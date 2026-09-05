@@ -14,6 +14,8 @@ vi.mock('@/lib/services/llm-cost-calculator', () => ({
     calculateCost: vi.fn(() => 7),
     calculateCostDollars: vi.fn(() => 0.07),
   },
+  normalizeProviderId: (provider: string | null | undefined) =>
+    typeof provider === 'string' ? provider.toLowerCase() : null,
 }));
 vi.mock('./tool-loop-anthropic', async (importOriginal) => {
   const actual = await importOriginal<typeof import('./tool-loop-anthropic')>();

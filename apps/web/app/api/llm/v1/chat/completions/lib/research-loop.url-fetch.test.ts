@@ -25,6 +25,7 @@ vi.mock('@/lib/logger', () => ({
 }));
 vi.mock('./tool-loop-anthropic', () => ({
   buildToolLoopStream: vi.fn(),
+  buildServingRouteId: vi.fn(),
 }));
 vi.mock('@/lib/services/credit-service', () => ({
   CreditService: {
@@ -37,6 +38,8 @@ vi.mock('@/lib/services/llm-cost-calculator', () => ({
     calculateCost: vi.fn(() => 7),
     calculateCostDollars: vi.fn(() => 0.07),
   },
+  normalizeProviderId: (provider: string | null | undefined) =>
+    typeof provider === 'string' ? provider.toLowerCase() : null,
 }));
 import { buildToolLoopStream } from './tool-loop-anthropic';
 import { runResearchLoop, READY_MARKER } from './research-loop';
