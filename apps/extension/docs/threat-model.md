@@ -88,6 +88,19 @@ Extension pages use a restrictive CSP for scripts and objects and disallow
 framing. The current source CSP permits inline styles and `data:` images; code
 review must not assume those two classes are blocked.
 
+`connect-src` also allows `https://*.ingest.sentry.io` and
+`https://*.ingest.us.sentry.io` unconditionally. This is a static allowlist
+entry rather than a build-time or runtime-conditioned one: CSP is fixed at
+package time, so there is no way to add the host only when a user has opted
+in. Whether anything is ever sent to it is instead gated at runtime by
+[`errorReportingConsent.ts`](src/features/observability/errorReportingConsent.ts),
+default off, and by the presence of a configured DSN
+([`errorReporting.ts`](src/features/observability/errorReporting.ts)). Every
+payload is scrubbed by [`@agiworkforce/observability`](../../packages/platform/observability)
+before it reaches this host: message text, file paths, and URLs never leave
+the browser, only the error's type name and bare function names from its
+stack.
+
 ## Data flows
 
 ### Managed Cloud chat

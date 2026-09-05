@@ -136,6 +136,7 @@ import {
   SYNC_SWEEP_ALARM,
 } from './features/cloud-bridge/conversationSync';
 import { watchCloudMirroringEnabled } from './features/privacy/cloudMirroring';
+import { installBackgroundErrorReporting } from './features/observability/errorReporting';
 import { resolveComputerUseModel } from './features/computer-use/cloudAgentClient';
 import { signOutClerkIfCurrent } from './features/cloud-bridge/clerkAuth';
 import {
@@ -5421,6 +5422,7 @@ function isValidMessage(message: unknown): message is ExtensionMessage {
 }
 
 initialize();
+installBackgroundErrorReporting();
 
 for (const retired of RETIRED_ALARM_NAMES) {
   void chrome.alarms.clear(retired);
