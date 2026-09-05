@@ -1,0 +1,29 @@
+{
+  "schemaVersion": 1,
+  "entries": [
+    {
+      "path": "apps/web/app/layout.tsx",
+      "reason": "Mounts the provider's React context around the app. The port covers what the product asks of a provider, not the provider's own component tree, so the mount is part of a swap rather than a leak the port can absorb."
+    },
+    {
+      "path": "apps/web/app/login/page.tsx",
+      "reason": "Renders the provider's hosted sign-in component. A swap replaces this page with the new provider's component; nothing behind it needs to know."
+    },
+    {
+      "path": "apps/web/app/signup/page.tsx",
+      "reason": "Renders the provider's hosted sign-up component, for the same reason as the sign-in page."
+    },
+    {
+      "path": "apps/web/lib/identity/client.ts",
+      "reason": "The browser composition root. It is where the provider's hooks are chosen, and it exports useSession, useCurrentUser and useSignOut in this product's shapes so no component names the vendor."
+    },
+    {
+      "path": "apps/web/lib/identity/token.ts",
+      "reason": "The browser composition root for the imperative token read the service modules use outside React. Kept out of the hooks module so it carries no use client boundary."
+    },
+    {
+      "path": "apps/web/lib/server/sso/clerk-enterprise-connections.ts",
+      "reason": "Enterprise SSO is brokered by the provider's enterprise-connections product, which has no equivalent in the port. sso_connections stores the provider's connection id and the activation gate depends on it, so moving this is its own slice."
+    }
+  ]
+}
