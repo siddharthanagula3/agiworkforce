@@ -15,7 +15,6 @@ import {
 import { toast } from 'sonner';
 import { Popover, PopoverTrigger, PopoverContent, Slider, useMenuKeyboard } from '@agiworkforce/ui';
 import { useModelStore, AVAILABLE_MODELS, type AIModel } from '@shared/stores/model-store';
-import { BudgetTrackerDisplay } from '@/features/chat/components/Budget/BudgetTrackerDisplay';
 import { StyleSelector } from './StyleSelector';
 import { Switch } from '@agiworkforce/ui';
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '@agiworkforce/ui';
@@ -933,18 +932,6 @@ export function ComposerFooter({
         .filter(Boolean)
         .join(' ')}
     >
-      {/*
-        Budget display · renders only when tokens have been used.
-        The card variant needs its own block, so inline mode gets the compact
-        pill. Previously this was `!inline &&`, and since the ONLY production
-        mount of ComposerFooter always passes `inline`, it never rendered.
-      */}
-      {inline ? (
-        <BudgetTrackerDisplay variant="compact" className="mr-2" />
-      ) : (
-        <BudgetTrackerDisplay className="mx-1" />
-      )}
-
       <div
         className={
           inline ? 'flex min-w-0 items-center gap-2' : 'flex items-center justify-end gap-2 px-1'
