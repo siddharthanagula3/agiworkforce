@@ -46,6 +46,7 @@ import { ComposerInput } from './ComposerInput';
 import { ComposerFooter, ComposerModelSummary } from './ComposerFooter';
 import { DragDropOverlay } from './DragDropOverlay';
 import { VoiceInputButton } from './VoiceInputButton';
+import { VoiceEntryButton } from './VoiceEntryButton';
 import { DictationStrip } from './DictationStrip';
 import { useDictation } from '@features/chat/hooks/use-dictation';
 import { AttachmentPreview } from './AttachmentPreview';
@@ -279,6 +280,12 @@ interface ChatComposerProps {
   onTypingChange?: (isTyping: boolean) => void;
   /** Called when the user clicks the stop button. */
   onStop?: () => void;
+  /**
+   * Enters conversational voice mode. When supplied, the trailing round button
+   * carries voice entry while the field is empty and hands the slot back to
+   * Send the moment it has text.
+   */
+  onEnterVoiceMode?: () => void;
   /** Increment to clear composer state after a parent-owned deferred send. */
   clearSignal?: number;
   /** Larger, centered composer presentation used on the empty new-chat state. */
@@ -621,6 +628,7 @@ const ChatComposerNewComponent = ({
   onDroppedFilesConsumed,
   onTypingChange,
   onStop,
+  onEnterVoiceMode,
   clearSignal,
   emptyState = false,
   attachmentPrivacyShortLabel,
@@ -4336,21 +4344,26 @@ const ChatComposerNewComponent = ({
               />
             </div>
 
-            {/* Send / Stop Button */}
-            <SendButton
-              mode={sendButtonMode}
-              isSending={isSendPending}
-              hasContent={hasContent}
-              disabled={
-                composerDisabled ||
-                (sendButtonMode !== 'stop' &&
-                  (hasAttachmentConflict ||
-                    mediaAttachmentConflict ||
-                    selectedMediaModelUnavailable))
-              }
-              onClick={sendButtonMode === 'stop' ? handleStop : handleSubmit}
-              className="shrink-0"
-            />
+            {/* Trailing slot: voice entry while the field is empty, send once
+                it has text, Stop while a turn is running. */}
+            {onEnterVoiceMode && sendButtonMode !== 'stop' && !hasContent ? (
+              <VoiceEntryButton onStart={onEnterVoiceMode} disabled={composerDisabled} />
+            ) : (
+              <SendButton
+                mode={sendButtonMode}
+                isSending={isSendPending}
+                hasContent={hasContent}
+                disabled={
+                  composerDisabled ||
+                  (sendButtonMode !== 'stop' &&
+                    (hasAttachmentConflict ||
+                      mediaAttachmentConflict ||
+                      selectedMediaModelUnavailable))
+                }
+                onClick={sendButtonMode === 'stop' ? handleStop : handleSubmit}
+                className="shrink-0"
+              />
+            )}
           </div>
 
           {/* AUDIT-FIX CMP-9: a typed command is applied on send, so say so
@@ -4668,6 +4681,7 @@ export const ChatComposerNew = memo(ChatComposerNewComponent, (prev, next) => {
     prev.onDroppedFilesConsumed === next.onDroppedFilesConsumed &&
     prev.onTypingChange === next.onTypingChange &&
     prev.onStop === next.onStop &&
+    prev.onEnterVoiceMode === next.onEnterVoiceMode &&
     prev.clearSignal === next.clearSignal &&
     prev.emptyState === next.emptyState &&
     prev.attachmentPrivacyShortLabel === next.attachmentPrivacyShortLabel &&
