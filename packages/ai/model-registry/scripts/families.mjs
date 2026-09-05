@@ -375,7 +375,7 @@ export function applyPromotion(family, promotion, policy) {
   };
 }
 
-export function applyRollback(family, reason, now) {
+export function applyRollback(family, reason, now, policy) {
   assert.ok(family.previous, 'Family slot has no previous model to roll back to');
   const demoted = family.active;
   const restored = { ...family.previous, promotedAt: now, promotionReason: reason };
@@ -386,7 +386,7 @@ export function applyRollback(family, reason, now) {
     ...family,
     active: restored,
     previous: demoted,
-    fallbackChain: chain,
+    fallbackChain: chain.slice(0, policy.fallbackChainLimit),
     history: [
       ...family.history,
       { promotedAt: now, from: demoted.modelKey, to: restored.modelKey, reason, rollback: true },
@@ -417,6 +417,37 @@ export function buildFamilyView(familyCatalog, snapshot, policy) {
         },
       ];
     }),
+  );
+}
+
+function demotedModelKeys(family) {
+  const demoted = [];
+  for (let index = family.history.length - 1; index >= 0; index -= 1) {
+    const modelKey = family.history[index].from;
+    if (modelKey === family.active.modelKey || demoted.includes(modelKey)) continue;
+    demoted.push(modelKey);
+  }
+  return demoted;
+}
+
+function validateFallbackChain(familyId, family, snapshot, policy) {
+  const demoted = demotedModelKeys(family);
+  const retired = snapshot.retiredModelKeys ?? new Set();
+  if (demoted.length > 0 && family.fallbackChain.length === 0) {
+    for (const modelKey of demoted) {
+      assert.ok(
+        retired.has(modelKey),
+        `Family slot ${familyId} has been promoted but lists no fallback, and ${modelKey} is neither in the roster nor in retired-models.json. Re-run the promotion tool rather than clearing the chain by hand`,
+      );
+    }
+  }
+  const expected = demoted
+    .filter((modelKey) => snapshot.models[modelKey])
+    .slice(0, policy.fallbackChainLimit);
+  assert.deepEqual(
+    family.fallbackChain,
+    expected,
+    `Family slot ${familyId} fallback chain must be every still-rostered model it was promoted away from, newest first`,
   );
 }
 
@@ -463,5 +494,6 @@ export function validateFamilyCatalog(familyCatalog, snapshot) {
       family.fallbackChain.length <= policy.fallbackChainLimit,
       `Family slot ${familyId} fallback chain exceeds ${policy.fallbackChainLimit}`,
     );
+    validateFallbackChain(familyId, family, snapshot, policy);
   }
 }

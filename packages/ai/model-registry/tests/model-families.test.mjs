@@ -358,7 +358,7 @@ test('rolls back to the previous model and keeps the demoted one reachable', () 
     '2026-09-01',
   );
   const promoted = applyPromotion(fixtureFamily(), promotion, policy);
-  const rolled = applyRollback(promoted, 'provider outage', '2026-09-02');
+  const rolled = applyRollback(promoted, 'provider outage', '2026-09-02', policy);
 
   assert.equal(rolled.active.modelKey, ACTIVE);
   assert.equal(rolled.previous.modelKey, NEWER);
@@ -367,7 +367,7 @@ test('rolls back to the previous model and keeps the demoted one reachable', () 
 });
 
 test('rejects a rollback when no previous model was retained', () => {
-  assert.throws(() => applyRollback(fixtureFamily(), 'no history', '2026-09-02'));
+  assert.throws(() => applyRollback(fixtureFamily(), 'no history', '2026-09-02', policy));
 });
 
 test('validates the authored family catalog against the compiled roster', () => {
@@ -378,6 +378,7 @@ test('validates the authored family catalog against the compiled roster', () => 
     pricing: registry.pricing,
     limits: registry.limits,
     benchmarks: registry.benchmarks,
+    retiredModelKeys: new Set(readCatalog('retired-models.json').retiredModelIds),
   };
   validateFamilyCatalog(familyCatalog, snapshot);
 });
@@ -391,6 +392,59 @@ test('rejects a family slot whose active model is outside its family', () => {
   broken.families[FAMILY].active = { ...broken.families[FAMILY].active, modelKey: 'fixture-pro-9' };
   snapshot.models['fixture-pro-9'] = fixtureModel({ apiModelId: 'fixture-pro-9' });
   assert.throws(() => validateFamilyCatalog(broken, snapshot), /does not match its family pattern/);
+});
+
+test('rejects a promoted family whose chain was cleared while its predecessor still ships', () => {
+  const snapshot = fixtureSnapshot(baselineModels);
+  const cleared = {
+    policy,
+    families: {
+      [FAMILY]: fixtureFamily({
+        active: { modelKey: NEWER, generation: '2', lifecycle: policy.stableLifecycle },
+        previous: { modelKey: ACTIVE, generation: '1', lifecycle: policy.stableLifecycle },
+        fallbackChain: [],
+        history: [{ promotedAt: '2026-02-01', from: ACTIVE, to: NEWER, reason: 'fixture' }],
+      }),
+    },
+  };
+  assert.throws(
+    () => validateFamilyCatalog(cleared, snapshot),
+    /neither in the roster nor in retired-models\.json/,
+  );
+});
+
+test('accepts an empty chain once every model the slot was promoted away from is retired', () => {
+  const snapshot = fixtureSnapshot({ [NEWER]: fixtureModel({ apiModelId: NEWER }) });
+  snapshot.retiredModelKeys = new Set([ACTIVE]);
+  const retiredPredecessor = {
+    policy,
+    families: {
+      [FAMILY]: fixtureFamily({
+        active: { modelKey: NEWER, generation: '2', lifecycle: policy.stableLifecycle },
+        previous: { modelKey: ACTIVE, generation: '1', lifecycle: policy.stableLifecycle },
+        fallbackChain: [],
+        history: [{ promotedAt: '2026-02-01', from: ACTIVE, to: NEWER, reason: 'fixture' }],
+      }),
+    },
+  };
+  validateFamilyCatalog(retiredPredecessor, snapshot);
+});
+
+test('requires the chain to list every still-rostered model the slot was promoted away from', () => {
+  const snapshot = fixtureSnapshot(baselineModels);
+  const missing = {
+    policy,
+    families: {
+      [FAMILY]: fixtureFamily({
+        active: { modelKey: NEWER, generation: '2', lifecycle: policy.stableLifecycle },
+        previous: { modelKey: ACTIVE, generation: '1', lifecycle: policy.stableLifecycle },
+        fallbackChain: [],
+        history: [{ promotedAt: '2026-02-01', from: ACTIVE, to: NEWER, reason: 'fixture' }],
+      }),
+    },
+  };
+  snapshot.retiredModelKeys = new Set([ACTIVE]);
+  assert.throws(() => validateFamilyCatalog(missing, snapshot), /newest first/);
 });
 
 test('rejects a family slot that lists its active model as a fallback', () => {

@@ -31,6 +31,7 @@ const SYNCED_JSON = path.join(CATALOG_DIR, 'models.synced.json');
 const HARNESSES_JSON = path.join(CATALOG_DIR, 'harnesses.json');
 const MODEL_ROUTES_JSON = path.join(CATALOG_DIR, 'model-routes.json');
 const PROVIDER_GOVERNANCE_JSON = path.join(CATALOG_DIR, 'provider-governance.json');
+const RETIRED_MODELS_JSON = path.join(CATALOG_DIR, 'retired-models.json');
 const ROUTING_POLICIES_JSON = path.join(CATALOG_DIR, 'routing-policies.json');
 const REGISTRY_SCHEMA_JSON = path.join(REGISTRY_DIR, 'schema', 'registry.schema.json');
 const GENERATED_DIR = path.join(REGISTRY_DIR, 'generated');
@@ -1661,6 +1662,7 @@ function buildNormalizedRegistry(
     pricing,
     limits,
     benchmarks,
+    retiredModelKeys: new Set(readJson(RETIRED_MODELS_JSON).retiredModelIds),
   };
   validateFamilyCatalog(familyCatalog, familySnapshot);
 
@@ -1967,6 +1969,7 @@ export function loadFamilySnapshot() {
       pricing: registry.pricing,
       limits: registry.limits,
       benchmarks: registry.benchmarks,
+      retiredModelKeys: new Set(readJson(RETIRED_MODELS_JSON).retiredModelIds),
     },
   };
 }
