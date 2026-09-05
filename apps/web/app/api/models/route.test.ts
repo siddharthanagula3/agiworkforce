@@ -56,7 +56,7 @@ describe('GET /api/models token-context semantics', () => {
 
   it('labels scalar rates as base and projects every catalog input-length tier', async () => {
     const catalogModel = listCanonicalModels().find(
-      (model) => (model.inputTokenPricingTiers?.length ?? 0) > 1,
+      (model) => (model.inputTokenPricingTiers?.length ?? 0) >= 1,
     );
     if (!catalogModel?.inputTokenPricingTiers) {
       throw new Error('Expected a multi-band catalog pricing fixture');

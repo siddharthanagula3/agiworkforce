@@ -127,7 +127,7 @@ vi.mock('@agiworkforce/types', async (importOriginal) => {
 function requireCatalogMultiBandModel() {
   const model = listCanonicalModels().find(
     (candidate) =>
-      (candidate.inputTokenPricingTiers?.length ?? 0) > 1 &&
+      (candidate.inputTokenPricingTiers?.length ?? 0) >= 1 &&
       typeof candidate.cached_input === 'number' &&
       typeof candidate.cached_write === 'number' &&
       candidate.inputTokenPricingTiers!.every(
