@@ -10,6 +10,7 @@ function installHost(openExternal: ElectronHostBridge['openExternal']): void {
     handles: () => false,
     invokeBridge: async () => undefined,
     onDeepLink: () => () => undefined,
+    onVoiceHotkey: () => () => undefined,
     openExternal,
     windowControl: async () => false,
     dialog: async () => null,

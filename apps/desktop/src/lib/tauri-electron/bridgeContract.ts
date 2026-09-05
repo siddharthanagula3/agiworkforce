@@ -27,6 +27,7 @@ export const ELECTRON_IPC_CHANNELS = {
   notify: 'agi:notify',
   relaunch: 'agi:relaunch',
   deepLink: 'agi:deep-link',
+  voiceHotkey: 'agi:voice-hotkey',
   checkUpdate: 'agi:check-update',
   openUpdateInstaller: 'agi:open-update-installer',
 } as const;
@@ -68,6 +69,7 @@ export interface ElectronHostBridge {
   handles(command: string): boolean;
   invokeBridge(command: string, args?: Record<string, unknown>): Promise<unknown>;
   onDeepLink(callback: (url: string) => void): () => void;
+  onVoiceHotkey(callback: () => void): () => void;
   openExternal(url: string): Promise<void>;
   windowControl(request: ElectronWindowControlRequest): Promise<boolean>;
   dialog(request: ElectronDialogRequest): Promise<string | boolean | null>;

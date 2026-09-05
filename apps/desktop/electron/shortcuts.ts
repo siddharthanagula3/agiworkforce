@@ -1,48 +1,109 @@
 import { Notification, globalShortcut } from 'electron';
 import { getShortcuts } from './settingsStore';
-import { isUsableAccelerator } from './garnishCore';
+import {
+  SHORTCUT_KEYS,
+  SHORTCUT_LABELS,
+  duplicateShortcutKeys,
+  isUsableAccelerator,
+  type GarnishShortcuts,
+  type ShortcutKey,
+} from './garnishCore';
 
 export interface GarnishShortcutHandlers {
   onQuickAsk: () => void;
   onScreenshot: () => void;
+  onVoice: () => void;
 }
 
-let warnedAboutConflict = false;
+export type ShortcutStatus = 'registered' | 'duplicate' | 'taken' | 'malformed';
 
-function warnOnce(accelerator: string, label: string): void {
+export interface ShortcutRegistration {
+  key: ShortcutKey;
+  accelerator: string;
+  status: ShortcutStatus;
+}
+
+const TAKEN_NOTIFICATION_TITLE = 'Shortcut unavailable';
+const DUPLICATE_STATUS_DETAIL = 'is already assigned to another AGI Cloud shortcut';
+const TAKEN_STATUS_DETAIL = 'is already in use by another app';
+const MALFORMED_STATUS_DETAIL = 'is not a valid accelerator';
+const TRAY_FALLBACK_DETAIL = 'Use the AGI Cloud tray menu instead.';
+
+let warnedAboutConflict = false;
+let registrations: ShortcutRegistration[] = [];
+
+export function shortcutStatusDetail(status: ShortcutStatus): string | null {
+  if (status === 'duplicate') return DUPLICATE_STATUS_DETAIL;
+  if (status === 'taken') return TAKEN_STATUS_DETAIL;
+  if (status === 'malformed') return MALFORMED_STATUS_DETAIL;
+  return null;
+}
+
+function warnOnce(accelerator: string, label: string, detail: string): void {
   console.warn(
-    `[shortcuts] could not register ${label} shortcut (${accelerator}), already in use.`,
+    `[shortcuts] could not register the ${label} shortcut (${accelerator}), it ${detail}.`,
   );
   if (warnedAboutConflict) return;
   warnedAboutConflict = true;
   if (!Notification.isSupported()) return;
   new Notification({
-    title: 'Shortcut unavailable',
-    body: `${accelerator} is already in use by another app. Use the AGI Cloud tray menu instead.`,
+    title: TAKEN_NOTIFICATION_TITLE,
+    body: `${accelerator} ${detail}. ${TRAY_FALLBACK_DETAIL}`,
   }).show();
 }
 
-function register(accelerator: string, label: string, handler: () => void): boolean {
-  if (!isUsableAccelerator(accelerator)) {
-    console.warn(`[shortcuts] ignoring malformed ${label} accelerator: ${String(accelerator)}`);
-    return false;
-  }
+function claim(accelerator: string, handler: () => void): boolean {
   try {
-    if (globalShortcut.register(accelerator, handler)) return true;
+    return globalShortcut.register(accelerator, handler);
   } catch (error) {
-    console.warn(`[shortcuts] ${label} accelerator rejected (${accelerator}):`, error);
+    console.warn(`[shortcuts] accelerator rejected (${accelerator}):`, error);
     return false;
   }
-  warnOnce(accelerator, label);
-  return false;
 }
 
-export function registerGarnishShortcuts(handlers: GarnishShortcutHandlers): void {
-  const { quickAskShortcut, screenshotShortcut } = getShortcuts();
-  register(quickAskShortcut, 'Quick Ask', handlers.onQuickAsk);
-  register(screenshotShortcut, 'Screenshot to Chat', handlers.onScreenshot);
+function registerOne(
+  key: ShortcutKey,
+  accelerator: string,
+  handler: () => void,
+  duplicates: readonly ShortcutKey[],
+): ShortcutRegistration {
+  if (!isUsableAccelerator(accelerator)) {
+    return { key, accelerator, status: 'malformed' };
+  }
+  if (duplicates.includes(key)) {
+    return { key, accelerator, status: 'duplicate' };
+  }
+  return { key, accelerator, status: claim(accelerator, handler) ? 'registered' : 'taken' };
+}
+
+export function registerGarnishShortcuts(
+  handlers: GarnishShortcutHandlers,
+): ShortcutRegistration[] {
+  const shortcuts: GarnishShortcuts = getShortcuts();
+  const duplicates = duplicateShortcutKeys(shortcuts);
+  const handlerFor: Record<ShortcutKey, () => void> = {
+    quickAskShortcut: handlers.onQuickAsk,
+    screenshotShortcut: handlers.onScreenshot,
+    voiceShortcut: handlers.onVoice,
+  };
+
+  registrations = SHORTCUT_KEYS.map((key) =>
+    registerOne(key, shortcuts[key], handlerFor[key], duplicates),
+  );
+
+  for (const registration of registrations) {
+    const detail = shortcutStatusDetail(registration.status);
+    if (detail) warnOnce(registration.accelerator, SHORTCUT_LABELS[registration.key], detail);
+  }
+
+  return registrations;
+}
+
+export function shortcutRegistrations(): ShortcutRegistration[] {
+  return registrations;
 }
 
 export function unregisterGarnishShortcuts(): void {
   globalShortcut.unregisterAll();
+  registrations = [];
 }
