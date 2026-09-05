@@ -64,6 +64,7 @@ import {
   ACTION_BUTTON_SIZE,
   ACTION_BUTTON_TONE,
   ACTION_ICON_SIZE,
+  ACTION_ICON_SIZE_DESCENDANT,
   ACTION_ROW_MIN_HEIGHT,
 } from './messageActionRow';
 import { variantDeleteConfirm } from './variantDeleteConfirm';
@@ -123,9 +124,13 @@ import { useStreamingArtifactSync } from '../../hooks/use-streaming-artifact';
 import { useArtifactsStore, generatedFileArtifactId } from '../../stores/artifacts-store';
 import {
   useChatStore,
+  selectIsAgiWorkConversation,
+  AGI_WORK_MODE,
   type GeneratedFileMetadataEntry,
   type MessageMetadata as StoreMessageMetadata,
 } from '@shared/stores/web-chat-store';
+import { ComposerFeedbackDialog } from '../Composer/ComposerFeedbackDialog';
+import { AGI_WORK_FEEDBACK_LABEL } from '../../lib/agi-work';
 import { useToolApprovalResolver, isApprovalTurnLive } from '@/lib/hooks/useChatStream';
 import { ToolTimeline, type ToolEntry } from './ToolTimeline';
 import type { SearchResponse, SearchResult, MediaGenerationResult } from '../../types/search-media';
@@ -807,6 +812,10 @@ const MessageBubbleComponent = function MessageBubble({
   // on it left artifacts with conversationId=undefined → filtered out of every
   // panel. Falls back to message.sessionId when there's no active conversation.
   const activeConversationId = useChatStore((s) => s.activeConversationId);
+  const isAgiWorkTurn = useChatStore(
+    selectIsAgiWorkConversation(message.sessionId ?? activeConversationId),
+  );
+  const taskRunId = message.metadata?.cloudAgentRun?.runId ?? null;
   const activeConversationModel = useChatStore(
     (s) => s.conversations.find((c) => c.id === s.activeConversationId)?.model ?? null,
   );
@@ -1578,6 +1587,7 @@ const MessageBubbleComponent = function MessageBubble({
               // failed-tool row start open instead of needing a click.
               key={showNoSearchResultsNotice ? `${message.id}-no-sources` : message.id}
               activity={canonicalActivity}
+              {...(isAgiWorkTurn ? { workMode: AGI_WORK_MODE } : {})}
               defaultExpanded={showNoSearchResultsNotice}
               onApprove={resolveToolApproval ? handleApproveTool : undefined}
               onReject={resolveToolApproval ? handleRejectTool : undefined}
@@ -2440,6 +2450,27 @@ const MessageBubbleComponent = function MessageBubble({
                           {responseRating === 'down' ? 'Remove rating' : 'Bad response'}
                         </TooltipContent>
                       </Tooltip>
+                      {isAgiWorkTurn && taskRunId && (
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <span>
+                              <ComposerFeedbackDialog
+                                variant="task"
+                                runId={taskRunId}
+                                messageId={message.id}
+                                conversationId={message.sessionId ?? activeConversationId}
+                                triggerClassName={cn(
+                                  ACTION_BUTTON_SIZE,
+                                  ACTION_BUTTON_TONE,
+                                  'inline-flex items-center justify-center rounded-md transition-colors hover:bg-[var(--chat-surface-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--chat-focus-ring)]',
+                                  ACTION_ICON_SIZE_DESCENDANT,
+                                )}
+                              />
+                            </span>
+                          </TooltipTrigger>
+                          <TooltipContent>{AGI_WORK_FEEDBACK_LABEL}</TooltipContent>
+                        </Tooltip>
+                      )}
                     </>
                   )}
 

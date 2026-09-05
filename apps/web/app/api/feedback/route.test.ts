@@ -227,3 +227,85 @@ describe('response ratings', () => {
     expect(res.status).toBeGreaterThanOrEqual(400);
   });
 });
+
+// ChatGPT Work reports are filed against the task, not the message. A report
+// that cannot name its run is untriageable, and the run id is what makes the
+// existing endpoint carry a task signal without a second table.
+describe('task feedback', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    feedbackRouteMocks.auth.mockResolvedValue({ userId: 'user-web' });
+    feedbackRouteMocks.query.mockResolvedValue([]);
+  });
+
+  it('stores the run the report is about', async () => {
+    const response = await POST(
+      request({
+        subject: 'AGI Work task · Web chat',
+        message: 'It skipped the second source.',
+        metadata: {
+          source: 'web',
+          platform: 'web',
+          version: 'web',
+          user_agent: 'test',
+          feedback_context: 'task_feedback',
+          run_id: 'run-42',
+          conversation_id: 'conversation-7',
+        },
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    const [, , , storedMetadata] = feedbackRouteMocks.query.mock.calls[0]?.[1] as [
+      string | null,
+      string,
+      string,
+      string,
+    ];
+    expect(storedMetadata).toContain('"feedback_context":"task_feedback"');
+    expect(storedMetadata).toContain('"run_id":"run-42"');
+  });
+
+  it('refuses a task report with no run to attribute it to', async () => {
+    const response = await POST(
+      request({
+        subject: 'AGI Work task · Web chat',
+        message: 'It skipped the second source.',
+        metadata: {
+          platform: 'web',
+          version: 'web',
+          user_agent: 'test',
+          feedback_context: 'task_feedback',
+        },
+      }),
+    );
+
+    expect(response.status).toBeGreaterThanOrEqual(400);
+  });
+
+  it('keeps the verdict a rating carried, instead of dropping it on the way in', async () => {
+    const response = await POST(
+      request({
+        subject: 'Response rated down',
+        message: 'answer text',
+        metadata: {
+          platform: 'web',
+          version: 'web',
+          user_agent: 'test',
+          feedback_context: 'response_rating',
+          rating: 'down',
+          message_id: 'msg-1',
+        },
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    const [, , , storedMetadata] = feedbackRouteMocks.query.mock.calls[0]?.[1] as [
+      string | null,
+      string,
+      string,
+      string,
+    ];
+    expect(storedMetadata).toContain('"rating":"down"');
+  });
+});
