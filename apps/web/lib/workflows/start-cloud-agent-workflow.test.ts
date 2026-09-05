@@ -48,10 +48,14 @@ vi.mock('@/app/api/llm/v1/chat/completions/lib/approval-checkpoint-request', () 
   buildApprovalCheckpointRequest: (request: unknown) => request,
 }));
 vi.mock('@/lib/services/cloud-agent-run-service', () => ({
+  appendCloudAgentEvent: vi.fn(),
   completeCloudAgentApprovalCheckpoint: workflowMocks.completeCheckpoint,
+  getCloudAgentRun: vi.fn(),
   isCloudAgentRunCancellationRequested: vi.fn(async () => false),
+  recordCloudAgentRunSettledUsage: vi.fn(),
   saveCloudAgentApprovalCheckpoint: workflowMocks.saveApproval,
   saveCloudAgentInputCheckpoint: workflowMocks.saveInput,
+  transitionCloudAgentRun: vi.fn(),
 }));
 vi.mock('@/lib/services/managed-usage-accounting-service', () => ({
   createObservedProviderUsage: () => ({
@@ -63,6 +67,9 @@ vi.mock('@/lib/services/managed-usage-accounting-service', () => ({
     cacheWrite1hTokens: 0,
     reasoningTokens: 0,
   }),
+  calculateObservedProviderUsageCostDollars: vi.fn(() => 0),
+  finalizeObservedManagedUsage: vi.fn(),
+  mergeObservedProviderUsage: vi.fn(),
 }));
 vi.mock('@/lib/services/managed-auto-memory-service', () => ({
   recordManagedAutoMemoryTurn: workflowMocks.autoMemory,
