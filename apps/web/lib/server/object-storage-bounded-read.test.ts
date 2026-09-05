@@ -1,18 +1,18 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type { ObjectStore } from '@agiworkforce/object-storage';
 
-const sendMock = vi.hoisted(() => vi.fn());
+const headMock = vi.hoisted(() => vi.fn());
+const getStreamMock = vi.hoisted(() => vi.fn());
 
-vi.mock('@aws-sdk/client-s3', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@aws-sdk/client-s3')>();
-  return {
-    ...actual,
-    S3Client: class {
-      readonly send = sendMock;
-    },
+vi.mock('./object-storage-runtime', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('./object-storage-runtime')>();
+  const store: Pick<ObjectStore, 'head' | 'getStream'> = {
+    head: headMock,
+    getStream: getStreamMock,
   };
+  return { ...actual, getObjectStore: () => store };
 });
 
-import { GetObjectCommand, HeadObjectCommand } from '@aws-sdk/client-s3';
 import { getBoundedPrivateObject, StoredObjectTooLargeError } from './object-storage';
 
 const ENV_KEYS = [
@@ -25,6 +25,8 @@ const ENV_KEYS = [
 const ORIGINAL_ENV = Object.fromEntries(ENV_KEYS.map((key) => [key, process.env[key]]));
 
 const KEY = 'chat-attachments/user-abc/1700000000000_abcdefghijklm.png';
+const MAX_BYTES = 12 * 1024 * 1024;
+const OVERSIZED_BYTES = 4 * 1024 * 1024 * 1024;
 
 function webStreamOf(chunks: Uint8Array[]): ReadableStream<Uint8Array> {
   return new ReadableStream<Uint8Array>({
@@ -41,7 +43,11 @@ beforeEach(() => {
   process.env['CLOUDFLARE_R2_SECRET_ACCESS_KEY'] = 'secret';
   process.env['CLOUDFLARE_R2_BUCKET_NAME'] = 'public-media';
   process.env['CLOUDFLARE_R2_PRIVATE_BUCKET_NAME'] = 'private-media';
-  sendMock.mockReset();
+  headMock.mockReset();
+  getStreamMock.mockReset();
+  getStreamMock.mockImplementation(() => {
+    throw new Error('the stored bytes must not be read before the size check');
+  });
 });
 
 afterEach(() => {
@@ -54,42 +60,32 @@ afterEach(() => {
 
 describe('getBoundedPrivateObject', () => {
   it('refuses an object larger than the limit without ever fetching its bytes', async () => {
-    sendMock.mockImplementation(async (command: unknown) => {
-      if (command instanceof HeadObjectCommand) {
-        return { ContentLength: 4 * 1024 * 1024 * 1024, ContentType: 'image/png' };
-      }
-      throw new Error('the stored bytes must not be read before the size check');
-    });
+    headMock.mockResolvedValue({ contentLength: OVERSIZED_BYTES, contentType: 'image/png' });
 
-    await expect(getBoundedPrivateObject(KEY, 12 * 1024 * 1024)).rejects.toBeInstanceOf(
+    await expect(getBoundedPrivateObject(KEY, MAX_BYTES)).rejects.toBeInstanceOf(
       StoredObjectTooLargeError,
     );
 
-    expect(sendMock).toHaveBeenCalledTimes(1);
-    expect(sendMock.mock.calls[0]?.[0]).toBeInstanceOf(HeadObjectCommand);
+    expect(headMock).toHaveBeenCalledTimes(1);
+    expect(getStreamMock).not.toHaveBeenCalled();
   });
 
   it('refuses an object whose size the store does not report', async () => {
-    sendMock.mockImplementation(async (command: unknown) => {
-      if (command instanceof HeadObjectCommand) return { ContentType: 'image/png' };
-      throw new Error('the stored bytes must not be read before the size check');
-    });
+    headMock.mockResolvedValue({ contentType: 'image/png' });
 
-    await expect(getBoundedPrivateObject(KEY, 12 * 1024 * 1024)).rejects.toBeInstanceOf(
+    await expect(getBoundedPrivateObject(KEY, MAX_BYTES)).rejects.toBeInstanceOf(
       StoredObjectTooLargeError,
     );
-    expect(sendMock).toHaveBeenCalledTimes(1);
+    expect(getStreamMock).not.toHaveBeenCalled();
   });
 
   it('aborts a stream that outgrows the limit after a truthful head response', async () => {
-    sendMock.mockImplementation(async (command: unknown) => {
-      if (command instanceof HeadObjectCommand) {
-        return { ContentLength: 8, ContentType: 'text/plain' };
-      }
-      return {
-        Body: { transformToWebStream: () => webStreamOf([new Uint8Array(8), new Uint8Array(8)]) },
-        ContentType: 'text/plain',
-      };
+    headMock.mockResolvedValue({ contentLength: 8, contentType: 'text/plain' });
+    getStreamMock.mockResolvedValue({
+      body: webStreamOf([new Uint8Array(8), new Uint8Array(8)]),
+      contentType: 'text/plain',
+      contentLength: 8,
+      contentRange: undefined,
     });
 
     await expect(getBoundedPrivateObject(KEY, 8)).rejects.toBeInstanceOf(StoredObjectTooLargeError);
@@ -97,28 +93,29 @@ describe('getBoundedPrivateObject', () => {
 
   it('returns the bytes of an object within the limit', async () => {
     const bytes = new Uint8Array([1, 2, 3, 4]);
-    sendMock.mockImplementation(async (command: unknown) => {
-      if (command instanceof HeadObjectCommand) {
-        return { ContentLength: bytes.byteLength, ContentType: 'image/png' };
-      }
-      expect(command).toBeInstanceOf(GetObjectCommand);
-      return {
-        Body: { transformToWebStream: () => webStreamOf([bytes]) },
-        ContentType: 'image/png',
-      };
+    headMock.mockResolvedValue({
+      contentLength: bytes.byteLength,
+      contentType: 'image/png',
+      etag: '"abc"',
+    });
+    getStreamMock.mockResolvedValue({
+      body: webStreamOf([bytes]),
+      contentType: 'image/png',
+      contentLength: bytes.byteLength,
+      contentRange: undefined,
     });
 
-    await expect(getBoundedPrivateObject(KEY, 12 * 1024 * 1024)).resolves.toEqual({
+    await expect(getBoundedPrivateObject(KEY, MAX_BYTES)).resolves.toEqual({
       data: Buffer.from(bytes),
       contentType: 'image/png',
+      etag: '"abc"',
     });
   });
 
   it('returns null when the object is missing', async () => {
-    sendMock.mockImplementation(async () => {
-      throw Object.assign(new Error('missing'), { name: 'NoSuchKey' });
-    });
+    headMock.mockResolvedValue(null);
 
-    await expect(getBoundedPrivateObject(KEY, 12 * 1024 * 1024)).resolves.toBeNull();
+    await expect(getBoundedPrivateObject(KEY, MAX_BYTES)).resolves.toBeNull();
+    expect(getStreamMock).not.toHaveBeenCalled();
   });
 });

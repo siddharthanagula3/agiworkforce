@@ -1,126 +1,71 @@
 import 'server-only';
 
 import {
-  S3Client,
-  PutObjectCommand,
-  DeleteObjectCommand,
-  GetObjectCommand,
-  HeadObjectCommand,
-  CopyObjectCommand,
-} from '@aws-sdk/client-s3';
-import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
+  hasObjectStorageCredentials,
+  ObjectStorageConfigError,
+  OBJECT_STORAGE_BUCKET_ENV,
+  OBJECT_STORAGE_PRIVATE_BUCKET_ENV,
+  OBJECT_STORAGE_PUBLIC_BASE_URL_ENV,
+  type ObjectStorageConfig,
+} from '@agiworkforce/object-storage';
 import type { Readable } from 'node:stream';
-import {
-  OBJECT_STORAGE_CONNECTION_TIMEOUT_MS,
-  OBJECT_STORAGE_REQUEST_TIMEOUT_MS,
-} from './object-storage-timeouts';
+import { getObjectStore, objectStorageConfig } from './object-storage-runtime';
 
-export class ObjectStorageTimeoutError extends Error {
-  constructor(readonly timeoutMs: number) {
-    super(`Object storage request exceeded ${timeoutMs}ms`);
-    this.name = 'ObjectStorageTimeoutError';
-  }
-}
+export { ObjectStorageTimeoutError } from '@agiworkforce/object-storage';
+export type { StoredObjectStream, StoredObjectHead } from '@agiworkforce/object-storage';
 
-/**
- * A backstop independent of whatever the request handler underneath the
- * client does. The client's own `requestHandler` timeouts protect a real
- * socket; this protects every caller even when the client itself is a fake
- * that never settles, which is exactly the failure a hung upstream host
- * looks like from here.
- */
-async function withRequestTimeout<T>(operation: () => Promise<T>): Promise<T> {
-  let timer: ReturnType<typeof setTimeout> | undefined;
-  const deadline = new Promise<never>((_resolve, reject) => {
-    timer = setTimeout(
-      () => reject(new ObjectStorageTimeoutError(OBJECT_STORAGE_REQUEST_TIMEOUT_MS)),
-      OBJECT_STORAGE_REQUEST_TIMEOUT_MS,
-    );
-  });
-  try {
-    return await Promise.race([operation(), deadline]);
-  } finally {
-    clearTimeout(timer);
-  }
-}
+const R2_BUCKET_ENV_NAME = 'CLOUDFLARE_R2_BUCKET_NAME';
+const R2_PRIVATE_BUCKET_ENV_NAME = 'CLOUDFLARE_R2_PRIVATE_BUCKET_NAME';
+const R2_PUBLIC_BASE_URL_ENV_NAME = 'CLOUDFLARE_R2_PUBLIC_BASE_URL';
+const DEFAULT_PRESIGNED_UPLOAD_TTL_SECONDS = 300;
 
-function env(name: string): string | undefined {
-  return process.env[name]?.trim() || undefined;
-}
-
-function hasR2Credentials(): boolean {
-  return Boolean(
-    env('CLOUDFLARE_R2_ACCOUNT_ID') &&
-    env('CLOUDFLARE_R2_ACCESS_KEY_ID') &&
-    env('CLOUDFLARE_R2_SECRET_ACCESS_KEY'),
-  );
+function missingSetting(neutralName: string, legacyName: string): ObjectStorageConfigError {
+  return new ObjectStorageConfigError(`${neutralName} or ${legacyName} is not configured.`);
 }
 
 export function isObjectStorageConfigured(): boolean {
+  const config = objectStorageConfig();
   return Boolean(
-    hasR2Credentials() && env('CLOUDFLARE_R2_BUCKET_NAME') && env('CLOUDFLARE_R2_PUBLIC_BASE_URL'),
+    hasObjectStorageCredentials(config) && config.publicBucket && config.publicBaseUrl,
   );
 }
 
 export function isPrivateObjectStorageConfigured(): boolean {
-  const privateBucket = env('CLOUDFLARE_R2_PRIVATE_BUCKET_NAME');
-  const publicBucket = env('CLOUDFLARE_R2_BUCKET_NAME');
+  const config = objectStorageConfig();
   return Boolean(
-    hasR2Credentials() && privateBucket && (!publicBucket || privateBucket !== publicBucket),
+    hasObjectStorageCredentials(config) &&
+    config.privateBucket &&
+    (!config.publicBucket || config.privateBucket !== config.publicBucket),
   );
 }
 
-let cachedClient: S3Client | null = null;
+function publicBucketName(config: ObjectStorageConfig = objectStorageConfig()): string {
+  if (!config.publicBucket) throw missingSetting(OBJECT_STORAGE_BUCKET_ENV, R2_BUCKET_ENV_NAME);
+  return config.publicBucket;
+}
 
-function getR2Client(): S3Client {
-  if (cachedClient) return cachedClient;
-
-  const accountId = env('CLOUDFLARE_R2_ACCOUNT_ID');
-  const accessKeyId = env('CLOUDFLARE_R2_ACCESS_KEY_ID');
-  const secretAccessKey = env('CLOUDFLARE_R2_SECRET_ACCESS_KEY');
-
-  if (!accountId || !accessKeyId || !secretAccessKey) {
-    throw new Error(
-      'Cloudflare R2 is not configured. Set CLOUDFLARE_R2_ACCOUNT_ID, CLOUDFLARE_R2_ACCESS_KEY_ID, and CLOUDFLARE_R2_SECRET_ACCESS_KEY.',
+function privateBucketName(config: ObjectStorageConfig = objectStorageConfig()): string {
+  if (!config.privateBucket) {
+    throw missingSetting(OBJECT_STORAGE_PRIVATE_BUCKET_ENV, R2_PRIVATE_BUCKET_ENV_NAME);
+  }
+  if (config.publicBucket && config.privateBucket === config.publicBucket) {
+    throw new ObjectStorageConfigError(
+      'The private storage bucket must be distinct from the public storage bucket.',
     );
   }
-
-  cachedClient = new S3Client({
-    region: 'auto',
-    endpoint: `https://${accountId}.r2.cloudflarestorage.com`,
-    credentials: { accessKeyId, secretAccessKey },
-    requestHandler: {
-      connectionTimeout: OBJECT_STORAGE_CONNECTION_TIMEOUT_MS,
-      requestTimeout: OBJECT_STORAGE_REQUEST_TIMEOUT_MS,
-    },
-  });
-  return cachedClient;
-}
-
-function getPublicBucketName(): string {
-  const bucket = env('CLOUDFLARE_R2_BUCKET_NAME');
-  if (!bucket) throw new Error('CLOUDFLARE_R2_BUCKET_NAME is not configured.');
-  return bucket;
-}
-
-function getPrivateBucketName(): string {
-  const bucket = env('CLOUDFLARE_R2_PRIVATE_BUCKET_NAME');
-  const publicBucket = env('CLOUDFLARE_R2_BUCKET_NAME');
-  if (!bucket) throw new Error('CLOUDFLARE_R2_PRIVATE_BUCKET_NAME is not configured.');
-  if (publicBucket && bucket === publicBucket) {
-    throw new Error('The private R2 bucket must be distinct from the public R2 bucket.');
-  }
-  return bucket;
+  return config.privateBucket;
 }
 
 export function publicUrlForKey(key: string): string {
-  const base = env('CLOUDFLARE_R2_PUBLIC_BASE_URL');
-  if (!base) throw new Error('CLOUDFLARE_R2_PUBLIC_BASE_URL is not configured.');
+  const base = objectStorageConfig().publicBaseUrl;
+  if (!base) {
+    throw missingSetting(OBJECT_STORAGE_PUBLIC_BASE_URL_ENV, R2_PUBLIC_BASE_URL_ENV_NAME);
+  }
   return `${base.replace(/\/$/, '')}/${key}`;
 }
 
 export function objectKeyFromPublicUrl(value: string): string | null {
-  const configuredBase = env('CLOUDFLARE_R2_PUBLIC_BASE_URL');
+  const configuredBase = objectStorageConfig().publicBaseUrl;
   if (!configuredBase || value.includes('\\') || /%(?:2e|2f|5c)/i.test(value)) return null;
 
   try {
@@ -173,26 +118,23 @@ interface PutObjectParams {
   contentLength?: number;
 }
 
-async function putObjectInBucket(bucket: string, params: PutObjectParams): Promise<void> {
-  const client = getR2Client();
-  await client.send(
-    new PutObjectCommand({
-      Bucket: bucket,
-      Key: params.key,
-      Body: params.data,
-      ContentType: params.contentType,
-      ContentLength: params.contentLength,
-    }),
-  );
+function putObjectInBucket(bucket: string, params: PutObjectParams): Promise<void> {
+  return getObjectStore().put({
+    bucket,
+    key: params.key,
+    body: params.data,
+    contentType: params.contentType,
+    contentLength: params.contentLength,
+  });
 }
 
 export async function putObject(params: PutObjectParams): Promise<{ url: string }> {
-  await putObjectInBucket(getPublicBucketName(), params);
+  await putObjectInBucket(publicBucketName(), params);
   return { url: publicUrlForKey(params.key) };
 }
 
 export async function putPrivateObject(params: PutObjectParams): Promise<{ key: string }> {
-  await putObjectInBucket(getPrivateBucketName(), params);
+  await putObjectInBucket(privateBucketName(), params);
   return { key: params.key };
 }
 
@@ -200,62 +142,21 @@ async function getObjectFromBucket(
   bucket: string,
   key: string,
 ): Promise<{ data: Buffer; contentType: string | undefined } | null> {
-  const client = getR2Client();
-  try {
-    const res = await withRequestTimeout(() =>
-      client.send(new GetObjectCommand({ Bucket: bucket, Key: key })),
-    );
-    if (!res.Body) return null;
-    const bytes = await res.Body.transformToByteArray();
-    return { data: Buffer.from(bytes), contentType: res.ContentType };
-  } catch (error) {
-    const name = (error as { name?: string } | null)?.name;
-    if (name === 'NoSuchKey' || name === 'NotFound') return null;
-    throw error;
-  }
+  const stored = await getObjectStore().get(bucket, key);
+  if (!stored) return null;
+  return { data: Buffer.from(stored.data), contentType: stored.contentType };
 }
 
 export function getObject(
   key: string,
 ): Promise<{ data: Buffer; contentType: string | undefined } | null> {
-  return getObjectFromBucket(getPublicBucketName(), key);
+  return getObjectFromBucket(publicBucketName(), key);
 }
 
 export function getPrivateObject(
   key: string,
 ): Promise<{ data: Buffer; contentType: string | undefined } | null> {
-  return getObjectFromBucket(getPrivateBucketName(), key);
-}
-
-export interface StoredObjectStream {
-  body: ReadableStream<Uint8Array>;
-  contentType: string | undefined;
-  contentLength: number | undefined;
-  contentRange: string | undefined;
-}
-
-async function getObjectStreamFromBucket(
-  bucket: string,
-  key: string,
-  range?: string,
-): Promise<StoredObjectStream | null> {
-  const client = getR2Client();
-  try {
-    const res = await withRequestTimeout(() =>
-      client.send(new GetObjectCommand({ Bucket: bucket, Key: key, Range: range })),
-    );
-    if (!res.Body) return null;
-    return {
-      body: res.Body.transformToWebStream(),
-      contentType: res.ContentType,
-      contentLength: res.ContentLength,
-      contentRange: res.ContentRange,
-    };
-  } catch (error) {
-    const name = (error as { name?: string } | null)?.name;
-    if (name === 'NoSuchKey' || name === 'NotFound') return null;
-    throw error;
-  }
+  return getObjectFromBucket(privateBucketName(), key);
 }
 
 export class StoredObjectTooLargeError extends Error {
@@ -269,26 +170,8 @@ export class StoredObjectTooLargeError extends Error {
   }
 }
 
-export interface StoredObjectHead {
-  contentLength: number | undefined;
-  contentType: string | undefined;
-  etag: string | undefined;
-}
-
-async function headObjectInBucket(bucket: string, key: string): Promise<StoredObjectHead | null> {
-  const client = getR2Client();
-  try {
-    const res = await client.send(new HeadObjectCommand({ Bucket: bucket, Key: key }));
-    return { contentLength: res.ContentLength, contentType: res.ContentType, etag: res.ETag };
-  } catch (error) {
-    const name = (error as { name?: string } | null)?.name;
-    if (name === 'NoSuchKey' || name === 'NotFound') return null;
-    throw error;
-  }
-}
-
-export function headPrivateObject(key: string): Promise<StoredObjectHead | null> {
-  return headObjectInBucket(getPrivateBucketName(), key);
+export function headPrivateObject(key: string) {
+  return getObjectStore().head(privateBucketName(), key);
 }
 
 export interface BoundedStoredObject {
@@ -302,13 +185,14 @@ async function getBoundedObjectFromBucket(
   key: string,
   maxBytes: number,
 ): Promise<BoundedStoredObject | null> {
-  const head = await headObjectInBucket(bucket, key);
+  const store = getObjectStore();
+  const head = await store.head(bucket, key);
   if (!head) return null;
   if (head.contentLength === undefined || head.contentLength > maxBytes) {
     throw new StoredObjectTooLargeError(key, maxBytes, head.contentLength);
   }
 
-  const stream = await getObjectStreamFromBucket(bucket, key);
+  const stream = await store.getStream(bucket, key);
   if (!stream) return null;
 
   const reader = stream.body.getReader();
@@ -335,63 +219,43 @@ export function getBoundedObject(
   key: string,
   maxBytes: number,
 ): Promise<BoundedStoredObject | null> {
-  return getBoundedObjectFromBucket(getPublicBucketName(), key, maxBytes);
+  return getBoundedObjectFromBucket(publicBucketName(), key, maxBytes);
 }
 
 export function getBoundedPrivateObject(
   key: string,
   maxBytes: number,
 ): Promise<BoundedStoredObject | null> {
-  return getBoundedObjectFromBucket(getPrivateBucketName(), key, maxBytes);
+  return getBoundedObjectFromBucket(privateBucketName(), key, maxBytes);
 }
 
-// Copies only if the source still carries the ETag the caller inspected, so the bytes that
-// were scanned are the bytes that get served; a swap after the scan fails the precondition.
-export async function copyPrivateObjectIfUnchanged(params: {
+export function copyPrivateObjectIfUnchanged(params: {
   sourceKey: string;
   destinationKey: string;
   etag: string;
 }): Promise<boolean> {
-  const bucket = getPrivateBucketName();
-  try {
-    await getR2Client().send(
-      new CopyObjectCommand({
-        Bucket: bucket,
-        Key: params.destinationKey,
-        CopySource: `${bucket}/${params.sourceKey.split('/').map(encodeURIComponent).join('/')}`,
-        CopySourceIfMatch: params.etag,
-        MetadataDirective: 'COPY',
-      }),
-    );
-    return true;
-  } catch (error) {
-    const name = (error as { name?: string } | null)?.name;
-    const status = (error as { $metadata?: { httpStatusCode?: number } } | null)?.$metadata
-      ?.httpStatusCode;
-    if (name === 'PreconditionFailed' || status === 412) return false;
-    throw error;
-  }
+  return getObjectStore().copyIfMatch({
+    bucket: privateBucketName(),
+    sourceKey: params.sourceKey,
+    destinationKey: params.destinationKey,
+    etag: params.etag,
+  });
 }
 
-export function getObjectStream(key: string, range?: string): Promise<StoredObjectStream | null> {
-  return getObjectStreamFromBucket(getPublicBucketName(), key, range);
+export function getObjectStream(key: string, range?: string) {
+  return getObjectStore().getStream(publicBucketName(), key, range);
 }
 
-export function getPrivateObjectStream(
-  key: string,
-  range?: string,
-): Promise<StoredObjectStream | null> {
-  return getObjectStreamFromBucket(getPrivateBucketName(), key, range);
+export function getPrivateObjectStream(key: string, range?: string) {
+  return getObjectStore().getStream(privateBucketName(), key, range);
 }
 
-export async function deleteObject(key: string): Promise<void> {
-  const client = getR2Client();
-  await client.send(new DeleteObjectCommand({ Bucket: getPublicBucketName(), Key: key }));
+export function deleteObject(key: string): Promise<void> {
+  return getObjectStore().delete(publicBucketName(), key);
 }
 
-export async function deletePrivateObject(key: string): Promise<void> {
-  const client = getR2Client();
-  await client.send(new DeleteObjectCommand({ Bucket: getPrivateBucketName(), Key: key }));
+export function deletePrivateObject(key: string): Promise<void> {
+  return getObjectStore().delete(privateBucketName(), key);
 }
 
 interface PresignUploadParams {
@@ -401,39 +265,25 @@ interface PresignUploadParams {
   expiresInSeconds?: number;
 }
 
-async function presignUploadForBucket(
-  bucket: string,
-  params: PresignUploadParams,
-): Promise<string> {
-  if (!Number.isSafeInteger(params.contentLength) || params.contentLength <= 0) {
-    throw new Error('A presigned upload must bind a positive content length.');
-  }
-  const contentType = params.contentType.trim();
-  if (!contentType) {
-    throw new Error('A presigned upload must bind a content type.');
-  }
-  const client = getR2Client();
-  const command = new PutObjectCommand({
-    Bucket: bucket,
-    Key: params.key,
-    ContentType: contentType,
-    ContentLength: params.contentLength,
-  });
-  return getSignedUrl(client, command, {
-    expiresIn: params.expiresInSeconds ?? 300,
-    signableHeaders: new Set(['content-length', 'content-type']),
+function presignUploadForBucket(bucket: string, params: PresignUploadParams): Promise<string> {
+  return getObjectStore().presignPut({
+    bucket,
+    key: params.key,
+    contentType: params.contentType,
+    contentLength: params.contentLength,
+    expiresInSeconds: params.expiresInSeconds ?? DEFAULT_PRESIGNED_UPLOAD_TTL_SECONDS,
   });
 }
 
 export async function getPresignedUploadUrl(
   params: PresignUploadParams,
 ): Promise<{ uploadUrl: string; publicUrl: string }> {
-  const uploadUrl = await presignUploadForBucket(getPublicBucketName(), params);
+  const uploadUrl = await presignUploadForBucket(publicBucketName(), params);
   return { uploadUrl, publicUrl: publicUrlForKey(params.key) };
 }
 
 export async function getPresignedPrivateUploadUrl(
   params: PresignUploadParams,
 ): Promise<{ uploadUrl: string }> {
-  return { uploadUrl: await presignUploadForBucket(getPrivateBucketName(), params) };
+  return { uploadUrl: await presignUploadForBucket(privateBucketName(), params) };
 }
