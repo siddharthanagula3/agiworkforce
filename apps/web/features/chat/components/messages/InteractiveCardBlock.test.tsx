@@ -58,7 +58,7 @@ describe('InteractiveCardBlock', () => {
     expect(screen.queryByTestId('interactive-card-fallback')).not.toBeInTheDocument();
   });
 
-  it('renders a real map search card and opens only the selected provider URL', () => {
+  it('renders a real map search card and opens only the selected provider URL', async () => {
     const mapCard = clone(envelope) as Record<string, unknown>;
     mapCard['kind'] = 'map-search.v1';
     mapCard['producedBy'] = { toolCallId: 'toolu_01abc', toolName: 'search_maps' };
@@ -85,7 +85,7 @@ describe('InteractiveCardBlock', () => {
     const open = vi.spyOn(window, 'open').mockImplementation(() => null);
 
     render(<InteractiveCardBlock cards={[decodeDelta(mapCard)]} />);
-    expect(screen.getByTestId('interactive-card-map-search')).toBeVisible();
+    expect(await screen.findByTestId('interactive-card-map-search')).toBeVisible();
     expect(screen.getByText('coffee shops near Austin, Texas')).toBeVisible();
     screen.getByRole('button', { name: /Open in Google Maps/ }).click();
     expect(open).toHaveBeenCalledWith(
@@ -96,7 +96,7 @@ describe('InteractiveCardBlock', () => {
     open.mockRestore();
   });
 
-  it('refuses an arbitrary HTTPS URL even if a caller bypasses card hydration', () => {
+  it('refuses an arbitrary HTTPS URL even if a caller bypasses card hydration', async () => {
     const mapCard = clone(envelope) as Record<string, unknown>;
     mapCard['kind'] = 'map-search.v1';
     mapCard['producedBy'] = { toolCallId: 'toolu_01abc', toolName: 'search_maps' };
@@ -125,7 +125,7 @@ describe('InteractiveCardBlock', () => {
     const open = vi.spyOn(window, 'open').mockImplementation(() => null);
 
     render(<InteractiveCardBlock cards={[bypassed]} />);
-    screen.getByRole('button', { name: 'Open map' }).click();
+    (await screen.findByRole('button', { name: 'Open map' })).click();
     expect(open).not.toHaveBeenCalled();
     open.mockRestore();
   });

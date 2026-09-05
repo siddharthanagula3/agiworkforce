@@ -6,6 +6,7 @@ import {
   resolveInteractiveCardRenderer,
   type InteractiveCard,
   type InteractiveCardRegistry,
+  type InteractiveCardRenderContext,
   type InteractiveCardResponsePayload,
 } from '@agiworkforce/types';
 import {
@@ -22,7 +23,7 @@ import {
 import { selectIsActiveConversationStreaming, useChatStore } from '@shared/stores/web-chat-store';
 import { cn } from '@shared/lib/utils';
 import { ClarifyCard, type ClarifyCardContext } from './cards/ClarifyCard';
-import { MapSearchCard } from './cards/MapSearchCard';
+import { MapSearchCardLazy, PlacesMapCardLazy } from './cards/lazyMapCards';
 import { McpAppCard } from './cards/McpAppCard';
 
 type WebCardRegistry = {
@@ -33,8 +34,11 @@ const WEB_CARD_REGISTRY: WebCardRegistry = {
   'clarify.v1': ({ card, body, ctx }) => (
     <ClarifyCard card={card} body={body} ctx={ctx as ClarifyCardContext} />
   ),
-  'map-search.v1': ({ body, ctx }) => <MapSearchCard body={body} ctx={ctx} />,
+  'map-search.v1': ({ body, ctx }) => <MapSearchCardLazy body={body} ctx={ctx} />,
   'mcp-app.v1': ({ body }) => <McpAppCard body={body} />,
+  'places.v1': ({ body, ctx }) => (
+    <PlacesMapCardLazy body={body} assistantText={(ctx as WebCardContext).assistantText} />
+  ),
 };
 
 function openMapSearchProviderUrl(value: string): void {
@@ -100,16 +104,25 @@ function useCardResponseDeadline(card: InteractiveCard): void {
   }, [deadlineMs]);
 }
 
+type WebCardContext = InteractiveCardRenderContext & { assistantText?: string };
+
 interface InteractiveCardBlockProps {
   cards: readonly InteractiveCard[];
   className?: string;
+  /**
+   * The answer this turn wrote. A place popup quotes the sentence about that
+   * place from it, so an editorial line beside sourced data is verifiably the
+   * assistant's own words.
+   */
+  assistantText?: string;
 }
 
 interface SingleCardProps {
   card: InteractiveCard;
+  assistantText?: string;
 }
 
-const SingleCard = memo(function SingleCard({ card }: SingleCardProps) {
+const SingleCard = memo(function SingleCard({ card, assistantText }: SingleCardProps) {
   const renderer = resolveInteractiveCardRenderer(WEB_CARD_REGISTRY, card);
   const channel = useCardResponseChannel(card.cardId);
   const submissionError = useCardSubmissionError(card.cardId);
@@ -138,6 +151,7 @@ const SingleCard = memo(function SingleCard({ card }: SingleCardProps) {
             canRespond,
             ...(canRespond ? { onRespond } : {}),
             ...(submissionError ? { submissionError } : {}),
+            ...(assistantText ? { assistantText } : {}),
             onOpenUrl: openMapSearchProviderUrl,
           },
         })}
@@ -166,12 +180,13 @@ SingleCard.displayName = 'SingleCard';
 export const InteractiveCardBlock = memo(function InteractiveCardBlock({
   cards,
   className,
+  assistantText,
 }: InteractiveCardBlockProps) {
   if (cards.length === 0) return null;
   return (
     <div className={className}>
       {cards.map((card) => (
-        <SingleCard key={card.cardId} card={card} />
+        <SingleCard key={card.cardId} card={card} assistantText={assistantText} />
       ))}
     </div>
   );
