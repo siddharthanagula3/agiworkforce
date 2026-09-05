@@ -118,6 +118,57 @@ describe('AgentActivityTimeline', () => {
     expect(screen.getAllByText('Starting AGI Work')).toHaveLength(1);
   });
 
+  it('shows Retrying instead of the generic local-start label for a silent retry', () => {
+    render(
+      <AgentActivityTimeline
+        activity={activity({
+          lastSequence: -1,
+          entries: [
+            {
+              kind: 'progress',
+              id: 'progress:local-starting',
+              progressId: 'local-starting',
+              summary: 'Retrying',
+              status: 'running',
+              startedAtMs: 1_000,
+              isRetry: true,
+            },
+          ],
+        })}
+      />,
+    );
+
+    const trigger = screen.getByRole('button', { name: /agent activity/i });
+    expect(trigger.textContent).toContain('Retrying');
+    expect(trigger.textContent).not.toContain('Working');
+  });
+
+  it('reports a retry-only completed run instead of rendering nothing', () => {
+    const completed = activity({
+      lastSequence: -1,
+      status: 'completed',
+      startedAtMs: 1_000,
+      completedAtMs: 4_000,
+      entries: [
+        {
+          kind: 'progress',
+          id: 'progress:local-starting',
+          progressId: 'local-starting',
+          summary: 'Retrying',
+          status: 'completed',
+          startedAtMs: 1_000,
+          completedAtMs: 4_000,
+          isRetry: true,
+        },
+      ],
+    });
+
+    render(<AgentActivityTimeline activity={completed} />);
+    expect(screen.getByRole('button', { name: /show agent activity/i }).textContent).toContain(
+      'Worked for 3s',
+    );
+  });
+
   it('auto-expands a running run live and collapses on a manual toggle', () => {
     render(<AgentActivityTimeline activity={activity()} />);
 
