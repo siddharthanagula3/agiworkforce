@@ -22,7 +22,10 @@
         "deprecationDate": null,
         "deprecated": false,
         "releasedOn": "2026-07-09",
-        "deprecatedOn": null
+        "deprecatedOn": null,
+        "stage": "promoted",
+        "stagedOn": "2026-09-05",
+        "stageSource": "packages/ai/model-registry/catalog/routing-policies.json#auto.slots.flagship_general"
       },
       "evidenceRefs": []
     },
@@ -46,7 +49,10 @@
         "deprecationDate": null,
         "deprecated": false,
         "releasedOn": "2026-07-09",
-        "deprecatedOn": null
+        "deprecatedOn": null,
+        "stage": "promoted",
+        "stagedOn": "2026-09-05",
+        "stageSource": "packages/ai/model-registry/catalog/routing-policies.json#auto.slots.general_balanced"
       },
       "evidenceRefs": []
     },
@@ -70,7 +76,10 @@
         "deprecationDate": null,
         "deprecated": false,
         "releasedOn": "2026-07-09",
-        "deprecatedOn": null
+        "deprecatedOn": null,
+        "stage": "registered",
+        "stagedOn": "2026-09-05",
+        "stageSource": "packages/ai/model-registry/catalog/models.curation.json#verificationLog"
       },
       "evidenceRefs": []
     },
@@ -95,7 +104,10 @@
         "deprecationDate": null,
         "deprecated": false,
         "releasedOn": "2026-09-01",
-        "deprecatedOn": null
+        "deprecatedOn": null,
+        "stage": "registered",
+        "stagedOn": "2026-09-05",
+        "stageSource": "packages/ai/model-registry/catalog/models.curation.json#verificationLog"
       },
       "evidenceRefs": []
     },
@@ -120,7 +132,10 @@
         "deprecationDate": null,
         "deprecated": false,
         "releasedOn": "2026-07-24",
-        "deprecatedOn": null
+        "deprecatedOn": null,
+        "stage": "promoted",
+        "stagedOn": "2026-09-05",
+        "stageSource": "packages/ai/model-registry/catalog/routing-policies.json#auto.slots.flagship_coding"
       },
       "evidenceRefs": []
     },
@@ -151,7 +166,10 @@
         "deprecationDate": null,
         "deprecated": false,
         "releasedOn": "2026-06-30",
-        "deprecatedOn": null
+        "deprecatedOn": null,
+        "stage": "promoted",
+        "stagedOn": "2026-09-05",
+        "stageSource": "packages/ai/model-registry/catalog/routing-policies.json#auto.slots.coding_balanced"
       },
       "evidenceRefs": []
     },
@@ -176,7 +194,10 @@
         "deprecationDate": null,
         "deprecated": false,
         "releasedOn": "2025-10-15",
-        "deprecatedOn": null
+        "deprecatedOn": null,
+        "stage": "registered",
+        "stagedOn": "2026-09-05",
+        "stageSource": "packages/ai/model-registry/catalog/models.curation.json#verificationLog"
       },
       "evidenceRefs": []
     },
@@ -199,7 +220,10 @@
         "deprecationDate": null,
         "deprecated": false,
         "releasedOn": "2026-04-22",
-        "deprecatedOn": null
+        "deprecatedOn": null,
+        "stage": "promoted",
+        "stagedOn": "2026-09-05",
+        "stageSource": "packages/ai/model-registry/catalog/routing-policies.json#auto.slots.embedding_default"
       },
       "evidenceRefs": []
     },
@@ -224,7 +248,10 @@
         "deprecationDate": null,
         "deprecated": false,
         "releasedOn": "2026-02-19",
-        "deprecatedOn": null
+        "deprecatedOn": null,
+        "stage": "promoted",
+        "stagedOn": "2026-09-05",
+        "stageSource": "packages/ai/model-registry/catalog/routing-policies.json#auto.slots.long_context_balanced"
       },
       "evidenceRefs": []
     },
@@ -259,7 +286,10 @@
         "deprecationDate": null,
         "deprecated": false,
         "releasedOn": "2026-07-21",
-        "deprecatedOn": null
+        "deprecatedOn": null,
+        "stage": "promoted",
+        "stagedOn": "2026-09-05",
+        "stageSource": "packages/ai/model-registry/catalog/routing-policies.json#auto.slots.general_fast"
       },
       "evidenceRefs": []
     },
@@ -284,7 +314,10 @@
         "deprecationDate": "2027-05-07",
         "deprecated": false,
         "releasedOn": "2026-05-07",
-        "deprecatedOn": "2027-05-07"
+        "deprecatedOn": "2027-05-07",
+        "stage": "registered",
+        "stagedOn": "2026-09-05",
+        "stageSource": "packages/ai/model-registry/catalog/models.curation.json#verificationLog"
       },
       "evidenceRefs": []
     },
@@ -307,7 +340,10 @@
         "deprecationDate": null,
         "deprecated": false,
         "releasedOn": null,
-        "deprecatedOn": null
+        "deprecatedOn": null,
+        "stage": "promoted",
+        "stagedOn": "2026-09-05",
+        "stageSource": "packages/ai/model-registry/catalog/routing-policies.json#auto.slots.image_generation"
       },
       "evidenceRefs": []
     },
@@ -332,7 +368,10 @@
         "deprecationDate": null,
         "deprecated": false,
         "releasedOn": "2026-05-28",
-        "deprecatedOn": null
+        "deprecatedOn": null,
+        "stage": "registered",
+        "stagedOn": "2026-09-05",
+        "stageSource": "packages/ai/model-registry/catalog/models.curation.json#verificationLog"
       },
       "evidenceRefs": []
     },
@@ -357,7 +396,10 @@
         "deprecationDate": null,
         "deprecated": false,
         "releasedOn": "2026-06-30",
-        "deprecatedOn": null
+        "deprecatedOn": null,
+        "stage": "registered",
+        "stagedOn": "2026-09-05",
+        "stageSource": "packages/ai/model-registry/catalog/models.curation.json#verificationLog"
       },
       "evidenceRefs": []
     },
@@ -382,7 +424,10 @@
         "deprecationDate": null,
         "deprecated": false,
         "releasedOn": "2026-07-31",
-        "deprecatedOn": null
+        "deprecatedOn": null,
+        "stage": "promoted",
+        "stagedOn": "2026-09-05",
+        "stageSource": "packages/ai/model-registry/catalog/routing-policies.json#auto.slots.reasoning_premium"
       },
       "evidenceRefs": []
     },
@@ -407,7 +452,10 @@
         "deprecationDate": null,
         "deprecated": false,
         "releasedOn": "2026-08-13",
-        "deprecatedOn": null
+        "deprecatedOn": null,
+        "stage": "evaluated",
+        "stagedOn": "2026-09-05",
+        "stageSource": "models.dev#deepseek-v4-pro"
       },
       "evidenceRefs": []
     },
@@ -432,7 +480,10 @@
         "deprecationDate": null,
         "deprecated": false,
         "releasedOn": "2026-08-21",
-        "deprecatedOn": null
+        "deprecatedOn": null,
+        "stage": "registered",
+        "stagedOn": "2026-09-05",
+        "stageSource": "packages/ai/model-registry/catalog/models.curation.json#verificationLog"
       },
       "evidenceRefs": []
     },
@@ -454,7 +505,10 @@
         "deprecationDate": null,
         "deprecated": false,
         "releasedOn": null,
-        "deprecatedOn": null
+        "deprecatedOn": null,
+        "stage": "promoted",
+        "stagedOn": "2026-09-05",
+        "stageSource": "packages/ai/model-registry/catalog/routing-policies.json#auto.slots.reasoning_economy"
       },
       "evidenceRefs": []
     },
@@ -476,7 +530,10 @@
         "deprecationDate": null,
         "deprecated": false,
         "releasedOn": null,
-        "deprecatedOn": null
+        "deprecatedOn": null,
+        "stage": "registered",
+        "stagedOn": "2026-09-05",
+        "stageSource": "packages/ai/model-registry/catalog/models.curation.json#verificationLog"
       },
       "evidenceRefs": []
     },
@@ -500,7 +557,10 @@
         "deprecationDate": "2026-09-27",
         "deprecated": false,
         "releasedOn": null,
-        "deprecatedOn": "2026-09-27"
+        "deprecatedOn": "2026-09-27",
+        "stage": "evaluated",
+        "stagedOn": "2026-09-05",
+        "stageSource": "models.dev#sonar"
       },
       "evidenceRefs": []
     },
@@ -523,7 +583,10 @@
         "deprecationDate": "2026-09-27",
         "deprecated": false,
         "releasedOn": null,
-        "deprecatedOn": "2026-09-27"
+        "deprecatedOn": "2026-09-27",
+        "stage": "evaluated",
+        "stagedOn": "2026-09-05",
+        "stageSource": "models.dev#sonar-reasoning-pro"
       },
       "evidenceRefs": []
     },
@@ -547,7 +610,10 @@
         "deprecationDate": "2026-09-27",
         "deprecated": false,
         "releasedOn": null,
-        "deprecatedOn": "2026-09-27"
+        "deprecatedOn": "2026-09-27",
+        "stage": "evaluated",
+        "stagedOn": "2026-09-05",
+        "stageSource": "models.dev#sonar-pro"
       },
       "evidenceRefs": []
     },
@@ -570,7 +636,10 @@
         "deprecationDate": "2026-09-27",
         "deprecated": false,
         "releasedOn": null,
-        "deprecatedOn": "2026-09-27"
+        "deprecatedOn": "2026-09-27",
+        "stage": "evaluated",
+        "stagedOn": "2026-09-05",
+        "stageSource": "models.dev#sonar-deep-research"
       },
       "evidenceRefs": []
     },
@@ -592,7 +661,10 @@
         "deprecationDate": null,
         "deprecated": false,
         "releasedOn": null,
-        "deprecatedOn": null
+        "deprecatedOn": null,
+        "stage": "registered",
+        "stagedOn": "2026-09-05",
+        "stageSource": "packages/ai/model-registry/catalog/models.curation.json#verificationLog"
       },
       "evidenceRefs": []
     },
@@ -615,7 +687,10 @@
         "deprecationDate": null,
         "deprecated": false,
         "releasedOn": "2026-08-07",
-        "deprecatedOn": null
+        "deprecatedOn": null,
+        "stage": "registered",
+        "stagedOn": "2026-09-05",
+        "stageSource": "packages/ai/model-registry/catalog/models.curation.json#verificationLog"
       },
       "evidenceRefs": []
     },
@@ -636,7 +711,10 @@
         "deprecationDate": null,
         "deprecated": false,
         "releasedOn": "2026-04-21",
-        "deprecatedOn": null
+        "deprecatedOn": null,
+        "stage": "registered",
+        "stagedOn": "2026-09-05",
+        "stageSource": "packages/ai/model-registry/catalog/models.curation.json#verificationLog"
       },
       "evidenceRefs": []
     },
@@ -657,7 +735,10 @@
         "deprecationDate": null,
         "deprecated": false,
         "releasedOn": "2025-03-20",
-        "deprecatedOn": null
+        "deprecatedOn": null,
+        "stage": "registered",
+        "stagedOn": "2026-09-05",
+        "stageSource": "packages/ai/model-registry/catalog/models.curation.json#verificationLog"
       },
       "evidenceRefs": []
     },
@@ -682,7 +763,10 @@
         "deprecationDate": null,
         "deprecated": false,
         "releasedOn": "2026-09-02",
-        "deprecatedOn": null
+        "deprecatedOn": null,
+        "stage": "promoted",
+        "stagedOn": "2026-09-05",
+        "stageSource": "packages/ai/model-registry/catalog/routing-policies.json#auto.slots.general_premium"
       },
       "evidenceRefs": []
     },
@@ -707,7 +791,10 @@
         "deprecationDate": null,
         "deprecated": false,
         "releasedOn": "2026-07-21",
-        "deprecatedOn": null
+        "deprecatedOn": null,
+        "stage": "registered",
+        "stagedOn": "2026-09-05",
+        "stageSource": "packages/ai/model-registry/catalog/models.curation.json#verificationLog"
       },
       "evidenceRefs": []
     },
@@ -731,7 +818,10 @@
         "deprecationDate": null,
         "deprecated": false,
         "releasedOn": "2026-08-18",
-        "deprecatedOn": null
+        "deprecatedOn": null,
+        "stage": "promoted",
+        "stagedOn": "2026-09-05",
+        "stageSource": "packages/ai/model-registry/catalog/routing-policies.json#auto.slots.escalation_coding"
       },
       "evidenceRefs": []
     },
@@ -756,7 +846,10 @@
         "deprecationDate": null,
         "deprecated": false,
         "releasedOn": "2026-08-26",
-        "deprecatedOn": null
+        "deprecatedOn": null,
+        "stage": "registered",
+        "stagedOn": "2026-09-05",
+        "stageSource": "packages/ai/model-registry/catalog/models.curation.json#verificationLog"
       },
       "evidenceRefs": []
     },
@@ -785,7 +878,10 @@
         "deprecationDate": null,
         "deprecated": false,
         "releasedOn": null,
-        "deprecatedOn": null
+        "deprecatedOn": null,
+        "stage": "promoted",
+        "stagedOn": "2026-09-05",
+        "stageSource": "packages/ai/model-registry/catalog/routing-policies.json#auto.slots.reasoning_balanced"
       },
       "evidenceRefs": []
     },
@@ -809,7 +905,10 @@
         "deprecationDate": null,
         "deprecated": false,
         "releasedOn": "2026-07-16",
-        "deprecatedOn": null
+        "deprecatedOn": null,
+        "stage": "registered",
+        "stagedOn": "2026-09-05",
+        "stageSource": "packages/ai/model-registry/catalog/models.curation.json#verificationLog"
       },
       "evidenceRefs": []
     },
@@ -833,7 +932,10 @@
         "deprecationDate": null,
         "deprecated": false,
         "releasedOn": null,
-        "deprecatedOn": null
+        "deprecatedOn": null,
+        "stage": "registered",
+        "stagedOn": "2026-09-05",
+        "stageSource": "packages/ai/model-registry/catalog/models.curation.json#verificationLog"
       },
       "evidenceRefs": []
     },
@@ -858,7 +960,10 @@
         "deprecationDate": null,
         "deprecated": false,
         "releasedOn": "2026-04-20",
-        "deprecatedOn": null
+        "deprecatedOn": null,
+        "stage": "registered",
+        "stagedOn": "2026-09-05",
+        "stageSource": "packages/ai/model-registry/catalog/models.curation.json#verificationLog"
       },
       "evidenceRefs": []
     },
@@ -882,7 +987,10 @@
         "deprecationDate": null,
         "deprecated": false,
         "releasedOn": "2026-08-12",
-        "deprecatedOn": null
+        "deprecatedOn": null,
+        "stage": "registered",
+        "stagedOn": "2026-09-05",
+        "stageSource": "packages/ai/model-registry/catalog/models.curation.json#verificationLog"
       },
       "evidenceRefs": []
     },
@@ -903,7 +1011,10 @@
         "deprecationDate": null,
         "deprecated": false,
         "releasedOn": "2025-10-15",
-        "deprecatedOn": null
+        "deprecatedOn": null,
+        "stage": "promoted",
+        "stagedOn": "2026-09-05",
+        "stageSource": "packages/ai/model-registry/catalog/routing-policies.json#auto.slots.video_generation"
       },
       "evidenceRefs": []
     },
@@ -924,7 +1035,10 @@
         "deprecationDate": null,
         "deprecated": false,
         "releasedOn": "2025-10-15",
-        "deprecatedOn": null
+        "deprecatedOn": null,
+        "stage": "registered",
+        "stagedOn": "2026-09-05",
+        "stageSource": "packages/ai/model-registry/catalog/models.curation.json#verificationLog"
       },
       "evidenceRefs": []
     },
@@ -945,7 +1059,10 @@
         "deprecationDate": "2027-02-26",
         "deprecated": false,
         "releasedOn": "2025-03-20",
-        "deprecatedOn": "2027-02-26"
+        "deprecatedOn": "2027-02-26",
+        "stage": "promoted",
+        "stagedOn": "2026-09-05",
+        "stageSource": "packages/ai/model-registry/catalog/routing-policies.json#auto.slots.voice_transcription"
       },
       "evidenceRefs": []
     },
@@ -966,7 +1083,10 @@
         "deprecationDate": "2027-02-26",
         "deprecated": false,
         "releasedOn": "2025-03-20",
-        "deprecatedOn": "2027-02-26"
+        "deprecatedOn": "2027-02-26",
+        "stage": "registered",
+        "stagedOn": "2026-09-05",
+        "stageSource": "packages/ai/model-registry/catalog/models.curation.json#verificationLog"
       },
       "evidenceRefs": []
     },
@@ -989,7 +1109,10 @@
         "deprecationDate": null,
         "deprecated": false,
         "releasedOn": null,
-        "deprecatedOn": null
+        "deprecatedOn": null,
+        "stage": "registered",
+        "stagedOn": "2026-09-05",
+        "stageSource": "packages/ai/model-registry/catalog/models.curation.json#verificationLog"
       },
       "evidenceRefs": []
     },
@@ -1013,7 +1136,10 @@
         "deprecationDate": null,
         "deprecated": false,
         "releasedOn": "2026-03-18",
-        "deprecatedOn": null
+        "deprecatedOn": null,
+        "stage": "registered",
+        "stagedOn": "2026-09-05",
+        "stageSource": "packages/ai/model-registry/catalog/models.curation.json#verificationLog"
       },
       "evidenceRefs": []
     },
@@ -1034,7 +1160,10 @@
         "deprecationDate": null,
         "deprecated": false,
         "releasedOn": "2026-03-31",
-        "deprecatedOn": null
+        "deprecatedOn": null,
+        "stage": "registered",
+        "stagedOn": "2026-09-05",
+        "stageSource": "packages/ai/model-registry/catalog/models.curation.json#verificationLog"
       },
       "evidenceRefs": []
     },
@@ -1055,7 +1184,10 @@
         "deprecationDate": "2026-09-30",
         "deprecated": false,
         "releasedOn": "2026-06-30",
-        "deprecatedOn": "2026-09-30"
+        "deprecatedOn": "2026-09-30",
+        "stage": "registered",
+        "stagedOn": "2026-09-05",
+        "stageSource": "packages/ai/model-registry/catalog/models.curation.json#verificationLog"
       },
       "evidenceRefs": []
     },
@@ -1076,7 +1208,10 @@
         "deprecationDate": null,
         "deprecated": false,
         "releasedOn": null,
-        "deprecatedOn": null
+        "deprecatedOn": null,
+        "stage": "registered",
+        "stagedOn": "2026-09-05",
+        "stageSource": "packages/ai/model-registry/catalog/models.curation.json#verificationLog"
       },
       "evidenceRefs": []
     },
@@ -1099,7 +1234,10 @@
         "deprecationDate": null,
         "deprecated": false,
         "releasedOn": "2026-03-11",
-        "deprecatedOn": null
+        "deprecatedOn": null,
+        "stage": "registered",
+        "stagedOn": "2026-09-05",
+        "stageSource": "packages/ai/model-registry/catalog/models.curation.json#verificationLog"
       },
       "evidenceRefs": []
     },
@@ -1122,7 +1260,10 @@
         "deprecationDate": null,
         "deprecated": false,
         "releasedOn": "2026-04-13",
-        "deprecatedOn": null
+        "deprecatedOn": null,
+        "stage": "registered",
+        "stagedOn": "2026-09-05",
+        "stageSource": "packages/ai/model-registry/catalog/models.curation.json#verificationLog"
       },
       "evidenceRefs": []
     },
@@ -1146,7 +1287,10 @@
         "deprecationDate": null,
         "deprecated": false,
         "releasedOn": "2023-11-08",
-        "deprecatedOn": null
+        "deprecatedOn": null,
+        "stage": "registered",
+        "stagedOn": "2026-09-05",
+        "stageSource": "packages/ai/model-registry/catalog/models.curation.json#verificationLog"
       },
       "evidenceRefs": []
     },
@@ -1171,7 +1315,10 @@
         "deprecationDate": null,
         "deprecated": false,
         "releasedOn": "2026-07-17",
-        "deprecatedOn": null
+        "deprecatedOn": null,
+        "stage": "registered",
+        "stagedOn": "2026-09-05",
+        "stageSource": "packages/ai/model-registry/catalog/models.curation.json#verificationLog"
       },
       "evidenceRefs": []
     },
@@ -1195,7 +1342,10 @@
         "deprecationDate": null,
         "deprecated": false,
         "releasedOn": "2026-02-01",
-        "deprecatedOn": null
+        "deprecatedOn": null,
+        "stage": "registered",
+        "stagedOn": "2026-09-05",
+        "stageSource": "packages/ai/model-registry/catalog/models.curation.json#verificationLog"
       },
       "evidenceRefs": []
     },
@@ -1218,7 +1368,10 @@
         "deprecationDate": null,
         "deprecated": false,
         "releasedOn": null,
-        "deprecatedOn": null
+        "deprecatedOn": null,
+        "stage": "promoted",
+        "stagedOn": "2026-09-05",
+        "stageSource": "packages/ai/model-registry/catalog/routing-policies.json#auto.slots.free_workhorse"
       },
       "evidenceRefs": []
     },
@@ -1241,7 +1394,10 @@
         "deprecationDate": null,
         "deprecated": false,
         "releasedOn": null,
-        "deprecatedOn": null
+        "deprecatedOn": null,
+        "stage": "promoted",
+        "stagedOn": "2026-09-05",
+        "stageSource": "packages/ai/model-registry/catalog/routing-policies.json#auto.slots.free_workhorse_fast"
       },
       "evidenceRefs": []
     },
@@ -1266,7 +1422,10 @@
         "deprecationDate": null,
         "deprecated": false,
         "releasedOn": "2025-10-29",
-        "deprecatedOn": null
+        "deprecatedOn": null,
+        "stage": "registered",
+        "stagedOn": "2026-09-05",
+        "stageSource": "packages/ai/model-registry/catalog/models.curation.json#verificationLog"
       },
       "evidenceRefs": []
     },
@@ -1291,7 +1450,10 @@
         "deprecationDate": null,
         "deprecated": false,
         "releasedOn": null,
-        "deprecatedOn": null
+        "deprecatedOn": null,
+        "stage": "registered",
+        "stagedOn": "2026-09-05",
+        "stageSource": "packages/ai/model-registry/catalog/models.curation.json#verificationLog"
       },
       "evidenceRefs": []
     },
@@ -1316,7 +1478,10 @@
         "deprecationDate": null,
         "deprecated": false,
         "releasedOn": null,
-        "deprecatedOn": null
+        "deprecatedOn": null,
+        "stage": "registered",
+        "stagedOn": "2026-09-05",
+        "stageSource": "packages/ai/model-registry/catalog/models.curation.json#verificationLog"
       },
       "evidenceRefs": []
     }

@@ -826,7 +826,12 @@
         "caching": true
       },
       "speedOverride": "medium",
-      "releasedOverride": "July 9, 2026"
+      "releasedOverride": "July 9, 2026",
+      "lifecycle": {
+        "stage": "promoted",
+        "stagedOn": "2026-09-05",
+        "source": "packages/ai/model-registry/catalog/routing-policies.json#auto.slots.flagship_general"
+      }
     },
     "gpt-5.6-terra": {
       "id": "gpt-5.6-terra",
@@ -933,7 +938,12 @@
         "caching": true
       },
       "speedOverride": "medium",
-      "releasedOverride": "July 9, 2026"
+      "releasedOverride": "July 9, 2026",
+      "lifecycle": {
+        "stage": "promoted",
+        "stagedOn": "2026-09-05",
+        "source": "packages/ai/model-registry/catalog/routing-policies.json#auto.slots.general_balanced"
+      }
     },
     "gpt-5.6-luna": {
       "id": "gpt-5.6-luna",
@@ -1040,7 +1050,12 @@
         "caching": true
       },
       "speedOverride": "medium",
-      "releasedOverride": "July 9, 2026"
+      "releasedOverride": "July 9, 2026",
+      "lifecycle": {
+        "stage": "registered",
+        "stagedOn": "2026-09-05",
+        "source": "packages/ai/model-registry/catalog/models.curation.json#verificationLog"
+      }
     },
     "claude-fable-5-1": {
       "id": "claude-fable-5-1",
@@ -1102,7 +1117,12 @@
       "promptCacheMinimumTokens": 512,
       "pricingNote": "Cache reads bill at 0.025x the base input rate ($0.25/1M), not the 0.1x every other Claude model uses, so any price derived from a 0.1 multiplier is wrong for this model. The full 1M window bills at the standard per-token rate with no long-context tier. Batch is 50% off at $5/$25. No fast mode and no priority tier are offered. Verified against platform.claude.com/docs/en/about-claude/pricing and the prompt-caching guide, retrieved 2026-09-04.",
       "speedOverride": "slow",
-      "releasedOverride": "September 1, 2026"
+      "releasedOverride": "September 1, 2026",
+      "lifecycle": {
+        "stage": "registered",
+        "stagedOn": "2026-09-05",
+        "source": "packages/ai/model-registry/catalog/models.curation.json#verificationLog"
+      }
     },
     "claude-opus-5": {
       "id": "claude-opus-5",
@@ -1169,7 +1189,12 @@
         "nativeWebFetch": false
       },
       "speedOverride": "slow",
-      "releasedOverride": "July 24, 2026"
+      "releasedOverride": "July 24, 2026",
+      "lifecycle": {
+        "stage": "promoted",
+        "stagedOn": "2026-09-05",
+        "source": "packages/ai/model-registry/catalog/routing-policies.json#auto.slots.flagship_coding"
+      }
     },
     "claude-sonnet-5": {
       "id": "claude-sonnet-5",
@@ -1228,7 +1253,12 @@
         "caching": true
       },
       "speedOverride": "fast",
-      "releasedOverride": "June 30, 2026"
+      "releasedOverride": "June 30, 2026",
+      "lifecycle": {
+        "stage": "promoted",
+        "stagedOn": "2026-09-05",
+        "source": "packages/ai/model-registry/catalog/routing-policies.json#auto.slots.coding_balanced"
+      }
     },
     "claude-haiku-4-5": {
       "id": "claude-haiku-4-5",
@@ -1289,7 +1319,12 @@
       "promptCacheMinimumTokens": 4096,
       "pricingNote": "The pinned Claude API id is the dated snapshot claude-haiku-4-5-20251001; claude-haiku-4-5 is an alias that resolves to it. Extended thinking only, through thinking.type enabled plus thinking.budget_tokens; the effort parameter is not supported and adaptive thinking returns 400. Minimum cacheable prompt is 4,096 tokens. Batch is 50% off at $0.50/$2.50. Anthropic commits only to no retirement before 2025-10-15, so this is a short-horizon row. Verified against platform.claude.com/docs/en/models/haiku-4-5/overview, retrieved 2026-09-04.",
       "speedOverride": "very-fast",
-      "releasedOverride": "October 15, 2025"
+      "releasedOverride": "October 15, 2025",
+      "lifecycle": {
+        "stage": "registered",
+        "stagedOn": "2026-09-05",
+        "source": "packages/ai/model-registry/catalog/models.curation.json#verificationLog"
+      }
     },
     "gemini-embedding-2": {
       "id": "gemini-embedding-2",
@@ -1327,7 +1362,12 @@
         "caching": false
       },
       "speedOverride": "fast",
-      "releasedOverride": "April 22, 2026"
+      "releasedOverride": "April 22, 2026",
+      "lifecycle": {
+        "stage": "promoted",
+        "stagedOn": "2026-09-05",
+        "source": "packages/ai/model-registry/catalog/routing-policies.json#auto.slots.embedding_default"
+      }
     },
     "gemini-3.1-pro-preview": {
       "id": "gemini-3.1-pro-preview",
@@ -1368,7 +1408,12 @@
       "tierPolicy": {
         "minTier": "pro"
       },
-      "releasedOverride": "February 19, 2026"
+      "releasedOverride": "February 19, 2026",
+      "lifecycle": {
+        "stage": "promoted",
+        "stagedOn": "2026-09-05",
+        "source": "packages/ai/model-registry/catalog/routing-policies.json#auto.slots.long_context_balanced"
+      }
     },
     "gemini-3.5-flash-lite": {
       "id": "gemini-3.5-flash-lite",
@@ -1402,7 +1447,12 @@
       "tierPolicy": {
         "minTier": "free"
       },
-      "releasedOverride": "July 21, 2026"
+      "releasedOverride": "July 21, 2026",
+      "lifecycle": {
+        "stage": "promoted",
+        "stagedOn": "2026-09-05",
+        "source": "packages/ai/model-registry/catalog/routing-policies.json#auto.slots.general_fast"
+      }
     },
     "gemini-3.1-flash-lite": {
       "id": "gemini-3.1-flash-lite",
@@ -1460,7 +1510,12 @@
         "caching": true
       },
       "speedOverride": "very-fast",
-      "releasedOverride": "May 7, 2026"
+      "releasedOverride": "May 7, 2026",
+      "lifecycle": {
+        "stage": "registered",
+        "stagedOn": "2026-09-05",
+        "source": "packages/ai/model-registry/catalog/models.curation.json#verificationLog"
+      }
     },
     "gemini-3.1-flash-image": {
       "id": "gemini-3.1-flash-image",
@@ -1503,7 +1558,12 @@
       "speedOverride": "fast",
       "releasedOverride": "March 2026",
       "imagePerImageCost": 0.067,
-      "pricingNote": "Input $0.50/1M (text/image). Output $3.00/1M for text and thinking, $60.00/1M for images. Image output bills by resolution: 0.5K = 747 tokens ($0.045), 1K = 1120 tokens ($0.067), 2K = 1680 tokens ($0.101), 4K = 2520 tokens ($0.151). `imagePerImageCost` carries the 1K rate. Prices re-read 2026-09-01 and unchanged. Input budget CORRECTED 2026-09-01 from 1,000,000 to 131,072: Google's model card publishes an input token limit of 131,072 and an output token limit of 32,768. litellm reports 65,536 and so will keep flagging this row, Google's card is the authority, not the snapshot. CORRECTED 2026-08-06: this entry previously read inputCost 0.039 / outputCost 0, 0.039 is the RETIRED gemini-2.5-flash-image per-image rate sitting in a per-1M-token field, so every generation was metered at roughly a thousandth of cost and image output was billed as free. Sourced from the published Gemini API pricing table."
+      "pricingNote": "Input $0.50/1M (text/image). Output $3.00/1M for text and thinking, $60.00/1M for images. Image output bills by resolution: 0.5K = 747 tokens ($0.045), 1K = 1120 tokens ($0.067), 2K = 1680 tokens ($0.101), 4K = 2520 tokens ($0.151). `imagePerImageCost` carries the 1K rate. Prices re-read 2026-09-01 and unchanged. Input budget CORRECTED 2026-09-01 from 1,000,000 to 131,072: Google's model card publishes an input token limit of 131,072 and an output token limit of 32,768. litellm reports 65,536 and so will keep flagging this row, Google's card is the authority, not the snapshot. CORRECTED 2026-08-06: this entry previously read inputCost 0.039 / outputCost 0, 0.039 is the RETIRED gemini-2.5-flash-image per-image rate sitting in a per-1M-token field, so every generation was metered at roughly a thousandth of cost and image output was billed as free. Sourced from the published Gemini API pricing table.",
+      "lifecycle": {
+        "stage": "promoted",
+        "stagedOn": "2026-09-05",
+        "source": "packages/ai/model-registry/catalog/routing-policies.json#auto.slots.image_generation"
+      }
     },
     "gemini-3-pro-image": {
       "id": "gemini-3-pro-image",
@@ -1552,7 +1612,12 @@
         "caching": false
       },
       "speedOverride": "slow",
-      "releasedOverride": "May 28, 2026"
+      "releasedOverride": "May 28, 2026",
+      "lifecycle": {
+        "stage": "registered",
+        "stagedOn": "2026-09-05",
+        "source": "packages/ai/model-registry/catalog/models.curation.json#verificationLog"
+      }
     },
     "gemini-3.1-flash-lite-image": {
       "id": "gemini-3.1-flash-lite-image",
@@ -1602,7 +1667,12 @@
         "caching": false
       },
       "speedOverride": "fast",
-      "releasedOverride": "June 30, 2026"
+      "releasedOverride": "June 30, 2026",
+      "lifecycle": {
+        "stage": "registered",
+        "stagedOn": "2026-09-05",
+        "source": "packages/ai/model-registry/catalog/models.curation.json#verificationLog"
+      }
     },
     "deepseek-v4-flash": {
       "id": "deepseek-v4-flash",
@@ -1645,7 +1715,12 @@
       "providerCompatibility": {
         "forcedToolChoice": false
       },
-      "inputModalities": ["text"]
+      "inputModalities": ["text"],
+      "lifecycle": {
+        "stage": "promoted",
+        "stagedOn": "2026-09-05",
+        "source": "packages/ai/model-registry/catalog/routing-policies.json#auto.slots.reasoning_premium"
+      }
     },
     "deepseek-v4-pro": {
       "id": "deepseek-v4-pro",
@@ -1694,6 +1769,11 @@
       "releasedOverride": "August 13, 2026",
       "providerCompatibility": {
         "forcedToolChoice": false
+      },
+      "lifecycle": {
+        "stage": "evaluated",
+        "stagedOn": "2026-09-05",
+        "source": "models.dev#deepseek-v4-pro"
       }
     },
     "deepseek-v4-flash-vision-exp": {
@@ -1751,7 +1831,12 @@
       },
       "pricingNote": "The only DeepSeek model that accepts images, and the correct target for the DeepSeek vision task. Same peak and off-peak clock as deepseek-v4-flash: peak $0.44/1M cache-miss input, $1.32/1M output, $0.014/1M cache hit between 01:00-04:00 and 06:00-10:00 UTC Monday through Friday, exactly half in every other hour. The catalog carries the peak rate because it is the only figure never undercut. Images convert to input tokens by dimension at an upper bound of 384 tokens per image with no per-image fee. Experimental endpoint: DeepSeek publishes no sunset date but has retired a temporary endpoint at two weeks notice before, so treat availability as short-horizon. Effort levels are inherited from deepseek-v4-flash; the effort-mapping table names only the two text models. Verified against api-docs.deepseek.com, retrieved 2026-09-04.",
       "speedOverride": "very-fast",
-      "releasedOverride": "August 21, 2026"
+      "releasedOverride": "August 21, 2026",
+      "lifecycle": {
+        "stage": "registered",
+        "stagedOn": "2026-09-05",
+        "source": "packages/ai/model-registry/catalog/models.curation.json#verificationLog"
+      }
     },
     "qwen-3.5-flash": {
       "id": "qwen-3.5-flash",
@@ -1804,7 +1889,12 @@
         "caching": true
       },
       "speedOverride": "very-fast",
-      "releasedOverride": "February 2026"
+      "releasedOverride": "February 2026",
+      "lifecycle": {
+        "stage": "promoted",
+        "stagedOn": "2026-09-05",
+        "source": "packages/ai/model-registry/catalog/routing-policies.json#auto.slots.reasoning_economy"
+      }
     },
     "qwen-3.8-flash": {
       "id": "qwen-3.8-flash",
@@ -1856,7 +1946,12 @@
         "caching": true
       },
       "speedOverride": "very-fast",
-      "releasedOverride": "August 2026"
+      "releasedOverride": "August 2026",
+      "lifecycle": {
+        "stage": "registered",
+        "stagedOn": "2026-09-05",
+        "source": "packages/ai/model-registry/catalog/models.curation.json#verificationLog"
+      }
     },
     "sonar": {
       "id": "sonar",
@@ -1877,6 +1972,11 @@
       },
       "tierPolicy": {
         "minTier": "free"
+      },
+      "lifecycle": {
+        "stage": "evaluated",
+        "stagedOn": "2026-09-05",
+        "source": "models.dev#sonar"
       }
     },
     "sonar-reasoning-pro": {
@@ -1902,6 +2002,11 @@
           "togglePath": null,
           "budgetPath": null
         }
+      },
+      "lifecycle": {
+        "stage": "evaluated",
+        "stagedOn": "2026-09-05",
+        "source": "models.dev#sonar-reasoning-pro"
       }
     },
     "sonar-pro": {
@@ -1920,6 +2025,11 @@
       "reasoning": {
         "capable": false,
         "control": "none"
+      },
+      "lifecycle": {
+        "stage": "evaluated",
+        "stagedOn": "2026-09-05",
+        "source": "models.dev#sonar-pro"
       }
     },
     "sonar-deep-research": {
@@ -1950,6 +2060,11 @@
       },
       "tierPolicy": {
         "minTier": "pro"
+      },
+      "lifecycle": {
+        "stage": "evaluated",
+        "stagedOn": "2026-09-05",
+        "source": "models.dev#sonar-deep-research"
       }
     },
     "runway-gen-4": {
@@ -2037,7 +2152,12 @@
         "caching": false
       },
       "speedOverride": "medium",
-      "releasedOverride": "December 2025"
+      "releasedOverride": "December 2025",
+      "lifecycle": {
+        "stage": "registered",
+        "stagedOn": "2026-09-05",
+        "source": "packages/ai/model-registry/catalog/models.curation.json#verificationLog"
+      }
     },
     "seedance-2.5": {
       "id": "seedance-2.5",
@@ -2135,9 +2255,9 @@
           "unit": "video_tokens",
           "framesPerSecond": 24,
           "pixelsPerToken": 1024,
-          "usdPerToken": 1.07e-5,
-          "usdPerTokenWithoutAudio": 1.07e-5,
-          "usdPerTokenWithVideoInput": 6.4e-6
+          "usdPerToken": 0.0000107,
+          "usdPerTokenWithoutAudio": 0.0000107,
+          "usdPerTokenWithVideoInput": 0.0000064
         }
       },
       "pricingNote": "OpenRouter bills video tokens as width x height x 24 frames/second x duration / 1024. The with-audio and without-audio video-token SKUs are both $0.0000107/token; requests that carry a video reference bill at the cheaper $0.0000064/token with-video-input SKU. Every reservation uses the exact catalog pixel tuple rather than a flat resolution price. Verified against openrouter.ai, retrieved 2026-09-04.",
@@ -2167,7 +2287,12 @@
       "speedOverride": "slow",
       "releasedOverride": "August 7, 2026",
       "openWeight": false,
-      "license": "proprietary"
+      "license": "proprietary",
+      "lifecycle": {
+        "stage": "registered",
+        "stagedOn": "2026-09-05",
+        "source": "packages/ai/model-registry/catalog/models.curation.json#verificationLog"
+      }
     },
     "gpt-image-2": {
       "id": "gpt-image-2",
@@ -2185,7 +2310,12 @@
         "capable": false,
         "control": "none"
       },
-      "releasedOverride": "April 21, 2026"
+      "releasedOverride": "April 21, 2026",
+      "lifecycle": {
+        "stage": "registered",
+        "stagedOn": "2026-09-05",
+        "source": "packages/ai/model-registry/catalog/models.curation.json#verificationLog"
+      }
     },
     "gpt-4o-mini-tts": {
       "id": "gpt-4o-mini-tts",
@@ -2223,7 +2353,12 @@
       },
       "speedOverride": "fast",
       "releasedOverride": "March 20, 2025",
-      "pricingNote": "$0.60/1M input text tokens, $12/1M output audio tokens. Added to the Audio API on 2025-03-20; the gpt-4o-mini-tts-2025-12-15 snapshot became the default on 2026-01-13. NOT deprecated: it is absent from OpenAI's deprecations page, carries no deprecated badge on the models page, and the text-to-speech guide still names it the recommended text-to-speech model. It is the only model served on /v1/audio/speech. Verified 2026-09-04."
+      "pricingNote": "$0.60/1M input text tokens, $12/1M output audio tokens. Added to the Audio API on 2025-03-20; the gpt-4o-mini-tts-2025-12-15 snapshot became the default on 2026-01-13. NOT deprecated: it is absent from OpenAI's deprecations page, carries no deprecated badge on the models page, and the text-to-speech guide still names it the recommended text-to-speech model. It is the only model served on /v1/audio/speech. Verified 2026-09-04.",
+      "lifecycle": {
+        "stage": "registered",
+        "stagedOn": "2026-09-05",
+        "source": "packages/ai/model-registry/catalog/models.curation.json#verificationLog"
+      }
     },
     "gemini-3.8-flash": {
       "id": "gemini-3.8-flash",
@@ -2270,7 +2405,12 @@
       "tierPolicy": {
         "minTier": "basic"
       },
-      "releasedOverride": "September 2, 2026"
+      "releasedOverride": "September 2, 2026",
+      "lifecycle": {
+        "stage": "promoted",
+        "stagedOn": "2026-09-05",
+        "source": "packages/ai/model-registry/catalog/routing-policies.json#auto.slots.general_premium"
+      }
     },
     "gemini-3.6-flash": {
       "id": "gemini-3.6-flash",
@@ -2339,7 +2479,12 @@
         "caching": true
       },
       "speedOverride": "fast",
-      "releasedOverride": "July 21, 2026"
+      "releasedOverride": "July 21, 2026",
+      "lifecycle": {
+        "stage": "registered",
+        "stagedOn": "2026-09-05",
+        "source": "packages/ai/model-registry/catalog/models.curation.json#verificationLog"
+      }
     },
     "glm-5.3": {
       "id": "glm-5.3",
@@ -2376,6 +2521,11 @@
       },
       "tierPolicy": {
         "minTier": "pro"
+      },
+      "lifecycle": {
+        "stage": "promoted",
+        "stagedOn": "2026-09-05",
+        "source": "packages/ai/model-registry/catalog/routing-policies.json#auto.slots.escalation_coding"
       }
     },
     "glm-5.3-flash": {
@@ -2422,6 +2572,11 @@
       },
       "tierPolicy": {
         "minTier": "basic"
+      },
+      "lifecycle": {
+        "stage": "registered",
+        "stagedOn": "2026-09-05",
+        "source": "packages/ai/model-registry/catalog/models.curation.json#verificationLog"
       }
     },
     "qwen-3.7-plus": {
@@ -2490,7 +2645,12 @@
         "caching": true
       },
       "speedOverride": "fast",
-      "releasedOverride": "May 2026"
+      "releasedOverride": "May 2026",
+      "lifecycle": {
+        "stage": "promoted",
+        "stagedOn": "2026-09-05",
+        "source": "packages/ai/model-registry/catalog/routing-policies.json#auto.slots.reasoning_balanced"
+      }
     },
     "kimi-k3": {
       "id": "kimi-k3",
@@ -2530,7 +2690,12 @@
       "tierPolicy": {
         "minTier": "pro"
       },
-      "releasedOverride": "July 16, 2026"
+      "releasedOverride": "July 16, 2026",
+      "lifecycle": {
+        "stage": "registered",
+        "stagedOn": "2026-09-05",
+        "source": "packages/ai/model-registry/catalog/models.curation.json#verificationLog"
+      }
     },
     "kimi-k2.7-code": {
       "id": "kimi-k2.7-code",
@@ -2584,7 +2749,12 @@
         "caching": true
       },
       "pricingNote": "Single flat row with no input-length tiers: $0.95/1M cache-miss input, $0.19/1M cache-hit input, $4.00/1M output. Batch bills 60% of list. No cache-write fee is published and caching is automatic. Thinking is forced on: thinking.type accepts only enabled and there is no reasoning_effort. The 32,768 output figure is the documented default; Moonshot publishes no ceiling. Moonshot documents only kimi-k3 on its Messages API, so route this model through chat completions. Verified against platform.kimi.ai/docs/pricing/chat-k27-code, retrieved 2026-09-04.",
-      "speedOverride": "medium"
+      "speedOverride": "medium",
+      "lifecycle": {
+        "stage": "registered",
+        "stagedOn": "2026-09-05",
+        "source": "packages/ai/model-registry/catalog/models.curation.json#verificationLog"
+      }
     },
     "kimi-k2.6": {
       "id": "kimi-k2.6",
@@ -2640,7 +2810,12 @@
       },
       "pricingNote": "Single flat row with no input-length tiers: $0.95/1M cache-miss input, $0.16/1M cache-hit input, $4.00/1M output. Batch bills 60% of list. No cache-write fee is published and caching is automatic. The 32,768 output figure is the documented default; Moonshot publishes no ceiling and no knowledge cutoff. Older than kimi-k3 and below the Kimi family context floor, so it can never take the family slot. Moonshot documents only kimi-k3 on its Messages API, so route this model through chat completions. Verified against platform.kimi.ai/docs/pricing/chat-k26, retrieved 2026-09-04.",
       "speedOverride": "medium",
-      "releasedOverride": "April 20, 2026"
+      "releasedOverride": "April 20, 2026",
+      "lifecycle": {
+        "stage": "registered",
+        "stagedOn": "2026-09-05",
+        "source": "packages/ai/model-registry/catalog/models.curation.json#verificationLog"
+      }
     },
     "grok-4.6": {
       "id": "grok-4.6",
@@ -2704,7 +2879,12 @@
         "caching": true
       },
       "speedOverride": "fast",
-      "releasedOverride": "August 12, 2026"
+      "releasedOverride": "August 12, 2026",
+      "lifecycle": {
+        "stage": "registered",
+        "stagedOn": "2026-09-05",
+        "source": "packages/ai/model-registry/catalog/models.curation.json#verificationLog"
+      }
     },
     "veo-3.1": {
       "id": "veo-3.1",
@@ -2795,7 +2975,12 @@
         "caching": false
       },
       "speedOverride": "slow",
-      "releasedOverride": "October 15, 2025"
+      "releasedOverride": "October 15, 2025",
+      "lifecycle": {
+        "stage": "promoted",
+        "stagedOn": "2026-09-05",
+        "source": "packages/ai/model-registry/catalog/routing-policies.json#auto.slots.video_generation"
+      }
     },
     "veo-3.1-fast": {
       "id": "veo-3.1-fast",
@@ -2886,7 +3071,12 @@
         "caching": false
       },
       "speedOverride": "fast",
-      "releasedOverride": "October 15, 2025"
+      "releasedOverride": "October 15, 2025",
+      "lifecycle": {
+        "stage": "registered",
+        "stagedOn": "2026-09-05",
+        "source": "packages/ai/model-registry/catalog/models.curation.json#verificationLog"
+      }
     },
     "gpt-4o-transcribe": {
       "id": "gpt-4o-transcribe",
@@ -2924,7 +3114,12 @@
       },
       "speedOverride": "fast",
       "releasedOverride": "March 20, 2025",
-      "pricingNote": "$2.50/1M input, $10/1M output tokens; 16k context. Added to the Audio API on 2025-03-20. Shut down 2027-02-26 in favour of gpt-transcribe for file transcription and gpt-live-transcribe for realtime. File streaming with stream=true is supported and the model is served on /v1/realtime. Verified 2026-09-04."
+      "pricingNote": "$2.50/1M input, $10/1M output tokens; 16k context. Added to the Audio API on 2025-03-20. Shut down 2027-02-26 in favour of gpt-transcribe for file transcription and gpt-live-transcribe for realtime. File streaming with stream=true is supported and the model is served on /v1/realtime. Verified 2026-09-04.",
+      "lifecycle": {
+        "stage": "promoted",
+        "stagedOn": "2026-09-05",
+        "source": "packages/ai/model-registry/catalog/routing-policies.json#auto.slots.voice_transcription"
+      }
     },
     "gpt-4o-mini-transcribe": {
       "id": "gpt-4o-mini-transcribe",
@@ -2962,7 +3157,12 @@
       },
       "speedOverride": "fast",
       "releasedOverride": "March 20, 2025",
-      "pricingNote": "$1.25/1M input, $5/1M output tokens; 16k context. Added to the Audio API on 2025-03-20; default snapshot gpt-4o-mini-transcribe-2025-12-15. Shut down 2027-02-26 in favour of gpt-transcribe for file transcription and gpt-live-transcribe for realtime; the 2025-03-20 snapshot shuts down earlier, on 2027-01-20. File streaming with stream=true is supported and the model is served on /v1/realtime. Verified 2026-09-04."
+      "pricingNote": "$1.25/1M input, $5/1M output tokens; 16k context. Added to the Audio API on 2025-03-20; default snapshot gpt-4o-mini-transcribe-2025-12-15. Shut down 2027-02-26 in favour of gpt-transcribe for file transcription and gpt-live-transcribe for realtime; the 2025-03-20 snapshot shuts down earlier, on 2027-01-20. File streaming with stream=true is supported and the model is served on /v1/realtime. Verified 2026-09-04.",
+      "lifecycle": {
+        "stage": "registered",
+        "stagedOn": "2026-09-05",
+        "source": "packages/ai/model-registry/catalog/models.curation.json#verificationLog"
+      }
     },
     "minimax-m3": {
       "id": "minimax-m3",
@@ -3010,7 +3210,12 @@
         "codeExecution": false,
         "caching": true
       },
-      "cached_input": 0.06
+      "cached_input": 0.06,
+      "lifecycle": {
+        "stage": "registered",
+        "stagedOn": "2026-09-05",
+        "source": "packages/ai/model-registry/catalog/models.curation.json#verificationLog"
+      }
     },
     "minimax-m2.7": {
       "id": "minimax-m2.7",
@@ -3051,6 +3256,11 @@
         "research": false,
         "codeExecution": false,
         "caching": true
+      },
+      "lifecycle": {
+        "stage": "registered",
+        "stagedOn": "2026-09-05",
+        "source": "packages/ai/model-registry/catalog/models.curation.json#verificationLog"
       }
     },
     "veo-3.1-lite": {
@@ -3127,7 +3337,12 @@
         "caching": false
       },
       "speedOverride": "fast",
-      "releasedOverride": "March 31, 2026"
+      "releasedOverride": "March 31, 2026",
+      "lifecycle": {
+        "stage": "registered",
+        "stagedOn": "2026-09-05",
+        "source": "packages/ai/model-registry/catalog/models.curation.json#verificationLog"
+      }
     },
     "gemini-omni-flash-preview": {
       "id": "gemini-omni-flash-preview",
@@ -3167,7 +3382,12 @@
         "caching": false
       },
       "speedOverride": "fast",
-      "releasedOverride": "June 30, 2026"
+      "releasedOverride": "June 30, 2026",
+      "lifecycle": {
+        "stage": "registered",
+        "stagedOn": "2026-09-05",
+        "source": "packages/ai/model-registry/catalog/models.curation.json#verificationLog"
+      }
     },
     "gemini-3.5-live-translate-preview": {
       "id": "gemini-3.5-live-translate-preview",
@@ -3207,7 +3427,12 @@
         "caching": false
       },
       "speedOverride": "fast",
-      "releasedOverride": "June 2026"
+      "releasedOverride": "June 2026",
+      "lifecycle": {
+        "stage": "registered",
+        "stagedOn": "2026-09-05",
+        "source": "packages/ai/model-registry/catalog/models.curation.json#verificationLog"
+      }
     },
     "gemini-3.1-flash-live-preview": {
       "id": "gemini-3.1-flash-live-preview",
@@ -3259,7 +3484,12 @@
         "caching": false
       },
       "speedOverride": "fast",
-      "releasedOverride": "March 11, 2026"
+      "releasedOverride": "March 11, 2026",
+      "lifecycle": {
+        "stage": "registered",
+        "stagedOn": "2026-09-05",
+        "source": "packages/ai/model-registry/catalog/models.curation.json#verificationLog"
+      }
     },
     "gemini-3.1-flash-tts-preview": {
       "id": "gemini-3.1-flash-tts-preview",
@@ -3301,7 +3531,12 @@
         "caching": false
       },
       "speedOverride": "fast",
-      "releasedOverride": "April 13, 2026"
+      "releasedOverride": "April 13, 2026",
+      "lifecycle": {
+        "stage": "registered",
+        "stagedOn": "2026-09-05",
+        "source": "packages/ai/model-registry/catalog/models.curation.json#verificationLog"
+      }
     },
     "openrouter-auto": {
       "id": "openrouter-auto",
@@ -3325,7 +3560,12 @@
       "tierPolicy": {
         "minTier": "free"
       },
-      "releasedOverride": "November 8, 2023"
+      "releasedOverride": "November 8, 2023",
+      "lifecycle": {
+        "stage": "registered",
+        "stagedOn": "2026-09-05",
+        "source": "packages/ai/model-registry/catalog/models.curation.json#verificationLog"
+      }
     },
     "openrouter-auto-beta": {
       "id": "openrouter-auto-beta",
@@ -3372,7 +3612,12 @@
         "caching": false
       },
       "speedOverride": "medium",
-      "releasedOverride": "July 17, 2026"
+      "releasedOverride": "July 17, 2026",
+      "lifecycle": {
+        "stage": "registered",
+        "stagedOn": "2026-09-05",
+        "source": "packages/ai/model-registry/catalog/models.curation.json#verificationLog"
+      }
     },
     "openrouter-free": {
       "id": "openrouter-free",
@@ -3394,7 +3639,12 @@
       "tierPolicy": {
         "minTier": "free"
       },
-      "releasedOverride": "February 1, 2026"
+      "releasedOverride": "February 1, 2026",
+      "lifecycle": {
+        "stage": "registered",
+        "stagedOn": "2026-09-05",
+        "source": "packages/ai/model-registry/catalog/models.curation.json#verificationLog"
+      }
     },
     "gpt-oss-120b": {
       "id": "gpt-oss-120b",
@@ -3424,6 +3674,11 @@
       },
       "tierPolicy": {
         "minTier": "free"
+      },
+      "lifecycle": {
+        "stage": "promoted",
+        "stagedOn": "2026-09-05",
+        "source": "packages/ai/model-registry/catalog/routing-policies.json#auto.slots.free_workhorse"
       }
     },
     "gpt-oss-20b": {
@@ -3454,6 +3709,11 @@
       },
       "tierPolicy": {
         "minTier": "free"
+      },
+      "lifecycle": {
+        "stage": "promoted",
+        "stagedOn": "2026-09-05",
+        "source": "packages/ai/model-registry/catalog/routing-policies.json#auto.slots.free_workhorse_fast"
       }
     },
     "gpt-oss-safeguard-20b": {
@@ -3512,7 +3772,12 @@
         "caching": true
       },
       "speedOverride": "very-fast",
-      "releasedOverride": "October 29, 2025"
+      "releasedOverride": "October 29, 2025",
+      "lifecycle": {
+        "stage": "registered",
+        "stagedOn": "2026-09-05",
+        "source": "packages/ai/model-registry/catalog/models.curation.json#verificationLog"
+      }
     },
     "qwen-3.6-27b": {
       "id": "qwen-3.6-27b",
@@ -3569,7 +3834,12 @@
         "caching": false
       },
       "speedOverride": "very-fast",
-      "releasedOverride": "April 2026"
+      "releasedOverride": "April 2026",
+      "lifecycle": {
+        "stage": "registered",
+        "stagedOn": "2026-09-05",
+        "source": "packages/ai/model-registry/catalog/models.curation.json#verificationLog"
+      }
     },
     "qwen-3.8-27b": {
       "id": "qwen-3.8-27b",
@@ -3626,7 +3896,12 @@
         "caching": false
       },
       "speedOverride": "very-fast",
-      "releasedOverride": "August 2026"
+      "releasedOverride": "August 2026",
+      "lifecycle": {
+        "stage": "registered",
+        "stagedOn": "2026-09-05",
+        "source": "packages/ai/model-registry/catalog/models.curation.json#verificationLog"
+      }
     }
   },
   "tierAllowedModels": {

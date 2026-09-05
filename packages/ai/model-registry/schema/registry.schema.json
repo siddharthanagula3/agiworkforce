@@ -225,7 +225,16 @@
     "lifecycle": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["status", "availability", "deprecated", "releasedOn", "deprecatedOn"],
+      "required": [
+        "status",
+        "availability",
+        "deprecated",
+        "releasedOn",
+        "deprecatedOn",
+        "stage",
+        "stagedOn",
+        "stageSource"
+      ],
       "properties": {
         "status": {
           "$ref": "#/definitions/nonEmptyString"
@@ -254,6 +263,31 @@
         },
         "deprecated": {
           "type": "boolean"
+        },
+        "stage": {
+          "type": "string",
+          "enum": [
+            "discovered",
+            "registered",
+            "probed",
+            "benchmarked",
+            "evaluated",
+            "shadow",
+            "canary",
+            "promoted",
+            "observed",
+            "deprecated",
+            "removed"
+          ],
+          "description": "The lifecycle stage this model has actually reached."
+        },
+        "stagedOn": {
+          "$ref": "#/definitions/isoDate",
+          "description": "The calendar day the model entered its current stage."
+        },
+        "stageSource": {
+          "$ref": "#/definitions/nonEmptyString",
+          "description": "What justifies the stage: a slot, a probe record, or the source of the scores it was evaluated on."
         }
       }
     },

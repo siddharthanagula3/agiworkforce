@@ -682,7 +682,12 @@
         "explicitBreakpoints": true
       },
       "reasoningDots": 5,
-      "tierPolicy": { "minTier": "max" }
+      "tierPolicy": { "minTier": "max" },
+      "lifecycle": {
+        "stage": "promoted",
+        "stagedOn": "2026-09-05",
+        "source": "packages/ai/model-registry/catalog/routing-policies.json#auto.slots.flagship_general"
+      }
     },
     "gpt-5.6-terra": {
       "id": "gpt-5.6-terra",
@@ -779,7 +784,12 @@
         "explicitBreakpoints": true
       },
       "reasoningDots": 4,
-      "tierPolicy": { "minTier": "pro" }
+      "tierPolicy": { "minTier": "pro" },
+      "lifecycle": {
+        "stage": "promoted",
+        "stagedOn": "2026-09-05",
+        "source": "packages/ai/model-registry/catalog/routing-policies.json#auto.slots.general_balanced"
+      }
     },
     "gpt-5.6-luna": {
       "id": "gpt-5.6-luna",
@@ -876,7 +886,12 @@
         "explicitBreakpoints": true
       },
       "reasoningDots": 3,
-      "tierPolicy": { "minTier": "free" }
+      "tierPolicy": { "minTier": "free" },
+      "lifecycle": {
+        "stage": "registered",
+        "stagedOn": "2026-09-05",
+        "source": "packages/ai/model-registry/catalog/models.curation.json#verificationLog"
+      }
     },
     "claude-fable-5-1": {
       "id": "claude-fable-5-1",
@@ -934,7 +949,12 @@
         }
       },
       "tierPolicy": { "minTier": "max" },
-      "promptCacheMinimumTokens": 512
+      "promptCacheMinimumTokens": 512,
+      "lifecycle": {
+        "stage": "registered",
+        "stagedOn": "2026-09-05",
+        "source": "packages/ai/model-registry/catalog/models.curation.json#verificationLog"
+      }
     },
     "claude-opus-5": {
       "id": "claude-opus-5",
@@ -995,7 +1015,12 @@
       },
       "tierPolicy": { "minTier": "max" },
       "promptCacheMinimumTokens": 512,
-      "providerCompatibility": { "nativeWebFetch": false }
+      "providerCompatibility": { "nativeWebFetch": false },
+      "lifecycle": {
+        "stage": "promoted",
+        "stagedOn": "2026-09-05",
+        "source": "packages/ai/model-registry/catalog/routing-policies.json#auto.slots.flagship_coding"
+      }
     },
     "claude-sonnet-5": {
       "id": "claude-sonnet-5",
@@ -1050,7 +1075,12 @@
           "budgetPath": null
         }
       },
-      "tierPolicy": { "minTier": "pro" }
+      "tierPolicy": { "minTier": "pro" },
+      "lifecycle": {
+        "stage": "promoted",
+        "stagedOn": "2026-09-05",
+        "source": "packages/ai/model-registry/catalog/routing-policies.json#auto.slots.coding_balanced"
+      }
     },
     "claude-haiku-4-5": {
       "id": "claude-haiku-4-5",
@@ -1107,7 +1137,12 @@
         }
       },
       "tierPolicy": { "minTier": "pro" },
-      "promptCacheMinimumTokens": 4096
+      "promptCacheMinimumTokens": 4096,
+      "lifecycle": {
+        "stage": "registered",
+        "stagedOn": "2026-09-05",
+        "source": "packages/ai/model-registry/catalog/models.curation.json#verificationLog"
+      }
     },
     "gemini-embedding-2": {
       "id": "gemini-embedding-2",
@@ -1143,7 +1178,12 @@
       "pricingNote": "Standard text input $0.20/M tokens; Batch text input $0.10/M tokens. Image/audio/video prices vary by modality.",
       "openWeight": false,
       "license": "proprietary",
-      "maxInputTokens": 8192
+      "maxInputTokens": 8192,
+      "lifecycle": {
+        "stage": "promoted",
+        "stagedOn": "2026-09-05",
+        "source": "packages/ai/model-registry/catalog/routing-policies.json#auto.slots.embedding_default"
+      }
     },
     "gemini-3.1-pro-preview": {
       "id": "gemini-3.1-pro-preview",
@@ -1198,7 +1238,12 @@
           "budgetPath": "thinkingConfig.thinkingBudget"
         }
       },
-      "tierPolicy": { "minTier": "pro" }
+      "tierPolicy": { "minTier": "pro" },
+      "lifecycle": {
+        "stage": "promoted",
+        "stagedOn": "2026-09-05",
+        "source": "packages/ai/model-registry/catalog/routing-policies.json#auto.slots.long_context_balanced"
+      }
     },
     "gemini-3.5-flash-lite": {
       "id": "gemini-3.5-flash-lite",
@@ -1250,7 +1295,12 @@
           "budgetPath": "thinkingConfig.thinkingBudget"
         }
       },
-      "tierPolicy": { "minTier": "free" }
+      "tierPolicy": { "minTier": "free" },
+      "lifecycle": {
+        "stage": "promoted",
+        "stagedOn": "2026-09-05",
+        "source": "packages/ai/model-registry/catalog/routing-policies.json#auto.slots.general_fast"
+      }
     },
     "gemini-3.1-flash-lite": {
       "id": "gemini-3.1-flash-lite",
@@ -1304,7 +1354,12 @@
           "budgetPath": "thinkingConfig.thinkingBudget"
         }
       },
-      "tierPolicy": { "minTier": "basic" }
+      "tierPolicy": { "minTier": "basic" },
+      "lifecycle": {
+        "stage": "registered",
+        "stagedOn": "2026-09-05",
+        "source": "packages/ai/model-registry/catalog/models.curation.json#verificationLog"
+      }
     },
     "gemini-3.1-flash-image": {
       "id": "gemini-3.1-flash-image",
@@ -1342,7 +1397,12 @@
       "pricingNote": "Input $0.50/1M (text/image). Output $3.00/1M for text and thinking, $60.00/1M for images. Image output bills by resolution: 0.5K = 747 tokens ($0.045), 1K = 1120 tokens ($0.067), 2K = 1680 tokens ($0.101), 4K = 2520 tokens ($0.151). `imagePerImageCost` carries the 1K rate. Prices re-read 2026-09-01 and unchanged. Input budget CORRECTED 2026-09-01 from 1,000,000 to 131,072: Google's model card publishes an input token limit of 131,072 and an output token limit of 32,768. litellm reports 65,536 and so will keep flagging this row, Google's card is the authority, not the snapshot. CORRECTED 2026-08-06: this entry previously read inputCost 0.039 / outputCost 0, 0.039 is the RETIRED gemini-2.5-flash-image per-image rate sitting in a per-1M-token field, so every generation was metered at roughly a thousandth of cost and image output was billed as free. Sourced from the published Gemini API pricing table.",
       "openWeight": false,
       "license": "proprietary",
-      "reasoning": { "capable": false, "control": "none" }
+      "reasoning": { "capable": false, "control": "none" },
+      "lifecycle": {
+        "stage": "promoted",
+        "stagedOn": "2026-09-05",
+        "source": "packages/ai/model-registry/catalog/routing-policies.json#auto.slots.image_generation"
+      }
     },
     "gemini-3-pro-image": {
       "id": "gemini-3-pro-image",
@@ -1384,7 +1444,12 @@
       "license": "proprietary",
       "maxOutputTokens": 32768,
       "reasoning": { "capable": false, "control": "none" },
-      "tierPolicy": { "minTier": "pro" }
+      "tierPolicy": { "minTier": "pro" },
+      "lifecycle": {
+        "stage": "registered",
+        "stagedOn": "2026-09-05",
+        "source": "packages/ai/model-registry/catalog/models.curation.json#verificationLog"
+      }
     },
     "gemini-3.1-flash-lite-image": {
       "id": "gemini-3.1-flash-lite-image",
@@ -1427,7 +1492,12 @@
       "maxOutputTokens": 4096,
       "knowledgeCutoff": "2025-01",
       "reasoning": { "capable": false, "control": "none" },
-      "tierPolicy": { "minTier": "basic" }
+      "tierPolicy": { "minTier": "basic" },
+      "lifecycle": {
+        "stage": "registered",
+        "stagedOn": "2026-09-05",
+        "source": "packages/ai/model-registry/catalog/models.curation.json#verificationLog"
+      }
     },
     "deepseek-v4-flash": {
       "id": "deepseek-v4-flash",
@@ -1482,7 +1552,12 @@
         }
       },
       "tierPolicy": { "minTier": "pro" },
-      "providerCompatibility": { "forcedToolChoice": false }
+      "providerCompatibility": { "forcedToolChoice": false },
+      "lifecycle": {
+        "stage": "promoted",
+        "stagedOn": "2026-09-05",
+        "source": "packages/ai/model-registry/catalog/routing-policies.json#auto.slots.reasoning_premium"
+      }
     },
     "deepseek-v4-pro": {
       "id": "deepseek-v4-pro",
@@ -1543,7 +1618,12 @@
         }
       },
       "tierPolicy": { "minTier": "pro" },
-      "providerCompatibility": { "forcedToolChoice": false }
+      "providerCompatibility": { "forcedToolChoice": false },
+      "lifecycle": {
+        "stage": "evaluated",
+        "stagedOn": "2026-09-05",
+        "source": "models.dev#deepseek-v4-pro"
+      }
     },
     "deepseek-v4-flash-vision-exp": {
       "id": "deepseek-v4-flash-vision-exp",
@@ -1596,7 +1676,12 @@
           "budgetPath": null
         }
       },
-      "tierPolicy": { "minTier": "pro" }
+      "tierPolicy": { "minTier": "pro" },
+      "lifecycle": {
+        "stage": "registered",
+        "stagedOn": "2026-09-05",
+        "source": "packages/ai/model-registry/catalog/models.curation.json#verificationLog"
+      }
     },
     "qwen-3.5-flash": {
       "id": "qwen-3.5-flash",
@@ -1645,7 +1730,12 @@
           "budgetPath": null
         }
       },
-      "tierPolicy": { "minTier": "basic" }
+      "tierPolicy": { "minTier": "basic" },
+      "lifecycle": {
+        "stage": "promoted",
+        "stagedOn": "2026-09-05",
+        "source": "packages/ai/model-registry/catalog/routing-policies.json#auto.slots.reasoning_economy"
+      }
     },
     "qwen-3.8-flash": {
       "id": "qwen-3.8-flash",
@@ -1693,7 +1783,12 @@
           "budgetPath": "thinking_budget"
         }
       },
-      "tierPolicy": { "minTier": "basic" }
+      "tierPolicy": { "minTier": "basic" },
+      "lifecycle": {
+        "stage": "registered",
+        "stagedOn": "2026-09-05",
+        "source": "packages/ai/model-registry/catalog/models.curation.json#verificationLog"
+      }
     },
     "sonar": {
       "id": "sonar",
@@ -1730,7 +1825,8 @@
       "openWeight": false,
       "license": "proprietary",
       "reasoning": { "capable": false, "control": "none" },
-      "tierPolicy": { "minTier": "free" }
+      "tierPolicy": { "minTier": "free" },
+      "lifecycle": { "stage": "evaluated", "stagedOn": "2026-09-05", "source": "models.dev#sonar" }
     },
     "sonar-reasoning-pro": {
       "id": "sonar-reasoning-pro",
@@ -1775,6 +1871,11 @@
           "togglePath": null,
           "budgetPath": null
         }
+      },
+      "lifecycle": {
+        "stage": "evaluated",
+        "stagedOn": "2026-09-05",
+        "source": "models.dev#sonar-reasoning-pro"
       }
     },
     "sonar-pro": {
@@ -1811,7 +1912,12 @@
       "deprecation_date": "2026-09-27",
       "openWeight": false,
       "license": "proprietary",
-      "reasoning": { "capable": false, "control": "none" }
+      "reasoning": { "capable": false, "control": "none" },
+      "lifecycle": {
+        "stage": "evaluated",
+        "stagedOn": "2026-09-05",
+        "source": "models.dev#sonar-pro"
+      }
     },
     "sonar-deep-research": {
       "id": "sonar-deep-research",
@@ -1859,7 +1965,12 @@
           "budgetPath": null
         }
       },
-      "tierPolicy": { "minTier": "pro" }
+      "tierPolicy": { "minTier": "pro" },
+      "lifecycle": {
+        "stage": "evaluated",
+        "stagedOn": "2026-09-05",
+        "source": "models.dev#sonar-deep-research"
+      }
     },
     "runway-gen-4": {
       "id": "runway-gen-4",
@@ -1909,7 +2020,12 @@
       "pricingNote": "Runway Gen-4.5 bills 12 credits per second of output at $0.01 per credit, so $0.12/second flat for the default mp4 output format regardless of ratio. Text-to-video accepts ratio 1280:720 or 720:1280 only; image-to-video additionally accepts 1104:832, 960:960, 832:1104 and 1584:672, and requires both a prompt image and prompt text. Duration is an integer from 2-10 seconds on both endpoints. Professional output formats add a per-second surcharge the schema cannot key by format: prores and png_sequence add 5 credits per second (+$0.05), and every 10-bit or HDR profile adds 20 credits per second (+$0.20). The 40 credits per second tier above 4 megapixels is unreachable at these ratios. The model remains non-selectable until AGI verifies provider provisioning with a live 200 probe; default video routing stays on the verified Google Veo route. Verified against docs.dev.runwayml.com, retrieved 2026-09-04.",
       "availability": "unavailable",
       "unavailableReason": "Runway text-to-video provisioning has not been verified by a live AGI-owned account probe.",
-      "reasoning": { "capable": false, "control": "none" }
+      "reasoning": { "capable": false, "control": "none" },
+      "lifecycle": {
+        "stage": "registered",
+        "stagedOn": "2026-09-05",
+        "source": "packages/ai/model-registry/catalog/models.curation.json#verificationLog"
+      }
     },
     "seedance-2.5": {
       "id": "seedance-2.5",
@@ -1974,7 +2090,12 @@
       "pricingNote": "OpenRouter bills video tokens as width x height x 24 frames/second x duration / 1024. The with-audio and without-audio video-token SKUs are both $0.0000107/token; requests that carry a video reference bill at the cheaper $0.0000064/token with-video-input SKU. Every reservation uses the exact catalog pixel tuple rather than a flat resolution price. Verified against openrouter.ai, retrieved 2026-09-04.",
       "openWeight": false,
       "license": "proprietary",
-      "reasoning": { "capable": false, "control": "none" }
+      "reasoning": { "capable": false, "control": "none" },
+      "lifecycle": {
+        "stage": "registered",
+        "stagedOn": "2026-09-05",
+        "source": "packages/ai/model-registry/catalog/models.curation.json#verificationLog"
+      }
     },
     "gpt-image-2": {
       "id": "gpt-image-2",
@@ -2009,7 +2130,12 @@
       "deprecation_date": null,
       "imageApi": "openai",
       "pricingNote": "OpenAI image generation guide uses a calculator for gpt-image-2 output-token/cost estimation; common 1024x1024 estimates are $0.006 low, $0.053 medium, and $0.211 high. OpenAI publishes two separate per-1M-token rows for this model: an image row at $8.00 input, $2.00 cached input, $30.00 output, and a text row at $5.00 input, $1.25 cached input, no output price. This entry carries the image row throughout, so a cache read of $2.00 is correct and a third-party snapshot reporting $1.25 is quoting the text row rather than contradicting it, litellm exposes only the text cache-read field, so it will keep reporting this row as drift. Verified against https://developers.openai.com/api/docs/pricing, retrieved 2026-09-01.",
-      "reasoning": { "capable": false, "control": "none" }
+      "reasoning": { "capable": false, "control": "none" },
+      "lifecycle": {
+        "stage": "registered",
+        "stagedOn": "2026-09-05",
+        "source": "packages/ai/model-registry/catalog/models.curation.json#verificationLog"
+      }
     },
     "gpt-4o-mini-tts": {
       "id": "gpt-4o-mini-tts",
@@ -2042,7 +2168,12 @@
       "released": "March 20, 2025",
       "deprecation_date": null,
       "pricingNote": "$0.60/1M input text tokens, $12/1M output audio tokens. Added to the Audio API on 2025-03-20; the gpt-4o-mini-tts-2025-12-15 snapshot became the default on 2026-01-13. NOT deprecated: it is absent from OpenAI's deprecations page, carries no deprecated badge on the models page, and the text-to-speech guide still names it the recommended text-to-speech model. It is the only model served on /v1/audio/speech. Verified 2026-09-04.",
-      "reasoning": { "capable": false, "control": "none" }
+      "reasoning": { "capable": false, "control": "none" },
+      "lifecycle": {
+        "stage": "registered",
+        "stagedOn": "2026-09-05",
+        "source": "packages/ai/model-registry/catalog/models.curation.json#verificationLog"
+      }
     },
     "gemini-3.8-flash": {
       "id": "gemini-3.8-flash",
@@ -2103,7 +2234,12 @@
           "budgetPath": "thinkingConfig.thinkingBudget"
         }
       },
-      "tierPolicy": { "minTier": "basic" }
+      "tierPolicy": { "minTier": "basic" },
+      "lifecycle": {
+        "stage": "promoted",
+        "stagedOn": "2026-09-05",
+        "source": "packages/ai/model-registry/catalog/routing-policies.json#auto.slots.general_premium"
+      }
     },
     "gemini-3.6-flash": {
       "id": "gemini-3.6-flash",
@@ -2164,7 +2300,12 @@
           "budgetPath": "thinkingConfig.thinkingBudget"
         }
       },
-      "tierPolicy": { "minTier": "basic" }
+      "tierPolicy": { "minTier": "basic" },
+      "lifecycle": {
+        "stage": "registered",
+        "stagedOn": "2026-09-05",
+        "source": "packages/ai/model-registry/catalog/models.curation.json#verificationLog"
+      }
     },
     "glm-5.3": {
       "id": "glm-5.3",
@@ -2220,7 +2361,12 @@
           "budgetPath": null
         }
       },
-      "tierPolicy": { "minTier": "pro" }
+      "tierPolicy": { "minTier": "pro" },
+      "lifecycle": {
+        "stage": "promoted",
+        "stagedOn": "2026-09-05",
+        "source": "packages/ai/model-registry/catalog/routing-policies.json#auto.slots.escalation_coding"
+      }
     },
     "glm-5.3-flash": {
       "id": "glm-5.3-flash",
@@ -2281,7 +2427,12 @@
           "budgetPath": null
         }
       },
-      "tierPolicy": { "minTier": "basic" }
+      "tierPolicy": { "minTier": "basic" },
+      "lifecycle": {
+        "stage": "registered",
+        "stagedOn": "2026-09-05",
+        "source": "packages/ai/model-registry/catalog/models.curation.json#verificationLog"
+      }
     },
     "qwen-3.7-plus": {
       "id": "qwen-3.7-plus",
@@ -2345,7 +2496,12 @@
           "budgetPath": null
         }
       },
-      "tierPolicy": { "minTier": "pro" }
+      "tierPolicy": { "minTier": "pro" },
+      "lifecycle": {
+        "stage": "promoted",
+        "stagedOn": "2026-09-05",
+        "source": "packages/ai/model-registry/catalog/routing-policies.json#auto.slots.reasoning_balanced"
+      }
     },
     "kimi-k3": {
       "id": "kimi-k3",
@@ -2403,7 +2559,12 @@
           "budgetPath": null
         }
       },
-      "tierPolicy": { "minTier": "pro" }
+      "tierPolicy": { "minTier": "pro" },
+      "lifecycle": {
+        "stage": "registered",
+        "stagedOn": "2026-09-05",
+        "source": "packages/ai/model-registry/catalog/models.curation.json#verificationLog"
+      }
     },
     "kimi-k2.7-code": {
       "id": "kimi-k2.7-code",
@@ -2453,7 +2614,12 @@
           "budgetPath": null
         }
       },
-      "tierPolicy": { "minTier": "pro" }
+      "tierPolicy": { "minTier": "pro" },
+      "lifecycle": {
+        "stage": "registered",
+        "stagedOn": "2026-09-05",
+        "source": "packages/ai/model-registry/catalog/models.curation.json#verificationLog"
+      }
     },
     "kimi-k2.6": {
       "id": "kimi-k2.6",
@@ -2505,7 +2671,12 @@
           "budgetPath": null
         }
       },
-      "tierPolicy": { "minTier": "pro" }
+      "tierPolicy": { "minTier": "pro" },
+      "lifecycle": {
+        "stage": "registered",
+        "stagedOn": "2026-09-05",
+        "source": "packages/ai/model-registry/catalog/models.curation.json#verificationLog"
+      }
     },
     "grok-4.6": {
       "id": "grok-4.6",
@@ -2565,7 +2736,12 @@
           "budgetPath": null
         }
       },
-      "tierPolicy": { "minTier": "max" }
+      "tierPolicy": { "minTier": "max" },
+      "lifecycle": {
+        "stage": "registered",
+        "stagedOn": "2026-09-05",
+        "source": "packages/ai/model-registry/catalog/models.curation.json#verificationLog"
+      }
     },
     "veo-3.1": {
       "id": "veo-3.1",
@@ -2637,7 +2813,12 @@
         "supportsSeed": true
       },
       "pricingNote": "Veo 3.1 Standard with audio: $0.40/second at 720p or 1080p; $0.60/second at 4k. 1080p and 4k require 8-second generations.",
-      "reasoning": { "capable": false, "control": "none" }
+      "reasoning": { "capable": false, "control": "none" },
+      "lifecycle": {
+        "stage": "promoted",
+        "stagedOn": "2026-09-05",
+        "source": "packages/ai/model-registry/catalog/routing-policies.json#auto.slots.video_generation"
+      }
     },
     "veo-3.1-fast": {
       "id": "veo-3.1-fast",
@@ -2709,7 +2890,12 @@
         "supportsSeed": true
       },
       "pricingNote": "Veo 3.1 Fast with audio: $0.10/second at 720p, $0.12/second at 1080p, $0.30/second at 4k. 1080p and 4k require 8-second generations. Verified against ai.google.dev/gemini-api/docs/pricing on 2026-08-12.",
-      "reasoning": { "capable": false, "control": "none" }
+      "reasoning": { "capable": false, "control": "none" },
+      "lifecycle": {
+        "stage": "registered",
+        "stagedOn": "2026-09-05",
+        "source": "packages/ai/model-registry/catalog/models.curation.json#verificationLog"
+      }
     },
     "gpt-4o-transcribe": {
       "id": "gpt-4o-transcribe",
@@ -2742,7 +2928,12 @@
       "released": "March 20, 2025",
       "deprecation_date": "2027-02-26",
       "pricingNote": "$2.50/1M input, $10/1M output tokens; 16k context. Added to the Audio API on 2025-03-20. Shut down 2027-02-26 in favour of gpt-transcribe for file transcription and gpt-live-transcribe for realtime. File streaming with stream=true is supported and the model is served on /v1/realtime. Verified 2026-09-04.",
-      "reasoning": { "capable": false, "control": "none" }
+      "reasoning": { "capable": false, "control": "none" },
+      "lifecycle": {
+        "stage": "promoted",
+        "stagedOn": "2026-09-05",
+        "source": "packages/ai/model-registry/catalog/routing-policies.json#auto.slots.voice_transcription"
+      }
     },
     "gpt-4o-mini-transcribe": {
       "id": "gpt-4o-mini-transcribe",
@@ -2775,7 +2966,12 @@
       "released": "March 20, 2025",
       "deprecation_date": "2027-02-26",
       "pricingNote": "$1.25/1M input, $5/1M output tokens; 16k context. Added to the Audio API on 2025-03-20; default snapshot gpt-4o-mini-transcribe-2025-12-15. Shut down 2027-02-26 in favour of gpt-transcribe for file transcription and gpt-live-transcribe for realtime; the 2025-03-20 snapshot shuts down earlier, on 2027-01-20. File streaming with stream=true is supported and the model is served on /v1/realtime. Verified 2026-09-04.",
-      "reasoning": { "capable": false, "control": "none" }
+      "reasoning": { "capable": false, "control": "none" },
+      "lifecycle": {
+        "stage": "registered",
+        "stagedOn": "2026-09-05",
+        "source": "packages/ai/model-registry/catalog/models.curation.json#verificationLog"
+      }
     },
     "minimax-m3": {
       "id": "minimax-m3",
@@ -2821,7 +3017,12 @@
       "pricingNote": "Standard tier, permanent 50% discount: $0.30/1M input and $1.20/1M output at or below 512K input tokens, rising to $0.60/$2.40 above 512K. Cache reads are $0.06/1M at the base band and $0.12/1M above 512K. M3 is served by passive caching on the OpenAI-compatible route the product calls, and MiniMax publishes no cache-write fee for it. Verified against platform.minimax.io, retrieved 2026-09-04.",
       "openWeight": true,
       "maxOutputTokens": 524288,
-      "tierPolicy": { "minTier": "pro" }
+      "tierPolicy": { "minTier": "pro" },
+      "lifecycle": {
+        "stage": "registered",
+        "stagedOn": "2026-09-05",
+        "source": "packages/ai/model-registry/catalog/models.curation.json#verificationLog"
+      }
     },
     "minimax-m2.7": {
       "id": "minimax-m2.7",
@@ -2860,7 +3061,12 @@
       "pricingNote": "Flat rate with no context tiers: $0.30/1M input, $1.20/1M output, $0.06/1M cache read. The $0.375/1M cache-write price applies only to explicit cache_control caching on the Anthropic-compatible route; the OpenAI-compatible route this catalog calls uses passive caching and charges no write fee, so none is recorded. Text only and always thinking, older than MiniMax-M3 but still classed as current by MiniMax. No knowledge cutoff and no structured-output support are documented. Verified against platform.minimax.io, retrieved 2026-09-04.",
       "openWeight": true,
       "maxOutputTokens": 204800,
-      "tierPolicy": { "minTier": "pro" }
+      "tierPolicy": { "minTier": "pro" },
+      "lifecycle": {
+        "stage": "registered",
+        "stagedOn": "2026-09-05",
+        "source": "packages/ai/model-registry/catalog/models.curation.json#verificationLog"
+      }
     },
     "veo-3.1-lite": {
       "id": "veo-3.1-lite",
@@ -2918,7 +3124,12 @@
         "supportsSeed": true
       },
       "pricingNote": "Veo 3.1 Lite with audio: $0.05/second at 720p, $0.08/second at 1080p. 4k output is NOT supported on Lite. Paid tier only. Verified end to end against veo-3.1-lite-generate-preview on 2026-08-06 (200 + completed operation).",
-      "reasoning": { "capable": false, "control": "none" }
+      "reasoning": { "capable": false, "control": "none" },
+      "lifecycle": {
+        "stage": "registered",
+        "stagedOn": "2026-09-05",
+        "source": "packages/ai/model-registry/catalog/models.curation.json#verificationLog"
+      }
     },
     "gemini-omni-flash-preview": {
       "id": "gemini-omni-flash-preview",
@@ -2953,7 +3164,12 @@
       "videoPerSecondCost": 0.1,
       "pricingNote": "Paid tier only (no free tier). Input $1.50/1M (text/image/video/audio); output $9.00/1M text and $17.50/1M video. Video output bills at 5,792 tokens per second of 720p, an effective ~$0.10 per second. Sourced from the published Gemini API pricing table, 2026-08-06; prices re-read 2026-09-01 and unchanged. Input budget CORRECTED 2026-09-01 from 4,000 to 1,048,576, the context window Google publishes on the shared Gemini Omni Flash model card that this preview SKU's pricing entry links to, no model card exists at the preview id itself, and 4,000 was a placeholder shared with the veo-3.1 rows. litellm holds two entries for this model that disagree with each other: its gemini/ entry says 131,072 and its vertex_ai-language-models entry says 1,048,576, so the drift check will keep flagging the first one.",
       "availability": "preview",
-      "reasoning": { "capable": false, "control": "none" }
+      "reasoning": { "capable": false, "control": "none" },
+      "lifecycle": {
+        "stage": "registered",
+        "stagedOn": "2026-09-05",
+        "source": "packages/ai/model-registry/catalog/models.curation.json#verificationLog"
+      }
     },
     "gemini-3.5-live-translate-preview": {
       "id": "gemini-3.5-live-translate-preview",
@@ -2988,7 +3204,12 @@
       "pricingNote": "Low-latency real-time speech-to-speech translation, 70+ languages. Free tier is free of charge; paid tier $3.50/1M input and $21.00/1M output audio tokens, equivalently $0.0053/min in and $0.0315/min out. Audio bills at 25 tokens per second, an effective ~$0.0368 per minute. Sourced from the published Gemini API pricing table, 2026-08-06. INTERIM: adopted while OpenAI's live/realtime API is unreleased; revisit when that ships.",
       "maxOutputTokens": 65536,
       "availability": "preview",
-      "reasoning": { "capable": false, "control": "none" }
+      "reasoning": { "capable": false, "control": "none" },
+      "lifecycle": {
+        "stage": "registered",
+        "stagedOn": "2026-09-05",
+        "source": "packages/ai/model-registry/catalog/models.curation.json#verificationLog"
+      }
     },
     "gemini-3.1-flash-live-preview": {
       "id": "gemini-3.1-flash-live-preview",
@@ -3038,6 +3259,11 @@
           "togglePath": null,
           "budgetPath": "thinkingConfig.thinkingBudget"
         }
+      },
+      "lifecycle": {
+        "stage": "registered",
+        "stagedOn": "2026-09-05",
+        "source": "packages/ai/model-registry/catalog/models.curation.json#verificationLog"
       }
     },
     "gemini-3.1-flash-tts-preview": {
@@ -3075,7 +3301,12 @@
       "license": "proprietary",
       "maxOutputTokens": 16384,
       "availability": "preview",
-      "reasoning": { "capable": false, "control": "none" }
+      "reasoning": { "capable": false, "control": "none" },
+      "lifecycle": {
+        "stage": "registered",
+        "stagedOn": "2026-09-05",
+        "source": "packages/ai/model-registry/catalog/models.curation.json#verificationLog"
+      }
     },
     "openrouter-auto": {
       "id": "openrouter-auto",
@@ -3113,7 +3344,12 @@
       "openWeight": false,
       "license": "proprietary",
       "reasoning": { "capable": true, "control": "effort" },
-      "tierPolicy": { "minTier": "free" }
+      "tierPolicy": { "minTier": "free" },
+      "lifecycle": {
+        "stage": "registered",
+        "stagedOn": "2026-09-05",
+        "source": "packages/ai/model-registry/catalog/models.curation.json#verificationLog"
+      }
     },
     "openrouter-auto-beta": {
       "id": "openrouter-auto-beta",
@@ -3153,7 +3389,12 @@
       "license": "proprietary",
       "availability": "preview",
       "reasoning": { "capable": true, "control": "effort" },
-      "tierPolicy": { "minTier": "free" }
+      "tierPolicy": { "minTier": "free" },
+      "lifecycle": {
+        "stage": "registered",
+        "stagedOn": "2026-09-05",
+        "source": "packages/ai/model-registry/catalog/models.curation.json#verificationLog"
+      }
     },
     "openrouter-free": {
       "id": "openrouter-free",
@@ -3189,7 +3430,12 @@
       "openWeight": false,
       "license": "proprietary",
       "reasoning": { "capable": true, "control": "effort" },
-      "tierPolicy": { "minTier": "free" }
+      "tierPolicy": { "minTier": "free" },
+      "lifecycle": {
+        "stage": "registered",
+        "stagedOn": "2026-09-05",
+        "source": "packages/ai/model-registry/catalog/models.curation.json#verificationLog"
+      }
     },
     "gpt-oss-120b": {
       "id": "gpt-oss-120b",
@@ -3238,7 +3484,12 @@
           "budgetPath": null
         }
       },
-      "tierPolicy": { "minTier": "free" }
+      "tierPolicy": { "minTier": "free" },
+      "lifecycle": {
+        "stage": "promoted",
+        "stagedOn": "2026-09-05",
+        "source": "packages/ai/model-registry/catalog/routing-policies.json#auto.slots.free_workhorse"
+      }
     },
     "gpt-oss-20b": {
       "id": "gpt-oss-20b",
@@ -3287,7 +3538,12 @@
           "budgetPath": null
         }
       },
-      "tierPolicy": { "minTier": "free" }
+      "tierPolicy": { "minTier": "free" },
+      "lifecycle": {
+        "stage": "promoted",
+        "stagedOn": "2026-09-05",
+        "source": "packages/ai/model-registry/catalog/routing-policies.json#auto.slots.free_workhorse_fast"
+      }
     },
     "gpt-oss-safeguard-20b": {
       "id": "gpt-oss-safeguard-20b",
@@ -3341,7 +3597,12 @@
           "budgetPath": null
         }
       },
-      "tierPolicy": { "minTier": "free" }
+      "tierPolicy": { "minTier": "free" },
+      "lifecycle": {
+        "stage": "registered",
+        "stagedOn": "2026-09-05",
+        "source": "packages/ai/model-registry/catalog/models.curation.json#verificationLog"
+      }
     },
     "qwen-3.6-27b": {
       "id": "qwen-3.6-27b",
@@ -3394,7 +3655,12 @@
           "budgetPath": null
         }
       },
-      "tierPolicy": { "minTier": "free" }
+      "tierPolicy": { "minTier": "free" },
+      "lifecycle": {
+        "stage": "registered",
+        "stagedOn": "2026-09-05",
+        "source": "packages/ai/model-registry/catalog/models.curation.json#verificationLog"
+      }
     },
     "qwen-3.8-27b": {
       "id": "qwen-3.8-27b",
@@ -3447,7 +3713,12 @@
           "budgetPath": null
         }
       },
-      "tierPolicy": { "minTier": "free" }
+      "tierPolicy": { "minTier": "free" },
+      "lifecycle": {
+        "stage": "registered",
+        "stagedOn": "2026-09-05",
+        "source": "packages/ai/model-registry/catalog/models.curation.json#verificationLog"
+      }
     }
   },
   "tierAllowedModels": {
