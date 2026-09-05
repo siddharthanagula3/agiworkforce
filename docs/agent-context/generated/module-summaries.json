@@ -303,6 +303,12 @@
       "purpose": "Vendor-neutral database and identity data-layer boundary for AGI Workforce"
     },
     {
+      "name": "@agiworkforce/identity",
+      "path": "packages/platform/identity",
+      "kind": "package",
+      "purpose": "IdentityProvider port with a Clerk adapter, a browser-safe session-cookie entry and a testing adapter"
+    },
+    {
       "name": "@agiworkforce/key-value",
       "path": "packages/platform/key-value",
       "kind": "package",

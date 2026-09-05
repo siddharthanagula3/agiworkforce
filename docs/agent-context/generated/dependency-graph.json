@@ -19,6 +19,7 @@
       "@agiworkforce/guardian-github",
       "@agiworkforce/i18n",
       "@agiworkforce/icons",
+      "@agiworkforce/identity",
       "@agiworkforce/key-value",
       "@agiworkforce/licensing",
       "@agiworkforce/local-llm",
