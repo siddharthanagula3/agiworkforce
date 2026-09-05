@@ -19,11 +19,15 @@ const STATE_DESCRIPTION: Record<ToggleState, string> = {
   on: 'This browser will be notified when a run finishes.',
 };
 
-/**
- * The durable way back in after the one-time offer was dismissed or denied,
- * and the only place a user can turn this browser off again.
- */
-export function WebPushToggle() {
+export interface WebPushToggleState {
+  checked: boolean;
+  disabled: boolean;
+  blocked: boolean;
+  description: string;
+  onCheckedChange: (next: boolean) => void;
+}
+
+export function useWebPushToggle(): WebPushToggleState {
   const [state, setState] = useState<ToggleState>('unsupported');
   const [busy, setBusy] = useState(false);
 
@@ -64,16 +68,32 @@ export function WebPushToggle() {
 
   const interactive = state === 'off' || state === 'on';
 
+  return {
+    checked: state === 'on',
+    disabled: busy || !interactive,
+    blocked: state === 'blocked',
+    description: STATE_DESCRIPTION[state],
+    onCheckedChange: (next) => void change(next),
+  };
+}
+
+/**
+ * The durable way back in after the one-time offer was dismissed or denied,
+ * and the only place a user can turn this browser off again.
+ */
+export function WebPushToggle() {
+  const { checked, disabled, description, onCheckedChange } = useWebPushToggle();
+
   return (
     <div className="flex items-center justify-between gap-4">
       <div>
         <p className="text-sm font-medium">Browser notifications</p>
-        <p className="text-sm text-muted-foreground">{STATE_DESCRIPTION[state]}</p>
+        <p className="text-sm text-muted-foreground">{description}</p>
       </div>
       <Switch
-        checked={state === 'on'}
-        disabled={busy || !interactive}
-        onCheckedChange={(next) => void change(next)}
+        checked={checked}
+        disabled={disabled}
+        onCheckedChange={onCheckedChange}
         aria-label="Browser notifications"
       />
     </div>

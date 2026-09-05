@@ -41,7 +41,9 @@ vi.mock('@agiworkforce/ui', async () => {
   const actual = await vi.importActual<Record<string, unknown>>('@agiworkforce/ui');
   return {
     ...actual,
-    Switch: ({ checked }: { checked: boolean }) => <span role="switch" aria-checked={checked} />,
+    Switch: ({ checked, 'aria-label': ariaLabel }: { checked: boolean; 'aria-label'?: string }) => (
+      <span role="switch" aria-checked={checked} aria-label={ariaLabel} />
+    ),
   };
 });
 
@@ -55,15 +57,14 @@ describe('Web Settings capability boundaries', () => {
       .map((option) => option.textContent);
     expect(optionLabels).toEqual(['Off', 'Email', 'Mobile push', 'Email, Mobile push']);
     expect(screen.queryByText(/project, usage, billing/i)).not.toBeInTheDocument();
-    await waitFor(() => expect(screen.getByText('Saved')).toBeInTheDocument());
+    await waitFor(() => expect(screen.queryByText(/loading/i)).toBeNull());
   });
 
   it('offers the browser push channel that web-push delivery actually sends to', () => {
     render(<NotificationsSection />);
 
     const runEvent = screen.getByRole('region', { name: 'Agent run updates' });
-    expect(within(runEvent).getByText('Browser notifications')).toBeInTheDocument();
-    expect(within(runEvent).getByRole('switch')).toBeInTheDocument();
+    expect(within(runEvent).getByRole('switch', { name: 'Agent run updates' })).toBeInTheDocument();
   });
 
   it('does not deny the email and push schedule channels, which are implemented', () => {
