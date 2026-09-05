@@ -30,10 +30,19 @@ import { immer } from 'zustand/middleware/immer';
 
 export interface UIState {
   sidebarCollapsed: boolean;
+
+  /**
+   * The AGI Work autonomy disclosure has been dismissed. Deliberately NOT in
+   * `partialize` below: the disclosure names what a run may do on its own, so
+   * it is owed once per session rather than silenced forever by one click.
+   */
+  agiWorkAutonomyNoticeDismissed: boolean;
 }
 
 export interface UIActions {
   setSidebarCollapsed: (collapsed: boolean) => void;
+
+  dismissAgiWorkAutonomyNotice: () => void;
 
   /**
    * Sign-out cleanup verb. Invoked dynamically, `authentication-store.ts`
@@ -48,6 +57,7 @@ export type UIStore = UIState & UIActions;
 
 const INITIAL_STATE: UIState = {
   sidebarCollapsed: false,
+  agiWorkAutonomyNoticeDismissed: false,
 };
 
 const enableDevtools = process.env.NODE_ENV !== 'production';
@@ -63,6 +73,11 @@ export const useUIStore = create<UIStore>()(
             state.sidebarCollapsed = collapsed;
           }),
 
+        dismissAgiWorkAutonomyNotice: () =>
+          set((state) => {
+            state.agiWorkAutonomyNoticeDismissed = true;
+          }),
+
         reset: () =>
           set((state) => {
             Object.assign(state, INITIAL_STATE);
@@ -76,6 +91,7 @@ export const useUIStore = create<UIStore>()(
             typeof (persisted as UIState | undefined)?.sidebarCollapsed === 'boolean'
               ? (persisted as UIState).sidebarCollapsed
               : INITIAL_STATE.sidebarCollapsed,
+          agiWorkAutonomyNoticeDismissed: INITIAL_STATE.agiWorkAutonomyNoticeDismissed,
         }),
         partialize: (state) => ({
           sidebarCollapsed: state.sidebarCollapsed,
