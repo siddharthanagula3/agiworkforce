@@ -9,6 +9,7 @@ import {
   MODEL_ENVIRONMENTS,
   getCoreManualModelOptions,
   getAutoRoutingProfiles,
+  getAutoRoutingProfileTiers,
   getDefaultAutoRoutingProfile,
   getAllowedModelsForTier,
   getDefaultModelFor,
@@ -561,6 +562,16 @@ describe('model catalog helpers', () => {
     expect(profiles.every((profile) => profile.label.trim().length > 0)).toBe(true);
     expect(profiles.every((profile) => profile.description.trim().length > 0)).toBe(true);
     expect(getDefaultAutoRoutingProfile()).toEqual(profiles[0]);
+  });
+
+  it('exposes every routing profile as its own tier for a direct tier picker', () => {
+    const tiers = getAutoRoutingProfileTiers();
+
+    expect(tiers.map((tier) => tier.profile)).toEqual(['economy', 'balanced', 'premium']);
+    expect(new Set(tiers.map((tier) => tier.id)).size).toBe(tiers.length);
+    expect(tiers.every((tier) => tier.label.trim().length > 0)).toBe(true);
+    expect(tiers.every((tier) => tier.description.trim().length > 0)).toBe(true);
+    expect(tiers.map((tier) => tier.id)).not.toContain(getDefaultAutoRoutingProfile().id);
   });
 
   it('builds context limit and cost maps from canonical ids', () => {
