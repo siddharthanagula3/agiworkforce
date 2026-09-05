@@ -1781,7 +1781,24 @@ describe('MessageBubble', () => {
       expect(noSourcesNotice()).not.toBeInTheDocument();
     });
 
-    it('shows the notice on a search-enabled turn whose fetch attempt produced zero sources', () => {
+    it('shows the notice when the user asked for a search and it produced zero sources', () => {
+      render(
+        <MessageBubble
+          message={makeMessage({
+            role: 'assistant',
+            content: 'Based on what I already know, here is an answer.',
+            metadata: {
+              webSearchRequested: true,
+              webSearchAskedInText: true,
+              agentActivity: failedFetchActivity,
+            },
+          })}
+        />,
+      );
+      expect(noSourcesNotice()).toBeInTheDocument();
+    });
+
+    it('stays quiet when only the toggle asked and the search produced zero sources', () => {
       render(
         <MessageBubble
           message={makeMessage({
@@ -1794,7 +1811,7 @@ describe('MessageBubble', () => {
           })}
         />,
       );
-      expect(noSourcesNotice()).toBeInTheDocument();
+      expect(noSourcesNotice()).not.toBeInTheDocument();
     });
 
     it('stays quiet when web search was never requested for the turn', () => {

@@ -241,6 +241,13 @@ export interface MessageMetadata {
   citations?: Array<{ type?: string; cited_text?: string; title?: string; url?: string }>;
   /** True when this turn's request had web search on, stamped at send time. */
   webSearchRequested?: boolean;
+  /**
+   * True when the user's own words asked for a search, stamped at send time.
+   * A toggle left on is a standing preference, not an instruction for this
+   * turn, so only this distinguishes a search that failed the user from one
+   * they never asked for.
+   */
+  webSearchAskedInText?: boolean;
   /** Safe replay metadata used to regenerate a turn without storing raw skill bodies. */
   sendReplay?: SendReplayMetadata;
   /** Durable owner-scoped attachment descriptors; raw bytes stay in object storage. */

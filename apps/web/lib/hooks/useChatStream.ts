@@ -18,6 +18,7 @@ import {
   type KnownInteractiveCardKind,
 } from '@agiworkforce/types';
 import { parseInteractiveCardDelta } from '@agiworkforce/cloud-contracts';
+import { hasExplicitWebSearchIntent } from '@agiworkforce/search';
 import { useSession } from '@/lib/identity/client';
 import { toast } from 'sonner';
 import {
@@ -958,6 +959,7 @@ function beginEmptyTurnRetry(
       isStreaming: true,
       metadata: {
         ...(currentMetadata?.webSearchRequested ? { webSearchRequested: true } : {}),
+        ...(currentMetadata?.webSearchAskedInText ? { webSearchAskedInText: true } : {}),
         agentActivity: startAgentActivityLocally({
           sessionId: conversationId,
           turnId: assistantMessageId,
@@ -1048,6 +1050,7 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
   // once, up front, because buildAssistantMetadata rebuilds metadata from scratch
   // and would otherwise drop it on the final persist.
   const webSearchRequestedForTurn = liveMessageMetadata?.webSearchRequested === true;
+  const webSearchAskedInTextForTurn = liveMessageMetadata?.webSearchAskedInText === true;
   const interactiveCardsResumed = seedMetadata?.interactiveCardsResumed;
   let currentSearchResults: MessageMetadata['searchResults'] = seedMetadata?.searchResults;
   const citationsInModelMarkerOrder: NonNullable<MessageMetadata['citations']> = [
@@ -1500,6 +1503,9 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
     }
     if (webSearchRequestedForTurn) {
       metadata.webSearchRequested = true;
+    }
+    if (webSearchAskedInTextForTurn) {
+      metadata.webSearchAskedInText = true;
     }
     if (currentCodeExecutionResult) {
       metadata.codeExecutionResult = currentCodeExecutionResult;
@@ -2577,6 +2583,7 @@ export function useChatStream(): UseChatStreamReturn {
         ...(assistantParentId ? { parentId: assistantParentId } : {}),
         metadata: {
           ...(options.webSearch ? { webSearchRequested: true } : {}),
+          ...(hasExplicitWebSearchIntent(content) ? { webSearchAskedInText: true } : {}),
           agentActivity: startAgentActivityLocally({
             sessionId: conversationId,
             turnId: assistantMessageId,
