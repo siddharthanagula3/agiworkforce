@@ -28,6 +28,11 @@ the process, not the rules.
 
 ## How-to guides
 
+- [`execution-state.md`](./execution-state.md), the living evidence of
+  current work: objective, blockers, surfaces audited, dead UI, flows, CI,
+  surfaces ready or blocked.
+- [`ui-truth-map.md`](./ui-truth-map.md), every product route and control
+  with what it connects to and whether it is complete.
 - [`add-a-gateway.md`](./add-a-gateway.md), the five steps to add an OpenAI-
   or Anthropic-compatible gateway to the model registry without a dedicated
   provider package.
