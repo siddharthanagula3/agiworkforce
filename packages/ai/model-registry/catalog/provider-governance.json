@@ -9,7 +9,8 @@
       "residencyRegions": ["us"],
       "source": "https://agiworkforce.com/privacy",
       "verifiedOn": "2026-09-05",
-      "note": "AGI Managed Cloud's own retention: conversations are kept until the user deletes them or the account, with no automatic expiry enforced today; temporary chats expire in about 30 days by a daily job (https://agiworkforce.com/privacy). There is no mode where AGI itself stores nothing: the workspace zero-data-retention setting controls which upstream model providers a request may route to, not AGI's own storage of the conversation. Training commitment is at https://agiworkforce.com/terms section 05: AGI does not train AGI-owned models on submitted content, explicitly not a promise about a third-party model provider's handling. Data is hosted in the United States only; AGI does not offer EU or UK data residency (https://agiworkforce.com/privacy#s-08)."
+      "note": "AGI Managed Cloud's own retention: conversations are kept until the user deletes them or the account, with no automatic expiry enforced today; temporary chats expire in about 30 days by a daily job (https://agiworkforce.com/privacy). There is no mode where AGI itself stores nothing: the workspace zero-data-retention setting controls which upstream model providers a request may route to, not AGI's own storage of the conversation. Training commitment is at https://agiworkforce.com/terms section 05: AGI does not train AGI-owned models on submitted content, explicitly not a promise about a third-party model provider's handling. Data is hosted in the United States only; AGI does not offer EU or UK data residency (https://agiworkforce.com/privacy#s-08).",
+      "cacheTokenBillingClass": "unknown"
     },
     "openai": {
       "dataRetentionClass": "provider_default",
@@ -18,7 +19,11 @@
       "residencyRegions": ["us", "eu", "ae"],
       "source": "https://developers.openai.com/api/docs/guides/your-data",
       "verifiedOn": "2026-09-05",
-      "note": "Abuse-monitoring logs are held up to 30 days unless the law requires longer. Zero data retention needs prior approval and drops the request from those logs. Regional processing covers the United States, the European Economic Area with Switzerland, and the United Arab Emirates; the other listed regions are storage only."
+      "note": "Abuse-monitoring logs are held up to 30 days unless the law requires longer. Zero data retention needs prior approval and drops the request from those logs. Regional processing covers the United States, the European Economic Area with Switzerland, and the United Arab Emirates; the other listed regions are storage only.",
+      "cacheTokenBillingClass": "included_in_input",
+      "cacheTokenBillingSource": "https://developers.openai.com/api/docs/api-reference/chat/object",
+      "cacheTokenBillingVerifiedOn": "2026-09-05",
+      "cacheTokenBillingNote": "usage.prompt_tokens_details.cached_tokens is documented as \"Cached tokens present in the prompt,\" and the prompt-caching cost formula (https://developers.openai.com/api/docs/guides/prompt-caching) computes weighted cost as ordinary_input_tokens + cached_tokens * cacheInputMultiplier, deriving ordinary_input_tokens from prompt_tokens minus the cached and cache-write counts. Cached tokens are a subset of prompt_tokens, not additional to it."
     },
     "anthropic": {
       "dataRetentionClass": "provider_default",
@@ -27,7 +32,11 @@
       "residencyRegions": null,
       "source": "https://privacy.claude.com/en/articles/7996866-how-long-do-you-store-personal-data",
       "verifiedOn": "2026-09-05",
-      "note": "API inputs and outputs are deleted within 30 days of receipt, with exceptions for the Files API, custom agreements, usage-policy enforcement and legal holds. Zero data retention exists as a separate agreement. No residency region list is published."
+      "note": "API inputs and outputs are deleted within 30 days of receipt, with exceptions for the Files API, custom agreements, usage-policy enforcement and legal holds. Zero data retention exists as a separate agreement. No residency region list is published.",
+      "cacheTokenBillingClass": "additional_to_input",
+      "cacheTokenBillingSource": "https://platform.claude.com/docs/en/build-with-claude/prompt-caching",
+      "cacheTokenBillingVerifiedOn": "2026-09-05",
+      "cacheTokenBillingNote": "The usage object reports cache_read_input_tokens and cache_creation_input_tokens separately from input_tokens: total_input_tokens = cache_read_input_tokens + cache_creation_input_tokens + input_tokens, so cached tokens are additional to, not a subset of, input_tokens. This provider speaks the Anthropic Messages wire protocol directly and shares its usage-object shape (harnesses.json)."
     },
     "google": {
       "dataRetentionClass": "provider_default",
@@ -36,7 +45,11 @@
       "residencyRegions": null,
       "source": "https://ai.google.dev/gemini-api/terms",
       "verifiedOn": "2026-09-05",
-      "note": "On the paid tier Google does not use prompts, cached content, files or responses to improve its products. Prompts and responses are still logged for a limited period to detect abuse. The terms name no zero-retention option and no region list."
+      "note": "On the paid tier Google does not use prompts, cached content, files or responses to improve its products. Prompts and responses are still logged for a limited period to detect abuse. The terms name no zero-retention option and no region list.",
+      "cacheTokenBillingClass": "included_in_input",
+      "cacheTokenBillingSource": "https://ai.google.dev/api/generate-content",
+      "cacheTokenBillingVerifiedOn": "2026-09-05",
+      "cacheTokenBillingNote": "UsageMetadata.promptTokenCount is documented as: \"When cachedContent is set, this is still the total effective prompt size meaning this includes the number of tokens in the cached content.\" cachedContentTokenCount is a subset of promptTokenCount, not additional to it."
     },
     "open_router": {
       "dataRetentionClass": "conditional",
@@ -45,7 +58,8 @@
       "residencyRegions": ["us", "eu"],
       "source": "https://openrouter.ai/docs/features/privacy-and-logging",
       "verifiedOn": "2026-09-05",
-      "note": "Zero retention is a per-request data policy that restricts the upstream pool, not a default, and the docs state the setting has no bearing on OpenRouter's own handling. The condition on this class is that the adapter honours the requirement per request: a request carrying the zero-retention requirement is sent with the deny data-collection policy, and the harness declares that through the zeroDataRetentionOnRequest feature, which is what admission reads. A request without the requirement sends nothing, so the pool narrows only for the organizations that asked."
+      "note": "Zero retention is a per-request data policy that restricts the upstream pool, not a default, and the docs state the setting has no bearing on OpenRouter's own handling. The condition on this class is that the adapter honours the requirement per request: a request carrying the zero-retention requirement is sent with the deny data-collection policy, and the harness declares that through the zeroDataRetentionOnRequest feature, which is what admission reads. A request without the requirement sends nothing, so the pool narrows only for the organizations that asked.",
+      "cacheTokenBillingClass": "unknown"
     },
     "vercel_gateway": {
       "dataRetentionClass": "zero_retention",
@@ -54,7 +68,8 @@
       "residencyRegions": null,
       "source": "https://vercel.com/docs/ai-gateway/security-and-compliance/zdr",
       "verifiedOn": "2026-09-05",
-      "note": "Gateway's own layer only. Vercel states AI Gateway has a ZDR policy and does not retain prompts, outputs, or sensitive data, and that user data is immediately and permanently deleted after requests are completed; separately, AI Gateway does not use prompts or responses for training purposes (https://vercel.com/docs/ai-gateway/security-and-compliance/disallow-prompt-training). The paid team-wide or per-request zeroDataRetention toggle instead restricts routing to upstream model providers that have their own negotiated ZDR agreement with Vercel; that upstream policy varies by provider and applies per model, and is not covered by this record. No residency or region commitment is published for AI Gateway's own infrastructure."
+      "note": "Gateway's own layer only. Vercel states AI Gateway has a ZDR policy and does not retain prompts, outputs, or sensitive data, and that user data is immediately and permanently deleted after requests are completed; separately, AI Gateway does not use prompts or responses for training purposes (https://vercel.com/docs/ai-gateway/security-and-compliance/disallow-prompt-training). The paid team-wide or per-request zeroDataRetention toggle instead restricts routing to upstream model providers that have their own negotiated ZDR agreement with Vercel; that upstream policy varies by provider and applies per model, and is not covered by this record. No residency or region commitment is published for AI Gateway's own infrastructure.",
+      "cacheTokenBillingClass": "unknown"
     },
     "cheaperinference": {
       "dataRetentionClass": "zero_retention",
@@ -63,7 +78,8 @@
       "residencyRegions": null,
       "source": "https://platform.cheaperinference.com/legal/privacy",
       "verifiedOn": "2026-09-05",
-      "note": "Gateway's own layer only, operated by Keak. Cheaper Inference does not store prompt or response bodies in its application database; request content is transmitted to the serving provider and temporary uploads expire after one hour (https://platform.cheaperinference.com/legal/dpa). Operational logs are retained up to 12 months, account and billing records for the agreement term plus seven years. Keak states it does not use customer prompt or response bodies to train Keak models. Upstream model providers may retain inputs under their own practices; that policy applies per model and is not covered here. Data may be processed in the United States, Canada, Europe, and other countries where Keak operates, no fixed residency list is published."
+      "note": "Gateway's own layer only, operated by Keak. Cheaper Inference does not store prompt or response bodies in its application database; request content is transmitted to the serving provider and temporary uploads expire after one hour (https://platform.cheaperinference.com/legal/dpa). Operational logs are retained up to 12 months, account and billing records for the agreement term plus seven years. Keak states it does not use customer prompt or response bodies to train Keak models. Upstream model providers may retain inputs under their own practices; that policy applies per model and is not covered here. Data may be processed in the United States, Canada, Europe, and other countries where Keak operates, no fixed residency list is published.",
+      "cacheTokenBillingClass": "unknown"
     },
     "cheaperinference_anthropic": {
       "dataRetentionClass": "zero_retention",
@@ -72,14 +88,19 @@
       "residencyRegions": null,
       "source": "https://platform.cheaperinference.com/legal/privacy",
       "verifiedOn": "2026-09-05",
-      "note": "Same Cheaper Inference (Keak) governance as the cheaperinference chat-completions route, exposed here through the Anthropic Messages-compatible dialect at api.cheaperinference.com. See the cheaperinference record for the sourced quotes; upstream model provider policy applies per model and is not covered here."
+      "note": "Same Cheaper Inference (Keak) governance as the cheaperinference chat-completions route, exposed here through the Anthropic Messages-compatible dialect at api.cheaperinference.com. See the cheaperinference record for the sourced quotes; upstream model provider policy applies per model and is not covered here.",
+      "cacheTokenBillingClass": "additional_to_input",
+      "cacheTokenBillingSource": "https://platform.claude.com/docs/en/build-with-claude/prompt-caching",
+      "cacheTokenBillingVerifiedOn": "2026-09-05",
+      "cacheTokenBillingNote": "Routes this provider through the anthropic_messages harness protocol (packages/ai/model-registry/catalog/harnesses.json), so its usage object follows the same cache_read_input_tokens / cache_creation_input_tokens / input_tokens shape Anthropic's own API documents: cached tokens are additional to, not a subset of, input_tokens."
     },
     "xai": {
       "dataRetentionClass": "unknown",
       "zeroDataRetentionAvailability": "unknown",
       "trainsOnInputs": "unknown",
       "residencyRegions": null,
-      "note": "Checked and could not read: https://x.ai/legal/privacy-policy (403), https://x.ai/legal/privacy-statement (403), https://x.ai/legal/enterprise-privacy-policy (403), https://x.ai (403), https://docs.x.ai/ (200 but no data-policy content in the fetched nav or footer), https://docs.x.ai/docs/data-and-privacy (404), https://grok.com/privacy (403). x.ai's site returned 403 to automated fetch throughout this session; no primary source text was recoverable."
+      "note": "Checked and could not read: https://x.ai/legal/privacy-policy (403), https://x.ai/legal/privacy-statement (403), https://x.ai/legal/enterprise-privacy-policy (403), https://x.ai (403), https://docs.x.ai/ (200 but no data-policy content in the fetched nav or footer), https://docs.x.ai/docs/data-and-privacy (404), https://grok.com/privacy (403). x.ai's site returned 403 to automated fetch throughout this session; no primary source text was recoverable.",
+      "cacheTokenBillingClass": "unknown"
     },
     "deepseek": {
       "dataRetentionClass": "provider_default",
@@ -88,7 +109,8 @@
       "residencyRegions": ["cn"],
       "source": "https://cdn.deepseek.com/policies/en-US/deepseek-privacy-policy.html",
       "verifiedOn": "2026-09-05",
-      "note": "General DeepSeek privacy policy and terms of use, not an API-specific document; api-docs.deepseek.com and the FAQ at static.deepseek.com/faq (client-rendered, unreadable by fetch) had no distinct API-tier retention statement. Privacy policy states DeepSeek directly collects, processes and stores personal data in the People's Republic of China, and may use data to train and improve its machine learning models and algorithms. Users have the right to opt out of using their data for training, via the Improve the model for everyone toggle described in the Terms of Use (https://cdn.deepseek.com/policies/en-US/deepseek-terms-of-use.html) section 4.3, which frames the use as minimal extent, encrypted and de-identified. No explicit zero-retention API feature or fixed retention duration is published."
+      "note": "General DeepSeek privacy policy and terms of use, not an API-specific document; api-docs.deepseek.com and the FAQ at static.deepseek.com/faq (client-rendered, unreadable by fetch) had no distinct API-tier retention statement. Privacy policy states DeepSeek directly collects, processes and stores personal data in the People's Republic of China, and may use data to train and improve its machine learning models and algorithms. Users have the right to opt out of using their data for training, via the Improve the model for everyone toggle described in the Terms of Use (https://cdn.deepseek.com/policies/en-US/deepseek-terms-of-use.html) section 4.3, which frames the use as minimal extent, encrypted and de-identified. No explicit zero-retention API feature or fixed retention duration is published.",
+      "cacheTokenBillingClass": "unknown"
     },
     "deepseek_anthropic": {
       "dataRetentionClass": "provider_default",
@@ -97,28 +119,38 @@
       "residencyRegions": ["cn"],
       "source": "https://cdn.deepseek.com/policies/en-US/deepseek-privacy-policy.html",
       "verifiedOn": "2026-09-05",
-      "note": "Same DeepSeek governance as the primary deepseek route, exposed through the Anthropic Messages-compatible dialect. See the deepseek record for the sourced quotes; no separate API-tier policy was found."
+      "note": "Same DeepSeek governance as the primary deepseek route, exposed through the Anthropic Messages-compatible dialect. See the deepseek record for the sourced quotes; no separate API-tier policy was found.",
+      "cacheTokenBillingClass": "additional_to_input",
+      "cacheTokenBillingSource": "https://platform.claude.com/docs/en/build-with-claude/prompt-caching",
+      "cacheTokenBillingVerifiedOn": "2026-09-05",
+      "cacheTokenBillingNote": "Routes this provider through the anthropic_messages harness protocol (packages/ai/model-registry/catalog/harnesses.json), so its usage object follows the same cache_read_input_tokens / cache_creation_input_tokens / input_tokens shape Anthropic's own API documents: cached tokens are additional to, not a subset of, input_tokens."
     },
     "qwen": {
       "dataRetentionClass": "unknown",
       "zeroDataRetentionAvailability": "unknown",
       "trainsOnInputs": "unknown",
       "residencyRegions": null,
-      "note": "Checked and could not read: https://www.alibabacloud.com/help/en/model-studio/user-privacy-protection (404), https://www.alibabacloud.com/help/en/model-studio/data-security (404), https://qwen.ai/privacy (client-rendered shell, no policy text recoverable). Qwen routes through Alibaba Cloud Model Studio at dashscope.aliyuncs.com; its documentation pages are heavily client-rendered and returned no policy text to automated fetch this session."
+      "note": "Checked and could not read: https://www.alibabacloud.com/help/en/model-studio/user-privacy-protection (404), https://www.alibabacloud.com/help/en/model-studio/data-security (404), https://qwen.ai/privacy (client-rendered shell, no policy text recoverable). Qwen routes through Alibaba Cloud Model Studio at dashscope.aliyuncs.com; its documentation pages are heavily client-rendered and returned no policy text to automated fetch this session.",
+      "cacheTokenBillingClass": "unknown"
     },
     "moonshot": {
       "dataRetentionClass": "unknown",
       "zeroDataRetentionAvailability": "unknown",
       "trainsOnInputs": "unknown",
       "residencyRegions": null,
-      "note": "Checked and could not read: https://platform.moonshot.ai/docs/agreement/privacy-policy (redirects to platform.kimi.ai, page loaded but returned no policy text, likely client-rendered). Moonshot's docs site did not yield readable policy content to automated fetch this session."
+      "note": "Checked and could not read: https://platform.moonshot.ai/docs/agreement/privacy-policy (redirects to platform.kimi.ai, page loaded but returned no policy text, likely client-rendered). Moonshot's docs site did not yield readable policy content to automated fetch this session.",
+      "cacheTokenBillingClass": "unknown"
     },
     "moonshot_anthropic": {
       "dataRetentionClass": "unknown",
       "zeroDataRetentionAvailability": "unknown",
       "trainsOnInputs": "unknown",
       "residencyRegions": null,
-      "note": "Same Moonshot AI (Kimi) governance gap as the moonshot chat-completions route; see that record. No policy text was recoverable from platform.moonshot.ai or platform.kimi.ai this session."
+      "note": "Same Moonshot AI (Kimi) governance gap as the moonshot chat-completions route; see that record. No policy text was recoverable from platform.moonshot.ai or platform.kimi.ai this session.",
+      "cacheTokenBillingClass": "additional_to_input",
+      "cacheTokenBillingSource": "https://platform.claude.com/docs/en/build-with-claude/prompt-caching",
+      "cacheTokenBillingVerifiedOn": "2026-09-05",
+      "cacheTokenBillingNote": "Routes this provider through the anthropic_messages harness protocol (packages/ai/model-registry/catalog/harnesses.json), so its usage object follows the same cache_read_input_tokens / cache_creation_input_tokens / input_tokens shape Anthropic's own API documents: cached tokens are additional to, not a subset of, input_tokens."
     },
     "perplexity": {
       "dataRetentionClass": "zero_retention",
@@ -127,21 +159,27 @@
       "residencyRegions": ["us"],
       "source": "https://docs.perplexity.ai/faq/faq",
       "verifiedOn": "2026-09-05",
-      "note": "By default, the API has zero day retention of user prompt data, which is never used for AI training. Perplexity does not retain any query data sent through the API and does not train on any of it. Compute is hosted via Amazon Web Services in North America, recorded here as us; the FAQ does not distinguish United States from Canada specifically."
+      "note": "By default, the API has zero day retention of user prompt data, which is never used for AI training. Perplexity does not retain any query data sent through the API and does not train on any of it. Compute is hosted via Amazon Web Services in North America, recorded here as us; the FAQ does not distinguish United States from Canada specifically.",
+      "cacheTokenBillingClass": "unknown"
     },
     "zhipu": {
       "dataRetentionClass": "unknown",
       "zeroDataRetentionAvailability": "unknown",
       "trainsOnInputs": "unknown",
       "residencyRegions": null,
-      "note": "Checked and could not read: https://open.bigmodel.cn/dev/law (redirects to docs.bigmodel.cn), https://docs.bigmodel.cn/ (index only, no privacy section), https://docs.bigmodel.cn/cn/guide/faq/data-security (404), https://z.ai/privacy-policy (404). Zhipu routes through api.z.ai; its documentation and marketing sites did not yield readable policy content to automated fetch this session."
+      "note": "Checked and could not read: https://open.bigmodel.cn/dev/law (redirects to docs.bigmodel.cn), https://docs.bigmodel.cn/ (index only, no privacy section), https://docs.bigmodel.cn/cn/guide/faq/data-security (404), https://z.ai/privacy-policy (404). Zhipu routes through api.z.ai; its documentation and marketing sites did not yield readable policy content to automated fetch this session.",
+      "cacheTokenBillingClass": "unknown"
     },
     "zhipu_anthropic": {
       "dataRetentionClass": "unknown",
       "zeroDataRetentionAvailability": "unknown",
       "trainsOnInputs": "unknown",
       "residencyRegions": null,
-      "note": "Same Zhipu AI (Z.ai) governance gap as the zhipu chat-completions route; see that record."
+      "note": "Same Zhipu AI (Z.ai) governance gap as the zhipu chat-completions route; see that record.",
+      "cacheTokenBillingClass": "additional_to_input",
+      "cacheTokenBillingSource": "https://platform.claude.com/docs/en/build-with-claude/prompt-caching",
+      "cacheTokenBillingVerifiedOn": "2026-09-05",
+      "cacheTokenBillingNote": "Routes this provider through the anthropic_messages harness protocol (packages/ai/model-registry/catalog/harnesses.json), so its usage object follows the same cache_read_input_tokens / cache_creation_input_tokens / input_tokens shape Anthropic's own API documents: cached tokens are additional to, not a subset of, input_tokens."
     },
     "bedrock": {
       "dataRetentionClass": "conditional",
@@ -150,14 +188,16 @@
       "residencyRegions": null,
       "source": "https://docs.aws.amazon.com/bedrock/latest/userguide/data-retention.html",
       "verifiedOn": "2026-09-05",
-      "note": "Gateway's own layer (AWS), not the upstream model provider. Retention is set by a data_retention_mode the customer configures at account or project scope: none is zero data retention, no request or response data is written to durable storage by AWS or shared with the model provider; default applies the model's own retention behavior; aws_review and legacy provider_data_share retain content up to 30 days within the AWS boundary for AWS-performed human review some model providers require as a condition of access, content is never shared with the provider. Some models require aws_review as their minimum and do not permit none without a support-assisted eligibility process, contact your AWS account manager to discuss eligibility. AWS FAQ states AWS and third-party model providers will not use any inputs to or outputs from Amazon Bedrock to train Amazon Nova, Amazon Titan, or any third-party models (https://aws.amazon.com/bedrock/faqs/). Bedrock is offered across many AWS regions the customer selects for inference; no fixed region list is recorded here. Upstream model provider policy still applies per model and is not covered by this record."
+      "note": "Gateway's own layer (AWS), not the upstream model provider. Retention is set by a data_retention_mode the customer configures at account or project scope: none is zero data retention, no request or response data is written to durable storage by AWS or shared with the model provider; default applies the model's own retention behavior; aws_review and legacy provider_data_share retain content up to 30 days within the AWS boundary for AWS-performed human review some model providers require as a condition of access, content is never shared with the provider. Some models require aws_review as their minimum and do not permit none without a support-assisted eligibility process, contact your AWS account manager to discuss eligibility. AWS FAQ states AWS and third-party model providers will not use any inputs to or outputs from Amazon Bedrock to train Amazon Nova, Amazon Titan, or any third-party models (https://aws.amazon.com/bedrock/faqs/). Bedrock is offered across many AWS regions the customer selects for inference; no fixed region list is recorded here. Upstream model provider policy still applies per model and is not covered by this record.",
+      "cacheTokenBillingClass": "unknown"
     },
     "nvidia_nim": {
       "dataRetentionClass": "unknown",
       "zeroDataRetentionAvailability": "unknown",
       "trainsOnInputs": "unknown",
       "residencyRegions": null,
-      "note": "Read the NVIDIA Technology Access Terms of Use (https://assets.ngc.nvidia.com/products/api-catalog/legal/NVIDIA_Technology_Access_TOU.pdf), which governs the API Catalog and build.nvidia.com generally; its User Content licence grants NVIDIA rights to use submitted content to modify and improve NVIDIA products or services or the technology underlying the Technology, which does not amount to a clear no-training commitment, and the TOU itself says a separate Product Agreement may govern specific NVIDIA Services and would supersede it. Also checked: https://www.nvidia.com/en-us/about-nvidia/privacy-policy/ (retention section covers marketing and account engagement, not API data, no API-specific statement), https://build.nvidia.com/legal/privacy-policy (404), https://build.nvidia.com/docs/data-privacy (404), https://docs.nvidia.com/nim/data-privacy.html (404). No API-specific data retention, training, or residency statement was found this session."
+      "note": "Read the NVIDIA Technology Access Terms of Use (https://assets.ngc.nvidia.com/products/api-catalog/legal/NVIDIA_Technology_Access_TOU.pdf), which governs the API Catalog and build.nvidia.com generally; its User Content licence grants NVIDIA rights to use submitted content to modify and improve NVIDIA products or services or the technology underlying the Technology, which does not amount to a clear no-training commitment, and the TOU itself says a separate Product Agreement may govern specific NVIDIA Services and would supersede it. Also checked: https://www.nvidia.com/en-us/about-nvidia/privacy-policy/ (retention section covers marketing and account engagement, not API data, no API-specific statement), https://build.nvidia.com/legal/privacy-policy (404), https://build.nvidia.com/docs/data-privacy (404), https://docs.nvidia.com/nim/data-privacy.html (404). No API-specific data retention, training, or residency statement was found this session.",
+      "cacheTokenBillingClass": "unknown"
     },
     "groq": {
       "dataRetentionClass": "provider_default",
@@ -166,14 +206,16 @@
       "residencyRegions": null,
       "source": "https://console.groq.com/docs/legal/customer-data-processing-addendum",
       "verifiedOn": "2026-09-05",
-      "note": "Groq's general privacy policy explicitly excludes GroqCloud, which is instead governed by the Groq Services Agreement and this Customer Data Processing Addendum. The DPA states data is retained for the time period needed to accomplish the purposes of processing unless applicable law requires longer, and that the customer may request deletion of personal data within a maximum period of 180 days. No dedicated zero-data-retention API feature is published, only this request-based deletion within up to 180 days, so this is recorded as unavailable rather than on_request. The DPA restricts processing to providing, maintaining and supporting the Cloud Services and to the customer's documented instructions, but does not explicitly state whether Groq trains models on customer data, so trainsOnInputs is left unknown. Personal data may be transferred to and processed in the United States and other countries where Groq or its subprocessors maintain processing operations, no fixed region list."
+      "note": "Groq's general privacy policy explicitly excludes GroqCloud, which is instead governed by the Groq Services Agreement and this Customer Data Processing Addendum. The DPA states data is retained for the time period needed to accomplish the purposes of processing unless applicable law requires longer, and that the customer may request deletion of personal data within a maximum period of 180 days. No dedicated zero-data-retention API feature is published, only this request-based deletion within up to 180 days, so this is recorded as unavailable rather than on_request. The DPA restricts processing to providing, maintaining and supporting the Cloud Services and to the customer's documented instructions, but does not explicitly state whether Groq trains models on customer data, so trainsOnInputs is left unknown. Personal data may be transferred to and processed in the United States and other countries where Groq or its subprocessors maintain processing operations, no fixed region list.",
+      "cacheTokenBillingClass": "unknown"
     },
     "minimax": {
       "dataRetentionClass": "unknown",
       "zeroDataRetentionAvailability": "unknown",
       "trainsOnInputs": "unknown",
       "residencyRegions": null,
-      "note": "Checked and could not read: https://www.minimax.io/platform/document/platform%20introduction?key=privacy, https://platform.minimax.io/document/platform%20introduction?key=privacy, https://www.minimax.io/platform/protocol/privacy-policy, https://platform.minimax.io/protocol/privacy-policy (all client-rendered shells, no policy text recoverable), https://intl.minimaxi.com/protocol/privacy-policy (TLS certificate error). MiniMax's API platform documentation is heavily client-rendered and returned no policy text to automated fetch this session."
+      "note": "Checked and could not read: https://www.minimax.io/platform/document/platform%20introduction?key=privacy, https://platform.minimax.io/document/platform%20introduction?key=privacy, https://www.minimax.io/platform/protocol/privacy-policy, https://platform.minimax.io/protocol/privacy-policy (all client-rendered shells, no policy text recoverable), https://intl.minimaxi.com/protocol/privacy-policy (TLS certificate error). MiniMax's API platform documentation is heavily client-rendered and returned no policy text to automated fetch this session.",
+      "cacheTokenBillingClass": "unknown"
     },
     "workers_ai": {
       "dataRetentionClass": "conditional",
@@ -182,14 +224,16 @@
       "residencyRegions": null,
       "source": "https://developers.cloudflare.com/workers-ai/platform/data-usage/",
       "verifiedOn": "2026-09-05",
-      "note": "Workers AI runs open-weight models directly on Cloudflare's own infrastructure behind the AI Gateway compat endpoint; there is no separate third-party upstream provider layer for this route the way there is for vercel_gateway or bedrock. Cloudflare does not use customer content to train any AI models made available on Workers AI or to improve any Cloudflare or third-party services, and would not do so without explicit consent. AI Gateway request and response logs persist by default for an account-configured duration and can be turned off account-wide in dashboard settings, or per request via the cf-aig-collect-log:false header (drop all logging) or cf-aig-collect-log-payload:false (drop stored bodies, keep metadata) (https://developers.cloudflare.com/ai-gateway/observability/logging/). No residency or region commitment is published for this route."
+      "note": "Workers AI runs open-weight models directly on Cloudflare's own infrastructure behind the AI Gateway compat endpoint; there is no separate third-party upstream provider layer for this route the way there is for vercel_gateway or bedrock. Cloudflare does not use customer content to train any AI models made available on Workers AI or to improve any Cloudflare or third-party services, and would not do so without explicit consent. AI Gateway request and response logs persist by default for an account-configured duration and can be turned off account-wide in dashboard settings, or per request via the cf-aig-collect-log:false header (drop all logging) or cf-aig-collect-log-payload:false (drop stored bodies, keep metadata) (https://developers.cloudflare.com/ai-gateway/observability/logging/). No residency or region commitment is published for this route.",
+      "cacheTokenBillingClass": "unknown"
     },
     "runway": {
       "dataRetentionClass": "unknown",
       "zeroDataRetentionAvailability": "unknown",
       "trainsOnInputs": "unknown",
       "residencyRegions": null,
-      "note": "Checked and could not read: https://runwayml.com/legal/privacy-policy and https://runway.com/legal/privacy-policy (404 after redirect), https://runway.com/privacy (404), https://runway.com/legal (404), https://runwayml.com/legal (redirects to runway.com/legal, also 404), https://help.runwayml.com/hc/en-us and its data-and-privacy article (403, Zendesk bot-blocked), https://dev.runwayml.com/ (client-rendered shell, no policy text), https://runway.com/api (redirects to dev.runwayml.com). Runway's legal and developer-portal pages did not yield readable policy content to automated fetch this session."
+      "note": "Checked and could not read: https://runwayml.com/legal/privacy-policy and https://runway.com/legal/privacy-policy (404 after redirect), https://runway.com/privacy (404), https://runway.com/legal (404), https://runwayml.com/legal (redirects to runway.com/legal, also 404), https://help.runwayml.com/hc/en-us and its data-and-privacy article (403, Zendesk bot-blocked), https://dev.runwayml.com/ (client-rendered shell, no policy text), https://runway.com/api (redirects to dev.runwayml.com). Runway's legal and developer-portal pages did not yield readable policy content to automated fetch this session.",
+      "cacheTokenBillingClass": "unknown"
     },
     "ollama": {
       "dataRetentionClass": "zero_retention",
@@ -198,7 +242,8 @@
       "residencyRegions": null,
       "source": "AGENTS.md#6-trust-boundaries-and-security",
       "verifiedOn": "2026-09-05",
-      "note": "Every harness for this provider is local or on-device, so the request never leaves the operator's machine. The trust boundary, not a vendor page, is the source."
+      "note": "Every harness for this provider is local or on-device, so the request never leaves the operator's machine. The trust boundary, not a vendor page, is the source.",
+      "cacheTokenBillingClass": "unknown"
     },
     "lmstudio": {
       "dataRetentionClass": "zero_retention",
@@ -207,7 +252,8 @@
       "residencyRegions": null,
       "source": "AGENTS.md#6-trust-boundaries-and-security",
       "verifiedOn": "2026-09-05",
-      "note": "Every harness for this provider is local or on-device, so the request never leaves the operator's machine. The trust boundary, not a vendor page, is the source."
+      "note": "Every harness for this provider is local or on-device, so the request never leaves the operator's machine. The trust boundary, not a vendor page, is the source.",
+      "cacheTokenBillingClass": "unknown"
     },
     "llamacpp": {
       "dataRetentionClass": "zero_retention",
@@ -216,7 +262,8 @@
       "residencyRegions": null,
       "source": "AGENTS.md#6-trust-boundaries-and-security",
       "verifiedOn": "2026-09-05",
-      "note": "Every harness for this provider is local or on-device, so the request never leaves the operator's machine. The trust boundary, not a vendor page, is the source."
+      "note": "Every harness for this provider is local or on-device, so the request never leaves the operator's machine. The trust boundary, not a vendor page, is the source.",
+      "cacheTokenBillingClass": "unknown"
     },
     "vllm": {
       "dataRetentionClass": "zero_retention",
@@ -225,7 +272,8 @@
       "residencyRegions": null,
       "source": "AGENTS.md#6-trust-boundaries-and-security",
       "verifiedOn": "2026-09-05",
-      "note": "Every harness for this provider is local or on-device, so the request never leaves the operator's machine. The trust boundary, not a vendor page, is the source."
+      "note": "Every harness for this provider is local or on-device, so the request never leaves the operator's machine. The trust boundary, not a vendor page, is the source.",
+      "cacheTokenBillingClass": "unknown"
     }
   }
 }
