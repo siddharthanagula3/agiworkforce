@@ -195,6 +195,8 @@
     "renameConversation": "重命名对话",
     "saveTitle": "保存标题",
     "shareConversation": "分享对话",
+    "temporaryChat": "临时对话",
+    "temporaryChatRetentionNote": "不会保存到你的历史记录，本轮也不会使用记忆。",
     "toggleArtifacts": "切换工件面板",
     "toggleArtifactsCount": "切换工件面板（{{count}}）",
     "toggleStats": "统计"

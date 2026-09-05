@@ -134,6 +134,30 @@ describe('useConversations.createConversation', () => {
 
     expect(findPostBody()).not.toHaveProperty('projectId');
   });
+
+  it('marks the first conversation temporary when armed from the composer before it existed', async () => {
+    useChatStore.getState().setPendingTemporaryChat(true);
+    const { result } = renderHook(() => useConversations());
+    await waitFor(() => expect(vi.mocked(fetch)).toHaveBeenCalled());
+
+    await act(async () => {
+      await result.current.createConversation('New Chat', 'auto');
+    });
+
+    expect(findPostBody()).toMatchObject({ isTemporary: true });
+  });
+
+  it('consuming the pending flag at creation clears it for the next chat', async () => {
+    useChatStore.getState().setPendingTemporaryChat(true);
+    const { result } = renderHook(() => useConversations());
+    await waitFor(() => expect(vi.mocked(fetch)).toHaveBeenCalled());
+
+    await act(async () => {
+      await result.current.createConversation('New Chat', 'auto');
+    });
+
+    expect(useChatStore.getState().pendingTemporaryChat).toBe(false);
+  });
 });
 
 describe('useConversations.updateConversation', () => {

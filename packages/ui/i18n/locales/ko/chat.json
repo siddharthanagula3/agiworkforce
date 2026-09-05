@@ -195,6 +195,8 @@
     "renameConversation": "대화 이름 변경",
     "saveTitle": "제목 저장",
     "shareConversation": "대화 공유",
+    "temporaryChat": "임시 채팅",
+    "temporaryChatRetentionNote": "기록에 저장되지 않으며 이번 대화에서는 메모리를 사용하지 않습니다.",
     "toggleArtifacts": "아티팩트 패널 전환",
     "toggleArtifactsCount": "아티팩트 패널 전환 ({{count}})",
     "toggleStats": "통계"

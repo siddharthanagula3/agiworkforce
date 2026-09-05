@@ -86,7 +86,15 @@ import {
   isFreeBillingPlanTier,
 } from '@agiworkforce/types';
 import { accountInitial, normalizeDisplayName } from '@agiworkforce/utils/display-name';
-import { Menu, Share2, PanelsTopLeft, Bell, X as XIcon, ChevronUp } from '@agiworkforce/icons';
+import {
+  Menu,
+  Share2,
+  PanelsTopLeft,
+  Bell,
+  X as XIcon,
+  ChevronUp,
+  EyeOff,
+} from '@agiworkforce/icons';
 import { Button, Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '@agiworkforce/ui';
 import { ShareConversationDialog } from '../components/share/ShareConversationDialog';
 import { useArtifactCloudSync } from '../hooks/use-artifact-cloud-sync';
@@ -1116,6 +1124,7 @@ export default function WebChatPage({ initialWorkMode }: WebChatPageProps) {
 
   const messages = useChatStore((s) => s.messages);
   const activeConversationId = useChatStore((s) => s.activeConversationId);
+  const pendingTemporaryChat = useChatStore((s) => s.pendingTemporaryChat);
   const addMessage = useChatStore((s) => s.addMessage);
   const updateMessage = useChatStore((s) => s.updateMessage);
   const deleteMessage = useChatStore((s) => s.deleteMessage);
@@ -1336,6 +1345,9 @@ export default function WebChatPage({ initialWorkMode }: WebChatPageProps) {
   // creates a public snapshot.
   const activeConversationTitle = displayedConversation?.title;
   useDocumentTitleSync(activeConversationId, activeConversationTitle);
+  const temporaryChatActive = displayedConversation
+    ? Boolean(displayedConversation.isTemporary)
+    : pendingTemporaryChat;
   const [shareDialogOpen, setShareDialogOpen] = useState(false);
   const [exportDialogOpen, setExportDialogOpen] = useState(false);
   const hasMessages = displayedMessages.length > 0;
@@ -4101,6 +4113,7 @@ export default function WebChatPage({ initialWorkMode }: WebChatPageProps) {
     onFocusComposer: handleFocusComposer,
     onCopyLastMessage: handleCopyLastMessage,
     onRegenerateLastMessage: handleRegenerateLastMessage,
+    onToggleArtifacts: () => _sharedArtifactStore.getState().togglePanel(),
   });
 
   const [retryingResearchMessageId, setRetryingResearchMessageId] = useState<string | null>(null);
@@ -4776,6 +4789,31 @@ export default function WebChatPage({ initialWorkMode }: WebChatPageProps) {
                 </Button>
               )}
               {voiceModeActive && <VoiceHeaderLabel />}
+              {!voiceModeActive && temporaryChatActive && !hasMessages && (
+                <div
+                  className="flex min-w-0 shrink-0 items-center gap-1.5 text-[13px] font-medium text-foreground"
+                  title={t('chat:header.temporaryChatRetentionNote')}
+                >
+                  <EyeOff
+                    className="h-3.5 w-3.5 shrink-0 text-muted-foreground"
+                    aria-hidden="true"
+                  />
+                  <span className="shrink-0">{t('chat:header.temporaryChat')}</span>
+                  <span className="hidden truncate text-[12px] font-normal text-muted-foreground sm:inline">
+                    · {t('chat:header.temporaryChatRetentionNote')}
+                  </span>
+                </div>
+              )}
+              {!voiceModeActive && temporaryChatActive && hasMessages && (
+                <span
+                  className="flex shrink-0 items-center"
+                  role="status"
+                  aria-label={`${t('chat:header.temporaryChat')}: ${t('chat:header.temporaryChatRetentionNote')}`}
+                  title={`${t('chat:header.temporaryChat')} · ${t('chat:header.temporaryChatRetentionNote')}`}
+                >
+                  <EyeOff className="h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" />
+                </span>
+              )}
               {!voiceModeActive &&
                 hasMessages &&
                 activeConversationTitle &&
