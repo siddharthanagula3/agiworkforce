@@ -36,7 +36,11 @@ vi.mock('@/lib/api-auth', () => ({
   getClerkAuthUser: (...args: unknown[]) => mockGetClerkAuthUser(...args),
 }));
 
-vi.mock('@/lib/security-audit', () => ({ recordAuditEvent: vi.fn(async () => undefined) }));
+vi.mock('@/lib/security-audit', () => ({
+  recordAuditEvent: vi.fn(async () => undefined),
+  BLOCK_APPEAL_PATH: '/support',
+  logRateLimitExceeded: vi.fn(),
+}));
 
 vi.mock('@/lib/services/billing-invoice-service', () => ({
   listUserBillingInvoices: vi.fn(async () => []),
