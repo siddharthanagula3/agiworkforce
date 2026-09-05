@@ -25,6 +25,18 @@ export const TASK_DOCK_SOURCES_EMPTY = 'Pages the task reads appear here as it s
 
 export const TASK_DOCK_OUTPUTS_LABEL = 'Outputs';
 
+/**
+ * A plain chat is not an AGI Work session, and the dock in one must not claim
+ * to be. Both leaders title the dock with the chat and hold two sections in it.
+ */
+export const CHAT_DOCK_PANEL_LABEL = 'Chat details';
+
+export const CHAT_DOCK_FALLBACK_TITLE = 'This chat';
+
+export const CHAT_DOCK_FILES_LABEL = 'In this chat';
+
+export const CHAT_DOCK_FILES_EMPTY = 'Files created in this chat appear here';
+
 export const TASK_DOCK_OUTPUTS_EMPTY = 'Files created during this task appear here';
 
 export const TASK_DOCK_CONTEXT_LABEL = 'Context';
