@@ -248,11 +248,14 @@ function recordDirectRouteSuccess(input: {
       Date.now(),
     );
     if (!input.processed.conversationId) return;
+    const routePricing = getRoutePricing(routeId);
     void recordServedRouteAffinity({
       conversationId: input.processed.conversationId,
       routeId,
-      ttlMs: routeAffinityTtlMs(getRoutePricing(routeId)?.cacheClass),
+      ttlMs: routeAffinityTtlMs(routePricing?.cacheClass),
       ...(input.upstreamProvider ? { upstreamProvider: input.upstreamProvider } : {}),
+      ...(routePricing?.modelKey ? { modelKey: routePricing.modelKey } : {}),
+      taskType: input.processed.resolvedTaskType,
     });
   } catch (error) {
     logger.warn({ error }, '[stream-transform] route outcome / affinity was not recorded');
