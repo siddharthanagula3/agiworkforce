@@ -4,14 +4,31 @@ import React from 'react';
 
 vi.mock('sonner', () => ({ toast: { error: vi.fn() } }));
 
-const catalogFixture = await vi.hoisted(async () => {
-  const { listCanonicalModels } = await import('@agiworkforce/types');
-  const model = listCanonicalModels().find(
-    (entry) => entry.capabilities.vision && entry.capabilities.tools,
-  );
-  if (!model) throw new Error('catalog exposes no model with vision and tools');
-  return { id: model.id, name: model.name, provider: model.provider };
+const registryFixtures = await vi.hoisted(async () => {
+  const { listCanonicalModels, getMinimumRequiredTier, PLAN_LABEL } =
+    await import('@agiworkforce/types');
+  const models = listCanonicalModels();
+  const catalog = models.find((entry) => entry.capabilities.vision && entry.capabilities.tools);
+  if (!catalog) throw new Error('catalog exposes no model with vision and tools');
+  const locked = models.find((entry) => {
+    if (entry.id === catalog.id) return false;
+    const minimumTier = getMinimumRequiredTier(entry.id);
+    return minimumTier !== null && minimumTier !== 'basic';
+  });
+  if (!locked) throw new Error('catalog exposes no model gated above the entry plan');
+  return {
+    catalog: { id: catalog.id, name: catalog.name, provider: catalog.provider },
+    locked: {
+      id: locked.id,
+      name: locked.name,
+      provider: locked.provider,
+      planLabel: PLAN_LABEL[getMinimumRequiredTier(locked.id)!],
+    },
+  };
 });
+
+const catalogFixture = registryFixtures.catalog;
+const lockedFixture = registryFixtures.locked;
 
 const sel = vi.hoisted(() => ({ id: 'fixture-primary-model' }));
 
@@ -31,10 +48,10 @@ const BASE_MODELS = vi.hoisted(() => [
     description: '',
   },
   {
-    id: 'fixture-locked-model',
-    name: 'Locked Fixture',
-    provider: 'Google',
-    providerKey: 'google',
+    id: registryFixtures.locked.id,
+    name: registryFixtures.locked.name,
+    provider: registryFixtures.locked.provider,
+    providerKey: registryFixtures.locked.provider,
     description: 'Needs a bigger plan',
   },
 ]);
@@ -74,7 +91,7 @@ vi.mock('@shared/stores/web-auth-store', () => ({
 
 vi.mock('@shared/config/llm', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@shared/config/llm')>()),
-  isModelAllowedForTier: (modelId: string) => modelId !== 'fixture-locked-model',
+  isModelAllowedForTier: (modelId: string) => modelId !== registryFixtures.locked.id,
 }));
 
 vi.mock('@agiworkforce/ui', async (importOriginal) => {
@@ -132,6 +149,7 @@ vi.mock('zustand/middleware', async () => {
   return { ...actual, persist: (config: (set: unknown) => unknown) => config };
 });
 
+import { MODEL_PICKER_GUIDANCE } from '@agiworkforce/unified-chat/model-picker';
 import { ComposerFooter } from '../ComposerFooter';
 
 const useRoster = (models: Record<string, unknown>[]) => {
@@ -153,8 +171,11 @@ const modelRows = (dialog: HTMLElement) =>
     .getAllByRole('button')
     .filter((button) => button.hasAttribute('aria-pressed'));
 
-const moreModelsRow = (dialog: HTMLElement) =>
-  within(dialog).getByRole('button', { name: /More models/ });
+const allModelsRow = (dialog: HTMLElement) =>
+  within(dialog).getByRole('button', { name: /All models/ });
+
+const planPageLink = (dialog: HTMLElement) =>
+  within(dialog).getByRole('link', { name: 'What each plan includes' });
 
 describe('ComposerFooter · picker rows', () => {
   beforeEach(() => {
@@ -174,7 +195,9 @@ describe('ComposerFooter · picker rows', () => {
     const selected = within(dialog).getByRole('button', { name: 'Primary Fixture' });
     expect(selected).toHaveAttribute('aria-pressed', 'true');
     expect(within(selected).getByText('Primary Fixture')).toBeInTheDocument();
-    expect(within(selected).getByText('Balanced for everyday work')).toBeInTheDocument();
+    expect(
+      Object.values(MODEL_PICKER_GUIDANCE).some((phrase) => within(selected).queryByText(phrase)),
+    ).toBe(true);
     expect(selected.querySelector('svg.text-primary')).not.toBeNull();
 
     const other = within(dialog).getByRole('button', { name: 'Secondary Fixture' });
@@ -182,13 +205,14 @@ describe('ComposerFooter · picker rows', () => {
     expect(other.querySelector('svg.text-primary')).toBeNull();
   });
 
-  it('derives a guidance line when the registry has no description', () => {
+  it('gives a model with no catalog description the same profile phrase', () => {
     const dialog = mountAndOpen();
     const row = within(dialog).getByRole('button', { name: 'Secondary Fixture' });
-    expect(within(row).getByText('Anthropic')).toBeInTheDocument();
+    const guidance = row.querySelector('span.text-muted-foreground')?.textContent ?? '';
+    expect(Object.values(MODEL_PICKER_GUIDANCE)).toContain(guidance);
   });
 
-  it('renders catalog capabilities as glyphs with a text description, not text pills', () => {
+  it('keeps catalog capabilities in the row description for screen readers only', () => {
     useRoster([
       ...BASE_MODELS,
       {
@@ -208,84 +232,96 @@ describe('ComposerFooter · picker rows', () => {
     expect(description.textContent).toMatch(/Tools/);
     expect(within(row).queryByText('Vision')).not.toBeInTheDocument();
     expect(within(row).queryByText('Tools')).not.toBeInTheDocument();
-    expect(row.querySelectorAll('svg').length).toBeGreaterThanOrEqual(2);
   });
 
-  it('keeps the More models row as a fixed-height expander with the locked roster behind it', () => {
+  it('keeps the All models row as a fixed-height expander with the locked roster behind it', () => {
     const dialog = mountAndOpen();
-    const more = moreModelsRow(dialog);
+    const more = allModelsRow(dialog);
     expect(more).toHaveAttribute('data-picker-row');
     expect(more.className).toContain('h-12');
     expect(more).toHaveAttribute('aria-expanded', 'false');
-    expect(more).toHaveTextContent('1');
+    expect(more).toHaveTextContent(String(BASE_MODELS.length));
     expect(
-      within(dialog).queryByRole('button', { name: /Locked Fixture/ }),
+      within(dialog).queryByRole('button', { name: new RegExp(lockedFixture.name) }),
     ).not.toBeInTheDocument();
 
     fireEvent.click(more);
     expect(more).toHaveAttribute('aria-expanded', 'true');
-    const locked = within(dialog).getByRole('button', { name: /Locked Fixture/ });
-    expect(locked).toHaveTextContent('Upgrade');
+    const locked = within(dialog).getByRole('button', { name: new RegExp(lockedFixture.name) });
+    expect(locked).toHaveTextContent(`${lockedFixture.planLabel} and above`);
     expect(locked.className).toContain('h-12');
   });
 
-  it('hides the search box for a short roster and shows it first for a long one', () => {
-    render(<ComposerFooter />);
-    let dialog = openPicker();
-    expect(
-      within(dialog).queryByRole('textbox', { name: 'Search models' }),
-    ).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Change model' }));
+  it('carries no header and no search field, matching the reference menu', () => {
+    const dialog = mountAndOpen();
+    expect(within(dialog).queryByRole('textbox')).not.toBeInTheDocument();
+    expect(dialog).toHaveAttribute('aria-label', 'Models');
+    expect(within(dialog).queryByText('Models')).not.toBeInTheDocument();
+  });
 
+  it('filters the roster from a typed character instead of a search field', () => {
+    const dialog = mountAndOpen();
+    expect(modelRows(dialog).length).toBeGreaterThan(1);
+
+    fireEvent.keyDown(dialog, { key: 'S' });
+    fireEvent.keyDown(dialog, { key: 'e' });
+    fireEvent.keyDown(dialog, { key: 'c' });
+    expect(within(dialog).getByRole('status')).toHaveTextContent('Sec');
+    expect(modelRows(dialog).map((row) => row.getAttribute('aria-label'))).toEqual([
+      'Secondary Fixture',
+    ]);
+
+    for (let index = 0; index < 3; index += 1) fireEvent.keyDown(dialog, { key: 'Backspace' });
+    expect(within(dialog).queryByRole('status')).not.toBeInTheDocument();
+    expect(modelRows(dialog).length).toBeGreaterThan(1);
+  });
+
+  it('puts one guidance phrase per routing profile on a row, not the catalog tagline', () => {
+    const dialog = mountAndOpen();
+    const phrases = new Set<string>(Object.values(MODEL_PICKER_GUIDANCE));
+    for (const row of modelRows(dialog)) {
+      const guidance = row.querySelector('span.text-muted-foreground')?.textContent ?? '';
+      expect(phrases.has(guidance)).toBe(true);
+    }
+    expect(within(dialog).queryByText('Balanced for everyday work')).not.toBeInTheDocument();
+  });
+
+  it('drops the capability glyph row from short list rows', () => {
     useRoster([
       ...BASE_MODELS,
-      ...Array.from({ length: 6 }, (_, index) => ({
-        id: `fixture-extra-${index}`,
-        name: `Extra Fixture ${index}`,
-        provider: 'OpenAI',
-        providerKey: 'openai',
-        description: 'Padding',
-      })),
+      {
+        id: catalogFixture.id,
+        name: catalogFixture.name,
+        provider: catalogFixture.provider,
+        providerKey: catalogFixture.provider,
+        description: 'catalog fixture',
+      },
     ]);
-    dialog = openPicker();
-    const search = within(dialog).getByRole('textbox', { name: 'Search models' });
-    expect(search).toHaveAttribute('data-picker-row');
-    const firstRow = modelRows(dialog)[0]!;
-    expect(
-      search.compareDocumentPosition(firstRow) & Node.DOCUMENT_POSITION_FOLLOWING,
-    ).toBeTruthy();
+    const dialog = mountAndOpen();
+    const row = within(dialog).getByRole('button', { name: catalogFixture.name });
+    expect(within(row).queryByLabelText(/^Vision$/)).not.toBeInTheDocument();
+    expect(row.querySelector('[aria-label^="Price band"]')).not.toBeNull();
   });
 });
 
-describe('ComposerFooter · picker search reset', () => {
+describe('ComposerFooter · picker query reset', () => {
   beforeEach(() => {
     sel.id = 'fixture-primary-model';
-    useRoster([
-      ...BASE_MODELS,
-      ...Array.from({ length: 6 }, (_, index) => ({
-        id: `fixture-extra-${index}`,
-        name: `Extra Fixture ${index}`,
-        provider: 'OpenAI',
-        providerKey: 'openai',
-        description: 'Padding',
-      })),
-    ]);
+    useRoster(BASE_MODELS);
   });
 
-  it('clears the search when a row is picked so the next open shows the full roster', () => {
+  it('clears the typed query when a row is picked so the next open shows the roster', () => {
     render(<ComposerFooter />);
     let dialog = openPicker();
-    fireEvent.change(within(dialog).getByRole('textbox', { name: 'Search models' }), {
-      target: { value: 'Secondary' },
-    });
+    for (const key of ['S', 'e', 'c']) fireEvent.keyDown(dialog, { key });
     expect(modelRows(dialog)).toHaveLength(1);
     fireEvent.click(within(dialog).getByRole('button', { name: 'Secondary Fixture' }));
     expect(screen.queryByRole('dialog', { name: 'Models' })).not.toBeInTheDocument();
 
     dialog = openPicker();
-    expect(within(dialog).getByRole('textbox', { name: 'Search models' })).toHaveValue('');
+    expect(within(dialog).queryByRole('status')).not.toBeInTheDocument();
     expect(modelRows(dialog).length).toBeGreaterThan(1);
-    expect(moreModelsRow(dialog)).toBeInTheDocument();
+    expect(allModelsRow(dialog)).toBeInTheDocument();
   });
 });
 
@@ -303,11 +339,11 @@ describe('ComposerFooter · picker keyboard', () => {
     fireEvent.keyDown(document.activeElement!, { key: 'ArrowDown' });
     expect(document.activeElement).toBe(rows[1]);
     fireEvent.keyDown(document.activeElement!, { key: 'ArrowDown' });
-    expect(document.activeElement).toBe(moreModelsRow(dialog));
+    expect(document.activeElement).toBe(allModelsRow(dialog));
     fireEvent.keyDown(document.activeElement!, { key: 'ArrowUp' });
     expect(document.activeElement).toBe(rows[1]);
     fireEvent.keyDown(document.activeElement!, { key: 'End' });
-    expect(document.activeElement).toBe(moreModelsRow(dialog));
+    expect(document.activeElement).toBe(planPageLink(dialog));
     fireEvent.keyDown(document.activeElement!, { key: 'Home' });
     expect(document.activeElement).toBe(rows[0]);
 
@@ -319,16 +355,16 @@ describe('ComposerFooter · picker keyboard', () => {
   it('skips disabled rows when walking with the arrow keys', () => {
     useRoster([BASE_MODELS[0]!, BASE_MODELS[1]!, COMING_SOON_MODEL, BASE_MODELS[2]!]);
     const dialog = mountAndOpen();
-    fireEvent.click(moreModelsRow(dialog));
+    fireEvent.click(allModelsRow(dialog));
     const comingSoon = within(dialog).getByRole('button', { name: /Coming Soon Fixture/ });
     expect(comingSoon).toBeDisabled();
 
-    const more = moreModelsRow(dialog);
+    const more = allModelsRow(dialog);
     more.focus();
     fireEvent.keyDown(more, { key: 'ArrowDown' });
     expect(document.activeElement).not.toBe(comingSoon);
     expect(document.activeElement).toBe(
-      within(dialog).getByRole('button', { name: /Locked Fixture/ }),
+      within(dialog).getByRole('button', { name: new RegExp(lockedFixture.name) }),
     );
   });
 });

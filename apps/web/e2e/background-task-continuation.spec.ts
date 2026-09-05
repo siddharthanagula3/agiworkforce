@@ -127,8 +127,8 @@ async function selectComposerModel(page: Page, modelName: string): Promise<void>
     if (await searchBox.count()) {
       await searchBox.fill(modelName);
     } else {
-      const moreModels = page.getByRole('button', { name: /More models/ });
-      if (await moreModels.count()) await moreModels.first().click();
+      const allModels = page.getByRole('button', { name: /All models/ });
+      if (await allModels.count()) await allModels.first().click();
     }
   }
   await expect(target).toBeVisible({ timeout: 10_000 });

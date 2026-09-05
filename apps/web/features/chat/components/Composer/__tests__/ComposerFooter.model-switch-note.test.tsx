@@ -54,6 +54,7 @@ vi.mock('@shared/stores/web-auth-store', () => ({
 
 const chatStoreState = vi.hoisted(() => ({
   activeConversationId: null as string | null,
+  conversations: [] as { id: string; model?: string | null }[],
   messages: [] as { role: string; isStreaming?: boolean }[],
 }));
 
