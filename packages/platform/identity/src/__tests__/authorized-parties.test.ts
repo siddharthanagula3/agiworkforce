@@ -11,6 +11,15 @@ const { ClerkIdentityProvider } = await import('../adapters/clerk');
 const { IdentityConfigError } = await import('../types');
 const { resolveDeploymentOrigin } = await import('../deployment-origin');
 
+describe('verification configuration', () => {
+  it('reports that it cannot verify tokens without a secret key', () => {
+    expect(new ClerkIdentityProvider({ secretKey: '' }).canVerifySessionTokens()).toBe(false);
+    expect(new ClerkIdentityProvider({ secretKey: 'sk_test_x' }).canVerifySessionTokens()).toBe(
+      true,
+    );
+  });
+});
+
 describe('authorized parties', () => {
   it('uses the configured allowlist and trims blank entries', () => {
     const provider = new ClerkIdentityProvider({
