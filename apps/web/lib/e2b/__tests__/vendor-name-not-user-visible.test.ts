@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 import { redactSandboxVendor } from '../execution-tools';
@@ -19,10 +19,19 @@ describe('sandbox vendor stays out of user-visible copy', () => {
     expect(redactSandboxVendor('starting e2b runtime')).toBe('starting sandbox runtime');
   });
 
-  it('keeps the vendor out of the Code page terminal banner', () => {
-    const source = readFileSync(join(WEB_ROOT, 'features/code/CloudCodePage.tsx'), 'utf-8');
-    const renderedStrings = source.match(/>[^<>{}]*\be2b\b[^<>{}]*</gi) ?? [];
-    expect(renderedStrings).toEqual([]);
-    expect(source).toContain('Managed sandbox ·');
+  it('keeps the vendor out of every rendered string on the Code surface', () => {
+    const roots = ['features/code', 'features/code/components'];
+    const components = roots.flatMap((root) =>
+      readdirSync(join(WEB_ROOT, root))
+        .filter((name) => name.endsWith('.tsx') && !name.endsWith('.test.tsx'))
+        .map((name) => join(root, name)),
+    );
+    expect(components.length).toBeGreaterThan(0);
+
+    for (const file of components) {
+      const source = readFileSync(join(WEB_ROOT, file), 'utf-8');
+      expect(source.match(/>[^<>{}]*\be2b\b[^<>{}]*</gi) ?? [], file).toEqual([]);
+      expect(source.match(/(['`])[^'`]*\be2b\b[^'`]*\1/gi) ?? [], file).toEqual([]);
+    }
   });
 });

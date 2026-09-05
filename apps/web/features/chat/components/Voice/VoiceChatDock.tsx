@@ -64,7 +64,7 @@ export function VoiceChatDock({
       role="menu"
       aria-label={LABEL.panel}
       data-testid="voice-chat-dock"
-      className="fixed right-4 top-16 z-[var(--z-popover,200)] w-[290px] rounded-2xl border border-[var(--chat-border-strong)] bg-[var(--chat-surface-overlay)] p-2 shadow-[var(--chat-shadow-lg)]"
+      className="fixed right-4 top-16 z-[var(--z-popover,350)] w-[290px] rounded-2xl border border-[var(--chat-border-strong)] bg-[var(--chat-surface-overlay)] p-2 shadow-[var(--chat-shadow-lg)]"
     >
       <p className="px-3 pb-1 pt-2 text-xs font-medium text-[var(--chat-text-muted)]">
         {LABEL.panel}

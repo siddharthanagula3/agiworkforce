@@ -54,7 +54,24 @@ describe('/api/schedules', () => {
       new NextRequest('http://localhost/api/schedules?limit=500&offset=-2'),
     );
     expect(response.status).toBe(200);
-    expect(listSchedules).toHaveBeenCalledWith(db, 'user-1', { limit: 100, offset: 0 });
+    expect(listSchedules).toHaveBeenCalledWith(db, 'user-1', {
+      limit: 100,
+      offset: 0,
+      projectId: null,
+    });
+  });
+
+  it('forwards the requested project to the schedule listing', async () => {
+    const response = await GET(
+      new NextRequest('http://localhost/api/schedules?projectId=project-7'),
+    );
+
+    expect(response.status).toBe(200);
+    expect(listSchedules).toHaveBeenCalledWith(
+      db,
+      'user-1',
+      expect.objectContaining({ projectId: 'project-7' }),
+    );
   });
 
   it('returns 401 when user-scoped authentication fails', async () => {

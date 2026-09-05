@@ -28,7 +28,10 @@ const mockQuery = vi.fn();
 const mockExecute = vi.fn();
 const mockGetUserScopedDb = vi.fn();
 
-vi.mock('@/lib/server/neon-chat', () => ({
+vi.mock('server-only', () => ({}));
+
+vi.mock('@/lib/server/neon-chat', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/server/neon-chat')>()),
   normalizeMessageMetadata: (v: unknown) => v,
 }));
 

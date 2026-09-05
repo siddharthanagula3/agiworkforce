@@ -10,7 +10,14 @@ vi.mock('@/lib/cors', () => ({
 }));
 
 const authMocks = vi.hoisted(() => ({
+  db: { query: async () => [], execute: async () => 0 },
   getClerkAuthUser: vi.fn(),
+}));
+vi.mock('@/lib/server/rls-db', () => ({
+  getUserScopedDb: async (...args: unknown[]) => {
+    const { userId } = (await authMocks.getClerkAuthUser(...args)) as { userId: string };
+    return { db: authMocks.db, userId, organizationId: null };
+  },
 }));
 vi.mock('@/lib/api-auth', () => ({
   getClerkAuthUser: authMocks.getClerkAuthUser,
@@ -102,7 +109,7 @@ describe('GET /api/llm/v1/models authentication downgrade boundary', () => {
       object: 'list',
       x_agi_workforce: { user_tier: 'max' },
     });
-    expect(subscriptionMocks.getSubscription).toHaveBeenCalledWith('user-1');
+    expect(subscriptionMocks.getSubscription).toHaveBeenCalledWith(authMocks.db, 'user-1');
     expect(authMocks.getClerkAuthUser).toHaveBeenCalledWith(expect.any(NextRequest), {
       apiKeyScope: 'models:read',
     });

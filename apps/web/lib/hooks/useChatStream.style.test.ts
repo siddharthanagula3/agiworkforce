@@ -6,6 +6,7 @@ import { useChatStream } from './useChatStream';
 const authMocks = vi.hoisted(() => ({ getToken: vi.fn() }));
 vi.mock('@clerk/nextjs', () => ({ useAuth: () => ({ getToken: authMocks.getToken }) }));
 vi.mock('@/lib/client/csrf', () => ({
+  getCsrfToken: async () => 'csrf-token',
   addCsrfHeaders: async (headers: HeadersInit = {}) => headers,
 }));
 
