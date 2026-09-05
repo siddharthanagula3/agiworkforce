@@ -272,9 +272,12 @@ export function ReflectSection() {
             <h2 id="reflect-topics-heading" className="text-lg font-semibold text-foreground">
               What you spent time on
             </h2>
-            <div className="space-y-3">
-              {recap.topics.map((topic) => (
-                <div key={topic.id} className="rounded-lg border border-border/50 p-4">
+            <div>
+              {recap.topics.map((topic, index) => (
+                <div
+                  key={topic.id}
+                  className={`py-3 ${index === 0 ? '' : 'border-t border-border/50'}`}
+                >
                   <div className="flex items-start justify-between gap-4">
                     <div>
                       <h3 className="text-sm font-medium text-foreground">{topic.label}</h3>

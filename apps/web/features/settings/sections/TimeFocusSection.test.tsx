@@ -32,7 +32,7 @@ describe('TimeFocusSection', () => {
   it('loads and saves one validated account-wide preference namespace', async () => {
     render(<TimeFocusSection />);
 
-    expect(await screen.findByText('Synced to your account')).toBeInTheDocument();
+    expect(await screen.findByText('Saved')).toBeInTheDocument();
     expect(preferenceMocks.fetch).toHaveBeenCalledWith(
       'time-focus',
       expect.objectContaining({ breakReminderMinutes: null }),
@@ -64,7 +64,7 @@ describe('TimeFocusSection', () => {
 
   it('rejects an ambiguous all-day range instead of silently saving it', async () => {
     render(<TimeFocusSection />);
-    expect(await screen.findByText('Synced to your account')).toBeInTheDocument();
+    expect(await screen.findByText('Saved')).toBeInTheDocument();
 
     fireEvent.change(screen.getByLabelText('Quiet hours end'), {
       target: { value: '22:00' },
@@ -78,7 +78,7 @@ describe('TimeFocusSection', () => {
   it('surfaces persistence failures without claiming the settings synced', async () => {
     preferenceMocks.save.mockRejectedValue(new Error('storage unavailable'));
     render(<TimeFocusSection />);
-    expect(await screen.findByText('Synced to your account')).toBeInTheDocument();
+    expect(await screen.findByText('Saved')).toBeInTheDocument();
 
     fireEvent.change(screen.getByRole('combobox', { name: 'Break reminder' }), {
       target: { value: '30' },
@@ -86,5 +86,13 @@ describe('TimeFocusSection', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Save time and focus settings' }));
 
     expect(await screen.findByText('Save failed: storage unavailable')).toBeInTheDocument();
+  });
+
+  it('renders break reminder and quiet hours as rows, not bordered cards', async () => {
+    render(<TimeFocusSection />);
+    await screen.findByText('Saved');
+
+    expect(document.querySelector('[style*="border-radius: var(--radius-lg)"]')).toBeNull();
+    expect(screen.queryByText(/loading account settings/i)).toBeNull();
   });
 });
