@@ -39,6 +39,7 @@ describe('support actions, confirmation tokens are single use', () => {
 
   it('refuses the second confirmation of the same proposal', async () => {
     const { proposal, confirmationToken } = await proposeSupportAction({
+      db: mocks.db!.adapter,
       userId: USER,
       actionId: 'export_account_data',
       params: {},
@@ -48,6 +49,7 @@ describe('support actions, confirmation tokens are single use', () => {
 
     await expect(
       confirmSupportAction({
+        db: mocks.db!.adapter,
         userId: USER,
         proposalId: proposal.id,
         confirmationToken,
@@ -57,6 +59,7 @@ describe('support actions, confirmation tokens are single use', () => {
 
     await expect(
       confirmSupportAction({
+        db: mocks.db!.adapter,
         userId: USER,
         proposalId: proposal.id,
         confirmationToken,
@@ -88,6 +91,7 @@ describe('support actions, confirmation tokens are single use', () => {
 
     await expect(
       confirmSupportAction({
+        db: mocks.db!.adapter,
         userId: USER,
         proposalId: '33333333-3333-4333-8333-333333333333',
         confirmationToken: raw,
@@ -98,6 +102,7 @@ describe('support actions, confirmation tokens are single use', () => {
 
   it("refuses one proposal's token presented against another proposal's id", async () => {
     const first = await proposeSupportAction({
+      db: mocks.db!.adapter,
       userId: USER,
       actionId: 'export_account_data',
       params: {},
@@ -105,6 +110,7 @@ describe('support actions, confirmation tokens are single use', () => {
       conversationRef: null,
     });
     const second = await proposeSupportAction({
+      db: mocks.db!.adapter,
       userId: USER,
       actionId: 'open_billing_portal',
       params: {},
@@ -114,6 +120,7 @@ describe('support actions, confirmation tokens are single use', () => {
 
     await expect(
       confirmSupportAction({
+        db: mocks.db!.adapter,
         userId: USER,
         proposalId: second.proposal.id,
         confirmationToken: first.confirmationToken,
@@ -126,6 +133,7 @@ describe('support actions, confirmation tokens are single use', () => {
 
   it('stores only a hash of the token, never the token itself', async () => {
     const { confirmationToken } = await proposeSupportAction({
+      db: mocks.db!.adapter,
       userId: USER,
       actionId: 'export_account_data',
       params: {},

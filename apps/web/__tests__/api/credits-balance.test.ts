@@ -46,10 +46,11 @@ vi.mock('@/lib/errors', async () => {
   };
 });
 
-const mockGetClerkAuthUser = vi.fn();
+const mockGetUserScopedDb = vi.fn();
+const scopedDb = { query: vi.fn(), execute: vi.fn(), transaction: vi.fn() };
 
-vi.mock('@/lib/api-auth', () => ({
-  getClerkAuthUser: (...args: unknown[]) => mockGetClerkAuthUser(...args),
+vi.mock('@/lib/server/rls-db', () => ({
+  getUserScopedDb: (...args: unknown[]) => mockGetUserScopedDb(...args),
 }));
 
 vi.mock('@/lib/neon-db', () => ({
@@ -92,7 +93,11 @@ describe('Credits Balance API', () => {
   beforeEach(() => {
     vi.clearAllMocks();
 
-    mockGetClerkAuthUser.mockResolvedValue({ userId: mockUser.id, email: mockUser.email });
+    mockGetUserScopedDb.mockResolvedValue({
+      db: scopedDb,
+      userId: mockUser.id,
+      organizationId: null,
+    });
 
     vi.mocked(SubscriptionService.getSubscription).mockResolvedValue(mockSubscription);
     vi.mocked(CreditService.getBalance).mockResolvedValue(mockBalance);
@@ -107,7 +112,7 @@ describe('Credits Balance API', () => {
     describe('Authentication', () => {
       it('should return 401 without authorization header', async () => {
         const { createError } = await import('@/lib/errors');
-        mockGetClerkAuthUser.mockRejectedValueOnce(createError.unauthorized());
+        mockGetUserScopedDb.mockRejectedValueOnce(createError.unauthorized());
 
         const request = new NextRequest('http://localhost/api/llm/v1/credits/balance');
 
@@ -117,7 +122,7 @@ describe('Credits Balance API', () => {
 
       it('should return 401 with invalid authorization header format', async () => {
         const { createError } = await import('@/lib/errors');
-        mockGetClerkAuthUser.mockRejectedValueOnce(createError.unauthorized());
+        mockGetUserScopedDb.mockRejectedValueOnce(createError.unauthorized());
 
         const request = new NextRequest('http://localhost/api/llm/v1/credits/balance', {
           headers: { Authorization: 'Basic invalid' },
@@ -129,7 +134,7 @@ describe('Credits Balance API', () => {
 
       it('should return 401 with invalid token', async () => {
         const { createError } = await import('@/lib/errors');
-        mockGetClerkAuthUser.mockRejectedValueOnce(createError.unauthorized('Invalid token'));
+        mockGetUserScopedDb.mockRejectedValueOnce(createError.unauthorized('Invalid token'));
 
         const request = new NextRequest('http://localhost/api/llm/v1/credits/balance', {
           headers: { Authorization: 'Bearer invalid-token' },
@@ -164,7 +169,7 @@ describe('Credits Balance API', () => {
 
         const response = await GET(request);
         expect(response.status).toBe(200);
-        expect(mockGetClerkAuthUser).toHaveBeenCalledWith(request, {
+        expect(mockGetUserScopedDb).toHaveBeenCalledWith(request, {
           apiKeyScope: 'usage:read',
         });
 
@@ -285,7 +290,7 @@ describe('Credits Balance API', () => {
           reset_at: '2026-07-19T12:00:00.000Z',
           has_usage_remaining: true,
         });
-        expect(mockGetFreeTrialPublicUsage).toHaveBeenCalledWith(mockUser.id);
+        expect(mockGetFreeTrialPublicUsage).toHaveBeenCalledWith(scopedDb, mockUser.id);
       });
 
       it('omits the allocation signal entirely on Free', async () => {

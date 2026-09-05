@@ -1,6 +1,6 @@
-
 import 'server-only';
 
+import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import { getManagedUsageSummary } from '@/lib/services/managed-usage-summary-service';
 import { SubscriptionService } from '@/lib/services/subscription-service';
 import { logger } from '@/lib/logger';
@@ -42,13 +42,14 @@ export const ANONYMOUS_ACCOUNT_CONTEXT: HandoffAccountContext = {
  *               from a request body.
  */
 export async function buildHandoffAccountContext(
+  db: DatabaseAdapter | null,
   userId: string | null,
 ): Promise<HandoffAccountContext> {
-  if (!userId) return ANONYMOUS_ACCOUNT_CONTEXT;
+  if (!userId || !db) return ANONYMOUS_ACCOUNT_CONTEXT;
 
   const [subscription, usage] = await Promise.all([
-    withTimeout(SubscriptionService.getSubscription(userId), 'subscription'),
-    withTimeout(getManagedUsageSummary(userId), 'managed-usage'),
+    withTimeout(SubscriptionService.getSubscription(db, userId), 'subscription'),
+    withTimeout(getManagedUsageSummary(db, userId), 'managed-usage'),
   ]);
 
   const degradedParts: string[] = [];

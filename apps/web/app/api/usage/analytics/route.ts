@@ -2,7 +2,7 @@ import 'server-only';
 
 import { parseManagedUsageSummaryResponse } from '@agiworkforce/types';
 import { NextRequest, NextResponse } from 'next/server';
-import { getClerkAuthUser } from '@/lib/api-auth';
+import { getUserScopedDb, type UserScopedDb } from '@/lib/server/rls-db';
 import { unauthorizedResponseFor } from '@/lib/api-auth-response';
 import { isMfaRequiredError } from '@/lib/mfa-policy-gate';
 import { isIpNotAllowedError } from '@/lib/ip-allow-list-gate';
@@ -17,9 +17,9 @@ async function handleGetAnalytics(request: NextRequest) {
   const rateLimitResponse = await withRateLimit(request, 'usage-analytics');
   if (rateLimitResponse) return rateLimitResponse;
 
-  let userId: string;
+  let scoped: UserScopedDb;
   try {
-    userId = (await getClerkAuthUser(request)).userId;
+    scoped = await getUserScopedDb(request);
   } catch (authError) {
     if (isMfaRequiredError(authError) || isIpNotAllowedError(authError)) {
       return unauthorizedResponseFor(authError);
@@ -29,10 +29,10 @@ async function handleGetAnalytics(request: NextRequest) {
 
   try {
     return NextResponse.json(
-      parseManagedUsageSummaryResponse(await getManagedUsageSummary(userId)),
+      parseManagedUsageSummaryResponse(await getManagedUsageSummary(scoped.db, scoped.userId)),
     );
   } catch (error) {
-    logger.error({ error, userId }, 'Failed to fetch usage summary');
+    logger.error({ error, userId: scoped.userId }, 'Failed to fetch usage summary');
     throw createError.internal('Failed to fetch usage summary');
   }
 }

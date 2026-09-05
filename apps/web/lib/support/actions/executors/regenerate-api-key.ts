@@ -1,7 +1,7 @@
 import 'server-only';
 
+import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import { resolveApiKeyScopes, type ApiKeyScope } from '@/lib/api-key-scopes';
-import { getNeonDb } from '@/lib/server/neon-db';
 import { ApiKeyService } from '@/lib/services/api-key-service';
 import { SupportActionRefusal, type SupportActionResult } from '../types';
 
@@ -11,8 +11,11 @@ interface OwnedKeyRow {
   scopes: string[] | null;
 }
 
-async function readOwnedKey(userId: string, keyId: string): Promise<OwnedKeyRow | null> {
-  const db = getNeonDb();
+async function readOwnedKey(
+  db: DatabaseAdapter,
+  userId: string,
+  keyId: string,
+): Promise<OwnedKeyRow | null> {
   const [row] = await db.query<OwnedKeyRow>(
     `select id, name, scopes
        from public.api_keys
@@ -23,8 +26,12 @@ async function readOwnedKey(userId: string, keyId: string): Promise<OwnedKeyRow 
   return row ?? null;
 }
 
-export async function assertApiKeyOwned(userId: string, keyId: string): Promise<void> {
-  const row = await readOwnedKey(userId, keyId);
+export async function assertApiKeyOwned(
+  db: DatabaseAdapter,
+  userId: string,
+  keyId: string,
+): Promise<void> {
+  const row = await readOwnedKey(db, userId, keyId);
   if (!row) {
     throw new SupportActionRefusal(
       'SUPPORT_ACTION_TARGET_NOT_FOUND',
@@ -35,11 +42,12 @@ export async function assertApiKeyOwned(userId: string, keyId: string): Promise<
 }
 
 export async function executeRegenerateApiKey(args: {
+  db: DatabaseAdapter;
   userId: string;
   keyId: string;
 }): Promise<SupportActionResult> {
-  const { userId, keyId } = args;
-  const existing = await readOwnedKey(userId, keyId);
+  const { db, userId, keyId } = args;
+  const existing = await readOwnedKey(db, userId, keyId);
   if (!existing) {
     throw new SupportActionRefusal(
       'SUPPORT_ACTION_TARGET_NOT_FOUND',
@@ -48,7 +56,6 @@ export async function executeRegenerateApiKey(args: {
     );
   }
 
-  const db = getNeonDb();
   const scopes: ApiKeyScope[] = resolveApiKeyScopes(existing.scopes ?? []);
 
   if (scopes.length === 0) {

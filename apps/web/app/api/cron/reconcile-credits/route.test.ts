@@ -89,7 +89,7 @@ describe('GET /api/cron/reconcile-credits', () => {
     // drain is the only caller of `recover_stale_managed_usage_requests`, so
     // the batch size is the platform's whole refund rate for reservations a
     // killed turn leaked; at 100 the backlog grows and never comes back down.
-    expect(processPending).toHaveBeenCalledWith(500);
+    expect(processPending).toHaveBeenCalledWith(500, expect.anything());
     await expect(response.json()).resolves.toEqual({
       processed: 4,
       succeeded: 3,

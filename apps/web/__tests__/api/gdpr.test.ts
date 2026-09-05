@@ -530,7 +530,7 @@ describe('GDPR Data Export API (GET /api/user/export)', () => {
         expect.stringContaining('export_user_data'),
         expect.anything(),
       );
-      expect(mockGetManagedUsageSummary).toHaveBeenCalledWith(mockUser.id);
+      expect(mockGetManagedUsageSummary).toHaveBeenCalledWith(expect.anything(), mockUser.id);
     });
 
     it('should return JSON response with export data', async () => {
@@ -710,7 +710,7 @@ describe('GDPR Data Export API (GET /api/user/export)', () => {
       const data = await response.json();
 
       expect(data.data.billing_invoices).toEqual([]);
-      expect(mockListUserBillingInvoices).toHaveBeenCalledWith(mockUser.id);
+      expect(mockListUserBillingInvoices).toHaveBeenCalledWith(expect.anything(), mockUser.id);
       expect(JSON.stringify(data.data.billing_invoices)).not.toMatch(
         /credits_|token_|microusd|provider_cost|usage_cost/i,
       );

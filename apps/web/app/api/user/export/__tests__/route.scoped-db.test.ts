@@ -82,6 +82,55 @@ describe('GET /api/user/export scoped db binding', () => {
     );
   });
 
+  it('exports the workspace rows a member owns, not only their personal ones', async () => {
+    const ORGANIZATION = '11111111-1111-4111-8111-111111111111';
+    let boundOrganizationId = '';
+    mockQuery.mockImplementation(async (sql: string, params: unknown[] = []) => {
+      if (sql.includes("set_config('request.jwt.claim.org_id'")) {
+        boundOrganizationId = String(params[1] ?? '');
+        return [];
+      }
+      if (sql.includes('from organization_members')) {
+        return [
+          {
+            organization_id: ORGANIZATION,
+            role: 'member',
+            provisioning_source: null,
+            provisioned_at: null,
+            joined_at: '2026-01-01T00:00:00.000Z',
+          },
+        ];
+      }
+      // The tenant predicate only returns a workspace row while the session is
+      // bound to that workspace, which is exactly what the bug missed.
+      if (sql.includes('from web_conversations') && boundOrganizationId === ORGANIZATION) {
+        return [
+          {
+            id: 'conversation-in-workspace',
+            title: 'Workspace thread',
+            model: 'test-model',
+            project_id: null,
+            pinned: false,
+            created_at: '2026-02-01T00:00:00.000Z',
+            updated_at: '2026-02-01T00:00:00.000Z',
+            deleted_at: null,
+          },
+        ];
+      }
+      return [];
+    });
+
+    const response = await GET(exportRequest());
+    const body = (await response.json()) as {
+      data: { conversations: { id: string }[] };
+    };
+
+    expect(response.status).toBe(200);
+    expect(body.data.conversations.map((conversation) => conversation.id)).toContain(
+      'conversation-in-workspace',
+    );
+  });
+
   it('ignores an identity smuggled into the query string and exports the session user only', async () => {
     const response = await GET(
       exportRequest('https://agiworkforce.com/api/user/export?userId=victim-user'),

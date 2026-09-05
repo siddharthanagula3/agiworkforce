@@ -202,20 +202,8 @@
       "reason": "organization erasure engine deletes across every org-owned table by the target organizationId, triggered only by the deletion cron"
     },
     {
-      "path": "apps/web/lib/server/rolling-usage.ts",
-      "reason": "pending scoped migration"
-    },
-    {
       "path": "apps/web/lib/server/security-log-retention.ts",
       "reason": "retention sweep over the whole audit log triggered by cron or admin, deletes by age not by subject"
-    },
-    {
-      "path": "apps/web/lib/server/spendable-credits.ts",
-      "reason": "pending scoped migration"
-    },
-    {
-      "path": "apps/web/lib/server/user-identity.ts",
-      "reason": "pending scoped migration"
     },
     {
       "path": "apps/web/lib/services/agent-notification-service.ts",
@@ -226,16 +214,8 @@
       "reason": "pending scoped migration"
     },
     {
-      "path": "apps/web/lib/services/billing-invoice-service.ts",
-      "reason": "pending scoped migration"
-    },
-    {
-      "path": "apps/web/lib/services/credit-service.ts",
-      "reason": "pending scoped migration"
-    },
-    {
       "path": "apps/web/lib/services/free-trial-service.ts",
-      "reason": "pending scoped migration"
+      "reason": "every statement already runs under RLS through createClaimedUserScopedDb bound to the reservation owner, which needs a schema-owner pool to SET ROLE app_rls on; getNeonDb here is that pool, not an unscoped read"
     },
     {
       "path": "apps/web/lib/services/org-entitlements.ts",
@@ -271,23 +251,11 @@
     },
     {
       "path": "apps/web/lib/services/subscription-service.ts",
-      "reason": "pending scoped migration"
+      "reason": "the profile provisioning and Stripe self-heal writes already run under RLS through createClaimedUserScopedDb, which needs a schema-owner pool to SET ROLE app_rls on; every other method takes the caller connection"
     },
     {
       "path": "apps/web/lib/services/web-push-service.ts",
       "reason": "the matched word is a local variable holding push-subscription objects, not the billing subscriptions table, every statement already carries user_id"
-    },
-    {
-      "path": "apps/web/lib/support/account/context-resolver.ts",
-      "reason": "pending scoped migration"
-    },
-    {
-      "path": "apps/web/lib/support/actions/executors/regenerate-api-key.ts",
-      "reason": "pending scoped migration"
-    },
-    {
-      "path": "apps/web/lib/support/actions/executors/revoke-connector.ts",
-      "reason": "pending scoped migration"
     },
     {
       "path": "apps/web/lib/support/handoff/store.ts",

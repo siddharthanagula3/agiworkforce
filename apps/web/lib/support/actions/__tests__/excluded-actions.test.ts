@@ -81,6 +81,7 @@ describe('support actions, the exclusion list', () => {
     async (id) => {
       await expect(
         proposeSupportAction({
+          db: mocks.db!.adapter,
           userId: 'user_a',
           actionId: id,
           params: {},
@@ -110,6 +111,7 @@ describe('support actions, the exclusion list', () => {
   it('refuses an id that is in neither list', async () => {
     await expect(
       proposeSupportAction({
+        db: mocks.db!.adapter,
         userId: 'user_a',
         actionId: 'drop_all_tables',
         params: {},
@@ -131,6 +133,7 @@ describe('support actions, the exclusion list', () => {
   it('refuses to remove a custom MCP connector, because that deletes its stored credential', async () => {
     await expect(
       proposeSupportAction({
+        db: mocks.db!.adapter,
         userId: 'user_a',
         actionId: 'revoke_connector',
         params: { connectorId: 'custom-abc123' },

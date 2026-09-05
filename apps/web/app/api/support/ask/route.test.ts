@@ -8,6 +8,7 @@ const mocks = vi.hoisted(() => ({
   answer: vi.fn(),
   enabled: vi.fn(),
   resolveContext: vi.fn(),
+  scopedDb: { query: vi.fn(), execute: vi.fn(), transaction: vi.fn() },
   listActions: vi.fn(),
   requireHumanCaller: vi.fn(),
 }));
@@ -22,6 +23,9 @@ vi.mock('@/lib/logger', () => ({
 }));
 vi.mock('@/lib/csrf', () => ({ requireCsrfToken: mocks.requireCsrfToken }));
 vi.mock('@/lib/rate-limit', () => ({ withRateLimit: mocks.withRateLimit }));
+vi.mock('@/lib/server/rls-db', () => ({
+  getCurrentUserRlsDb: async () => ({ db: mocks.scopedDb, userId: 'user-1' }),
+}));
 vi.mock('@/lib/support/handoff/request-identity', () => ({
   resolveHandoffIdentity: mocks.resolveIdentity,
 }));
@@ -148,7 +152,7 @@ describe('POST /api/support/ask', () => {
   it('never sends another user account context to the model', async () => {
     await POST(post(QUESTION));
 
-    expect(mocks.resolveContext).toHaveBeenCalledWith('user-1');
+    expect(mocks.resolveContext).toHaveBeenCalledWith(mocks.scopedDb, 'user-1');
     const [input] = mocks.answer.mock.calls[0]!;
     expect(input.viewer.userId).toBe('user-1');
     expect(input.accountFacts).toEqual(

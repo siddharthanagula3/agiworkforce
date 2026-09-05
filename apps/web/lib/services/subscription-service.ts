@@ -30,25 +30,15 @@ export interface SubscriptionInfo {
 }
 
 interface CreditAllocationOptions {
+  db: DatabaseAdapter;
   stripePriceId?: string | null;
-  db?: DatabaseAdapter;
 }
 
 export class SubscriptionService {
   static async getSubscription(
-    dbOrUserId: DatabaseAdapter | string,
-    userId?: string,
+    db: DatabaseAdapter,
+    userId: string,
   ): Promise<SubscriptionInfo | null> {
-    let db: DatabaseAdapter;
-    let resolvedUserId: string;
-    if (typeof dbOrUserId === 'string') {
-      db = getNeonDb();
-      resolvedUserId = dbOrUserId;
-    } else {
-      db = dbOrUserId;
-      resolvedUserId = userId!;
-    }
-
     try {
       const rows = await db.query<SubscriptionRow>(
         `SELECT id, user_id, plan_tier, status, current_period_start, current_period_end,
@@ -58,7 +48,7 @@ export class SubscriptionService {
          FROM subscriptions
          WHERE user_id = $1
          LIMIT 1`,
-        [resolvedUserId],
+        [userId],
       );
 
       if (rows.length === 0) {
@@ -81,7 +71,7 @@ export class SubscriptionService {
         google_purchase_token: data.google_purchase_token,
       };
     } catch (error) {
-      logger.error({ error, userId: resolvedUserId }, 'Error in getSubscription');
+      logger.error({ error, userId }, 'Error in getSubscription');
       throw error;
     }
   }
@@ -92,7 +82,7 @@ export class SubscriptionService {
     planTier: string,
     periodStart: Date,
     periodEnd: Date,
-    options: CreditAllocationOptions = {},
+    options: CreditAllocationOptions,
   ): Promise<string> {
     const creditsCents = getPlanUsageBudgetCents(planTier, 'monthly');
 
@@ -143,7 +133,7 @@ export class SubscriptionService {
     planTier: string,
     periodStart: Date,
     periodEnd: Date,
-    options: CreditAllocationOptions = {},
+    options: CreditAllocationOptions,
   ): Promise<string> {
     const creditsCents = getPlanUsageBudgetCents(planTier, 'monthly');
 
@@ -192,7 +182,7 @@ export class SubscriptionService {
     nextPlanTier: string,
     periodStart: Date,
     periodEnd: Date,
-    db?: DatabaseAdapter,
+    db: DatabaseAdapter,
   ): Promise<string> {
     const previousBudgetCents = getPlanUsageBudgetCents(previousPlanTier, 'monthly');
     const nextBudgetCents = getPlanUsageBudgetCents(nextPlanTier, 'monthly');

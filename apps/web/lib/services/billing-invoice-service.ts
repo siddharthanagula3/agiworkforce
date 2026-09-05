@@ -1,6 +1,6 @@
 import 'server-only';
 
-import { getNeonDb } from '@/lib/server/neon-db';
+import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import type { SubscriptionRow } from '@/lib/server/neon-types';
 import { getStripeClientOrNull } from '@/lib/server/stripe-client';
 
@@ -27,11 +27,14 @@ export interface BillingInvoiceRecord {
 
 const stripe = getStripeClientOrNull();
 
-export async function listUserBillingInvoices(userId: string): Promise<BillingInvoiceRecord[]> {
+export async function listUserBillingInvoices(
+  db: DatabaseAdapter,
+  userId: string,
+): Promise<BillingInvoiceRecord[]> {
   if (!stripe) return [];
 
   type CustomerRow = Pick<SubscriptionRow, 'stripe_customer_id'>;
-  const [subscription] = await getNeonDb()
+  const [subscription] = await db
     .query<CustomerRow>(
       `select stripe_customer_id
        from public.subscriptions

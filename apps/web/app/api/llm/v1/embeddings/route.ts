@@ -211,7 +211,7 @@ async function handleEmbeddings(request: NextRequest): Promise<Response> {
     if (scoped.userId !== userId) {
       throw new ManagedUsageRequestError('Managed usage tenant mismatch.', 403, 'tenant_mismatch');
     }
-    const subscription = await SubscriptionService.getSubscription(userId);
+    const subscription = await SubscriptionService.getSubscription(scoped.db, userId);
     reservation = await reserveManagedUsageRequest({
       db: scoped.db,
       userId,

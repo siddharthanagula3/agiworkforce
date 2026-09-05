@@ -55,6 +55,8 @@ import {
   templateVcpuCount,
   type HarnessCredentialSpec,
 } from './templates';
+import { getNeonDb } from '@/lib/server/neon-db';
+import { createClaimedUserScopedDb } from '@/lib/server/claimed-user-scope-db';
 import { egressNeedsProxy } from './network-policy';
 import { providerProxyBaseUrl, providerProxyHost } from './provider-proxy';
 import { mintProviderProxyToken } from './provider-proxy-token';
@@ -117,7 +119,10 @@ function resolveSandboxLimits(planTier: string | null | undefined): {
 async function resolveScopePlanTier(scope: E2BSessionScope): Promise<string | null> {
   if (scope.planTier) return scope.planTier;
   try {
-    const subscription = await SubscriptionService.getSubscription(scope.userId);
+    const subscription = await SubscriptionService.getSubscription(
+      createClaimedUserScopedDb(getNeonDb(), { userId: scope.userId, organizationId: null }),
+      scope.userId,
+    );
     return subscription?.plan_tier ?? 'free';
   } catch (err) {
     logger.error(

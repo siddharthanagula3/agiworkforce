@@ -1,8 +1,8 @@
 import 'server-only';
 
+import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import { effectivePlanTier } from '@/lib/entitlement';
 import { logger } from '@/lib/logger';
-import { getNeonDb } from '@/lib/server/neon-db';
 import { getManagedUsageSummary } from '@/lib/services/managed-usage-summary-service';
 import { SubscriptionService } from '@/lib/services/subscription-service';
 import {
@@ -53,8 +53,10 @@ function resolveSubscriptionSource(
   return 'manual';
 }
 
-async function resolveConnectors(userId: string): Promise<SupportAccountConnector[]> {
-  const db = getNeonDb();
+async function resolveConnectors(
+  db: DatabaseAdapter,
+  userId: string,
+): Promise<SupportAccountConnector[]> {
   const connectors: SupportAccountConnector[] = [];
 
   let rows: { id: string; connector_id: string; connected_at: string }[] = [];
@@ -92,7 +94,7 @@ async function resolveConnectors(userId: string): Promise<SupportAccountConnecto
     });
   }
 
-  const custom = await getUserCustomConnectorSummaries(userId);
+  const custom = await getUserCustomConnectorSummaries(db, userId);
   for (const c of custom) {
     connectors.push({
       id: c.id,
@@ -105,8 +107,7 @@ async function resolveConnectors(userId: string): Promise<SupportAccountConnecto
   return connectors;
 }
 
-async function resolveApiKeyCount(userId: string): Promise<number> {
-  const db = getNeonDb();
+async function resolveApiKeyCount(db: DatabaseAdapter, userId: string): Promise<number> {
   const [row] = await db.query<{ count: string }>(
     `select count(*) as count from public.api_keys where user_id = $1 and revoked_at is null`,
     [userId],
@@ -143,9 +144,12 @@ async function resolveEmail(userId: string): Promise<SupportAccountEmail> {
   }
 }
 
-async function resolveUsage(userId: string): Promise<SupportAccountUsage | null> {
+async function resolveUsage(
+  db: DatabaseAdapter,
+  userId: string,
+): Promise<SupportAccountUsage | null> {
   try {
-    const summary = await getManagedUsageSummary(userId);
+    const summary = await getManagedUsageSummary(db, userId);
     return {
       usagePercentage: summary.usage_percentage,
       sessionUsagePercentage: summary.session_usage_percentage,
@@ -168,16 +172,19 @@ async function resolveUsage(userId: string): Promise<SupportAccountUsage | null>
  * @param userId - MUST come from `getClerkAuthUser(request)`. Never from a
  *   request body, a query parameter, or model output.
  */
-export async function resolveSupportAccountContext(userId: string): Promise<SupportAccountContext> {
+export async function resolveSupportAccountContext(
+  db: DatabaseAdapter,
+  userId: string,
+): Promise<SupportAccountContext> {
   if (!userId || typeof userId !== 'string') {
     throw new Error('resolveSupportAccountContext requires an authenticated user id');
   }
 
   const [subscription, usage, connectors, apiKeyCount, email] = await Promise.all([
-    SubscriptionService.getSubscription(userId),
-    resolveUsage(userId),
-    resolveConnectors(userId),
-    resolveApiKeyCount(userId),
+    SubscriptionService.getSubscription(db, userId),
+    resolveUsage(db, userId),
+    resolveConnectors(db, userId),
+    resolveApiKeyCount(db, userId),
     resolveEmail(userId),
   ]);
 

@@ -1,10 +1,9 @@
-
 import 'server-only';
 
 import { NextResponse, type NextRequest } from 'next/server';
 import { z } from 'zod';
 
-import { getClerkAuthUser } from '@/lib/api-auth';
+import { getUserScopedDb } from '@/lib/server/rls-db';
 import { requireCsrfToken } from '@/lib/csrf';
 import { withErrorHandler } from '@/lib/error-handler';
 import { createError } from '@/lib/errors';
@@ -33,7 +32,7 @@ function refusalResponse(error: SupportActionRefusal): NextResponse {
 }
 
 async function handlePost(request: NextRequest) {
-  const { userId } = await getClerkAuthUser(request);
+  const { db, userId } = await getUserScopedDb(request, { resolveOrganization: false });
 
   const csrfError = await requireCsrfToken(request, userId);
   if (csrfError) return csrfError as NextResponse;
@@ -49,6 +48,7 @@ async function handlePost(request: NextRequest) {
 
   try {
     const { actionId, result } = await confirmSupportAction({
+      db,
       userId,
       proposalId: parsed.data.proposalId,
       confirmationToken: parsed.data.confirmationToken,

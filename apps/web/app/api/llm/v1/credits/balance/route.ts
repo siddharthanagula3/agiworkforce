@@ -1,7 +1,7 @@
 import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
-import { getClerkAuthUser } from '@/lib/api-auth';
+import { getUserScopedDb } from '@/lib/server/rls-db';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { CreditService } from '@/lib/services/credit-service';
@@ -25,11 +25,11 @@ async function handleGetBalance(request: NextRequest) {
     return rateLimitResponse;
   }
 
-  const { userId } = await getClerkAuthUser(request, { apiKeyScope: 'usage:read' });
+  const { db, userId } = await getUserScopedDb(request, { apiKeyScope: 'usage:read' });
 
   const [subscriptionResult, balanceResult] = await Promise.allSettled([
-    SubscriptionService.getSubscription(userId),
-    CreditService.getBalance(userId),
+    SubscriptionService.getSubscription(db, userId),
+    CreditService.getBalance(db, userId),
   ]);
 
   const subscription = subscriptionResult.status === 'fulfilled' ? subscriptionResult.value : null;
@@ -75,7 +75,7 @@ async function handleGetBalance(request: NextRequest) {
   const used = balance?.credits_used_cents ?? 0;
   const remaining = balance?.credits_remaining_cents ?? 0;
   const isFreePlan = subscription.plan_tier.toLowerCase() === 'free';
-  const freeUsage = isFreePlan ? await getFreeTrialPublicUsage(userId) : null;
+  const freeUsage = isFreePlan ? await getFreeTrialPublicUsage(db, userId) : null;
   const resetAt = freeUsage?.resetAt ?? nextMonthReset?.toISOString() ?? null;
   const resetDate = resetAt ? new Date(resetAt) : null;
   const secondsUntilReset =

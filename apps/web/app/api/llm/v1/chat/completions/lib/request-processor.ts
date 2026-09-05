@@ -1758,17 +1758,19 @@ export async function processRequest(
   let creditBalancePromise: ReturnType<typeof CreditService.getBalance> | null =
     freeTrialEnabled || isFreePlanTier(subscription.plan_tier)
       ? null
-      : CreditService.getBalance(userId);
+      : scopedDbPromise.then((scoped) => CreditService.getBalance(scoped.db, userId));
   creditBalancePromise?.catch(() => {});
 
   const chatSurface = resolveAuthenticatedSurface(request, auth);
   const customInstructionsPromise =
     chatSurface === 'api'
       ? null
-      : buildCustomInstructionsPreamble(userId).catch((error: unknown) => {
-          logger.warn({ error, userId }, 'Custom instructions read failed; sending none');
-          return null;
-        });
+      : scopedDbPromise
+          .then((scoped) => buildCustomInstructionsPreamble(scoped.db, userId))
+          .catch((error: unknown) => {
+            logger.warn({ error, userId }, 'Custom instructions read failed; sending none');
+            return null;
+          });
 
   const skillInstallOverridesPromise: Promise<ReadonlyMap<string, boolean>> = scopedDbPromise
     .then((scoped) => getSkillInstallOverrides(scoped.db, userId))
@@ -2349,7 +2351,8 @@ export async function processRequest(
   let routeBudgetRemainingCents: number | undefined;
   if (!freeTrialEnabled) {
     try {
-      const budgetBalance = await (creditBalancePromise ?? CreditService.getBalance(userId));
+      const budgetBalance = await (creditBalancePromise ??
+        CreditService.getBalance((await scopedDbPromise).db, userId));
       if ((budgetBalance?.credits_allocated_cents ?? 0) > 0) {
         routeBudgetRemainingCents = budgetBalance?.credits_remaining_cents;
       }
@@ -3034,7 +3037,8 @@ export async function processRequest(
   } else {
     let existingBalance = await timePhase(
       CHAT_TURN_PHASE.creditCheck,
-      () => creditBalancePromise ?? CreditService.getBalance(userId),
+      async () =>
+        creditBalancePromise ?? CreditService.getBalance((await scopedDbPromise).db, userId),
     );
 
     logger.debug(
@@ -3061,12 +3065,12 @@ export async function processRequest(
           subscription.plan_tier,
           subscription.current_period_start,
           subscription.current_period_end,
-          { stripePriceId: subscription.stripe_price_id },
+          { db: (await scopedDbPromise).db, stripePriceId: subscription.stripe_price_id },
         );
 
         if (accountId) {
           logger.info({ userId: userId, accountId }, 'Credits allocated successfully');
-          existingBalance = await CreditService.getBalance(userId);
+          existingBalance = await CreditService.getBalance((await scopedDbPromise).db, userId);
           logger.debug(
             {
               userId: userId,
@@ -3089,8 +3093,8 @@ export async function processRequest(
       }
     }
 
-    const hasCredits = await timePhase(CHAT_TURN_PHASE.creditCheck, () =>
-      CreditService.checkAvailable(userId, estimatedCostCents),
+    const hasCredits = await timePhase(CHAT_TURN_PHASE.creditCheck, async () =>
+      CreditService.checkAvailable((await scopedDbPromise).db, userId, estimatedCostCents),
     );
 
     logger.debug(
@@ -3144,7 +3148,11 @@ export async function processRequest(
           maxTokens,
         );
 
-        const hasFallbackCredits = await CreditService.checkAvailable(userId, fallbackCostCents);
+        const hasFallbackCredits = await CreditService.checkAvailable(
+          (await scopedDbPromise).db,
+          userId,
+          fallbackCostCents,
+        );
 
         if (hasFallbackCredits) {
           usedFallback = true;

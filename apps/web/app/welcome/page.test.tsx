@@ -6,6 +6,8 @@ const mocks = vi.hoisted(() => ({
   redirect: vi.fn(),
   requireTerms: vi.fn(),
   getOnboardingStatus: vi.fn(),
+  getCurrentUserRlsDb: vi.fn(),
+  scopedDb: { query: vi.fn(), execute: vi.fn(), transaction: vi.fn() },
 }));
 
 vi.mock('@clerk/nextjs/server', () => ({ auth: () => mocks.auth() }));
@@ -20,7 +22,10 @@ vi.mock('@/lib/server/require-current-terms', () => ({
     mocks.requireTerms(userId, returnTo),
 }));
 vi.mock('@/lib/server/user-identity', () => ({
-  getOnboardingStatus: (userId: string) => mocks.getOnboardingStatus(userId),
+  getOnboardingStatus: (db: unknown, userId: string) => mocks.getOnboardingStatus(db, userId),
+}));
+vi.mock('@/lib/server/rls-db', () => ({
+  getCurrentUserRlsDb: () => mocks.getCurrentUserRlsDb(),
 }));
 vi.mock('@/features/onboarding/components/OnboardingWizard', () => ({
   OnboardingWizard: () => <div data-testid="onboarding-wizard" />,
@@ -34,6 +39,7 @@ describe('/welcome', () => {
     mocks.auth.mockResolvedValue({ userId: 'user-1' });
     mocks.requireTerms.mockResolvedValue(undefined);
     mocks.getOnboardingStatus.mockResolvedValue({ completed: false, primaryUseCase: null });
+    mocks.getCurrentUserRlsDb.mockResolvedValue({ db: mocks.scopedDb, userId: 'user-1' });
   });
 
   it('sends a signed-out visitor to login with a return path', async () => {
@@ -55,6 +61,6 @@ describe('/welcome', () => {
 
     expect(screen.getByTestId('onboarding-wizard')).toBeInTheDocument();
     expect(mocks.requireTerms).toHaveBeenCalledWith('user-1', '/welcome');
-    expect(mocks.getOnboardingStatus).toHaveBeenCalledWith('user-1');
+    expect(mocks.getOnboardingStatus).toHaveBeenCalledWith(mocks.scopedDb, 'user-1');
   });
 });
