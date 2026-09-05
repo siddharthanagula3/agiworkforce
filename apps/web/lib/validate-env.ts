@@ -1,3 +1,11 @@
+import {
+  hasObjectStorageCredentials,
+  resolveObjectStorageConfig,
+  OBJECT_STORAGE_ACCESS_KEY_ID_ENV,
+  OBJECT_STORAGE_ENDPOINT_ENV,
+  OBJECT_STORAGE_PRIVATE_BUCKET_ENV,
+  OBJECT_STORAGE_SECRET_ACCESS_KEY_ENV,
+} from '@agiworkforce/object-storage/config';
 import { getAllRegisteredPriceIds } from './price-tier-mapping';
 import { STRIPE_PRICE_IDS } from './pricing';
 
@@ -373,34 +381,31 @@ export function validateSandboxOriginConfigured(): ValidationResult {
 export function validateGeneratedMediaStorage(): ValidationResult {
   const errors: string[] = [];
   const warnings: string[] = [];
-  const read = (name: string): string | undefined => process.env[name]?.trim() || undefined;
+  const config = resolveObjectStorageConfig();
 
-  const hasR2Credentials = Boolean(
-    read('CLOUDFLARE_R2_ACCOUNT_ID') &&
-    read('CLOUDFLARE_R2_ACCESS_KEY_ID') &&
-    read('CLOUDFLARE_R2_SECRET_ACCESS_KEY'),
-  );
-  if (!hasR2Credentials) {
+  if (!hasObjectStorageCredentials(config)) {
     warnings.push(
-      'Cloudflare R2 credentials are not set (CLOUDFLARE_R2_ACCOUNT_ID, ' +
-        'CLOUDFLARE_R2_ACCESS_KEY_ID, CLOUDFLARE_R2_SECRET_ACCESS_KEY), managed image and ' +
+      `Object storage credentials are not set (${OBJECT_STORAGE_ENDPOINT_ENV}, ` +
+        `${OBJECT_STORAGE_ACCESS_KEY_ID_ENV}, ${OBJECT_STORAGE_SECRET_ACCESS_KEY_ENV} or their ` +
+        'CLOUDFLARE_R2_ equivalents), managed image and ' +
         'video generation report storage_not_configured and stay unavailable in the composer.',
     );
     return { valid: true, errors, warnings };
   }
 
-  const privateBucket = read('CLOUDFLARE_R2_PRIVATE_BUCKET_NAME');
-  const publicBucket = read('CLOUDFLARE_R2_BUCKET_NAME');
+  const { privateBucket, publicBucket } = config;
 
   if (!privateBucket) {
     warnings.push(
-      'CLOUDFLARE_R2_PRIVATE_BUCKET_NAME is not set, generated media has nowhere private to ' +
+      `${OBJECT_STORAGE_PRIVATE_BUCKET_ENV} or CLOUDFLARE_R2_PRIVATE_BUCKET_NAME is not set, ` +
+        'generated media has nowhere private to ' +
         'live, so every managed image and video model reports storage_not_configured and video ' +
         'generation is refused before any credit is reserved.',
     );
   } else if (publicBucket && privateBucket === publicBucket) {
     warnings.push(
-      'CLOUDFLARE_R2_PRIVATE_BUCKET_NAME matches CLOUDFLARE_R2_BUCKET_NAME, private generated ' +
+      `${OBJECT_STORAGE_PRIVATE_BUCKET_ENV} or CLOUDFLARE_R2_PRIVATE_BUCKET_NAME matches the ` +
+        'public bucket, private generated ' +
         'media storage stays disabled until the two name different buckets.',
     );
   }
