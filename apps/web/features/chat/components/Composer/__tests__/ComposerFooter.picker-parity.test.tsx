@@ -292,21 +292,17 @@ describe('ComposerFooter · picker rows', () => {
     expect(within(dialog).queryByText('Models')).not.toBeInTheDocument();
   });
 
-  it('filters the roster from a typed character instead of a search field', () => {
+  it('opens the catalogue on the typed query instead of filtering the short list', () => {
     const dialog = mountAndOpen();
-    expect(modelRows(dialog).length).toBeGreaterThan(1);
+    expect(within(dialog).queryByRole('textbox')).not.toBeInTheDocument();
 
+    // One character is all the short list handles: it opens the catalogue and
+    // the catalogue's own autofocused field takes the rest of the typing.
     fireEvent.keyDown(dialog, { key: 'S' });
-    fireEvent.keyDown(dialog, { key: 'e' });
-    fireEvent.keyDown(dialog, { key: 'c' });
-    expect(within(dialog).getByRole('status')).toHaveTextContent('Sec');
-    expect(modelRows(dialog).map((row) => row.getAttribute('aria-label'))).toEqual([
-      'Secondary Fixture',
-    ]);
 
-    for (let index = 0; index < 3; index += 1) fireEvent.keyDown(dialog, { key: 'Backspace' });
-    expect(within(dialog).queryByRole('status')).not.toBeInTheDocument();
-    expect(modelRows(dialog).length).toBeGreaterThan(1);
+    const search = within(dialog).getByRole('textbox', { name: 'Search models' });
+    expect(search).toHaveValue('S');
+    expect(within(dialog).queryByRole('button', { name: /All models/ })).not.toBeInTheDocument();
   });
 
   it('puts one guidance phrase per routing profile on a row, not the catalog tagline', () => {
@@ -343,17 +339,20 @@ describe('ComposerFooter · picker query reset', () => {
     useRoster(BASE_MODELS);
   });
 
-  it('clears the typed query when a row is picked so the next open shows the roster', () => {
+  it('clears the typed query and closes the catalogue when the picker closes', () => {
     render(<ComposerFooter />);
     let dialog = openPicker();
-    for (const key of ['S', 'e', 'c']) fireEvent.keyDown(dialog, { key });
-    expect(modelRows(dialog)).toHaveLength(1);
-    fireEvent.click(within(dialog).getByRole('button', { name: 'Secondary Fixture' }));
+    fireEvent.keyDown(dialog, { key: 'S' });
+    expect(within(dialog).getByRole('textbox', { name: 'Search models' })).toHaveValue('S');
+
+    // Escape unwinds the catalogue, then the panel; Tab would cycle inside the
+    // dialog rather than close it, which is the contract.
+    fireEvent.keyDown(dialog, { key: 'Escape' });
+    fireEvent.keyDown(screen.getByRole('dialog', { name: 'Models' }), { key: 'Escape' });
     expect(screen.queryByRole('dialog', { name: 'Models' })).not.toBeInTheDocument();
 
     dialog = openPicker();
-    expect(within(dialog).queryByRole('status')).not.toBeInTheDocument();
-    expect(modelRows(dialog).length).toBeGreaterThan(1);
+    expect(within(dialog).queryByRole('textbox')).not.toBeInTheDocument();
     expect(allModelsRow(dialog)).toBeInTheDocument();
   });
 });

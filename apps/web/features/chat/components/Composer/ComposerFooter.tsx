@@ -703,6 +703,13 @@ export function ComposerFooter({
     }
     if (event.key.length !== 1 || event.key === ' ') return;
     event.stopPropagation();
+    // preventDefault matters: without it the browser also delivers this same
+    // character to the catalogue's field once it mounts and autofocuses, so the
+    // query opened with its first letter doubled. jsdom cannot see that.
+    event.preventDefault();
+    // The search field lives in the catalogue only, so a typed character opens
+    // the disclosure on that query rather than filtering the short list.
+    setCatalogueOpen(true);
     setSearchQuery((query) => query + event.key);
   }, []);
 
