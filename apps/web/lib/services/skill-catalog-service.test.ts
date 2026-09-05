@@ -1,7 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
-import { join } from 'node:path';
+import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { join, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
+
+import { SKILL_AUDIENCES, SKILL_MANIFEST_FILE_NAME } from '@agiworkforce/skills';
 
 vi.mock('server-only', () => ({}));
 vi.mock('@/lib/logger', () => ({
@@ -260,6 +262,47 @@ describe('managed Skill catalog service', () => {
     for (const skills of [withoutPlugin, withPlugin]) {
       expect(skills.some((skill) => skill.name === 'code-review')).toBe(true);
     }
+  });
+
+  it('never offers a repository development skill to the product catalog', async () => {
+    const directory = await getManagedSkillDirectory();
+    const listed = new Set(directory.map((skill) => skill.name));
+
+    for (const developerSkill of ['agiworkforce-design', 'model-orchestration', 'antislop']) {
+      expect(listed.has(developerSkill)).toBe(false);
+      await expect(findManagedSkillByName(developerSkill)).resolves.toBeNull();
+      await expect(getBundledSkillDownload(developerSkill)).resolves.toBeNull();
+      await expect(
+        executeManagedSkillTool(
+          { action: 'load', name: developerSkill },
+          { availableTools: new Set(['skill']) },
+        ),
+      ).resolves.toMatchObject({ isError: true, code: 'skill_not_found' });
+    }
+
+    for (const productSkill of ['code-review', 'data-analysis']) {
+      expect(listed.has(productSkill)).toBe(true);
+      await expect(findManagedSkillByName(productSkill)).resolves.toMatchObject({
+        name: productSkill,
+      });
+    }
+  });
+
+  it('requires every bundled skill to declare an audience before it can ship', async () => {
+    const repositoryRoot = resolve(process.cwd(), '..', '..');
+    const manifest = JSON.parse(
+      await readFile(join(repositoryRoot, SKILL_MANIFEST_FILE_NAME), 'utf-8'),
+    ) as { skills: Record<string, { audience?: string }> };
+    const bundled = await readdir(join(repositoryRoot, '.agents', 'skills'), {
+      withFileTypes: true,
+    });
+
+    const undeclared = bundled
+      .filter((entry) => entry.isDirectory() && !entry.name.startsWith('.'))
+      .map((entry) => entry.name)
+      .filter((id) => !SKILL_AUDIENCES.includes(manifest.skills[id]?.audience as never));
+
+    expect(undeclared).toEqual([]);
   });
 
   it('does not auto-grant a bundled skill required tools', async () => {

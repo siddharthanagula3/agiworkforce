@@ -24,6 +24,17 @@
  */
 
 export type { Skill, SkillLayer, SkillMetadata, SkillSource } from './types';
+export {
+  filterSkillsForProductAudience,
+  parseSkillAudienceManifest,
+  skillAudience,
+  skillManifestId,
+  DEVELOPER_SKILL_AUDIENCE,
+  PRODUCT_SKILL_AUDIENCE,
+  SKILL_AUDIENCES,
+  SKILL_MANIFEST_FILE_NAME,
+} from './audience';
+export type { SkillAudience, SkillAudienceManifest } from './audience';
 export { parseFrontmatter } from './frontmatter';
 export type { ParsedFrontmatter } from './frontmatter';
 export {

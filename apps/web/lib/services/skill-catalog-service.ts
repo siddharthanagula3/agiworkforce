@@ -6,9 +6,13 @@ import { dirname, isAbsolute, join, relative, resolve } from 'node:path';
 
 import {
   executeSkillTool,
+  filterSkillsForProductAudience,
   loadSkillsFromLayers,
   mergeSkills,
+  parseSkillAudienceManifest,
+  SKILL_MANIFEST_FILE_NAME,
   type Skill,
+  type SkillAudienceManifest,
   type SkillLayer,
   type SkillSource,
   type SkillToolResult,
@@ -83,12 +87,27 @@ export function parseSkillLayersConfig(raw: string | undefined): SkillLayer[] {
   }
 }
 
+const BUNDLED_SKILLS_DIRECTORY = '.agents/skills';
+const WORKSPACE_ROOT_FROM_APP = '../..';
+
+function repositoryRoot(): string {
+  const candidates = [process.cwd(), resolve(process.cwd(), WORKSPACE_ROOT_FROM_APP)];
+  return (
+    candidates.find((candidate) => existsSync(join(candidate, BUNDLED_SKILLS_DIRECTORY))) ??
+    candidates[0]!
+  );
+}
+
 function bundledSkillsRoot(): string {
-  const candidates = [
-    resolve(process.cwd(), '.agents/skills'),
-    resolve(process.cwd(), '../..', '.agents/skills'),
-  ];
-  return candidates.find((candidate) => existsSync(candidate)) ?? candidates[0]!;
+  return join(repositoryRoot(), BUNDLED_SKILLS_DIRECTORY);
+}
+
+function skillManifestPath(): string {
+  return join(repositoryRoot(), SKILL_MANIFEST_FILE_NAME);
+}
+
+async function readSkillAudienceManifest(): Promise<SkillAudienceManifest> {
+  return parseSkillAudienceManifest(await readFile(skillManifestPath(), 'utf-8'));
 }
 
 export function getManagedSkillLayers(): SkillLayer[] {
@@ -103,7 +122,15 @@ export async function getManagedSkillDirectory(): Promise<Skill[]> {
   if (skillCache && now < skillCache.expiresAt) return skillCache.value;
 
   try {
-    const value = mergeSkills(await loadSkillsFromLayers(getManagedSkillLayers()));
+    const [layers, manifest] = await Promise.all([
+      loadSkillsFromLayers(getManagedSkillLayers()),
+      readSkillAudienceManifest(),
+    ]);
+    const value = filterSkillsForProductAudience(
+      mergeSkills(layers),
+      manifest,
+      bundledSkillsRoot(),
+    );
     skillCache = { value, expiresAt: now + CACHE_TTL_MS };
     return value;
   } catch (error) {
