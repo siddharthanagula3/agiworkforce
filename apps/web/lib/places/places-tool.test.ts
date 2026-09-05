@@ -1,8 +1,9 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
 
 import { toolStatusPhrase } from '@agiworkforce/provider-protocol';
 import { PLACES_SEARCH_TOOL_NAME, type PlaceRecord } from '@agiworkforce/types';
 
+import type { recordPlacesSearchCost } from './places-cost';
 import type { PlacesProvider, PlacesSearchQuery } from './places-provider';
 import {
   executePlacesSearch,
@@ -76,10 +77,10 @@ describe('placesSearchToolDef', () => {
 });
 
 describe('executePlacesSearch', () => {
-  let recordCost: ReturnType<typeof vi.fn>;
+  let recordCost: Mock<typeof recordPlacesSearchCost>;
 
   beforeEach(() => {
-    recordCost = vi.fn().mockResolvedValue(undefined);
+    recordCost = vi.fn<typeof recordPlacesSearchCost>().mockResolvedValue(undefined);
   });
 
   it('rejects an unusable argument without buying anything', async () => {
@@ -222,7 +223,7 @@ describe('formatPlacesResultForModel', () => {
         toolCallId: 'call-8',
         provider,
         userId: 'user_1',
-        recordCost: vi.fn(),
+        recordCost: vi.fn<typeof recordPlacesSearchCost>(),
         timeZone: 'America/Los_Angeles',
         now: () => FIXED_NOW,
       },
