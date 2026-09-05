@@ -86,6 +86,15 @@ vi.mock('@agiworkforce/unified-chat', async () => {
     EmptyState: () => React.createElement('div', { 'data-testid': 'empty-state' }),
     QuickChips: () => React.createElement('div', { 'data-testid': 'quick-chips' }),
     useReducedMotion: () => false,
+    composerVoiceStateFromTranscription: (
+      workflow: string,
+      flags: { isRecording: boolean; isTranscribing: boolean; isSupported: boolean },
+    ) => {
+      if (flags.isRecording) return 'listening';
+      if (flags.isTranscribing) return 'transcribing';
+      if (!flags.isSupported) return 'unsupported';
+      return workflow;
+    },
     useChatStore,
     useChatModelStore,
     selectBudget: () => ({ enabled: false }),

@@ -201,6 +201,15 @@ vi.mock('@agiworkforce/unified-chat', async () => {
           )
         : null,
     useReducedMotion: () => false,
+    composerVoiceStateFromTranscription: (
+      workflow: string,
+      flags: { isRecording: boolean; isTranscribing: boolean; isSupported: boolean },
+    ) => {
+      if (flags.isRecording) return 'listening';
+      if (flags.isTranscribing) return 'transcribing';
+      if (!flags.isSupported) return 'unsupported';
+      return workflow;
+    },
     useChatStore,
     useChatModelStore,
     selectBudget: (state: typeof unifiedChatMock.budgetState) => state.budget,

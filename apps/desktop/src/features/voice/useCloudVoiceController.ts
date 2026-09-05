@@ -5,6 +5,7 @@ import {
   type ToolApprovalRequest,
 } from '@agiworkforce/types';
 import {
+  composerVoiceStateFromTranscription,
   useChatStore as useSharedChatStore,
   type ComposerVoiceController,
   type ComposerVoiceState,
@@ -28,7 +29,10 @@ import { toProviderLanguage } from '../../lib/voiceLanguage';
 import { onGlobalVoiceHotkey } from '../../lib/tauri-electron/voice-hotkey';
 import { rewriteCloudVoiceTranscript, type CloudVoiceDecision } from './cloudVoiceService';
 
-type WorkflowState = 'idle' | 'processing' | 'awaiting_action' | 'executing' | 'stopping' | 'error';
+type DesktopVoiceWorkflowState = Extract<
+  ComposerVoiceState,
+  'idle' | 'processing' | 'awaiting_action' | 'executing' | 'stopping' | 'error'
+>;
 
 function insertVoiceTextIntoDraft(text: string): void {
   if (!text) return;
@@ -58,7 +62,7 @@ export interface CloudVoiceControllerResult {
 }
 
 export function useCloudVoiceController(enabled: boolean): CloudVoiceControllerResult {
-  const [workflowState, setWorkflowState] = useState<WorkflowState>('idle');
+  const [workflowState, setWorkflowState] = useState<DesktopVoiceWorkflowState>('idle');
   const [pendingAction, setPendingAction] = useState<string | null>(null);
   const [consentPromptOpen, setConsentPromptOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -439,10 +443,11 @@ export function useCloudVoiceController(enabled: boolean): CloudVoiceControllerR
   // through a Tauri command the cloud shell cannot reach.
   useEffect(() => onGlobalVoiceHotkey(() => void toggleRef.current()), []);
 
-  let controllerState: ComposerVoiceState = workflowState;
-  if (isRecording) controllerState = 'listening';
-  else if (isTranscribing) controllerState = 'transcribing';
-  else if (!isSupported) controllerState = 'unsupported';
+  const controllerState: ComposerVoiceState = composerVoiceStateFromTranscription(workflowState, {
+    isRecording,
+    isTranscribing,
+    isSupported,
+  });
 
   const controller = useMemo<ComposerVoiceController>(
     () => ({
