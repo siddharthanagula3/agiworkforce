@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { listCanonicalModels } from '@agiworkforce/types';
+import { listCanonicalModels, type Provider } from '@agiworkforce/types';
 
 vi.mock('server-only', () => ({}));
 vi.mock('@/lib/logger', () => ({
@@ -33,8 +33,8 @@ function governed(policy: Partial<ModelAccessPolicy>) {
   );
 }
 
-function providerOf(routeId: string): string {
-  return routeId.slice(0, routeId.indexOf('/'));
+function providerOf(routeId: string): Provider {
+  return routeId.slice(0, routeId.indexOf('/')) as Provider;
 }
 
 describe('workspace model policy as a router input', () => {

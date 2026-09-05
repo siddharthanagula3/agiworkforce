@@ -2604,6 +2604,7 @@ export async function processRequest(
     return { ok: false, response: modelPolicyDenialResponse(modelAccess) };
   }
 
+  const scopedForPolicy = await scopedDbPromise;
   const fallbackAllowedByPolicy = (candidateModel: string): boolean => {
     const decision = evaluateCandidateModelAccess(workspaceModelPolicy, candidateModel);
     if (!decision.allowed) {
