@@ -1,6 +1,4 @@
-
 import { NextRequest, NextResponse } from 'next/server';
-import { auth } from '@clerk/nextjs/server';
 import { z } from 'zod';
 
 import { withErrorHandler } from '@/lib/error-handler';
@@ -8,6 +6,7 @@ import { requireCsrfToken } from '@/lib/csrf';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { CURRENT_TERMS_VERSION, recordTermsAcceptance } from '@/lib/server/terms';
+import { getRequestIdentity } from '@/lib/server/identity';
 
 const AcceptTermsSchema = z.object({
   surface: z.enum(['web-signup', 'web-login']),
@@ -18,7 +17,7 @@ async function handleAcceptTerms(request: NextRequest) {
   const csrfResponse = await requireCsrfToken(request);
   if (csrfResponse) return csrfResponse;
 
-  const { userId } = await auth();
+  const { subject: userId } = await getRequestIdentity();
   if (!userId) {
     throw createError.unauthorized('Sign in to record terms acceptance');
   }

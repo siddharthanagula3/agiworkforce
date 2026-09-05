@@ -1,12 +1,11 @@
-
 export const runtime = 'nodejs';
 
-import { auth } from '@clerk/nextjs/server';
 import { NextRequest, NextResponse } from 'next/server';
 import { withRateLimit } from '@/lib/rate-limit';
 import { requireCsrfToken } from '@/lib/csrf';
 import { logger } from '@/lib/logger';
 import crypto from 'crypto';
+import { getRequestIdentity } from '@/lib/server/identity';
 
 const TOKEN_TTL_MS = 60 * 1000;
 
@@ -77,7 +76,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   }
 
   try {
-    const { userId, getToken } = await auth();
+    const { subject: userId, getToken } = await getRequestIdentity();
 
     if (!userId) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });

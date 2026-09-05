@@ -33,6 +33,9 @@ import {
 } from '@/lib/services/capability-handshake-service';
 import { resolveSubscriptionBillingSource } from '@/lib/server/subscription-billing-owner';
 import { getCapabilityLimitResets } from '@/lib/server/capability-limit-resets';
+import { getIdentityUser } from '@/lib/server/identity';
+
+const IDENTITY_LOOKUP_TIMEOUT_MS = 1500;
 
 const PatchMeSchema = z.object({
   display_name: z.string().min(1).max(120).optional(),
@@ -51,26 +54,26 @@ async function handleGetMe(request: NextRequest) {
     let clerkName: string | undefined;
     let resolvedEmail = email ?? undefined;
     try {
-      const { clerkClient } = await import('@clerk/nextjs/server');
-      const client = await clerkClient();
       let nameTimer: ReturnType<typeof setTimeout> | undefined;
-      const clerkUser = await Promise.race([
-        client.users.getUser(userId).finally(() => {
+      const identityUser = await Promise.race([
+        getIdentityUser(userId).finally(() => {
           if (nameTimer) clearTimeout(nameTimer);
         }),
         new Promise<never>((_, reject) => {
-          nameTimer = setTimeout(() => reject(new Error('clerk getUser timeout')), 1500);
+          nameTimer = setTimeout(
+            () => reject(new Error('identity user lookup timeout')),
+            IDENTITY_LOOKUP_TIMEOUT_MS,
+          );
         }),
       ]);
       clerkName =
-        clerkUser.fullName?.trim() ||
-        [clerkUser.firstName, clerkUser.lastName].filter(Boolean).join(' ').trim() ||
-        clerkUser.firstName?.trim() ||
-        clerkUser.username?.trim() ||
-        undefined;
-      resolvedEmail = resolvedEmail ?? clerkUser.primaryEmailAddress?.emailAddress ?? undefined;
-    } catch (clerkLookupError) {
-      logger.warn({ userId, error: clerkLookupError }, 'Failed to resolve Clerk profile name');
+        identityUser?.fullName ?? identityUser?.firstName ?? identityUser?.username ?? undefined;
+      resolvedEmail = resolvedEmail ?? identityUser?.primaryEmail ?? undefined;
+    } catch (identityLookupError) {
+      logger.warn(
+        { userId, error: identityLookupError },
+        'Failed to resolve the identity profile name',
+      );
     }
 
     const db = createClaimedUserScopedDb(getNeonDb(), { userId, organizationId: null });

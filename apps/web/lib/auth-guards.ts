@@ -8,17 +8,15 @@ import {
   parsePlatformAdminIds,
 } from '@/features/admin/lib/platform-admin-access';
 
+import { getIdentityUser } from './server/identity';
 import { assertAccountActive, getClerkAuthUser, type AuthResult } from './api-auth';
 import { createError } from './errors';
 import { logger } from './logger';
 
 async function getUserRole(userId: string): Promise<string | undefined> {
   try {
-    const { clerkClient } = await import('@clerk/nextjs/server');
-    const client = await clerkClient();
-    const user = await client.users.getUser(userId);
-    const meta = user.publicMetadata as Record<string, unknown> | null | undefined;
-    const role = meta?.['role'];
+    const user = await getIdentityUser(userId);
+    const role = user?.publicMetadata['role'];
     return typeof role === 'string' ? role : undefined;
   } catch {
     return undefined;
@@ -29,8 +27,8 @@ async function getUserRole(userId: string): Promise<string | undefined> {
  * Require an authenticated admin user. Throws on either no auth (401) or
  * authenticated-but-not-admin (403).
  *
- * Admin role is read from Clerk publicMetadata.role. Both "admin" and "owner"
- * are accepted as admin-equivalent.
+ * Admin role is read from the identity provider's public metadata. Both "admin"
+ * and "owner" are accepted as admin-equivalent.
  *
  * @throws {AppError} 401 if not authenticated, 403 if no admin role
  */
@@ -44,7 +42,7 @@ export async function requireAdmin(request: NextRequest): Promise<AuthResult> {
 }
 
 /**
- * Require a platform operator: a Clerk user id on the `AGI_PLATFORM_ADMIN_USER_IDS`
+ * Require a platform operator: a user id on the `AGI_PLATFORM_ADMIN_USER_IDS`
  * allowlist. Use this, never `requireAdmin`, for surfaces that reach across
  * tenants, since the org `admin`/`owner` role is self-service.
  *

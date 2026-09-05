@@ -38,12 +38,12 @@ export function selectIdentityProvider(
  * second case here plus its adapter; every consumer already talks to the
  * interface, so no route, guard or page changes.
  */
-export function resolveIdentityProvider(
+export function resolveIdentityProvider<Request = unknown>(
   options: ResolveIdentityProviderOptions = {},
-): IdentityProvider {
+): IdentityProvider<Request> {
   const provider = selectIdentityProvider(options);
   switch (provider) {
     case 'clerk':
-      return new ClerkIdentityProvider(options.clerk ?? {});
+      return new ClerkIdentityProvider<Request>(options.clerk ?? {});
   }
 }

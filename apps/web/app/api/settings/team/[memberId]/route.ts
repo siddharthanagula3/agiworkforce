@@ -13,11 +13,11 @@ import { getUserScopedDb } from '@/lib/server/rls-db';
 import type { OrganizationMemberRow } from '@/lib/server/neon-types';
 import { handleCorsPreflightRequest } from '@/lib/cors';
 import { recordAuditEvent } from '@/lib/security-audit';
-import { clerkClient } from '@clerk/nextjs/server';
 import { deprovisionMember } from '@/lib/services/deprovision-service';
 import { withSeatAccountingErrors } from '@/lib/services/organization-seat-service';
 import { invalidateActiveOrganizationCache } from '@/lib/server/request-context-cache';
 import { requireTeamAdminAccess } from '../team-admin-access';
+import { getIdentityProvider } from '@/lib/server/identity';
 
 const MEMBER_ID_RE = /^([0-9a-f-]{36}):(.+)$/;
 
@@ -146,7 +146,7 @@ async function handleRemove(
   // "actually cut off" is the offboarding hole a security review looks for.
   // Deliberately after the membership delete: if revocation fails the member is
   // still out of the workspace, and the audit event says what remained.
-  const deprovision = await deprovisionMember(getNeonDb(), await clerkClient(), {
+  const deprovision = await deprovisionMember(getNeonDb(), getIdentityProvider(), {
     userId: targetUserId,
     organizationId,
   });

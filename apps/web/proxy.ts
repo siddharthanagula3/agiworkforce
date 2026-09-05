@@ -2,13 +2,12 @@ import {
   objectStorageUploadOrigins,
   resolveObjectStorageConfig,
 } from '@agiworkforce/object-storage/config';
-import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server';
 import type { NextMiddleware, NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
 import { withCorsAndSecurityHeaders } from './lib/cors';
 import { apiHostRewriteUsesClerk, isApiHostRewriteSource } from './lib/api-host-route-contract';
 import { decideEuAccess, euBlockEnabled } from './lib/eu-access';
-import { getClerkAuthorizedParties } from './lib/clerk-authorized-parties';
+import { getIdentityProvider } from './lib/server/identity';
 import { hasBrowserSessionCookie as isBrowserSessionCookiePresent } from './lib/session-cookie';
 
 const CHAT_ROOT_PATH = '/chat';
@@ -18,19 +17,7 @@ const CLOUD_CODE_PATH = '/chat/code';
 
 const UNAVAILABLE_PATH = '/region-unavailable';
 
-function clerkFapiOrigin(): string {
-  const key = process.env['NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY']?.trim();
-  const encoded = key?.replace(/^pk_(test|live)_/u, '');
-  if (!encoded || encoded === key) return '';
-  let host: string;
-  try {
-    host = atob(encoded).replace(/\$+$/u, '');
-  } catch {
-    return '';
-  }
-  if (!/^(?!-)[a-z0-9-]{1,63}(?:\.(?!-)[a-z0-9-]{1,63})+$/u.test(host)) return '';
-  return ` https://${host}`;
-}
+const identityMiddleware = getIdentityProvider().middleware;
 
 function buildCspWithNonce(nonce: string, frameAncestors: "'none'" | "'self'" = "'none'"): string {
   const sandboxOrigin = process.env['NEXT_PUBLIC_SANDBOX_ORIGIN']?.trim().replace(/\/+$/, '');
@@ -39,14 +26,16 @@ function buildCspWithNonce(nonce: string, frameAncestors: "'none'" | "'self'" = 
     .map((origin) => ` ${origin}`)
     .join('');
   const devUnsafeEval = process.env['NODE_ENV'] === 'production' ? '' : " 'unsafe-eval'";
-  const clerkFapi = clerkFapiOrigin();
+  const identityOrigins = getIdentityProvider().middleware.contentSecurityPolicyOrigins();
+  const identityScript = identityOrigins.script.map((origin) => ` ${origin}`).join('');
+  const identityConnect = identityOrigins.connect.map((origin) => ` ${origin}`).join('');
   return `
     default-src 'self';
-    script-src 'self' 'nonce-${nonce}'${devUnsafeEval}${clerkFapi} https://*.clerk.accounts.dev https://*.clerk.com https://js.stripe.com https://challenges.cloudflare.com https://www.googletagmanager.com;
+    script-src 'self' 'nonce-${nonce}'${devUnsafeEval}${identityScript} https://js.stripe.com https://challenges.cloudflare.com https://www.googletagmanager.com;
     style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://js.stripe.com;
     img-src 'self' data: blob: https:;
     font-src 'self' https://fonts.gstatic.com https://js.stripe.com data:;
-    connect-src 'self'${storageUploadOrigins}${clerkFapi} https://*.clerk.accounts.dev https://*.clerk.com https://clerk-telemetry.com https://api.stripe.com https://vitals.vercel-insights.com https://www.google-analytics.com https://analytics.google.com https://region1.google-analytics.com;
+    connect-src 'self'${storageUploadOrigins}${identityConnect} https://api.stripe.com https://vitals.vercel-insights.com https://www.google-analytics.com https://analytics.google.com https://region1.google-analytics.com;
     worker-src 'self' blob:;
     frame-src 'self' https://js.stripe.com https://hooks.stripe.com https://challenges.cloudflare.com${sandboxFrameSrc};
     frame-ancestors ${frameAncestors};
@@ -123,14 +112,15 @@ function buildAgiCodeResponse(request: NextRequest): NextResponse {
 
 function buildSignedOutRedirect(request: NextRequest): NextResponse {
   const requestedPath = `${request.nextUrl.pathname}${request.nextUrl.search}`;
-  const redirectUrl = new URL('/login', request.url);
-  redirectUrl.searchParams.set('redirectTo', requestedPath);
+  const signInRoute = identityMiddleware.signInRoute();
+  const redirectUrl = new URL(signInRoute.path, request.url);
+  redirectUrl.searchParams.set(signInRoute.redirectParam, requestedPath);
   const response = NextResponse.redirect(redirectUrl);
   response.headers.set('Content-Security-Policy', buildCspWithNonce(btoa(crypto.randomUUID())));
   return response;
 }
 
-const isProtectedAppRoute = createRouteMatcher([
+const isProtectedAppRoute = identityMiddleware.createRouteMatcher([
   '/chat(.*)',
   '/library(.*)',
   '/schedules(.*)',
@@ -144,7 +134,7 @@ const isProtectedAppRoute = createRouteMatcher([
   '/welcome(.*)',
 ]);
 
-const isPublicApiRoute = createRouteMatcher([
+const isPublicApiRoute = identityMiddleware.createRouteMatcher([
   '/api/health',
   '/api/download(.*)',
   '/api/download-beta(.*)',
@@ -152,7 +142,7 @@ const isPublicApiRoute = createRouteMatcher([
   '/api/waitlist(.*)',
 ]);
 
-const isClerkSessionRoute = createRouteMatcher([
+const isIdentitySessionRoute = identityMiddleware.createRouteMatcher([
   '/__clerk/(.*)',
   '/login/complete',
   '/chat(.*)',
@@ -171,31 +161,31 @@ const isClerkSessionRoute = createRouteMatcher([
   '/api/(.*)',
 ]);
 
-const clerkAuthorizedParties = ((): string[] | null => {
+const identityAuthorizedParties = ((): readonly string[] | null => {
   try {
-    return getClerkAuthorizedParties();
+    return getIdentityProvider().authorizedParties();
   } catch {
     return null;
   }
 })();
 
-// Clerk skips the azp check entirely when authorizedParties is empty, so an
-// unresolvable allowlist must stop the request instead of authenticating it.
-const clerkAwareProxy = clerkAuthorizedParties
-  ? clerkMiddleware(
-      (_auth, request: NextRequest) => {
+// A provider skips the azp check entirely when authorizedParties is empty, so
+// an unresolvable allowlist must stop the request instead of authenticating it.
+const identityAwareProxy = identityAuthorizedParties
+  ? identityMiddleware.withSession(
+      (request: NextRequest) => {
         if (request.nextUrl.pathname === '/') return buildHomeResponse(request);
         if (request.nextUrl.pathname === AGI_WORK_PATH) return buildAgiWorkResponse(request);
         if (request.nextUrl.pathname === AGI_CODE_PATH) return buildAgiCodeResponse(request);
         return buildCspResponse(request);
       },
-      { authorizedParties: clerkAuthorizedParties },
+      { authorizedParties: identityAuthorizedParties },
     )
   : null;
 
-function clerkUnconfiguredResponse(): NextResponse {
+function identityUnconfiguredResponse(): NextResponse {
   const response = NextResponse.json(
-    { error: 'Authentication is unavailable: no Clerk authorized-party allowlist is configured.' },
+    { error: 'Authentication is unavailable: no authorized-party allowlist is configured.' },
     { status: 503 },
   );
   response.headers.set('Content-Security-Policy', buildCspWithNonce(btoa(crypto.randomUUID())));
@@ -275,11 +265,11 @@ export const proxy: NextMiddleware = async (request, event) => {
 
   if (
     request.nextUrl.pathname === '/' ||
-    isClerkSessionRoute(request) ||
+    isIdentitySessionRoute(request) ||
     apiHostRewriteUsesClerk(request.nextUrl.pathname)
   ) {
-    if (!clerkAwareProxy) return attachApiCors(request, clerkUnconfiguredResponse());
-    const response = await clerkAwareProxy(request, event);
+    if (!identityAwareProxy) return attachApiCors(request, identityUnconfiguredResponse());
+    const response = await identityAwareProxy(request, event);
     return response ? attachApiCors(request, response) : response;
   }
 

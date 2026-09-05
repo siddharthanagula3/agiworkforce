@@ -22,6 +22,7 @@ import {
   getSubscriptionBillingOwnerPolicy,
   stripeBillingOwnershipMessage,
 } from '@/lib/server/subscription-billing-owner';
+import { getIdentityUser } from '@/lib/server/identity';
 
 const CHECKOUT_SCOPE = { resolveOrganization: false } as const;
 
@@ -82,15 +83,13 @@ async function handleCheckout(request: NextRequest): Promise<NextResponse> {
 
   let userEmail = '';
   try {
-    const { clerkClient } = await import('@clerk/nextjs/server');
-    const clerkUser = await (await clerkClient()).users.getUser(userId);
-    userEmail =
-      clerkUser.emailAddresses.find((e) => e.id === clerkUser.primaryEmailAddressId)
-        ?.emailAddress ??
-      clerkUser.emailAddresses[0]?.emailAddress ??
-      '';
+    const identityUser = await getIdentityUser(userId);
+    userEmail = identityUser?.primaryEmail ?? '';
   } catch (err) {
-    logger.warn({ error: err, userId }, 'Could not fetch email from Clerk; proceeding without it');
+    logger.warn(
+      { error: err, userId },
+      'Could not fetch email from the identity provider; proceeding without it',
+    );
   }
 
   const user = { id: userId, email: userEmail };

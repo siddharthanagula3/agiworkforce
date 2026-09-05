@@ -1,11 +1,11 @@
 import type { Metadata } from 'next';
-import { auth } from '@clerk/nextjs/server';
 import { redirect } from 'next/navigation';
 import { AdminConsolePage } from '@/features/admin';
 import {
   PLATFORM_ADMIN_ENV_VAR,
   isPlatformAdmin,
 } from '@/features/admin/lib/platform-admin-access';
+import { getRequestIdentity } from '@/lib/server/identity';
 
 export const metadata: Metadata = {
   title: 'Admin Readiness',
@@ -13,7 +13,7 @@ export const metadata: Metadata = {
 };
 
 export default async function AdminPage() {
-  const { userId } = await auth();
+  const { subject: userId } = await getRequestIdentity();
 
   // The panels here drive platform-wide surfaces (security telemetry, account
   // ban, the trust-and-safety queue), so the console must match the API gate:

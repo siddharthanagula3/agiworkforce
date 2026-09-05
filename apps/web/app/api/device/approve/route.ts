@@ -2,7 +2,6 @@ import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
-import { auth } from '@clerk/nextjs/server';
 
 import { getNeonDb } from '@/lib/server/neon-db';
 import { createClaimedUserScopedDb } from '@/lib/server/claimed-user-scope-db';
@@ -15,6 +14,7 @@ import { requireCsrfToken } from '@/lib/csrf';
 import { isDeviceCodeSignInEnabled } from '@/lib/server/device-signin-policy';
 import { hasAcceptedCurrentTerms } from '@/lib/server/terms';
 import { QrLinkCodeSchema } from '@/lib/validations/device';
+import { getRequestIdentity } from '@/lib/server/identity';
 
 const DeviceApproveRequestSchema = z.object({
   code: QrLinkCodeSchema,
@@ -37,7 +37,7 @@ async function handleDeviceApprove(request: NextRequest): Promise<NextResponse> 
   if (rateLimitResponse) return rateLimitResponse;
 
   try {
-    const { userId } = await auth();
+    const { subject: userId } = await getRequestIdentity();
 
     if (!userId) {
       throw createError.unauthorized('Please sign in to continue');

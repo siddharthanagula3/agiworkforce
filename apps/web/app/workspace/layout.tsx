@@ -1,5 +1,4 @@
 import type { ReactNode } from 'react';
-import { auth } from '@clerk/nextjs/server';
 import { redirect } from 'next/navigation';
 
 import { assertAccountActive } from '@/lib/api-auth';
@@ -8,6 +7,7 @@ import { getNeonDb } from '@/lib/server/neon-db';
 import { requireCurrentTermsAcceptance } from '@/lib/server/require-current-terms';
 import { resolveOrgMembership, type OrgRole } from '@/lib/services/org-sharing-service';
 import { WorkspaceConsoleShell } from '@/features/workspace-console/components/WorkspaceConsoleShell';
+import { getRequestIdentity } from '@/lib/server/identity';
 
 export const dynamic = 'force-dynamic';
 
@@ -25,7 +25,7 @@ export const dynamic = 'force-dynamic';
  * cannot administer sees a stated denial rather than an empty or broken panel.
  */
 export default async function WorkspaceConsoleLayout({ children }: { children: ReactNode }) {
-  const { userId } = await auth();
+  const { subject: userId } = await getRequestIdentity();
 
   if (!userId) {
     redirect('/login?redirectTo=/workspace');

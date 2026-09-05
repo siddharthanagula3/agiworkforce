@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { auth } from '@clerk/nextjs/server';
 import { z } from 'zod';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
@@ -8,6 +7,7 @@ import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { getNeonDb } from '@/lib/server/neon-db';
 import { redactSecrets } from '@/lib/support/handoff/transcript';
+import { getRequestIdentity } from '@/lib/server/identity';
 
 const MAX_LOGS_CHARS = 20_000;
 
@@ -99,7 +99,7 @@ async function handleSubmitFeedback(request: NextRequest) {
   const safeMessage = redactSecrets(message);
   const safeLogs = typeof logs === 'string' ? redactSecrets(logs).slice(0, MAX_LOGS_CHARS) : null;
 
-  const { userId } = await auth();
+  const { subject: userId } = await getRequestIdentity();
 
   const db = getNeonDb();
   try {

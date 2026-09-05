@@ -1,7 +1,6 @@
 import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
-import { auth } from '@clerk/nextjs/server';
 import { z } from 'zod';
 
 import { withErrorHandler } from '@/lib/error-handler';
@@ -17,6 +16,7 @@ import {
   readUserConsents,
   recordConsentBatch,
 } from '@/lib/server/consent-records';
+import { getRequestIdentity } from '@/lib/server/identity';
 
 const ConsentDecisionSchema = z.object({
   purpose: z.string().refine(isConsentPurpose, 'Unknown consent purpose'),
@@ -33,7 +33,7 @@ async function handleGet(request: NextRequest): Promise<NextResponse> {
   const rateLimitResponse = await withRateLimit(request, 'default');
   if (rateLimitResponse) return rateLimitResponse;
 
-  const { userId } = await auth();
+  const { subject: userId } = await getRequestIdentity();
   if (!userId) {
     throw createError.unauthorized('Sign in to read your consent record');
   }
@@ -54,7 +54,7 @@ async function handlePost(request: NextRequest): Promise<NextResponse> {
   const rateLimitResponse = await withRateLimit(request, 'default');
   if (rateLimitResponse) return rateLimitResponse;
 
-  const { userId } = await auth();
+  const { subject: userId } = await getRequestIdentity();
   if (!userId) {
     throw createError.unauthorized('Sign in to record a consent decision');
   }

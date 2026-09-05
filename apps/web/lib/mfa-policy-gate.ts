@@ -1,10 +1,10 @@
 import 'server-only';
 
 import type { NextRequest } from 'next/server';
-import { clerkClient } from '@clerk/nextjs/server';
 import { AppError, ErrorCode, isAppError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { getNeonDb } from '@/lib/server/neon-db';
+import { getIdentityUser } from '@/lib/server/identity';
 import { getKeyValueStore } from '@/lib/server/key-value';
 import { resolveMfaPolicy } from '@/lib/services/organization-policy-gate';
 import { evaluateOrganizationPolicy } from '@/lib/services/organization-policy-evaluator';
@@ -50,11 +50,13 @@ export async function resolveMfaEnrolled(userId: string): Promise<boolean> {
 
   let enrolled: boolean;
   try {
-    const client = await clerkClient();
-    const user = await client.users.getUser(userId);
-    enrolled = user.twoFactorEnabled;
+    const user = await getIdentityUser(userId);
+    enrolled = user?.twoFactorEnabled ?? false;
   } catch (error) {
-    logger.error({ error, userId }, '[mfa-policy] clerk enrollment lookup failed; failing closed');
+    logger.error(
+      { error, userId },
+      '[mfa-policy] identity enrollment lookup failed; failing closed',
+    );
     return false;
   }
 

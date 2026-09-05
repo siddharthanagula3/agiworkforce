@@ -1,8 +1,7 @@
-
 import 'server-only';
 
-import { auth } from '@clerk/nextjs/server';
 import { getOrCreateAnonSession } from '@/lib/csrf';
+import { getIdentityUser, getRequestIdentity } from '@/lib/server/identity';
 import { logger } from '@/lib/logger';
 
 export interface HandoffRequestIdentity {
@@ -12,17 +11,15 @@ export interface HandoffRequestIdentity {
   newCookie?: string;
 }
 
-const CLERK_LOOKUP_TIMEOUT_MS = 1_500;
+const IDENTITY_LOOKUP_TIMEOUT_MS = 1_500;
 
 async function resolveVerifiedEmail(userId: string): Promise<string | null> {
   try {
-    const { clerkClient } = await import('@clerk/nextjs/server');
-    const client = await clerkClient();
     const user = await Promise.race([
-      client.users.getUser(userId),
-      new Promise<null>((resolve) => setTimeout(() => resolve(null), CLERK_LOOKUP_TIMEOUT_MS)),
+      getIdentityUser(userId),
+      new Promise<null>((resolve) => setTimeout(() => resolve(null), IDENTITY_LOOKUP_TIMEOUT_MS)),
     ]);
-    return user?.primaryEmailAddress?.emailAddress ?? null;
+    return user?.primaryEmail ?? null;
   } catch (error) {
     logger.warn({ error }, 'Support handoff could not resolve a verified email');
     return null;
@@ -35,8 +32,8 @@ export async function resolveHandoffIdentity(
 ): Promise<HandoffRequestIdentity> {
   let userId: string | null = null;
   try {
-    const session = await auth();
-    userId = session.userId ?? null;
+    const session = await getRequestIdentity();
+    userId = session.subject;
   } catch {
     userId = null;
   }

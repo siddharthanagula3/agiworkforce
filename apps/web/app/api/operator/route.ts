@@ -1,7 +1,6 @@
 import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
-import { auth } from '@clerk/nextjs/server';
 import { logger } from '@/lib/logger';
 import { withRateLimit } from '@/lib/rate-limit';
 import { requireCsrfToken } from '@/lib/csrf';
@@ -22,6 +21,7 @@ import {
   resetAllUsersUsage,
   grantBonusCredits,
 } from '@/features/admin/services/operator-metrics';
+import { getRequestIdentity } from '@/lib/server/identity';
 
 export const dynamic = 'force-dynamic';
 
@@ -39,7 +39,7 @@ function errorResponse(err: AppError): NextResponse {
  * to audit rather than two that can drift.
  */
 async function requirePlatformAdmin(): Promise<string> {
-  const { userId } = await auth();
+  const { subject: userId } = await getRequestIdentity();
   if (!userId) throw createError.unauthorized('Sign in required.');
 
   if (!isPlatformAdmin(userId, process.env[PLATFORM_ADMIN_ENV_VAR])) {
@@ -147,12 +147,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       const reason = typeof body.reason === 'string' ? body.reason.trim().slice(0, 280) : '';
       if (!reason) throw createError.validation('reason is required so the grant is explainable.');
 
-      const result = await grantBonusCredits(
-        targetUserId,
-        amountCents as number,
-        actorId,
-        reason,
-      );
+      const result = await grantBonusCredits(targetUserId, amountCents as number, actorId, reason);
       await logSecurityEvent({
         userId: actorId,
         eventType: 'admin_action',

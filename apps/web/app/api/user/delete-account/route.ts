@@ -9,7 +9,6 @@ import { getClerkAuthUser } from '@/lib/api-auth';
 import { unauthorizedResponseFor } from '@/lib/api-auth-response';
 import { isMfaRequiredError } from '@/lib/mfa-policy-gate';
 import { isIpNotAllowedError } from '@/lib/ip-allow-list-gate';
-import { clerkClient } from '@clerk/nextjs/server';
 import { getNeonDb } from '@/lib/server/neon-db';
 import { createClaimedUserScopedDb } from '@/lib/server/claimed-user-scope-db';
 import { eraseUserAccountData } from '@/lib/server/account-erasure';
@@ -19,6 +18,7 @@ import { CONTACT_EMAIL } from '@/lib/legal-constants';
 import { SubscriptionService, type SubscriptionInfo } from '@/lib/services/subscription-service';
 import { hasLiveBillingRelationship } from '@/lib/services/subscription-access-policy';
 import { isFreeBillingPlanTier } from '@agiworkforce/types';
+import { getIdentityProvider } from '@/lib/server/identity';
 
 export const runtime = 'nodejs';
 
@@ -220,8 +220,7 @@ export async function DELETE(request: NextRequest) {
             { status: 500, headers: SECURITY_HEADERS },
           );
         }
-        const client = await clerkClient();
-        await client.users.deleteUser(userId);
+        await getIdentityProvider().deleteUser(userId);
       } catch (clerkErr: unknown) {
         const errMsg = clerkErr instanceof Error ? clerkErr.message : String(clerkErr);
         logger.error({ userId, error: errMsg }, 'Account deletion failed');

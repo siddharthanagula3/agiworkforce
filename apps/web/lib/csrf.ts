@@ -1,5 +1,4 @@
 import { createHmac, randomBytes, timingSafeEqual } from 'crypto';
-import { auth } from '@clerk/nextjs/server';
 
 const MIN_CSRF_SECRET_BYTES = 32;
 let cachedSecret: string | null = null;
@@ -139,12 +138,13 @@ function constantTimeSignatureMatch(
 
 export async function getSessionIdFromRequest(_request: Request): Promise<string> {
   try {
-    const { userId } = await auth();
-    if (userId) {
-      return userId;
+    const { getRequestIdentity } = await import('@/lib/server/identity');
+    const { subject } = await getRequestIdentity();
+    if (subject) {
+      return subject;
     }
   } catch {
-    // Clerk may fail in non-route-handler contexts; fall through
+    // Reading the request identity fails outside a route handler; fall through
   }
 
   const cookies = _request.headers.get('cookie') || '';
@@ -161,7 +161,7 @@ const ANON_SESSION_COOKIE = '__Host-anon-session-id';
 const ANON_SESSION_ID_PATTERN =
   /^anon-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 
-// Only the id shape this server mints is honoured, so a client cannot present a Clerk user id
+// Only the id shape this server mints is honoured, so a client cannot present a provider user id
 // (or any other principal) as its anonymous identity.
 function readAnonSessionCookie(cookies: string): string | null {
   const value = readCookie(cookies, ANON_SESSION_COOKIE);
@@ -172,12 +172,13 @@ export async function getOrCreateAnonSession(
   request: Request,
 ): Promise<{ id: string; newCookie?: string }> {
   try {
-    const { userId } = await auth();
-    if (userId) {
-      return { id: userId };
+    const { getRequestIdentity } = await import('@/lib/server/identity');
+    const { subject } = await getRequestIdentity();
+    if (subject) {
+      return { id: subject };
     }
   } catch {
-    // Clerk may fail in non-route-handler contexts; fall through
+    // Reading the request identity fails outside a route handler; fall through
   }
 
   const cookies = request.headers.get('cookie') || '';
@@ -218,17 +219,11 @@ async function isBearerTokenValid(authHeader: string | null): Promise<boolean> {
     return true;
   }
 
-  const secretKey = process.env['CLERK_SECRET_KEY'];
-  if (!secretKey) return false;
-
   try {
-    const { getClerkAuthorizedParties } = await import('@/lib/clerk-authorized-parties');
-    const authorizedParties = getClerkAuthorizedParties();
-    const { verifyToken } = await import('@clerk/backend');
-    const claims = await verifyToken(token, { secretKey, authorizedParties });
-    if (claims.sub) return true;
+    const { verifyIdentitySessionToken } = await import('@/lib/server/identity');
+    if (await verifyIdentitySessionToken(token)) return true;
   } catch {
-    // Not a valid Clerk token
+    // Not a session token this deployment can verify
   }
 
   return false;

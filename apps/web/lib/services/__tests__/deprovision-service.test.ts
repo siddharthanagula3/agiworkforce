@@ -61,26 +61,33 @@ const CONNECTORS: ConnectorFixture[] = [
 
 const ALL_SHARES: ShareFixture[] = [LEAVER_SHARE, LEAVER_OTHER_ORG_SHARE, COLLEAGUE_SHARE];
 
-function clerkStub({
+function identityStub({
   sessions = ['sess_1', 'sess_2'],
   listThrows = false,
   failIds = [] as string[],
 } = {}) {
   const revoked: string[] = [];
+  const listed = (id: string) => ({
+    id,
+    userId: USER,
+    status: 'active',
+    createdAt: null,
+    lastActiveAt: null,
+    expireAt: null,
+    latestActivity: null,
+  });
   return {
     revoked,
-    client: {
-      sessions: {
-        getSessionList: vi.fn(async ({ offset }: { offset: number }) => {
-          if (listThrows) throw new Error('clerk unavailable');
-          return { data: offset === 0 ? sessions.map((id) => ({ id })) : [] };
-        }),
-        revokeSession: vi.fn(async (id: string) => {
-          if (failIds.includes(id)) throw new Error('revoke failed');
-          revoked.push(id);
-          return {};
-        }),
-      },
+    identity: {
+      listUserSessions: vi.fn(async (_userId: string, options: { offset?: number } = {}) => {
+        if (listThrows) throw new Error('identity provider unavailable');
+        const page = (options.offset ?? 0) === 0 ? sessions.map(listed) : [];
+        return { sessions: page, totalCount: sessions.length };
+      }),
+      revokeSession: vi.fn(async (id: string) => {
+        if (failIds.includes(id)) throw new Error('revoke failed');
+        revoked.push(id);
+      }),
     },
   };
 }
@@ -159,10 +166,10 @@ beforeEach(() => vi.clearAllMocks());
 
 describe('deprovisionMember', () => {
   it('revokes every live session, device token, and API key', async () => {
-    const clerk = clerkStub();
+    const identity = identityStub();
     const db = dbStub();
 
-    const result = await deprovisionMember(db.db, clerk.client, {
+    const result = await deprovisionMember(db.db, identity.identity, {
       userId: USER,
       organizationId: ORG,
     });
@@ -171,17 +178,17 @@ describe('deprovisionMember', () => {
     expect(result.deviceTokensRevoked).toBe(2);
     expect(result.apiKeysRevoked).toBe(1);
     expect(result.errors).toEqual([]);
-    expect(clerk.revoked).toEqual(['sess_1', 'sess_2']);
+    expect(identity.revoked).toEqual(['sess_1', 'sess_2']);
   });
 
   it('does not report zero sessions when it could not list them', async () => {
     // Reporting zero would read as "this user had no sessions", which is the
     // opposite of the truth and would let an administrator believe the leaver
     // was cut off.
-    const clerk = clerkStub({ listThrows: true });
+    const identity = identityStub({ listThrows: true });
     const db = dbStub();
 
-    const result = await deprovisionMember(db.db, clerk.client, {
+    const result = await deprovisionMember(db.db, identity.identity, {
       userId: USER,
       organizationId: ORG,
     });
@@ -190,12 +197,12 @@ describe('deprovisionMember', () => {
     expect(result.errors.join(' ')).toMatch(/could not list sessions/i);
   });
 
-  it('still revokes local credentials when Clerk is unavailable', async () => {
-    // A Clerk outage must not leave the leaver's developer keys live as well.
-    const clerk = clerkStub({ listThrows: true });
+  it('still revokes local credentials when the identity provider is unavailable', async () => {
+    // A provider outage must not leave the leaver's developer keys live as well.
+    const identity = identityStub({ listThrows: true });
     const db = dbStub();
 
-    const result = await deprovisionMember(db.db, clerk.client, {
+    const result = await deprovisionMember(db.db, identity.identity, {
       userId: USER,
       organizationId: ORG,
     });
@@ -205,10 +212,10 @@ describe('deprovisionMember', () => {
   });
 
   it('still revokes sessions when the device table is unreachable', async () => {
-    const clerk = clerkStub();
+    const identity = identityStub();
     const db = dbStub({ deviceThrows: true });
 
-    const result = await deprovisionMember(db.db, clerk.client, {
+    const result = await deprovisionMember(db.db, identity.identity, {
       userId: USER,
       organizationId: ORG,
     });
@@ -219,10 +226,10 @@ describe('deprovisionMember', () => {
   });
 
   it('reports sessions it failed to revoke rather than counting them as done', async () => {
-    const clerk = clerkStub({ failIds: ['sess_2'] });
+    const identity = identityStub({ failIds: ['sess_2'] });
     const db = dbStub();
 
-    const result = await deprovisionMember(db.db, clerk.client, {
+    const result = await deprovisionMember(db.db, identity.identity, {
       userId: USER,
       organizationId: ORG,
     });
@@ -233,9 +240,9 @@ describe('deprovisionMember', () => {
   });
 
   it('only touches credentials that are still live', async () => {
-    const clerk = clerkStub();
+    const identity = identityStub();
     const db = dbStub();
-    await deprovisionMember(db.db, clerk.client, { userId: USER, organizationId: ORG });
+    await deprovisionMember(db.db, identity.identity, { userId: USER, organizationId: ORG });
 
     // Scoped to the credential-revocation writes this policed from the start.
     // The shared-connector steps run against a table that has no revoked_at
@@ -252,9 +259,9 @@ describe('deprovisionMember', () => {
   it('never deletes the account, only its credentials', async () => {
     // Removing a member from one workspace must not destroy their personal
     // account. They sign in again and land in personal scope.
-    const clerk = clerkStub();
+    const identity = identityStub();
     const db = dbStub();
-    await deprovisionMember(db.db, clerk.client, { userId: USER, organizationId: ORG });
+    await deprovisionMember(db.db, identity.identity, { userId: USER, organizationId: ORG });
 
     for (const sql of db.statements) {
       expect(sql).not.toMatch(/delete from/i);
@@ -264,25 +271,25 @@ describe('deprovisionMember', () => {
 
   it('pages through more sessions than one request returns', async () => {
     const many = Array.from({ length: 50 }, (_, i) => `sess_${i}`);
-    const clerk = clerkStub({ sessions: many });
+    const identity = identityStub({ sessions: many });
     const db = dbStub();
 
-    const result = await deprovisionMember(db.db, clerk.client, {
+    const result = await deprovisionMember(db.db, identity.identity, {
       userId: USER,
       organizationId: ORG,
     });
 
     expect(result.sessionsRevoked).toBe(50);
-    expect(clerk.client.sessions.getSessionList).toHaveBeenCalledTimes(2);
+    expect(identity.identity.listUserSessions).toHaveBeenCalledTimes(2);
   });
 
   describe('connectors the leaver shared with the workspace', () => {
     function run(overrides: Parameters<typeof dbStub>[0] = {}) {
-      const clerk = clerkStub();
+      const identity = identityStub();
       const db = dbStub({ connectors: CONNECTORS, shares: ALL_SHARES, ...overrides });
       return {
         db,
-        result: deprovisionMember(db.db, clerk.client, { userId: USER, organizationId: ORG }),
+        result: deprovisionMember(db.db, identity.identity, { userId: USER, organizationId: ORG }),
       };
     }
 

@@ -765,23 +765,19 @@ async function resolveVerifiedUserBucket(request: NextRequest): Promise<string |
     const token = authHeader.slice(7).trim();
     if (!token || token.startsWith('sk_live_') || token.startsWith('sk_test_')) return null;
 
-    const secretKey = process.env['CLERK_SECRET_KEY'];
-    if (!secretKey) return null;
     try {
-      const { getClerkAuthorizedParties } = await import('./clerk-authorized-parties');
-      const authorizedParties = getClerkAuthorizedParties();
-      const { verifyToken } = await import('@clerk/backend');
-      const claims = await verifyToken(token, { secretKey, authorizedParties });
-      return typeof claims.sub === 'string' && claims.sub.length > 0 ? `user:${claims.sub}` : null;
+      const { verifyIdentitySessionToken } = await import('./server/identity');
+      const claims = await verifyIdentitySessionToken(token);
+      return claims ? `user:${claims.subject}` : null;
     } catch {
       return null;
     }
   }
 
   try {
-    const { auth } = await import('@clerk/nextjs/server');
-    const { userId } = await auth();
-    return userId ? `user:${userId}` : null;
+    const { getRequestIdentity } = await import('./server/identity');
+    const { subject } = await getRequestIdentity();
+    return subject ? `user:${subject}` : null;
   } catch {
     return null;
   }

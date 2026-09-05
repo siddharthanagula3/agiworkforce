@@ -1,6 +1,5 @@
 import 'server-only';
 
-import { clerkClient } from '@clerk/nextjs/server';
 import { NextRequest, NextResponse } from 'next/server';
 import { handleCorsPreflightRequest } from '@/lib/cors';
 import { requireCsrfToken } from '@/lib/csrf';
@@ -10,30 +9,31 @@ import { logger } from '@/lib/logger';
 import { withRateLimit } from '@/lib/rate-limit';
 import { recordAuditEvent } from '@/lib/security-audit';
 import { resolveSessionsPrincipal } from './session-principal';
+import type { IdentityProvider, IdentitySession } from '@agiworkforce/identity';
+
+type IdentitySessionOperations = Pick<IdentityProvider, 'listUserSessions' | 'revokeSession'>;
+import { getIdentityProvider } from '@/lib/server/identity';
+import { SESSION_STATUS_ACTIVE } from '@/lib/server/session-status';
 
 const PAGE_SIZE = 100;
 const MAX_SESSION_PAGES = 20;
 const REVOKE_BATCH_SIZE = 10;
 
-type ClerkClient = Awaited<ReturnType<typeof clerkClient>>;
-type ClerkSession = Awaited<ReturnType<ClerkClient['sessions']['getSession']>>;
-
-export async function listActiveClerkSessions(
-  client: ClerkClient,
+export async function listActiveIdentitySessions(
+  identity: IdentitySessionOperations,
   userId: string,
-): Promise<ClerkSession[]> {
-  const sessions: ClerkSession[] = [];
+): Promise<IdentitySession[]> {
+  const sessions: IdentitySession[] = [];
 
   for (let pageIndex = 0; pageIndex < MAX_SESSION_PAGES; pageIndex++) {
-    const response = await client.sessions.getSessionList({
-      userId,
-      status: 'active',
+    const response = await identity.listUserSessions(userId, {
+      status: SESSION_STATUS_ACTIVE,
       limit: PAGE_SIZE,
       offset: pageIndex * PAGE_SIZE,
     });
-    sessions.push(...response.data);
+    sessions.push(...response.sessions);
 
-    if (sessions.length >= response.totalCount || response.data.length < PAGE_SIZE) {
+    if (sessions.length >= response.totalCount || response.sessions.length < PAGE_SIZE) {
       return sessions;
     }
   }
@@ -43,12 +43,13 @@ export async function listActiveClerkSessions(
   );
 }
 
-function toIsoTimestamp(timestamp: number): string | null {
+function toIsoTimestamp(timestamp: number | null): string | null {
+  if (timestamp === null) return null;
   const date = new Date(timestamp);
   return Number.isNaN(date.getTime()) ? null : date.toISOString();
 }
 
-function serializeSession(session: ClerkSession, currentSessionId: string | null) {
+function serializeSession(session: IdentitySession, currentSessionId: string | null) {
   const activity = session.latestActivity;
   const device = activity?.deviceType?.trim() || (activity?.isMobile ? 'Mobile device' : 'Browser');
   const browser = [activity?.browserName?.trim(), activity?.browserVersion?.trim()]
@@ -70,8 +71,8 @@ function serializeSession(session: ClerkSession, currentSessionId: string | null
 }
 
 async function revokeInBatches(
-  client: ClerkClient,
-  sessions: ClerkSession[],
+  identity: IdentitySessionOperations,
+  sessions: IdentitySession[],
 ): Promise<{ revoked: string[]; failed: string[] }> {
   const revoked: string[] = [];
   const failed: string[] = [];
@@ -79,7 +80,7 @@ async function revokeInBatches(
   for (let index = 0; index < sessions.length; index += REVOKE_BATCH_SIZE) {
     const batch = sessions.slice(index, index + REVOKE_BATCH_SIZE);
     const results = await Promise.allSettled(
-      batch.map((session) => client.sessions.revokeSession(session.id)),
+      batch.map((session) => identity.revokeSession(session.id)),
     );
     results.forEach((result, resultIndex) => {
       const id = batch[resultIndex]?.id;
@@ -97,7 +98,7 @@ async function handleList(request: NextRequest) {
   if (rateLimitResponse) return rateLimitResponse;
 
   const { userId, currentSessionId } = await resolveSessionsPrincipal(request);
-  const sessions = await listActiveClerkSessions(await clerkClient(), userId);
+  const sessions = await listActiveIdentitySessions(getIdentityProvider(), userId);
   const projected = sessions
     .map((session) => serializeSession(session, currentSessionId))
     .sort((left, right) => {
@@ -121,13 +122,13 @@ async function handleRevokeAll(request: NextRequest) {
   const csrfError = await requireCsrfToken(request);
   if (csrfError) return csrfError as NextResponse;
 
-  const client = await clerkClient();
-  const sessions = await listActiveClerkSessions(client, userId);
+  const identity = getIdentityProvider();
+  const sessions = await listActiveIdentitySessions(identity, userId);
   const currentSession = currentSessionId
     ? sessions.find((session) => session.id === currentSessionId)
     : undefined;
   const otherSessions = sessions.filter((session) => session.id !== currentSession?.id);
-  const result = await revokeInBatches(client, otherSessions);
+  const result = await revokeInBatches(identity, otherSessions);
   await db.execute(
     `update device_refresh_tokens
         set revoked_at = coalesce(revoked_at, now())
@@ -154,7 +155,7 @@ async function handleRevokeAll(request: NextRequest) {
   }
 
   if (currentSession) {
-    await client.sessions.revokeSession(currentSession.id);
+    await identity.revokeSession(currentSession.id);
     result.revoked.push(currentSession.id);
   }
 

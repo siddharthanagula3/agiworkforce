@@ -935,9 +935,9 @@ async function revokeCredentialsAfterScimRemoval(
   if (!linkedUserId) return [];
 
   try {
-    const { clerkClient } = await import('@clerk/nextjs/server');
+    const { getIdentityProvider } = await import('@/lib/server/identity');
     const { deprovisionMember } = await import('@/lib/services/deprovision-service');
-    const result = await deprovisionMember(db, await clerkClient(), {
+    const result = await deprovisionMember(db, getIdentityProvider(), {
       userId: linkedUserId,
       organizationId,
     });
