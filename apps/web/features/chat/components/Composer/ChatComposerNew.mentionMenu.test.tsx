@@ -106,9 +106,7 @@ describe('composer @mention menu', () => {
       <ChatComposerNew onSend={vi.fn()} emptyState projectPicker={picker({ onSelectProject })} />,
     );
 
-    fireEvent.click(screen.getByRole('button', { name: /add attachments and tools/i }));
     fireEvent.click(screen.getByRole('button', { name: 'AGI Work' }));
-    fireEvent.keyDown(document, { key: 'Escape' });
     const textarea = typeInComposer('@Laun');
 
     expect(screen.getByRole('option', { name: 'Launch' })).toBeVisible();
