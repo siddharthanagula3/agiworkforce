@@ -6,6 +6,12 @@ vi.mock('node:dns/promises', () => ({
   lookup: dnsMocks.lookup,
 }));
 
+const recordSettledProviderCost = vi.hoisted(() => vi.fn());
+vi.mock('@/lib/services/cogs-ledger-service', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/lib/services/cogs-ledger-service')>();
+  return { ...actual, recordSettledProviderCost };
+});
+
 import {
   executeWebSearch,
   enrichWebSearchResultTitles,
@@ -47,6 +53,8 @@ function resolvesToPublicAddress(): void {
 
 beforeEach(() => {
   dnsMocks.lookup.mockReset();
+  recordSettledProviderCost.mockReset();
+  recordSettledProviderCost.mockResolvedValue(undefined);
 });
 
 describe('tool identity and definition', () => {
@@ -192,6 +200,25 @@ describe('executeWebSearch, happy path', () => {
     const outcome = await executeWebSearch({ query: 'x' }, { fetchImpl, apiKey: 'k' });
     expect(outcome.ok).toBe(true);
     if (outcome.ok) expect(outcome.results).toEqual([]);
+  });
+
+  it('does not record a cost when the caller carries no identity', async () => {
+    const fetchImpl = fetchReturning(jsonResponse({ results: [] }));
+    await executeWebSearch({ query: 'x' }, { fetchImpl, apiKey: 'k' });
+    expect(recordSettledProviderCost).not.toHaveBeenCalled();
+  });
+
+  it('records a Perplexity search cost through the same COGS path as other tools', async () => {
+    const fetchImpl = fetchReturning(jsonResponse({ results: [] }));
+    await executeWebSearch(
+      { query: 'x' },
+      { fetchImpl, apiKey: 'k', userId: 'user_1', organizationId: 'org_1', turnRef: 'turn-1' },
+    );
+
+    expect(recordSettledProviderCost).toHaveBeenCalledTimes(1);
+    const event = recordSettledProviderCost.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect(event['provider']).toBe('perplexity');
+    expect(event['sourceRef']).toBe('perplexity_search:turn-1');
   });
 });
 
