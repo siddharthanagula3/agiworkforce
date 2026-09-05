@@ -344,3 +344,21 @@
 .mermaid-caption button:hover {
   color: var(--chat-text-primary);
 }
+
+/* Search fields inside a menu or palette.
+ *
+ * The field rule in apps/web/app/globals.css paints an inset ring on any
+ * focused input, which reads as an alert on a field that opens with the panel
+ * and whose list rows carry the focus affordance. That rule excludes this
+ * class the same way it excludes the composer textarea.
+ */
+.chat-quiet-field {
+  background: transparent;
+  outline: none;
+}
+
+.chat-quiet-field:focus,
+.chat-quiet-field:focus-visible {
+  outline: none;
+  box-shadow: none;
+}

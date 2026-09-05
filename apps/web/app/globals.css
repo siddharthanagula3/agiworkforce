@@ -1450,7 +1450,9 @@
    ring on every field click as well made a routine click read as an alert.
    Text fields get a one-step border strengthening instead, on every focus
    entry, and keep this same treatment for keyboard entry too. */
-:is(input, textarea, select, [contenteditable='true']):not([data-composer-textarea]):focus-visible {
+:is(input, textarea, select, [contenteditable='true']):not([data-composer-textarea]):not(
+    .chat-quiet-field
+  ):focus-visible {
   outline: none;
   box-shadow: inset 0 0 0 1.5px hsl(var(--foreground));
 } /* The chat composer renders its own accent-colored focus ring on the
