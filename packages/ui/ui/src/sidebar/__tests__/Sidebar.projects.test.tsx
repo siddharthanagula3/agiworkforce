@@ -123,3 +123,30 @@ describe('Sidebar projects section (hover pattern)', () => {
     expect(onProjectOpen).toHaveBeenCalledWith('p1');
   });
 });
+
+describe('Sidebar project row icon tint (slice E item 7)', () => {
+  it('tints a recognized custom icon with the chosen accent colour', () => {
+    renderSidebar({
+      projects: [{ id: 'p1', name: 'Website Redesign', iconEmoji: 'terminal', accentColor: 'sky' }],
+    });
+    const row = screen.getByRole('button', { name: 'Expand project Website Redesign' });
+    const icon = row.querySelector('svg');
+    expect((icon?.parentElement as HTMLElement).style.color).toBe('rgb(14, 165, 233)');
+  });
+
+  it('falls back to the plain folder toggle when no custom icon is set', () => {
+    renderSidebar({ projects: [{ id: 'p1', name: 'Website Redesign' }] });
+    const row = screen.getByRole('button', { name: 'Expand project Website Redesign' });
+    const icon = row.querySelector('svg');
+    expect((icon?.parentElement as HTMLElement).style.color).toBe('');
+  });
+
+  it('falls back to the plain folder toggle for an unrecognized legacy value', () => {
+    renderSidebar({
+      projects: [{ id: 'p1', name: 'Website Redesign', iconEmoji: '🚀', accentColor: 'sky' }],
+    });
+    const row = screen.getByRole('button', { name: 'Expand project Website Redesign' });
+    const icon = row.querySelector('svg');
+    expect((icon?.parentElement as HTMLElement).style.color).toBe('');
+  });
+});

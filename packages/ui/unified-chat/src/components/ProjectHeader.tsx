@@ -1,4 +1,5 @@
-import { Folder, KeyRound, Lock, Users } from 'lucide-react';
+import { KeyRound, Lock, Users } from 'lucide-react';
+import { resolveProjectIcon, hasKnownProjectIcon } from '@agiworkforce/ui';
 import type { ProjectAccentColor, ProjectHeaderPresentation } from '@agiworkforce/types';
 import { cn } from '../lib/utils';
 
@@ -26,15 +27,18 @@ const PROVIDER_CHIP: Record<string, string> = {
 
 function IconCircle({ presentation }: { presentation: ProjectHeaderPresentation }) {
   const accent = ACCENT_BG[presentation.accentColor];
+  const Icon = resolveProjectIcon(
+    hasKnownProjectIcon(presentation.iconEmoji) ? presentation.iconEmoji : null,
+  );
   return (
     <div
       aria-hidden
       className={cn(
-        'flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border text-xl',
+        'flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border',
         accent,
       )}
     >
-      {presentation.iconEmoji ?? <Folder className="h-6 w-6" />}
+      <Icon className="h-6 w-6" />
     </div>
   );
 }
