@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 
 import { WebAppShell } from '@shared/components/layout/WebAppShell';
-import { SchedulesPage } from '@/features/schedules';
+import { SchedulesPageWithProjects } from '@/features/schedules';
 
 export const metadata: Metadata = {
   title: 'Schedules',
@@ -12,7 +12,7 @@ export const metadata: Metadata = {
 export default function SchedulesRoute() {
   return (
     <WebAppShell>
-      <SchedulesPage />
+      <SchedulesPageWithProjects />
     </WebAppShell>
   );
 }
