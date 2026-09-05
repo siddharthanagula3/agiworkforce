@@ -138,6 +138,7 @@ describe('SettingsModal nav (web IA)', () => {
     renderModal();
 
     const nav = screen.getByRole('navigation', { name: 'Settings navigation' });
+    const scrollRegion = screen.getByTestId('settings-nav-scroll-region');
     const topFade = screen.getByTestId('settings-nav-scroll-fade-top');
     const bottomFade = screen.getByTestId('settings-nav-scroll-fade-bottom');
 
@@ -145,22 +146,72 @@ describe('SettingsModal nav (web IA)', () => {
     expect(topFade.className).toContain('opacity-0');
     expect(bottomFade.className).toContain('opacity-0');
 
-    Object.defineProperty(nav, 'scrollHeight', { configurable: true, value: 600 });
-    Object.defineProperty(nav, 'clientHeight', { configurable: true, value: 300 });
-    Object.defineProperty(nav, 'scrollTop', { configurable: true, writable: true, value: 0 });
+    Object.defineProperty(scrollRegion, 'scrollHeight', { configurable: true, value: 600 });
+    Object.defineProperty(scrollRegion, 'clientHeight', { configurable: true, value: 300 });
+    Object.defineProperty(scrollRegion, 'scrollTop', {
+      configurable: true,
+      writable: true,
+      value: 0,
+    });
 
-    fireEvent.scroll(nav);
+    fireEvent.scroll(scrollRegion);
 
     expect(bottomFade.className).toContain('opacity-100');
     expect(topFade.className).toContain('opacity-0');
 
-    nav.scrollTop = 300;
-    fireEvent.scroll(nav);
+    scrollRegion.scrollTop = 300;
+    fireEvent.scroll(scrollRegion);
 
     expect(topFade.className).toContain('opacity-100');
     expect(bottomFade.className).toContain('opacity-0');
   });
 
+  it('gives the fade overlays their own blank space instead of overlapping the first and last rows', () => {
+    renderModal();
+
+    const scrollRegion = screen.getByTestId('settings-nav-scroll-region');
+    const topFade = screen.getByTestId('settings-nav-scroll-fade-top');
+    const bottomFade = screen.getByTestId('settings-nav-scroll-fade-bottom');
+
+    expect(topFade.nextElementSibling?.className).toContain('h-6');
+    expect(bottomFade.previousElementSibling?.className).toContain('h-6');
+    expect(scrollRegion.contains(topFade.nextElementSibling)).toBe(true);
+    expect(scrollRegion.contains(bottomFade.previousElementSibling)).toBe(true);
+  });
+
+  it('scrolls the active entry into view with the minimal nearest alignment on change', () => {
+    const scrollIntoView = vi.fn();
+    Element.prototype.scrollIntoView = scrollIntoView;
+
+    const { rerender } = renderModal({ activeSection: 'general' });
+    scrollIntoView.mockClear();
+
+    rerender(
+      <SettingsModal
+        open
+        onClose={vi.fn()}
+        activeSection="billing"
+        onSectionChange={vi.fn()}
+        sectionContent={{}}
+        navGroups={SETTINGS_NAV_GROUPS_WEB}
+        adapter={adapter}
+      />,
+    );
+
+    expect(scrollIntoView).toHaveBeenCalledWith({ block: 'nearest' });
+  });
+
+  it('keeps the title and search pinned outside the scrolling entry list', () => {
+    renderModal();
+
+    const nav = screen.getByRole('navigation', { name: 'Settings navigation' });
+    const scrollRegion = screen.getByTestId('settings-nav-scroll-region');
+    const search = screen.getByRole('searchbox', { name: 'Search settings' });
+
+    expect(scrollRegion.className).toContain('overflow-y-auto');
+    expect(nav.className).not.toContain('overflow-y-auto');
+    expect(scrollRegion.contains(search)).toBe(false);
+  });
 
   it('renders no New skill control or Actions column when the adapter cannot author skills', () => {
     renderModal({ activeSection: 'skills' });
@@ -540,9 +591,6 @@ describe('Connectors pane (table)', () => {
     expect(screen.queryByText(/Scopes for/)).toBeNull();
   });
 
-
-
-
   it('opens the custom-connector docs without tearing down the settings modal', () => {
     renderModal();
     fireEvent.click(screen.getByRole('button', { name: /^Add$/ }));
@@ -552,14 +600,6 @@ describe('Connectors pane (table)', () => {
     expect(learnMore.getAttribute('target')).toBe('_blank');
     expect(learnMore.getAttribute('rel')).toContain('noreferrer');
   });
-
-
-
-
-
-
-
-
 
   // CONNECTOR-FORM-PASSWORD-AUTOFILL-01
   it('opts the custom-connector fields out of password-manager autofill', () => {
@@ -750,7 +790,6 @@ describe('Skills pane (table)', () => {
     expect(screen.queryByRole('button', { name: /^Add$/ })).toBeNull();
     expect(screen.queryByRole('button', { name: 'Browse' })).toBeNull();
   });
-
 });
 
 describe('Plugins pane (table)', () => {
