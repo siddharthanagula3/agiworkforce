@@ -639,7 +639,7 @@ describe('unavailable tool notices', () => {
         type: 'tool-execution-start',
         toolCallId: 'call-unavailable',
         name: 'execute_code',
-        category: 'code',
+        category: 'code-execution',
         input: {},
       }),
     );
