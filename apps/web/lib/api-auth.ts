@@ -15,6 +15,7 @@ import {
 import { apiKeyHasScope, type ApiKeyScope } from '@/lib/api-key-scopes';
 import { ApiKeyScopeError } from '@/lib/api-key-scope-error';
 import { getIdentityProvider, getRequestIdentity } from '@/lib/server/identity';
+import { resolveIdentityUserId } from '@/lib/server/identity-user';
 import { resolveOrgMembership } from '@/lib/services/org-sharing-service';
 import { getCachedAccountStatus, setCachedAccountStatus } from '@/lib/server/request-context-cache';
 
@@ -179,7 +180,9 @@ async function verifyBearerToken(token: string): Promise<AuthResult | null> {
 
   const claims = await identity.verifySessionToken(token, { authorizedParties });
   if (claims) {
-    return { userId: claims.subject, email: claims.email ?? undefined };
+    const userId = await resolveIdentityUserId(claims.subject);
+    if (!userId) return null;
+    return { userId, email: claims.email ?? undefined };
   }
 
   return null;
@@ -245,7 +248,8 @@ export async function getClerkAuthUser(
     throw createError.unauthorized();
   }
 
-  const { subject: userId } = await getRequestIdentity();
+  const { subject } = await getRequestIdentity();
+  const userId = subject === null ? null : await resolveIdentityUserId(subject);
   if (userId) {
     await assertAccountActive(userId);
     setTenantScope({ userId });
