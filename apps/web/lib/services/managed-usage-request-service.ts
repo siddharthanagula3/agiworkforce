@@ -196,17 +196,34 @@ export function fingerprintManagedUsageRequest(value: unknown): string {
     .digest('hex');
 }
 
+const QUERY_LOG_PREVIEW_CHARS = 80;
+
+function databaseErrorCode(error: unknown): string | undefined {
+  return typeof error === 'object' &&
+    error !== null &&
+    'code' in error &&
+    typeof error.code === 'string'
+    ? error.code
+    : undefined;
+}
+
 async function queryOne(
   db: DatabaseAdapter,
   sql: string,
   params: unknown[],
 ): Promise<Record<string, unknown>> {
+  const statement = sql.slice(0, QUERY_LOG_PREVIEW_CHARS);
   try {
     const rows = await db.query<Record<string, unknown>>(sql, params);
     const row = rows[0];
     if (row) return row;
+    logger.error({ statement }, '[managed-usage] usage query returned no row; billing unavailable');
   } catch (error) {
     if (error instanceof ManagedUsageRequestError) throw error;
+    logger.error(
+      { error, code: databaseErrorCode(error), statement },
+      '[managed-usage] usage query failed; billing unavailable',
+    );
   }
   throw new ManagedUsageRequestError(
     'Managed usage billing is temporarily unavailable.',
