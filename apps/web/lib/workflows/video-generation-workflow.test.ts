@@ -24,6 +24,24 @@ vi.mock('@/lib/server/video-generation-jobs', () => ({
   recoverVideoProviderTaskAttachment: (...args: unknown[]) => mocks.recoverAttachment(...args),
   reconcileVideoGenerationBillingSettlement: (...args: unknown[]) =>
     mocks.reconcileBilling(...args),
+  beginVideoProviderCancellationAttempt: vi.fn(),
+  claimVideoGenerationJob: vi.fn(),
+  claimVideoIncidentAlert: vi.fn(),
+  claimVideoSettlementIncidentById: vi.fn(),
+  claimVideoSettlementIncidentByReservation: vi.fn(),
+  completeVideoIncidentAlert: vi.fn(),
+  completeVideoSettlementIncident: vi.fn(),
+  countExhaustedVideoIncidentAlerts: vi.fn(),
+  countExhaustedVideoSettlementIncidentAlerts: vi.fn(),
+  deferVideoGenerationJob: vi.fn(),
+  deferVideoGenerationJobFailure: vi.fn(),
+  finalizeVideoGenerationJob: vi.fn(),
+  getVideoSettlementIncident: vi.fn(),
+  listDueVideoGenerationJobIds: vi.fn(),
+  listPendingVideoIncidentAlertIds: vi.fn(),
+  listPendingVideoSettlementIncidentIds: vi.fn(),
+  markVideoGenerationOutcomeUnknown: vi.fn(),
+  recordVideoProviderCancellationAttempt: vi.fn(),
 }));
 vi.mock('@/lib/services/video-job-reconciliation-service', () => ({
   reconcileVideoGenerationJobWithRequiredTranscript: (...args: unknown[]) =>

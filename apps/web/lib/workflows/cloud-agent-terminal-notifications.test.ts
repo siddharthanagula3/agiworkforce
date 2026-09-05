@@ -46,6 +46,9 @@ vi.mock('@/lib/services/managed-usage-accounting-service', () => ({
 }));
 vi.mock('@/lib/services/managed-usage-request-service', () => ({
   markManagedUsageClientDelivered: vi.fn(async () => undefined),
+  markManagedUsageProviderStarted: vi.fn(),
+  finalizeManagedUsageRequest: vi.fn(async () => undefined),
+  UPGRADE_HREF: '/pricing',
   MANAGED_CHAT_CONTRACT_VERSION: 'fixture-contract-version',
   ManagedUsageRequestError: class ManagedUsageRequestError extends Error {
     constructor(

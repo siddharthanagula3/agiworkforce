@@ -41,10 +41,15 @@ vi.mock('./cloud-agent-workflow-stream', () => ({
 }));
 vi.mock('@/lib/services/cloud-agent-run-service', () => ({
   appendCloudAgentEvent: mocks.appendEvent,
+  appendCloudAgentEvents: vi.fn(),
   getCloudAgentRun: vi.fn(),
   isCloudAgentRunCancellationRequested: vi.fn(async () => false),
   saveCloudAgentApprovalCheckpoint: vi.fn(),
   saveCloudAgentInputCheckpoint: vi.fn(),
+  completeCloudAgentApprovalCheckpoint: vi.fn(),
+  readCloudAgentRunAssistantText: vi.fn(),
+  recordCloudAgentRunSettledUsage: vi.fn(),
+  transitionCloudAgentRun: vi.fn(),
 }));
 vi.mock('@/lib/services/cloud-agent-event-journal', () => ({
   createCloudAgentEventJournal: () => ({
