@@ -6,7 +6,6 @@ vi.mock('server-only', () => ({}));
 vi.mock('@/lib/logger', () => ({
   logger: { debug: vi.fn(), error: vi.fn(), info: vi.fn(), warn: vi.fn() },
 }));
-vi.mock('@/lib/server/neon-db', () => ({ getNeonDb: () => ({ query: mocks.query }) }));
 vi.mock('../push-notification-service', () => ({
   sendPushToUser: (...args: unknown[]) => mocks.sendPush(...args),
 }));
@@ -16,6 +15,8 @@ vi.mock('../notification-email-service', () => ({
 
 const { notifyScheduleCompleted, SCHEDULE_PUSH_PREFERENCE_KEY, SCHEDULE_EMAIL_PREFERENCE_KEY } =
   await import('../schedule-notification-service');
+
+const callerDb = { query: mocks.query } as never;
 
 const notice = {
   userId: 'user-1',
@@ -37,7 +38,7 @@ beforeEach(() => {
 
 describe('notifyScheduleCompleted, consent', () => {
   it('sends when the user enabled it', async () => {
-    const result = await notifyScheduleCompleted(notice);
+    const result = await notifyScheduleCompleted(callerDb, notice);
 
     expect(result.pushed).toBe(true);
     expect(mocks.sendPush).toHaveBeenCalledWith(
@@ -48,7 +49,7 @@ describe('notifyScheduleCompleted, consent', () => {
   });
 
   it('keeps the mobile-push opt-in mobile: a browser is not notified off it', async () => {
-    await notifyScheduleCompleted(notice);
+    await notifyScheduleCompleted(callerDb, notice);
 
     expect(mocks.sendPush.mock.calls[0]?.[2]).toEqual({ expo: true, web: false });
   });
@@ -56,7 +57,7 @@ describe('notifyScheduleCompleted, consent', () => {
   it('sends nothing when the preference is absent', async () => {
     preferences({});
 
-    await expect(notifyScheduleCompleted(notice)).resolves.toEqual({
+    await expect(notifyScheduleCompleted(callerDb, notice)).resolves.toEqual({
       pushed: false,
       emailed: false,
     });
@@ -66,7 +67,7 @@ describe('notifyScheduleCompleted, consent', () => {
   it('sends nothing when the account has no settings row', async () => {
     mocks.query.mockResolvedValue([]);
 
-    await expect(notifyScheduleCompleted(notice)).resolves.toEqual({
+    await expect(notifyScheduleCompleted(callerDb, notice)).resolves.toEqual({
       pushed: false,
       emailed: false,
     });
@@ -76,7 +77,7 @@ describe('notifyScheduleCompleted, consent', () => {
   it('treats a non-boolean preference as off', async () => {
     preferences({ [SCHEDULE_PUSH_PREFERENCE_KEY]: 'yes' });
 
-    await expect(notifyScheduleCompleted(notice)).resolves.toEqual({
+    await expect(notifyScheduleCompleted(callerDb, notice)).resolves.toEqual({
       pushed: false,
       emailed: false,
     });
@@ -85,7 +86,7 @@ describe('notifyScheduleCompleted, consent', () => {
   it('fails CLOSED when settings cannot be read', async () => {
     mocks.query.mockRejectedValue(new Error('db down'));
 
-    await expect(notifyScheduleCompleted(notice)).resolves.toEqual({
+    await expect(notifyScheduleCompleted(callerDb, notice)).resolves.toEqual({
       pushed: false,
       emailed: false,
     });
@@ -95,7 +96,7 @@ describe('notifyScheduleCompleted, consent', () => {
 
 describe('notifyScheduleCompleted, content', () => {
   it('names failure as failure', async () => {
-    await notifyScheduleCompleted({ ...notice, status: 'failed' });
+    await notifyScheduleCompleted(callerDb, { ...notice, status: 'failed' });
 
     const message = mocks.sendPush.mock.calls[0]![1] as { title: string; body: string };
     expect(message.title).toMatch(/failed/i);
@@ -103,20 +104,20 @@ describe('notifyScheduleCompleted, content', () => {
   });
 
   it('distinguishes a timeout', async () => {
-    await notifyScheduleCompleted({ ...notice, status: 'timeout' });
+    await notifyScheduleCompleted(callerDb, { ...notice, status: 'timeout' });
 
     expect((mocks.sendPush.mock.calls[0]![1] as { body: string }).body).toMatch(/timed out/i);
   });
 
   it('carries deep-link material but never task output', async () => {
-    await notifyScheduleCompleted(notice);
+    await notifyScheduleCompleted(callerDb, notice);
 
     const message = mocks.sendPush.mock.calls[0]![1] as { data: Record<string, string> };
     expect(message.data).toEqual({ type: 'schedule_run', taskId: 'task-1' });
   });
 
   it('truncates a very long task name', async () => {
-    await notifyScheduleCompleted({ ...notice, taskName: 'x'.repeat(200) });
+    await notifyScheduleCompleted(callerDb, { ...notice, taskName: 'x'.repeat(200) });
 
     const body = (mocks.sendPush.mock.calls[0]![1] as { body: string }).body;
     expect(body.length).toBeLessThan(120);
@@ -124,7 +125,9 @@ describe('notifyScheduleCompleted, content', () => {
   });
 
   it('says nothing for a run the user cancelled themselves', async () => {
-    await expect(notifyScheduleCompleted({ ...notice, status: 'cancelled' })).resolves.toEqual({
+    await expect(
+      notifyScheduleCompleted(callerDb, { ...notice, status: 'cancelled' }),
+    ).resolves.toEqual({
       pushed: false,
       emailed: false,
     });
@@ -136,7 +139,7 @@ describe('notifyScheduleCompleted, never throws', () => {
   it('swallows a push failure', async () => {
     mocks.sendPush.mockRejectedValue(new Error('expo down'));
 
-    await expect(notifyScheduleCompleted(notice)).resolves.toEqual({
+    await expect(notifyScheduleCompleted(callerDb, notice)).resolves.toEqual({
       pushed: false,
       emailed: false,
     });
@@ -146,7 +149,9 @@ describe('notifyScheduleCompleted, never throws', () => {
     mocks.sendPush.mockResolvedValue({ sent: 0, invalidated: 1 });
     preferences({ [SCHEDULE_PUSH_PREFERENCE_KEY]: true });
 
-    await expect(notifyScheduleCompleted(notice)).resolves.toMatchObject({ pushed: false });
+    await expect(notifyScheduleCompleted(callerDb, notice)).resolves.toMatchObject({
+      pushed: false,
+    });
   });
 
   it('still emails when push fails', async () => {
@@ -156,7 +161,7 @@ describe('notifyScheduleCompleted, never throws', () => {
       [SCHEDULE_EMAIL_PREFERENCE_KEY]: true,
     });
 
-    await expect(notifyScheduleCompleted(notice)).resolves.toEqual({
+    await expect(notifyScheduleCompleted(callerDb, notice)).resolves.toEqual({
       pushed: false,
       emailed: true,
     });
@@ -169,7 +174,7 @@ describe('notifyScheduleCompleted, never throws', () => {
       [SCHEDULE_EMAIL_PREFERENCE_KEY]: true,
     });
 
-    await expect(notifyScheduleCompleted(notice)).resolves.toEqual({
+    await expect(notifyScheduleCompleted(callerDb, notice)).resolves.toEqual({
       pushed: true,
       emailed: false,
     });
@@ -178,7 +183,7 @@ describe('notifyScheduleCompleted, never throws', () => {
   it('sends no email when the account has no address', async () => {
     preferences({ [SCHEDULE_EMAIL_PREFERENCE_KEY]: true }, null);
 
-    await expect(notifyScheduleCompleted(notice)).resolves.toEqual({
+    await expect(notifyScheduleCompleted(callerDb, notice)).resolves.toEqual({
       pushed: false,
       emailed: false,
     });
