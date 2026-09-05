@@ -921,6 +921,17 @@
       "evidence": ["packages/platform/data-layer/src/factory.ts"]
     },
     {
+      "path": "packages/platform/key-value",
+      "kind": "package",
+      "canonicalOwner": "Backend and data",
+      "consumers": ["apps/web"],
+      "deployability": "server-library",
+      "trustBoundary": "shared cache, rate limit and lock state behind the keyvalue port",
+      "status": "active",
+      "action": "keep",
+      "evidence": ["packages/platform/key-value/src/factory.ts", "apps/web/lib/server/key-value.ts"]
+    },
+    {
       "path": "packages/platform/local-llm",
       "kind": "package",
       "canonicalOwner": "Mobile platform",
