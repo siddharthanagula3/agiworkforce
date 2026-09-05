@@ -3032,7 +3032,7 @@ const ChatComposerNewComponent = ({
         className={cn(
           'relative z-10 rounded-2xl border bg-[var(--chat-input-bg)] backdrop-blur-sm transition-all duration-200',
           isFocused
-            ? 'border-[var(--chat-accent-primary)]/40 shadow-md ring-2 ring-[var(--chat-accent-primary)]/30'
+            ? 'border-[var(--chat-border-strong)] shadow-md ring-2 ring-[var(--chat-focus-ring)]'
             : 'border-[var(--chat-border-strong)] shadow-none',
         )}
       >
