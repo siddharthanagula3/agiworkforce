@@ -127,7 +127,9 @@
     "unpinProject": "Dejar de fijar proyecto",
     "unstar": "Quitar estrella",
     "untitled": "Sin título",
-    "untitledChat": "Chat sin título"
+    "untitledChat": "Chat sin título",
+    "navLabel": "Historial de chats",
+    "toggleSidebar": "Mostrar u ocultar la barra lateral"
   },
   "composer": {
     "addAttachment": "Añadir archivo adjunto",
