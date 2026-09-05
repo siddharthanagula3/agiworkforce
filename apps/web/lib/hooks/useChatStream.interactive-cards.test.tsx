@@ -20,6 +20,7 @@ vi.mock('@/lib/client/csrf', () => ({
     ...headers,
     'x-csrf-token': 'csrf-token',
   }),
+  getCsrfToken: async () => 'csrf-token',
 }));
 
 const TEMP_CONVERSATION = {
@@ -131,7 +132,7 @@ describe('useChatStream, interactive cards', () => {
     const init = vi.mocked(fetch).mock.calls[0]?.[1];
     const body = JSON.parse(String(init?.body)) as Record<string, unknown>;
     expect(body['x_interactive_cards']).toEqual({
-      supported: ['clarify.v1', 'map-search.v1', 'mcp-app.v1'],
+      supported: ['clarify.v1', 'map-search.v1', 'mcp-app.v1', 'places.v1'],
       canRespond: true,
     });
   });

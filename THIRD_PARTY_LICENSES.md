@@ -93,6 +93,15 @@ SOFTWARE.
 - **Adoption**: Runtime dependency only; no upstream source was copied or adapted into this repository. The package generates editable Managed Cloud `.pptx` files on the server.
 - **Notice**: The complete MIT license is distributed in the installed `pptxgenjs` package.
 
+## Leaflet
+
+- **Upstream**: [Leaflet/Leaflet](https://github.com/Leaflet/Leaflet), release `1.9.4`
+- **License**: BSD-2-Clause
+- **Copyright**: Copyright (c) 2010-2024, Volodymyr Agafonkin; Copyright (c) 2010-2011, CloudMade
+- **Used by**: `apps/web/features/chat/components/messages/cards/map/LeafletMapCanvas.tsx` and its stylesheet import
+- **Adoption**: Runtime dependency only; no upstream source was copied or adapted into this repository. It draws the interactive map inside a chat transcript. The tile endpoint it reads is repository configuration, not a Leaflet default: no vendor host is compiled into the component.
+- **Notice**: The complete BSD-2-Clause license is distributed in the installed `leaflet` package.
+
 ## OpenDyslexic
 
 - **Upstream**: [antijingoist/opendyslexic](https://github.com/antijingoist/opendyslexic) (https://opendyslexic.org), release `v0.91.12`

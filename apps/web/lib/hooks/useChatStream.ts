@@ -703,6 +703,7 @@ export const WEB_INTERACTIVE_CARD_KINDS = [
   'clarify.v1',
   'map-search.v1',
   'mcp-app.v1',
+  'places.v1',
 ] as const satisfies readonly KnownInteractiveCardKind[];
 
 export type WebInteractiveCardKind = (typeof WEB_INTERACTIVE_CARD_KINDS)[number];
