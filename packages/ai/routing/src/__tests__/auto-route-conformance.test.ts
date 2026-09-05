@@ -27,6 +27,8 @@ import { describe, expect, it } from 'vitest';
 import { resolveAutoRoute, type RoutingTrustMode } from '../auto';
 import type { RoutingTaskType } from '../types';
 
+const FIXTURE_INDENT = 2;
+
 const FIXTURE_PATH = fileURLToPath(
   new URL('./fixtures/auto-route-conformance.json', import.meta.url),
 );
@@ -140,7 +142,7 @@ describe('auto-route cross-language conformance', () => {
 
   if (process.env.AGI_UPDATE_ROUTING_CONFORMANCE === '1') {
     it('regenerates the conformance fixture', () => {
-      writeFileSync(FIXTURE_PATH, `${JSON.stringify(computed, null, 1)}\n`);
+      writeFileSync(FIXTURE_PATH, `${JSON.stringify(computed, null, FIXTURE_INDENT)}\n`);
       expect(Object.keys(computed).length).toBeGreaterThan(0);
     });
     return;
