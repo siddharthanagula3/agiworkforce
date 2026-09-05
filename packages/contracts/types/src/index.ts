@@ -78,6 +78,7 @@ export * from './usage-vocabulary';
 export * from './quick-start-intents';
 export * from './paywall-vocabulary';
 export * from './interactive-cards';
+export * from './places-search';
 export * from './web-search-citations';
 
 export * from './subscription-entitlement';
