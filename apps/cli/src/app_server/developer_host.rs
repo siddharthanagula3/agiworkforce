@@ -3166,7 +3166,30 @@ mod tests {
             resolved.fallback_model_ids.first(),
             Some(&resolved.provider_model_id)
         );
-        assert_eq!(resolved.fallback_model_ids.len(), 1);
+        // The registry now hands back a cross-provider ladder behind the cached
+        // model. The host must chain it verbatim, once each, and every entry has
+        // to be a BYOK-reachable catalog model.
+        let expected = crate::model_catalog::resolve_auto_model_with_context(
+            "auto-economy",
+            agiworkforce_model_registry::RoutingTaskType::Coding,
+            "byok",
+            agiworkforce_model_registry::TrustMode::Byok,
+            Some(&previous.model_key),
+            Some(agiworkforce_model_registry::RoutingTaskType::SimpleChat),
+        )
+        .expect("catalog coding route");
+        assert_eq!(
+            resolved.fallback_model_ids[1..],
+            expected.fallback_provider_model_ids[..]
+        );
+        let mut seen = std::collections::HashSet::new();
+        for model_id in &resolved.fallback_model_ids {
+            assert!(seen.insert(model_id), "duplicate fallback {model_id}");
+            assert!(
+                crate::model_catalog::find(model_id).is_some(),
+                "fallback {model_id} is not a catalog model"
+            );
+        }
     }
 
     #[tokio::test]
