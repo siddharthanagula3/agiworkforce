@@ -77,4 +77,20 @@ fn export_typescript_bindings() {
     // it needs its own root per this file's own doc comment.
     agiworkforce_protocol::agent_events::AgentEventEnvelope::export_all_to(dir)
         .expect("export agent event envelope graph");
+
+    // The tool primitive (decision D-P0-5). Definition, permission, approval,
+    // result and audit are five independent roots: no envelope references
+    // them, so none is reachable from the roots above.
+    agiworkforce_protocol::tool_primitive::ToolDefinition::export_all_to(dir)
+        .expect("export tool definition graph");
+    agiworkforce_protocol::tool_primitive::ToolPermission::export_all_to(dir)
+        .expect("export tool permission graph");
+    agiworkforce_protocol::tool_primitive::ToolApprovalRequest::export_all_to(dir)
+        .expect("export tool approval request graph");
+    agiworkforce_protocol::tool_primitive::ToolApprovalDecision::export_all_to(dir)
+        .expect("export tool approval decision graph");
+    agiworkforce_protocol::tool_primitive::ToolResult::export_all_to(dir)
+        .expect("export tool result graph");
+    agiworkforce_protocol::tool_primitive::ToolAuditRecord::export_all_to(dir)
+        .expect("export tool audit record graph");
 }

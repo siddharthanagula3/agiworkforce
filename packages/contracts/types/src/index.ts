@@ -125,6 +125,8 @@ export * from './capabilities';
 
 export * from './tool-display';
 
+export * from './tool-primitive';
+
 export type {
   AgentEvent,
   AgentEventApprovalDecision,
