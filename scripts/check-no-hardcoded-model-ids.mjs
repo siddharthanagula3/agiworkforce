@@ -419,6 +419,33 @@ export function isModelIdOwnerPath(repoRoot, filePath) {
   return OWNER_PATH_SET.has(relativePath);
 }
 
+const SKILLS_LOCK_PATH = 'skills-lock.json';
+const FIRST_PARTY_SKILL_SOURCE = 'first-party';
+const VENDORED_SKILL_PREFIX_CACHE = new Map();
+
+export function vendoredSkillPrefixes(repoRoot = REPO_ROOT) {
+  const cached = VENDORED_SKILL_PREFIX_CACHE.get(repoRoot);
+  if (cached) return cached;
+  let prefixes = [];
+  try {
+    const lock = JSON.parse(readFileSync(path.join(repoRoot, SKILLS_LOCK_PATH), 'utf8'));
+    const skills =
+      lock?.skills && typeof lock.skills === 'object' ? Object.values(lock.skills) : [];
+    prefixes = skills
+      .filter((skill) => skill?.sourceType && skill.sourceType !== FIRST_PARTY_SKILL_SOURCE)
+      .map((skill) => `${toPosixPath(skill.path)}/`);
+  } catch {
+    prefixes = [];
+  }
+  VENDORED_SKILL_PREFIX_CACHE.set(repoRoot, prefixes);
+  return prefixes;
+}
+
+export function isVendoredSkillPath(repoRoot, filePath) {
+  const relativePath = toPosixPath(path.relative(repoRoot, path.resolve(filePath)));
+  return vendoredSkillPrefixes(repoRoot).some((prefix) => relativePath.startsWith(prefix));
+}
+
 function readUtf8Text(filePath) {
   const stat = lstatSync(filePath);
   if (stat.isSymbolicLink()) return readlinkSync(filePath, 'utf8');
@@ -437,7 +464,7 @@ export function scanModelIdFiles({ repoRoot = REPO_ROOT, filePaths, tokens }) {
   const skippedFiles = [];
 
   for (const filePath of [...new Set(filePaths.map((file) => path.resolve(file)))].sort()) {
-    if (isModelIdOwnerPath(repoRoot, filePath)) continue;
+    if (isModelIdOwnerPath(repoRoot, filePath) || isVendoredSkillPath(repoRoot, filePath)) continue;
     let text;
     try {
       text = readUtf8Text(filePath);
