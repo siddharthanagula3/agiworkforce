@@ -1,8 +1,8 @@
 import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
-import { getClerkAuthUser } from '@/lib/api-auth';
 import { getNeonDb } from '@/lib/server/neon-db';
+import { getUserScopedDb } from '@/lib/server/rls-db';
 import type { SubscriptionRow } from '@/lib/server/neon-types';
 import { ClaimOfferRequestSchema } from '@/lib/validations/claim-offer';
 import { withErrorHandler } from '@/lib/error-handler';
@@ -23,8 +23,7 @@ async function handleClaimOffer(request: NextRequest) {
     return rateLimitResponse;
   }
 
-  const { userId } = await getClerkAuthUser(request);
-  const db = getNeonDb();
+  const { db, userId } = await getUserScopedDb(request, { resolveOrganization: false });
 
   let body: unknown;
   try {
@@ -47,7 +46,11 @@ async function handleClaimOffer(request: NextRequest) {
       trial_days: number | null;
       discount_percent: number | null;
     };
-    const [invite] = await db.query<InviteRow>(
+    // An invite belongs to nobody until it is redeemed, and claim_beta_invite
+    // locks it, spends a use and writes the redemption row, none of which the
+    // claimant owns yet. Both statements stay on the schema owner for that
+    // reason; the subscription read-back below is the caller's own row.
+    const [invite] = await getNeonDb().query<InviteRow>(
       'select id, plan_tier, trial_days, discount_percent from beta_invites where code = $1 and is_active = true limit 1',
       [trimmedCode],
     );
@@ -77,7 +80,7 @@ async function handleClaimOffer(request: NextRequest) {
     };
     let claimRpcRows: { result: ClaimResult | null }[];
     try {
-      claimRpcRows = await db.query<{ result: ClaimResult | null }>(
+      claimRpcRows = await getNeonDb().query<{ result: ClaimResult | null }>(
         'select claim_beta_invite($1, $2, $3) as result',
         [userId, invite.id, invite.plan_tier],
       );
