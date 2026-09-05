@@ -1025,6 +1025,7 @@
     "@agiworkforce/agent-core": "workspace:*",
     "@agiworkforce/cloud-contracts": "workspace:*",
     "@agiworkforce/design-tokens": "workspace:*",
+    "@agiworkforce/observability": "workspace:*",
     "@agiworkforce/client-runtime": "workspace:*",
     "@agiworkforce/routing": "workspace:*",
     "@agiworkforce/types": "workspace:*",
