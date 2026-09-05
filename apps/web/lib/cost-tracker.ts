@@ -1,4 +1,3 @@
-
 import 'server-only';
 
 import {
@@ -6,7 +5,10 @@ import {
   resolveEffectiveModelPricingForInputTokens,
 } from '@agiworkforce/types';
 import type { CpstUsageFields } from '@/lib/cpst-telemetry';
-import { resolveCacheRates } from '@/lib/services/llm-cost-calculator';
+import {
+  isCacheTokensDisjointFromInput,
+  resolveCacheRates,
+} from '@/lib/services/llm-cost-calculator';
 
 export interface ModelUsage {
   modelId: string;
@@ -52,8 +54,8 @@ function calculateCostUsd(modelId: string, usage: NormalizedUsage, asOf: Date): 
   const rawInputTokens = usage.inputTokens ?? 0;
   const cacheRead = usage.cacheReadInputTokens ?? 0;
   const cacheCreationTotal = usage.cacheCreationInputTokens ?? 0;
-  const isAnthropic = meta.provider === 'anthropic';
-  const tierInputTokens = isAnthropic
+  const disjointFromInput = isCacheTokensDisjointFromInput(meta.provider);
+  const tierInputTokens = disjointFromInput
     ? rawInputTokens + cacheRead + cacheCreationTotal
     : rawInputTokens;
   const effective = resolveEffectiveModelPricingForInputTokens(meta, asOf, tierInputTokens);
@@ -72,7 +74,7 @@ function calculateCostUsd(modelId: string, usage: NormalizedUsage, asOf: Date): 
       typeof effective.cached_write === 'number' ? effective.cached_write : undefined,
     cachedWrite1hCostPer1MTokens:
       typeof effective.cached_write_1h === 'number' ? effective.cached_write_1h : undefined,
-    cacheTokensDisjointFromInput: isAnthropic,
+    cacheTokensDisjointFromInput: disjointFromInput,
   });
 
   const outputTokens = usage.outputTokens ?? 0;
@@ -83,7 +85,7 @@ function calculateCostUsd(modelId: string, usage: NormalizedUsage, asOf: Date): 
   );
   const cacheCreation5m = cacheCreationTotal - cacheCreation1h;
 
-  const billableInput = isAnthropic
+  const billableInput = disjointFromInput
     ? rawInputTokens
     : Math.max(0, rawInputTokens - cacheRead - cacheCreationTotal);
 

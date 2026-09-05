@@ -1,6 +1,7 @@
 import 'server-only';
 import {
   getModelMetadataById,
+  getProviderCacheTokenBillingClass,
   getProviderConfig,
   listCanonicalModels,
   normalizeModelId,
@@ -9,7 +10,10 @@ import {
 import * as modelCatalogRegistry from '@agiworkforce/types';
 import { logger } from '@/lib/logger';
 
-const ANTHROPIC_PROVIDER_ID = 'anthropic';
+export function isCacheTokensDisjointFromInput(providerId: string | null | undefined): boolean {
+  if (!providerId) return false;
+  return getProviderCacheTokenBillingClass(providerId) === 'additional_to_input';
+}
 
 export interface RoutePriceSheet {
   provider: string;
@@ -305,8 +309,9 @@ export class LLMCostCalculator {
       cachedInputCostPer1MTokens: sheet.cacheReadPerMillion ?? undefined,
       cachedWriteCostPer1MTokens: sheet.cacheWritePerMillion ?? undefined,
       cachedWrite1hCostPer1MTokens: sheet.cacheWrite1hPerMillion ?? undefined,
-      cacheTokensDisjointFromInput:
-        (sheet.provider ?? fallbackProviderId) === ANTHROPIC_PROVIDER_ID,
+      cacheTokensDisjointFromInput: isCacheTokensDisjointFromInput(
+        sheet.provider ?? fallbackProviderId,
+      ),
     };
   }
 
@@ -369,7 +374,7 @@ export class LLMCostCalculator {
           cachedInputCostPer1MTokens: effective.cached_input,
           cachedWriteCostPer1MTokens: effective.cached_write,
           cachedWrite1hCostPer1MTokens: effective.cached_write_1h,
-          cacheTokensDisjointFromInput: metadata.provider === ANTHROPIC_PROVIDER_ID,
+          cacheTokensDisjointFromInput: isCacheTokensDisjointFromInput(metadata.provider),
         };
       }
 

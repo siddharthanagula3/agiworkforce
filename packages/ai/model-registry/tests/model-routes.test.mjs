@@ -27,6 +27,11 @@ const COMMERCIAL_STATUSES = new Set([
 const DATA_RETENTIONS = new Set(['zero_retention', 'provider_default', 'conditional', 'unknown']);
 const UNKNOWN_GOVERNANCE_VALUE = 'unknown';
 const ZERO_RETENTION = 'zero_retention';
+const CACHE_TOKEN_BILLING_CLASSES = new Set([
+  'additional_to_input',
+  'included_in_input',
+  'unknown',
+]);
 
 const registry = JSON.parse(fs.readFileSync(REGISTRY_JSON, 'utf8'));
 const declarations = JSON.parse(fs.readFileSync(MODEL_ROUTES_JSON, 'utf8'));
@@ -181,5 +186,51 @@ test('a governance record with nothing verified claims no source', () => {
       entry.residencyRegions === null;
     if (!everythingUnknown) continue;
     assert.equal(entry.source, undefined, `${providerId} cites a source for nothing verified`);
+  }
+});
+
+test('every provider declares a known cache-token billing class', () => {
+  for (const [providerId, entry] of Object.entries(registry.governance)) {
+    assert.ok(
+      CACHE_TOKEN_BILLING_CLASSES.has(entry.cacheTokenBillingClass),
+      `${providerId} cacheTokenBillingClass ${entry.cacheTokenBillingClass} is not a known class`,
+    );
+  }
+});
+
+test('a verified cache-token billing class always cites a source and a day it was read', () => {
+  for (const [providerId, entry] of Object.entries(registry.governance)) {
+    if (entry.cacheTokenBillingClass === UNKNOWN_GOVERNANCE_VALUE) {
+      assert.equal(
+        entry.cacheTokenBillingSource,
+        undefined,
+        `${providerId} claims a cache-token billing class of unknown but cites a source`,
+      );
+      continue;
+    }
+    assert.ok(
+      entry.cacheTokenBillingSource,
+      `${providerId} claims a cache-token billing class without a source`,
+    );
+    assert.ok(
+      entry.cacheTokenBillingVerifiedOn,
+      `${providerId} claims a cache-token billing class without a verified date`,
+    );
+  }
+});
+
+test('anthropic and every provider proxying it through the Anthropic Messages protocol report cache tokens additional to input', () => {
+  const anthropicProtocolProviders = new Set(
+    Object.values(registry.harnesses)
+      .filter((harness) => harness.protocol === 'anthropic_messages')
+      .map((harness) => harness.provider),
+  );
+  anthropicProtocolProviders.add('anthropic');
+  for (const providerId of anthropicProtocolProviders) {
+    assert.equal(
+      registry.governance[providerId]?.cacheTokenBillingClass,
+      'additional_to_input',
+      `${providerId} speaks the Anthropic Messages protocol and must report cache tokens additional to input`,
+    );
   }
 });

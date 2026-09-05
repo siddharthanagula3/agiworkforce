@@ -7,6 +7,7 @@ import {
 import { logger } from './logger';
 import {
   CACHE_WRITE_FALLBACK_MULTIPLIERS,
+  isCacheTokensDisjointFromInput,
   resolveCacheRates,
 } from '@/lib/services/llm-cost-calculator';
 
@@ -32,8 +33,9 @@ function getDeclaredCacheReadPerMtok(
 ): number | undefined {
   const meta = model ? getModelMetadataById(model) : null;
   if (!meta) return undefined;
-  const tierInputTokens =
-    meta.provider === 'anthropic' ? inputTokens + cacheReadTokens + cacheWriteTokens : inputTokens;
+  const tierInputTokens = isCacheTokensDisjointFromInput(meta.provider)
+    ? inputTokens + cacheReadTokens + cacheWriteTokens
+    : inputTokens;
   const cachedInput = resolveEffectiveModelPricingForInputTokens(
     meta,
     pricedAt,

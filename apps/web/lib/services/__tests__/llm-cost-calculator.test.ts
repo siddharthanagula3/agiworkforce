@@ -7,7 +7,11 @@ import {
 } from '@agiworkforce/types';
 import { getRoutePricingForModel } from '@agiworkforce/model-registry';
 
-import { LLMCostCalculator, setRouteRegistryPricingLookup } from '../llm-cost-calculator';
+import {
+  LLMCostCalculator,
+  isCacheTokensDisjointFromInput,
+  setRouteRegistryPricingLookup,
+} from '../llm-cost-calculator';
 
 vi.mock('@agiworkforce/types', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@agiworkforce/types')>();
@@ -755,5 +759,31 @@ describe('LLMCostCalculator, live registry wiring', () => {
     expect(pricing.outputCostPer1MTokens).toBe(canonical.outputCost);
     expect(pricing.cachedWrite1hCostPer1MTokens).toBe(canonical.cached_write_1h);
     expect(pricing.cacheTokensDisjointFromInput).toBe(true);
+  });
+});
+
+describe('isCacheTokensDisjointFromInput, registry-sourced cache billing shape', () => {
+  it('reads additional_to_input for anthropic and every anthropic-protocol proxy from the registry', () => {
+    for (const providerId of [
+      'anthropic',
+      'cheaperinference_anthropic',
+      'deepseek_anthropic',
+      'moonshot_anthropic',
+      'zhipu_anthropic',
+    ]) {
+      expect(isCacheTokensDisjointFromInput(providerId)).toBe(true);
+    }
+  });
+
+  it('reads included_in_input for providers whose docs state cache tokens are a subset', () => {
+    expect(isCacheTokensDisjointFromInput('openai')).toBe(false);
+    expect(isCacheTokensDisjointFromInput('google')).toBe(false);
+  });
+
+  it('defaults an unresearched or unknown provider to non-disjoint rather than guessing', () => {
+    expect(isCacheTokensDisjointFromInput('xai')).toBe(false);
+    expect(isCacheTokensDisjointFromInput('not-a-real-provider')).toBe(false);
+    expect(isCacheTokensDisjointFromInput(null)).toBe(false);
+    expect(isCacheTokensDisjointFromInput(undefined)).toBe(false);
   });
 });
