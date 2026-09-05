@@ -98,16 +98,16 @@ routes).
 
 ## Desktop (Electron shell), from the 2026-09-05 reconnaissance
 
-| Control or capability                                     | Status    | Evidence or gap                                                                                  |
-| --------------------------------------------------------- | --------- | ------------------------------------------------------------------------------------------------ |
-| Sign in card, device flow                                 | verified  | rebuilt and approved 2026-09-05                                                                  |
-| Tray, quick ask chord, screenshot to chat                 | verified  | live 2026-09-05                                                                                  |
-| Global dictation chord into our composer                  | partial   | works; batch transcription, one cleanup call; no partial transcripts                             |
-| Dictation into the focused app                            | dead      | no path exists; fail closed by the code's own flaw record                                        |
-| Settings, Voice tab                                       | partial   | reachable; local voice providers are code only under Electron                                    |
-| Computer use, accessibility, keyboard, mouse              | dead      | Rust layer has no transport from the shipped build (D-15)                                        |
-| Browser automation, vision loop                           | dead      | same                                                                                             |
-| OS permission checks and deep links                       | dead      | same                                                                                             |
-| Files, clipboard, terminal commands                       | partial   | exist in the Rust layer; unreachable from the shell                                              |
-| Ten account bridge commands                               | to verify | recon reads the invoke path as calling the Tauri invoke; sign in worked live, confirm the branch |
-| Duplicate task store, legacy HTTP client, migration stubs | remove    | wiring allowlist names them; no renderer caller                                                  |
+| Control or capability                                     | Status   | Evidence or gap                                                                                     |
+| --------------------------------------------------------- | -------- | --------------------------------------------------------------------------------------------------- |
+| Sign in card, device flow                                 | verified | rebuilt and approved 2026-09-05                                                                     |
+| Tray, quick ask chord, screenshot to chat                 | verified | live 2026-09-05                                                                                     |
+| Global dictation chord into our composer                  | partial  | works; batch transcription, one cleanup call; no partial transcripts                                |
+| Dictation into the focused app                            | dead     | no path exists; fail closed by the code's own flaw record                                           |
+| Settings, Voice tab                                       | partial  | reachable; local voice providers are code only under Electron                                       |
+| Computer use, accessibility, keyboard, mouse              | dead     | Rust layer has no transport from the shipped build (D-15)                                           |
+| Browser automation, vision loop                           | dead     | same                                                                                                |
+| OS permission checks and deep links                       | dead     | same                                                                                                |
+| Files, clipboard, terminal commands                       | partial  | exist in the Rust layer; unreachable from the shell                                                 |
+| Ten account bridge commands                               | verified | the Electron build aliases the Tauri invoke to the Electron core (vite config), sign in worked live |
+| Duplicate task store, legacy HTTP client, migration stubs | remove   | wiring allowlist names them; no renderer caller                                                     |
