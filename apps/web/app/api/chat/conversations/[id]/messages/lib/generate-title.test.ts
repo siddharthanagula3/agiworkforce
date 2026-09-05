@@ -38,6 +38,7 @@ vi.mock('@/app/api/llm/v1/chat/completions/lib/adapter-response', () => ({
 vi.mock('@/lib/services/provider-adapter-service', () => ({
   buildServerProviderAdapter: () => ({ stream: () => (async function* () {})() }),
   toGenericUpstreamError: (provider: string) => new Error(`upstream ${provider}`),
+  buildProtocolRouteAdapter: vi.fn(),
 }));
 
 class FakeRedis {

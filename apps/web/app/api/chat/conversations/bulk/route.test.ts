@@ -19,6 +19,7 @@ vi.mock('@/lib/server/rls-db', () => ({
 }));
 vi.mock('@/lib/services/active-workspace-service', () => ({
   resolveActiveOrganizationId: vi.fn(async () => null),
+  resolveOrganizationMembershipId: vi.fn(),
 }));
 vi.mock('@/lib/csrf', () => ({ requireCsrfToken: vi.fn(async () => null) }));
 vi.mock('@/lib/rate-limit', () => ({ withRateLimit: vi.fn(async () => null) }));
@@ -32,6 +33,14 @@ vi.mock('@/lib/e2b/runtime', () => ({
 vi.mock('@/lib/e2b/session-store', () => ({
   managedCloudE2BSessionScope: (userId: string, conversationId: string) =>
     mocks.scope(userId, conversationId),
+  CHAT_SANDBOX_NETWORK_ACCESS: 'trusted',
+  deleteE2BSession: vi.fn(),
+  getE2BSession: vi.fn(),
+  saveE2BSession: vi.fn(),
+  withUserSandboxLock: vi.fn(async (_scope: unknown, critical: () => Promise<unknown>) => ({
+    locked: true,
+    result: await critical(),
+  })),
 }));
 vi.mock('@/lib/logger', () => ({
   logger: { debug: vi.fn(), error: vi.fn(), info: vi.fn(), warn: vi.fn() },

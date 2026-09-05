@@ -27,7 +27,17 @@ vi.mock('@/lib/cors', () => ({
   handleCorsPreflightRequest: vi.fn(() => null),
 }));
 vi.mock('@/lib/e2b/runtime', () => ({ killE2BSession: vi.fn() }));
-vi.mock('@/lib/e2b/session-store', () => ({ managedCloudE2BSessionScope: vi.fn(() => 'scope') }));
+vi.mock('@/lib/e2b/session-store', () => ({
+  managedCloudE2BSessionScope: vi.fn(() => 'scope'),
+  CHAT_SANDBOX_NETWORK_ACCESS: 'trusted',
+  deleteE2BSession: vi.fn(),
+  getE2BSession: vi.fn(),
+  saveE2BSession: vi.fn(),
+  withUserSandboxLock: vi.fn(async (_scope: unknown, critical: () => Promise<unknown>) => ({
+    locked: true,
+    result: await critical(),
+  })),
+}));
 vi.mock('@/lib/services/published-artifact-service', () => ({
   unpublishArtifactsForConversations: vi.fn(async () => []),
 }));
