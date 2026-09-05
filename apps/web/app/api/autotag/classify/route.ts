@@ -1,14 +1,11 @@
-
 import { NextRequest, NextResponse } from 'next/server';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { requireCsrfToken } from '@/lib/csrf';
-import { getClerkAuthUser } from '@/lib/api-auth';
-import { getNeonDb } from '@/lib/server/neon-db';
+import { getUserScopedDb } from '@/lib/server/rls-db';
 import { classifyConversationText } from '@/lib/services/conversation-classification-service';
-import { resolveActiveOrganizationId } from '@/lib/services/active-workspace-service';
 
 async function handleClassify(request: NextRequest) {
   const csrfError = await requireCsrfToken(request);
@@ -17,9 +14,7 @@ async function handleClassify(request: NextRequest) {
   const rateLimitResponse = await withRateLimit(request, 'chat-conversation');
   if (rateLimitResponse) return rateLimitResponse;
 
-  const { userId } = await getClerkAuthUser(request);
-  const db = getNeonDb();
-  const organizationId = await resolveActiveOrganizationId(db, userId);
+  const { db, userId, organizationId } = await getUserScopedDb(request);
 
   let body: { conversationId?: string };
   try {
