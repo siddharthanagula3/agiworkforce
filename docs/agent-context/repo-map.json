@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "lastUpdated": "2026-08-28",
+  "lastUpdated": "2026-09-05",
   "canonicalAgentDoc": "AGENTS.md",
   "surfaces": [
     {
@@ -992,12 +992,12 @@
       "path": "packages/tools/browser-tool",
       "kind": "package",
       "canonicalOwner": "Browser automation and security",
-      "consumers": ["apps/extension"],
+      "consumers": [],
       "deployability": "library",
       "trustBoundary": "isolated browser profile and computer-use actions",
-      "status": "active-single-consumer",
+      "status": "unwired-pending-contract-slice",
       "action": "keep",
-      "evidence": ["packages/tools/browser-tool/src/index.ts", "apps/extension/package.json"]
+      "evidence": ["packages/tools/browser-tool/README.md", "docs/decisions/wire-or-cut.md"]
     },
     {
       "path": "packages/tools/mcp",
