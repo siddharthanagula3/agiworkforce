@@ -171,7 +171,7 @@ describe('the liveness probe clears the handoff without waiting for the model', 
     const live = await claimLiveDurableStream(readable, 200);
 
     expect(live).not.toBeNull();
-    expect(isDurableTransportCoolingDown()).toBe(false);
+    await expect(isDurableTransportCoolingDown()).resolves.toBe(false);
 
     releaseModel();
     await invocation;
@@ -181,7 +181,7 @@ describe('the liveness probe clears the handoff without waiting for the model', 
     const stalled = new ReadableStream<Uint8Array>({ start() {} });
 
     expect(await claimLiveDurableStream(stalled, 50)).toBeNull();
-    expect(isDurableTransportCoolingDown()).toBe(true);
+    await expect(isDurableTransportCoolingDown()).resolves.toBe(true);
     recordDurableTransportClaim();
   });
 });

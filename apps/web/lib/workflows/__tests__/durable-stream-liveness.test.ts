@@ -122,22 +122,26 @@ describe('durable stream liveness', () => {
   });
 
   it('opens the breaker on a stall so the next turn skips the probe', async () => {
-    expect(isDurableTransportCoolingDown()).toBe(false);
+    await expect(isDurableTransportCoolingDown()).resolves.toBe(false);
     await claimLiveDurableStream(neverEmits(), 40);
-    expect(isDurableTransportCoolingDown()).toBe(true);
+    await expect(isDurableTransportCoolingDown()).resolves.toBe(true);
   });
 
   it('closes the breaker once a stream is claimed', async () => {
     recordDurableTransportStall();
     await claimLiveDurableStream(emits('data: one\n\n'), 500);
-    expect(isDurableTransportCoolingDown()).toBe(false);
+    await expect(isDurableTransportCoolingDown()).resolves.toBe(false);
   });
 
-  it('reopens the transport once the cooldown elapses', () => {
+  it('reopens the transport once the cooldown elapses', async () => {
     const now = Date.now();
     recordDurableTransportStall(now);
-    expect(isDurableTransportCoolingDown(now + DURABLE_STALL_COOLDOWN_MS - 1)).toBe(true);
-    expect(isDurableTransportCoolingDown(now + DURABLE_STALL_COOLDOWN_MS)).toBe(false);
+    await expect(isDurableTransportCoolingDown(now + DURABLE_STALL_COOLDOWN_MS - 1)).resolves.toBe(
+      true,
+    );
+    await expect(isDurableTransportCoolingDown(now + DURABLE_STALL_COOLDOWN_MS)).resolves.toBe(
+      false,
+    );
   });
 });
 
@@ -189,20 +193,24 @@ describe('durable first-event budget', () => {
 
   it('leaves the stall breaker closed so an agi work run keeps the durable path', async () => {
     await claimDurableStreamWithinBudget(neverEmits(), TINY_BUDGET_MS);
-    expect(isDurableTransportCoolingDown()).toBe(false);
-    expect(isDurableFirstEventBudgetCoolingDown()).toBe(true);
+    await expect(isDurableTransportCoolingDown()).resolves.toBe(false);
+    await expect(isDurableFirstEventBudgetCoolingDown()).resolves.toBe(true);
   });
 
   it('spends the budget once, then bypasses the durable attempt for the cooldown', async () => {
     await claimDurableStreamWithinBudget(neverEmits(), TINY_BUDGET_MS);
     const now = Date.now();
-    expect(isDurableFirstEventBudgetCoolingDown(now + DURABLE_STALL_COOLDOWN_MS - 1)).toBe(true);
-    expect(isDurableFirstEventBudgetCoolingDown(now + DURABLE_STALL_COOLDOWN_MS)).toBe(false);
+    await expect(
+      isDurableFirstEventBudgetCoolingDown(now + DURABLE_STALL_COOLDOWN_MS - 1),
+    ).resolves.toBe(true);
+    await expect(
+      isDurableFirstEventBudgetCoolingDown(now + DURABLE_STALL_COOLDOWN_MS),
+    ).resolves.toBe(false);
   });
 
-  it('opens the budget breaker when a stall is recorded', () => {
+  it('opens the budget breaker when a stall is recorded', async () => {
     recordDurableTransportStall();
-    expect(isDurableFirstEventBudgetCoolingDown()).toBe(true);
+    await expect(isDurableFirstEventBudgetCoolingDown()).resolves.toBe(true);
   });
 
   it('opens the budget breaker when a claim outlives the budget', async () => {
@@ -210,14 +218,14 @@ describe('durable first-event budget', () => {
     const durable = emitsAfter(OUTLIVES_BUDGET_MS, 'data: slow\n\n');
     const live = await claimLiveDurableStream(durable.stream, OUTLIVES_BUDGET_MS * 5);
     expect(live).not.toBeNull();
-    expect(isDurableTransportCoolingDown()).toBe(false);
-    expect(isDurableFirstEventBudgetCoolingDown()).toBe(true);
+    await expect(isDurableTransportCoolingDown()).resolves.toBe(false);
+    await expect(isDurableFirstEventBudgetCoolingDown()).resolves.toBe(true);
   });
 
   it('closes both breakers when a claim lands inside the budget', async () => {
     recordDurableTransportStall();
     await claimDurableStreamWithinBudget(emits('data: one\n\n'), DEFAULT_BUDGET_MS);
-    expect(isDurableTransportCoolingDown()).toBe(false);
-    expect(isDurableFirstEventBudgetCoolingDown()).toBe(false);
+    await expect(isDurableTransportCoolingDown()).resolves.toBe(false);
+    await expect(isDurableFirstEventBudgetCoolingDown()).resolves.toBe(false);
   });
 });

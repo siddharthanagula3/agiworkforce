@@ -682,11 +682,12 @@ async function dispatchChatCompletions(
       // durable attach fails).
       const durableBudgetApplies = !isAgiWorkTurn;
       const durableFirstEventBudgetMs = resolveDurableFirstEventBudgetMs();
-      if (
-        areDurableInitialTurnsEnabled() &&
-        !isDurableTransportCoolingDown() &&
-        !(durableBudgetApplies && isDurableFirstEventBudgetCoolingDown())
-      ) {
+      const durableTurnsEnabled = areDurableInitialTurnsEnabled();
+      const durableBreakerOpen =
+        durableTurnsEnabled &&
+        ((await isDurableTransportCoolingDown()) ||
+          (durableBudgetApplies && (await isDurableFirstEventBudgetCoolingDown())));
+      if (durableTurnsEnabled && !durableBreakerOpen) {
         try {
           const workflow = await timePhase(CHAT_TURN_PHASE.durableStart, () =>
             startCloudAgentWorkflowExecution({
