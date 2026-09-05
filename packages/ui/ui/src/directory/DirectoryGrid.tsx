@@ -182,8 +182,19 @@ export function DirectoryGrid({
 }) {
   if (loading && entries.length === 0) {
     return (
-      <div className="flex justify-center py-16">
-        <Spinner aria-label={DIRECTORY_LOADING_LABEL} />
+      <div role="status" aria-live="polite" className="flex flex-col gap-3">
+        <span className="sr-only">{DIRECTORY_LOADING_LABEL}</span>
+        {Array.from({ length: 4 }).map((_, index) => (
+          <div key={index} aria-hidden="true" className={cn(DIRECTORY_CARD, 'cursor-default')}>
+            <div className="flex items-start gap-3">
+              <div className="size-8 shrink-0 animate-pulse rounded-md bg-foreground/10" />
+              <div className="min-w-0 flex-1 space-y-2">
+                <div className="h-3.5 w-2/5 animate-pulse rounded bg-foreground/10" />
+                <div className="h-3 w-4/5 animate-pulse rounded bg-foreground/[0.07]" />
+              </div>
+            </div>
+          </div>
+        ))}
       </div>
     );
   }
