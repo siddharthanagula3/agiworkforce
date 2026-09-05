@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { act, render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { act, render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import {
   ChatComposerNew,
@@ -111,7 +111,6 @@ vi.mock('./SendButton', () => ({
 
 vi.mock('./ComposerFooter', () => ({
   ComposerFooter: () => <div data-testid="composer-footer" />,
-  ComposerModelSummary: () => <span data-testid="composer-model-summary" />,
 }));
 
 vi.mock('./VoiceInputButton', () => ({
@@ -876,7 +875,8 @@ describe('ChatComposerNew', () => {
     const chatButton = screen.getByRole('button', { name: 'Chat' });
     expect(chatButton).toHaveAttribute('aria-pressed', 'true');
     expect(chatButton.parentElement).toHaveClass('chat-composer-mode-inline');
-    expect(chatButton.closest('.chat-composer-container')).not.toBeNull();
+    expect(chatButton.closest('.chat-composer-row')).not.toBeNull();
+    expect(chatButton.closest('.chat-composer-leading-end')).not.toBeNull();
     expect(screen.getByRole('button', { name: 'Chat' })).toHaveAttribute(
       'title',
       'Chat: quick questions and conversation',
@@ -891,7 +891,8 @@ describe('ChatComposerNew', () => {
     );
 
     fireEvent.click(screen.getByRole('button', { name: /add attachments and tools/i }));
-    expect(document.querySelector('.chat-composer-mode-in-menu')).not.toBeNull();
+    expect(document.querySelector('.chat-composer-mode-in-menu')).toBeNull();
+    expect(screen.getAllByRole('button', { name: 'AGI Work' })).toHaveLength(1);
   });
 
   it('clicking AGI Work flips both buttons pressed state and rewrites the placeholder', () => {
@@ -932,7 +933,7 @@ describe('ChatComposerNew', () => {
     expect(textarea).toHaveAttribute('placeholder', 'How can I help you today?');
   });
 
-  it('gives the text field its own wrappable row so narrow composers do not squeeze it', () => {
+  it('puts the text field on a row of its own above the control row at every width', () => {
     render(
       <ChatComposerNew
         onSend={vi.fn()}
@@ -955,7 +956,142 @@ describe('ChatComposerNew', () => {
     expect(field?.contains(screen.getByRole('textbox', { name: /message input/i }))).toBe(true);
 
     const plusButton = screen.getByRole('button', { name: /add attachments and tools/i });
-    expect(plusButton.parentElement).toHaveClass('chat-composer-leading-end');
+    const leading = plusButton.closest('.chat-composer-leading-end');
+    expect(leading).not.toBeNull();
+    expect(leading?.contains(screen.getByTestId('composer-work-mode'))).toBe(true);
+    expect(
+      field?.compareDocumentPosition(leading!) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+  });
+
+  it('keeps every control on one nowrap line so a phone never gets a third row', () => {
+    render(
+      <ChatComposerNew
+        onSend={vi.fn()}
+        emptyState
+        onEnterVoiceMode={vi.fn()}
+        projectPicker={{
+          projects: [{ id: 'proj-1', name: 'Website Redesign' }],
+          activeProjectId: null,
+          onSelectProject: vi.fn(),
+          onCreateProject: vi.fn(),
+        }}
+      />,
+    );
+
+    const controls = document.querySelector('.chat-composer-controls');
+    expect(controls).not.toBeNull();
+    expect(controls).toHaveClass('flex-nowrap');
+    expect(controls).toHaveClass('flex-row');
+    expect(
+      controls?.contains(screen.getByRole('button', { name: /add attachments and tools/i })),
+    ).toBe(true);
+    expect(controls?.contains(screen.getByRole('button', { name: /voice input/i }))).toBe(true);
+
+    const row = document.querySelector('.chat-composer-row');
+    expect(row?.children).toHaveLength(2);
+  });
+
+  it('opens the AGI Work scope panel from the "+" menu rather than a pill under the card', () => {
+    render(
+      <ChatComposerNew
+        onSend={vi.fn()}
+        emptyState
+        projectPicker={{
+          projects: [{ id: 'proj-1', name: 'Website Redesign' }],
+          activeProjectId: null,
+          onSelectProject: vi.fn(),
+          onCreateProject: vi.fn(),
+        }}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'AGI Work' }));
+    expect(screen.queryByRole('button', { name: /scope/i })).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /add attachments and tools/i }));
+    fireEvent.click(screen.getByRole('button', { name: /scope/i }));
+
+    expect(document.querySelectorAll('input[type="text"]').length).toBeGreaterThan(0);
+  });
+
+  it('keeps the segmented control on the composer face inside an existing chat', () => {
+    render(
+      <ChatComposerNew
+        onSend={vi.fn()}
+        conversationId="conv-1"
+        projectPicker={{
+          projects: [{ id: 'proj-1', name: 'Website Redesign' }],
+          activeProjectId: null,
+          onSelectProject: vi.fn(),
+          onCreateProject: vi.fn(),
+        }}
+      />,
+    );
+
+    const control = screen.getByTestId('composer-work-mode');
+    expect(control.className).not.toContain('hidden');
+    expect(control.className).not.toContain('sm:flex');
+    expect(within(control).getByRole('button', { name: 'Chat' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+  });
+
+  it('replaces the scope pill with the attached bar once AGI Work is selected', () => {
+    render(
+      <ChatComposerNew
+        onSend={vi.fn()}
+        emptyState
+        projectPicker={{
+          projects: [{ id: 'proj-1', name: 'Website Redesign' }],
+          activeProjectId: null,
+          onSelectProject: vi.fn(),
+          onCreateProject: vi.fn(),
+        }}
+      />,
+    );
+
+    expect(screen.queryByTestId('composer-work-bar')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'AGI Work' }));
+
+    const bar = screen.getByTestId('composer-work-bar');
+    expect(within(bar).getByRole('button', { name: /project or folder/i })).toBeInTheDocument();
+    expect(within(bar).getByRole('button', { name: 'Files' })).toBeInTheDocument();
+    expect(within(bar).getByRole('button', { name: 'Plugins' })).toBeInTheDocument();
+    expect(within(bar).getByRole('button', { name: 'Open desktop app' })).toBeInTheDocument();
+    expect(within(bar).queryByRole('button', { name: /add scope/i })).not.toBeInTheDocument();
+  });
+
+  it('names the picked project on the bar and still sends it in the meta', () => {
+    const onSend = vi.fn();
+    render(
+      <ChatComposerNew
+        onSend={onSend}
+        emptyState
+        projectPicker={{
+          projects: [{ id: 'proj-1', name: 'Website Redesign' }],
+          activeProjectId: 'proj-1',
+          onSelectProject: vi.fn(),
+          onCreateProject: vi.fn(),
+        }}
+      />,
+    );
+
+    const bar = screen.getByTestId('composer-work-bar');
+    expect(within(bar).getByText('Website Redesign')).toBeInTheDocument();
+
+    const textarea = screen.getByRole('textbox', { name: /message input/i });
+    fireEvent.change(textarea, { target: { value: 'ship the redesign' } });
+    fireEvent.click(screen.getByRole('button', { name: /send message/i }));
+
+    expect(onSend).toHaveBeenCalledWith(
+      'ship the redesign',
+      undefined,
+      undefined,
+      expect.objectContaining({ workMode: 'agiwork', projectId: 'proj-1' }),
+    );
   });
 
   it('keeps only explicit task modes inside the + menu', () => {

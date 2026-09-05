@@ -55,7 +55,7 @@ describe('ComposerFooter inline, bottom row stays a single usable line', () => {
     expect(container.textContent?.toLowerCase()).not.toContain('to send');
   });
 
-  it('hides the response-style selector below sm so the model selector keeps width', () => {
+  it('hides the response-style selector below sm so the control row stays one line', () => {
     const { container } = renderFooter();
     const styleBtn = container.querySelector(
       'button[aria-label="Response style"]',
