@@ -9,6 +9,37 @@ current implementation, options, decision, why, tradeoff, reversibility, revisit
 entries are not permanent truth; the revisit trigger says what evidence reopens them. New entries
 go at the top. Model names are omitted by rule; families and slots only.
 
+## D-2026-09-05-15 The Electron shell needs a transport to the Rust capability layer
+
+- Question: how the shipped desktop product reaches the automation, local voice, permission and
+  MCP capabilities that exist in the Tauri host.
+- Evidence: the desktop reconnaissance of 2026-09-05 (read from code) found that the shipped
+  Electron build attaches a renderer whose invoke path mocks nearly every Tauri command in
+  JavaScript (apps/desktop/src/lib/tauri-mock.ts), so the automation tree, the native
+  accessibility drivers, keyboard and mouse control, the vision loop, the OS permission checks and
+  thirty local voice commands in apps/desktop/src-tauri have no transport from the product users
+  install; what works today in the shell is screenshot to chat, quick ask, the global chord into
+  our own composer with cloud transcription and one cleanup call, and the cloud account; the
+  launch decision of 2026-09-04 names the Electron shell as the product and the Rust layer as the
+  capability substrate.
+- Current implementation: two runtimes with no bridge; system wide dictation fail closed and
+  unshipped by the code's own flaw record; computer use actions never reach the audit log; the
+  action router's documented connector-first tier is a read-only HTTP GET.
+- Options: ship the Tauri app as the product; port capabilities into Electron with native
+  modules; run the Tauri host as a sidecar the shell launches and talks to over a local
+  authenticated socket with the same command names, so the renderer's invoke routes to it.
+- Decision: the sidecar transport, after a two day spike that proves one round trip end to end
+  (renderer invoke, shell, sidecar, native accessibility read, back) on a signed local build;
+  the decision is reopened if the spike shows the sidecar cannot hold the OS permissions the
+  capabilities need (accessibility, screen recording, input monitoring are granted per binary).
+- Why: the Rust layer holds every capability the flagship promises and the shell holds the
+  account and update plumbing; a bridge is smaller than either rewrite, and the wiring guard
+  already enforces the command surface both sides must agree on.
+- Tradeoff: two processes to sign, notarize and update; a socket to secure; a second permission
+  prompt if the sidecar binary is the one that needs the grant.
+- Reversibility: medium; the transport is one module on each side.
+- Revisit trigger: the spike result, or a platform change that lets one runtime host both.
+
 ## D-2026-09-05-14 Billing exhaustion degrades gracefully for Auto, honestly for a pinned model
 
 - Question: what the product does when the platform's own account at a provider is out of money.
